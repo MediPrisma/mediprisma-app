@@ -40,6 +40,7 @@ describe('CumulativeLabReport 直式 — 免疫 電泳／輕鏈 panel', () => {
       row('ro52', '12064B', 'Ro52', 'Negative'),
       row('ife', '12103B', 'IFE', LONG_IFE, { interpretation: [{ coding: [{ code: 'A' }] }] }),
       row('lane-igg', '12103B', 'IgG', 'Present'),
+      row('mband', '12103B', 'M-band', 0, { valueQuantity: { value: 0.2, comparator: '<', unit: 'g/L' } }),
       row('fk', '12160B', 'Free Kappa', 45.1),
       row('fl', '12160B', 'Free Lambda', 12.0),
       row('uife', '12159B', 'Urine IFE', 'No monoclonal band', { specimen: { display: 'Urine' } }),
@@ -80,6 +81,8 @@ describe('CumulativeLabReport 直式 — 免疫 電泳／輕鏈 panel', () => {
     const panel = screen.getByRole('dialog')
     expect(panel).toHaveTextContent(LONG_IFE)
     expect(panel).toHaveTextContent('IgG: Present')
+    // Each record keeps its comparator and unit.
+    expect(panel).toHaveTextContent('M-band: <0.2 g/L')
     // Escape closes it and returns focus.
     fireEvent.keyDown(panel, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()

@@ -189,7 +189,11 @@ const SPEP_SET = new Set(PROTEIN_ELECTROPHORESIS_NHI_ORDER_CODES)
 const M_PROTEIN_RE = /(?<![A-Z0-9])M[-\s]?(?:PROTEIN|SPIKE)(?![A-Z])|(?<![A-Z0-9])M[-\s]?(?:蛋白|帶)|PARAPROTEIN|單株(?:球)?蛋白(?:定量|量)?|MONOCLONAL\s*PROTEIN/iu
 const URINE_RE = /尿|URINE|(?<![A-Z0-9])UFLC(?![A-Z0-9])|^U[-\s.]|\(U\)/iu
 const CSF_RE = /(?<![A-Z0-9])CSF(?![A-Z0-9])|腦脊髓/iu
-const RATIO_RE = /RATIO|比值|(?<![A-Z0-9])[ΚK]\s*\/\s*[ΛL](?![A-Z0-9])|KAPPA\s*\/\s*LAMBDA/iu
+// The κ/λ ratio only when its direction is written κ-over-λ (κ/λ, K/L,
+// kappa/lambda). λ/κ, or a ratio without a direction ("FLC ratio"), keeps its
+// source name and never joins the κ/λ column.
+const KL_RATIO_RE = /(?:Κ|KAPPA|(?<![A-Z0-9])K)\s*\/\s*(?:Λ|LAMBDA|L(?![A-Z0-9]))/iu
+const ANY_RATIO_RE = /RATIO|比值|\//iu
 const KAPPA_RE = /KAPPA|Κ|(?<![A-Z0-9])K(?![A-Z0-9])/iu
 const LAMBDA_RE = /LAMBDA|Λ|(?<![A-Z0-9])L(?![A-Z0-9])/iu
 const FREE_RE = /FREE|(?<![A-Z0-9])[SU]?FLC(?![A-Z0-9])|游離/iu
@@ -253,7 +257,8 @@ export function paraproteinIdentity(obs: any): { key: string; display?: string }
   const prefix = prefixFor(specimen)
 
   if (order === '12160B') {
-    const analyte = RATIO_RE.test(upper) ? 'KL-RATIO'
+    const analyte = KL_RATIO_RE.test(upper) ? 'KL-RATIO'
+      : ANY_RATIO_RE.test(upper) ? null
       : KAPPA_RE.test(upper) && !LAMBDA_RE.test(upper) ? 'KAPPA'
         : LAMBDA_RE.test(upper) && !KAPPA_RE.test(upper) ? 'LAMBDA'
           : null
@@ -302,15 +307,44 @@ const CONTROLLED_NEGATIVE_RE = new RegExp(
   + '|(?:未見|未發現|無)單株(?:球)?蛋白(?:帶)?'
   + ')$',
 )
-const NEGATION_OR_DOUBT_RE = /\bNO\b|\bNOT\b|NEGATIVE|ABSENT|WITHOUT|\bNONE\b|SUSPIC|SUSPECT|FAINT|EQUIVOCAL|POSSIBL|PROBABL|CANNOT|CAN'T|EXCLUDE|RULE\s*OUT|\bR\/O\b|SUGGEST|\bTRACE\b|\?|未|無|陰|疑|不能|無法|可能|微弱|建議|排除/
-const MULTI_CLAUSE_RE = /[;；,，。\n]|\bAND\b|\bWITH\b|\bALSO\b|\bPLUS\b|及|和|與|並|另|BICLONAL|OLIGOCLONAL|TWO\s|MULTIPLE/
-
-const HEAVY = '(IG[GAMDE])'
-const LIGHT = '(Κ|Λ|KAPPA|LAMBDA)'
-const ISOTYPE_RE = new RegExp(`${HEAVY}\\s*[-‐_/ ]?\\s*${LIGHT}`, 'g')
-const FREE_LIGHT_RE = new RegExp(`(?:FREE|游離)\\s*${LIGHT}`, 'g')
+// Isotype badges by ALLOWLIST. A denylist of negations keeps leaking
+// ("IgG-κ is undetectable", "band has disappeared", 「已消失」), so a badge is
+// given only when the whole result is one of a few controlled affirmative
+// templates and nothing else:
+//   [monoclonal] <isotype> [monoclonal] [band | protein | component …]
+//     [is | was] [detected | present | identified | seen | noted | observed]
+//     [in the gamma | beta | alpha(-1/-2) region]
+//   單株 <isotype> [陽性 | 檢出];  <isotype> 單株(球)蛋白(帶) [陽性 | 檢出]
+// where <isotype> is a heavy-light pair (IgG-κ, IgA lambda) or a free light
+// chain (free λ, free kappa light chain).
+const LIGHT_ALT = '(?:Κ|Λ|KAPPA|LAMBDA)'
+const ISOTYPE_ALT = `(?:IG[GAMDE]\\s*[-‐_/ ]?\\s*${LIGHT_ALT}|(?:FREE|游離)\\s*${LIGHT_ALT}(?:\\s+LIGHT\\s+CHAINS?)?)`
+const AFFIRMATIVE_TEMPLATES = [
+  new RegExp(
+    `^(?:MONOCLONAL\\s+)?(${ISOTYPE_ALT})(?:\\s+MONOCLONAL)?`
+    + `(?:\\s+(?:BAND|PROTEIN|PARAPROTEIN|GAMMOPATHY|COMPONENT|IMMUNOGLOBULIN))?`
+    + `(?:\\s+(?:IS\\s+|WAS\\s+)?(?:DETECTED|PRESENT|IDENTIFIED|SEEN|NOTED|OBSERVED))?`
+    + `(?:\\s+IN\\s+(?:THE\\s+)?(?:GAMMA|BETA|ALPHA(?:[-\\s]?[12])?)(?:\\s+REGION)?)?$`,
+  ),
+  new RegExp(`^單株\\s*(${ISOTYPE_ALT})\\s*(?:陽性|檢出)?$`),
+  new RegExp(`^(${ISOTYPE_ALT})\\s*單株(?:球)?蛋白(?:帶)?\\s*(?:陽性|檢出)?$`),
+]
+const ISOTYPE_PARTS_RE = new RegExp(`^(?:(IG[GAMDE])\\s*[-‐_/ ]?\\s*(${LIGHT_ALT})|(?:FREE|游離)\\s*(${LIGHT_ALT}))`)
 
 const lightSymbol = (light: string) => (/Κ|KAPPA/.test(light) ? 'κ' : 'λ')
+
+/** The isotype a controlled affirmative template states, else null. */
+function singleIsotype(result: string): string | null {
+  const text = result.replace(/\s+/g, ' ').trim()
+  for (const template of AFFIRMATIVE_TEMPLATES) {
+    const match = text.match(template)
+    if (!match) continue
+    const parts = match[1].trim().match(ISOTYPE_PARTS_RE)
+    if (!parts) return null
+    return parts[1] ? `Ig${parts[1].slice(2)}-${lightSymbol(parts[2])}` : `free ${lightSymbol(parts[3])}`
+  }
+  return null
+}
 
 function splitRecord(record: string): { label: string; result: string } {
   const text = String(record ?? '').normalize('NFKC').toUpperCase().trim()
@@ -318,15 +352,6 @@ function splitRecord(record: string): { label: string; result: string } {
   return colon > 0
     ? { label: text.slice(0, colon).trim(), result: text.slice(colon + 2).trim().replace(/[.。]+$/, '').trim() }
     : { label: '', result: text.replace(/[.。]+$/, '').trim() }
-}
-
-/** The one isotype a single-clause, undoubted, unnegated statement names. */
-function singleIsotype(result: string): string | null {
-  if (NEGATION_OR_DOUBT_RE.test(result) || MULTI_CLAUSE_RE.test(result)) return null
-  const isotypes = [...result.matchAll(ISOTYPE_RE)].map((m) => `Ig${m[1].slice(2)}-${lightSymbol(m[2])}`)
-  const freeLights = [...result.matchAll(FREE_LIGHT_RE)].map((m) => `free ${lightSymbol(m[1])}`)
-  const found = [...new Set([...isotypes, ...freeLights])]
-  return found.length === 1 ? found[0] : null
 }
 
 /**

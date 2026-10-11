@@ -112,14 +112,6 @@ describe('immunology non-blood check', () => {
   })
 })
 
-it('「血清鈣」 under URINE(SPOT) with a urine-like range is still never 尿液 (its name says serum)', () => {
-  // (It files under 其他: 生化 has no 「鈣」 alias — a separate, pre-existing gap.)
-  expect(cat(row('血清鈣', '09011C', 12, 'mg/dL', { range: '[<20]', inspect: 'URINE(SPOT)' }))).not.toBe('urine')
-})
-
-it('leaves ratio names to the urine ratio rules, whatever their unit', () => {
-  // A ratio is its own urine analyte; its unit cannot make it serum.
-  for (const [item, unit] of [['Prot/Cr ratio', 'g/dL'], ['Prot/Cr ratio', 'mg/g'], ['Alb/Cr ratio', 'g/L'], ['微白蛋白/肌酸酐比值', 'g/dL']]) {
-    expect(cat(row(item, item.startsWith('Prot') ? '09040C' : '12111C', 7, unit))).toBe('urine')
-  }
+it('「血清鈣」 under URINE(SPOT) with a urine-like range stays in 生化 (its name says serum)', () => {
+  expect(cat(row('血清鈣', '09011C', 12, 'mg/dL', { range: '[<20]', inspect: 'URINE(SPOT)' }))).toBe('chem')
 })

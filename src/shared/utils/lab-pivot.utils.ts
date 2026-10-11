@@ -390,6 +390,9 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   '總蛋白質': 'TP',
   // 09040C 全蛋白 — the NHI order's own name.
   '全蛋白': 'TP',
+  // 09011C 鈣 — the NHI order's own name.
+  '鈣': 'CA',
+  '血清鈣': 'CA',
   'PTH-I': 'IPTH',
   IPTH: 'IPTH',
   'I-PTH': 'IPTH',
@@ -846,8 +849,13 @@ export function buildLabPivots(
       // stays correct. The raw row-by-row report uses a different path, untouched.
       // An IEP / IFE report column folds the report and its lane rows into
       // one cell; each record keeps its own analyte ("IgG: Present").
+      // The comparator goes inside the record ("M-band: <0.2 g/L"), so the
+      // cell itself carries none.
+      const sourceComparator = typeof obs.valueQuantity?.comparator === 'string' && obs.valueQuantity.comparator.trim()
+        ? obs.valueQuantity.comparator.trim()
+        : undefined
       let cellValue = isParaproteinTextKey(testKey) && value && value !== '—'
-        ? `${getTestDisplayName(obs)}: ${value}${unit ? ` ${unit}` : ''}`
+        ? `${getTestDisplayName(obs)}: ${recordDisplayValue({ value, comparator: sourceComparator })}${unit ? ` ${unit}` : ''}`
         : value
       let cellUnit = isParaproteinTextKey(testKey) ? undefined : unit
       let trendUnit = unit
@@ -902,9 +910,7 @@ export function buildLabPivots(
         value: cellValue,
         unit: cellUnit,
         isAbnormal,
-        comparator: typeof obs.valueQuantity?.comparator === 'string' && obs.valueQuantity.comparator.trim()
-          ? obs.valueQuantity.comparator.trim()
-          : undefined,
+        comparator: isParaproteinTextKey(testKey) ? undefined : sourceComparator,
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
         status,

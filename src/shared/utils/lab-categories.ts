@@ -150,7 +150,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // CO2 variants stay TCO2-specific — NOT 'BICARBONATE'/'HCO3', which is the
     // arterial blood-gas analyte (own category). NT-proBNP variants kept
     // distinct from BNP (a different assay we don't fold in here).
-    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
+    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', '鈣', '血清鈣', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
     // ships this for NHI 09099C 心肌旋轉蛋白Ｉ.
@@ -867,7 +867,10 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   const orderDisplayNorms = codings
     .filter((c: any) => isNhiOrderCodeSystem(c?.system))
     .map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
-  const hasOwnName = !!textNorm || ownCodings.some((c: any) => c?.display || c?.code)
+  // A name a person reads: code.text or an item coding display. A bare
+  // local item code ("L0001", "72-001") is an identifier, not a name, so it
+  // never suppresses the order display.
+  const hasOwnName = !!textNorm || ownCodings.some((c: any) => typeof c?.display === 'string' && c.display.trim())
   const displayNorms = hasOwnName ? ownDisplayNorms : [...ownDisplayNorms, ...orderDisplayNorms]
 
   const exactCandidates = [...codeNorms, textNorm, ...displayNorms].filter(Boolean)
@@ -1097,6 +1100,9 @@ export function getTestDisplayName(obs: any): string {
   return (
     obs?.code?.text ||
     own.find((c: any) => c?.display)?.display ||
+    // An opaque local item code is an identifier; the order display names
+    // the row better.
+    codings.find((c: any) => isNhiOrderCodeSystem(c?.system) && c?.display)?.display ||
     own.find((c: any) => c?.code)?.code ||
     codings[0]?.display ||
     codings[0]?.code ||
