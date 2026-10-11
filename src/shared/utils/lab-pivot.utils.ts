@@ -28,6 +28,7 @@ import {
   isNhiMedicloudObservation,
 } from '@/src/shared/utils/observation-provenance.utils'
 import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
+import { valueUnitFamily } from '@/src/shared/utils/lab-value-grammar'
 
 export interface LabCell {
   adultPreventive?: boolean
@@ -542,62 +543,6 @@ function differentialKeyFromLoinc(obs: any): string | undefined {
   return undefined
 }
 
-/**
- * Count per volume: /µL, 10^3/µL, x10^9/L, /mm3, /cumm, cells/µL, K/µL, and
- * the UCUM forms (10*3/uL). Deliberately not G/L, which is also grams/litre.
- */
-function isCountPerVolumeUnit(unit: string): boolean {
-  const compact = unit
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/[µμ]/g, 'u')
-  const match = compact.match(/^(.*)\/(ul|mm3|mm\^3|cumm|cmm|nl|l)$/)
-  if (!match) return false
-  const prefix = match[1].replace(/^[x*×·]/, '').replace(/^(?:cells?|#)/, '').replace(/(?:cells?|#)$/, '')
-  const power = /^10(?:\^|\*|e)?(\d{1,2})$/.exec(prefix)
-  if (match[2] === 'l') return !!power && (power[1] === '9' || power[1] === '6')
-  return prefix === '' || /^(?:k|thou|1000)$/.test(prefix) || (!!power && Number(power[1]) <= 6)
-}
-
-// The ways a percent unit is printed — the same spellings the AI lab value
-// family accepts (fhir-tools labValueFamily): "%", full-width 「％」 (NFKC),
-// "percent", "per cent", "pct", 「百分比」, in any case, as a whole word.
-const PERCENT_UNIT_TEXT_RE = /^(?:%|percent|per\s*cent|pct|百分比)$/i
-
-function unitFamily(unit: unknown): 'count' | 'fraction' | null {
-  if (typeof unit !== 'string' || !unit.trim()) return null
-  if (PERCENT_UNIT_TEXT_RE.test(unit.normalize('NFKC').trim())) return 'fraction'
-  return isCountPerVolumeUnit(unit) ? 'count' : null
-}
-
-// "3100 /uL", "< 1 %", "60-65%", "62 percent": a number written as text with
-// its unit after it.
-const NUMBER_WITH_UNIT_TEXT_RE =
-  /^\s*(?:[<>≤≥≦≧]=?\s*)?\d+(?:\.\d+)?(?:\s*[-–~]\s*\d+(?:\.\d+)?)?\s*(\S.*?)\s*$/
-
-/** The unit family of a value sent as text ("3100 /uL", "62%"), or null. */
-function stringUnitFamily(value: unknown): 'count' | 'fraction' | null {
-  if (typeof value !== 'string') return null
-  const unit = value.normalize('NFKC').match(NUMBER_WITH_UNIT_TEXT_RE)?.[1]
-  return unit ? unitFamily(unit) : null
-}
-
-/** What a Quantity's units say. Its UCUM code decides when it has one
- *  (system UCUM or absent) — code '%' is a fraction whatever the unit text
- *  says, a count code ('10*3/uL') is a count — as in the AI value family.
- *  Without a code, or with a code that is neither, the unit text. */
-function quantityUnitFamily(obs: any): 'count' | 'fraction' | null {
-  const quantity = obs?.valueQuantity
-  if (!quantity) return stringUnitFamily(obs?.valueString)
-  const code = typeof quantity.code === 'string' ? quantity.code.trim() : ''
-  const system = typeof quantity.system === 'string' ? quantity.system : ''
-  if (code && (!system || /unitsofmeasure\.org/i.test(system))) {
-    if (code === '%') return 'fraction'
-    if (isCountPerVolumeUnit(code)) return 'count'
-  }
-  return unitFamily(quantity.unit)
-}
 
 /**
  * The column a differential result belongs in, given the key its name (or
@@ -611,7 +556,9 @@ export function countFractionAwareKey(obs: any, key: string): string {
   const countKey = COUNT_KEY_FOR_FRACTION_KEY[key]
   const fractionKey = FRACTION_KEY_FOR_COUNT_KEY[key]
   if (!countKey && !fractionKey) return key
-  const family = quantityUnitFamily(obs)
+  // One grammar with the AI value family: Quantity, Range bounds, or a
+  // number printed as text with its unit; UCUM code first, then unit text.
+  const family = valueUnitFamily(obs)
   if (family === 'count' && countKey) return countKey
   if (family === 'fraction' && fractionKey) return fractionKey
   return key
