@@ -1,5 +1,6 @@
-// 免疫 category — field report LDR-20261008-28256AA6 (臺北榮總 via 雲端病歷):
-// 「累積報告沒有免疫相關: IgG, IgA, IgM, C3, C4, RF」. Every analyte of the
+// 免疫 category — from a field report (雲端病歷 data, 2026-10-08) that IgG,
+// IgA, IgM, C3, C4 and RF had no cumulative panel; values here are
+// synthetic. Every analyte of the
 // report, with and without LOINC and with no / an unrelated order code; the
 // name guards; the former mis-routes (line-blot "Negative" → 尿液, 混合黴菌 →
 // 微生物); specific-allergen rows kept out of the cumulative report; and the
@@ -66,28 +67,28 @@ function obs({
 //  expected column key, needs immunology context when the row has no order]
 const SPEC_ROWS: Array<[string, string, string, string | number, string, boolean]> = [
   ['RF', '12011C', '11572-5', 9.5, 'RF', true],
-  ['IGG', '12025B', '2465-3', 1107, 'IGG', false],
-  ['IGA', '12027B', '2458-8', 307, 'IGA', false],
-  ['IGM', '12029B', '2472-9', 324, 'IGM', false],
-  ['IgE', '12031C', '19113-0', 150, 'IGE', false],
-  ['C3', '12034B', '4485-9', 113.9, 'C3', false],
-  ['C4', '12038B', '4498-2', 16.5, 'C4', false],
+  ['IGG', '12025B', '2465-3', 1000, 'IGG', false],
+  ['IGA', '12027B', '2458-8', 200, 'IGA', false],
+  ['IGM', '12029B', '2472-9', 300, 'IGM', false],
+  ['IgE', '12031C', '19113-0', 100, 'IGE', false],
+  ['C3', '12034B', '4485-9', 100, 'C3', false],
+  ['C4', '12038B', '4498-2', 20, 'C4', false],
   ['ANA', '12053C', '5048-4', 'N', 'ANA', false],
-  ['dsDNA Ab', '12060C', '5130-0', 1.5, 'ANTI-DSDNA', false],
-  ['SS-A/Ro Ab', '12064B', '33569-5', 0.4, 'ANTI-SSA', false],
-  ['SS-B/La Ab', '12064B', '17791-5', 1.4, 'ANTI-SSB', false],
+  ['dsDNA Ab', '12060C', '5130-0', 5, 'ANTI-DSDNA', false],
+  ['SS-A/Ro Ab', '12064B', '33569-5', 2, 'ANTI-SSA', false],
+  ['SS-B/La Ab', '12064B', '17791-5', 3, 'ANTI-SSB', false],
   ['Ro52', '12064B', '53017-0', 'Negative', 'ANTI-RO52', false],
-  ['RNP Ab', '12173B', '29374-6', 0.8, 'ANTI-RNP', false],
-  ['Sm Ab', '12173B', '11090-8', 0.7, 'ANTI-SM', false],
+  ['RNP Ab', '12173B', '29374-6', 4, 'ANTI-RNP', false],
+  ['Sm Ab', '12173B', '11090-8', 6, 'ANTI-SM', false],
   ['Mi-2alpha(Mi-2a)', '12137B', '88732-3', 'Negative', 'ANTI-MI-2A', false],
   ['Mi-2beta(Mi-2b)', '12137B', '88733-1', 'Negative', 'ANTI-MI-2B', false],
   ['Jo-1', '12154B', '8076-2', 'Negative', 'ANTI-JO-1', false],
   ['Ku', '12155B', '18484-6', 'Negative', 'ANTI-KU', true],
   ['粒腺體抗體 ;(AMA, anti-mitochondrial antibody)', '12056B', '20483-4', 'Negative', 'AMA', false],
-  ['IgG1', '12149B', '2466-1', 518, 'IGG1', false],
-  ['IgG2', '12149B', '2467-9', 293.5, 'IGG2', false],
-  ['IgG3', '12149B', '2468-7', 65.5, 'IGG3', false],
-  ['IgG4', '12149B', '2469-5', 60.1, 'IGG4', false],
+  ['IgG1', '12149B', '2466-1', 500, 'IGG1', false],
+  ['IgG2', '12149B', '2467-9', 300, 'IGG2', false],
+  ['IgG3', '12149B', '2468-7', 50, 'IGG3', false],
+  ['IgG4', '12149B', '2469-5', 40, 'IGG4', false],
 ]
 
 const ALLERGENS = ['混合花粉', '屋塵璊', '德國蟑螂', '混合動物皮毛', '貓毛', '狗毛', '混合黴菌']
@@ -167,7 +168,7 @@ describe('by name alone — no order code, or a code the app does not know', () 
   })
 
   it('reads the bilingual standardized IgE name', () => {
-    const observation = obs({ item: '免疫球蛋白E ;(IgE)', value: 150 })
+    const observation = obs({ item: '免疫球蛋白E ;(IgE)', value: 100 })
     expect(categorizeObservation(observation)?.id).toBe('immuno')
     expect(getLabPivotTestIdentity(observation, 'immuno').testKey).toBe('IGE')
   })
@@ -260,9 +261,9 @@ describe('name guards', () => {
 describe('specific-allergen IgE is kept out of the cumulative report', () => {
   it.each(ALLERGENS)('%s — coded 30022C or uncoded — has no category', (item) => {
     for (const observation of [
-      obs({ item, nhi: '30022C', value: '<0.35', unit: 'KU/L' }),
-      obs({ item, nhi: '30022C', loinc: '6833-8', value: '<0.35', unit: 'KU/L' }),
-      obs({ item, value: '<0.35', unit: 'KU/L' }),
+      obs({ item, nhi: '30022C', value: '<0.1', unit: 'KU/L' }),
+      obs({ item, nhi: '30022C', loinc: '6833-8', value: '<0.1', unit: 'KU/L' }),
+      obs({ item, value: '<0.1', unit: 'KU/L' }),
     ]) {
       expect(isExcludedFromCumulativeReport(observation)).toBe(true)
       expect(categorizeObservationWithReason(observation)).toEqual({ category: null, decidedBy: 'excluded' })
@@ -271,15 +272,15 @@ describe('specific-allergen IgE is kept out of the cumulative report', () => {
 
   it('any 30022C row is excluded, whatever its allergen name', () => {
     for (const item of ['牛奶', '蛋白', 'Alternaria tenuis 交錯黴菌', 'Penicillium 青黴菌', 'Phadiatop']) {
-      expect(categorizeObservation(obs({ item, nhi: '30022C', value: '<0.35' }))).toBeNull()
+      expect(categorizeObservation(obs({ item, nhi: '30022C', value: '<0.1' }))).toBeNull()
     }
   })
 
   it('appears in no cumulative panel — not 免疫, 其他 or 微生物 — and in no lab-data report', () => {
     const rows = [
-      ...ALLERGENS.map((item) => obs({ item, nhi: '30022C', value: '<0.35', unit: 'KU/L' })),
-      obs({ item: '混合黴菌', value: '<0.35' }),
-      obs({ item: 'IGG', nhi: '12025B', value: 1107 }),
+      ...ALLERGENS.map((item) => obs({ item, nhi: '30022C', value: '<0.1', unit: 'KU/L' })),
+      obs({ item: '混合黴菌', value: '<0.1' }),
+      obs({ item: 'IGG', nhi: '12025B', value: 1000 }),
     ]
     const pivots = buildLabPivots(rows)
     const names = Object.values(pivots).flatMap((pivot) => pivot.rows.filter((row) => row.values.size > 0).map((row) => row.displayName))
@@ -289,12 +290,12 @@ describe('specific-allergen IgE is kept out of the cumulative report', () => {
   })
 
   it('a 混合黴菌 allergen is still never a fungal culture; real cultures are', () => {
-    expect(categorizeObservation(obs({ item: '混合黴菌', value: '<0.35' }))?.id).toBeUndefined()
+    expect(categorizeObservation(obs({ item: '混合黴菌', value: '<0.1' }))?.id).toBeUndefined()
     expect(categorizeObservation(obs({ item: '黴菌培養', nhi: '13007C', value: 'No growth' }))?.id).toBe('microbio')
   })
 
   it('total IgE (12031C) is not an allergen row', () => {
-    expect(categorizeObservation(obs({ item: 'IgE', nhi: '12031C', value: 150 }))?.id).toBe('immuno')
+    expect(categorizeObservation(obs({ item: 'IgE', nhi: '12031C', value: 100 }))?.id).toBe('immuno')
   })
 })
 
@@ -322,15 +323,15 @@ describe('former mis-routes', () => {
 describe('columns come from the analyte, not the shared order code', () => {
   it('splits 12064B into SS-A, Ro52 and SS-B and 12173B into Sm and RNP', () => {
     const rows = [
-      obs({ item: 'SS-A/Ro Ab', nhi: '12064B', value: 0.4 }),
-      obs({ item: 'SS-B/La Ab', nhi: '12064B', value: 1.4 }),
+      obs({ item: 'SS-A/Ro Ab', nhi: '12064B', value: 2 }),
+      obs({ item: 'SS-B/La Ab', nhi: '12064B', value: 3 }),
       obs({ item: 'Ro52', nhi: '12064B', value: 'Negative' }),
-      obs({ item: 'RNP Ab', nhi: '12173B', value: 0.8 }),
-      obs({ item: 'Sm Ab', nhi: '12173B', value: 0.7 }),
-      obs({ item: 'IGG', nhi: '12025B', value: 1107 }),
-      obs({ item: 'C3', nhi: '12034B', value: 113.9 }),
+      obs({ item: 'RNP Ab', nhi: '12173B', value: 4 }),
+      obs({ item: 'Sm Ab', nhi: '12173B', value: 6 }),
+      obs({ item: 'IGG', nhi: '12025B', value: 1000 }),
+      obs({ item: 'C3', nhi: '12034B', value: 100 }),
       obs({ item: 'RF', nhi: '12011C', value: 9.5 }),
-      obs({ item: 'IgG1亞型', value: 518 }),
+      obs({ item: 'IgG1亞型', value: 500 }),
     ]
     const pivot = buildLabPivots(rows).immuno
     expect(pivot.rows.map((row) => [row.testKey, row.subgroupId])).toEqual([
@@ -350,7 +351,7 @@ describe('columns come from the analyte, not the shared order code', () => {
 
   it('a LOINC-coded, an order-coded and an uncoded row of one analyte share a column', () => {
     const pivot = buildLabPivots([
-      obs({ item: 'SS-A/Ro Ab', nhi: '12064B', loinc: '33569-5', value: 0.4, date: '2026-01-01' }),
+      obs({ item: 'SS-A/Ro Ab', nhi: '12064B', loinc: '33569-5', value: 2, date: '2026-01-01' }),
       obs({ item: 'SS-A/Ro Ab', nhi: '12064B', value: 0.5, date: '2026-09-30' }),
       obs({ item: 'Mi-2alpha(Mi-2a)', nhi: '12137B', value: 'Negative', date: '2026-01-01' }),
       obs({ item: 'Mi-2α', value: 'Negative', date: '2026-09-30' }),
@@ -387,7 +388,7 @@ describe('non-regression', () => {
   })
 
   it('CRP (12015C) stays in 生化', () => {
-    expect(categorizeObservation(obs({ item: 'CRP', nhi: '12015C', value: 0.06 }))?.id).toBe('chem')
+    expect(categorizeObservation(obs({ item: 'CRP', nhi: '12015C', value: 0.1 }))?.id).toBe('chem')
   })
 
   it('雲端病歷 CBC rows under 08 orders stay in 血液', () => {
@@ -400,7 +401,7 @@ describe('urine spot Prot/Cr ratio (09040C)', () => {
     ['NHI code only', undefined],
     ['with LOINC 2890-2', '2890-2'],
   ])('%s → 尿液 UPCR column', (_label, loinc) => {
-    const observation = obs({ item: 'Prot/Cr ratio', nhi: '09040C', loinc, value: 0.09, unit: 'mg/g' })
+    const observation = obs({ item: 'Prot/Cr ratio', nhi: '09040C', loinc, value: 0.1, unit: 'mg/g' })
     expect(categorizeObservation(observation)?.id).toBe('urine')
     const pivot = buildLabPivots([observation]).urine
     const row = pivot.rows.find((r) => r.values.size > 0)!

@@ -86,11 +86,11 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
       ...(typeof value === 'number' ? { valueQuantity: { value, unit: 'mg/dL' } } : { valueString: value }),
     })
     render(<CumulativeLabReport observations={[
-      row('igg', '12025B', 'IGG', 1107),
-      row('c3', '12034B', 'C3', 113.9),
+      row('igg', '12025B', 'IGG', 1000),
+      row('c3', '12034B', 'C3', 100),
       row('ro52', '12064B', 'Ro52', 'Negative'),
-      row('ssa', '12064B', 'SS-A/Ro Ab', '<0.4'),
-      row('mold', '30022C', '混合黴菌', '<0.35'),
+      row('ssa', '12064B', 'SS-A/Ro Ab', '<1'),
+      row('mold', '30022C', '混合黴菌', '<0.1'),
     ]} />, { wrapper: TestProviders })
 
     const immuno = section('immuno')!

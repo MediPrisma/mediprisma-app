@@ -110,7 +110,7 @@ const SYNTHETIC: any[] = [
   // Quantitative vs qualitative under one name.
   lab('HBsAg', '5196-1', 0.2, 'IU/mL'), lab('HBsAg', '5195-3', 'Negative'),
   // Declared-equivalent immunology LOINCs: quantitative vs presence.
-  lab('SS-A', '33569-5', 0.4, 'U/mL'), lab('SS-A', '5352-0', 'Negative'), lab('SS-A', '17792-3', 0.5, 'U/mL'),
+  lab('SS-A', '33569-5', 2, 'U/mL'), lab('SS-A', '5352-0', 'Negative'), lab('SS-A', '17792-3', 3, 'U/mL'),
   // Declared-equivalent thyroid LOINCs.
   lab('TPO Ab', '8099-4', 12, 'IU/mL'), lab('Anti-TPO', '56477-3', 15, 'IU/mL'),
   // Titer vs presence vs quantity, one analyte name each.
@@ -137,7 +137,7 @@ function representations(text: string, loinc: string, quantityUnit: string): any
     { valueQuantity: { value: 2, unit: '%' } },
     { valueRange: { low: { value: 0, unit: quantityUnit }, high: { value: 5, unit: quantityUnit } } },
     { valueInteger: 3 },
-    { valueDecimal: 0.4 },
+    { valueDecimal: 0.25 },
     { valueString: '2 /HPF' }, { valueString: '0–5 /HPF' }, { valueString: '< 0.5' },
     { valueString: 'Negative' }, { valueString: 'NEG' }, { valueString: 'Negative for HBsAg' },
     { valueString: 'Not detected by PCR' }, { valueString: 'Positive (1:80)' }, { valueString: '1:160' },

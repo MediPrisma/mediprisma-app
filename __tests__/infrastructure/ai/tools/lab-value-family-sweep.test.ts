@@ -55,7 +55,7 @@ for (const [sign, s] of SIGNS) {
   }
 }
 for (const separator of RANGE_SEPARATORS) {
-  for (const [low, high] of [['0', '5'], ['0.5', '1.5'], ['1,000', '2,000'], ['-1', '+1'], ['.5', '2']]) {
+  for (const [low, high] of [['0', '5'], ['0.25', '1.75'], ['1,000', '2,000'], ['-1', '+1'], ['.5', '2']]) {
     for (const unit of UNITS) {
       CASES.push({
         value: `${low}${separator}${high}${unit}`, family: 'quantity',
@@ -104,7 +104,7 @@ describe('labValueFamily sweep', () => {
   })
 
   it('keeps a LOINC-less base excess history crossing zero in one group', async () => {
-    const values = ['-3.2', '+1.1', '0.4', '−2.0', '－0.8', '-.5', '+3.2 mmol/L']
+    const values = ['-3.2', '+1.1', '0.25', '−2.0', '－0.75', '-.5', '+3.2 mmol/L']
     const observations = values.map((value, i) => ({
       resourceType: 'Observation', id: `be-${i}`, status: 'final',
       category: [{ coding: [{ code: 'laboratory' }] }],

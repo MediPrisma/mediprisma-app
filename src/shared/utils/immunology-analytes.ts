@@ -2,7 +2,7 @@
 // complement, and autoantibodies. Specific-allergen IgE (30022C) is kept OUT
 // of the cumulative report altogether for now (owner decision 2026-10-08).
 //
-// Field report LDR-20261008-28256AA6 (臺北榮總 via 雲端病歷): IgG, IgA, IgM,
+// A field report (雲端病歷 data, 2026-10-08) showed IgG, IgA, IgM,
 // C3, C4 and RF had no panel and fell to 「其他」; line-blot autoantibodies
 // whose value is "Negative" (Ro52, Mi-2α/β, Jo-1, Ku) were read as urine
 // dipstick results; and the 30022C allergen 混合黴菌 was filed as a fungal

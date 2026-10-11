@@ -154,7 +154,7 @@ describe('LabReportsAdminPage', () => {
       {
         ref: 1, source: 's02', ordinal: 1, dates: { case_time: { day: 3 } },
         fields: { order_code: '30022C', assay_item_name: '混合黴菌', unit_data: 'KU/L', hosp: '合成醫院' },
-        results: { assay_value: '<0.35' }, withheld: {},
+        results: { assay_value: '<0.1' }, withheld: {},
       },
       {
         ref: 2, source: 's02', ordinal: 2, dates: { case_time: { day: 3 } },

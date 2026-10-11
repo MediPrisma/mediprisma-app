@@ -8,7 +8,7 @@
 //      → 24-h urine; g/dL, g/L → blood; mg/dL (or anything else) decides
 //      nothing;
 //   3. the MediCloud inspect mode, which is batch-level and can be wrong
-//      (a serum "Ca 9.6 mg/dL [8.6~10.0]" arrived under URINE(SPOT)): it
+//      (a serum Ca with a serum reference range can arrive under URINE(SPOT)): it
 //      counts only when the row's reference range agrees with it;
 //   4. conflict or nothing → null, and the caller keeps today's behaviour.
 

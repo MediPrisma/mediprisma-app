@@ -77,7 +77,7 @@ describe('routing and columns', () => {
     ['游離輕鏈 κ', '12160B', 15.2, {}, 'immuno/PP:KAPPA-FREE'],
     ['Total Kappa', '12160B', 260, { unit: 'mg/dL' }, 'immuno/PP:KAPPA-TOTAL'],
     ['κ 總量', '12160B', 260, { unit: 'mg/dL' }, 'immuno/PP:KAPPA-TOTAL'],
-    ['Lambda total', '12160B', 150, { unit: 'mg/dL' }, 'immuno/PP:LAMBDA-TOTAL'],
+    ['Lambda total', '12160B', 200, { unit: 'mg/dL' }, 'immuno/PP:LAMBDA-TOTAL'],
     ['UFLC Kappa', '12160B', 8.1, {}, 'immuno/PP:U:KAPPA-FREE'],
     ['Free Kappa', '12160B', 8.1, { specimen: 'Urine' }, 'immuno/PP:U:KAPPA-FREE'],
     // LOINC decides where the name is silent
@@ -92,8 +92,8 @@ describe('routing and columns', () => {
     ['IgG lane', undefined, 'Detected', { loinc: '44597-3' }, 'immuno/PP:IFE'],
     // M-protein: from SPEP only when the row says so
     ['M-protein', '09065B', 1.2, { unit: 'g/dL' }, 'immuno/PP:M-PROTEIN'],
-    ['M-spike', '09065B', 0.8, { unit: 'g/dL' }, 'immuno/PP:M-PROTEIN'],
-    ['M蛋白', '09065B', 0.8, { unit: 'g/dL' }, 'immuno/PP:M-PROTEIN'],
+    ['M-spike', '09065B', 1, { unit: 'g/dL' }, 'immuno/PP:M-PROTEIN'],
+    ['M蛋白', '09065B', 1, { unit: 'g/dL' }, 'immuno/PP:M-PROTEIN'],
     ['M-protein', '09100B', 0.3, { unit: 'g/L', specimen: 'Urine' }, 'immuno/PP:U:M-PROTEIN'],
     ['M-protein', undefined, 1.1, { loinc: '33358-3', unit: 'g/dL' }, 'immuno/PP:M-PROTEIN'],
   ] as Array<[string, string | undefined, number | string, any, string]>)('%s under %s = %s → %s', (item, nhi, value, opts, want) => {
@@ -101,10 +101,10 @@ describe('routing and columns', () => {
   })
 
   it('keeps a neutral κ/λ (no free / total marker) in a column named after the source, serum and urine apart', () => {
-    const serum = getLabPivotTestIdentity(row('κ/λ ratio', '12160B', 1.4, { unit: '' }), 'immuno')
+    const serum = getLabPivotTestIdentity(row('κ/λ ratio', '12160B', 2, { unit: '' }), 'immuno')
     const urine = getLabPivotTestIdentity(row('κ/λ ratio', '12160B', 3.1, { unit: '', specimen: 'Urine' }), 'immuno')
     const kappa = getLabPivotTestIdentity(row('Kappa', '12160B', 15), 'immuno')
-    expect(categorizeObservation(row('κ/λ ratio', '12160B', 1.4, { unit: '' }))?.id).toBe('immuno')
+    expect(categorizeObservation(row('κ/λ ratio', '12160B', 2, { unit: '' }))?.id).toBe('immuno')
     expect(serum.testKey).toMatch(/^PP:/)
     expect(serum.testKey).not.toMatch(/FREE|TOTAL/)
     expect(serum.displayName).toBe('κ/λ ratio')
@@ -126,7 +126,7 @@ describe('routing and columns', () => {
       row('IgG', '12025B', 1100, { unit: 'mg/dL' }),
       row('IFE', '12103B', 'No monoclonal band'),
       row('Free Kappa', '12160B', 15.2),
-      row('κ/λ ratio', '12160B', 1.4, { unit: '' }),
+      row('κ/λ ratio', '12160B', 2, { unit: '' }),
       row('Urine IFE', '12159B', 'Negative', { specimen: 'Urine' }),
     ]).immuno
     const rows = pivot.rows.filter((r) => r.values.size > 0)

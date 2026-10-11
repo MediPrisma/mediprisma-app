@@ -36,7 +36,7 @@ describe('CumulativeLabReport 直式 — 免疫 電泳／輕鏈 panel', () => {
 
   it('renders a third table with κ/λ numbers and one-line IFE text cells', () => {
     render(<CumulativeLabReport observations={[
-      row('igg', '12025B', 'IGG', 1107, { valueQuantity: { value: 1107, unit: 'mg/dL' } }),
+      row('igg', '12025B', 'IGG', 1000, { valueQuantity: { value: 1000, unit: 'mg/dL' } }),
       row('ro52', '12064B', 'Ro52', 'Negative'),
       row('ife', '12103B', 'IFE', LONG_IFE, { interpretation: [{ coding: [{ code: 'A' }] }] }),
       row('lane-igg', '12103B', 'IgG', 'Present'),

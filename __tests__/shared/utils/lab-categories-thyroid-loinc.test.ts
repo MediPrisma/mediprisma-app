@@ -60,7 +60,7 @@ describe('内分泌 thyroid antibody / thyroglobulin LOINCs', () => {
   })
 
   it('leaves a triglyceride row without the thyroglobulin LOINC in 血脂', () => {
-    const tg = loincObs('2571-8', 'TG', { valueQuantity: { value: 150, unit: 'mg/dL' } })
+    const tg = loincObs('2571-8', 'TG', { valueQuantity: { value: 120, unit: 'mg/dL' } })
     expect(categorizeObservationWithReason(tg).category?.id).toBe('lipid')
   })
 })

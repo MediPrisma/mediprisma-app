@@ -332,8 +332,8 @@ export const LAB_CATEGORIES: LabCategory[] = [
     pinnedColumns: ['AFP', 'CEA', 'CA-199', 'CA-125', 'CA-153', 'PSA', 'FERRITIN'],
   },
   {
-    // 免疫 — immunoglobulins and complement, and autoantibodies (field report
-    // LDR-20261008-28256AA6). Analyte data live in immunology-analytes.ts.
+    // 免疫 — immunoglobulins and complement, and autoantibodies (from a field
+    // report, 2026-10-08). Analyte data live in immunology-analytes.ts.
     // Specific-allergen IgE (30022C) is deliberately NOT here: it is kept out
     // of the cumulative report altogether (see isExcludedFromCumulativeReport).
     //

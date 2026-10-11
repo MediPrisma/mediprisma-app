@@ -36,8 +36,8 @@ function labObs(id: string, nhi: string, nhiDisplay: string, text: string, item:
 }
 
 const observations = [
-  labObs('ssa', '12064B', PANEL, PANEL, 'SS-A/Ro Ab', { valueQuantity: { value: 0.4, unit: 'U/mL' } }),
-  labObs('ssb', '12064B', PANEL, PANEL, 'SS-B/La Ab', { valueQuantity: { value: 1.4, unit: 'U/mL' } }),
+  labObs('ssa', '12064B', PANEL, PANEL, 'SS-A/Ro Ab', { valueQuantity: { value: 2, unit: 'U/mL' } }),
+  labObs('ssb', '12064B', PANEL, PANEL, 'SS-B/La Ab', { valueQuantity: { value: 3, unit: 'U/mL' } }),
   labObs('ro52', '12064B', PANEL, PANEL, 'Ro52', { valueString: 'Negative' }),
   labObs('mould', '30022C', '特異過敏原免疫檢驗', '混合黴菌', '混合黴菌', { valueString: 'Class 0' }),
 ]
@@ -54,7 +54,7 @@ describe('queryLabResultsByCategory — 免疫', () => {
     expect(result.observationCount).toBe(3)
     expect(result.availableAnalytes).toEqual(expect.arrayContaining(['SS-A/Ro', 'SS-B/La', 'Ro52']))
     const ids = result.data.flatMap((group: any) => group.results.map((r: any) => r.value))
-    expect(ids).toEqual(expect.arrayContaining([0.4, 1.4, 'Negative']))
+    expect(ids).toEqual(expect.arrayContaining([2, 3, 'Negative']))
   })
 
   it('says specific-allergen IgE is not covered, so absence is not concluded for allergens', async () => {

@@ -43,7 +43,7 @@ describe('ordinal value vocabulary', () => {
   })
 
   it.each([
-    '-5', '+0.3', '+1.5', 'RBC 3-5/HPF', 'Possible', 'Possibly',
+    '-5', '+0.3', '+1.25', 'RBC 3-5/HPF', 'Possible', 'Possibly',
     'Normal flora', 'Trachea', 'Rare', 'NEGLIGIBLE', 'Border cells', 'See report', 'BLOOD', 'Reactive lymphocytes seen'.replace('Reactive', 'Reactivated'),
   ])('%s is not an ordinal value', (value) => {
     expect(ordinalValue(value)).toBeNull()

@@ -45,7 +45,7 @@ const isLatinLetter = (ch: string | undefined) => !!ch && /[A-Z]/.test(ch)
  * is allowed — "Negative for HBsAg", "Not detected by PCR", "Positive (1:80)",
  * 「陰性(-)」, "NEG 0.2 S/CO" — but a spelling must end where a word ends ("R"
  * is not the start of "RBC", "POS" not of "POSSIBLE"), and a bare sign or
- * grade must not be part of a number ("-5", "+0.3", "+1.5").
+ * grade must not be part of a number ("-5", "+0.3", "+1.25").
  */
 export function ordinalValue(value: unknown): string | null {
   if (typeof value !== 'string') return null

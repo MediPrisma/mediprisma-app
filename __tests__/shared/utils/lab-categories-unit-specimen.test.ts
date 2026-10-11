@@ -8,8 +8,8 @@
 //   3. the MediCloud inspect mode (batch-level, can be wrong) — only when the
 //      reference range supports it;
 //   4. conflict or nothing → today's behaviour.
-// Real data: a 09011C serum "Ca 9.6 mg/dL [8.6~10.0]" carried inspect mode
-// URINE(SPOT); it must stay in 生化.
+// The inspect mode is batch-level: a serum Ca with a serum reference range
+// can arrive under URINE(SPOT); it must stay in 生化.
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw'
@@ -36,7 +36,7 @@ const cat = (o: any) => categorizeObservation(o)?.id
 describe('unit class decides the specimen', () => {
   it.each([
     // urine ratios
-    ['TP', '09040C', 150, 'mg/g'],
+    ['TP', '09040C', 120, 'mg/g'],
     ['Total protein', '09040C', 0.15, 'g/g'],
     ['Protein', '09040C', 0.2, 'mg/mg'],
     ['Albumin', '09038C', 30, 'mg/g'],
@@ -44,7 +44,7 @@ describe('unit class decides the specimen', () => {
     ['Ca', '09011C', 0.2, 'mg/mg'],
     ['Creatinine', '09015C', 1.1, 'g/g'],
     // 24-h urine
-    ['Total protein', '09040C', 0.8, 'g/day'],
+    ['Total protein', '09040C', 1, 'g/day'],
     ['TP', '09040C', 450, 'mg/24h'],
     ['Ca', '09011C', 180, 'mg/24hr'],
     ['Creatinine', '09015C', 1.2, 'g/24h'],
@@ -62,9 +62,9 @@ describe('unit class decides the specimen', () => {
 })
 
 describe('inspect mode counts only with a supporting reference range', () => {
-  it('keeps the real-data serum Ca 9.6 mg/dL [8.6~10.0] under URINE(SPOT) in 生化', () => {
-    expect(cat(row('Ca', '09011C', 9.6, 'mg/dL', { range: '[8.6~10.0]', inspect: 'URINE(SPOT)' }))).toBe('chem')
-    expect(cat(row('Ca', '09011C', 9.6, 'mg/dL', { range: [8.6, 10.0], inspect: 'URINE(SPOT)' }))).toBe('chem')
+  it('keeps a serum Ca with a serum reference range under URINE(SPOT) in 生化', () => {
+    expect(cat(row('Ca', '09011C', 9, 'mg/dL', { range: '[8~10]', inspect: 'URINE(SPOT)' }))).toBe('chem')
+    expect(cat(row('Ca', '09011C', 9, 'mg/dL', { range: [8, 10], inspect: 'URINE(SPOT)' }))).toBe('chem')
   })
 
   it.each([
@@ -77,7 +77,7 @@ describe('inspect mode counts only with a supporting reference range', () => {
   })
 
   it.each([
-    ['Creatinine', '09015C', 1.0, 'mg/dL', '[0.7~1.3]', 'URINE(SPOT)'],
+    ['Creatinine', '09015C', 1.0, 'mg/dL', '[0.5~1.2]', 'URINE(SPOT)'],
     ['Creatinine', '09015C', 85, 'mg/dL', undefined, 'URINE(SPOT)'],
     ['Creatinine', '09015C', 85, 'mg/dL', '[20~300]', 'SERUM_YL'],
     ['Creatinine', '09015C', 85, 'mg/dL', '[20~300]', undefined],
@@ -108,7 +108,7 @@ describe('immunology non-blood check', () => {
   it('refuses an immunology name on a urine unit or a supported urine inspect mode', () => {
     expect(cat(row('IgG', '12025B', 1100, 'mg/dL'))).toBe('immuno')
     expect(cat(row('IgG', '12999B', 12, 'mg/g'))).not.toBe('immuno')
-    expect(cat(row('IgG', '12999B', 1100, 'mg/dL', { inspect: 'URINE(SPOT)', range: '[700~1600]' }))).toBe('immuno')
+    expect(cat(row('IgG', '12999B', 1100, 'mg/dL', { inspect: 'URINE(SPOT)', range: '[600~1500]' }))).toBe('immuno')
   })
 })
 
