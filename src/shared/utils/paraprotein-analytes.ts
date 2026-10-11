@@ -198,6 +198,29 @@ const KAPPA_RE = /KAPPA|Κ|(?<![A-Z0-9])K(?![A-Z0-9])/iu
 const LAMBDA_RE = /LAMBDA|Λ|(?<![A-Z0-9])L(?![A-Z0-9])/iu
 const FREE_RE = /FREE|(?<![A-Z0-9])[SU]?FLC(?![A-Z0-9])|游離/iu
 const TOTAL_RE = /TOTAL|總/iu
+const BOUND_RE = /(?<![A-Z0-9])BOUND(?![A-Z0-9])|結合/iu
+// "free + bound", "bound and free", 「游離+結合」, 「結合及游離」: the sum is the total.
+const FREE_AND_BOUND_RE =
+  /(?:FREE|游離)\s*(?:\+|&|AND|和|及|與|加)\s*(?:BOUND|結合)|(?:BOUND|結合)\s*(?:\+|&|AND|和|及|與|加)\s*(?:FREE|游離)/iu
+
+/**
+ * The free / total modifier of a 12160B label, read in context:
+ * - free + bound wording → TOTAL (that sum is the total), with or without
+ *   the word "total";
+ * - free with total, or free with bound alone ("free/total", "Free kappa
+ *   total", "bound") → null: ambiguous, so the row keeps a neutral
+ *   source-name column and joins neither the free nor the total column;
+ * - otherwise free → FREE, total → TOTAL.
+ */
+function lightChainModifier(upper: string): 'FREE' | 'TOTAL' | null {
+  if (FREE_AND_BOUND_RE.test(upper)) return 'TOTAL'
+  const free = FREE_RE.test(upper)
+  const total = TOTAL_RE.test(upper)
+  const bound = BOUND_RE.test(upper)
+  if (free) return total || bound ? null : 'FREE'
+  if (total) return bound ? null : 'TOTAL'
+  return null
+}
 const IEP_ONLY_RE = /(?<![A-Z0-9])IEP(?![A-Z0-9])|IMMUNOELECTRO|免疫電泳/iu
 const IFE_RE = /(?<![A-Z0-9])IFE(?![A-Z0-9])|IMMUNOFIX|免疫固定/iu
 
@@ -262,7 +285,7 @@ export function paraproteinIdentity(obs: any): { key: string; display?: string }
       : KAPPA_RE.test(upper) && !LAMBDA_RE.test(upper) ? 'KAPPA'
         : LAMBDA_RE.test(upper) && !KAPPA_RE.test(upper) ? 'LAMBDA'
           : null
-    const marker = FREE_RE.test(upper) ? 'FREE' : TOTAL_RE.test(upper) ? 'TOTAL' : null
+    const marker = lightChainModifier(upper)
     if (analyte && marker) return { key: `${prefix}${analyte}-${marker}` }
     // Neutral: the source name is the column; free / total is never asserted.
     const neutral = name.normalize('NFKC').trim() || '12160B'

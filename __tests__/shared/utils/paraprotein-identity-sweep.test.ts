@@ -8,6 +8,7 @@
  * the "m" of "Serum" start an M-protein.
  */
 import { paraproteinIdentity } from '@/src/shared/utils/paraprotein-analytes'
+import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
 import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-analyte-display.utils'
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import { samplePatient, sampleCollection } from '../../infrastructure/ai/tools/fixtures'
@@ -142,5 +143,51 @@ describe('AI category query never drops a lane or merges specimens', () => {
     ]).queryLabResultsByCategory as any).execute({ category: 'immuno' })
     expect(result.analyteCount).toBe(2)
     expect(result.availableAnalytes.some((a: string) => /urine/i.test(a))).toBe(true)
+  })
+})
+
+// Free / total in context: "total", or wording that says free AND bound, is
+// never FREE; both markers with no such wording are ambiguous and keep a
+// neutral source-name column — never the free or total columns.
+describe('12160B free / total modifiers in context', () => {
+  it.each([
+    ['Total kappa (free + bound)', 'PP:KAPPA-TOTAL'], ['Kappa, total', 'PP:KAPPA-TOTAL'], ['Kappa (free + bound)', 'PP:KAPPA-TOTAL'],
+    ['Kappa (free and bound)', 'PP:KAPPA-TOTAL'], ['Total lambda (free + bound)', 'PP:LAMBDA-TOTAL'], ['Lambda, total', 'PP:LAMBDA-TOTAL'],
+    ['Lambda (bound + free)', 'PP:LAMBDA-TOTAL'], ['Total κ/λ ratio (free + bound)', 'PP:KL-RATIO-TOTAL'],
+    ['κ/λ ratio, total', 'PP:KL-RATIO-TOTAL'], ['總κ(游離+結合)', 'PP:KAPPA-TOTAL'], ['κ（游離及結合）', 'PP:KAPPA-TOTAL'],
+    ['總 λ', 'PP:LAMBDA-TOTAL'], ['總κ/λ比值', 'PP:KL-RATIO-TOTAL'], ['Total kappa (free + bound) (U)', 'PP:U:KAPPA-TOTAL'],
+  ])('%s → %s', (label, want) => {
+    expect(key(label, '12160B', 10)).toBe(want)
+  })
+
+  it.each([
+    'Kappa free/total', 'Free/total kappa', 'Lambda free / total', 'κ/λ ratio free/total', 'Free and total kappa',
+    'Free kappa total', 'Total free lambda', '游離/總 κ', '總游離λ', 'Bound kappa', 'Kappa (bound)', '結合型 κ', 'λ 結合',
+  ])('%s keeps a neutral source-name column', (label) => {
+    const k = key(label, '12160B', 10)
+    expect(k).toMatch(/^PP:(?:U:)?KL:/)
+  })
+
+  it.each([
+    ['Free kappa', 'PP:KAPPA-FREE'], ['FLC κ', 'PP:KAPPA-FREE'], ['sFLC λ', 'PP:LAMBDA-FREE'], ['Free κ/λ ratio', 'PP:KL-RATIO-FREE'],
+    ['游離κ', 'PP:KAPPA-FREE'], ['Free kappa light chain', 'PP:KAPPA-FREE'], ['Kappa, free', 'PP:KAPPA-FREE'], ['游離輕鏈 λ', 'PP:LAMBDA-FREE'],
+  ])('genuine free label %s keeps %s', (label, want) => {
+    expect(key(label, '12160B', 10)).toBe(want)
+  })
+})
+
+describe('a total and a genuine free κ never share a column or a trend', () => {
+  it('keeps "Total kappa (free + bound)" apart from "Free kappa"', () => {
+    const observations = ['2026-01-01', '2026-04-01'].flatMap((date) => [
+      row('Free kappa', '12160B', 10, undefined, date),
+      row('Total kappa (free + bound)', '12160B', 200, undefined, date),
+    ])
+    const rows = buildLabPivots(observations).immuno.rows.filter((r) => r.values.size > 0)
+    const free = rows.find((r) => r.testKey === 'PP:KAPPA-FREE')!
+    const total = rows.find((r) => r.testKey === 'PP:KAPPA-TOTAL')!
+    expect(free.values.size).toBe(2)
+    expect(total.values.size).toBe(2)
+    expect([...free.values.values()].map((c) => c.value)).toEqual(['10', '10'])
+    expect(free.mapKey).not.toBe(total.mapKey)
   })
 })
