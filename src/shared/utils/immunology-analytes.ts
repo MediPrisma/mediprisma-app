@@ -212,7 +212,11 @@ export const IMMUNOLOGY_NHI_ORDER_CODES = [
  * 06 尿液, 07 糞便, 08 血液, 11 血庫 (antibody screen / Coombs IgG), 13 微生物,
  * 14 病毒血清 (CMV / EBV IgG and IgM).
  */
-export const IMMUNOLOGY_NAME_DENIED_NHI_ORDER_CODES = ['12103B', '12160B']
+// 12159B 尿液免疫固定電泳分析 joins 12103B / 12160B: its IgG / IgA / IgM rows
+// are IFE lanes. Rows of all three reach 免疫's 電泳／輕鏈 subgroup through
+// paraprotein-analytes.ts, before any name pass, so this only refuses the
+// immunoglobulin name match.
+export const IMMUNOLOGY_NAME_DENIED_NHI_ORDER_CODES = ['12103B', '12159B', '12160B']
 export const IMMUNOLOGY_NAME_DENIED_NHI_SECTIONS = ['06', '07', '08', '11', '13', '14']
 
 /** Words in a row's name or order display that place an immunology-looking

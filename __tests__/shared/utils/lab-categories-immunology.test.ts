@@ -95,10 +95,10 @@ const ALLERGENS = ['混合花粉', '屋塵璊', '德國蟑螂', '混合動物皮
 describe('免疫 category definition', () => {
   const immuno = LAB_CATEGORIES.find((c) => c.id === 'immuno')!
 
-  it('is a secondary sub-tab with immunoglobulin and autoantibody subgroups only', () => {
+  it('is a secondary sub-tab with immunoglobulin, autoantibody and electrophoresis / light-chain subgroups', () => {
     expect(immuno.hiddenByDefault).toBe(true)
-    expect(immuno.subgroups?.map((sg) => sg.id)).toEqual(['immunoglobulin', 'autoantibody'])
-    expect(immuno.stackedPanels).toEqual([['immunoglobulin'], ['autoantibody']])
+    expect(immuno.subgroups?.map((sg) => sg.id)).toEqual(['immunoglobulin', 'autoantibody', 'paraprotein'])
+    expect(immuno.stackedPanels).toEqual([['immunoglobulin'], ['autoantibody'], ['paraprotein']])
     expect(immuno.pinnedColumns).toBeUndefined()
     expect(immuno.nhiOrderCodes).not.toContain('30022C')
     // No allergen LOINC (cat 6833-8, dog 6098-8, cockroach 6078-0) anywhere.
@@ -179,9 +179,18 @@ describe('by name alone — no order code, or a code the app does not know', () 
 })
 
 describe('name guards', () => {
+  // 12103B / 12160B rows now reach 免疫's 電泳／輕鏈 subgroup (2026-10-11), but an
+  // IgG under them is an IFE lane / light-chain row, never the IgG column.
   it.each([
     ['immunofixation band', { item: 'IgG', nhi: '12103B', value: 'Monoclonal band' }],
     ['free light chains', { item: 'IgG', nhi: '12160B', value: 12 }],
+  ])('%s reaches only the electrophoresis / light-chain subgroup', (_label, input: any) => {
+    const observation = obs(input)
+    expect(categorizeObservation(observation)?.id).toBe('immuno')
+    expect(getLabPivotTestIdentity(observation, 'immuno').testKey).toMatch(/^PP:/)
+  })
+
+  it.each([
     ['blood bank (Coombs IgG)', { item: 'IgG', nhi: '11003C', value: 'Negative' }],
     ['virus serology (14xxx)', { item: 'IgG', nhi: '14049C', value: 'Positive' }],
     ['microbiology (13xxx)', { item: 'IgM', nhi: '13999C', value: 'Positive' }],

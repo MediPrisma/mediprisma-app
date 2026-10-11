@@ -1744,6 +1744,7 @@ export const zhTW = {
       mycology: '黴菌／真菌',
       immunoglobulin: '免疫球蛋白／補體',
       autoantibody: '自體抗體',
+      paraprotein: '電泳／輕鏈',
     },
     labels: {
       status: '狀態：',

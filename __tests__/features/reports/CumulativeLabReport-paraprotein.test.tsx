@@ -1,0 +1,75 @@
+import { render, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
+import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { AudienceProvider } from '@/src/application/providers/audience.provider'
+import { useCumulativeReportPrefsStore } from '@/src/application/stores/cumulative-report-prefs.store'
+
+function TestProviders({ children }: { children: ReactNode }) {
+  return (
+    <LanguageProvider>
+      <AudienceProvider>{children}</AudienceProvider>
+    </LanguageProvider>
+  )
+}
+
+const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw'
+const row = (id: string, nhi: string, text: string, value: string | number, extra: Record<string, any> = {}) => ({
+  id,
+  status: 'final',
+  category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
+  code: { text, coding: [{ system: NHI, code: nhi }] },
+  effectiveDateTime: '2026-09-30',
+  ...(typeof value === 'number' ? { valueQuantity: { value, unit: 'mg/L' } } : { valueString: value }),
+  ...extra,
+})
+
+const LONG_IFE = 'IgG-kappa monoclonal band in the gamma region; free lambda also seen; suggest serum free light chain assay and bone marrow correlation'
+
+describe('CumulativeLabReport 直式 — 免疫 電泳／輕鏈 panel', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useCumulativeReportPrefsStore.setState({ layoutMode: 'stacked', range: 'latest3', categoryOrder: null })
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: jest.fn() })
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: jest.fn() })
+  })
+
+  it('renders a third table with κ/λ numbers and one-line IFE text cells', () => {
+    render(<CumulativeLabReport observations={[
+      row('igg', '12025B', 'IGG', 1107, { valueQuantity: { value: 1107, unit: 'mg/dL' } }),
+      row('ro52', '12064B', 'Ro52', 'Negative'),
+      row('ife', '12103B', 'IFE', LONG_IFE, { interpretation: [{ coding: [{ code: 'A' }] }] }),
+      row('lane-igg', '12103B', 'IgG', 'Present'),
+      row('fk', '12160B', 'Free Kappa', 45.1),
+      row('fl', '12160B', 'Free Lambda', 12.0),
+      row('uife', '12159B', 'Urine IFE', 'No monoclonal band', { specimen: { display: 'Urine' } }),
+    ]} />, { wrapper: TestProviders })
+
+    const immuno = document.querySelector<HTMLElement>('[data-cumulative-section="immuno"]')!
+    const tables = immuno.querySelectorAll('table')
+    expect(tables).toHaveLength(3)
+    expect(tables[2]).toHaveTextContent('電泳／輕鏈')
+    // The IgG lane under the IEP order is not in the immunoglobulin table.
+    expect(within(tables[0] as HTMLElement).queryByText('Present')).toBeNull()
+    expect(tables[2]).toHaveTextContent('45.1')
+
+    const textCells = tables[2].querySelectorAll<HTMLElement>('[data-lab-text-cell]')
+    expect(textCells.length).toBe(2)
+    const serum = [...textCells].find((cell) => cell.getAttribute('data-lab-test-key') === 'PP:IFE')!
+    // Short badge, full text (every folded record) on hover, one clamped line.
+    expect(serum).toHaveTextContent('IgG-κ')
+    expect(serum).not.toHaveTextContent('bone marrow')
+    expect(serum.getAttribute('title')).toContain(LONG_IFE)
+    expect(serum.getAttribute('title')).toContain('Present')
+    const clamp = serum.querySelector('[data-lab-text-clamp]')!
+    expect(clamp.className).toMatch(/truncate/)
+    expect(clamp.className).toMatch(/max-w-/)
+    // Text results are never coloured as abnormal.
+    expect(serum.className).not.toMatch(/text-clinical-abnormal/)
+
+    const urine = [...textCells].find((cell) => cell.getAttribute('data-lab-test-key') === 'PP:U:IFE')!
+    expect(urine).toHaveTextContent('陰性')
+    // The urine IFE is not in the 尿液 section.
+    expect(document.querySelector('[data-cumulative-section="urine"] table')).toBeNull()
+  })
+})

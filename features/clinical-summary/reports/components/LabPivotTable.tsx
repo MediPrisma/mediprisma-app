@@ -15,6 +15,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import type { LabPivot } from "../hooks/useLabPivot"
 import { cellDisplayValue } from "@/src/shared/utils/lab-pivot.utils"
+import { isParaproteinTextKey, paraproteinTextBadge } from "@/src/shared/utils/paraprotein-analytes"
 import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
@@ -276,8 +277,29 @@ export const LabPivotTable = memo(function LabPivotTable({
         if (isMissingLabValue(cell.value)) {
           return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
         }
-        const cls = cell.isAbnormal ? 'text-clinical-abnormal font-medium' : 'text-foreground'
         const isFocusedCell = focusDate === date && test.testKey === focusAnalyteKey
+        if (isParaproteinTextKey(test.testKey)) {
+          // IEP / IFE report text: one clamped line holding a short badge
+          // (IgG-κ / 陰性 / 見報告), every folded record in full on hover, a
+          // fixed width, and no abnormal colouring — the text is not graded.
+          const records = cell.allValues ?? (cell.sourceRecords?.map((record) => record.value) ?? [cell.value])
+          const badge = paraproteinTextBadge(records, locale.startsWith('zh') ? 'zh-TW' : 'en')
+          return (
+            <td
+              key={test.mapKey}
+              data-lab-cell=""
+              data-lab-text-cell=""
+              data-lab-test-key={test.testKey}
+              data-lab-date={date}
+              data-evidence-focus={isFocusedCell ? 'true' : undefined}
+              className={`border-l px-1 py-1 text-center text-foreground ${isFocusedCell ? 'relative bg-primary/15 ring-2 ring-inset ring-primary' : ''}`}
+              title={records.join('\n')}
+            >
+              <span data-lab-text-clamp="" className="mx-auto block max-w-[7.5rem] truncate">{badge}</span>
+            </td>
+          )
+        }
+        const cls = cell.isAbnormal ? 'text-clinical-abnormal font-medium' : 'text-foreground'
         return (
           <td
             key={test.mapKey}

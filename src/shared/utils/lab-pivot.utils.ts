@@ -8,6 +8,11 @@ import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { THYROID_DISPLAY, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import {
+  PARAPROTEIN_COLUMN_ORDER,
+  paraproteinDisplay,
+  paraproteinIdentity,
+} from '@/src/shared/utils/paraprotein-analytes'
+import {
   AUTOANTIBODY_KEYS,
   IMMUNOGLOBULIN_KEYS,
   IMMUNOLOGY_DISPLAY,
@@ -522,6 +527,9 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   ...IMMUNOLOGY_DISPLAY,
   // 內分泌 thyroid columns keyed by LOINC (thyroid-analytes.ts).
   ...THYROID_DISPLAY,
+  // 免疫 電泳／輕鏈 fixed columns (English here; getLabRowDisplayParts gives
+  // each language its own header via paraproteinDisplay).
+  ...Object.fromEntries(PARAPROTEIN_COLUMN_ORDER.map((key) => [key, paraproteinDisplay(key, 'en')!])),
 }
 
 /** Canonical labels supplied by the app while the shared normalization
@@ -646,7 +654,13 @@ export function getLabPivotTestIdentity(
   let testKey = labKeyInCategory(canonicalTestKey(obs), categoryId)
   let displayOverride: string | undefined
 
-  if (categoryId === 'immuno') {
+  // 免疫 電泳／輕鏈: the paraprotein column comes first and alone — an IgG lane
+  // under an IEP / IFE order never reaches the IgG column.
+  const paraprotein = categoryId === 'immuno' ? paraproteinIdentity(obs) : null
+  if (paraprotein) {
+    testKey = paraprotein.key
+    displayOverride = paraprotein.display ?? paraproteinDisplay(paraprotein.key, 'en')
+  } else if (categoryId === 'immuno') {
     // Only a LOINC or the immunology name matcher may assign a 免疫 column.
     // The general name resolver reads "IgG抗體" (anti-IgG) as IgG; when the
     // matcher refused such a name, the row keeps its own source name.
@@ -1014,8 +1028,10 @@ export function buildLabPivots(
           memberToGroup.set(m.toUpperCase(), sg.id)
         }
       }
+      const prefixes = cat.subgroups.flatMap((sg) => (sg.keyPrefixes ?? []).map((prefix) => [prefix, sg.id] as const))
       for (const row of testMap.values()) {
         row.subgroupId = memberToGroup.get(row.testKey)
+          ?? prefixes.find(([prefix]) => row.testKey.startsWith(prefix))?.[1]
       }
     }
 

@@ -1737,6 +1737,7 @@ export const en = {
       mycology: 'Mycology',
       immunoglobulin: 'Immunoglobulins / Complement',
       autoantibody: 'Autoantibodies',
+      paraprotein: 'Electrophoresis & light chains',
     },
     labels: {
       status: 'Status:',

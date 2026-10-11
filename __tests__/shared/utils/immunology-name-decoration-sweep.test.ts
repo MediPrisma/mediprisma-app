@@ -121,7 +121,9 @@ describe('denied names stay out of 免疫 under every decoration', () => {
   const cases = DENIED.flatMap(([name, nhi]) => [name, ...neutralDecorations(name)].map((d) => [d, nhi] as const))
   it(`covers ${cases.length} decorated denied names`, () => {
     const failures = cases
-      .filter(([decorated, nhi]) => placement(decorated, nhi).startsWith('immuno'))
+      // Denied: never an immunoglobulin / autoantibody column. Rows of the
+      // IEP / IFE / κλ orders may sit in 電泳／輕鏈 (PP:) — that is their place.
+      .filter(([decorated, nhi]) => placement(decorated, nhi).startsWith('immuno') && !placement(decorated, nhi).startsWith('immuno/PP:'))
       .map(([decorated, nhi]) => `${decorated} [${nhi ?? 'no code'}]: ${placement(decorated, nhi)}`)
     expect(failures).toEqual([])
   })

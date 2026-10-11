@@ -13,6 +13,12 @@
 
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import {
+  isParaproteinObservation,
+  PARAPROTEIN_COLUMN_ORDER,
+  PARAPROTEIN_LOINC_TO_KEY,
+  PARAPROTEIN_PREFIX,
+} from '@/src/shared/utils/paraprotein-analytes'
 
 import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
 import { canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
@@ -39,6 +45,9 @@ export interface LabSubgroup {
   /** Canonical row keys (uppercase) that belong to this subgroup.
    *  Match against pickKey() result in useLabPivot. */
   members: string[]
+  /** Row keys starting with one of these also belong here — for columns
+   *  named after their source (the paraprotein subgroup's neutral κ/λ). */
+  keyPrefixes?: string[]
 }
 
 export interface LabCategory {
@@ -339,20 +348,25 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // ESR, not an immune-status test), although NHI bills it as 12015C.
     id: 'immuno',
     hiddenByDefault: true,
-    preferredOrder: [...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS],
+    preferredOrder: [...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS, ...PARAPROTEIN_COLUMN_ORDER],
     codes: Object.keys(IMMUNOLOGY_TEXT_TO_KEY),
     loincCodes: [
       ...PACKAGE_IMMUNOLOGY_LOINCS,
       ...Object.keys(IMMUNOLOGY_LOINC_TO_KEY),
+      ...Object.keys(PARAPROTEIN_LOINC_TO_KEY),
     ],
     nhiOrderCodes: IMMUNOLOGY_NHI_ORDER_CODES,
     subgroups: [
       { id: 'immunoglobulin', members: IMMUNOGLOBULIN_KEYS },
       { id: 'autoantibody', members: AUTOANTIBODY_KEYS },
+      // 電泳／輕鏈: IEP / IFE reports, κ/λ light chains, M-protein
+      // (paraprotein-analytes.ts). Neutral κ/λ columns are named after their
+      // source, hence the key prefix.
+      { id: 'paraprotein', members: PARAPROTEIN_COLUMN_ORDER, keyPrefixes: [PARAPROTEIN_PREFIX] },
     ],
-    // 直式: the immunoglobulin/complement table, then the autoantibodies, so
-    // neither needs a horizontal scroll.
-    stackedPanels: [['immunoglobulin'], ['autoantibody']],
+    // 直式: the immunoglobulin/complement table, the autoantibodies, then the
+    // electrophoresis / light-chain table, so none needs a horizontal scroll.
+    stackedPanels: [['immunoglobulin'], ['autoantibody'], ['paraprotein']],
   },
   {
     id: 'urine',
@@ -888,6 +902,18 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // Before microbiology, so 混合黴菌 (mixed moulds IgE) can never be filed
   // as a fungal culture.
   if (isExcludedFromCumulativeReport(obs)) return { category: null, decidedBy: 'excluded' }
+
+  // ── Pass 0a: 免疫 電泳／輕鏈 (paraprotein) ─────────────────────────────
+  // IEP / IFE reports and κ/λ light chains, by NHI order (12103B, 12157B,
+  // 12158B, 12159B, 12160B; an M-protein row of SPEP 09065B / UPEP 09100B) or
+  // verified LOINC. Before specimen routing: a urine IFE or a CSF IEP is
+  // still this report, not 尿液 or 其他.
+  if (isParaproteinObservation(obs)) {
+    return {
+      category: LAB_CATEGORIES.find((c) => c.id === 'immuno') || null,
+      decidedBy: nhiOrderCode(obs) ? 'code' : 'loinc',
+    }
+  }
 
   // ── Pass 0: microbiology, by TEST rather than specimen ─────────────────
   // Runs first on purpose. A culture is microbiology whatever it was grown
