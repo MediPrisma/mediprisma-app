@@ -11,6 +11,7 @@ import {
   PARAPROTEIN_COLUMN_ORDER,
   paraproteinDisplay,
   paraproteinIdentity,
+  isParaproteinTextKey,
 } from '@/src/shared/utils/paraprotein-analytes'
 import {
   AUTOANTIBODY_KEYS,
@@ -843,10 +844,14 @@ export function buildLabPivots(
       // unreadable. Rescale to one canonical unit here. `isAbnormal` was already
       // computed from the raw value vs the obs's own referenceRange above, so it
       // stays correct. The raw row-by-row report uses a different path, untouched.
-      let cellValue = value
-      let cellUnit = unit
+      // An IEP / IFE report column folds the report and its lane rows into
+      // one cell; each record keeps its own analyte ("IgG: Present").
+      let cellValue = isParaproteinTextKey(testKey) && value && value !== '—'
+        ? `${getTestDisplayName(obs)}: ${value}${unit ? ` ${unit}` : ''}`
+        : value
+      let cellUnit = isParaproteinTextKey(testKey) ? undefined : unit
       let trendUnit = unit
-      if (numericValue !== undefined) {
+      if (numericValue !== undefined && !isParaproteinTextKey(testKey)) {
         // Quantity.unit is human-readable and may use a local spelling such as
         // "/cumm", while Quantity.code is the machine-processable UCUM form
         // (for example "/uL"). Keep `unit` for raw display, but when the source
@@ -930,7 +935,7 @@ export function buildLabPivots(
       // with it ("<0.5 / 0.7", "Reactive (<0.5)") and the cell-level
       // comparator is cleared — it could only ever describe one of them.
       const prev = row.values.get(date)
-      const incomingNumeric = numericValue !== undefined
+      const incomingNumeric = numericValue !== undefined && !isParaproteinTextKey(testKey)
       if (prev?.allValues) {
         const allValues = [...prev.allValues, cellDisplayValue(cell)]
         row.values.set(date, {

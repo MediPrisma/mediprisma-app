@@ -147,21 +147,79 @@ describe('routing and columns', () => {
   })
 })
 
+// Badges are conservative: one only when the WHOLE report says one thing —
+// a single controlled negative statement, or a single positive isotype with
+// no negation, doubt or second clause in scope. Anything else: 見報告.
 describe('paraprotein text badge', () => {
   it.each([
-    [['No monoclonal band'], '陰性', 'Negative'],
-    [['Negative'], '陰性', 'Negative'],
-    [['未見單株球蛋白'], '陰性', 'Negative'],
-    [['IgG-kappa monoclonal band in gamma region'], 'IgG-κ', 'IgG-κ'],
-    [['IgA lambda'], 'IgA-λ', 'IgA-λ'],
-    [['Monoclonal IgM κ, free λ also seen'], 'IgM-κ', 'IgM-κ'],
-    [['Free lambda light chain detected'], 'free λ', 'free λ'],
-    [['IgG: Absent', 'IgA: Absent', 'Negative'], '陰性', 'Negative'],
-    [['Present'], '見報告', 'See report'],
-    [['Oligoclonal pattern, suggest correlation'], '見報告', 'See report'],
-    [['IgG-κ', 'IgA-λ'], 'IgG-κ + IgA-λ', 'IgG-κ + IgA-λ'],
-  ] as Array<[string[], string, string]>)('%j → %s / %s', (values, zh, enBadge) => {
-    expect(paraproteinTextBadge(values, 'zh-TW')).toBe(zh)
-    expect(paraproteinTextBadge(values, 'en')).toBe(enBadge)
+    [['IFE: No monoclonal band'], '陰性', 'Negative'],
+    [['IFE: Negative'], '陰性', 'Negative'],
+    [['IFE: No monoclonal band detected.'], '陰性', 'Negative'],
+    [['IFE: 未見單株球蛋白'], '陰性', 'Negative'],
+    [['IFE: (-)'], '陰性', 'Negative'],
+    [['IFE: IgG-kappa monoclonal band in gamma region'], 'IgG-κ', 'IgG-κ'],
+    [['IFE: IgA lambda'], 'IgA-λ', 'IgA-λ'],
+    [['IFE: Monoclonal IgM-κ detected'], 'IgM-κ', 'IgM-κ'],
+    [['IFE: Free lambda light chain detected'], 'free λ', 'free λ'],
+    // a negative report with negative lanes
+    [['IgG: Absent', 'IgA: Absent', 'IFE: Negative'], '陰性', 'Negative'],
+    [['IgG: Absent', 'IgA: Absent', 'IgM: Absent', 'κ: Absent', 'λ: Absent'], '陰性', 'Negative'],
+  ] as Array<[string[], string, string]>)('%j → %s / %s', (records, zh, enBadge) => {
+    expect(paraproteinTextBadge(records, 'zh-TW')).toBe(zh)
+    expect(paraproteinTextBadge(records, 'en')).toBe(enBadge)
+  })
+
+  // Tricky phrasings: every one of these is 見報告.
+  const SEE_REPORT: string[][] = [
+    ['IFE: IgG: negative; IgA: positive; IgM: negative'],
+    ['IFE: No IgG-kappa monoclonal band detected'],
+    ['IFE: No IgG-κ band; IgA-λ present'],
+    ['IFE: Negative for IgA; IgG-κ present'],
+    ['IFE: Suspicious faint IgG-κ band'],
+    ['IFE: Faint band, cannot exclude IgG-κ'],
+    ['IFE: Cannot exclude monoclonal gammopathy'],
+    ['IFE: Possible IgM-κ'],
+    ['IFE: Probable IgG lambda'],
+    ['IFE: IgG-κ? please repeat'],
+    ['IFE: 疑似 IgG-κ'],
+    ['IFE: 不能排除單株球蛋白'],
+    ['IFE: 無法排除 IgA-λ'],
+    ['IFE: IgG-κ and free λ'],
+    ['IFE: IgG-κ, IgA-λ (biclonal)'],
+    ['IFE: Two monoclonal bands'],
+    ['IFE: Oligoclonal bands'],
+    ['IFE: Polyclonal increase with faint IgG-κ'],
+    ['IFE: No monoclonal band; suggest repeat in 3 months'],
+    ['IFE: Monoclonal IgM κ, free λ also seen'],
+    ['IFE: Present'],
+    ['IFE: Abnormal'],
+    ['IFE: IgG-κ', 'IFE: IgA-λ'],
+    ['IFE: Negative', 'IgG: Present'],
+    ['IFE: IgG-κ monoclonal band', 'IgA: Present'],
+    ['IgG: Present', 'IgA: Absent', 'κ: Present', 'λ: Absent'],
+    ['IgG: Present'],
+    ['IgG: Absent', 'IgA: Trace'],
+    ['IFE: Negative', 'IFE: IgG-κ'],
+  ]
+  it(`gives 見報告 for all ${SEE_REPORT.length} ambiguous reports`, () => {
+    const failures = SEE_REPORT
+      .filter((records) => paraproteinTextBadge(records, 'zh-TW') !== '見報告' || paraproteinTextBadge(records, 'en') !== 'See report')
+      .map((records) => `${JSON.stringify(records)} → ${paraproteinTextBadge(records, 'zh-TW')}`)
+    expect(failures).toEqual([])
+  })
+})
+
+describe('folded lanes keep their analyte', () => {
+  it('stores each 12103B record with its source name', () => {
+    const date = '2026-10-03'
+    const pivot = buildLabPivots([
+      row('IgG', '12103B', 'Present', { date }),
+      row('IgA', '12103B', 'Absent', { date }),
+      row('Kappa', '12103B', 'Present', { date }),
+      row('Lambda', '12103B', 'Absent', { date }),
+    ]).immuno
+    const cell = pivot.rows.find((r) => r.testKey === 'PP:IFE')!.values.get(date)!
+    expect(cell.allValues).toEqual(['IgG: Present', 'IgA: Absent', 'Kappa: Present', 'Lambda: Absent'])
+    expect(paraproteinTextBadge(cell.allValues!, 'zh-TW')).toBe('見報告')
   })
 })

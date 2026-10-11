@@ -1,4 +1,4 @@
-import { render, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -56,16 +56,30 @@ describe('CumulativeLabReport 直式 — 免疫 電泳／輕鏈 panel', () => {
     const textCells = tables[2].querySelectorAll<HTMLElement>('[data-lab-text-cell]')
     expect(textCells.length).toBe(2)
     const serum = [...textCells].find((cell) => cell.getAttribute('data-lab-test-key') === 'PP:IFE')!
-    // Short badge, full text (every folded record) on hover, one clamped line.
-    expect(serum).toHaveTextContent('IgG-κ')
+    // A multi-clause report plus a lane: no badge it could misstate.
+    expect(serum).toHaveTextContent('見報告')
     expect(serum).not.toHaveTextContent('bone marrow')
-    expect(serum.getAttribute('title')).toContain(LONG_IFE)
-    expect(serum.getAttribute('title')).toContain('Present')
-    const clamp = serum.querySelector('[data-lab-text-clamp]')!
-    expect(clamp.className).toMatch(/truncate/)
-    expect(clamp.className).toMatch(/max-w-/)
     // Text results are never coloured as abnormal.
     expect(serum.className).not.toMatch(/text-clinical-abnormal/)
+    const trigger = within(serum).getByRole('button')
+    const clamp = trigger.querySelector('[data-lab-text-clamp]')!
+    expect(clamp.className).toMatch(/truncate/)
+    expect(clamp.className).toMatch(/max-w-/)
+    // Keyboard: a real, focusable button that names what it opens.
+    expect(trigger.tagName).toBe('BUTTON')
+    trigger.focus()
+    expect(document.activeElement).toBe(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger.getAttribute('aria-label')).toMatch(/IFE/)
+    // Click / tap opens the full report — every folded record with its analyte.
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const panel = screen.getByRole('dialog')
+    expect(panel).toHaveTextContent(LONG_IFE)
+    expect(panel).toHaveTextContent('IgG: Present')
+    // Escape closes it and returns focus.
+    fireEvent.keyDown(panel, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
 
     const urine = [...textCells].find((cell) => cell.getAttribute('data-lab-test-key') === 'PP:U:IFE')!
     expect(urine).toHaveTextContent('陰性')

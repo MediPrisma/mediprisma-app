@@ -16,6 +16,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import type { LabPivot } from "../hooks/useLabPivot"
 import { cellDisplayValue } from "@/src/shared/utils/lab-pivot.utils"
 import { isParaproteinTextKey, paraproteinTextBadge } from "@/src/shared/utils/paraprotein-analytes"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getLabRowDisplayParts } from "@/src/shared/utils/lab-analyte-display.utils"
 import type { AnalyteNameMode } from "@voho0000/clinical-lab-normalization/display"
@@ -280,10 +281,14 @@ export const LabPivotTable = memo(function LabPivotTable({
         const isFocusedCell = focusDate === date && test.testKey === focusAnalyteKey
         if (isParaproteinTextKey(test.testKey)) {
           // IEP / IFE report text: one clamped line holding a short badge
-          // (IgG-κ / 陰性 / 見報告), every folded record in full on hover, a
-          // fixed width, and no abnormal colouring — the text is not graded.
+          // (IgG-κ / 陰性 / 見報告) on a button that opens the full report —
+          // every folded record with its analyte — by click, tap or keyboard
+          // (never hover-only). Fixed width; no abnormal colouring, the text
+          // is not graded.
           const records = cell.allValues ?? (cell.sourceRecords?.map((record) => record.value) ?? [cell.value])
-          const badge = paraproteinTextBadge(records, locale.startsWith('zh') ? 'zh-TW' : 'en')
+          const zh = locale.startsWith('zh')
+          const badge = paraproteinTextBadge(records, zh ? 'zh-TW' : 'en')
+          const columnName = getLabRowDisplayParts(test, audience, locale, nameMode).name
           return (
             <td
               key={test.mapKey}
@@ -293,9 +298,31 @@ export const LabPivotTable = memo(function LabPivotTable({
               data-lab-date={date}
               data-evidence-focus={isFocusedCell ? 'true' : undefined}
               className={`border-l px-1 py-1 text-center text-foreground ${isFocusedCell ? 'relative bg-primary/15 ring-2 ring-inset ring-primary' : ''}`}
-              title={records.join('\n')}
             >
-              <span data-lab-text-clamp="" className="mx-auto block max-w-[7.5rem] truncate">{badge}</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-label={zh
+                      ? `${columnName} ${formatDateLabel(date)}：${badge}，查看完整報告`
+                      : `${columnName} ${formatDateLabel(date)}: ${badge}, view full report`}
+                    className="mx-auto block min-h-[1.75rem] rounded px-1 underline decoration-dotted underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <span data-lab-text-clamp="" className="block max-w-[7.5rem] truncate">{badge}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  role="dialog"
+                  aria-label={`${columnName} ${formatDateLabel(date)}`}
+                  className="w-80 max-w-[90vw] text-left text-xs"
+                >
+                  <div className="mb-1 font-medium">{columnName} · {formatDateLabel(date)}</div>
+                  <ul className="space-y-1 whitespace-pre-wrap break-words">
+                    {records.map((record, index) => <li key={index}>{record}</li>)}
+                  </ul>
+                </PopoverContent>
+              </Popover>
             </td>
           )
         }

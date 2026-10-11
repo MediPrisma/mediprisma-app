@@ -277,42 +277,71 @@ export function isParaproteinObservation(obs: any): boolean {
 }
 
 // ── text badge ────────────────────────────────────────────────────────────
+//
+// A badge is a summary a clinician may read instead of the report, so it is
+// given only when the WHOLE report says one thing:
+// - negative: every record is a controlled negative statement in full
+//   ("No monoclonal band", "Negative", 「未見單株球蛋白」, a lane "Absent");
+// - positive: exactly one record states one isotype ("IgG-κ", "free λ") in a
+//   single clause with no negation, doubt or second finding in scope, and
+//   every other record is a negative lane.
+// Anything else — mixed lanes, a lane-only positive, two bands, "faint",
+// "suspicious", "cannot exclude", 疑似, 不能排除, a second clause — is 見報告.
+// Records are "analyte: result" (the pivot keeps each folded lane's name).
+
+const LANE_LABEL_RE = /^(?:IG[GAMDE]|Κ|Λ|KAPPA|LAMBDA|FREE\s*(?:Κ|Λ|KAPPA|LAMBDA)|(?:IG[GAMDE]|KAPPA|LAMBDA)\s*LANE)$/
+const CONTROLLED_NEGATIVE_RE = new RegExp(
+  '^(?:'
+  + 'NEGATIVE|NEG|NOT\\s+DETECTED|ABSENT|NONE|NIL|\\(-\\)|-|陰性|未檢出'
+  + '|NO\\s+(?:MONOCLONAL\\s+(?:BAND|PROTEIN|GAMMOPATHY|COMPONENT|IMMUNOGLOBULIN)S?|M[-\\s]?PROTEIN|PARAPROTEIN|M[-\\s]?SPIKE|ABNORMAL\\s+BANDS?|BENCE[-\\s]?JONES\\s+PROTEIN|PARAPROTEIN\\s+BANDS?)'
+  + '(?:\\s+(?:IS\\s+|WAS\\s+)?(?:DETECTED|SEEN|IDENTIFIED|FOUND|NOTED|OBSERVED))?'
+  + '|(?:未見|未發現|無)單株(?:球)?蛋白(?:帶)?'
+  + ')$',
+)
+const NEGATION_OR_DOUBT_RE = /\bNO\b|\bNOT\b|NEGATIVE|ABSENT|WITHOUT|\bNONE\b|SUSPIC|SUSPECT|FAINT|EQUIVOCAL|POSSIBL|PROBABL|CANNOT|CAN'T|EXCLUDE|RULE\s*OUT|\bR\/O\b|SUGGEST|\bTRACE\b|\?|未|無|陰|疑|不能|無法|可能|微弱|建議|排除/
+const MULTI_CLAUSE_RE = /[;；,，。\n]|\bAND\b|\bWITH\b|\bALSO\b|\bPLUS\b|及|和|與|並|另|BICLONAL|OLIGOCLONAL|TWO\s|MULTIPLE/
 
 const HEAVY = '(IG[GAMDE])'
 const LIGHT = '(Κ|Λ|KAPPA|LAMBDA)'
-const ISOTYPE_RE = new RegExp(`${HEAVY}\\s*[-‐_/ ]?\\s*${LIGHT}`, 'gi')
-const FREE_LIGHT_RE = new RegExp(`FREE\\s*${LIGHT}|游離\\s*${LIGHT}`, 'gi')
-const NEGATIVE_RE = /NO\s+(?:MONOCLONAL|M[-\s]?PROTEIN|PARAPROTEIN|M[-\s]?SPIKE|BENCE)|NEGATIVE|NOT\s+DETECTED|ABSENT|\(-\)|陰性|未見|無單株|未發現|正常(?:型態|圖譜)?$/i
+const ISOTYPE_RE = new RegExp(`${HEAVY}\\s*[-‐_/ ]?\\s*${LIGHT}`, 'g')
+const FREE_LIGHT_RE = new RegExp(`(?:FREE|游離)\\s*${LIGHT}`, 'g')
 
-const lightSymbol = (light: string) => (/Κ|KAPPA/i.test(light) ? 'κ' : 'λ')
+const lightSymbol = (light: string) => (/Κ|KAPPA/.test(light) ? 'κ' : 'λ')
+
+function splitRecord(record: string): { label: string; result: string } {
+  const text = String(record ?? '').normalize('NFKC').toUpperCase().trim()
+  const colon = text.indexOf(': ')
+  return colon > 0
+    ? { label: text.slice(0, colon).trim(), result: text.slice(colon + 2).trim().replace(/[.。]+$/, '').trim() }
+    : { label: '', result: text.replace(/[.。]+$/, '').trim() }
+}
+
+/** The one isotype a single-clause, undoubted, unnegated statement names. */
+function singleIsotype(result: string): string | null {
+  if (NEGATION_OR_DOUBT_RE.test(result) || MULTI_CLAUSE_RE.test(result)) return null
+  const isotypes = [...result.matchAll(ISOTYPE_RE)].map((m) => `Ig${m[1].slice(2)}-${lightSymbol(m[2])}`)
+  const freeLights = [...result.matchAll(FREE_LIGHT_RE)].map((m) => `free ${lightSymbol(m[1])}`)
+  const found = [...new Set([...isotypes, ...freeLights])]
+  return found.length === 1 ? found[0] : null
+}
 
 /**
  * A short badge for one paraprotein text cell (every folded record of the
- * day): the monoclonal isotype(s) when stated ("IgG-κ"), a free light chain
- * ("free λ") when that is all, 「陰性」 when every record is negative, else
- * 「見報告」. Never a judgement the text does not make.
+ * day, each "analyte: result"): an isotype, 「陰性」, or 「見報告」.
  */
-export function paraproteinTextBadge(values: readonly string[], language: Lang): string {
-  const isotypes: string[] = []
-  const freeLights: string[] = []
-  let allNegative = values.length > 0
-  for (const raw of values) {
-    const text = String(raw ?? '').normalize('NFKC').toUpperCase()
-    let found = false
-    for (const match of text.matchAll(ISOTYPE_RE)) {
-      const heavy = `Ig${match[1].slice(2).toUpperCase()}`
-      isotypes.push(`${heavy}-${lightSymbol(match[2])}`)
-      found = true
-    }
-    for (const match of text.matchAll(FREE_LIGHT_RE)) {
-      freeLights.push(`free ${lightSymbol(match[1] ?? match[2])}`)
-      found = true
-    }
-    if (found || !NEGATIVE_RE.test(text.trim())) allNegative = false
-  }
-  const unique = (list: string[]) => [...new Set(list)]
-  if (isotypes.length > 0) return unique(isotypes).join(' + ')
-  if (freeLights.length > 0) return unique(freeLights).join(' + ')
-  if (allNegative) return language === 'zh-TW' ? '陰性' : 'Negative'
-  return language === 'zh-TW' ? '見報告' : 'See report'
+export function paraproteinTextBadge(records: readonly string[], language: Lang): string {
+  const seeReport = language === 'zh-TW' ? '見報告' : 'See report'
+  if (records.length === 0) return seeReport
+  const parsed = records.map(splitRecord)
+  const isLane = (r: { label: string }) => LANE_LABEL_RE.test(r.label)
+  const isNegative = (r: { result: string }) => CONTROLLED_NEGATIVE_RE.test(r.result)
+
+  if (parsed.every(isNegative)) return language === 'zh-TW' ? '陰性' : 'Negative'
+
+  // A positive lane on its own is not a finding (a polyclonal band is
+  // "present" too); a lane's isotype is never inferred.
+  const reports = parsed.filter((r) => !isLane(r))
+  const lanes = parsed.filter(isLane)
+  if (reports.length !== 1 || !lanes.every(isNegative)) return seeReport
+  return singleIsotype(reports[0].result) ?? seeReport
 }
