@@ -315,7 +315,12 @@ export const LabPivotTable = memo(function LabPivotTable({
                 <PopoverContent
                   role="dialog"
                   aria-label={`${columnName} ${formatDateLabel(date)}`}
-                  className="w-80 max-w-[90vw] text-left text-xs"
+                  // Bounded to the space the popover has (Radix measures it),
+                  // never more than 70vh: a long report scrolls inside, by
+                  // touch, wheel or keyboard (the panel takes focus).
+                  tabIndex={0}
+                  collisionPadding={8}
+                  className="w-80 max-w-[90vw] max-h-[min(70vh,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <div className="mb-1 font-medium">{columnName} · {formatDateLabel(date)}</div>
                   <ul className="space-y-1 whitespace-pre-wrap break-words">

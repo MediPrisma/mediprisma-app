@@ -84,31 +84,60 @@ const SERUM_WINDOW_MG_DL: Record<DualSpecimenAnalyte, [number, number]> = {
   ALB: [3000, 5500],
 }
 
-function referenceBounds(obs: any): { low?: number; high?: number } | null {
+/** Factors to mg/dL per analyte and unit (folded: lower case, µ → u, no
+ *  spaces). Ca 1 mmol/L = 4.008 mg/dL; creatinine 1 µmol/L = 1/88.4 mg/dL,
+ *  1 mmol/L = 11.31 mg/dL; protein 1 g/dL = 1000 mg/dL, 1 g/L = 100 mg/dL.
+ *  A unit not listed is not converted — the range then decides nothing. */
+const TO_MG_DL: Record<DualSpecimenAnalyte, Record<string, number>> = {
+  CA: { 'mg/dl': 1, 'mg/l': 0.1, 'mmol/l': 4.008 },
+  CREA: { 'mg/dl': 1, 'mg/l': 0.1, 'umol/l': 1 / 88.4, 'mmol/l': 11.31 },
+  TP: { 'mg/dl': 1, 'mg/l': 0.1, 'g/dl': 1000, 'g/l': 100 },
+  ALB: { 'mg/dl': 1, 'mg/l': 0.1, 'g/dl': 1000, 'g/l': 100 },
+}
+
+const foldUnit = (unit: unknown) =>
+  String(unit ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, '').replace(/[μµ]/g, 'u')
+
+/** The reference range's bounds and the unit it states for itself (a
+ *  Quantity unit / code, or a unit written after the numbers), if any. */
+function referenceBounds(obs: any): { values: number[]; statedUnit?: string } | null {
   const range = Array.isArray(obs?.referenceRange) ? obs.referenceRange[0] : undefined
   if (!range) return null
-  const low = typeof range.low?.value === 'number' ? range.low.value : undefined
-  const high = typeof range.high?.value === 'number' ? range.high.value : undefined
-  if (low !== undefined || high !== undefined) return { low, high }
+  const quantities = [range.low, range.high].filter((q: any) => typeof q?.value === 'number')
+  if (quantities.length > 0) {
+    const unit = quantities.map((q: any) => q.unit ?? q.code).find((u: unknown) => typeof u === 'string' && u.trim())
+    return { values: quantities.map((q: any) => q.value), statedUnit: unit ? foldUnit(unit) : undefined }
+  }
   const text = typeof range.text === 'string' ? range.text.normalize('NFKC') : ''
-  const between = text.match(/(-?\d+(?:\.\d+)?)\s*[~\-–～]\s*(\d+(?:\.\d+)?)/)
-  if (between) return { low: Number(between[1]), high: Number(between[2]) }
-  const upper = text.match(/[<≤≦]=?\s*(\d+(?:\.\d+)?)/)
-  if (upper) return { high: Number(upper[1]) }
-  const lower = text.match(/[>≥≧]=?\s*(\d+(?:\.\d+)?)/)
-  if (lower) return { low: Number(lower[1]) }
+  const unitAfter = (rest: string) => {
+    const token = rest.replace(/^[\s\])）】]+/, '').match(/^([A-Za-zµμ][A-Za-zµμ/0-9.*]*)/)
+    return token ? foldUnit(token[1]) : undefined
+  }
+  const between = text.match(/(-?\d+(?:\.\d+)?)\s*[~\-–～]\s*(\d+(?:\.\d+)?)(.*)$/)
+  if (between) return { values: [Number(between[1]), Number(between[2])], statedUnit: unitAfter(between[3]) }
+  const bound = text.match(/[<>≤≥≦≧]=?\s*(\d+(?:\.\d+)?)(.*)$/)
+  if (bound) return { values: [Number(bound[1])], statedUnit: unitAfter(bound[2]) }
   return null
 }
 
-/** Does the reference range read as serum or as urine for this analyte? */
+/**
+ * Does the reference range read as serum or as urine for this analyte? The
+ * range is read in its OWN stated unit, converted to mg/dL; without a stated
+ * unit the value's unit is assumed. A range inside the serum window supports
+ * blood. Only a range in its own stated, convertible unit that falls outside
+ * the window supports urine — an assumed or unconvertible unit never does
+ * (a serum Ca range "2.1–2.6" in mmol/L beside a mg/dL value is not urine).
+ */
 function specimenFromReferenceRange(obs: any, analyte: DualSpecimenAnalyte): SpecimenClass | null {
-  if (unitOf(obs) !== 'mg/dl') return null
   const bounds = referenceBounds(obs)
   if (!bounds) return null
+  const unit = bounds.statedUnit ?? foldUnit(obs?.valueQuantity?.unit ?? obs?.valueQuantity?.code)
+  const factor = TO_MG_DL[analyte][unit]
+  if (!factor) return null
   const [w0, w1] = SERUM_WINDOW_MG_DL[analyte]
-  const values = [bounds.low, bounds.high].filter((v): v is number => v !== undefined)
-  if (values.length === 0) return null
-  return values.every((v) => v >= w0 && v <= w1) ? 'blood' : 'urine'
+  const inWindow = bounds.values.every((v) => v * factor >= w0 && v * factor <= w1)
+  if (inWindow) return 'blood'
+  return bounds.statedUnit ? 'urine' : null
 }
 
 /**

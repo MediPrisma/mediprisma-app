@@ -79,6 +79,13 @@ describe('CumulativeLabReport 直式 — 免疫 電泳／輕鏈 panel', () => {
     fireEvent.click(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
     const panel = screen.getByRole('dialog')
+    // Bounded to the viewport: a long report scrolls inside the popover
+    // (by touch, wheel or keyboard) instead of running off a phone screen.
+    expect(panel.className.split(' ')).toEqual(expect.arrayContaining([
+      'max-h-[min(70vh,var(--radix-popover-content-available-height))]',
+      'overflow-y-auto',
+    ]))
+    expect(panel).toHaveAttribute('tabindex', '0')
     expect(panel).toHaveTextContent(LONG_IFE)
     expect(panel).toHaveTextContent('IgG: Present')
     // Each record keeps its comparator and unit.

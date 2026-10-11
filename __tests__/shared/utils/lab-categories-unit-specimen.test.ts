@@ -68,10 +68,10 @@ describe('inspect mode counts only with a supporting reference range', () => {
   })
 
   it.each([
-    ['Creatinine', '09015C', 85, 'mg/dL', '[20~300]'],
-    ['Creatinine', '09015C', 85, 'mg/dL', '20-300'],
-    ['Ca', '09011C', 12, 'mg/dL', '[<20]'],
-    ['TP', '09040C', 9, 'mg/dL', '[<12]'],
+    ['Creatinine', '09015C', 85, 'mg/dL', '[20~300] mg/dL'],
+    ['Creatinine', '09015C', 85, 'mg/dL', '20-300 mg/dL'],
+    ['Ca', '09011C', 12, 'mg/dL', '[<20 mg/dL]'],
+    ['TP', '09040C', 9, 'mg/dL', '[<12 mg/dL]'],
   ])('%s %s %s %s with a urine-like range under URINE(SPOT) → 尿液', (item, nhi, value, unit, range) => {
     expect(cat(row(item, nhi, value, unit, { range, inspect: 'URINE(SPOT)' }))).toBe('urine')
   })
@@ -81,6 +81,9 @@ describe('inspect mode counts only with a supporting reference range', () => {
     ['Creatinine', '09015C', 85, 'mg/dL', undefined, 'URINE(SPOT)'],
     ['Creatinine', '09015C', 85, 'mg/dL', '[20~300]', 'SERUM_YL'],
     ['Creatinine', '09015C', 85, 'mg/dL', '[20~300]', undefined],
+    // A range that does not state its own unit never supports urine.
+    ['Creatinine', '09015C', 85, 'mg/dL', '[20~300]', 'URINE(SPOT)'],
+    ['Ca', '09011C', 12, 'mg/dL', '[<20]', 'URINE(SPOT)'],
   ])('%s %s %s %s with inspect %s keeps today\'s category', (item, nhi, value, unit, range, inspect) => {
     const o = row(item, nhi, value, unit, { range, inspect })
     const baseline = row(item, nhi, value, unit)
