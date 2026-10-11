@@ -1044,16 +1044,19 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   }
   const byOwnName = matchNames(exactCandidates, [textNorm, ...displayNorms])
   if (byOwnName) return byOwnName
-  if (hasOwnName && orderDisplayNorms.length > 0) {
-    const byOrderDisplay = matchNames(orderDisplayNorms, orderDisplayNorms)
-    if (byOrderDisplay) return byOrderDisplay
-  }
 
   // ── Pass 5: text-based urine fallback (only when nothing above matched) ─
   // Skip when bridge declared specimen=Blood — see big comment above for
   // the 尿酸 / 尿素氮 substring trap this guard avoids.
   if (!specimenSaysBlood && /\bURINE\b|尿/.test(fullText)) {
     return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'text-urine' }
+  }
+
+  // ── Pass 5.5: the order display as a last-resort name (after the urine
+  // wording of the row's own name had its say).
+  if (hasOwnName && orderDisplayNorms.length > 0) {
+    const byOrderDisplay = matchNames(orderDisplayNorms, orderDisplayNorms)
+    if (byOrderDisplay) return byOrderDisplay
   }
 
   // ── Pass 6: qualitative-result fallback ────────────────────────────────
