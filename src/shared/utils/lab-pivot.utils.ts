@@ -885,7 +885,11 @@ export function buildLabPivots(
         ? obs.status.trim().toLowerCase()
         : ''
       const trendTimestamp = new Date(obs.effectiveDateTime).getTime()
-      const hasTrendPoint = numericValue !== undefined
+      // A folded IEP / IFE report column gathers different analytes (IgG and
+      // IgA lanes): never a trend, never graded.
+      const foldedReport = isParaproteinTextKey(testKey)
+      const hasTrendPoint = !foldedReport
+        && numericValue !== undefined
         && Number.isFinite(numericValue)
         && Number.isFinite(trendTimestamp)
         && !INVALID_TREND_STATUSES.has(normalizedStatus)
@@ -909,7 +913,7 @@ export function buildLabPivots(
       const cell: LabCell = {
         value: cellValue,
         unit: cellUnit,
-        isAbnormal,
+        isAbnormal: foldedReport ? false : isAbnormal,
         comparator: isParaproteinTextKey(testKey) ? undefined : sourceComparator,
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
