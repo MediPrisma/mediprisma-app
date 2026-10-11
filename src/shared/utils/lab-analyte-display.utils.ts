@@ -9,12 +9,47 @@ import {
 import { categorizeObservation, getTestDisplayName } from './lab-categories'
 import { isParaproteinTextKey, neutralParaproteinDisplay, paraproteinDisplay } from './paraprotein-analytes'
 import {
+  freeTotalOfKey,
   getLabCompatibilityCanonicalDisplay,
   getLabPivotTestIdentity,
+  specimenOfKey,
   type LabRow,
 } from './lab-pivot.utils'
 
 type DisplayRow = Pick<LabRow, 'testKey' | 'displayName' | 'displaySource'>
+  & Partial<Pick<LabRow, 'originalHintKind' | 'unit'>>
+
+const SPECIMEN_HINT: Record<string, { zh: string; en: string }> = {
+  urine: { zh: '尿', en: 'Urine' },
+  csf: { zh: 'CSF', en: 'CSF' },
+  serum: { zh: '血清', en: 'Serum' },
+}
+const FREE_TOTAL_HINT: Record<string, { zh: string; en: string }> = {
+  free: { zh: '游離', en: 'free' },
+  total: { zh: '總', en: 'total' },
+}
+
+/** The short hint an original-mode column that shares its source label
+ *  with another column of the table carries (see assignOriginalHints). */
+function originalHint(row: DisplayRow, audience: AudienceMode, language: DisplayLang): string | undefined {
+  const zh = language === 'zh-TW'
+  switch (row.originalHintKind) {
+    case 'specimen': {
+      const hint = SPECIMEN_HINT[specimenOfKey(row.testKey) ?? '']
+      return hint && (zh ? hint.zh : hint.en)
+    }
+    case 'unit':
+      return row.unit === '%' ? '%' : '#'
+    case 'freeTotal': {
+      const hint = FREE_TOTAL_HINT[freeTotalOfKey(row.testKey) ?? '']
+      return hint && (zh ? hint.zh : hint.en)
+    }
+    case 'standard':
+      return getLabRowDisplayParts({ testKey: row.testKey, displayName: row.displayName, displaySource: row.displaySource }, audience, language, 'standardized').name
+    default:
+      return undefined
+  }
+}
 
 /** Shared label contract for cumulative headers, report results and search.
  * Identity (including glucose subtype and local magnesium compatibility) comes
@@ -27,7 +62,11 @@ export function getLabRowDisplayParts(
   language: DisplayLang,
   mode: AnalyteNameMode = 'standardized',
 ): { name: string; abbr: string | null } {
-  if (mode === 'original') return { name: row.displayName, abbr: null }
+  if (mode === 'original') {
+    // The source label; a hint only where another column shares it.
+    const hint = originalHint(row, audience, language)
+    return { name: hint ? `${row.displayName} (${hint})` : row.displayName, abbr: null }
+  }
   const paraprotein = paraproteinDisplay(row.testKey, language === 'zh-TW' ? 'zh-TW' : 'en')
   if (paraprotein) return { name: paraprotein, abbr: null }
   // A neutral κ/λ column is named after its source; a urine or CSF one says so.

@@ -163,9 +163,42 @@ export interface LabRow {
   unit?: string               // unit summary (most common across all dates)
   values: Map<string, LabCell>  // date "YYYY-MM-DD" → cell
   subgroupId?: string         // assigned subgroup id (renal/liver/etc.)
+  /** Original-name mode only: this column shares its source label with
+   *  another column of the table, and this is what tells them apart. */
+  originalHintKind?: OriginalHintKind
   /** Cheap availability index built during the pivot pass. Full trend point
    *  details are constructed only after the user opens this analyte. */
   trendChartable?: boolean
+}
+
+export type OriginalHintKind = 'specimen' | 'unit' | 'freeTotal' | 'standard'
+
+export const specimenOfKey = (testKey: string): string | undefined =>
+  testKey.startsWith('PP:U:') ? 'urine' : testKey.startsWith('PP:CSF:') ? 'csf' : testKey.startsWith('PP:') ? 'serum' : undefined
+export const freeTotalOfKey = (testKey: string): string | undefined =>
+  /-FREE$/.test(testKey) ? 'free' : /-TOTAL$/.test(testKey) ? 'total' : undefined
+
+/** The hint that tells apart original-mode columns sharing one source label:
+ *  the specimen, else count vs %, else free vs total, else the standardized
+ *  column label. Columns with a unique label get none. */
+function assignOriginalHints(rows: LabRow[]): void {
+  const groups = new Map<string, LabRow[]>()
+  for (const row of rows) {
+    if (row.values.size === 0) continue
+    const label = row.displayName.normalize('NFKC').trim().toLowerCase()
+    groups.set(label, [...(groups.get(label) ?? []), row])
+  }
+  const distinct = (values: Array<string | undefined>) =>
+    values.every((v) => v !== undefined) && new Set(values).size === values.length
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const kind: OriginalHintKind =
+      distinct(group.map((r) => specimenOfKey(r.testKey))) ? 'specimen'
+        : distinct(group.map((r) => (r.unit === '%' ? 'percent' : 'count'))) ? 'unit'
+          : distinct(group.map((r) => freeTotalOfKey(r.testKey))) ? 'freeTotal'
+            : 'standard'
+    for (const row of group) row.originalHintKind = kind
+  }
 }
 
 export interface LabPivot {
@@ -1068,6 +1101,7 @@ export function buildLabPivots(
       return cmp(a.testKey, b.testKey)
     })
 
+    if (nameMode === 'original') assignOriginalHints(rows)
     result[cat.id] = { category: cat, dates, rows }
   }
 
