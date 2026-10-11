@@ -4,6 +4,7 @@ import { CumulativeLabReport } from '@/features/clinical-summary/reports/compone
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { AudienceProvider } from '@/src/application/providers/audience.provider'
 import { useCumulativeReportPrefsStore } from '@/src/application/stores/cumulative-report-prefs.store'
+import { ReportNameModeProvider } from '@/features/clinical-summary/reports/context/report-name-mode.context'
 
 function TestProviders({ children }: { children: ReactNode }) {
   return (
@@ -84,5 +85,29 @@ describe.each(['tabs', 'stacked'] as const)('CumulativeLabReport (%s) — neutro
     // No same-day "55 / 3.2" merge anywhere in the table.
     const texts = [...container.querySelectorAll('td[data-lab-cell] > span')].map((node) => node.textContent)
     expect(texts.some((text) => text?.includes(' / '))).toBe(false)
+  })
+})
+
+describe.each(['tabs', 'stacked'] as const)('CumulativeLabReport (%s, original names) — count and % headers differ', (layoutMode) => {
+  beforeEach(() => {
+    localStorage.clear()
+    useCumulativeReportPrefsStore.setState({ layoutMode, range: 'all', categoryOrder: null })
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: jest.fn() })
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: jest.fn() })
+  })
+
+  it('two columns sharing the source label read (#) and (%)', () => {
+    const { container } = render(
+      <ReportNameModeProvider value="original">
+        <CumulativeLabReport activeCategoryId="cbc" observations={OBSERVATIONS.slice(0, 2)} />
+      </ReportNameModeProvider>,
+      { wrapper: TestProviders },
+    )
+    const headers = [...container.querySelectorAll<HTMLElement>('th[data-lab-test-key]')]
+      .map((th) => th.textContent ?? '')
+      .filter((text) => text.includes('Neutrophil'))
+    expect(headers).toHaveLength(2)
+    expect(headers.some((text) => text.includes('嗜中性白血球 / Neutrophil (#)'))).toBe(true)
+    expect(headers.some((text) => text.includes('嗜中性白血球 / Neutrophil (%)'))).toBe(true)
   })
 })

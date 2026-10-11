@@ -11,10 +11,36 @@ import {
   DIFFERENTIAL_COUNT_LABELS,
   getLabCompatibilityCanonicalDisplay,
   getLabPivotTestIdentity,
+  specimenOfKey,
   type LabRow,
 } from './lab-pivot.utils'
 
 type DisplayRow = Pick<LabRow, 'testKey' | 'displayName' | 'displaySource'>
+  & Partial<Pick<LabRow, 'originalHintKind' | 'unit'>>
+
+const SPECIMEN_HINT: Record<string, { zh: string; en: string }> = {
+  urine: { zh: '尿', en: 'Urine' },
+  csf: { zh: 'CSF', en: 'CSF' },
+  serum: { zh: '血清', en: 'Serum' },
+}
+
+/** The short hint an original-mode column that shares its source label
+ *  with another column of the table carries (see assignOriginalHints). */
+function originalHint(row: DisplayRow, audience: AudienceMode, language: DisplayLang): string | undefined {
+  const zh = language === 'zh-TW'
+  switch (row.originalHintKind) {
+    case 'specimen': {
+      const hint = SPECIMEN_HINT[specimenOfKey(row.testKey) ?? '']
+      return hint && (zh ? hint.zh : hint.en)
+    }
+    case 'unit':
+      return row.unit === '%' ? '%' : '#'
+    case 'standard':
+      return getLabRowDisplayParts({ testKey: row.testKey, displayName: row.displayName, displaySource: row.displaySource }, audience, language, 'standardized').name
+    default:
+      return undefined
+  }
+}
 
 /** Shared label contract for cumulative headers, report results and search.
  * Identity (including glucose subtype and local magnesium compatibility) comes
@@ -27,7 +53,11 @@ export function getLabRowDisplayParts(
   language: DisplayLang,
   mode: AnalyteNameMode = 'standardized',
 ): { name: string; abbr: string | null } {
-  if (mode === 'original') return { name: row.displayName, abbr: null }
+  if (mode === 'original') {
+    // The source label; a hint only where another column shares it.
+    const hint = originalHint(row, audience, language)
+    return { name: hint ? `${row.displayName} (${hint})` : row.displayName, abbr: null }
+  }
   const compatibilityDisplay = getLabCompatibilityCanonicalDisplay(row.testKey)
   if (compatibilityDisplay) {
     // Absolute-count columns the app adds (ALC, AMC, …) get the same lay
