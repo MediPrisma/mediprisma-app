@@ -799,9 +799,7 @@ function immunologyNameAllowed(obs: any): boolean {
 // code fall through unchanged (most non-NHI FHIR data; specimen routing in Pass 1
 // handles those when a specimen is present). Categories absent from the map are
 // never gated.
-function nameMatchAllowedForCategory(cat: LabCategory, obs: any, bloodEvidence = false): boolean {
-  // The row's own evidence says blood (serum-or-urine analytes, Pass 2.6).
-  if (cat.id === 'urine' && bloodEvidence) return false
+function nameMatchAllowedForCategory(cat: LabCategory, obs: any): boolean {
   // A dipstick value ("4+", "Negative", "Trace") under a glucose NAME is a
   // urinalysis row, not a serum sugar. Urine-specimen rows are already routed
   // before any name match; this covers the specimen-less ones that would
@@ -990,67 +988,71 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // row's own evidence decides (specimen-evidence.ts): an explicit name or
   // specimen, then the unit class (mg/g, mg/24h → urine; g/dL, g/L → blood),
   // then the MediCloud inspect mode only where the reference range agrees.
-  // Urine → 尿液 here; blood → the name passes may not choose 尿液. No
-  // evidence, a conflict, or a 06 urinalysis order → today's routing.
+  // Urine → 尿液 here; blood → 生化 (the analyte is a chemistry analyte there:
+  // "Protein 7 g/dL" is total protein). No evidence, a conflict, or a 06
+  // urinalysis order → today's routing.
+  const urineCategory = LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   const dualAnalyte = nhiCode?.startsWith('06') ? null : dualSpecimenAnalyte(obs)
   const dualEvidence = dualAnalyte ? specimenEvidence(obs, dualAnalyte) : null
-  if (dualEvidence === 'urine') {
-    return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'specimen-urine' }
+  if (dualEvidence === 'urine') return { category: urineCategory, decidedBy: 'specimen-urine' }
+  if (dualEvidence === 'blood') {
+    return { category: LAB_CATEGORIES.find((c) => c.id === 'chem') || null, decidedBy: 'canonical' }
   }
-  const bloodEvidence = dualEvidence === 'blood'
-
-  // ── Pass 3: exact short-code match against cat.codes ───────────────────
-  for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
-    for (const candidate of exactCandidates) {
-      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs, bloodEvidence)) return { category: cat, decidedBy: 'code' }
+  // ── Passes 3 – 4.5: name matching ─────────────────────────────────────
+  // Run on the row's own name first; only when that names nothing, on the
+  // NHI order display (round 8: the own name always wins when it matches,
+  // but an own name that resolves nowhere — "WBC" under an HBsAg order, a
+  // local "Carbon dioxide (CO2)" — still lets the order place the row).
+  const matchNames = (exact: string[], displays: string[]): LabCategoryResult | null => {
+    // ── Pass 3: exact short-code match against cat.codes
+    for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
+      for (const candidate of exact) {
+        if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'code' }
+      }
     }
+    // ── Pass 4: stripped display-name match ("Serum TSH(ECLIA ...)" → "TSH")
+    const stripped = displays
+      .map(n =>
+        n.replace(/\s*[\(\[（［].*$/, '')  // strip parenthetical and everything after
+         .replace(/^SERUM\s+/, '')          // strip "Serum " / "SERUM " prefix
+         .replace(/[.…]+$/, '')             // strip trailing dots
+         .trim()
+      )
+      .filter(Boolean)
+    for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
+      for (const candidate of stripped) {
+        if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'display' }
+      }
+    }
+    // ── Pass 4.5: canonical-analyte match
+    // clinical-lab-normalization already knows which source names mean which
+    // analyte — that is how a row can be HEADED "GLUCOSE-AC" when the source
+    // said 飯前血糖. Matching the CANONICAL key against each category's code +
+    // column lists keeps categorisation and display from drifting apart.
+    const canonicalKeys = [
+      canonicalKeyFromLoinc(obs),
+      ...exact.map((candidate) => canonicalTestKeyFromString(candidate)),
+      // Bilingual / parenthesised immunology names 「免疫球蛋白E ;(IgE)」.
+      ...exact.map((candidate) => immunologyKeyFromName(candidate)),
+    ].filter((key): key is string => !!key && key !== 'UNKNOWN').map(normalize)
+    for (const { category: cat, canonicalKeys: keySet } of CATEGORY_MATCHERS) {
+      for (const key of canonicalKeys) {
+        if (keySet.has(key) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'canonical' }
+      }
+    }
+    return null
   }
-
-  // ── Pass 4: stripped display-name match ────────────────────────────────
-  // Handles verbose names like "Serum TSH(ECLIA ...)" where stripping the
-  // prefix/parenthetical yields a short code ("TSH") that IS in codes[].
-  const strippedDisplays = [textNorm, ...displayNorms]
-    .map(n =>
-      n.replace(/\s*[\(\[（［].*$/, '')  // strip parenthetical and everything after
-       .replace(/^SERUM\s+/, '')          // strip "Serum " / "SERUM " prefix
-       .replace(/[.…]+$/, '')             // strip trailing dots
-       .trim()
-    )
-    .filter(Boolean)
-  for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
-    for (const candidate of strippedDisplays) {
-      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs, bloodEvidence)) return { category: cat, decidedBy: 'display' }
-    }
-  }
-
-  // ── Pass 4.5: canonical-analyte match ──────────────────────────────────
-  // clinical-lab-normalization already knows which source names mean which analyte — that
-  // is how a row can be HEADED "GLUCOSE-AC" when the source said 飯前血糖.
-  // Categorisation used to consult only the raw text against `codes`, so an
-  // analyte the alias table recognised could still fail every pass above and
-  // fall out of its panel: "GLUCOSE-AC" is listed in glucose's preferredOrder
-  // and pinnedColumns but was never added to its `codes`, so a source emitting
-  // that exact name was silently dropped from 血糖.
-  //
-  // Matching the CANONICAL key against each category's code + column lists
-  // keeps categorisation and display from drifting apart, instead of asking
-  // every future alias to be hand-copied into a second list.
-  const canonicalKeys = [
-    canonicalKeyFromLoinc(obs),
-    ...exactCandidates.map((candidate) => canonicalTestKeyFromString(candidate)),
-    // Bilingual / parenthesised immunology names 「免疫球蛋白E ;(IgE)」.
-    ...exactCandidates.map((candidate) => immunologyKeyFromName(candidate)),
-  ].filter((key): key is string => !!key && key !== 'UNKNOWN').map(normalize)
-  for (const { category: cat, canonicalKeys: keySet } of CATEGORY_MATCHERS) {
-    for (const key of canonicalKeys) {
-      if (keySet.has(key) && nameMatchAllowedForCategory(cat, obs, bloodEvidence)) return { category: cat, decidedBy: 'canonical' }
-    }
+  const byOwnName = matchNames(exactCandidates, [textNorm, ...displayNorms])
+  if (byOwnName) return byOwnName
+  if (hasOwnName && orderDisplayNorms.length > 0) {
+    const byOrderDisplay = matchNames(orderDisplayNorms, orderDisplayNorms)
+    if (byOrderDisplay) return byOrderDisplay
   }
 
   // ── Pass 5: text-based urine fallback (only when nothing above matched) ─
   // Skip when bridge declared specimen=Blood — see big comment above for
   // the 尿酸 / 尿素氮 substring trap this guard avoids.
-  if (!specimenSaysBlood && !bloodEvidence && /\bURINE\b|尿/.test(fullText)) {
+  if (!specimenSaysBlood && /\bURINE\b|尿/.test(fullText)) {
     return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'text-urine' }
   }
 
@@ -1066,7 +1068,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // through here as before, and so do rows billed under a 06 尿液 order, whose
   // code says urine outright. An immunology order never reaches here (Pass
   // 2.5), so a line-blot "Negative" can no longer become a dipstick result.
-  if (!specimenSaysBlood && !bloodEvidence && (!nhiCode || nhiCode.startsWith('06')) && isQualitativeResult(obs)) {
+  if (!specimenSaysBlood && (!nhiCode || nhiCode.startsWith('06')) && isQualitativeResult(obs)) {
     return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'qualitative' }
   }
 

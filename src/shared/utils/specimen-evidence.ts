@@ -18,7 +18,9 @@ export type SpecimenClass = 'urine' | 'blood'
 export type DualSpecimenAnalyte = 'TP' | 'ALB' | 'CA' | 'CREA'
 
 const URINE_NAME_RE = /尿|URINE|\(U\)|^U[-\s.]|\bSPOT\b|\b24\s*-?\s*H(?:R|RS|OUR)?\b|24小時/i
-const BLOOD_NAME_RE = /SERUM|血清|PLASMA|血漿|\bBLOOD\b|\(S\)|\(B\)|\(P\)/i
+// 「肌酸酐、血」 (the NHI order name of serum creatinine) states blood with a
+// trailing 「、血」 / 「(血)」.
+const BLOOD_NAME_RE = /SERUM|血清|PLASMA|血漿|\bBLOOD\b|\(S\)|\(B\)|\(P\)|[、,，]\s*血$|[(（]血[)）]/i
 const URINE_SPECIMEN_RE = /URINE|URINALY|尿/i
 const BLOOD_SPECIMEN_RE = /BLOOD|SERUM|PLASMA|血/i
 
@@ -31,7 +33,8 @@ const BLOOD_INSPECT_RE = /^(?:(?:SERUM|PLASMA|BLOOD)\$?_[A-Z0-9.$]+|blood|血|�
 export function dualSpecimenAnalyte(obs: any): DualSpecimenAnalyte | null {
   const name = ownName(obs).normalize('NFKC').toUpperCase()
     .replace(/\b(?:SERUM|URINE|SPOT|PLASMA|BLOOD)\b|血清|血漿|尿液?|\(.*?\)/g, ' ').trim()
-  if (/KINASE|激酶/.test(name)) return null
+  // Not the analyte itself: an enzyme, a clearance, a filtration rate.
+  if (/KINASE|激酶|CLEARANCE|CCR|GFR|清除率/.test(name)) return null
   // A ratio (Prot/Cr, Alb/Cr, 微白蛋白/肌酸酐) is its own urine analyte, not
   // total protein / albumin / creatinine.
   if (/\/|RATIO|比值/.test(ownName(obs))) return null
@@ -53,7 +56,13 @@ export function dualSpecimenAnalyte(obs: any): DualSpecimenAnalyte | null {
 function ownName(obs: any): string {
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system) && !/loinc/i.test(c?.system || ''))
-  return String(obs?.code?.text || own.find((c: any) => c?.display)?.display || '')
+  // The row's own name; without one, the NHI order display names the row.
+  return String(
+    obs?.code?.text
+    || own.find((c: any) => c?.display)?.display
+    || codings.find((c: any) => isNhiOrderCodeSystem(c?.system) && c?.display)?.display
+    || '',
+  )
 }
 
 function unitOf(obs: any): string {

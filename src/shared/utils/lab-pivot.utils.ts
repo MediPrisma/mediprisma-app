@@ -7,6 +7,7 @@
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { THYROID_DISPLAY, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import { dualSpecimenAnalyte } from '@/src/shared/utils/specimen-evidence'
 import {
   PARAPROTEIN_COLUMN_ORDER,
   paraproteinDisplay,
@@ -704,6 +705,14 @@ export function getLabPivotTestIdentity(
     const immunologyKey = canonicalKeyFromLoinc(obs) ?? immunologyAnalyteKey(obs)
     testKey = immunologyKey
       ?? (IMMUNOLOGY_COLUMN_KEYS.has(testKey) ? raw.normalize('NFKC').trim().toUpperCase() : testKey)
+  }
+
+  // 生化 serum-or-urine analytes named generically ("Protein", "PROT") are
+  // the chemistry analyte there — the column is TP / ALB / CA / CREA.
+  if (categoryId === 'chem') {
+    const dual = dualSpecimenAnalyte(obs)
+    if (dual && !isKnownPivotKey(testKey)) testKey = dual
+    if (dual && (testKey === 'PROTEIN' || testKey === 'PROT')) testKey = dual
   }
 
   if (categoryId === 'endocrine') {
