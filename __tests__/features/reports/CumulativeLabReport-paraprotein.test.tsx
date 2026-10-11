@@ -67,6 +67,9 @@ describe('CumulativeLabReport 直式 — 免疫 電泳／輕鏈 panel', () => {
     expect(clamp.className).toMatch(/max-w-/)
     // Keyboard: a real, focusable button that names what it opens.
     expect(trigger.tagName).toBe('BUTTON')
+    // Touch target: 44px on mobile (DESIGN.md), compact on desktop rows.
+    expect(trigger.className.split(' ')).toContain('max-md:min-h-11')
+    expect(trigger.className.split(' ')).toContain('min-h-6')
     trigger.focus()
     expect(document.activeElement).toBe(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'false')

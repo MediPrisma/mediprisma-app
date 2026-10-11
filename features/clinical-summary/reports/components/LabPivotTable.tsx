@@ -307,7 +307,7 @@ export const LabPivotTable = memo(function LabPivotTable({
                     aria-label={zh
                       ? `${columnName} ${formatDateLabel(date)}：${badge}，查看完整報告`
                       : `${columnName} ${formatDateLabel(date)}: ${badge}, view full report`}
-                    className="mx-auto block min-h-[1.75rem] rounded px-1 underline decoration-dotted underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="mx-auto block min-h-6 rounded px-1 underline decoration-dotted underline-offset-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-11"
                   >
                     <span data-lab-text-clamp="" className="block max-w-[7.5rem] truncate">{badge}</span>
                   </button>
