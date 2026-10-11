@@ -29,27 +29,47 @@ const URINE_INSPECT_RE = /URINE|尿/i
 // The bridge's own definition of a stated blood sample (isBloodFamilyInspectMode).
 const BLOOD_INSPECT_RE = /^(?:(?:SERUM|PLASMA|BLOOD)\$?_[A-Z0-9.$]+|blood|血|血液)$/i
 
+/** Exact names of the four serum-or-urine analytes, after specimen
+ *  decorations are stripped (see stripSpecimenDecorations). Whole-name
+ *  matches only, never prefixes: "Protein C", "Calcium ionized", "Creatinine
+ *  clearance" or "Prealbumin" are other analytes. */
+const DUAL_ANALYTE_ALIASES: Readonly<Record<string, DualSpecimenAnalyte>> = Object.fromEntries([
+  ...['TP', 'T.P', 'T-P', 'TOTAL PROTEIN', 'PROTEIN, TOTAL', 'PROTEIN,TOTAL', 'PROTEIN TOTAL', 'PROTEIN', 'PROT', 'T-PROTEIN',
+    '全蛋白', '總蛋白', '總蛋白質'].map((alias) => [alias, 'TP']),
+  ...['ALB', 'ALBUMIN', '白蛋白'].map((alias) => [alias, 'ALB']),
+  ...['CA', 'CAL', 'CALCIUM', 'CALCIUM, TOTAL', 'CALCIUM,TOTAL', 'TOTAL CALCIUM', 'CA, TOTAL', 'CA TOTAL', '鈣', '總鈣']
+    .map((alias) => [alias, 'CA']),
+  ...['CREA', 'CREAT', 'CRE', 'CREATININE', '肌酸酐', '肌酐'].map((alias) => [alias, 'CREA']),
+] as Array<[string, DualSpecimenAnalyte]>)
+
+/** Strip only what states the specimen: "Serum " / "Urine " / "U-" / 血清 /
+ *  尿 prefixes, ", serum" / 「、血」 / 「、尿」 suffixes, and parentheticals that
+ *  name a blood or urine specimen ("(urine)", "(S)", "(spot urine)",
+ *  「(血液)」). A parenthetical naming anything else ("(CSF)") stays. */
+function stripSpecimenDecorations(name: string): string {
+  let text = name.normalize('NFKC').toUpperCase().replace(/\s+/g, ' ').trim().replace(/[.。]+$/, '')
+  const SPECIMEN_WORD = '(?:SERUM|PLASMA|BLOOD|URINE|SPOT|RANDOM|24\\s*-?\\s*H(?:R|RS|OUR)?|S|U|P|B|血清|血漿|血液|血|尿液?|隨機尿|24小時尿?)'
+  const parenthetical = new RegExp(`\\s*[(（]\\s*${SPECIMEN_WORD}(?:\\s+${SPECIMEN_WORD})*\\s*[)）]$`)
+  const suffix = new RegExp(`\\s*[,，、]\\s*${SPECIMEN_WORD}$`)
+  const prefix = new RegExp(`^(?:${SPECIMEN_WORD}(?:\\s+|\\s*-\\s*|(?=[^A-Z])))+`)
+  for (let i = 0; i < 3; i++) {
+    const before = text
+    text = text.replace(parenthetical, '').replace(suffix, '').replace(prefix, '').trim()
+    if (text === before) break
+  }
+  return text
+}
+
 /** The analyte, when it is one measured in both serum and urine. */
 export function dualSpecimenAnalyte(obs: any): DualSpecimenAnalyte | null {
-  const name = ownName(obs).normalize('NFKC').toUpperCase()
-    .replace(/\b(?:SERUM|URINE|SPOT|PLASMA|BLOOD)\b|血清|血漿|尿液?|\(.*?\)/g, ' ').trim()
-  // Not the analyte itself: an enzyme, a clearance, a filtration rate.
-  if (/KINASE|激酶|CLEARANCE|CCR|GFR|清除率/.test(name)) return null
-  // A ratio (Prot/Cr, Alb/Cr, 微白蛋白/肌酸酐) is its own urine analyte, not
-  // total protein / albumin / creatinine.
-  if (/\/|RATIO|比值/.test(ownName(obs))) return null
-  if (/TOTAL\s*PROTEIN|^T\.?P\.?$|^PROT(?:EIN)?\b|全蛋白|總蛋白/.test(name)) return 'TP'
-  if (/^(?:ALB(?:UMIN)?)\b|^白蛋白/.test(name)) return 'ALB'
-  // Ca, Calcium, 鈣 — never the CA 19-9 / CA-125 tumour markers.
-  if (/^(?:CA|CAL|CALCIUM)$|^CALCIUM\b|鈣/.test(name)) return 'CA'
-  if (/CREA(?:T(?:ININE)?)?\b|^CRE\b|肌酸酐|肌酐/.test(name)) return 'CREA'
+  const raw = ownName(obs)
+  if (raw) return DUAL_ANALYTE_ALIASES[stripSpecimenDecorations(raw)] ?? null
+  // No name at all: the single-analyte order says which.
   const order = nhiOrderCode(obs)
-  if (!name) {
-    if (order === '09040C') return 'TP'
-    if (order === '09038C') return 'ALB'
-    if (order === '09011C') return 'CA'
-    if (order === '09015C' || order === '09016C') return 'CREA'
-  }
+  if (order === '09040C') return 'TP'
+  if (order === '09038C') return 'ALB'
+  if (order === '09011C') return 'CA'
+  if (order === '09015C' || order === '09016C') return 'CREA'
   return null
 }
 
