@@ -84,6 +84,12 @@ import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab
 import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
 import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
+import {
+  foldNumericText,
+  isPercentQuantity,
+  NUMERIC_TEXT_RE,
+  PERCENT_UNIT_PREFIX_RE,
+} from '@/src/shared/utils/lab-value-grammar'
 import { isParaproteinTextKey, PARAPROTEIN_PREFIX } from '@/src/shared/utils/paraprotein-analytes'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
@@ -492,20 +498,6 @@ function labAnalyteKey(observation: any): string {
 export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
 
 // "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
-// One number: optional sign, digits with optional thousands separators and
-// decimals, or a bare leading decimal (".5"), optional exponent ("1.2e3").
-const NUMBER_PATTERN = String.raw`[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?`
-// A number or a range ("0-5", "0 ~ 5", "0 to 5"), after an optional
-// comparator (<, >, ≤, ≥, <=, >=), ending where the number ends.
-const NUMERIC_TEXT_RE = new RegExp(
-  String.raw`^\s*(?:<=|>=|[<>≤≥≦≧])?\s*${NUMBER_PATTERN}(?:\s*(?:-|~|\bto\b)\s*${NUMBER_PATTERN})?(?![\d.,:])`,
-  'i',
-)
-/** NFKC folds full-width digits and ＋/－; the other dashes (− U+2212, ‒, –,
- *  —) are read as the ASCII hyphen-minus before a number, so "−3.2" and
- *  "0–5" parse while a lone "—" (no value) stays text. */
-const foldNumericText = (text: string) =>
-  text.normalize('NFKC').replace(/[−‒–—](?=\s*[+-]?[\d.])/g, '-')
 const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
 /** Value family of one lab row: a count / concentration, a percentage, a
  *  titer, an ordinal (presence / grade) or free text. Rows of different
@@ -534,25 +526,6 @@ export function labValueFamily(observation: any): LabValueFamily {
   const numeric = text.match(NUMERIC_TEXT_RE)
   if (numeric) return PERCENT_UNIT_PREFIX_RE.test(text.slice(numeric[0].length)) ? 'percent' : 'quantity'
   return 'text'
-}
-
-// The ways a percent unit is printed: "%", full-width 「％」 (NFKC folds it),
-// "percent", "per cent", "pct", 「百分比」 — in any case, as a whole word.
-const PERCENT_UNIT_RE = /^(?:%|percent|per\s*cent|pct|百分比)$/i
-const PERCENT_UNIT_PREFIX_RE = /^\s*(?:%|percent|per\s*cent|pct|百分比)(?![a-z])/i
-
-function isPercentUnit(unit: unknown): boolean {
-  return typeof unit === 'string' && PERCENT_UNIT_RE.test(unit.normalize('NFKC').trim())
-}
-
-/** A Quantity (or Range bound) in percent. Its UCUM code decides when it has
- *  one (system UCUM or absent): code '%' is percent whatever the unit text
- *  says, and a count code ('10*3/uL') is not. Without a code, the unit text. */
-function isPercentQuantity(quantity: any): boolean {
-  const code = typeof quantity?.code === 'string' ? quantity.code.trim() : ''
-  const system = typeof quantity?.system === 'string' ? quantity.system : ''
-  if (code && (!system || /unitsofmeasure\.org/i.test(system))) return code === '%'
-  return isPercentUnit(quantity?.unit)
 }
 
 /** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;
