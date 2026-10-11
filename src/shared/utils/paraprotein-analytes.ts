@@ -182,16 +182,20 @@ export function isParaproteinTextKey(key: string | undefined): boolean {
 const ORDER_SET = new Set(PARAPROTEIN_NHI_ORDER_CODES)
 const SPEP_SET = new Set(PROTEIN_ELECTROPHORESIS_NHI_ORDER_CODES)
 
-const M_PROTEIN_RE = /M[-\s]?(?:PROTEIN|SPIKE|蛋白|帶)|PARAPROTEIN|單株(?:球)?蛋白(?:定量|量)?|MONOCLONAL\s*PROTEIN/i
-const URINE_RE = /尿|URINE|\bUFLC\b|^U[-\s.]|\(U\)/i
-const CSF_RE = /\bCSF\b|腦脊髓/i
-const RATIO_RE = /RATIO|比值|[ΚK]\s*\/\s*[ΛL]\b|KAPPA\s*\/\s*LAMBDA/i
-const KAPPA_RE = /KAPPA|Κ|\bK\b/i
-const LAMBDA_RE = /LAMBDA|Λ|\bL\b/i
-const FREE_RE = /FREE|\bS?FLC\b|\bUFLC\b|游離/i
-const TOTAL_RE = /TOTAL|總/i
-const IEP_ONLY_RE = /\bIEP\b|IMMUNOELECTRO|免疫電泳/i
-const IFE_RE = /\bIFE\b|IMMUNOFIX|免疫固定/i
+// Word boundaries are Unicode-aware lookarounds against Latin letters and
+// digits, never \b: \b is ASCII-only, so it fails after a Greek κ / λ ("Free
+// κ/λ") and would let a CJK neighbour block a match. An abbreviation must
+// START a word — the "m" ending "Serum" never begins an "M protein".
+const M_PROTEIN_RE = /(?<![A-Z0-9])M[-\s]?(?:PROTEIN|SPIKE)(?![A-Z])|(?<![A-Z0-9])M[-\s]?(?:蛋白|帶)|PARAPROTEIN|單株(?:球)?蛋白(?:定量|量)?|MONOCLONAL\s*PROTEIN/iu
+const URINE_RE = /尿|URINE|(?<![A-Z0-9])UFLC(?![A-Z0-9])|^U[-\s.]|\(U\)/iu
+const CSF_RE = /(?<![A-Z0-9])CSF(?![A-Z0-9])|腦脊髓/iu
+const RATIO_RE = /RATIO|比值|(?<![A-Z0-9])[ΚK]\s*\/\s*[ΛL](?![A-Z0-9])|KAPPA\s*\/\s*LAMBDA/iu
+const KAPPA_RE = /KAPPA|Κ|(?<![A-Z0-9])K(?![A-Z0-9])/iu
+const LAMBDA_RE = /LAMBDA|Λ|(?<![A-Z0-9])L(?![A-Z0-9])/iu
+const FREE_RE = /FREE|(?<![A-Z0-9])[SU]?FLC(?![A-Z0-9])|游離/iu
+const TOTAL_RE = /TOTAL|總/iu
+const IEP_ONLY_RE = /(?<![A-Z0-9])IEP(?![A-Z0-9])|IMMUNOELECTRO|免疫電泳/iu
+const IFE_RE = /(?<![A-Z0-9])IFE(?![A-Z0-9])|IMMUNOFIX|免疫固定/iu
 
 const loincOf = (obs: any): string | undefined =>
   (obs?.code?.coding ?? []).find((c: any) => /loinc/i.test(c?.system || ''))?.code
@@ -344,4 +348,13 @@ export function paraproteinTextBadge(records: readonly string[], language: Lang)
   const lanes = parsed.filter(isLane)
   if (reports.length !== 1 || !lanes.every(isNegative)) return seeReport
   return singleIsotype(reports[0].result) ?? seeReport
+}
+
+/** Header of a neutral (source-named) κ/λ column: the source name, prefixed
+ *  with its specimen when that is urine or CSF ("Urine Kappa", 「尿 Kappa」),
+ *  so a serum and a urine column of the same source name are told apart. */
+export function neutralParaproteinDisplay(key: string, sourceName: string, language: Lang): string | undefined {
+  const parts = splitKey(key)
+  if (!parts || !parts.base.startsWith('KL:')) return undefined
+  return `${SPECIMEN_LABEL[parts.specimen][language]}${sourceName}`
 }

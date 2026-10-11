@@ -76,6 +76,7 @@ import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documen
 import {
   LAB_CATEGORIES,
   categorizeObservation,
+  getTestDisplayName,
   compareTestsByPreferred,
   isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
@@ -83,6 +84,7 @@ import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab
 import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
 import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
+import { isParaproteinTextKey, PARAPROTEIN_PREFIX } from '@/src/shared/utils/paraprotein-analytes'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
@@ -610,6 +612,20 @@ export function labCategoryAnalyte(observation: any, category: string): {
       return { key: `key:${declared}|${scale}`, label, canonicalKey: declared, loinc, family }
     }
     return { key: `loinc:${loinc}`, label, canonicalKey: declared ?? loinc, loinc, family }
+  }
+  // 免疫 電泳／輕鏈 rows keep their specimen-qualified column (a serum and a
+  // urine neutral κ never merge). A report column (IFE / IEP) gathers a
+  // report and its lanes in the cumulative table, but the AI answer gives
+  // each lane its own analyte, so latest-value selection never drops one.
+  if (identity.testKey.startsWith(PARAPROTEIN_PREFIX)) {
+    const columnLabel = getLabRowDisplayParts(identity, 'medical', 'en').name
+    if (isParaproteinTextKey(identity.testKey)) {
+      const own = getTestDisplayName(observation)
+      const lane = own.normalize('NFKC').trim().toUpperCase()
+      const canonicalKey = `${identity.mapKey}:${lane}`
+      return { key: `name:${canonicalKey}|${family}`, label: `${columnLabel} · ${own}`, canonicalKey, family }
+    }
+    return { key: `name:${identity.mapKey}|${family}`, label: columnLabel, canonicalKey: identity.mapKey, family }
   }
   const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
   return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }

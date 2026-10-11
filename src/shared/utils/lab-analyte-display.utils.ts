@@ -6,8 +6,8 @@ import {
   type AudienceMode,
   type DisplayLang,
 } from '@voho0000/clinical-lab-normalization/display'
-import { categorizeObservation } from './lab-categories'
-import { paraproteinDisplay } from './paraprotein-analytes'
+import { categorizeObservation, getTestDisplayName } from './lab-categories'
+import { isParaproteinTextKey, neutralParaproteinDisplay, paraproteinDisplay } from './paraprotein-analytes'
 import {
   getLabCompatibilityCanonicalDisplay,
   getLabPivotTestIdentity,
@@ -30,6 +30,9 @@ export function getLabRowDisplayParts(
   if (mode === 'original') return { name: row.displayName, abbr: null }
   const paraprotein = paraproteinDisplay(row.testKey, language === 'zh-TW' ? 'zh-TW' : 'en')
   if (paraprotein) return { name: paraprotein, abbr: null }
+  // A neutral κ/λ column is named after its source; a urine or CSF one says so.
+  const neutral = neutralParaproteinDisplay(row.testKey, row.displayName, language === 'zh-TW' ? 'zh-TW' : 'en')
+  if (neutral) return { name: neutral, abbr: null }
   const compatibilityDisplay = getLabCompatibilityCanonicalDisplay(row.testKey)
   if (compatibilityDisplay) return { name: compatibilityDisplay, abbr: null }
   if (CANONICAL_KEYS.has(row.testKey)) {
@@ -55,6 +58,10 @@ export function getAnalyteDisplayForMode(
     return packageDisplayForMode(observation, audience, language, mode)
   }
   const identity = getLabPivotTestIdentity(observation, category.id, mode)
+  // An IEP / IFE report column ("Serum IFE/IEP") gathers a report and its
+  // lanes; one observation shown on its own keeps its own name (IgG, Kappa …)
+  // so the lanes stay distinguishable outside the cumulative table.
+  if (isParaproteinTextKey(identity.testKey)) return getTestDisplayName(observation)
   const { name, abbr } = getLabRowDisplayParts(
     { ...identity, displaySource: observation }, audience, language, mode,
   )
