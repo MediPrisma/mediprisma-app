@@ -46,7 +46,7 @@ describe('Band form cumulative-report identity', () => {
   it('keeps the hospital label auditable in original-name mode', () => {
     expect(getLabPivotTestIdentity(bandObservation, 'cbc', 'original')).toEqual({
       testKey: 'BAND',
-      mapKey: 'source:band form 嗜中性帶狀球',
+      mapKey: 'source:band form 嗜中性帶狀球|BAND',
       displayName: 'Band form 嗜中性帶狀球',
     })
   })

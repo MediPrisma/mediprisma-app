@@ -21,6 +21,7 @@ import {
 } from '@voho0000/clinical-lab-normalization/display'
 import { categorizeObservation, LAB_CATEGORIES } from './lab-categories'
 import {
+  DIFFERENTIAL_COUNT_LABELS,
   getLabCompatibilityCanonicalDisplay,
   labKeyInCategory,
   primaryCellRecord,
@@ -120,6 +121,10 @@ const APP_ANALYTE_NAMES: Readonly<Record<string, { zh: string; en: string }>> = 
   NSE: { zh: '神經元特異性烯醇化酶', en: 'Neuron-specific enolase' },
   'PIVKA-II': { zh: '異常凝血酶原 (PIVKA-II)', en: 'PIVKA-II' },
   B2M: { zh: 'β2-微球蛋白', en: 'Beta-2 microglobulin' },
+  // Differential absolute counts (ALC, AMC, …), kept apart from the percentages.
+  ...Object.fromEntries(
+    Object.entries(DIFFERENTIAL_COUNT_LABELS).map(([key, { zh, en }]) => [key, { zh, en }]),
+  ),
 }
 
 /** Short labels where the key itself is not what a clinician writes. */

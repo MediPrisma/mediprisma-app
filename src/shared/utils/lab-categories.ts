@@ -58,11 +58,14 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // neutrophils first (NEU, the bridge canonical that SEG / SEG. /
     // Segmented / 嗜中性白血球 all collapse to via TEST_ALIASES), then
     // immature band-form (BAND), then the other lineages in decreasing
-    // frequency: LYM → MONO → EOS → BASO. ANC tails as a derived value.
+    // frequency: LYM → MONO → EOS → BASO. The absolute counts (ANC, ALC,
+    // AMC, AEC, ABC, Band#, …) tail as their own columns: a count and its
+    // percentage share a source name but never a column (see
+    // countFractionAwareKey in lab-pivot.utils).
     // Only canonical keys go here — variants like SEG / NEU. / LYM. are
     // dead entries because getAnalyteLabel always returns the canonical
     // (see memory/feedback_canonical_only_in_preferredorder.md).
-    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'PLT', 'MPV', 'NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC', 'BLAST', 'PROMYELOCYTE', 'MYELOCYTE', 'META-MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PS'],
+    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'PLT', 'MPV', 'NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC', 'ALC', 'AMC', 'AEC', 'ABC', 'BAND-ABS', 'BLAST', 'PROMYELOCYTE', 'MYELOCYTE', 'META-MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PS', 'BLAST-ABS', 'PROMYELOCYTE-ABS', 'MYELOCYTE-ABS', 'META-MYELOCYTE-ABS', 'NORMOBLAST-ABS', 'PLASMA-CELL-ABS'],
     // `codes` covers VGH short-form (WBC/RBC/…) AND long-form display
     // names (BASOPHIL/EOSINOPHIL/…) that bridge v0.9.9+ emits for the
     // differential cells. Long-form catches cases where the LOINC isn't
@@ -76,10 +79,16 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // Without these in the allowlist, those obs were silently dropped
     // from the cbc category — clinicians saw 累積報告 missing 3 of 5
     // differential cells.
-    loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4', '713-8', '5905-5', '57021-8'],
+    loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4', '713-8', '5905-5', '57021-8',
+      // Differential #/volume and /100-leukocyte twins (verified tx.fhir.org,
+      // 2026-10-09); the pivot splits count from percentage by this LOINC.
+      '753-4', '26499-4', '768-2', '30451-9', '23761-0', '26511-6', '769-0',
+      '763-3', '26507-4', '26508-2', '35332-6', '732-8', '26474-7', '737-7', '26478-8',
+      '743-5', '26484-6', '744-3', '26485-3', '711-2', '712-0', '26449-9', '714-6', '26450-7',
+      '704-7', '705-4', '26444-0', '707-0', '30180-4', '30376-8', '709-6', '771-6'],
     subgroups: [
       { id: 'counts',  members: ['WBC', 'RBC', 'HB', 'PLT', 'MPV'] },
-      { id: 'diff',    members: ['NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC', 'BLAST', 'PROMYELOCYTE', 'MYELOCYTE', 'META-MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PS'] },
+      { id: 'diff',    members: ['NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC', 'ALC', 'AMC', 'AEC', 'ABC', 'BAND-ABS', 'BLAST', 'PROMYELOCYTE', 'MYELOCYTE', 'META-MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PS', 'BLAST-ABS', 'PROMYELOCYTE-ABS', 'MYELOCYTE-ABS', 'META-MYELOCYTE-ABS', 'NORMOBLAST-ABS', 'PLASMA-CELL-ABS'] },
       { id: 'indices', members: ['HCT', 'MCV', 'MCH', 'MCHC', 'RDW'] },
     ],
     pinnedColumns: ['WBC', 'RBC', 'HB', 'PLT', 'HCT', 'MCV', 'NEU', 'LYM', 'MONO', 'EOS', 'BASO'],

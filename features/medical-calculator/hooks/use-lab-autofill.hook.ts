@@ -12,6 +12,7 @@ import { useEffect, useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinical-lab-normalization/canonical'
+import { countFractionAwareKey } from '@/src/shared/utils/lab-pivot.utils'
 import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue } from '../hfpef-clinical-autofill'
 import { buildEchoAutofill } from '../echo-autofill'
 import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
@@ -157,7 +158,9 @@ export function buildAutofill(
     const viaLoinc = canonicalKeyFromLoinc(holder) != null
     const { testName, loinc } = readCodeProvenance(holder)
     const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date, viaLoinc, testName, loinc, obsId: meta.obsId, facility: meta.facility }
-    const key = getAnalyteCanonicalKey(holder)
+    // Same column as the cumulative report: a reticulocyte or differential
+    // COUNT (14196-0, 751-8, a /µL unit) never feeds an input that expects %.
+    const key = countFractionAwareKey(holder, getAnalyteCanonicalKey(holder) ?? '') || null
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
     const spec = normSpecimen(specimenDisplay)
     if (key && spec) {

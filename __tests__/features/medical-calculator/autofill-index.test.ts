@@ -193,3 +193,26 @@ describe('buildAutofill — derived urine ACR (microalbumin ÷ urine creatinine)
     expect(af.resolve(acrSource)).toBeUndefined()
   })
 })
+
+describe('buildAutofill — reticulocyte count never fills the % input', () => {
+  // LOINC 14196-0 is Reticulocytes [#/volume] (NCnc); the RPI input wants the
+  // percentage (17849-1, NFr). The shared table files 14196-0 under RETIC, so
+  // the count used to fill the % box. Same column split as the cumulative report.
+  it('a #/volume reticulocyte count is not offered as RETIC', () => {
+    const af = buildAutofill([labLoinc('14196-0', 62, '10^3/uL', '2020-01-02')], {})
+    expect(af.resolve({ kind: 'lab', keys: ['RETIC'] })).toBeUndefined()
+  })
+
+  it('the percentage still fills RETIC, even when a newer count exists', () => {
+    const af = buildAutofill([
+      labLoinc('17849-1', 1.4, '%', '2020-01-01'),
+      labLoinc('14196-0', 62, '10^3/uL', '2020-01-02'),
+    ], {})
+    expect(af.resolve({ kind: 'lab', keys: ['RETIC'] })).toMatchObject({ value: 1.4, unit: '%' })
+  })
+
+  it('an uncoded retic count (by unit) is not offered as RETIC either', () => {
+    const af = buildAutofill([named('Retic', 62, '10^3/uL', '2020-01-02'), named('Retic', 1.1, '%', '2020-01-01')], {})
+    expect(af.resolve({ kind: 'lab', keys: ['RETIC'] })).toMatchObject({ value: 1.1, unit: '%' })
+  })
+})

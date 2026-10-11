@@ -555,6 +555,44 @@ describe('createFhirTools (unified)', () => {
       })
     })
 
+    it('keeps a differential count and its percentage as two analytes, as the cumulative report does', async () => {
+      const neutrophil = (id: string, loinc: string, value: number, unit: string, date: string) => ({
+        id,
+        status: 'final',
+        code: {
+          text: '嗜中性白血球 / Neutrophil',
+          coding: [
+            { system: 'http://loinc.org', code: loinc },
+            { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code', code: '08013C' },
+          ],
+        },
+        category: [{ coding: [{ code: 'laboratory' }] }],
+        valueQuantity: { value, unit },
+        effectiveDateTime: `${date}T00:00:00+08:00`,
+      }) as any
+      const tools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          observations: [
+            neutrophil('anc-1', '751-8', 3.2, '10^3/uL', '2025-04-01'),
+            neutrophil('neu-1', '770-8', 55, '%', '2025-04-01'),
+            neutrophil('anc-2', '751-8', 2.9, '10^3/uL', '2025-03-01'),
+            neutrophil('neu-2', '770-8', 61, '%', '2025-03-01'),
+          ],
+          vitalSigns: [],
+        },
+      }))
+
+      const result = await (tools.queryLabResultsByCategory as any).execute({ category: 'cbc', withTrend: true })
+      const byKey = new Map(result.data.map((group: any) => [group.canonicalKey, group]))
+
+      expect([...byKey.keys()].sort()).toEqual(['ANC', 'NEU'])
+      expect((byKey.get('NEU') as any).results.map((item: any) => item.value)).toEqual([55, 61])
+      expect((byKey.get('ANC') as any).results.map((item: any) => item.value)).toEqual([3.2, 2.9])
+      expect((byKey.get('ANC') as any).analyte).toBe('ANC')
+    })
+
     it('does not treat an unavailable Observation query as an empty category', async () => {
       const unavailableTools = createFhirTools(() => ({
         patient: samplePatient,
