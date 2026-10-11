@@ -730,7 +730,12 @@ export function getLabPivotTestIdentity(
   // they share one (possibly wrong) LOINC. NFKC/case/whitespace folding avoids
   // duplicate columns for typographic-only variants while preserving genuine
   // differences such as "Atypical lym." versus "Lymphocytes %".
-  const originalMapKey = `source:${raw.normalize('NFKC').trim().toLocaleLowerCase()}`
+  //
+  // The audit view may split further by source label, but never merge what
+  // the standardized view keeps apart: the standardized key (specimen,
+  // free / total, lane, count vs %, glucose subtype …) is part of it. The
+  // header stays the source label.
+  const originalMapKey = `source:${raw.normalize('NFKC').trim().toLocaleLowerCase()}|${canonicalMapKey}`
   const mapKey = nameMode === 'original' ? originalMapKey : canonicalMapKey
 
   // Column header preference:
