@@ -43,9 +43,9 @@ const CASES: Array<[string, string, string, string]> = [
   ['Microalbumin/Creatinine ratio', '12111C', '微量白蛋白', 'urine'],
   ['Glu', '09005C', '血糖', 'glucose'],
   ['eGFR', '09015C', '肌酸酐、血', 'chem'],
-  // Pre-existing: Pass 4 strips the parenthetical, so the name reads Ca → 生化
-  // with or without the order display. Kept here for the invariance.
-  ['Ca(spot urine)', '09011C', '鈣', 'chem'],
+  // The name states urine (specimen evidence, Pass 2.6) — no longer read as
+  // serum Ca through the stripped parenthetical.
+  ['Ca(spot urine)', '09011C', '鈣', 'urine'],
   ['SS-A/Ro Ab', '12064B', '可抽出的核抗體測定—Ro/La抗體', 'immuno'],
   ['Ro52', '12064B', '可抽出的核抗體測定—Ro/La抗體', 'immuno'],
   ['SS-B/La Ab', '12064B', '可抽出的核抗體測定—Ro/La抗體', 'immuno'],

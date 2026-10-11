@@ -13,6 +13,7 @@
 
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import { dualSpecimenAnalyte, specimenEvidence } from '@/src/shared/utils/specimen-evidence'
 import {
   isParaproteinObservation,
   PARAPROTEIN_COLUMN_ORDER,
@@ -784,6 +785,8 @@ function immunologyNameAllowed(obs: any): boolean {
     .map(normalize)
     .join(' ')
   if (IMMUNOLOGY_NAME_DENIED_CONTEXT.test(context)) return false
+  // A urine unit (mg/g, mg/24h …) or a stated urine specimen is not serum.
+  if (specimenEvidence(obs, null) === 'urine') return false
   const matches = ownNames(obs).map((name) => immunologyNameMatch(name))
   if (matches.some((match) => match && !match.ambiguous)) return true
   if (!matches.some((match) => match)) return false
@@ -796,7 +799,9 @@ function immunologyNameAllowed(obs: any): boolean {
 // code fall through unchanged (most non-NHI FHIR data; specimen routing in Pass 1
 // handles those when a specimen is present). Categories absent from the map are
 // never gated.
-function nameMatchAllowedForCategory(cat: LabCategory, obs: any): boolean {
+function nameMatchAllowedForCategory(cat: LabCategory, obs: any, bloodEvidence = false): boolean {
+  // The row's own evidence says blood (serum-or-urine analytes, Pass 2.6).
+  if (cat.id === 'urine' && bloodEvidence) return false
   // A dipstick value ("4+", "Negative", "Trace") under a glucose NAME is a
   // urinalysis row, not a serum sugar. Urine-specimen rows are already routed
   // before any name match; this covers the specimen-less ones that would
@@ -977,10 +982,24 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
     }
   }
 
+  // ── Pass 2.6: specimen evidence for serum-or-urine analytes ───────────
+  // Total protein, albumin, calcium and creatinine are measured in both. The
+  // row's own evidence decides (specimen-evidence.ts): an explicit name or
+  // specimen, then the unit class (mg/g, mg/24h → urine; g/dL, g/L → blood),
+  // then the MediCloud inspect mode only where the reference range agrees.
+  // Urine → 尿液 here; blood → the name passes may not choose 尿液. No
+  // evidence, a conflict, or a 06 urinalysis order → today's routing.
+  const dualAnalyte = nhiCode?.startsWith('06') ? null : dualSpecimenAnalyte(obs)
+  const dualEvidence = dualAnalyte ? specimenEvidence(obs, dualAnalyte) : null
+  if (dualEvidence === 'urine') {
+    return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'specimen-urine' }
+  }
+  const bloodEvidence = dualEvidence === 'blood'
+
   // ── Pass 3: exact short-code match against cat.codes ───────────────────
   for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
     for (const candidate of exactCandidates) {
-      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'code' }
+      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs, bloodEvidence)) return { category: cat, decidedBy: 'code' }
     }
   }
 
@@ -997,7 +1016,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
     .filter(Boolean)
   for (const { category: cat, codes: codeSet } of CATEGORY_MATCHERS) {
     for (const candidate of strippedDisplays) {
-      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'display' }
+      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs, bloodEvidence)) return { category: cat, decidedBy: 'display' }
     }
   }
 
@@ -1021,14 +1040,14 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   ].filter((key): key is string => !!key && key !== 'UNKNOWN').map(normalize)
   for (const { category: cat, canonicalKeys: keySet } of CATEGORY_MATCHERS) {
     for (const key of canonicalKeys) {
-      if (keySet.has(key) && nameMatchAllowedForCategory(cat, obs)) return { category: cat, decidedBy: 'canonical' }
+      if (keySet.has(key) && nameMatchAllowedForCategory(cat, obs, bloodEvidence)) return { category: cat, decidedBy: 'canonical' }
     }
   }
 
   // ── Pass 5: text-based urine fallback (only when nothing above matched) ─
   // Skip when bridge declared specimen=Blood — see big comment above for
   // the 尿酸 / 尿素氮 substring trap this guard avoids.
-  if (!specimenSaysBlood && /\bURINE\b|尿/.test(fullText)) {
+  if (!specimenSaysBlood && !bloodEvidence && /\bURINE\b|尿/.test(fullText)) {
     return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'text-urine' }
   }
 
@@ -1044,7 +1063,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // through here as before, and so do rows billed under a 06 尿液 order, whose
   // code says urine outright. An immunology order never reaches here (Pass
   // 2.5), so a line-blot "Negative" can no longer become a dipstick result.
-  if (!specimenSaysBlood && (!nhiCode || nhiCode.startsWith('06')) && isQualitativeResult(obs)) {
+  if (!specimenSaysBlood && !bloodEvidence && (!nhiCode || nhiCode.startsWith('06')) && isQualitativeResult(obs)) {
     return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'qualitative' }
   }
 
