@@ -28,6 +28,10 @@ let mockInactiveMedicationGroups: Array<{
   medications: MedicationRow[]
 }> = []
 
+jest.mock('@/src/application/providers/audience.provider', () => ({
+  useAudience: () => ({ audience: 'medical' }),
+}))
+
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
     t: {

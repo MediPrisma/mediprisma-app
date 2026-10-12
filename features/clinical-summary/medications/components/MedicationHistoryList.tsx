@@ -18,10 +18,23 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
 import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
+import {
+  assignVisitBands,
+  compareRowsByVisit,
+  visitBandTintClass,
+  type VisitBand,
+} from '../utils/visit-bands'
+import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
 import { compactMedicationDate } from '../utils/medication-date-display'
 import { MedicationItem } from './MedicationItem'
 
 export type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
+export {
+  assignVisitBands,
+  dateSortKey,
+  visitKeyOf,
+  type VisitBand,
+} from '../utils/visit-bands'
 
 /** SNOMED-mapped injection route abbreviations (see route-display.ts). */
 const INJECTION_ABBR = new Set(['IV', 'IM', 'SC'])
@@ -48,66 +61,17 @@ function isInjectable(m: MedicationRow): boolean {
   return INJECTION_RE.test(`${m.title || ''} ${m.secondaryTitle || ''}`)
 }
 
-/** Sortable YYYY-MM-DD for a display date, only when it is unambiguous
- *  (year first, as zh-TW renders "2026/8/5"). Month/day-first locale strings
- *  ("10/1/2026", "1/10/2026") can't be told apart, so they return '' rather
- *  than a guess. Rows built by useMedicationRows carry *Iso fields and never
- *  reach this fallback. */
-export function dateSortKey(value?: string): string {
-  const match = value?.trim().match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})(?!\d)/)
-  if (!match) return ''
-  return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
-}
-
-function startDayOf(m?: MedicationRow): string {
-  return m?.startedOnIso || dateSortKey(m?.startedOn)
-}
-
-function latestDayOf(m?: MedicationRow): string {
-  return m?.endDateIso || dateSortKey(m?.endDate || m?.stoppedOn) || startDayOf(m)
-}
-
-/** One outpatient visit ≈ the latest fill's start day + institution. Drugs
- *  prescribed at the same visit share it, so the list can band them together.
- *  Falls back to the drug key when the start day is unknown or ambiguous — an
- *  undated row is never merged into a neighbouring visit. */
-export function visitKeyOf(group: MedicationHistoryGroup): string {
-  const started = startDayOf(group.medications[0])
-  if (!started) return `drug:${group.key}`
-  return `${started}|${(group.medications[0]?.pharmacy ?? '').trim()}`
-}
-
-/** Newest visit first; drugs from one visit stay adjacent (institution, then
- *  the fill that ran longest), so visit bands are contiguous. */
-function compareHistoryGroups(a: MedicationHistoryGroup, b: MedicationHistoryGroup): number {
-  const aLatest = a.medications[0]
-  const bLatest = b.medications[0]
-  const byVisitDate = (startDayOf(bLatest) || latestDayOf(bLatest))
-    .localeCompare(startDayOf(aLatest) || latestDayOf(aLatest))
-  if (byVisitDate !== 0) return byVisitDate
-  const byInstitution = (aLatest?.pharmacy ?? '').localeCompare(bLatest?.pharmacy ?? '')
-  if (byInstitution !== 0) return byInstitution
-  return latestDayOf(bLatest).localeCompare(latestDayOf(aLatest))
-}
-
-export interface VisitBand {
-  /** Alternates 0/1 each time the visit changes. */
-  band: 0 | 1
-  /** First drug of a visit (other than the very first row). */
-  visitStart: boolean
-}
-
-/** Alternating band per visit for an already-sorted list. */
-export function assignVisitBands(groups: MedicationHistoryGroup[]): VisitBand[] {
-  let band: 0 | 1 = 0
-  let previous: string | undefined
-  return groups.map((group, index) => {
-    const key = visitKeyOf(group)
-    const changed = index > 0 && key !== previous
-    if (changed) band = band === 0 ? 1 : 0
-    previous = key
-    return { band, visitStart: changed }
-  })
+/** Representative rows of the visit that starts at `index` (empty for rows
+ *  that don't start a visit). Uses the full list, so counts stay correct
+ *  while later rows are still being revealed in idle batches. */
+function visitRowsAt(
+  groups: MedicationHistoryGroup[],
+  bands: VisitBand[],
+  index: number,
+): MedicationRow[] | undefined {
+  const count = bands[index]?.headerCount ?? 0
+  if (!count) return undefined
+  return groups.slice(index, index + count).map((group) => group.medications[0])
 }
 
 /** Compact "start → end" shared with the collapsed medication row. */
@@ -139,7 +103,7 @@ export function MedicationHistoryList({
   // Sort by visit, newest first, so drugs prescribed together sit together
   // and can share a background band (scanning by eye: "which visit was this").
   const { regular, injectable } = useMemo(() => {
-    const sorted = [...groups].sort(compareHistoryGroups)
+    const sorted = [...groups].sort((a, b) => compareRowsByVisit(a.medications[0], b.medications[0]))
     const reg: MedicationHistoryGroup[] = []
     const inj: MedicationHistoryGroup[] = []
     for (const g of sorted) {
@@ -247,6 +211,7 @@ export function MedicationHistoryList({
               mt={mt}
               nameMode={nameMode}
               visitBand={regularBands[index]}
+              visitRows={visitRowsAt(regular, regularBands, index)}
             />
           ))}
         </ul>
@@ -283,6 +248,7 @@ export function MedicationHistoryList({
                   mt={mt}
                   nameMode={nameMode}
                   visitBand={injectableBands[index]}
+                  visitRows={visitRowsAt(injectable, injectableBands, index)}
                 />
               ))}
             </ul>
@@ -298,11 +264,13 @@ function HistoryRow({
   mt,
   nameMode,
   visitBand,
+  visitRows,
 }: {
   group: MedicationHistoryGroup
   mt: any
   nameMode: MedicationNameMode
   visitBand?: VisitBand
+  visitRows?: MedicationRow[]
 }) {
   const [open, setOpen] = useState(false)
   const detailsId = useId()
@@ -324,27 +292,14 @@ function HistoryRow({
     <li
       className={cn(
         'relative min-w-0',
-        tinted && 'bg-sky-500/[0.07] dark:bg-sky-400/[0.09]',
+        tinted && visitBandTintClass,
       )}
       data-visit-band={visitBand?.band}
       data-visit-start={visitBand?.visitStart || undefined}
     >
-      {visitBand && (
-        // Left bar repeats the band in a non-colour cue (shape + contrast) so
-        // visits stay separable for colour-blind readers and in print.
-        <span
-          aria-hidden
-          className={cn(
-            'pointer-events-none absolute inset-y-0 left-0 z-10 w-[3px]',
-            tinted ? 'bg-sky-500/70 dark:bg-sky-400/70' : 'bg-border',
-          )}
-        />
-      )}
-      {visitBand?.visitStart && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-foreground/20"
-        />
+      {visitBand && <VisitBandMarks band={visitBand} />}
+      {visitBand && visitBand.headerCount > 0 && visitRows && (
+        <VisitHeader rows={visitRows} count={visitBand.headerCount} />
       )}
       <MedicationItem
         medication={historyMedication}

@@ -86,10 +86,10 @@ describe('visit bands', () => {
 
   it('alternates bands at each visit boundary', () => {
     expect(assignVisitBands([ent1, ent2, derm, ent3])).toEqual([
-      { band: 0, visitStart: false },
-      { band: 0, visitStart: false },
-      { band: 1, visitStart: true },
-      { band: 0, visitStart: true },
+      { band: 0, visitStart: false, headerCount: 2 },
+      { band: 0, visitStart: false, headerCount: 0 },
+      { band: 1, visitStart: true, headerCount: 1 },
+      { band: 0, visitStart: true, headerCount: 1 },
     ])
   })
 
@@ -105,6 +105,10 @@ describe('visit bands', () => {
     )
     expect(bands).toEqual(['0', '0', '0', '1', '0'])
     expect(container.querySelectorAll('li[data-visit-start]')).toHaveLength(2)
+    const headers = Array.from(container.querySelectorAll('[data-visit-header]'))
+    expect(headers).toHaveLength(3)
+    expect(headers[0].textContent).toContain('慈田耳鼻喉')
+    expect(headers[0].textContent).toContain('3 項')
   })
 })
 
