@@ -251,4 +251,25 @@ describe('current medications — visit bands and headers', () => {
     expect(undated.querySelector('[data-testid="medication-institution"]')?.textContent).toBe('某診所')
     expect(undated.querySelector('[data-medication-diagnosis] button')?.textContent).toContain('K21.9')
   })
+
+  it('folds rows under a header onto one line on a wide list, but not undated rows', () => {
+    // Container-query classes only: jsdom has no layout, so this pins which
+    // rows opt in. The browser check covers the actual widths.
+    const meds = [
+      active('DATED', '2026-09-20', '臺大醫院', 'I10'),
+      active('UNDATED', '', '某診所', 'K21.9'),
+    ]
+    const { container } = render(
+      <MedicationList medications={meds} isLoading={false} error={null} />,
+    )
+    const layoutOf = (name: string) => Array.from(container.querySelectorAll('li[data-visit-band]'))
+      .find((li) => li.textContent?.includes(name) && (name === 'UNDATED' || !li.textContent?.includes('UNDATED')))!
+      .querySelector('[data-medication-row-layout]')!
+    const dated = layoutOf('DATED')
+    expect(dated.className).toContain('@min-[45rem]:grid-cols-')
+    expect(dated.querySelector('[data-medication-regimen]')!.className).toContain('@min-[45rem]:row-start-1')
+    const undated = layoutOf('UNDATED')
+    expect(undated.className).not.toContain('@min-[45rem]:grid-cols-')
+  })
 })
+

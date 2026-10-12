@@ -344,6 +344,11 @@ export function MedicationItem({
     && !((medication.overlapCount ?? 0) > 0)
     && !showStatementChip
     && !refillCompact
+  // A row under a visit header has nothing left in its middle column at
+  // desktop widths, so from a 720px list it folds onto one line:
+  // name | dates + regimen | class chips | status + refills. Below that it
+  // keeps the two-line layout (the regimen needs ~300px of its own).
+  const singleLineWhenWide = visitContextInHeader
 
   // Resource-navigation anchor — catalog cites MedicationRequest OR
   // MedicationStatement, so this row answers to both.
@@ -373,6 +378,8 @@ export function MedicationItem({
         grouped
           ? "rounded-none border-0 bg-transparent"
           : "rounded-md border border-border/70 bg-muted/40 dark:border-border/80 dark:bg-muted/30",
+        singleLineWhenWide
+          && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
     >
       {leadingControl && (
@@ -422,7 +429,10 @@ export function MedicationItem({
           <div
             ref={regimenRef}
             data-medication-regimen
-            className="relative col-span-3 col-start-1 row-start-2 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-span-1"
+            className={cn(
+              "relative col-span-3 col-start-1 row-start-2 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-span-1",
+              singleLineWhenWide && "@min-[45rem]:col-start-2 @min-[45rem]:row-start-1",
+            )}
           >
             {scheduleParts.map((part, index) => (
               <span
@@ -468,6 +478,7 @@ export function MedicationItem({
             className={cn(
               "col-start-2 row-start-3 flex h-4 min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2",
               narrowThirdLineEmpty && "@max-[456px]:hidden",
+              singleLineWhenWide && "@min-[45rem]:col-start-3 @min-[45rem]:row-start-1",
             )}
           >
             {rowInstitution && (
@@ -537,6 +548,7 @@ export function MedicationItem({
         className={cn(
           "col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-1",
           narrowThirdLineEmpty && "@max-[456px]:hidden",
+          singleLineWhenWide && "@min-[45rem]:hidden",
         )}
       >
         <div
@@ -577,9 +589,19 @@ export function MedicationItem({
           the clinically time-sensitive information. */}
       <div
         data-medication-cell="supply"
-        className="col-start-3 row-start-1 row-span-2 contents w-[4.75rem] min-w-0 flex-col items-stretch @min-[456px]:flex"
+        className={cn(
+          "col-start-3 row-start-1 row-span-2 contents w-[4.75rem] min-w-0 flex-col items-stretch @min-[456px]:flex",
+          // Status stays at the right edge; the refill count sits to its left.
+          singleLineWhenWide
+            && "@min-[45rem]:col-start-4 @min-[45rem]:row-span-1 @min-[45rem]:w-auto @min-[45rem]:flex-row-reverse @min-[45rem]:items-center @min-[45rem]:gap-1.5",
+        )}
       >
-        <div className="col-start-3 row-start-1 flex h-4 items-center">
+        <div
+          className={cn(
+            "col-start-3 row-start-1 flex h-4 items-center",
+            singleLineWhenWide && "@min-[45rem]:w-[4.75rem] @min-[45rem]:shrink-0",
+          )}
+        >
           <Badge
             variant={badge.variant}
             className={cn(
@@ -598,6 +620,7 @@ export function MedicationItem({
           className={cn(
             "col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75",
             narrowThirdLineEmpty && "@max-[456px]:hidden",
+            singleLineWhenWide && "@min-[45rem]:flex-1",
           )}
         >
           {refillCompact && (

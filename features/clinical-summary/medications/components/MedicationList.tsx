@@ -284,6 +284,8 @@ export function MedicationList({
                         })
                       }) : undefined}
                       leadingControl={history ? (
+                        // Stretches to the row (44px two-line, 32px when the
+                        // row folds onto one line) so the chevron stays centred.
                         <button
                           type="button"
                           aria-expanded={historyOpen}
@@ -291,7 +293,7 @@ export function MedicationList({
                           aria-label={historyToggleLabel}
                           title={historyToggleLabel}
                           onClick={toggleHistory}
-                          className="inline-flex min-h-11 w-full items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
+                          className="inline-flex w-full self-stretch items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
                         >
                           <ChevronRight
                             className={cn(
