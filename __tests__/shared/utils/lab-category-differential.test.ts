@@ -33,6 +33,16 @@ import { dualSpecimenAnalyte } from '@/src/shared/utils/specimen-evidence'
 import { IMMUNOLOGY_NHI_ORDER_CODES } from '@/src/shared/utils/immunology-analytes'
 import { PARAPROTEIN_NHI_ORDER_CODES } from '@/src/shared/utils/paraprotein-analytes'
 import { LOOK_ALIKES } from '../../helpers/lab-lookalikes'
+import { hasUrineWording } from '@/src/shared/utils/urine-wording'
+
+// 尿 inside analyte names (尿素氮, 尿素, 尿酸) and genuine urine wording, under
+// the orders that bill them, a urinalysis order and no order (round 24).
+const URINE_WORD_NAMES = [
+  '血中尿素氮(BUN)', '血中尿素氮', '尿素氮', '尿素氮(BUN)', 'BUN(尿素氮)', '尿素', '尿酸', '尿酸(UA)', '血清尿酸', '血中尿酸',
+  '尿素氮/肌酸酐比', 'B型利鈉尿胜肽', '抗利尿激素',
+  '尿液常規', '尿蛋白', '尿中肌酸酐', '尿中尿酸', '尿液尿酸', '尿素氮(尿)', '尿液尿素氮', '小便尿酸', 'Urine uric acid', 'U-UA',
+]
+const URINE_WORD_ORDERS = ['', '09002C', '09013C', '06013C', '09015C', '09001C']
 
 const ROOT = process.cwd()
 const MEDCLOUD = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw'
@@ -110,6 +120,7 @@ function buildCorpus(): Row[] {
     }
   }
   for (const alias of LOOK_ALIKES) for (const code of SECTION_REPS) pairs.set(`${code}|${alias}`, [code, alias, 'lookalike'])
+  for (const alias of URINE_WORD_NAMES) for (const code of URINE_WORD_ORDERS) pairs.set(`${code}|${alias}`, [code, alias, 'urine-word'])
   for (const [code, name] of Object.entries(NHI_ORDER_CODE_TO_EN)) pairs.set(`${code}|${name}`, [code, name, 'order-name-en'])
   for (const [code, name] of Object.entries(NHI_ORDER_CODE_TO_ZH)) pairs.set(`${code}|${name}`, [code, name, 'order-name-zh'])
   const rows: Row[] = []
@@ -120,7 +131,7 @@ function buildCorpus(): Row[] {
       index += 1
       // Deterministic sample: every row of the orders, names and look-alikes
       // this branch touches; one in five of the rest.
-      const priority = PRIORITY_CODES.has(code) || source === 'lookalike' || /PROT|ALB|CA|CRE|蛋白|鈣|肌/i.test(alias)
+      const priority = PRIORITY_CODES.has(code) || source === 'lookalike' || source === 'urine-word' || /PROT|ALB|CA|CRE|蛋白|鈣|肌/i.test(alias)
       if (!priority && index % 5 !== 0) continue
       rows.push([code, alias, source, shape, unit, mode, (NHI_ORDER_CODE_TO_ZH as any)[code] ?? ''])
     }
@@ -157,6 +168,12 @@ function place(categorize: (o: any) => any, identity: (o: any, c: string) => any
 
 const IMMUNO_ORDERS = new Set([...IMMUNOLOGY_NHI_ORDER_CODES, ...PARAPROTEIN_NHI_ORDER_CODES])
 const DUAL_KEYS = new Set(['TP', 'ALB', 'CA', 'CREA'])
+/** Names this branch added, with the column they take ('' = 生化 only). */
+const NEW_ALIASES: Record<string, string> = {
+  全蛋白: 'TP', 鈣: 'CA', 血清鈣: 'CA',
+  血中尿素氮: 'BUN', 血尿素氮: 'BUN', 血清尿素氮: 'BUN', 尿素氮: 'BUN', 'BLOOD UREA NITROGEN': 'BUN', 'UREA NITROGEN': 'BUN', 尿素: '',
+  尿酸: 'UA', 血中尿酸: 'UA', 血清尿酸: 'UA', 'URIC ACID': 'UA',
+}
 
 /** Every allowed kind of change, with its reason. */
 export const ALLOW_LIST: Record<string, string> = {
@@ -164,10 +181,11 @@ export const ALLOW_LIST: Record<string, string> = {
   immunoOrder: 'an immunology NHI order (incl. IEP / IFE / κλ and IgG-subclass orders) decides 免疫',
   unitUrine: 'a serum-or-urine analyte with a urine unit (mg/g …) → 尿液 (unit-specimen evidence)',
   unitBlood: 'a serum-or-urine analyte with a blood unit (g/dL, g/L) → 生化 with its TP / ALB / CA / CREA column',
-  nameUrine: 'the row\'s own name states urine → 尿液',
+  nameUrine: 'the row\'s own name states urine (尿 outside an analyte word, 小便, Urine, SPOT) → 尿液',
+  urineAnalyteWord: '尿 only inside an analyte name (尿素氮, 尿素, 尿酸, 利尿 / 鈉尿) is not a urine specimen: the base text-urine routing gives way to 生化 (round 24)',
   ownName: 'the own name wins over the order display (round 8; a bare local code too, round 23): the row lands where its own name alone does',
   dualColumn: 'an exact serum-or-urine analyte name takes that analyte\'s column (TP / ALB / CA / CREA)',
-  newAlias: '全蛋白 / 鈣 / 血清鈣 are names of TP / CA (rounds 6, 14)',
+  newAlias: '全蛋白 / 鈣 / 血清鈣 are names of TP / CA (rounds 6, 14); 血中尿素氮 / 尿素氮 … of BUN, 尿酸 / 血清尿酸 … of UA, 尿素 a 生化 name (round 24)',
   localCodeAsName: 'a bare local code that names an analyte reads as code.text (round 23): the row lands where the same row with that code as code.text (beside the order display) does — never placed by the order display alone',
   medcloudLikeHealthbank: 'MediCloud NHI codes are now recognised: the row lands where the same row under the 健保存摺 system does, which is the base\'s 健保存摺 result or an allowed change',
 }
@@ -181,8 +199,11 @@ function classify(row: Row, base: Placement, branch: Placement, ownOnly: Placeme
   const dual = dualSpecimenAnalyte(o)
   if (dual && nc === 'urine' && unit === 'mg/g') return 'unitUrine'
   if (dual && nc === 'chem' && unit === 'g/dL' && nk === dual) return 'unitBlood'
-  if (/尿|URINE|SPOT/i.test(alias) && nc === 'urine') return 'nameUrine'
-  if (['全蛋白', '鈣', '血清鈣'].includes(alias) && (nk === 'TP' || nk === 'CA' || nc === 'chem')) return 'newAlias'
+  if ((hasUrineWording(alias) || /SPOT/i.test(alias)) && nc === 'urine') return 'nameUrine'
+  // The names the row carries: its own, plus the order display in the shapes that send one beside it.
+  const carried = ['both', 'local', 'localAfter'].includes(shape) ? `${alias} ${row[6]}` : alias
+  if (bc === 'urine' && nc !== 'urine' && /尿/.test(carried) && !hasUrineWording(carried)) return 'urineAnalyteWord'
+  if (alias in NEW_ALIASES && (nk === NEW_ALIASES[alias] || nc === 'chem')) return 'newAlias'
   if (bc === nc && dual && DUAL_KEYS.has(nk) && nk === dual) return 'dualColumn'
   if ((shape === 'both' || shape === 'localAfter') && ownOnly && ownOnly[0] === nc && ownOnly[1] === nk) return 'ownName'
   if ((shape === 'local' || shape === 'localAfter') && asText && asText[0] === nc && asText[1] === nk) return 'localCodeAsName'

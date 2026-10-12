@@ -13,6 +13,7 @@
 //   4. conflict or nothing → null, and the caller keeps today's behaviour.
 
 import { isNhiOrderCodeSystem, meaningfulLocalCode, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { withoutUrineAnalyteWords } from '@/src/shared/utils/urine-wording'
 
 export type SpecimenClass = 'urine' | 'blood'
 export type DualSpecimenAnalyte = 'TP' | 'ALB' | 'CA' | 'CREA'
@@ -179,12 +180,13 @@ function specimenFromReferenceRange(obs: any, analyte: DualSpecimenAnalyte): Spe
 export function specimenEvidence(obs: any, analyte: DualSpecimenAnalyte | null): SpecimenClass | null {
   // 1. explicit
   const name = ownName(obs).normalize('NFKC')
-  const nameUrine = URINE_NAME_RE.test(name)
+  // 尿素氮 / 尿酸 … are analyte words, never a urine specimen.
+  const nameUrine = URINE_NAME_RE.test(withoutUrineAnalyteWords(name))
   const nameBlood = BLOOD_NAME_RE.test(name)
   if (nameUrine !== nameBlood) return nameUrine ? 'urine' : 'blood'
   const specimenText = [obs?.specimen?.display, obs?.specimen?.type?.text].filter(Boolean).join(' ')
   if (specimenText) {
-    if (URINE_SPECIMEN_RE.test(specimenText)) return 'urine'
+    if (URINE_SPECIMEN_RE.test(withoutUrineAnalyteWords(specimenText))) return 'urine'
     if (BLOOD_SPECIMEN_RE.test(specimenText)) return 'blood'
   }
   // 2. unit class
@@ -194,7 +196,7 @@ export function specimenEvidence(obs: any, analyte: DualSpecimenAnalyte | null):
   if (!analyte) return null
   const mode = inspectMode(obs)
   if (!mode) return null
-  const modeSays: SpecimenClass | null = URINE_INSPECT_RE.test(mode) ? 'urine' : BLOOD_INSPECT_RE.test(mode) ? 'blood' : null
+  const modeSays: SpecimenClass | null = URINE_INSPECT_RE.test(withoutUrineAnalyteWords(mode)) ? 'urine' : BLOOD_INSPECT_RE.test(mode) ? 'blood' : null
   if (!modeSays) return null
   const rangeSays = specimenFromReferenceRange(obs, analyte)
   // 4. conflict or insufficient → null

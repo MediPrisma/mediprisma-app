@@ -12,6 +12,7 @@
 //  through to `return null`.
 
 import { isNhiOrderCodeSystem, meaningfulLocalCode, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { hasUrineWording, isUrineAnalyteInUrine, withoutUrineAnalyteWords } from '@/src/shared/utils/urine-wording'
 import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { dualSpecimenAnalyte, specimenEvidence } from '@/src/shared/utils/specimen-evidence'
 import {
@@ -150,7 +151,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // CO2 variants stay TCO2-specific — NOT 'BICARBONATE'/'HCO3', which is the
     // arterial blood-gas analyte (own category). NT-proBNP variants kept
     // distinct from BNP (a different assay we don't fold in here).
-    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', '鈣', '血清鈣', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
+    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', '血中尿素氮', '血尿素氮', '血清尿素氮', '尿素氮', 'BLOOD UREA NITROGEN', 'UREA NITROGEN', '尿素', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', '鈣', '血清鈣', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', '尿酸', '血中尿酸', '血清尿酸', 'URIC ACID', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
     // ships this for NHI 09099C 心肌旋轉蛋白Ｉ.
@@ -784,7 +785,8 @@ function immunologyNameAllowed(obs: any): boolean {
     .filter((text): text is string => typeof text === 'string')
     .map(normalize)
     .join(' ')
-  if (IMMUNOLOGY_NAME_DENIED_CONTEXT.test(context)) return false
+  // 尿素氮 / 尿酸 in an order display is an analyte, not a urine context.
+  if (IMMUNOLOGY_NAME_DENIED_CONTEXT.test(withoutUrineAnalyteWords(context))) return false
   // A urine unit (mg/g, mg/24h …) or a stated urine specimen is not serum.
   if (specimenEvidence(obs, null) === 'urine') return false
   const matches = ownNames(obs).map((name) => immunologyNameMatch(name))
@@ -986,7 +988,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   // than being dropped.
   let specimenBlocksPanels = false
   if (specimenText) {
-    if (/urine|urinaly|尿/i.test(specimenText)) {
+    if (/urinaly/i.test(specimenText) || hasUrineWording(specimenText)) {
       return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'specimen-urine' }
     }
     specimenBlocksPanels = !specimenSaysBlood
@@ -1072,13 +1074,22 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
     }
     return null
   }
+  // 「尿素氮(尿)」, 「尿中尿酸」: a 尿-spelt chemistry analyte whose own name
+  // also states urine is the urine measurement — the stripped name
+  // (尿素氮, 尿酸) must not take it to 生化. Without an own name the order
+  // display is the row's name (displayNorms) and is read the same way.
+  if (!specimenSaysBlood && isUrineAnalyteInUrine([nameNorm, ...displayNorms].join(' '))) {
+    return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'text-urine' }
+  }
   const byOwnName = matchNames(exactCandidates, [nameNorm, ...displayNorms])
   if (byOwnName) return byOwnName
 
   // ── Pass 5: text-based urine fallback (only when nothing above matched) ─
-  // Skip when bridge declared specimen=Blood — see big comment above for
-  // the 尿酸 / 尿素氮 substring trap this guard avoids.
-  if (!specimenSaysBlood && /\bURINE\b|尿/.test(fullText)) {
+  // Skip when bridge declared specimen=Blood. 尿 inside an analyte name
+  // (尿素氮, 尿素, 尿酸, 利尿 / 鈉尿) is not urine: hasUrineWording reads past
+  // those words, so 「血中尿素氮(BUN)」 under 09002C reaches the order display
+  // (Pass 5.5) and stays 生化, while 「尿中尿酸」 still states urine.
+  if (!specimenSaysBlood && hasUrineWording(fullText)) {
     return { category: LAB_CATEGORIES.find((c) => c.id === 'urine') || null, decidedBy: 'text-urine' }
   }
 

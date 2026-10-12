@@ -427,6 +427,19 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   // 09011C 鈣 — the NHI order's own name.
   '鈣': 'CA',
   '血清鈣': 'CA',
+  // 09002C 血中尿素氮 / 09013C 尿酸 — the NHI order names and their common
+  // spellings. 尿 here is part of the analyte name, not a urine specimen.
+  // (尿素, urea, is a different quantity from urea nitrogen: no BUN alias.)
+  '血中尿素氮': 'BUN',
+  '血尿素氮': 'BUN',
+  '血清尿素氮': 'BUN',
+  '尿素氮': 'BUN',
+  'BLOOD UREA NITROGEN': 'BUN',
+  'UREA NITROGEN': 'BUN',
+  '尿酸': 'UA',
+  '血中尿酸': 'UA',
+  '血清尿酸': 'UA',
+  'URIC ACID': 'UA',
   'PTH-I': 'IPTH',
   IPTH: 'IPTH',
   'I-PTH': 'IPTH',

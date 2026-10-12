@@ -34,6 +34,7 @@
 //   immunoglobulin columns.
 
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { withoutUrineAnalyteWords } from '@/src/shared/utils/urine-wording'
 
 export const PARAPROTEIN_PREFIX = 'PP:'
 
@@ -313,7 +314,7 @@ function specimenOf(obs: any, order: string | null, name: string): 'S' | 'U' | '
   if (order === '12157B') return 'CSF'
   const evidence = `${name} ${specimenText(obs)}`.normalize('NFKC')
   if (CSF_RE.test(evidence)) return 'CSF'
-  if (URINE_RE.test(evidence)) return 'U'
+  if (URINE_RE.test(withoutUrineAnalyteWords(evidence))) return 'U'
   return 'S'
 }
 
