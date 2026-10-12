@@ -11,7 +11,7 @@
 //  No denylist / exclusion regex needed — unrecognised tests simply fall
 //  through to `return null`.
 
-import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { isNhiOrderCodeSystem, meaningfulLocalCode, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { dualSpecimenAnalyte, specimenEvidence } from '@/src/shared/utils/specimen-evidence'
 import {
@@ -841,6 +841,30 @@ export interface LabCategoryResult {
   decidedBy: LabCategoryDecision
 }
 
+/** A local code that a category lists by name ("WBC", "09037C"). */
+function isRecognisedLocalCode(code: string): boolean {
+  const norm = normalize(code)
+  return CATEGORY_MATCHERS.some(({ codes }) => codes.has(norm))
+}
+
+/**
+ * The bare local code that names the row — no code.text, no item display,
+ * and a code that is not an opaque identifier ("WBC", "GLU-AC").
+ */
+export function localCodeName(obs: any): string | undefined {
+  if (obs?.code?.text) return undefined
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  if (codings.some((c: any) => !isNhiOrderCodeSystem(c?.system) && typeof c?.display === 'string' && c.display.trim())) return undefined
+  return meaningfulLocalCode(codings, isRecognisedLocalCode)
+}
+
+/** The observation with its bare local code read as code.text, for readers
+ *  that look only at code.text and displays. Unchanged otherwise. */
+export function withLocalCodeAsText<T>(obs: T): T {
+  const name = localCodeName(obs)
+  return name ? { ...(obs as any), code: { ...(obs as any).code, text: name } } : obs
+}
+
 export function categorizeObservation(obs: any): LabCategory | null {
   return categorizeObservationWithReason(obs).category
 }
@@ -865,14 +889,20 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   const orderDisplayNorms = codings
     .filter((c: any) => isNhiOrderCodeSystem(c?.system))
     .map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
-  // A name a person reads: code.text or an item coding display. A bare
-  // local item code ("L0001", "72-001") is an identifier, not a name, so it
-  // never suppresses the order display.
-  const hasOwnName = !!textNorm || ownCodings.some((c: any) => typeof c?.display === 'string' && c.display.trim())
+  // The row's own name: code.text, an item coding display, or a bare local
+  // code that names an analyte ("WBC" under 08011C "CBC"). Only an opaque
+  // local identifier ("L0001", "72-001") lets the order display name the row.
+  // Without code.text or an item display, such a local code reads as the
+  // row's text: its wording (urine, a culture) counts like code.text's.
+  const localNameNorm = !textNorm && ownDisplayNorms.length === 0
+    ? normalize(meaningfulLocalCode(codings, isRecognisedLocalCode) ?? '')
+    : ''
+  const nameNorm = textNorm || localNameNorm
+  const hasOwnName = !!nameNorm || ownDisplayNorms.length > 0
   const displayNorms = hasOwnName ? ownDisplayNorms : [...ownDisplayNorms, ...orderDisplayNorms]
 
   const exactCandidates = [...codeNorms, textNorm, ...displayNorms].filter(Boolean)
-  const fullText = [textNorm, ...ownDisplayNorms, ...orderDisplayNorms].filter(Boolean).join(' ')
+  const fullText = [nameNorm, ...ownDisplayNorms, ...orderDisplayNorms].filter(Boolean).join(' ')
 
   // ── Early special cases ──────────────────────────────────────────────────
   // (Previously: 溶血/脂血/icterus filter removed 2026-05-29.) Bridge still
@@ -936,7 +966,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
   const isMicrobiologyNhiOrder = !!nhiCode && MICROBIOLOGY_NHI_ORDER_CODES.has(nhiCode)
   const allowsMicrobiologyNameMatch = !nhiCode || nhiCode.startsWith('13')
   const isMicrobiologyName = allowsMicrobiologyNameMatch &&
-    MICROBIOLOGY_NAME_PATTERNS.some((pattern) => pattern.test(fullText) || pattern.test(textNorm))
+    MICROBIOLOGY_NAME_PATTERNS.some((pattern) => pattern.test(fullText) || pattern.test(nameNorm))
   if (
     isMicrobiologyLoinc
     || (!hasKnownNonMicrobiologyLoinc && isMicrobiologyNhiOrder)
@@ -1042,7 +1072,7 @@ export function categorizeObservationWithReason(obs: any): LabCategoryResult {
     }
     return null
   }
-  const byOwnName = matchNames(exactCandidates, [textNorm, ...displayNorms])
+  const byOwnName = matchNames(exactCandidates, [nameNorm, ...displayNorms])
   if (byOwnName) return byOwnName
 
   // ── Pass 5: text-based urine fallback (only when nothing above matched) ─
@@ -1105,6 +1135,10 @@ export function getTestDisplayName(obs: any): string {
   return (
     obs?.code?.text ||
     own.find((c: any) => c?.display)?.display ||
+    // A bare local code that names an analyte ("WBC", "HGB") is the row's
+    // name: under a panel order (08011C "CBC") the order display would merge
+    // every analyte of the panel into one column.
+    meaningfulLocalCode(codings, isRecognisedLocalCode) ||
     // An opaque local item code is an identifier; the order display names
     // the row better.
     codings.find((c: any) => isNhiOrderCodeSystem(c?.system) && c?.display)?.display ||

@@ -4,7 +4,7 @@
 // re-exports everything for existing feature/test imports.
 // Groups observations by lab category, then pivots into test (row) × date (column).
 // Groups observations by lab category, then pivots into test (row) × date (column).
-import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, withLocalCodeAsText, type LabCategory } from '@/src/shared/utils/lab-categories'
 import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { THYROID_DISPLAY, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { dualSpecimenAnalyte } from '@/src/shared/utils/specimen-evidence'
@@ -671,7 +671,9 @@ const KNOWN_GLUCOSE_KEYS = new Set(['GLUCOSE', 'HBA1C', 'C-PEPTIDE', 'GLU,1HRPC'
 // in the generic 血糖 column beside the post-prandial values.
 const FASTING_SHORT_NAME = /\bac[-\s]*sug(?:ar)?\b|\bglucose[-\s(]*ac\b/i
 
-function glucoseSubtype(obs: any): ReturnType<typeof classifyGlucose> {
+function glucoseSubtype(source: any): ReturnType<typeof classifyGlucose> {
+  // A bare local code ("GLU-AC") is the row's name, as code.text would be.
+  const obs = withLocalCodeAsText(source)
   const sub = classifyGlucose(obs)
   if (sub !== 'generic') return sub
   const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []

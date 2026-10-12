@@ -91,6 +91,7 @@ import {
   PERCENT_UNIT_PREFIX_RE,
 } from '@/src/shared/utils/lab-value-grammar'
 import { isParaproteinTextKey, PARAPROTEIN_PREFIX } from '@/src/shared/utils/paraprotein-analytes'
+import { isNhiOrderCodeSystem, meaningfulLocalCode } from '@/src/shared/utils/nhi-order-code'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
@@ -490,9 +491,25 @@ function selectDiagnosticReportPage(
 }
 
 function labAnalyteKey(observation: any): string {
-  return getAnalyteCanonicalKey(observation)
+  const named = ownCodingFirst(observation)
+  return getAnalyteCanonicalKey(named)
     ?? loincOf(observation?.code)
-    ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
+    ?? getAnalyteLabel(named).normalize('NFKC').toUpperCase()
+}
+
+/**
+ * The label readers take coding[0] as the row's name, but MediCloud writes
+ * the NHI order coding first: under a panel order (08011C "CBC", 06013C) every
+ * analyte would read as the order. When the row has no code.text and a local
+ * code that names the analyte, read that local coding first instead.
+ */
+function ownCodingFirst(observation: any): any {
+  const codings: any[] = Array.isArray(observation?.code?.coding) ? observation.code.coding : []
+  if (observation?.code?.text || !isNhiOrderCodeSystem(codings[0]?.system)) return observation
+  const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
+  const named = own.some((c: any) => typeof c?.display === 'string' && c.display.trim()) || !!meaningfulLocalCode(codings)
+  if (!named) return observation
+  return { ...observation, code: { ...observation.code, coding: [...own, ...codings.filter((c: any) => isNhiOrderCodeSystem(c?.system))] } }
 }
 
 export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
@@ -575,7 +592,7 @@ export function labCategoryAnalyte(observation: any, category: string): {
   const known = isKnownPivotKey(identity.testKey)
   const label = known
     ? getLabRowDisplayParts(identity, 'medical', 'en').name
-    : getAnalyteLabel(observation)
+    : getAnalyteLabel(ownCodingFirst(observation))
   if (loinc) {
     const declared = declaredLoincAnalyteKey(loinc)
     const scale = declaredLoincScale(loinc)

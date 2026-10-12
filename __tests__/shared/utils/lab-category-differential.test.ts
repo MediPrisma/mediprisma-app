@@ -11,7 +11,14 @@
  * look-alike analytes — × name shapes × unit families × inspect modes is
  * categorised by both, under both NHI coding systems. Every category or
  * pivot-column change must be explained by the explicit allow-list below,
- * else the test fails and names the rows.
+ * else the test fails and names the rows. A second check: within one order
+ * and row shape, the branch never puts two rows into one column that the
+ * base kept apart, unless each row's own name alone lands it there.
+ *
+ * Shapes: 'own' (code.text), 'order' (the order display only), 'both',
+ * 'opaque' (an opaque local code beside the order display), and 'local' /
+ * 'localAfter' — a bare local item code (no display) with the order
+ * coding after / before it, as panel rows (08011C WBC, RBC, HGB) arrive.
  *
  * Skips (with a warning) when the base commit is not available — e.g. a
  * shallow CI clone. Override the base with LAB_DIFF_BASE=<commit>.
@@ -108,7 +115,7 @@ function buildCorpus(): Row[] {
   const rows: Row[] = []
   let index = 0
   for (const [code, alias, source] of pairs.values()) {
-    const shapes = code ? ['own', 'order', 'both', 'opaque'] : ['own']
+    const shapes = code ? ['own', 'order', 'both', 'opaque', 'local', 'localAfter'] : ['own']
     for (const shape of shapes) for (const unit of UNITS) for (const mode of MODES) {
       index += 1
       // Deterministic sample: every row of the orders, names and look-alikes
@@ -128,6 +135,8 @@ function observation([code, alias, , shape, unit, mode, orderName]: Row, system:
   if (shape === 'order') codings.push({ system, code, display: alias })
   if (shape === 'both') { text = alias; codings.push({ system, code, display: orderName || alias }) }
   if (shape === 'opaque') { codings.push({ system, code, display: alias }); codings.push({ system: LOCAL, code: 'L0001' }) }
+  if (shape === 'local') { codings.push({ system: LOCAL, code: alias }); codings.push({ system, code, display: orderName || alias }) }
+  if (shape === 'localAfter') { codings.push({ system, code, display: orderName || alias }); codings.push({ system: LOCAL, code: alias }) }
   return {
     resourceType: 'Observation', status: 'final',
     category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
@@ -156,13 +165,14 @@ export const ALLOW_LIST: Record<string, string> = {
   unitUrine: 'a serum-or-urine analyte with a urine unit (mg/g …) → 尿液 (unit-specimen evidence)',
   unitBlood: 'a serum-or-urine analyte with a blood unit (g/dL, g/L) → 生化 with its TP / ALB / CA / CREA column',
   nameUrine: 'the row\'s own name states urine → 尿液',
-  ownName: 'the own name wins over the order display (round 8): the row lands where its own name alone does',
+  ownName: 'the own name wins over the order display (round 8; a bare local code too, round 23): the row lands where its own name alone does',
   dualColumn: 'an exact serum-or-urine analyte name takes that analyte\'s column (TP / ALB / CA / CREA)',
   newAlias: '全蛋白 / 鈣 / 血清鈣 are names of TP / CA (rounds 6, 14)',
+  localCodeAsName: 'a bare local code that names an analyte reads as code.text (round 23): the row lands where the same row with that code as code.text (beside the order display) does — never placed by the order display alone',
   medcloudLikeHealthbank: 'MediCloud NHI codes are now recognised: the row lands where the same row under the 健保存摺 system does, which is the base\'s 健保存摺 result or an allowed change',
 }
 
-function classify(row: Row, base: Placement, branch: Placement, ownOnly: Placement | undefined, o: any): string | null {
+function classify(row: Row, base: Placement, branch: Placement, ownOnly: Placement | undefined, o: any, asText?: Placement): string | null {
   const [code, alias, , shape, unit] = row
   const [bc] = base
   const [nc, nk] = branch
@@ -174,7 +184,8 @@ function classify(row: Row, base: Placement, branch: Placement, ownOnly: Placeme
   if (/尿|URINE|SPOT/i.test(alias) && nc === 'urine') return 'nameUrine'
   if (['全蛋白', '鈣', '血清鈣'].includes(alias) && (nk === 'TP' || nk === 'CA' || nc === 'chem')) return 'newAlias'
   if (bc === nc && dual && DUAL_KEYS.has(nk) && nk === dual) return 'dualColumn'
-  if (shape === 'both' && ownOnly && ownOnly[0] === nc && ownOnly[1] === nk) return 'ownName'
+  if ((shape === 'both' || shape === 'localAfter') && ownOnly && ownOnly[0] === nc && ownOnly[1] === nk) return 'ownName'
+  if ((shape === 'local' || shape === 'localAfter') && asText && asText[0] === nc && asText[1] === nk) return 'localCodeAsName'
   return null
 }
 
@@ -203,6 +214,11 @@ describe('lab categorisation differential against the base branch', () => {
     // Where the same row lands on this branch with its own name only.
     const ownOnly = (row: Row, system: string): Placement =>
       place(categorizeObservation, getLabPivotTestIdentity, observation([row[0], row[1], row[2], 'own', row[4], row[5], row[6]], system))
+    // A bare local code shape, as the same row with that code as code.text.
+    const asText = (row: Row, system: string): Placement | undefined =>
+      row[3] === 'local' || row[3] === 'localAfter'
+        ? place(categorizeObservation, getLabPivotTestIdentity, observation([row[0], row[1], row[2], 'both', row[4], row[5], row[6]], system))
+        : undefined
 
     const unexplained: string[] = []
     const counts: Record<string, number> = {}
@@ -218,13 +234,14 @@ describe('lab categorisation differential against the base branch', () => {
         const branchP = results[`branch:${label}`][i]
         if (!changed(baseP, branchP)) continue
         const o = observation(row, label === 'healthbank' ? HEALTHBANK : MEDCLOUD)
-        let rule = classify(row, baseP, branchP, ownOnly(row, label === 'healthbank' ? HEALTHBANK : MEDCLOUD), o)
+        const sys = label === 'healthbank' ? HEALTHBANK : MEDCLOUD
+        let rule = classify(row, baseP, branchP, ownOnly(row, sys), o, asText(row, sys))
         if (!rule && label === 'medcloud') {
           const branchHb = results['branch:healthbank'][i]
           const baseHb = results['base:healthbank'][i]
           if (!changed(branchP, branchHb)) {
             const hbOwn = ownOnly(row, HEALTHBANK)
-            if (!changed(baseHb, branchHb) || classify(row, baseHb, branchHb, hbOwn, observation(row, HEALTHBANK))) {
+            if (!changed(baseHb, branchHb) || classify(row, baseHb, branchHb, hbOwn, observation(row, HEALTHBANK), asText(row, HEALTHBANK))) {
               rule = 'medcloudLikeHealthbank'
             }
           }
@@ -233,10 +250,52 @@ describe('lab categorisation differential against the base branch', () => {
         else unexplained.push(`${label} ${baseP.join('/')} -> ${branchP.join('/')} ${JSON.stringify(row.slice(0, 6))}`)
       }
     })
-    if (process.env.LAB_DIFF_VERBOSE) console.log('lab-category-differential', { corpus: corpus.length, counts })
+    // ── No new merges: rows of one order and shape that the base kept in
+    // different columns stay apart, unless each row that moved lands in the
+    // shared column by its own name alone (a synonym in this branch's tables,
+    // never the order display).
+    const merges: string[] = []
+    let mergeAllowed = 0
+    for (const label of ['healthbank', 'medcloud'] as const) {
+      const system = label === 'healthbank' ? HEALTHBANK : MEDCLOUD
+      const buckets = new Map<string, number[]>()
+      corpus.forEach((row, i) => {
+        const [nc, nk] = results[`branch:${label}`][i]
+        if (nc === 'none') return
+        const key = [row[0], row[3], row[4], row[5], nc, nk].join('|')
+        const list = buckets.get(key)
+        if (list) list.push(i)
+        else buckets.set(key, [i])
+      })
+      for (const members of buckets.values()) {
+        const basePlaces = new Set(members.map((i) => results[`base:${label}`][i].join('/')))
+        if (basePlaces.size < 2) continue
+        for (const i of members) {
+          const baseP = results[`base:${label}`][i]
+          const branchP = results[`branch:${label}`][i]
+          if (!changed(baseP, branchP)) continue
+          if (!changed(ownOnly(corpus[i], system), branchP)) { mergeAllowed += 1; continue }
+          const text = asText(corpus[i], system)
+          if (text && !changed(text, branchP)) { mergeAllowed += 1; continue }
+          // A serum-or-urine analyte named generically ("Protein", "PROT")
+          // joins its chemistry column (TP / ALB / CA / CREA) on purpose.
+          if (branchP[0] === 'chem' && dualSpecimenAnalyte(observation(corpus[i], system)) === branchP[1]) { mergeAllowed += 1; continue }
+          // The English and Chinese names of ONE order, on rows with no name
+          // of their own: one order, one analyte.
+          if (corpus[i][2].startsWith('order-name') && (corpus[i][3] === 'order' || corpus[i][3] === 'opaque')
+            && members.every((j) => corpus[j][2].startsWith('order-name'))) { mergeAllowed += 1; continue }
+          // MediCloud now reads like 健保存摺, where the base already put the row here.
+          if (label === 'medcloud' && !changed(results['base:healthbank'][i], branchP)) { mergeAllowed += 1; continue }
+          const joined = members.filter((j) => j !== i && results[`base:${label}`][j].join("/") !== baseP.join("/")).slice(0, 3).map((j) => `${corpus[j][1]}@${results[`base:${label}`][j].join("/")}`)
+          merges.push(`${label} ${baseP.join("/")} -> ${branchP.join("/")} ${JSON.stringify(corpus[i].slice(0, 6))} joins ${joined.join(", ")}`)
+        }
+      }
+    }
+    if (process.env.LAB_DIFF_VERBOSE) console.log('lab-category-differential', { corpus: corpus.length, counts, mergeAllowed })
     // Every allowed kind is in the allow-list with its reason.
     for (const rule of Object.keys(counts)) expect(ALLOW_LIST[rule]).toBeTruthy()
     expect({ corpus: corpus.length, unexplained: unexplained.slice(0, 40), total: unexplained.length })
       .toEqual({ corpus: corpus.length, unexplained: [], total: 0 })
+    expect({ merges: merges.slice(0, 40), total: merges.length }).toEqual({ merges: [], total: 0 })
   }, 600_000)
 })

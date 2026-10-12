@@ -12,7 +12,7 @@
 //      counts only when the row's reference range agrees with it;
 //   4. conflict or nothing → null, and the caller keeps today's behaviour.
 
-import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { isNhiOrderCodeSystem, meaningfulLocalCode, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 
 export type SpecimenClass = 'urine' | 'blood'
 export type DualSpecimenAnalyte = 'TP' | 'ALB' | 'CA' | 'CREA'
@@ -76,10 +76,12 @@ export function dualSpecimenAnalyte(obs: any): DualSpecimenAnalyte | null {
 function ownName(obs: any): string {
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system) && !/loinc/i.test(c?.system || ''))
-  // The row's own name; without one, the NHI order display names the row.
+  // The row's own name — text, item display, or a bare local code that is
+  // not an opaque id; without one, the NHI order display names the row.
   return String(
     obs?.code?.text
     || own.find((c: any) => c?.display)?.display
+    || meaningfulLocalCode(codings)
     || codings.find((c: any) => isNhiOrderCodeSystem(c?.system) && c?.display)?.display
     || '',
   )
