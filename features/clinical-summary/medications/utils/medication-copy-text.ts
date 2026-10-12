@@ -23,6 +23,7 @@
 // covers only codes it recognises and is all-or-nothing per line, so a line is
 // never half-translated.
 
+import { doseUnlessRepeated } from './dose-helpers'
 import {
   MED_COPY_FIELD_IDS,
   MED_COPY_FIELD_STYLES,
@@ -335,15 +336,17 @@ function fieldText(entry: MedCopyEntry, field: MedCopyField, ctx: MedCopyContext
       if (field.style === 'product') return item.secondaryTitle || item.title
       if (field.style === 'both' && item.secondaryTitle) return `${item.title} (${item.secondaryTitle})`
       return item.title
-    case 'dose':
-      if (!item.dose) return ''
-      return field.style === 'compact' ? compactDose(item.dose) : item.dose
+    case 'dose': {
+      const dose = doseUnlessRepeated(item.dose, item.frequency)
+      if (!dose) return ''
+      return field.style === 'compact' ? compactDose(dose) : dose
+    }
     case 'prevDose':
       if (!item.previousDose) return ''
       // previousDose is the old dose · frequency signature, so the arrow
       // compares it with the same signature of today's prescription.
       if (field.style === 'arrow') {
-        const now = [item.dose, item.frequency].filter(Boolean).join(' · ')
+        const now = [doseUnlessRepeated(item.dose, item.frequency), item.frequency].filter(Boolean).join(' · ')
         if (now) return paren(`${item.previousDose} → ${now}`)
       }
       return paren(fill(labels.previousDose, { dose: item.previousDose }))

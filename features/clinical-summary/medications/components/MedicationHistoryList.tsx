@@ -20,6 +20,7 @@ import type { MedicationNameMode, MedicationRow } from '../types'
 import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 import { compactMedicationDate } from '../utils/medication-date-display'
 import { MedicationItem } from './MedicationItem'
+import { doseUnlessRepeated } from '../utils/dose-helpers'
 
 export type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 
@@ -321,7 +322,8 @@ export function MedicationHistoryDetails({
           : ''
         if (range) scheduleParts.push({ key: 'date', text: `${range}${durationSuffix}` })
         else if (durationLabel) scheduleParts.push({ key: 'duration', text: durationLabel })
-        if (medication.dose) scheduleParts.push({ key: 'dose', text: medication.dose })
+        const shownDose = doseUnlessRepeated(medication.dose, medication.frequency)
+        if (shownDose) scheduleParts.push({ key: 'dose', text: shownDose })
         if (medication.route) scheduleParts.push({ key: 'route', text: medication.route })
         if (medication.frequency) {
           scheduleParts.push({ key: 'frequency', text: medication.frequency })
@@ -349,9 +351,8 @@ export function MedicationHistoryDetails({
         }
         const scheduleText = scheduleParts.reduce((text, part, partIndex) => {
           if (partIndex === 0) return part.text
-          const previousKey = scheduleParts[partIndex - 1]?.key
-          const separator = part.key === 'frequency'
-            && (previousKey === 'date' || previousKey === 'duration')
+          // Only "（28 天）" spaces itself; a bare "28 天" needs the space.
+          const separator = part.key === 'frequency' && text.endsWith('）')
             ? ''
             : ' '
           return `${text}${separator}${part.text}`
