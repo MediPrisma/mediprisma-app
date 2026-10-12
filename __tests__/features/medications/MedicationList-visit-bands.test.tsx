@@ -193,4 +193,16 @@ describe('current medications — visit bands and headers', () => {
     expect(visible.length).toBeGreaterThan(0)
     for (const child of visible) expect(child.getAttribute('aria-hidden')).toBe('true')
   })
+
+  it('dates the header from the source day, not the runtime display string (Astra r3)', () => {
+    // An en-GB runtime formats 2026-08-06 as "06/08/2026"; re-parsing that
+    // as month/day showed 26/06/08 on a zh-TW interface.
+    const m = { ...active('A', '2026-08-06', 'Clinic', 'I10'), startedOn: '06/08/2026' } as MedicationRow
+    const { container } = render(
+      <MedicationList medications={[m]} isLoading={false} error={null} />,
+    )
+    const header = container.querySelector('[data-visit-header]')!
+    expect(header.textContent).toContain('26/08/06')
+    expect(header.textContent).not.toContain('26/06/08')
+  })
 })

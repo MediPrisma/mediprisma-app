@@ -50,8 +50,14 @@ export function VisitHeader({
   const { audience } = useAudience()
   const mt = t.medications as any
   const first = rows[0]
-  if (!first || !startDayOf(first)) return null
-  const date = compactMedicationDate(first.startedOn, locale)
+  const startDay = startDayOf(first)
+  if (!first || !startDay) return null
+  // zh re-orders the date into yy/mm/dd, so it must start from the source day
+  // the visit is keyed on: re-parsing the runtime's display string read an
+  // en-GB "06/08/2026" as June 8. Other locales only shorten that string.
+  const date = locale.startsWith('zh')
+    ? compactMedicationDate(startDay, locale)
+    : compactMedicationDate(first.startedOn || startDay, locale)
   const institution = (first.pharmacy ?? '').trim()
   const icd = audience === 'medical' ? sharedVisitIcd(rows) : undefined
   const one = count === 1
