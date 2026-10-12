@@ -238,6 +238,19 @@ describe('inferReportDisplayGroup', () => {
     })).toBe('imaging')
   })
 
+  it('keeps a Pathology-labelled CT-guided biopsy outside the verified list in Pathology', () => {
+    // 33103B shares the 33xxx range with CT/MRI but is a biopsy procedure.
+    expect(inferReportDisplayGroup({
+      category: [{
+        coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'PAT' }],
+      }],
+      code: {
+        coding: [{ system: 'https://nhi-fhir-bridge.local/CodeSystem/his-local-report', code: '33103B' }],
+        text: 'CT Guide biopsy',
+      },
+    })).toBe('pathology')
+  })
+
   it('keeps ultrasound-guided biopsy with a Pathology category in Pathology', () => {
     expect(inferReportDisplayGroup({
       category: [{
