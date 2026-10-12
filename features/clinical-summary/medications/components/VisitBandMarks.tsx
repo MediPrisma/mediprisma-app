@@ -65,7 +65,9 @@ export function VisitHeader({
     >
       <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="shrink-0 font-semibold tabular-nums text-foreground/85">{date}</span>
-      {institution && <span className="shrink-0">{institution}</span>}
+      {/* Shrinks before the count: a full hospital name is wider than a
+          phone-width row, and the list clips whatever overflows. */}
+      {institution && <span className="min-w-0 truncate" title={institution}>{institution}</span>}
       {icd && (
         <span className="min-w-0 truncate" title={icd.text ? `${icd.code} ${icd.text}` : icd.code}>
           · <span className="font-mono">{icd.code}</span>

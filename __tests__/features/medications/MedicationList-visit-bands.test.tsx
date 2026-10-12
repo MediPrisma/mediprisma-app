@@ -82,4 +82,28 @@ describe('current medications — visit bands and headers', () => {
     expect(header.textContent).not.toContain('H40')
     expect(header.textContent).toContain('2 項')
   })
+
+  it('lets a long institution name truncate so the visit count stays in the row', () => {
+    // At phone width a full hospital name is wider than the row; a rigid
+    // (shrink-0) name pushed the count past the clipped edge of the list.
+    const longName = '國立臺灣大學醫學院附設醫院新竹臺大分院生醫醫院院區'
+    const meds = [
+      active('A', '2026-09-25', longName, 'E11.9'),
+      active('B', '2026-09-25', longName, 'E78.5'),
+    ]
+    const { container } = render(
+      <MedicationList medications={meds} isLoading={false} error={null} />,
+    )
+    const header = container.querySelector('[data-visit-header]')!
+    const institution = Array.from(header.querySelectorAll('span'))
+      .find((span) => span.textContent === longName)!
+    expect(institution).toBeDefined()
+    expect(institution.className).toContain('truncate')
+    expect(institution.className).toContain('min-w-0')
+    expect(institution.className).not.toContain('shrink-0')
+    expect(institution.getAttribute('title')).toBe(longName)
+    const count = Array.from(header.querySelectorAll('span'))
+      .find((span) => span.textContent === '2 項')!
+    expect(count.className).toContain('shrink-0')
+  })
 })
