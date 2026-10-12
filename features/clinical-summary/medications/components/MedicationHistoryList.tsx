@@ -48,31 +48,33 @@ function isInjectable(m: MedicationRow): boolean {
   return INJECTION_RE.test(`${m.title || ''} ${m.secondaryTitle || ''}`)
 }
 
-/** Most recent activity date for a prescription (end → stopped → start). */
-function latestDateOf(m?: MedicationRow): string {
-  return m?.endDate || m?.stoppedOn || m?.startedOn || ''
-}
-
-/** Zero-padded, lexically sortable date key. Row dates arrive display-
- *  formatted ("2026/8/5"), where a raw localeCompare would put 2026/10/x
- *  before 2026/9/x. Accepts ISO, slash, and ROC (115/8/5) year forms. */
+/** Sortable YYYY-MM-DD for a display date, only when it is unambiguous
+ *  (year first, as zh-TW renders "2026/8/5"). Month/day-first locale strings
+ *  ("10/1/2026", "1/10/2026") can't be told apart, so they return '' rather
+ *  than a guess. Rows built by useMedicationRows carry *Iso fields and never
+ *  reach this fallback. */
 export function dateSortKey(value?: string): string {
-  const match = value?.match(/(\d{2,4})\D(\d{1,2})\D(\d{1,2})/)
-  if (!match) return value || ''
-  let year = Number(match[1])
-  if (year < 1000) year += 1911
-  return `${year}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+  const match = value?.trim().match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})(?!\d)/)
+  if (!match) return ''
+  return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
 }
 
-/** One outpatient visit ≈ the latest fill's start date + institution. Drugs
+function startDayOf(m?: MedicationRow): string {
+  return m?.startedOnIso || dateSortKey(m?.startedOn)
+}
+
+function latestDayOf(m?: MedicationRow): string {
+  return m?.endDateIso || dateSortKey(m?.endDate || m?.stoppedOn) || startDayOf(m)
+}
+
+/** One outpatient visit ≈ the latest fill's start day + institution. Drugs
  *  prescribed at the same visit share it, so the list can band them together.
- *  Falls back to the drug key when the fill has no start date — an undated
- *  row is never merged into a neighbouring visit. */
+ *  Falls back to the drug key when the start day is unknown or ambiguous — an
+ *  undated row is never merged into a neighbouring visit. */
 export function visitKeyOf(group: MedicationHistoryGroup): string {
-  const latest = group.medications[0]
-  const started = dateSortKey(latest?.startedOn)
+  const started = startDayOf(group.medications[0])
   if (!started) return `drug:${group.key}`
-  return `${started}|${(latest?.pharmacy ?? '').trim()}`
+  return `${started}|${(group.medications[0]?.pharmacy ?? '').trim()}`
 }
 
 /** Newest visit first; drugs from one visit stay adjacent (institution, then
@@ -80,12 +82,12 @@ export function visitKeyOf(group: MedicationHistoryGroup): string {
 function compareHistoryGroups(a: MedicationHistoryGroup, b: MedicationHistoryGroup): number {
   const aLatest = a.medications[0]
   const bLatest = b.medications[0]
-  const byVisitDate = dateSortKey(bLatest?.startedOn || latestDateOf(bLatest))
-    .localeCompare(dateSortKey(aLatest?.startedOn || latestDateOf(aLatest)))
+  const byVisitDate = (startDayOf(bLatest) || latestDayOf(bLatest))
+    .localeCompare(startDayOf(aLatest) || latestDayOf(aLatest))
   if (byVisitDate !== 0) return byVisitDate
   const byInstitution = (aLatest?.pharmacy ?? '').localeCompare(bLatest?.pharmacy ?? '')
   if (byInstitution !== 0) return byInstitution
-  return dateSortKey(latestDateOf(bLatest)).localeCompare(dateSortKey(latestDateOf(aLatest)))
+  return latestDayOf(bLatest).localeCompare(latestDayOf(aLatest))
 }
 
 export interface VisitBand {

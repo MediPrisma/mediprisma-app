@@ -5,6 +5,8 @@ import {
   dateSortKey,
   visitKeyOf,
 } from '@/features/clinical-summary/medications/components/MedicationHistoryList'
+import { groupMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
+import { formatDate } from '@/src/shared/utils/fhir-helpers'
 import type { MedicationHistoryGroup } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 
@@ -54,8 +56,9 @@ describe('dateSortKey', () => {
   it('pads display dates so October sorts after September', () => {
     expect(dateSortKey('2026/10/1') > dateSortKey('2026/9/30')).toBe(true)
   })
-  it('normalises ROC years', () => {
-    expect(dateSortKey('115/8/6')).toBe('2026-08-06')
+  it('refuses month/day-first strings instead of guessing', () => {
+    expect(dateSortKey('10/1/2026')).toBe('')
+    expect(dateSortKey('1/10/2026')).toBe('')
   })
 })
 
@@ -102,5 +105,83 @@ describe('visit bands', () => {
     )
     expect(bands).toEqual(['0', '0', '0', '1', '0'])
     expect(container.querySelectorAll('li[data-visit-start]')).toHaveLength(2)
+  })
+})
+
+// ── Astra round 1 regressions ────────────────────────────────────────────
+
+function row(
+  id: string,
+  drugKey: string,
+  iso: string,
+  pharmacy: string,
+): MedicationRow {
+  return {
+    id,
+    drugKey,
+    title: drugKey,
+    status: 'completed',
+    isInactive: true,
+    isChronic: false,
+    searchHaystack: '',
+    refillCount: 1,
+    // Display strings exactly as useMedicationRows builds them — in whatever
+    // locale the runtime has (en-US gives "10/1/2026").
+    startedOn: formatDate(iso),
+    endDate: formatDate(iso),
+    startedOnIso: iso,
+    endDateIso: iso,
+    pharmacy,
+  } as unknown as MedicationRow
+}
+
+describe('visit bands — locale-independent dates (Astra r1 #1)', () => {
+  const asGroup = (m: MedicationRow): MedicationHistoryGroup =>
+    ({ key: m.id, name: m.title, count: 1, medications: [m] }) as MedicationHistoryGroup
+
+  it('keeps the same day in different years as different visits', () => {
+    const a = asGroup(row('a', 'A', '2025-10-01', 'Clinic'))
+    const b = asGroup(row('b', 'B', '2026-10-01', 'Clinic'))
+    expect(visitKeyOf(a)).not.toBe(visitKeyOf(b))
+  })
+
+  it.each(['en-US', 'en-GB', 'zh-TW'])('builds the key from the ISO date under %s', (locale) => {
+    const spy = jest
+      .spyOn(Date.prototype, 'toLocaleDateString')
+      .mockImplementation(function (this: Date) {
+        return Intl.DateTimeFormat(locale).format(this)
+      })
+    try {
+      const m = row('a', 'A', '2026-08-06', 'Clinic')
+      expect(visitKeyOf(asGroup(m))).toBe('2026-08-06|Clinic')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('never merges rows that only have an ambiguous display date', () => {
+    const a = asGroup({ ...row('a', 'A', '2025-10-01', 'Clinic'), startedOnIso: undefined } as MedicationRow)
+    const b = asGroup({ ...row('b', 'B', '2026-10-01', 'Clinic'), startedOnIso: undefined } as MedicationRow)
+    a.medications[0].startedOn = '10/1/2025'
+    b.medications[0].startedOn = '10/1/2026'
+    expect(visitKeyOf(a)).not.toBe(visitKeyOf(b))
+  })
+})
+
+describe('visit bands — representative fill is the newest (Astra r1 #2)', () => {
+  it('picks 10/1 over 9/30 inside a group and bands it with the same-visit drug', () => {
+    const { inactiveMedicationGroups: history } = groupMedications([
+      row('a-old', 'A', '2026-09-30', 'Clinic'),
+      row('a-new', 'A', '2026-10-01', 'Clinic'),
+      row('b', 'B', '2026-10-01', 'Clinic'),
+    ])
+    const groupA = history.find((g) => g.key === 'A')!
+    expect(groupA.medications.map((m) => m.id)).toEqual(['a-new', 'a-old'])
+
+    const { container } = render(<MedicationHistoryList groups={history} />)
+    const bands = Array.from(container.querySelectorAll('li[data-visit-band]')).map(
+      (li) => li.getAttribute('data-visit-band'),
+    )
+    expect(bands).toEqual(['0', '0'])
   })
 })
