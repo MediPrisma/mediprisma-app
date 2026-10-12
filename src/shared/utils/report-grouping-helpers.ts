@@ -367,13 +367,18 @@ export function inferReportDisplayGroup(
 
   const categoryGroup = inferGroupFromCategory(report.category)
   if (categoryGroup !== 'other' && categoryGroup !== 'imaging') return categoryGroup
-  if (isPathologyCategory(report.category)) return 'pathology'
-  if (categoryGroup === 'imaging') return 'imaging'
 
   const codings = report.code?.coding ?? []
   const orderCodes = codings
     .map((coding) => coding.code?.trim().toUpperCase())
     .filter((code): code is string => !!code)
+  // An NHI radiology order (X-ray/CT/MRI, 32xxx/33xxx) names the exam itself.
+  // Older MediCloud bundles tagged such reports Pathology when the narrative
+  // quoted the patient's pathological diagnosis; the order code wins.
+  if (orderCodes.some((code) => NHI_IMAGING_ORDER_CODE.test(code))) return 'imaging'
+  if (isPathologyCategory(report.category)) return 'pathology'
+  if (categoryGroup === 'imaging') return 'imaging'
+
   if (orderCodes.some((code) => NHI_PATHOLOGY_ORDER_CODES.has(code))) {
     return 'pathology'
   }

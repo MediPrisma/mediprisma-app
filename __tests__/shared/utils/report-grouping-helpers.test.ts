@@ -194,6 +194,25 @@ describe('inferReportDisplayGroup', () => {
     })).toBe('lab')
   })
 
+  it.each([
+    ['33085B', '磁振造影－有造影劑 ;(Magnetic resonance imaging-with contrast)'],
+    ['33072B', 'CT, with/without contrast'],
+    ['32001C', '胸腔檢查 ;(Chest view)'],
+  ])('keeps NHI radiology order %s in Imaging despite a Pathology category', (code, text) => {
+    expect(inferReportDisplayGroup({
+      category: [{
+        coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+          code: 'PAT',
+          display: 'Pathology',
+        }],
+        text: '特殊造影檢查',
+      }],
+      code: { coding: [{ system: 'https://example.org/local-report-code', code, display: text }], text },
+      conclusion: 'Indications: lung cancer. PATHOLOGICAL DIAGNOSIS: carcinoma.',
+    })).toBe('imaging')
+  })
+
   it('does not infer Pathology from conclusion text alone', () => {
     expect(inferReportDisplayGroup({
       code: { text: 'Consultation note' },
