@@ -215,6 +215,29 @@ describe('inferReportDisplayGroup', () => {
     })).toBe('imaging')
   })
 
+  it('keeps the bridge-shaped legacy MRI report in Imaging', () => {
+    // Shape of a MediCloud bundle built before the bridge fix: unpromoted
+    // order code under the bridge's local report-code system.
+    expect(inferReportDisplayGroup({
+      category: [{
+        coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+          code: 'PAT',
+          display: 'Pathology',
+        }],
+        text: '特殊造影檢查',
+      }],
+      code: {
+        coding: [{
+          system: 'https://nhi-fhir-bridge.local/CodeSystem/his-local-report',
+          code: '33085B',
+          display: '磁振造影－有造影劑 ;(Magnetic resonance imaging-with contrast)',
+        }],
+        text: '磁振造影－有造影劑 ;(Magnetic resonance imaging-with contrast)',
+      },
+    })).toBe('imaging')
+  })
+
   it('keeps ultrasound-guided biopsy with a Pathology category in Pathology', () => {
     expect(inferReportDisplayGroup({
       category: [{

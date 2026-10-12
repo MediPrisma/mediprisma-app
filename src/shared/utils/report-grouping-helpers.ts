@@ -174,6 +174,18 @@ const IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS = [
   /病理|組織切片|細胞學/,
 ]
 
+/**
+ * True when the report's order is an NHI category-2 (imaging/check) report
+ * code. Such a report is never a pathology report, whatever its category or
+ * narrative says.
+ */
+export function hasNhiNonPathologyReportOrderCode(report?: Pick<DiagnosticReportLike, 'code'> | null): boolean {
+  return (report?.code?.coding ?? []).some((coding) => {
+    const code = coding.code?.trim().toUpperCase()
+    return !!code && (NHI_IMAGING_ORDER_CODE.test(code) || NHI_NON_PATHOLOGY_REPORT_ORDER_CODES.has(code))
+  })
+}
+
 function collectCategoryTokens(input?: CodeableConcept | CodeableConcept[]): Set<string> {
   const concepts = Array.isArray(input) ? input : input ? [input] : []
   const tokens = new Set<string>()
@@ -385,22 +397,18 @@ export function inferReportDisplayGroup(
   const categoryGroup = inferGroupFromCategory(report.category)
   if (categoryGroup !== 'other' && categoryGroup !== 'imaging') return categoryGroup
 
-  const codings = report.code?.coding ?? []
-  const orderCodes = codings
-    .map((coding) => coding.code?.trim().toUpperCase())
-    .filter((code): code is string => !!code)
   // An NHI category-2 report order (X-ray/CT/MRI 32xxx/33xxx, ultrasound,
   // endoscopy, cardiac…) names the exam itself. Older MediCloud bundles tagged
   // such reports Pathology when the narrative quoted the patient's
   // pathological diagnosis; the order code wins.
-  if (orderCodes.some((code) =>
-    NHI_IMAGING_ORDER_CODE.test(code) || NHI_NON_PATHOLOGY_REPORT_ORDER_CODES.has(code),
-  )) {
-    return 'imaging'
-  }
+  if (hasNhiNonPathologyReportOrderCode(report)) return 'imaging'
   if (isPathologyCategory(report.category)) return 'pathology'
   if (categoryGroup === 'imaging') return 'imaging'
 
+  const codings = report.code?.coding ?? []
+  const orderCodes = codings
+    .map((coding) => coding.code?.trim().toUpperCase())
+    .filter((code): code is string => !!code)
   if (orderCodes.some((code) => NHI_PATHOLOGY_ORDER_CODES.has(code))) {
     return 'pathology'
   }
