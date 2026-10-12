@@ -4,6 +4,8 @@ import { CalendarDays } from 'lucide-react'
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/clinical-color-roles"
+import { clinicalTooltipSurfaceClass } from "@/features/clinical-summary/components/clinical-metadata-styles"
+import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationRow } from '../types'
 import { compactMedicationDate } from '../utils/medication-date-display'
@@ -12,6 +14,7 @@ import {
   medicationIcdCodeClass,
   medicationIcdDescriptionClass,
 } from './medication-chip-styles'
+import { TruncatedRevealLabel } from './TruncatedRevealLabel'
 import { sharedVisitIcd, startDayOf, type VisitBand } from '../utils/visit-bands'
 
 /** Overlay marks for a visit-banded row (parent must be `relative`). The left
@@ -69,45 +72,51 @@ export function VisitHeader({
   const one = count === 1
   const countText = ((one ? mt.visitHeaderCountOne : mt.visitHeaderCount) ?? '{n} 項')
     .replace('{n}', String(count))
-  const label = ((one ? mt.visitHeaderLabelOne : mt.visitHeaderLabel) ?? '{date} {institution} 就診，{n} 項用藥')
+  const label = ((one ? mt.visitHeaderLabelOne : mt.visitHeaderLabel) ?? '{date} 就診，{n} 項用藥')
     .replace('{date}', date)
-    .replace('{institution}', institution)
     .replace('{n}', String(count))
-  // aria-label is ignored on a plain div, so the summary is read from an
-  // sr-only span and the visible pieces are hidden from assistive tech.
+  const icdTitle = icd ? (icd.text ? `${icd.code} ${icd.text}` : icd.code) : ''
+  // aria-label is ignored on a plain div, so the date and count are read from
+  // an sr-only span (the visible copies are hidden); institution and
+  // diagnosis are buttons that name themselves.
   return (
     <div
       data-visit-header
       className="flex min-w-0 items-center gap-1.5 pb-0.5 pl-9 pr-3 pt-1.5 text-[0.6875rem] leading-tight text-muted-foreground"
     >
-      <span className="sr-only">
-        {icd ? `${label} · ${icd.code}${icd.text ? ` ${icd.text}` : ''}` : label}
-      </span>
+      <span className="sr-only">{label}</span>
       <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span aria-hidden className="shrink-0 font-semibold tabular-nums text-foreground/85">{date}</span>
-      {/* Shrinks before the count: a full hospital name is wider than a
-          phone-width row, and the list clips whatever overflows. */}
-      {/* Same tones as the row's institution and ICD chip, at header size. */}
+      {/* The rows below leave institution and diagnosis to this header, so
+          both keep the row's tones and its tap-to-reveal (a title tooltip
+          never shows on a phone). Both shrink before the count: a full
+          hospital name is wider than a phone-width row. */}
       {institution && (
-        <span
-          aria-hidden
-          data-visit-header-institution
-          className={cn('min-w-0 truncate', CLINICAL_SOURCE_TONE)}
-          title={institution}
-        >
-          {institution}
-        </span>
+        <TruncatedRevealLabel
+          data-testid="visit-header-institution"
+          text={institution}
+          className={cn('inline-flex min-w-0 shrink items-center', CLINICAL_SOURCE_TONE)}
+        />
       )}
       {icd && (
-        <span
-          aria-hidden
-          data-visit-header-icd
-          className={cn(medicationIcdChipClass, 'h-4 w-auto shrink text-[0.6875rem] hover:bg-amber-50/50 dark:hover:bg-amber-500/10')}
-          title={icd.text ? `${icd.code} ${icd.text}` : icd.code}
+        <TapTooltip
+          asChild
+          content={icdTitle}
+          contentClassName={cn(
+            clinicalTooltipSurfaceClass,
+            'max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed',
+          )}
         >
-          <span className={medicationIcdCodeClass}>{icd.code}</span>
-          {icd.text && <span className={medicationIcdDescriptionClass}>{icd.text}</span>}
-        </span>
+          <button
+            type="button"
+            data-visit-header-icd
+            aria-label={icdTitle}
+            className={cn(medicationIcdChipClass, 'h-4 w-auto shrink overflow-hidden text-left text-[0.6875rem]')}
+          >
+            <span className={cn(medicationIcdCodeClass, 'max-w-full truncate')}>{icd.code}</span>
+            {icd.text && <span className={medicationIcdDescriptionClass}>{icd.text}</span>}
+          </button>
+        </TapTooltip>
       )}
       <span aria-hidden className="ml-auto shrink-0 tabular-nums">{countText}</span>
     </div>

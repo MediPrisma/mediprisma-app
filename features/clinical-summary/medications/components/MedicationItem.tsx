@@ -49,6 +49,9 @@ interface MedicationItemProps {
   /** Removes the individual card boundary when rows live in a shared list
    *  frame. The internal three-lane information grid stays identical. */
   grouped?: boolean
+  /** The row sits under a visit header that already names its institution
+   *  and diagnosis, so the row leaves both out. */
+  visitContextInHeader?: boolean
   /** Optional full-height leading action, used to reveal this current drug's
    *  older prescriptions without duplicating it in the history section. */
   leadingControl?: ReactNode
@@ -117,6 +120,7 @@ export function MedicationItem({
   executionPeriods,
   nameMode = 'ingredient',
   grouped = false,
+  visitContextInHeader = false,
   leadingControl,
   onRowToggle,
   onResourceNavigationMatch,
@@ -330,6 +334,16 @@ export function MedicationItem({
       ?? (locale.startsWith('zh') ? '累計 {count} 次' : '{count} refills'))
       .replace('{count}', String(medication.refillCount))
     : ''
+  const rowInstitution = visitContextInHeader ? undefined : medication.pharmacy
+  const showIcd = isMedical && !!medication.icdCode && !visitContextInHeader
+  // Below 456px the institution, ICD and refill count share a third line.
+  // With the first two in the visit header, drop the line when nothing else
+  // is left on it rather than leave a blank one.
+  const narrowThirdLineEmpty = visitContextInHeader
+    && !medication.isChronic
+    && !((medication.overlapCount ?? 0) > 0)
+    && !showStatementChip
+    && !refillCompact
 
   // Resource-navigation anchor — catalog cites MedicationRequest OR
   // MedicationStatement, so this row answers to both.
@@ -451,12 +465,15 @@ export function MedicationItem({
           </div>
           <div
             data-medication-classification
-            className="col-start-2 row-start-3 flex h-4 min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2"
+            className={cn(
+              "col-start-2 row-start-3 flex h-4 min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2",
+              narrowThirdLineEmpty && "@max-[456px]:hidden",
+            )}
           >
-            {medication.pharmacy && (
+            {rowInstitution && (
               <TruncatedRevealLabel
                 data-testid="medication-institution"
-                text={medication.pharmacy}
+                text={rowInstitution}
                 className={cn(
                   "inline-flex h-4 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
                   CLINICAL_SOURCE_TONE,
@@ -517,14 +534,17 @@ export function MedicationItem({
           establish a minimum width that squeezes the medication name. */}
       <div
         data-medication-cell="clinical"
-        className="col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-1"
+        className={cn(
+          "col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-1",
+          narrowThirdLineEmpty && "@max-[456px]:hidden",
+        )}
       >
         <div
           data-medication-context
           data-medication-diagnosis
           className="flex h-4 min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         >
-          {isMedical && medication.icdCode && (
+          {showIcd && (
             <TapTooltip
               asChild
               content={billingIcdTitle}
@@ -574,7 +594,12 @@ export function MedicationItem({
             <span className="truncate">{badge.label}</span>
           </Badge>
         </div>
-        <div className="col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75">
+        <div
+          className={cn(
+            "col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75",
+            narrowThirdLineEmpty && "@max-[456px]:hidden",
+          )}
+        >
           {refillCompact && (
             <Tooltip>
               <TooltipTrigger asChild>

@@ -11,16 +11,16 @@ const zhMedications = {
   currentlyInUse: '使用中',
   visitHeaderCount: '{n} 項',
   visitHeaderCountOne: '1 項',
-  visitHeaderLabel: '{date} {institution} 就診，{n} 項用藥',
-  visitHeaderLabelOne: '{date} {institution} 就診，1 項用藥',
+  visitHeaderLabel: '{date} 就診，{n} 項用藥',
+  visitHeaderLabelOne: '{date} 就診，1 項用藥',
   refillSummary: '累計 {count} 次',
 }
 const enMedications = {
   currentlyInUse: 'Active',
   visitHeaderCount: '{n} items',
   visitHeaderCountOne: '1 item',
-  visitHeaderLabel: 'Visit {date} at {institution}, {n} medications',
-  visitHeaderLabelOne: 'Visit {date} at {institution}, 1 medication',
+  visitHeaderLabel: 'Visit {date}, {n} medications',
+  visitHeaderLabelOne: 'Visit {date}, 1 medication',
   refillSummary: '{count} fills',
 }
 let mockLocale: 'zh-TW' | 'en' = 'zh-TW'
@@ -128,13 +128,14 @@ describe('current medications — visit bands and headers', () => {
       <MedicationList medications={meds} isLoading={false} error={null} />,
     )
     const header = container.querySelector('[data-visit-header]')!
-    const institution = Array.from(header.querySelectorAll('span'))
-      .find((span) => span.textContent === longName)!
-    expect(institution).toBeDefined()
-    expect(institution.className).toContain('truncate')
+    const institution = header.querySelector('[data-testid="visit-header-institution"]')!
+    expect(institution.textContent).toBe(longName)
     expect(institution.className).toContain('min-w-0')
     expect(institution.className).not.toContain('shrink-0')
-    expect(institution.getAttribute('title')).toBe(longName)
+    expect(institution.querySelector('.truncate')).not.toBeNull()
+    // Tap reveals the full name on a phone, where a title tooltip never shows.
+    expect(institution.hasAttribute('data-truncated-reveal')).toBe(true)
+    expect(institution.getAttribute('aria-label')).toBe(longName)
     const count = Array.from(header.querySelectorAll('span'))
       .find((span) => span.textContent === '2 項')!
     expect(count.className).toContain('shrink-0')
@@ -186,13 +187,20 @@ describe('current medications — visit bands and headers', () => {
     const header = container.querySelector('[data-visit-header]')!
     expect(header.hasAttribute('aria-label')).toBe(false)
     const srOnly = header.querySelector('.sr-only')!
-    // The shared diagnosis is hidden visually-only above, so it must be here.
-    expect(srOnly.textContent).toBe('26/09/20 南方藥局 就診，1 項用藥 · H40.1110')
-    // Everything visible is hidden from the accessibility tree, so the summary
-    // is read once rather than twice.
-    const visible = Array.from(header.children).filter((child) => child !== srOnly)
-    expect(visible.length).toBeGreaterThan(0)
-    for (const child of visible) expect(child.getAttribute('aria-hidden')).toBe('true')
+    // Institution and diagnosis are buttons of their own (tap to reveal), so
+    // the summary carries only what they don't: the date and the count.
+    expect(srOnly.textContent).toBe('26/09/20 就診，1 項用藥')
+    const institution = header.querySelector('[data-testid="visit-header-institution"]')!
+    expect(institution.tagName).toBe('BUTTON')
+    expect(institution.getAttribute('aria-label')).toBe('南方藥局')
+    const icd = header.querySelector('[data-visit-header-icd]')!
+    expect(icd.tagName).toBe('BUTTON')
+    expect(icd.getAttribute('aria-label')).toBe('H40.1110')
+    // The rest of the visible text repeats the summary and is hidden.
+    const plain = Array.from(header.children)
+      .filter((child) => child !== srOnly && child.tagName !== 'BUTTON')
+    expect(plain.length).toBeGreaterThan(0)
+    for (const child of plain) expect(child.getAttribute('aria-hidden')).toBe('true')
   })
 
   it('dates the header from the source day, not the runtime display string (Astra r3)', () => {
@@ -217,8 +225,30 @@ describe('current medications — visit bands and headers', () => {
     // Same sand chip as the row's ICD (clinicalIcdToneClass).
     expect(icd.className).toContain('bg-amber-50/50')
     expect(icd.textContent).toContain('I10')
-    const institution = header.querySelector('[data-visit-header-institution]')!
+    const institution = header.querySelector('[data-testid="visit-header-institution"]')!
     expect(institution.textContent).toBe('臺大醫院')
     for (const cls of CLINICAL_SOURCE_TONE.split(' ')) expect(institution.className).toContain(cls)
+  })
+
+  it('leaves institution and diagnosis to the header on rows under one', () => {
+    // The header above already names both; the undated row has no header and
+    // keeps its own.
+    const meds = [
+      active('DATED', '2026-09-20', '臺大醫院', 'I10'),
+      active('UNDATED', '', '某診所', 'K21.9'),
+    ]
+    const { container } = render(
+      <MedicationList medications={meds} isLoading={false} error={null} />,
+    )
+    const rows = Array.from(container.querySelectorAll('li[data-visit-band]'))
+    const dated = rows.find((li) => li.textContent?.includes('DATED') && !li.textContent?.includes('UNDATED'))!
+    const undated = rows.find((li) => li.textContent?.includes('UNDATED'))!
+    const header = dated.querySelector('[data-visit-header]')!
+    expect(header.textContent).toContain('臺大醫院')
+    expect(header.textContent).toContain('I10')
+    expect(dated.querySelector('[data-testid="medication-institution"]')).toBeNull()
+    expect(dated.querySelector('[data-medication-diagnosis] button')).toBeNull()
+    expect(undated.querySelector('[data-testid="medication-institution"]')?.textContent).toBe('某診所')
+    expect(undated.querySelector('[data-medication-diagnosis] button')?.textContent).toContain('K21.9')
   })
 })

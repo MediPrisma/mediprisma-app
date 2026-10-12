@@ -14,6 +14,7 @@ import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
 import {
   assignRowVisitBands,
   compareRowsByVisit,
+  startDayOf,
   visitBandTintClass,
 } from '../utils/visit-bands'
 import {
@@ -262,6 +263,7 @@ export function MedicationList({
                       sourceChipStatementTooltip={sourceChipStatementTooltip}
                       nameMode={nameMode}
                       grouped
+                      visitContextInHeader={!!startDayOf(medication)}
                       onRowToggle={history ? toggleHistory : undefined}
                       resourceNavigationIds={history
                         ? [

@@ -214,3 +214,24 @@ describe('visit bands — representative fill is the newest (Astra r1 #2)', () =
     expect(bands).toEqual(['0', '0'])
   })
 })
+
+describe('history rows under a visit header', () => {
+  it('leave institution and diagnosis to the header', () => {
+    const dated = group('CEPHALEXIN', '2026/8/6', '2026/8/9', '慈田耳鼻喉')
+    dated.medications[0].startedOnIso = '2026-08-06'
+    dated.medications[0].icdCode = 'J01.90'
+    const undated = group('FAMOTIDINE', undefined, '', '某診所')
+    undated.medications[0].icdCode = 'K21.9'
+    const { container } = render(<MedicationHistoryList groups={[dated, undated]} />)
+    const rows = Array.from(container.querySelectorAll('li[data-visit-band]'))
+    const datedRow = rows.find((li) => li.textContent?.includes('CEPHALEXIN'))!
+    const undatedRow = rows.find((li) => li.textContent?.includes('FAMOTIDINE'))!
+    expect(datedRow.querySelector('[data-visit-header]')?.textContent).toContain('慈田耳鼻喉')
+    expect(datedRow.querySelector('[data-testid="medication-institution"]')).toBeNull()
+    expect(datedRow.querySelector('[data-medication-diagnosis] button')).toBeNull()
+    expect(undatedRow.querySelector('[data-visit-header]')).toBeNull()
+    expect(undatedRow.querySelector('[data-testid="medication-institution"]')?.textContent).toBe('某診所')
+    expect(undatedRow.querySelector('[data-medication-diagnosis] button')?.textContent).toContain('K21.9')
+  })
+})
+

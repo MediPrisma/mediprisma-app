@@ -112,13 +112,16 @@ describe('MedicationHistoryList row parity', () => {
     expect(
       container.querySelector('[data-medication-frequency-total-gap]')?.textContent,
     ).toBe(' ')
-    expect(container.querySelector('[data-medication-diagnosis]')).toHaveTextContent(
-      'E07.9甲狀腺疾患',
-    )
-    expect(container.querySelector('[data-medication-diagnosis]'))
-      .not.toHaveTextContent('新北市聯合醫院')
+    // A dated row sits under its visit header, which carries the diagnosis
+    // and institution; the row itself keeps the drug class.
+    const header = container.querySelector('[data-visit-header]')
+    expect(header).toHaveTextContent('E07.9甲狀腺疾患')
+    expect(header).toHaveTextContent('新北市聯合醫院')
+    expect(container.querySelector('[data-medication-diagnosis]')).toBeEmptyDOMElement()
     expect(container.querySelector('[data-medication-classification]'))
-      .toHaveTextContent('新北市聯合醫院甲狀腺製劑')
+      .toHaveTextContent('甲狀腺製劑')
+    expect(container.querySelector('[data-medication-classification]'))
+      .not.toHaveTextContent('新北市聯合醫院')
     expect(screen.getByText('甲狀腺製劑')).toBeInTheDocument()
     expect(screen.getByText('已結束')).toBeInTheDocument()
     expect(screen.getByText('累計 2 次')).toBeInTheDocument()

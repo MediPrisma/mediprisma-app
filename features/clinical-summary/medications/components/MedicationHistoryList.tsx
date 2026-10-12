@@ -21,6 +21,7 @@ import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 import {
   assignVisitBands,
   compareRowsByVisit,
+  startDayOf,
   visitBandTintClass,
   type VisitBand,
 } from '../utils/visit-bands'
@@ -305,6 +306,7 @@ function HistoryRow({
         medication={historyMedication}
         nameMode={nameMode}
         grouped
+        visitContextInHeader={!!visitBand && !!startDayOf(latest)}
         onRowToggle={canExpand ? toggleHistory : undefined}
         resourceNavigationIds={group.medications.map((medication) => medication.id)}
         onResourceNavigationMatch={canExpand ? openForNavigation : undefined}
