@@ -3,9 +3,15 @@
 import { CalendarDays } from 'lucide-react'
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/clinical-color-roles"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationRow } from '../types'
 import { compactMedicationDate } from '../utils/medication-date-display'
+import {
+  medicationIcdChipClass,
+  medicationIcdCodeClass,
+  medicationIcdDescriptionClass,
+} from './medication-chip-styles'
 import { sharedVisitIcd, startDayOf, type VisitBand } from '../utils/visit-bands'
 
 /** Overlay marks for a visit-banded row (parent must be `relative`). The left
@@ -81,11 +87,26 @@ export function VisitHeader({
       <span aria-hidden className="shrink-0 font-semibold tabular-nums text-foreground/85">{date}</span>
       {/* Shrinks before the count: a full hospital name is wider than a
           phone-width row, and the list clips whatever overflows. */}
-      {institution && <span aria-hidden className="min-w-0 truncate" title={institution}>{institution}</span>}
+      {/* Same tones as the row's institution and ICD chip, at header size. */}
+      {institution && (
+        <span
+          aria-hidden
+          data-visit-header-institution
+          className={cn('min-w-0 truncate', CLINICAL_SOURCE_TONE)}
+          title={institution}
+        >
+          {institution}
+        </span>
+      )}
       {icd && (
-        <span aria-hidden className="min-w-0 truncate" title={icd.text ? `${icd.code} ${icd.text}` : icd.code}>
-          · <span className="font-mono">{icd.code}</span>
-          {icd.text ? ` ${icd.text}` : ''}
+        <span
+          aria-hidden
+          data-visit-header-icd
+          className={cn(medicationIcdChipClass, 'h-4 w-auto shrink text-[0.6875rem] hover:bg-amber-50/50 dark:hover:bg-amber-500/10')}
+          title={icd.text ? `${icd.code} ${icd.text}` : icd.code}
+        >
+          <span className={medicationIcdCodeClass}>{icd.code}</span>
+          {icd.text && <span className={medicationIcdDescriptionClass}>{icd.text}</span>}
         </span>
       )}
       <span aria-hidden className="ml-auto shrink-0 tabular-nums">{countText}</span>

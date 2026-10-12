@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react'
 import { MedicationList } from '@/features/clinical-summary/medications/components/MedicationList'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
+import { CLINICAL_SOURCE_TONE } from '@/features/clinical-summary/components/clinical-color-roles'
 
 jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
@@ -204,5 +205,20 @@ describe('current medications — visit bands and headers', () => {
     const header = container.querySelector('[data-visit-header]')!
     expect(header.textContent).toContain('26/08/06')
     expect(header.textContent).not.toContain('26/06/08')
+  })
+
+  it('styles the header ICD and institution like the row does', () => {
+    const meds = [active('A', '2026-09-20', '臺大醫院', 'I10')]
+    const { container } = render(
+      <MedicationList medications={meds} isLoading={false} error={null} />,
+    )
+    const header = container.querySelector('[data-visit-header]')!
+    const icd = header.querySelector('[data-visit-header-icd]')!
+    // Same sand chip as the row's ICD (clinicalIcdToneClass).
+    expect(icd.className).toContain('bg-amber-50/50')
+    expect(icd.textContent).toContain('I10')
+    const institution = header.querySelector('[data-visit-header-institution]')!
+    expect(institution.textContent).toBe('臺大醫院')
+    for (const cls of CLINICAL_SOURCE_TONE.split(' ')) expect(institution.className).toContain(cls)
   })
 })
