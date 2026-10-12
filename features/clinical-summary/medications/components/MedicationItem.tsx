@@ -337,13 +337,14 @@ export function MedicationItem({
   const rowInstitution = visitContextInHeader ? undefined : medication.pharmacy
   const showIcd = isMedical && !!medication.icdCode && !visitContextInHeader
   // Below 456px the institution, ICD and refill count share a third line.
-  // With the first two in the visit header, drop the line when nothing else
-  // is left on it rather than leave a blank one.
+  // With the first two in the visit header, the refill count moves up beside
+  // the regimen (which then gives up the status column), and the third line
+  // is dropped when nothing else is left on it rather than left blank.
+  const narrowRefillOnSecondLine = visitContextInHeader && !!refillCompact
   const narrowThirdLineEmpty = visitContextInHeader
     && !medication.isChronic
     && !((medication.overlapCount ?? 0) > 0)
     && !showStatementChip
-    && !refillCompact
   // A row under a visit header has nothing left in its middle column at
   // desktop widths, so from a 720px list it folds onto one line:
   // name | dates + regimen | class chips | status + refills. Below that it
@@ -431,6 +432,7 @@ export function MedicationItem({
             data-medication-regimen
             className={cn(
               "relative col-span-3 col-start-1 row-start-2 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-span-1",
+              narrowRefillOnSecondLine && "@max-[456px]:col-span-2",
               singleLineWhenWide && "@min-[45rem]:col-start-2 @min-[45rem]:row-start-1",
             )}
           >
@@ -619,7 +621,9 @@ export function MedicationItem({
         <div
           className={cn(
             "col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75",
-            narrowThirdLineEmpty && "@max-[456px]:hidden",
+            narrowRefillOnSecondLine
+              ? "@max-[456px]:row-start-2"
+              : narrowThirdLineEmpty && "@max-[456px]:hidden",
             singleLineWhenWide && "@min-[45rem]:flex-1",
           )}
         >

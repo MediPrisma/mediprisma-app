@@ -271,5 +271,24 @@ describe('current medications — visit bands and headers', () => {
     const undated = layoutOf('UNDATED')
     expect(undated.className).not.toContain('@min-[45rem]:grid-cols-')
   })
+
+  it('puts the refill count on the second line on a narrow list (no third line)', () => {
+    // The third line used to hold institution + ICD + refills; with the first
+    // two in the header, a lone refill count should not cost a line.
+    const refilled = { ...active('REFILLED', '2026-09-20', '臺大醫院', 'I10'), refillCount: 2 } as MedicationRow
+    const single = active('SINGLE', '2026-09-20', '臺大醫院', 'I10')
+    const { container } = render(
+      <MedicationList medications={[refilled, single]} isLoading={false} error={null} />,
+    )
+    const layoutOf = (name: string) => Array.from(container.querySelectorAll('[data-medication-row-layout]'))
+      .find((row) => row.textContent?.includes(name))!
+    const row = layoutOf('REFILLED')
+    const refill = Array.from(row.querySelectorAll('div')).find((el) => el.textContent === '累計 2 次')!
+    expect(refill.className).toContain('@max-[456px]:row-start-2')
+    expect(row.querySelector('[data-medication-regimen]')!.className).toContain('@max-[456px]:col-span-2')
+    // Without a refill count the regimen keeps the full width.
+    expect(layoutOf('SINGLE').querySelector('[data-medication-regimen]')!.className)
+      .not.toContain('@max-[456px]:col-span-2')
+  })
 })
 
