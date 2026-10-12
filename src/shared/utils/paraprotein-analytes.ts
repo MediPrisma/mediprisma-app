@@ -61,8 +61,14 @@ export const PARAPROTEIN_LOINC_TO_KEY: Readonly<Record<string, string>> = {
   // Serum M-protein
   '33358-3': 'PP:M-PROTEIN',       // Protein.monoclonal [Mass/volume] in Serum or Plasma by Electrophoresis
   '104837-0': 'PP:M-PROTEIN',      // Protein.monoclonal [Mass/volume] in Serum or Plasma
-  '51435-6': 'PP:M-PROTEIN',       // Protein.monoclonal band 1 [Mass/volume] in Serum or Plasma by Electrophoresis
-  '99415-2': 'PP:M-PROTEIN',       // Protein.monoclonal band 1 [Mass/volume] in Serum or Plasma by Immunofixation
+  // M-protein bands are separate LOINC items (verified tx.fhir.org, LOINC
+  // 2.82, 2026-10-13; panel 90991-1): each band keeps its own column.
+  '51435-6': 'PP:M-PROTEIN:BAND1', // Protein.monoclonal band 1 [Mass/volume] in Serum or Plasma by Electrophoresis
+  '99415-2': 'PP:M-PROTEIN:BAND1', // Protein.monoclonal band 1 [Mass/volume] in Serum or Plasma by Immunofixation
+  '35559-4': 'PP:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Serum or Plasma by Electrophoresis
+  '99416-0': 'PP:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Serum or Plasma by Immunofixation
+  '50796-2': 'PP:M-PROTEIN:BAND3', // Protein.monoclonal band 3 [Mass/volume] in Serum or Plasma by Electrophoresis
+  '50797-0': 'PP:M-PROTEIN:BAND4', // Protein.monoclonal band 4 [Mass/volume] in Serum or Plasma by Electrophoresis
   // Serum IFE / IEP reports and their lanes → the serum text column
   '25700-6': 'PP:IFE',             // Immunofixation for Serum or Plasma
   '49275-1': 'PP:IFE',             // Immunofixation for Serum or Plasma Narrative
@@ -99,6 +105,13 @@ export const PARAPROTEIN_LOINC_TO_KEY: Readonly<Record<string, string>> = {
   '87835-5': 'PP:U:M-PROTEIN',     // Protein.monoclonal [Mass/volume] in Urine by Immunofixation
   '40661-1': 'PP:U:M-PROTEIN',     // Protein.monoclonal [Mass/volume] in Urine by Electrophoresis
   '35560-2': 'PP:U:M-PROTEIN',     // Protein.monoclonal [Mass/volume] in Urine
+  '97772-8': 'PP:U:M-PROTEIN:BAND1', // Protein.monoclonal band 1 [Mass/volume] in Urine by Electrophoresis
+  '51437-2': 'PP:U:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Urine by Electrophoresis
+  '87834-8': 'PP:U:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Urine by Immunofixation
+  '35561-0': 'PP:U:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Urine
+  '51440-6': 'PP:U:M-PROTEIN:BAND3', // Protein.monoclonal band 3 [Mass/volume] in Urine by Electrophoresis
+  '87833-0': 'PP:U:M-PROTEIN:BAND3', // Protein.monoclonal band 3 [Mass/volume] in Urine by Immunofixation
+  '59563-7': 'PP:U:M-PROTEIN:BAND4', // Protein.monoclonal band 4 [Mass/volume] in Urine by Electrophoresis
   // Urine IFE report and lanes
   '14896-5': 'PP:U:IFE',           // Protein Fractions [Interpretation] in Urine by Immunofixation
   '49300-7': 'PP:U:IFE',           // … in Urine by Immunofixation Narrative
@@ -164,11 +177,25 @@ function splitKey(key: string): { specimen: 'S' | 'U' | 'CSF'; base: string } | 
 
 /** Column header of a fixed paraprotein column, or undefined (neutral source
  *  -name columns keep their source name). */
+const REGION_SYMBOL: Record<string, string> = { GAMMA: 'γ', BETA: 'β', ALPHA1: 'α1', ALPHA2: 'α2' }
+
+/** Header of an M-protein band / region / total column. */
+function mProteinBandDisplay(base: string): Record<Lang, string> | undefined {
+  const match = base.match(/^M-PROTEIN:(.+)$/)
+  if (!match) return undefined
+  const qualifier = match[1]
+  if (qualifier === 'TOTAL') return { 'zh-TW': 'M 蛋白總量', en: 'Total M-protein' }
+  const band = qualifier.match(/^BAND(\d)$/)
+  if (band) return { 'zh-TW': `M 蛋白 第${band[1]}峰`, en: `M-protein band ${band[1]}` }
+  const symbol = REGION_SYMBOL[qualifier]
+  return symbol ? { 'zh-TW': `M 蛋白（${symbol}）`, en: `M-protein (${symbol})` } : undefined
+}
+
 export function paraproteinDisplay(key: string, language: Lang): string | undefined {
   if (key === 'PP:IFE') return language === 'zh-TW' ? '血清 IFE/IEP' : 'Serum IFE/IEP'
   const parts = splitKey(key)
   if (!parts) return undefined
-  const base = BASE_DISPLAY[parts.base]
+  const base = BASE_DISPLAY[parts.base] ?? mProteinBandDisplay(parts.base)
   if (!base) return undefined
   return `${SPECIMEN_LABEL[parts.specimen][language]}${base[language]}`
 }
@@ -186,7 +213,44 @@ const SPEP_SET = new Set(PROTEIN_ELECTROPHORESIS_NHI_ORDER_CODES)
 // digits, never \b: \b is ASCII-only, so it fails after a Greek κ / λ ("Free
 // κ/λ") and would let a CJK neighbour block a match. An abbreviation must
 // START a word — the "m" ending "Serum" never begins an "M protein".
-const M_PROTEIN_RE = /(?<![A-Z0-9])M[-\s]?(?:PROTEIN|SPIKE)(?![A-Z])|(?<![A-Z0-9])M[-\s]?(?:蛋白|帶)|PARAPROTEIN|單株(?:球)?蛋白(?:定量|量)?|MONOCLONAL\s*PROTEIN/iu
+const M_PROTEIN_RE = /(?<![A-Z0-9])M[-\s]?(?:PROTEINS?|SPIKES?)(?![A-Z])|(?<![A-Z0-9])M[-\s]?(?:蛋白|帶)|PARAPROTEIN|單株(?:球)?蛋白(?:定量|量)?|MONOCLONAL\s*PROTEIN/iu
+// M-protein band qualifiers. LOINC gives each band its own item (band 1
+// 51435-6, band 2 35559-4 …), so a band keeps its own column; a total (sum of
+// bands) is neither a band nor the undifferentiated M-protein.
+const M_TOTAL_RE = /(?<![A-Z0-9])(?:TOTAL|SUM)(?![A-Z])|總|合計/iu
+const M_BAND_NUMBER_RE = /(?:BAND|PEAK|SPIKE|PROTEIN|蛋白|峰|帶|#|NO\.?)\s*[-#]?\s*(\d|IV|I{1,3})(?![\dA-Z])/iu
+const M_LEADING_BAND_RE = /(?<![A-Z0-9])BAND\s*[-#]?\s*(\d|IV|I{1,3})(?![\dA-Z])/iu
+const M_ORDINAL_RE = /(?<![A-Z0-9])(FIRST|1ST|SECOND|2ND|THIRD|3RD|FOURTH|4TH)(?![A-Z])|第\s*([一二三四1-4])/iu
+const ORDINAL_NUMBER: Record<string, number> = {
+  FIRST: 1, '1ST': 1, SECOND: 2, '2ND': 2, THIRD: 3, '3RD': 3, FOURTH: 4, '4TH': 4,
+  一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4,
+}
+const ROMAN_NUMBER: Record<string, number> = { I: 1, II: 2, III: 3, IV: 4 }
+const M_REGION: Array<[RegExp, string]> = [
+  [/ALPHA\s*-?\s*1|Α\s*-?\s*1/iu, 'ALPHA1'],
+  [/ALPHA\s*-?\s*2|Α\s*-?\s*2/iu, 'ALPHA2'],
+  [/(?<![A-Z])BETA(?![A-Z])|Β/iu, 'BETA'],
+  [/(?<![A-Z])GAMMA(?![A-Z])|Γ/iu, 'GAMMA'],
+]
+
+/** The band qualifier of an M-protein label: ":TOTAL", ":BANDn", a region
+ *  (":GAMMA" …), or "" for the undifferentiated M-protein. */
+function mProteinQualifier(upper: string): string {
+  if (M_TOTAL_RE.test(upper)) return ':TOTAL'
+  const numbered = upper.match(M_BAND_NUMBER_RE) ?? upper.match(M_LEADING_BAND_RE)
+  if (numbered) {
+    const n = /^\d$/.test(numbered[1]) ? Number(numbered[1]) : ROMAN_NUMBER[numbered[1].toUpperCase()]
+    if (n) return `:BAND${n}`
+  }
+  const ordinal = upper.match(M_ORDINAL_RE)
+  if (ordinal) {
+    const n = ORDINAL_NUMBER[(ordinal[1] ?? ordinal[2]).toUpperCase()]
+    if (n) return `:BAND${n}`
+  }
+  for (const [pattern, region] of M_REGION) if (pattern.test(upper)) return `:${region}`
+  return ''
+}
+
 const URINE_RE = /尿|URINE|(?<![A-Z0-9])UFLC(?![A-Z0-9])|^U[-\s.]|\(U\)/iu
 const CSF_RE = /(?<![A-Z0-9])CSF(?![A-Z0-9])|腦脊髓/iu
 // The κ/λ ratio only when its direction is written κ-over-λ (κ/λ, K/L,
@@ -272,7 +336,7 @@ export function paraproteinIdentity(obs: any): { key: string; display?: string }
 
   if (order && SPEP_SET.has(order)) {
     if (!M_PROTEIN_RE.test(upper)) return null
-    return { key: `${prefixFor(specimenOf(obs, order, name))}M-PROTEIN` }
+    return { key: `${prefixFor(specimenOf(obs, order, name))}M-PROTEIN${mProteinQualifier(upper)}` }
   }
   if (!order || !ORDER_SET.has(order)) return null
 
@@ -294,7 +358,7 @@ export function paraproteinIdentity(obs: any): { key: string; display?: string }
 
   // Report orders: an M-protein amount, else the report's text column (lane
   // rows included).
-  if (M_PROTEIN_RE.test(upper) && isNumericValue(obs)) return { key: `${prefix}M-PROTEIN` }
+  if (M_PROTEIN_RE.test(upper) && isNumericValue(obs)) return { key: `${prefix}M-PROTEIN${mProteinQualifier(upper)}` }
   if (specimen === 'CSF') return { key: 'PP:CSF:IEP' }
   if (order === '12159B') return { key: 'PP:U:IFE' }
   if (order === '12158B') return { key: 'PP:U:IEP' }

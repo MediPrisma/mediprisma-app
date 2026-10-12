@@ -18,7 +18,7 @@
  */
 import { execFileSync } from 'child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
-import { dirname, join, posix, relative } from 'path'
+import { dirname, join, posix } from 'path'
 import { LAB_CATEGORIES, categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 import { NHI_ORDER_CODE_TO_EN, NHI_ORDER_CODE_TO_ZH } from '@/src/shared/utils/nhi-order-names'
@@ -164,7 +164,7 @@ export const ALLOW_LIST: Record<string, string> = {
 
 function classify(row: Row, base: Placement, branch: Placement, ownOnly: Placement | undefined, o: any): string | null {
   const [code, alias, , shape, unit] = row
-  const [bc, bk] = base
+  const [bc] = base
   const [nc, nk] = branch
   if (bc === 'other' || bc === 'none') return 'fromNoPanel'
   if (IMMUNO_ORDERS.has(code) && nc === 'immuno') return 'immunoOrder'
@@ -190,14 +190,14 @@ describe('lab categorisation differential against the base branch', () => {
     return
   }
 
-  it('changes nothing the allow-list does not explain', () => {
+  it('changes nothing the allow-list does not explain', async () => {
     const dir = join(ROOT, 'tmp', 'lab-category-base', base.slice(0, 12))
     if (!existsSync(join(dir, '.complete'))) {
       extractClosure(base, dir, ['src/shared/utils/lab-categories.ts', 'src/shared/utils/lab-pivot.utils.ts'])
       writeFileSync(join(dir, '.complete'), base)
     }
-    const baseCategories = require(join(dir, 'src/shared/utils/lab-categories.ts'))
-    const basePivot = require(join(dir, 'src/shared/utils/lab-pivot.utils.ts'))
+    const baseCategories = await import(join(dir, 'src/shared/utils/lab-categories.ts'))
+    const basePivot = await import(join(dir, 'src/shared/utils/lab-pivot.utils.ts'))
 
     const corpus = buildCorpus()
     // Where the same row lands on this branch with its own name only.
