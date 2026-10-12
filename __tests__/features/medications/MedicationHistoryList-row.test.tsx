@@ -124,7 +124,9 @@ describe('MedicationHistoryList row parity', () => {
       .not.toHaveTextContent('新北市聯合醫院')
     expect(screen.getByText('甲狀腺製劑')).toBeInTheDocument()
     expect(screen.getByText('已結束')).toBeInTheDocument()
-    expect(screen.getByText('累計 2 次')).toBeInTheDocument()
+    // One copy per width: the status column (456px and up) and the end of
+    // the regimen line below that; CSS shows exactly one.
+    expect(screen.getAllByText('累計 2 次')).toHaveLength(2)
 
     const toggle = screen.getByRole('button', {
       name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',

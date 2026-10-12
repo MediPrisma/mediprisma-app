@@ -272,7 +272,7 @@ describe('current medications — visit bands and headers', () => {
     expect(undated.className).not.toContain('@min-[45rem]:grid-cols-')
   })
 
-  it('puts the refill count on the second line on a narrow list (no third line)', () => {
+  it('ends the regimen line with the refill count on a narrow list (no third line)', () => {
     // The third line used to hold institution + ICD + refills; with the first
     // two in the header, a lone refill count should not cost a line.
     const refilled = { ...active('REFILLED', '2026-09-20', '臺大醫院', 'I10'), refillCount: 2 } as MedicationRow
@@ -283,12 +283,19 @@ describe('current medications — visit bands and headers', () => {
     const layoutOf = (name: string) => Array.from(container.querySelectorAll('[data-medication-row-layout]'))
       .find((row) => row.textContent?.includes(name))!
     const row = layoutOf('REFILLED')
-    const refill = Array.from(row.querySelectorAll('div')).find((el) => el.textContent === '累計 2 次')!
-    expect(refill.className).toContain('@max-[456px]:row-start-2')
-    expect(row.querySelector('[data-medication-regimen]')!.className).toContain('@max-[456px]:col-span-2')
-    // Without a refill count the regimen keeps the full width.
-    expect(layoutOf('SINGLE').querySelector('[data-medication-regimen]')!.className)
-      .not.toContain('@max-[456px]:col-span-2')
+    const regimen = row.querySelector('[data-medication-regimen]')!
+    // The count ends the regimen line itself, so the end-date fit measures
+    // the two together and drops the end date only when both don't fit —
+    // reserving the whole status column dropped it on rows that had room.
+    const inline = regimen.querySelector('[data-medication-refill-inline]')!
+    expect(inline.textContent).toContain('累計 2 次')
+    expect(inline.className).toContain('@min-[456px]:hidden')
+    expect(regimen.className).not.toContain('col-span-2')
+    // The status-column copy steps aside below 456px.
+    const lane = Array.from(row.querySelectorAll('div'))
+      .find((el) => el.textContent === '累計 2 次' && !el.closest('[data-medication-regimen]'))!
+    expect(lane.className).toContain('@max-[456px]:hidden')
+    expect(layoutOf('SINGLE').querySelector('[data-medication-refill-inline]')).toBeNull()
   })
 })
 

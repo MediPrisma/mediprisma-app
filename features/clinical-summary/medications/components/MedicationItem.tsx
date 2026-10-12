@@ -337,9 +337,9 @@ export function MedicationItem({
   const rowInstitution = visitContextInHeader ? undefined : medication.pharmacy
   const showIcd = isMedical && !!medication.icdCode && !visitContextInHeader
   // Below 456px the institution, ICD and refill count share a third line.
-  // With the first two in the visit header, the refill count moves up beside
-  // the regimen (which then gives up the status column), and the third line
-  // is dropped when nothing else is left on it rather than left blank.
+  // With the first two in the visit header, the refill count moves up to end
+  // the regimen line, and the third line is dropped when nothing else is left
+  // on it rather than left blank.
   const narrowRefillOnSecondLine = visitContextInHeader && !!refillCompact
   const narrowThirdLineEmpty = visitContextInHeader
     && !medication.isChronic
@@ -432,7 +432,6 @@ export function MedicationItem({
             data-medication-regimen
             className={cn(
               "relative col-span-3 col-start-1 row-start-2 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-span-1",
-              narrowRefillOnSecondLine && "@max-[456px]:col-span-2",
               singleLineWhenWide && "@min-[45rem]:col-start-2 @min-[45rem]:row-start-1",
             )}
           >
@@ -474,6 +473,18 @@ export function MedicationItem({
                 {part.node}
               </span>
             ))}
+            {/* Inside the regimen so the end-date fit measures both: the end
+                date is dropped only when it and the count don't both fit. The
+                leading spaces are text, so the gap is measured too. */}
+            {narrowRefillOnSecondLine && (
+              <span
+                data-medication-refill-inline
+                title={refillSummary}
+                className="ml-auto shrink-0 whitespace-pre text-[0.625rem] tabular-nums text-muted-foreground/75 @min-[456px]:hidden"
+              >
+                {'  '}{refillCompact}
+              </span>
+            )}
           </div>
           <div
             data-medication-classification
@@ -621,9 +632,7 @@ export function MedicationItem({
         <div
           className={cn(
             "col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75",
-            narrowRefillOnSecondLine
-              ? "@max-[456px]:row-start-2"
-              : narrowThirdLineEmpty && "@max-[456px]:hidden",
+            (narrowRefillOnSecondLine || narrowThirdLineEmpty) && "@max-[456px]:hidden",
             singleLineWhenWide && "@min-[45rem]:flex-1",
           )}
         >
