@@ -97,6 +97,23 @@ const NHI_IMAGING_OR_PATHOLOGY_ORDER_CODES = new Set([
   '30103B', // Pathology
   '30105B', // Pathology
 ])
+// NHI report category-2 (imaging/check) orders outside the 32xxx/33xxx
+// radiology range, from the NHI upload specification effective 2026-01-01.
+// 19007C (ultrasound-guided biopsy) is excluded: its report may legitimately
+// carry pathology.
+const NHI_NON_PATHOLOGY_REPORT_ORDER_CODES = new Set([
+  '28002C', '28016C', '28017C', '28023C', // Endoscopy
+  '17008B', '20001C', '20019B', '20023B', // Electroneurodiagnostic
+  '18001C', '18015B', '18019C', // Electrocardiac
+  '18008C', '18010C', '18041B', '20013C', '20026B', // Vascular ultrasound
+  '18020B', '18022B', // Cardiac catheterization
+  '26025B', '26029B', '26072B', // Nuclear medicine
+  '17003C', '17004C', '17006C', '17019C', // Pulmonary function
+  '18005C', '18006C', '18007C', '18033B', // Cardiac ultrasound
+  '19010C', // Obstetric ultrasound
+  '19001C', '19002B', '19003C', '19005C', '19009C', '19012C', '19014C',
+  '19015C', '19016C', '19017C', '19018C', '21008C', '23504C', // Ultrasound
+])
 const NHI_PATHOLOGY_ORDER_CODES = new Set([
   '15001C', // Cytopathology
   '15017C', // Cytopathology
@@ -372,10 +389,15 @@ export function inferReportDisplayGroup(
   const orderCodes = codings
     .map((coding) => coding.code?.trim().toUpperCase())
     .filter((code): code is string => !!code)
-  // An NHI radiology order (X-ray/CT/MRI, 32xxx/33xxx) names the exam itself.
-  // Older MediCloud bundles tagged such reports Pathology when the narrative
-  // quoted the patient's pathological diagnosis; the order code wins.
-  if (orderCodes.some((code) => NHI_IMAGING_ORDER_CODE.test(code))) return 'imaging'
+  // An NHI category-2 report order (X-ray/CT/MRI 32xxx/33xxx, ultrasound,
+  // endoscopy, cardiac…) names the exam itself. Older MediCloud bundles tagged
+  // such reports Pathology when the narrative quoted the patient's
+  // pathological diagnosis; the order code wins.
+  if (orderCodes.some((code) =>
+    NHI_IMAGING_ORDER_CODE.test(code) || NHI_NON_PATHOLOGY_REPORT_ORDER_CODES.has(code),
+  )) {
+    return 'imaging'
+  }
   if (isPathologyCategory(report.category)) return 'pathology'
   if (categoryGroup === 'imaging') return 'imaging'
 
