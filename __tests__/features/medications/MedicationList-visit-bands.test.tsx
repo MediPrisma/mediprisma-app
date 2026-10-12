@@ -6,16 +6,30 @@ jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
 }))
 
+const zhMedications = {
+  currentlyInUse: '使用中',
+  visitHeaderCount: '{n} 項',
+  visitHeaderCountOne: '1 項',
+  visitHeaderLabel: '{date} {institution} 就診，{n} 項用藥',
+  visitHeaderLabelOne: '{date} {institution} 就診，1 項用藥',
+  refillSummary: '累計 {count} 次',
+}
+const enMedications = {
+  currentlyInUse: 'Active',
+  visitHeaderCount: '{n} items',
+  visitHeaderCountOne: '1 item',
+  visitHeaderLabel: 'Visit {date} at {institution}, {n} medications',
+  visitHeaderLabelOne: 'Visit {date} at {institution}, 1 medication',
+  refillSummary: '{count} fills',
+}
+let mockLocale: 'zh-TW' | 'en' = 'zh-TW'
+
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
-    locale: 'zh-TW',
+    locale: mockLocale,
     t: {
-      common: { loading: '載入中' },
-      medications: {
-        currentlyInUse: '使用中',
-        visitHeaderCount: '{n} 項',
-        refillSummary: '累計 {count} 次',
-      },
+      common: { loading: 'loading' },
+      medications: mockLocale === 'en' ? enMedications : zhMedications,
     },
   }),
 }))
@@ -31,6 +45,13 @@ jest.mock('@/src/application/stores/resource-navigation.store', () => ({
 }))
 
 function active(id: string, iso: string, pharmacy: string, icdCode: string): MedicationRow {
+  if (!iso) {
+    return {
+      ...active(id, '2026-01-01', pharmacy, icdCode),
+      startedOn: undefined,
+      startedOnIso: undefined,
+    } as MedicationRow
+  }
   return {
     id,
     drugKey: id,
@@ -48,6 +69,8 @@ function active(id: string, iso: string, pharmacy: string, icdCode: string): Med
 }
 
 describe('current medications — visit bands and headers', () => {
+  afterEach(() => { mockLocale = 'zh-TW' })
+
   it('groups drugs from the same visit and labels each visit', () => {
     // Input interleaves the two visits; display must keep each visit together.
     const meds = [
@@ -105,5 +128,60 @@ describe('current medications — visit bands and headers', () => {
     const count = Array.from(header.querySelectorAll('span'))
       .find((span) => span.textContent === '2 項')!
     expect(count.className).toContain('shrink-0')
+  })
+
+  it('shows no visit header for a drug whose start day is unknown', () => {
+    // An undated row is its own "visit"; a header without a date only
+    // repeats the institution the row already shows.
+    const meds = [
+      active('DATED', '2026-09-20', 'Clinic', 'I10'),
+      active('UNDATED', '', 'Other clinic', 'I10'),
+    ]
+    const { container } = render(
+      <MedicationList medications={meds} isLoading={false} error={null} />,
+    )
+    const headers = Array.from(container.querySelectorAll('[data-visit-header]'))
+    expect(headers).toHaveLength(1)
+    expect(headers[0].textContent).toContain('Clinic')
+    // The undated row still starts its own band.
+    const rows = Array.from(container.querySelectorAll('li[data-visit-band]'))
+    expect(rows.map((li) => li.getAttribute('data-visit-band'))).toEqual(['0', '1'])
+  })
+
+  it('uses the singular count for a one-drug visit in English', () => {
+    mockLocale = 'en'
+    const meds = [
+      active('A', '2026-09-20', 'Clinic', 'I10'),
+      active('B', '2026-09-15', 'Clinic', 'I10'),
+      active('C', '2026-09-15', 'Clinic', 'I10'),
+    ]
+    const { container } = render(
+      <MedicationList medications={meds} isLoading={false} error={null} />,
+    )
+    const headers = Array.from(container.querySelectorAll('[data-visit-header]'))
+    expect(headers[0].textContent).toContain('1 item')
+    expect(headers[0].textContent).not.toContain('1 items')
+    expect(headers[0].textContent).toContain('1 medication')
+    expect(headers[0].textContent).not.toContain('1 medications')
+    expect(headers[1].textContent).toContain('2 items')
+    expect(headers[1].textContent).toContain('2 medications')
+  })
+
+  it('gives screen readers the visit summary as text, not an aria-label on a plain div', () => {
+    // aria-label is not allowed on a generic element and is ignored there.
+    const meds = [active('A', '2026-09-20', '南方藥局', 'H40.1110')]
+    const { container } = render(
+      <MedicationList medications={meds} isLoading={false} error={null} />,
+    )
+    const header = container.querySelector('[data-visit-header]')!
+    expect(header.hasAttribute('aria-label')).toBe(false)
+    const srOnly = header.querySelector('.sr-only')!
+    // The shared diagnosis is hidden visually-only above, so it must be here.
+    expect(srOnly.textContent).toBe('26/09/20 南方藥局 就診，1 項用藥 · H40.1110')
+    // Everything visible is hidden from the accessibility tree, so the summary
+    // is read once rather than twice.
+    const visible = Array.from(header.children).filter((child) => child !== srOnly)
+    expect(visible.length).toBeGreaterThan(0)
+    for (const child of visible) expect(child.getAttribute('aria-hidden')).toBe('true')
   })
 })

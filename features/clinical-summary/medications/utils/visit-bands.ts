@@ -15,7 +15,8 @@ export function dateSortKey(value?: string): string {
   return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
 }
 
-function startDayOf(m?: MedicationRow): string {
+/** Start day of a row as YYYY-MM-DD, or '' when unknown or ambiguous. */
+export function startDayOf(m?: MedicationRow): string {
   return m?.startedOnIso || dateSortKey(m?.startedOn)
 }
 
