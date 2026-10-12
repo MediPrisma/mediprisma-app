@@ -78,6 +78,31 @@ describe('visit bands', () => {
     expect(visitKeyOf(other)).not.toBe(visitKeyOf(ent1))
   })
 
+  it('does not merge two clinics at the same institution on the same day', () => {
+    // One day at 臺大醫院: cardiology (I10) and endocrinology (E11.9) are two
+    // visits, even though date and institution match.
+    const cardio = group('AMLODIPINE', '2026/8/6', '2026/9/3', '臺大醫院')
+    const endo = group('METFORMIN', '2026/8/6', '2026/9/3', '臺大醫院')
+    const cardio2 = group('LOSARTAN', '2026/8/6', '2026/9/3', '臺大醫院')
+    cardio.medications[0].icdCode = 'I10'
+    endo.medications[0].icdCode = 'E11.9'
+    cardio2.medications[0].icdCode = 'I10'
+    expect(visitKeyOf(cardio)).not.toBe(visitKeyOf(endo))
+    expect(visitKeyOf(cardio)).toBe(visitKeyOf(cardio2))
+
+    // Interleaved input: each clinic's drugs stay together, one band each.
+    const { container } = render(
+      <MedicationHistoryList groups={[cardio, endo, cardio2]} />,
+    )
+    const rows = Array.from(container.querySelectorAll('li[data-visit-band]'))
+    const titles = rows.map((li) => li.textContent ?? '')
+    const endoAt = titles.findIndex((t) => t.includes('METFORMIN'))
+    expect(endoAt === 0 || endoAt === 2).toBe(true)
+    const bands = rows.map((li) => li.getAttribute('data-visit-band'))
+    expect(new Set(bands).size).toBe(2)
+    expect(container.querySelectorAll('[data-visit-header]')).toHaveLength(2)
+  })
+
   it('never merges undated rows into a neighbour', () => {
     expect(visitKeyOf(group('A', undefined, '', ''))).not.toBe(
       visitKeyOf(group('B', undefined, '', '')),
@@ -157,7 +182,7 @@ describe('visit bands — locale-independent dates (Astra r1 #1)', () => {
       })
     try {
       const m = row('a', 'A', '2026-08-06', 'Clinic')
-      expect(visitKeyOf(asGroup(m))).toBe('2026-08-06|Clinic')
+      expect(visitKeyOf(asGroup(m))).toBe('2026-08-06|Clinic|')
     } finally {
       spy.mockRestore()
     }

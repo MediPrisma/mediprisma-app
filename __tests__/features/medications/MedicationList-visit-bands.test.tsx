@@ -93,17 +93,26 @@ describe('current medications — visit bands and headers', () => {
     expect(headers[1].textContent).toContain('長庚嘉義')
   })
 
-  it('omits the diagnosis when drugs of one visit have different ICD codes', () => {
+  it('splits one day at one institution into separate visits by diagnosis', () => {
+    // Same day, same hospital, two clinics: each is its own visit with its
+    // own header and diagnosis, and the drugs of each stay together.
     const meds = [
-      active('A', '2026-09-20', 'Clinic', 'H40.1110'),
-      active('B', '2026-09-20', 'Clinic', 'N40.0'),
+      active('AMLODIPINE', '2026-09-20', '臺大醫院', 'I10'),
+      active('METFORMIN', '2026-09-20', '臺大醫院', 'E11.9'),
+      active('LOSARTAN', '2026-09-20', '臺大醫院', 'I10'),
     ]
     const { container } = render(
       <MedicationList medications={meds} isLoading={false} error={null} />,
     )
-    const header = container.querySelector('[data-visit-header]')!
-    expect(header.textContent).not.toContain('H40')
-    expect(header.textContent).toContain('2 項')
+    const headers = Array.from(container.querySelectorAll('[data-visit-header]'))
+    expect(headers).toHaveLength(2)
+    const byIcd = (code: string) => headers.find((h) => h.textContent?.includes(code))!
+    expect(byIcd('I10').textContent).toContain('2 項')
+    expect(byIcd('E11.9').textContent).toContain('1 項')
+    const rows = Array.from(container.querySelectorAll('li[data-visit-band]'))
+    const order = rows.map((li) => (li.textContent ?? '').match(/AMLODIPINE|METFORMIN|LOSARTAN/)![0])
+    const metforminAt = order.indexOf('METFORMIN')
+    expect(metforminAt === 0 || metforminAt === 2).toBe(true)
   })
 
   it('lets a long institution name truncate so the visit count stays in the row', () => {
@@ -112,7 +121,7 @@ describe('current medications — visit bands and headers', () => {
     const longName = '國立臺灣大學醫學院附設醫院新竹臺大分院生醫醫院院區'
     const meds = [
       active('A', '2026-09-25', longName, 'E11.9'),
-      active('B', '2026-09-25', longName, 'E78.5'),
+      active('B', '2026-09-25', longName, 'E11.9'),
     ]
     const { container } = render(
       <MedicationList medications={meds} isLoading={false} error={null} />,

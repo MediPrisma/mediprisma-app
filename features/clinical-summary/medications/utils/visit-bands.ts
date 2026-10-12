@@ -1,6 +1,6 @@
 // Visit banding — rows prescribed at the same outpatient visit (same start
-// day + institution) share an alternating background band, in both the
-// current-medication list and the medication history.
+// day + institution + diagnosis) share an alternating background band, in
+// both the current-medication list and the medication history.
 import type { MedicationRow } from '../types'
 import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 
@@ -24,13 +24,15 @@ function latestDayOf(m?: MedicationRow): string {
   return m?.endDateIso || dateSortKey(m?.endDate || m?.stoppedOn) || startDayOf(m)
 }
 
-/** One outpatient visit ≈ start day + institution. Falls back to a per-row
- *  key when the start day is unknown or ambiguous, so an undated row is never
- *  merged into a neighbouring visit. */
+/** One outpatient visit ≈ start day + institution + diagnosis (ICD). The
+ *  rows carry no encounter id, and one day at one hospital can be two clinics
+ *  (cardiology I10, endocrinology E11.9), so the diagnosis keeps them apart.
+ *  Falls back to a per-row key when the start day is unknown or ambiguous, so
+ *  an undated row is never merged into a neighbouring visit. */
 export function visitKeyOfRow(m: MedicationRow | undefined, fallbackKey: string): string {
   const started = startDayOf(m)
   if (!started) return `row:${fallbackKey}`
-  return `${started}|${(m?.pharmacy ?? '').trim()}`
+  return `${started}|${(m?.pharmacy ?? '').trim()}|${(m?.icdCode ?? '').trim()}`
 }
 
 /** Visit of a history group = visit of its latest (representative) fill. */
@@ -38,14 +40,17 @@ export function visitKeyOf(group: MedicationHistoryGroup): string {
   return visitKeyOfRow(group.medications[0], group.key)
 }
 
-/** Newest visit first; rows of one visit stay adjacent (institution, then the
- *  fill that ran longest). Ties keep their incoming order (stable sort). */
+/** Newest visit first; rows of one visit stay adjacent (institution, then
+ *  diagnosis, then the fill that ran longest). Ties keep their incoming order
+ *  (stable sort). */
 export function compareRowsByVisit(a?: MedicationRow, b?: MedicationRow): number {
   const byVisitDate = (startDayOf(b) || latestDayOf(b))
     .localeCompare(startDayOf(a) || latestDayOf(a))
   if (byVisitDate !== 0) return byVisitDate
   const byInstitution = (a?.pharmacy ?? '').localeCompare(b?.pharmacy ?? '')
   if (byInstitution !== 0) return byInstitution
+  const byDiagnosis = (a?.icdCode ?? '').trim().localeCompare((b?.icdCode ?? '').trim())
+  if (byDiagnosis !== 0) return byDiagnosis
   return latestDayOf(b).localeCompare(latestDayOf(a))
 }
 
@@ -75,8 +80,9 @@ export function bandsFromVisitKeys(keys: string[]): VisitBand[] {
   return bands
 }
 
-/** Diagnosis to show in a visit header: only when every row of the visit
- *  carries the same ICD code — a mixed visit gets none rather than a guess. */
+/** Diagnosis to show in a visit header. The visit key already includes the
+ *  ICD code, so this guards rows that reach a header without one (or callers
+ *  that pass rows from more than one visit): mixed codes get none. */
 export function sharedVisitIcd(rows: Array<MedicationRow | undefined>): { code: string; text?: string } | undefined {
   const first = rows[0]
   if (!first?.icdCode) return undefined

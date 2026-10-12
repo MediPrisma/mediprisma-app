@@ -33,7 +33,7 @@ export function VisitBandMarks({ band }: { band: VisitBand }) {
 }
 
 /** One-line header above the first row of a visit: date, institution,
- *  shared diagnosis (clinician view, only when every drug shares it) and how
+ *  diagnosis (clinician view; part of the visit key) and how
  *  many drugs were prescribed at that visit. None for a drug whose start day
  *  is unknown: it is its own visit, and a dateless header would only repeat
  *  the institution its row already shows. */
