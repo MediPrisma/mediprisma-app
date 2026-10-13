@@ -4,7 +4,23 @@
 // re-exports everything for existing feature/test imports.
 // Groups observations by lab category, then pivots into test (row) × date (column).
 // Groups observations by lab category, then pivots into test (row) × date (column).
-import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, withLocalCodeAsText, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { THYROID_DISPLAY, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import { dualSpecimenAnalyte } from '@/src/shared/utils/specimen-evidence'
+import {
+  PARAPROTEIN_COLUMN_ORDER,
+  paraproteinDisplay,
+  paraproteinIdentity,
+  isParaproteinTextKey,
+} from '@/src/shared/utils/paraprotein-analytes'
+import {
+  AUTOANTIBODY_KEYS,
+  IMMUNOGLOBULIN_KEYS,
+  IMMUNOLOGY_DISPLAY,
+  IMMUNOLOGY_LOINC_TO_KEY,
+  immunologyKeyFromName,
+} from '@/src/shared/utils/immunology-analytes'
 import {
   CANONICAL_KEYS,
   CANONICAL_DISPLAY,
@@ -148,9 +164,42 @@ export interface LabRow {
   unit?: string               // unit summary (most common across all dates)
   values: Map<string, LabCell>  // date "YYYY-MM-DD" → cell
   subgroupId?: string         // assigned subgroup id (renal/liver/etc.)
+  /** Original-name mode only: this column shares its source label with
+   *  another column of the table, and this is what tells them apart. */
+  originalHintKind?: OriginalHintKind
   /** Cheap availability index built during the pivot pass. Full trend point
    *  details are constructed only after the user opens this analyte. */
   trendChartable?: boolean
+}
+
+export type OriginalHintKind = 'specimen' | 'unit' | 'freeTotal' | 'standard'
+
+export const specimenOfKey = (testKey: string): string | undefined =>
+  testKey.startsWith('PP:U:') ? 'urine' : testKey.startsWith('PP:CSF:') ? 'csf' : testKey.startsWith('PP:') ? 'serum' : undefined
+export const freeTotalOfKey = (testKey: string): string | undefined =>
+  /-FREE$/.test(testKey) ? 'free' : /-TOTAL$/.test(testKey) ? 'total' : undefined
+
+/** The hint that tells apart original-mode columns sharing one source label:
+ *  the specimen, else count vs %, else free vs total, else the standardized
+ *  column label. Columns with a unique label get none. */
+function assignOriginalHints(rows: LabRow[]): void {
+  const groups = new Map<string, LabRow[]>()
+  for (const row of rows) {
+    if (row.values.size === 0) continue
+    const label = row.displayName.normalize('NFKC').trim().toLowerCase()
+    groups.set(label, [...(groups.get(label) ?? []), row])
+  }
+  const distinct = (values: Array<string | undefined>) =>
+    values.every((v) => v !== undefined) && new Set(values).size === values.length
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const kind: OriginalHintKind =
+      distinct(group.map((r) => specimenOfKey(r.testKey))) ? 'specimen'
+        : distinct(group.map((r) => (r.unit === '%' ? 'percent' : 'count'))) ? 'unit'
+          : distinct(group.map((r) => freeTotalOfKey(r.testKey))) ? 'freeTotal'
+            : 'standard'
+    for (const row of group) row.originalHintKind = kind
+  }
 }
 
 export interface LabPivot {
@@ -250,32 +299,19 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   }
 }
 
-// NHI system URI used by the 健康存摺 bridge
-const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
+const LEGACY_NHI_LAB_OID_SYSTEM = 'urn:oid:nhi.lab.code'
 
-// The current bridges emit the TW Core URI while older cached bundles use the
-// OID above. Match both without treating unrelated local codes as NHI orders.
-function getNhiLabCode(obs: any): string | null {
-  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
-  for (const coding of codings) {
-    const system = typeof coding?.system === 'string' ? coding.system.toLowerCase() : ''
-    if (system !== NHI_LAB_SYSTEM && !system.includes('nhi-medical-order-code') && !system.includes('nhi-lab-code')) {
-      continue
-    }
-    const code = typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : ''
-    if (code) return code
-  }
-  return null
-}
-
+// NHI 醫令 codes come from the shared helper (nhiOrderCode), which accepts
+// 健保存摺's `…/nhi-medical-order-code`, MediCloud's `…/medical-service-payment-tw`
+// and the legacy `urn:oid:nhi.lab.code` / `nhi-lab-code` systems alike.
 function microbiologyLocalIdentity(obs: any): { testKey: string; displayName: string } | null {
-  const nhiCode = getNhiLabCode(obs)
+  const nhiCode = nhiOrderCode(obs)
   if (!nhiCode) return null
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   const labels = [
     obs?.code?.text,
     ...codings
-      .filter((coding) => !getNhiLabCode({ code: { coding: [coding] } }))
+      .filter((coding) => !isNhiOrderCodeSystem(coding?.system))
       .flatMap((coding) => [coding?.display, coding?.code]),
   ]
     .filter((label): label is string => typeof label === 'string' && !!label.trim())
@@ -319,7 +355,7 @@ function microbiologyLocalIdentity(obs: any): { testKey: string; displayName: st
 const MYCOBACTERIAL_CULTURE_NHI_CODES = new Set(['13012C', '13026C'])
 
 function hasNhiMycobacterialCultureEvidence(obs: any): boolean {
-  const nhiCode = getNhiLabCode(obs)
+  const nhiCode = nhiOrderCode(obs)
   if (!nhiCode || !MYCOBACTERIAL_CULTURE_NHI_CODES.has(nhiCode)) return false
 
   const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
@@ -375,6 +411,7 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   '2514-8': 'KETONE', // Ketones [Presence] in Urine by Test strip
   '19161-9': 'UROBI', // Urobilinogen [Units/volume] in Urine by Test strip
   '24124-0': 'CASTS', // Casts [Presence] in Urine sediment by Light microscopy
+  '2890-2': 'PROT/CR RATIO', // Protein/Creatinine [Mass Ratio] in Urine
   // Its own column — not folded into RISKF, whose exact ratio definition at
   // the source hospital is unverified.
   '9830-1': 'TC/HDL RATIO', // Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or Plasma
@@ -385,6 +422,24 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   '總蛋白': 'TP',
   '血清總蛋白': 'TP',
   '總蛋白質': 'TP',
+  // 09040C 全蛋白 — the NHI order's own name.
+  '全蛋白': 'TP',
+  // 09011C 鈣 — the NHI order's own name.
+  '鈣': 'CA',
+  '血清鈣': 'CA',
+  // 09002C 血中尿素氮 / 09013C 尿酸 — the NHI order names and their common
+  // spellings. 尿 here is part of the analyte name, not a urine specimen.
+  // (尿素, urea, is a different quantity from urea nitrogen: no BUN alias.)
+  '血中尿素氮': 'BUN',
+  '血尿素氮': 'BUN',
+  '血清尿素氮': 'BUN',
+  '尿素氮': 'BUN',
+  'BLOOD UREA NITROGEN': 'BUN',
+  'UREA NITROGEN': 'BUN',
+  '尿酸': 'UA',
+  '血中尿酸': 'UA',
+  '血清尿酸': 'UA',
+  'URIC ACID': 'UA',
   'PTH-I': 'IPTH',
   IPTH: 'IPTH',
   'I-PTH': 'IPTH',
@@ -447,6 +502,47 @@ const URINE_SPELLINGS: Readonly<Record<string, string>> = {
   '微白蛋白/肌酐酸比值(半定量)': 'ACR',
 }
 
+/**
+ * The 免疫 column of one observation. Several analytes share one NHI order
+ * (12064B = SS-A + SS-B + Ro52; 30022C = one row per allergen), so the order
+ * code and its panel-name display are never consulted: the analyte LOINC
+ * first, then the row's own item name. Null when neither is recognised — the
+ * row then keeps its source name as its column (every allergen does).
+ */
+/** The 內分泌 column of a thyroid antibody / thyroglobulin row, by its LOINC
+ *  (see thyroid-analytes.ts). Null when the row carries none of them. */
+function thyroidAnalyteKey(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    if (coding?.system === FHIR_SYSTEMS.LOINC && THYROID_LOINC_TO_KEY[coding?.code]) {
+      return THYROID_LOINC_TO_KEY[coding.code]
+    }
+  }
+  return null
+}
+
+const IMMUNOLOGY_COLUMN_KEYS = new Set([...IMMUNOGLOBULIN_KEYS, ...AUTOANTIBODY_KEYS])
+
+function immunologyAnalyteKey(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    if (coding?.system === FHIR_SYSTEMS.LOINC && IMMUNOLOGY_LOINC_TO_KEY[coding?.code]) {
+      return IMMUNOLOGY_LOINC_TO_KEY[coding.code]
+    }
+  }
+  const ownNames = [
+    obs?.code?.text,
+    ...codings
+      .filter((coding) => !isNhiOrderCodeSystem(coding?.system))
+      .flatMap((coding) => [coding?.display, coding?.code]),
+  ]
+  for (const name of ownNames) {
+    const key = typeof name === 'string' ? immunologyKeyFromName(name) : null
+    if (key) return key
+  }
+  return null
+}
+
 /** A key as it lands in one panel — urine spellings folded there only. */
 export function labKeyInCategory(testKey: string, categoryId?: string): string {
   return categoryId === 'urine' ? URINE_SPELLINGS[testKey] ?? testKey : testKey
@@ -478,6 +574,13 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   CASTS: 'Casts',
   'PROT/CR RATIO': 'UPCR',
   'TC/HDL RATIO': 'TC/HDL',
+  // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).
+  ...IMMUNOLOGY_DISPLAY,
+  // 內分泌 thyroid columns keyed by LOINC (thyroid-analytes.ts).
+  ...THYROID_DISPLAY,
+  // 免疫 電泳／輕鏈 fixed columns (English here; getLabRowDisplayParts gives
+  // each language its own header via paraproteinDisplay).
+  ...Object.fromEntries(PARAPROTEIN_COLUMN_ORDER.map((key) => [key, paraproteinDisplay(key, 'en')!])),
 }
 
 /** Canonical labels supplied by the app while the shared normalization
@@ -543,7 +646,8 @@ function canonicalTestKey(obs: any): string {
   return resolved
 }
 
-function isKnownPivotKey(key: string): boolean {
+/** True when `key` is an analyte the pivot recognises (package or app label). */
+export function isKnownPivotKey(key: string): boolean {
   return CANONICAL_KEYS.has(key) || !!APP_CANONICAL_DISPLAY[key]
 }
 
@@ -580,7 +684,9 @@ const KNOWN_GLUCOSE_KEYS = new Set(['GLUCOSE', 'HBA1C', 'C-PEPTIDE', 'GLU,1HRPC'
 // in the generic 血糖 column beside the post-prandial values.
 const FASTING_SHORT_NAME = /\bac[-\s]*sug(?:ar)?\b|\bglucose[-\s(]*ac\b/i
 
-function glucoseSubtype(obs: any): ReturnType<typeof classifyGlucose> {
+function glucoseSubtype(source: any): ReturnType<typeof classifyGlucose> {
+  // A bare local code ("GLU-AC") is the row's name, as code.text would be.
+  const obs = withLocalCodeAsText(source)
   const sub = classifyGlucose(obs)
   if (sub !== 'generic') return sub
   const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
@@ -600,6 +706,35 @@ export function getLabPivotTestIdentity(
 
   let testKey = labKeyInCategory(canonicalTestKey(obs), categoryId)
   let displayOverride: string | undefined
+
+  // 免疫 電泳／輕鏈: the paraprotein column comes first and alone — an IgG lane
+  // under an IEP / IFE order never reaches the IgG column.
+  const paraprotein = categoryId === 'immuno' ? paraproteinIdentity(obs) : null
+  if (paraprotein) {
+    testKey = paraprotein.key
+    displayOverride = paraprotein.display ?? paraproteinDisplay(paraprotein.key, 'en')
+  } else if (categoryId === 'immuno') {
+    // Only a LOINC or the immunology name matcher may assign a 免疫 column.
+    // The general name resolver reads "IgG抗體" (anti-IgG) as IgG; when the
+    // matcher refused such a name, the row keeps its own source name.
+    const immunologyKey = canonicalKeyFromLoinc(obs) ?? immunologyAnalyteKey(obs)
+    testKey = immunologyKey
+      ?? (IMMUNOLOGY_COLUMN_KEYS.has(testKey) ? raw.normalize('NFKC').trim().toUpperCase() : testKey)
+  }
+
+  // 生化 serum-or-urine analytes named generically ("Protein", "PROT") are
+  // the chemistry analyte there — the column is TP / ALB / CA / CREA.
+  if (categoryId === 'chem') {
+    const dual = dualSpecimenAnalyte(obs)
+    if (dual && !isKnownPivotKey(testKey)) testKey = dual
+    if (dual && (testKey === 'PROTEIN' || testKey === 'PROT')) testKey = dual
+  }
+
+  if (categoryId === 'endocrine') {
+    // The header comes from APP_CANONICAL_DISPLAY, the same map every
+    // rendered label (getLabRowDisplayParts) reads.
+    testKey = thyroidAnalyteKey(obs) ?? testKey
+  }
 
   const microbiologyComponent = categoryId === 'microbio'
     ? microbiologyLocalIdentity(obs)
@@ -640,15 +775,24 @@ export function getLabPivotTestIdentity(
     displayOverride = label.display
   }
 
-  const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
-  const nhiCode = nhiCoding?.code as string | undefined
+  const nhiCode = nhiOrderCode(obs) ?? undefined
+  // The NHI display is a header fallback only for the legacy OID system. The
+  // current 健保存摺 and MediCloud systems both fall through to the row's own
+  // label: their NHI display is usually the panel name (「細菌培養鑑定檢查」
+  // for "Anaerobic #2"), which would make a misleading column header.
+  const nhiCoding = obs.code?.coding?.find((c: any) => c?.system === LEGACY_NHI_LAB_OID_SYSTEM)
   const canonicalMapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
 
   // The audit view must not collapse different source labels merely because
   // they share one (possibly wrong) LOINC. NFKC/case/whitespace folding avoids
   // duplicate columns for typographic-only variants while preserving genuine
   // differences such as "Atypical lym." versus "Lymphocytes %".
-  const originalMapKey = `source:${raw.normalize('NFKC').trim().toLocaleLowerCase()}`
+  //
+  // The audit view may split further by source label, but never merge what
+  // the standardized view keeps apart: the standardized key (specimen,
+  // free / total, lane, count vs %, glucose subtype …) is part of it. The
+  // header stays the source label.
+  const originalMapKey = `source:${raw.normalize('NFKC').trim().toLocaleLowerCase()}|${canonicalMapKey}`
   const mapKey = nameMode === 'original' ? originalMapKey : canonicalMapKey
 
   // Column header preference:
@@ -664,7 +808,9 @@ export function getLabPivotTestIdentity(
   //      label so unknown tests keep whatever the source institution sent.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
-  const candidateDisplay = nhiDisplay || rawDisplay
+  // A 免疫 order display names the whole multi-analyte order (「可抽出的核抗體
+  // 測定— Ro/La 抗體」 for SS-A, SS-B and Ro52), never the analyte in this column.
+  const candidateDisplay = (categoryId !== 'immuno' && nhiDisplay) || rawDisplay
   const isCanonical = CANONICAL_KEYS.has(testKey) || !!APP_CANONICAL_DISPLAY[testKey]
   const canonicalDisplay = APP_CANONICAL_DISPLAY[testKey] || CANONICAL_DISPLAY[testKey] || testKey
   const displayName = nameMode === 'original'
@@ -763,10 +909,19 @@ export function buildLabPivots(
       // unreadable. Rescale to one canonical unit here. `isAbnormal` was already
       // computed from the raw value vs the obs's own referenceRange above, so it
       // stays correct. The raw row-by-row report uses a different path, untouched.
-      let cellValue = value
-      let cellUnit = unit
+      // An IEP / IFE report column folds the report and its lane rows into
+      // one cell; each record keeps its own analyte ("IgG: Present").
+      // The comparator goes inside the record ("M-band: <0.2 g/L"), so the
+      // cell itself carries none.
+      const sourceComparator = typeof obs.valueQuantity?.comparator === 'string' && obs.valueQuantity.comparator.trim()
+        ? obs.valueQuantity.comparator.trim()
+        : undefined
+      let cellValue = isParaproteinTextKey(testKey) && value && value !== '—'
+        ? `${getTestDisplayName(obs)}: ${recordDisplayValue({ value, comparator: sourceComparator })}${unit ? ` ${unit}` : ''}`
+        : value
+      let cellUnit = isParaproteinTextKey(testKey) ? undefined : unit
       let trendUnit = unit
-      if (numericValue !== undefined) {
+      if (numericValue !== undefined && !isParaproteinTextKey(testKey)) {
         // Quantity.unit is human-readable and may use a local spelling such as
         // "/cumm", while Quantity.code is the machine-processable UCUM form
         // (for example "/uL"). Keep `unit` for raw display, but when the source
@@ -792,7 +947,11 @@ export function buildLabPivots(
         ? obs.status.trim().toLowerCase()
         : ''
       const trendTimestamp = new Date(obs.effectiveDateTime).getTime()
-      const hasTrendPoint = numericValue !== undefined
+      // A folded IEP / IFE report column gathers different analytes (IgG and
+      // IgA lanes): never a trend, never graded.
+      const foldedReport = isParaproteinTextKey(testKey)
+      const hasTrendPoint = !foldedReport
+        && numericValue !== undefined
         && Number.isFinite(numericValue)
         && Number.isFinite(trendTimestamp)
         && !INVALID_TREND_STATUSES.has(normalizedStatus)
@@ -816,10 +975,8 @@ export function buildLabPivots(
       const cell: LabCell = {
         value: cellValue,
         unit: cellUnit,
-        isAbnormal,
-        comparator: typeof obs.valueQuantity?.comparator === 'string' && obs.valueQuantity.comparator.trim()
-          ? obs.valueQuantity.comparator.trim()
-          : undefined,
+        isAbnormal: foldedReport ? false : isAbnormal,
+        comparator: isParaproteinTextKey(testKey) ? undefined : sourceComparator,
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
         status,
@@ -850,7 +1007,7 @@ export function buildLabPivots(
       // with it ("<0.5 / 0.7", "Reactive (<0.5)") and the cell-level
       // comparator is cleared — it could only ever describe one of them.
       const prev = row.values.get(date)
-      const incomingNumeric = numericValue !== undefined
+      const incomingNumeric = numericValue !== undefined && !isParaproteinTextKey(testKey)
       if (prev?.allValues) {
         const allValues = [...prev.allValues, cellDisplayValue(cell)]
         row.values.set(date, {
@@ -948,8 +1105,10 @@ export function buildLabPivots(
           memberToGroup.set(m.toUpperCase(), sg.id)
         }
       }
+      const prefixes = cat.subgroups.flatMap((sg) => (sg.keyPrefixes ?? []).map((prefix) => [prefix, sg.id] as const))
       for (const row of testMap.values()) {
         row.subgroupId = memberToGroup.get(row.testKey)
+          ?? prefixes.find(([prefix]) => row.testKey.startsWith(prefix))?.[1]
       }
     }
 
@@ -966,6 +1125,7 @@ export function buildLabPivots(
       return cmp(a.testKey, b.testKey)
     })
 
+    if (nameMode === 'original') assignOriginalHints(rows)
     result[cat.id] = { category: cat, dates, rows }
   }
 

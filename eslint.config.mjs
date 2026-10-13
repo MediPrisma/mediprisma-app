@@ -23,6 +23,8 @@ const config = [
       ".claude/**",
       "vendor/**",
       "next-env.d.ts",
+      // git-ignored scratch (e.g. the lab-category differential's base copy)
+      "tmp/**",
     ],
   },
 

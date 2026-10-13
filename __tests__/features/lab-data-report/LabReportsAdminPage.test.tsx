@@ -147,4 +147,38 @@ describe('LabReportsAdminPage', () => {
     expect(within(section).queryByText('轉換後 #1')).not.toBeInTheDocument()
     expect(within(section).getByText('Anti-ENA')).toBeInTheDocument()
   })
+
+  it('marks a specific-allergen raw row as left out by design, not as unpaired', async () => {
+    mockUser = admin
+    const rawRows: LabDataReportRawRow[] = [
+      {
+        ref: 1, source: 's02', ordinal: 1, dates: { case_time: { day: 3 } },
+        fields: { order_code: '30022C', assay_item_name: '混合黴菌', unit_data: 'KU/L', hosp: '合成醫院' },
+        results: { assay_value: '<0.1' }, withheld: {},
+      },
+      {
+        ref: 2, source: 's02', ordinal: 2, dates: { case_time: { day: 3 } },
+        fields: { order_code: '12034B', assay_item_name: 'Anti-ENA', hosp: '合成醫院' },
+        results: { assay_value: 'Negative' }, withheld: {},
+      },
+    ]
+    ;(service.listLabDataReports as jest.Mock).mockResolvedValue([{
+      ...report,
+      rawRowCount: 2,
+      rawSource: {
+        producer: 'medcloud2', producerVersion: '0.13.8', s02Rows: 2, s03Rows: 0, endpointStatus: { s02: 200 },
+        truncatedRows: 0, droppedStrings: 0, unparsedDates: 0, unknownFields: [],
+      },
+    }])
+    ;(service.getLabDataReportRows as jest.Mock).mockResolvedValue({ rows, rawRows })
+    render(<LabReportsAdminPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /LDR-20260927-AAAAAAAA/ }))
+    const section = await screen.findByRole('region', { name: '原始列表格' })
+    expect(within(section).getByText('不列入累積報告（特異過敏原）')).toBeInTheDocument()
+    expect(within(section).getAllByText('未配對')).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '只看未配對、數值不同或只靠醫令碼' }))
+    expect(within(section).queryByText('混合黴菌')).not.toBeInTheDocument()
+    expect(within(section).getByText('Anti-ENA')).toBeInTheDocument()
+  })
 })
