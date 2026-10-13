@@ -592,7 +592,6 @@ export const zhTW = {
       ended: '已結束',
       stopped: '已停用',
       previousDose: '原 {dose}',
-      sameIngredient: '同成分，{n} 院',
       endedListTitle: '近期已用完（短期藥，不算在上面 {count} 項）',
       unknownInstitution: '院所不明',
       uncategorised: '未分類',

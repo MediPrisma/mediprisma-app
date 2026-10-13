@@ -61,8 +61,6 @@ export interface MedCopySourceItem {
   category?: string
   /** The dose before an in-window adjustment. */
   previousDose?: string
-  /** Same-ingredient identity (not product identity). */
-  ingredientKey: string
 }
 
 export type MedCopyExcludedReason = 'ended' | 'stopped'
@@ -136,7 +134,6 @@ export interface MedCopyTextLabels {
   ended: string
   stopped: string
   previousDose: string
-  sameIngredient: string
   endedListTitle: string
   unknownInstitution: string
   uncategorised: string
@@ -434,14 +431,6 @@ export function buildMedicationCopyText(
   const dateStyle = format.fields.find((field) => field.id === 'date')?.style ?? 'md'
   const paren = (text: string) => fill(labels.paren, { text })
 
-  // Same ingredient running from more than one institution.
-  const institutionsByIngredient = new Map<string, Set<string>>()
-  for (const { item } of selection.current) {
-    const set = institutionsByIngredient.get(item.ingredientKey) ?? new Set<string>()
-    set.add(item.institution ?? '')
-    institutionsByIngredient.set(item.ingredientKey, set)
-  }
-
   const number = (index: number): string => {
     switch (format.numbering) {
       case 'dot': return `${index + 1}. `
@@ -456,17 +445,12 @@ export function buildMedicationCopyText(
     prefix: string,
     hidden: ReadonlySet<MedCopyFieldId>,
     statusMarker?: string,
-    closing = false,
   ): string => {
     const parts = shown
       .filter((field) => !hidden.has(field.id))
       .map((field) => fieldText(entry, field, ctx, frequencyField))
       .filter(Boolean)
     if (statusMarker) parts.push(paren(statusMarker))
-    const institutions = institutionsByIngredient.get(entry.item.ingredientKey)
-    if (!closing && institutions && institutions.size > 1) {
-      parts.push(paren(fill(labels.sameIngredient, { n: institutions.size })))
-    }
     return prefix + parts.join(separator)
   }
 
@@ -545,7 +529,7 @@ export function buildMedicationCopyText(
         : !remainingShown
           ? undefined
           : entry.endedDays !== undefined ? fill(labels.endedDays, { n: entry.endedDays }) : labels.ended
-      out.push(line(entry, prefix, new Set<MedCopyFieldId>(['remaining']), marker, true))
+      out.push(line(entry, prefix, new Set<MedCopyFieldId>(['remaining']), marker))
       listedExcludedCount += 1
     }
   }
