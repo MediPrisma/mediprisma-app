@@ -135,16 +135,16 @@ export function groupMedications(medications: MedicationRow[]) {
   )
 
   // When the same product has a current prescription, its older fills belong
-  // to that current therapy row. Attach the history to the first active row
-  // for the product (important when two clinics currently prescribe the same
-  // drug) and remove it from the separate stopped-medication section so the
-  // UI never presents the same drug twice.
+  // to that current therapy row, and leave the separate stopped-medication
+  // section so the drug is not listed twice. When two clinics currently
+  // prescribe the same drug, every current row gets the same history: each
+  // shows the drug's refill count, so each must be able to open what it
+  // counts. The list keeps one of them as the navigation owner.
   const activeHistoryByMedicationId = new Map<string, MedicationHistoryGroup>()
   const attachedHistoryKeys = new Set<string>()
   const historyByKey = new Map(historyGroups.map((group) => [group.key, group]))
   for (const medication of active) {
     const key = groupKeyOf(medication)
-    if (attachedHistoryKeys.has(key)) continue
     const history = historyByKey.get(key)
     if (!history) continue
     activeHistoryByMedicationId.set(medication.id, history)
