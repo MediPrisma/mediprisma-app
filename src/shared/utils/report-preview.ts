@@ -41,12 +41,17 @@ const PREAMBLE_HEADINGS = new Set([
 // "Computed Tomography of Brain Without Enhancement Show:" left on its own
 // line — the study name the card title already carries, introducing findings.
 const LEAD_IN_ONLY_RE = /\b(?:Shows?|Showed|Showing|Reveals?|Revealed|Revealing|Demonstrates?|Demonstrated|Demonstrating|Discloses?|Disclosed|Disclosing)\s*[:：]\s*$/i
-// Some sources fold the verdict into a combined heading the shared parser does
-// not split on ("CT findings and conclusion:"), left as a plain line.
-const COMBINED_CONCLUSION_RE = /^(?:[A-Z]{2,5}\s+)?findings\s+and\s+conclusions?\s*[:：]\s*$/i
+// The shared parser only splits on its own keyword list, so some conclusion
+// headings arrive as a plain line with the verdict after the colon:
+// "Interpretation Summary: Reduced LV systolic function." or a combined
+// "CT findings and conclusion:" lead-in. Same priority as the first group.
+const INLINE_CONCLUSION_RE = /^(Interpretation Summary|Short summary|Sonar Diagnosis|(?:[A-Z]{2,5}\s+)?[Ff]indings\s+and\s+[Cc]onclusions?)\s*[:：]\s*([\s\S]*)$/
 
-// TW sources also bullet with a bare "＞" / "=" the shared parser keeps in the text.
-const isListItem = (line: ReportLine) => Boolean(line.marker) || /^[＞>=]/.test(line.text)
+// Preamble sections about how the images were acquired. Numbered items right
+// after these are findings (the bridge drops the next heading); after History
+// or Comparison they may still be the history itself.
+const ACQUISITION_HEADINGS = new Set(['Methods', 'Method', 'Technique'])
+
 const headingKey = (line: ReportLine) => line.text.replace(/\s*[:：]\s*$/, '')
 const isSectionHeading = (line: ReportLine) => line.heading === true && line.level === 0
 // "Impression:." — the source's stray punctuation after the colon.
@@ -68,27 +73,32 @@ function sectionBody(lines: ReportLine[], start: number): ReportLine[] {
 }
 
 function conclusionPreview(lines: ReportLine[]): ReportPreview | null {
-  for (const group of CONCLUSION_GROUPS) {
+  for (const [rank, group] of CONCLUSION_GROUPS.entries()) {
     for (let i = 0; i < lines.length; i++) {
-      if (!isSectionHeading(lines[i]) || !group.has(headingKey(lines[i]))) continue
-      const text = trimLeadingPunctuation(joinLines(sectionBody(lines, i)))
-      if (text) return { label: headingKey(lines[i]), text }
+      const line = lines[i]
+      if (isSectionHeading(line) && group.has(headingKey(line))) {
+        const text = trimLeadingPunctuation(joinLines(sectionBody(lines, i)))
+        if (text) return { label: headingKey(line), text }
+        continue
+      }
+      const inline = rank === 0 && line.level === 0 && !line.heading ? INLINE_CONCLUSION_RE.exec(line.text) : null
+      if (inline) {
+        const text = trimLeadingPunctuation(`${inline[2]} ${joinLines(sectionBody(lines, i))}`.trim())
+        if (text) return { label: inline[1], text }
+      }
     }
-  }
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].level !== 0 || !COMBINED_CONCLUSION_RE.test(lines[i].text)) continue
-    const text = trimLeadingPunctuation(joinLines(sectionBody(lines, i)))
-    if (text) return { label: headingKey(lines[i]), text }
   }
   return null
 }
 
 /**
  * Index of the first line after the preamble, or 0 when the preamble cannot be
- * skipped safely. The landing line must read as a finding — a list item, or
- * the text a "… Show:" lead-in introduces. Anything else (a History paragraph
- * that runs on past its heading) would preview background as if it were a
- * result, with the heading that said otherwise gone.
+ * skipped safely. Only a findings lead-in ("… Show:", inline or on its own
+ * line) proves the findings have started; a method/technique section after it
+ * keeps that proof, any other preamble section drops it. Without that proof a
+ * History list or paragraph that runs on past its heading would preview as a
+ * result, with the heading that said otherwise gone — so the report stays as
+ * written.
  */
 function skipPreamble(lines: ReportLine[]): number {
   let i = 0
@@ -105,15 +115,13 @@ function skipPreamble(lines: ReportLine[]): number {
       continue
     }
     if (isSectionHeading(line) && PREAMBLE_HEADINGS.has(headingKey(line))) {
-      // Only the heading's own run-on text: the bridge often drops the next
-      // heading, so numbered items or a new paragraph after "Method:" are
-      // already findings.
-      afterLeadIn = false
+      if (!ACQUISITION_HEADINGS.has(headingKey(line))) afterLeadIn = false
       i++
+      // Only the heading's own run-on text.
       while (i < lines.length && lines[i].level > 0 && !lines[i].marker && !lines[i].heading) {
         // "Comparison: 2025/08/06 CT of the chest … shows:" — the run-on text
         // itself ends in the findings lead-in.
-        afterLeadIn = LEAD_IN_ONLY_RE.test(lines[i].text)
+        if (LEAD_IN_ONLY_RE.test(lines[i].text)) afterLeadIn = true
         i++
       }
       continue
@@ -121,7 +129,7 @@ function skipPreamble(lines: ReportLine[]): number {
     break
   }
   if (i === 0 || i >= lines.length) return 0
-  return isListItem(lines[i]) || afterLeadIn ? i : 0
+  return afterLeadIn ? i : 0
 }
 
 /**

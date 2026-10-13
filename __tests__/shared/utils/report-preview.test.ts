@@ -97,3 +97,31 @@ describe('extractReportPreview preamble landing', () => {
     expect(extractReportPreview(raw)).toEqual({ text: '＞ A small nodule in RLL. ＞ No pleural effusion.' })
   })
 })
+
+describe('extractReportPreview review regressions', () => {
+  it('keeps a numbered History list as written instead of previewing it as findings', () => {
+    const raw = 'History:\n1. Prior lung cancer.\n2. Status post lobectomy.\nFindings: New right lower lobe nodule.'
+    expect(extractReportPreview(raw)).toBeNull()
+  })
+
+  it('keeps a History section after a study lead-in as written', () => {
+    const raw = 'CT of chest Show:\nHistory:\n1. Prior lung cancer.\n2. Status post lobectomy.'
+    expect(extractReportPreview(raw)).toBeNull()
+  })
+
+  it('recognises "Interpretation Summary:" with a colon and inline text', () => {
+    const raw = 'Left Ventricle\nNormal size.\nInterpretation Summary: Reduced LV systolic function.'
+    expect(extractReportPreview(raw)).toEqual({
+      label: 'Interpretation Summary',
+      text: 'Reduced LV systolic function.',
+    })
+  })
+
+  it('carries lines after an inline conclusion heading', () => {
+    const raw = 'Left Ventricle\nNormal size.\nInterpretation Summary:\nReduced LV systolic function.\nMild MR.'
+    expect(extractReportPreview(raw)).toEqual({
+      label: 'Interpretation Summary',
+      text: 'Reduced LV systolic function. Mild MR.',
+    })
+  })
+})
