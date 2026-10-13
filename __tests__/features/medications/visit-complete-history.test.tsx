@@ -1,4 +1,4 @@
-import { render, within } from '@testing-library/react'
+import { fireEvent, render, within } from '@testing-library/react'
 import { MedicationList } from '@/features/clinical-summary/medications/components/MedicationList'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 
@@ -92,6 +92,23 @@ describe('用藥歷史 lists every drug of each visit', () => {
     // ...and it is still the current row in 使用中.
     const currentList = container.querySelectorAll('ul[data-medication-list-surface="grouped"]')[0]
     expect(currentList.textContent).toContain('AMLODIPINE')
+  })
+
+  it('lets an earlier fill of a current drug open every fill, as other history rows do', () => {
+    const current = fill('amlo-1002', 'AMLODIPINE', '2026-10-02', '臺大醫院', 'I10', false, 2)
+    const earlier = fill('amlo-0710', 'AMLODIPINE', '2026-07-10', '馬偕醫院', 'J01.90', true, 2)
+    const { container } = render(<MedicationList medications={[current, earlier, b, c]} isLoading={false} error={null} />)
+    const amlo = visitRows(historyList(container), '26/07/10')
+      .find((li) => li.textContent?.includes('AMLODIPINE')) as HTMLElement
+    // 「累計 2 次」 counts the current fill too, so the row opens both.
+    const toggle = within(amlo).getByRole('button', { name: '顯示 AMLODIPINE 的過往用藥紀錄（2）' })
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const details = amlo.querySelector(`#${CSS.escape(toggle.getAttribute('aria-controls')!)}`)!
+    expect(details.textContent).toContain('臺大醫院')
+    expect(details.textContent).toContain('馬偕醫院')
+    // Newest first, as in every expanded history.
+    expect(details.textContent!.indexOf('臺大醫院')).toBeLessThan(details.textContent!.indexOf('馬偕醫院'))
   })
 
   it('reads the same visit total with and without a filter', () => {

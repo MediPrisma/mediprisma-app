@@ -59,6 +59,7 @@ jest.mock('@/src/application/stores/resource-navigation.store', () => ({
 }))
 
 jest.mock('@/features/clinical-summary/medications/hooks/useGroupedMedications', () => ({
+  medicationGroupKey: jest.requireActual('@/features/clinical-summary/medications/hooks/useGroupedMedications').medicationGroupKey,
   useGroupedMedications: () => ({
     activeMedications: [mockActiveMedication],
     activeHistoryByMedicationId: new Map([

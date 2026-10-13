@@ -71,9 +71,14 @@ export function isInjectable(m: MedicationRow): boolean {
  *  filled again later. */
 interface HistoryEntry {
   key: string
-  group: MedicationHistoryGroup
+  group: HistoryListGroup
   fill: MedicationRow
 }
+
+/** A drug's ended fills, one row each. `currentFills` are that drug's
+ *  current prescriptions (rows of 使用中, not of this list): an expanded row
+ *  lists them with the ended fills, so it opens every fill it counts. */
+export type HistoryListGroup = MedicationHistoryGroup & { currentFills?: MedicationRow[] }
 
 function visitKeyOfEntry(entry: HistoryEntry): string {
   return visitKeyOfRow(entry.fill, entry.key)
@@ -106,7 +111,7 @@ function dateRangeOf(m: MedicationRow, locale: string): string {
 interface MedicationHistoryListProps {
   /** Drug groups whose fills the list shows: stopped drugs, plus the earlier
    *  fills of current drugs (no badge: 使用中 above lists those drugs). */
-  groups: MedicationHistoryGroup[]
+  groups: HistoryListGroup[]
   /** Drugs per visit before a search or class filter, when one is on, split
    *  as the lists are: visit headers then compare the matches with the
    *  visit's total ("1／3 項"). */
@@ -314,18 +319,25 @@ function HistoryRow({
   const [open, setOpen] = useState(false)
   const detailsId = useId()
   const { group, fill } = entry
-  const canExpand = group.medications.length > 1
+  // Every fill of the drug, current ones included, newest first.
+  const allFills = useMemo(
+    () => (group.currentFills?.length
+      ? [...group.currentFills, ...group.medications].sort(compareRowsByVisit)
+      : group.medications),
+    [group],
+  )
+  const canExpand = allFills.length > 1
   const historyMedication = {
     ...fill,
     // The drug's own count over every fill (as its 使用中 row shows), not
     // just the ended fills grouped here.
-    refillCount: Math.max(fill.refillCount ?? 1, group.count),
+    refillCount: Math.max(fill.refillCount ?? 1, allFills.length),
   }
   const toggleLabel = (open
     ? (mt.hideMedicationHistory ?? '收合 {name} 的過往用藥紀錄（{count}）')
     : (mt.showMedicationHistory ?? '顯示 {name} 的過往用藥紀錄（{count}）'))
     .replace('{name}', group.name)
-    .replace('{count}', String(group.count))
+    .replace('{count}', String(allFills.length))
   const toggleHistory = useCallback(() => setOpen((current) => !current), [])
   const tinted = visitBand?.band === 1
   return (
@@ -377,7 +389,7 @@ function HistoryRow({
       {canExpand && open && (
         <MedicationHistoryDetails
           id={detailsId}
-          medications={group.medications}
+          medications={allFills}
           nameMode={nameMode}
           className="border-t border-border/60 bg-background/30 px-2.5 py-1.5 pl-9"
         />

@@ -23,6 +23,7 @@ import {
   MedicationHistoryDetails,
   MedicationHistoryList,
   isInjectable,
+  type HistoryListGroup,
 } from './MedicationHistoryList'
 import {
   medicationGroupKey,
@@ -89,11 +90,19 @@ export function MedicationList({
   // 用藥歷史 lists every fill under its own visit: stopped drugs, plus the
   // earlier fills of current drugs, so each visit shows every drug it
   // prescribed. (No 使用中 badge: the list above already names them.)
+  // Those earlier fills carry the drug's current fills too, so their row opens
+  // every fill its 「累計 n 次」 counts, as a stopped drug's row does.
   const historyGroups = useMemo(() => {
-    const attached = new Map<string, MedicationHistoryGroup>()
-    for (const group of activeHistoryByMedicationId.values()) attached.set(group.key, group)
+    const attached = new Map<string, HistoryListGroup>()
+    for (const group of activeHistoryByMedicationId.values()) {
+      if (attached.has(group.key)) continue
+      const currentFills = medications.filter(
+        (row) => !row.isInactive && medicationGroupKey(row) === group.key,
+      )
+      attached.set(group.key, { ...group, currentFills })
+    }
     return [...inactiveMedicationGroups, ...attached.values()]
-  }, [activeHistoryByMedicationId, inactiveMedicationGroups])
+  }, [activeHistoryByMedicationId, inactiveMedicationGroups, medications])
   // Totals before the filter, in the unit each list shows (rows): 使用中
   // counts its current-therapy rows; 用藥歷史 counts every ended fill, one
   // row each, split as its lists are (injectables apart).
