@@ -56,13 +56,14 @@ export const IMMUNOLOGY_DISPLAY: Readonly<Record<string, string>> = {
 export const IMMUNOGLOBULIN_KEYS = ['IGG', 'IGA', 'IGM', 'IGE', 'IGG1', 'IGG2', 'IGG3', 'IGG4', 'C3', 'C4']
 
 // Reading order: screen (ANA) → SLE-specific (dsDNA, Sm, RNP) → Sjögren
-// (SS-A, Ro52, SS-B) → RF → the myositis line blot (synthetase antibodies,
-// then the dermatomyositis / necrotising / overlap members) → AMA.
+// (SS-A, Ro52, SS-B) → the myositis line blot (synthetase antibodies, then
+// the dermatomyositis / necrotising / overlap members) → RF (arthritis) →
+// AMA (liver). RF is not an ENA, so it stays out of the ENA/myositis run.
 export const AUTOANTIBODY_KEYS = [
-  'ANA', 'ANTI-DSDNA', 'ANTI-SM', 'ANTI-RNP', 'ANTI-SSA', 'ANTI-RO52', 'ANTI-SSB', 'RF',
+  'ANA', 'ANTI-DSDNA', 'ANTI-SM', 'ANTI-RNP', 'ANTI-SSA', 'ANTI-RO52', 'ANTI-SSB',
   'ANTI-JO-1', 'ANTI-PL-7', 'ANTI-PL-12', 'ANTI-EJ', 'ANTI-OJ', 'ANTI-SRP',
   'ANTI-MI-2A', 'ANTI-MI-2B', 'ANTI-MDA5', 'ANTI-TIF1G', 'ANTI-NXP2', 'ANTI-SAE1',
-  'ANTI-KU', 'ANTI-KI', 'ANTI-PM-SCL100', 'ANTI-PM-SCL75', 'AMA',
+  'ANTI-KU', 'ANTI-KI', 'ANTI-PM-SCL100', 'ANTI-PM-SCL75', 'RF', 'AMA',
 ]
 
 /** 30022C allergen item names as hospitals print them, used only to keep an
