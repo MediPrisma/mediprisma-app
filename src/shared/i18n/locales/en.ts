@@ -1217,6 +1217,10 @@ export const en = {
   },
 
   medications: {
+    visitHeaderCount: '{n} items',
+    visitHeaderCountOne: '1 item',
+    visitHeaderLabel: 'Visit {date}, {n} medications',
+    visitHeaderLabelOne: 'Visit {date}, 1 medication',
     title: "Patient's Medications",
     active: 'Active',
     all: 'All',

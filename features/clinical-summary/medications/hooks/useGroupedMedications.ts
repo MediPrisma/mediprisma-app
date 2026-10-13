@@ -107,12 +107,20 @@ export function groupMedications(medications: MedicationRow[]) {
     }
   }
 
-  // Sort inactive medications by date (newest first) within each group
+  // Sort inactive fills newest first within each group. medications[0] is the
+  // group's representative (row shown, visit banding), so compare calendar
+  // days — the display strings are locale-formatted and not zero-padded
+  // ("2026/9/30" > "2026/10/1" as text).
+  const startDayTs = (m: MedicationRow): number => {
+    if (m.startedOnIso) return Date.parse(`${m.startedOnIso}T00:00:00Z`)
+    const ms = m.startedOn ? new Date(m.startedOn).getTime() : NaN
+    return Number.isNaN(ms) ? -Infinity : ms
+  }
   inactiveByKey.forEach((group) => {
     group.medications.sort((a, b) => {
-      const dateA = a.startedOn || ''
-      const dateB = b.startedOn || ''
-      return dateB.localeCompare(dateA)
+      const byStart = startDayTs(b) - startDayTs(a)
+      if (byStart !== 0 && !Number.isNaN(byStart)) return byStart
+      return (b.endDateIso || '').localeCompare(a.endDateIso || '')
     })
   })
 

@@ -30,6 +30,7 @@ import {
   getMedicationStatusBadgeClass,
 } from './medication-chip-styles'
 import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
+import { doseUnlessRepeated } from '../utils/dose-helpers'
 
 interface MedicationItemProps {
   medication: MedicationRow
@@ -49,6 +50,9 @@ interface MedicationItemProps {
   /** Removes the individual card boundary when rows live in a shared list
    *  frame. The internal three-lane information grid stays identical. */
   grouped?: boolean
+  /** The row sits under a visit header that already names its institution
+   *  and diagnosis, so the row leaves both out. */
+  visitContextInHeader?: boolean
   /** Optional full-height leading action, used to reveal this current drug's
    *  older prescriptions without duplicating it in the history section. */
   leadingControl?: ReactNode
@@ -117,6 +121,7 @@ export function MedicationItem({
   executionPeriods,
   nameMode = 'ingredient',
   grouped = false,
+  visitContextInHeader = false,
   leadingControl,
   onRowToggle,
   onResourceNavigationMatch,
@@ -274,11 +279,18 @@ export function MedicationItem({
     }
   }
 
-  if (medication.dose) {
+  // The instruction follows "（28 天）" directly: the full-width bracket
+  // spaces itself. A bare "28 天" (no date) or a range without a duration
+  // still needs the space.
+  const joinsFrequencyWithoutSpace = (previousKey?: string) =>
+    (previousKey === 'date' || previousKey === 'execution-period')
+    && durationSuffix.startsWith('（')
+  const shownDose = doseUnlessRepeated(medication.dose, medication.frequency)
+  if (shownDose) {
     scheduleParts.push({
       key: 'dose',
       fixed: true,
-      node: <span>{medication.dose}</span>,
+      node: <span>{shownDose}</span>,
     })
   }
 
@@ -330,6 +342,22 @@ export function MedicationItem({
       ?? (locale.startsWith('zh') ? '累計 {count} 次' : '{count} refills'))
       .replace('{count}', String(medication.refillCount))
     : ''
+  const rowInstitution = visitContextInHeader ? undefined : medication.pharmacy
+  const showIcd = isMedical && !!medication.icdCode && !visitContextInHeader
+  // Below 456px the institution, ICD and refill count share a third line.
+  // With the first two in the visit header, the refill count moves up to end
+  // the regimen line, and the third line is dropped when nothing else is left
+  // on it rather than left blank.
+  const narrowRefillOnSecondLine = visitContextInHeader && !!refillCompact
+  const narrowThirdLineEmpty = visitContextInHeader
+    && !medication.isChronic
+    && !((medication.overlapCount ?? 0) > 0)
+    && !showStatementChip
+  // A row under a visit header has nothing left in its middle column at
+  // desktop widths, so from a 720px list it folds onto one line:
+  // name | dates + regimen | class chips | status + refills. Below that it
+  // keeps the two-line layout (the regimen needs ~300px of its own).
+  const singleLineWhenWide = visitContextInHeader
 
   // Resource-navigation anchor — catalog cites MedicationRequest OR
   // MedicationStatement, so this row answers to both.
@@ -359,6 +387,8 @@ export function MedicationItem({
         grouped
           ? "rounded-none border-0 bg-transparent"
           : "rounded-md border border-border/70 bg-muted/40 dark:border-border/80 dark:bg-muted/30",
+        singleLineWhenWide
+          && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
     >
       {leadingControl && (
@@ -408,7 +438,10 @@ export function MedicationItem({
           <div
             ref={regimenRef}
             data-medication-regimen
-            className="relative col-span-3 col-start-1 row-start-2 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-span-1"
+            className={cn(
+              "relative col-span-3 col-start-1 row-start-2 flex h-4 min-w-0 items-center overflow-hidden whitespace-nowrap @min-[456px]:col-span-1",
+              singleLineWhenWide && "@min-[45rem]:col-start-2 @min-[45rem]:row-start-1",
+            )}
           >
             {scheduleParts.map((part, index) => (
               <span
@@ -429,18 +462,14 @@ export function MedicationItem({
                     }
                     data-medication-date-frequency-join={
                       part.key === 'frequency'
-                      && ['date', 'duration', 'execution-period'].includes(
-                        scheduleParts[index - 1]?.key ?? '',
-                      )
+                      && joinsFrequencyWithoutSpace(scheduleParts[index - 1]?.key)
                         ? 'true'
                         : undefined
                     }
                     className="whitespace-pre"
                   >
                     {part.key === 'frequency'
-                      && ['date', 'duration', 'execution-period'].includes(
-                        scheduleParts[index - 1]?.key ?? '',
-                      )
+                      && joinsFrequencyWithoutSpace(scheduleParts[index - 1]?.key)
                       ? ''
                       : ' '}
                   </span>
@@ -448,15 +477,31 @@ export function MedicationItem({
                 {part.node}
               </span>
             ))}
+            {/* Inside the regimen so the end-date fit measures both: the end
+                date is dropped only when it and the count don't both fit. The
+                leading spaces are text, so the gap is measured too. */}
+            {narrowRefillOnSecondLine && (
+              <span
+                data-medication-refill-inline
+                title={refillSummary}
+                className="ml-auto shrink-0 whitespace-pre text-[0.625rem] tabular-nums text-muted-foreground/75 @min-[456px]:hidden"
+              >
+                {'  '}{refillCompact}
+              </span>
+            )}
           </div>
           <div
             data-medication-classification
-            className="col-start-2 row-start-3 flex h-4 min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2"
+            className={cn(
+              "col-start-2 row-start-3 flex h-4 min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2",
+              narrowThirdLineEmpty && "@max-[456px]:hidden",
+              singleLineWhenWide && "@min-[45rem]:col-start-3 @min-[45rem]:row-start-1",
+            )}
           >
-            {medication.pharmacy && (
+            {rowInstitution && (
               <TruncatedRevealLabel
                 data-testid="medication-institution"
-                text={medication.pharmacy}
+                text={rowInstitution}
                 className={cn(
                   "inline-flex h-4 min-w-0 max-w-[8.5rem] shrink items-center text-[0.6875rem]",
                   CLINICAL_SOURCE_TONE,
@@ -517,14 +562,18 @@ export function MedicationItem({
           establish a minimum width that squeezes the medication name. */}
       <div
         data-medication-cell="clinical"
-        className="col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-1"
+        className={cn(
+          "col-start-1 row-start-3 flex h-4 min-w-0 items-center overflow-hidden @min-[456px]:col-start-2 @min-[456px]:row-start-1",
+          narrowThirdLineEmpty && "@max-[456px]:hidden",
+          singleLineWhenWide && "@min-[45rem]:hidden",
+        )}
       >
         <div
           data-medication-context
           data-medication-diagnosis
           className="flex h-4 min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         >
-          {isMedical && medication.icdCode && (
+          {showIcd && (
             <TapTooltip
               asChild
               content={billingIcdTitle}
@@ -557,9 +606,19 @@ export function MedicationItem({
           the clinically time-sensitive information. */}
       <div
         data-medication-cell="supply"
-        className="col-start-3 row-start-1 row-span-2 contents w-[4.75rem] min-w-0 flex-col items-stretch @min-[456px]:flex"
+        className={cn(
+          "col-start-3 row-start-1 row-span-2 contents w-[4.75rem] min-w-0 flex-col items-stretch @min-[456px]:flex",
+          // Status stays at the right edge; the refill count sits to its left.
+          singleLineWhenWide
+            && "@min-[45rem]:col-start-4 @min-[45rem]:row-span-1 @min-[45rem]:w-auto @min-[45rem]:flex-row-reverse @min-[45rem]:items-center @min-[45rem]:gap-1.5",
+        )}
       >
-        <div className="col-start-3 row-start-1 flex h-4 items-center">
+        <div
+          className={cn(
+            "col-start-3 row-start-1 flex h-4 items-center",
+            singleLineWhenWide && "@min-[45rem]:w-[4.75rem] @min-[45rem]:shrink-0",
+          )}
+        >
           <Badge
             variant={badge.variant}
             className={cn(
@@ -574,7 +633,13 @@ export function MedicationItem({
             <span className="truncate">{badge.label}</span>
           </Badge>
         </div>
-        <div className="col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75">
+        <div
+          className={cn(
+            "col-start-3 row-start-3 flex h-4 min-w-0 items-center justify-end overflow-hidden text-[0.625rem] tabular-nums text-muted-foreground/75",
+            (narrowRefillOnSecondLine || narrowThirdLineEmpty) && "@max-[456px]:hidden",
+            singleLineWhenWide && "@min-[45rem]:flex-1",
+          )}
+        >
           {refillCompact && (
             <Tooltip>
               <TooltipTrigger asChild>

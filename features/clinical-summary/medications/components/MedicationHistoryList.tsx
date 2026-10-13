@@ -18,10 +18,25 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
 import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
+import {
+  assignVisitBands,
+  compareRowsByVisit,
+  startDayOf,
+  visitBandTintClass,
+  type VisitBand,
+} from '../utils/visit-bands'
+import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
 import { compactMedicationDate } from '../utils/medication-date-display'
 import { MedicationItem } from './MedicationItem'
+import { doseUnlessRepeated } from '../utils/dose-helpers'
 
 export type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
+export {
+  assignVisitBands,
+  dateSortKey,
+  visitKeyOf,
+  type VisitBand,
+} from '../utils/visit-bands'
 
 /** SNOMED-mapped injection route abbreviations (see route-display.ts). */
 const INJECTION_ABBR = new Set(['IV', 'IM', 'SC'])
@@ -48,9 +63,17 @@ function isInjectable(m: MedicationRow): boolean {
   return INJECTION_RE.test(`${m.title || ''} ${m.secondaryTitle || ''}`)
 }
 
-/** Most recent activity date for a prescription (end → stopped → start). */
-function latestDateOf(m?: MedicationRow): string {
-  return m?.endDate || m?.stoppedOn || m?.startedOn || ''
+/** Representative rows of the visit that starts at `index` (empty for rows
+ *  that don't start a visit). Uses the full list, so counts stay correct
+ *  while later rows are still being revealed in idle batches. */
+function visitRowsAt(
+  groups: MedicationHistoryGroup[],
+  bands: VisitBand[],
+  index: number,
+): MedicationRow[] | undefined {
+  const count = bands[index]?.headerCount ?? 0
+  if (!count) return undefined
+  return groups.slice(index, index + count).map((group) => group.medications[0])
 }
 
 /** Compact "start → end" shared with the collapsed medication row. */
@@ -79,13 +102,10 @@ export function MedicationHistoryList({
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
-  // Sort drugs by most-recently-stopped first — the clinically relevant end of
-  // a long history. localeCompare on the formatted date string sorts correctly
-  // for the year-first zh-TW format (the primary audience).
+  // Sort by visit, newest first, so drugs prescribed together sit together
+  // and can share a background band (scanning by eye: "which visit was this").
   const { regular, injectable } = useMemo(() => {
-    const sorted = [...groups].sort((a, b) =>
-      latestDateOf(b.medications[0]).localeCompare(latestDateOf(a.medications[0])),
-    )
+    const sorted = [...groups].sort((a, b) => compareRowsByVisit(a.medications[0], b.medications[0]))
     const reg: MedicationHistoryGroup[] = []
     const inj: MedicationHistoryGroup[] = []
     for (const g of sorted) {
@@ -95,6 +115,11 @@ export function MedicationHistoryList({
     }
     return { regular: reg, injectable: inj }
   }, [groups])
+
+  // Bands are computed over the full list so idle-time batch reveal never
+  // re-colours rows that are already on screen.
+  const regularBands = useMemo(() => assignVisitBands(regular), [regular])
+  const injectableBands = useMemo(() => assignVisitBands(injectable), [injectable])
 
   const regularRenderKey = useMemo(
     () => regular.map((group) => group.key).join('\u001f'),
@@ -181,8 +206,15 @@ export function MedicationHistoryList({
           data-medication-list-surface="grouped"
           className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
         >
-          {visibleRegular.map((group) => (
-            <HistoryRow key={group.key} group={group} mt={mt} nameMode={nameMode} />
+          {visibleRegular.map((group, index) => (
+            <HistoryRow
+              key={group.key}
+              group={group}
+              mt={mt}
+              nameMode={nameMode}
+              visitBand={regularBands[index]}
+              visitRows={visitRowsAt(regular, regularBands, index)}
+            />
           ))}
         </ul>
       )}
@@ -211,8 +243,15 @@ export function MedicationHistoryList({
               data-medication-list-surface="grouped"
               className="@container divide-y divide-border/70 overflow-hidden border-t border-border/60 bg-muted/30"
             >
-              {injectable.map((group) => (
-                <HistoryRow key={group.key} group={group} mt={mt} nameMode={nameMode} />
+              {injectable.map((group, index) => (
+                <HistoryRow
+                  key={group.key}
+                  group={group}
+                  mt={mt}
+                  nameMode={nameMode}
+                  visitBand={injectableBands[index]}
+                  visitRows={visitRowsAt(injectable, injectableBands, index)}
+                />
               ))}
             </ul>
           )}
@@ -226,10 +265,14 @@ function HistoryRow({
   group,
   mt,
   nameMode,
+  visitBand,
+  visitRows,
 }: {
   group: MedicationHistoryGroup
   mt: any
   nameMode: MedicationNameMode
+  visitBand?: VisitBand
+  visitRows?: MedicationRow[]
 }) {
   const [open, setOpen] = useState(false)
   const detailsId = useId()
@@ -246,12 +289,25 @@ function HistoryRow({
     .replace('{count}', String(group.count))
   const toggleHistory = useCallback(() => setOpen((current) => !current), [])
   const openForNavigation = useCallback(() => setOpen(true), [])
+  const tinted = visitBand?.band === 1
   return (
-    <li className="min-w-0">
+    <li
+      className={cn(
+        'relative min-w-0',
+        tinted && visitBandTintClass,
+      )}
+      data-visit-band={visitBand?.band}
+      data-visit-start={visitBand?.visitStart || undefined}
+    >
+      {visitBand && <VisitBandMarks band={visitBand} />}
+      {visitBand && visitBand.headerCount > 0 && visitRows && (
+        <VisitHeader rows={visitRows} count={visitBand.headerCount} />
+      )}
       <MedicationItem
         medication={historyMedication}
         nameMode={nameMode}
         grouped
+        visitContextInHeader={!!visitBand && !!startDayOf(latest)}
         onRowToggle={canExpand ? toggleHistory : undefined}
         resourceNavigationIds={group.medications.map((medication) => medication.id)}
         onResourceNavigationMatch={canExpand ? openForNavigation : undefined}
@@ -321,7 +377,8 @@ export function MedicationHistoryDetails({
           : ''
         if (range) scheduleParts.push({ key: 'date', text: `${range}${durationSuffix}` })
         else if (durationLabel) scheduleParts.push({ key: 'duration', text: durationLabel })
-        if (medication.dose) scheduleParts.push({ key: 'dose', text: medication.dose })
+        const shownDose = doseUnlessRepeated(medication.dose, medication.frequency)
+        if (shownDose) scheduleParts.push({ key: 'dose', text: shownDose })
         if (medication.route) scheduleParts.push({ key: 'route', text: medication.route })
         if (medication.frequency) {
           scheduleParts.push({ key: 'frequency', text: medication.frequency })
@@ -349,9 +406,8 @@ export function MedicationHistoryDetails({
         }
         const scheduleText = scheduleParts.reduce((text, part, partIndex) => {
           if (partIndex === 0) return part.text
-          const previousKey = scheduleParts[partIndex - 1]?.key
-          const separator = part.key === 'frequency'
-            && (previousKey === 'date' || previousKey === 'duration')
+          // Only "（28 天）" spaces itself; a bare "28 天" needs the space.
+          const separator = part.key === 'frequency' && text.endsWith('）')
             ? ''
             : ' '
           return `${text}${separator}${part.text}`

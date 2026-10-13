@@ -56,6 +56,12 @@ export interface MedicationRow {
   durationDays?: number
   /** Computed end date: startedOn + durationDays (ISO date) */
   endDate?: string
+  /** Source calendar day of the start as YYYY-MM-DD. `startedOn`/`endDate`
+   *  are locale display strings ("10/1/2026" in en-US), so anything that
+   *  compares or groups by date must use these instead. */
+  startedOnIso?: string
+  /** Calendar day of `endDate` as YYYY-MM-DD (see startedOnIso). */
+  endDateIso?: string
   /** Days remaining until endDate (negative if already past) */
   daysRemaining?: number
   /** Primary readout: today's cloud single-prescription snapshot when fresh,
