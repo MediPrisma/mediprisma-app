@@ -313,6 +313,8 @@ export const zhTW = {
     // 初診快覽 — 固定版面：一句定位、問題清單、影像與病理重點、開藥注意
     overviewTitle: '初診快覽',
     overviewDataRange: '健保雲端 · 至 {end}',
+    overviewDataRangeHealthBank: '健康存摺 · 至 {end}',
+    overviewDataRangeOther: '資料至 {end}',
     verifyFlag: '待核對',
     otherAlerts: '顯示其餘 {count} 項',
     otherAlertsSectionLabel: '開藥注意',
@@ -469,6 +471,8 @@ export const zhTW = {
       title: '我的健康摘要',
       overviewTitle: '健康快覽',
       overviewDataRange: '健保雲端 · 至 {end}',
+      overviewDataRangeHealthBank: '健康存摺 · 至 {end}',
+      overviewDataRangeOther: '資料至 {end}',
       verifyFlag: '待確認',
       problemsTitle: '健康狀況清單',
       problemsSubtitle: '（AI 整理，實際請以醫師診斷為準）',

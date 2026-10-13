@@ -20,6 +20,10 @@ const ANTIMUSCARINIC_MECHANISM = /muscarinic[^;]*antagonist|anticholinergic/i
 
 /** Stored with a source prefix ("e:", "m:", "c:", "s:", "g:"). */
 const mechanismOf = (atc?: string): string | undefined => (atc ? MECHANISM_BY_ATC[atc]?.slice(2) : undefined)
+/** "g:" is the class shared by the other members of the ATC group, inferred
+ *  rather than stated for this medicine: trimebutine inherits "Cholinergic
+ *  Muscarinic Antagonists" from A03AA though it acts on opioid receptors. */
+const mechanismIsInferred = (atc?: string): boolean => !!atc && MECHANISM_BY_ATC[atc]?.startsWith('g:') === true
 
 export interface MedicineProfile {
   /** "beta3-Adrenergic Agonist"; for a combination, each ingredient the
@@ -37,17 +41,23 @@ export interface MedicineProfile {
   anticholinergic?: string
 }
 
-interface Component { name: string; atc?: string; mechanism?: string; listed?: string }
+interface Component { name: string; atc?: string; mechanism?: string; inferred?: boolean; listed?: string }
 
 // Eye, ear, skin, nose and mouth preparations and inhaled antimuscarinics act
 // where they are applied; burden scales do not count them.
 const LOCAL_USE = /^(S|D|R01|A01|R03BB)/
+// Quaternary-ammonium antispasmodics (glycopyrrolate, methscopolamine,
+// otilonium, butylscopolamine) and pirenzepine barely cross the blood–brain
+// barrier; the burden scales and Beers count them only where they list them
+// by name, which the ACB / Beers path above already reads.
+const PERIPHERAL_ANTIMUSCARINIC = /^(A03AB|A03BB|A02BX03)/
 
 function anticholinergicOf(c: Component): string | undefined {
   if (c.listed) return c.listed
   // Only when antimuscarinic is the medicine's first listed mechanism:
   // mirtazapine lists it after its serotonin and α2 actions and is not a
   // burden drug.
+  if (c.inferred || PERIPHERAL_ANTIMUSCARINIC.test(c.atc ?? '')) return undefined
   const primary = c.mechanism?.split(';')[0] ?? ''
   return ANTIMUSCARINIC_MECHANISM.test(primary) && !LOCAL_USE.test(c.atc ?? '') ? 'antimuscarinic' : undefined
 }
@@ -58,6 +68,7 @@ const component = (name: string, atc?: string, listedByName = false): Component 
   name,
   atc,
   mechanism: mechanismOf(atc),
+  inferred: mechanismIsInferred(atc),
   // An ingredient of a combination is also read by name: belladonna never
   // has a single-ingredient code of its own.
   listed: (atc ? ANTICHOLINERGIC_BY_ATC[atc] : undefined) ?? (listedByName ? ANTICHOLINERGIC_BY_INGREDIENT[name] : undefined),
@@ -77,7 +88,7 @@ export function medicineProfile(input: { atcCode?: string; ingredientText?: stri
       .sort((a, b) => strength(b.label) - strength(a.label))[0]
     return {
       ...(known.length ? { mechanism: known.slice(0, 3).map((c) => `${c.name}: ${c.mechanism}`).join('; ') } : {}),
-      complete: known.length === components.length,
+      complete: known.length === components.length && !components.some((c) => c.inferred),
       ...(strongest ? { anticholinergic: `${strongest.label} (${strongest.c.name})` } : {}),
     }
   }
@@ -85,7 +96,7 @@ export function medicineProfile(input: { atcCode?: string; ingredientText?: stri
   const anticholinergic = anticholinergicOf(single)
   return {
     ...(single.mechanism ? { mechanism: single.mechanism } : {}),
-    complete: !!single.mechanism,
+    complete: !!single.mechanism && !single.inferred,
     ...(anticholinergic ? { anticholinergic } : {}),
   }
 }

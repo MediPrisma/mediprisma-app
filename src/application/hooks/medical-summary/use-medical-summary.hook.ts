@@ -26,6 +26,7 @@ import {
   generateMedicalSummaryUseCase,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
+  markSourceKeysOutsideCatalog,
   MEDICAL_SUMMARY_MODEL_ID,
   type GenerateMedicalSummaryInput,
   type ReportHighlightsPresentationInput,
@@ -539,6 +540,16 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       // shared batch request before any per-card error is recorded.
       let transportClinicalContext = laneInput.clinicalContext
 
+      // Citations are checked against what this lane actually sent. A key the
+      // model never saw resolves nowhere, even when the saved catalog has it.
+      const laneCatalogIsNarrower = laneInput.catalog !== ctx.catalog
+      const parseLaneBatch = (card: MedicalSummaryCardDefinition, text: string): unknown | null => {
+        const parsed = card.parseBatch(text, laneInput.catalog)
+        return parsed && laneCatalogIsNarrower
+          ? markSourceKeysOutsideCatalog(parsed, laneInput.catalog)
+          : parsed
+      }
+
       const publishCardResult = (card: MedicalSummaryCardDefinition, parsed: unknown) => {
         laneCallCardIds.add(card.id)
         publishCard(card, parsed, laneExecution)
@@ -604,7 +615,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
                 attemptParseResults.has(card.id) ||
                 !card.hasCompleteBatchBlock(streamedText)
               ) return
-              const parsed = card.parseBatch(streamedText, ctx.catalog)
+              const parsed = parseLaneBatch(card, streamedText)
               attemptParseResults.set(card.id, parsed)
               warnUnknownSourceKeys(card, parsed)
               if (parsed) {
@@ -624,7 +635,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             const hadStreamParse = attemptParseResults.has(card.id)
             const parsed = hadStreamParse
               ? attemptParseResults.get(card.id) ?? null
-              : card.parseBatch(full, ctx.catalog)
+              : parseLaneBatch(card, full)
             if (!hadStreamParse) warnUnknownSourceKeys(card, parsed)
             if (parsed && !publishedCardIds.has(card.id)) publishCardResult(card, parsed)
             if (parsed) {

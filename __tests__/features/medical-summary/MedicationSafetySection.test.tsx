@@ -17,13 +17,35 @@ const renderSection = (alerts: SafetyAlert[]) => render(
     moreLabel="顯示其餘 {count} 項"
     lessLabel="收合"
     disclaimer="AI 掃描，僅供參考"
+    emptyLabel="未發現明顯安全風險。"
   />,
 )
 
 describe('MedicationSafetySection', () => {
-  it('renders nothing when the scan found nothing', () => {
+  it('says so when a finished scan found nothing, instead of disappearing', () => {
     const { container } = renderSection([])
-    expect(container).toBeEmptyDOMElement()
+    expect(screen.getByRole('heading', { name: '開藥注意' })).toBeInTheDocument()
+    expect(screen.getByText('未發現明顯安全風險。')).toBeInTheDocument()
+    expect(container.querySelectorAll('[data-safety-alerts] li')).toHaveLength(0)
+    expect(container.querySelector('[data-safety-updating]')).toBeNull()
+  })
+
+  it('marks a rescan running over the alerts already on screen', () => {
+    render(
+      <MedicationSafetySection
+        alerts={[alert('m1', 'medium', 'Synthetic B')]}
+        title="開藥注意"
+        moreLabel="顯示其餘 {count} 項"
+        lessLabel="收合"
+        disclaimer="AI 掃描，僅供參考"
+        emptyLabel="未發現明顯安全風險。"
+        updating
+        updatingLabel="AI 掃描中…"
+      />,
+    )
+    expect(screen.getByRole('status', { name: 'AI 掃描中…' })).toBeInTheDocument()
+    expect(screen.getByText('Synthetic B')).toBeInTheDocument()
+    expect(screen.queryByText('未發現明顯安全風險。')).toBeNull()
   })
 
   it('lists alerts in the given order with no severity badge, three open', () => {
@@ -54,6 +76,7 @@ describe('MedicationSafetySection', () => {
         moreLabel="顯示其餘 {count} 項"
         lessLabel="收合"
         disclaimer="AI 掃描，僅供參考"
+        emptyLabel="未發現明顯安全風險。"
         staleEvidenceDate={(item) => (item.id === 'old' ? '2022-11-07' : undefined)}
         staleEvidenceLabel="依據資料已逾 1 年（{date}）"
       />,
@@ -70,6 +93,7 @@ describe('MedicationSafetySection', () => {
         moreLabel="顯示其餘 {count} 項"
         lessLabel="收合"
         disclaimer="AI 掃描，僅供參考"
+        emptyLabel="未發現明顯安全風險。"
         propertyReviewLabel={() => '待核對：mirabegron 未列為抗膽鹼藥'}
       />,
     )
@@ -97,6 +121,7 @@ describe('MedicationSafetySection', () => {
         moreLabel="顯示其餘 {count} 項"
         lessLabel="收合"
         disclaimer="AI 掃描，僅供參考"
+        emptyLabel="未發現明顯安全風險。"
         renderSources={(keys, _unsupported, children) => (
           <button type="button" data-keys={keys.join(',')} onClick={() => opened.push(keys)}>{children}</button>
         )}

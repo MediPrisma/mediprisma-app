@@ -292,7 +292,9 @@ export default function MedicalSummaryFeature() {
   }), [ms])
   const generationErrors = useMemo(() => {
     const failedCards = MEDICAL_SUMMARY_CARD_IDS.flatMap((cardId) => {
-      const error = cardId === "safety" ? safetyError ?? cardErrors.safety : cardErrors[cardId]
+      // A legacy/restored safety slot can expose its error outside
+      // result.cardErrors; it is the same card, so it is listed once, here.
+      const error = cardId === "safety" ? cardErrors.safety ?? safetyError : cardErrors[cardId]
       return error ? [{
         label: cardLabels[cardId],
         message: error === "PARSE_FAILED"
@@ -306,18 +308,6 @@ export default function MedicalSummaryFeature() {
           message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
         }]
       : []
-    // A legacy/restored safety slot can still expose its error separately from
-    // result.cardErrors. Surface it in the same banner without duplicating an
-    // integrated safety-card error.
-    const standaloneSafetyError = safetyError && !cardErrors.safety
-      ? [{
-          label: cardLabels.safety,
-          message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
-        }]
-      : []
-    // Consolidation counts against the standard card ids, so the standalone
-    // slot stays outside it. `safety` is one of those ids, so the two are
-    // mutually exclusive anyway: consolidating needs cardErrors.safety set.
     return [
       // The patient version never requests 影像與病理重點, so "every card
       // failed" counts one card fewer there.
@@ -326,7 +316,6 @@ export default function MedicalSummaryFeature() {
         ms.title,
         MEDICAL_SUMMARY_CARD_IDS.length - (isPatient ? 1 : 0),
       ),
-      ...standaloneSafetyError,
       ...genericSummaryError,
     ]
   }, [
@@ -498,12 +487,13 @@ export default function MedicalSummaryFeature() {
   // (owner, 2026-10-03). Judged on the loaded chart, never on the summary's
   // scope: reports the user left out of the summary are not "none".
   const sourceClinicalData = useClinicalData()
-  const isMedcloudChart = useMemo(
+  const chartSource = useMemo(
     () => detectClinicalDataSource(
       sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0],
-    ) === 'nhi-medcloud',
+    ),
     [sourceClinicalData],
   )
+  const isMedcloudChart = chartSource === "nhi-medcloud"
   const reportsNoneLabel = useMemo(() => {
     if (!isMedcloudChart) return undefined
     const chart = sourceClinicalData as unknown as { diagnosticReports?: DiagnosticReportEntity[] }
@@ -558,8 +548,15 @@ export default function MedicalSummaryFeature() {
     [safetyResult],
   )
 
+  // Name the bridge only when the chart came through one; a SMART EHR launch,
+  // an IPS import or the demo is not 健保雲端.
   const heroDataRange = coverage?.end
-    ? ms.overviewDataRange.replace("{end}", coverage.end)
+    ? (chartSource === "nhi-medcloud"
+        ? ms.overviewDataRange
+        : chartSource === "nhi-health-bank"
+          ? ms.overviewDataRangeHealthBank
+          : ms.overviewDataRangeOther
+      ).replace("{end}", coverage.end)
     : null
 
   const summaryGenerationInfo = useMemo(() => {
@@ -1053,7 +1050,7 @@ export default function MedicalSummaryFeature() {
 
           {isSafetyGenerating && !safetyResult ? (
             <SummarySectionPending title={ms.otherAlertsSectionLabel} label={safetyText.scanning} />
-          ) : (
+          ) : safetyResult ? (
             <MedicationSafetySection
               alerts={orderedAlerts}
               title={ms.otherAlertsSectionLabel}
@@ -1065,8 +1062,13 @@ export default function MedicalSummaryFeature() {
               staleEvidenceDate={alertStaleEvidenceDate}
               staleEvidenceLabel={ms.safetyStaleEvidence}
               propertyReviewLabel={alertPropertyReview}
+              emptyLabel={safetyText.emptyNoRisk}
+              // The run keeps going after 開藥注意 lands (the reports lane);
+              // spin only while this section is the one still being rewritten.
+              updating={isSafetyGenerating && !result?.completedCardIds?.includes("safety")}
+              updatingLabel={safetyText.scanning}
             />
-          )}
+          ) : null}
 
           {coverage ? (
             <CoverageCard

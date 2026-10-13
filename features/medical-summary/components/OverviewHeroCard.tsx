@@ -45,6 +45,7 @@ export function OverviewHeroCard({
 
   return (
     <section
+      data-tour="medical-summary-overview"
       className="overflow-hidden rounded-lg border border-border bg-card"
       aria-labelledby="medical-summary-overview-title"
     >

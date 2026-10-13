@@ -6,7 +6,7 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
-import { ChevronDown, Flag } from "lucide-react"
+import { ChevronDown, Flag, Loader2 } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
 import { keyMentionsText, type KeyMentionSegment } from "@/src/core/utils/key-mentions.utils"
@@ -37,6 +37,13 @@ interface MedicationSafetySectionProps {
   /** "待核對：mirabegron 未列為抗膽鹼藥" for an alert that calls a medicine
    *  anticholinergic against its listed mechanism; labels, never hides. */
   propertyReviewLabel?: (alert: SafetyAlert) => string | undefined
+  /** Shown when a finished scan found nothing, so "scanned, nothing found"
+   *  never reads like "not scanned". */
+  emptyLabel: string
+  /** A rescan is running over the alerts on screen. */
+  updating?: boolean
+  /** "AI 掃描中…", read by assistive tech while updating. */
+  updatingLabel?: string
 }
 
 export function MedicationSafetySection({
@@ -50,9 +57,11 @@ export function MedicationSafetySection({
   staleEvidenceDate,
   staleEvidenceLabel,
   propertyReviewLabel,
+  emptyLabel,
+  updating = false,
+  updatingLabel,
 }: MedicationSafetySectionProps) {
   const [showAll, setShowAll] = useState(false)
-  if (alerts.length === 0) return null
   const prose = (alert: SafetyAlert, text: string): ReactNode => {
     const keys = alert.sources ?? []
     if (!resolveMentions || keys.length === 0) return text
@@ -82,10 +91,21 @@ export function MedicationSafetySection({
     >
       <h3
         id="medical-summary-safety-title"
-        className="mb-1 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground"
+        className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground"
       >
         {title}
+        {updating ? (
+          <Loader2
+            className="h-3 w-3 shrink-0 animate-spin text-muted-foreground"
+            role="status"
+            aria-label={updatingLabel}
+            data-safety-updating
+          />
+        ) : null}
       </h3>
+      {alerts.length === 0 ? (
+        <p className="text-xs leading-snug text-muted-foreground" data-safety-empty>{emptyLabel}</p>
+      ) : null}
       <ol className="space-y-1.5" data-safety-alerts>
         {visible.map((alert) => {
           const staleDate = staleEvidenceLabel ? staleEvidenceDate?.(alert) : undefined

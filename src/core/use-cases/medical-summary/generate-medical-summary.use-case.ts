@@ -2100,6 +2100,38 @@ function collectClaimedSourceKeys(value: unknown): string[] {
   return sourceKeys.filter(Boolean)
 }
 
+/**
+ * A lane that sent the model a narrower catalog than the one the finaliser
+ * resolves against (the fast lane's overview snapshot, a local latency
+ * budget) must not let a key the model never saw resolve to a real record:
+ * "M4" invented beside a snapshot of M3/M7 would otherwise land as a verified
+ * chip on an unrelated medicine. Such a key keeps its place but is marked so
+ * it stays unknown everywhere, and renders as an unverified citation like any
+ * other unknown key.
+ */
+export function markSourceKeysOutsideCatalog<T>(
+  value: T,
+  laneCatalog: readonly SummarySourceCatalogEntry[],
+): T {
+  const known = new Set(laneCatalog.map((entry) => normaliseSummarySourceKey(entry.key)))
+  const mark = (rawKey: string): string => {
+    const key = normaliseSummarySourceKey(rawKey)
+    return !key || known.has(key) ? rawKey : `${key}?`
+  }
+  const visit = (current: unknown, parentKey?: string): unknown => {
+    if (Array.isArray(current)) {
+      return parentKey === 'sources'
+        ? current.map((item) => typeof item === 'string' ? mark(item) : item)
+        : current.map((item) => visit(item))
+    }
+    if (!current || typeof current !== 'object') return current
+    return Object.fromEntries(Object.entries(current as Record<string, unknown>).map(([key, item]) => (
+      key === 'ref' && typeof item === 'string' ? [key, mark(item)] : [key, visit(item, key)]
+    )))
+  }
+  return visit(value) as T
+}
+
 export class GenerateMedicalSummaryUseCase {
   readonly moduleIds = MEDICAL_SUMMARY_MODULE_IDS
 

@@ -227,3 +227,28 @@ test('a frontier-window model keeps the established single batch', async () => {
   expect(mockResult.headline).toContain('78 歲男性')
   expect(mockResult.cardErrors).toBeUndefined()
 })
+
+test('a key the fast lane never sent stays unverified, even when the saved catalog has it', async () => {
+  // The snapshot sends E1, M1 and P1 but not the outpatient visit E2. A key
+  // the model could not have seen must not land as a verified chip on E2.
+  const overview = '<<<MEDIPRISMA_MODULE:overview>>>' + JSON.stringify({
+    headline: '78 歲男性，糖尿病與慢性腎病，跨院照護',
+    medicationEducation: [
+      { name: 'Metformin', benefit: '控制血糖', attention: '腎功能', sources: ['M1', 'E2'] },
+    ],
+  }) + '<<<END_MEDIPRISMA_MODULE:overview>>>'
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    const text = isFastLaneRequest(messages) ? overview : FULL_BLOCKS
+    options.onChunk(text)
+    return text
+  })
+
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => { await result.current.generate() })
+
+  const byKey = new Map<string, any>(mockResult.sourceIndex.map((ref: any) => [ref.key, ref]))
+  expect(byKey.get('M1')).toEqual(expect.objectContaining({ verified: true, resourceId: 'med-1' }))
+  expect(byKey.get('E2')).toBeUndefined()
+  expect(byKey.get('E2?')).toEqual(expect.objectContaining({ verified: false }))
+  expect(byKey.get('E2?')?.resourceId).toBeUndefined()
+})

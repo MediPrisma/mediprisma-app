@@ -211,6 +211,35 @@ describe('quote verification', () => {
     expect(highlights.others.map((row) => row.key)).toEqual([key('xr-new')])
   })
 
+  it('a follow-up report that denies the finding neither verifies its quote nor lends its date', () => {
+    const resolved = {
+      diagnosticReports: [
+        report('xr-eff', '2026-01-10', 'Chest X-ray', 'Left pleural effusion, moderate.'),
+        report('xr-dry', '2026-06-10', 'Chest X-ray', 'No pleural effusion. Lungs clear.'),
+      ],
+    } as any
+    const resolvedCatalog = buildSourceCatalog(resolved)
+    const key = (id: string) => resolvedCatalog.find((entry) => entry.resourceId === id)!.key
+    const highlights = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: moduleOf([{
+          organ: 'lung',
+          points: [point('Pleural effusion', [key('xr-eff'), key('xr-dry')], [
+            [key('xr-eff'), 'pleural effusion'],
+            [key('xr-dry'), 'pleural effusion'],
+          ])],
+        }]),
+      },
+      resolvedCatalog,
+      { clinicalData: resolved, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    const supported = highlights.groups[0].points[0]
+    expect(supported.sources.map((source) => source.key)).toEqual([key('xr-eff')])
+    expect(supported.quotes.map((quote) => quote.key)).toEqual([key('xr-eff')])
+    expect(highlights.others.map((row) => row.key)).toEqual([key('xr-dry')])
+  })
+
   it('a follow-up report repeating the verified words supports the point without its own quote', () => {
     const repeated = {
       diagnosticReports: [

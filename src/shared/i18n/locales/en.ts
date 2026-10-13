@@ -313,6 +313,8 @@ export const en = {
     // 初診快覽 — fixed layout: positioning line, problems, imaging & pathology highlights, other alerts.
     overviewTitle: 'First-visit overview',
     overviewDataRange: 'NHI cloud · through {end}',
+    overviewDataRangeHealthBank: 'NHI health bank · through {end}',
+    overviewDataRangeOther: 'Records through {end}',
     verifyFlag: 'to verify',
     otherAlerts: 'Show {count} more',
     otherAlertsSectionLabel: 'Prescribing alerts',
@@ -468,6 +470,8 @@ export const en = {
       title: 'My health summary',
       overviewTitle: 'Health at a glance',
       overviewDataRange: 'NHI records · through {end}',
+      overviewDataRangeHealthBank: 'NHI health bank · through {end}',
+      overviewDataRangeOther: 'Records through {end}',
       verifyFlag: 'to confirm',
       problemsTitle: 'My conditions',
       problemsSubtitle: '(AI-organised; confirm with your doctor)',
