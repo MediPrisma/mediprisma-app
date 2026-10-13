@@ -21,8 +21,10 @@ import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 import {
   assignVisitBands,
   compareRowsByVisit,
+  countByVisitKey,
   startDayOf,
   visitBandTintClass,
+  visitKeyOf,
   type VisitBand,
 } from '../utils/visit-bands'
 import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
@@ -89,11 +91,15 @@ function dateRangeOf(m: MedicationRow, locale: string): string {
 
 interface MedicationHistoryListProps {
   groups: MedicationHistoryGroup[]
+  /** The groups before a search or class filter, when one is on: visit
+   *  headers then compare the matches with the visit's total ("1／3 項"). */
+  unfilteredGroups?: MedicationHistoryGroup[]
   nameMode?: MedicationNameMode
 }
 
 export function MedicationHistoryList({
   groups,
+  unfilteredGroups,
   nameMode = 'ingredient',
 }: MedicationHistoryListProps) {
   const { t } = useLanguage()
@@ -120,6 +126,15 @@ export function MedicationHistoryList({
   // re-colours rows that are already on screen.
   const regularBands = useMemo(() => assignVisitBands(regular), [regular])
   const injectableBands = useMemo(() => assignVisitBands(injectable), [injectable])
+  // Visit totals before the filter, split the same way (an injectable's visit
+  // is counted in the injectable list, as it is banded there).
+  const visitTotals = useMemo(() => {
+    if (!unfilteredGroups) return undefined
+    const reg: string[] = []
+    const inj: string[] = []
+    for (const g of unfilteredGroups) (g.medications.some(isInjectable) ? inj : reg).push(visitKeyOf(g))
+    return { regular: countByVisitKey(reg), injectable: countByVisitKey(inj) }
+  }, [unfilteredGroups])
 
   const regularRenderKey = useMemo(
     () => regular.map((group) => group.key).join('\u001f'),
@@ -214,6 +229,7 @@ export function MedicationHistoryList({
               nameMode={nameMode}
               visitBand={regularBands[index]}
               visitRows={visitRowsAt(regular, regularBands, index)}
+              visitTotal={visitTotals?.regular.get(visitKeyOf(group))}
             />
           ))}
         </ul>
@@ -251,6 +267,7 @@ export function MedicationHistoryList({
                   nameMode={nameMode}
                   visitBand={injectableBands[index]}
                   visitRows={visitRowsAt(injectable, injectableBands, index)}
+                  visitTotal={visitTotals?.injectable.get(visitKeyOf(group))}
                 />
               ))}
             </ul>
@@ -267,12 +284,14 @@ function HistoryRow({
   nameMode,
   visitBand,
   visitRows,
+  visitTotal,
 }: {
   group: MedicationHistoryGroup
   mt: any
   nameMode: MedicationNameMode
   visitBand?: VisitBand
   visitRows?: MedicationRow[]
+  visitTotal?: number
 }) {
   const [open, setOpen] = useState(false)
   const detailsId = useId()
@@ -301,7 +320,7 @@ function HistoryRow({
     >
       {visitBand && <VisitBandMarks band={visitBand} />}
       {visitBand && visitBand.headerCount > 0 && visitRows && (
-        <VisitHeader rows={visitRows} count={visitBand.headerCount} />
+        <VisitHeader rows={visitRows} count={visitBand.headerCount} total={visitTotal} />
       )}
       <MedicationItem
         medication={historyMedication}

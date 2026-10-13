@@ -14,7 +14,9 @@ import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
 import {
   assignRowVisitBands,
   compareRowsByVisit,
+  countByVisitKey,
   startDayOf,
+  visitKeyOfRow,
   visitBandTintClass,
 } from '../utils/visit-bands'
 import {
@@ -42,6 +44,9 @@ interface MedicationListProps {
   onNameModeChange?: (mode: MedicationNameMode) => void
   /** Actions about the 使用中 list (複製｜編輯), at the end of its header. */
   activeActions?: ReactNode
+  /** The rows before a search or class filter, when one is on: visit
+   *  headers then compare the matches with the visit's total ("1／3 項"). */
+  unfilteredMedications?: MedicationRow[]
 }
 
 export function MedicationList({
@@ -55,6 +60,7 @@ export function MedicationList({
   showNameModeSwitch = false,
   onNameModeChange,
   activeActions,
+  unfilteredMedications,
 }: MedicationListProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
@@ -78,6 +84,14 @@ export function MedicationList({
     [activeMedications],
   )
   const activeBands = useMemo(() => assignRowVisitBands(activeByVisit), [activeByVisit])
+  // Same grouping over the unfiltered rows, for the visit totals.
+  const unfilteredGrouped = useGroupedMedications(unfilteredMedications ?? medications)
+  const activeVisitTotals = useMemo(
+    () => unfilteredMedications
+      ? countByVisitKey(unfilteredGrouped.activeMedications.map((row, index) => visitKeyOfRow(row, row.id || String(index))))
+      : undefined,
+    [unfilteredMedications, unfilteredGrouped],
+  )
   // Rows of one drug at two clinics share a history; only the first one shown
   // answers navigation to its prior fills, so the row that scrolls into view
   // is the row whose history opens.
@@ -269,6 +283,7 @@ export function MedicationList({
                       <VisitHeader
                         rows={activeByVisit.slice(index, index + visitBand.headerCount)}
                         count={visitBand.headerCount}
+                        total={activeVisitTotals?.get(visitKeyOfRow(medication, medication.id || String(index)))}
                       />
                     )}
                     <MedicationItem
@@ -359,7 +374,11 @@ export function MedicationList({
 
           {showInactive && (
             <div id={inactiveListId}>
-              <MedicationHistoryList groups={inactiveMedicationGroups} nameMode={nameMode} />
+              <MedicationHistoryList
+                groups={inactiveMedicationGroups}
+                unfilteredGroups={unfilteredMedications ? unfilteredGrouped.inactiveMedicationGroups : undefined}
+                nameMode={nameMode}
+              />
             </div>
           )}
         </div>

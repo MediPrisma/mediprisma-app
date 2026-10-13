@@ -98,5 +98,13 @@ export function assignRowVisitBands(rows: MedicationRow[]): VisitBand[] {
   return bandsFromVisitKeys(rows.map((row, index) => visitKeyOfRow(row, row.id || String(index))))
 }
 
+/** Rows per visit key: the visit totals a filtered list's headers compare
+ *  against ("1／3 項"). */
+export function countByVisitKey(keys: string[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1)
+  return counts
+}
+
 /** Tint for the alternate band. */
 export const visitBandTintClass = 'bg-sky-500/[0.07] dark:bg-sky-400/[0.09]'
