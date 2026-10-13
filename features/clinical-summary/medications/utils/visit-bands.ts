@@ -98,22 +98,18 @@ export function assignRowVisitBands(rows: MedicationRow[]): VisitBand[] {
   return bandsFromVisitKeys(rows.map((row, index) => visitKeyOfRow(row, row.id || String(index))))
 }
 
-/** Distinct drugs prescribed at each visit, counted over every fill: the
- *  totals a filtered list's headers compare against ("1／3 項"). Counting
- *  fills, not grouped rows, keeps a drug in an older visit's total even when
- *  a newer fill is its row's representative. */
-export function drugsPerVisit(
-  fills: MedicationRow[],
-  drugKeyOf: (row: MedicationRow) => string,
-): Map<string, number> {
-  const drugs = new Map<string, Set<string>>()
-  fills.forEach((row, index) => {
+/** Rows per visit, over the unfiltered rows: the totals a filtered list's
+ *  headers compare against ("1／3 項"). The unit is the row — one per fill
+ *  in 用藥歷史 — the same unit as the header's own count, so "n／total"
+ *  never mixes prescriptions with drugs (a drug filled twice at one visit
+ *  is two rows on both sides). */
+export function rowsPerVisit(rows: MedicationRow[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  rows.forEach((row, index) => {
     const visit = visitKeyOfRow(row, row.id || String(index))
-    const set = drugs.get(visit) ?? new Set<string>()
-    set.add(drugKeyOf(row))
-    drugs.set(visit, set)
+    counts.set(visit, (counts.get(visit) ?? 0) + 1)
   })
-  return new Map([...drugs].map(([visit, set]) => [visit, set.size]))
+  return counts
 }
 
 /** Tint for the alternate band. */

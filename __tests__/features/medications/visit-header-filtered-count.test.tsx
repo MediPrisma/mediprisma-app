@@ -107,5 +107,27 @@ describe('visit header count while filtered', () => {
     expect(header.textContent).toContain('1／3 項')
     expect(header.querySelector('.sr-only')!.textContent).toBe('26/07/10 就診，3 項用藥中 1 項符合')
   })
+
+  it('counts prescription rows on both sides of 「n／total」 (Astra r2 on #289)', () => {
+    // One row per fill: A twice on one visit (QD and HS) with B and C is four
+    // rows, "4 項" unfiltered. Searching A leaves its two rows: "2／4", not
+    // two rows over three drugs.
+    const at = (id: string, drug: string) => ({
+      ...med(id, '2026-07-10', true), drugKey: drug, title: drug,
+    }) as MedicationRow
+    const aQd = at('a-qd', 'A')
+    const aHs = at('a-hs', 'A')
+    const b = at('b', 'B')
+    const c = at('c', 'C')
+    const unfiltered = render(<MedicationList medications={[aQd, aHs, b, c]} isLoading={false} error={null} />)
+    expect(unfiltered.container.querySelector('[data-visit-header]')!.textContent).toContain('4 項')
+    unfiltered.unmount()
+    const { container } = render(
+      <MedicationList medications={[aQd, aHs]} unfilteredMedications={[aQd, aHs, b, c]} isLoading={false} error={null} />,
+    )
+    const header = container.querySelector('[data-visit-header]')!
+    expect(header.textContent).toContain('2／4 項')
+    expect(header.querySelector('.sr-only')!.textContent).toBe('26/07/10 就診，4 項用藥中 2 項符合')
+  })
 })
 

@@ -14,7 +14,7 @@ import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
 import {
   assignRowVisitBands,
   compareRowsByVisit,
-  drugsPerVisit,
+  rowsPerVisit,
   startDayOf,
   visitKeyOfRow,
   visitBandTintClass,
@@ -97,9 +97,9 @@ export function MedicationList({
       stillInUseKeys: new Set(attached.keys()) as ReadonlySet<string>,
     }
   }, [activeHistoryByMedicationId, inactiveMedicationGroups])
-  // Totals before the filter, matched to what each list shows: 使用中 counts
-  // its current-therapy rows; 用藥歷史 counts every earlier fill (distinct
-  // drugs per visit), split as its lists are (injectables apart).
+  // Totals before the filter, in the unit each list shows (rows): 使用中
+  // counts its current-therapy rows; 用藥歷史 counts every ended fill, one
+  // row each, split as its lists are (injectables apart).
   const unfilteredGrouped = useGroupedMedications(unfilteredMedications ?? medications)
   const visitTotals = useMemo(() => {
     if (!unfilteredMedications) return undefined
@@ -107,9 +107,9 @@ export function MedicationList({
     const injectableDrugs = new Set(pastFills.filter(isInjectable).map(medicationGroupKey))
     const isInjectableDrug = (row: MedicationRow) => injectableDrugs.has(medicationGroupKey(row))
     return {
-      active: drugsPerVisit(unfilteredGrouped.activeMedications, (row) => row.id),
-      regular: drugsPerVisit(pastFills.filter((row) => !isInjectableDrug(row)), medicationGroupKey),
-      injectable: drugsPerVisit(pastFills.filter(isInjectableDrug), medicationGroupKey),
+      active: rowsPerVisit(unfilteredGrouped.activeMedications),
+      regular: rowsPerVisit(pastFills.filter((row) => !isInjectableDrug(row))),
+      injectable: rowsPerVisit(pastFills.filter(isInjectableDrug)),
     }
   }, [unfilteredMedications, unfilteredGrouped])
   const pending = useResourceNavigationStore((s) => s.pending)
