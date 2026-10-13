@@ -25,7 +25,6 @@ const LABELS: MedCopyTextLabels = {
   ended: '已結束',
   stopped: '已停用',
   previousDose: '原 {dose}',
-  sameIngredient: '同成分，{n} 院',
   endedListTitle: '近期已用完（短期藥，不算在上面 {count} 項）',
   unknownInstitution: '院所不明',
   uncategorised: '未分類',
@@ -41,7 +40,6 @@ function med(overrides: Partial<MedCopySourceItem> & { id: string; title: string
     isInactive: false,
     isCurrent: true,
     status: 'active',
-    ingredientKey: overrides.title.toLowerCase(),
     ...overrides,
   }
 }
@@ -189,7 +187,11 @@ describe('buildMedicationCopyText', () => {
     expect(none.text).toBe('Amlodipine・5 mg・QD')
   })
 
-  it('the same ingredient from two institutions keeps both lines and says so', () => {
+  it('the same ingredient from two institutions keeps both lines without a marker', () => {
+    // 「（同成分，N 院）」 was removed (owner, 2026-10-13): it counted
+    // institution strings, so a pharmacy dispensing another brand of the
+    // same ingredient, or one hospital's 門診 and 急診, read as two
+    // institutions — a false duplicate-therapy alarm in the chart.
     const elsewhere = med({ ...ASPIRIN, id: 'm9', institution: '臺北榮總' })
     const { text } = buildMedicationCopyText(
       selectMedicationsForCopy([ASPIRIN, elsewhere]),
@@ -197,8 +199,8 @@ describe('buildMedicationCopyText', () => {
       CTX,
     )
     expect(text.split('\n').slice(1)).toEqual([
-      '- Aspirin 100 mg QD （同成分，2 院）',
-      '- Aspirin 100 mg QD （同成分，2 院）',
+      '- Aspirin 100 mg QD',
+      '- Aspirin 100 mg QD',
     ])
   })
 

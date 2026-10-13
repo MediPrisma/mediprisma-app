@@ -592,7 +592,6 @@ export const en = {
       ended: 'ended',
       stopped: 'stopped',
       previousDose: 'was {dose}',
-      sameIngredient: 'same ingredient, {n} institutions',
       endedListTitle: 'Recently ran out (short courses, not counted in the {count} above)',
       unknownInstitution: 'Institution unknown',
       uncategorised: 'Uncategorised',
