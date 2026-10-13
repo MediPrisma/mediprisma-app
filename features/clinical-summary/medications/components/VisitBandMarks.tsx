@@ -49,11 +49,15 @@ export function VisitBandMarks({ band }: { band: VisitBand }) {
 export function VisitHeader({
   rows,
   count,
+  total,
 }: {
   /** Rows of this visit (at least the first). */
   rows: Array<MedicationRow | undefined>
   /** Total rows in the visit (may exceed rows rendered so far). */
   count: number
+  /** The visit's row count before a search or class filter; shown as
+   *  "1／3 項" when the filter left fewer. */
+  total?: number
 }) {
   const { t, locale = 'zh-TW' } = useLanguage()
   const { audience } = useAudience()
@@ -70,11 +74,20 @@ export function VisitHeader({
   const institution = (first.pharmacy ?? '').trim()
   const icd = audience === 'medical' ? sharedVisitIcd(rows) : undefined
   const one = count === 1
-  const countText = ((one ? mt.visitHeaderCountOne : mt.visitHeaderCount) ?? '{n} 項')
+  // A filter that left only part of the visit says so, so "1 項" never reads
+  // as "this visit prescribed one drug".
+  const filtered = total !== undefined && total > count
+  const countText = (filtered
+    ? (mt.visitHeaderCountFiltered ?? '{n}／{total} 項')
+    : ((one ? mt.visitHeaderCountOne : mt.visitHeaderCount) ?? '{n} 項'))
     .replace('{n}', String(count))
-  const label = ((one ? mt.visitHeaderLabelOne : mt.visitHeaderLabel) ?? '{date} 就診，{n} 項用藥')
+    .replace('{total}', String(total))
+  const label = (filtered
+    ? (mt.visitHeaderLabelFiltered ?? '{date} 就診，{total} 項用藥中 {n} 項符合')
+    : ((one ? mt.visitHeaderLabelOne : mt.visitHeaderLabel) ?? '{date} 就診，{n} 項用藥'))
     .replace('{date}', date)
     .replace('{n}', String(count))
+    .replace('{total}', String(total))
   const icdTitle = icd ? (icd.text ? `${icd.code} ${icd.text}` : icd.code) : ''
   // aria-label is ignored on a plain div, so the date and count are read from
   // an sr-only span (the visible copies are hidden); institution and

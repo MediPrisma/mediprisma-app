@@ -1222,8 +1222,10 @@ export const zhTW = {
   medications: {
     visitHeaderCount: '{n} 項',
     visitHeaderCountOne: '1 項',
+    visitHeaderCountFiltered: '{n}／{total} 項',
     visitHeaderLabel: '{date} 就診，{n} 項用藥',
     visitHeaderLabelOne: '{date} 就診，1 項用藥',
+    visitHeaderLabelFiltered: '{date} 就診，{total} 項用藥中 {n} 項符合',
     title: '病人用藥',
     active: '使用中',
     all: '全部',
