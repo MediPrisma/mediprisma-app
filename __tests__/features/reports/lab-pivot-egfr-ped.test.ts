@@ -1,5 +1,6 @@
 import { buildLabPivots, getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
+import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 
 // 臺北榮總 prints 「eGFR(M)」 and 「eGFR(PED)」 on every creatinine report.
 // Stripping the parenthetical used to key the pediatric (Schwartz) value as
@@ -42,4 +43,12 @@ it('labels the pediatric column eGFR (PED) for clinicians', () => {
   const row = buildLabPivots([egfr('eGFR(PED)', 102, '69405-9')]).chem.rows.find(r => r.testKey === 'EGFR(PED)')!
   expect(getLabRowDisplayParts(row, 'medical', 'zh-TW').name).toBe('eGFR (PED)')
   expect(getLabRowDisplayParts(row, 'medical', 'en').name).toBe('eGFR (PED)')
+})
+
+it('files a Schwartz row by its LOINC alone, under a name no alias knows', () => {
+  // The LOINC short name is not an alias: only 50384-7 identifies the row.
+  const row = egfr('GFR SerPlBld Schwartz-ArVRat', 100, '50384-7')
+  expect(categorizeObservation(row)?.id).toBe('chem')
+  const cell = buildLabPivots([row]).chem.rows.find(r => r.testKey === 'EGFR(PED)')?.values.get('2026-04-04')?.value
+  expect(cell).toBe('100')
 })
