@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, within } from '@testing-library/react'
 import { MedicationList } from '@/features/clinical-summary/medications/components/MedicationList'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 
@@ -72,12 +72,14 @@ describe('same drug current at two clinics', () => {
 
   it('lets both rows open the prior fills', () => {
     renderList()
-    const toggles = screen.getAllByRole('button', { name: /顯示 Metformin 500mg 的過往用藥紀錄（2）/ })
+    // The prior fills also have rows of their own in 用藥歷史; read 使用中.
+    const current = document.querySelectorAll('ul[data-medication-list-surface="grouped"]')[0] as HTMLElement
+    const toggles = within(current).getAllByRole('button', { name: /顯示 Metformin 500mg 的過往用藥紀錄（2）/ })
     expect(toggles).toHaveLength(2)
 
     // The second row (臺大) opens its own copy of the shared history.
     fireEvent.click(toggles[1])
-    const rows = Array.from(document.querySelectorAll('li[data-visit-band]'))
+    const rows = Array.from(current.querySelectorAll(':scope > li[data-visit-band]'))
     const ntuhRow = rows.find((li) => li.textContent?.includes('臺大醫院'))!
     expect(within(ntuhRow as HTMLElement).getByText(/26\/07\/01/)).toBeInTheDocument()
     expect(within(ntuhRow as HTMLElement).getByText(/某診所/)).toBeInTheDocument()
@@ -85,12 +87,16 @@ describe('same drug current at two clinics', () => {
     expect(within(mackayRow as HTMLElement).queryByText(/26\/07\/01/)).toBeNull()
   })
 
-  it('keeps one navigation owner for the prior fills: the first row shown', () => {
+  it('keeps one navigation owner per prior fill: its own row in 用藥歷史', () => {
+    // Each prior fill is listed under its own visit (owner, 2026-10-13), so
+    // that row answers for it; the current rows answer only for themselves.
     renderList()
     const owners = mockAnchorIds.filter((ids) => ids.includes('prior-mackay'))
     // Every render repeats the same registration; all of them belong to one row.
     expect(owners.length).toBeGreaterThan(0)
-    expect(new Set(owners.map((ids) => ids[0]))).toEqual(new Set(['active-mackay']))
-    expect(mockAnchorIds.some((ids) => ids[0] === 'active-ntuh' && ids.length === 1)).toBe(true)
+    expect(new Set(owners.map((ids) => ids.join('|')))).toEqual(new Set(['prior-mackay']))
+    for (const id of ['active-mackay', 'active-ntuh']) {
+      expect(mockAnchorIds.filter((ids) => ids[0] === id).every((ids) => ids.length === 1)).toBe(true)
+    }
   })
 })

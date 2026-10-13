@@ -192,7 +192,9 @@ describe('MedicationList active section toggle', () => {
     })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByText('historical-medication-1')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /用藥歷史/ })).not.toBeInTheDocument()
+    // The earlier fill is also listed under its own visit in 用藥歷史
+    // (owner, 2026-10-13), so the section is there with it.
+    expect(screen.getByRole('button', { name: '用藥歷史 (1 已停用)' })).toBeInTheDocument()
 
     fireEvent.click(toggle)
 
@@ -261,7 +263,10 @@ describe('MedicationList active section toggle', () => {
     expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
   })
 
-  it('opens current-drug refill history when navigation targets an older fill', () => {
+  it('leaves a citation of an older fill to that fill\'s own row in 用藥歷史', () => {
+    // The earlier fill has its own row under its visit now, which answers for
+    // it; the current row no longer claims it (the mock offers 模擬舊處方導引
+    // only for a row that registers a second id).
     render(
       <MedicationList
         medications={[mockActiveMedication, mockHistoricalMedication]}
@@ -270,15 +275,8 @@ describe('MedicationList active section toggle', () => {
       />,
     )
 
-    const toggle = screen.getByRole('button', {
-      name: '顯示 ACETYLCYSTEINE 600 MG 的過往用藥紀錄（1）',
-    })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-
-    fireEvent.click(screen.getByRole('button', { name: '模擬舊處方導引' }))
-
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('historical-medication-1')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '模擬舊處方導引' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('medication-history-list')).toBeInTheDocument()
   })
 
   it('opens the stopped-medication section by default and still allows collapsing it', () => {
@@ -297,7 +295,8 @@ describe('MedicationList active section toggle', () => {
       />,
     )
 
-    const toggle = screen.getByRole('button', { name: '用藥歷史 (110 已停用)' })
+    // 110 stopped fills plus the current drug's one earlier fill.
+    const toggle = screen.getByRole('button', { name: '用藥歷史 (111 已停用)' })
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(toggle).toHaveAttribute('aria-controls')
     expect(screen.getByTestId('medication-history-list')).toBeInTheDocument()

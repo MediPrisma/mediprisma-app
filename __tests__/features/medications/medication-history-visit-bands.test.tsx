@@ -208,10 +208,11 @@ describe('visit bands — representative fill is the newest (Astra r1 #2)', () =
     expect(groupA.medications.map((m) => m.id)).toEqual(['a-new', 'a-old'])
 
     const { container } = render(<MedicationHistoryList groups={history} />)
-    const bands = Array.from(container.querySelectorAll('li[data-visit-band]')).map(
-      (li) => li.getAttribute('data-visit-band'),
-    )
-    expect(bands).toEqual(['0', '0'])
+    const rows = Array.from(container.querySelectorAll('li[data-visit-band]'))
+    // A's 10/1 fill shares 10/1's band with B; its 9/30 fill now has a row of
+    // its own under the 9/30 visit (owner, 2026-10-13).
+    expect(rows.map((li) => li.getAttribute('data-visit-band'))).toEqual(['0', '0', '1'])
+    expect(rows[2].textContent).toContain('A')
   })
 })
 
