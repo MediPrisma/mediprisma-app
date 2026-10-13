@@ -21,7 +21,6 @@ import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 import {
   assignVisitBands,
   compareRowsByVisit,
-  countByVisitKey,
   startDayOf,
   visitBandTintClass,
   visitKeyOf,
@@ -56,7 +55,7 @@ const HISTORY_GROUP_BATCH_SIZE = 24
 
 /** Route- and name-based heuristic for an injectable / infusion medication.
  *  NOT an inpatient detector — route only. */
-function isInjectable(m: MedicationRow): boolean {
+export function isInjectable(m: MedicationRow): boolean {
   const route = (m.route || '').trim()
   if (route) {
     if (INJECTION_ABBR.has(route.toUpperCase())) return true
@@ -91,15 +90,16 @@ function dateRangeOf(m: MedicationRow, locale: string): string {
 
 interface MedicationHistoryListProps {
   groups: MedicationHistoryGroup[]
-  /** The groups before a search or class filter, when one is on: visit
-   *  headers then compare the matches with the visit's total ("1／3 項"). */
-  unfilteredGroups?: MedicationHistoryGroup[]
+  /** Drugs per visit before a search or class filter, when one is on, split
+   *  as the lists are: visit headers then compare the matches with the
+   *  visit's total ("1／3 項"). */
+  visitTotals?: { regular: Map<string, number>; injectable: Map<string, number> }
   nameMode?: MedicationNameMode
 }
 
 export function MedicationHistoryList({
   groups,
-  unfilteredGroups,
+  visitTotals,
   nameMode = 'ingredient',
 }: MedicationHistoryListProps) {
   const { t } = useLanguage()
@@ -126,15 +126,6 @@ export function MedicationHistoryList({
   // re-colours rows that are already on screen.
   const regularBands = useMemo(() => assignVisitBands(regular), [regular])
   const injectableBands = useMemo(() => assignVisitBands(injectable), [injectable])
-  // Visit totals before the filter, split the same way (an injectable's visit
-  // is counted in the injectable list, as it is banded there).
-  const visitTotals = useMemo(() => {
-    if (!unfilteredGroups) return undefined
-    const reg: string[] = []
-    const inj: string[] = []
-    for (const g of unfilteredGroups) (g.medications.some(isInjectable) ? inj : reg).push(visitKeyOf(g))
-    return { regular: countByVisitKey(reg), injectable: countByVisitKey(inj) }
-  }, [unfilteredGroups])
 
   const regularRenderKey = useMemo(
     () => regular.map((group) => group.key).join('\u001f'),

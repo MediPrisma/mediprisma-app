@@ -19,11 +19,16 @@ export interface MedicationHistoryGroup {
 
 /** Pure grouping logic — exported for direct unit testing (the hook is just
  *  a useMemo wrapper). */
+/** The drug a row belongs to: fills of one drug group into one history row
+ *  and one current-therapy row per prescribing clinic. */
+export function medicationGroupKey(medication: MedicationRow): string {
+  return medication.drugKey || medication.title
+}
+
 export function groupMedications(medications: MedicationRow[]) {
   const activeRaw: MedicationRow[] = []
   const inactiveByKey = new Map<string, { name: string; medications: MedicationRow[] }>()
-  const groupKeyOf = (medication: MedicationRow): string =>
-    medication.drugKey || medication.title
+  const groupKeyOf = medicationGroupKey
 
   medications.forEach((med) => {
     if (med.isInactive) {

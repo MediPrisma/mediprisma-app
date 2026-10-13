@@ -14,7 +14,7 @@ import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
 import {
   assignRowVisitBands,
   compareRowsByVisit,
-  countByVisitKey,
+  drugsPerVisit,
   startDayOf,
   visitKeyOfRow,
   visitBandTintClass,
@@ -22,8 +22,10 @@ import {
 import {
   MedicationHistoryDetails,
   MedicationHistoryList,
+  isInjectable,
 } from './MedicationHistoryList'
 import {
+  medicationGroupKey,
   useGroupedMedications,
   type MedicationHistoryGroup,
 } from '../hooks/useGroupedMedications'
@@ -84,14 +86,21 @@ export function MedicationList({
     [activeMedications],
   )
   const activeBands = useMemo(() => assignRowVisitBands(activeByVisit), [activeByVisit])
-  // Same grouping over the unfiltered rows, for the visit totals.
-  const unfilteredGrouped = useGroupedMedications(unfilteredMedications ?? medications)
-  const activeVisitTotals = useMemo(
-    () => unfilteredMedications
-      ? countByVisitKey(unfilteredGrouped.activeMedications.map((row, index) => visitKeyOfRow(row, row.id || String(index))))
-      : undefined,
-    [unfilteredMedications, unfilteredGrouped],
-  )
+  // Drugs per visit before the filter, counted over every fill, so a drug
+  // stays in an older visit's total when a newer fill represents its row.
+  // History splits them as its lists do (injectables apart).
+  const visitTotals = useMemo(() => {
+    if (!unfilteredMedications) return undefined
+    const injectableDrugs = new Set(
+      unfilteredMedications.filter(isInjectable).map(medicationGroupKey),
+    )
+    const isInjectableDrug = (row: MedicationRow) => injectableDrugs.has(medicationGroupKey(row))
+    return {
+      all: drugsPerVisit(unfilteredMedications, medicationGroupKey),
+      regular: drugsPerVisit(unfilteredMedications.filter((row) => !isInjectableDrug(row)), medicationGroupKey),
+      injectable: drugsPerVisit(unfilteredMedications.filter(isInjectableDrug), medicationGroupKey),
+    }
+  }, [unfilteredMedications])
   // Rows of one drug at two clinics share a history; only the first one shown
   // answers navigation to its prior fills, so the row that scrolls into view
   // is the row whose history opens.
@@ -283,7 +292,7 @@ export function MedicationList({
                       <VisitHeader
                         rows={activeByVisit.slice(index, index + visitBand.headerCount)}
                         count={visitBand.headerCount}
-                        total={activeVisitTotals?.get(visitKeyOfRow(medication, medication.id || String(index)))}
+                        total={visitTotals?.all.get(visitKeyOfRow(medication, medication.id || String(index)))}
                       />
                     )}
                     <MedicationItem
@@ -376,7 +385,7 @@ export function MedicationList({
             <div id={inactiveListId}>
               <MedicationHistoryList
                 groups={inactiveMedicationGroups}
-                unfilteredGroups={unfilteredMedications ? unfilteredGrouped.inactiveMedicationGroups : undefined}
+                visitTotals={visitTotals}
                 nameMode={nameMode}
               />
             </div>

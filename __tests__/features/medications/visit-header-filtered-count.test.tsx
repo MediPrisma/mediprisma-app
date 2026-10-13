@@ -88,4 +88,24 @@ describe('visit header count while filtered', () => {
     )
     expect(container.querySelector('[data-visit-header]')!.textContent).toContain('1 of 3 items')
   })
+
+  it('counts a drug in an older visit even when it has a newer fill (Astra r1 on #289)', () => {
+    // A, B and C were prescribed together on 7/10 at Clinic X; A was filled
+    // again on 9/10 at Clinic Y. Grouping files A under its newer fill, so
+    // a total built from groups counted only B and C for 7/10 ("1／2").
+    const at = (id: string, drug: string, iso: string, pharmacy: string) => ({
+      ...med(id, iso, true), drugKey: drug, title: drug, pharmacy,
+    }) as MedicationRow
+    const aOld = at('a-0710', 'A', '2026-07-10', 'Clinic X')
+    const aNew = at('a-0910', 'A', '2026-09-10', 'Clinic Y')
+    const b = at('b-0710', 'B', '2026-07-10', 'Clinic X')
+    const c = at('c-0710', 'C', '2026-07-10', 'Clinic X')
+    const { container } = render(
+      <MedicationList medications={[aOld]} unfilteredMedications={[aOld, aNew, b, c]} isLoading={false} error={null} />,
+    )
+    const header = container.querySelector('[data-visit-header]')!
+    expect(header.textContent).toContain('1／3 項')
+    expect(header.querySelector('.sr-only')!.textContent).toBe('26/07/10 就診，3 項用藥中 1 項符合')
+  })
 })
+
