@@ -23,6 +23,7 @@
 // covers only codes it recognises and is all-or-nothing per line, so a line is
 // never half-translated.
 
+import { doseUnlessRepeated } from './dose-helpers'
 import {
   MED_COPY_FIELD_IDS,
   MED_COPY_FIELD_STYLES,
@@ -326,7 +327,15 @@ function compactDose(dose: string): string {
   return dose.replace(/(\d)\s+(?=[^\d\s])/g, '$1')
 }
 
-function fieldText(entry: MedCopyEntry, field: MedCopyField, ctx: MedCopyContext): string {
+/** `frequencyField` is the format's shown 頻次 field, if any: the dose is
+ *  left out only when the instruction that line will actually print still
+ *  starts with it — never when 頻次 is off or rewritten without the dose. */
+function fieldText(
+  entry: MedCopyEntry,
+  field: MedCopyField,
+  ctx: MedCopyContext,
+  frequencyField?: MedCopyField,
+): string {
   const { item } = entry
   const { labels } = ctx
   const paren = (text: string) => fill(labels.paren, { text })
@@ -335,15 +344,18 @@ function fieldText(entry: MedCopyEntry, field: MedCopyField, ctx: MedCopyContext
       if (field.style === 'product') return item.secondaryTitle || item.title
       if (field.style === 'both' && item.secondaryTitle) return `${item.title} (${item.secondaryTitle})`
       return item.title
-    case 'dose':
-      if (!item.dose) return ''
-      return field.style === 'compact' ? compactDose(item.dose) : item.dose
+    case 'dose': {
+      const printedFrequency = frequencyField ? fieldText(entry, frequencyField, ctx) : undefined
+      const dose = doseUnlessRepeated(item.dose, printedFrequency)
+      if (!dose) return ''
+      return field.style === 'compact' ? compactDose(dose) : dose
+    }
     case 'prevDose':
       if (!item.previousDose) return ''
       // previousDose is the old dose · frequency signature, so the arrow
       // compares it with the same signature of today's prescription.
       if (field.style === 'arrow') {
-        const now = [item.dose, item.frequency].filter(Boolean).join(' · ')
+        const now = [doseUnlessRepeated(item.dose, item.frequency), item.frequency].filter(Boolean).join(' · ')
         if (now) return paren(`${item.previousDose} → ${now}`)
       }
       return paren(fill(labels.previousDose, { dose: item.previousDose }))
@@ -417,6 +429,7 @@ export function buildMedicationCopyText(
   const { labels } = ctx
   const separator = SEPARATORS[format.separator]
   const shown = format.fields.filter((field) => field.on)
+  const frequencyField = shown.find((field) => field.id === 'frequency')
   const remainingShown = shown.some((field) => field.id === 'remaining')
   const dateStyle = format.fields.find((field) => field.id === 'date')?.style ?? 'md'
   const paren = (text: string) => fill(labels.paren, { text })
@@ -447,7 +460,7 @@ export function buildMedicationCopyText(
   ): string => {
     const parts = shown
       .filter((field) => !hidden.has(field.id))
-      .map((field) => fieldText(entry, field, ctx))
+      .map((field) => fieldText(entry, field, ctx, frequencyField))
       .filter(Boolean)
     if (statusMarker) parts.push(paren(statusMarker))
     const institutions = institutionsByIngredient.get(entry.item.ingredientKey)
@@ -501,7 +514,7 @@ export function buildMedicationCopyText(
       if (format.hoistShared) {
         for (const field of shown) {
           if (field.id === keyField || !HOISTABLE.includes(field.id)) continue
-          const values = group.entries.map((entry) => fieldText(entry, field, ctx))
+          const values = group.entries.map((entry) => fieldText(entry, field, ctx, frequencyField))
           if (values[0] && values.every((value) => value === values[0])) {
             hidden.add(field.id)
             extras.push(values[0])

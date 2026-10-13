@@ -8,7 +8,7 @@
 import { useMemo } from 'react'
 import { medicationClinicalIdentityKey } from '@/src/shared/utils/fhir-display-helpers'
 import { computeDurationDays } from '@/features/clinical-summary/medications/utils/duration-helpers'
-import { humanDoseAmount, displayDosageInstruction } from '@/features/clinical-summary/medications/utils/dose-helpers'
+import { humanDoseAmount, displayDosageInstruction, doseUnlessRepeated } from '@/features/clinical-summary/medications/utils/dose-helpers'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { useGroupedMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
@@ -280,7 +280,7 @@ export function useOverviewMeds(
       const finishedDay = endDay ?? startDay
       const isCurrent = !row.isInactive || !finishedDay
         || daysBetween(finishedDay, window.endDay) <= MEDICATION_RECENTLY_FINISHED_DAYS
-      const doseText = [row.dose, row.frequency]
+      const doseText = [doseUnlessRepeated(row.dose, row.frequency), row.frequency]
         .filter((part) => part && part !== '—')
         .join(' · ')
       items.push({

@@ -1,4 +1,5 @@
 import { categorizeObservation, getTestDisplayName } from '@/src/shared/utils/lab-categories'
+import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
 import { getOriginalAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
 
 export type MicrobiologyFamily = 'bacteriology' | 'mycobacteriology' | 'mycology'
@@ -78,7 +79,6 @@ const FAMILY_ORDER: MicrobiologyFamily[] = [
   'mycology',
 ]
 
-const NHI_ORDER_SYSTEM_FRAGMENTS = ['nhi-medical-order-code', 'nhi-lab-code', 'nhi.lab.code']
 
 const MYCOBACTERIAL_STANDARDIZED_NAME_BY_STAGE: Partial<Record<MicrobiologyStage, string>> = {
   directExam: 'AFB smear',
@@ -101,32 +101,17 @@ function observationLabels(obs: any): string {
     .join(' ')
 }
 
-function isNhiOrderSystem(system: unknown): boolean {
-  const normalized = normalizedText(system).toLowerCase()
-  return NHI_ORDER_SYSTEM_FRAGMENTS.some((fragment) => normalized.includes(fragment))
-}
-
 function localObservationLabels(obs: any): string {
   const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
   const labels = [
     obs?.code?.text,
     ...codings
-      .filter((coding: any) => !isNhiOrderSystem(coding?.system))
+      .filter((coding: any) => !isNhiOrderCodeSystem(coding?.system))
       .flatMap((coding: any) => [coding?.display, coding?.code]),
   ]
     .map(normalizedText)
     .filter(Boolean)
   return [...new Set(labels)].join(' ')
-}
-
-function getNhiOrderCode(obs: any): string | undefined {
-  const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
-  for (const coding of codings) {
-    if (!isNhiOrderSystem(coding?.system)) continue
-    const code = normalizedText(coding?.code).toUpperCase()
-    if (code) return code
-  }
-  return undefined
 }
 
 function textStages(labels: string): Set<MicrobiologyStage> {
@@ -170,7 +155,7 @@ function classifyStage(obs: any, value: string): {
   sourceRoleConflict: boolean
   sourceOrderCode?: string
 } {
-  const sourceOrderCode = getNhiOrderCode(obs)
+  const sourceOrderCode = nhiOrderCode(obs) ?? undefined
   const localLabels = localObservationLabels(obs)
   const stagesFromLocalText = textStages(localLabels)
   const resultStage = mycobacterialStageFromResult(value)

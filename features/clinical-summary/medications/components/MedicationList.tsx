@@ -1,7 +1,7 @@
 // Improved Medication List Component with Collapsible Sections
 "use client"
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, History } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -10,6 +10,13 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
 import { MedicationItem } from './MedicationItem'
+import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
+import {
+  assignRowVisitBands,
+  compareRowsByVisit,
+  startDayOf,
+  visitBandTintClass,
+} from '../utils/visit-bands'
 import {
   MedicationHistoryDetails,
   MedicationHistoryList,
@@ -64,6 +71,24 @@ export function MedicationList({
     activeHistoryByMedicationId = new Map<string, MedicationHistoryGroup>(),
     inactiveMedicationGroups,
   } = useGroupedMedications(medications)
+  // Display order only: newest visit first, drugs from one visit adjacent so
+  // they can share a band. Overview and copy-text keep the grouped order.
+  const activeByVisit = useMemo(
+    () => [...activeMedications].sort(compareRowsByVisit),
+    [activeMedications],
+  )
+  const activeBands = useMemo(() => assignRowVisitBands(activeByVisit), [activeByVisit])
+  // Rows of one drug at two clinics share a history; only the first one shown
+  // answers navigation to its prior fills, so the row that scrolls into view
+  // is the row whose history opens.
+  const historyNavigationOwnerByKey = useMemo(() => {
+    const owners = new Map<string, string>()
+    for (const medication of activeByVisit) {
+      const history = activeHistoryByMedicationId.get(medication.id)
+      if (history && !owners.has(history.key)) owners.set(history.key, medication.id)
+    }
+    return owners
+  }, [activeByVisit, activeHistoryByMedicationId])
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
@@ -75,11 +100,14 @@ export function MedicationList({
     const targetInHistory = inactiveMedicationGroups.some((group) =>
       group.medications.some((medication) => medication.id === pending.resourceId),
     )
-    const activeHistoryOwner = [...activeHistoryByMedicationId.entries()].find(
-      ([, group]) => group.medications.some(
+    const ownedHistory = [...activeHistoryByMedicationId.values()].find(
+      (group) => group.medications.some(
         (medication) => medication.id === pending.resourceId,
       ),
-    )?.[0]
+    )
+    const activeHistoryOwner = ownedHistory
+      ? historyNavigationOwnerByKey.get(ownedHistory.key)
+      : undefined
     if (!targetInActive && !targetInHistory && !activeHistoryOwner) return
     const timer = window.setTimeout(() => {
       if (targetInActive || activeHistoryOwner) setShowActive(true)
@@ -98,6 +126,7 @@ export function MedicationList({
     navSeq,
     activeMedications,
     activeHistoryByMedicationId,
+    historyNavigationOwnerByKey,
     inactiveMedicationGroups,
   ])
 
@@ -211,7 +240,8 @@ export function MedicationList({
               data-medication-list-surface="grouped"
               className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
             >
-              {activeMedications.map((medication) => {
+              {activeByVisit.map((medication, index) => {
+                const visitBand = activeBands[index]
                 const history = activeHistoryByMedicationId.get(medication.id)
                 const historyOpen = openActiveHistories.has(medication.id)
                 const historyDetailsId = `${activeListId}-${medication.id}-history`
@@ -228,7 +258,19 @@ export function MedicationList({
                 })
 
                 return (
-                  <li key={medication.id} className="min-w-0">
+                  <li
+                    key={medication.id}
+                    className={cn('relative min-w-0', visitBand.band === 1 && visitBandTintClass)}
+                    data-visit-band={visitBand.band}
+                    data-visit-start={visitBand.visitStart || undefined}
+                  >
+                    <VisitBandMarks band={visitBand} />
+                    {visitBand.headerCount > 0 && (
+                      <VisitHeader
+                        rows={activeByVisit.slice(index, index + visitBand.headerCount)}
+                        count={visitBand.headerCount}
+                      />
+                    )}
                     <MedicationItem
                       medication={medication}
                       showSourceChip={showSourceChip}
@@ -236,8 +278,10 @@ export function MedicationList({
                       sourceChipStatementTooltip={sourceChipStatementTooltip}
                       nameMode={nameMode}
                       grouped
+                      visitContextInHeader={!!startDayOf(medication)}
                       onRowToggle={history ? toggleHistory : undefined}
                       resourceNavigationIds={history
+                        && historyNavigationOwnerByKey.get(history.key) === medication.id
                         ? [
                             medication.id,
                             ...history.medications.map((item) => item.id),
@@ -256,6 +300,8 @@ export function MedicationList({
                         })
                       }) : undefined}
                       leadingControl={history ? (
+                        // Stretches to the row (44px two-line, 32px when the
+                        // row folds onto one line) so the chevron stays centred.
                         <button
                           type="button"
                           aria-expanded={historyOpen}
@@ -263,7 +309,7 @@ export function MedicationList({
                           aria-label={historyToggleLabel}
                           title={historyToggleLabel}
                           onClick={toggleHistory}
-                          className="inline-flex min-h-11 w-full items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
+                          className="inline-flex w-full self-stretch items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
                         >
                           <ChevronRight
                             className={cn(

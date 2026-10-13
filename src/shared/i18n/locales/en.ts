@@ -1145,6 +1145,10 @@ export const en = {
   },
 
   medications: {
+    visitHeaderCount: '{n} items',
+    visitHeaderCountOne: '1 item',
+    visitHeaderLabel: 'Visit {date}, {n} medications',
+    visitHeaderLabelOne: 'Visit {date}, 1 medication',
     title: "Patient's Medications",
     active: 'Active',
     all: 'All',
@@ -1633,6 +1637,7 @@ export const en = {
       urine: 'Urine',
       bloodgas: 'BG',
       serology: 'Serology',
+      immuno: 'Immuno',
       microbio: 'Micro',
       // Catch-all for labs not in the five main panels — keeps
       // uncategorised results from rendering under the previous group's
@@ -1662,6 +1667,9 @@ export const en = {
       bacteriology: 'Bacteriology',
       mycobacteriology: 'Mycobacteriology',
       mycology: 'Mycology',
+      immunoglobulin: 'Immunoglobulins / Complement',
+      autoantibody: 'Autoantibodies',
+      paraprotein: 'Electrophoresis & light chains',
     },
     labels: {
       status: 'Status:',
@@ -2454,7 +2462,7 @@ export const en = {
         queryConditions: 'Query confirmed clinical conditions (cross-visit). Use this instead of visit-level reasonCode for actual diagnoses',
         queryObservations: 'Query observations/lab values/vital signs. Supports date range, exact code, fuzzy `codeQuery`, and `abnormalOnly`. For lab panels prefer queryDiagnosticReports; for trending one lab prefer searchObservationByName',
         queryDiagnosticReports: '**PRIMARY tool for lab panels and report-level tests.** Search ignores case, spaces, and dash variants (CA199, CA-199, CA–199, and CA 19-9 match). When checking multiple tests, pass every name in `queries`, e.g. `["CA125", "CA199"]`, and inspect matchedQueryTerms/unmatchedQueryTerms. Use queryImagingRecords for imaging/pathology',
-        queryLabResultsByCategory: '**PRIMARY tool when the user means an entire semantic lab group.** For "all tumor/cancer markers", use `category="tumor"` to return every marker the patient actually has (AFP, CEA, CA-125, CA-199, PSA, etc.) instead of searching only names explicitly mentioned. Also supports CBC, coagulation, biochemistry, endocrine, lipids, glucose, hepatitis, urine, blood gas, and serology using the same classification as the cumulative-report UI',
+        queryLabResultsByCategory: '**PRIMARY tool when the user means an entire semantic lab group.** For "all tumor/cancer markers", use `category="tumor"` to return every marker the patient actually has (AFP, CEA, CA-125, CA-199, PSA, etc.) instead of searching only names explicitly mentioned. Also supports CBC, coagulation, biochemistry, endocrine, lipids, glucose, hepatitis, urine, blood gas, serology, and immunology (immunoglobulins, complement, autoantibodies) using the same classification as the cumulative-report UI. Specific-allergen IgE (30022C) is in no category: search it with searchObservationByName or queryObservations and never conclude it is absent from an empty category result',
         queryImagingRecords: '**PRIMARY tool for imaging/pathology existence and details.** Covers both DiagnosticReport and standalone ImagingStudy with the same classification as the Imaging UI; supports name, modality, body site, status, and date filters',
         searchObservationByName: '**Fuzzy-search labs by name when you don\'t know the LOINC.** e.g. query="HbA1c". Set withTrend=true for up to 10 most recent values for trending',
         listAvailableObservationCodes: 'List distinct lab/observation names the patient has, with counts. Useful before searchObservationByName when you\'re unsure what\'s available',
@@ -3158,6 +3166,7 @@ export const en = {
       'specimen-urine': 'specimen: urine',
       'specimen-non-blood': 'non-blood specimen',
       loinc: 'LOINC',
+      excluded: 'not in the cumulative report',
       code: 'code match',
       display: 'name match',
       canonical: 'standard name',
@@ -3348,6 +3357,7 @@ export const en = {
     rawSources: { s02: 'detail', s03: 'history' },
     rawDateFields: { case_time: 'ordered', real_inspect_date: 'tested', recipe_date: 'prescribed', assaY_DATE: 'tested' },
     unpaired: 'Unpaired',
+    excludedByDesign: 'Not in the cumulative report (specific allergen)',
     noRawPair: 'No raw row',
     pairedWith: 'Converted #{ref}',
     mergedInto: 'Merged into converted #{ref}',

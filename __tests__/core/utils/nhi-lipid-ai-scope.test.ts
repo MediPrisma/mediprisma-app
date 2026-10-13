@@ -285,6 +285,21 @@ describe('scopeClinicalDataForNhiLipidAi', () => {
       issued: '2026-09-01',
       conclusion: 'Biopsy specimen with no malignancy.',
     }
+    // Older MediCloud bundles labelled some CT/MRI reports Pathology when the
+    // narrative quoted a prior biopsy; the NHI order code identifies the exam.
+    const legacyPathologyLabelledMri = {
+      id: 'legacy-mri-report',
+      category: [{
+        coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+          code: 'PAT',
+          display: 'Pathology',
+        }],
+      }],
+      code: { coding: [{ code: '33085B' }], text: 'Brain MRI with contrast' },
+      effectiveDateTime: '2024-08-01',
+      conclusion: 'Old lacunar infarct. Known lung cancer, pathological diagnosis reviewed.',
+    }
     const input = {
       imagingStudies: [
         {
@@ -323,6 +338,7 @@ describe('scopeClinicalDataForNhiLipidAi', () => {
         oldXrayReport,
         latestXrayReport,
         pathologyReport,
+        legacyPathologyLabelledMri,
       ],
     } as unknown as ClinicalDataCollection
 
@@ -339,6 +355,7 @@ describe('scopeClinicalDataForNhiLipidAi', () => {
       'renal-ultrasound-report',
       'brain-mri-report',
       'latest-xray-report',
+      'legacy-mri-report',
     ])
     expect(scoped.diagnosticReports?.[0]?.conclusion).toBe(abdominalCtReport.conclusion)
     expect(scoped.diagnosticReports?.[0]?.note).toEqual(abdominalCtReport.note)

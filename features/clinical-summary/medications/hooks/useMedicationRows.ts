@@ -25,6 +25,18 @@ import {
   MEDCLOUD_SOURCE_SETTING_URL,
 } from '@/src/shared/constants/medcloud.constants'
 
+/** Leading YYYY-MM-DD of a FHIR date/dateTime, as the source wrote it (no
+ *  timezone conversion — same contract as formatDate). */
+function isoCalendarDay(value?: string): string | undefined {
+  return value?.trim().match(/^(\d{4}-\d{2}-\d{2})(?=$|T)/)?.[1]
+}
+
+/** Local calendar day of a Date as YYYY-MM-DD. */
+function localIsoDay(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
 /** Keep descriptive drug classes aligned with the UI language. Some bridge
  *  payloads carry a bilingual zh label such as
  *  "痰液溶解劑 (MUCOLYTIC AGENTS)" in `text`; the compact row should not
@@ -251,11 +263,13 @@ export function useMedicationRows(
         !!med.dispenseRequest?.expectedSupplyDuration ||
         !!dosage?.timing?.repeat?.boundsDuration
       let endDate: string | undefined
+      let endDateIso: string | undefined
       let daysRemaining: number | undefined
       if (explicitEndDateRaw) {
         const end = new Date(explicitEndDateRaw)
         if (!Number.isNaN(end.getTime())) {
           endDate = explicitEndDateRaw
+          endDateIso = isoCalendarDay(explicitEndDateRaw)
           daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
         }
       } else if (startDateRaw && durationDays && hasDurationEvidence) {
@@ -264,12 +278,14 @@ export function useMedicationRows(
           const end = new Date(start)
           end.setDate(end.getDate() + durationDays)
           endDate = end.toISOString()
+          endDateIso = localIsoDay(end)
           daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
         }
       } else if (stopDateRaw) {
         const end = new Date(stopDateRaw)
         if (!Number.isNaN(end.getTime())) {
           endDate = stopDateRaw
+          endDateIso = isoCalendarDay(stopDateRaw)
           daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
         }
       }
@@ -375,6 +391,8 @@ export function useMedicationRows(
         stoppedOn: stopDateRaw ? formatDate(stopDateRaw) : undefined,
         durationDays,
         endDate: endDate ? formatDate(endDate) : undefined,
+        startedOnIso: isoCalendarDay(startDateRaw),
+        endDateIso,
         daysRemaining,
         displayRemainingDays: remainingDisplay.displayDays,
         displayRemainingSource: remainingDisplay.displaySource,

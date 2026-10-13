@@ -112,16 +112,21 @@ describe('MedicationHistoryList row parity', () => {
     expect(
       container.querySelector('[data-medication-frequency-total-gap]')?.textContent,
     ).toBe(' ')
-    expect(container.querySelector('[data-medication-diagnosis]')).toHaveTextContent(
-      'E07.9甲狀腺疾患',
-    )
-    expect(container.querySelector('[data-medication-diagnosis]'))
-      .not.toHaveTextContent('新北市聯合醫院')
+    // A dated row sits under its visit header, which carries the diagnosis
+    // and institution; the row itself keeps the drug class.
+    const header = container.querySelector('[data-visit-header]')
+    expect(header).toHaveTextContent('E07.9甲狀腺疾患')
+    expect(header).toHaveTextContent('新北市聯合醫院')
+    expect(container.querySelector('[data-medication-diagnosis]')).toBeEmptyDOMElement()
     expect(container.querySelector('[data-medication-classification]'))
-      .toHaveTextContent('新北市聯合醫院甲狀腺製劑')
+      .toHaveTextContent('甲狀腺製劑')
+    expect(container.querySelector('[data-medication-classification]'))
+      .not.toHaveTextContent('新北市聯合醫院')
     expect(screen.getByText('甲狀腺製劑')).toBeInTheDocument()
     expect(screen.getByText('已結束')).toBeInTheDocument()
-    expect(screen.getByText('累計 2 次')).toBeInTheDocument()
+    // One copy per width: the status column (456px and up) and the end of
+    // the regimen line below that; CSS shows exactly one.
+    expect(screen.getAllByText('累計 2 次')).toHaveLength(2)
 
     const toggle = screen.getByRole('button', {
       name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',

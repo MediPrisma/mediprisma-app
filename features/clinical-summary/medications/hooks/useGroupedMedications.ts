@@ -107,12 +107,20 @@ export function groupMedications(medications: MedicationRow[]) {
     }
   }
 
-  // Sort inactive medications by date (newest first) within each group
+  // Sort inactive fills newest first within each group. medications[0] is the
+  // group's representative (row shown, visit banding), so compare calendar
+  // days — the display strings are locale-formatted and not zero-padded
+  // ("2026/9/30" > "2026/10/1" as text).
+  const startDayTs = (m: MedicationRow): number => {
+    if (m.startedOnIso) return Date.parse(`${m.startedOnIso}T00:00:00Z`)
+    const ms = m.startedOn ? new Date(m.startedOn).getTime() : NaN
+    return Number.isNaN(ms) ? -Infinity : ms
+  }
   inactiveByKey.forEach((group) => {
     group.medications.sort((a, b) => {
-      const dateA = a.startedOn || ''
-      const dateB = b.startedOn || ''
-      return dateB.localeCompare(dateA)
+      const byStart = startDayTs(b) - startDayTs(a)
+      if (byStart !== 0 && !Number.isNaN(byStart)) return byStart
+      return (b.endDateIso || '').localeCompare(a.endDateIso || '')
     })
   })
 
@@ -127,16 +135,16 @@ export function groupMedications(medications: MedicationRow[]) {
   )
 
   // When the same product has a current prescription, its older fills belong
-  // to that current therapy row. Attach the history to the first active row
-  // for the product (important when two clinics currently prescribe the same
-  // drug) and remove it from the separate stopped-medication section so the
-  // UI never presents the same drug twice.
+  // to that current therapy row, and leave the separate stopped-medication
+  // section so the drug is not listed twice. When two clinics currently
+  // prescribe the same drug, every current row gets the same history: each
+  // shows the drug's refill count, so each must be able to open what it
+  // counts. The list keeps one of them as the navigation owner.
   const activeHistoryByMedicationId = new Map<string, MedicationHistoryGroup>()
   const attachedHistoryKeys = new Set<string>()
   const historyByKey = new Map(historyGroups.map((group) => [group.key, group]))
   for (const medication of active) {
     const key = groupKeyOf(medication)
-    if (attachedHistoryKeys.has(key)) continue
     const history = historyByKey.get(key)
     if (!history) continue
     activeHistoryByMedicationId.set(medication.id, history)

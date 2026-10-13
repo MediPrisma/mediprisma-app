@@ -1150,6 +1150,10 @@ export const zhTW = {
   },
 
   medications: {
+    visitHeaderCount: '{n} 項',
+    visitHeaderCountOne: '1 項',
+    visitHeaderLabel: '{date} 就診，{n} 項用藥',
+    visitHeaderLabelOne: '{date} 就診，1 項用藥',
     title: '病人用藥',
     active: '使用中',
     all: '全部',
@@ -1641,6 +1645,7 @@ export const zhTW = {
       urine: '尿液',
       bloodgas: '血氣',
       serology: '病毒抗原',
+      immuno: '免疫',
       microbio: '微生物',
       // 「其他」歸納未進入上述五大類的特殊檢驗（例如罕用的免疫學、
       // 微生物、自費項目）— 在就診紀錄詳情用，避免無分類檢驗緊接前
@@ -1670,6 +1675,9 @@ export const zhTW = {
       bacteriology: '一般細菌',
       mycobacteriology: '分枝桿菌',
       mycology: '黴菌／真菌',
+      immunoglobulin: '免疫球蛋白／補體',
+      autoantibody: '自體抗體',
+      paraprotein: '電泳／輕鏈',
     },
     labels: {
       status: '狀態：',
@@ -2462,7 +2470,7 @@ export const zhTW = {
         queryConditions: '查詢經臨床確認的診斷（跨就診）。請用這個而非就診層級的 reasonCode 來判斷實際診斷',
         queryObservations: '查詢觀察值 / 檢驗 / 生命徵象。支援時間範圍、精確 code、模糊 `codeQuery`、`abnormalOnly`。檢驗 panel 請優先用 queryDiagnosticReports；要看單項趨勢請用 searchObservationByName',
         queryDiagnosticReports: '**查詢檢驗 panel／報告的主力工具**。搜尋不區分大小寫、空格與連字號（例如 CA199、CA-199、CA–199、CA 19-9 視為相同）。同時確認多項檢驗時必須用 `queries` 陣列逐項傳入，例如 `["CA125", "CA199"]`，並檢查 matchedQueryTerms／unmatchedQueryTerms。影像／病理問題請改用 queryImagingRecords',
-        queryLabResultsByCategory: '**語意是整類檢驗時的主力工具。** 問「所有腫瘤標記／癌症指數」時使用 `category="tumor"`，一次取得病人實際擁有的 AFP、CEA、CA-125、CA-199、PSA 等全部項目；不要只逐字搜尋使用者提到的名稱。同樣支援血球、凝血、生化、內分泌、血脂、血糖、肝炎、尿液、血氣及血清／病毒分類，且與畫面累積報告共用分類規則',
+        queryLabResultsByCategory: '**語意是整類檢驗時的主力工具。** 問「所有腫瘤標記／癌症指數」時使用 `category="tumor"`，一次取得病人實際擁有的 AFP、CEA、CA-125、CA-199、PSA 等全部項目；不要只逐字搜尋使用者提到的名稱。同樣支援血球、凝血、生化、內分泌、血脂、血糖、肝炎、尿液、血氣、血清／病毒及免疫（免疫球蛋白、補體、自體抗體）分類，且與畫面累積報告共用分類規則。特異過敏原 IgE（30022C）不屬任何分類：請用 searchObservationByName 或 queryObservations 查詢，不可因分類結果為空就判定病人沒做過',
         queryImagingRecords: '**查詢影像／病理是否存在與內容的主力工具。** 同時涵蓋 DiagnosticReport 與獨立 ImagingStudy，分類方式與畫面影像頁籤一致；可依名稱、modality、部位、狀態與時間搜尋',
         searchObservationByName: '**不知道 LOINC 時，依名稱模糊搜尋檢驗。** 如 query="HbA1c"。設 withTrend=true 取最近 10 筆做趨勢',
         listAvailableObservationCodes: '列出病人擁有的檢驗 / 觀察值名稱與次數。不確定病人有什麼可查時，先打這個',
@@ -3166,6 +3174,7 @@ export const zhTW = {
       'specimen-urine': '檢體為尿液',
       'specimen-non-blood': '非血液檢體',
       loinc: 'LOINC',
+      excluded: '不列入累積報告',
       code: '代碼比對',
       display: '名稱比對',
       canonical: '標準名稱',
@@ -3356,6 +3365,7 @@ export const zhTW = {
     rawSources: { s02: '明細', s03: '歷史' },
     rawDateFields: { case_time: '開單', real_inspect_date: '檢驗', recipe_date: '處方', assaY_DATE: '檢驗' },
     unpaired: '未配對',
+    excludedByDesign: '不列入累積報告（特異過敏原）',
     noRawPair: '找不到原始列',
     pairedWith: '轉換後 #{ref}',
     mergedInto: '併入轉換後 #{ref}',
