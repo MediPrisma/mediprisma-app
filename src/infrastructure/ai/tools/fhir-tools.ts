@@ -76,8 +76,23 @@ import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documen
 import {
   LAB_CATEGORIES,
   categorizeObservation,
+  getTestDisplayName,
   compareTestsByPreferred,
+  isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
+import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab-pivot.utils'
+import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
+import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
+import {
+  foldNumericText,
+  isPercentQuantity,
+  NUMERIC_TEXT_RE,
+  PERCENT_UNIT_PREFIX_RE,
+} from '@/src/shared/utils/lab-value-grammar'
+import { isParaproteinTextKey, PARAPROTEIN_PREFIX } from '@/src/shared/utils/paraprotein-analytes'
+import { isNhiOrderCodeSystem, meaningfulLocalCode } from '@/src/shared/utils/nhi-order-code'
+import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
   getAnalyteLabel,
@@ -476,9 +491,164 @@ function selectDiagnosticReportPage(
 }
 
 function labAnalyteKey(observation: any): string {
-  return getAnalyteCanonicalKey(observation)
+  const named = ownCodingFirst(observation)
+  return getAnalyteCanonicalKey(named)
     ?? loincOf(observation?.code)
-    ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
+    ?? getAnalyteLabel(named).normalize('NFKC').toUpperCase()
+}
+
+/**
+ * The label readers take coding[0] as the row's name, but MediCloud writes
+ * the NHI order coding first: under a panel order (08011C "CBC", 06013C) every
+ * analyte would read as the order. When the row has no code.text and a local
+ * code that names the analyte, read that local coding first instead.
+ */
+function ownCodingFirst(observation: any): any {
+  const codings: any[] = Array.isArray(observation?.code?.coding) ? observation.code.coding : []
+  if (observation?.code?.text || !isNhiOrderCodeSystem(codings[0]?.system)) return observation
+  const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
+  const named = own.some((c: any) => typeof c?.display === 'string' && c.display.trim()) || !!meaningfulLocalCode(codings)
+  if (!named) return observation
+  return { ...observation, code: { ...observation.code, coding: [...own, ...codings.filter((c: any) => isNhiOrderCodeSystem(c?.system))] } }
+}
+
+export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
+
+// "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
+const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
+/** Value family of one lab row: a count / concentration, a percentage, a
+ *  titer, an ordinal (presence / grade) or free text. Rows of different
+ *  families never share a group. */
+export function labValueFamily(observation: any): LabValueFamily {
+  const quantity = observation?.valueQuantity
+  if (quantity && typeof quantity.value === 'number') {
+    return isPercentQuantity(quantity) ? 'percent' : 'quantity'
+  }
+  const range = observation?.valueRange
+  if (range && (range.low || range.high)) {
+    return [range.low, range.high].some((bound: any) => bound && isPercentQuantity(bound)) ? 'percent' : 'quantity'
+  }
+  if (typeof observation?.valueInteger === 'number' || typeof observation?.valueDecimal === 'number') return 'quantity'
+  if (observation?.valueRatio) return 'titer'
+  if (observation?.valueCodeableConcept || typeof observation?.valueBoolean === 'boolean') return 'ordinal'
+  const text = typeof observation?.valueString === 'string' ? foldNumericText(observation.valueString) : ''
+  if (TITER_VALUE_RE.test(text)) return 'titer'
+  // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)", "2+" are one
+  // family — checked before numbers so a grade "2+" is not read as 2 (a sign
+  // followed by a digit is never ordinal, so "-3.2" falls through).
+  if (isOrdinalValue(text)) return 'ordinal'
+  // A number written as text — signed, grouped, full-width, a range, after a
+  // comparator — is a quantity; a percentage when its unit is one ("62%",
+  // "62 ％", "62 percent"), like valueQuantity.
+  const numeric = text.match(NUMERIC_TEXT_RE)
+  if (numeric) return PERCENT_UNIT_PREFIX_RE.test(text.slice(numeric[0].length)) ? 'percent' : 'quantity'
+  return 'text'
+}
+
+/** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;
+ *  undefined when not declared (the value family still separates rows). */
+export function declaredLoincScale(loinc: string): 'Qn' | 'Ord' | 'Titr' | undefined {
+  return IMMUNOLOGY_LOINC_SCALE[loinc] ?? THYROID_LOINC_SCALE[loinc]
+}
+
+/** The analyte an explicit LOINC → key mapping assigns to `loinc` (the
+ *  normalization package's LOINC map, then the app's immunology and thyroid
+ *  maps). LOINCs mapped to one key are declared equivalent; nothing else is. */
+export function declaredLoincAnalyteKey(loinc: string): string | null {
+  return canonicalKeyFromLoinc({ code: { coding: [{ system: 'http://loinc.org', code: loinc }] } })
+    ?? IMMUNOLOGY_LOINC_TO_KEY[loinc]
+    ?? THYROID_LOINC_TO_KEY[loinc]
+    ?? null
+}
+
+/**
+ * Group key and label for one row of queryLabResultsByCategory. Two rows share
+ * a group only when
+ * - they carry the same LOINC, or LOINCs an explicit LOINC → key mapping
+ *   declares equivalent (declaredLoincAnalyteKey) — a shared display name
+ *   never merges different LOINCs (751-8 absolute neutrophils vs 770-8
+ *   neutrophil %, both labelled Neutrophil); or
+ * - neither carries a LOINC and the cumulative report's identity names the
+ *   same recognised analyte (one NHI order split into SS-A / SS-B / Ro52);
+ *   unrecognised LOINC-less rows keep the name-based key;
+ * Rows of ONE LOINC are always one group, however the value is written
+ * (Quantity, Range, Integer, string, coded, "Negative for HBsAg"): the LOINC
+ * already fixes what was measured and on what scale. Different LOINCs share
+ * a group only when declared equivalent AND on one known LOINC scale
+ * (declaredLoincScale) — a titer, a presence and a quantitative result of one
+ * antibody stay apart. Only LOINC-less rows are also split by value family
+ * (labValueFamily), the one signal left to tell a count from a percentage.
+ */
+export function labCategoryAnalyte(observation: any, category: string): {
+  key: string
+  label: string
+  canonicalKey: string
+  loinc?: string
+  family: LabValueFamily
+} {
+  const family = labValueFamily(observation)
+  const loinc = loincOf(observation?.code)
+  const identity = getLabPivotTestIdentity(observation, category)
+  const known = isKnownPivotKey(identity.testKey)
+  const label = known
+    ? getLabRowDisplayParts(identity, 'medical', 'en').name
+    : getAnalyteLabel(ownCodingFirst(observation))
+  if (loinc) {
+    const declared = declaredLoincAnalyteKey(loinc)
+    const scale = declaredLoincScale(loinc)
+    // Merge across LOINCs only on a declared key with a known scale;
+    // otherwise the LOINC alone is the group.
+    if (declared && scale) {
+      return { key: `key:${declared}|${scale}`, label, canonicalKey: declared, loinc, family }
+    }
+    return { key: `loinc:${loinc}`, label, canonicalKey: declared ?? loinc, loinc, family }
+  }
+  // 免疫 電泳／輕鏈 rows keep their specimen-qualified column (a serum and a
+  // urine neutral κ never merge). A report column (IFE / IEP) gathers a
+  // report and its lanes in the cumulative table, but the AI answer gives
+  // each lane its own analyte, so latest-value selection never drops one.
+  if (identity.testKey.startsWith(PARAPROTEIN_PREFIX)) {
+    const columnLabel = getLabRowDisplayParts(identity, 'medical', 'en').name
+    if (isParaproteinTextKey(identity.testKey)) {
+      const own = getTestDisplayName(observation)
+      const lane = own.normalize('NFKC').trim().toUpperCase()
+      const canonicalKey = `${identity.mapKey}:${lane}`
+      return { key: `name:${canonicalKey}|${family}`, label: `${columnLabel} · ${own}`, canonicalKey, family }
+    }
+    return { key: `name:${identity.mapKey}|${family}`, label: columnLabel, canonicalKey: identity.mapKey, family }
+  }
+  const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
+  return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }
+}
+
+/**
+ * A label for one AI lab group that holds for EVERY member. Members of one
+ * LOINC can carry different own labels — 2345-7 headed "Glu-AC" for an older
+ * "AC Sugar" row and "Glucose" for a newer generic one — and naming the group
+ * after its first member would present a non-fasting latest value as fasting.
+ * When the members agree their label is kept; otherwise the group's generic
+ * name: the display of its declared / recognised analyte key, else the LOINC's
+ * own display, else the LOINC code or name key.
+ */
+export function labGroupLabel(members: readonly any[], category: string): string {
+  const analytes = members.map((observation) => labCategoryAnalyte(observation, category))
+  const labels = new Set(analytes.map((analyte) => analyte.label))
+  if (labels.size === 1) return analytes[0].label
+  const { canonicalKey, loinc } = analytes[0]
+  if (isKnownPivotKey(canonicalKey)) {
+    return getLabRowDisplayParts({ testKey: canonicalKey, displayName: canonicalKey }, 'medical', 'en').name
+  }
+  if (loinc) {
+    const loincDisplay = members
+      .flatMap((observation) => observation?.code?.coding ?? [])
+      .find((coding: any) => /loinc/i.test(coding?.system || '') && coding?.code === loinc && coding?.display)?.display
+    return loincDisplay ?? `LOINC ${loinc}`
+  }
+  return canonicalKey
+}
+
+export function labCategoryAnalyteKey(observation: any, category: string): string {
+  return labCategoryAnalyte(observation, category).key
 }
 
 function diagnosticReportOutput(report: any) {
@@ -1697,21 +1867,39 @@ export function createFhirTools(getData: () => AgentDataSource) {
             && (!abnormalOnly || isAbnormalObservation(observation))
           )
 
-        const byAnalyte = new Map<string, any[]>()
+        // See labCategoryAnalyte: same LOINC, declared-equivalent LOINCs, or
+        // (LOINC-less) the same recognised analyte — always one value family.
+        const byAnalyte = new Map<string, ReturnType<typeof labCategoryAnalyte> & { observations: any[] }>()
         for (const observation of expanded) {
-          const key = labAnalyteKey(observation)
-          const series = byAnalyte.get(key)
-          if (series) series.push(observation)
-          else byAnalyte.set(key, [observation])
+          const analyte = labCategoryAnalyte(observation, category)
+          const group = byAnalyte.get(analyte.key)
+          if (group) group.observations.push(observation)
+          else byAnalyte.set(analyte.key, { ...analyte, observations: [observation] })
+        }
+        // A label that holds for every member, not the first member's subtype.
+        for (const group of byAnalyte.values()) group.label = labGroupLabel(group.observations, category)
+
+        // Groups that share a label (751-8 and 770-8 both read "NEU") are told
+        // apart by their LOINC and value family, so none looks like a duplicate.
+        const labelCounts = new Map<string, number>()
+        for (const group of byAnalyte.values()) {
+          labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1)
+        }
+        const familyText = { quantity: null, percent: '%', titer: 'titer', ordinal: 'qualitative', text: 'text' } as const
+        const distinctLabel = (group: ReturnType<typeof labCategoryAnalyte>) => {
+          if ((labelCounts.get(group.label) ?? 0) < 2) return group.label
+          const qualifiers = [group.loinc ? `LOINC ${group.loinc}` : null, familyText[group.family]].filter(Boolean)
+          return qualifiers.length > 0 ? `${group.label} (${qualifiers.join(', ')})` : `${group.label} (${group.canonicalKey})`
         }
 
-        const groups = [...byAnalyte.entries()].map(([canonicalKey, observations]) => {
-          const series = [...observations].sort((a, b) =>
+        const groups = [...byAnalyte.values()].map((group) => {
+          const series = [...group.observations].sort((a, b) =>
             (observationDate(b) || '').localeCompare(observationDate(a) || '')
           )
           return {
-            analyte: getAnalyteLabel(series[0]),
-            canonicalKey,
+            analyte: distinctLabel(group),
+            canonicalKey: group.canonicalKey,
+            ...(group.loinc ? { loinc: group.loinc } : {}),
             category,
             observationCount: series.length,
             latestDate: observationDate(series[0]),
@@ -1735,6 +1923,18 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ...page,
           incomplete: false,
           canConcludeAbsence: true,
+          ...(category === 'immuno' ? {
+            // Specific-allergen IgE (30022C) is kept out of every lab category,
+            // so this answer says nothing about allergen tests.
+            excludedFromCategory: {
+              specificAllergenIgE: collection!.observations.filter((observation: any) =>
+                String(observation?.status ?? '').toLowerCase() !== 'entered-in-error'
+                && isExcludedFromCumulativeReport(observation)
+                && isWithinDateRange(observationDate(observation), dateFrom, dateTo)
+              ).length,
+              instruction: 'Specific-allergen IgE results are not part of any lab category; canConcludeAbsence does not apply to them. Use searchObservationByName (e.g. the allergen name) or queryObservations to find allergen tests.',
+            },
+          } : {}),
           dateRange: { from: dateFrom, to: dateTo },
           availableAnalytes: groups.map(group => group.analyte),
           groundingRules: {

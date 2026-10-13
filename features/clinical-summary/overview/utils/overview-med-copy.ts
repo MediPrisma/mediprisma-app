@@ -12,9 +12,6 @@ function clean(value: string | undefined): string | undefined {
 
 export function toMedCopySourceItem(item: OverviewMedItem): MedCopySourceItem {
   const { row } = item
-  // Ingredient identity, so two products of one ingredient read as the same
-  // drug; the row title is the fallback when the drug master has no entry.
-  const ingredient = row.drugTerminology?.ingredientText || item.title
   return {
     id: item.id,
     title: item.title,
@@ -33,7 +30,6 @@ export function toMedCopySourceItem(item: OverviewMedItem): MedCopySourceItem {
     status: (row.status ?? '').toLowerCase(),
     category: clean(item.category),
     previousDose: item.change?.kind === 'adjusted' ? clean(item.change.previousDose) : undefined,
-    ingredientKey: ingredient.normalize('NFKC').trim().toLocaleLowerCase('en').replace(/\s+/g, ' '),
   }
 }
 

@@ -11,6 +11,7 @@ import {
   normalizeTestName,
 } from '@voho0000/clinical-lab-normalization'
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
+import { hasNhiNonPathologyReportOrderCode } from '@/src/shared/utils/report-grouping-helpers'
 
 const CONDITION_CODE = /^(?:I(?:1[0-6]|2[0-5]|6[0-9]|70|73)|G45|E1[0-4]|E8881|N18|F17|Z(?:49|720|8249|992))/
 const CONDITION_TEXT = /\b(?:ascvd|cad|acs|myocardial infarction|heart attack|mi|stroke|tia|pad|ckd|carotid|diabetes|diabetic|dm|hypertension|htn|smok(?:e|er|ing)|tobacco|family history|metabolic syndrome|dialysis|kidney replacement|n?stemi|cva|esrd|infarct(?:ion)?)\b|冠心|冠狀動脈|急性冠心|心肌梗塞|腦中風|腦梗塞|暫時性腦缺血|周邊動脈|頸動脈|動脈粥樣硬化|糖尿病|慢性腎|高血壓|吸菸|抽菸|家族史|代謝症候群|透析|腎臟替代|中風|梗塞|末期腎/i
@@ -178,6 +179,9 @@ function studyTime(study: ImagingStudyEntity): number {
 }
 
 function isPathologyReport(report: DiagnosticReportEntity): boolean {
+  // An NHI imaging/check order is not pathology even when an older bundle
+  // labelled it so (see inferReportDisplayGroup).
+  if (hasNhiNonPathologyReportOrderCode(report)) return false
   return PATHOLOGY_TEXT.test(collectText({ code: report.code, category: report.category }))
 }
 

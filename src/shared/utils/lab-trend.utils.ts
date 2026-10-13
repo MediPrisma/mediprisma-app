@@ -1,4 +1,5 @@
 import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/display'
+import { isParaproteinTextKey } from '@/src/shared/utils/paraprotein-analytes'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
@@ -238,7 +239,11 @@ export function buildLabTrendSeries(
     comparator: 0,
   }
 
+  // A folded IEP / IFE report column mixes analytes (IgG and IgA lanes): it
+  // is never a numeric series.
+  const foldedReport = isParaproteinTextKey(selection.testKey)
   observations.forEach((observation, index) => {
+    if (foldedReport) return
     if (!sourceMatchesSelection(observation, selection)) return
 
     const status = normalizeStatus(observation?.status)

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MedicationHistoryList } from '@/features/clinical-summary/medications/components/MedicationHistoryList'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
@@ -76,6 +76,11 @@ const olderMedication = {
   endDate: '2026/8/5',
 } as MedicationRow
 
+// Each fill is its own row under its own visit (owner, 2026-10-13); the
+// newest fill's row comes first. These checks read that row.
+const fillRows = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('li[data-visit-band]')) as HTMLElement[]
+
 describe('MedicationHistoryList row parity', () => {
   beforeEach(() => {
     mockAnchorOnMatch = undefined
@@ -98,11 +103,14 @@ describe('MedicationHistoryList row parity', () => {
 
     expect(container.querySelector('[data-medication-list-surface="grouped"]'))
       .toBeInTheDocument()
+    // Two fills, two visits: one row each.
+    expect(fillRows(container)).toHaveLength(2)
+    const row = within(fillRows(container)[0])
     expect(container.querySelector('[data-medication-row-layout="three-lane"]'))
       .toBeInTheDocument()
-    expect(screen.getByText(latestMedication.title)).toBeInTheDocument()
-    expect(screen.getByText('QOD')).toBeInTheDocument()
-    expect(screen.getByText('總量 15')).toBeInTheDocument()
+    expect(row.getByText(latestMedication.title)).toBeInTheDocument()
+    expect(row.getByText('QOD')).toBeInTheDocument()
+    expect(row.getByText('總量 15')).toBeInTheDocument()
     expect(container.querySelector('[data-medication-schedule]')).toHaveTextContent(
       '26/08/05 → 26/09/04（30 天）QOD 總量 15',
     )
@@ -112,18 +120,26 @@ describe('MedicationHistoryList row parity', () => {
     expect(
       container.querySelector('[data-medication-frequency-total-gap]')?.textContent,
     ).toBe(' ')
-    expect(container.querySelector('[data-medication-diagnosis]')).toHaveTextContent(
-      'E07.9甲狀腺疾患',
-    )
-    expect(container.querySelector('[data-medication-diagnosis]'))
-      .not.toHaveTextContent('新北市聯合醫院')
+    // A dated row sits under its visit header, which carries the diagnosis
+    // and institution; the row itself keeps the drug class.
+    const header = container.querySelector('[data-visit-header]')
+    expect(header).toHaveTextContent('E07.9甲狀腺疾患')
+    expect(header).toHaveTextContent('新北市聯合醫院')
+    expect(container.querySelector('[data-medication-diagnosis]')).toBeEmptyDOMElement()
     expect(container.querySelector('[data-medication-classification]'))
-      .toHaveTextContent('新北市聯合醫院甲狀腺製劑')
-    expect(screen.getByText('甲狀腺製劑')).toBeInTheDocument()
-    expect(screen.getByText('已結束')).toBeInTheDocument()
-    expect(screen.getByText('累計 2 次')).toBeInTheDocument()
+      .toHaveTextContent('甲狀腺製劑')
+    expect(container.querySelector('[data-medication-classification]'))
+      .not.toHaveTextContent('新北市聯合醫院')
+    expect(row.getByText('甲狀腺製劑')).toBeInTheDocument()
+    expect(row.getByText('已結束')).toBeInTheDocument()
+    // One copy per width: the status column (456px and up) and the end of
+    // the regimen line below that; CSS shows exactly one.
+    expect(row.getAllByText('累計 2 次')).toHaveLength(2)
+    // The older fill's row shows its own dates.
+    expect(fillRows(container)[1].querySelector('[data-medication-regimen]'))
+      .toHaveTextContent('26/07/06 → 26/08/05（30 天）')
 
-    const toggle = screen.getByRole('button', {
+    const toggle = row.getByRole('button', {
       name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
     })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -156,9 +172,9 @@ describe('MedicationHistoryList row parity', () => {
       />,
     )
 
-    const toggle = screen.getByRole('button', {
+    const toggle = screen.getAllByRole('button', {
       name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
-    })
+    })[0]
     fireEvent.click(toggle)
 
     const details = document.getElementById(toggle.getAttribute('aria-controls') ?? '')
@@ -183,7 +199,7 @@ describe('MedicationHistoryList row parity', () => {
     )
 
     const row = container.querySelector('[data-medication-row-layout="three-lane"]')
-    const toggle = screen.getByRole('button', {
+    const toggle = within(fillRows(container)[0]).getByRole('button', {
       name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
     })
     expect(row).toHaveAttribute('data-medication-row-toggle', 'true')
@@ -268,8 +284,8 @@ describe('MedicationHistoryList row parity', () => {
       .not.toHaveAttribute('data-medication-row-toggle')
   })
 
-  it('opens the matched historical drug group when resource navigation claims it', () => {
-    render(
+  it('expands a fill row when a citation of that fill asks for the drug history', () => {
+    const { container } = render(
       <MedicationHistoryList
         groups={[{
           key: 'levothyroxine',
@@ -280,14 +296,13 @@ describe('MedicationHistoryList row parity', () => {
       />,
     )
 
-    const toggle = screen.getByRole('button', {
+    // The older fill's own row answers for it (the mock keeps the last
+    // registration, which is that row's).
+    const toggle = within(fillRows(container)[1]).getByRole('button', {
       name: '顯示 LEVOTHYROXINE SODIUM 0.05 MG 的過往用藥紀錄（2）',
     })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(mockAnchorResourceId).toEqual([
-      latestMedication.id,
-      olderMedication.id,
-    ])
+    expect(mockAnchorResourceId).toEqual([olderMedication.id])
 
     act(() => {
       mockAnchorOnMatch?.(1, {

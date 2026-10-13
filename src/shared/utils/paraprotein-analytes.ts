@@ -1,0 +1,473 @@
+// 免疫 「電泳／輕鏈」 (paraprotein) subgroup: immunoelectrophoresis /
+// immunofixation reports and immunoglobulin light chains (user decision
+// 2026-10-11; research and GPT Astra review in
+// immunology-iep-ife-flc-loinc-research-20261010.md).
+//
+// NHI orders, verified against the NHI fee schedule (醫療服務給付項目及支付標準,
+// data.gov.tw 174450) and TW Core medical-service-payment-tw, 2026-10-10:
+//   12103B 免疫電泳分析 — no specimen in its name; serum unless the row says
+//          urine / CSF. Also the order serum IFE is billed under.
+//   12157B 腦脊髓液免疫球蛋白免疫電泳 (CSF IEP)
+//   12158B 尿液免疫球蛋白免疫電泳 (urine IEP)
+//   12159B 尿液免疫固定電泳分析 (urine IFE)
+//   12160B 免疫球蛋白κ/λ — neither free / total nor specimen in its name.
+//   09065B 蛋白電泳分析 (SPEP) / 09100B 尿液蛋白電泳 (UPEP): only a row that
+//          names the M-protein comes here. The protein fractions (albumin,
+//          α1, α2, β, γ, A/G) are SPEP chemistry and stay where they were —
+//          an M-protein is the one SPEP number that answers the paraprotein
+//          question; moving the fractions would empty 生化 of a routine panel.
+//   06010C 本周氏蛋白試驗 (Bence-Jones) stays in 尿液 (user decision).
+//
+// Every LOINC below was looked up on tx.fhir.org (LOINC 2.82) on 2026-10-11:
+// all ACTIVE, names as quoted. The NHI–LOINC ConceptMap's 1759-0 (A/G ratio)
+// and deprecated 40844-3 listed under 12160B are deliberately absent.
+//
+// Columns:
+// - κ, λ, κ/λ ratio as FREE or TOTAL only when the row says so (free / FLC /
+//   游離, total / 總) or its LOINC does; otherwise one neutral column per source
+//   name, labelled with that name — never asserting free or total.
+// - serum, urine (「尿」) and CSF never share a column.
+// - M-protein amount.
+// - one text column per report: serum IFE/IEP, urine IFE, urine IEP, CSF IEP.
+//   Lane rows (IgG / IgA / IgM / κ / λ present or absent) fold into their
+//   report's text column, never their own column — and never the
+//   immunoglobulin columns.
+
+import { isNhiOrderCodeSystem, nhiOrderCode } from '@/src/shared/utils/nhi-order-code'
+import { withoutUrineAnalyteWords } from '@/src/shared/utils/urine-wording'
+
+export const PARAPROTEIN_PREFIX = 'PP:'
+
+/** Orders whose every row is a paraprotein-subgroup row. */
+export const PARAPROTEIN_NHI_ORDER_CODES = ['12103B', '12157B', '12158B', '12159B', '12160B']
+/** SPEP / UPEP: only an explicitly named M-protein row. */
+export const PROTEIN_ELECTROPHORESIS_NHI_ORDER_CODES = ['09065B', '09100B']
+
+/** Verified LOINC → column. */
+export const PARAPROTEIN_LOINC_TO_KEY: Readonly<Record<string, string>> = {
+  // Serum / plasma free light chains
+  '36916-5': 'PP:KAPPA-FREE',      // Kappa light chains.free [Mass/volume] in Serum
+  '104544-2': 'PP:KAPPA-FREE',     // Kappa light chains.free [Mass/volume] in Serum or Plasma
+  '80515-0': 'PP:KAPPA-FREE',      // Kappa light chains.free [Mass/volume] in Serum by Nephelometry
+  '33944-0': 'PP:LAMBDA-FREE',     // Lambda light chains.free [Mass/volume] in Serum or Plasma
+  '80516-8': 'PP:LAMBDA-FREE',     // Lambda light chains.free [Mass/volume] in Serum by Nephelometry
+  '48378-4': 'PP:KL-RATIO-FREE',   // Kappa light chains.free/Lambda light chains.free [Mass Ratio] in Serum
+  '104546-7': 'PP:KL-RATIO-FREE',  // … [Mass Ratio] in Serum or Plasma
+  '80517-6': 'PP:KL-RATIO-FREE',   // … [Mass Ratio] in Serum by Nephelometry
+  // Serum / plasma total light chains
+  '11050-2': 'PP:KAPPA-TOTAL',     // Kappa light chains [Mass/volume] in Serum or Plasma
+  '11051-0': 'PP:LAMBDA-TOTAL',    // Lambda light chains [Mass/volume] in Serum or Plasma
+  '15189-4': 'PP:KL-RATIO-TOTAL',  // Kappa light chains/Lambda light chains [Mass Ratio] in Serum
+  '6788-4': 'PP:KL-RATIO-TOTAL',   // … [Mass Ratio] in Serum by Immunoassay
+  // Serum M-protein
+  '33358-3': 'PP:M-PROTEIN',       // Protein.monoclonal [Mass/volume] in Serum or Plasma by Electrophoresis
+  '104837-0': 'PP:M-PROTEIN',      // Protein.monoclonal [Mass/volume] in Serum or Plasma
+  // M-protein bands are separate LOINC items (verified tx.fhir.org, LOINC
+  // 2.82, 2026-10-13; panel 90991-1): each band keeps its own column.
+  '51435-6': 'PP:M-PROTEIN:BAND1', // Protein.monoclonal band 1 [Mass/volume] in Serum or Plasma by Electrophoresis
+  '99415-2': 'PP:M-PROTEIN:BAND1', // Protein.monoclonal band 1 [Mass/volume] in Serum or Plasma by Immunofixation
+  '35559-4': 'PP:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Serum or Plasma by Electrophoresis
+  '99416-0': 'PP:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Serum or Plasma by Immunofixation
+  '50796-2': 'PP:M-PROTEIN:BAND3', // Protein.monoclonal band 3 [Mass/volume] in Serum or Plasma by Electrophoresis
+  '50797-0': 'PP:M-PROTEIN:BAND4', // Protein.monoclonal band 4 [Mass/volume] in Serum or Plasma by Electrophoresis
+  // Serum IFE / IEP reports and their lanes → the serum text column
+  '25700-6': 'PP:IFE',             // Immunofixation for Serum or Plasma
+  '49275-1': 'PP:IFE',             // Immunofixation for Serum or Plasma Narrative
+  '14895-7': 'PP:IFE',             // Protein Fractions [Interpretation] in Serum or Plasma by Immunofixation
+  '49297-5': 'PP:IFE',             // … by Immunofixation Narrative
+  '13169-8': 'PP:IFE',             // Immunoelectrophoresis for Serum or Plasma
+  '49274-4': 'PP:IFE',             // Immunoelectrophoresis for Serum or Plasma Narrative
+  '74665-1': 'PP:IFE',             // Monoclonal band observed [Identifier] in Serum or Plasma by Immunofixation
+  '13348-8': 'PP:IFE',             // Monoclonal band observed [Identifier] in Serum or Plasma
+  '94400-9': 'PP:IFE',             // Protein.monoclonal [Presence] in Serum or Plasma
+  '44597-3': 'PP:IFE',             // IgG.monoclonal [Presence] in Serum by Immunofixation
+  '44587-4': 'PP:IFE',             // IgA.monoclonal [Presence] in Serum by Immunofixation
+  '44601-3': 'PP:IFE',             // IgM.monoclonal [Presence] in Serum by Immunofixation
+  '55921-1': 'PP:IFE',             // IgG.monoclonal [Presence] in Serum by Immunoelectrophoresis
+  '55901-3': 'PP:IFE',             // IgA.monoclonal [Presence] in Serum by Immunoelectrophoresis
+  '55924-5': 'PP:IFE',             // IgM.monoclonal [Presence] in Serum by Immunoelectrophoresis
+  '18301-2': 'PP:IFE',             // IgG [Presence] in Serum by Immunofixation
+  '15184-5': 'PP:IFE',             // IgG [Presence] in Serum by Immunoelectrophoresis
+  '40635-5': 'PP:IFE',             // Kappa light chains [Presence] in Serum by Immunofixation
+  '40639-7': 'PP:IFE',             // Lambda light chains [Presence] in Serum by Immunofixation
+  '25681-8': 'PP:IFE',             // Kappa light chains [Presence] in Serum by Immunoelectrophoresis
+  '25683-4': 'PP:IFE',             // Lambda light chains [Presence] in Serum by Immunoelectrophoresis
+  '44555-1': 'PP:IFE',             // Kappa light chains.free [Presence] in Serum by Immunofixation
+  '50978-6': 'PP:IFE',             // Lambda light chains.free [Presence] in Serum by Immunofixation
+  '55897-3': 'PP:IFE',             // Immunoglobulin light chains.free [Presence] in Serum by Immunoelectrophoresis
+  // Urine light chains
+  '38176-4': 'PP:U:KAPPA-FREE',    // Kappa light chains.free [Mass/volume] in Urine
+  '38178-0': 'PP:U:LAMBDA-FREE',   // Lambda light chains.free [Mass/volume] in Urine
+  '41759-2': 'PP:U:KL-RATIO-FREE', // Kappa light chains.free/Lambda light chains.free [Mass Ratio] in Urine
+  '27365-6': 'PP:U:KAPPA-TOTAL',   // Kappa light chains [Mass/volume] in Urine
+  '27394-6': 'PP:U:LAMBDA-TOTAL',  // Lambda light chains [Mass/volume] in Urine
+  '33559-6': 'PP:U:KL-RATIO-TOTAL', // Kappa light chains/Lambda light chains [Mass Ratio] in Urine
+  // Urine M-protein
+  '87835-5': 'PP:U:M-PROTEIN',     // Protein.monoclonal [Mass/volume] in Urine by Immunofixation
+  '40661-1': 'PP:U:M-PROTEIN',     // Protein.monoclonal [Mass/volume] in Urine by Electrophoresis
+  '35560-2': 'PP:U:M-PROTEIN',     // Protein.monoclonal [Mass/volume] in Urine
+  '97772-8': 'PP:U:M-PROTEIN:BAND1', // Protein.monoclonal band 1 [Mass/volume] in Urine by Electrophoresis
+  '51437-2': 'PP:U:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Urine by Electrophoresis
+  '87834-8': 'PP:U:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Urine by Immunofixation
+  '35561-0': 'PP:U:M-PROTEIN:BAND2', // Protein.monoclonal band 2 [Mass/volume] in Urine
+  '51440-6': 'PP:U:M-PROTEIN:BAND3', // Protein.monoclonal band 3 [Mass/volume] in Urine by Electrophoresis
+  '87833-0': 'PP:U:M-PROTEIN:BAND3', // Protein.monoclonal band 3 [Mass/volume] in Urine by Immunofixation
+  '59563-7': 'PP:U:M-PROTEIN:BAND4', // Protein.monoclonal band 4 [Mass/volume] in Urine by Electrophoresis
+  // Urine IFE report and lanes
+  '14896-5': 'PP:U:IFE',           // Protein Fractions [Interpretation] in Urine by Immunofixation
+  '49300-7': 'PP:U:IFE',           // … in Urine by Immunofixation Narrative
+  '13440-3': 'PP:U:IFE',           // Immunofixation for Urine
+  '49276-9': 'PP:U:IFE',           // Immunofixation for Urine Narrative
+  '74666-9': 'PP:U:IFE',           // Monoclonal band observed [Identifier] in Urine by Immunofixation
+  '44598-1': 'PP:U:IFE',           // IgG.monoclonal [Presence] in Urine by Immunofixation
+  '44588-2': 'PP:U:IFE',           // IgA.monoclonal [Presence] in Urine by Immunofixation
+  '44602-1': 'PP:U:IFE',           // IgM.monoclonal [Presence] in Urine by Immunofixation
+  '40636-3': 'PP:U:IFE',           // Kappa light chains [Presence] in Urine by Immunofixation
+  '40638-9': 'PP:U:IFE',           // Lambda light chains [Presence] in Urine by Immunofixation
+  '44604-7': 'PP:U:IFE',           // Kappa light chains.free [Presence] in Urine by Immunofixation
+  '56481-5': 'PP:U:IFE',           // Lambda light chains.free [Presence] in Urine by Immunofixation
+  '55900-5': 'PP:U:IFE',           // Immunoglobulin light chains.free [Presence] in Urine by Immunofixation
+  // Urine IEP report and lanes
+  '34440-8': 'PP:U:IEP',           // Immunoelectrophoresis for Urine
+  '49278-5': 'PP:U:IEP',           // Immunoelectrophoresis for Urine Narrative
+  '25445-8': 'PP:U:IEP',           // IgG [Presence] in Urine by Immunoelectrophoresis
+  '25444-1': 'PP:U:IEP',           // IgA [Presence] in Urine by Immunoelectrophoresis
+  '25446-6': 'PP:U:IEP',           // IgM [Presence] in Urine by Immunoelectrophoresis
+}
+
+/** Fixed columns, in reading order: serum κ/λ (free, then total), M-protein,
+ *  serum report; then urine, then CSF. Neutral source-name columns follow. */
+export const PARAPROTEIN_COLUMN_ORDER = [
+  'PP:KAPPA-FREE', 'PP:LAMBDA-FREE', 'PP:KL-RATIO-FREE',
+  'PP:KAPPA-TOTAL', 'PP:LAMBDA-TOTAL', 'PP:KL-RATIO-TOTAL',
+  'PP:M-PROTEIN', 'PP:IFE',
+  'PP:U:KAPPA-FREE', 'PP:U:LAMBDA-FREE', 'PP:U:KL-RATIO-FREE',
+  'PP:U:KAPPA-TOTAL', 'PP:U:LAMBDA-TOTAL', 'PP:U:KL-RATIO-TOTAL',
+  'PP:U:M-PROTEIN', 'PP:U:IFE', 'PP:U:IEP',
+  'PP:CSF:IEP',
+]
+
+/** The report (text) columns. */
+export const PARAPROTEIN_TEXT_KEYS = new Set(['PP:IFE', 'PP:U:IFE', 'PP:U:IEP', 'PP:CSF:IEP'])
+
+type Lang = 'zh-TW' | 'en'
+const SPECIMEN_LABEL: Record<'S' | 'U' | 'CSF', Record<Lang, string>> = {
+  S: { 'zh-TW': '', en: '' },
+  U: { 'zh-TW': '尿 ', en: 'Urine ' },
+  CSF: { 'zh-TW': 'CSF ', en: 'CSF ' },
+}
+const BASE_DISPLAY: Record<string, Record<Lang, string>> = {
+  'KAPPA-FREE': { 'zh-TW': '游離 κ', en: 'Free κ' },
+  'LAMBDA-FREE': { 'zh-TW': '游離 λ', en: 'Free λ' },
+  'KL-RATIO-FREE': { 'zh-TW': '游離 κ/λ', en: 'Free κ/λ ratio' },
+  'KAPPA-TOTAL': { 'zh-TW': '總 κ', en: 'Total κ' },
+  'LAMBDA-TOTAL': { 'zh-TW': '總 λ', en: 'Total λ' },
+  'KL-RATIO-TOTAL': { 'zh-TW': '總 κ/λ', en: 'Total κ/λ ratio' },
+  'M-PROTEIN': { 'zh-TW': 'M 蛋白', en: 'M-protein' },
+  IFE: { 'zh-TW': 'IFE', en: 'IFE' },
+  IEP: { 'zh-TW': 'IEP', en: 'IEP' },
+}
+
+function splitKey(key: string): { specimen: 'S' | 'U' | 'CSF'; base: string } | null {
+  if (!key.startsWith(PARAPROTEIN_PREFIX)) return null
+  const rest = key.slice(PARAPROTEIN_PREFIX.length)
+  if (rest.startsWith('U:')) return { specimen: 'U', base: rest.slice(2) }
+  if (rest.startsWith('CSF:')) return { specimen: 'CSF', base: rest.slice(4) }
+  return { specimen: 'S', base: rest }
+}
+
+/** Column header of a fixed paraprotein column, or undefined (neutral source
+ *  -name columns keep their source name). */
+const REGION_SYMBOL: Record<string, string> = { GAMMA: 'γ', BETA: 'β', ALPHA1: 'α1', ALPHA2: 'α2' }
+
+/** Header of an M-protein band / region / total column. */
+function mProteinBandDisplay(base: string): Record<Lang, string> | undefined {
+  const match = base.match(/^M-PROTEIN:(.+)$/)
+  if (!match) return undefined
+  const qualifier = match[1]
+  if (qualifier === 'TOTAL') return { 'zh-TW': 'M 蛋白總量', en: 'Total M-protein' }
+  const band = qualifier.match(/^BAND(\d)$/)
+  if (band) return { 'zh-TW': `M 蛋白 第${band[1]}峰`, en: `M-protein band ${band[1]}` }
+  const symbol = REGION_SYMBOL[qualifier]
+  return symbol ? { 'zh-TW': `M 蛋白（${symbol}）`, en: `M-protein (${symbol})` } : undefined
+}
+
+export function paraproteinDisplay(key: string, language: Lang): string | undefined {
+  if (key === 'PP:IFE') return language === 'zh-TW' ? '血清 IFE/IEP' : 'Serum IFE/IEP'
+  const parts = splitKey(key)
+  if (!parts) return undefined
+  const base = BASE_DISPLAY[parts.base] ?? mProteinBandDisplay(parts.base)
+  if (!base) return undefined
+  return `${SPECIMEN_LABEL[parts.specimen][language]}${base[language]}`
+}
+
+export function isParaproteinTextKey(key: string | undefined): boolean {
+  return !!key && PARAPROTEIN_TEXT_KEYS.has(key)
+}
+
+// ── identity ──────────────────────────────────────────────────────────────
+
+const ORDER_SET = new Set(PARAPROTEIN_NHI_ORDER_CODES)
+const SPEP_SET = new Set(PROTEIN_ELECTROPHORESIS_NHI_ORDER_CODES)
+
+// Word boundaries are Unicode-aware lookarounds against Latin letters and
+// digits, never \b: \b is ASCII-only, so it fails after a Greek κ / λ ("Free
+// κ/λ") and would let a CJK neighbour block a match. An abbreviation must
+// START a word — the "m" ending "Serum" never begins an "M protein".
+const M_PROTEIN_RE = /(?<![A-Z0-9])M[-\s]?(?:PROTEINS?|SPIKES?)(?![A-Z])|(?<![A-Z0-9])M[-\s]?(?:蛋白|帶)|PARAPROTEIN|單株(?:球)?蛋白(?:定量|量)?|MONOCLONAL\s*PROTEIN/iu
+// M-protein band qualifiers. LOINC gives each band its own item (band 1
+// 51435-6, band 2 35559-4 …), so a band keeps its own column; a total (sum of
+// bands) is neither a band nor the undifferentiated M-protein.
+const M_TOTAL_RE = /(?<![A-Z0-9])(?:TOTAL|SUM)(?![A-Z])|總|合計/iu
+const M_BAND_NUMBER_RE = /(?:BAND|PEAK|SPIKE|PROTEIN|蛋白|峰|帶|#|NO\.?)\s*[-#]?\s*(\d|IV|I{1,3})(?![\dA-Z])/iu
+const M_LEADING_BAND_RE = /(?<![A-Z0-9])BAND\s*[-#]?\s*(\d|IV|I{1,3})(?![\dA-Z])/iu
+const M_ORDINAL_RE = /(?<![A-Z0-9])(FIRST|1ST|SECOND|2ND|THIRD|3RD|FOURTH|4TH)(?![A-Z])|第\s*([一二三四1-4])/iu
+const ORDINAL_NUMBER: Record<string, number> = {
+  FIRST: 1, '1ST': 1, SECOND: 2, '2ND': 2, THIRD: 3, '3RD': 3, FOURTH: 4, '4TH': 4,
+  一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4,
+}
+const ROMAN_NUMBER: Record<string, number> = { I: 1, II: 2, III: 3, IV: 4 }
+const M_REGION: Array<[RegExp, string]> = [
+  [/ALPHA\s*-?\s*1|Α\s*-?\s*1/iu, 'ALPHA1'],
+  [/ALPHA\s*-?\s*2|Α\s*-?\s*2/iu, 'ALPHA2'],
+  [/(?<![A-Z])BETA(?![A-Z])|Β/iu, 'BETA'],
+  [/(?<![A-Z])GAMMA(?![A-Z])|Γ/iu, 'GAMMA'],
+]
+
+/** The band qualifier of an M-protein label: ":TOTAL", ":BANDn", a region
+ *  (":GAMMA" …), or "" for the undifferentiated M-protein. */
+function mProteinQualifier(upper: string): string {
+  if (M_TOTAL_RE.test(upper)) return ':TOTAL'
+  const numbered = upper.match(M_BAND_NUMBER_RE) ?? upper.match(M_LEADING_BAND_RE)
+  if (numbered) {
+    const n = /^\d$/.test(numbered[1]) ? Number(numbered[1]) : ROMAN_NUMBER[numbered[1].toUpperCase()]
+    if (n) return `:BAND${n}`
+  }
+  const ordinal = upper.match(M_ORDINAL_RE)
+  if (ordinal) {
+    const n = ORDINAL_NUMBER[(ordinal[1] ?? ordinal[2]).toUpperCase()]
+    if (n) return `:BAND${n}`
+  }
+  for (const [pattern, region] of M_REGION) if (pattern.test(upper)) return `:${region}`
+  return ''
+}
+
+const URINE_RE = /尿|URINE|(?<![A-Z0-9])UFLC(?![A-Z0-9])|^U[-\s.]|\(U\)/iu
+const CSF_RE = /(?<![A-Z0-9])CSF(?![A-Z0-9])|腦脊髓/iu
+// The κ/λ ratio only when its direction is written κ-over-λ (κ/λ, K/L,
+// kappa/lambda). λ/κ, or a ratio without a direction ("FLC ratio"), keeps its
+// source name and never joins the κ/λ column.
+const KL_RATIO_RE = /(?:Κ|KAPPA|(?<![A-Z0-9])K)\s*\/\s*(?:Λ|LAMBDA|L(?![A-Z0-9]))/iu
+const ANY_RATIO_RE = /RATIO|比值|\//iu
+const KAPPA_RE = /KAPPA|Κ|(?<![A-Z0-9])K(?![A-Z0-9])/iu
+const LAMBDA_RE = /LAMBDA|Λ|(?<![A-Z0-9])L(?![A-Z0-9])/iu
+const FREE_RE = /FREE|(?<![A-Z0-9])[SU]?FLC(?![A-Z0-9])|游離/iu
+const TOTAL_RE = /TOTAL|總/iu
+const BOUND_RE = /(?<![A-Z0-9])BOUND(?![A-Z0-9])|結合/iu
+// "free + bound", "bound and free", 「游離+結合」, 「結合及游離」: the sum is the total.
+const FREE_AND_BOUND_RE =
+  /(?:FREE|游離)\s*(?:\+|&|AND|和|及|與|加)\s*(?:BOUND|結合)|(?:BOUND|結合)\s*(?:\+|&|AND|和|及|與|加)\s*(?:FREE|游離)/iu
+
+/**
+ * The free / total modifier of a 12160B label, read in context:
+ * - free + bound wording → TOTAL (that sum is the total), with or without
+ *   the word "total";
+ * - free with total, or free with bound alone ("free/total", "Free kappa
+ *   total", "bound") → null: ambiguous, so the row keeps a neutral
+ *   source-name column and joins neither the free nor the total column;
+ * - otherwise free → FREE, total → TOTAL.
+ */
+function lightChainModifier(upper: string): 'FREE' | 'TOTAL' | null {
+  if (FREE_AND_BOUND_RE.test(upper)) return 'TOTAL'
+  const free = FREE_RE.test(upper)
+  const total = TOTAL_RE.test(upper)
+  const bound = BOUND_RE.test(upper)
+  if (free) return total || bound ? null : 'FREE'
+  if (total) return bound ? null : 'TOTAL'
+  return null
+}
+const IEP_ONLY_RE = /(?<![A-Z0-9])IEP(?![A-Z0-9])|IMMUNOELECTRO|免疫電泳/iu
+const IFE_RE = /(?<![A-Z0-9])IFE(?![A-Z0-9])|IMMUNOFIX|免疫固定/iu
+
+const loincOf = (obs: any): string | undefined =>
+  (obs?.code?.coding ?? []).find((c: any) => /loinc/i.test(c?.system || ''))?.code
+
+/** The row's own name: code.text, else a non-NHI (item) coding. */
+function ownName(obs: any): string {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system) && !/loinc/i.test(c?.system || ''))
+  return String(obs?.code?.text || own.find((c: any) => c?.display)?.display || own.find((c: any) => c?.code)?.code || '')
+}
+
+function specimenText(obs: any): string {
+  const specimen = obs?.specimen
+  const orderDisplays = (obs?.code?.coding ?? [])
+    .filter((c: any) => isNhiOrderCodeSystem(c?.system))
+    .map((c: any) => c?.display)
+  return [specimen?.display, specimen?.type?.text, ...(specimen?.type?.coding ?? []).map((c: any) => c?.display), ...orderDisplays]
+    .filter((t): t is string => typeof t === 'string')
+    .join(' ')
+}
+
+function specimenOf(obs: any, order: string | null, name: string): 'S' | 'U' | 'CSF' {
+  if (order === '12159B' || order === '12158B' || order === '09100B') return 'U'
+  if (order === '12157B') return 'CSF'
+  const evidence = `${name} ${specimenText(obs)}`.normalize('NFKC')
+  if (CSF_RE.test(evidence)) return 'CSF'
+  if (URINE_RE.test(withoutUrineAnalyteWords(evidence))) return 'U'
+  return 'S'
+}
+
+const prefixFor = (specimen: 'S' | 'U' | 'CSF') =>
+  specimen === 'U' ? 'PP:U:' : specimen === 'CSF' ? 'PP:CSF:' : PARAPROTEIN_PREFIX
+
+const isNumericValue = (obs: any) => typeof obs?.valueQuantity?.value === 'number'
+
+/**
+ * The paraprotein column of one observation, or null when it is not a
+ * paraprotein-subgroup row. `display` is set for neutral source-name columns.
+ */
+export function paraproteinIdentity(obs: any): { key: string; display?: string } | null {
+  const loinc = loincOf(obs)
+  if (loinc && PARAPROTEIN_LOINC_TO_KEY[loinc]) return { key: PARAPROTEIN_LOINC_TO_KEY[loinc] }
+
+  const order = nhiOrderCode(obs)
+  const name = ownName(obs)
+  const upper = name.normalize('NFKC').toUpperCase()
+
+  if (order && SPEP_SET.has(order)) {
+    if (!M_PROTEIN_RE.test(upper)) return null
+    return { key: `${prefixFor(specimenOf(obs, order, name))}M-PROTEIN${mProteinQualifier(upper)}` }
+  }
+  if (!order || !ORDER_SET.has(order)) return null
+
+  const specimen = specimenOf(obs, order, name)
+  const prefix = prefixFor(specimen)
+
+  if (order === '12160B') {
+    const analyte = KL_RATIO_RE.test(upper) ? 'KL-RATIO'
+      : ANY_RATIO_RE.test(upper) ? null
+      : KAPPA_RE.test(upper) && !LAMBDA_RE.test(upper) ? 'KAPPA'
+        : LAMBDA_RE.test(upper) && !KAPPA_RE.test(upper) ? 'LAMBDA'
+          : null
+    const marker = lightChainModifier(upper)
+    if (analyte && marker) return { key: `${prefix}${analyte}-${marker}` }
+    // Neutral: the source name is the column; free / total is never asserted.
+    const neutral = name.normalize('NFKC').trim() || '12160B'
+    return { key: `${prefix}KL:${neutral.toUpperCase()}`, display: neutral }
+  }
+
+  // Report orders: an M-protein amount, else the report's text column (lane
+  // rows included).
+  if (M_PROTEIN_RE.test(upper) && isNumericValue(obs)) return { key: `${prefix}M-PROTEIN${mProteinQualifier(upper)}` }
+  if (specimen === 'CSF') return { key: 'PP:CSF:IEP' }
+  if (order === '12159B') return { key: 'PP:U:IFE' }
+  if (order === '12158B') return { key: 'PP:U:IEP' }
+  if (order === '12157B') return { key: 'PP:CSF:IEP' }
+  // 12103B
+  if (specimen === 'U') return { key: IEP_ONLY_RE.test(upper) && !IFE_RE.test(upper) ? 'PP:U:IEP' : 'PP:U:IFE' }
+  return { key: 'PP:IFE' }
+}
+
+export function isParaproteinObservation(obs: any): boolean {
+  return paraproteinIdentity(obs) !== null
+}
+
+// ── text badge ────────────────────────────────────────────────────────────
+//
+// A badge is a summary a clinician may read instead of the report, so it is
+// given only when the WHOLE report says one thing:
+// - negative: every record is a controlled negative statement in full
+//   ("No monoclonal band", "Negative", 「未見單株球蛋白」, a lane "Absent");
+// - positive: exactly one record states one isotype ("IgG-κ", "free λ") in a
+//   single clause with no negation, doubt or second finding in scope, and
+//   every other record is a negative lane.
+// Anything else — mixed lanes, a lane-only positive, two bands, "faint",
+// "suspicious", "cannot exclude", 疑似, 不能排除, a second clause — is 見報告.
+// Records are "analyte: result" (the pivot keeps each folded lane's name).
+
+const LANE_LABEL_RE = /^(?:IG[GAMDE]|Κ|Λ|KAPPA|LAMBDA|FREE\s*(?:Κ|Λ|KAPPA|LAMBDA)|(?:IG[GAMDE]|KAPPA|LAMBDA)\s*LANE)$/
+const CONTROLLED_NEGATIVE_RE = new RegExp(
+  '^(?:'
+  + 'NEGATIVE|NEG|NOT\\s+DETECTED|ABSENT|NONE|NIL|\\(-\\)|-|陰性|未檢出'
+  + '|NO\\s+(?:MONOCLONAL\\s+(?:BAND|PROTEIN|GAMMOPATHY|COMPONENT|IMMUNOGLOBULIN)S?|M[-\\s]?PROTEIN|PARAPROTEIN|M[-\\s]?SPIKE|ABNORMAL\\s+BANDS?|BENCE[-\\s]?JONES\\s+PROTEIN|PARAPROTEIN\\s+BANDS?)'
+  + '(?:\\s+(?:IS\\s+|WAS\\s+)?(?:DETECTED|SEEN|IDENTIFIED|FOUND|NOTED|OBSERVED))?'
+  + '|(?:未見|未發現|無)單株(?:球)?蛋白(?:帶)?'
+  + ')$',
+)
+// Isotype badges by ALLOWLIST. A denylist of negations keeps leaking
+// ("IgG-κ is undetectable", "band has disappeared", 「已消失」), so a badge is
+// given only when the whole result is one of a few controlled affirmative
+// templates and nothing else:
+//   [monoclonal] <isotype> [monoclonal] [band | protein | component …]
+//     [is | was] [detected | present | identified | seen | noted | observed]
+//     [in the gamma | beta | alpha(-1/-2) region]
+//   單株 <isotype> [陽性 | 檢出];  <isotype> 單株(球)蛋白(帶) [陽性 | 檢出]
+// where <isotype> is a heavy-light pair (IgG-κ, IgA lambda) or a free light
+// chain (free λ, free kappa light chain).
+const LIGHT_ALT = '(?:Κ|Λ|KAPPA|LAMBDA)'
+const ISOTYPE_ALT = `(?:IG[GAMDE]\\s*[-‐_/ ]?\\s*${LIGHT_ALT}|(?:FREE|游離)\\s*${LIGHT_ALT}(?:\\s+LIGHT\\s+CHAINS?)?)`
+const AFFIRMATIVE_TEMPLATES = [
+  new RegExp(
+    `^(?:MONOCLONAL\\s+)?(${ISOTYPE_ALT})(?:\\s+MONOCLONAL)?`
+    + `(?:\\s+(?:BAND|PROTEIN|PARAPROTEIN|GAMMOPATHY|COMPONENT|IMMUNOGLOBULIN))?`
+    + `(?:\\s+(?:IS\\s+|WAS\\s+)?(?:DETECTED|PRESENT|IDENTIFIED|SEEN|NOTED|OBSERVED))?`
+    + `(?:\\s+IN\\s+(?:THE\\s+)?(?:GAMMA|BETA|ALPHA(?:[-\\s]?[12])?)(?:\\s+REGION)?)?$`,
+  ),
+  new RegExp(`^單株\\s*(${ISOTYPE_ALT})\\s*(?:陽性|檢出)?$`),
+  new RegExp(`^(${ISOTYPE_ALT})\\s*單株(?:球)?蛋白(?:帶)?\\s*(?:陽性|檢出)?$`),
+]
+const ISOTYPE_PARTS_RE = new RegExp(`^(?:(IG[GAMDE])\\s*[-‐_/ ]?\\s*(${LIGHT_ALT})|(?:FREE|游離)\\s*(${LIGHT_ALT}))`)
+
+const lightSymbol = (light: string) => (/Κ|KAPPA/.test(light) ? 'κ' : 'λ')
+
+/** The isotype a controlled affirmative template states, else null. */
+function singleIsotype(result: string): string | null {
+  const text = result.replace(/\s+/g, ' ').trim()
+  for (const template of AFFIRMATIVE_TEMPLATES) {
+    const match = text.match(template)
+    if (!match) continue
+    const parts = match[1].trim().match(ISOTYPE_PARTS_RE)
+    if (!parts) return null
+    return parts[1] ? `Ig${parts[1].slice(2)}-${lightSymbol(parts[2])}` : `free ${lightSymbol(parts[3])}`
+  }
+  return null
+}
+
+function splitRecord(record: string): { label: string; result: string } {
+  const text = String(record ?? '').normalize('NFKC').toUpperCase().trim()
+  const colon = text.indexOf(': ')
+  return colon > 0
+    ? { label: text.slice(0, colon).trim(), result: text.slice(colon + 2).trim().replace(/[.。]+$/, '').trim() }
+    : { label: '', result: text.replace(/[.。]+$/, '').trim() }
+}
+
+/**
+ * A short badge for one paraprotein text cell (every folded record of the
+ * day, each "analyte: result"): an isotype, 「陰性」, or 「見報告」.
+ */
+export function paraproteinTextBadge(records: readonly string[], language: Lang): string {
+  const seeReport = language === 'zh-TW' ? '見報告' : 'See report'
+  if (records.length === 0) return seeReport
+  const parsed = records.map(splitRecord)
+  const isLane = (r: { label: string }) => LANE_LABEL_RE.test(r.label)
+  const isNegative = (r: { result: string }) => CONTROLLED_NEGATIVE_RE.test(r.result)
+
+  if (parsed.every(isNegative)) return language === 'zh-TW' ? '陰性' : 'Negative'
+
+  // A positive lane on its own is not a finding (a polyclonal band is
+  // "present" too); a lane's isotype is never inferred.
+  const reports = parsed.filter((r) => !isLane(r))
+  const lanes = parsed.filter(isLane)
+  if (reports.length !== 1 || !lanes.every(isNegative)) return seeReport
+  return singleIsotype(reports[0].result) ?? seeReport
+}
+
+/** Header of a neutral (source-named) κ/λ column: the source name, prefixed
+ *  with its specimen when that is urine or CSF ("Urine Kappa", 「尿 Kappa」),
+ *  so a serum and a urine column of the same source name are told apart. */
+export function neutralParaproteinDisplay(key: string, sourceName: string, language: Lang): string | undefined {
+  const parts = splitKey(key)
+  if (!parts || !parts.base.startsWith('KL:')) return undefined
+  return `${SPECIMEN_LABEL[parts.specimen][language]}${sourceName}`
+}
