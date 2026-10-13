@@ -78,6 +78,17 @@ export function MedicationList({
     [activeMedications],
   )
   const activeBands = useMemo(() => assignRowVisitBands(activeByVisit), [activeByVisit])
+  // Rows of one drug at two clinics share a history; only the first one shown
+  // answers navigation to its prior fills, so the row that scrolls into view
+  // is the row whose history opens.
+  const historyNavigationOwnerByKey = useMemo(() => {
+    const owners = new Map<string, string>()
+    for (const medication of activeByVisit) {
+      const history = activeHistoryByMedicationId.get(medication.id)
+      if (history && !owners.has(history.key)) owners.set(history.key, medication.id)
+    }
+    return owners
+  }, [activeByVisit, activeHistoryByMedicationId])
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
@@ -89,11 +100,14 @@ export function MedicationList({
     const targetInHistory = inactiveMedicationGroups.some((group) =>
       group.medications.some((medication) => medication.id === pending.resourceId),
     )
-    const activeHistoryOwner = [...activeHistoryByMedicationId.entries()].find(
-      ([, group]) => group.medications.some(
+    const ownedHistory = [...activeHistoryByMedicationId.values()].find(
+      (group) => group.medications.some(
         (medication) => medication.id === pending.resourceId,
       ),
-    )?.[0]
+    )
+    const activeHistoryOwner = ownedHistory
+      ? historyNavigationOwnerByKey.get(ownedHistory.key)
+      : undefined
     if (!targetInActive && !targetInHistory && !activeHistoryOwner) return
     const timer = window.setTimeout(() => {
       if (targetInActive || activeHistoryOwner) setShowActive(true)
@@ -112,6 +126,7 @@ export function MedicationList({
     navSeq,
     activeMedications,
     activeHistoryByMedicationId,
+    historyNavigationOwnerByKey,
     inactiveMedicationGroups,
   ])
 
@@ -266,6 +281,7 @@ export function MedicationList({
                       visitContextInHeader={!!startDayOf(medication)}
                       onRowToggle={history ? toggleHistory : undefined}
                       resourceNavigationIds={history
+                        && historyNavigationOwnerByKey.get(history.key) === medication.id
                         ? [
                             medication.id,
                             ...history.medications.map((item) => item.id),

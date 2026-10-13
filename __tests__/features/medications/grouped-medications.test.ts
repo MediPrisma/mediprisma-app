@@ -144,7 +144,9 @@ describe('groupMedications — active-list merge', () => {
     expect(grouped.inactiveMedicationGroups).toEqual([])
   })
 
-  it('assigns shared drug history to only one current row when two clinics prescribe it', () => {
+  it('gives shared drug history to every current row when two clinics prescribe it', () => {
+    // Each row shows the drug's refill count, so each can open what it counts
+    // (MedicationList keeps one of them as the navigation owner).
     const clinicA = row({
       title: '普拿疼',
       drugKey: 'NHI-PANADOL',
@@ -165,8 +167,10 @@ describe('groupMedications — active-list merge', () => {
 
     const grouped = groupMedications([clinicA, clinicB, prior])
 
-    expect(grouped.activeHistoryByMedicationId.size).toBe(1)
+    expect(grouped.activeHistoryByMedicationId.size).toBe(2)
     expect(grouped.activeHistoryByMedicationId.get('active-a')?.medications).toEqual([prior])
+    expect(grouped.activeHistoryByMedicationId.get('active-b'))
+      .toBe(grouped.activeHistoryByMedicationId.get('active-a'))
     expect(grouped.inactiveMedicationGroups).toEqual([])
   })
 
