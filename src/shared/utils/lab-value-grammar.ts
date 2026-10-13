@@ -29,11 +29,14 @@ export function isPercentUnit(unit: unknown): boolean {
   return typeof unit === 'string' && PERCENT_UNIT_RE.test(unit.normalize('NFKC').trim())
 }
 
+/** The UCUM system URI, whole: http or https, with or without a trailing slash. */
+const UCUM_SYSTEM_RE = /^https?:\/\/unitsofmeasure\.org\/?$/i
+
 /** A UCUM code the Quantity carries, when its system is UCUM or absent. */
 function ucumCode(quantity: any): string {
   const code = typeof quantity?.code === 'string' ? quantity.code.trim() : ''
-  const system = typeof quantity?.system === 'string' ? quantity.system : ''
-  return code && (!system || /unitsofmeasure\.org/i.test(system)) ? code : ''
+  const system = typeof quantity?.system === 'string' ? quantity.system.trim() : ''
+  return code && (!system || UCUM_SYSTEM_RE.test(system)) ? code : ''
 }
 
 /** A Quantity (or Range bound) in percent. Its UCUM code decides when it has
