@@ -167,12 +167,20 @@ function CompactReferenceRange({
   // analyte lane still lays out at its text height at ANY root size. Scoped to
   // <768 (the app's md split) like the row's other touch targets; md+ keeps the
   // bare label and hover.
+  //
+  // md+: 12rem is the FLOOR, not the ceiling. A nested panel row has no
+  // institution/date beside it, and a fixed 144px cut a stratified range off
+  // with half the row still empty. `w-0 grow` takes whatever the cluster has
+  // spare while contributing only the 12rem minimum to the cluster's
+  // min-content — so a crowded row holds open exactly as before — and
+  // `max-w-max` stops at the text's end, keeping a high/low badge beside the
+  // range instead of pushed to the row's edge.
   return (
     <TapTooltip
       content={referenceText}
       aria-label={`參考範圍 ${referenceText}`}
       contentClassName="max-h-[50vh] max-w-[min(90vw,28rem)] overflow-y-auto whitespace-normal break-words text-xs leading-relaxed"
-      className="inline-flex min-w-0 max-w-[8rem] shrink max-md:-my-[10px] max-md:py-[10px] sm:max-w-[12rem]"
+      className="inline-flex min-w-0 max-w-[8rem] shrink max-md:-my-[10px] max-md:py-[10px] sm:max-w-[12rem] md:w-0 md:min-w-[12rem] md:max-w-max md:grow"
     >
       <span
         data-testid="reference-range-truncated"
