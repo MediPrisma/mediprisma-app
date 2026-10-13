@@ -53,8 +53,6 @@ interface MedicationItemProps {
   /** The row sits under a visit header that already names its institution
    *  and diagnosis, so the row leaves both out. */
   visitContextInHeader?: boolean
-  /** A history row of a drug that is still current: marks it 使用中. */
-  stillInUseLabel?: string
   /** Optional full-height leading action, used to reveal this current drug's
    *  older prescriptions without duplicating it in the history section. */
   leadingControl?: ReactNode
@@ -124,7 +122,6 @@ export function MedicationItem({
   nameMode = 'ingredient',
   grouped = false,
   visitContextInHeader = false,
-  stillInUseLabel,
   leadingControl,
   onRowToggle,
   onResourceNavigationMatch,
@@ -356,7 +353,6 @@ export function MedicationItem({
     && !medication.isChronic
     && !((medication.overlapCount ?? 0) > 0)
     && !showStatementChip
-    && !stillInUseLabel
   // A row under a visit header has nothing left in its middle column at
   // desktop widths, so from a 720px list it folds onto one line:
   // name | dates + regimen | class chips | status + refills. Below that it
@@ -548,14 +544,6 @@ export function MedicationItem({
                 className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/50 px-1.5 py-0 text-[0.625rem] font-medium text-muted-foreground"
               >
                 {mt.renewed ?? '已續領'}
-              </span>
-            )}
-            {stillInUseLabel && (
-              <span
-                data-history-still-in-use
-                className="inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[0.625rem] font-medium text-primary"
-              >
-                {stillInUseLabel}
               </span>
             )}
             {showStatementChip && (

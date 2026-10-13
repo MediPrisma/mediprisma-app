@@ -73,8 +73,6 @@ interface HistoryEntry {
   key: string
   group: MedicationHistoryGroup
   fill: MedicationRow
-  /** The drug is current; this is one of its earlier fills. */
-  stillInUse: boolean
 }
 
 function visitKeyOfEntry(entry: HistoryEntry): string {
@@ -107,10 +105,8 @@ function dateRangeOf(m: MedicationRow, locale: string): string {
 
 interface MedicationHistoryListProps {
   /** Drug groups whose fills the list shows: stopped drugs, plus the earlier
-   *  fills of current drugs (marked by `stillInUseKeys`). */
+   *  fills of current drugs (no badge: 使用中 above lists those drugs). */
   groups: MedicationHistoryGroup[]
-  /** Group keys of drugs that are current; their rows are marked 使用中. */
-  stillInUseKeys?: ReadonlySet<string>
   /** Drugs per visit before a search or class filter, when one is on, split
    *  as the lists are: visit headers then compare the matches with the
    *  visit's total ("1／3 項"). */
@@ -120,7 +116,6 @@ interface MedicationHistoryListProps {
 
 export function MedicationHistoryList({
   groups,
-  stillInUseKeys,
   visitTotals,
   nameMode = 'ingredient',
 }: MedicationHistoryListProps) {
@@ -143,7 +138,6 @@ export function MedicationHistoryList({
           key: `${group.key}\u001f${fill.id || index}`,
           group,
           fill,
-          stillInUse: stillInUseKeys?.has(group.key) ?? false,
           injectable: groupInjectable,
         })
       })
@@ -153,7 +147,7 @@ export function MedicationHistoryList({
       regular: entries.filter((entry) => !entry.injectable),
       injectable: entries.filter((entry) => entry.injectable),
     }
-  }, [groups, stillInUseKeys])
+  }, [groups])
   const injectableDrugCount = useMemo(
     () => new Set(injectable.map((entry) => entry.group.key)).size,
     [injectable],
@@ -359,7 +353,6 @@ function HistoryRow({
         onResourceNavigationMatch={canExpand ? ((_sequence, target) => {
           if (target.expandMedicationHistory) setOpen(true)
         }) : undefined}
-        stillInUseLabel={entry.stillInUse ? (mt.historyStillInUse ?? '使用中') : undefined}
         leadingControl={canExpand ? (
           <button
             type="button"

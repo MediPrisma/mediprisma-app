@@ -87,15 +87,12 @@ export function MedicationList({
   )
   const activeBands = useMemo(() => assignRowVisitBands(activeByVisit), [activeByVisit])
   // 用藥歷史 lists every fill under its own visit: stopped drugs, plus the
-  // earlier fills of current drugs (marked 使用中), so each visit shows
-  // every drug it prescribed.
-  const { historyGroups, stillInUseKeys } = useMemo(() => {
+  // earlier fills of current drugs, so each visit shows every drug it
+  // prescribed. (No 使用中 badge: the list above already names them.)
+  const historyGroups = useMemo(() => {
     const attached = new Map<string, MedicationHistoryGroup>()
     for (const group of activeHistoryByMedicationId.values()) attached.set(group.key, group)
-    return {
-      historyGroups: [...inactiveMedicationGroups, ...attached.values()],
-      stillInUseKeys: new Set(attached.keys()) as ReadonlySet<string>,
-    }
+    return [...inactiveMedicationGroups, ...attached.values()]
   }, [activeHistoryByMedicationId, inactiveMedicationGroups])
   // Totals before the filter, in the unit each list shows (rows): 使用中
   // counts its current-therapy rows; 用藥歷史 counts every ended fill, one
@@ -364,7 +361,6 @@ export function MedicationList({
             <div id={inactiveListId}>
               <MedicationHistoryList
                 groups={historyGroups}
-                stillInUseKeys={stillInUseKeys}
                 visitTotals={visitTotals}
                 nameMode={nameMode}
               />

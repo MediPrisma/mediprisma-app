@@ -17,7 +17,6 @@ jest.mock('@/src/application/providers/language.provider', () => ({
       common: { loading: '載入中' },
       medications: {
         currentlyInUse: '使用中', history: '用藥歷史', historyStopped: '已停用',
-        historyStillInUse: '使用中',
         showMedicationHistory: '顯示 {name} 的過往用藥紀錄（{count}）',
         hideMedicationHistory: '收合 {name} 的過往用藥紀錄（{count}）',
         visitHeaderCount: '{n} 項', visitHeaderCountOne: '1 項', visitHeaderCountFiltered: '{n}／{total} 項',
@@ -77,7 +76,7 @@ describe('用藥歷史 lists every drug of each visit', () => {
     expect(july.find((li) => li.textContent?.includes('ACETAMINOPHEN'))!.textContent).toContain('累計 2 次')
   })
 
-  it('lists a drug still in use at its older visit, marked 使用中', () => {
+  it('lists a drug still in use at its older visit', () => {
     const current = fill('amlo-1002', 'AMLODIPINE', '2026-10-02', '臺大醫院', 'I10', false, 2)
     const earlier = fill('amlo-0710', 'AMLODIPINE', '2026-07-10', '馬偕醫院', 'J01.90', true, 2)
     const { container } = render(<MedicationList medications={[current, earlier, b, c]} isLoading={false} error={null} />)
@@ -85,7 +84,9 @@ describe('用藥歷史 lists every drug of each visit', () => {
     const july = visitRows(list, '26/07/10')
     expect(july).toHaveLength(3)
     const amlo = july.find((li) => li.textContent?.includes('AMLODIPINE'))!
-    expect(amlo.querySelector('[data-history-still-in-use]')?.textContent).toBe('使用中')
+    // No 「使用中」 badge (owner, 2026-10-13): 使用中 above already lists the
+    // current drugs, and beside this fill's 已結束 it read as a contradiction.
+    expect(amlo.querySelector('[data-history-still-in-use]')).toBeNull()
     // Same refill count as the drug's 使用中 row, which counts every fill.
     expect(amlo.textContent).toContain('累計 2 次')
     // ...and it is still the current row in 使用中.
