@@ -170,6 +170,15 @@ describe('extractReportPreview audit of real report formats', () => {
     expect(extractReportPreview('【報告內容】 Sinus tachycardia RBBB 【Impression】')).toBeNull()
   })
 
+  it('does not take a preoperative or history DX as the conclusion', () => {
+    expect(extractReportPreview('PREOPERATIVE DX: Suspected colon cancer.\nPATHOLOGICAL DIAGNOSIS: Tubular adenoma.')).toEqual({
+      label: 'PATHOLOGICAL DIAGNOSIS',
+      text: 'Tubular adenoma.',
+    })
+    expect(extractReportPreview('Clinical history: DX: Lung cancer.\nFindings: No focal lung lesion.')?.label).not.toBe('DX')
+    expect(extractReportPreview('DX: Lung cancer, for staging. Lungs are clear.')).toBeNull()
+  })
+
   it('reads the Chang Gung pathology DX up to the gross description', () => {
     const raw = '姓名:測試 性別:男 病理編號:S0000 SNOMED: 00000-B DX: Colon, biopsy ----- Tubular adenoma GROSS D: Two pieces of tissue.'
     expect(extractReportPreview(raw)).toEqual({ label: 'DX', text: 'Colon, biopsy ----- Tubular adenoma' })

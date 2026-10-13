@@ -53,10 +53,15 @@ const FINDINGS_HEADING_RE = /FINDINGS?$/i
 
 // Conclusion markers the shared parser does not split on, found in the raw
 // text: echo "Conclusion ＆ Comments" (no colon), all-caps "IMPRESSION:" /
-// "CONCLUSION:" / a "* IMPRESSION *" banner, "SONAR DIAGNOSIS :", a bracketed
-// "【Impression】", and the Chang Gung pathology "DX:". Ranked after the parsed
-// first-group headings and before the second group.
-const RAW_CONCLUSION_RE = /(?<![A-Za-z])(Conclusion\s*[＆&]\s*Comments|IMPRESSIONS?(?=\s*[:：*])|CONCLUSIONS?(?=\s*[:：])|SONAR DIAGNOSIS(?=\s*[:：])|【Impression】|DX(?=\s*[:：]))[\s:：*】]*/g
+// "CONCLUSION:" / a "* IMPRESSION *" banner, "SONAR DIAGNOSIS :" and a
+// bracketed "【Impression】". Ranked after the parsed first-group headings and
+// before the second group.
+const RAW_CONCLUSION_RE = /(?<![A-Za-z])(Conclusion\s*[＆&]\s*Comments|IMPRESSIONS?(?=\s*[:：*])|CONCLUSIONS?(?=\s*[:：])|SONAR DIAGNOSIS(?=\s*[:：])|【Impression】)[\s:：*】]*/g
+// Chang Gung pathology states its diagnosis as "SNOMED: <code> DX: …". A bare
+// "DX:" elsewhere is too loose — "PREOPERATIVE DX:" or a history line would
+// pass the pre-test diagnosis off as the result — so only the DX that follows
+// a SNOMED code counts, ranked after every other conclusion.
+const PATHOLOGY_DX_RE = /SNOMED\s*[:：][^:：\n]*?(?<![A-Za-z])(DX)\s*[:：]\s*/g
 // Where a raw-marker section ends when no parsed heading ends it first.
 const RAW_SECTION_END_RE = /\s*(?:GROSS D|MICRO D|COMMENTS?|Echo guided procedure)\s*[:：][\s\S]*$/
 // "Clinical Impression:" is the referral reason, not the reader's verdict.
@@ -113,8 +118,8 @@ function headingConclusion(lines: ReportLine[], group: ReadonlySet<string>, with
   return null
 }
 
-function rawMarkerConclusion(raw: string): ReportPreview | null {
-  for (const match of raw.matchAll(RAW_CONCLUSION_RE)) {
+function rawMarkerConclusion(raw: string, marker: RegExp): ReportPreview | null {
+  for (const match of raw.matchAll(marker)) {
     if (CLINICAL_PREFIX_RE.test(raw.slice(0, match.index))) continue
     const rest = formatReportText(raw.slice(match.index + match[0].length))
     const text = tidy(joinLines(sectionBody(rest, -1)).replace(RAW_SECTION_END_RE, ''))
@@ -126,8 +131,9 @@ function rawMarkerConclusion(raw: string): ReportPreview | null {
 function conclusionPreview(lines: ReportLine[], raw: string): ReportPreview | null {
   const [primary, secondary] = CONCLUSION_GROUPS
   return headingConclusion(lines, primary, true)
-    ?? rawMarkerConclusion(raw)
+    ?? rawMarkerConclusion(raw, RAW_CONCLUSION_RE)
     ?? headingConclusion(lines, secondary, false)
+    ?? rawMarkerConclusion(raw, PATHOLOGY_DX_RE)
 }
 
 function letterheadPreview(raw: string): ReportPreview | null {
