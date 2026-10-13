@@ -62,7 +62,9 @@ export function humanDoseAmount(doseAndRate?: DoseAndRate[], text?: string): str
 export function doseUnlessRepeated(dose?: string, instruction?: string): string | undefined {
   if (!dose) return undefined
   const match = instruction?.match(
-    /^\s*(\d+(?:\.\d+)?)\s*(tab(?:let)?s?|cap(?:sule)?s?|mL|ml|mg|mcg|g|drop(?:s)?|puff(?:s)?|錠)(?![a-z])/i,
+    // The unit must end there: "5 mg/kg" or "5 mg/mL" is a per-weight dose
+    // or a concentration, not the absolute dose "5 mg".
+    /^\s*(\d+(?:\.\d+)?)\s*(tab(?:let)?s?|cap(?:sule)?s?|mL|ml|mg|mcg|g|drop(?:s)?|puff(?:s)?|錠)(?=$|[\s,;，、])/i,
   )
   if (!match) return dose
   const leading = `${match[1]} ${normalizeFormUnit(match[2])}`.toLowerCase()

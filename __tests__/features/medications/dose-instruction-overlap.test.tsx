@@ -5,6 +5,7 @@ import { doseUnlessRepeated } from '@/features/clinical-summary/medications/util
 import {
   BUILTIN_MED_COPY_FORMATS,
   buildMedicationCopyText,
+  createMedCopyFormat,
   selectMedicationsForCopy,
   type MedCopySourceItem,
 } from '@/features/clinical-summary/medications/utils/medication-copy-text'
@@ -33,6 +34,7 @@ describe('doseUnlessRepeated', () => {
     ['1 tab', '1 錠 QD'],
     ['5 mg', '5mg QD'],
     ['1 tab', '1 tab'],
+    ['1 tab', '1 tab, QD'],
   ])('drops %s when the instruction starts with it: %s', (dose, instruction) => {
     expect(doseUnlessRepeated(dose, instruction)).toBeUndefined()
   })
@@ -43,6 +45,11 @@ describe('doseUnlessRepeated', () => {
     ['1 mg', '10 mg QD'],
     ['1 tab', 'QD'],
     ['1 tab', undefined],
+    // A compound unit is a per-weight dose or a concentration, not the same
+    // absolute dose (Astra r1 on #285).
+    ['5 mg', '5 mg/kg QD'],
+    ['5 mg', '5 mg/mL solution, take 2 mL QD'],
+    ['5 mg', '5mg/kg QD'],
   ])('keeps %s otherwise: %s', (dose, instruction) => {
     expect(doseUnlessRepeated(dose, instruction)).toBe(dose)
   })
@@ -99,4 +106,33 @@ describe('copy text', () => {
     expect(text).toContain('1 tab QD')
     expect(text).not.toMatch(/1 ?tab\s*1 tab/)
   })
+
+  const copy = (format: ReturnType<typeof createMedCopyFormat>) => {
+    const item = {
+      id: 'm1', title: 'Drug A', dose: '1 tab', frequency: '1 tab QD',
+      day: '2026-10-02', durationDays: 28, isChronic: false, isInactive: false, isCurrent: true,
+    } as MedCopySourceItem
+    return buildMedicationCopyText(
+      selectMedicationsForCopy([item]), format, { today: '2026-10-03', labels: zhTW.medCopy.text },
+    ).text
+  }
+
+  it('keeps the dose when the format leaves the instruction out (Astra r1 on #285)', () => {
+    const format = createMedCopyFormat(BUILTIN_MED_COPY_FORMATS['builtin:compact'], 'mine', 'mine')
+    format.fields = format.fields.map((field) => field.id === 'frequency' ? { ...field, on: false } : field)
+    expect(copy(format)).toContain('1 tab')
+  })
+
+  it('keeps the dose when the instruction is rewritten without it', () => {
+    // Any frequency style that no longer starts with the dose must not take
+    // the dose with it.
+    for (const style of ['zh', 'split'] as const) {
+      const format = createMedCopyFormat(BUILTIN_MED_COPY_FORMATS['builtin:compact'], 'mine', 'mine')
+      format.fields = format.fields.map((field) => field.id === 'frequency' ? { ...field, style } : field)
+      const text = copy(format)
+      expect(text).toMatch(/1 ?tab/)
+      expect(text).not.toMatch(/1 ?tab\s*1 tab/)
+    }
+  })
 })
+
