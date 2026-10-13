@@ -58,6 +58,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
           vitals: '生命徵象',
           procedures: '處置',
         },
+        labTable: { abnormalOnly: '只看異常', showing: '顯示 {shown} / 共 {total} 筆' },
       },
     },
   }),

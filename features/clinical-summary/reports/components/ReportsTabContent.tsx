@@ -11,15 +11,19 @@
 //   with the report list instead of staying pinned above an internal scroller.
 // - fullscreen mode keeps the old internal scroll because the overlay itself is
 //   fixed-height.
-import { memo, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Loader2 } from "lucide-react"
 import { TabsContent } from "@/components/ui/tabs"
+import { cn } from "@/src/shared/utils/cn.utils"
 import type { Row } from '../types'
 import { isSystolicDiastolicBloodPressureRow } from '../utils/blood-pressure-panel'
 import { AdultPreventiveGroupCard } from './AdultPreventiveGroupCard'
 import { CancerScreeningRow } from './CancerScreeningRow'
 import { ReportRow } from './ReportRow'
+import { LabReportRow } from './lab-table/LabReportRow'
+import { LabTableHeader } from './lab-table/LabTableHeader'
+import type { LabTableVariant } from './lab-table/lab-table-layout'
 
 interface ReportsTabContentProps {
   value: string
@@ -60,6 +64,9 @@ interface ReportsTabContentProps {
   preparingLabel?: string
   emptyLabel?: string
   noMatchesLabel?: string
+  /** Lab tab: render rows on the shared column grid (flat list or day view)
+   *  inside one bordered table with a column header. */
+  labVariant?: LabTableVariant
 }
 
 // Stable fallback so referential equality holds when no expand list is
@@ -96,7 +103,7 @@ function findExternalScrollElement(el: HTMLElement): HTMLElement | null {
   return lastOverflowCandidate
 }
 
-function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading', emptyLabel = 'No reports available in this category.', noMatchesLabel = 'No matching reports.' }: ReportsTabContentProps) {
+function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved, isPreparing = false, preparingLabel = 'Loading', emptyLabel = 'No reports available in this category.', noMatchesLabel = 'No matching reports.', labVariant }: ReportsTabContentProps) {
   // The navigation target opens like a search hit — the user asked to SEE
   // this report, not to find its collapsed shell. The vitals tab also keeps
   // complete systolic/diastolic BP panels immediately readable; other
@@ -256,12 +263,13 @@ function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive =
           {searchActive ? noMatchesLabel : emptyLabel}
         </div>
       ) : (
+        <LabTableFrame variant={labVariant} fullHeight={fullHeight}>
         <div
           ref={fullHeight ? setScrollEl : setListEl}
           className={
             fullHeight
-              ? 'h-full overflow-y-auto pr-1'
-              : 'pr-1'
+              ? cn('h-full overflow-y-auto', !labVariant && 'pr-1', labVariant && 'min-h-0 flex-1')
+              : (labVariant ? '-mb-px' : 'pr-1')
           }
         >
           {/* Outer spacer sized to the *full* list height so the scrollbar
@@ -300,6 +308,8 @@ function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive =
                     <AdultPreventiveGroupCard row={row} defaultOpen={openIds} query={query} showTypeBadge={value === 'all'} />
                   ) : row.group === 'cancer-screening' ? (
                     <CancerScreeningRow row={row} defaultOpen={openIds} query={query} showTypeBadge={value === 'all'} />
+                  ) : labVariant ? (
+                    <LabReportRow row={row} variant={labVariant} defaultOpen={openIds} query={query} />
                   ) : (
                     <ReportRow row={row} defaultOpen={openIds} query={query} showTypeBadge={value === 'all'} />
                   )}
@@ -308,8 +318,30 @@ function ReportsTabContentImpl({ value, rows, isActive = true, workspaceActive =
             })}
           </div>
         </div>
+        </LabTableFrame>
       )}
     </TabsContent>
+  )
+}
+
+/** The lab tab's one bordered table: column header above, rows below. Other
+ *  tabs render their list bare. `overflow-clip` (not hidden) keeps the sticky
+ *  header attached to the panel's scroller; the list's `-mb-px` lays the last
+ *  row's divider over the frame's own bottom edge instead of doubling it. */
+function LabTableFrame({ variant, fullHeight, children }: { variant?: LabTableVariant; fullHeight: boolean; children: ReactNode }) {
+  if (!variant) return <>{children}</>
+  return (
+    <div
+      data-testid="lab-table"
+      data-variant={variant}
+      className={cn(
+        '@container overflow-clip rounded-lg border border-border bg-card',
+        fullHeight && 'flex h-full flex-col',
+      )}
+    >
+      <LabTableHeader variant={variant} />
+      {children}
+    </div>
   )
 }
 

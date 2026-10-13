@@ -23,6 +23,7 @@ import { useGroupedRows } from './hooks/useGroupedRows'
 import { useReportTabCounts } from './hooks/useReportTabCounts'
 import { groupMultiRegionStudies } from './utils/multi-region-grouping'
 import { groupLabReportsByDay } from './utils/lab-day-grouping'
+import { keepAbnormalLabRows } from './utils/lab-abnormal-filter'
 import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
@@ -566,9 +567,22 @@ export function ReportsCard() {
   // stays one toggle away. Grouping runs on the FILTERED rows so a search
   // shows day groups containing exactly the matching members.
   const [labByDay, setLabByDay] = useState(true)
+  // 只看異常 keeps only the abnormal analytes — a panel narrows to its flagged
+  // members — so the list answers "what is off?" in either view.
+  const [labAbnormalOnly, setLabAbnormalOnly] = useState(false)
+  const labSourceRows = useMemo(
+    () => (labAbnormalOnly ? keepAbnormalLabRows(groupedRows.lab) : groupedRows.lab),
+    [groupedRows.lab, labAbnormalOnly],
+  )
   const labRows = useMemo(
-    () => (labByDay ? groupLabReportsByDay(groupedRows.lab) : groupedRows.lab),
-    [groupedRows.lab, labByDay],
+    () => (labByDay ? groupLabReportsByDay(labSourceRows) : labSourceRows),
+    [labSourceRows, labByDay],
+  )
+  const labUnfilteredCount = useMemo(
+    () => (labAbnormalOnly
+      ? (labByDay ? groupLabReportsByDay(groupedRows.lab).length : groupedRows.lab.length)
+      : labRows.length),
+    [groupedRows.lab, labAbnormalOnly, labByDay, labRows.length],
   )
 
   const tabConfigs = useMemo(() => {
@@ -832,11 +846,7 @@ export function ReportsCard() {
                 fragmentation into one card per (day × institution); 單項列表
                 is the original flat list. Lab tab only. */}
             {activeTab === "lab" && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <ReportNameModeSwitch />
-
-                <span className="h-4 w-px bg-border" aria-hidden />
-
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
                 <div className="inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/40 p-0.5" role="group" aria-label={(t.reports as any).labViewLabel}>
                   {([
                     { byDay: true, label: (t.reports as any).byCollectionDay, title: (t.reports as any).byCollectionDayTooltip },
@@ -848,7 +858,7 @@ export function ReportsCard() {
                       onClick={() => setLabByDay(opt.byDay)}
                       title={opt.title}
                       aria-pressed={labByDay === opt.byDay}
-                      className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                      className={`rounded px-2 py-1 text-xs font-medium transition-colors max-md:min-h-9 ${
                         labByDay === opt.byDay
                           ? REPORT_ACTIVE_CONTROL_TONE
                           : 'text-muted-foreground hover:text-foreground'
@@ -858,6 +868,27 @@ export function ReportsCard() {
                     </button>
                   ))}
                 </div>
+
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-foreground max-md:min-h-9">
+                  <input
+                    type="checkbox"
+                    checked={labAbnormalOnly}
+                    onChange={(e) => setLabAbnormalOnly(e.target.checked)}
+                    data-testid="lab-abnormal-only"
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  {t.reports.labTable.abnormalOnly}
+                </label>
+
+                <ReportNameModeSwitch className="ml-auto" />
+
+                {labAbnormalOnly && (
+                  <p className="basis-full text-xs text-muted-foreground">
+                    {t.reports.labTable.showing
+                      .replace('{shown}', String(labRows.length))
+                      .replace('{total}', String(labUnfilteredCount))}
+                  </p>
+                )}
               </div>
             )}
             {activeTab === "procedures" && (
@@ -959,6 +990,7 @@ export function ReportsCard() {
               preparingLabel={t.common.loading}
               emptyLabel={t.reports.emptyCategory}
               noMatchesLabel={t.reports.noSearchResults}
+              labVariant={tab.value === 'lab' ? (labByDay ? 'day' : 'flat') : undefined}
             />
           )
         })}
