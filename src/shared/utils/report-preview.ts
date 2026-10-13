@@ -1,4 +1,4 @@
-import { formatReportText, type ReportLine } from './report-text-format'
+import { decodeReportEntities, formatReportText, type ReportLine } from './report-text-format'
 
 // One-glance preview for a collapsed free-text report card.
 //
@@ -30,12 +30,10 @@ const CONCLUSION_GROUPS: ReadonlyArray<ReadonlySet<string>> = [
 
 // Leading sections that describe how the study was done or why, never what it
 // found. When a report has no conclusion heading, the preview skips past these.
-// A letterhead block ("正式報告 臺北榮民總醫院…報告 病患資訊：…") is deliberately
-// NOT skipped: what follows it is patient identity, not findings.
 const PREAMBLE_HEADINGS = new Set([
   'History', 'Comparison', 'Methods', 'Method', 'Technique', 'INDICATION', 'Indications', 'Indication',
   'Premedication', 'Instruments', 'Instrument', 'Chief Complain', 'Medication', 'CLINICAL DIAGNOSIS',
-  'RADIOPHARMACEUTICAL',
+  'RADIOPHARMACEUTICAL', 'NUCLEAR MEDICINE STUDY',
 ])
 
 // "Computed Tomography of Brain Without Enhancement Show:" left on its own
@@ -51,14 +49,39 @@ const INLINE_CONCLUSION_RE = /^(Interpretation Summary|Short summary|Sonar Diagn
 // after these are findings (the bridge drops the next heading); after History
 // or Comparison they may still be the history itself.
 const ACQUISITION_HEADINGS = new Set(['Methods', 'Method', 'Technique'])
+const FINDINGS_HEADING_RE = /FINDINGS?$/i
+
+// Conclusion markers the shared parser does not split on, found in the raw
+// text: echo "Conclusion ＆ Comments" (no colon), all-caps "IMPRESSION:" /
+// "CONCLUSION:" / a "* IMPRESSION *" banner, "SONAR DIAGNOSIS :", a bracketed
+// "【Impression】", and the Chang Gung pathology "DX:". Ranked after the parsed
+// first-group headings and before the second group.
+const RAW_CONCLUSION_RE = /(?<![A-Za-z])(Conclusion\s*[＆&]\s*Comments|IMPRESSIONS?(?=\s*[:：*])|CONCLUSIONS?(?=\s*[:：])|SONAR DIAGNOSIS(?=\s*[:：])|【Impression】|DX(?=\s*[:：]))[\s:：*】]*/g
+// Where a raw-marker section ends when no parsed heading ends it first.
+const RAW_SECTION_END_RE = /\s*(?:GROSS D|MICRO D|COMMENTS?|Echo guided procedure)\s*[:：][\s\S]*$/
+// "Clinical Impression:" is the referral reason, not the reader's verdict.
+const CLINICAL_PREFIX_RE = /Clinical\s*$/i
+
+// Sign-off that follows the report body: reader / operator / supervisor names
+// and licence numbers ("操作醫師： DOC1234K 判讀醫師： … 監督醫師：…").
+const SIGN_OFF_RE = /\s*(?:操作醫師|判讀醫師|監督醫師|報告醫師|執行醫師|技術員|打字員|Reported by\b|Report DR\b|放診專)[\s\S]*$/
+
+// Taipei VGH reports open with a letterhead and the patient-identity block
+// ("正式報告 臺北榮民總醫院心臟內科報告 病患資訊：… 醫囑名稱： E.C.G. (E.K.G) …").
+// The report itself starts at the order name; nothing before it is a finding.
+// MediCloud may prefix the block with its own field label ("病理診斷 1：正式報告…").
+const VGH_LETTERHEAD_RE = /^\s*(?:[^\n:：]{1,12}[:：]\s*)?(?:正式|初步)報告\s/
+const ORDER_NAME_FIELD_RE = /醫囑名稱\s*[:：]\s*/
 
 const headingKey = (line: ReportLine) => line.text.replace(/\s*[:：]\s*$/, '')
 const isSectionHeading = (line: ReportLine) => line.heading === true && line.level === 0
-// "Impression:." — the source's stray punctuation after the colon.
-const trimLeadingPunctuation = (text: string) => text.replace(/^[.。,，;；:：\s]+/, '')
+// "Impression:." — the source's stray punctuation after the colon — and the
+// sign-off that would otherwise fill a short preview's second line.
+const tidy = (text: string) => text.replace(/^[.。,，;；:：\s]+/, '').replace(SIGN_OFF_RE, '').trim()
+// A "." bullet would read as a doubled full stop once items share one line.
 const joinLines = (lines: ReportLine[]) => lines
   .filter((line) => !line.separator)
-  .map((line) => (line.marker ? `${line.marker} ${line.text}` : line.text))
+  .map((line) => (line.marker && line.marker !== '.' ? `${line.marker} ${line.text}` : line.text))
   .join(' ')
   .trim()
 
@@ -72,29 +95,53 @@ function sectionBody(lines: ReportLine[], start: number): ReportLine[] {
   return body
 }
 
-function conclusionPreview(lines: ReportLine[]): ReportPreview | null {
-  for (const [rank, group] of CONCLUSION_GROUPS.entries()) {
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-      if (isSectionHeading(line) && group.has(headingKey(line))) {
-        const text = trimLeadingPunctuation(joinLines(sectionBody(lines, i)))
-        if (text) return { label: headingKey(line), text }
-        continue
-      }
-      const inline = rank === 0 && line.level === 0 && !line.heading ? INLINE_CONCLUSION_RE.exec(line.text) : null
-      if (inline) {
-        const text = trimLeadingPunctuation(`${inline[2]} ${joinLines(sectionBody(lines, i))}`.trim())
-        if (text) return { label: inline[1], text }
-      }
+function headingConclusion(lines: ReportLine[], group: ReadonlySet<string>, withInline: boolean): ReportPreview | null {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (isSectionHeading(line) && group.has(headingKey(line))) {
+      if (CLINICAL_PREFIX_RE.test(lines[i - 1]?.text ?? '')) continue
+      const text = tidy(joinLines(sectionBody(lines, i)))
+      if (text) return { label: headingKey(line), text }
+      continue
+    }
+    const inline = withInline && line.level === 0 && !line.heading ? INLINE_CONCLUSION_RE.exec(line.text) : null
+    if (inline) {
+      const text = tidy(`${inline[2]} ${joinLines(sectionBody(lines, i))}`)
+      if (text) return { label: inline[1], text }
     }
   }
   return null
 }
 
+function rawMarkerConclusion(raw: string): ReportPreview | null {
+  for (const match of raw.matchAll(RAW_CONCLUSION_RE)) {
+    if (CLINICAL_PREFIX_RE.test(raw.slice(0, match.index))) continue
+    const rest = formatReportText(raw.slice(match.index + match[0].length))
+    const text = tidy(joinLines(sectionBody(rest, -1)).replace(RAW_SECTION_END_RE, ''))
+    if (text) return { label: match[1].replace(/[【】]/g, ''), text }
+  }
+  return null
+}
+
+function conclusionPreview(lines: ReportLine[], raw: string): ReportPreview | null {
+  const [primary, secondary] = CONCLUSION_GROUPS
+  return headingConclusion(lines, primary, true)
+    ?? rawMarkerConclusion(raw)
+    ?? headingConclusion(lines, secondary, false)
+}
+
+function letterheadPreview(raw: string): ReportPreview | null {
+  if (!VGH_LETTERHEAD_RE.test(raw)) return null
+  const field = ORDER_NAME_FIELD_RE.exec(raw)
+  if (!field) return null
+  const text = tidy(joinLines(formatReportText(raw.slice(field.index + field[0].length))))
+  return text ? { text } : null
+}
+
 /**
  * Index of the first line after the preamble, or 0 when the preamble cannot be
  * skipped safely. Only a findings lead-in ("… Show:", inline or on its own
- * line) proves the findings have started; a method/technique section after it
+ * line) or a findings heading proves the findings have started; a method/technique section after it
  * keeps that proof, any other preamble section drops it. Without that proof a
  * History list or paragraph that runs on past its heading would preview as a
  * result, with the heading that said otherwise gone — so the report stays as
@@ -129,6 +176,11 @@ function skipPreamble(lines: ReportLine[]): number {
     break
   }
   if (i === 0 || i >= lines.length) return 0
+  // A findings heading after the preamble ("SCINTIGRAPHIC FINDINGS:") is the
+  // same proof a lead-in gives; preview its body.
+  if (isSectionHeading(lines[i]) && FINDINGS_HEADING_RE.test(headingKey(lines[i]))) {
+    return i + 1 < lines.length && !isSectionHeading(lines[i + 1]) ? i + 1 : 0
+  }
   return afterLeadIn ? i : 0
 }
 
@@ -136,18 +188,26 @@ function skipPreamble(lines: ReportLine[]): number {
  * Pick what a collapsed report card should preview.
  *
  * 1. The report's conclusion section, labelled with the source's own heading.
- * 2. Otherwise the text after any leading method / history / study-name
+ * 2. Otherwise, for a Taipei VGH letterhead report, the text from the order
+ *    name on — never the patient-identity block.
+ * 3. Otherwise the text after any leading method / history / study-name
  *    preamble.
- * 3. Otherwise `null` — the caller keeps showing the report as written.
+ * 4. Otherwise `null` — the caller keeps showing the report as written.
+ *
+ * Every preview stops at the reader sign-off.
  */
 export function extractReportPreview(raw: string | undefined | null): ReportPreview | null {
   if (!raw || !raw.trim()) return null
+  const decoded = decodeReportEntities(raw)
   const lines = formatReportText(raw)
-  const conclusion = conclusionPreview(lines)
+  const conclusion = conclusionPreview(lines, decoded)
   if (conclusion) return conclusion
+
+  const letterhead = letterheadPreview(decoded)
+  if (letterhead) return letterhead
 
   const start = skipPreamble(lines)
   if (start === 0) return null
-  const text = joinLines(lines.slice(start))
+  const text = tidy(joinLines(lines.slice(start)))
   return text ? { text } : null
 }

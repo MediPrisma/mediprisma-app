@@ -80,7 +80,7 @@ describe('extractReportPreview', () => {
     expect(extractReportPreview('History: lung nodule follow-up, s/p wedge resection in 2024.')).toBeNull()
   })
 
-  it('does not skip a letterhead into the patient identity block', () => {
+  it('leaves a letterhead without an order-name field as written', () => {
     const raw = '正式報告 某某醫院心臟內科報告\n病患資訊： 門診 測試病人\n報告人： 測試醫師'
     expect(extractReportPreview(raw)).toBeNull()
   })
@@ -123,5 +123,71 @@ describe('extractReportPreview review regressions', () => {
       label: 'Interpretation Summary',
       text: 'Reduced LV systolic function. Mild MR.',
     })
+  })
+})
+
+describe('extractReportPreview audit of real report formats', () => {
+  // Shapes found auditing MediCloud + 健康存摺 reports; wording invented.
+  const LETTERHEAD = '正式報告 某某醫院心臟內科報告 病患資訊： 門 診 測試病人 0000000-0 男性 80歲 出生日期： 1946/01/01 申請序號 / 工作號： A0000 開醫囑者： X 測試醫師 報告人： X 測試醫師 檢體： 醫囑名稱： '
+
+  it('starts a letterhead report at the order name, never the identity block', () => {
+    const raw = `${LETTERHEAD}E.C.G. (E.K.G) Sinus rhythm Right bundle branch block 操作醫師： DOC0000X測試 判讀醫師： DOC0000X測試 監督醫師： DOC0000X測試`
+    expect(extractReportPreview(raw)).toEqual({ text: 'E.C.G. (E.K.G) Sinus rhythm Right bundle branch block' })
+  })
+
+  it('accepts a MediCloud field label in front of the letterhead', () => {
+    const raw = `病理診斷 1：${LETTERHEAD}CYTOLOGY EX-ASCITES Negative for malignant cells`
+    expect(extractReportPreview(raw)?.text).toBe('CYTOLOGY EX-ASCITES Negative for malignant cells')
+  })
+
+  it('still prefers a conclusion inside a letterhead report', () => {
+    const raw = `${LETTERHEAD}COLOR,M-MODE+2-D ECHO LVEF 60 % Conclusion ＆ Comments 1. Thickened aortic valve. 2. Normal LV systolic function. 操作醫師： DOC0000X測試`
+    expect(extractReportPreview(raw)).toEqual({
+      label: 'Conclusion ＆ Comments',
+      text: '1. Thickened aortic valve. 2. Normal LV systolic function.',
+    })
+  })
+
+  it('cuts the reader sign-off from a conclusion', () => {
+    const raw = 'Findings: increased uptake.\nImpression: ＞ No interval change. 操作醫師： 0000X 判讀醫師： 0000X 監督醫師： 0000X'
+    expect(extractReportPreview(raw)?.text).toBe('＞ No interval change.')
+    expect(extractReportPreview('Impression: no acute hemorrhage 報告醫師: 測試 放診專字: 第000號')?.text).toBe('no acute hemorrhage')
+  })
+
+  it('reads all-caps and banner conclusion headings', () => {
+    expect(extractReportPreview('Liver: unremarkable. CONCLUSION: ＞ Stable disease.')).toEqual({ label: 'CONCLUSION', text: '＞ Stable disease.' })
+    expect(extractReportPreview('Lungs clear.---IMPRESSION: 1. No metastasis.')).toEqual({ label: 'IMPRESSION', text: '1. No metastasis.' })
+    expect(extractReportPreview('Lungs clear. ************** * IMPRESSION * ************** 1. No embolism.')).toEqual({ label: 'IMPRESSION', text: '1. No embolism.' })
+  })
+
+  it('reads SONAR DIAGNOSIS up to the procedure note', () => {
+    const raw = 'PLEURAL EFFUSION : YES SONAR DIAGNOSIS : Right pleural effusion Echo guided procedure : Thoracentesis'
+    expect(extractReportPreview(raw)).toEqual({ label: 'SONAR DIAGNOSIS', text: 'Right pleural effusion' })
+  })
+
+  it('reads a bracketed 【Impression】 but not an empty one', () => {
+    expect(extractReportPreview('【報告內容】, pleural effusion 【Impression】, pleural effusion, right')).toEqual({ label: 'Impression', text: 'pleural effusion, right' })
+    expect(extractReportPreview('【報告內容】 Sinus tachycardia RBBB 【Impression】')).toBeNull()
+  })
+
+  it('reads the Chang Gung pathology DX up to the gross description', () => {
+    const raw = '姓名:測試 性別:男 病理編號:S0000 SNOMED: 00000-B DX: Colon, biopsy ----- Tubular adenoma GROSS D: Two pieces of tissue.'
+    expect(extractReportPreview(raw)).toEqual({ label: 'DX', text: 'Colon, biopsy ----- Tubular adenoma' })
+  })
+
+  it('does not treat a Clinical Impression as the conclusion', () => {
+    const raw = 'Clinical Impression: Lung cancer\nScintigraphic Findings and Impression:\n＞ No bone metastasis.'
+    expect(extractReportPreview(raw)).toEqual({ label: 'Impression', text: '＞ No bone metastasis.' })
+    expect(extractReportPreview('檢查: chest sonography Clinical Impression: Indication: pleural effusion')).toBeNull()
+  })
+
+  it('previews nuclear medicine findings after the study preamble', () => {
+    const raw = 'NUCLEAR MEDICINE STUDY: Whole body bone scan\nRADIOPHARMACEUTICAL: Tc-99m MDP\nINDICATION: staging\nSCINTIGRAPHIC FINDINGS:\nIncreased uptake at L2.'
+    expect(extractReportPreview(raw)).toEqual({ text: 'Increased uptake at L2.' })
+  })
+
+  it('does not double the full stop of "." bullets', () => {
+    const raw = 'Conclusions:\n. Thickened aortic valve.\n. No pericardial effusion.'
+    expect(extractReportPreview(raw)?.text).toBe('Thickened aortic valve. No pericardial effusion.')
   })
 })
