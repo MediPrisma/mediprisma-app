@@ -30,6 +30,7 @@ import {
   getMedicationStatusBadgeClass,
 } from './medication-chip-styles'
 import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
+import { doseUnlessRepeated } from '../utils/dose-helpers'
 
 interface MedicationItemProps {
   medication: MedicationRow
@@ -278,11 +279,18 @@ export function MedicationItem({
     }
   }
 
-  if (medication.dose) {
+  // The instruction follows "（28 天）" directly: the full-width bracket
+  // spaces itself. A bare "28 天" (no date) or a range without a duration
+  // still needs the space.
+  const joinsFrequencyWithoutSpace = (previousKey?: string) =>
+    (previousKey === 'date' || previousKey === 'execution-period')
+    && durationSuffix.startsWith('（')
+  const shownDose = doseUnlessRepeated(medication.dose, medication.frequency)
+  if (shownDose) {
     scheduleParts.push({
       key: 'dose',
       fixed: true,
-      node: <span>{medication.dose}</span>,
+      node: <span>{shownDose}</span>,
     })
   }
 
@@ -454,18 +462,14 @@ export function MedicationItem({
                     }
                     data-medication-date-frequency-join={
                       part.key === 'frequency'
-                      && ['date', 'duration', 'execution-period'].includes(
-                        scheduleParts[index - 1]?.key ?? '',
-                      )
+                      && joinsFrequencyWithoutSpace(scheduleParts[index - 1]?.key)
                         ? 'true'
                         : undefined
                     }
                     className="whitespace-pre"
                   >
                     {part.key === 'frequency'
-                      && ['date', 'duration', 'execution-period'].includes(
-                        scheduleParts[index - 1]?.key ?? '',
-                      )
+                      && joinsFrequencyWithoutSpace(scheduleParts[index - 1]?.key)
                       ? ''
                       : ' '}
                   </span>
