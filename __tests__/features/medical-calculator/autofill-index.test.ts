@@ -193,3 +193,32 @@ describe('buildAutofill — derived urine ACR (microalbumin ÷ urine creatinine)
     expect(af.resolve(acrSource)).toBeUndefined()
   })
 })
+
+describe('buildAutofill — pediatric eGFR', () => {
+  // 臺北榮總 eGFR rows: both may carry 69405-9 (no formula), so only the name
+  // tells the pediatric (Schwartz) value apart. Values are synthetic.
+  const egfr = (text: string, value: number, loinc: string, date: string) => ({
+    effectiveDateTime: date,
+    code: { text, coding: [{ system: 'http://loinc.org', code: loinc }] },
+    valueQuantity: { value, unit: 'mL/min/1.73m2' },
+  })
+  const ADULT = { kind: 'lab' as const, keys: ['EGFR(EPI)', 'EGFR(M)'] }
+
+  it('never fills an adult eGFR from a pediatric-only observation', () => {
+    expect(buildAutofill([egfr('eGFR(PED)', 102, '69405-9', '2026-10-01')], { age: 50 }).resolve(ADULT)).toBeUndefined()
+    expect(buildAutofill([egfr('GFR SerPlBld Schwartz-ArVRat', 102, '50384-7', '2026-10-01')], { age: 50 }).resolve(ADULT)).toBeUndefined()
+  })
+
+  it('never fills an adult eGFR from a pediatric panel component', () => {
+    const panel = { effectiveDateTime: '2026-10-01', code: { text: 'Creatinine' }, component: [egfr('eGFR(PED)', 102, '69405-9', '2026-10-01')] }
+    expect(buildAutofill([panel], { age: 50 }).resolve(ADULT)).toBeUndefined()
+  })
+
+  it('still fills from MDRD when a later pediatric value sits beside it', () => {
+    const af = buildAutofill([
+      egfr('eGFR(M)', 177, '69405-9', '2026-10-01'),
+      egfr('eGFR(PED)', 102, '69405-9', '2026-10-02'),
+    ], { age: 50 })
+    expect(af.resolve(ADULT)?.value).toBe(177)
+  })
+})

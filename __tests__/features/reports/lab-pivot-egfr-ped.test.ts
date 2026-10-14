@@ -2,7 +2,7 @@ import { buildLabPivots, getLabPivotTestIdentity } from '@/src/shared/utils/lab-
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 
-// 臺北榮總 prints 「eGFR(M)」 and 「eGFR(PED)」 on every creatinine report.
+// Some 臺北榮總 creatinine reports print 「eGFR(M)」 and 「eGFR(PED)」.
 // Stripping the parenthetical used to key the pediatric (Schwartz) value as
 // EGFR(M), so one cumulative cell read "181.06 / 106". Values are synthetic.
 const LAB = [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }]

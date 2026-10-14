@@ -421,7 +421,7 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
 }
 
 const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
-  // 臺北榮總 prints 「eGFR(PED)」 beside 「eGFR(M)」 on every creatinine report.
+  // Some 臺北榮總 creatinine reports print 「eGFR(PED)」 beside 「eGFR(M)」.
   // The package strips the parenthetical and keys bare eGFR as EGFR(M), which
   // merged the pediatric (Schwartz) value into the adult cell ("181.06 / 106").
   'EGFR(PED)': 'EGFR(PED)',
@@ -656,6 +656,13 @@ function canonicalTestKey(obs: any): string {
     if (isKnownPivotKey(key)) return key
   }
   return resolved
+}
+
+/** True when the pivot files this row (or panel component) as pediatric
+ *  (Schwartz) eGFR. The package keys it as EGFR(M), so callers outside the
+ *  pivot (calculator autofill) ask here before trusting the package's key. */
+export function isPediatricEgfr(holder: unknown): boolean {
+  return canonicalTestKey(holder) === 'EGFR(PED)'
 }
 
 /** True when `key` is an analyte the pivot recognises (package or app label). */
