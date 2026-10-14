@@ -60,8 +60,11 @@ const RAW_CONCLUSION_RE = /(?<![A-Za-z])(Conclusion\s*[＆&]\s*Comments|IMPRESSI
 // Chang Gung pathology states its diagnosis as "SNOMED: <code> DX: …". A bare
 // "DX:" elsewhere is too loose — "PREOPERATIVE DX:" or a history line would
 // pass the pre-test diagnosis off as the result — so only the DX that follows
-// a SNOMED code counts, ranked after every other conclusion.
-const PATHOLOGY_DX_RE = /SNOMED\s*[:：][^:：\n]*?(?<![A-Za-z])(DX)\s*[:：]\s*/g
+// a SNOMED code counts, ranked after every other conclusion. Only code tokens
+// ("00000-B-M00000": capitals, digits, hyphens, at least one digit) may sit
+// between the two — a word there ("SNOMED: … PREOPERATIVE DX:") qualifies the DX.
+// The source sometimes runs the last code into the label ("…-M81403DX:").
+const PATHOLOGY_DX_RE = /SNOMED\s*[:：]\s*(?:[A-Z-]*\d[A-Z0-9-]*?[\s,;/]*)+?(DX)\s*[:：]\s*/g
 // Where a raw-marker section ends when no parsed heading ends it first.
 const RAW_SECTION_END_RE = /\s*(?:GROSS D|MICRO D|COMMENTS?|Echo guided procedure)\s*[:：][\s\S]*$/
 // "Clinical Impression:" is the referral reason, not the reader's verdict.

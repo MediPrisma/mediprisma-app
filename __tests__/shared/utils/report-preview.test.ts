@@ -179,6 +179,18 @@ describe('extractReportPreview audit of real report formats', () => {
     expect(extractReportPreview('DX: Lung cancer, for staging. Lungs are clear.')).toBeNull()
   })
 
+  it('does not take a qualified DX between the SNOMED code and the colon', () => {
+    expect(extractReportPreview('SNOMED: 00000-B PREOPERATIVE DX: Suspected colon cancer. GROSS D: Two pieces of tissue.')).toBeNull()
+    expect(extractReportPreview('SNOMED: 00000-B Clinical DX: Suspected colon cancer. GROSS D: Two pieces of tissue.')).toBeNull()
+  })
+
+  it('reads a pathology DX after several SNOMED codes and line breaks', () => {
+    const raw = 'SNOMED:\r    00000-B-M00000 T67000-M81403\r\r\rDX: Colon, biopsy ----- Tubular adenoma GROSS D: Two pieces.'
+    expect(extractReportPreview(raw)).toEqual({ label: 'DX', text: 'Colon, biopsy ----- Tubular adenoma' })
+    // The source sometimes runs the last code into the label.
+    expect(extractReportPreview('SNOMED: 00000-B-M00000DX: Stomach, biopsy ----- Gastritis GROSS D: One piece.')?.text).toBe('Stomach, biopsy ----- Gastritis')
+  })
+
   it('reads the Chang Gung pathology DX up to the gross description', () => {
     const raw = '姓名:測試 性別:男 病理編號:S0000 SNOMED: 00000-B DX: Colon, biopsy ----- Tubular adenoma GROSS D: Two pieces of tissue.'
     expect(extractReportPreview(raw)).toEqual({ label: 'DX', text: 'Colon, biopsy ----- Tubular adenoma' })
