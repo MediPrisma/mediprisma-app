@@ -521,7 +521,6 @@ export const zhTW = {
       ended: '已結束',
       stopped: '已停用',
       previousDose: '原 {dose}',
-      sameIngredient: '同成分，{n} 院',
       endedListTitle: '近期已用完（短期藥，不算在上面 {count} 項）',
       unknownInstitution: '院所不明',
       uncategorised: '未分類',
@@ -1152,8 +1151,10 @@ export const zhTW = {
   medications: {
     visitHeaderCount: '{n} 項',
     visitHeaderCountOne: '1 項',
+    visitHeaderCountFiltered: '{n}／{total} 項',
     visitHeaderLabel: '{date} 就診，{n} 項用藥',
     visitHeaderLabelOne: '{date} 就診，1 項用藥',
+    visitHeaderLabelFiltered: '{date} 就診，{total} 項用藥中 {n} 項符合',
     title: '病人用藥',
     active: '使用中',
     all: '全部',

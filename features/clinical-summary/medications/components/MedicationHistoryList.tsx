@@ -19,10 +19,11 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
 import type { MedicationHistoryGroup } from '../hooks/useGroupedMedications'
 import {
-  assignVisitBands,
+  bandsFromVisitKeys,
   compareRowsByVisit,
   startDayOf,
   visitBandTintClass,
+  visitKeyOfRow,
   type VisitBand,
 } from '../utils/visit-bands'
 import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
@@ -54,7 +55,7 @@ const HISTORY_GROUP_BATCH_SIZE = 24
 
 /** Route- and name-based heuristic for an injectable / infusion medication.
  *  NOT an inpatient detector — route only. */
-function isInjectable(m: MedicationRow): boolean {
+export function isInjectable(m: MedicationRow): boolean {
   const route = (m.route || '').trim()
   if (route) {
     if (INJECTION_ABBR.has(route.toUpperCase())) return true
@@ -63,17 +64,37 @@ function isInjectable(m: MedicationRow): boolean {
   return INJECTION_RE.test(`${m.title || ''} ${m.secondaryTitle || ''}`)
 }
 
-/** Representative rows of the visit that starts at `index` (empty for rows
- *  that don't start a visit). Uses the full list, so counts stay correct
- *  while later rows are still being revealed in idle batches. */
+/** One row of the history list: a single fill, under the visit that
+ *  prescribed it, carrying its drug's group for the refill count and the
+ *  expandable list of the drug's other fills. Every visit therefore lists
+ *  every drug it prescribed (owner, 2026-10-13), even when the drug was
+ *  filled again later. */
+interface HistoryEntry {
+  key: string
+  group: HistoryListGroup
+  fill: MedicationRow
+}
+
+/** A drug's ended fills, one row each. `currentFills` are that drug's
+ *  current prescriptions (rows of 使用中, not of this list): an expanded row
+ *  lists them with the ended fills, so it opens every fill it counts. */
+export type HistoryListGroup = MedicationHistoryGroup & { currentFills?: MedicationRow[] }
+
+function visitKeyOfEntry(entry: HistoryEntry): string {
+  return visitKeyOfRow(entry.fill, entry.key)
+}
+
+/** Fills of the visit that starts at `index` (empty for rows that don't
+ *  start a visit). Uses the full list, so counts stay correct while later
+ *  rows are still being revealed in idle batches. */
 function visitRowsAt(
-  groups: MedicationHistoryGroup[],
+  entries: HistoryEntry[],
   bands: VisitBand[],
   index: number,
 ): MedicationRow[] | undefined {
   const count = bands[index]?.headerCount ?? 0
   if (!count) return undefined
-  return groups.slice(index, index + count).map((group) => group.medications[0])
+  return entries.slice(index, index + count).map((entry) => entry.fill)
 }
 
 /** Compact "start → end" shared with the collapsed medication row. */
@@ -88,12 +109,19 @@ function dateRangeOf(m: MedicationRow, locale: string): string {
 }
 
 interface MedicationHistoryListProps {
-  groups: MedicationHistoryGroup[]
+  /** Drug groups whose fills the list shows: stopped drugs, plus the earlier
+   *  fills of current drugs (no badge: 使用中 above lists those drugs). */
+  groups: HistoryListGroup[]
+  /** Drugs per visit before a search or class filter, when one is on, split
+   *  as the lists are: visit headers then compare the matches with the
+   *  visit's total ("1／3 項"). */
+  visitTotals?: { regular: Map<string, number>; injectable: Map<string, number> }
   nameMode?: MedicationNameMode
 }
 
 export function MedicationHistoryList({
   groups,
+  visitTotals,
   nameMode = 'ingredient',
 }: MedicationHistoryListProps) {
   const { t } = useLanguage()
@@ -102,27 +130,41 @@ export function MedicationHistoryList({
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
-  // Sort by visit, newest first, so drugs prescribed together sit together
-  // and can share a background band (scanning by eye: "which visit was this").
+  // One row per fill, sorted by visit, newest first, so drugs prescribed
+  // together sit together and share a background band.
   const { regular, injectable } = useMemo(() => {
-    const sorted = [...groups].sort((a, b) => compareRowsByVisit(a.medications[0], b.medications[0]))
-    const reg: MedicationHistoryGroup[] = []
-    const inj: MedicationHistoryGroup[] = []
-    for (const g of sorted) {
-      // Same drug name across refills → consistent classification; `.some`
-      // still catches a group whose route was only recorded on some refills.
-      ;(g.medications.some(isInjectable) ? inj : reg).push(g)
+    const entries: Array<HistoryEntry & { injectable: boolean }> = []
+    for (const group of groups) {
+      // Same drug across refills → one classification; `.some` still catches
+      // a drug whose route was only recorded on some refills.
+      const groupInjectable = group.medications.some(isInjectable)
+      group.medications.forEach((fill, index) => {
+        entries.push({
+          key: `${group.key}\u001f${fill.id || index}`,
+          group,
+          fill,
+          injectable: groupInjectable,
+        })
+      })
     }
-    return { regular: reg, injectable: inj }
+    entries.sort((a, b) => compareRowsByVisit(a.fill, b.fill))
+    return {
+      regular: entries.filter((entry) => !entry.injectable),
+      injectable: entries.filter((entry) => entry.injectable),
+    }
   }, [groups])
+  const injectableDrugCount = useMemo(
+    () => new Set(injectable.map((entry) => entry.group.key)).size,
+    [injectable],
+  )
 
   // Bands are computed over the full list so idle-time batch reveal never
   // re-colours rows that are already on screen.
-  const regularBands = useMemo(() => assignVisitBands(regular), [regular])
-  const injectableBands = useMemo(() => assignVisitBands(injectable), [injectable])
+  const regularBands = useMemo(() => bandsFromVisitKeys(regular.map(visitKeyOfEntry)), [regular])
+  const injectableBands = useMemo(() => bandsFromVisitKeys(injectable.map(visitKeyOfEntry)), [injectable])
 
   const regularRenderKey = useMemo(
-    () => regular.map((group) => group.key).join('\u001f'),
+    () => regular.map((entry) => entry.key).join('\u001f'),
     [regular],
   )
   const initialRegularCount = Math.min(INITIAL_HISTORY_GROUP_COUNT, regular.length)
@@ -181,12 +223,8 @@ export function MedicationHistoryList({
 
   useEffect(() => {
     if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
-    const targetInRegular = regular.findIndex((group) =>
-      group.medications.some((medication) => medication.id === pending.resourceId),
-    )
-    const targetInInjectables = injectable.some((group) =>
-      group.medications.some((medication) => medication.id === pending.resourceId),
-    )
+    const targetInRegular = regular.findIndex((entry) => entry.fill.id === pending.resourceId)
+    const targetInInjectables = injectable.some((entry) => entry.fill.id === pending.resourceId)
     if (targetInRegular < 0 && !targetInInjectables) return
     const timer = window.setTimeout(() => {
       if (targetInInjectables) setShowInjectables(true)
@@ -206,14 +244,15 @@ export function MedicationHistoryList({
           data-medication-list-surface="grouped"
           className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
         >
-          {visibleRegular.map((group, index) => (
+          {visibleRegular.map((entry, index) => (
             <HistoryRow
-              key={group.key}
-              group={group}
+              key={entry.key}
+              entry={entry}
               mt={mt}
               nameMode={nameMode}
               visitBand={regularBands[index]}
               visitRows={visitRowsAt(regular, regularBands, index)}
+              visitTotal={visitTotals?.regular.get(visitKeyOfEntry(entry))}
             />
           ))}
         </ul>
@@ -235,7 +274,7 @@ export function MedicationHistoryList({
             <Syringe className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>{mt.injectablesHeader ?? '注射／點滴用藥'}</span>
             <span className="rounded-full bg-muted px-1.5 py-0 tabular-nums text-foreground/70">
-              {injectable.length}
+              {injectableDrugCount}
             </span>
           </button>
           {showInjectables && (
@@ -243,14 +282,15 @@ export function MedicationHistoryList({
               data-medication-list-surface="grouped"
               className="@container divide-y divide-border/70 overflow-hidden border-t border-border/60 bg-muted/30"
             >
-              {injectable.map((group, index) => (
+              {injectable.map((entry, index) => (
                 <HistoryRow
-                  key={group.key}
-                  group={group}
+                  key={entry.key}
+                  entry={entry}
                   mt={mt}
                   nameMode={nameMode}
                   visitBand={injectableBands[index]}
                   visitRows={visitRowsAt(injectable, injectableBands, index)}
+                  visitTotal={visitTotals?.injectable.get(visitKeyOfEntry(entry))}
                 />
               ))}
             </ul>
@@ -262,33 +302,43 @@ export function MedicationHistoryList({
 }
 
 function HistoryRow({
-  group,
+  entry,
   mt,
   nameMode,
   visitBand,
   visitRows,
+  visitTotal,
 }: {
-  group: MedicationHistoryGroup
+  entry: HistoryEntry
   mt: any
   nameMode: MedicationNameMode
   visitBand?: VisitBand
   visitRows?: MedicationRow[]
+  visitTotal?: number
 }) {
   const [open, setOpen] = useState(false)
   const detailsId = useId()
-  const latest = group.medications[0]
-  const canExpand = group.medications.length > 1
+  const { group, fill } = entry
+  // Every fill of the drug, current ones included, newest first.
+  const allFills = useMemo(
+    () => (group.currentFills?.length
+      ? [...group.currentFills, ...group.medications].sort(compareRowsByVisit)
+      : group.medications),
+    [group],
+  )
+  const canExpand = allFills.length > 1
   const historyMedication = {
-    ...latest,
-    refillCount: group.count,
+    ...fill,
+    // The drug's own count over every fill (as its 使用中 row shows), not
+    // just the ended fills grouped here.
+    refillCount: Math.max(fill.refillCount ?? 1, allFills.length),
   }
   const toggleLabel = (open
     ? (mt.hideMedicationHistory ?? '收合 {name} 的過往用藥紀錄（{count}）')
     : (mt.showMedicationHistory ?? '顯示 {name} 的過往用藥紀錄（{count}）'))
     .replace('{name}', group.name)
-    .replace('{count}', String(group.count))
+    .replace('{count}', String(allFills.length))
   const toggleHistory = useCallback(() => setOpen((current) => !current), [])
-  const openForNavigation = useCallback(() => setOpen(true), [])
   const tinted = visitBand?.band === 1
   return (
     <li
@@ -301,16 +351,20 @@ function HistoryRow({
     >
       {visitBand && <VisitBandMarks band={visitBand} />}
       {visitBand && visitBand.headerCount > 0 && visitRows && (
-        <VisitHeader rows={visitRows} count={visitBand.headerCount} />
+        <VisitHeader rows={visitRows} count={visitBand.headerCount} total={visitTotal} />
       )}
       <MedicationItem
         medication={historyMedication}
         nameMode={nameMode}
         grouped
-        visitContextInHeader={!!visitBand && !!startDayOf(latest)}
+        visitContextInHeader={!!visitBand && !!startDayOf(fill)}
         onRowToggle={canExpand ? toggleHistory : undefined}
-        resourceNavigationIds={group.medications.map((medication) => medication.id)}
-        onResourceNavigationMatch={canExpand ? openForNavigation : undefined}
+        // Each fill has its own row now, so a row answers only for its fill;
+        // a citation asking for the drug's history still expands it here.
+        resourceNavigationIds={[fill.id]}
+        onResourceNavigationMatch={canExpand ? ((_sequence, target) => {
+          if (target.expandMedicationHistory) setOpen(true)
+        }) : undefined}
         leadingControl={canExpand ? (
           <button
             type="button"
@@ -335,7 +389,7 @@ function HistoryRow({
       {canExpand && open && (
         <MedicationHistoryDetails
           id={detailsId}
-          medications={group.medications}
+          medications={allFills}
           nameMode={nameMode}
           className="border-t border-border/60 bg-background/30 px-2.5 py-1.5 pl-9"
         />

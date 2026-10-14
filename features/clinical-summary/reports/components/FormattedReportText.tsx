@@ -58,7 +58,14 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
               {line.marker && (
                 <span className="shrink-0 text-muted-foreground" aria-hidden="true">{line.marker}</span>
               )}
-              <p className="font-semibold text-foreground">{line.text}</p>
+              {line.headingLabel ? (
+                <p className="min-w-0 break-words">
+                  <span className="font-semibold text-foreground">{line.headingLabel}</span>
+                  {line.text.slice(line.headingLabel.length)}
+                </p>
+              ) : (
+                <p className="font-semibold text-foreground">{line.text}</p>
+              )}
             </div>
           )
         }

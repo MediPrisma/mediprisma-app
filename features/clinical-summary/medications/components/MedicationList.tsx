@@ -14,14 +14,19 @@ import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
 import {
   assignRowVisitBands,
   compareRowsByVisit,
+  rowsPerVisit,
   startDayOf,
+  visitKeyOfRow,
   visitBandTintClass,
 } from '../utils/visit-bands'
 import {
   MedicationHistoryDetails,
   MedicationHistoryList,
+  isInjectable,
+  type HistoryListGroup,
 } from './MedicationHistoryList'
 import {
+  medicationGroupKey,
   useGroupedMedications,
   type MedicationHistoryGroup,
 } from '../hooks/useGroupedMedications'
@@ -42,6 +47,9 @@ interface MedicationListProps {
   onNameModeChange?: (mode: MedicationNameMode) => void
   /** Actions about the 使用中 list (複製｜編輯), at the end of its header. */
   activeActions?: ReactNode
+  /** The rows before a search or class filter, when one is on: visit
+   *  headers then compare the matches with the visit's total ("1／3 項"). */
+  unfilteredMedications?: MedicationRow[]
 }
 
 export function MedicationList({
@@ -55,6 +63,7 @@ export function MedicationList({
   showNameModeSwitch = false,
   onNameModeChange,
   activeActions,
+  unfilteredMedications,
 }: MedicationListProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
@@ -78,17 +87,37 @@ export function MedicationList({
     [activeMedications],
   )
   const activeBands = useMemo(() => assignRowVisitBands(activeByVisit), [activeByVisit])
-  // Rows of one drug at two clinics share a history; only the first one shown
-  // answers navigation to its prior fills, so the row that scrolls into view
-  // is the row whose history opens.
-  const historyNavigationOwnerByKey = useMemo(() => {
-    const owners = new Map<string, string>()
-    for (const medication of activeByVisit) {
-      const history = activeHistoryByMedicationId.get(medication.id)
-      if (history && !owners.has(history.key)) owners.set(history.key, medication.id)
+  // 用藥歷史 lists every fill under its own visit: stopped drugs, plus the
+  // earlier fills of current drugs, so each visit shows every drug it
+  // prescribed. (No 使用中 badge: the list above already names them.)
+  // Those earlier fills carry the drug's current fills too, so their row opens
+  // every fill its 「累計 n 次」 counts, as a stopped drug's row does.
+  const historyGroups = useMemo(() => {
+    const attached = new Map<string, HistoryListGroup>()
+    for (const group of activeHistoryByMedicationId.values()) {
+      if (attached.has(group.key)) continue
+      const currentFills = medications.filter(
+        (row) => !row.isInactive && medicationGroupKey(row) === group.key,
+      )
+      attached.set(group.key, { ...group, currentFills })
     }
-    return owners
-  }, [activeByVisit, activeHistoryByMedicationId])
+    return [...inactiveMedicationGroups, ...attached.values()]
+  }, [activeHistoryByMedicationId, inactiveMedicationGroups, medications])
+  // Totals before the filter, in the unit each list shows (rows): 使用中
+  // counts its current-therapy rows; 用藥歷史 counts every ended fill, one
+  // row each, split as its lists are (injectables apart).
+  const unfilteredGrouped = useGroupedMedications(unfilteredMedications ?? medications)
+  const visitTotals = useMemo(() => {
+    if (!unfilteredMedications) return undefined
+    const pastFills = unfilteredMedications.filter((row) => row.isInactive)
+    const injectableDrugs = new Set(pastFills.filter(isInjectable).map(medicationGroupKey))
+    const isInjectableDrug = (row: MedicationRow) => injectableDrugs.has(medicationGroupKey(row))
+    return {
+      active: rowsPerVisit(unfilteredGrouped.activeMedications),
+      regular: rowsPerVisit(pastFills.filter((row) => !isInjectableDrug(row))),
+      injectable: rowsPerVisit(pastFills.filter(isInjectableDrug)),
+    }
+  }, [unfilteredMedications, unfilteredGrouped])
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
@@ -97,37 +126,22 @@ export function MedicationList({
     const targetInActive = activeMedications.some((medication) =>
       medication.id === pending.resourceId,
     )
-    const targetInHistory = inactiveMedicationGroups.some((group) =>
+    // Every earlier fill has its own row in 用藥歷史, under its visit, so a
+    // citation of one opens the history section and lands on that row.
+    const targetInHistory = historyGroups.some((group) =>
       group.medications.some((medication) => medication.id === pending.resourceId),
     )
-    const ownedHistory = [...activeHistoryByMedicationId.values()].find(
-      (group) => group.medications.some(
-        (medication) => medication.id === pending.resourceId,
-      ),
-    )
-    const activeHistoryOwner = ownedHistory
-      ? historyNavigationOwnerByKey.get(ownedHistory.key)
-      : undefined
-    if (!targetInActive && !targetInHistory && !activeHistoryOwner) return
+    if (!targetInActive && !targetInHistory) return
     const timer = window.setTimeout(() => {
-      if (targetInActive || activeHistoryOwner) setShowActive(true)
+      if (targetInActive) setShowActive(true)
       if (targetInHistory) setShowInactive(true)
-      if (activeHistoryOwner) {
-        setOpenActiveHistories((current) => {
-          const next = new Set(current)
-          next.add(activeHistoryOwner)
-          return next
-        })
-      }
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
     pending,
     navSeq,
     activeMedications,
-    activeHistoryByMedicationId,
-    historyNavigationOwnerByKey,
-    inactiveMedicationGroups,
+    historyGroups,
   ])
 
   if (isLoading) {
@@ -146,7 +160,8 @@ export function MedicationList({
     return <div className="text-sm text-muted-foreground">{mt.noData}</div>
   }
 
-  const totalInactive = inactiveMedicationGroups.reduce((sum, group) => sum + group.count, 0)
+  // Every ended fill the history lists, including earlier fills of current drugs.
+  const totalInactive = historyGroups.reduce((sum, group) => sum + group.count, 0)
   const nameDisplay = mt.nameDisplay ?? {
     label: '藥名顯示方式',
     ingredient: '成分名',
@@ -269,6 +284,7 @@ export function MedicationList({
                       <VisitHeader
                         rows={activeByVisit.slice(index, index + visitBand.headerCount)}
                         count={visitBand.headerCount}
+                        total={visitTotals?.active.get(visitKeyOfRow(medication, medication.id || String(index)))}
                       />
                     )}
                     <MedicationItem
@@ -280,18 +296,11 @@ export function MedicationList({
                       grouped
                       visitContextInHeader={!!startDayOf(medication)}
                       onRowToggle={history ? toggleHistory : undefined}
-                      resourceNavigationIds={history
-                        && historyNavigationOwnerByKey.get(history.key) === medication.id
-                        ? [
-                            medication.id,
-                            ...history.medications.map((item) => item.id),
-                          ]
-                        : undefined}
+                      // Answers only for its own prescription: earlier fills
+                      // have their own rows in 用藥歷史. A citation asking to
+                      // expand this drug's history still opens it here.
                       onResourceNavigationMatch={history ? ((_sequence, target) => {
-                        const targetsHistoricalFill = history.medications.some(
-                          (item) => item.id === target.resourceId,
-                        )
-                        if (!target.expandMedicationHistory && !targetsHistoricalFill) return
+                        if (!target.expandMedicationHistory) return
                         setShowActive(true)
                         setOpenActiveHistories((current) => {
                           const next = new Set(current)
@@ -338,7 +347,7 @@ export function MedicationList({
       )}
 
       {/* Inactive Medications - Collapsible */}
-      {totalInactive > 0 && (
+      {historyGroups.length > 0 && (
         <div className="space-y-2">
           <Button
             variant="ghost"
@@ -359,7 +368,11 @@ export function MedicationList({
 
           {showInactive && (
             <div id={inactiveListId}>
-              <MedicationHistoryList groups={inactiveMedicationGroups} nameMode={nameMode} />
+              <MedicationHistoryList
+                groups={historyGroups}
+                visitTotals={visitTotals}
+                nameMode={nameMode}
+              />
             </div>
           )}
         </div>

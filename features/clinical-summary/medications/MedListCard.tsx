@@ -447,6 +447,7 @@ export function MedListCard() {
                 filteredRows.length > 0 && (
                   <MedicationList
                     medications={filteredRows}
+                    unfilteredMedications={hasMedicationFilters ? rows : undefined}
                     isLoading={false}
                     error={null}
                     showSourceChip={sourceMix === 'mixed'}

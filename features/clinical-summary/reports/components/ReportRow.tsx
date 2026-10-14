@@ -32,6 +32,7 @@ import { useCompactLayout } from '@/src/shared/hooks/layout/use-compact-layout.h
 import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
+import { ReportPreviewLine } from './ReportPreviewLine'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
 import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
@@ -1022,12 +1023,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   <SharedReportSources sources={row.sharedReportSources} />
                 </>
               ) : (
-                <p
-                  className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80 max-sm:hidden"
+                <ReportPreviewLine
+                  text={fullText}
+                  className="cursor-pointer text-xs leading-relaxed text-foreground/80"
                   onClick={() => setTextExpanded(true)}
-                >
-                  {obs.valueString}
-                </p>
+                />
               )
             )}
             {hasText && textExpanded && (

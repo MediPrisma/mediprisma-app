@@ -98,5 +98,19 @@ export function assignRowVisitBands(rows: MedicationRow[]): VisitBand[] {
   return bandsFromVisitKeys(rows.map((row, index) => visitKeyOfRow(row, row.id || String(index))))
 }
 
+/** Rows per visit, over the unfiltered rows: the totals a filtered list's
+ *  headers compare against ("1／3 項"). The unit is the row — one per fill
+ *  in 用藥歷史 — the same unit as the header's own count, so "n／total"
+ *  never mixes prescriptions with drugs (a drug filled twice at one visit
+ *  is two rows on both sides). */
+export function rowsPerVisit(rows: MedicationRow[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  rows.forEach((row, index) => {
+    const visit = visitKeyOfRow(row, row.id || String(index))
+    counts.set(visit, (counts.get(visit) ?? 0) + 1)
+  })
+  return counts
+}
+
 /** Tint for the alternate band. */
 export const visitBandTintClass = 'bg-sky-500/[0.07] dark:bg-sky-400/[0.09]'

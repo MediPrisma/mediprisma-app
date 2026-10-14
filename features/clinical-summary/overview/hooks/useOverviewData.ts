@@ -19,6 +19,7 @@ import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.ut
 import type { DisplayLang } from '@voho0000/clinical-lab-normalization/display'
 import { useReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
 import { groupMultiRegionStudies } from '@/features/clinical-summary/reports/utils/multi-region-grouping'
+import { extractReportPreview } from '@/src/shared/utils/report-preview'
 import { decodeReportEntities, separateGluedOrderCode } from '@/src/shared/utils/report-text-format'
 import type { NhiViewerAction, ReportGroup, Row } from '@/features/clinical-summary/reports/types'
 import { useVisitHistory, type VisitRecord } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
@@ -96,6 +97,9 @@ export interface OverviewReportItem {
   institution?: string
   day?: string
   summary: string
+  /** Source heading of the section `summary` previews ("Impression"), when it
+   *  is the report's conclusion rather than its opening line. */
+  summaryLabel?: string
   fullText: string
   /** Resource the 報告 tab should scroll-flash. */
   navResourceType: 'DiagnosticReport' | 'Procedure' | 'Observation'
@@ -384,13 +388,16 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       const viewerActions = members.length
         ? members.flatMap((member) => member.viewerActions ?? [])
         : (row.viewerActions ?? [])
+      const previewSource = narrative || memberReports[0]?.text || ''
+      const preview = extractReportPreview(previewSource)
       items.push({
         id: `${navResourceType}:${row.id}`,
         title: row.title,
         group: row.group,
         institution: row.institution,
         day: reportRowDay(row),
-        summary: firstLine(narrative || memberReports[0]?.text || ''),
+        summary: preview?.text ?? firstLine(previewSource),
+        summaryLabel: preview?.label,
         fullText: narrative,
         reports: memberReports.length ? memberReports : undefined,
         hasImages: !!row.images?.length || viewerActions.length > 0
