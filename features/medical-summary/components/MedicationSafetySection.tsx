@@ -91,7 +91,7 @@ export function MedicationSafetySection({
     >
       <h3
         id="medical-summary-safety-title"
-        className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground"
+        className="mb-1 flex items-center gap-1.5 text-[length:max(12px,0.75rem)] font-semibold tracking-wide text-muted-foreground"
       >
         {title}
         {updating ? (
@@ -104,7 +104,7 @@ export function MedicationSafetySection({
         ) : null}
       </h3>
       {alerts.length === 0 ? (
-        <p className="text-xs leading-snug text-muted-foreground" data-safety-empty>{emptyLabel}</p>
+        <p className="text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground" data-safety-empty>{emptyLabel}</p>
       ) : null}
       <ol className="space-y-1.5" data-safety-alerts>
         {visible.map((alert) => {
@@ -112,30 +112,30 @@ export function MedicationSafetySection({
           const review = propertyReviewLabel?.(alert)
           return (
             <li key={alert.id} className="border-b border-border pb-1.5 last:border-b-0 last:pb-0">
-              <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
+              <p className="text-[length:max(13px,0.875rem)] font-semibold leading-snug text-foreground">
                 {renderSources
                   ? renderSources(alert.sources ?? [], alert.unsupportedSourceKeys, plain(alert, alert.title))
                   : plain(alert, alert.title)}
                 {staleDate ? (
-                  <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
+                  <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[length:max(13px,0.8125rem)] font-normal leading-5 text-muted-foreground">
                     {staleEvidenceLabel!.replace("{date}", staleDate)}
                   </span>
                 ) : null}
                 {review ? (
                   <span
-                    className="ml-1 inline-flex items-center gap-0.5 rounded border border-amber-500/40 px-1 align-baseline text-[0.625rem] font-normal leading-4 text-amber-700 dark:text-amber-300"
+                    className="ml-1 inline-flex items-center gap-0.5 rounded border border-amber-500/40 px-1 align-baseline text-[length:max(13px,0.8125rem)] font-normal leading-5 text-amber-700 dark:text-amber-300"
                     data-property-review
                   >
-                    <Flag className="h-2.5 w-2.5 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
+                    <Flag className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
                     {review}
                   </span>
                 ) : null}
               </p>
-              <p className="mt-0.5 text-xs leading-snug text-foreground/85">
+              <p className="mt-0.5 text-[length:max(13px,0.8125rem)] leading-snug text-foreground/85">
                 {prose(alert, alert.detail)}
               </p>
               {alert.recommendation ? (
-                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                <p className="mt-0.5 text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground">
                   {prose(alert, alert.recommendation)}
                 </p>
               ) : null}
@@ -148,13 +148,13 @@ export function MedicationSafetySection({
           type="button"
           onClick={() => setShowAll((value) => !value)}
           aria-expanded={showAll}
-          className="mt-1 flex min-h-[44px] items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground lg:min-h-8"
+          className="mt-1 flex min-h-[44px] items-center gap-1.5 text-[length:max(13px,0.8125rem)] text-muted-foreground transition-colors hover:text-foreground lg:min-h-8"
         >
           <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", showAll && "rotate-180")} aria-hidden="true" />
           {showAll ? lessLabel : moreLabel.replace("{count}", String(hiddenCount))}
         </button>
       ) : null}
-      <p className="mt-1 text-[0.65rem] leading-snug text-muted-foreground/70">{disclaimer}</p>
+      <p className="mt-1 text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground/70">{disclaimer}</p>
     </section>
   )
 }

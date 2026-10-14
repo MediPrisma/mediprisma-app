@@ -62,7 +62,7 @@ export function OverviewHeroCard({
           </h3>
           <span className="ml-auto flex items-center gap-2">
             {dataRange ? (
-              <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{dataRange}</span>
+              <span className="text-[length:max(12px,0.75rem)] tabular-nums text-muted-foreground">{dataRange}</span>
             ) : null}
             <Button
               type="button"
@@ -81,15 +81,15 @@ export function OverviewHeroCard({
             </Button>
           </span>
         </div>
-        <p className="mt-1.5 text-[0.875rem] font-semibold leading-snug text-foreground @min-[48rem]:text-[0.9375rem]">
+        <p className="mt-1.5 text-[length:max(15px,1rem)] font-semibold leading-snug text-foreground">
           {result.headline}
         </p>
         {reviewLabel ? (
           <p
-            className="mt-1 inline-flex items-center gap-0.5 rounded border border-amber-500/40 px-1 text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300"
+            className="mt-1 inline-flex items-center gap-0.5 rounded border border-amber-500/40 px-1 text-[length:max(13px,0.8125rem)] leading-5 text-amber-700 dark:text-amber-300"
             data-headline-review
           >
-            <Flag className="h-2.5 w-2.5 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
+            <Flag className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
             {reviewLabel}
           </p>
         ) : null}

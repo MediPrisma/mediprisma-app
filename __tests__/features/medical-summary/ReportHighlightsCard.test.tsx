@@ -271,7 +271,7 @@ describe('ReportHighlightsCard — repeated original wording', () => {
 })
 
 describe('ReportHighlightsCard — many serial studies on one finding', () => {
-  it('shows the first two report chips and folds the rest behind +N', () => {
+  it('merges same-day studies into one chip, shows two chips and folds the rest behind +N', () => {
     const mri = ['2026-07-08', '2026-07-08', '2026-04-17', '2026-04-17', '2026-01-20'].map((date, index) => source(`L${10 + index}`, 'mri', date))
     const { container } = render(
       <ReportHighlightsCard
@@ -283,8 +283,13 @@ describe('ReportHighlightsCard — many serial studies on one finding', () => {
         onNavigate={jest.fn()}
       />,
     )
-    expect(container.querySelectorAll('[data-report-chip]')).toHaveLength(2)
-    fireEvent.click(screen.getByRole('button', { name: ms.reportsMoreSources.replace('{count}', '3') }))
-    expect(container.querySelectorAll('[data-report-chip]')).toHaveLength(5)
+    // Two MRIs on 07-08 and two on 04-17 read as one chip each; +1 is the
+    // one study left, counted in reports.
+    const chips = () => [...container.querySelectorAll('[data-report-chip]')].map((chip) => chip.textContent)
+    expect(chips()).toEqual([expect.stringMatching(/07-08 ×2$/), expect.stringMatching(/04-17 ×2$/)])
+    fireEvent.click(screen.getByRole('button', { name: ms.reportsMoreSources.replace('{count}', '1') }))
+    // Opened: every study is its own chip again.
+    expect(chips()).toHaveLength(5)
+    expect(chips().some((label) => label?.includes('×'))).toBe(false)
   })
 })

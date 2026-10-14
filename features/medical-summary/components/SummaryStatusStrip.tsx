@@ -52,7 +52,7 @@ export function SummaryStatusStrip({
       <div className="flex min-w-0 flex-nowrap items-center gap-2 px-2">
         {showStats && coverage ? (
           <div
-            className="flex min-w-0 flex-none flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[0.6875rem] tabular-nums text-foreground/70"
+            className="flex min-w-0 flex-none flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[length:max(12px,0.75rem)] tabular-nums text-foreground/70"
             aria-label={[
               fill(labels.orgs, coverage.organizations),
               fill(labels.encounters, coverage.encounters),

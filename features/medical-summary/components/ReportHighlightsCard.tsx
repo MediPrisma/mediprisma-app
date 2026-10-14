@@ -102,10 +102,10 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
     if (!labels.noReports || highlights.totalReports > 0) return null
     return (
       <section className="rounded-lg border border-border bg-card px-3 py-2.5" aria-labelledby="medical-summary-reports-title">
-        <h3 id="medical-summary-reports-title" className="mb-1 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">
+        <h3 id="medical-summary-reports-title" className="mb-1 text-[length:max(12px,0.75rem)] font-semibold tracking-wide text-muted-foreground">
           {labels.title}
         </h3>
-        <p className="text-xs leading-snug text-muted-foreground" data-no-reports>{labels.noReports}</p>
+        <p className="text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground" data-no-reports>{labels.noReports}</p>
       </section>
     )
   }
@@ -127,11 +127,12 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
     return next
   })
 
-  const chip = (source: ReportFindingSource, quotes: ReportFindingPoint["quotes"] = []) => {
-    const label = `${labels.kindLabels[source.kind]} ${reportChipDate(source.date, newestYear)}`
+  const chipLabel = (source: ReportFindingSource) => `${labels.kindLabels[source.kind]} ${reportChipDate(source.date, newestYear)}`
+  const chip = (source: ReportFindingSource, quotes: ReportFindingPoint["quotes"] = [], sameDayCount = 1) => {
+    const label = sameDayCount > 1 ? `${chipLabel(source)} ×${sameDayCount}` : chipLabel(source)
     const evidenceQuote = quotes.find((quote) => quote.key === source.key)?.quote
     const className =
-      "relative ml-1 inline-flex items-center whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 align-baseline text-[0.6875rem] leading-[1.125rem] tabular-nums text-muted-foreground"
+      "relative ml-1 inline-flex items-center whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 align-baseline text-[length:max(12px,0.75rem)] leading-[1.375rem] tabular-nums text-muted-foreground"
     if (!onNavigate) {
       return <span key={source.key} className={className} data-report-chip={source.key}>{label}</span>
     }
@@ -157,18 +158,31 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
 
   // A finding seen on many serial studies would line up a chip per study
   // ("MRI 07-08" ×8): the first few, the rest one click away.
+  // Studies of one kind on one day ("CT 08-14" twice: a chest and an abdomen
+  // series) read as one chip with a count until the point is opened; the
+  // chip opens the first, and opening the point lists each.
   const chips = (id: string, sources: ReportFindingSource[], quotes?: ReportFindingPoint["quotes"]) => {
     const open = openPoints.has(id)
-    const hidden = sources.length - CHIPS_SHOWN
+    const sameDay = new Map<string, ReportFindingSource[]>()
+    for (const source of sources) {
+      const label = chipLabel(source)
+      sameDay.set(label, [...(sameDay.get(label) ?? []), source])
+    }
+    const merged = [...sameDay.values()]
+    const shown = merged.slice(0, CHIPS_SHOWN)
+    // Counted in studies, not chips: "+3" means three more reports.
+    const hidden = sources.length - shown.reduce((sum, group) => sum + group.length, 0)
     return (
       <>
-        {(open ? sources : sources.slice(0, CHIPS_SHOWN)).map((source) => chip(source, quotes))}
+        {open
+          ? sources.map((source) => chip(source, quotes))
+          : shown.map((group) => chip(group[0], quotes, group.length))}
         {!open && hidden > 0 ? (
           <button
             type="button"
             onClick={() => togglePoint(id)}
             aria-label={labels.moreSources.replace("{count}", String(hidden))}
-            className="relative ml-1 inline-flex items-center rounded px-1 align-baseline text-[0.6875rem] leading-[1.125rem] tabular-nums text-muted-foreground transition-colors hover:text-foreground before:absolute before:-inset-x-0.5 before:-inset-y-3 before:content-[''] lg:before:-inset-y-1"
+            className="relative ml-1 inline-flex items-center rounded px-1 align-baseline text-[length:max(12px,0.75rem)] leading-[1.375rem] tabular-nums text-muted-foreground transition-colors hover:text-foreground before:absolute before:-inset-x-0.5 before:-inset-y-3 before:content-[''] lg:before:-inset-y-1"
             data-report-more-sources
           >
             +{hidden}
@@ -186,7 +200,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
     const showExcerpt = !highlights.summarized && row.excerpt
     const inner = (
       <span className="block min-w-0">
-        <span className="block text-xs leading-snug text-foreground/90">
+        <span className="block text-[length:max(13px,0.8125rem)] leading-snug text-foreground/90">
           <span className="font-semibold tabular-nums text-foreground/80">{row.date ?? "—"}</span>
           {" · "}
           {labels.kindLabels[row.kind]}
@@ -198,9 +212,9 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
           ) : null}
         </span>
         {showExcerpt ? (
-          <span className="mt-0.5 block break-words text-xs leading-snug text-muted-foreground">
+          <span className="mt-0.5 block break-words text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground">
             <span
-              className="mr-1 whitespace-nowrap rounded border border-dashed border-border px-1 py-px text-[0.625rem]"
+              className="mr-1 whitespace-nowrap rounded border border-dashed border-border px-1 py-px text-[length:max(12px,0.75rem)]"
               data-excerpt-source={row.excerptSource}
             >
               {row.excerptSource === "conclusion" ? labels.conclusionTag : labels.openingTag}
@@ -234,7 +248,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
     >
       <h3
         id="medical-summary-reports-title"
-        className="mb-1 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground"
+        className="mb-1 text-[length:max(12px,0.75rem)] font-semibold tracking-wide text-muted-foreground"
       >
         {labels.title}
       </h3>
@@ -246,9 +260,9 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
               <li
                 key={group.organ}
                 data-report-organ={group.organ}
-                className="grid grid-cols-1 gap-x-3 border-b border-border py-1.5 last:border-b-0 @min-[26rem]:grid-cols-[4.5rem_minmax(0,1fr)]"
+                className="grid grid-cols-1 gap-x-3 border-b border-border py-1.5 last:border-b-0 @min-[26rem]:grid-cols-[max(4.5rem,66px)_minmax(0,1fr)]"
               >
-                <span className="text-xs font-semibold leading-snug text-foreground/80 @min-[26rem]:pt-px">
+                <span className="text-[length:max(13px,0.8125rem)] font-semibold leading-snug text-foreground/80 @min-[26rem]:pt-px">
                   {group.label}
                 </span>
                 <ul className="min-w-0 space-y-0.5">
@@ -259,24 +273,24 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                     return (
                       <li key={id} data-report-point={point.displayAs} className="flex items-start gap-1">
                         {showAsQuote ? (
-                          <span className="mt-[0.3125rem] h-3 w-3 shrink-0" aria-hidden="true" />
+                          <span className="mt-[0.375rem] h-3 w-3 shrink-0" aria-hidden="true" />
                         ) : (
                           <button
                             type="button"
                             onClick={() => togglePoint(id)}
                             aria-expanded={open}
                             aria-label={open ? labels.hideQuotes : labels.showQuotes}
-                            className="relative mt-[0.3125rem] flex h-3 w-3 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground before:absolute before:-inset-4 before:content-[''] lg:before:-inset-1.5"
+                            className="relative mt-[0.375rem] flex h-3 w-3 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground before:absolute before:-inset-4 before:content-[''] lg:before:-inset-1.5"
                           >
                             <ChevronRight className={cn("h-3 w-3 transition-transform", open && "rotate-90")} aria-hidden="true" />
                           </button>
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="break-words text-[0.8125rem] leading-snug text-foreground">
+                          <p className="break-words text-[length:max(13px,0.875rem)] leading-snug text-foreground">
                             {showAsQuote ? (
                               <>
                                 <span
-                                  className="mr-1 whitespace-nowrap rounded border border-border px-1 py-px align-[0.0625rem] text-[0.625rem] font-medium text-muted-foreground"
+                                  className="mr-1 whitespace-nowrap rounded border border-border px-1 py-px align-[0.0625rem] text-[length:max(12px,0.75rem)] font-medium text-muted-foreground"
                                   data-original-wording
                                 >
                                   {labels.originalTag}
@@ -310,7 +324,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                                 return (
                                   <li
                                     key={`${quote.key}-${quoteIndex}`}
-                                    className="break-words text-xs leading-snug text-muted-foreground"
+                                    className="break-words text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground"
                                     data-verified-quote={quote.key}
                                   >
                                     {quoted(quote.quote)}
@@ -336,16 +350,16 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
       ) : null}
 
       {!highlights.summarized ? (
-        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{labels.unavailable}</p>
+        <p className="mt-0.5 text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground">{labels.unavailable}</p>
       ) : null}
 
       {unverifiedPoints.length > 0 ? (
         <div className="mt-2 border-t border-border pt-2" data-hidden-points>
-          <p className="text-xs leading-snug text-muted-foreground">{labels.hiddenPointsNote}</p>
+          <p className="text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground">{labels.hiddenPointsNote}</p>
           <ul className="mt-1 space-y-1">
             {unverifiedPoints.map((point, index) => (
-              <li key={point.organ + '-' + index} className="break-words text-[0.8125rem] leading-snug text-foreground" data-unverified-point>
-                <span className="mr-1 inline-block rounded border border-border bg-muted/40 px-1 py-px text-xs font-medium text-muted-foreground" data-unverified-tag>
+              <li key={point.organ + '-' + index} className="break-words text-[length:max(13px,0.875rem)] leading-snug text-foreground" data-unverified-point>
+                <span className="mr-1 inline-block rounded border border-border bg-muted/40 px-1 py-px text-[length:max(13px,0.8125rem)] font-medium text-muted-foreground" data-unverified-tag>
                   {labels.unverifiedTag}
                 </span>
                 {point.text}
@@ -357,7 +371,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
       ) : null}
 
       {highlights.hiddenPointCount > unverifiedPoints.length ? (
-        <p className="mt-0.5 text-xs text-muted-foreground/80">
+        <p className="mt-0.5 text-[length:max(12px,0.75rem)] text-muted-foreground/80">
           {labels.hiddenPoints.replace("{count}", String(highlights.hiddenPointCount - unverifiedPoints.length))}
         </p>
       ) : null}
@@ -368,7 +382,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
             type="button"
             onClick={() => setOthersOpen((value) => !value)}
             aria-expanded={othersOpen}
-            className="flex min-h-[44px] w-full items-center gap-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground lg:min-h-8"
+            className="flex min-h-[44px] w-full items-center gap-1.5 text-left text-[length:max(13px,0.8125rem)] text-muted-foreground transition-colors hover:text-foreground lg:min-h-8"
           >
             <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 -rotate-90 transition-transform", othersOpen && "rotate-0")} aria-hidden="true" />
             {footerLabel}

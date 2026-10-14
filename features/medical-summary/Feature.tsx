@@ -1086,7 +1086,7 @@ export default function MedicalSummaryFeature() {
           ) : null}
 
           <div className="flex flex-col items-center gap-0.5 px-1 pb-0.5">
-            <p className="text-center text-[0.65rem] leading-snug text-muted-foreground/60">
+            <p className="text-center text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground/60">
               {ms.secondLayerNote}
             </p>
           </div>
