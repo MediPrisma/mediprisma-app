@@ -85,7 +85,11 @@ const SIGN_OFF_RE = /\s*(?:操作醫師|判讀醫師|監督醫師|報告醫師|�
 const VGH_LETTERHEAD_RE = /^\s*(?:[^\n:：]{1,12}[:：]\s*)?(?:正式|初步)報告\s/
 const ORDER_NAME_FIELD_RE = /醫囑名稱\s*[:：]\s*/
 
-const headingKey = (line: ReportLine) => line.text.replace(/\s*[:：]\s*$/, '')
+// A label-style heading keeps its value on the same line ("Method: T1WI…",
+// see report-text-format's headingLabel), so its key is the label, not the
+// whole line — otherwise a preamble label stops matching and the findings
+// after it are skipped along with it.
+const headingKey = (line: ReportLine) => (line.headingLabel ?? line.text).replace(/\s*[:：]\s*$/, '')
 const isSectionHeading = (line: ReportLine) => line.heading === true && line.level === 0
 // "Impression:." — the source's stray punctuation after the colon — and the
 // sign-off that would otherwise fill a short preview's second line.
