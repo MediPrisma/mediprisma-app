@@ -25,6 +25,12 @@ export interface ReportLine {
   marker?: string
   /** True when the line is a section heading (e.g. "Impression:"). */
   heading?: boolean
+  /**
+   * Set when a label-style heading keeps its short value on the same line
+   * ("Comparison: CT on 2026-5-19."). `text` stays the whole line so plain-text
+   * consumers lose nothing; this is only the prefix the renderer emphasises.
+   */
+  headingLabel?: string
   /** Source-system divider rule, rendered as a real divider rather than dash noise. */
   separator?: boolean
   /** Fixed-width source row such as a microbiology susceptibility header. */
@@ -93,8 +99,10 @@ const KEYWORD_SOURCE = SECTION_KEYWORDS.join('|')
 
 // Matches a section keyword + colon anywhere in the text (case-sensitive).
 // Used to force every heading onto its own line, healing the bridge's glued
-// concatenations.
-const KEYWORD_COLON_RE = new RegExp(`(?<![A-Za-z])(${KEYWORD_SOURCE})[ \t]*([:：])`, 'g')
+// concatenations. A keyword opening a parenthetical ("(Comparison: 2026/07/07)")
+// is an inline note, not a section heading — breaking there strands the "(" on
+// its own line and the closing date under a fake heading.
+const KEYWORD_COLON_RE = new RegExp(`(?<![A-Za-z])(?<![(（][ \t]*)(${KEYWORD_SOURCE})[ \t]*([:：])`, 'g')
 
 // Matches a numbered list marker ("1." … "10.") glued mid-text onto the
 // preceding token, the way the bridge runs findings together
@@ -110,6 +118,24 @@ const GLUED_NUM_RE = /([A-Za-z一-鿿.;:)\]）】])\s*(\d{1,2}\.)(?=\s*[A-Z一-�
 // A line that *is* a section heading, optionally with inline content trailing
 // the colon ("Recommendation: correlate with clinical finding").
 const HEADING_LINE_RE = new RegExp(`^(${KEYWORD_SOURCE})[ \t]*([:：])\\s*([\\s\\S]*)$`)
+
+// Headings that label a short value rather than open a section. The source
+// writes "Comparison: CT on 2026-5-19." as one line; splitting it puts a lone
+// date under a bold pseudo-section. Conclusion-type headings (Impression,
+// Diagnosis, Recommendation...) and the endoscopy organ findings are not here:
+// they keep their block layout so the conclusion stands on its own.
+const INLINE_LABEL_KEYWORDS = new Set([
+  'Comparison', 'History', 'Technique', 'Method', 'Methods',
+  'Indication', 'Indications', 'INDICATION', 'CLINICAL DIAGNOSIS',
+  'Premedication', 'Instrument', 'Instruments', 'Medication', 'Chief Complain',
+  'Procedure', 'Procedures', 'Complication', 'Complications',
+  'NUCLEAR MEDICINE STUDY', 'RADIOPHARMACEUTICAL', '技術員',
+  'LIVER', 'GB', 'PANCREAS', 'CBD', 'PORTAL VEIN', 'SPLEEN', 'KIDNEY',
+])
+// Past this length the "value" is a whole narrative the bridge glued onto the
+// label (real captures run past 1,500 chars); it keeps the block layout so
+// pushBody can still break it into paragraphs.
+const INLINE_LABEL_MAX_CHARS = 200
 
 // Top-level numbered item: "1." / "10." but NOT a decimal like "0.5".
 // The dot must be followed by whitespace, end-of-line, or a non-digit
@@ -430,6 +456,11 @@ export function formatReportText(raw: string): ReportLine[] {
       if (upperEndoscopy) bodyLevel = 1
       const kw = h[1]
       const rest = h[3].trim()
+      if (rest && INLINE_LABEL_KEYWORDS.has(kw) && rest.length <= INLINE_LABEL_MAX_CHARS && !BULLET_RE.test(rest) && !FINDINGS_LEADIN_RE.test(rest)) {
+        // The source line verbatim: its own spacing after the colon, none added.
+        lines.push({ text: line, level: 0, heading: true, headingLabel: line.slice(0, line.indexOf(h[2], kw.length) + 1) })
+        continue
+      }
       lines.push({ text: `${kw}${h[2]}`, level: 0, heading: true })
       // Inline content after the colon — may itself be a findings lead-in the
       // bridge tucked under "Conclusion:" / "Findings:", so route it through

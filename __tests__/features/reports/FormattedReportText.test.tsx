@@ -55,4 +55,12 @@ describe('original report disclosure', () => {
     expect(container.querySelector('pre')?.textContent).toBe(raw)
     expect(container.querySelector('img')).toBeNull()
   })
+
+  it('bolds only the label of an inline label heading', () => {
+    render(<FormattedReportText text={'CT of chest shows:\nComparison: CT on 2026-5-19.'} />)
+    const label = screen.getByText('Comparison:')
+    expect(label).toHaveClass('font-semibold')
+    expect(label.parentElement?.textContent).toBe('Comparison: CT on 2026-5-19.')
+    expect(label.parentElement).not.toHaveClass('font-semibold')
+  })
 })
