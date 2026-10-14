@@ -173,6 +173,7 @@ const NEW_ALIASES: Record<string, string> = {
   全蛋白: 'TP', 鈣: 'CA', 血清鈣: 'CA',
   血中尿素氮: 'BUN', 血尿素氮: 'BUN', 血清尿素氮: 'BUN', 尿素氮: 'BUN', 'BLOOD UREA NITROGEN': 'BUN', 'UREA NITROGEN': 'BUN', 尿素: '',
   尿酸: 'UA', 血中尿酸: 'UA', 血清尿酸: 'UA', 'URIC ACID': 'UA',
+  'EGFR(PED)': 'EGFR(PED)',
 }
 
 /** Every allowed kind of change, with its reason. */
@@ -185,7 +186,7 @@ export const ALLOW_LIST: Record<string, string> = {
   urineAnalyteWord: '尿 only inside an analyte name (尿素氮, 尿素, 尿酸, 利尿 / 鈉尿) is not a urine specimen: the base text-urine routing gives way to 生化 (round 24)',
   ownName: 'the own name wins over the order display (round 8; a bare local code too, round 23): the row lands where its own name alone does',
   dualColumn: 'an exact serum-or-urine analyte name takes that analyte\'s column (TP / ALB / CA / CREA)',
-  newAlias: '全蛋白 / 鈣 / 血清鈣 are names of TP / CA (rounds 6, 14); 血中尿素氮 / 尿素氮 … of BUN, 尿酸 / 血清尿酸 … of UA, 尿素 a 生化 name (round 24)',
+  newAlias: '全蛋白 / 鈣 / 血清鈣 are names of TP / CA (rounds 6, 14); 血中尿素氮 / 尿素氮 … of BUN, 尿酸 / 血清尿酸 … of UA, 尿素 a 生化 name (round 24); eGFR(PED) is the pediatric (Schwartz) formula with its own column, no longer the adult EGFR(M)',
   localCodeAsName: 'a bare local code that names an analyte reads as code.text (round 23): the row lands where the same row with that code as code.text (beside the order display) does — never placed by the order display alone',
   medcloudLikeHealthbank: 'MediCloud NHI codes are now recognised: the row lands where the same row under the 健保存摺 system does, which is the base\'s 健保存摺 result or an allowed change',
 }
