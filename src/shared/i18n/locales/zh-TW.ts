@@ -1517,6 +1517,7 @@ export const zhTW = {
         range: '參考範圍',
         source: '來源',
         date: '採檢日',
+        sourceDate: '來源・採檢日',
       },
       moreActions: '更多動作',
       copyResult: '複製這筆結果',
@@ -1533,11 +1534,13 @@ export const zhTW = {
     labDayCount: '{n} 項檢驗',
     abnormalCount: '{n} 異常',
     sourcePrograms: {
-      adultPreventive: '成人健檢',
+      adultPreventive: '成人預防保健',
+      adultPreventiveShort: '健',
     },
     sourceProvenance: {
       nhiMedicloud: {
         shortLabel: '健保雲端圖形化查詢',
+        compactLabel: '健保雲端',
         formalName: '健保醫療資訊雲端查詢系統',
         sourceLabel: '資料來源',
         originalInstitutionLabel: '原檢驗院所',
@@ -1548,8 +1551,8 @@ export const zhTW = {
     },
     adultPreventiveGroup: {
       itemCount: '{n} 項',
-      expand: '展開成人健檢項目',
-      collapse: '收合成人健檢項目',
+      expand: '展開成人預防保健項目',
+      collapse: '收合成人預防保健項目',
     },
     latest: '僅最新版本',
     allVersions: '所有版本',

@@ -75,19 +75,24 @@ function useRowSource(row: Row) {
   ) : null
   const node = (
     <span className="flex min-w-0 items-center gap-1">
-      <ReportSourceProgramBadge sourceProgram={row.sourceProgram} label={sourceProgramLabel} className="px-1 py-0" />
+      <ReportSourceProgramBadge
+        sourceProgram={row.sourceProgram}
+        label={sourceProgramLabel}
+        shortLabel={tr.sourcePrograms?.adultPreventiveShort}
+        className="px-1 py-0"
+      />
       {medicloud ? (
-        <NhiMedicloudSourceIndicator institution={row.institution} className="min-w-0 max-w-full" />
+        <NhiMedicloudSourceIndicator institution={row.institution} compact className="min-w-0 max-w-full" />
       ) : row.institution ? (
-        <ReportInstitutionLabel institution={row.institution} locale={locale} className="min-w-0 text-muted-foreground dark:text-muted-foreground" />
+        <ReportInstitutionLabel institution={row.institution} locale={locale} className="min-w-0 text-muted-foreground dark:text-muted-foreground [&_svg]:hidden" />
       ) : null}
       {row.bridgeDupCount && row.bridgeDupCount > 0 ? <BridgeDupBadge count={row.bridgeDupCount} /> : null}
       {duplicateNote}
     </span>
   )
-  const text = medicloud
-    ? tr.sourceProvenance.nhiMedicloud.shortLabel
-    : row.institution ? formatReportInstitution(row.institution, locale) : ''
+  const text = row.institution
+    ? formatReportInstitution(row.institution, locale)
+    : medicloud ? tr.sourceProvenance.nhiMedicloud.compactLabel : ''
   return { node, text, duplicateNote }
 }
 
@@ -204,31 +209,43 @@ function PanelRow({ row, defaultOpen, query }: { row: Row; defaultOpen: string[]
     <div data-testid="lab-panel">
       <div
         data-testid="lab-panel-header"
-        className={cn(LAB_ROW_BASE, layout.grid, rightActive ? 'bg-primary/5' : 'bg-muted/30')}
+        className={cn(LAB_ROW_BASE, layout.grid, layout.gap, rightActive ? 'bg-primary/5' : 'bg-muted/30')}
       >
+        {/* The title runs over the result / unit / flag tracks — a panel row
+            has no value of its own, and real panel names run long (half the
+            雲端病歷 order names are wider than 270px). The count follows it. */}
         <button
           type="button"
           aria-expanded={open}
           onClick={() => setManualOpen(!open)}
           data-tour="report-tour-row"
-          className="col-start-1 col-end-3 row-start-1 flex min-w-0 items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className={cn(
+            layout.panelTitle,
+            'flex min-w-0 items-baseline rounded-sm text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          )}
         >
-          <span className="flex w-5 shrink-0 justify-center text-muted-foreground @min-[820px]:w-6">
+          <span className={cn('flex shrink-0 justify-start self-center text-muted-foreground', layout.panelChevron)}>
             <ChevronRight className={cn('h-4 w-4 transition-transform', open && 'rotate-90')} aria-hidden="true" />
           </span>
           <span className={cn('min-w-0 font-semibold', open ? 'whitespace-normal break-words' : 'truncate')} title={row.title}>
             <HighlightText text={row.title} query={query} />
           </span>
+          <span data-testid="lab-panel-count" className="ml-2 shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+            {countLabel}
+          </span>
+          {abnormalLabel && (
+            <span data-testid="lab-panel-abnormal" className="ml-1.5 shrink-0 whitespace-nowrap text-xs font-semibold text-clinical-abnormal">
+              {abnormalLabel}
+            </span>
+          )}
         </button>
-        <div className="col-start-3 row-start-1 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
-          {countLabel}
-        </div>
-        <div className="col-start-4 col-end-6 row-start-1 whitespace-nowrap text-xs font-semibold text-clinical-abnormal">
-          {abnormalLabel}
-        </div>
         <div className={cn(layout.wideOnly, layout.range)} />
-        <div className={cn(layout.wideOnly, layout.source, 'min-w-0 text-xs text-muted-foreground')}>{source.node}</div>
-        <div className={cn(layout.wideOnly, layout.date, 'whitespace-nowrap text-xs tabular-nums text-muted-foreground')}>{dateLabel}</div>
+        <div className={cn(layout.wideOnly, layout.meta, '@container min-w-0 text-xs text-muted-foreground')}>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="flex min-w-0 flex-1 items-center">{source.node}</span>
+            {dateLabel && <span className="shrink-0 whitespace-nowrap tabular-nums">{dateLabel}</span>}
+          </span>
+        </div>
         <LabRowMenu items={menuItems} label={strings.moreActions} className={layout.menu} />
         <div className={cn(layout.narrowOnly, 'col-start-2 col-end-7 row-start-2 flex min-w-0 items-baseline justify-end gap-1.5 whitespace-nowrap text-xs tabular-nums text-muted-foreground')}>
           {source.duplicateNote}

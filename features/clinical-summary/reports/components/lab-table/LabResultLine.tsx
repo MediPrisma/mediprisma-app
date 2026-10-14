@@ -133,7 +133,19 @@ export function LabResultLine({
     </>
   )
 
-  const rangeContent = rangeText ? <span className="line-clamp-2 break-words" title={rangeText}>{rangeText}</span> : null
+  // Always one line, clamped; the full text on hover or tap (the tap stays on
+  // the range and does not open the row's trend). A quarter of real ranges
+  // are age/sex-stratified strings no width can hold.
+  const rangeInline = rangeText ? (
+    <TapTooltip
+      content={rangeText}
+      aria-label={rangeText}
+      contentClassName="max-h-[50vh] max-w-[min(90vw,28rem)] overflow-y-auto whitespace-pre-line break-words text-xs leading-relaxed"
+      className="flex min-w-0 max-w-full"
+    >
+      <span className="truncate">{rangeText}</span>
+    </TapTooltip>
+  ) : null
 
   // A very long phrase is clamped to three lines; the whole text stays one tap
   // away.
@@ -161,6 +173,7 @@ export function LabResultLine({
       className={cn(
         LAB_ROW_BASE,
         layout.grid,
+        layout.gap,
         rowOpens && 'cursor-pointer',
         detail.isActive ? 'bg-primary/5' : 'hover:bg-muted/40',
       )}
@@ -228,19 +241,24 @@ export function LabResultLine({
         </div>
       )}
 
-      <div data-testid="lab-result-range" className={cn(layout.wideOnly, layout.range, 'min-w-0 text-xs text-muted-foreground')}>
-        {rangeContent}
+      <div
+        data-testid="lab-result-range"
+        className={cn(layout.wideOnly, layout.range, level === 'member' && layout.rangeToEdge, 'min-w-0 text-xs text-muted-foreground')}
+      >
+        {rangeInline}
       </div>
-      <div className={cn(layout.wideOnly, layout.source, 'min-w-0 text-xs text-muted-foreground')}>
-        {source}
-      </div>
-      <div className={cn(layout.wideOnly, layout.date, 'whitespace-nowrap text-xs tabular-nums text-muted-foreground')}>
-        {date}
-      </div>
+      {level !== 'member' && (
+        <div data-testid="lab-result-meta" className={cn(layout.wideOnly, layout.meta, '@container min-w-0 text-xs text-muted-foreground')}>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="flex min-w-0 flex-1 items-center">{source}</span>
+            {date && <span className="shrink-0 whitespace-nowrap tabular-nums">{date}</span>}
+          </span>
+        </div>
+      )}
       <LabRowMenu items={menuItems} label={strings.moreActions} className={layout.menu} />
 
       <div className={cn(layout.narrowOnly, 'col-start-2 col-end-7 row-start-2 flex min-w-0 items-baseline gap-2 text-xs text-muted-foreground')}>
-        <span className="min-w-0 flex-1">{rangeContent}</span>
+        <span className="flex min-w-0 flex-1">{rangeInline}</span>
         {(sourceText || date || (variant === 'flat' && note)) && (
           <span className="flex shrink-0 items-baseline gap-1.5 whitespace-nowrap tabular-nums">
             {variant === 'flat' && note}

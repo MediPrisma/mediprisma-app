@@ -16,7 +16,8 @@ export function LabTableHeader({ variant }: { variant: LabTableVariant }) {
       className={cn(
         layout.header,
         layout.grid,
-        'sticky top-0 z-10 items-center gap-x-2.5 border-b border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground',
+        layout.gap,
+        'sticky top-0 z-10 items-center border-b border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground',
       )}
     >
       <span className="col-start-1 row-start-1" aria-hidden="true" />
@@ -25,8 +26,7 @@ export function LabTableHeader({ variant }: { variant: LabTableVariant }) {
       <span className="col-start-4 row-start-1">{columns.unit}</span>
       <span className="col-start-5 row-start-1 text-center">{columns.flag}</span>
       <span className={layout.range}>{columns.range}</span>
-      {variant === 'flat' && <span className={layout.source}>{columns.source}</span>}
-      {variant === 'flat' && <span className={layout.date}>{columns.date}</span>}
+      {variant === 'flat' && <span className={layout.meta}>{columns.sourceDate}</span>}
     </div>
   )
 }

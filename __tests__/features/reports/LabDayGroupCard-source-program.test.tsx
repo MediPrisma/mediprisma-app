@@ -39,7 +39,7 @@ describe('LabDayGroupCard source-program provenance', () => {
     )
 
     expect(screen.getByTestId('report-source-program').closest('button'))
-      .toHaveTextContent('成人健檢')
+      .toHaveTextContent('成人預防保健')
   })
 
   it('keeps the item and abnormal counts in stable aligned columns', () => {

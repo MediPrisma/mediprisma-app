@@ -1512,6 +1512,7 @@ export const en = {
         range: 'Reference',
         source: 'Source',
         date: 'Collected',
+        sourceDate: 'Source · collected',
       },
       moreActions: 'More actions',
       copyResult: 'Copy this result',
@@ -1528,11 +1529,13 @@ export const en = {
     labDayCount: '{n} tests',
     abnormalCount: '{n} abnormal',
     sourcePrograms: {
-      adultPreventive: 'Adult health exam',
+      adultPreventive: 'Adult preventive care',
+      adultPreventiveShort: 'Checkup',
     },
     sourceProvenance: {
       nhiMedicloud: {
         shortLabel: 'NHI MediCloud graphical query',
+        compactLabel: 'NHI cloud',
         formalName: 'NHI MediCloud System',
         sourceLabel: 'Data source',
         originalInstitutionLabel: 'Original testing institution',

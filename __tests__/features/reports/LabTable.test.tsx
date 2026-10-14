@@ -127,13 +127,18 @@ describe('LabReportRow', () => {
     expect(header).toHaveTextContent('1 異常')
     expect(screen.queryAllByTestId('lab-result-line')).toHaveLength(0)
 
-    fireEvent.click(within(header).getByRole('button', { name: 'Creatinine, serum' }))
+    fireEvent.click(within(header).getByRole('button', { name: /^Creatinine, serum/ }))
     const members = screen.getAllByTestId('lab-result-line')
     expect(members).toHaveLength(2)
     members.forEach((member) => expect(member).toHaveAttribute('data-level', 'member'))
+    // Members have no source of their own: the range runs over that track.
+    members.forEach((member) => {
+      expect(within(member).getByTestId('lab-result-range')).toHaveClass('col-end-8')
+      expect(within(member).queryByTestId('lab-result-meta')).not.toBeInTheDocument()
+    })
     // Same tracks as a single result: the member grid matches the header grid.
-    expect(members[0].className).toContain('@min-[820px]:grid-cols-[1.5rem_minmax(10rem,3fr)')
-    expect(header.className).toContain('@min-[820px]:grid-cols-[1.5rem_minmax(10rem,3fr)')
+    expect(members[0].className).toContain('@min-[920px]:grid-cols-[1.5rem_10rem')
+    expect(header.className).toContain('@min-[920px]:grid-cols-[1.5rem_10rem')
   })
 
   it('opens a day section to one line per analyte', () => {
@@ -183,6 +188,31 @@ describe('LabReportRow', () => {
     expect(value).toHaveAttribute('data-text-result', 'long')
     expect(value).toHaveClass('text-left', 'whitespace-normal', 'col-end-6')
     expect(screen.queryByTestId('lab-result-unit')).not.toBeInTheDocument()
+  })
+
+  it('shows a MediCloud source as one compact line, details in the bubble', () => {
+    const row: Row = {
+      id: 'alt-cloud', title: 'ALT', meta: '', group: 'lab', effectiveDate: '2025-08-29',
+      sourceProvenance: 'nhi-medicloud',
+      obs: [quantity('alt-cloud-obs', 'ALT', 14, 'U/L')],
+    }
+    renderRow(row)
+    const source = within(screen.getByTestId('lab-result-meta')).getByTestId('nhi-medicloud-source')
+    expect(source).toHaveAttribute('data-compact', 'true')
+    expect(source).toHaveTextContent('健保雲端')
+    expect(source).not.toHaveTextContent('院所未提供')
+  })
+
+  it('shortens the adult-preventive badge so the institution keeps its room', () => {
+    const row: Row = {
+      id: 'chol-ap', title: 'CHOL', meta: '', group: 'lab', effectiveDate: '2024-03-12',
+      sourceProgram: 'adult-preventive', institution: '示範長青醫院',
+      obs: [quantity('chol-ap-obs', 'CHOL', 188, 'mg/dL')],
+    }
+    renderRow(row)
+    const badge = within(screen.getByTestId('lab-result-meta')).getByTestId('report-source-program')
+    expect(badge).toHaveTextContent('健')
+    expect(badge).toHaveAttribute('aria-label', '成人預防保健')
   })
 
   it('keeps the full report row for a report the grid cannot carry', () => {

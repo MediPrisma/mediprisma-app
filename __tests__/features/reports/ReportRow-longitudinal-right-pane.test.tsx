@@ -139,7 +139,7 @@ describe('ReportRow longitudinal right-pane behavior', () => {
 
     renderRow(row)
 
-    expect(screen.getByTestId('report-source-program')).toHaveTextContent('成人健檢')
+    expect(screen.getByTestId('report-source-program')).toHaveTextContent('成人預防保健')
     expect(screen.queryByTestId('reference-range-inline')).not.toBeInTheDocument()
   })
 

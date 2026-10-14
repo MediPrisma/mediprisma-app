@@ -37,11 +37,16 @@ function SourceDetails({ institution }: { institution?: string }) {
 export function NhiMedicloudSourceIndicator({
   institution,
   iconOnly = false,
+  compact = false,
   className,
   stopPropagation = true,
 }: {
   institution?: string
   iconOnly?: boolean
+  /** One line for a narrow table cell: icon + institution (or the short
+   *  source name when the record carries none). Everything else — the formal
+   *  name, the original institution, the caveat — stays in the bubble. */
+  compact?: boolean
   className?: string
   stopPropagation?: boolean
 }) {
@@ -65,6 +70,32 @@ export function NhiMedicloudSourceIndicator({
       >
         {details}
       </InfoHint>
+    )
+  }
+
+  if (compact) {
+    return (
+      <TapTooltip
+        asChild
+        side="top"
+        aria-label={accessibleLabel}
+        contentClassName="max-w-sm"
+        content={details}
+        stopPropagation={stopPropagation}
+      >
+        <span
+          tabIndex={0}
+          data-testid="nhi-medicloud-source"
+          data-compact="true"
+          className={cn(
+            'inline-flex min-w-0 cursor-pointer touch-manipulation items-center gap-1 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            className,
+          )}
+        >
+          <Info className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden />
+          <span className="min-w-0 truncate">{displayInstitution || labels.compactLabel}</span>
+        </span>
+      </TapTooltip>
     )
   }
 
