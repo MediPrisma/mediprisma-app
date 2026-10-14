@@ -64,7 +64,11 @@ const RAW_CONCLUSION_RE = /(?<![A-Za-z])(Conclusion\s*[＆&]\s*Comments|IMPRESSI
 // ("00000-B-M00000": capitals, digits, hyphens, at least one digit) may sit
 // between the two — a word there ("SNOMED: … PREOPERATIVE DX:") qualifies the DX.
 // The source sometimes runs the last code into the label ("…-M81403DX:").
-const PATHOLOGY_DX_RE = /SNOMED\s*[:：]\s*(?:[A-Z-]*\d[A-Z0-9-]*?[\s,;/]*)+?(DX)\s*[:：]\s*/g
+// Checked token by token rather than in one pattern: a nested repeat over
+// optional separators backtracks exponentially on a long run of digits.
+const SNOMED_LABEL_RE = /SNOMED\s*[:：]/g
+const DX_LABEL_RE = /DX\s*[:：]\s*/g
+const SNOMED_CODE_RE = /^[A-Z-]*\d[A-Z0-9-]*$/
 // Where a raw-marker section ends when no parsed heading ends it first.
 const RAW_SECTION_END_RE = /\s*(?:GROSS D|MICRO D|COMMENTS?|Echo guided procedure)\s*[:：][\s\S]*$/
 // "Clinical Impression:" is the referral reason, not the reader's verdict.
@@ -121,12 +125,31 @@ function headingConclusion(lines: ReportLine[], group: ReadonlySet<string>, with
   return null
 }
 
-function rawMarkerConclusion(raw: string, marker: RegExp): ReportPreview | null {
-  for (const match of raw.matchAll(marker)) {
+/** The raw-text section starting at `offset`, up to the next heading or section end. */
+function rawSection(raw: string, offset: number): string {
+  const rest = formatReportText(raw.slice(offset))
+  return tidy(joinLines(sectionBody(rest, -1)).replace(RAW_SECTION_END_RE, ''))
+}
+
+function rawMarkerConclusion(raw: string): ReportPreview | null {
+  for (const match of raw.matchAll(RAW_CONCLUSION_RE)) {
     if (CLINICAL_PREFIX_RE.test(raw.slice(0, match.index))) continue
-    const rest = formatReportText(raw.slice(match.index + match[0].length))
-    const text = tidy(joinLines(sectionBody(rest, -1)).replace(RAW_SECTION_END_RE, ''))
+    const text = rawSection(raw, match.index + match[0].length)
     if (text) return { label: match[1].replace(/[【】]/g, ''), text }
+  }
+  return null
+}
+
+function pathologyDxConclusion(raw: string): ReportPreview | null {
+  for (const snomed of raw.matchAll(SNOMED_LABEL_RE)) {
+    const codesStart = snomed.index + snomed[0].length
+    DX_LABEL_RE.lastIndex = codesStart
+    const dx = DX_LABEL_RE.exec(raw)
+    if (!dx) return null
+    const codes = raw.slice(codesStart, dx.index).split(/[\s,;/]+/).filter(Boolean)
+    if (!codes.length || !codes.every((code) => SNOMED_CODE_RE.test(code))) continue
+    const text = rawSection(raw, dx.index + dx[0].length)
+    if (text) return { label: 'DX', text }
   }
   return null
 }
@@ -134,9 +157,9 @@ function rawMarkerConclusion(raw: string, marker: RegExp): ReportPreview | null 
 function conclusionPreview(lines: ReportLine[], raw: string): ReportPreview | null {
   const [primary, secondary] = CONCLUSION_GROUPS
   return headingConclusion(lines, primary, true)
-    ?? rawMarkerConclusion(raw, RAW_CONCLUSION_RE)
+    ?? rawMarkerConclusion(raw)
     ?? headingConclusion(lines, secondary, false)
-    ?? rawMarkerConclusion(raw, PATHOLOGY_DX_RE)
+    ?? pathologyDxConclusion(raw)
 }
 
 function letterheadPreview(raw: string): ReportPreview | null {

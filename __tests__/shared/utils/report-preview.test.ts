@@ -179,6 +179,12 @@ describe('extractReportPreview audit of real report formats', () => {
     expect(extractReportPreview('DX: Lung cancer, for staging. Lungs are clear.')).toBeNull()
   })
 
+  it('stays linear on a long digit run after SNOMED (no regex backtracking)', () => {
+    const started = Date.now()
+    expect(extractReportPreview(`SNOMED:0${'0'.repeat(5000)}!`)).toBeNull()
+    expect(Date.now() - started).toBeLessThan(500)
+  })
+
   it('does not take a qualified DX between the SNOMED code and the colon', () => {
     expect(extractReportPreview('SNOMED: 00000-B PREOPERATIVE DX: Suspected colon cancer. GROSS D: Two pieces of tissue.')).toBeNull()
     expect(extractReportPreview('SNOMED: 00000-B Clinical DX: Suspected colon cancer. GROSS D: Two pieces of tissue.')).toBeNull()
