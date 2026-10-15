@@ -35,9 +35,15 @@ const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
   ['hematologic-lymph', /\b(?:lymph\w*|marrow)\b|淋巴|骨髓/iu],
 ]
 
-export function reportOrganFromQuotes(proposed: ReportOrgan, quotes: readonly string[]): ReportOrgan {
+export function reportOrganFromQuotes(proposed: ReportOrgan, quotes: readonly string[], sourceNarratives: readonly string[] = []): ReportOrgan {
   const matches = new Set(ANATOMY.filter(([, pattern]) => quotes.some(quote => pattern.test(quote))).map(([organ]) => organ))
   if (matches.size === 1) return [...matches][0]
   if (matches.size > 1 && !matches.has(proposed)) return 'other'
+  // A short verified quote (e.g. "Fracture") need not repeat the specimen.
+  // A single-organ source can disambiguate it; a multi-organ report cannot.
+  if (matches.size === 0) {
+    const sourceMatches = new Set(ANATOMY.filter(([, pattern]) => sourceNarratives.some(text => pattern.test(text))).map(([organ]) => organ))
+    if (sourceMatches.size === 1) return [...sourceMatches][0]
+  }
   return proposed
 }

@@ -38,3 +38,9 @@ test('regroups an actual verified pathology quote without losing the finding or 
   expect(result.groups[0].organ).toBe('musculoskeletal')
   expect(result.groups[0].points[0].sources[0].key).toBe(key)
 })
+
+test('a short quote uses only unambiguous source anatomy, never an unrelated report', () => {
+  expect(reportOrganFromQuotes('gynecologic', ['Fracture'], ['Bone, femoral head. Diagnosis: Fracture.'])).toBe('musculoskeletal')
+  expect(reportOrganFromQuotes('other', ['Cyst'], ['Liver cyst. Renal cyst.'])).toBe('other')
+  expect(reportOrganFromQuotes('heart', ['Tricuspid regurgitation'], ['Lungs clear. Tricuspid regurgitation.'])).toBe('heart')
+})

@@ -3318,7 +3318,8 @@ export function finalizeReportHighlights(
       }
       if (finalized.point.displayAs === 'quote') uncertaintyRewriteCount += 1
       finalized.point.sources.forEach((source) => citedKeys.add(source.key))
-      const verifiedOrgan = reportOrganFromQuotes(organ, finalized.point.quotes.map(quote => quote.quote))
+      const verifiedOrgan = reportOrganFromQuotes(organ, finalized.point.quotes.map(quote => quote.quote),
+        finalized.point.sources.map(source => readItemByKey.get(source.key)?.narrative ?? ''))
       const points = pointsByOrgan.get(verifiedOrgan)
       if (points) points.push(finalized.point)
       else pointsByOrgan.set(verifiedOrgan, [finalized.point])
