@@ -77,3 +77,26 @@ test('numbered pathological diagnosis supplies anatomy but clinical history does
   const result = finalizeReportHighlights({ groups: [{ organ: 'gynecologic', points: [{ text: 'Fracture', sources: [key], quotes: [{ source: key, quote: 'Fracture' }] }] }], unremarkable: [] }, data, catalog)
   expect(result.groups[0].organ).toBe('musculoskeletal')
 })
+
+test('coded fasting glucose supports a glucose claim', () => {
+  expect(labClaimConflicts('Hyperglycemia', [{ code: { coding: [{ system: 'http://loinc.org', code: '1558-6' }] } }])).toBe(false)
+})
+
+test.each([
+  ['head-neck', 'Mucosal thickening of maxillary sinus'],
+  ['musculoskeletal', 'Lumbar spondylosis'],
+  ['abdomen-liver-biliary', 'Gall bladder stone'],
+  ['abdomen-liver-biliary', '肝血管瘤'],
+  ['heart', 'Coronary artery calcification'],
+  ['gynecologic', '骨盆腔腫塊'],
+])('preserves organ identity in overlapping anatomical wording: %s / %s', (organ, quote) => {
+  expect(reportOrganFromQuotes(organ as any, [quote])).toBe(organ)
+})
+
+test('multiple specimens use the quoted diagnosis section, not the last specimen', () => {
+  const data: any = { diagnosticReports: [{ id: 'multi', code: { text: 'Pathology' }, category: [{ text: 'pathology' }], conclusion: '病理診斷 1：Uterus, myometrium\nLeiomyoma\n病理診斷 2：Bone, femoral head\nFracture' }] }
+  const catalog = buildSourceCatalog(data)
+  const key = catalog[0].key
+  const result = finalizeReportHighlights({ groups: [{ organ: 'gynecologic', points: [{ text: 'Leiomyoma', sources: [key], quotes: [{ source: key, quote: 'Leiomyoma' }] }] }], unremarkable: [] }, data, catalog)
+  expect(result.groups[0].organ).toBe('gynecologic')
+})

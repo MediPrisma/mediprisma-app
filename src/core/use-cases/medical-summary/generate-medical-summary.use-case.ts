@@ -3325,12 +3325,22 @@ export function finalizeReportHighlights(
       }
       if (finalized.point.displayAs === 'quote') uncertaintyRewriteCount += 1
       finalized.point.sources.forEach((source) => citedKeys.add(source.key))
-      const verifiedOrgan = reportOrganFromQuotes(organ, finalized.point.quotes.map(quote => quote.quote),
+      const verifiedQuotes = finalized.point.quotes
+      const verifiedOrgan = reportOrganFromQuotes(organ, verifiedQuotes.map(quote => quote.quote),
         finalized.point.sources.flatMap(source => {
           const item = readItemByKey.get(source.key)
           if (!item) return []
-          const section = findConclusionSection(item.narrative)
-          return [item.title, ...(section ? [item.narrative.slice(section.contentStart, section.end)] : [])]
+          // Numbered specimens are independent diagnoses, not addenda. Use
+          // only sections that actually contain this point's verified quote;
+          // repeated ambiguous quotes retain all matching sections.
+          const matching: string[] = []
+          let remaining = item.narrative
+          for (let section = findConclusionSection(remaining); section; section = findConclusionSection(remaining)) {
+            const content = remaining.slice(section.contentStart, section.end)
+            if (verifiedQuotes.some(quote => quote.key === source.key && verifyReportQuote(quote.quote, content))) matching.push(content)
+            remaining = remaining.slice(0, section.headerStart)
+          }
+          return matching
         }))
       const points = pointsByOrgan.get(verifiedOrgan)
       if (points) points.push(finalized.point)
