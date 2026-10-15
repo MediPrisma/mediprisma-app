@@ -7,6 +7,7 @@ import { hfDiagnosisVisits, suggestHfDiagnosis, type HfPhysicianDiagnosisDraft }
 import { hasHfDiagnosis, summarizeHfInput } from '@/src/core/hf-risk/input-summary'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { HfProvenance, HfResultsView, hfResultText } from './HfPredictionResult'
+import { HfExcludedLabs } from './HfExcludedLabs'
 
 const GAP: Record<string, [string, string]> = {
   'index-diagnosis-missing': ['門診缺少可核對的 ICD-10-CM／ICD-9-CM 診斷；一般 ICD-10 不自行換碼，可由醫師確認後補充本次診斷', 'The index visit lacks a verified ICD-10-CM/ICD-9-CM diagnosis; correct the source or explicitly supply HF for this exact visit'],
@@ -307,6 +308,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
         </div>
       </div>
     </details>}
+
+    {current && <HfExcludedLabs key={`${current.importId}:${current.selection.provider}:${current.selection.encounter}`} items={current.input.excludedLabs ?? []} indexDate={current.input.indexDate} locale={locale} />}
 
     {runs && <details className="group rounded-lg border border-border bg-background">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">{chevron}{en ? 'Attestation and calculation record' : '醫師聲明與計算紀錄'}</summary>

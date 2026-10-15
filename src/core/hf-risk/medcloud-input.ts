@@ -1,5 +1,5 @@
 import { normalizeHfRecordSource, type HfRecordSource } from './record-source'
-import { fhirDay, taipeiToday, HF_DRY_RUN_CLAIMS, HF_NAMESPACE, MEDCLOUD_PROVIDER_SYSTEM, type FhirRecord, type HfInput, type HfSelection } from './contract'
+import { fhirDay, taipeiToday, HF_DRY_RUN_CLAIMS, HF_NAMESPACE, MEDCLOUD_PROVIDER_SYSTEM, type FhirRecord, type HfInput, type HfSelection, type HfExcludedLab } from './contract'
 import { HF_LABS, normalizeHfLab } from './labs'
 
 const ICD10 = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw'
@@ -82,6 +82,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   const indexDate = selected.date
   const uuid = options.uuid ?? (() => crypto.randomUUID())
   const gaps = new Map<string, number>()
+  const excludedLabs: HfExcludedLab[] = []
   const gap = (code: string, count = 1) => gaps.set(code, (gaps.get(code) ?? 0) + count)
   const output: FhirRecord[] = []
   const add = (resource: FhirRecord) => output.push({ fullUrl: 'urn:uuid:' + resource.id, resource })
@@ -156,24 +157,51 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
     if (resource.class.code === 'IMP' && diagnosis.some(item => !item.rank)) gap('diagnosis-rank-missing')
     add(mapped)
   }
-  for (const item of entry) {
+  // Keep one diagnostic per excluded observation, at the first failing gate.
+  // Only observations belonging to this patient reach this helper.
+  const text = (value: unknown) => typeof value === 'string' ? value : typeof value === 'number' ? String(value) : undefined
+  const omitLab = (resource: FhirRecord, row: number, reason: string) => {
+    gap(reason)
+    if (resource.resourceType !== 'Observation') return
+    const codes = coding(resource.code)
+    const quantity = resource.valueQuantity
+    const matchedLab = HF_LABS.find(lab => codes.some(code => code.system === 'http://loinc.org' && lab.loinc.includes(code.code)))
+    let valueIssue: HfExcludedLab['valueIssue']
+    if (reason === 'lab-value-unit') {
+      if (typeof quantity?.value !== 'number' || !Number.isFinite(quantity.value)) valueIssue = 'value-invalid'
+      else if (!(quantity.code || quantity.unit)) valueIssue = 'unit-missing'
+      else if (matchedLab && !normalizeHfLab(matchedLab, { ...quantity, value: 1, comparator: undefined })) valueIssue = 'unit-unsupported'
+      else if (quantity.comparator && !['<', '<=', '>', '>='].includes(quantity.comparator)) valueIssue = 'comparator-invalid'
+      else valueIssue = 'value-invalid' // Conversion overflow is not an unsupported unit.
+    }
+    excludedLabs.push({ row, reason,
+      ...(valueIssue ? { valueIssue } : {}),
+      name: text(resource.code?.text) || codes.map(code => text(code.display)).find(Boolean) || matchedLab?.key,
+      codes: codes.map(code => [text(code.system), text(code.code)].filter(Boolean).join(' | ')).filter(Boolean),
+      date: text(resource.effectiveDateTime ?? resource.effectivePeriod?.start),
+      value: quantity ? [text(quantity.comparator), text(quantity.value)].filter(value => value !== undefined).join(' ') || undefined
+        : text(resource.valueString) ?? text(resource.valueCodeableConcept?.text),
+      unit: text(quantity?.unit), unitCode: text(quantity?.code), status: text(resource.status),
+    })
+  }
+  for (const [row, item] of entry.entries()) {
     const resource = item.resource
     if (!['Observation', 'Procedure'].includes(resource.resourceType) || !belongs(resource)) continue
-    if (provider(resource) !== selection.provider) { gap('source-omitted'); continue }
-    if (voided(resource)) { gap('void-omitted'); continue }
+    if (provider(resource) !== selection.provider) { omitLab(resource, row + 1, 'source-omitted'); continue }
+    if (voided(resource)) { omitLab(resource, row + 1, 'void-omitted'); continue }
     if (resource.resourceType === 'Observation') {
       // NHI cloud and health-bank results carry no workflow status; the bridges mark them unknown.
       // A reported value with a collection date is accepted from those sources; anything else stays strict.
       const unreported = resource.status === 'unknown' && (source === 'medcloud' || source === 'health-bank')
-      if (!['final', 'amended', 'corrected'].includes(resource.status) && !unreported) { gap('lab-status'); continue }
+      if (!['final', 'amended', 'corrected'].includes(resource.status) && !unreported) { omitLab(resource, row + 1, 'lab-status'); continue }
       const lab = HF_LABS.find(lab => coding(resource.code).some(code => code.system === 'http://loinc.org' && lab.loinc.includes(code.code)))
-      if (!lab) { gap('lab-unmapped'); continue }
+      if (!lab) { omitLab(resource, row + 1, 'lab-unmapped'); continue }
       // issued/report/visit dates are not replacements for the collection date.
       const date = fhirDay(resource.effectiveDateTime ?? resource.effectivePeriod?.start)
-      if (!date) { gap('lab-date'); continue }
-      if (date > indexDate) { gap('future-omitted'); continue }
+      if (!date) { omitLab(resource, row + 1, 'lab-date'); continue }
+      if (date > indexDate) { omitLab(resource, row + 1, 'future-omitted'); continue }
       const quantity = resource.valueQuantity && normalizeHfLab(lab, resource.valueQuantity)
-      if (!quantity) { gap('lab-value-unit'); continue }
+      if (!quantity) { omitLab(resource, row + 1, 'lab-value-unit'); continue }
       if (unreported) gap('lab-status-unreported')
       add({ resourceType: 'Observation', id: uuid(), subject, status: 'final',
         category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
@@ -198,5 +226,5 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   const indexEncounter = output.find(item => item.resource.id === encounterIds.get(resolve(selection.encounter)!))?.resource
   if (!indexEncounter?.diagnosis?.length) gap('index-diagnosis-missing')
   return { bundle: { resourceType: 'Bundle', type: 'collection', entry: output }, indexDate, indexEncounterReference: indexEncounter ? 'urn:uuid:' + indexEncounter.id : undefined, claim: selection.claim,
-    gaps: [...gaps].map(([code, count]) => ({ code, count })), counts }
+    gaps: [...gaps].map(([code, count]) => ({ code, count })), counts, excludedLabs }
 }
