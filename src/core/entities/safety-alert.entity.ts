@@ -3,6 +3,7 @@
 // reasons over the clinical context) but constrained to this schema; we Zod-
 // validate the parsed JSON so a malformed response is rejected, not rendered.
 import { z } from 'zod'
+import { clampLine } from '@/src/core/utils/clamp-line.utils'
 
 export const SAFETY_SEVERITIES = ['high', 'medium', 'low'] as const
 export type SafetySeverity = (typeof SAFETY_SEVERITIES)[number]
@@ -23,7 +24,8 @@ export type SafetyCategory = (typeof SAFETY_CATEGORIES)[number]
 // Size caps CLAMP (slice/truncate) instead of rejecting — verbose models
 // (Claude Haiku) exceed them with good content, and one oversize field must
 // not void a whole safety scan (see medical-summary.entity.ts, 2026-07).
-const trimTo = (max: number) => (s: string) => (s.length > max ? s.slice(0, max) : s)
+// Clamp at a clause boundary with an ellipsis, never mid-word.
+const trimTo = (max: number) => (s: string) => clampLine(s.trim(), max)
 export const SafetyAlertSchema = z.object({
   severity: z.enum(SAFETY_SEVERITIES),
   title: z.string().min(1).transform(trimTo(80)),
@@ -53,6 +55,9 @@ export interface SafetyAlert extends SafetyAlertInput {
   /** Existing D# resources whose document text does not support a procedure
    *  asserted by this alert. The UI keeps them visible but marks them amber. */
   unsupportedSourceKeys?: string[]
+  /** Cited medicines the alert calls anticholinergic although their listed
+   *  mechanism and burden say otherwise. Shown as 待核對, never removed. */
+  propertyReviewKeys?: string[]
 }
 
 export interface SafetyScanResult {

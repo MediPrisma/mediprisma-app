@@ -1,5 +1,6 @@
 import {
   createConfiguredOpenAiCompatibleFetch,
+  hiddenReasoningOffRequestFields,
   createOpenAiCompatibleFetch,
   createOpenAiCompatibleGatewayFetch,
   testOpenAiCompatibleAgentCapability,
@@ -882,5 +883,79 @@ describe('OpenAI-compatible browser client', () => {
       reason: expect.stringContaining('timed out'),
     })
     expect(wasAborted).toBe(true)
+  })
+})
+
+describe('hidden-reasoning-off request mapping', () => {
+  it('sends the vLLM chat-template flag for an ordinary endpoint model', () => {
+    expect(hiddenReasoningOffRequestFields(profile)).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+    })
+  })
+
+  it('bounds reasoning instead of disabling it for gpt-oss', () => {
+    // gpt-oss cannot disable hidden CoT; the lowest budget is the closest it
+    // gets, and the vLLM template flag must NOT be sent to it.
+    for (const modelId of ['gpt-oss:20b', 'gpt-oss-120b']) {
+      expect(hiddenReasoningOffRequestFields({ ...profile, modelId })).toEqual({
+        reasoning_effort: 'low',
+      })
+    }
+  })
+
+  it('adds OpenRouter\'s own switch only on the OpenRouter host', () => {
+    expect(hiddenReasoningOffRequestFields({
+      ...profile,
+      baseUrl: 'https://openrouter.ai/api/v1',
+    })).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+      reasoning: { enabled: false },
+    })
+    expect(hiddenReasoningOffRequestFields(profile).reasoning).toBeUndefined()
+  })
+
+  it('merges the fields into the SDK body without disturbing the request', async () => {
+    const originalFetch = global.fetch
+    const fetchMock = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({})) as jest.MockedFunction<typeof fetch>
+    global.fetch = fetchMock
+    try {
+      await createConfiguredOpenAiCompatibleFetch(profile, { hiddenReasoning: 'off' })(
+        'https://llm.intra.example/v1/chat/completions',
+        {
+          method: 'POST',
+          body: JSON.stringify({ model: 'hospital-model', messages: [], stream: true }),
+        },
+      )
+      expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+        model: 'hospital-model',
+        messages: [],
+        stream: true,
+        chat_template_kwargs: { enable_thinking: false },
+      })
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
+
+  it('leaves the request untouched when the option is absent', async () => {
+    const originalFetch = global.fetch
+    const fetchMock = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({})) as jest.MockedFunction<typeof fetch>
+    global.fetch = fetchMock
+    try {
+      const body = JSON.stringify({ model: 'hospital-model', messages: [] })
+      await createConfiguredOpenAiCompatibleFetch(profile)(
+        'https://llm.intra.example/v1/chat/completions',
+        { method: 'POST', body },
+      )
+      expect(fetchMock.mock.calls[0][1]?.body).toBe(body)
+    } finally {
+      global.fetch = originalFetch
+    }
   })
 })

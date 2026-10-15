@@ -149,7 +149,7 @@ export function primaryCellRecord(cell: LabCell): { record: LabCellRecord; valid
 /** A cell's value as a clinician or the AI must read it: "<0.5", never "0.5".
  *  Every reader that prints a pivot cell goes through this. A missing value
  *  stays the placeholder — a comparator never turns "—" into "<—". */
-export function cellDisplayValue(cell: LabCell): string {
+export function cellDisplayValue(cell: Pick<LabCell, 'value' | 'comparator'>): string {
   const text = cell.value?.trim()
   if (!text || text === '—') return cell.value
   return recordDisplayValue({ value: cell.value, comparator: cell.comparator })
@@ -837,6 +837,46 @@ export function getLabPivotTestIdentity(
     : displayOverride || (isCanonical ? canonicalDisplay : candidateDisplay)
 
   return { mapKey, testKey, displayName }
+}
+
+// ── Shared markdown-cell rendering ──────────────────────────────────────────
+// Both AI lanes print the same pivot cell: the value, the SOURCE's abnormal
+// flag when the source called it abnormal, and a status tag when the record is
+// not a plain final result. Kept here, beside the builder that fills the cell,
+// so the two lanes can never drift into different abnormal semantics.
+
+const UNREMARKABLE_LAB_STATUSES = new Set(['final', 'amended', 'corrected', 'unknown'])
+
+/** `{status:preliminary}` and friends; nothing for an ordinary final result. */
+export function labStatusSuffix(status?: string): string {
+  return status && !UNREMARKABLE_LAB_STATUSES.has(status)
+    ? ` {status:${status}}`
+    : ''
+}
+
+/** One measured value as text: the value, the SOURCE's abnormal marker when it
+ *  called the value abnormal — its own interpretation code (H/L/A/…), falling
+ *  back to `*` when it flagged through a structured reference range without
+ *  naming a code — and a status tag for anything but a plain final result. */
+export function formatLabValueText(
+  cell: Pick<LabCell, 'value' | 'comparator' | 'isAbnormal' | 'interpretationCode' | 'status'>,
+): string {
+  const status = labStatusSuffix(cell.status)
+  // The comparator travels with the value ("<0.5"), in both lanes.
+  const value = cellDisplayValue(cell)
+  if (!cell.isAbnormal) return `${value}${status}`
+  return `${value} ${cell.interpretationCode || '*'}${status}`
+}
+
+/** One markdown table cell. `-` when the analyte was not measured that day. */
+export function formatLabPivotCell(row: LabRow, date: string): string {
+  const cell = row.values.get(date)
+  return cell ? formatLabValueText(cell) : '-'
+}
+
+/** Column header text: the analyte and, when every cell agrees on one, its unit. */
+export function labPivotColumnLabel(row: LabRow): string {
+  return row.unit ? `${row.displayName} (${row.unit})` : row.displayName
 }
 
 export function buildLabPivots(

@@ -9,7 +9,7 @@ describe('coerceProfile — schema migration preserves user choices', () => {
     const p = coerceProfile(undefined)
     expect(p.selection).toEqual(DEFAULT_DATA_SELECTION)
     expect(p.filters).toEqual(DEFAULT_DATA_FILTERS)
-    expect(p.documentMode).toBe('latestAdmission')
+    expect(p.documentMode).toBe('recentAdmissions')
   })
 
   it('preserves the user toggles even when the stored profile predates new keys', () => {

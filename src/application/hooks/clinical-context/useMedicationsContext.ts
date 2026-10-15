@@ -14,13 +14,17 @@ import {
 import { routeAbbr } from "@/src/shared/utils/route-display"
 import {
   durationToDays,
-  filterMedicationRecords,
   isChronicMedicationRecord,
   isMedicationCurrentlyInUse,
+  MILESTONE_ENCOUNTER_FLOOR_DAYS,
   normalizeClinicalStatus,
+  selectMedicationRecords,
 } from "@/src/core/utils/clinical-context-selection.utils"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
+
+/** The floor's horizon, stated in the months the section heading uses. */
+const FLOOR_WINDOW_MONTHS = Math.round(MILESTONE_ENCOUNTER_FLOOR_DAYS / 30)
 
 interface MedSummary {
   name: string
@@ -30,6 +34,8 @@ interface MedSummary {
   startedOn?: string
   endDate?: string
   daysRemaining?: number
+  /** Days supply the source recorded, when it recorded one. */
+  supplyDays?: number
   state: 'current' | 'ended' | 'other'
   status: string
   isChronic: boolean
@@ -100,6 +106,7 @@ function summarize(
     startedOn: startedRaw ? String(startedRaw).slice(0, 10) : undefined,
     endDate,
     daysRemaining,
+    supplyDays: days,
     state,
     status,
     isChronic: isChronicMedicationRecord(med),
@@ -154,7 +161,7 @@ function formatNhiTerminology(m: MedSummary): string | undefined {
   return `[NHI terminology matched to this exact medication record: ${fields.join('; ')}]`
 }
 
-function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string {
+function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other' | 'lapsed', neutral = false): string {
   const parts: string[] = [m.isChronic ? `${m.name} [慢箋]` : m.name]
   const dosing = [m.dose, m.frequency, m.route].filter(Boolean).join(', ')
   if (dosing) parts.push(`(${dosing})`)
@@ -165,8 +172,18 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string 
       parts.push(`— since ${m.startedOn}`)
     }
   } else if (mode === 'recent') {
-    if (m.endDate) parts.push(`— last ended ${m.endDate}`)
+    if (neutral) {
+      if (m.startedOn) parts.push(`— last dispensed ${m.startedOn}`)
+      if (m.endDate) parts.push(`(estimated supply to ${m.endDate})`)
+    } else if (m.endDate) parts.push(`— last ended ${m.endDate}`)
     else if (m.startedOn) parts.push(`— ${m.startedOn}`)
+  } else if (mode === 'lapsed') {
+    if (m.startedOn) parts.push(`— last dispensed ${m.startedOn}`)
+    if (m.supplyDays) {
+      parts.push(neutral
+        ? `(${m.supplyDays}d supply${m.endDate ? `, estimated to ${m.endDate}` : ''})`
+        : `(${m.supplyDays}d supply${m.endDate ? `, ended ${m.endDate}` : ''})`)
+    }
   } else {
     if (m.startedOn) parts.push(`— recorded ${m.startedOn}`)
     if (m.endDate) parts.push(`(calculated supply end ${m.endDate})`)
@@ -240,11 +257,17 @@ export function useMedicationsContext(
   // authoritative even when visit-linked records are repeated chronologically.
   _encountersShown: boolean = false,
   sharedNowMs?: number,
+  /** 'neutral' (初診快覽): a passed supply estimate is not a stop. The cloud
+   *  record holds dispensings, not stop orders, so the section says when a
+   *  medicine was last dispensed and when its supply was estimated to run out
+   *  — never that it is "NOT currently in use". */
+  supplyWording: 'default' | 'neutral' = 'default',
 ): ClinicalContextSection | null {
   // The production clinical-context owner passes the shared day clock. Direct
   // experiment/test consumers keep one mount-time snapshot instead of adding
   // another focus listener or changing memo keys on every render.
   const [fallbackNowMs] = useState(Date.now)
+  const neutral = supplyWording === 'neutral'
   const nowMs = sharedNowMs ?? fallbackNowMs
   return useMemo(() => {
     if (!includeMedications || !clinicalData?.medications?.length) return null
@@ -253,15 +276,21 @@ export function useMedicationsContext(
     // linked records may also be repeated under their encounter for chronology;
     // never remove them here, because the encounter and medication windows can
     // differ and cross-section "dedup" previously made records disappear.
-    const meds = filterMedicationRecords(
+    // `floor` are the recently dispensed medicines the latest-known floor added
+    // because too few are current. They are NOT current, so the buckets below
+    // would classify them as ended/other — and under the default 使用中 filter
+    // those buckets are cleared, which is how a whole lapsed DM regimen used to
+    // reach no AI module at all. They get their own labelled subsection instead.
+    const { selected: meds, floor } = selectMedicationRecords(
       clinicalData.medications,
       filters,
       clinicalData as { encounters?: any[] },
       nowMs,
     )
-    if (meds.length === 0) return null
+    if (meds.length === 0 && floor.length === 0) return null
 
     const summaries = meds.map((m: any) => summarize(m, nowMs))
+    const lapsed = dedupByDrug(floor.map((m: any) => summarize(m, nowMs)))
 
     const now = nowMs
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -301,21 +330,34 @@ export function useMedicationsContext(
     if (active.length > 0) {
       items.push(`Currently in use (${active.length}):`)
       active.sort((a, b) => (a.daysRemaining ?? Infinity) - (b.daysRemaining ?? Infinity))
-      active.forEach((m) => items.push(`  • ${formatLine(m, 'active')}`))
+      active.forEach((m) => items.push(`  • ${formatLine(m, 'active', neutral)}`))
+    }
+
+    if (lapsed.length > 0) {
+      if (items.length > 0) items.push('')
+      items.push(neutral
+        ? `Dispensed in the last ${FLOOR_WINDOW_MONTHS} months, estimated supply already passed (${lapsed.length}) — current use is not known from these records:`
+        : `Recently dispensed, supply ended (last ${FLOOR_WINDOW_MONTHS} months, ${lapsed.length}) — NOT currently in use:`)
+      lapsed.sort((a, b) => (b.startedOn || '').localeCompare(a.startedOn || ''))
+      lapsed.forEach((m) => items.push(`  • ${formatLine(m, 'lapsed', neutral)}`))
     }
 
     if (recent.length > 0) {
       if (items.length > 0) items.push('')
-      items.push(`Recently ended (last ${RECENTLY_ENDED_WINDOW_DAYS} days, ${recent.length}):`)
+      items.push(neutral
+        ? `Estimated supply passed in the last ${RECENTLY_ENDED_WINDOW_DAYS} days (${recent.length}) — current use is not known from these records:`
+        : `Recently ended (last ${RECENTLY_ENDED_WINDOW_DAYS} days, ${recent.length}):`)
       recent.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''))
-      recent.forEach((m) => items.push(`  • ${formatLine(m, 'recent')}`))
+      recent.forEach((m) => items.push(`  • ${formatLine(m, 'recent', neutral)}`))
     }
 
     if (pastUnique.length > 0) {
       if (items.length > 0) items.push('')
-      items.push(`Past medications (older than ${RECENTLY_ENDED_WINDOW_DAYS} days, ${pastUnique.length}):`)
+      items.push(neutral
+        ? `Older dispensings (estimated supply passed more than ${RECENTLY_ENDED_WINDOW_DAYS} days ago, ${pastUnique.length}):`
+        : `Past medications (older than ${RECENTLY_ENDED_WINDOW_DAYS} days, ${pastUnique.length}):`)
       pastUnique.sort((a, b) => (b.endDate || b.startedOn || '').localeCompare(a.endDate || a.startedOn || ''))
-      pastUnique.forEach((m) => items.push(`  • ${formatLine(m, 'recent')}`))
+      pastUnique.forEach((m) => items.push(`  • ${formatLine(m, 'recent', neutral)}`))
     }
 
     if (other.length > 0) {
@@ -331,7 +373,10 @@ export function useMedicationsContext(
       '',
       'Record-fidelity note: visit-linked medication records may also appear under their visit; do not count repeated records as separate prescriptions.',
       'Terminology note: each NHI terminology block belongs only to the medication row that contains it. It can establish that product\'s ingredient/strength, dose form, and ATC classification, but it does not establish why this patient received it, actual use/adherence, or clinical outcome.',
+      ...(neutral
+        ? ['Supply note: these are dispensing records, not stop orders. A passed supply estimate does not show a medicine was stopped, and a long-acting injection (a depot dosed every one to six months) records a one-day supply while acting for its whole dosing interval.']
+        : []),
     )
     return { title: "Patient's Medications", items }
-  }, [includeMedications, clinicalData, filters, nowMs])
+  }, [includeMedications, clinicalData, filters, nowMs, neutral])
 }

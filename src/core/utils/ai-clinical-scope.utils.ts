@@ -19,6 +19,8 @@ import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
 import { imagingStudyTitle } from '@/src/shared/utils/imaging-study.utils'
 import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-domain-filter.utils'
+import { floorStartDay, prescribingAnalyteKey } from '@/src/core/utils/first-visit-floors'
+import { AI_REPORT_GROUPS, reportModalityClass } from '@/src/core/utils/report-narrative.utils'
 
 const LAB_FALLBACK_SAMPLING_DAYS = 3
 const NHI_VIEWER_REQUEST_EXTENSION_URL =
@@ -199,6 +201,38 @@ function selectLabScope(
       .forEach(({ parent }) => selectedParents.add(parent))
   }
 
+  // Latest-known floor: a prescribing analyte whose newest value fell outside
+  // the saved window (or its panel filter) still contributes that one value
+  // when it is within the floor horizon of the newest lab in the chart. A
+  // quiet six months must not hide an eight-month-old platelet count.
+  const newestLabDay = expanded
+    .map(({ value }) => String(observationDate(value) ?? '').slice(0, 10))
+    .filter(Boolean)
+    .sort()
+    .at(-1)
+  const floorStart = floorStartDay(newestLabDay)
+  if (floorStart) {
+    const coveredAnalytes = new Set<string>()
+    for (const parent of selectedParents) {
+      for (const value of expandObservationValues(parent)) {
+        const key = prescribingAnalyteKey(value)
+        if (key) coveredAnalytes.add(key)
+      }
+    }
+    const latestByAnalyte = new Map<string, { parent: any; date: string }>()
+    for (const { parent, value } of expanded) {
+      const key = prescribingAnalyteKey(value)
+      if (!key || coveredAnalytes.has(key)) continue
+      // A panel the user switched off stays off; the floor widens time, not scope.
+      if (panelIds.size > 0 && !panelIds.has(categorizeObservation(value)?.id ?? '')) continue
+      const date = String(observationDate(value) ?? '').slice(0, 10)
+      if (!date || date < floorStart) continue
+      const current = latestByAnalyte.get(key)
+      if (!current || date > current.date) latestByAnalyte.set(key, { parent, date })
+    }
+    for (const { parent } of latestByAnalyte.values()) selectedParents.add(parent)
+  }
+
   const selectedReports = reports.filter((report) => {
     if ((reportMembers.get(report) ?? []).some((observation) => selectedParents.has(observation))) return true
     return conclusionReports.includes(report) && dateSelected(report.effectiveDateTime || report.issued)
@@ -258,10 +292,14 @@ export function scopeClinicalDataForAi(
     ? selectLabScope(input, availableLabReports, filters)
     : { reports: [], observations: [] }
   const labReports = labScope.reports
+  // Pathology reports ride on the imaging selection: they were reaching no AI
+  // surface at all (the scope kept only the lab and imaging groups), yet a
+  // biopsy result is the one report an oncology second opinion cannot do
+  // without. Same window and same latest-per-name rule as imaging.
   let imagingReports = selection.imagingReports
     ? (input.diagnosticReports ?? []).filter((report) =>
         reportStatusOk(report)
-        && inferGroupFromDiagnosticReport(report) === 'imaging'
+        && AI_REPORT_GROUPS.has(inferGroupFromDiagnosticReport(report))
         && imagingWindow(report.effectiveDateTime || report.issued),
       )
     : []
@@ -291,6 +329,36 @@ export function scopeClinicalDataForAi(
   }
   // Avoid duplicate report objects if a malformed server labels one report as
   // both lab and imaging; the rendered categories use the same classification.
+  // Latest-known floor for reports: the newest report of each modality class
+  // (pathology, CT, MRI, ultrasound, ECG, X-ray…) within the floor horizon
+  // stays in scope even when the saved imaging window is shorter. NHI names
+  // every CT alike, so the class — not the report name — is the unit.
+  if (selection.imagingReports) {
+    const candidates = (input.diagnosticReports ?? []).filter((report) =>
+      reportStatusOk(report) && AI_REPORT_GROUPS.has(inferGroupFromDiagnosticReport(report)))
+    const newestReportDay = candidates
+      .map((report) => String(report.effectiveDateTime || report.issued || '').slice(0, 10))
+      .filter(Boolean)
+      .sort()
+      .at(-1)
+    const floorStart = floorStartDay(newestReportDay)
+    if (floorStart) {
+      const present = new Set(imagingReports)
+      const latestByClass = new Map<string, { report: any; date: string }>()
+      for (const report of candidates) {
+        const date = String(report.effectiveDateTime || report.issued || '').slice(0, 10)
+        if (!date || date < floorStart) continue
+        const group = inferGroupFromDiagnosticReport(report)
+        const { cls } = reportModalityClass(group, codeText(report.code) ?? group)
+        const current = latestByClass.get(cls)
+        if (!current || date > current.date) latestByClass.set(cls, { report, date })
+      }
+      for (const { report } of latestByClass.values()) {
+        if (!present.has(report)) imagingReports.push(report)
+      }
+    }
+  }
+
   const reportById = new Map<string, any>()
   const reportsWithoutId: any[] = []
   for (const report of [...labReports, ...imagingReports]) {

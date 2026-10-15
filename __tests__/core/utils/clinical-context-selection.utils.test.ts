@@ -71,3 +71,30 @@ describe('medication currentness', () => {
     })
   })
 })
+
+describe('a malformed newest date does not break context building', () => {
+  // A bridge writing "20260601" sorts after every ISO date and does not parse;
+  // it used to throw RangeError from toISOString() for every AI feature.
+  const { filterEncounterRecords, selectMedicationRecords } = jest.requireActual(
+    '@/src/core/utils/clinical-context-selection.utils',
+  ) as typeof import('@/src/core/utils/clinical-context-selection.utils')
+
+  it('keeps the encounter floor working from the newest well-formed date', () => {
+    const encounters = [
+      { id: 'adm', class: { code: 'IMP' }, period: { start: '2025-12-01' } },
+      { id: 'opd', class: { code: 'AMB' }, period: { start: '2026-08-30' } },
+      { id: 'bad', class: { code: 'AMB' }, period: { start: '20260901' } },
+    ]
+    expect(() => filterEncounterRecords(encounters, '3m', { encounters })).not.toThrow()
+    const kept = filterEncounterRecords(encounters, '3m', { encounters }).map((encounter) => encounter.id)
+    expect(kept).toContain('opd')
+  })
+
+  it('does not throw for medicines either', () => {
+    const medications = [
+      withSupply('completed', '2026-01-02', 28),
+      { ...withSupply('completed', '20260901', 28), id: 'bad' },
+    ]
+    expect(() => selectMedicationRecords(medications, { medicationTimeRange: '1m' } as any, null, NOW)).not.toThrow()
+  })
+})

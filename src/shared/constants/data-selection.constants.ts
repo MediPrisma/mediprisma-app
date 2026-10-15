@@ -9,6 +9,11 @@ import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-co
 // + recent lab trends/imaging, time-bounded so the AI context stays complete
 // without drowning in noise. This is the seed for new profiles and for the
 // user's Custom template slot.
+/** Discharge summaries sent by default: the latest three admissions. One
+ *  admission's note was not enough for a first-visit overview and hid the
+ *  previous stay's anticoagulant history; 'all' would flood a 32K window. */
+export const DEFAULT_DOCUMENT_MODE = 'recentAdmissions' as const
+
 export const DEFAULT_DATA_SELECTION: DataSelection = {
   // Patient group
   patientInfo: true,
@@ -33,7 +38,7 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
   immunizations: true,
 
   // Documents group
-  documents: true,         // On by default; documentMode 'latestAdmission' keeps
+  documents: true,         // On by default; DEFAULT_DOCUMENT_MODE keeps
                            // it to just the most recent 出院病摘 (bounded).
 }
 
@@ -61,7 +66,12 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // Empty = include every lab panel. Narrow (e.g. 'cbc,chem') only for
   // analyte-dense patients where the full panel set overwhelms the context.
   labPanelIds: '',
-  imagingReportVersion: 'latest',
+  // All versions, not latest-per-name: NHI cloud records give every CT the
+  // same order name (33071B 電腦斷層造影) whatever the body part, so
+  // latest-per-name collapsed a year of serial studies into one report and
+  // the 影像與病理重點 section lost every comparison. Same-study duplicates
+  // are still collapsed by the report digest (modality + day + accession).
+  imagingReportVersion: 'all',
   imagingReportTimeRange: '1y',
   // Vitals / procedures / immunizations: `latest`-version filter already dedups
   // by name, so volume isn't a concern. Keep `all` so historical data for
@@ -85,9 +95,24 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
 // 無檢驗時自動放寬為每項目最近 1 筆、不限時間 — 見 ips-curation.ts），此回溯/放寬
 // 與 depth 值解耦、是 IPS 層獨立機制。
 // 只影響 'ips' consumer profile 的種子值；chat/insights 的 DEFAULT_DATA_FILTERS 不變。
+// 雲端病歷 (NHI MediCloud) holds about one year of visits. The 6-month 初診
+// window dropped a cancer diagnosis whose follow-up runs every six months
+// (owner decision 2026-10-03: use the cloud record's whole year). Applied by
+// the adaptive defaults only while the 初診 filters are untouched, and shown
+// as such in 資料範圍.
+export const MEDCLOUD_YEAR_DATA_FILTERS: DataFilters = {
+  ...DEFAULT_DATA_FILTERS,
+  encounterTimeRange: '1y',
+  medicationTimeRange: '1y',
+  labReportTimeRange: '1y',
+  imagingReportTimeRange: '1y',
+}
+
 export const IPS_DEFAULT_DATA_FILTERS: DataFilters = {
   ...DEFAULT_DATA_FILTERS,
   labDepth: '3',
+  // A portable snapshot keeps the newest report per name, as before.
+  imagingReportVersion: 'latest',
 }
 
 // ── 全部資料 (everything) — for the 全選 button ──────────────────────────────

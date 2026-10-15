@@ -1,5 +1,6 @@
 import type { DataFilters, TimeRange } from '@/src/core/entities/clinical-context.entity'
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
+import { floorStartDay } from '@/src/core/utils/first-visit-floors'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -44,6 +45,12 @@ export function medicationExpectedEnd(medication: any): string | undefined {
   date.setDate(date.getDate() + days)
   return date.toISOString().slice(0, 10)
 }
+
+// The newest record is picked by string sort, so only dates written the ISO
+// way take part: "20240601" sorts after "2024-06-01" and does not parse. A
+// malformed date must not break building the context every AI feature reads.
+const isParsableDay = (value: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}/.test(value) && Number.isFinite(Date.parse(value))
 
 function isMedicationSupplyWindowOpen(end: string, nowMs: number): boolean {
   const endMs = Date.parse(end)
@@ -116,17 +123,28 @@ export function isChronicMedicationRecord(medication: any): boolean {
   return Array.isArray(coding) && coding.some((item: any) => item?.code === 'continuous')
 }
 
-export function filterMedicationRecords(
+/** What the medication scope kept, split into the records the saved filters
+ *  selected and the recently-dispensed ones the latest-known floor added.
+ *  Consumers that must LABEL the two differently (the AI medication section)
+ *  read this; everything else takes the flat list below. */
+export interface MedicationSelection {
+  /** Records the saved filters selected on their own. */
+  selected: any[]
+  /** Lapsed records the floor added because too few medicines are current. */
+  floor: any[]
+}
+
+export function selectMedicationRecords(
   medications: any[],
   filters: Partial<DataFilters> | undefined,
   clinicalData: { encounters?: any[] } | null | undefined,
   nowMs: number,
-): any[] {
+): MedicationSelection {
   const chronic = filters?.medicationChronic ?? 'all'
   const timeRange = filters?.medicationTimeRange ?? 'all'
   const inWindow = makeTimeRangeTest(timeRange, clinicalData)
 
-  return medications.filter((medication) => {
+  const selected = medications.filter((medication) => {
     if (chronic === 'chronic' && !isChronicMedicationRecord(medication)) return false
     if (chronic === 'acute' && isChronicMedicationRecord(medication)) return false
     const date = medication?.authoredOn || medication?.effectiveDateTime
@@ -134,6 +152,86 @@ export function filterMedicationRecords(
     if (filters?.medicationStatus === 'active' && !isMedicationCurrentlyInUse(medication, nowMs)) return false
     return true
   })
+  if (filters?.medicationStatus !== 'active' || selected.length >= MEDICATION_FLOOR_MIN_CURRENT) {
+    return { selected, floor: [] }
+  }
+  // Latest-known floor: when every supply window has lapsed (a chemotherapy
+  // patient between cycles, a quiet half-year) the "使用中" view would hand the
+  // AI an empty medicine list, which reads as "takes nothing". Fill up to the
+  // floor with the most recently dispensed distinct medicines inside the
+  // milestone horizon; both lanes mark them as lapsed.
+  const newest = medications
+    .map((medication) => String(medication?.authoredOn || medication?.effectiveDateTime || '').slice(0, 10))
+    .filter(isParsableDay)
+    .sort()
+    .at(-1)
+  const floorStart = floorStartDay(newest, MILESTONE_ENCOUNTER_FLOOR_DAYS)
+  if (!floorStart) return { selected, floor: [] }
+  const present = new Set(selected)
+  const seenNames = new Set(selected.map(medicationDisplayName))
+  // Only what was dispensed and has run out may be presented as lapsed: a
+  // current medicine the 急慢性 filter left out stays out, and a record with no
+  // supply estimate is unknown, not ended.
+  const lapsed = medications
+    .filter((medication) => !present.has(medication)
+      && !(chronic === 'chronic' && !isChronicMedicationRecord(medication))
+      && !(chronic === 'acute' && isChronicMedicationRecord(medication))
+      && isLapsedDispensing(medication, nowMs)
+      && String(medication?.authoredOn || medication?.effectiveDateTime || '').slice(0, 10) >= floorStart)
+    .sort((a, b) => String(b?.authoredOn || b?.effectiveDateTime || '').localeCompare(String(a?.authoredOn || a?.effectiveDateTime || '')))
+  const floor: any[] = []
+  for (const medication of lapsed) {
+    const name = medicationDisplayName(medication)
+    if (!name || seenNames.has(name)) continue
+    seenNames.add(name)
+    floor.push(medication)
+    if (floor.length >= MEDICATION_FLOOR_RECENT_COUNT) break
+  }
+  return { selected, floor }
+}
+
+export function filterMedicationRecords(
+  medications: any[],
+  filters: Partial<DataFilters> | undefined,
+  clinicalData: { encounters?: any[] } | null | undefined,
+  nowMs: number,
+): any[] {
+  const { selected, floor } = selectMedicationRecords(medications, filters, clinicalData, nowMs)
+  return floor.length > 0 ? [...selected, ...floor] : selected
+}
+
+/**
+ * Statuses that say the order never actually reached the patient. The floor
+ * fills the list with what was most recently DISPENSED, so a draft, a hold, a
+ * cancellation or a retraction can never take one of its slots — it would be
+ * presented as a medicine the patient had been taking until recently.
+ * `stopped`/`completed`/`ended` are absent on purpose: those orders did run.
+ */
+const NEVER_DISPENSED_STATUSES = new Set(['draft', 'on-hold', 'cancelled', 'entered-in-error'])
+
+/**
+ * A record that reached the patient and whose estimated supply has run out —
+ * the only kind a latest-known fill may present as "supply ended". A never-
+ * dispensed order is not one, and neither is a record with no supply estimate
+ * (its state is unknown, not ended).
+ */
+export function isLapsedDispensing(medication: any, nowMs: number): boolean {
+  if (NEVER_DISPENSED_STATUSES.has(normalizeClinicalStatus(medication?.status))) return false
+  const end = medicationExpectedEnd(medication)
+  return Boolean(end) && !isMedicationSupplyWindowOpen(end!, nowMs)
+}
+
+/** Below this many current medicines the recent-medicine floor engages. */
+export const MEDICATION_FLOOR_MIN_CURRENT = 5
+/** How many recently dispensed (lapsed) medicines the floor adds at most. */
+export const MEDICATION_FLOOR_RECENT_COUNT = 10
+
+function medicationDisplayName(medication: any): string {
+  const text = medication?.medicationCodeableConcept?.text
+    || medication?.medicationCodeableConcept?.coding?.[0]?.display
+    || medication?.medicationReference?.display
+    || ''
+  return String(text).toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
 export function procedureDate(procedure: any): string | undefined {
@@ -161,13 +259,39 @@ export function filterProcedureRecords(
   return filtered
 }
 
+/** Admissions and emergency visits stay citable for this long however narrow
+ *  the saved visit window is. The default 6-month window exists to keep routine
+ *  outpatient/pharmacy rows out of the prompt; it was silently dropping the
+ *  one admission whose claim codes carried the anticoagulant history. */
+export const MILESTONE_ENCOUNTER_FLOOR_DAYS = 730
+
+function isMilestoneEncounter(encounter: any): boolean {
+  const cls = encounter?.class
+  const code = String(cls?.code ?? cls?.coding?.[0]?.code ?? '').trim().toUpperCase()
+  const display = `${cls?.display ?? ''} ${cls?.text ?? ''} ${cls?.coding?.[0]?.display ?? ''}`
+  if (['IMP', 'ACUTE', 'NONAC', 'SS', 'EMER'].includes(code)) return true
+  return /住院|急診|inpatient|emergency/i.test(display)
+}
+
 export function filterEncounterRecords(
   encounters: any[],
   range: TimeRange,
   clinicalData: { encounters?: any[] } | null | undefined,
 ): any[] {
   const inWindow = makeTimeRangeTest(range, clinicalData)
+  const inMilestoneFloor = makeTimeRangeTest('all', clinicalData)
+  const newest = [...(clinicalData?.encounters ?? encounters)]
+    .map((encounter) => String(encounter?.period?.start ?? ''))
+    .filter(isParsableDay)
+    .sort()
+    .at(-1)
+  const floorStart = floorStartDay(newest, MILESTONE_ENCOUNTER_FLOOR_DAYS)
+  const keptByFloor = (encounter: any): boolean => {
+    if (!floorStart || !isMilestoneEncounter(encounter)) return false
+    const start = String(encounter?.period?.start ?? '').slice(0, 10)
+    return Boolean(start) && start >= floorStart && inMilestoneFloor(encounter?.period?.start)
+  }
   return [...encounters]
-    .filter((encounter) => range === 'all' || inWindow(encounter?.period?.start))
+    .filter((encounter) => range === 'all' || inWindow(encounter?.period?.start) || keptByFloor(encounter))
     .sort((a, b) => (b?.period?.start || '').localeCompare(a?.period?.start || ''))
 }

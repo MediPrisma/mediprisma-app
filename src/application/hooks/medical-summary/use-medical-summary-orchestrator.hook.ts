@@ -8,6 +8,7 @@ import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safet
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
+import { ensureReportHighlights } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
@@ -1052,8 +1053,16 @@ export function useMedicalSummaryOrchestrator() {
     .filter((issue): issue is NonNullable<typeof issue> => issue?.kind === 'context-overflow')
     .sort((left, right) => right.overBy - left.overBy)[0] ?? null
 
+  // A result restored from before 影像與病理重點 existed gets that section from
+  // the digest's deterministic fallback, so it never renders as missing.
+  const reportDigestInput = summary.reportDigestInput
+  const presentedResultWithReports = useMemo(
+    () => ensureReportHighlights(presentedResult, reportDigestInput),
+    [presentedResult, reportDigestInput],
+  )
+
   return {
-    result: presentedResult,
+    result: presentedResultWithReports,
     safetyResult: presentedSafetyResult,
     coverage,
     hasPatient,
@@ -1089,6 +1098,7 @@ export function useMedicalSummaryOrchestrator() {
       !hasCardErrors(presentedResult)
     ),
     resolveSafetySource,
+    safetySourceCatalog: summary.sourceCatalog,
     activeGeneration: presentedBatch && !presentedBatch.cancelled ? {
       id: presentedBatch.id,
       modelName: presentedBatch.modelName,

@@ -1,522 +1,937 @@
 {
   "metadata": {
-    "modelId": "gemini-3-flash-preview",
-    "modelName": "Gemini 3 Flash Preview"
+    "modelId": "gemini-3.8-flash",
+    "modelName": "Gemini 3.8 Flash"
+  },
+  "sourceResourceIds": {
+    "D1": "demo-documentreference-1",
+    "D2": "demo-documentreference-2",
+    "E1": "demo-encounter-40",
+    "E2": "demo-encounter-41",
+    "E3": "demo-encounter-42",
+    "E7": "demo-encounter-30",
+    "E8": "demo-encounter-31",
+    "E9": "demo-encounter-32",
+    "E10": "demo-encounter-33",
+    "E11": "demo-encounter-34",
+    "E12": "demo-encounter-35",
+    "E13": "demo-encounter-36",
+    "E14": "demo-encounter-37",
+    "E15": "demo-encounter-38",
+    "E16": "demo-encounter-39",
+    "E18": "demo-encounter-27",
+    "E19": "demo-encounter-28",
+    "E20": "demo-encounter-25",
+    "E21": "demo-encounter-26",
+    "E22": "demo-encounter-24",
+    "E23": "demo-encounter-9",
+    "E25": "demo-encounter-11",
+    "E26": "demo-encounter-1",
+    "E28": "demo-encounter-12",
+    "E29": "demo-encounter-13",
+    "E30": "demo-encounter-7",
+    "E31": "demo-encounter-8",
+    "E32": "demo-encounter-3",
+    "E33": "demo-encounter-4",
+    "E34": "demo-encounter-5",
+    "E36": "demo-encounter-14",
+    "E46": "demo-encounter-17",
+    "K1": "demo-careplan-1",
+    "K2": "demo-careplan-2",
+    "L15": "demo-diagnosticreport-1",
+    "L26": "demo-diagnosticreport-3",
+    "L27": "demo-diagnosticreport-4",
+    "L28": "demo-diagnosticreport-5",
+    "L29": "demo-diagnosticreport-6",
+    "L30": "demo-diagnosticreport-2",
+    "L55": "demo-diagnosticreport-7",
+    "L56": "demo-diagnosticreport-8",
+    "L93": "demo-diagnosticreport-echo",
+    "L94": "demo-diagnosticreport-echo-doppler",
+    "M2": "demo-medicationrequest-132",
+    "M3": "demo-medicationrequest-133",
+    "M4": "demo-medicationrequest-134",
+    "M5": "demo-medicationrequest-135",
+    "M6": "demo-medicationrequest-136",
+    "M7": "demo-medicationrequest-137",
+    "M8": "demo-medicationrequest-138",
+    "M9": "demo-medicationrequest-139",
+    "M10": "demo-medicationrequest-140",
+    "M19": "demo-medicationrequest-106",
+    "M20": "demo-medicationrequest-107",
+    "M21": "demo-medicationrequest-108",
+    "M22": "demo-medicationrequest-109",
+    "M23": "demo-medicationrequest-110",
+    "M24": "demo-medicationrequest-111",
+    "M26": "demo-medicationrequest-113",
+    "M27": "demo-medicationrequest-114",
+    "M28": "demo-medicationrequest-115",
+    "M31": "demo-medicationrequest-118",
+    "M32": "demo-medicationrequest-119",
+    "M33": "demo-medicationrequest-120",
+    "M34": "demo-medicationrequest-121",
+    "M35": "demo-medicationrequest-122",
+    "M36": "demo-medicationrequest-123",
+    "M37": "demo-medicationrequest-124",
+    "M38": "demo-medicationrequest-125",
+    "M39": "demo-medicationrequest-126",
+    "M41": "demo-medicationrequest-128",
+    "M43": "demo-medicationrequest-130",
+    "M47": "demo-medicationrequest-102",
+    "M48": "demo-medicationrequest-103",
+    "M49": "demo-medicationrequest-104",
+    "M50": "demo-medicationrequest-89",
+    "M52": "demo-medicationrequest-91",
+    "M53": "demo-medicationrequest-92",
+    "M54": "demo-medicationrequest-93",
+    "M57": "demo-medicationrequest-96",
+    "M58": "demo-medicationrequest-97",
+    "M59": "demo-medicationrequest-98",
+    "M60": "demo-medicationrequest-99",
+    "M62": "demo-medicationrequest-88",
+    "M64": "demo-medicationrequest-2",
+    "M65": "demo-medicationrequest-3",
+    "M66": "demo-medicationrequest-4",
+    "M74": "demo-medicationrequest-12",
+    "M75": "demo-medicationrequest-13",
+    "M76": "demo-medicationrequest-14",
+    "M77": "demo-medicationrequest-15",
+    "M81": "demo-medicationrequest-19",
+    "M82": "demo-medicationrequest-20",
+    "M84": "demo-medicationrequest-22",
+    "M85": "demo-medicationrequest-23",
+    "M86": "demo-medicationrequest-24",
+    "M88": "demo-medicationrequest-26",
+    "M89": "demo-medicationrequest-27",
+    "M90": "demo-medicationrequest-28",
+    "M91": "demo-medicationrequest-29",
+    "O1": "demo-observation-1",
+    "O6": "demo-observation-6",
+    "O7": "demo-observation-7",
+    "O9": "demo-observation-9",
+    "O10": "demo-observation-10",
+    "O14": "demo-observation-14",
+    "O15": "demo-observation-15",
+    "O17": "demo-observation-25",
+    "O18": "demo-observation-26",
+    "O20": "demo-observation-28",
+    "O23": "demo-observation-37",
+    "O30": "demo-observation-23",
+    "O46": "demo-observation-80",
+    "O48": "demo-observation-77",
+    "O51": "demo-observation-88",
+    "O56": "demo-observation-60",
+    "O80": "demo-observation-67",
+    "O81": "demo-observation-68",
+    "O85": "demo-observation-79"
   },
   "medicalSummary": {
     "zh-TW": {
       "medical": {
-        "headline": "94歲男性：CKD 3b期管理、多重慢性疾病與用藥核對",
-        "summary": [
-          {
-        "text": "患者為94歲男性，長期追蹤多項慢性疾病。最新紀錄為2026年08月25日慢病門診及27日眼科相關調劑。腎功能方面，eGFR於2026年5月至6月間自33略微變動至32 mL/min/1.73m²，屬",
-            "emphasis": false,
-            "sources": []
-          },
-          {
-        "text": "CKD 3b期，近期變化小",
-            "emphasis": true,
-            "sources": [
-              "O7",
-              "O18"
-            ]
-          },
-          {
-        "text": "。同期間Hb由11.2回升至12.1 g/dL，",
-            "emphasis": false,
-            "sources": []
-          },
-          {
-            "text": "貧血數值回升但仍偏低",
-            "emphasis": true,
-            "sources": [
-              "O9",
-              "O20"
-            ]
-          },
-          {
-        "text": "。餐後血糖由126略降至124 mg/dL，6月2日HbA1c為6.6%。同日胸部X光顯示雙側下肺野斑塊狀浸潤、",
-            "emphasis": false,
-            "sources": []
-          },
-          {
-        "text": "雙側肋膜變化併積液",
-            "emphasis": true,
-            "sources": [
-              "L15"
-            ]
-          },
-          {
-        "text": "及邊緣性心臟擴大。目前用藥涵蓋降眼壓藥、Aricept、降糖藥、甲狀腺素、泌尿道藥物及痛風治療。臨床需注意門診申報資料僅供參考，各項診斷應以醫師實際診察評估為準。",
-            "emphasis": false,
-            "sources": []
-          }
-        ],
-        "investigations": [
-          {
-            "label": "腎功能指標",
-            "kind": "lab",
-            "direction": "unspecified",
-            "trend": "Creatinine 1.88→1.93 mg/dL; eGFR 33→32 mL/min/1.73m²",
-            "interpretation": "CKD 3b期，腎功能指標於2026年5月至6月間呈小幅波動。",
-            "sources": [
-              "O6",
-              "O7",
-              "O17",
-              "O18"
-            ]
-          },
-          {
-            "label": "貧血指標",
-            "kind": "lab",
-            "direction": "improving",
-            "trend": "Hb 11.2→12.1 g/dL; Hct 35.8%→37.2%",
-            "interpretation": "貧血狀況有所改善，但數值仍低於參考區間。",
-            "sources": [
-              "O8",
-              "O9",
-              "O19",
-              "O20"
-            ]
-          },
-          {
-            "label": "血糖指標",
-            "kind": "lab",
-            "direction": "stable",
-            "trend": "餐後血糖 126→124 mg/dL; HbA1c 6.6%",
-        "interpretation": "餐後血糖變化小；2026-06-02 HbA1c為6.6%。",
-            "sources": [
-              "O23",
-              "O14",
-              "O10"
-            ]
-          },
-          {
-            "label": "胸部影像",
-            "kind": "imaging",
-            "direction": "single",
-            "trend": "2026-06-02 胸部X光",
-        "interpretation": "支氣管周圍浸潤、雙下肺斑塊影、雙側肋膜變化併積液及邊緣性心臟擴大。",
-            "sources": [
-              "L15"
-            ]
-          }
-        ],
+        "headline": "94M with CKD stage 3b, T2DM, hypothyroidism, BPH, POAG, dementia/delirium history, and monocytosis/anemia; care shared across 示範長青醫院 and 示範嘉恩醫院.",
         "medicationEducation": [],
-        "medicationReview": {
-          "regimen": [
-            {
-          "group": "眼科",
-              "name": "PATEAR, Brimonin, Xalatan, Cosopt",
-              "sources": [
-                "M1",
-                "M2",
-                "M3",
-                "M4"
-              ]
-            },
-            {
-              "group": "認知改善",
-              "name": "Aricept (Donepezil) 5mg",
-              "sources": [
-                "M5",
-                "M11"
-              ]
-            },
-            {
-              "group": "代謝與痛風",
-              "name": "Forxiga, Feuri (Febuxostat)",
-              "sources": [
-                "M10",
-                "M8"
-              ]
-            },
-            {
-              "group": "甲狀腺補充",
-              "name": "Eltroxin",
-              "sources": [
-                "M9"
-              ]
-            },
-            {
-              "group": "泌尿與情緒",
-              "name": "Harnalidge, Imimine",
-              "sources": [
-                "M13",
-                "M12"
-              ]
-            },
-            {
-              "group": "營養與緩瀉",
-              "name": "Folacin, Sennosides",
-              "sources": [
-                "M6",
-                "M7"
-              ]
-            }
-          ],
-          "changes": [],
-          "reconciliation": [
-            {
-              "reason": "possible-same-drug",
-              "text": "Aricept 5mg 於 08-05 (M11) 與 08-27 (M5) 有重複調劑紀錄，需確認剩餘量與醫囑執行。",
-              "sources": [
-                "M5",
-                "M11"
-              ]
-            }
-          ]
-        },
         "problems": [
           {
-            "label": "CKD 3b期",
-            "basis": "腎功能指標與照護計畫",
-            "kind": "careplan",
-            "sources": [
-              "O7",
-              "O18",
+            "label": "Chronic kidney disease, stage 3b",
+            "basis": "4 visits, N18.32; 2 care plans; discharge summary",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "E13",
+              "E20",
               "K1",
-              "K2"
-            ]
-          },
-          {
-            "label": "貧血",
-            "basis": "Hb 12.1 g/dL (低於參考值)",
-            "kind": "lab",
-            "sources": [
-              "O9",
-              "O20"
-            ]
-          },
-          {
-            "label": "第二型糖尿病",
-            "basis": "門診申報資料",
-            "kind": "claim",
-            "sources": [
+              "K2",
               "D1",
-              "E3"
+              "D2"
             ],
+            "metric": "eGFR 35 → 33 → 32 ▼",
+            "metricSources": [
+              "O46",
+              "O18",
+              "O7"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10"
+            ],
+            "flag": false,
             "documentEvidence": [
               {
                 "source": "D1",
+                "quote": "Chronic kidney disease"
+              },
+              {
+                "source": "D2",
+                "quote": "Chronic kidney disease stage 3b"
+              }
+            ]
+          },
+          {
+            "label": "Type 2 diabetes mellitus",
+            "basis": "3 visits, E11.9; discharge summary; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "D1",
+              "D2",
+              "M10"
+            ],
+            "metric": "HbA1c 6.6% (single)",
+            "metricSources": [
+              "O10"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Type2 Diebetes mellitus"
+              },
+              {
+                "source": "D2",
                 "quote": "Diebetes mellitus"
               }
             ]
           },
           {
-            "label": "青光眼",
-            "basis": "門診申報資料與眼藥水使用",
-            "kind": "claim",
-            "sources": [
-              "E1",
-              "M1",
-              "M2",
-              "M3",
-              "M4"
-            ]
-          },
-          {
-            "label": "攝護腺肥大或尿路問題",
-            "basis": "門診申報資料與藥物使用",
-            "kind": "claim",
-            "sources": [
-          "E28",
-          "M13"
-            ]
-          },
-          {
-            "label": "甲狀腺功能低下",
-            "basis": "出院診斷與藥物使用",
+            "label": "Hypothyroidism",
+            "basis": "discharge summary; 1 abnormal lab result; medication",
             "kind": "diagnosis",
-            "sources": [
+            "basisSources": [
               "D1",
+              "D2",
+              "O81",
               "M9"
             ],
+            "metric": "TSH 14.7 uIU/mL (single) ▲",
+            "metricSources": [
+              "O81"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M9"
+            ],
+            "flag": true,
             "documentEvidence": [
               {
                 "source": "D1",
                 "quote": "Hypothyrodism, under Levothyroxine"
-              }
-            ]
-          },
-          {
-            "label": "胃食道逆流",
-            "basis": "出院診斷 (Reflux esophagitis)",
-            "kind": "diagnosis",
-            "sources": [
-              "D1"
-            ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
-              }
-            ]
-          },
-          {
-            "label": "慢性痛風",
-            "basis": "門診申報資料與降尿酸藥物",
-            "kind": "claim",
-            "sources": [
-              "E3",
-              "M8"
-            ]
-          }
-        ],
-        "decisions": [],
-        "timeline": [
-          {
-            "ref": "E3",
-            "label": "健保申報列慢性腎臟病第 3b 期",
-            "category": "diagnosis"
-          },
-          {
-            "ref": "L15",
-            "label": "胸部 X 光見雙下肺斑塊影、雙側肋膜變化併積液及邊緣性心臟擴大",
-            "category": "procedure"
-          },
-          {
-            "ref": "L26",
-            "label": "心電圖見竇性心搏過緩、左軸偏移及年代未定的前中隔梗塞徵象",
-            "category": "procedure"
-          },
-          {
-            "ref": "D1",
-            "label": "因含血嘔吐／咳血住院；出院病摘記載 A 級逆流性食道炎與紅斑性胃炎",
-            "category": "encounter",
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "vomiting with some blood today"
               },
               {
+                "source": "D2",
+                "quote": "Follow　thyroid function showed hypothyroid, adjust Thyroxine dose 1-> 2PC QD."
+              }
+            ]
+          },
+          {
+            "label": "Primary open-angle glaucoma, right eye",
+            "basis": "5 visits, H40.1110; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E1",
+              "E11",
+              "E18",
+              "E23",
+              "E29",
+              "M2",
+              "M3",
+              "M4"
+            ],
+            "metric": "Not in cloud record: IOP",
+            "metricSources": [],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E11",
+            "medicationSources": [
+              "M2",
+              "M3",
+              "M4"
+            ],
+            "flag": false
+          },
+          {
+            "label": "Benign prostatic hyperplasia with lower urinary tract symptoms",
+            "basis": "5 visits, N40.0; discharge summary; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E9",
+              "E10",
+              "E16",
+              "E22",
+              "E28",
+              "D2",
+              "M22",
+              "M23",
+              "M24"
+            ],
+            "metric": "PSA 0.64 ng/mL (single)",
+            "metricSources": [
+              "O1"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E10",
+            "medicationSources": [
+              "M22",
+              "M23",
+              "M24"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Enlarged prostate and right seminal vessicle, prostate Ca with local invasion is suspected"
+              }
+            ]
+          },
+          {
+            "label": "Cognitive disorder and history of delirium",
+            "basis": "5 visits, F05; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E2",
+              "E8",
+              "E15",
+              "E32",
+              "E33",
+              "M5",
+              "M21"
+            ],
+            "metric": "Not in cloud record: MMSE",
+            "metricSources": [],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E15",
+            "medicationSources": [
+              "M5"
+            ],
+            "flag": false
+          },
+          {
+            "label": "Normocytic anemia and persistent monocytosis, suspected bone marrow disorder",
+            "basis": "4 visits, D72.821; discharge summary; serial labs",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E7",
+              "E12",
+              "E19",
+              "E25",
+              "D2",
+              "O9",
+              "O20",
+              "O30",
+              "O56"
+            ],
+            "metric": "Hb 12.9 → 11.2 → 12.1 g/dL",
+            "metricSources": [
+              "O48",
+              "O20",
+              "O9"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E7",
+            "medicationSources": [
+              "M7"
+            ],
+            "flag": true,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Peripheral monocytosis, suspect primary bone marrow disorders (CMMoL), should rule out reative monocytosis"
+              }
+            ]
+          },
+          {
+            "label": "Hyperuricemia and gout",
+            "basis": "1 visit, M1A.00X0; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "M8"
+            ],
+            "metric": "UA 4.4 mg/dL (single)",
+            "metricSources": [
+              "O15"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M8"
+            ],
+            "flag": false
+          },
+          {
+            "label": "Gastroesophageal reflux disease and gastritis, history of UGI bleeding",
+            "basis": "discharge summary; 3 visits, K31.7",
+            "kind": "discharge",
+            "basisSources": [
+              "D1",
+              "E14",
+              "E21",
+              "E31"
+            ],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E14",
+            "medicationSources": [
+              "M38"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
                 "source": "D1",
                 "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
               }
             ]
           },
           {
-            "ref": "K1",
-            "label": "納入 Pre-ESRD 病人照護與衛教計畫",
-            "category": "followup"
+            "label": "Colonic polyps, status post polypectomy",
+            "basis": "discharge summary; procedure",
+            "kind": "discharge",
+            "basisSources": [
+              "D2"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E36",
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "T-colon 0.5 and 0.6cm polyp+A-colon 0.8cm polyp s/p cold snare polypectomy on 2025/2/25"
+              }
+            ]
           },
           {
-            "ref": "P1",
-            "label": "接受左眼玻璃體部分切除術",
-            "category": "procedure"
+            "label": "Coronary artery disease and old myocardial infarction",
+            "basis": "3 ECG reports; chest CT; past admission",
+            "kind": "other",
+            "basisSources": [
+              "L26",
+              "L27",
+              "L29",
+              "D2",
+              "E30"
+            ],
+            "managedBy": "示範北辰醫院",
+            "managedByRef": "E30",
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Calcification of coronary arteries and aorta. Cardiomegaly."
+              }
+            ]
           }
-        ]
+        ],
+        "reports": {
+          "groups": [
+            {
+              "organ": "chest-lung",
+              "points": [
+                {
+                  "text": "Bilateral lower lung field consolidation and patchy infiltrates",
+                  "sources": [
+                    "L15",
+                    "L28",
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L15",
+                      "quote": "Patchy lesions in bilateral lower lung field."
+                    },
+                    {
+                      "source": "L56",
+                      "quote": "Consolidation in right lower lung field with volume shrinkage."
+                    }
+                  ]
+                },
+                {
+                  "text": "Bilateral pleural effusion with blunting of costophrenic angles",
+                  "sources": [
+                    "L15",
+                    "L28",
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L15",
+                      "quote": "Bilateral pleural change with effusion."
+                    },
+                    {
+                      "source": "L56",
+                      "quote": "Obliteration of bilateral lateral costophrenic angles."
+                    }
+                  ]
+                },
+                {
+                  "text": "Suspicious for bronchiectasis over bilateral lower lung fields",
+                  "sources": [
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L56",
+                      "quote": "Suspicious for bronchiectasis over bilateral lower lung field."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "heart",
+              "points": [
+                {
+                  "text": "Cardiomegaly",
+                  "sources": [
+                    "L15",
+                    "L28",
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L28",
+                      "quote": "Cardiomegaly."
+                    },
+                    {
+                      "source": "L15",
+                      "quote": "Borderline cardiomegaly ."
+                    }
+                  ]
+                },
+                {
+                  "text": "Anteroseptal infarct, age undetermined",
+                  "sources": [
+                    "L26",
+                    "L27",
+                    "L29"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L26",
+                      "quote": "Anteroseptal infarct , age undetermined"
+                    }
+                  ]
+                },
+                {
+                  "text": "Inferior infarct, age undetermined",
+                  "sources": [
+                    "L27"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L27",
+                      "quote": "Inferior infarct , age undetermined"
+                    }
+                  ]
+                },
+                {
+                  "text": "Grade 1 LV diastolic dysfunction",
+                  "sources": [
+                    "L93"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L93",
+                      "quote": "LV diastolic dysfunction: Grade 1"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "vascular",
+              "points": [
+                {
+                  "text": "Tortuous thoracic aorta with calcified aortic knob",
+                  "sources": [
+                    "L15",
+                    "L28"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L28",
+                      "quote": "Tortuous thoracic aorta with calcified aortic knob."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "brain",
+              "points": [
+                {
+                  "text": "Senile cortical atrophy and cerebral small vessel disease",
+                  "sources": [
+                    "L55"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L55",
+                      "quote": "Senile cortical atrophy and cerebral small vessel disease."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "head-neck",
+              "points": [
+                {
+                  "text": "Pan-paranasal sinusitis",
+                  "sources": [
+                    "L55"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L55",
+                      "quote": "Pan-paranasal sinusitis."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "kidney-urinary",
+              "points": [
+                {
+                  "text": "Nephrolithiasis",
+                  "sources": [
+                    "L30"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L30",
+                      "quote": "RENAL STONES"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "abdomen-liver-biliary",
+              "points": [
+                {
+                  "text": "Fatty liver and gallbladder sludge",
+                  "sources": [
+                    "L30"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L30",
+                      "quote": "Gallbladder sludge"
+                    },
+                    {
+                      "source": "L30",
+                      "quote": "Fatty liver"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "abdomen-other",
+              "points": [
+                {
+                  "text": "Colonic gas interposed in right subphrenic space",
+                  "sources": [
+                    "L28"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L28",
+                      "quote": "Colonic gas interposed in right subphrenic region between liver and diaphragm."
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unremarkable": []
+        }
       },
       "patient": {
-        "headline": "腎功能追蹤與 Aricept 用藥核對 (8/27 更新)",
-        "summary": [
-          {
-            "text": "慢性腎臟病追蹤",
-            "emphasis": true,
-            "sources": [
-              "E3",
-              "K1",
-              "K2"
-            ]
-          },
-          {
-            "text": "Aricept 藥量核對",
-            "emphasis": true,
-            "sources": [
-              "M5",
-              "M11"
-            ]
-          },
-          {
-            "text": "持續追蹤慢性腎臟病，腎功能目前小幅波動（Creatinine 1.88→1.93；eGFR 33→32）。8/25 有門診紀錄，8/27 有青光眼與 Aricept 調劑紀錄。注意 Aricept 於 8/5 與 8/27 處方重疊，請核對藥袋避免重複服用。申報資料非正式診斷，請諮詢醫師。",
-            "emphasis": false,
-            "sources": [
-              "O6",
-              "O7",
-              "O17",
-              "O18",
-              "E3",
-              "E1"
-            ]
-          }
-        ],
-        "investigations": [
-          {
-            "label": "腎功能 (Creatinine/eGFR)",
-            "kind": "lab",
-            "direction": "worsening",
-            "trend": "Cr 1.88→1.93; eGFR 33→32",
-            "interpretation": "數值小幅波動，需持續追蹤。",
-            "sources": [
-              "O6",
-              "O7",
-              "O17",
-              "O18"
-            ]
-          },
-          {
-            "label": "貧血相關數值",
-            "kind": "lab",
-            "direction": "improving",
-            "trend": "血色素 11.2→12.1 g/dL",
-            "interpretation": "數值回升但仍低於標準。",
-            "sources": [
-              "O8",
-              "O9",
-              "O19",
-              "O20"
-            ]
-          },
-          {
-            "label": "胸部影像",
-            "kind": "imaging",
-            "direction": "single",
-            "trend": "肺部浸潤與肋膜積液",
-            "interpretation": "請配合臨床症狀評估。",
-            "sources": [
-              "L15"
-            ]
-          }
-        ],
+        "headline": "94歲男性，長期追蹤慢性腎臟病、青光眼、攝護腺肥大與甲狀腺機能低下，跨示範長青醫院及嘉恩醫院等多家院所就醫。",
         "medicationEducation": [
           {
-            "name": "Aricept",
-            "benefit": "失智症治療",
-            "attention": "核對 8/5 與 8/27 處方，避免重複服用",
-            "sources": [
-              "M5",
-              "M11"
-            ]
-          },
-          {
-            "name": "Forxiga",
-            "benefit": "腎臟與血糖照護",
-            "attention": "留意脫水或泌尿道不適",
+            "name": "Forxiga Film-coated Tablets 10mg",
+            "benefit": "協助血糖管理，並經實證有助於心臟與腎臟功能的長期保護。",
+            "attention": "請依指示規律服用，平時維持適度水分補充，若有尿路不適可於回診時向醫師反應。",
             "sources": [
               "M10"
             ]
           },
           {
-            "name": "青光眼藥水",
-            "benefit": "控制眼壓",
-            "attention": "依醫囑固定順序點藥",
+            "name": "Eltroxin Tablets 100mcg 〝Germany〞",
+            "benefit": "補充體內甲狀腺素不足，協助維持身體正常代謝活力與生理機能運作。",
+            "attention": "建議每日固定時間服用，並配合醫師定期抽血追蹤甲狀腺功能數值。",
+            "sources": [
+              "M9"
+            ]
+          },
+          {
+            "name": "Feuri F.C. Tablets 80mg",
+            "benefit": "減少體內尿酸生成，協助穩定血中尿酸濃度以預防痛風發作。",
+            "attention": "請遵照醫囑劑量服用，日常注意補充足夠水分，不宜自行增減藥量。",
+            "sources": [
+              "M8"
+            ]
+          },
+          {
+            "name": "BRIMONIN OPHTHALMIC SOLUTION 0.15% / XALATAN 50?g/ml (0.005%) / COSOPT OPHTHALMIC SOLUTION",
+            "benefit": "經由不同機轉調節眼內房水生成與排出，協助降低眼壓以保護視神經。",
+            "attention": "點用多種眼藥水時，建議兩瓶之間間隔至少5分鐘，以利藥物充分吸收。",
             "sources": [
               "M2",
               "M3",
               "M4"
             ]
-          },
-          {
-            "name": "Eltroxin",
-            "benefit": "補充甲狀腺素",
-            "attention": "固定服用，併用其他藥物請諮詢",
-            "sources": [
-              "M9"
-            ]
           }
         ],
-        "medicationReview": {
-          "regimen": [],
-          "changes": [],
-          "reconciliation": []
-        },
         "problems": [
           {
-            "label": "慢性腎臟病第3b期",
-            "basis": "門診追蹤計畫",
-            "kind": "careplan",
-            "sources": [
+            "label": "第三期慢性腎臟病",
+            "basis": "3 次門診主診斷、2 份照護計畫、出院病摘及檢驗追蹤",
+            "kind": "diagnosis",
+            "basisSources": [
               "E3",
+              "E13",
+              "E20",
               "K1",
-              "K2"
-            ]
-          },
-          {
-            "label": "貧血",
-            "basis": "血色素低於參考值",
-            "kind": "lab",
-            "sources": [
-              "O9",
-              "O20"
+              "K2",
+              "D1",
+              "D2"
+            ],
+            "metric": "eGFR 35 → 33 → 32 mL/min/1.73m2 ▼",
+            "metricSources": [
+              "O46",
+              "O18",
+              "O7"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Chronic kidney disease"
+              },
+              {
+                "source": "D2",
+                "quote": "Chronic kidney disease stage 3b"
+              }
             ]
           },
           {
             "label": "第二型糖尿病",
-            "basis": "D1: Diebetes mellitus",
-            "kind": "discharge",
-            "sources": [
-              "D1"
+            "basis": "門診主診斷、出院病摘、用藥紀錄與檢驗",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "D1",
+              "D2",
+              "O10"
             ],
+            "metric": "HbA1c 6.6% 單次",
+            "metricSources": [
+              "O10"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10"
+            ],
+            "flag": false,
             "documentEvidence": [
               {
                 "source": "D1",
+                "quote": "Diebetes mellitus"
+              },
+              {
+                "source": "D2",
                 "quote": "Diebetes mellitus"
               }
             ]
           },
           {
-            "label": "青光眼",
-            "basis": "用藥紀錄",
+            "label": "原發性隅角開放性青光眼",
+            "basis": "6 次門診主診斷及眼科用藥",
             "kind": "diagnosis",
-            "sources": [
+            "basisSources": [
+              "E1",
+              "E11",
+              "E18",
+              "E23",
+              "E29",
+              "E46"
+            ],
+            "metric": "雲端紀錄無：眼壓",
+            "metricSources": [],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E11",
+            "medicationSources": [
               "M2",
               "M3",
               "M4"
-            ]
+            ],
+            "flag": false
           },
           {
             "label": "良性攝護腺增生",
-            "basis": "用藥紀錄",
+            "basis": "6 次門診主診斷、出院病摘及泌尿道用藥",
             "kind": "diagnosis",
-            "sources": [
-              "M13"
+            "basisSources": [
+              "E9",
+              "E10",
+              "E16",
+              "E22",
+              "E28",
+              "D2"
+            ],
+            "metric": "PSA 0.64 ng/mL 單次",
+            "metricSources": [
+              "O1"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E10",
+            "medicationSources": [
+              "M22",
+              "M23",
+              "M24"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Enlarged prostate and right seminal vessicle"
+              }
             ]
           },
           {
-            "label": "肺炎 (申報紀錄)",
-            "basis": "門診申報資料",
-            "kind": "diagnosis",
-            "sources": [
-              "E7",
-              "E12"
-            ]
-          },
-          {
-            "label": "未確認申報紀錄",
-            "basis": "門診申報資料",
-            "kind": "diagnosis",
-            "sources": [
-              "E7",
-              "E12"
-            ]
-          }
-        ],
-        "decisions": [],
-        "timeline": [
-          {
-            "ref": "E3",
-            "label": "健保紀錄顯示腎臟病進入第 3b 期照護",
-            "category": "diagnosis"
-          },
-          {
-            "ref": "L15",
-            "label": "胸部 X 光顯示雙下肺異常陰影、兩側胸腔積液及心臟稍大",
-            "category": "procedure"
-          },
-          {
-            "ref": "L26",
-            "label": "心電圖記錄心跳較慢、心軸偏移及前中隔疑似舊變化",
-            "category": "procedure"
-          },
-          {
-            "ref": "D1",
-            "label": "因嘔吐物帶血／咳血住院；出院摘要記錄輕度逆流性食道炎與胃炎",
-            "category": "encounter",
+            "label": "甲狀腺機能低下",
+            "basis": "出院病摘、檢驗異常及甲狀腺素補充劑",
+            "kind": "medication",
+            "basisSources": [
+              "D1",
+              "D2",
+              "O81",
+              "M9"
+            ],
+            "metric": "TSH 14.7 uIU/mL (單次)",
+            "metricSources": [
+              "O81"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M9"
+            ],
+            "flag": false,
             "documentEvidence": [
               {
                 "source": "D1",
-                "quote": "vomiting with some blood today"
+                "quote": "Hypothyrodism, under Levothyroxine"
               },
+              {
+                "source": "D2",
+                "quote": "Hypothyrodism, under Levothyroxine"
+              }
+            ]
+          },
+          {
+            "label": "痛風與高尿酸血症",
+            "basis": "門診次診斷、出院病摘及降尿酸用藥",
+            "kind": "medication",
+            "basisSources": [
+              "E3",
+              "E30",
+              "D2",
+              "M8"
+            ],
+            "metric": "尿酸 4.4 mg/dL (單次)",
+            "metricSources": [
+              "O15"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M8"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Febuxostat 80mg/tab"
+              }
+            ]
+          },
+          {
+            "label": "譫妄與認知評估",
+            "basis": "6 次門診主診斷、腦部電腦斷層報告及精神神經用藥",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E2",
+              "E8",
+              "E15",
+              "E32",
+              "E33",
+              "L55"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E15",
+            "medicationSources": [
+              "M5",
+              "M21"
+            ],
+            "flag": false
+          },
+          {
+            "label": "慢性咳嗽與肺部病變",
+            "basis": "門診主診斷、胸部X光及呼吸道用藥",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E7",
+              "E12",
+              "E19",
+              "E25",
+              "E26",
+              "L15",
+              "L28",
+              "L56"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E7",
+            "medicationSources": [
+              "M19"
+            ],
+            "flag": false
+          },
+          {
+            "label": "胃食道逆流與胃息肉",
+            "basis": "4 次門診主診斷、胃鏡檢查報告及出院病摘",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E14",
+              "E21",
+              "E31",
+              "E34",
+              "D1"
+            ],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E14",
+            "medicationSources": [
+              "M35",
+              "M37",
+              "M38",
+              "M39"
+            ],
+            "flag": false,
+            "documentEvidence": [
               {
                 "source": "D1",
                 "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
@@ -524,604 +939,868 @@
             ]
           },
           {
-            "ref": "K1",
-            "label": "加入腎臟病照護與衛教計畫",
-            "category": "followup"
-          },
-          {
-            "ref": "P1",
-            "label": "接受左眼玻璃體手術",
-            "category": "procedure"
+            "label": "貧血",
+            "basis": "出院病摘及多次血色素檢驗偏低",
+            "kind": "lab",
+            "basisSources": [
+              "D1",
+              "D2",
+              "O9",
+              "O20",
+              "O48"
+            ],
+            "metric": "Hb 12.9 → 11.2 → 12.1 g/dL",
+            "metricSources": [
+              "O48",
+              "O20",
+              "O9"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M7"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "mild anemia (Hb:11)"
+              },
+              {
+                "source": "D2",
+                "quote": "Chronic normocytic anemia"
+              }
+            ]
           }
         ]
       }
     },
     "en": {
       "medical": {
-        "headline": "94yo Male: Stage 3b CKD and Multi-morbidity Care",
-        "summary": [
-          {
-        "text": "This patient is managed for Stage 3b CKD, diabetes, glaucoma, and other chronic conditions. The latest records are an Aug 25 chronic-care visit and Aug 27 glaucoma/Aricept dispensing. June 2026 laboratory results show renal function remained ",
-            "emphasis": false,
-            "sources": [
-          "E1",
-          "E3",
-          "M5",
-          "O7",
-              "O18"
-            ]
-          },
-          {
-            "text": "stable but impaired",
-            "emphasis": true,
-            "sources": [
-              "O6",
-              "O7",
-              "O17",
-              "O18"
-            ]
-          },
-          {
-            "text": ", with creatinine showing only a minor shift from ",
-            "emphasis": false,
-            "sources": []
-          },
-          {
-            "text": "1.88 to 1.93 mg/dL",
-            "emphasis": true,
-            "sources": [
-              "O6",
-              "O17"
-            ]
-          },
-          {
-            "text": ". Anemia improved but remained below reference limits (",
-            "emphasis": false,
-            "sources": [
-              "O8",
-              "O19"
-            ]
-          },
-          {
-            "text": "Hb 12.1 g/dL",
-            "emphasis": true,
-            "sources": [
-              "O9",
-              "O20"
-            ]
-          },
-          {
-        "text": "). Glycemic testing showed HbA1c 6.6%. Chest imaging noted bilateral patchy opacities, pleural changes/effusions, and borderline cardiomegaly. Medication and claim records also indicate active thyroid, urinary, and gout management; claim-coded conditions require chart confirmation.",
-            "emphasis": false,
-            "sources": [
-          "L15",
-          "O10",
-          "M9",
-          "M13",
-          "E28",
-          "E3",
-          "M8"
-            ]
-          }
-        ],
-        "investigations": [
-          {
-            "label": "Renal function",
-            "kind": "lab",
-            "direction": "stable",
-            "trend": "Creatinine 1.88→1.93 mg/dL; eGFR 33→32 mL/min/1.73m²",
-            "interpretation": "Stable Stage 3b CKD.",
-            "sources": [
-              "O6",
-              "O7",
-              "O17",
-              "O18"
-            ]
-          },
-          {
-            "label": "Anemia indices",
-            "kind": "lab",
-            "direction": "improving",
-            "trend": "Hb 11.2→12.1 g/dL; Hct 35.8%→37.2%",
-            "interpretation": "Improved but remains below reference interval.",
-            "sources": [
-              "O8",
-              "O9",
-              "O19",
-              "O20"
-            ]
-          },
-          {
-            "label": "Glycemic control",
-            "kind": "lab",
-            "direction": "stable",
-            "trend": "HbA1c 6.6%; Postprandial glucose 126→124 mg/dL",
-            "interpretation": "Stable control on 2026-06-02.",
-            "sources": [
-              "O10",
-              "O14",
-              "O23"
-            ]
-          },
-          {
-            "label": "Chest imaging",
-            "kind": "imaging",
-            "direction": "single",
-            "trend": "Bilateral patchy opacities and pleural effusions",
-            "interpretation": "Peribronchial infiltration and borderline cardiomegaly noted 2026-06-02.",
-            "sources": [
-              "L15"
-            ]
-          }
-        ],
+        "headline": "94M with CKD 3b, T2DM, hypothyroidism, primary open-angle glaucoma, BPH, and recurrent delirium; multi-facility care across 示範長青醫院 and 示範嘉恩醫院.",
         "medicationEducation": [],
-        "medicationReview": {
-          "regimen": [
-            {
-              "group": "Ophthalmic",
-          "name": "PATEAR, Brimonin, Xalatan, Cosopt",
-              "sources": [
-            "M1",
-            "M2",
-            "M3",
-            "M4"
-              ]
-            },
-            {
-              "group": "Cognitive",
-              "name": "Aricept 5mg",
-              "sources": [
-                "M5"
-              ]
-            },
-            {
-              "group": "Antidepressant",
-              "name": "Imimine 25mg",
-              "sources": [
-                "M12"
-              ]
-            },
-            {
-              "group": "Urinary",
-              "name": "Harnalidge 0.4mg",
-              "sources": [
-                "M13"
-              ]
-            },
-            {
-              "group": "Renal/Diabetes/Urate",
-              "name": "Forxiga 10mg, Feuri 80mg",
-              "sources": [
-                "M8",
-                "M10"
-              ]
-            },
-            {
-              "group": "Thyroid",
-              "name": "Eltroxin 100mcg",
-              "sources": [
-                "M9"
-              ]
-            },
-            {
-              "group": "Supplements/Laxatives",
-              "name": "Folacin, sennosides",
-              "sources": [
-                "M6",
-                "M7"
-              ]
-            }
-          ],
-          "changes": [],
-          "reconciliation": [
-            {
-              "reason": "possible-same-drug",
-              "text": "Aricept 5mg supply overlap between 2026-08-05 and 2026-08-27.",
-              "sources": [
-                "M5",
-                "M11"
-              ]
-            }
-          ]
-        },
         "problems": [
           {
-            "label": "Stage 3b CKD",
-            "basis": "eGFR/Claim",
-            "kind": "careplan",
-            "sources": [
+            "label": "Chronic kidney disease, stage 3b",
+            "basis": "4 visits, N18.32; 2 care plans; 2 discharge summaries; lab results; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "E13",
+              "E20",
               "K1",
               "K2",
+              "D1",
+              "D2",
+              "O6",
               "O7",
+              "O17",
               "O18",
-              "E3"
-            ]
-          },
-          {
-            "label": "Anemia",
-            "basis": "Lab",
-            "kind": "lab",
-            "sources": [
-              "O9",
-              "O20"
-            ]
-          },
-          {
-            "label": "Type 2 diabetes",
-            "basis": "D1/Claim",
-            "kind": "discharge",
-            "sources": [
-              "D1",
-              "E3",
-              "O10",
-              "M10"
+              "O46",
+              "O85"
             ],
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "Diebetes mellitus"
-              }
-            ]
-          },
-          {
-            "label": "Primary glaucoma",
-            "basis": "E1 pharmacy",
-            "kind": "diagnosis",
-            "sources": [
-              "E1",
-              "M1",
-              "M2",
-              "M3"
-            ]
-          },
-          {
-            "label": "BPH/urinary issue",
-            "basis": "Claim",
-            "kind": "diagnosis",
-            "sources": [
-          "E28",
-          "M13"
-            ]
-          },
-          {
-            "label": "Hypothyroidism",
-            "basis": "D1 summary",
-            "kind": "discharge",
-            "sources": [
-              "D1",
-              "M9"
+            "metric": "eGFR 35 → 33 → 32 mL/min/1.73m2",
+            "metricSources": [
+              "O46",
+              "O18",
+              "O7"
             ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10",
+              "M34",
+              "M60",
+              "M77",
+              "M91"
+            ],
+            "flag": false,
             "documentEvidence": [
               {
                 "source": "D1",
-                "quote": "Hypothyrodism, under Levothyroxine"
-              }
-            ]
-          },
-          {
-            "label": "GERD",
-        "basis": "D1 discharge summary",
-        "kind": "discharge",
-        "sources": [
-          "D1"
-        ],
-        "documentEvidence": [
-          {
-            "source": "D1",
-            "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
-          }
-        ]
-          },
-          {
-            "label": "Gout",
-            "basis": "Claim",
-            "kind": "diagnosis",
-            "sources": [
-              "E3",
-              "M8"
-            ]
-          }
-        ],
-        "decisions": [],
-        "timeline": [
-          {
-            "ref": "E3",
-            "label": "NHI claim records stage 3b chronic kidney disease",
-            "category": "diagnosis"
-          },
-          {
-            "ref": "L15",
-            "label": "Chest X-ray showed bilateral lower-lung patchy opacities, bilateral pleural changes with effusion, and borderline cardiomegaly",
-            "category": "procedure"
-          },
-          {
-            "ref": "L26",
-            "label": "ECG showed sinus bradycardia, left axis deviation, and anteroseptal infarct of undetermined age",
-            "category": "procedure"
-          },
-          {
-            "ref": "D1",
-            "label": "Admission for bloody emesis/hemoptysis; discharge summary documented LA grade A reflux esophagitis and erythematous gastritis",
-            "category": "encounter",
-            "documentEvidence": [
-              {
-                "source": "D1",
-                "quote": "vomiting with some blood today"
+                "quote": "Chronic kidney disease"
               },
               {
-                "source": "D1",
-                "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
+                "source": "D2",
+                "quote": "Chronic kidney disease stage 3b"
               }
-            ]
-          },
-          {
-            "ref": "K1",
-            "label": "Enrolled in a Pre-ESRD care and education program",
-            "category": "followup"
-          },
-          {
-            "ref": "P1",
-            "label": "Underwent partial left vitrectomy",
-            "category": "procedure"
-          }
-        ]
-      },
-      "patient": {
-        "headline": "Kidney & Medication Follow-up",
-        "summary": [
-          {
-            "text": "Records show follow-up for ",
-            "emphasis": false,
-            "sources": []
-          },
-          {
-            "text": "CKD Stage 3b",
-            "emphasis": true,
-            "sources": [
-              "E3",
-              "K1",
-              "K2"
-            ]
-          },
-          {
-            "text": " (Aug 25) and pharmacy visits (Aug 27). Creatinine rose (1.88→1.93) and ",
-            "emphasis": false,
-            "sources": [
-              "E1",
-              "O7",
-              "O18"
-            ]
-          },
-          {
-            "text": "eGFR fell (33→32)",
-            "emphasis": true,
-            "sources": [
-              "O7",
-              "O18"
-            ]
-          },
-          {
-            "text": ". Aricept was dispensed Aug 5 and 27; ",
-            "emphasis": false,
-            "sources": [
-              "M5",
-              "M11"
-            ]
-          },
-          {
-            "text": "reconcile Aricept",
-            "emphasis": true,
-            "sources": [
-              "M5",
-              "M11"
-            ]
-          },
-          {
-            "text": " refills. Claim codes are not confirmed diagnoses.",
-            "emphasis": false,
-            "sources": [
-              "E7",
-              "E12",
-              "E19",
-              "E25"
-            ]
-          }
-        ],
-        "investigations": [
-          {
-            "label": "Kidney function (creatinine/eGFR)",
-            "kind": "lab",
-            "direction": "worsening",
-            "trend": "Creatinine 1.88→1.93 mg/dL; eGFR 33→32 mL/min/1.73m²",
-            "interpretation": "Values changed slightly.",
-            "sources": [
-              "O6",
-              "O7",
-              "O17",
-              "O18"
-            ]
-          },
-          {
-            "label": "Anemia-related values",
-            "kind": "lab",
-            "direction": "improving",
-            "trend": "Hemoglobin 11.2→12.1 g/dL",
-            "interpretation": "Improved, remains low.",
-            "sources": [
-              "O8",
-              "O9",
-              "O19",
-              "O20"
-            ]
-          },
-          {
-            "label": "Chest imaging",
-            "kind": "imaging",
-            "direction": "single",
-            "trend": "Peribronchial infiltration",
-            "interpretation": "Clinical correlation required.",
-            "sources": [
-              "L15"
-            ]
-          }
-        ],
-        "medicationEducation": [
-          {
-            "name": "Forxiga (dapagliflozin)",
-            "benefit": "Used for CKD and glucose care.",
-            "attention": "Use as prescribed; watch for dehydration/urinary symptoms.",
-            "sources": [
-              "M10"
-            ]
-          },
-          {
-            "name": "Harnalidge (tamsulosin)",
-            "benefit": "Helps prostate-related urinary symptoms.",
-            "attention": "Rise slowly if you feel dizzy.",
-            "sources": [
-              "M13"
-            ]
-          },
-          {
-            "name": "Aricept (donepezil)",
-            "benefit": "Used for dementia care.",
-            "attention": "Bring packages to confirm refill timing for Aug 5 and 27 records.",
-            "sources": [
-              "M5",
-              "M11"
-            ]
-          },
-          {
-            "name": "Eltroxin (levothyroxine)",
-            "benefit": "Thyroid hormone replacement.",
-            "attention": "Take consistently; ask if timing needs to be separate from other meds.",
-            "sources": [
-              "M9"
-            ]
-          }
-        ],
-        "medicationReview": {
-          "regimen": [],
-          "changes": [],
-          "reconciliation": []
-        },
-        "problems": [
-          {
-            "label": "Stage 3b chronic kidney disease",
-            "basis": "Aug 25 claim and labs",
-            "kind": "careplan",
-            "sources": [
-              "E3",
-              "K1",
-              "K2",
-              "O7",
-              "O18"
-            ]
-          },
-          {
-            "label": "Unconfirmed claim codes",
-            "basis": "Claims records",
-            "kind": "diagnosis",
-            "sources": [
-              "E7",
-              "E12",
-              "E19",
-              "E25"
-            ]
-          },
-          {
-            "label": "Pneumonia (unconfirmed)",
-            "basis": "Claims records",
-            "kind": "diagnosis",
-            "sources": [
-              "E7",
-              "E12",
-              "E19",
-              "E25"
-            ]
-          },
-          {
-            "label": "Anemia",
-            "basis": "Low hemoglobin",
-            "kind": "lab",
-            "sources": [
-              "O9",
-              "O20"
             ]
           },
           {
             "label": "Type 2 diabetes mellitus",
-            "basis": "Claims and labs",
-            "kind": "discharge",
-            "sources": [
+            "basis": "2 discharge summaries; 1 visit, E11.9; lab results; medication",
+            "kind": "diagnosis",
+            "basisSources": [
               "D1",
+              "D2",
               "E3",
               "O10",
-              "M10"
+              "O14",
+              "O23",
+              "O51"
             ],
+            "metric": "HbA1c 6.6% (single)",
+            "metricSources": [
+              "O10"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10",
+              "M34",
+              "M60",
+              "M77",
+              "M91"
+            ],
+            "flag": false,
             "documentEvidence": [
               {
                 "source": "D1",
+                "quote": "Diebetes mellitus"
+              },
+              {
+                "source": "D2",
                 "quote": "Diebetes mellitus"
               }
             ]
           },
           {
-            "label": "Gastroesophageal reflux",
-            "basis": "Discharge summary",
-            "kind": "discharge",
-            "sources": [
-              "D1"
+            "label": "Primary open-angle glaucoma",
+            "basis": "5 visits, H40.1110; eye drops",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E1",
+              "E11",
+              "E18",
+              "E23",
+              "E29"
             ],
+            "metric": "Not in cloud record: IOP",
+            "metricSources": [],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E11",
+            "medicationSources": [
+              "M2",
+              "M3",
+              "M4",
+              "M26",
+              "M27",
+              "M28",
+              "M47",
+              "M48",
+              "M49",
+              "M64",
+              "M65",
+              "M66",
+              "M84",
+              "M85",
+              "M86"
+            ],
+            "flag": false
+          },
+          {
+            "label": "Benign prostatic hyperplasia",
+            "basis": "4 visits, N40.0; 1 discharge summary; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E9",
+              "E10",
+              "E16",
+              "E22",
+              "E28",
+              "D2"
+            ],
+            "metric": "PSA 0.64 ng/mL (single)",
+            "metricSources": [
+              "O1"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E10",
+            "medicationSources": [
+              "M22",
+              "M23",
+              "M24",
+              "M43",
+              "M62",
+              "M81",
+              "M82"
+            ],
+            "flag": false,
             "documentEvidence": [
               {
-                "source": "D1",
-                "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
+                "source": "D2",
+                "quote": "Enlarged prostate and right seminal vessicle, prostate Ca with local invasion is suspected"
               }
             ]
           },
           {
-            "label": "Hypothyroidism",
-            "basis": "Discharge summary",
-            "kind": "discharge",
-            "sources": [
-              "D1",
-              "M9"
+            "label": "Delirium",
+            "basis": "5 visits, F05; 1 brain CT; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E2",
+              "E8",
+              "E15",
+              "E32",
+              "E33",
+              "L55"
             ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E15",
+            "medicationSources": [
+              "M5",
+              "M20",
+              "M41"
+            ],
+            "flag": true
+          },
+          {
+            "label": "Hypothyroidism",
+            "basis": "2 discharge summaries; lab results; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "D1",
+              "D2",
+              "O80",
+              "O81"
+            ],
+            "metric": "TSH 14.7 uIU/mL (single)",
+            "metricSources": [
+              "O81"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M9",
+              "M32",
+              "M58",
+              "M75",
+              "M89"
+            ],
+            "flag": true,
             "documentEvidence": [
               {
                 "source": "D1",
                 "quote": "Hypothyrodism, under Levothyroxine"
+              },
+              {
+                "source": "D2",
+                "quote": "Hypothyrodism, under Levothyroxine"
               }
             ]
-          }
-        ],
-        "decisions": [],
-        "timeline": [
-          {
-            "ref": "E3",
-            "label": "NHI records show stage 3b kidney disease care",
-            "category": "diagnosis"
           },
           {
-            "ref": "L15",
-            "label": "Chest X-ray showed changes in both lower lungs, fluid around both lungs, and mild heart enlargement",
-            "category": "procedure"
+            "label": "Chronic gout / Hyperuricemia",
+            "basis": "1 visit, M1A.00X0; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "O15"
+            ],
+            "metric": "UA 4.4 mg/dL (single)",
+            "metricSources": [
+              "O15"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M8",
+              "M33",
+              "M59",
+              "M76",
+              "M90"
+            ],
+            "flag": false
           },
           {
-            "ref": "L26",
-            "label": "ECG recorded a slow heartbeat, an axis change, and a possible older front-wall change",
-            "category": "procedure"
+            "label": "Normocytic anemia",
+            "basis": "1 discharge summary; serial CBC results; medication",
+            "kind": "lab",
+            "basisSources": [
+              "D2",
+              "O9",
+              "O20",
+              "O48"
+            ],
+            "metric": "Hb 12.9 → 11.2 → 12.1 g/dL",
+            "metricSources": [
+              "O48",
+              "O20",
+              "O9"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M7",
+              "M31",
+              "M57",
+              "M74",
+              "M88"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Chronic normocytic anemia, may be primary bone marrow disorders (CMMoL) related"
+              }
+            ]
           },
           {
-            "ref": "D1",
-            "label": "Hospitalized for bloody vomit/coughing blood; the discharge summary recorded mild reflux esophagitis and gastritis",
-            "category": "encounter",
+            "label": "Gastric ulcer and duodenal/gastric polyps",
+            "basis": "5 visits, K31.7, K25.9; 1 panendoscopy in discharge summary; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E14",
+              "E21",
+              "E31",
+              "E34",
+              "D1"
+            ],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E14",
+            "medicationSources": [
+              "M35",
+              "M37",
+              "M38",
+              "M39",
+              "M50",
+              "M52",
+              "M53",
+              "M54"
+            ],
+            "flag": false,
             "documentEvidence": [
               {
                 "source": "D1",
-                "quote": "vomiting with some blood today"
+                "quote": "Reflux esophagitis, L.A. grade A\nErythematous gastritis\n* no active bleeder nor ulcer/mass can be seen"
+              }
+            ]
+          },
+          {
+            "label": "Chronic ischemic heart disease",
+            "basis": "1 visit, I25.9; 3 ECGs; 1 echocardiography",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E30",
+              "L26",
+              "L27",
+              "L29",
+              "L93",
+              "L94"
+            ],
+            "metric": "LVEF 72.6% (single)",
+            "metricSources": [],
+            "managedBy": "示範北辰醫院",
+            "managedByRef": "E30",
+            "medicationSources": [],
+            "flag": false
+          }
+        ],
+        "reports": {
+          "groups": [
+            {
+              "organ": "chest-lung",
+              "points": [
+                {
+                  "text": "Bilateral lower lung consolidation and infiltrates",
+                  "sources": [
+                    "L15",
+                    "L28",
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L28",
+                      "quote": "Consolidation over bilateral lower lung fields"
+                    },
+                    {
+                      "source": "L15",
+                      "quote": "Patchy lesions in bilateral lower lung field."
+                    }
+                  ]
+                },
+                {
+                  "text": "Bilateral pleural effusion with costophrenic angle obliteration",
+                  "sources": [
+                    "L15",
+                    "L28",
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L15",
+                      "quote": "Bilateral pleural change with effusion."
+                    },
+                    {
+                      "source": "L28",
+                      "quote": "Obliteration of bilateral lateral costophrenic angles"
+                    }
+                  ]
+                },
+                {
+                  "text": "Suspicious for bronchiectasis over bilateral lower lung field",
+                  "sources": [
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L56",
+                      "quote": "Suspicious for bronchiectasis over bilateral lower lung field."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "heart",
+              "points": [
+                {
+                  "text": "Cardiomegaly",
+                  "sources": [
+                    "L15",
+                    "L28",
+                    "L56"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L28",
+                      "quote": "Cardiomegaly."
+                    },
+                    {
+                      "source": "L15",
+                      "quote": "Borderline cardiomegaly ."
+                    }
+                  ]
+                },
+                {
+                  "text": "Anteroseptal infarct, age undetermined",
+                  "sources": [
+                    "L26",
+                    "L27",
+                    "L29"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L26",
+                      "quote": "Anteroseptal infarct , age undetermined"
+                    }
+                  ]
+                },
+                {
+                  "text": "Inferior infarct, age undetermined",
+                  "sources": [
+                    "L27"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L27",
+                      "quote": "Inferior infarct , age undetermined"
+                    }
+                  ]
+                },
+                {
+                  "text": "Grade 1 LV diastolic dysfunction",
+                  "sources": [
+                    "L93"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L93",
+                      "quote": "LV diastolic dysfunction: Grade 1"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "brain",
+              "points": [
+                {
+                  "text": "Senile cortical atrophy and cerebral small vessel disease",
+                  "sources": [
+                    "L55"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L55",
+                      "quote": "Senile cortical atrophy and cerebral small vessel disease."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "kidney-urinary",
+              "points": [
+                {
+                  "text": "Renal stones",
+                  "sources": [
+                    "L30"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L30",
+                      "quote": "RENAL STONES"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "abdomen-liver-biliary",
+              "points": [
+                {
+                  "text": "Fatty liver",
+                  "sources": [
+                    "L30"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L30",
+                      "quote": "Fatty liver"
+                    }
+                  ]
+                },
+                {
+                  "text": "Gallbladder sludge",
+                  "sources": [
+                    "L30"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L30",
+                      "quote": "Gallbladder sludge"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "abdomen-other",
+              "points": [
+                {
+                  "text": "Colonic gas interposed in right subphrenic region",
+                  "sources": [
+                    "L28"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L28",
+                      "quote": "Colonic gas interposed in right subphrenic region between liver and diaphragm."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "organ": "head-neck",
+              "points": [
+                {
+                  "text": "Pan-paranasal sinusitis",
+                  "sources": [
+                    "L55"
+                  ],
+                  "quotes": [
+                    {
+                      "source": "L55",
+                      "quote": "Pan-paranasal sinusitis."
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unremarkable": []
+        }
+      },
+      "patient": {
+        "headline": "A 94-year-old man with chronic kidney disease, type 2 diabetes, hypothyroidism, and glaucoma, managed across multiple clinics and hospitals.",
+        "medicationEducation": [
+          {
+            "name": "Forxiga Film-coated Tablets 10mg",
+            "benefit": "Helps control blood sugar levels and supports kidney function.",
+            "attention": "Drink plenty of water unless your doctor has advised fluid restrictions, and report any signs of urinary discomfort.",
+            "sources": [
+              "M10"
+            ]
+          },
+          {
+            "name": "Eltroxin Tablets 100mcg",
+            "benefit": "Provides thyroid hormone to keep metabolism and energy levels balanced.",
+            "attention": "Best taken on an empty stomach in the morning with a full glass of water, about 30 to 60 minutes before breakfast.",
+            "sources": [
+              "M9"
+            ]
+          },
+          {
+            "name": "Feburic 80 mg Film Coated Tablets / Feuri F.C. Tablets 80mg",
+            "benefit": "Lowers uric acid levels in the blood to help prevent painful gout flares.",
+            "attention": "Take consistently as directed, and stay well hydrated throughout the day.",
+            "sources": [
+              "M8",
+              "M33"
+            ]
+          },
+          {
+            "name": "ARICEPT F.C. TABLETS 5MG",
+            "benefit": "Supports thinking, memory, and cognitive stability.",
+            "attention": "Take around bedtime as directed; let your clinician know if you feel persistent nausea or dizziness.",
+            "sources": [
+              "M5",
+              "M20"
+            ]
+          },
+          {
+            "name": "XALATAN 50?g/ml (0.005%) / COSOPT OPHTHALMIC SOLUTION / BRIMONIN OPHTHALMIC SOLUTION 0.15%",
+            "benefit": "Lowers fluid pressure inside the eyes to help protect your vision from glaucoma.",
+            "attention": "When using multiple eye drops, wait at least 5 minutes between each different bottle to let each drop absorb properly.",
+            "sources": [
+              "M2",
+              "M3",
+              "M4"
+            ]
+          }
+        ],
+        "problems": [
+          {
+            "label": "Chronic kidney disease, stage 3b",
+            "basis": "4 visits, N18.32; 2 care plans; 2 discharge summaries",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "E13",
+              "E20",
+              "K1",
+              "K2",
+              "D1",
+              "D2"
+            ],
+            "metric": "eGFR 35 → 33 → 32",
+            "metricSources": [
+              "O46",
+              "O18",
+              "O7"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Chronic kidney disease"
               },
+              {
+                "source": "D2",
+                "quote": "Chronic kidney disease stage 3b"
+              }
+            ]
+          },
+          {
+            "label": "Type 2 diabetes mellitus",
+            "basis": "1 visit, E11.9; 2 discharge summaries; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "D1",
+              "D2",
+              "M10"
+            ],
+            "metric": "HbA1c 6.6% (single)",
+            "metricSources": [
+              "O10"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M10"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Diebetes mellitus"
+              },
+              {
+                "source": "D2",
+                "quote": "Diebetes mellitus"
+              }
+            ]
+          },
+          {
+            "label": "Primary open-angle glaucoma",
+            "basis": "5 visits, H40.1110; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E1",
+              "E11",
+              "E18",
+              "E23",
+              "E29",
+              "M2",
+              "M3",
+              "M4"
+            ],
+            "metric": "Not in cloud record: IOP",
+            "metricSources": [],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E11",
+            "medicationSources": [
+              "M2",
+              "M3",
+              "M4"
+            ],
+            "flag": false
+          },
+          {
+            "label": "Hypothyroidism",
+            "basis": "2 discharge summaries; medication",
+            "kind": "discharge",
+            "basisSources": [
+              "D1",
+              "D2",
+              "M9"
+            ],
+            "metric": "TSH 14.7 uIU/mL (single)",
+            "metricSources": [
+              "O81"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M9"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D1",
+                "quote": "Hypothyrodism, under Levothyroxine"
+              },
+              {
+                "source": "D2",
+                "quote": "Hypothyrodism, under Levothyroxine"
+              }
+            ]
+          },
+          {
+            "label": "Benign prostatic hyperplasia",
+            "basis": "4 visits, N40.0; 1 discharge summary; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E9",
+              "E10",
+              "E16",
+              "E22",
+              "D2",
+              "M22"
+            ],
+            "metric": "PSA 0.64 ng/mL (single)",
+            "metricSources": [
+              "O1"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E10",
+            "medicationSources": [
+              "M22",
+              "M23",
+              "M24"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Enlarged prostate and right seminal vessicle, prostate Ca with local invasion is suspected"
+              }
+            ]
+          },
+          {
+            "label": "Delirium",
+            "basis": "5 visits, F05; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E2",
+              "E8",
+              "E15",
+              "E32",
+              "E33",
+              "M5"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E15",
+            "medicationSources": [
+              "M5",
+              "M21"
+            ],
+            "flag": false
+          },
+          {
+            "label": "Gout / hyperuricemia",
+            "basis": "1 visit, M1A.00X0; medication",
+            "kind": "diagnosis",
+            "basisSources": [
+              "E3",
+              "M8"
+            ],
+            "metric": "UA 4.4 mg/dL (single)",
+            "metricSources": [
+              "O15"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M8"
+            ],
+            "flag": false
+          },
+          {
+            "label": "Normocytic anemia",
+            "basis": "1 discharge summary; 3 abnormal lab results; medication",
+            "kind": "lab",
+            "basisSources": [
+              "D2",
+              "O9",
+              "O20",
+              "O48",
+              "M7"
+            ],
+            "metric": "Hb 12.9 → 11.2 → 12.1",
+            "metricSources": [
+              "O48",
+              "O20",
+              "O9"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E3",
+            "medicationSources": [
+              "M7"
+            ],
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "Chronic normocytic anemia, may be primary bone marrow disorders (CMMoL) related"
+              }
+            ]
+          },
+          {
+            "label": "Gastroesophageal reflux disease and gastritis",
+            "basis": "1 discharge summary; endoscopy report",
+            "kind": "discharge",
+            "basisSources": [
+              "D1"
+            ],
+            "managedBy": "示範嘉恩醫院",
+            "managedByRef": "E14",
+            "medicationSources": [
+              "M35",
+              "M37",
+              "M38",
+              "M39"
+            ],
+            "flag": false,
+            "documentEvidence": [
               {
                 "source": "D1",
                 "quote": "Reflux esophagitis, L.A. grade A; Erythematous gastritis"
@@ -1129,14 +1808,21 @@
             ]
           },
           {
-            "ref": "K1",
-            "label": "Joined a kidney care and education program",
-            "category": "followup"
-          },
-          {
-            "ref": "P1",
-            "label": "Underwent left-eye vitreous surgery",
-            "category": "procedure"
+            "label": "Colon polyps, post-polypectomy",
+            "basis": "1 discharge summary; procedure",
+            "kind": "discharge",
+            "basisSources": [
+              "D2"
+            ],
+            "managedBy": "示範長青醫院",
+            "managedByRef": "E36",
+            "flag": false,
+            "documentEvidence": [
+              {
+                "source": "D2",
+                "quote": "T-colon 0.5 and 0.6cm polyp+A-colon 0.8cm polyp s/p cold snare polypectomy on 2025/2/25"
+              }
+            ]
           }
         ]
       }
@@ -1175,162 +1861,215 @@
   "safetyScan": {
     "zh-TW": {
       "medical": {
-        "scannedCount": 95,
+        "scannedCount": 46,
         "alerts": [
           {
-            "severity": "medium",
-            "title": "抗膽鹼與認知風險評估",
-            "detail": "患者紀錄同時包含 donepezil (Aricept) 與具抗膽鹼作用之 imipramine (Imimine)，若併用需評估認知、譫妄與周邊抗膽鹼副作用。",
+            "severity": "high",
+            "title": "Anticholinergic and pro-cholinergic co-prescribing with retention risk",
+            "detail": "Oxybutynin 5mg ER and Imipramine 25mg BID antagonize Donepezil 5mg while markedly worsening urinary retention and delirium risks in this 94-year-old male with BPH and delirium history.",
             "evidence": [
-              "ARICEPT F.C. TABLETS 5MG",
-              "IMIMINE S.C. TABLETS 25MG"
+              "Donepezil last dispensed 2026-08-05",
+              "Oxybutynin ER last dispensed 2026-08-04",
+              "Imipramine last dispensed 2026-08-05",
+              "History of BPH and delirium F05"
             ],
             "sources": [
               "M5",
-              "M11",
-              "M12"
+              "M21",
+              "M23",
+              "E2",
+              "E10"
             ],
             "category": "other",
-            "recommendation": "核對兩藥實際服法與適應症，評估認知變化、譫妄、口乾、便祕及尿滯留。"
+            "recommendation": "Review indications for oxybutynin and imipramine; consider deprescribing strong anticholinergics to protect cognitive function and reduce urinary retention risk."
           },
           {
             "severity": "medium",
-            "title": "腎功能趨勢監測",
-            "detail": "2026-05-25 至 06-02 Creatinine 由 1.88 升至 1.93 mg/dL、eGFR 由 33 降至 32 mL/min/1.73m²；應檢視現行 Forxiga 與 Feuri 之使用情形。",
+            "title": "Suboptimally controlled hypothyroidism on levothyroxine",
+            "detail": "TSH was elevated at 14.7 uIU/mL (2026-01-14) despite Eltroxin 100mcg daily.",
             "evidence": [
-              "Creatinine 1.88→1.93 mg/dL",
-              "eGFR 33→32 mL/min/1.73m²",
-              "Forxiga 10mg；Feuri 80mg"
+              "TSH 14.7 uIU/mL on 2026-01-14",
+              "Eltroxin 100mcg QD last dispensed 2026-08-25"
+            ],
+            "sources": [
+              "O81",
+              "M9"
+            ],
+            "category": "monitoring",
+            "recommendation": "Recheck thyroid function panel (TSH, Free T4) and assess medication adherence."
+          },
+          {
+            "severity": "medium",
+            "title": "Dapagliflozin use with declining renal function",
+            "detail": "Forxiga 10mg daily continued with eGFR declining to 32 mL/min/1.73m2 (creatinine 1.93 mg/dL on 2026-06-02).",
+            "evidence": [
+              "eGFR 32 mL/min/1.73m2 and Creatinine 1.93 mg/dL on 2026-06-02",
+              "Forxiga 10mg last dispensed 2026-08-25"
             ],
             "sources": [
               "O6",
               "O7",
-              "O17",
-              "O18",
-              "M8",
               "M10"
             ],
             "category": "renal",
-            "recommendation": "持續追蹤腎功能與體液狀態，確認藥物適應症、劑量及相關檢驗數值。"
+            "recommendation": "Monitor renal function and volume status; glycemic efficacy of SGLT2 inhibitors declines below eGFR 30 mL/min/1.73m2 although renal/cardiovascular benefit may persist."
           }
         ]
       },
       "patient": {
-        "scannedCount": 95,
+        "scannedCount": 305,
         "alerts": [
           {
             "severity": "medium",
-            "title": "藥物風險與認知功能提醒",
-            "detail": "同時使用 Aricept 與具抗膽鹼作用的 Imimine，可能增加意識混亂、嗜睡、口乾或便祕等副作用風險。",
+            "title": "抗膽鹼藥物與膀胱鬆弛劑合併使用提醒",
+            "detail": "病患目前處方包含 Oxybutynin 5mg、Mirabegron 50mg、Tamsulosin 0.4mg 及三環抗憂鬱劑 Imipramine 25mg，需注意排尿順暢度。",
             "evidence": [
-              "ARICEPT F.C. TABLETS 5MG",
-              "IMIMINE S.C. TABLETS 25MG"
+              "2026-08-04 開立 Oxbu Extended-release 5mg 與 Betmiga 50mg",
+              "2026-08-05 調劑 Harnalidge 0.4mg 與 IMIMINE 25mg"
             ],
             "sources": [
-              "M5",
-              "M11",
-              "M12"
+              "M21",
+              "M22",
+              "M23",
+              "M24"
             ],
             "category": "other",
-            "recommendation": "回診時請諮詢醫療團隊評估藥物整合；若出現意識混亂、排尿困難或嚴重便祕，請儘速就醫。"
+            "recommendation": "建議於泌尿科或家醫科門診追蹤時，主動告知醫師是否有解尿困難或尿流變慢等情形。"
           },
           {
             "severity": "medium",
-            "title": "腎功能指標追蹤",
-            "detail": "近期追蹤顯示肌酸酐由 1.88 升至 1.93 mg/dL，eGFR 由 33 降至 32 mL/min/1.73m²，腎功能有小幅波動。",
+            "title": "腎功能指標追蹤注意",
+            "detail": "最近一次腎絲球過濾率為 32 mL/min/1.73m2，數值呈現漸進追蹤趨勢。",
             "evidence": [
-              "Creatinine 1.88→1.93 mg/dL",
-              "eGFR 33→32 mL/min/1.73m²"
+              "eGFR 35 (2026-01-14) → 33 (2026-05-25) → 32 mL/min/1.73m2 (2026-06-02)"
             ],
             "sources": [
-              "O6",
-              "O7",
-              "O17",
-              "O18"
+              "O46",
+              "O18",
+              "O7"
             ],
             "category": "renal",
-            "recommendation": "請依原醫療團隊安排定期回診抽血；切勿因單次數值變化自行停藥或更換劑量。"
+            "recommendation": "請遵醫囑定期返診追蹤腎功能與血液生化指數，並維持穩定用藥與水分攝取。"
+          },
+          {
+            "severity": "low",
+            "title": "便秘藥物重疊開立注意",
+            "detail": "示範長青醫院與示範嘉恩醫院於 2026 年 6 至 8 月間皆有開立番瀉葉（Sennosides）排便用藥。",
+            "evidence": [
+              "長青醫院 2026-08-25 開立 THROUGH 28 天份",
+              "嘉恩醫院 2026-07-20 開立 THROUGH 28 天份"
+            ],
+            "sources": [
+              "M6",
+              "M36"
+            ],
+            "category": "duplicate",
+            "recommendation": "軟便劑請依當前排便狀況與醫師指示調整服用，避免兩家院所之同類藥品同時重複服用。"
           }
         ]
       }
     },
     "en": {
       "medical": {
-        "scannedCount": 95,
+        "scannedCount": 46,
         "alerts": [
           {
             "severity": "medium",
-            "title": "Review anticholinergic and cognitive risk",
-            "detail": "Records include donepezil and imipramine. If taken together, assess for cognitive impairment, delirium, and peripheral anticholinergic effects.",
+            "title": "High TSH indicating suboptimal thyroid hormone replacement",
+            "detail": "TSH was elevated at 14.7 uIU/mL on 2026-01-14 despite ongoing Eltroxin Tablets 100mcg 〝Germany〞 therapy.",
             "evidence": [
-              "ARICEPT F.C. TABLETS 5MG",
-              "IMIMINE S.C. TABLETS 25MG"
+              "TSH 14.7 uIU/mL (2026-01-14)"
             ],
             "sources": [
-              "M5",
-              "M11",
-              "M12"
+              "O81",
+              "M9"
             ],
-            "category": "other",
-            "recommendation": "Reconcile use and assess for delirium, dry mouth, constipation, and urinary retention."
+            "category": "monitoring",
+            "recommendation": "Check follow-up thyroid function panel and adjust levothyroxine dosage if indicated."
           },
           {
             "severity": "medium",
-            "title": "Monitor renal function trend",
-            "detail": "Creatinine increased (1.88 to 1.93 mg/dL) and eGFR decreased (33 to 32 mL/min/1.73m²) while Forxiga and Feuri are active.",
+            "title": "Dual antimuscarinic/anticholinergic therapy in elderly male with BPH",
+            "detail": "Patient was co-prescribed IMIMINE S.C. TABLETS 25MG and Oxbu Extended-release Tablets 5mg, which increases risk of urinary retention and worsening delirium.",
             "evidence": [
-              "Creatinine 1.88→1.93 mg/dL",
-              "eGFR 33→32 mL/min/1.73m²",
-              "Forxiga 10mg; Feuri 80mg"
+              "IMIMINE S.C. TABLETS 25MG dispensed 2026-08-05",
+              "Oxbu Extended-release Tablets 5mg dispensed 2026-08-04"
             ],
             "sources": [
-              "O6",
+              "M21",
+              "M23"
+            ],
+            "category": "other",
+            "recommendation": "Review indications for imipramine and oxybutynin; monitor post-void residual urine volume and cognitive status."
+          },
+          {
+            "severity": "low",
+            "title": "SGLT2i use with reduced renal function",
+            "detail": "Forxiga Film-coated Tablets 10mg is prescribed with eGFR 32 mL/min/1.73m2; glucose-lowering efficacy is reduced.",
+            "evidence": [
+              "eGFR 32 mL/min/1.73m2 (2026-06-02)",
+              "Forxiga Film-coated Tablets 10mg dispensed 2026-08-25"
+            ],
+            "sources": [
               "O7",
-              "O17",
-              "O18",
-              "M8",
               "M10"
             ],
             "category": "renal",
-            "recommendation": "Monitor renal function and volume status; confirm medication indications and doses."
+            "recommendation": "Monitor eGFR and renal function periodically; ensure adequate hydration."
           }
         ]
       },
       "patient": {
-        "scannedCount": 95,
+        "scannedCount": 268,
         "alerts": [
           {
             "severity": "medium",
-            "title": "anticholinergic/cognitive medication review",
-            "detail": "Records include Aricept and Imimine. Report confusion, drowsiness, dry mouth, constipation, or difficulty urinating to the care team.",
+            "title": "Combined anticholinergic and urinary medications",
+            "detail": "Concomitant use of oxybutynin, imipramine, and mirabegron with tamsulosin was prescribed on 2026-08-04 and 2026-08-05, which may increase the chance of urinary retention or dry mouth in older adults.",
             "evidence": [
-              "ARICEPT F.C. TABLETS 5MG",
-              "IMIMINE S.C. TABLETS 25MG"
+              "Oxbu (oxybutynin 5 mg) prescribed on 2026-08-04",
+              "Betmiga (mirabegron 50 mg) prescribed on 2026-08-04",
+              "IMIMINE (imipramine 25 mg) dispensed on 2026-08-05",
+              "Harnalidge (tamsulosin 0.4 mg) dispensed on 2026-08-05"
             ],
             "sources": [
-              "M5",
-              "M11",
-              "M12"
+              "M21",
+              "M22",
+              "M23",
+              "M24"
             ],
             "category": "other",
-            "recommendation": "Bring all medication packages to your next visit. Contact the care team for confusion or side effects; do not stop medication on your own."
+            "recommendation": "Review urinary symptom response and monitor for voiding difficulties or pronounced dry mouth with your prescribing physician."
           },
           {
             "severity": "medium",
-            "title": "renal-function monitoring",
-            "detail": "From 2026-05-25 to 06-02, creatinine increased (1.88 to 1.93 mg/dL) and eGFR decreased (33 to 32 mL/min/1.73m²).",
+            "title": "Elevated TSH under levothyroxine therapy",
+            "detail": "TSH was measured at 14.7 uIU/mL on 2026-01-14 while taking levothyroxine 100 mcg daily.",
             "evidence": [
-              "Creatinine 1.88→1.93 mg/dL",
-              "eGFR 33→32 mL/min/1.73m²"
+              "TSH 14.7 uIU/mL on 2026-01-14",
+              "Eltroxin 100mcg dispensed on 2026-08-25"
             ],
             "sources": [
-              "O6",
+              "O81",
+              "M9"
+            ],
+            "category": "monitoring",
+            "recommendation": "Discuss a routine follow-up thyroid blood test with your physician to ensure optimal dosage."
+          },
+          {
+            "severity": "low",
+            "title": "Renal function monitoring with SGLT2 inhibitor",
+            "detail": "Forxiga (dapagliflozin) is being continued with recent eGFR readings around 32 to 35 mL/min/1.73m² (most recently 32 mL/min/1.73m² on 2026-06-02).",
+            "evidence": [
+              "eGFR 32 mL/min/1.73m² on 2026-06-02",
+              "Forxiga 10mg dispensed on 2026-08-25"
+            ],
+            "sources": [
               "O7",
-              "O17",
-              "O18"
+              "M10"
             ],
             "category": "renal",
-            "recommendation": "Attend scheduled blood tests. Do not stop or change a dose based on a single value without speaking with your care team."
+            "recommendation": "Continue scheduled renal panel checks as planned by your kidney care clinic."
           }
         ]
       }

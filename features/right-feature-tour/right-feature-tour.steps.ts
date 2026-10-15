@@ -27,19 +27,19 @@ const ALL_STEPS: TourStep[] = [
   },
   {
     id: 'summary',
-    target: '[data-tour="medical-summary-card-nav"]',
+    target: '[data-tour="medical-summary-overview"]',
     fallbackTarget: '[data-tour="right-tab-medical-summary"]',
     fallbackGraceAttempts: 0,
     lockTargetOnceResolved: true,
     highlightPadding: 4,
     title: { 'zh-TW': '先用醫療摘要掌握重點', en: 'Start with the medical summary' },
     body: {
-      'zh-TW': '摘要把問題、歷程、檢查趨勢、安全提醒與用藥整理成固定卡片；上方捷徑可直接跳到指定區塊。內容由 AI 協助整理，仍需由醫療人員核對。',
-      en: 'The summary organises problems, timeline, investigation trends, safety alerts, and medications into fixed cards. Jump directly with the shortcuts above, and always clinically verify AI-assisted content.',
+      'zh-TW': '初診快覽依序整理：一句話摘要、問題清單與負責院所、影像與病理重點、開藥注意。點來源標籤可打開原始紀錄。內容由 AI 協助整理，仍需由醫療人員核對。',
+      en: 'The first-visit summary gives a one-line overview, the problem list with the managing facility, imaging and pathology highlights, and prescribing cautions. Source tags open the original records. Always clinically verify AI-assisted content.',
     },
     fallbackBody: {
-      'zh-TW': '摘要產生完成後，上方會出現問題、歷程、檢查趨勢、安全提醒與用藥捷徑，可直接跳到指定區塊。',
-      en: 'After the summary is generated, shortcuts for problems, timeline, investigation trends, safety alerts, and medications appear above for direct navigation.',
+      'zh-TW': '摘要產生後，這裡會依序列出一句話摘要、問題清單、影像與病理重點與開藥注意；點來源標籤可打開原始紀錄。',
+      en: 'Once generated, the summary lists a one-line overview, the problem list, imaging and pathology highlights, and prescribing cautions here; source tags open the original records.',
     },
   },
   {

@@ -48,6 +48,18 @@ export interface AiResultAnalytics {
   fedCounts?: Partial<FedResourceCounts>
 }
 
+/**
+ * Measurements only the producer can take, read back after it settles. They
+ * are separate from `AiResultAnalytics` because the caller cannot know them
+ * before `produce()` has streamed: a surface that publishes progressively
+ * knows when its FIRST section became visible, and on a slow endpoint that is
+ * a different reliability fact from the end-to-end duration.
+ */
+export interface AiRunMetrics {
+  /** Milliseconds from the start of the run to the first published section. */
+  firstCardMs?: number
+}
+
 export async function runGenerationJob<T>(options: {
   store: AiResultStore<T>
   /** Slot key the result / loading / error land under. */
@@ -60,8 +72,12 @@ export async function runGenerationJob<T>(options: {
   shouldCommit?: () => boolean
   /** Opt in to the `ai_result` reliability event. Omit and nothing is sent. */
   analytics?: AiResultAnalytics
+  /** Read once, after the run settles, for measurements the producer took. */
+  readRunMetrics?: () => AiRunMetrics | undefined
 }): Promise<T | null> {
-  const { store, key, cacheKey, produce, shouldCommit = () => true, analytics } = options
+  const {
+    store, key, cacheKey, produce, shouldCommit = () => true, analytics, readRunMetrics,
+  } = options
   // Never double-start the same slot's generation.
   if (store.getState().running[key]) return null
   const bundleRevision = store.getState().bundleRevision
@@ -88,7 +104,7 @@ export async function runGenerationJob<T>(options: {
     if (reported || !analytics) return
     reported = true
     collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown', summaryCards })
-    reportAiResult(analytics, outcome, nowMs() - startedAt)
+    reportAiResult(analytics, outcome, nowMs() - startedAt, readRunMetrics?.())
   }
   try {
     let measurement: AiGenerationMeasurement | undefined
@@ -131,12 +147,18 @@ function reportAiResult(
   analytics: AiResultAnalytics,
   outcome: AiOutcome,
   durationMs: number,
+  metrics?: AiRunMetrics,
 ): void {
   trackEvent('ai_result', {
     surface: analytics.surface,
     outcome,
     model_id: analytics.modelId,
     duration_bucket: bucketDuration(durationMs),
+    // Bucketed like every other timing on this event: the same rule that keeps
+    // an exact duration off it applies to the time-to-first-section.
+    ...(typeof metrics?.firstCardMs === 'number'
+      ? { first_card_bucket: bucketDuration(metrics.firstCardMs) }
+      : {}),
     // Spread rather than assigned: an absent measurement must leave the key
     // off the event entirely, not sit on it as `undefined` or 0 — "we could
     // not measure" and "we measured nothing" are different findings.

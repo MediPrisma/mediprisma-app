@@ -48,6 +48,8 @@ export interface DataSelectionDrawerProps {
   title: string
   description: string
   applyHint?: string
+  /** Deterministic 初診快覽 floors that apply regardless of the saved window. */
+  floorNote?: string
   modelId?: string
   fallbackModelId?: string
   /** Last exact full-request overflow, used to turn the selected-only meter
@@ -70,6 +72,7 @@ export function DataSelectionDrawer({
   title,
   description,
   applyHint,
+  floorNote,
   modelId,
   fallbackModelId,
   overflowIssue,
@@ -100,9 +103,10 @@ export function DataSelectionDrawer({
           </div>
         </ScrollArea>
 
-        {applyHint ? (
-          <div className="border-t bg-background px-4 py-2.5 text-xs leading-relaxed text-muted-foreground sm:px-5">
-            {applyHint}
+        {applyHint || floorNote ? (
+          <div className="space-y-1 border-t bg-background px-4 py-2.5 text-xs leading-relaxed text-muted-foreground sm:px-5">
+            {floorNote ? <p>{floorNote}</p> : null}
+            {applyHint ? <p>{applyHint}</p> : null}
           </div>
         ) : null}
       </SheetContent>

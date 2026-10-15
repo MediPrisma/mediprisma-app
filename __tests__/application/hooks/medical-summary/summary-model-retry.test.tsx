@@ -38,16 +38,16 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
   },
 }))
 jest.mock('@/src/core/use-cases/medical-summary/medical-summary-card-registry', () => {
-  const medications = {
-    id: 'medications', hasCompleteBatchBlock: () => true, parseBatch: () => 'NEW_MEDICATION_CARD',
-    apply: (aggregate: any, parsed: any) => ({ ...aggregate, summary: { ...aggregate.summary, medications: parsed } }),
+  const overview = {
+    id: 'overview', hasCompleteBatchBlock: () => true, parseBatch: () => 'NEW_OVERVIEW_CARD',
+    apply: (aggregate: any, parsed: any) => ({ ...aggregate, summary: { ...aggregate.summary, overview: parsed } }),
   }
   const safety = {
     id: 'safety', hasCompleteBatchBlock: () => true,
     parseBatch: () => ({ alerts: [], scannedCount: 1 }),
     apply: (aggregate: any, parsed: any) => ({ ...aggregate, safety: parsed }),
   }
-  const cards = { medications, safety }
+  const cards = { overview, safety }
   return {
     MEDICAL_SUMMARY_CARD_REGISTRY: cards,
     registeredMedicalSummaryCards: (_input: any, enabledIds?: string[]) => (
@@ -65,10 +65,10 @@ beforeEach(() => {
   mockStream.mockReset()
   useMedcloudLaunchStore.getState().clear()
   mockStream.mockImplementation(async (_messages, options) => {
-    options.onChunk('NEW_MEDICATION_CARD')
+    options.onChunk('NEW_OVERVIEW_CARD')
     // Some providers report identity only in their last chunk.
     options.onModelExecution(reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.8-flash'))
-    return 'NEW_MEDICATION_CARD'
+    return 'NEW_OVERVIEW_CARD'
   })
 })
 
@@ -76,7 +76,7 @@ afterEach(() => jest.restoreAllMocks())
 
 test.each([false, true])('reports final card failures after internal retries, preserving results (partial=%s)', async (partial) => {
   jest.spyOn(MEDICAL_SUMMARY_CARD_REGISTRY.safety, 'parseBatch').mockReturnValue(null)
-  if (!partial) jest.spyOn(MEDICAL_SUMMARY_CARD_REGISTRY.medications, 'parseBatch').mockReturnValue(null)
+  if (!partial) jest.spyOn(MEDICAL_SUMMARY_CARD_REGISTRY.overview, 'parseBatch').mockReturnValue(null)
   const { result } = renderHook(() => useMedicalSummary())
   await act(async () => result.current.generate())
   expect(mockStream).toHaveBeenCalledTimes(3)
@@ -86,9 +86,9 @@ test.each([false, true])('reports final card failures after internal retries, pr
   })
   expect(mockResult.cardErrors.safety).toBe('PARSE_FAILED')
   if (partial) {
-    expect(mockResult.medications).toBe('NEW_MEDICATION_CARD')
-    expect(mockResult.completedCardIds).toContain('medications')
-  } else expect(mockResult.cardErrors.medications).toBe('PARSE_FAILED')
+    expect(mockResult.overview).toBe('NEW_OVERVIEW_CARD')
+    expect(mockResult.completedCardIds).toContain('overview')
+  } else expect(mockResult.cardErrors.overview).toBe('PARSE_FAILED')
 })
 
 test('a manual summary model choice immediately releases the Medcloud override', () => {
@@ -112,7 +112,7 @@ test('retrying failed cards retains provenance for successful cards kept from th
   const clear = jest.spyOn(useAiExecutionDiagnosticsStore.getState(), 'clearOperationFeature')
   const previousExecution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
   medicalSummaryStore.setState({ byKey: { 'audit-slot': {
-    problems: 'RETAINED_LITE_CARD', cardErrors: { medications: 'PARSE_FAILED' },
+    problems: 'RETAINED_LITE_CARD', cardErrors: { overview: 'PARSE_FAILED' },
     completedCardIds: ['problems'],
     generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.1 Flash-Lite',
       generatedAt: 1, modelExecution: previousExecution },
@@ -120,11 +120,11 @@ test('retrying failed cards retains provenance for successful cards kept from th
   const { result } = renderHook(() => useMedicalSummary())
   await act(async () => result.current.retryFailedModules())
   expect(mockResult.problems).toBe('RETAINED_LITE_CARD')
-  expect(mockResult.medications).toBe('NEW_MEDICATION_CARD')
+  expect(mockResult.overview).toBe('NEW_OVERVIEW_CARD')
   expect(mockResult.generation.modelExecution.actualModelIds).toContain('gemini-3.1-flash-lite')
   expect(modelExecutionFallback(mockResult.generation.modelExecution)).toBe(true)
   expect(mockResult.generation.cardModelExecutions.problems.actualModelId).toBe('gemini-3.1-flash-lite')
-  expect(mockResult.generation.cardModelExecutions.medications.actualModelId).toBe('gemini-3.8-flash')
+  expect(mockResult.generation.cardModelExecutions.overview.actualModelId).toBe('gemini-3.8-flash')
   expect(mockResult.generation.modelExecution.hasUnreportedSteps).not.toBe(true)
   expect(clear).not.toHaveBeenCalled()
   await act(async () => result.current.generate())
@@ -137,9 +137,9 @@ test('replaces only the retried card provenance instead of retaining an obsolete
   const flash = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.8-flash')
   const lite = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
   medicalSummaryStore.setState({ byKey: { 'audit-slot': {
-    problems: 'RETAINED_FLASH_CARD', cardErrors: { medications: 'PARSE_FAILED' }, completedCardIds: ['problems'],
+    problems: 'RETAINED_FLASH_CARD', cardErrors: { overview: 'PARSE_FAILED' }, completedCardIds: ['problems'],
     generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.1 Flash-Lite', generatedAt: 1,
-      modelExecution: lite, cardModelExecutions: { problems: flash, medications: lite } },
+      modelExecution: lite, cardModelExecutions: { problems: flash, overview: lite } },
   } as any } })
   const { result } = renderHook(() => useMedicalSummary())
   await act(async () => result.current.retryFailedModules())

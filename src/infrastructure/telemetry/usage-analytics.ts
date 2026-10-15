@@ -181,6 +181,11 @@ export interface UsageEventParams {
     outcome: AiOutcome
     model_id: string
     duration_bucket: DurationBucket
+    /** Same banding, applied to the time until the surface showed its FIRST
+     *  section. Only progressive surfaces can measure it; the rest omit it.
+     *  Bucketed for the same reason as `duration_bucket`: a raw millisecond
+     *  timing never leaves the app. */
+    first_card_bucket?: DurationBucket
     /** Estimated tokens of clinical context sent with this call. Optional:
      *  surfaces that have no estimate at the reporting point omit it rather
      *  than reporting a misleading 0. Size only — never the text. */
@@ -223,6 +228,7 @@ const EVENT_PARAM_KEYS: Record<UsageEventName, readonly string[]> = {
     'outcome',
     'model_id',
     'duration_bucket',
+    'first_card_bucket',
     'context_tokens',
     'resource_count',
     'obs_count',
@@ -287,6 +293,7 @@ const ENUM_PARAM_VALUES: Record<string, readonly string[]> = {
   surface: ['summary', 'safety', 'med_recon', 'insights', 'report_interp', 'chat'],
   outcome: ['ok', 'error', 'timeout', 'aborted', 'context_overflow', 'quota', 'parse_failed'],
   duration_bucket: ['lt5', '5to15', '15to45', 'gt45'],
+  first_card_bucket: ['lt5', '5to15', '15to45', 'gt45'],
   from: ['summary', 'safety', 'chat', 'unknown'],
   block: ['hero', 'custom_module'],
   // Preference user properties (validateValue is shared by both paths).

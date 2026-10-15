@@ -55,31 +55,14 @@ describe('medical summary batch blocks', () => {
     `<<<MEDIPRISMA_MODULE:${id}>>>\n${body}\n${closed ? `<<<END_MEDIPRISMA_MODULE:${id}>>>` : ''}`
 
   it('repairs an omitted final } in a block whose end marker arrived', () => {
-    const body = '{"timeline": [{"ref": "E1", "label": "住院", "category": "encounter"}]'
-    expect(useCase.parseBatchModuleResult('timeline', block('timeline', body))?.timeline).toHaveLength(1)
+    const body = '{"problems": [{"label": "糖尿病", "sources": ["C1"]}]'
+    expect(useCase.parseBatchModuleResult('problems', block('problems', body))?.problems).toHaveLength(1)
   })
 
   it('rejects a truncated final block instead of keeping only its first items', () => {
-    const truncated = '{"timeline": [{"ref": "E1", "label": "住院", "category": "encounter"}, {"ref": "E2", "lab'
-    expect(useCase.parseBatchModuleResult('timeline', block('timeline', truncated, false))).toBeNull()
-    const atBoundary = '{"timeline": [{"ref": "E1", "label": "住院", "category": "encounter"}]'
-    expect(useCase.parseBatchModuleResult('timeline', block('timeline', atBoundary, false))).toBeNull()
-  })
-})
-
-describe('investigations card with a null interpretation', () => {
-  it('keeps the card and fills a neutral interpretation', () => {
-    const useCase = new GenerateMedicalSummaryUseCase()
-    const parsed = useCase.parseModuleResult('investigations',
-      '{"investigations": [{"label": "HbA1c", "kind": "lab", "direction": "single", "trend": "8.2%", "interpretation": null, "sources": ["O1"]}]}')
-    expect(parsed).not.toBeNull()
-    expect(parsed?.investigations[0].interpretation).toBe('')
-    const catalog = [{ key: 'O1', resourceType: 'Observation', resourceId: 'o1', display: 'HbA1c', date: '2026-08-01' }]
-    const result = useCase.finalizeResult(
-      { headline: 'h', summary: [{ text: 't', emphasis: false, sources: [] }], problems: [], decisions: [], timeline: [], investigations: parsed!.investigations } as never,
-      catalog,
-      { locale: 'zh-TW', strictGrounding: true },
-    )
-    expect(result.investigations[0].interpretation.length).toBeGreaterThan(0)
+    const truncated = '{"problems": [{"label": "糖尿病", "sources": ["C1"]}, {"label": "高血'
+    expect(useCase.parseBatchModuleResult('problems', block('problems', truncated, false))).toBeNull()
+    const atBoundary = '{"problems": [{"label": "糖尿病", "sources": ["C1"]}]'
+    expect(useCase.parseBatchModuleResult('problems', block('problems', atBoundary, false))).toBeNull()
   })
 })

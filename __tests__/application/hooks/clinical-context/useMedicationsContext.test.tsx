@@ -233,4 +233,109 @@ describe('useMedicationsContext full export', () => {
     expect(result.current?.items.find((item) => item.includes('Unknown status expired drug')))
       .toContain('last ended 2026-06-06')
   })
+
+  // A chemotherapy patient between cycles has ONE current medicine. The DM
+  // regimen dispensed three months ago is what the focus / problems / safety
+  // modules actually need, and it used to reach none of them: the floor added
+  // the records, then the 使用中 filter cleared the buckets they landed in.
+  it('surfaces the floor medicines in their own labelled subsection', () => {
+    const clinicalData = {
+      medications: [
+        {
+          id: 'letrozole', status: 'completed', authoredOn: '2026-07-01',
+          medicationCodeableConcept: { text: 'LETROZOLE TABLETS 2.5MG' },
+          dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days' } },
+          requester: { display: '臺北榮總' },
+        },
+        {
+          id: 'metformin', status: 'completed', authoredOn: '2026-01-12',
+          medicationCodeableConcept: { text: 'Metformin 500mg Tablets' },
+          dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days' } },
+          requester: { display: '示範診所' },
+        },
+        {
+          id: 'glargine', status: 'completed', authoredOn: '2026-01-12',
+          medicationCodeableConcept: { text: 'Insulin glargine pen' },
+          dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days' } },
+          requester: { display: '示範診所' },
+        },
+      ],
+    }
+    const { result } = renderHook(
+      () => useMedicationsContext(true, clinicalData as any, {
+        medicationTimeRange: 'all',
+        medicationChronic: 'all',
+        medicationStatus: 'active',
+      } as any, false, new Date('2026-07-10T00:00:00Z').getTime()),
+      { wrapper: Wrapper },
+    )
+
+    const items = result.current?.items ?? []
+    const text = items.join('\n')
+    expect(items).toContain('Currently in use (1):')
+    expect(text).toContain('LETROZOLE TABLETS 2.5MG')
+    expect(items).toContain('Recently dispensed, supply ended (last 24 months, 2) — NOT currently in use:')
+    expect(text).toContain('Metformin 500mg Tablets — last dispensed 2026-01-12 (28d supply, ended 2026-02-09)')
+    expect(text).toContain('Insulin glargine pen — last dispensed 2026-01-12 (28d supply, ended 2026-02-09)')
+    expect(text).toContain('[開立 by 示範診所]')
+    // The existing notes are still there.
+    expect(text).toContain('Record-fidelity note:')
+    expect(text).toContain('Terminology note:')
+  })
+
+  it('words a passed supply as an estimate, not a stop, for the first-visit summary', () => {
+    const clinicalData = {
+      medications: [{
+        id: 'metformin', status: 'completed', authoredOn: '2026-01-12',
+        medicationCodeableConcept: { text: 'Metformin 500mg Tablets' },
+        dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days' } },
+        requester: { display: '示範診所' },
+      }],
+    }
+    const render = (wording?: 'neutral') => renderHook(
+      () => useMedicationsContext(true, clinicalData as any, {
+        medicationTimeRange: 'all',
+        medicationChronic: 'all',
+        medicationStatus: 'active',
+      } as any, false, new Date('2026-07-10T00:00:00Z').getTime(), wording),
+      { wrapper: Wrapper },
+    ).result.current?.items.join('\n') ?? ''
+
+    const neutral = render('neutral')
+    expect(neutral).not.toContain('NOT currently in use')
+    expect(neutral).toContain('estimated supply already passed')
+    expect(neutral).toContain('current use is not known from these records')
+    expect(neutral).toContain('Metformin 500mg Tablets — last dispensed 2026-01-12 (28d supply, estimated to 2026-02-09)')
+    expect(neutral).toContain('a long-acting injection')
+    // Every other consumer keeps the established wording.
+    expect(render()).toContain('NOT currently in use')
+  })
+
+  it('never presents a draft, held or cancelled order as recently dispensed', () => {
+    const clinicalData = {
+      medications: [
+        { id: 'draft', status: 'draft', authoredOn: '2026-07-01', medicationCodeableConcept: { text: 'Draft Drug' } },
+        { id: 'hold', status: 'on-hold', authoredOn: '2026-07-01', medicationCodeableConcept: { text: 'Held Drug' } },
+        { id: 'cancelled', status: 'cancelled', authoredOn: '2026-07-01', medicationCodeableConcept: { text: 'Cancelled Drug' } },
+        {
+          id: 'real', status: 'completed', authoredOn: '2026-01-12',
+          medicationCodeableConcept: { text: 'Real Dispensed Drug' },
+          dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'days' } },
+        },
+      ],
+    }
+    const { result } = renderHook(
+      () => useMedicationsContext(true, clinicalData as any, {
+        medicationTimeRange: 'all',
+        medicationChronic: 'all',
+        medicationStatus: 'active',
+      } as any, false, new Date('2026-07-10T00:00:00Z').getTime()),
+      { wrapper: Wrapper },
+    )
+    const text = result.current?.items.join('\n') ?? ''
+    expect(text).toContain('Real Dispensed Drug')
+    expect(text).not.toContain('Draft Drug')
+    expect(text).not.toContain('Held Drug')
+    expect(text).not.toContain('Cancelled Drug')
+  })
 })

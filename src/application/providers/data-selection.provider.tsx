@@ -9,6 +9,7 @@
 // read their resolved profile via getProfile(consumer).
 "use client"
 
+import { DEFAULT_DOCUMENT_MODE } from '@/src/shared/constants/data-selection.constants'
 import { createContext, useContext, useEffect, useState, useMemo, useCallback, type ReactNode } from 'react'
 import { StorageService } from '@/src/shared/utils/storage.utils'
 import {
@@ -111,7 +112,10 @@ function makeDefaultProfile(defaultFilters: DataFilters = DEFAULT_DATA_FILTERS):
   return {
     selection: { ...DEFAULT_DATA_SELECTION },
     filters: { ...defaultFilters },
-    documentMode: 'latestAdmission',
+    // Default is the last three admissions, not one: a 初診 overview needs the
+    // previous stay's diagnoses as much as the latest, and the drawer label
+    // (最近三次住院) states exactly what the AI receives.
+    documentMode: DEFAULT_DOCUMENT_MODE,
     documentIds: [],
   }
 }
@@ -180,7 +184,7 @@ export function coerceProfile(
     // highlight is derived live from selection/filters. Any such keys on an old
     // stored profile are simply ignored here. Legacy supplementaryNotes and
     // editedClinicalContext keys are also intentionally dropped.
-    documentMode: mode === 'all' || mode === 'custom' || mode === 'latestAdmission' || mode === 'recentAdmissions' ? mode : 'latestAdmission',
+    documentMode: mode === 'all' || mode === 'custom' || mode === 'latestAdmission' || mode === 'recentAdmissions' ? mode : DEFAULT_DOCUMENT_MODE,
     documentIds: Array.isArray(saved.documentIds) ? saved.documentIds.filter((x): x is string => typeof x === 'string') : [],
   }
 }

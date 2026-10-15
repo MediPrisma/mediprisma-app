@@ -93,6 +93,12 @@ export function useEncountersContext(
     includeProcedures?: boolean
     filters?: Partial<DataFilters>
     nowMs?: number
+    /** 'count' names no medicine under a visit, only how many were
+     *  prescribed there. NHI cloud visits carry one primary diagnosis, and a
+     *  medicine listed under it reads as that diagnosis's treatment (a
+     *  furosemide dispensed at a pneumonia visit became "pneumonia
+     *  medication"); the medicines stay in 'Patient's Medications'. */
+    visitMedications?: 'list' | 'count'
   },
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
@@ -163,8 +169,15 @@ export function useEncountersContext(
     const items: string[] = []
 
     // Per-visit details
+    // The first-visit summary states its own diagnosis-code rule per data
+    // source (a 雲端病歷 visit code IS the primary diagnosis); a note here
+    // calling every code "billing, not confirmed" contradicted it, and the
+    // 'Problem List' it pointed to is not in that context.
+    const summaryVariant = options?.visitMedications === 'count'
     items.push(`Recent visits (showing ${visitsToShow.length} of ${encounters.length}):`)
-    items.push("Note: ICD codes listed under each visit come from billing/dispensing records and may not represent confirmed diagnoses. See 'Problem List' for clinically confirmed diagnoses. 'Patient\'s Medications' is the authoritative regimen list; visit-linked medication rows below are chronology only. Medication/procedure records may be repeated in their standalone sections; do not double-count them.")
+    items.push(summaryVariant
+      ? "Note: weigh the diagnosis codes under each visit by the diagnosis-code rule in the instructions. 'Patient\'s Medications' is the authoritative regimen list. Medication/procedure records may be repeated in their standalone sections; do not double-count them."
+      : "Note: ICD codes listed under each visit come from billing/dispensing records and may not represent confirmed diagnoses. See 'Problem List' for clinically confirmed diagnoses. 'Patient\'s Medications' is the authoritative regimen list; visit-linked medication rows below are chronology only. Medication/procedure records may be repeated in their standalone sections; do not double-count them.")
     items.push('')
 
     for (const enc of visitsToShow) {
@@ -180,11 +193,17 @@ export function useEncountersContext(
 
       const entry = encMap.get(enc.id)
       if (entry?.diagnoses.length) {
-        items.push(`    ICD codes on visit record (billing, not confirmed diagnoses): ${entry.diagnoses.join('; ')}`)
+        items.push(summaryVariant
+          ? `    Diagnosis code(s) on this visit: ${entry.diagnoses.join('; ')}`
+          : `    ICD codes on visit record (billing, not confirmed diagnoses): ${entry.diagnoses.join('; ')}`)
       }
       if (entry?.meds.length) {
-        items.push(`    Medications:`)
-        entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m)}`))
+        if (options?.visitMedications === 'count') {
+          items.push(`    Medications prescribed or dispensed at this visit: ${entry.meds.length} (named under 'Patient's Medications'; this visit's diagnosis code does not state any medicine's indication, and medicines dispensed together are not one problem's treatment)`)
+        } else {
+          items.push(`    Medications:`)
+          entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m)}`))
+        }
       }
       if (entry?.procs.length) {
         items.push(`    Procedures:`)

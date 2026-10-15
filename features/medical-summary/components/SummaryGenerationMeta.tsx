@@ -155,6 +155,14 @@ export function SummaryGenerationMeta({
         <TruncatedModelName modelName={generationInfo.modelName} />
       )}
       <ModelExecutionInfo execution={generationInfo.modelExecution} />
+      {generationInfo.firstCardLabel && generationInfo.firstCardText ? (
+        <>
+          <span aria-hidden="true" className="shrink-0">·</span>
+          <span className="shrink-0 tabular-nums">
+            {generationInfo.firstCardLabel} {generationInfo.firstCardText}
+          </span>
+        </>
+      ) : null}
       {generationInfo.durationLabel && generationInfo.durationText ? (
         <>
           <span aria-hidden="true" className="shrink-0">·</span>

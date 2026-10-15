@@ -1,5 +1,7 @@
 import {
   DOCUMENT_CONTEXT_OMISSION_MARKER,
+  DOCUMENT_HISTORY_TRUNCATION_MARKER,
+  extractDocumentKeySections,
   fitDocumentTextToTokenBudget,
   formatDocumentsSection,
   listClinicalDocuments,
@@ -270,5 +272,57 @@ describe('clinical-documents.utils', () => {
     expect(text).not.toContain('font-family') // CSS gone
     expect(text).not.toContain('標楷體') // <style> body gone
     expect(text).not.toMatch(/Ã|å·|é¢/) // no UTF-8 mojibake
+  })
+})
+
+// The 病史 section is the ONLY place an oncology chart states the treatment
+// narrative (staging, regimen, cycle dates). It is dropped by default because
+// for most notes it restates the structured record; the overview lane asks for
+// it explicitly and pays for it out of its own budget.
+describe('extractDocumentKeySections keepHistoryChars', () => {
+  const note = [
+    '病患姓名：王ＯＯ',
+    '病歷號：12345',
+    '出院診斷',
+    'Left breast invasive ductal carcinoma, ypT2N2.',
+    '病史',
+    `${'This 61-year-old patient received neoadjuvant TCHP. '.repeat(60)}`,
+    '理學檢查',
+    'Abdomen soft, no tenderness.',
+    '檢驗',
+    'WBC 4210, Hb 12.0, PLT 107000.',
+    '住院治療經過',
+    'Empirical antibiotics were given and the abscess was drained.',
+    '出院指示',
+    'Follow up in clinic.',
+  ].join('\n')
+
+  it('drops history by default and names it in the omission trailer', () => {
+    const reduced = extractDocumentKeySections(note)
+    expect(reduced.extracted).toBe(true)
+    expect(reduced.text).not.toContain('neoadjuvant TCHP')
+    expect(reduced.historyText).toBeUndefined()
+    expect(reduced.text).toContain('[sections omitted: administrative fields, history, physical exam, labs]')
+  })
+
+  it('returns history separately, truncated, and stops calling it omitted', () => {
+    const reduced = extractDocumentKeySections(note, { keepHistoryChars: 200 })
+    // Separate from `text` so the caller's body fit (which cuts the middle)
+    // cannot be what eats it.
+    expect(reduced.text).not.toContain('neoadjuvant TCHP')
+    expect(reduced.historyText).toContain('neoadjuvant TCHP')
+    expect(reduced.historyText).toContain(DOCUMENT_HISTORY_TRUNCATION_MARKER)
+    expect(reduced.historyText!.length).toBeLessThanOrEqual(200 + DOCUMENT_HISTORY_TRUNCATION_MARKER.length)
+    // The trailer must stay truthful: history is no longer omitted…
+    expect(reduced.text).not.toMatch(/sections omitted:[^\]]*history/)
+    // …but the routine sections still are.
+    expect(reduced.text).toContain('physical exam')
+    expect(reduced.text).toContain('labs')
+    expect(reduced.text).not.toContain('Abdomen soft')
+  })
+
+  it('leaves a short history untruncated', () => {
+    const reduced = extractDocumentKeySections(note, { keepHistoryChars: 100_000 })
+    expect(reduced.historyText).not.toContain(DOCUMENT_HISTORY_TRUNCATION_MARKER)
   })
 })

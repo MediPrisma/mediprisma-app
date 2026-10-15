@@ -1,8 +1,10 @@
 import {
+  adaptiveFiltersAction,
   autoSelectAllTokenLimit,
   estimateFullRecordTokens,
   AUTO_SELECT_ALL_TOKENS,
 } from '@/features/data-selection/hooks/useAdaptiveDataDefaults'
+import { DEFAULT_DATA_FILTERS, MEDCLOUD_YEAR_DATA_FILTERS } from '@/src/shared/constants/data-selection.constants'
 
 const obs = (i: number) => ({
   id: `o${i}`,
@@ -63,5 +65,35 @@ describe('estimateFullRecordTokens', () => {
       ],
     } as any
     expect(estimateFullRecordTokens(data)).toBeLessThan(AUTO_SELECT_ALL_TOKENS)
+  })
+})
+
+describe('adaptiveFiltersAction', () => {
+  const base = { filters: DEFAULT_DATA_FILTERS, activePreset: 'newPatient', dataSource: 'nhi-medcloud' as const, smallRecord: false, autoApplied: false }
+
+  it('gives an untouched 雲端病歷 record its whole year of visits, medicines, labs and reports', () => {
+    expect(adaptiveFiltersAction(base)).toEqual({ kind: 'set-filters', filters: MEDCLOUD_YEAR_DATA_FILTERS })
+    expect(MEDCLOUD_YEAR_DATA_FILTERS).toMatchObject({ encounterTimeRange: '1y', medicationTimeRange: '1y', labReportTimeRange: '1y', imagingReportTimeRange: '1y' })
+    expect(adaptiveFiltersAction({ ...base, filters: MEDCLOUD_YEAR_DATA_FILTERS, autoApplied: true })).toEqual({ kind: 'none' })
+  })
+
+  it('returns another source to the factory window it set for the cloud record', () => {
+    expect(adaptiveFiltersAction({ ...base, dataSource: 'nhi-health-bank', filters: MEDCLOUD_YEAR_DATA_FILTERS, autoApplied: true }))
+      .toEqual({ kind: 'set-filters', filters: DEFAULT_DATA_FILTERS })
+    expect(adaptiveFiltersAction({ ...base, dataSource: 'other' })).toEqual({ kind: 'none' })
+  })
+
+  it('still takes everything for a small record', () => {
+    expect(adaptiveFiltersAction({ ...base, smallRecord: true })).toEqual({ kind: 'select-all' })
+  })
+
+  it('keeps a one-year window the user chose by hand (d834b140 review)', () => {
+    expect(adaptiveFiltersAction({ ...base, dataSource: 'nhi-health-bank', filters: MEDCLOUD_YEAR_DATA_FILTERS })).toEqual({ kind: 'none' })
+    expect(adaptiveFiltersAction({ ...base, dataSource: 'nhi-health-bank', filters: MEDCLOUD_YEAR_DATA_FILTERS, smallRecord: true })).toEqual({ kind: 'none' })
+  })
+
+  it('never overrides the user\'s own window or another template', () => {
+    expect(adaptiveFiltersAction({ ...base, filters: { ...DEFAULT_DATA_FILTERS, encounterTimeRange: '3m' } })).toEqual({ kind: 'none' })
+    expect(adaptiveFiltersAction({ ...base, activePreset: 'followUp' })).toEqual({ kind: 'none' })
   })
 })

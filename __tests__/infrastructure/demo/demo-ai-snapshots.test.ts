@@ -34,6 +34,25 @@ import {
   buildGroundingAuditInput,
 } from '../../../scripts/lib/grounding-audit'
 
+/** Every citation key in raw snapshot modules, by the schemas' citation
+ *  fields: key lists ("sources", "basisSources", "metricSources",
+ *  "medicationSources", "unremarkable") and single keys ("source", "ref",
+ *  "managedByRef"). */
+function collectCitedKeys(value: unknown, into = new Set<string>(), field?: string): Set<string> {
+  const isKeyList = field === 'sources' || field === 'unremarkable' || /Sources$/.test(field ?? '')
+  const isKey = field === 'source' || field === 'ref' || /Ref$/.test(field ?? '')
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      if (typeof item === 'string') { if (isKeyList) into.add(item) } else collectCitedKeys(item, into)
+    })
+  } else if (value && typeof value === 'object') {
+    Object.entries(value).forEach(([key, item]) => collectCitedKeys(item, into, key))
+  } else if (isKey && typeof value === 'string') {
+    into.add(value)
+  }
+  return into
+}
+
 describe('demo clinical-insight snapshots', () => {
   it('declares honest pre-generated model provenance without a fabricated time', () => {
     expect(DEMO_CLINICAL_INSIGHT_GENERATION).toEqual({
@@ -87,8 +106,8 @@ describe('demo medical-summary snapshots', () => {
   it('declares honest pre-generated model provenance without a fabricated time', () => {
     expect(DEMO_MEDICAL_SUMMARY_GENERATION).toEqual({
       source: 'pre-generated',
-      modelId: 'gemini-3-flash-preview',
-      modelName: 'Gemini 3 Flash Preview',
+      modelId: 'gemini-3.8-flash',
+      modelName: 'Gemini 3.8 Flash',
     })
     expect(DEMO_MEDICAL_SUMMARY_GENERATION).not.toHaveProperty('generatedAt')
     expect(DEMO_SAFETY_SCAN_GENERATION).toEqual(DEMO_MEDICAL_SUMMARY_GENERATION)
@@ -116,47 +135,57 @@ describe('demo medical-summary snapshots', () => {
       .toBe(demoSafetyScanSnapshots['zh-TW'].patient)
   })
 
-  it.each(['zh-TW', 'en'] as const)('does not restore retired decisions cards in %s', (locale) => {
-    expect(demoMedicalSummarySnapshots[locale].medical.decisions).toEqual([])
-    expect(demoMedicalSummarySnapshots[locale].patient.decisions).toEqual([])
+  it.each(['zh-TW', 'en'] as const)('keeps benefit-first education patient-only in %s', (locale) => {
+    expect(demoMedicalSummarySnapshots[locale].medical.medicationEducation).toEqual([])
+    expect(demoMedicalSummarySnapshots[locale].patient.medicationEducation.length).toBeGreaterThan(0)
   })
 
-  it.each(['medical', 'patient'] as const)('ships non-empty English narrative for %s audience', (audience) => {
+  // 開藥前必看, 最可能的就診主因 and 最近 90 天 were retired (2026-10-02); the
+  // problems only the focus card carried moved into the problem list.
+  it.each(['zh-TW', 'en'] as const)('carries none of the retired sections in %s', (locale) => {
+    for (const audience of ['medical', 'patient'] as const) {
+      const snapshot = demoMedicalSummarySnapshots[locale][audience] as Record<string, unknown>
+      for (const retired of ['mustKnow', 'focus', 'recent']) expect(snapshot).not.toHaveProperty(retired)
+    }
+    // Clinicians read the problem list in chart English in either locale.
+    const labels = demoMedicalSummarySnapshots[locale].medical.problems.map((problem) => problem.label).join(' ')
+    expect(labels).toMatch(/Chronic kidney disease/)
+    expect(labels).toMatch(/Hypothyroidism/)
+  })
+
+  it.each(['medical', 'patient'] as const)('ships non-empty English content for %s audience', (audience) => {
     const snapshot = demoMedicalSummarySnapshots.en[audience]
     expect(snapshot.headline).toMatch(/[A-Za-z]/)
-    expect(snapshot.summary.map((segment) => segment.text).join('')).toMatch(/[A-Za-z]/)
-    expect(snapshot.investigations.length).toBeGreaterThan(0)
+    expect(snapshot.problems.map((item) => item.label).join('')).toMatch(/[A-Za-z]/)
+    expect(snapshot.problems.length).toBeGreaterThan(0)
     expect(demoSafetyScanSnapshots.en[audience].alerts.length).toBeGreaterThan(0)
   })
 
-  it('keeps the compact English reconciliation fully English and de-identified', () => {
-    const reconciliation = demoMedicalSummarySnapshots.en.medical
-      .medicationReview.reconciliation.map((item) => item.text).join(' ')
-    expect(reconciliation).toContain('Aricept')
-    expect(reconciliation).not.toContain('示範')
-    expect(reconciliation).not.toMatch(/Demo (Grace|Sunny)/)
+  it('keeps the English problem list fully English and de-identified', () => {
+    const problems = demoMedicalSummarySnapshots.en.medical.problems
+      .map((item) => [item.label, item.basis, item.metric].join(' '))
+      .join(' ')
+    expect(problems).toMatch(/Chronic kidney disease/)
+    expect(problems).not.toMatch(/[一-鿿]/)
+    expect(problems).not.toContain('示範')
   })
 
-  it('resolves every bundled summary and safety citation against the enriched default demo AI scope', async () => {
+  it('resolves every bundled summary and safety citation against the enriched demo AI scope', async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const bundle = require('../../../public/demo/demo-bundle.json')
     const enriched = await enrichBundleWithNhiDrugTerminology(bundle)
     const parsedData = LocalBundleService.parse(enriched.bundle)
     expect(parsedData).not.toBeNull()
-    const includedDocumentIds = resolveSelectedDocuments(
-      listClinicalDocuments(parsedData!.collection),
-      'latestAdmission',
-      [],
-    ).map((document) => document.id)
+    // The demo record is small, so the 初診 defaults select all of it
+    // (useAdaptiveDataDefaults) — the scope the snapshots were generated over.
+    const includedDocumentIds = listClinicalDocuments(parsedData!.collection).map((document) => document.id)
     // Scope against the demo's own as-of date, exactly like the app does for
-    // demo data. Using the wall clock made this assertion decay: the bundle's
-    // 2026-07-20 dispensings passed their supply window on 2026-08-16 and
-    // dropped out of scope, breaking six citations that were correct when the
-    // snapshot was written.
+    // demo data. Using the wall clock made this assertion decay as supply
+    // windows passed.
     const scopedClinicalData = scopeClinicalDataForAi(
       parsedData!.collection,
-      DEFAULT_DATA_SELECTION,
-      DEFAULT_DATA_FILTERS,
+      ALL_DATA_SELECTION,
+      ALL_DATA_FILTERS,
       includedDocumentIds,
       DEMO_DATA_AS_OF_MS,
     )
@@ -178,20 +207,13 @@ describe('demo medical-summary snapshots', () => {
           locale,
         })
         expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
-        expect(finalized.droppedTimelineCount).toBe(0)
-        expect(finalized.problems.find((problem) => problem.sourceKeys.includes('D1')))
-          .toEqual(expect.objectContaining({
-            documentEvidence: expect.arrayContaining([
-              expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
-            ]),
-          }))
-        const documentTimeline = finalized.timeline.find((event) => event.key === 'D1')
-        if (documentTimeline) {
-          expect(documentTimeline).toEqual(expect.objectContaining({
-            documentEvidence: expect.arrayContaining([
-              expect.objectContaining({ source: 'D1', quote: expect.any(String) }),
-            ]),
-          }))
+        // Every problem that cites a discharge summary carries its verbatim quote.
+        for (const problem of finalized.problems) {
+          for (const key of problem.sourceKeys.filter((sourceKey) => /^D\d+$/.test(sourceKey))) {
+            expect(problem.documentEvidence).toEqual(expect.arrayContaining([
+              expect.objectContaining({ source: key, quote: expect.any(String) }),
+            ]))
+          }
         }
         expect(auditSummaryGrounding(snapshot, grounding)).toEqual([])
 
@@ -236,42 +258,22 @@ describe('demo medical-summary snapshots', () => {
     const bundle = require('../../../public/demo/demo-bundle.json')
     const enriched = await enrichBundleWithNhiDrugTerminology(bundle)
     const parsedData = LocalBundleService.parse(enriched.bundle)!
-    const includedDocumentIds = resolveSelectedDocuments(
-      listClinicalDocuments(parsedData.collection),
-      'latestAdmission',
-      [],
-    ).map((document) => document.id)
     const scoped = scopeClinicalDataForAi(
       parsedData.collection,
-      DEFAULT_DATA_SELECTION,
-      DEFAULT_DATA_FILTERS,
-      includedDocumentIds,
+      ALL_DATA_SELECTION,
+      ALL_DATA_FILTERS,
+      listClinicalDocuments(parsedData.collection).map((document) => document.id),
       DEMO_DATA_AS_OF_MS,
     )
     const catalog = getSourceCatalog(scoped, 'zh-TW')
     const catalogKeys = new Set(catalog.map((source) => source.key))
 
     const cited = new Set<string>()
-    const walk = (value: unknown, field?: string): void => {
-      if (Array.isArray(value)) {
-        if (field === 'sources' || field === 'sourceKeys') {
-          value.forEach((item) => { if (typeof item === 'string') cited.add(item) })
-          return
-        }
-        value.forEach((item) => walk(item, field))
-        return
-      }
-      if (value && typeof value === 'object') {
-        Object.entries(value).forEach(([key, item]) => walk(item, key))
-        return
-      }
-      if ((field === 'ref' || field === 'source') && typeof value === 'string') cited.add(value)
-    }
     for (const locale of ['zh-TW', 'en'] as const) {
-      walk(remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale].medical, catalog))
-      walk(remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale].patient, catalog))
-      walk(remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[locale].medical, catalog))
-      walk(remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[locale].patient, catalog))
+      collectCitedKeys(remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale].medical, catalog), cited)
+      collectCitedKeys(remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale].patient, catalog), cited)
+      collectCitedKeys(remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[locale].medical, catalog), cited)
+      collectCitedKeys(remapDemoSnapshotSourceKeys(demoSafetyScanSnapshots[locale].patient, catalog), cited)
     }
 
     const unresolvable = [...cited]
@@ -280,19 +282,35 @@ describe('demo medical-summary snapshots', () => {
     expect(unresolvable).toEqual([])
   })
 
-  it('keeps current medication terminology aligned with each education item', () => {
-    const education = demoMedicalSummarySnapshots['zh-TW'].patient.medicationEducation
-    const aricept = education.find((item) => item.name.includes('Aricept'))
-    const glaucoma = education.find((item) => item.sources.join(',') === 'M2,M3,M4')
+  it('ties each education item to a record of the medicine it explains', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bundle = require('../../../public/demo/demo-bundle.json')
+    const enriched = await enrichBundleWithNhiDrugTerminology(bundle)
+    const collection = LocalBundleService.parse(enriched.bundle)!.collection
+    const scoped = scopeClinicalDataForAi(
+      collection,
+      ALL_DATA_SELECTION,
+      ALL_DATA_FILTERS,
+      listClinicalDocuments(collection).map((document) => document.id),
+      DEMO_DATA_AS_OF_MS,
+    )
+    for (const locale of ['zh-TW', 'en'] as const) {
+      const catalog = getSourceCatalog(scoped, locale)
+      const education = remapDemoSnapshotSourceKeys(demoMedicalSummarySnapshots[locale].patient, catalog).medicationEducation
+      expect(education.length).toBeGreaterThan(0)
+      for (const item of education) {
+        const medicines = item.sources
+          .map((key) => catalog.find((source) => source.key === key))
+          .filter((source) => source?.resourceType?.startsWith('Medication'))
+        const brand = item.name.split(/[\s(（]/)[0].toLowerCase()
+        expect(medicines.some((source) => source!.display.toLowerCase().includes(brand))).toBe(true)
+      }
+    }
 
-    expect(aricept).toMatchObject({ sources: ['M5', 'M11'] })
-    expect(aricept?.benefit).toContain('失智症治療')
-    expect(glaucoma).toMatchObject({ sources: ['M2', 'M3', 'M4'] })
-
-    const regimen = demoMedicalSummarySnapshots['zh-TW'].medical.medicationReview.regimen
-    expect(regimen.some((item) => item.sources.includes('M13'))).toBe(true)
-    expect(regimen.some((item) => item.sources.includes('M5') && item.sources.includes('M11'))).toBe(true)
-    expect(regimen.some((item) => item.sources.includes('M10'))).toBe(true)
+    // The clinician list carries medicines on the problem rows: each row's
+    // medicines are cited per row.
+    const problems = demoMedicalSummarySnapshots['zh-TW'].medical.problems
+    expect(problems.filter((item) => item.medicationSources?.length).length).toBeGreaterThan(5)
   })
 
   it.each(['medical', 'patient'] as const)(
@@ -325,12 +343,16 @@ describe('demo medical-summary snapshots', () => {
       )
 
       expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
-      expect(finalized.droppedTimelineCount).toBe(0)
-      const remappedDocumentProblem = finalized.problems.find((problem) =>
-        problem.documentEvidence?.some((entry) => entry.quote === 'Diebetes mellitus'),
-      )
-      expect(remappedDocumentProblem?.documentEvidence?.[0]?.source)
-        .toBe(remappedDocumentProblem?.sourceKeys[0])
+      // A document quote follows its document to the new key: every document a
+      // row still cites (a column keeps at most six keys) has its quote.
+      const documentProblems = finalized.problems.filter((problem) =>
+        problem.sourceKeys.some((key) => /^D\d+$/.test(key)))
+      expect(documentProblems.length).toBeGreaterThan(0)
+      for (const problem of documentProblems) {
+        for (const key of problem.sourceKeys.filter((sourceKey) => /^D\d+$/.test(sourceKey))) {
+          expect(problem.documentEvidence?.map((entry) => entry.source)).toContain(key)
+        }
+      }
     },
   )
 })
@@ -338,25 +360,10 @@ describe('demo medical-summary snapshots', () => {
 describe('demo snapshot citation keys', () => {
   const citedKeys = () => {
     const cited = new Set<string>()
-    const walk = (value: unknown, field?: string): void => {
-      if (Array.isArray(value)) {
-        if (field === 'sources' || field === 'sourceKeys') {
-          value.forEach((item) => { if (typeof item === 'string') cited.add(item) })
-          return
-        }
-        value.forEach((item) => walk(item, field))
-        return
-      }
-      if (value && typeof value === 'object') {
-        Object.entries(value).forEach(([key, item]) => walk(item, key))
-        return
-      }
-      if ((field === 'ref' || field === 'source') && typeof value === 'string') cited.add(value)
-    }
     for (const locale of ['zh-TW', 'en'] as const) {
       for (const audience of ['medical', 'patient'] as const) {
-        walk(demoMedicalSummarySnapshots[locale][audience])
-        walk(demoSafetyScanSnapshots[locale][audience])
+        collectCitedKeys(demoMedicalSummarySnapshots[locale][audience], cited)
+        collectCitedKeys(demoSafetyScanSnapshots[locale][audience], cited)
       }
     }
     return [...cited].filter((key) => /^[A-Z]+\d+$/.test(key)).sort()
@@ -376,11 +383,13 @@ describe('demo snapshot citation keys', () => {
   })
 
   it.each(['default', 'all-data'] as const)(
-    'resolves every cited key to its own record in the %s demo scope',
+    'maps every cited key back to its own record in the %s demo scope',
     async (scope) => {
-      // The demo loads with the whole record selected (it is small enough),
-      // while a retained 初診 selection gives the default scope. Both must map
-      // each citation back to the resource it was written against.
+      // The demo loads with the whole record selected (it is small enough) —
+      // the scope the snapshots were written against, where every citation
+      // resolves. A narrower retained 初診 selection may leave out a cited
+      // record; that citation must stay unresolved (shown unverified), never
+      // land on a different record.
       const collection = await demoCollection()
       const documents = listClinicalDocuments(collection)
       const scoped = scope === 'default'
@@ -403,7 +412,13 @@ describe('demo snapshot citation keys', () => {
         const remapped = remapDemoSnapshotSourceKeys({ sources: [key] }, catalog).sources[0]
         return [key, catalog.find((source) => source.key === remapped)?.resourceId]
       })
-      expect(resolved).toEqual(citedKeys().map((key) => [key, DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key]]))
+      if (scope === 'all-data') {
+        expect(resolved).toEqual(citedKeys().map((key) => [key, DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key]]))
+      } else {
+        const misplaced = resolved.filter(([key, resourceId]) =>
+          resourceId !== undefined && resourceId !== DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key!])
+        expect(misplaced).toEqual([])
+      }
     },
   )
 

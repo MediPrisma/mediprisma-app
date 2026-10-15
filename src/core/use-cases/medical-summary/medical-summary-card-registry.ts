@@ -5,7 +5,10 @@ import type {
   MedicalSummaryModuleResult,
   SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
-import { MEDICAL_SUMMARY_MODULE_IDS } from '@/src/core/entities/medical-summary.entity'
+import {
+  MEDICAL_SUMMARY_MODULE_IDS,
+  MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS,
+} from '@/src/core/entities/medical-summary.entity'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 import {
   generateMedicalSummaryUseCase,
@@ -94,32 +97,32 @@ export const MEDICAL_SUMMARY_CARD_REGISTRY: Readonly<
   safety: SAFETY_CARD_DEFINITION,
 }
 
-const LOCAL_CARD_ORDER: readonly MedicalSummaryCardId[] = [
-  'priorities',
-  // Put the compact, immediately useful card first so slower custom models
-  // can paint a result before generating the much larger medication payload.
-  // Keep medications second (rather than last) to limit tail-truncation risk.
-  'medications',
-  'problems',
-  'timeline',
-  'investigations',
+// One order for both harness profiles. Overview is always first: it is the
+// smallest block and paints the hero card while a slow model is still
+// writing. 影像與病理重點 runs on its own lane over the report digest and never
+// shares a request with the cards above, so it is listed last.
+const CARD_ORDER: readonly MedicalSummaryCardId[] = [
+  ...MEDICAL_SUMMARY_NARRATIVE_MODULE_IDS,
   'safety',
+  'reports',
 ]
 
-const FRONTIER_CARD_ORDER: readonly MedicalSummaryCardId[] = [
-  ...MEDICAL_SUMMARY_MODULE_IDS,
-  'safety',
-]
+/** Cards a given audience is ever asked for. 影像與病理重點 is clinician-facing:
+ *  the patient version never requests it. */
+function cardServesAudience(
+  cardId: MedicalSummaryCardId,
+  audience: GenerateMedicalSummaryInput['audience'],
+): boolean {
+  return cardId !== 'reports' || audience !== 'patient'
+}
 
 export function registeredMedicalSummaryCards(
   input: GenerateMedicalSummaryInput,
   enabledCardIds?: readonly MedicalSummaryCardId[],
 ): MedicalSummaryCardDefinition[] {
-  const order = input.harnessProfile === 'local-small'
-    ? LOCAL_CARD_ORDER
-    : FRONTIER_CARD_ORDER
   const enabled = enabledCardIds ? new Set(enabledCardIds) : null
-  return order
+  return CARD_ORDER
+    .filter((cardId) => cardServesAudience(cardId, input.audience))
     .filter((cardId) => !enabled || enabled.has(cardId))
     .map((cardId) => MEDICAL_SUMMARY_CARD_REGISTRY[cardId])
 }

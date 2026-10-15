@@ -175,6 +175,42 @@ describe('GenerateSafetyAlertsUseCase', () => {
       expect(result!.alerts[0].unsupportedSourceKeys).toEqual([])
     })
 
+    describe('a medicine called anticholinergic against its listed mechanism', () => {
+      // Synthetic catalog: the line facts the SOURCE LIST printed.
+      const medicine = (key: string, display: string, medicationClass: string, medicine: { mechanism?: string; complete: boolean; anticholinergic?: string }) => ({
+        key, resourceType: 'MedicationRequest', resourceId: `r-${key}`, display, medicationClass, medicine,
+      })
+      const catalog = [
+        medicine('M1', 'SYN-OXY Extended-release Tablets 5mg', 'oxybutynin · G04B UROLOGICALS', { mechanism: 'Cholinergic Muscarinic Antagonist', complete: true, anticholinergic: 'ACB 3' }),
+        medicine('M2', 'Synmiga Prolonged-release Tablets 50mg', 'mirabegron · G04B UROLOGICALS', { mechanism: 'beta3-Adrenergic Agonist', complete: true }),
+        { key: 'M3', resourceType: 'MedicationRequest', resourceId: 'r-M3', display: 'SYN-HERB CAPSULES', medicationClass: 'synherb · A16A' },
+      ]
+      const parse = (alert: Record<string, unknown>) => generateSafetyAlertsUseCase.parseScanResult(
+        JSON.stringify({ alerts: [{ severity: 'medium', category: 'other', ...alert }] }), catalog,
+      )!.alerts[0]
+
+      it('marks the β3 agonist an alert calls anticholinergic, by ingredient or brand', () => {
+        expect(parse({
+          title: 'Anticholinergic burden: SYN-OXY + Synmiga',
+          detail: 'Concurrent oxybutynin and mirabegron increase anticholinergic and urinary retention risk.',
+          sources: ['M1', 'M2'],
+        }).propertyReviewKeys).toEqual(['M2'])
+      })
+
+      it('does not read a suggestion to switch, or an unknown medicine, as the claim', () => {
+        expect(parse({
+          title: 'Oxybutynin in an older adult',
+          detail: 'Oxybutynin is strongly anticholinergic. Consider switching to mirabegron, which is not anticholinergic.',
+          sources: ['M1', 'M2'],
+        }).propertyReviewKeys).toEqual([])
+        expect(parse({
+          title: 'Anticholinergic load with synherb',
+          detail: 'Synherb and oxybutynin add anticholinergic effects.',
+          sources: ['M1', 'M3'],
+        }).propertyReviewKeys).toEqual([])
+      })
+    })
+
     it('strips markdown fences / surrounding prose', () => {
       const r = generateSafetyAlertsUseCase.parseScanResult('Sure:\n```json\n' + valid + '\n```\nDone.')
       expect(r).not.toBeNull()

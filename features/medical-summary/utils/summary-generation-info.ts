@@ -11,6 +11,10 @@ export interface MedicalSummaryGenerationInfo {
   generatedAtLabel?: string
   durationLabel?: string
   durationText?: string
+  /** Time to the FIRST visible section. Shown beside the total because on a
+   *  slow endpoint those two numbers answer different questions. */
+  firstCardLabel?: string
+  firstCardText?: string
   ariaLabel: string
 }
 
@@ -32,8 +36,10 @@ export function buildSummaryGenerationInfo({
   locale,
   labelTemplate,
   labelWithDurationTemplate,
+  labelWithFirstCardTemplate,
   generatedAtLabel,
   durationLabel,
+  firstCardLabel,
   preGeneratedLabel,
   preGeneratedTemplate,
 }: {
@@ -41,8 +47,12 @@ export function buildSummaryGenerationInfo({
   locale: string
   labelTemplate: string
   labelWithDurationTemplate: string
+  /** Optional: callers that do not surface the first-section timing keep the
+   *  duration-only aria label. */
+  labelWithFirstCardTemplate?: string
   generatedAtLabel: string
   durationLabel: string
+  firstCardLabel?: string
   preGeneratedLabel: string
   preGeneratedTemplate: string
 }): MedicalSummaryGenerationInfo | undefined {
@@ -73,14 +83,24 @@ export function buildSummaryGenerationInfo({
   const durationText = generation.durationMs === undefined
     ? undefined
     : formatGenerationDuration(generation.durationMs)
-  const ariaLabel = durationText
-    ? labelWithDurationTemplate
+  const firstCardText = generation.firstCardMs === undefined
+    ? undefined
+    : formatGenerationDuration(generation.firstCardMs)
+  const showFirstCard = Boolean(firstCardText && firstCardLabel)
+  const ariaLabel = showFirstCard && durationText && labelWithFirstCardTemplate
+    ? labelWithFirstCardTemplate
       .replace("{model}", modelName)
       .replace("{time}", generatedAtText)
+      .replace("{first}", firstCardText as string)
       .replace("{duration}", durationText)
-    : labelTemplate
-      .replace("{model}", modelName)
-      .replace("{time}", generatedAtText)
+    : durationText
+      ? labelWithDurationTemplate
+        .replace("{model}", modelName)
+        .replace("{time}", generatedAtText)
+        .replace("{duration}", durationText)
+      : labelTemplate
+        .replace("{model}", modelName)
+        .replace("{time}", generatedAtText)
 
   return {
     modelName,
@@ -90,6 +110,8 @@ export function buildSummaryGenerationInfo({
     generatedAtLabel,
     durationLabel: durationText ? durationLabel : undefined,
     durationText,
+    firstCardLabel: showFirstCard ? firstCardLabel : undefined,
+    firstCardText: showFirstCard ? firstCardText : undefined,
     ariaLabel,
   }
 }
