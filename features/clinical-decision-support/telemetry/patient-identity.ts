@@ -4,6 +4,8 @@ const MASK = /[Xx*＊○〇●Ｏ◯]/u
 const NAME_MASK = /[Xx○〇●Ｏ◯]/u
 const MASKED_NATIONAL_ID = /^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u
 const NATIONAL_ID_SYSTEM = /national[-_]?id/i
+const TVGH_NATIONAL_ID_SYSTEM = 'urn:oid:tw.gov.id-number'
+const TWCORE_NATIONAL_ID_SYSTEM = 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id'
 const MEDCLOUD_SOURCE_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id'
 const MEDCLOUD_MASKED_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id'
 const MEDCLOUD_NATIONAL_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
@@ -46,7 +48,7 @@ function maskedName(name: string): string {
   return visible.join('')
 }
 
-function nationalId(patient: PatientEntity): { system: string; value: string } {
+function nationalId(patient: PatientEntity): { system: string; value: string; displayValue?: string } {
   const matches = (patient.identifier ?? [])
     .map((identifier) => ({
       system: normalizedIdentifierSystem(identifier.system),
@@ -54,7 +56,16 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
     }))
     .filter(identifier => isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)
       || isMedcloudSystem(identifier.system, MEDCLOUD_NATIONAL_ID_SYSTEM)
+      || identifier.system === TVGH_NATIONAL_ID_SYSTEM
       || (!isMedcloudNamespace(identifier.system) && NATIONAL_ID_SYSTEM.test(identifier.system)))
+  // The hospital bridge supplies a full ID in this explicit namespace. Keep
+  // the full value in the local digest input, never in the transmitted display.
+  if (matches.length === 1 && matches[0].system === TVGH_NATIONAL_ID_SYSTEM) {
+    const value = matches[0].value
+    if (!/^[A-Z][12][0-9]{8}$/.test(value)) throw new Error('cdss_identity_unavailable')
+    return { system: TWCORE_NATIONAL_ID_SYSTEM, value,
+      displayValue: `${value.slice(0, 4)}XXX${value.slice(7)}` }
+  }
   if (matches.length !== 1 || !MASKED_NATIONAL_ID.test(matches[0].value)
     || !MASK.test(matches[0].value.slice(1))) {
     throw new Error('cdss_identity_unavailable')
@@ -101,7 +112,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
     patient_identity: {
       name_masked: maskedName(name),
       birth_year: birthDate.slice(0, 4),
-      identifier_masked: identifier.value,
+      identifier_masked: identifier.displayValue ?? identifier.value,
       identifier_system: identifier.system,
     },
   }

@@ -148,8 +148,10 @@ test.each([false, true])('other save failures retain the general error and do no
   const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
   fireEvent.click(screen.getByTestId('cdss-save-record'))
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
-    english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。',
+    english ? 'CDSS save was not confirmed.' : 'CDSS 儲存結果未確認。',
+    expect.objectContaining({ description: expect.stringContaining('cdss_save_unknown'), duration: 15000 }),
   ))
+  expect(JSON.stringify(jest.mocked(toast.error).mock.calls)).not.toContain('private server error')
   expect(screen.getByTestId('cdss-save-record')).toBeEnabled()
   view.unmount()
 })

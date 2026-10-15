@@ -377,3 +377,45 @@ test('de-identified source patients never transmit a CDSS save', async () => {
     .rejects.toThrow('cdss_patient_deidentified')
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test.each([400, 401, 403, 413, 503])('save rejection retains HTTP %s and request stage', async status => {
+  jest.mocked(fetch).mockResolvedValueOnce({ status } as Response)
+  await expect(saveCdssSnapshot(input)).rejects.toMatchObject({ message: 'cdss_gateway_rejected', stage: 'request', status })
+})
+
+test('network failures have a distinct diagnostic code', async () => {
+  jest.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  await expect(saveCdssSnapshot(input)).rejects.toMatchObject({ message: 'cdss_network_unavailable', stage: 'request' })
+})
+
+test('invalid receipts are reported as unconfirmed, not a network failure', async () => {
+  jest.mocked(fetch).mockResolvedValueOnce({ status: 201, json: async () => null } as Response)
+  await expect(saveCdssSnapshot(input)).rejects.toMatchObject({ message: 'cdss_gateway_unconfirmed', stage: 'receipt' })
+})
+
+test('TVGH hospital bridge identity saves without transmitting its full national ID', async () => {
+  const fullId = 'A123456789'
+  const patient = { ...input.patient, identifier: [
+    { system: 'urn:oid:his.patient.mrn', value: 'synthetic-mrn' },
+    { system: 'urn:oid:tw.gov.id-number', value: fullId },
+  ] }
+  await saveCdssSnapshot({ ...input, patient,
+    physicianDecisions: { note: `ID ${fullId}` } })
+  const serialized = jest.mocked(fetch).mock.calls[0][1]!.body as string
+  expect(serialized).not.toContain(fullId)
+  expect(JSON.parse(serialized).patient_identity).toMatchObject({
+    identifier_system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id', identifier_masked: 'A123XXX789',
+  })
+  const first = await cdssPatientIdentity(patient)
+  const second = await cdssPatientIdentity({ ...patient, identifier: [
+    { system: 'urn:oid:tw.gov.id-number', value: 'A123999789' },
+  ] })
+  expect(first.patient_key_sha256).not.toBe(second.patient_key_sha256)
+  expect(first.patient_identity.identifier_masked).toBe(second.patient_identity.identifier_masked)
+})
+
+test.each(['A12345678', 'A1234567890', '1234567890'])('rejects malformed TVGH ID %s', async value => {
+  await expect(cdssPatientIdentity({ ...input.patient, identifier: [
+    { system: 'urn:oid:tw.gov.id-number', value },
+  ] })).rejects.toThrow('cdss_identity_unavailable')
+})

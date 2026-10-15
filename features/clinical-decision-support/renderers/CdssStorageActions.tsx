@@ -15,6 +15,7 @@ import { cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '
 import { deleteCdssHistory, listCdssHistory, readCdssHistory, type CdssHistoryList, type CdssHistoryRecord } from '../telemetry/cdss-history'
 import { authorizeFhir, captureFhirRequestAuth, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
 import { cdssPatientIdentity } from '../telemetry/patient-identity'
+import { cdssSaveErrorDescription } from '../telemetry/save-error'
 import type { CarryForwardChoices } from '../telemetry/cdss-carry-forward'
 
 const isDeidentifiedFailure = (failure: unknown) => failure instanceof Error && failure.message === 'cdss_patient_deidentified'
@@ -193,8 +194,8 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
     ? 'Turn off the de-identification option in the export tool, then reimport the patient data.'
     : '請取消雲抓的「去識別化」選項後，重新匯入病人資料。'
   const identityHelp = english
-    ? 'Check that the patient name retains at least two recognizable letters (unrecognized source characters may appear as *; names masked with ○ are not supported), with a valid date of birth and a partially masked national ID. Then reimport the data and try again.'
-    : '請確認姓名至少保留兩個可辨識文字（來源未辨識字元可保留 *，但不支援含 ○ 的遮蔽姓名），並有有效出生日期及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
+    ? 'Check that the patient name retains at least two recognizable letters (unrecognized source characters may appear as *; names masked with ○ are not supported), with a valid date of birth and a supported national ID: a partially masked national ID from the cloud or a full ID from the TVGH bridge. Then reimport the data and try again.'
+    : '請確認姓名至少保留兩個可辨識文字（來源未辨識字元可保留 *，但不支援含 ○ 的遮蔽姓名），並有有效出生日期與支援的身分證欄位：雲端部分遮蔽的身分證字號，或北榮懷爾抓抓的完整證號。確認後重新匯入資料再試。'
   /** Opens on the newest record of the disease on screen, the one a clinician most often brings back. */
   const run = async (saveId?: string, latest = false) => {
     if (!ownerUid) return
@@ -243,7 +244,8 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
           toast.error(english ? 'Patient identification failed. CDSS record was not saved.' : '病人識別失敗，CDSS 紀錄未儲存。',
             { description: identityHelp, duration: 10000 })
         } else {
-          toast.error(english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。')
+          toast.error(english ? 'CDSS save was not confirmed.' : 'CDSS 儲存結果未確認。',
+            { description: cdssSaveErrorDescription(failure, english), duration: 15000 })
         }
       }
     }
