@@ -86,6 +86,7 @@ test.each([
   ['head-neck', 'Mucosal thickening of maxillary sinus'],
   ['musculoskeletal', 'Lumbar spondylosis'],
   ['abdomen-liver-biliary', 'Gall bladder stone'],
+  ['abdomen-liver-biliary', 'Gall-bladder stone'],
   ['abdomen-liver-biliary', '肝血管瘤'],
   ['heart', 'Coronary artery calcification'],
   ['gynecologic', '骨盆腔腫塊'],
@@ -99,4 +100,15 @@ test('multiple specimens use the quoted diagnosis section, not the last specimen
   const key = catalog[0].key
   const result = finalizeReportHighlights({ groups: [{ organ: 'gynecologic', points: [{ text: 'Leiomyoma', sources: [key], quotes: [{ source: key, quote: 'Leiomyoma' }] }] }], unremarkable: [] }, data, catalog)
   expect(result.groups[0].organ).toBe('gynecologic')
+})
+
+test.each([
+  ['kidney-urinary', 'Sonar Diagnosis:\n1. Fatty liver.\n2. Right hydronephrosis.', 'Right hydronephrosis.'],
+  ['abdomen-other', 'Impression:\n1. Bilateral pleural effusion.\n2. Splenomegaly.', 'Splenomegaly.'],
+])('never borrows anatomy from sibling imaging findings', (organ, conclusion, quote) => {
+  const data: any = { diagnosticReports: [{ id: 'imaging', code: { text: 'Abdominal ultrasound' }, category: [{ text: 'radiology' }], conclusion }] }
+  const catalog = buildSourceCatalog(data)
+  const key = catalog[0].key
+  const result = finalizeReportHighlights({ groups: [{ organ, points: [{ text: quote, sources: [key], quotes: [{ source: key, quote }] }] }], unremarkable: [] }, data, catalog)
+  expect(result.groups[0].organ).toBe(organ)
 })

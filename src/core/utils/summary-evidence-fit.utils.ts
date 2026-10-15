@@ -22,7 +22,7 @@ export function labClaimConflicts(label: string, observations: readonly Observat
 }
 
 // Use the verified finding's anatomy, never patient sex, modality or the
-// clinical history. Fallback receives only the quote's own diagnosis section. Ambiguity stays
+// clinical history. Fallback receives only the quote's adjacent pathology specimen descriptor. Ambiguity stays
 // in Other; no keyword decides a diagnosis or removes a finding.
 const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
   ['brain', /\b(?:brain|cerebr\w*|cerebell\w*|basal gangli\w*)\b|腦/iu],
@@ -30,9 +30,9 @@ const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
   ['chest-lung', /\b(?:lungs?|mediastin\w*|pleur\w*|bronch\w*|atelectasis)\b|肺|胸膜/iu],
   ['heart', /\b(?:heart|cardiac|coronary|(?:left|right) ventric\w*|cardiomegaly|mitral|tricuspid|pericardi\w*)\b|心臟|心室|二尖瓣|三尖瓣|冠狀動脈/iu],
   ['breast', /\b(?:breast|mammary)\b|乳房|乳腺/iu],
-  ['abdomen-liver-biliary', /\b(?:liver|hepatic|gall ?bladder|biliary|bile duct)\b|肝|膽囊|膽管/iu],
+  ['abdomen-liver-biliary', /\b(?:liver|hepatic|gall[\s-]?bladder|biliary|bile duct)\b|肝|膽囊|膽管/iu],
   ['abdomen-other', /\b(?:stomach|gastric|bowel|colon|pancrea\w*|spleen|splenic|hiatal)\b|胃|腸|胰|脾/iu],
-  ['kidney-urinary', /\b(?:kidney|renal|ureter\w*|(?<!gall )bladder)\b|腎|輸尿管|膀胱/iu],
+  ['kidney-urinary', /\b(?:kidney|renal|ureter\w*|(?<!gall[\s-]?)bladder)\b|腎|輸尿管|膀胱/iu],
   ['gynecologic', /\b(?:uter\w*|endometr\w*|ovary|ovarian|adnexa\w*|vagina\w*)\b|子宮|卵巢|陰道/iu],
   ['prostate', /\bprostat\w*\b|攝護腺|前列腺/iu],
   ['musculoskeletal', /\b(?:bone|femur|femoral|tibia\w*|humer\w*|vertebr\w*|spine|spinal|spondylosis|knee|hip|joint|osteoarthr\w*)\b|股骨|肱骨|脛骨|脊椎|骨折|骨骼|關節/iu],

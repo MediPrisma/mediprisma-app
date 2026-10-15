@@ -3329,7 +3329,7 @@ export function finalizeReportHighlights(
       const verifiedOrgan = reportOrganFromQuotes(organ, verifiedQuotes.map(quote => quote.quote),
         finalized.point.sources.flatMap(source => {
           const item = readItemByKey.get(source.key)
-          if (!item) return []
+          if (!item || item.kind !== 'pathology') return []
           // Numbered specimens are independent diagnoses, not addenda. Use
           // only sections that actually contain this point's verified quote;
           // repeated ambiguous quotes retain all matching sections.
@@ -3337,7 +3337,14 @@ export function finalizeReportHighlights(
           let remaining = item.narrative
           for (let section = findConclusionSection(remaining); section; section = findConclusionSection(remaining)) {
             const content = remaining.slice(section.contentStart, section.end)
-            if (verifiedQuotes.some(quote => quote.key === source.key && verifyReportQuote(quote.quote, content))) matching.push(content)
+            // Only the specimen descriptor immediately before a diagnosis
+            // may supply omitted anatomy. Never borrow from a sibling finding
+            // in an imaging impression or a multi-item pathological section.
+            const lines = content.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+            const descriptor = lines[0] ?? ''
+            const diagnosis = lines[1] ?? ''
+            if (descriptor.length <= 200 && !/[.!?。;；]/.test(descriptor) && !/^\d+[.)]/.test(descriptor) &&
+                verifiedQuotes.some(quote => quote.key === source.key && verifyReportQuote(quote.quote, diagnosis))) matching.push(descriptor)
             remaining = remaining.slice(0, section.headerStart)
           }
           return matching
