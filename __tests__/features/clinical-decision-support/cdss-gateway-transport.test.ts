@@ -368,7 +368,7 @@ test('account switch during a save never confirms the old account response', asy
     mockIsCurrent.mockReturnValue(false)
     return { status: 201, json: async () => ({ status: 'stored', save_id: JSON.parse(init!.body as string).save_id }) } as Response
   })
-  await expect(saveCdssSnapshot({ ...input, ownerUid: 'owner-a' })).rejects.toThrow('cdss_site_changed')
+  await expect(saveCdssSnapshot({ ...input, ownerUid: 'owner-a' })).rejects.toMatchObject({ message: 'cdss_save_interrupted', stage: 'receipt' })
 })
 
 
@@ -376,4 +376,135 @@ test('de-identified source patients never transmit a CDSS save', async () => {
   await expect(saveCdssSnapshot({ ...input, patient: { ...input.patient, deidentified: true } }))
     .rejects.toThrow('cdss_patient_deidentified')
   expect(fetch).not.toHaveBeenCalled()
+})
+
+test.each([400, 401, 403, 413, 503])('save rejection retains HTTP %s and request stage', async status => {
+  jest.mocked(fetch).mockResolvedValueOnce({ status } as Response)
+  await expect(saveCdssSnapshot(input)).rejects.toMatchObject({ message: 'cdss_gateway_rejected', stage: 'request', status })
+})
+
+test('network failures have a distinct diagnostic code', async () => {
+  jest.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  await expect(saveCdssSnapshot(input)).rejects.toMatchObject({ message: 'cdss_network_unavailable', stage: 'request' })
+})
+
+test('invalid receipts are reported as unconfirmed, not a network failure', async () => {
+  jest.mocked(fetch).mockResolvedValueOnce({ status: 201, json: async () => null } as Response)
+  await expect(saveCdssSnapshot(input)).rejects.toMatchObject({ message: 'cdss_gateway_unconfirmed', stage: 'receipt' })
+})
+
+test('TVGH hospital bridge identity saves without transmitting its full national ID', async () => {
+  const fullId = 'A123456789'
+  const patient = { ...input.patient, identifier: [
+    { system: 'urn:oid:his.patient.mrn', value: 'synthetic-mrn' },
+    { system: 'urn:oid:tw.gov.id-number', value: fullId },
+  ] }
+  await saveCdssSnapshot({ ...input, patient,
+    physicianDecisions: { note: `ID ${fullId}` } })
+  const serialized = jest.mocked(fetch).mock.calls[0][1]!.body as string
+  expect(serialized).not.toContain(fullId)
+  expect(JSON.parse(serialized).patient_identity).toMatchObject({
+    identifier_system: 'urn:mediprisma:vghtpe-bridge:national-id', identifier_masked: 'A123XXX789',
+  })
+  const first = await cdssPatientIdentity(patient)
+  const second = await cdssPatientIdentity({ ...patient, identifier: [
+    { system: 'urn:oid:tw.gov.id-number', value: 'A123999789' },
+  ] })
+  // Hidden digits are discarded before hashing, matching the cloud privacy
+  // boundary. Identity is the name/DOB/source/masked-ID tuple, not a full-ID key.
+  expect(first.patient_key_sha256).toBe(second.patient_key_sha256)
+  expect(first.patient_key_sha256).toBe(createHash('sha256').update(JSON.stringify([
+    1, 'vghtpe', '陳小華', '1968-05-09',
+    'urn:mediprisma:vghtpe-bridge:national-id', 'A123XXX789',
+  ])).digest('hex'))
+  expect(parseStoredCdssSaveV2(JSON.parse(serialized)).patient_identity.identifier_masked).toBe('A123XXX789')
+  expect(first.patient_identity.identifier_masked).toBe(second.patient_identity.identifier_masked)
+})
+
+test.each(['A12345678', 'A1234567890', '1234567890'])('rejects malformed TVGH ID %s', async value => {
+  await expect(cdssPatientIdentity({ ...input.patient, identifier: [
+    { system: 'urn:oid:tw.gov.id-number', value },
+  ] })).rejects.toThrow('cdss_identity_unavailable')
+})
+
+test('pre-request token timeout is not reported as an uncertain write', async () => {
+  jest.useFakeTimers()
+  try {
+    let started!: () => void
+    const ready = new Promise<void>(resolve => { started = resolve })
+    mockGetToken.mockImplementation(() => { started(); return new Promise(() => {}) })
+    const save = saveCdssSnapshot(input)
+    const rejected = expect(save).rejects.toMatchObject({ message: 'cdss_prepare_timeout', stage: 'auth-token' })
+    await ready
+    await jest.advanceTimersByTimeAsync(15000)
+    await rejected
+    expect(fetch).not.toHaveBeenCalled()
+  } finally { jest.useRealTimers() }
+})
+
+test.each(['request', 'receipt'])('timeout during %s remains unconfirmed', async stage => {
+  jest.useFakeTimers()
+  try {
+    let started!: () => void
+    const ready = new Promise<void>(resolve => { started = resolve })
+    jest.mocked(fetch).mockImplementationOnce(async (_url, init) => {
+      if (stage === 'request') return new Promise<Response>((_resolve, reject) => {
+        init!.signal!.addEventListener('abort', () => reject(new Error('aborted')))
+        started()
+      })
+      return { status: 201, json: () => { started(); return new Promise(() => {}) } } as Response
+    })
+    const save = saveCdssSnapshot(input)
+    const rejected = expect(save).rejects.toMatchObject({ message: 'cdss_save_timeout', stage })
+    await ready
+    await jest.advanceTimersByTimeAsync(15000)
+    await rejected
+  } finally { jest.useRealTimers() }
+})
+
+test('malformed receipt JSON is unconfirmed', async () => {
+  jest.mocked(fetch).mockResolvedValueOnce({ status: 201, json: async () => { throw new SyntaxError('private body') } } as unknown as Response)
+  await expect(saveCdssSnapshot(input)).rejects.toMatchObject({ message: 'cdss_gateway_unconfirmed', stage: 'receipt' })
+})
+
+test('TVGH normalization is stable and ambiguous identifiers reject', async () => {
+  const identity = (value: string) => cdssPatientIdentity({ ...input.patient, identifier: [{ system: 'urn:oid:tw.gov.id-number', value }] })
+  expect(await identity('ａ１２３４５６７８９')).toEqual(await identity('A123456789'))
+  await expect(cdssPatientIdentity({ ...input.patient, identifier: [
+    { system: 'urn:oid:tw.gov.id-number', value: 'A123456789' },
+    { system: 'urn:oid:tw.gov.id-number', value: 'A123999789' },
+  ] })).rejects.toThrow('cdss_identity_unavailable')
+})
+
+test('cancellation after sending reports an uncertain save', async () => {
+  let started!: () => void
+  const ready = new Promise<void>(resolve => { started = resolve })
+  jest.mocked(fetch).mockImplementationOnce(async (_url, init) => new Promise<Response>((_resolve, reject) => {
+    init!.signal!.addEventListener('abort', () => reject(new Error('aborted')))
+    started()
+  }))
+  const save = saveCdssSnapshot(input)
+  const rejected = expect(save).rejects.toMatchObject({ message: 'cdss_save_interrupted', stage: 'request' })
+  await ready
+  cancelCdssGatewayRequests()
+  await rejected
+})
+
+test('hospital keys are separate from TW Core cloud keys and placeholder names reject', async () => {
+  const hospital = { ...input.patient, identifier: [{ system: 'urn:oid:tw.gov.id-number', value: 'A123456789' }] }
+  const cloud = { ...input.patient, identifier: [{ system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id', value: 'A123XXX789' }] }
+  expect((await cdssPatientIdentity(hospital)).patient_key_sha256).not.toBe((await cdssPatientIdentity(cloud)).patient_key_sha256)
+  await expect(cdssPatientIdentity({ ...hospital, name: [{ text: 'Unknown' }] })).rejects.toThrow('cdss_identity_unavailable')
+})
+
+test('hospital bridge deidentified export explains reimport rather than a missing ID', async () => {
+  await expect(cdssPatientIdentity({ ...input.patient, name: [{ use: 'official', text: 'DEID-0123abcd' }],
+    identifier: [{ system: 'urn:oid:his.patient.mrn', value: '0123abcd'.repeat(4) }],
+  })).rejects.toThrow('cdss_patient_deidentified')
+})
+
+test('reserved hospital storage namespace is not accepted as an imported source', async () => {
+  await expect(cdssPatientIdentity({ ...input.patient, identifier: [
+    { system: 'urn:mediprisma:vghtpe-bridge:national-id', value: 'A123XXX789' },
+  ] })).rejects.toThrow('cdss_identity_unavailable')
 })

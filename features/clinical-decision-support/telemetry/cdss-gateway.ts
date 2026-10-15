@@ -7,6 +7,7 @@ import { isCollectorSite } from '@/src/application/telemetry/collector'
 import { captureFhirRequestAuth } from './fhir-auth'
 import { buildPatientNamePatterns, buildPatientTextLiterals, scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { cdssPatientIdentity } from './patient-identity'
+import { CdssSaveError } from './save-error'
 
 type EventBody =
   | { kind: 'interaction'; action: Extract<CdssGatewayEvent, { kind: 'interaction' }>['action']; target?: string; enabled?: boolean }
@@ -88,7 +89,9 @@ export async function saveCdssSnapshot(input: {
   if (!url) throw new Error('cdss_endpoint_unavailable')
   const controller = new AbortController()
   active.add(controller)
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  let timedOut = false
+  let stage = 'prepare'
+  const timer = setTimeout(() => { timedOut = true; controller.abort() }, TIMEOUT_MS)
   try {
     // Freeze the click-time snapshot BEFORE asynchronous identity preparation.
     const events = [...(pending.get(patientId) ?? [])]
@@ -128,6 +131,7 @@ export async function saveCdssSnapshot(input: {
           ['resourceType', 'resource_type', 'resourceId', 'resource_id', 'id'].includes(key))
       return scrubFreeText(value, piiLiterals, structural ? [] : piiNamePatterns)
     }))
+    stage = 'identity-and-auth'
     const [auth, identity] = await cancellable(Promise.all([
       captureFhirRequestAuth(input.ownerUid), cdssPatientIdentity(input.patient),
     ]), controller.signal)
@@ -137,27 +141,42 @@ export async function saveCdssSnapshot(input: {
     const previous = retryable.get(retryKey)
     const receipt = previous?.content === signature
       ? previous : { content: signature, saveId: crypto.randomUUID(), savedAt: new Date().toISOString() }
-    const parsed = cdssGatewaySaveSchema.parse({ schema_version: 2, save_id: receipt.saveId,
+    stage = 'validate'
+    const validation = cdssGatewaySaveSchema.safeParse({ schema_version: 2, save_id: receipt.saveId,
       saved_at: receipt.savedAt, ...identity, ...content })
+    if (!validation.success) throw new CdssSaveError('cdss_payload_invalid', stage)
+    const parsed = validation.data
     const body = JSON.stringify(parsed)
     if (new TextEncoder().encode(body).length > MAX_BYTES) throw new Error('cdss_payload_too_large')
     retryable.set(retryKey, receipt)
+    stage = 'auth-token'
     const token = await cancellable(auth.getToken(), controller.signal)
     if (!isCollectorSite() || controller.signal.aborted || !auth.isCurrent()) throw new Error('cdss_site_changed')
+    stage = 'request'
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body, signal: controller.signal,
       credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', cache: 'no-store',
     })
-    if (response.status !== 201) throw new Error('cdss_gateway_rejected')
-    const ack = await response.json() as { status?: string; save_id?: string }
+    if (response.status !== 201) throw new CdssSaveError('cdss_gateway_rejected', stage, response.status)
+    stage = 'receipt'
+    const ack = await cancellable(response.json(), controller.signal) as { status?: string; save_id?: string } | null
     if (!isCollectorSite() || controller.signal.aborted || !auth.isCurrent()) throw new Error('cdss_site_changed')
-    if (ack.status !== 'stored' || ack.save_id !== parsed.save_id) throw new Error('cdss_gateway_unconfirmed')
+    if (ack?.status !== 'stored' || ack?.save_id !== parsed.save_id) throw new Error('cdss_gateway_unconfirmed')
     const current = pending.get(patientId) ?? []
     const saved = new Set(events)
     pending.set(patientId, current.filter((event) => !saved.has(event)))
     retryable.delete(retryKey)
+  } catch (failure) {
+    if (timedOut) throw new CdssSaveError(['request', 'receipt'].includes(stage) ? 'cdss_save_timeout' : 'cdss_prepare_timeout', stage)
+    if (controller.signal.aborted || (failure instanceof Error && failure.message === 'cdss_site_changed')) {
+      throw new CdssSaveError(['request', 'receipt'].includes(stage) ? 'cdss_save_interrupted' : 'cdss_site_changed', stage)
+    }
+    if (failure instanceof CdssSaveError) throw failure
+    if (stage === 'request') throw new CdssSaveError('cdss_network_unavailable', stage)
+    if (stage === 'receipt') throw new CdssSaveError('cdss_gateway_unconfirmed', stage)
+    throw failure
   } finally {
     clearTimeout(timer)
     active.delete(controller)

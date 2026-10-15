@@ -99,3 +99,18 @@ test('de-identified source patients never request history list or detail', async
     .rejects.toThrow('cdss_patient_deidentified')
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test('TVGH identity can list and read its stored v2 history without full identifiers', async () => {
+  const hospital = { ...patient, identifier: [{ system: 'urn:oid:tw.gov.id-number', value: 'A123456789' }] }
+  const identity = await cdssPatientIdentity(hospital)
+  await listCdssHistory(hospital, new AbortController().signal)
+  const lookup = JSON.parse(jest.mocked(fetch).mock.calls[0][1]!.body as string)
+  expect(lookup.patient_key_sha256).toBe(identity.patient_key_sha256)
+  expect(JSON.stringify(lookup)).not.toContain('A123456789')
+  const save = { ...identity, schema_version: 2, save_id: saveId, saved_at: index.receivedAt, site: 'vghtpe',
+    patient_session_id: saveId, pack_id: 'synthetic', app_version: '0.0.0', build_revision: 'unknown',
+    profile: { facts: { synthetic: true } }, result: { packId: 'synthetic', packVersion: '1' },
+    physician_inputs: {}, physician_decisions: {}, source_records: [], events: [] }
+  jest.mocked(fetch).mockResolvedValueOnce(response({ ...index, savedAt: index.receivedAt, save }))
+  expect((await readCdssHistory(hospital, saveId, new AbortController().signal)).save).toEqual(save)
+})
