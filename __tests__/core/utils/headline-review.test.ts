@@ -1,4 +1,4 @@
-import { headlineItems, reviewHeadline } from '@/src/core/utils/headline-review.utils'
+import { headlineItems, headlineProblemListState, reviewHeadline } from '@/src/core/utils/headline-review.utils'
 
 // Synthetic headlines and problem lists.
 describe('reviewHeadline', () => {
@@ -59,5 +59,21 @@ describe('reviewHeadline', () => {
     expect(reviewHeadline('70F with hyperkalemia', [], [])).toEqual({ unlisted: ['hyperkalemia'], medicines: [], values: [] })
     expect(reviewHeadline('70F', [], [])).toBeUndefined()
     expect(headlineItems('94-year-old man with CKD 3b and gout.')).toEqual(['CKD 3b', 'gout'])
+  })
+})
+
+describe('headlineProblemListState', () => {
+  it('reads the failure from the summary on screen, which a model switch keeps', () => {
+    // Model A's summary stays on screen after switching to model B, whose slot
+    // has no errors: A's failed problem list must still label A's headline.
+    const shownFromModelA = { problems: [], completedCardIds: ['overview'], cardErrors: { problems: 'PARSE_FAILED' } }
+    expect(headlineProblemListState(shownFromModelA)).toBe('failed')
+  })
+
+  it('waits while the list streams, and reviews once it landed, empty or not', () => {
+    expect(headlineProblemListState({ problems: [], completedCardIds: ['overview'] })).toBe('pending')
+    expect(headlineProblemListState(undefined)).toBe('pending')
+    expect(headlineProblemListState({ problems: [], completedCardIds: ['overview', 'problems'] })).toBe('settled')
+    expect(headlineProblemListState({ problems: [{}] })).toBe('settled')
   })
 })

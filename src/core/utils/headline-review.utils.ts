@@ -103,6 +103,19 @@ export function headlineItems(headline: string): string[] {
     .filter((item) => item.length > 1)
 }
 
+/** Whether the problem list a headline is compared with is final, read from
+ *  the summary on screen — not the selected generation slot, which can belong
+ *  to another model whose summary is not the one shown. */
+export function headlineProblemListState(result: {
+  problems?: readonly unknown[]
+  completedCardIds?: readonly string[]
+  cardErrors?: Partial<Record<string, unknown>>
+} | undefined): 'failed' | 'pending' | 'settled' {
+  if (result?.cardErrors?.problems) return 'failed'
+  if (result?.completedCardIds?.includes('problems') || (result?.problems?.length ?? 0) > 0) return 'settled'
+  return 'pending'
+}
+
 export function reviewHeadline(
   headline: string,
   problemLabels: readonly string[],
