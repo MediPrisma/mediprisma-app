@@ -453,7 +453,9 @@ export interface SummaryProblem {
   managedByScope?: 'organization' | 'inferred'
   /** The model's metric drew a trend its cited records cannot carry (one
    *  day, two sides, two modalities, or dates out of order): shown without
-   *  arrows and marked for review. */
+   *  arrows and marked for review. Also set when a named numeric metric's
+   *  test identity disagrees with its cited lab values: keep the model text
+   *  for review instead of substituting an unrelated test's result. */
   metricNeedsReview?: true
   /** Cited keys whose report type contradicts the evidence type the basis
    *  names (e.g. 依據:心電圖紀錄 citing a chest X-ray). Detected app-side at

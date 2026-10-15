@@ -1602,7 +1602,7 @@ function composeLabMetric(
   clinicalData: SummaryCatalogInput | undefined,
   audience: 'medical' | 'patient',
   locale: SummaryLocale,
-): { text: string; segments: MetricSegment[] } | undefined {
+): { text: string; segments: MetricSegment[]; testNames: string[] } | undefined {
   if (keys.length === 0 || !clinicalData) return undefined
   const observationById = reportObservationMap(clinicalData.observations)
   const reportById = new Map((clinicalData.diagnosticReports ?? [])
@@ -1699,7 +1699,33 @@ function composeLabMetric(
     })
     if (sharedUnit) push(sharedUnit === '%' ? '%' : ` ${sharedUnit}`)
   })
-  return { text: segments.map((segment) => segment.text).join(''), segments }
+  return { text: segments.map((segment) => segment.text).join(''), segments, testNames: [...new Set(values.map(value => metricTestName(value.label)))] }
+}
+
+function metricTestName(name: string): string {
+  const canonical = getAnalyteCanonicalKey({ code: { text: name } })
+  return canonical?.startsWith('EGFR') ? 'EGFR' : canonical ?? name.toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Check test identity before replacing a model's numbers with record values.
+ * A real citation is not necessarily a citation for this metric. Only parse
+ * explicitly named numeric clauses; bare values/prose keep the existing path.
+ * Canonical names accept aliases without treating a substring (K in CK) as
+ * the same analyte. Unknown named measurements such as baPWV must also match.
+ */
+function metricTestNames(text: string): string[] {
+  return text.split(/[;；,，]/).flatMap((part) => {
+    const name = /^\s*([^\d].*?)\s+(?=[<>≤≥]?[\d.])/.exec(part)?.[1]?.trim().replace(/[:：]$/, '')
+    if (!name) return []
+    return [metricTestName(name)]
+  })
+}
+
+function metricTestNamesConflict(modelMetric: string | undefined, recorded: string[]): boolean {
+  if (!modelMetric) return false
+  const requested = metricTestNames(modelMetric)
+  if (!requested.length) return false
+  return !requested.every((name) => recorded.includes(name)) || !recorded.every((name) => requested.includes(name))
 }
 
 /** Whether a value is abnormal, by the same rule as every lab table: the
@@ -2827,7 +2853,10 @@ export class GenerateMedicalSummaryUseCase {
         options.audience === 'patient' ? 'patient' : 'medical',
         locale,
       )
-      const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = labMetric
+      const metricSourceConflict = Boolean(labMetric && metricTestNamesConflict(p.metric, labMetric.testNames))
+      const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = metricSourceConflict
+        ? { metric: p.metric?.trim().split(METRIC_ARROW).join('；'), metricNeedsReview: true }
+        : labMetric
         ? {
             metric: labMetric.text,
             ...(labMetric.segments.some((segment) => segment.abnormal) ? { metricSegments: labMetric.segments } : {}),
@@ -2857,7 +2886,8 @@ export class GenerateMedicalSummaryUseCase {
         kind,
         ...metricView,
         ...(carriedReview ? { metricNeedsReview: true as const } : {}),
-        metricMeta: metricSpan ?? (p.metricMeta?.trim() || undefined),
+        // A conflicting source's date must not make the retained claim look verified.
+        metricMeta: metricSourceConflict ? undefined : metricSpan ?? (p.metricMeta?.trim() || undefined),
         managedBy,
         ...(managedByDate ? { managedByDate } : {}),
         medications: medicationNames.length > 0
