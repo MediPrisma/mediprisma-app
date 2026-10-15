@@ -1,4 +1,7 @@
-/** Audited mapping used by the on-prem HF kit; no free-text analyte inference.
+/** Client source forms projected onto the on-prem HF kit's wire mapping.
+ * Source assays/units are a superset of the service's canonical wire forms;
+ * the first LOINC and `unit` remain the wire contract for each feature.
+ * No free-text analyte inference or magnitude-based unit guessing.
  * BNP is the service's historical feature name for NT-proBNP (LOINC 33762-6).
  * This is not a mapping for BNP assays.
  */
