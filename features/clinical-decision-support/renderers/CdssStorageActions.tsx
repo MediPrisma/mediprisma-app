@@ -192,7 +192,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   } }, [])
   const deidentifiedHelp = english
     ? 'Turn off the de-identification option in the export tool, then reimport the patient data.'
-    : '請取消雲抓的「去識別化」選項後，重新匯入病人資料。'
+    : '請取消雲抓或北榮懷爾抓抓的「去識別化」選項後，重新匯入病人資料。'
   const identityHelp = english
     ? 'Check that the patient name retains at least two recognizable letters (unrecognized source characters may appear as *; names masked with ○ are not supported), with a valid date of birth and a supported national ID: a partially masked national ID from the cloud or a full Taiwan national ID from the TVGH bridge. Hospital resident IDs and MRN-only records are not supported yet. Then reimport the data and try again.'
     : '請確認姓名至少保留兩個可辨識文字（來源未辨識字元可保留 *，但不支援含 ○ 的遮蔽姓名），並有有效出生日期與支援的身分證欄位：雲端部分遮蔽的身分證字號，或北榮懷爾抓抓的完整臺灣身分證字號。目前尚不支援院內居留證或僅有病歷號的資料。確認後重新匯入資料再試。'

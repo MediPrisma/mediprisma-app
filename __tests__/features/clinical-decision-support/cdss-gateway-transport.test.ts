@@ -496,3 +496,9 @@ test('hospital keys are separate from TW Core cloud keys and placeholder names r
   expect((await cdssPatientIdentity(hospital)).patient_key_sha256).not.toBe((await cdssPatientIdentity(cloud)).patient_key_sha256)
   await expect(cdssPatientIdentity({ ...hospital, name: [{ text: 'Unknown' }] })).rejects.toThrow('cdss_identity_unavailable')
 })
+
+test('hospital bridge deidentified export explains reimport rather than a missing ID', async () => {
+  await expect(cdssPatientIdentity({ ...input.patient, name: [{ use: 'official', text: 'DEID-0123abcd' }],
+    identifier: [{ system: 'urn:oid:his.patient.mrn', value: '0123abcd'.repeat(4) }],
+  })).rejects.toThrow('cdss_patient_deidentified')
+})

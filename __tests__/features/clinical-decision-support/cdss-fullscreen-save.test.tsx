@@ -1,3 +1,4 @@
+import { CdssSaveError } from '@/features/clinical-decision-support/telemetry/save-error'
 import { toast } from 'sonner'
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }))
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
@@ -205,7 +206,7 @@ test.each([[false, false], [false, true], [true, false], [true, true]])('de-iden
     fireEvent.click(screen.getByTestId('cdss-save-record'))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
       english ? 'De-identified patient data cannot be saved as a CDSS record.' : '去識別化資料無法儲存 CDSS 紀錄。',
-      { description: expect.stringContaining(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項'), duration: 10000 },
+      { description: expect.stringContaining(english ? 'Turn off the de-identification option' : '取消雲抓或北榮懷爾抓抓的「去識別化」選項'), duration: 10000 },
     ))
     expect(toast.success).not.toHaveBeenCalled()
   } finally { view.unmount(); target.remove() }
@@ -217,7 +218,7 @@ test.each([false, true])('history de-identification rejection explains how to re
   fireEvent.click(screen.getByTestId('cdss-history-records'))
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent(english ? 'CDSS history cannot be retrieved for de-identified patient data.' : '去識別化資料無法查詢 CDSS 歷史紀錄。')
-  expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項')
+  expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消雲抓或北榮懷爾抓抓的「去識別化」選項')
   view.unmount()
 })
 
@@ -292,5 +293,15 @@ test.each([false, true])('uncertain save outcomes ask users to check records (En
     english ? 'CDSS save was not confirmed.' : 'CDSS 儲存結果未確認。',
     expect.objectContaining({ description: expect.stringContaining('cdss_save_timeout') }),
   ))
+  view.unmount()
+})
+
+test.each([408, 500, 502, 503, 504])('server HTTP %s uses an uncertain title with recovery guidance', async status => {
+  jest.clearAllMocks()
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new CdssSaveError('cdss_gateway_rejected', 'request', status))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('CDSS 儲存結果未確認。',
+    expect.objectContaining({ description: expect.stringContaining('先查看紀錄') })))
   view.unmount()
 })

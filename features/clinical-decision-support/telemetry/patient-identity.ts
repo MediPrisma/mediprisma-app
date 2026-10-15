@@ -83,6 +83,9 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
 
 /** The identifying inputs exist only in this browser; only the digest and masked display fields leave it. */
 export async function cdssPatientIdentity(patient: PatientEntity) {
+  const deidentifiedHospital = (patient.identifier ?? []).some(identifier =>
+    normalizedIdentifierSystem(identifier.system) === 'urn:oid:his.patient.mrn')
+    && (patient.name ?? []).some(name => /^DEID-[0-9a-f]{8}$/i.test(name.text?.normalize('NFKC').trim() ?? ''))
   const remaskedMedcloudId = (patient.identifier ?? []).some(identifier => {
     const system = normalizedIdentifierSystem(identifier.system)
     const value = identifier.value?.normalize('NFKC').trim().toUpperCase() ?? ''
@@ -92,7 +95,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
     return isMedcloudSystem(system, MEDCLOUD_MASKED_ID_SYSTEM) ||
       (isMedcloudNamespace(system) && /[X*○〇●Ｏ◯]{4}$/u.test(value))
   })
-  if (isDeidentifiedPatient(patient) || remaskedMedcloudId) throw new Error('cdss_patient_deidentified')
+  if (isDeidentifiedPatient(patient) || remaskedMedcloudId || deidentifiedHospital) throw new Error('cdss_patient_deidentified')
   const name = normalizedName(patient)
   if (/^unknown$/i.test(name) && (patient.identifier ?? []).some(identifier =>
     normalizedIdentifierSystem(identifier.system) === TVGH_NATIONAL_ID_SYSTEM)) throw new Error('cdss_identity_unavailable')

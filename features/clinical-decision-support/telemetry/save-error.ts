@@ -23,6 +23,8 @@ const help: Record<string, [string, string]> = {
 }
 
 export function cdssSaveOutcomeUncertain(failure: unknown): boolean {
+  if (failure instanceof CdssSaveError && failure.message === 'cdss_gateway_rejected'
+    && failure.status !== undefined && (failure.status >= 500 || failure.status === 408)) return true
   return failure instanceof Error && ['cdss_save_timeout', 'cdss_network_unavailable', 'cdss_gateway_unconfirmed', 'cdss_save_interrupted'].includes(failure.message)
 }
 
@@ -32,6 +34,8 @@ export function cdssSaveErrorDescription(failure: unknown, english: boolean): st
   const status = failure instanceof CdssSaveError ? failure.status : undefined
   if (status === 401 || status === 403) message = english ? 'Authorization or access was denied. Check login and access permissions.' : '登入授權或存取權限被拒絕，請確認登入、帳號與網路存取權限。'
   if (status === 400) message = english ? 'The server rejected the snapshot format.' : '伺服器拒收資料格式，請提供此代碼給維護人員。'
-  if (status === 503) message = english ? 'FHIR storage is temporarily unavailable.' : 'FHIR 儲存服務暫時無法使用。'
+  if (status !== undefined && (status >= 500 || status === 408)) message = english
+    ? 'Storage did not confirm the outcome. Check records before retrying.'
+    : '儲存服務未能確認結果；重試前請先查看紀錄。'
   return `${message} [${code}${failure instanceof CdssSaveError ? `; stage=${failure.stage}` : ''}${status !== undefined ? `; HTTP ${status}` : ''}]`
 }
