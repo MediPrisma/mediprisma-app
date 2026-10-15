@@ -26,6 +26,8 @@ describe('HF excluded observation diagnostics', () => {
     ['', 'positive', 'positive'],
     [false, 'positive', 'positive'],
     [0, 'positive', 'positive'],
+    [{ comparator: '<', value: '' }, 'positive', 'positive'],
+    [{ comparator: '', value: '   ' }, 'positive', 'positive'],
   ])('preserves a textual result when quantity is malformed (%j)', (valueQuantity, valueString, expected) => {
     const bundle = hfMedcloudFixture()
     Object.assign(bundle.entry.at(-1).resource, { valueQuantity, valueString })
