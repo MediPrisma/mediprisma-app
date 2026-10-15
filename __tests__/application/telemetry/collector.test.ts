@@ -85,6 +85,8 @@ test.each(['missing API', 'missing query', 'query throws', 'unsupported names', 
 })
 
 test.each([
+  ['https://collector.mediprisma.tw', 'local-network'],
+  ['https://collector.mediprisma.tw:443', 'local-network'],
   ['https://collector.invalid:8787', 'local-network'],
   ['http://127.0.0.1:8787', 'loopback-network'],
   ['http://localhost:8787', 'loopback-network'],
@@ -101,6 +103,19 @@ test.each([
   expect(permission.query).toHaveBeenCalledWith({ name })
   expect(permission.query).toHaveBeenCalledTimes(1)
   expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+test('production Collector URL uses standard HTTPS 443 without changing site gating', async () => {
+  process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN = 'https://collector.mediprisma.tw'
+  window.history.replaceState({}, '', '/app/?site=vghtpe')
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(fetch).toHaveBeenCalledWith('https://collector.mediprisma.tw/collector/v1/events', expect.objectContaining({ method: 'POST' }))
+  jest.mocked(fetch).mockClear()
+  window.history.replaceState({}, '', '/app/?site=hmc')
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 test.each(['granted', 'prompt', 'denied'] as const)('uses the legacy descriptor only when split permissions are unsupported (%s)', async (state) => {
