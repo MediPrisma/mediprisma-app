@@ -13,7 +13,7 @@
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
-import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { getAnalyteCanonicalKey, TEST_ALIASES } from '@voho0000/clinical-lab-normalization/canonical'
 import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import type {
   EncounterEntity,
@@ -1602,13 +1602,13 @@ function composeLabMetric(
   clinicalData: SummaryCatalogInput | undefined,
   audience: 'medical' | 'patient',
   locale: SummaryLocale,
-): { text: string; segments: MetricSegment[] } | undefined {
+): { text: string; segments: MetricSegment[]; testNames: string[]; labels: string[] } | undefined {
   if (keys.length === 0 || !clinicalData) return undefined
   const observationById = reportObservationMap(clinicalData.observations)
   const reportById = new Map((clinicalData.diagnosticReports ?? [])
     .filter((report) => report.id)
     .map((report) => [report.id, report]))
-  const values: Array<{ label: string; group: string; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal']; oneADay?: boolean; order: number }> = []
+  const values: Array<{ label: string; group: string; aliases: string[]; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal']; oneADay?: boolean; order: number }> = []
   const observationOrder = new Map((clinicalData.observations ?? []).map((observation, index) => [observation.id, index]))
   for (const key of keys) {
     const entry = byKey.get(key)
@@ -1637,6 +1637,17 @@ function composeLabMetric(
       return [{
         label,
         group,
+        aliases: [
+          label, observation.code?.text ?? '',
+          ...(observation.code?.coding ?? []).map(coding => coding.display ?? ''),
+          getAnalyteDisplayForObs(observation, 'medical', 'en'),
+          getAnalyteDisplayForObs(observation, 'patient', 'en'),
+          getAnalyteDisplayForObs(observation, 'patient', 'zh-TW'),
+          ...(getAnalyteCanonicalKey(observation) === 'CREA' ? ['Cr'] : []),
+        ].flatMap(name => {
+          const bilingual = name.match(/^(.*?)\s*[;；,，]\s*\((.+)\)\s*$/)
+          return [name, name.replace(/\s*\([^)]*\)\s*$/, '').trim(), ...(bilingual ? [bilingual[1].trim(), bilingual[2].trim()] : [])]
+        }).filter(Boolean),
         date: obsDate(observation) ?? entry.date ?? '',
         value,
         unit: unitless ? undefined : observation.valueQuantity?.unit?.trim() || undefined,
@@ -1699,7 +1710,82 @@ function composeLabMetric(
     })
     if (sharedUnit) push(sharedUnit === '%' ? '%' : ` ${sharedUnit}`)
   })
-  return { text: segments.map((segment) => segment.text).join(''), segments }
+  const aliases = values.flatMap(value => value.aliases.map(label => ({ label, name: metricTestName(value.group) })))
+  return { text: segments.map((segment) => segment.text).join(''), segments, testNames: aliases.map(alias => alias.name), labels: aliases.map(alias => alias.label) }
+}
+
+function metricTestName(name: string): string {
+  const canonical = getAnalyteCanonicalKey({ code: { text: name } })
+  return canonical?.startsWith('EGFR') ? 'EGFR' : canonical ?? name.toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Check test identity before replacing a model's numbers with record values.
+ * A real citation is not necessarily a citation for this metric. Only parse
+ * explicitly named numeric clauses; bare values/prose keep the existing path.
+ * Canonical names accept aliases without treating a substring (K in CK) as
+ * the same analyte. Unknown named measurements such as baPWV must also match.
+ */
+function metricTestNames(text: string, labels: string[], recorded: string[]): string[] {
+  // A source name can itself contain punctuation (NHI bilingual names or
+  // LOINC's "Serum, Plasma or Blood"). Preserve separators inside a complete
+  // record label followed by a numeric value before splitting metric clauses.
+  const protectedSeparators = new Set<number>()
+  const lowerText = text.toLowerCase()
+  for (const label of [...labels].sort((a, b) => b.length - a.length)) {
+    if (!/[;；,，]/.test(label)) continue
+    const lowerLabel = label.toLowerCase()
+    let start = lowerText.indexOf(lowerLabel)
+    while (start !== -1) {
+      if (/^\s*[:：]?\s+[<>≤≥]?[\d.]/.test(text.slice(start + label.length))) {
+        for (let offset = 0; offset < label.length; offset++) {
+          if (/[;；,，]/.test(label[offset])) protectedSeparators.add(start + offset)
+        }
+      }
+      start = lowerText.indexOf(lowerLabel, start + 1)
+    }
+  }
+  const parts: string[] = []
+  let clauseStart = 0
+  for (let index = 0; index < text.length; index++) {
+    if (/[;；,，]/.test(text[index]) && !protectedSeparators.has(index)) {
+      parts.push(text.slice(clauseStart, index))
+      clauseStart = index + 1
+    }
+  }
+  parts.push(text.slice(clauseStart))
+  return parts.flatMap((part) => {
+    if (!/^\s*[^\d\s]/.test(part)) return []
+    const candidates = [...part.matchAll(/\s+(?=[<>≤≥]?[\d.])/g)]
+      .map(match => part.slice(0, match.index).trim().replace(/[:：]$/, ''))
+      .filter(Boolean)
+    // Prefer the complete recognized name, not the first number: CA 19-9
+    // contains a number in its name. Exact app labels also cover translated
+    // patient-facing names on a subsequent card retry.
+    for (const name of [...candidates].reverse()) {
+      const label = labels.find(label => name.toLowerCase() === label.toLowerCase())
+      if (label) return [recorded[labels.indexOf(label)]]
+      // Longer prefixes may already include values/units. Only accept an
+      // exact alias here; normalizing "WBC 12 K →" must not discover potassium.
+      const exactAlias = TEST_ALIASES[name.toUpperCase()]
+      if (exactAlias) return [metricTestName(exactAlias)]
+    }
+    // Narrative qualifiers belong only to the name before the FIRST value.
+    const words = (candidates[0] ?? '').split(/\s+/)
+    for (let start = 0; start < words.length; start++) {
+      const suffix = words.slice(start).join(' ')
+      const label = labels.find(label => suffix.toLowerCase() === label.toLowerCase())
+      if (label) return [recorded[labels.indexOf(label)]]
+      if (getAnalyteCanonicalKey({ code: { text: suffix } })) return [metricTestName(suffix)]
+    }
+    return candidates.length ? [metricTestName(candidates[0])] : []
+  })
+}
+
+function metricTestNamesConflict(modelMetric: string | undefined, recorded: string[], labels: string[]): boolean {
+  if (!modelMetric) return false
+  const requested = metricTestNames(modelMetric, labels, recorded)
+  if (!requested.length) return false
+  return !requested.every((name) => recorded.includes(name)) || !recorded.every((name) => requested.includes(name))
 }
 
 /** Whether a value is abnormal, by the same rule as every lab table: the
@@ -2827,7 +2913,10 @@ export class GenerateMedicalSummaryUseCase {
         options.audience === 'patient' ? 'patient' : 'medical',
         locale,
       )
-      const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = labMetric
+      const metricSourceConflict = Boolean(labMetric && metricTestNamesConflict(p.metric, labMetric.testNames, labMetric.labels))
+      const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = metricSourceConflict
+        ? { metric: p.metric?.trim().split(METRIC_ARROW).join('；'), metricNeedsReview: true }
+        : labMetric
         ? {
             metric: labMetric.text,
             ...(labMetric.segments.some((segment) => segment.abnormal) ? { metricSegments: labMetric.segments } : {}),
@@ -2857,7 +2946,8 @@ export class GenerateMedicalSummaryUseCase {
         kind,
         ...metricView,
         ...(carriedReview ? { metricNeedsReview: true as const } : {}),
-        metricMeta: metricSpan ?? (p.metricMeta?.trim() || undefined),
+        // A conflicting source's date must not make the retained claim look verified.
+        metricMeta: metricSourceConflict ? undefined : metricSpan ?? (p.metricMeta?.trim() || undefined),
         managedBy,
         ...(managedByDate ? { managedByDate } : {}),
         medications: medicationNames.length > 0
