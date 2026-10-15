@@ -415,9 +415,20 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   // Its own column — not folded into RISKF, whose exact ratio definition at
   // the source hospital is unverified.
   '9830-1': 'TC/HDL RATIO', // Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or Plasma
+  // Pediatric eGFR is its own formula and column, never EGFR(M) (tx.fhir.org,
+  // LOINC 2.82, verified 2026-10-13).
+  '50384-7': 'EGFR(PED)', // Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by Creatinine-based formula (Schwartz)/1.73 sq M
 }
 
 const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
+  // Some 臺北榮總 creatinine reports print 「eGFR(PED)」 beside 「eGFR(M)」.
+  // The package strips the parenthetical and keys bare eGFR as EGFR(M), which
+  // merged the pediatric (Schwartz) value into the adult cell ("181.06 / 106").
+  'EGFR(PED)': 'EGFR(PED)',
+  'EGFR (PED)': 'EGFR(PED)',
+  'EGFR-PED': 'EGFR(PED)',
+  'EGFR (SCHWARTZ)': 'EGFR(PED)',
+  'EGFR-SCHWARTZ': 'EGFR(PED)',
   'PROTEIN,TOTAL': 'TP',
   '總蛋白': 'TP',
   '血清總蛋白': 'TP',
@@ -574,6 +585,7 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   CASTS: 'Casts',
   'PROT/CR RATIO': 'UPCR',
   'TC/HDL RATIO': 'TC/HDL',
+  'EGFR(PED)': 'eGFR (PED)',
   // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).
   ...IMMUNOLOGY_DISPLAY,
   // 內分泌 thyroid columns keyed by LOINC (thyroid-analytes.ts).
@@ -644,6 +656,13 @@ function canonicalTestKey(obs: any): string {
     if (isKnownPivotKey(key)) return key
   }
   return resolved
+}
+
+/** True when the pivot files this row (or panel component) as pediatric
+ *  (Schwartz) eGFR. The package keys it as EGFR(M), so callers outside the
+ *  pivot (calculator autofill) ask here before trusting the package's key. */
+export function isPediatricEgfr(holder: unknown): boolean {
+  return canonicalTestKey(holder) === 'EGFR(PED)'
 }
 
 /** True when `key` is an analyte the pivot recognises (package or app label). */

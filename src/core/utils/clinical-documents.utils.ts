@@ -26,6 +26,7 @@ export interface ClinicalDocumentRef {
   date?: string
   title: string
   isDischargeSummary: boolean
+  isOutpatientSupplement?: boolean
   /** Plain-text body for the AI context (HTML/XHTML stripped). */
   text: string
 }
@@ -169,6 +170,9 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
       date: d.context?.period?.start ?? d.date,
       title: d.type?.text || d.type?.coding?.[0]?.display || att?.title || 'Document',
       isDischargeSummary: hasDischargeLoinc(d.type?.coding),
+      isOutpatientSupplement: d.meta?.tag?.some((tag) =>
+        tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')
+        && d.type?.text === '門診 SOAP 與醫囑',
       get text() { return (textCache ??= documentReferenceText(d)) },
     })
   }
@@ -194,15 +198,19 @@ export function resolveSelectedDocuments(
     const set = new Set(ids)
     return docs.filter((d) => set.has(d.id))
   }
+  // The importer has already selected the latest visit per physician. Keep
+  // that outpatient context together; explicit custom selections still win.
+  const includeSupplement = (selected: ClinicalDocumentRef[]) => docs.filter((doc) =>
+    doc.isOutpatientSupplement || selected.includes(doc))
   if (mode === 'recentAdmissions') {
     const discharges = docs.filter((d) => d.isDischargeSummary)
     const pool = discharges.length ? discharges : docs
-    return pool.slice(0, RECENT_ADMISSIONS_COUNT)
+    return includeSupplement(pool.slice(0, RECENT_ADMISSIONS_COUNT))
   }
   // latestAdmission
   const discharge = docs.find((d) => d.isDischargeSummary)
-  if (discharge) return [discharge]
-  return docs.length ? [docs[0]] : []
+  if (discharge) return includeSupplement([discharge])
+  return includeSupplement(docs.length ? [docs[0]] : [])
 }
 
 export const DOCUMENT_CONTEXT_OMISSION_MARKER =
@@ -619,17 +627,28 @@ export function formatDocumentsSection(
   if (docs.length === 0) return null
   const escapeBoundaryToken = (value: string): string =>
     value.replace(/<(BEGIN_DOCUMENT|END_DOCUMENT)\b/gi, '&lt;$1')
-  const perDocumentBudget = documentTokenBudget === undefined
-    ? undefined
-    : Math.max(1, Math.floor(documentTokenBudget / docs.length))
+  // Short notes consume only what they need, leaving unused shares available
+  // to longer summaries instead of unnecessarily truncating their middle.
+  const budgets = new Map<ClinicalDocumentRef, number>()
+  if (documentTokenBudget !== undefined) {
+    const costs = docs.map(doc => ({ doc, cost: estimateTokens(doc.text || '[No document body was available]') }))
+      .sort((a, b) => a.cost - b.cost)
+    let remaining = Math.max(0, documentTokenBudget)
+    costs.forEach(({ doc, cost }, index) => {
+      const share = Math.max(1, Math.floor(remaining / (costs.length - index)))
+      const allocation = Math.min(cost, share)
+      budgets.set(doc, allocation)
+      remaining = Math.max(0, remaining - allocation)
+    })
+  }
   const items = docs.map((d) => {
     const date = d.date ? new Date(d.date).toLocaleDateString() : ''
     const header = `${d.title}${date ? ` (${date})` : ''}`
     const bodyText = d.text || '[No document body was available]'
     const body = escapeBoundaryToken(
-      perDocumentBudget === undefined
+      documentTokenBudget === undefined
         ? bodyText
-        : fitDocumentTextToTokenBudget(bodyText, perDocumentBudget),
+        : fitDocumentTextToTokenBudget(bodyText, budgets.get(d) ?? 0),
     )
     // Only a sanitized FHIR id is allowed in the delimiter. Document titles
     // are untrusted source text and must not be able to close or mutate the

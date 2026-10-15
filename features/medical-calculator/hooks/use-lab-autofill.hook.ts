@@ -16,6 +16,7 @@ import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue 
 import { buildEchoAutofill } from '../echo-autofill'
 import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
+import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import type { AutofillSource, VitalKind } from '../types'
 
@@ -157,7 +158,9 @@ export function buildAutofill(
     const viaLoinc = canonicalKeyFromLoinc(holder) != null
     const { testName, loinc } = readCodeProvenance(holder)
     const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date, viaLoinc, testName, loinc, obsId: meta.obsId, facility: meta.facility }
-    const key = getAnalyteCanonicalKey(holder)
+    // The package keys pediatric eGFR as EGFR(M); keep it out of the adult
+    // keys, as the cumulative report does.
+    const key = isPediatricEgfr(holder) ? 'EGFR(PED)' : getAnalyteCanonicalKey(holder)
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
     const spec = normSpecimen(specimenDisplay)
     if (key && spec) {
