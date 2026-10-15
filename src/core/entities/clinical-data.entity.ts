@@ -774,7 +774,7 @@ export interface EncounterEntity {
     text?: string
     coding?: Array<{ code?: string; display?: string; system?: string }>
   }>
-  serviceType?: { coding?: Array<{ display?: string }> }
+  serviceType?: { text?: string; coding?: Array<{ display?: string }> }
   period?: {
     start?: string
     end?: string
@@ -793,7 +793,7 @@ export interface EncounterEntity {
   reasonReference?: Array<{ display?: string }>
   diagnosis?: Array<{
     rank?: number
-    condition?: { display?: string }
+    condition?: { reference?: string; display?: string }
   }>
   participant?: Array<{
     individual?: { display?: string }

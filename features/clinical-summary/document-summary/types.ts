@@ -34,15 +34,13 @@ export interface DocumentEntry {
   /** Institution / 機構, when discoverable. For DocumentReference this comes
    *  from attachment.title (bridge encodes it as "出院病摘 — 長庚嘉義 …"). */
   institution?: string
+  outpatient?: { department?: string; physician?: string }
   /** Date range (e.g. hospitalisation period for a discharge summary). */
   period?: { start?: string; end?: string }
   /** Free-form subtitle (e.g. the bridge-formatted attachment.title). */
   subtitle?: string
-  /** Primary diagnosis surfaced as a one-line context — resolved from the
-   *  linked Encounter's first reasonCode (or reasonReference) and stripped
-   *  of any leading ICD-10 code prefix so it renders cleanly. Equivalent
-   *  to the 「疾病分類」line on the 健保存摺 hospitalisation list.
-   *  Only populated when an Encounter is reachable from the document. */
+  /** Linked visit's primary diagnosis. Outpatient notes resolve the rank-one
+   *  Encounter.diagnosis Condition; inpatient summaries retain reasonCode. */
   primaryDiagnosis?: {
     /** Localised display text (e.g. '咳血' for zh-TW, 'Hemoptysis' for en). */
     text: string

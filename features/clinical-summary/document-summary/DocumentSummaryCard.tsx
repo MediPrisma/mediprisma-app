@@ -328,25 +328,29 @@ function DocumentEntryCard({
         </div>
       </div>
 
-      {/* Primary diagnosis — matches 健保存摺's 「疾病分類」line. Drawn from
-          the linked Encounter.reasonCode[0]; for inpatient discharge summaries
-          the bridge writes the principal diagnosis there.
-          The ICD code is shown for BOTH audiences (medical & 民眾): the tooltip
-          calls out that this is NHI's billing-side coding, not the clinician's
-          narrative diagnosis, so users don't mistake the short label for the
-          full clinical picture. */}
+      {entry.outpatient && (
+        <div className="mb-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="min-w-0 break-words">
+            {locale === 'en' ? 'Department: ' : '科別：'}
+            {entry.outpatient.department || (locale === 'en' ? 'Not provided' : '未提供')}
+          </span>
+          <span className="min-w-0 break-words">
+            {locale === 'en' ? 'Physician: ' : '門診醫師：'}
+            {entry.outpatient.physician || (locale === 'en' ? 'Not provided' : '未提供')}
+          </span>
+        </div>
+      )}
       {entry.primaryDiagnosis && (
-        <div className="mb-1 flex items-baseline gap-1.5 text-[0.8125rem] font-medium text-foreground/90">
+        <div className="mb-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.8125rem] font-medium text-foreground/90">
+          {entry.outpatient && <span className="text-xs text-muted-foreground">{locale === 'en' ? 'Primary diagnosis:' : '主診斷：'}</span>}
           {entry.primaryDiagnosis.code && (
-            <span
-              className="font-mono text-[0.6875rem] text-muted-foreground cursor-help"
-              title={strings.primaryDiagnosisTooltip}
-            >
-              {entry.primaryDiagnosis.code}
-            </span>
+            <span className="font-mono text-xs">{entry.primaryDiagnosis.code}</span>
           )}
-          <span title={strings.primaryDiagnosisTooltip} className="cursor-help">
-            {entry.primaryDiagnosis.text}
+          <span
+            title={entry.outpatient ? undefined : strings.primaryDiagnosisTooltip}
+            className="min-w-0 break-words"
+          >
+            {entry.primaryDiagnosis.text || (locale === 'en' ? 'Description not provided' : '未提供診斷名稱')}
           </span>
         </div>
       )}

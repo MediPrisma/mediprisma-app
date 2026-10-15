@@ -261,3 +261,39 @@ describe('document-adapter', () => {
     })
   })
 })
+
+
+describe('outpatient document context', () => {
+  const doc = {
+    id: 'soap', context: { encounter: [{ reference: 'Encounter/visit' }] },
+    content: [{ attachment: { contentType: 'text/plain', data: 'U09BUA==' } }],
+  }
+  const visit = {
+    id: 'visit', class: { code: 'AMB' }, serviceType: { text: '皮膚科' },
+    participant: [{ individual: { display: '測試醫師' } }],
+    reasonCode: [{ text: 'B02.9,L30.9' }],
+    diagnosis: [
+      { rank: 2, condition: { reference: 'Condition/secondary' } },
+      { rank: 1, condition: { reference: 'Condition/primary' } },
+    ],
+  }
+  const conditions = [
+    { id: 'secondary', code: { coding: [{ code: 'L30.9', display: 'Dermatitis' }] } },
+    { id: 'primary', code: { text: 'B02.9', coding: [{ code: 'B02.9', display: 'Zoster without complications' }] } },
+  ]
+  it('uses the linked rank-one condition, including its name, and visit metadata', () => {
+    const [entry] = buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', conditions)
+    expect(entry.outpatient).toEqual({ department: '皮膚科', physician: '測試醫師' })
+    expect(entry.primaryDiagnosis).toEqual({ code: 'B02.9', text: 'Zoster without complications' })
+  })
+  it('does not borrow an unrelated visit or secondary diagnosis when primary is missing', () => {
+    const [entry] = buildDocumentEntries([], [doc], {}, [{ ...visit, serviceType: undefined, participant: [] }], 'zh-TW', [conditions[0]])
+    expect(entry.primaryDiagnosis).toBeUndefined()
+    expect(entry.outpatient).toEqual({ department: undefined, physician: undefined })
+  })
+  it('prefers the supplied localized name and preserves the English coding display', () => {
+    const localized = [{ ...conditions[1], code: { ...conditions[1].code, text: 'B02.9 帶狀疱疹' } }]
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', localized)[0].primaryDiagnosis?.text).toBe('帶狀疱疹')
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'en', localized)[0].primaryDiagnosis?.text).toBe('Zoster without complications')
+  })
+})

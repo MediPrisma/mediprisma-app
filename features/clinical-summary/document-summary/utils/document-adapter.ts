@@ -6,6 +6,7 @@
 // Both are deferred to the renderer so the cost is paid only for documents the
 // user actually opens.
 import type {
+  ConditionEntity,
   CompositionEntity,
   DocumentReferenceEntity,
   EncounterEntity,
@@ -57,6 +58,30 @@ function extractPrimaryDiagnosis(
   const rr = encounter.reasonReference?.[0]?.display?.trim()
   if (rr) return { text: stripIcdPrefix(rr) }
   return undefined
+}
+
+/** Resolve the explicitly ranked primary diagnosis, never another visit's condition. */
+function outpatientPrimaryDiagnosis(
+  encounter: EncounterEntity | undefined,
+  conditions: Map<string, ConditionEntity> | undefined,
+  locale: string,
+): DocumentEntry['primaryDiagnosis'] {
+  const primary = encounter?.diagnosis?.find((diagnosis) => diagnosis.rank === 1)
+  const reference = primary?.condition?.reference
+  const concept = reference ? conditions?.get(reference.replace(/^Condition\//, ''))?.code : undefined
+  if (concept) {
+    const coding = concept.coding?.find((item) => item.code)
+    const code = coding?.code?.trim()
+    const display = coding?.display?.trim() || ''
+    const rawText = concept.text?.trim() || ''
+    const text = rawText === code ? '' : stripIcdPrefix(rawText)
+    return { code, text: (locale === 'en' ? display || text : text || display) }
+  }
+  if (primary?.condition?.display?.trim()) return { text: primary.condition.display.trim() }
+  // A reason string may contain all diagnosis codes. Do not relabel it as
+  // the primary when a structured diagnosis list exists but cannot resolve.
+  if (encounter?.diagnosis?.length) return undefined
+  return extractPrimaryDiagnosis(encounter, locale)
 }
 
 /**
@@ -159,6 +184,7 @@ export function documentReferenceToEntry(
   docTypeStrings: Record<string, string>,
   encounterMap?: Map<string, EncounterEntity>,
   locale: string = 'zh-TW',
+  conditionMap?: Map<string, ConditionEntity>,
 ): DocumentEntry | null {
   const att = pickRenderableAttachment(docRef)
   if (!att) return null
@@ -183,7 +209,19 @@ export function documentReferenceToEntry(
   const institution = institutionSource
     ? formatOrganizationDisplay(institutionSource, locale)
     : undefined
-  const primaryDiagnosis = extractPrimaryDiagnosis(encounter, locale)
+  const isOutpatient = encounter?.class?.code === 'AMB' || (
+    docRef.type?.text === '門診 SOAP 與醫囑' && docRef.meta?.tag?.some((tag) =>
+      tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')
+  )
+  const outpatient = isOutpatient ? {
+    department: encounter?.serviceType?.text?.trim()
+      || encounter?.serviceType?.coding?.find((coding) => coding.display?.trim())?.display?.trim(),
+    physician: encounter?.participant?.map((participant) =>
+      participant.individual?.display?.trim() || participant.actor?.display?.trim()).filter(Boolean).join('、') || undefined,
+  } : undefined
+  const primaryDiagnosis = isOutpatient
+    ? outpatientPrimaryDiagnosis(encounter, conditionMap, locale)
+    : extractPrimaryDiagnosis(encounter, locale)
 
   return {
     id: docRef.id || `documentReference-${docRef.date ?? Math.random()}`,
@@ -203,6 +241,7 @@ export function documentReferenceToEntry(
     attachment: att,
     encounterRef,
     primaryDiagnosis,
+    outpatient,
   }
 }
 
@@ -220,8 +259,10 @@ export function buildDocumentEntries(
   docTypeStrings: Record<string, string>,
   encounters?: EncounterEntity[],
   locale: string = 'zh-TW',
+  conditions?: ConditionEntity[],
 ): DocumentEntry[] {
   const entries: DocumentEntry[] = []
+  const conditionMap = new Map((conditions ?? []).map((condition) => [condition.id, condition]))
   // Build the encounter index once per call so 50+ document refs don't
   // re-walk the encounter list each time.
   const encounterMap = new Map<string, EncounterEntity>()
@@ -233,7 +274,7 @@ export function buildDocumentEntries(
     if (e) entries.push(e)
   }
   for (const d of documentReferences ?? []) {
-    const e = documentReferenceToEntry(d, docTypeStrings, encounterMap, locale)
+    const e = documentReferenceToEntry(d, docTypeStrings, encounterMap, locale, conditionMap)
     if (e) entries.push(e)
   }
   // Newest-first; entries without a date sink to the bottom.
