@@ -70,3 +70,12 @@ test('hospital de-identification survives demographic supplementation and IPS ro
   await expect(cdssPatientIdentity(supplemented)).rejects.toThrow('cdss_patient_deidentified')
   await expect(cdssPatientIdentity(reimported)).rejects.toThrow('cdss_patient_deidentified')
 })
+
+test.each([
+  { identifier: [{ system: 5 }] },
+  { identifier: [{ system: {} }] },
+  { identifier: [{ system: 'urn:oid:his.patient.mrn' }], name: [{ text: 5 }] },
+  { identifier: [{ system: 'urn:oid:his.patient.mrn' }], name: [{ text: {} }] },
+])('malformed identifier/name JSON does not crash deidentification detection: %j', fields => {
+  expect(() => PatientMapper.toDomain({ ...source, ...fields })).not.toThrow()
+})
