@@ -32,22 +32,22 @@ export function useDocumentSummaries(
     compositions,
     documentReferences,
     encounters,
+    conditions,
     resourceReady,
     error,
   } = useClinicalData()
-  // Documents are assembled from three types (the Encounter supplies each
-  // entry's primary diagnosis), so this card waits for those three and not for
-  // the rest of the chart.
+  // Visit context and diagnosis names require linked encounters and conditions.
   const isLoading = !resourceReady.compositions
     || !resourceReady.documentReferences
     || !resourceReady.encounters
+    || !resourceReady.conditions
   // `locale` drives the primary-diagnosis text picked from the linked
   // Encounter — zh-TW uses the Chinese `text` field, en uses coding[].display.
   const { locale } = useLanguage()
 
   const entries = useMemo(
-    () => buildDocumentEntries(compositions, documentReferences, docTypeStrings, encounters, locale),
-    [compositions, documentReferences, encounters, docTypeStrings, locale],
+    () => buildDocumentEntries(compositions, documentReferences, docTypeStrings, encounters, locale, conditions),
+    [compositions, documentReferences, encounters, conditions, docTypeStrings, locale],
   )
 
   return { entries, isLoading, error }
