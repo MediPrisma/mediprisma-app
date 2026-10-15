@@ -59,7 +59,7 @@ import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
 import { staleEvidenceDate } from "@/src/core/utils/stale-evidence.utils"
 import { keyMentionLanguage, resolveKeyMentions } from "@/src/core/utils/key-mentions.utils"
 import { currentAnticholinergicMedicines, reviewAnticholinergicAlert } from "@/src/core/utils/anticholinergic-burden.utils"
-import { reviewHeadline } from "@/src/core/utils/headline-review.utils"
+import { headlineProblemListState, reviewHeadline } from "@/src/core/utils/headline-review.utils"
 import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
 import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
 import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
@@ -292,7 +292,9 @@ export default function MedicalSummaryFeature() {
   }), [ms])
   const generationErrors = useMemo(() => {
     const failedCards = MEDICAL_SUMMARY_CARD_IDS.flatMap((cardId) => {
-      const error = cardId === "safety" ? safetyError ?? cardErrors.safety : cardErrors[cardId]
+      // A legacy/restored safety slot can expose its error outside
+      // result.cardErrors; it is the same card, so it is listed once, here.
+      const error = cardId === "safety" ? cardErrors.safety ?? safetyError : cardErrors[cardId]
       return error ? [{
         label: cardLabels[cardId],
         message: error === "PARSE_FAILED"
@@ -306,18 +308,6 @@ export default function MedicalSummaryFeature() {
           message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
         }]
       : []
-    // A legacy/restored safety slot can still expose its error separately from
-    // result.cardErrors. Surface it in the same banner without duplicating an
-    // integrated safety-card error.
-    const standaloneSafetyError = safetyError && !cardErrors.safety
-      ? [{
-          label: cardLabels.safety,
-          message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
-        }]
-      : []
-    // Consolidation counts against the standard card ids, so the standalone
-    // slot stays outside it. `safety` is one of those ids, so the two are
-    // mutually exclusive anyway: consolidating needs cardErrors.safety set.
     return [
       // The patient version never requests 影像與病理重點, so "every card
       // failed" counts one card fewer there.
@@ -326,7 +316,6 @@ export default function MedicalSummaryFeature() {
         ms.title,
         MEDICAL_SUMMARY_CARD_IDS.length - (isPatient ? 1 : 0),
       ),
-      ...standaloneSafetyError,
       ...genericSummaryError,
     ]
   }, [
@@ -473,18 +462,24 @@ export default function MedicalSummaryFeature() {
   // 待核對 under a clinician headline that does not match the problem list —
   // problems the list does not hold, medicines, lab values. Judged only once
   // both requests have answered; labels, never rewrites.
+  const problemListState = headlineProblemListState(result ?? undefined)
   const headlineReviewLabel = useMemo(() => {
-    if (isPatient || !headline || !problemList?.length) return undefined
+    if (isPatient || !headline) return undefined
+    // Nothing to compare with: the headline is the claim most prone to
+    // invention, so it is labelled rather than shown as if checked.
+    if (problemListState === "failed") return ms.headlineReviewNoProblems
+    // Still streaming: the list it is compared with has not landed yet.
+    if (problemListState === "pending") return undefined
     const medicineNames = (safetySourceCatalog ?? [])
       .filter((entry) => entry.resourceType.startsWith("Medication"))
       .flatMap((entry) => [entry.medicationClass?.split(" · ")[0] ?? "", /^[A-Za-z][A-Za-z-]+/.exec(entry.display.trim())?.[0] ?? ""])
-    const review = reviewHeadline(headline, problemList.map((problem) => problem.label), medicineNames)
+    const review = reviewHeadline(headline, (problemList ?? []).map((problem) => problem.label), medicineNames)
     if (!review) return undefined
     return [
       review.unlisted.length ? ms.headlineReviewUnlisted.replace("{items}", review.unlisted.join("、")) : undefined,
       review.medicines.length || review.values.length ? ms.headlineReviewMedsValues : undefined,
     ].filter(Boolean).join("；")
-  }, [isPatient, headline, problemList, safetySourceCatalog, ms.headlineReviewUnlisted, ms.headlineReviewMedsValues])
+  }, [isPatient, headline, problemList, problemListState, safetySourceCatalog, ms.headlineReviewUnlisted, ms.headlineReviewMedsValues, ms.headlineReviewNoProblems])
   // Keys the model wrote into an alert's prose ("NSAID use (M8, M11)") read
   // as the records they name, in the sentence's own language.
   const resolveSafetyMentions = useCallback(
@@ -498,12 +493,13 @@ export default function MedicalSummaryFeature() {
   // (owner, 2026-10-03). Judged on the loaded chart, never on the summary's
   // scope: reports the user left out of the summary are not "none".
   const sourceClinicalData = useClinicalData()
-  const isMedcloudChart = useMemo(
+  const chartSource = useMemo(
     () => detectClinicalDataSource(
       sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0],
-    ) === 'nhi-medcloud',
+    ),
     [sourceClinicalData],
   )
+  const isMedcloudChart = chartSource === "nhi-medcloud"
   const reportsNoneLabel = useMemo(() => {
     if (!isMedcloudChart) return undefined
     const chart = sourceClinicalData as unknown as { diagnosticReports?: DiagnosticReportEntity[] }
@@ -558,8 +554,15 @@ export default function MedicalSummaryFeature() {
     [safetyResult],
   )
 
+  // Name the bridge only when the chart came through one; a SMART EHR launch,
+  // an IPS import or the demo is not 健保雲端.
   const heroDataRange = coverage?.end
-    ? ms.overviewDataRange.replace("{end}", coverage.end)
+    ? (chartSource === "nhi-medcloud"
+        ? ms.overviewDataRange
+        : chartSource === "nhi-health-bank"
+          ? ms.overviewDataRangeHealthBank
+          : ms.overviewDataRangeOther
+      ).replace("{end}", coverage.end)
     : null
 
   const summaryGenerationInfo = useMemo(() => {
@@ -1036,6 +1039,7 @@ export default function MedicalSummaryFeature() {
                   hideQuotes: ms.reportsHideQuotes,
                   othersSummarized: ms.reportsOthers,
                   othersAll: ms.reportsAll,
+                  unreviewed: ms.reportsUnreviewed,
                   unavailable: ms.reportsUnavailable,
                   hiddenPoints: ms.reportsHiddenPoints,
                   unverifiedTag: ms.reportsUnverifiedTag,
@@ -1053,7 +1057,7 @@ export default function MedicalSummaryFeature() {
 
           {isSafetyGenerating && !safetyResult ? (
             <SummarySectionPending title={ms.otherAlertsSectionLabel} label={safetyText.scanning} />
-          ) : (
+          ) : safetyResult ? (
             <MedicationSafetySection
               alerts={orderedAlerts}
               title={ms.otherAlertsSectionLabel}
@@ -1065,8 +1069,13 @@ export default function MedicalSummaryFeature() {
               staleEvidenceDate={alertStaleEvidenceDate}
               staleEvidenceLabel={ms.safetyStaleEvidence}
               propertyReviewLabel={alertPropertyReview}
+              emptyLabel={safetyText.emptyNoRisk}
+              // The run keeps going after 開藥注意 lands (the reports lane);
+              // spin only while this section is the one still being rewritten.
+              updating={isSafetyGenerating && !result?.completedCardIds?.includes("safety")}
+              updatingLabel={safetyText.scanning}
             />
-          )}
+          ) : null}
 
           {coverage ? (
             <CoverageCard
@@ -1084,7 +1093,7 @@ export default function MedicalSummaryFeature() {
           ) : null}
 
           <div className="flex flex-col items-center gap-0.5 px-1 pb-0.5">
-            <p className="text-center text-[0.65rem] leading-snug text-muted-foreground/60">
+            <p className="text-center text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground/60">
               {ms.secondLayerNote}
             </p>
           </div>

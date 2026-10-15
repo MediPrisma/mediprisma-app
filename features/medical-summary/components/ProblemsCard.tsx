@@ -113,23 +113,23 @@ export function ProblemsCard({
       {/* Narrow containers stack the two header lines: a wrapping subtitle and
           a right-aligned count interleave into an unreadable zig-zag. */}
       <div className="@container mb-1">
-        <div className="flex flex-col gap-0 @min-[26rem]:flex-row @min-[26rem]:items-baseline @min-[26rem]:justify-between @min-[26rem]:gap-2">
+        <div className="flex flex-col gap-0 @min-[34rem]:flex-row @min-[34rem]:items-baseline @min-[34rem]:justify-between @min-[34rem]:gap-2">
           <h3
             id="medical-summary-problems-title"
-            className="min-w-0 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground"
+            className="min-w-0 text-[length:max(12px,0.75rem)] font-semibold tracking-wide text-muted-foreground"
           >
             {title}
             <span className="ml-1 font-normal text-muted-foreground/80">{subtitle}</span>
           </h3>
-          <span className="shrink-0 text-[0.6875rem] tabular-nums text-muted-foreground/80">
+          <span className="shrink-0 text-[length:max(12px,0.75rem)] tabular-nums text-muted-foreground/80">
             {metaLabel.replace("{count}", String(problems.length))}
           </span>
         </div>
       </div>
 
       {/* @container: three columns from 38rem of card width; below that the
-          same cells dissolve (display: contents) into layered rows — name and
-          facility on one line from 28rem, everything stacked under it. */}
+          same cells dissolve (display: contents) into layered rows —
+          basis and facility on one line from 28rem, with the name above. */}
       <div className="@container">
         {/* One grid for the whole list in the three-column layout, each row a
             subgrid: the columns are sized by every row's content together —
@@ -138,7 +138,7 @@ export function ProblemsCard({
         <ul className="@min-[38rem]:grid @min-[38rem]:grid-cols-[minmax(11rem,1fr)_minmax(0,1.15fr)_fit-content(14rem)] @min-[38rem]:gap-x-3">
           <li
             aria-hidden="true"
-            className="hidden border-b border-border pb-1 text-xs font-medium leading-snug text-muted-foreground @min-[38rem]:col-span-3 @min-[38rem]:grid @min-[38rem]:grid-cols-subgrid"
+            className="hidden border-b border-border pb-1 text-[length:max(12px,0.75rem)] font-medium leading-snug text-muted-foreground @min-[38rem]:col-span-3 @min-[38rem]:grid @min-[38rem]:grid-cols-subgrid"
             data-problem-column-headings
           >
             <span>{columnLabels.problem}</span>
@@ -214,7 +214,7 @@ export function ProblemsCard({
                 onClick={toggleMedications}
                 aria-expanded={medicationsOpen}
                 className={cn(
-                  "relative shrink-0 rounded-full px-1 text-[0.6875rem] leading-[1.125rem] text-primary hover:text-primary/80 before:absolute before:-inset-y-3 before:inset-x-0 before:content-[''] lg:before:-inset-y-1",
+                  "relative shrink-0 rounded-full px-1 text-[length:max(12px,0.75rem)] leading-[1.375rem] text-primary hover:text-primary/80 before:absolute before:-inset-y-3 before:inset-x-0 before:content-[''] lg:before:-inset-y-1",
                   className,
                 )}
               >
@@ -222,7 +222,7 @@ export function ProblemsCard({
               </button>
             )
             const tag = (label: string) => (
-              <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[0.625rem] font-normal leading-4 text-muted-foreground">
+              <span className="ml-1 inline-flex items-center rounded border border-border px-1 align-baseline text-[length:max(12px,0.75rem)] font-normal leading-[1.125rem] text-muted-foreground">
                 {label}
               </span>
             )
@@ -231,13 +231,13 @@ export function ProblemsCard({
                 key={`${problem.label}-${index}`}
                 className={cn(
                   "grid gap-x-3 gap-y-0.5 border-b border-border py-1.5 last:border-b-0",
-                  "grid-cols-1 [grid-template-areas:'name'_'org'_'basis'_'metric'_'meds']",
-                  "@min-[28rem]:grid-cols-[minmax(0,1fr)_auto] @min-[28rem]:[grid-template-areas:'name_org'_'basis_basis'_'metric_metric'_'meds_meds']",
+                  "grid-cols-1 [grid-template-areas:'name'_'basis'_'org'_'metric'_'meds']",
+                  "@min-[28rem]:grid-cols-[minmax(0,1fr)_auto] @min-[28rem]:[grid-template-areas:'name_name'_'basis_org'_'metric_metric'_'meds_meds']",
                   "@min-[38rem]:col-span-3 @min-[38rem]:grid-cols-subgrid @min-[38rem]:[grid-template-areas:none] @min-[38rem]:items-start",
                 )}
               >
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0" data-problem-column="problem">
-                  <p className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground break-words [grid-area:name]">
+                  <p className="min-w-0 text-[length:max(14px,0.9375rem)] font-semibold leading-snug text-foreground break-words [grid-area:name]">
                     {/* The name opens the records behind the problem when no
                         basis line carries them. */}
                     {cited(
@@ -252,14 +252,14 @@ export function ProblemsCard({
                       : null}
                     {problem.flag ? (
                       <Flag
-                        className="ml-1 inline h-3 w-3 shrink-0 align-[-0.125em] text-amber-500 dark:text-amber-300"
+                        className="ml-1 inline h-3.5 w-3.5 shrink-0 align-[-0.125em] text-amber-500 dark:text-amber-300"
                         aria-label={verifyLabel}
                       />
                     ) : null}
                   </p>
                   {problem.basis ? (
-                    <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words [grid-area:basis]">
-                      <span className="text-muted-foreground/80">{basisLabel}</span>
+                    <p className="text-[length:max(14px,0.875rem)] leading-snug text-foreground/80 break-words [grid-area:basis]">
+                      <span>{basisLabel}</span>
                       {perColumn ? cited(problem.basisSourceKeys, basisText) : basisText}
                     </p>
                   ) : null}
@@ -268,10 +268,10 @@ export function ProblemsCard({
                   {problem.metric ? (
                     <div className="flex min-w-0 items-start gap-0.5 [grid-area:metric]">
                       <RowFillClamp
-                        className="min-w-0 flex-1 text-xs leading-snug tabular-nums text-foreground break-words"
+                        className="min-w-0 flex-1 text-[length:max(14px,0.875rem)] leading-snug tabular-nums text-foreground break-words"
                         title={problem.metric}
                       >
-                        <span className="mr-1.5 text-[0.6875rem] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
+                        <span className="mr-1.5 text-[length:max(12px,0.75rem)] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
                         {cited(perColumn ? problem.metricSourceKeys : undefined, problem.metricSegments?.length
                           ? problem.metricSegments.map((segment, segmentIndex) => segment.abnormal ? (
                             // Same rule and colour as the lab tables; the
@@ -290,14 +290,16 @@ export function ProblemsCard({
                             <span key={segmentIndex}>{segment.text}</span>
                           ))
                           : problem.metric)}
-                        {problem.metricMeta ? (
-                          <span className="ml-1 text-[0.6875rem] text-muted-foreground">（{problem.metricMeta}）</span>
+                        {/* The model often writes the date into the value
+                            ("Echo: … (2026-07-07)"); then it is not repeated. */}
+                        {problem.metricMeta && !problem.metric.includes(problem.metricMeta) ? (
+                          <span className="ml-1 text-[length:max(14px,0.875rem)] text-foreground/80">（{problem.metricMeta}）</span>
                         ) : null}
                       </RowFillClamp>
                       {/* Kept outside the two-line clamp: the review tag must
                           never be cut off. */}
                       {problem.metricNeedsReview ? (
-                        <span className="inline-flex shrink-0 items-center rounded border border-amber-500/40 px-1 text-[0.625rem] leading-4 text-amber-700 dark:text-amber-300">
+                        <span className="inline-flex shrink-0 items-center rounded border border-amber-500/40 px-1 text-[length:max(13px,0.8125rem)] leading-5 text-amber-700 dark:text-amber-300">
                           {metricNeedsReviewLabel}
                         </span>
                       ) : null}
@@ -306,7 +308,13 @@ export function ProblemsCard({
                 </div>
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0 @min-[38rem]:space-y-0.5" data-problem-column="care">
                   {managedByLine ? (
-                    <p className="text-[0.6875rem] leading-snug tabular-nums text-muted-foreground break-words [grid-area:org] @min-[28rem]:text-right @min-[38rem]:text-left" data-problem-managed-by>
+                    <p className={cn(
+                      "min-w-0 text-[length:max(14px,0.875rem)] leading-snug tabular-nums text-foreground/80 break-words [grid-area:org]",
+                      problem.basis
+                        ? "@min-[28rem]:max-w-56 @min-[28rem]:text-right"
+                        : "@min-[28rem]:col-[1/-1] @min-[28rem]:text-left",
+                      "@min-[38rem]:max-w-none @min-[38rem]:text-left",
+                    )} data-problem-managed-by>
                       {cited(problem.managedBySourceKey ? [problem.managedBySourceKey] : undefined, managedByLine)}
                     </p>
                   ) : null}
@@ -326,7 +334,7 @@ export function ProblemsCard({
                             key={item.key}
                             title={review ? `${item.fullName} — ${medicationReviewLabel}` : item.fullName}
                             className={cn(
-                              "inline-block max-w-full truncate rounded-full border bg-muted text-[0.6875rem] leading-[1.125rem] text-foreground",
+                              "inline-block max-w-full truncate rounded-full border bg-muted text-[length:max(12px,0.75rem)] leading-[1.375rem] text-foreground",
                               review ? "border-amber-500/60" : "border-border",
                               !medicationsOpen && itemIndex >= INITIAL_MEDICATIONS_WIDE && "@min-[38rem]:hidden",
                             )}
@@ -337,7 +345,7 @@ export function ProblemsCard({
                               [item.key],
                               review ? (
                                 <>
-                                  <Flag className="mr-0.5 inline h-2.5 w-2.5 align-[-0.1em] text-amber-500 dark:text-amber-300" aria-hidden="true" />
+                                  <Flag className="mr-0.5 inline h-3 w-3 align-[-0.1em] text-amber-500 dark:text-amber-300" aria-hidden="true" />
                                   {item.name}
                                   <span className="sr-only">（{medicationReviewLabel}）</span>
                                 </>
@@ -363,7 +371,7 @@ export function ProblemsCard({
                     </div>
                   ) : problem.medications ? (
                     // A result from before per-medicine items: the joined names.
-                    <p className="text-[0.6875rem] leading-snug text-muted-foreground break-words [grid-area:meds]">
+                    <p className="text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground break-words [grid-area:meds]">
                       {perColumn ? cited(problem.medicationSourceKeys, problem.medications) : problem.medications}
                     </p>
                   ) : null}
@@ -375,7 +383,7 @@ export function ProblemsCard({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        <p className="flex items-center gap-1 text-[0.6875rem] leading-snug text-muted-foreground/80">
+        <p className="flex items-center gap-1 text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground/80">
           <Flag className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
           {legendLabel}
         </p>
@@ -383,7 +391,7 @@ export function ProblemsCard({
           <button
             type="button"
             onClick={() => setShowAll((value) => !value)}
-            className="flex min-h-[44px] items-center gap-1 text-[0.6875rem] font-medium text-primary hover:text-primary/80 lg:min-h-8"
+            className="flex min-h-[44px] items-center gap-1 text-[length:max(12px,0.75rem)] font-medium text-primary hover:text-primary/80 lg:min-h-8"
             aria-expanded={showAll}
           >
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />

@@ -13,7 +13,7 @@
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
-import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { getAnalyteCanonicalKey, TEST_ALIASES } from '@voho0000/clinical-lab-normalization/canonical'
 import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import type {
   EncounterEntity,
@@ -1172,9 +1172,6 @@ const SHARED_RULES =
   'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
   '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
   'a complex multi-morbid patient typically yields 8–12 problems, not 5–6. ' +
-  'Cross-hospital lens: surface care fragmented across providers and follow-up gaps. ' +
-  'For duplicate medications, be strict: these are NHI cross-facility records where ONE prescription appears twice (the prescribing clinic AND the 藥局 / pharmacy that dispenses the 慢箋), ' +
-  'and same-clinic refills are one ongoing therapy — NEITHER is duplication. Only call out duplication when the SAME drug (or same-class additive drugs) is prescribed by TWO DIFFERENT CLINICS in a short window. ' +
   'For "medicationEducation": this is ONLY for the patient audience; for the medical audience return an empty array. ' +
   'For patients, select 3–5 of the most relevant recent or long-term medicines (or clinically coherent medicine groups) that actually appear in the records. ' +
   'Lead with BENEFIT: explain in plain language how each medicine may support a documented condition or care goal. Then give exactly one calm, practical "attention" reminder. ' +
@@ -1252,7 +1249,7 @@ const MEDICAL_ENGLISH_LANGUAGE_CONTRACT =
 
 const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
   overview:
-    'OVERVIEW: The headline states only documented facts. Do not infer a disease from a medicine or infer control/stability from one value. ' +
+    'OVERVIEW: The headline states only documented facts: a problem the records establish (a medicine establishes one only as the medication-only rule allows), never control or stability read from one value. ' +
     'Keep it to ~30 words naming at most about six problems, each one a problem this patient\'s records establish — no medicine names, no lab values or units, no ICD or other codes. ' +
     'Name a coded diagnosis as the diagnosis-code rule above allows, never with "claim code only". ' +
     'medicationEducation is for patients only and must cite a real M key. Use no treatment advice. ' +
@@ -1310,7 +1307,14 @@ function localRulesForModules(
   moduleIds: readonly MedicalSummaryModuleId[],
 ): string {
   // `reports` never joins a narrative request; it has its own system prompt.
-  return LOCAL_CORE_RULES + moduleIds.filter(isNarrativeModule).map((moduleId) => LOCAL_MODULE_RULES[moduleId]).join('')
+  const narrative = moduleIds.filter(isNarrativeModule)
+  // The overview defers to the medication-only rule, which rides with the
+  // problems block; an overview asked for on its own (the fast lane) gets it
+  // here, multi-use exceptions included.
+  const medicationRule = narrative.includes('overview') && !narrative.includes('problems')
+    ? MEDICATION_INFERENCE_RULE
+    : ''
+  return LOCAL_CORE_RULES + narrative.map((moduleId) => LOCAL_MODULE_RULES[moduleId]).join('') + medicationRule
 }
 
 const FULL_OUTPUT_INSTRUCTION =
@@ -1398,10 +1402,10 @@ const BATCH_OUTPUT_INSTRUCTION = (
 
 const SYSTEM_MEDICAL_PREFIX =
   'You are preparing 初診快覽 — a first-visit overview for a physician who is seeing this patient ' +
-  'without knowing their history at other facilities. Precise clinical language; cite actual values and trends. ' +
+  'without knowing their history at other facilities. Precise clinical language; give actual values and trends where a section asks for them (a problem\'s key values), never in the headline. ' +
   'The reader has about thirty seconds before the consultation starts, so every line must be something they would otherwise miss. ' +
   'Return "medicationEducation" as an empty array; that benefit-first education list is patient-facing. ' +
-  'Safety alerts are handled by the Safety module in this same batch — do not restate them as extra prose.'
+  'Safety alerts have their own section — do not restate them as extra prose.'
 
 const SYSTEM_PATIENT_PREFIX =
   'You are helping a patient (a layperson, NOT a clinician) understand their own NHI 健康存摺 records. ' +
@@ -1414,7 +1418,7 @@ const SYSTEM_PATIENT_PREFIX =
   'check with the doctor, not a danger. ' +
   'Populate "medicationEducation" as benefit-first, reassuring medication education ' +
   'grounded in the patient\'s medication records. ' +
-  'Safety reminders are handled by the Safety module in this same batch.'
+  'Safety reminders have their own section.'
 
 // ---------------------------------------------------------------------------
 // 影像與病理重點 (`reports` lane) — organ-grouped key findings over the digest
@@ -1423,7 +1427,7 @@ const SYSTEM_PATIENT_PREFIX =
 const REPORT_HIGHLIGHTS_SYSTEM =
   'You are writing the key findings of a patient\'s imaging and pathology reports for a physician who has no time to read every report. ' +
   'You select the findings that matter and state each one in one short line. The app writes every date, examination type, hospital and report title itself, ' +
-  'and checks every quote you give character-for-character against the report: a point none of whose quotes matches is never shown.'
+  'and checks every quote you give character-for-character against the report: a point none of whose quotes matches is shown only as an unverified line the physician must check.'
 
 const REPORT_HIGHLIGHTS_RULES =
   '\n\nKEY-FINDINGS CONTRACT: ' +
@@ -1433,7 +1437,7 @@ const REPORT_HIGHLIGHTS_RULES =
   'Prefer abnormal, new, changing or clinically actionable findings: pathology diagnoses and staging, sizes, and comparisons with prior studies. ' +
   'Omit normal findings and incidental age-related findings unless they are clinically meaningful. ' +
   '"text" states the finding only: never a date, a modality or examination name, a hospital, a recommendation, or a diagnosis the cited text does not state. ' +
-  'Keep the source\'s uncertainty words in "text" (r/o, rule out, favor, suspect, suspicious, possible, probable, likely, cannot be ruled out, age undetermined, DDx, 疑似, 待排除, 不排除, 可能): write "Suspicious for bronchiectasis", never "Bronchiectasis", when the report says "suspicious for bronchiectasis". ' +
+  'Keep the source\'s uncertainty words in "text" (r/o, rule out, favor, suspect, suspicious, possible, probable, likely, cannot be ruled out, age undetermined, DDx; a Chinese report\'s 疑似, 待排除, 不排除, 可能 become suspected, to be ruled out, cannot be excluded, possible): write "Suspicious for bronchiectasis", never "Bronchiectasis", when the report says "suspicious for bronchiectasis". ' +
   'Copy the L prefix of each report key exactly; never replace L with H or invent a different key. ' +
   'Every point needs at least one entry in "quotes": one contiguous sentence or clause copied character-for-character from one of the cited reports, with that report\'s key in "source". ' +
   'Never translate, abbreviate, expand, correct spelling, merge two places, or add words inside a quote. Never quote the header line the app wrote, an administrative line (patient identity, order or specimen numbers, names of staff, sign-off times), or across a "[…]" line, which marks text the app omitted. ' +
@@ -1598,13 +1602,13 @@ function composeLabMetric(
   clinicalData: SummaryCatalogInput | undefined,
   audience: 'medical' | 'patient',
   locale: SummaryLocale,
-): { text: string; segments: MetricSegment[] } | undefined {
+): { text: string; segments: MetricSegment[]; testNames: string[]; labels: string[] } | undefined {
   if (keys.length === 0 || !clinicalData) return undefined
   const observationById = reportObservationMap(clinicalData.observations)
   const reportById = new Map((clinicalData.diagnosticReports ?? [])
     .filter((report) => report.id)
     .map((report) => [report.id, report]))
-  const values: Array<{ label: string; group: string; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal']; oneADay?: boolean; order: number }> = []
+  const values: Array<{ label: string; group: string; aliases: string[]; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal']; oneADay?: boolean; order: number }> = []
   const observationOrder = new Map((clinicalData.observations ?? []).map((observation, index) => [observation.id, index]))
   for (const key of keys) {
     const entry = byKey.get(key)
@@ -1633,6 +1637,17 @@ function composeLabMetric(
       return [{
         label,
         group,
+        aliases: [
+          label, observation.code?.text ?? '',
+          ...(observation.code?.coding ?? []).map(coding => coding.display ?? ''),
+          getAnalyteDisplayForObs(observation, 'medical', 'en'),
+          getAnalyteDisplayForObs(observation, 'patient', 'en'),
+          getAnalyteDisplayForObs(observation, 'patient', 'zh-TW'),
+          ...(getAnalyteCanonicalKey(observation) === 'CREA' ? ['Cr'] : []),
+        ].flatMap(name => {
+          const bilingual = name.match(/^(.*?)\s*[;；,，]\s*\((.+)\)\s*$/)
+          return [name, name.replace(/\s*\([^)]*\)\s*$/, '').trim(), ...(bilingual ? [bilingual[1].trim(), bilingual[2].trim()] : [])]
+        }).filter(Boolean),
         date: obsDate(observation) ?? entry.date ?? '',
         value,
         unit: unitless ? undefined : observation.valueQuantity?.unit?.trim() || undefined,
@@ -1695,7 +1710,82 @@ function composeLabMetric(
     })
     if (sharedUnit) push(sharedUnit === '%' ? '%' : ` ${sharedUnit}`)
   })
-  return { text: segments.map((segment) => segment.text).join(''), segments }
+  const aliases = values.flatMap(value => value.aliases.map(label => ({ label, name: metricTestName(value.group) })))
+  return { text: segments.map((segment) => segment.text).join(''), segments, testNames: aliases.map(alias => alias.name), labels: aliases.map(alias => alias.label) }
+}
+
+function metricTestName(name: string): string {
+  const canonical = getAnalyteCanonicalKey({ code: { text: name } })
+  return canonical?.startsWith('EGFR') ? 'EGFR' : canonical ?? name.toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Check test identity before replacing a model's numbers with record values.
+ * A real citation is not necessarily a citation for this metric. Only parse
+ * explicitly named numeric clauses; bare values/prose keep the existing path.
+ * Canonical names accept aliases without treating a substring (K in CK) as
+ * the same analyte. Unknown named measurements such as baPWV must also match.
+ */
+function metricTestNames(text: string, labels: string[], recorded: string[]): string[] {
+  // A source name can itself contain punctuation (NHI bilingual names or
+  // LOINC's "Serum, Plasma or Blood"). Preserve separators inside a complete
+  // record label followed by a numeric value before splitting metric clauses.
+  const protectedSeparators = new Set<number>()
+  const lowerText = text.toLowerCase()
+  for (const label of [...labels].sort((a, b) => b.length - a.length)) {
+    if (!/[;；,，]/.test(label)) continue
+    const lowerLabel = label.toLowerCase()
+    let start = lowerText.indexOf(lowerLabel)
+    while (start !== -1) {
+      if (/^\s*[:：]?\s+[<>≤≥]?[\d.]/.test(text.slice(start + label.length))) {
+        for (let offset = 0; offset < label.length; offset++) {
+          if (/[;；,，]/.test(label[offset])) protectedSeparators.add(start + offset)
+        }
+      }
+      start = lowerText.indexOf(lowerLabel, start + 1)
+    }
+  }
+  const parts: string[] = []
+  let clauseStart = 0
+  for (let index = 0; index < text.length; index++) {
+    if (/[;；,，]/.test(text[index]) && !protectedSeparators.has(index)) {
+      parts.push(text.slice(clauseStart, index))
+      clauseStart = index + 1
+    }
+  }
+  parts.push(text.slice(clauseStart))
+  return parts.flatMap((part) => {
+    if (!/^\s*[^\d\s]/.test(part)) return []
+    const candidates = [...part.matchAll(/\s+(?=[<>≤≥]?[\d.])/g)]
+      .map(match => part.slice(0, match.index).trim().replace(/[:：]$/, ''))
+      .filter(Boolean)
+    // Prefer the complete recognized name, not the first number: CA 19-9
+    // contains a number in its name. Exact app labels also cover translated
+    // patient-facing names on a subsequent card retry.
+    for (const name of [...candidates].reverse()) {
+      const label = labels.find(label => name.toLowerCase() === label.toLowerCase())
+      if (label) return [recorded[labels.indexOf(label)]]
+      // Longer prefixes may already include values/units. Only accept an
+      // exact alias here; normalizing "WBC 12 K →" must not discover potassium.
+      const exactAlias = TEST_ALIASES[name.toUpperCase()]
+      if (exactAlias) return [metricTestName(exactAlias)]
+    }
+    // Narrative qualifiers belong only to the name before the FIRST value.
+    const words = (candidates[0] ?? '').split(/\s+/)
+    for (let start = 0; start < words.length; start++) {
+      const suffix = words.slice(start).join(' ')
+      const label = labels.find(label => suffix.toLowerCase() === label.toLowerCase())
+      if (label) return [recorded[labels.indexOf(label)]]
+      if (getAnalyteCanonicalKey({ code: { text: suffix } })) return [metricTestName(suffix)]
+    }
+    return candidates.length ? [metricTestName(candidates[0])] : []
+  })
+}
+
+function metricTestNamesConflict(modelMetric: string | undefined, recorded: string[], labels: string[]): boolean {
+  if (!modelMetric) return false
+  const requested = metricTestNames(modelMetric, labels, recorded)
+  if (!requested.length) return false
+  return !requested.every((name) => recorded.includes(name)) || !recorded.every((name) => requested.includes(name))
 }
 
 /** Whether a value is abnormal, by the same rule as every lab table: the
@@ -2098,6 +2188,38 @@ function collectClaimedSourceKeys(value: unknown): string[] {
   }
   visit(value)
   return sourceKeys.filter(Boolean)
+}
+
+/**
+ * A lane that sent the model a narrower catalog than the one the finaliser
+ * resolves against (the fast lane's overview snapshot, a local latency
+ * budget) must not let a key the model never saw resolve to a real record:
+ * "M4" invented beside a snapshot of M3/M7 would otherwise land as a verified
+ * chip on an unrelated medicine. Such a key keeps its place but is marked so
+ * it stays unknown everywhere, and renders as an unverified citation like any
+ * other unknown key.
+ */
+export function markSourceKeysOutsideCatalog<T>(
+  value: T,
+  laneCatalog: readonly SummarySourceCatalogEntry[],
+): T {
+  const known = new Set(laneCatalog.map((entry) => normaliseSummarySourceKey(entry.key)))
+  const mark = (rawKey: string): string => {
+    const key = normaliseSummarySourceKey(rawKey)
+    return !key || known.has(key) ? rawKey : `${key}?`
+  }
+  const visit = (current: unknown, parentKey?: string): unknown => {
+    if (Array.isArray(current)) {
+      return parentKey === 'sources'
+        ? current.map((item) => typeof item === 'string' ? mark(item) : item)
+        : current.map((item) => visit(item))
+    }
+    if (!current || typeof current !== 'object') return current
+    return Object.fromEntries(Object.entries(current as Record<string, unknown>).map(([key, item]) => (
+      key === 'ref' && typeof item === 'string' ? [key, mark(item)] : [key, visit(item, key)]
+    )))
+  }
+  return visit(value) as T
 }
 
 export class GenerateMedicalSummaryUseCase {
@@ -2504,9 +2626,14 @@ export class GenerateMedicalSummaryUseCase {
                   quotes: point.quotes.map((quote) => ({ source: quote.key, quote: quote.quote })),
                 })),
               })),
-              // An all-unremarkable reply has no groups; its verdict must
-              // survive another card's retry.
-              unremarkable: highlights.groups.length === 0 ? highlights.others.map((row) => row.key) : [],
+              // An all-unremarkable reply has no groups, and a cut-off reply
+              // read only what it cited or called unremarkable: either way the
+              // verdict must survive another card's retry.
+              unremarkable: highlights.groups.length === 0 || highlights.incomplete
+                ? highlights.others.map((row) => row.key)
+                : [],
+              ...(highlights.incomplete ? { incomplete: true } : {}),
+              ...(highlights.sentKeys ? { sentKeys: highlights.sentKeys } : {}),
             },
           }
         : {}),
@@ -2786,7 +2913,10 @@ export class GenerateMedicalSummaryUseCase {
         options.audience === 'patient' ? 'patient' : 'medical',
         locale,
       )
-      const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = labMetric
+      const metricSourceConflict = Boolean(labMetric && metricTestNamesConflict(p.metric, labMetric.testNames, labMetric.labels))
+      const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = metricSourceConflict
+        ? { metric: p.metric?.trim().split(METRIC_ARROW).join('；'), metricNeedsReview: true }
+        : labMetric
         ? {
             metric: labMetric.text,
             ...(labMetric.segments.some((segment) => segment.abnormal) ? { metricSegments: labMetric.segments } : {}),
@@ -2816,7 +2946,8 @@ export class GenerateMedicalSummaryUseCase {
         kind,
         ...metricView,
         ...(carriedReview ? { metricNeedsReview: true as const } : {}),
-        metricMeta: metricSpan ?? (p.metricMeta?.trim() || undefined),
+        // A conflicting source's date must not make the retained claim look verified.
+        metricMeta: metricSourceConflict ? undefined : metricSpan ?? (p.metricMeta?.trim() || undefined),
         managedBy,
         ...(managedByDate ? { managedByDate } : {}),
         medications: medicationNames.length > 0
@@ -3078,8 +3209,29 @@ export function finalizeReportHighlights(
   catalog: readonly SummarySourceCatalogEntry[],
   options: FinalizeReportHighlightsOptions = {},
 ): ReportHighlights {
-  const digestItems = allDigestItems(buildReportDigest({ clinicalData, catalog }))
+  const digest = buildReportDigest({ clinicalData, catalog })
+  const digestItems = allDigestItems(digest)
   const itemByKey = new Map(digestItems.map((item) => [item.key, item]))
+  // What the model actually finished reading: the reports in its prompt, and
+  // none of them when the reply was cut off — a salvaged reply's silence on a
+  // report says nothing about it.
+  const incomplete = module?.incomplete === true
+  // `sentKeys`: the reports whose whole text the request carried after any
+  // context-window reduction (app-owned, see the reports lane). A cut-off
+  // reply read only what it explicitly called unremarkable or cited.
+  const sentKeys = new Set(module?.sentKeys ?? digest.items.map((item) => item.key))
+  const reviewedKeys = new Set(
+    (incomplete
+      ? (module?.unremarkable ?? []).map(normaliseSummarySourceKey)
+      : digest.items.map((item) => item.key)
+    ).filter((key) => sentKeys.has(key)),
+  )
+  // Only a report the model was given can back a finding: a quote or source
+  // naming an overflow report, or one the context cut removed, is dropped,
+  // so a citation can never take an unread report off the unread list.
+  const readItemByKey = new Map(
+    digest.items.filter((item) => sentKeys.has(item.key)).map((item) => [item.key, item]),
+  )
   let droppedQuoteCount = options.carried?.droppedQuoteCount ?? 0
   let hiddenPointCount = options.carried?.hiddenPointCount ?? 0
   const hiddenPoints: UnverifiedReportPoint[] = [...(options.carried?.hiddenPoints ?? [])]
@@ -3090,7 +3242,7 @@ export function finalizeReportHighlights(
   for (const group of module?.groups ?? []) {
     const organ = normaliseReportOrgan(group.organ)
     for (const point of group.points) {
-      const finalized = finalizeReportPoint(point, itemByKey)
+      const finalized = finalizeReportPoint(point, readItemByKey)
       droppedQuoteCount += finalized.droppedQuotes
       if (!finalized.point) {
         hiddenPointCount += 1
@@ -3124,25 +3276,39 @@ export function finalizeReportHighlights(
     label: REPORT_ORGAN_LABELS.en[organ],
     points: pointsByOrgan.get(organ)!,
   }))
-  const others = digestItems
+  const uncited = digestItems
     .filter((item) => !citedKeys.has(item.key))
     .sort(newestFirst)
-    .map(reportRow)
   // "其餘 N 份無特殊發現" is a statement about the reports, so it needs the
   // model to have actually said so. A reply whose every point failed
   // verification, or that returned nothing at all, said nothing about them:
   // present it like an unavailable summary (each report's own conclusion)
   // instead of implying the reports are unremarkable.
+  // Only a report the request carried whole can have been judged
+  // unremarkable; a verdict on one the cut removed says nothing, and must not
+  // make the reply count as a summary that the retry round trip cannot keep.
   const unremarkableCount = (module?.unremarkable ?? [])
     .map(normaliseSummarySourceKey)
-    .filter((key) => itemByKey.has(key))
+    .filter((key) => itemByKey.has(key) && sentKeys.has(key))
     .length
   const summarized = module !== undefined &&
     (groups.length > 0 || (hiddenPointCount === 0 && unremarkableCount > 0))
+  // Without a summary every report is listed with its excerpt anyway, so the
+  // unread ones need no list of their own — and the same reports read the
+  // same way after another card's retry drops the unsummarized module.
+  const others = uncited
+    .filter((item) => !summarized || reviewedKeys.has(item.key))
+    .map(reportRow)
+  const unreviewed = summarized
+    ? uncited.filter((item) => !reviewedKeys.has(item.key)).map(reportRow)
+    : []
   return {
     summarized,
     groups,
     others,
+    ...(unreviewed.length > 0 ? { unreviewed } : {}),
+    ...(summarized && incomplete ? { incomplete: true as const } : {}),
+    ...(summarized && module?.sentKeys ? { sentKeys: [...sentKeys] } : {}),
     totalReports: digestItems.length,
     droppedQuoteCount,
     hiddenPointCount,

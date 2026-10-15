@@ -1,4 +1,4 @@
-import { headlineItems, reviewHeadline } from '@/src/core/utils/headline-review.utils'
+import { headlineItems, headlineProblemListState, reviewHeadline } from '@/src/core/utils/headline-review.utils'
 
 // Synthetic headlines and problem lists.
 describe('reviewHeadline', () => {
@@ -53,8 +53,36 @@ describe('reviewHeadline', () => {
       .toEqual({ unlisted: ['recent pneumonia'], medicines: [], values: [] })
   })
 
-  it('waits for the problem list, and reads the age and sex as no item', () => {
-    expect(reviewHeadline('70F with hyperkalemia', [], [])).toBeUndefined()
+  it('reviews against a settled empty list, and reads the age and sex as no item', () => {
+    // Waiting for a list still streaming is the caller's decision; an empty
+    // list that has landed holds none of the headline's problems.
+    expect(reviewHeadline('70F with hyperkalemia', [], [])).toEqual({ unlisted: ['hyperkalemia'], medicines: [], values: [] })
+    expect(reviewHeadline('70F', [], [])).toBeUndefined()
+    // Two-letter abbreviations name problems too.
+    for (const abbreviation of ['AF', 'HF', 'RA']) {
+      expect(reviewHeadline(`70F with ${abbreviation}`, [], [])?.unlisted).toEqual([abbreviation])
+    }
+    expect(reviewHeadline('70F with AF', ['Atrial fibrillation'], [])).toBeUndefined()
+    // A label may write the abbreviation itself.
+    expect(reviewHeadline('70F with AF', ['AF'], [])).toBeUndefined()
+    expect(reviewHeadline('70F with AF and HF', ['Paroxysmal AF', 'HF'], [])).toBeUndefined()
+    expect(reviewHeadline('70F with RA', ['ra'], [])).toBeUndefined()
     expect(headlineItems('94-year-old man with CKD 3b and gout.')).toEqual(['CKD 3b', 'gout'])
+  })
+})
+
+describe('headlineProblemListState', () => {
+  it('reads the failure from the summary on screen, which a model switch keeps', () => {
+    // Model A's summary stays on screen after switching to model B, whose slot
+    // has no errors: A's failed problem list must still label A's headline.
+    const shownFromModelA = { problems: [], completedCardIds: ['overview'], cardErrors: { problems: 'PARSE_FAILED' } }
+    expect(headlineProblemListState(shownFromModelA)).toBe('failed')
+  })
+
+  it('waits while the list streams, and reviews once it landed, empty or not', () => {
+    expect(headlineProblemListState({ problems: [], completedCardIds: ['overview'] })).toBe('pending')
+    expect(headlineProblemListState(undefined)).toBe('pending')
+    expect(headlineProblemListState({ problems: [], completedCardIds: ['overview', 'problems'] })).toBe('settled')
+    expect(headlineProblemListState({ problems: [{}] })).toBe('settled')
   })
 })

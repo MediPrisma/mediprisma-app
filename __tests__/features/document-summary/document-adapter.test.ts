@@ -261,3 +261,65 @@ describe('document-adapter', () => {
     })
   })
 })
+
+
+describe('outpatient document context', () => {
+  const doc = {
+    id: 'soap', context: { encounter: [{ reference: 'Encounter/visit' }] },
+    content: [{ attachment: { contentType: 'text/plain', data: 'U09BUA==' } }],
+  }
+  const visit = {
+    id: 'visit', class: { code: 'AMB' }, serviceType: { text: '皮膚科' },
+    participant: [{ individual: { display: '測試醫師' } }],
+    reasonCode: [{ text: 'B02.9,L30.9' }],
+    diagnosis: [
+      { rank: 2, condition: { reference: 'Condition/secondary' } },
+      { rank: 1, condition: { reference: 'Condition/primary' } },
+    ],
+  }
+  const conditions = [
+    { id: 'secondary', code: { coding: [{ code: 'L30.9', display: 'Dermatitis' }] } },
+    { id: 'primary', code: { text: 'B02.9', coding: [{ code: 'B02.9', display: 'Zoster without complications' }] } },
+  ]
+  it('uses the linked rank-one condition, including its name, and visit metadata', () => {
+    const [entry] = buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', conditions)
+    expect(entry.outpatient).toEqual({ department: '皮膚科', physician: '測試醫師' })
+    expect(entry.primaryDiagnosis).toEqual({ code: 'B02.9', text: 'Zoster without complications' })
+  })
+  it('does not borrow an unrelated visit or secondary diagnosis when primary is missing', () => {
+    const [entry] = buildDocumentEntries([], [doc], {}, [{ ...visit, serviceType: undefined, participant: [] }], 'zh-TW', [conditions[0]])
+    expect(entry.primaryDiagnosis).toBeUndefined()
+    expect(entry.outpatient).toEqual({ department: undefined, physician: undefined })
+  })
+  it('retains the reason fallback for other sources with unranked diagnoses', () => {
+    const unranked = { ...visit, reasonCode: [{ text: 'J06.9 Acute URI' }], diagnosis: [{ condition: { reference: 'urn:uuid:other' } }] }
+    expect(buildDocumentEntries([], [doc], {}, [unranked], 'en', [])[0].primaryDiagnosis?.text).toBe('Acute URI')
+  })
+  it('splits a ranked reference display when its Condition is unavailable', () => {
+    const displayOnly = { ...visit, diagnosis: [{ rank: 1, condition: { display: 'B02.9 帶狀疱疹' } }] }
+    expect(buildDocumentEntries([], [doc], {}, [displayOnly], 'zh-TW', [])[0].primaryDiagnosis).toEqual({ code: 'B02.9', text: '帶狀疱疹' })
+  })
+  it('prefers ICD-10-CM over a SNOMED-first coding list', () => {
+    const multi = [{ id: 'primary', code: { coding: [{ system: 'http://snomed.info/sct', code: '4740000', display: 'Herpes zoster' }, { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'B02.9', display: 'Zoster without complications' }] } }]
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'en', multi)[0].primaryDiagnosis).toEqual({ code: 'B02.9', text: 'Zoster without complications' })
+  })
+  it('uses an available reference name when the resolved Condition code is empty', () => {
+    const linked = { ...visit, diagnosis: [{ rank: 1, condition: { reference: 'Condition/primary', display: 'B02.9 帶狀疱疹' } }] }
+    expect(buildDocumentEntries([], [doc], {}, [linked], 'zh-TW', [{ id: 'primary', code: {} }])[0].primaryDiagnosis).toEqual({ code: 'B02.9', text: '帶狀疱疹' })
+  })
+  it('prefers Taiwan ICD-10-CM coding systems', () => {
+    const mixed = [{ id: 'primary', code: { coding: [{ system: 'http://snomed.info/sct', code: '4740000', display: 'Herpes zoster' }, { system: 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw', code: 'B02.9', display: '帶狀疱疹' }] } }]
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', mixed)[0].primaryDiagnosis?.code).toBe('B02.9')
+  })
+  it('includes only typed attending or primary performers when roles are supplied', () => {
+    const person = (code: string, name: string) => ({ type: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType', code }] }], individual: { display: name } })
+    const typed = { ...visit, participant: [person('REF', '轉介者'), person('PART', '護理人員'), person('ATND', '主治醫師')] }
+    expect(buildDocumentEntries([], [doc], {}, [typed], 'zh-TW', conditions)[0].outpatient?.physician).toBe('主治醫師')
+    expect(buildDocumentEntries([], [doc], {}, [{ ...typed, participant: [person('REF', '轉介者')] }], 'zh-TW', conditions)[0].outpatient?.physician).toBeUndefined()
+  })
+  it('prefers the supplied localized name and preserves the English coding display', () => {
+    const localized = [{ ...conditions[1], code: { ...conditions[1].code, text: 'B02.9 帶狀疱疹' } }]
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', localized)[0].primaryDiagnosis?.text).toBe('帶狀疱疹')
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'en', localized)[0].primaryDiagnosis?.text).toBe('Zoster without complications')
+  })
+})

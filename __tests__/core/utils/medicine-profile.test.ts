@@ -31,6 +31,23 @@ describe('medicineProfile', () => {
     })
   })
 
+  it('does not call a medicine anticholinergic on a class inferred from its ATC group', () => {
+    // trimebutine (A03AA05) acts on opioid receptors; "g:" only says what its
+    // group-mates are. The class is unknown, so its absence proves nothing.
+    const trimebutine = medicineProfile({ atcCode: 'A03AA05' })
+    expect(trimebutine.anticholinergic).toBeUndefined()
+    expect(trimebutine.complete).toBe(false)
+  })
+
+  it('leaves peripheral quaternary antimuscarinics off the burden count unless a list names them', () => {
+    for (const atcCode of ['A03AB02', 'A03BB03', 'A03AB06', 'A02BX03']) {
+      expect(medicineProfile({ atcCode }).anticholinergic).toBeUndefined()
+    }
+    // Listed by name on the ACB scale: still counted.
+    expect(medicineProfile({ atcCode: 'A03AB05' }).anticholinergic).toBe('ACB 3')
+    expect(medicineProfile({ atcCode: 'A03AB20' }).anticholinergic).toBe('ACB 3')
+  })
+
   it('marks an anticholinergic whose mechanism does not say so', () => {
     // imipramine: a tricyclic antidepressant, ACB 3.
     expect(medicineProfile({ atcCode: 'N06AA02' })).toMatchObject({ mechanism: 'Tricyclic Antidepressant', anticholinergic: 'ACB 3' })

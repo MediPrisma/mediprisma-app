@@ -81,6 +81,19 @@ describe('ProblemsCard', () => {
     expect(screen.queryByRole('button', { name: /^Type 2 diabetes mellitus/ })).not.toBeInTheDocument()
   })
 
+  it('prints a date the value already carries once, not twice', () => {
+    const { container } = renderCard({
+      label: 'Mitral regurgitation',
+      kind: 'other',
+      metric: 'Echo: mild MR (2026-07-07)',
+      metricMeta: '2026-07-07',
+      sourceKeys: ['L1'],
+      metricSourceKeys: ['L1'],
+    })
+    const metric = container.querySelector('[data-problem-column="metric"]')!
+    expect(metric.textContent?.match(/2026-07-07/g)).toHaveLength(1)
+  })
+
   it('writes keys in the basis as the records they name', () => {
     renderCard({
       label: 'Type 2 diabetes mellitus',

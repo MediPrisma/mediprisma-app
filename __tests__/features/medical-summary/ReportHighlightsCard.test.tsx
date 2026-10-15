@@ -25,6 +25,7 @@ const LABELS = {
   hideQuotes: ms.reportsHideQuotes,
   othersSummarized: ms.reportsOthers,
   othersAll: ms.reportsAll,
+  unreviewed: ms.reportsUnreviewed,
   unavailable: ms.reportsUnavailable,
   hiddenPoints: ms.reportsHiddenPoints,
   unverifiedTag: ms.reportsUnverifiedTag,
@@ -271,7 +272,7 @@ describe('ReportHighlightsCard — repeated original wording', () => {
 })
 
 describe('ReportHighlightsCard — many serial studies on one finding', () => {
-  it('shows the first two report chips and folds the rest behind +N', () => {
+  it('merges same-day studies into one chip, shows two chips and folds the rest behind +N', () => {
     const mri = ['2026-07-08', '2026-07-08', '2026-04-17', '2026-04-17', '2026-01-20'].map((date, index) => source(`L${10 + index}`, 'mri', date))
     const { container } = render(
       <ReportHighlightsCard
@@ -283,8 +284,67 @@ describe('ReportHighlightsCard — many serial studies on one finding', () => {
         onNavigate={jest.fn()}
       />,
     )
-    expect(container.querySelectorAll('[data-report-chip]')).toHaveLength(2)
-    fireEvent.click(screen.getByRole('button', { name: ms.reportsMoreSources.replace('{count}', '3') }))
-    expect(container.querySelectorAll('[data-report-chip]')).toHaveLength(5)
+    // Two MRIs on 07-08 and two on 04-17 read as one chip each; +1 is the
+    // one study left, counted in reports.
+    const chips = () => [...container.querySelectorAll('[data-report-chip]')].map((chip) => chip.textContent)
+    expect(chips()).toEqual([expect.stringMatching(/07-08 ×2$/), expect.stringMatching(/04-17 ×2$/)])
+    fireEvent.click(screen.getByRole('button', { name: ms.reportsMoreSources.replace('{count}', '1') }))
+    // Opened: every study is its own chip again.
+    expect(chips()).toHaveLength(5)
+    expect(chips().some((label) => label?.includes('×'))).toBe(false)
+  })
+})
+
+describe('ReportHighlightsCard — reports the AI did not get to', () => {
+  it('lists them apart from 「無特殊發現」, with their conclusions', () => {
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{
+          ...HIGHLIGHTS,
+          unreviewed: [row('L40', 'ct', '2024-01-02', { excerpt: 'Old nodule, stable.', excerptSource: 'conclusion' })],
+        }}
+        labels={LABELS}
+      />,
+    )
+    const toggle = screen.getByRole('button', { name: ms.reportsUnreviewed.replace('{count}', '1') })
+    fireEvent.click(toggle)
+    const listed = container.querySelector('[data-report-unreviewed] [data-report-row="L40"]')!
+    expect(listed.textContent).toContain('Old nodule, stable.')
+  })
+})
+
+describe('ReportHighlightsCard — only unread reports', () => {
+  it('still draws the section, with the unread list open', () => {
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{
+          ...HIGHLIGHTS,
+          groups: [],
+          others: [],
+          hiddenPoints: undefined,
+          hiddenPointCount: 0,
+          unreviewed: [row('L41', 'ct', '2024-02-03', { excerpt: 'Stable nodule.', excerptSource: 'conclusion' })],
+        }}
+        labels={LABELS}
+      />,
+    )
+    expect(container.querySelector('[data-report-unreviewed] [data-report-row="L41"]')?.textContent).toContain('Stable nodule.')
+  })
+})
+
+describe('ReportHighlightsCard — chip years with unread reports', () => {
+  it('counts an unread report when deciding which year a chip may leave out', () => {
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{
+          ...HIGHLIGHTS,
+          groups: [{ organ: 'heart', label: 'Heart', points: [{ text: 'Cardiomegaly', displayAs: 'text', quotes: [{ key: 'L50', quote: 'Cardiomegaly.' }], sources: [source('L50', 'xray', '2025-03-10')] }] }],
+          others: [],
+          unreviewed: [row('L51', 'xray', '2026-03-10', { excerpt: 'Clear lungs.', excerptSource: 'conclusion' })],
+        }}
+        labels={LABELS}
+      />,
+    )
+    expect(container.querySelector('[data-report-chip="L50"]')?.textContent).toContain('2025-03-10')
   })
 })

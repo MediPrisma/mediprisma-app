@@ -1,5 +1,6 @@
 import type { DataFilters, TimeRange } from '@/src/core/entities/clinical-context.entity'
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
+import { floorStartDay } from '@/src/core/utils/first-visit-floors'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -44,6 +45,12 @@ export function medicationExpectedEnd(medication: any): string | undefined {
   date.setDate(date.getDate() + days)
   return date.toISOString().slice(0, 10)
 }
+
+// The newest record is picked by string sort, so only dates written the ISO
+// way take part: "20240601" sorts after "2024-06-01" and does not parse. A
+// malformed date must not break building the context every AI feature reads.
+const isParsableDay = (value: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}/.test(value) && Number.isFinite(Date.parse(value))
 
 function isMedicationSupplyWindowOpen(end: string, nowMs: number): boolean {
   const endMs = Date.parse(end)
@@ -155,11 +162,11 @@ export function selectMedicationRecords(
   // milestone horizon; both lanes mark them as lapsed.
   const newest = medications
     .map((medication) => String(medication?.authoredOn || medication?.effectiveDateTime || '').slice(0, 10))
-    .filter(Boolean)
+    .filter(isParsableDay)
     .sort()
     .at(-1)
-  if (!newest) return { selected, floor: [] }
-  const floorStart = new Date(Date.parse(newest) - MILESTONE_ENCOUNTER_FLOOR_DAYS * 86_400_000).toISOString().slice(0, 10)
+  const floorStart = floorStartDay(newest, MILESTONE_ENCOUNTER_FLOOR_DAYS)
+  if (!floorStart) return { selected, floor: [] }
   const present = new Set(selected)
   const seenNames = new Set(selected.map(medicationDisplayName))
   // Only what was dispensed and has run out may be presented as lapsed: a
@@ -275,12 +282,10 @@ export function filterEncounterRecords(
   const inMilestoneFloor = makeTimeRangeTest('all', clinicalData)
   const newest = [...(clinicalData?.encounters ?? encounters)]
     .map((encounter) => String(encounter?.period?.start ?? ''))
-    .filter(Boolean)
+    .filter(isParsableDay)
     .sort()
     .at(-1)
-  const floorStart = newest
-    ? new Date(Date.parse(newest) - MILESTONE_ENCOUNTER_FLOOR_DAYS * 86_400_000).toISOString().slice(0, 10)
-    : undefined
+  const floorStart = floorStartDay(newest, MILESTONE_ENCOUNTER_FLOOR_DAYS)
   const keptByFloor = (encounter: any): boolean => {
     if (!floorStart || !isMilestoneEncounter(encounter)) return false
     const start = String(encounter?.period?.start ?? '').slice(0, 10)

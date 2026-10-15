@@ -26,6 +26,7 @@ import {
   generateMedicalSummaryUseCase,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
+  markSourceKeysOutsideCatalog,
   MEDICAL_SUMMARY_MODEL_ID,
   type GenerateMedicalSummaryInput,
   type ReportHighlightsPresentationInput,
@@ -35,7 +36,7 @@ import {
   usesCompactSummaryHarness,
 } from '@/src/core/use-cases/medical-summary/medical-summary-harness'
 import { buildOverviewSnapshot } from '@/src/core/use-cases/medical-summary/overview-snapshot'
-import { buildReportDigest } from '@/src/core/use-cases/medical-summary/report-digest'
+import { buildReportDigest, sentReportKeys } from '@/src/core/use-cases/medical-summary/report-digest'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type {
   MedicalSummaryCardErrors,
@@ -539,6 +540,16 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       // shared batch request before any per-card error is recorded.
       let transportClinicalContext = laneInput.clinicalContext
 
+      // Citations are checked against what this lane actually sent. A key the
+      // model never saw resolves nowhere, even when the saved catalog has it.
+      const laneCatalogIsNarrower = laneInput.catalog !== ctx.catalog
+      const parseLaneBatch = (card: MedicalSummaryCardDefinition, text: string): unknown | null => {
+        const parsed = card.parseBatch(text, laneInput.catalog)
+        return parsed && laneCatalogIsNarrower
+          ? markSourceKeysOutsideCatalog(parsed, laneInput.catalog)
+          : parsed
+      }
+
       const publishCardResult = (card: MedicalSummaryCardDefinition, parsed: unknown) => {
         laneCallCardIds.add(card.id)
         publishCard(card, parsed, laneExecution)
@@ -604,7 +615,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
                 attemptParseResults.has(card.id) ||
                 !card.hasCompleteBatchBlock(streamedText)
               ) return
-              const parsed = card.parseBatch(streamedText, ctx.catalog)
+              const parsed = parseLaneBatch(card, streamedText)
               attemptParseResults.set(card.id, parsed)
               warnUnknownSourceKeys(card, parsed)
               if (parsed) {
@@ -624,7 +635,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             const hadStreamParse = attemptParseResults.has(card.id)
             const parsed = hadStreamParse
               ? attemptParseResults.get(card.id) ?? null
-              : card.parseBatch(full, ctx.catalog)
+              : parseLaneBatch(card, full)
             if (!hadStreamParse) warnUnknownSourceKeys(card, parsed)
             if (parsed && !publishedCardIds.has(card.id)) publishCardResult(card, parsed)
             if (parsed) {
@@ -790,7 +801,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       const requestOnce = async (): Promise<{ module: ReportsModuleDraft; execution: AiModelExecution }> => {
         let execution = initialExecution()
         let completePoints = 0
-        const { value } = await streamModelRequest({
+        const { value, clinicalContext: sentReportsText } = await streamModelRequest({
           laneId: 'reports',
           clinicalContext: digest.promptText,
           buildMessages: (reportsText) => generateMedicalSummaryUseCase.buildReportHighlightMessages({
@@ -814,11 +825,21 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             return true
           },
         })
-        const parsed = card.parseBatch(value.fullText, ctx.catalog) as ReportsModuleDraft | null
+        // A context-window reduction cuts the middle of the report text: only
+        // the reports whose whole text survived were read.
+        const sentKeys = sentReportKeys(digest, sentReportsText)
+        const coverage = sentKeys ? { sentKeys } : {}
+        const parsedReply = card.parseBatch(value.fullText, ctx.catalog) as ReportsModuleDraft | null
+        // `incomplete` and `sentKeys` are the app's to set, never the model's.
+        const parsed = parsedReply
+          ? { ...parsedReply, incomplete: undefined, sentKeys: undefined, ...coverage }
+          : null
         if (parsed && !value.timedOut) return { module: parsed, execution }
         const salvaged = generateMedicalSummaryUseCase.salvageReportsModule(value.fullText)
-        if (salvaged.pointCount > 0) return { module: salvaged.module, execution }
-        if (parsed) return { module: parsed, execution }
+        // Cut off: what finished is shown, and the reports it never reached
+        // are listed as unreviewed rather than as nothing notable.
+        if (salvaged.pointCount > 0) return { module: { ...salvaged.module, incomplete: true, sentKeys: undefined, ...coverage }, execution }
+        if (parsed) return { module: value.timedOut ? { ...parsed, incomplete: true } : parsed, execution }
         if (value.timedOut) throw new MedicalSummaryCardProgressTimeoutError(MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS)
         throw new ReportsParseError()
       }

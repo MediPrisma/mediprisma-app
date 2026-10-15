@@ -49,20 +49,30 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
 | `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
 
-## AI summary · 初診快覽 v3 (all routes; branch `claude/first-visit-overview`, draft — not on production)
+## AI summary · 初診快覽 v3 (all routes; PR #237)
 
 These remove cards from the 醫療摘要 first-visit summary on every route. They
 are not route gates; they are listed here because they take a clinical
 surface away. Nothing below may reach production without the owner's own yes
-(owner, in chat 2026-10-03: the AI summary needs more testing first).
+(owner, in chat 2026-10-03: the AI summary needs more testing first; owner approved
+production in chat 2026-10-15).
 
 | Surface | Change | Owner decision |
 |---|---|---|
 | 開藥前必看 (overview `mustKnow` grid) | Removed on all routes; the problem list and 開藥注意 carry the content | Owner, in chat 2026-10-02 |
 | 最可能的就診主因 (Focus card) and 最近 90 天 (Recent events card) | Removed on all routes | Owner, in chat 2026-10-02 |
 | Red high-alert banner under the headline | Removed; 開藥注意 is one neutral list ordered by importance, placed under 影像與病理重點 | Owner, in chat 2026-10-02: 「不要有什麼高危的紅色警示…照著重要度排序」 |
-| 民眾 audience: 最近需要注意的三件事, 就醫歷程 | Not shown (they rode on the removed cards) | **Pending — ask the owner before the PR leaves draft** |
-| 「雲端無過敏資料，非確認無過敏」 row | Not shown | **Pending — ask the owner before the PR leaves draft** |
+| 民眾 audience: 最近需要注意的三件事, 就醫歷程 | Not shown (they rode on the removed cards) | Owner, in chat 2026-10-15 |
+| 「雲端無過敏資料，非確認無過敏」 row | Not shown | Owner, in chat 2026-10-15 |
+| AI data scope, every AI surface (醫療摘要, 臨床對話, insights) | Adds, beyond the saved time window, the newest prescribing-relevant lab value and the newest report of each modality class within 730 days, and sends pathology reports with the imaging selection; only the 醫療摘要 data drawer notes it | Owner, in chat 2026-10-15: 「照現狀」 (same as pilot/hmc) |
+| 目前重點 (CurrentPrioritiesCard) | Removed on all routes; the headline replaces it | Owner, in chat 2026-10-13 |
+| 健康提醒／安全警示卡 (CareRemindersSafetyCard) | Removed on all routes; the scan shows as 開藥注意 under 影像與病理重點, with 「未發現明顯安全風險」 when a finished scan found nothing | Owner, in chat 2026-10-13 |
+| 跨院時間軸 (CrossFacilityTimeline) | Removed on all routes | Owner, in chat 2026-10-13 |
+| 關鍵檢驗與檢查趨勢 (InvestigationTrendsCard) and its jump into 累積報告; 民眾: 我的檢驗趨勢 | Removed on all routes; 累積報告 stays on the left panel | Owner, in chat 2026-10-13 |
+| 跨院用藥整合 (MedicationReconciliationCard) | Removed on all routes; 用藥 tab unchanged | Owner, in chat 2026-10-13 |
+| 舊版問題清單 (ProblemListCard) | Replaced on all routes by the new problem list (負責院所與用藥) | Owner, in chat 2026-10-13 |
+| 其他待確認事項 (DecisionList) | Removed; the prompt already returned no decisions | Owner, in chat 2026-10-13 |
+| Card nav and card-layout manager (reorder / hide cards) | Removed on all routes; a saved layout is no longer read | Owner, in chat 2026-10-13 |
 
 ## Prompt Gallery visibility
 
@@ -92,7 +102,7 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 
 | Surface | Compact presentation | Where the full recovery action remains | Owner decision |
 |---|---|---|---|
-| Care reminders and safety card | Do not render an empty card for a failed first scan, and do not repeat its error or retry action inside a card that still has prior successful content. | The Medical Summary error banner lists the safety failure with other failed cards and offers one retry action; that action reruns only failed cards and preserves successful cards. | Explicit Before/After approval in chat, 2026-09-15 |
+| 開藥注意 (the safety scan; was the care reminders and safety card) | Not shown for a failed scan, and its error or retry action is not repeated inside the section. A finished scan with no alert says so instead of disappearing. | The Medical Summary error banner lists the safety failure once, with other failed cards, and offers one retry action; that action reruns only failed cards and preserves successful cards. | Explicit Before/After approval in chat, 2026-09-15; carried to 開藥注意 2026-10-13 |
 
 ## HF visit action list (all launch routes)
 
