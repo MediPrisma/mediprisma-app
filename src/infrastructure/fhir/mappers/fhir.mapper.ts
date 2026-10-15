@@ -321,6 +321,7 @@ export class FhirMapper implements IDataMapper {
 
   static toObservation(fhirResource: Observation): ObservationEntity {
     return {
+      basedOn: fhirResource.basedOn,
       extension: fhirResource.extension,
       method: fhirResource.method,
       id: fhirResource.id || '',
@@ -357,6 +358,7 @@ export class FhirMapper implements IDataMapper {
 
   static toDiagnosticReport(fhirResource: DiagnosticReport, observations: ObservationEntity[]): DiagnosticReportEntity {
     const report: DiagnosticReportEntity = {
+      basedOn: fhirResource.basedOn,
       id: fhirResource.id || '',
       meta: fhirResource.meta,
       identifier: fhirResource.identifier,
