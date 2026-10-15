@@ -331,6 +331,8 @@ jobs:
         env:
           DEPLOY_BASE_PATH: "/app-hmc"
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}
+          NEXT_PUBLIC_HF_AUTH_POLICY: ${{ vars.NEXT_PUBLIC_HF_AUTH_POLICY }}
           NEXT_PUBLIC_CHAT_URL: ${{ vars.NEXT_PUBLIC_CHAT_URL }}
           NEXT_PUBLIC_WHISPER_URL: ${{ vars.NEXT_PUBLIC_WHISPER_URL }}
           NEXT_PUBLIC_GEMINI_URL: ${{ vars.NEXT_PUBLIC_GEMINI_URL }}
@@ -355,6 +357,20 @@ jobs:
             fi
           }
           trap restore_api EXIT
+          # Public settings must be inlined at build time. Refuse an artifact
+          # whose HF prediction button would be permanently disabled.
+          node --input-type=module <<'NODE'
+          const origin = process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN
+          const policy = process.env.NEXT_PUBLIC_HF_AUTH_POLICY
+          if (!origin) throw new Error('Set repository variable NEXT_PUBLIC_HF_GATEWAY_ORIGIN')
+          const url = new URL(origin)
+          if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+            throw new Error('NEXT_PUBLIC_HF_GATEWAY_ORIGIN must be an HTTPS origin')
+          }
+          if (!['firebase', 'intranet'].includes(policy)) {
+            throw new Error('Set repository variable NEXT_PUBLIC_HF_AUTH_POLICY to firebase or intranet')
+          }
+          NODE
           if [ -d app/api ]; then
             mv app/api .api-stash-hmc-build
           fi
