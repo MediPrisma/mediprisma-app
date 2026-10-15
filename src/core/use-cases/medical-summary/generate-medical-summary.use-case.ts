@@ -13,7 +13,7 @@
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
-import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { getAnalyteCanonicalKey, TEST_ALIASES } from '@voho0000/clinical-lab-normalization/canonical'
 import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import type {
   EncounterEntity,
@@ -1608,7 +1608,7 @@ function composeLabMetric(
   const reportById = new Map((clinicalData.diagnosticReports ?? [])
     .filter((report) => report.id)
     .map((report) => [report.id, report]))
-  const values: Array<{ label: string; group: string; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal']; oneADay?: boolean; order: number }> = []
+  const values: Array<{ label: string; group: string; aliases: string[]; date: string; value: string; unit?: string; id: string; abnormal?: MetricSegment['abnormal']; oneADay?: boolean; order: number }> = []
   const observationOrder = new Map((clinicalData.observations ?? []).map((observation, index) => [observation.id, index]))
   for (const key of keys) {
     const entry = byKey.get(key)
@@ -1637,6 +1637,14 @@ function composeLabMetric(
       return [{
         label,
         group,
+        aliases: [
+          label, observation.code?.text ?? '',
+          ...(observation.code?.coding ?? []).map(coding => coding.display ?? ''),
+          getAnalyteDisplayForObs(observation, 'medical', 'en'),
+          getAnalyteDisplayForObs(observation, 'patient', 'en'),
+          getAnalyteDisplayForObs(observation, 'patient', 'zh-TW'),
+          ...(getAnalyteCanonicalKey(observation) === 'CREA' ? ['Cr'] : []),
+        ].flatMap(name => [name, name.replace(/\s*\([^)]*\)\s*$/, '').trim()]).filter(Boolean),
         date: obsDate(observation) ?? entry.date ?? '',
         value,
         unit: unitless ? undefined : observation.valueQuantity?.unit?.trim() || undefined,
@@ -1699,8 +1707,8 @@ function composeLabMetric(
     })
     if (sharedUnit) push(sharedUnit === '%' ? '%' : ` ${sharedUnit}`)
   })
-  const labels = [...new Set(values.map(value => value.label))]
-  return { text: segments.map((segment) => segment.text).join(''), segments, testNames: labels.map(label => metricTestName(values.find(value => value.label === label)!.group)), labels }
+  const aliases = values.flatMap(value => value.aliases.map(label => ({ label, name: metricTestName(value.group) })))
+  return { text: segments.map((segment) => segment.text).join(''), segments, testNames: aliases.map(alias => alias.name), labels: aliases.map(alias => alias.label) }
 }
 
 function metricTestName(name: string): string {
@@ -1726,12 +1734,18 @@ function metricTestNames(text: string, labels: string[], recorded: string[]): st
     for (const name of [...candidates].reverse()) {
       const label = labels.find(label => name.toLowerCase() === label.toLowerCase())
       if (label) return [recorded[labels.indexOf(label)]]
-      // Narrative qualifiers ("Rising creatinine") do not change the test.
-      const words = name.split(/\s+/)
-      for (let start = 0; start < words.length; start++) {
-        const suffix = words.slice(start).join(' ')
-        if (getAnalyteCanonicalKey({ code: { text: suffix } })) return [metricTestName(suffix)]
-      }
+      // Longer prefixes may already include values/units. Only accept an
+      // exact alias here; normalizing "WBC 12 K →" must not discover potassium.
+      const exactAlias = TEST_ALIASES[name.toUpperCase()]
+      if (exactAlias) return [metricTestName(exactAlias)]
+    }
+    // Narrative qualifiers belong only to the name before the FIRST value.
+    const words = (candidates[0] ?? '').split(/\s+/)
+    for (let start = 0; start < words.length; start++) {
+      const suffix = words.slice(start).join(' ')
+      const label = labels.find(label => suffix.toLowerCase() === label.toLowerCase())
+      if (label) return [recorded[labels.indexOf(label)]]
+      if (getAnalyteCanonicalKey({ code: { text: suffix } })) return [metricTestName(suffix)]
     }
     return candidates.length ? [metricTestName(candidates[0])] : []
   })

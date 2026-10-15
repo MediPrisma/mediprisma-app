@@ -6,6 +6,8 @@ const data: any = {
     { id: 'creatinine', code: { text: 'Creatinine' }, valueQuantity: { value: 1.2, unit: 'mg/dL' }, effectiveDateTime: '2026-06-08' },
     { id: 'a1c', code: { text: 'HbA1c' }, valueQuantity: { value: 7, unit: '%' }, effectiveDateTime: '2026-06-08' },
     { id: 'ca199', code: { text: 'CA 19-9' }, valueQuantity: { value: 35, unit: 'U/mL' }, effectiveDateTime: '2026-06-08' },
+    { id: 'ldl', code: { text: 'LDL' }, valueQuantity: { value: 110, unit: 'mg/dL' }, effectiveDateTime: '2026-06-08' },
+    { id: 'wbc', code: { text: 'WBC' }, valueQuantity: { value: 9.8, unit: 'K' }, effectiveDateTime: '2026-06-08' },
   ],
   diagnosticReports: [{ id: 'vascular', code: { text: 'Doppler baPWV' }, effectiveDateTime: '2026-06-08', conclusion: 'baPWV right 1500 / left 1600; arterial stiffness' }],
 }
@@ -88,4 +90,22 @@ it('keeps translated patient-facing numeric test names stable on retry', () => {
   expect(second.problems[0].metric).toBe(first.problems[0].metric)
   expect(first.problems[0].metricNeedsReview).toBeUndefined()
   expect(second.problems[0].metricNeedsReview).toBeUndefined()
+})
+
+it.each(['Cr 99 mg/dL', 'Rising Cr 99 → 100 mg/dL'])('accepts the chart abbreviation %s', metric => {
+  const row = run(metric, ['creatinine']).problems[0]
+  expect(row.metric).toContain('1.2')
+  expect(row.metricNeedsReview).toBeUndefined()
+})
+
+it('accepts the plain Chinese lay name on the first patient-mode pass', () => {
+  const result = useCase.finalizeResult({ headline: '', problems: [{ label: 'Finding', metric: '低密度脂蛋白膽固醇 130 mg/dL', metricSources: [key('ldl')] }] } as any, catalog, { clinicalData: data, audience: 'patient', locale: 'zh-TW' })
+  expect(result.problems[0].metric).toContain('110')
+  expect(result.problems[0].metricNeedsReview).toBeUndefined()
+})
+
+it('does not interpret a later K unit as a potassium test name', () => {
+  const row = run('WBC 12.3 K → 9.8 K', ['wbc']).problems[0]
+  expect(row.metric).toContain('9.8')
+  expect(row.metricNeedsReview).toBeUndefined()
 })
