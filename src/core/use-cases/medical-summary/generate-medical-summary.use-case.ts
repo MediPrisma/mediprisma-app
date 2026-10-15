@@ -3136,6 +3136,12 @@ export function finalizeReportHighlights(
       : digest.items.map((item) => item.key)
     ).filter((key) => sentKeys.has(key)),
   )
+  // Only a report the model was given can back a finding: a quote or source
+  // naming an overflow report, or one the context cut removed, is dropped,
+  // so a citation can never take an unread report off the unread list.
+  const readItemByKey = new Map(
+    digest.items.filter((item) => sentKeys.has(item.key)).map((item) => [item.key, item]),
+  )
   let droppedQuoteCount = options.carried?.droppedQuoteCount ?? 0
   let hiddenPointCount = options.carried?.hiddenPointCount ?? 0
   const hiddenPoints: UnverifiedReportPoint[] = [...(options.carried?.hiddenPoints ?? [])]
@@ -3146,7 +3152,7 @@ export function finalizeReportHighlights(
   for (const group of module?.groups ?? []) {
     const organ = normaliseReportOrgan(group.organ)
     for (const point of group.points) {
-      const finalized = finalizeReportPoint(point, itemByKey)
+      const finalized = finalizeReportPoint(point, readItemByKey)
       droppedQuoteCount += finalized.droppedQuotes
       if (!finalized.point) {
         hiddenPointCount += 1

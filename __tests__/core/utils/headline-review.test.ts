@@ -58,6 +58,11 @@ describe('reviewHeadline', () => {
     // list that has landed holds none of the headline's problems.
     expect(reviewHeadline('70F with hyperkalemia', [], [])).toEqual({ unlisted: ['hyperkalemia'], medicines: [], values: [] })
     expect(reviewHeadline('70F', [], [])).toBeUndefined()
+    // Two-letter abbreviations name problems too.
+    for (const abbreviation of ['AF', 'HF', 'RA']) {
+      expect(reviewHeadline(`70F with ${abbreviation}`, [], [])?.unlisted).toEqual([abbreviation])
+    }
+    expect(reviewHeadline('70F with AF', ['Atrial fibrillation'], [])).toBeUndefined()
     expect(headlineItems('94-year-old man with CKD 3b and gout.')).toEqual(['CKD 3b', 'gout'])
   })
 })

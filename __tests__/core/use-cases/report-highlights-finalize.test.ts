@@ -865,3 +865,46 @@ describe('reports the model never finished reading — coverage and retries', ()
     expect(again.unreviewed).toBeUndefined()
   })
 })
+
+describe('a citation never takes an unread report off the unread list', () => {
+  it('drops a source past the digest cap even when it repeats the verified words', () => {
+    const many = {
+      diagnosticReports: Array.from({ length: 32 }, (_, index) => report(
+        `cap-${index}`,
+        `2026-0${Math.floor(index / 4) + 1}-${String((index % 4) * 7 + 1).padStart(2, '0')}`,
+        'Chest X-ray',
+        'Impression: Mild cardiomegaly.',
+      )),
+    } as any
+    const manyCatalog = buildSourceCatalog(many)
+    const digestKeys = manyCatalog.filter((entry) => entry.resourceType === 'DiagnosticReport').map((entry) => entry.key)
+    const first = digestKeys[0]
+    const highlightsFor = (sources: string[]) => useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: moduleOf([{ organ: 'heart', points: [point('Mild cardiomegaly', sources, [[first, 'Mild cardiomegaly.']])] }]),
+      },
+      manyCatalog,
+      { clinicalData: many, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    const plain = highlightsFor([first])
+    const overflowKeys = plain.unreviewed!.map((row) => row.key)
+    expect(overflowKeys).toHaveLength(2)
+    const cited = highlightsFor([first, ...overflowKeys])
+    expect(cited.groups[0].points[0].sources.map((source) => source.key)).not.toEqual(expect.arrayContaining(overflowKeys))
+    expect(cited.unreviewed!.map((row) => row.key).sort()).toEqual([...overflowKeys].sort())
+  })
+
+  it('drops a quote from a report the context cut removed', () => {
+    const highlights = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([{ organ: 'heart', points: [point('Cardiomegaly', [XR, US], [[XR, 'Cardiomegaly.'], [US, 'Fatty liver.']])] }]), sentKeys: [XR, CT] },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    expect(highlights.groups[0].points[0].sources.map((source) => source.key)).toEqual([XR])
+    expect(highlights.unreviewed!.map((row) => row.key)).toContain(US)
+  })
+})

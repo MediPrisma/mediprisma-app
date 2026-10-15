@@ -137,9 +137,11 @@ export function reviewHeadline(
       continue
     }
     const content = contentWords(item)
-    if (content.length === 0) continue
-    const named = content.some((word) => problemWords.has(word))
+    // "AF", "HF", "RA": a two-letter abbreviation has no content word, yet
+    // names a problem the list must hold.
     const acronyms = item.match(/\b[A-Z][A-Z0-9]{1,5}\b/g) ?? []
+    if (content.length === 0 && acronyms.length === 0) continue
+    const named = content.some((word) => problemWords.has(word))
     const byAcronym = acronyms.some((acronym) => problemLabels.some((label) => acronymMatches(acronym, label)))
     if (!named && !byAcronym) review.unlisted.push(item)
   }
