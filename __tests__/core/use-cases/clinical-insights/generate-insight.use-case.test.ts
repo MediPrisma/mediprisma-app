@@ -56,6 +56,31 @@ describe('GenerateInsightUseCase', () => {
       expect(messages[1].content).toContain('END UNTRUSTED PATIENT CLINICAL CONTEXT')
     })
 
+    it('places an ICD code reference at the top of the context and adds the code guard', () => {
+      const base = {
+        prompt: 'HMC template with ICD-9 block',
+        clinicalContext: 'Visits & Treatment History:\nsynthetic visit',
+        modelId: 'openai-compatible-custom:test-profile',
+        locale: 'zh-TW' as const,
+      }
+      const plain = useCase.buildMessages(base)
+      const withReference = useCase.buildMessages({ ...base, icdCodeReference: 'ICD code reference: 1 code\n\n' })
+
+      expect(plain[0].content).not.toContain('DIAGNOSIS CODES')
+      expect(withReference[0].content).toBe(
+        `${plain[0].content}\n\nDIAGNOSIS CODES: In any ICD code list, use only codes that appear in the supplied record or its ICD code reference. ` +
+        'Never recall or enumerate codes from memory; for a supported diagnosis without a supplied code, write the name and leave the code blank. ' +
+        'From the ICD code reference, copy a SINGLE code; write every part of a COMBINATION, one code from each { } group; ' +
+        'use at most one of ALTERNATIVES, and only when the record states which applies. ' +
+        'When the record cannot decide, keep the ICD-10-CM code and leave the ICD-9-CM code blank, marked "ICD-9 待確認". ' +
+        'Write each diagnosis at most once per block, then continue to the next section.',
+      )
+      expect(withReference[1].content).toContain(
+        '--- BEGIN UNTRUSTED PATIENT CLINICAL CONTEXT ---\nICD code reference: 1 code\n\nVisits & Treatment History:\nsynthetic visit\n',
+      )
+      expect(withReference[1].content.replace('ICD code reference: 1 code\n\n', '')).toBe(plain[1].content)
+    })
+
     it('should handle empty clinical context', () => {
       const input: GenerateInsightInput = {
         prompt: 'General inquiry',

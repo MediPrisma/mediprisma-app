@@ -5,6 +5,12 @@ import { AiError, AiErrorCode } from "@/src/core/errors"
 
 const mockQuery = jest.fn()
 const mockStop = jest.fn()
+const mockBuildMessages = jest.fn((_input: unknown) => [{ role: "user", content: "summarize" }])
+const mockLoadIcdCrosswalk = jest.fn()
+
+jest.mock("@/src/infrastructure/terminology/icd-crosswalk.loader", () => ({
+  loadIcdCrosswalk: () => mockLoadIcdCrosswalk(),
+}))
 
 jest.mock("@/src/application/hooks/ai/use-unified-ai.hook", () => ({
   useUnifiedAi: () => ({
@@ -16,7 +22,7 @@ jest.mock("@/src/application/hooks/ai/use-unified-ai.hook", () => ({
 jest.mock("@/src/application/hooks/clinical-insights/use-generate-insight.hook", () => ({
   useGenerateInsight: () => ({
     validate: () => ({ valid: true }),
-    buildMessages: () => [{ role: "user", content: "summarize" }],
+    buildMessages: (input: unknown) => mockBuildMessages(input),
     buildMetadata: (modelId: string) => ({ modelId, provider: "openai" }),
   }),
 }))
@@ -214,5 +220,145 @@ describe("useInsightGeneration provenance", () => {
 
     expect(useInsightResponsesStore.getState().panelStatus.soap.error).toBe(truncated)
     expect(useInsightResponsesStore.getState().responses.soap).toBeUndefined()
+  })
+
+  describe("ICD code reference", () => {
+    const LOCAL_MODEL = "openai-compatible-custom:vghtpe-tvghbrain"
+    const billed = "-     ICD codes on visit record (billing, not confirmed diagnoses): I10 - Essential hypertension"
+    // Real CMS 2018 GEM rows for I10: three mutually exclusive candidates.
+    const crosswalk = {
+      map: { I10: ["4010 10000", "4011 10000", "4019 10000"] },
+      names: {
+        "4010": "Malignant essential hypertension",
+        "4011": "Benign essential hypertension",
+        "4019": "Unspecified essential hypertension",
+      },
+    }
+    const render = (
+      model: string,
+      prompt: string,
+      context = `Visits & Treatment History:\n${billed}`,
+      panelIds = ["soap"],
+    ) =>
+      renderHook(() => useInsightGeneration({
+        panels: panelIds.map((id) => ({
+          id, title: id, prompt, outputFormat: "markdown" as const, languagePolicy: "interface-language" as const,
+        })),
+        prompts: Object.fromEntries(panelIds.map((id) => [id, prompt])),
+        context,
+        piiLiterals: [],
+        model,
+        modelName: "Tvghbrain 3.5",
+        contextLimit: 262_144,
+        contextAdaptation: null,
+        inputSignature: "input-icd",
+      }))
+    const pendingDownload = () => {
+      let finish!: (value: typeof crosswalk) => void
+      mockLoadIcdCrosswalk.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+      return (value: typeof crosswalk) => finish(value)
+    }
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue("generated summary")
+      mockLoadIcdCrosswalk.mockResolvedValue(crosswalk)
+    })
+
+    it("adds the translated billed codes for a local model and an ICD-9 template", async () => {
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block and ICD-10 block")
+      await act(async () => { await result.current.runPanel("soap", { force: true }) })
+
+      expect(mockLoadIcdCrosswalk).toHaveBeenCalledTimes(1)
+      expect(mockBuildMessages.mock.calls[0][0]).toMatchObject({
+        icdCodeReference: expect.stringContaining(
+          "1. billed ICD-10-CM I10 Essential hypertension | ICD-9-CM ALTERNATIVES (at most one): " +
+          "option 1: 401.0 MALIGNANT ESSENTIAL HYPERTENSION; option 2: 401.1 BENIGN ESSENTIAL HYPERTENSION; " +
+          "option 3: 401.9 UNSPECIFIED ESSENTIAL HYPERTENSION\n",
+        ),
+      })
+    })
+
+    it.each([
+      ["a frontier model", "gpt-5.6-luna", "A: ICD-9 block", undefined],
+      ["a template without ICD-9", LOCAL_MODEL, "Summarize the record", undefined],
+      ["a record without billed codes", LOCAL_MODEL, "A: ICD-9 block", "Lab Reports:\nnone"],
+    ])("leaves the request unchanged for %s", async (_label, model, prompt, context) => {
+      const { result } = render(model, prompt, context)
+      await act(async () => { await result.current.runPanel("soap", { force: true }) })
+
+      expect(mockLoadIcdCrosswalk).not.toHaveBeenCalled()
+      expect(mockBuildMessages.mock.calls[0][0]).not.toHaveProperty("icdCodeReference")
+    })
+
+    it("still generates when the crosswalk cannot be loaded", async () => {
+      mockLoadIcdCrosswalk.mockRejectedValueOnce(new Error("offline"))
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block")
+      await act(async () => { await result.current.runPanel("soap", { force: true }) })
+
+      expect(mockBuildMessages.mock.calls[0][0]).not.toHaveProperty("icdCodeReference")
+      expect(useInsightResponsesStore.getState().responses.soap?.text).toBe("generated summary")
+      warn.mockRestore()
+    })
+
+    it("sends nothing for a patient who was switched away during the crosswalk download", async () => {
+      const finishDownload = pendingDownload()
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block")
+      let generation!: Promise<void>
+      act(() => { generation = result.current.runPanel("soap", { force: true }) })
+      expect(useInsightResponsesStore.getState().panelStatus.soap).toMatchObject({ isLoading: true })
+
+      // ClinicalInsightsRuntimeProvider's patient switch: stopAll, then a new owner.
+      act(() => {
+        result.current.stopAll()
+        useInsightResponsesStore.getState().resetForPatient("patient-2")
+      })
+      await act(async () => {
+        finishDownload(crosswalk)
+        await generation
+      })
+
+      expect(mockBuildMessages).not.toHaveBeenCalled()
+      expect(mockQuery).not.toHaveBeenCalled()
+      expect(useInsightResponsesStore.getState().ownerPatientId).toBe("patient-2")
+      expect(useInsightResponsesStore.getState().responses).toEqual({})
+      expect(useInsightResponsesStore.getState().panelStatus).toEqual({})
+    })
+
+    it("sends nothing when the run is stopped during the crosswalk download", async () => {
+      const finishDownload = pendingDownload()
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block")
+      let generation!: Promise<void>
+      act(() => { generation = result.current.runPanel("soap", { force: true }) })
+
+      act(() => { result.current.stopPanel("soap") })
+      await act(async () => {
+        finishDownload(crosswalk)
+        await generation
+      })
+
+      expect(mockQuery).not.toHaveBeenCalled()
+      expect(useInsightResponsesStore.getState().panelStatus.soap).toEqual({ isLoading: false, error: null })
+      expect(useInsightResponsesStore.getState().responses.soap).toBeUndefined()
+    })
+
+    it("lets only the newer batch query when a second batch starts during the download", async () => {
+      const finishDownload = pendingDownload()
+      const { result } = render(LOCAL_MODEL, "A: ICD-9 block", undefined, ["soap", "plan"])
+      let first!: Promise<void>
+      let second!: Promise<void>
+      act(() => { first = result.current.runPanel("soap", { force: true }) })
+      act(() => { second = result.current.runPanel("plan", { force: true }) })
+      await act(async () => {
+        finishDownload(crosswalk)
+        await Promise.all([first, second])
+      })
+
+      expect(mockQuery).toHaveBeenCalledTimes(1)
+      expect(mockQuery.mock.calls[0][1]).toMatchObject({ operationKey: "clinical-insight:patient-1:plan" })
+      expect(useInsightResponsesStore.getState().responses.plan?.text).toBe("generated summary")
+      expect(useInsightResponsesStore.getState().responses.soap).toBeUndefined()
+      expect(useInsightResponsesStore.getState().panelStatus.soap).toEqual({ isLoading: false, error: null })
+    })
   })
 })
