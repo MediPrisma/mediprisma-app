@@ -356,6 +356,10 @@ export interface SummarySourceCatalogEntry {
    *  flag or reference range. A numeric value alone must not be described as
    *  high/low, controlled/uncontrolled, or at/not at target. */
   supportsNormalityAssessment?: boolean
+  /** Record-owned short lab values paired with their exact Observation keys.
+   * Panels list members explicitly so neighbouring results cannot be read as
+   * the value of the panel's title. Never contains an inferred diagnosis. */
+  observationFacts?: string
   /** Lazy decoded document narrative, used only for claim-level verification.
    *  Kept out of prompts/source pills so large discharge summaries are not
    *  duplicated in memory or exposed as metadata. */
