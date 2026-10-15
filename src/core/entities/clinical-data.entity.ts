@@ -796,6 +796,7 @@ export interface EncounterEntity {
     condition?: { reference?: string; display?: string }
   }>
   participant?: Array<{
+    type?: Array<{ coding?: Array<{ system?: string; code?: string }> }>
     individual?: { display?: string }
     actor?: { display?: string }
   }>

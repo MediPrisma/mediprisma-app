@@ -303,6 +303,20 @@ describe('outpatient document context', () => {
     const multi = [{ id: 'primary', code: { coding: [{ system: 'http://snomed.info/sct', code: '4740000', display: 'Herpes zoster' }, { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'B02.9', display: 'Zoster without complications' }] } }]
     expect(buildDocumentEntries([], [doc], {}, [visit], 'en', multi)[0].primaryDiagnosis).toEqual({ code: 'B02.9', text: 'Zoster without complications' })
   })
+  it('uses an available reference name when the resolved Condition code is empty', () => {
+    const linked = { ...visit, diagnosis: [{ rank: 1, condition: { reference: 'Condition/primary', display: 'B02.9 帶狀疱疹' } }] }
+    expect(buildDocumentEntries([], [doc], {}, [linked], 'zh-TW', [{ id: 'primary', code: {} }])[0].primaryDiagnosis).toEqual({ code: 'B02.9', text: '帶狀疱疹' })
+  })
+  it('prefers Taiwan ICD-10-CM coding systems', () => {
+    const mixed = [{ id: 'primary', code: { coding: [{ system: 'http://snomed.info/sct', code: '4740000', display: 'Herpes zoster' }, { system: 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw', code: 'B02.9', display: '帶狀疱疹' }] } }]
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', mixed)[0].primaryDiagnosis?.code).toBe('B02.9')
+  })
+  it('includes only typed attending or primary performers when roles are supplied', () => {
+    const person = (code: string, name: string) => ({ type: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType', code }] }], individual: { display: name } })
+    const typed = { ...visit, participant: [person('REF', '轉介者'), person('PART', '護理人員'), person('ATND', '主治醫師')] }
+    expect(buildDocumentEntries([], [doc], {}, [typed], 'zh-TW', conditions)[0].outpatient?.physician).toBe('主治醫師')
+    expect(buildDocumentEntries([], [doc], {}, [{ ...typed, participant: [person('REF', '轉介者')] }], 'zh-TW', conditions)[0].outpatient?.physician).toBeUndefined()
+  })
   it('prefers the supplied localized name and preserves the English coding display', () => {
     const localized = [{ ...conditions[1], code: { ...conditions[1].code, text: 'B02.9 帶狀疱疹' } }]
     expect(buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', localized)[0].primaryDiagnosis?.text).toBe('帶狀疱疹')

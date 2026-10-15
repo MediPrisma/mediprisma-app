@@ -345,13 +345,13 @@ function DocumentEntryCard({
           {entry.outpatient && <span className="text-xs text-muted-foreground">{locale === 'en' ? 'Primary diagnosis:' : '主診斷：'}</span>}
           {entry.primaryDiagnosis.code && (
             <span
-              className={cn('font-mono text-xs', !entry.outpatient && 'text-muted-foreground cursor-help')}
+              className={cn('font-mono', entry.outpatient ? 'text-xs' : 'text-[0.6875rem] text-muted-foreground cursor-help')}
               title={entry.outpatient ? undefined : strings.primaryDiagnosisTooltip}
             >{entry.primaryDiagnosis.code}</span>
           )}
           <span
             title={entry.outpatient ? undefined : strings.primaryDiagnosisTooltip}
-            className="min-w-0 break-words"
+            className={cn('min-w-0 break-words', !entry.outpatient && 'cursor-help')}
           >
             {entry.primaryDiagnosis.text || (locale === 'en' ? 'Description not provided' : '未提供診斷名稱')}
           </span>

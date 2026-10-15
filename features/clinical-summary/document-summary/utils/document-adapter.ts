@@ -71,7 +71,7 @@ function outpatientPrimaryDiagnosis(
   const concept = reference ? conditions?.get(reference.replace(/^Condition\//, ''))?.code : undefined
   if (concept) {
     const coding = concept.coding?.find((item) => item.code &&
-      /\/sid\/icd-10(?:-cm)?$/.test(item.system || ''))
+      /icd-?10(?:-?cm)?/i.test(item.system || ''))
       || concept.coding?.find((item) => item.code)
     const code = coding?.code?.trim()
     const display = coding?.display?.trim() || ''
@@ -79,7 +79,8 @@ function outpatientPrimaryDiagnosis(
     const text = rawText === code ? ''
       : code && rawText.startsWith(`${code} `) ? rawText.slice(code.length).trim()
       : stripIcdPrefix(rawText)
-    return { code, text: (locale === 'en' ? display || text : text || display) }
+    const name = locale === 'en' ? display || text : text || display
+    if (code || name) return { code, text: name }
   }
   const referenceDisplay = primary?.condition?.display?.trim()
   if (referenceDisplay) {
@@ -222,10 +223,17 @@ export function documentReferenceToEntry(
     docRef.type?.text === '門診 SOAP 與醫囑' && docRef.meta?.tag?.some((tag) =>
       tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')
   )
+  const participants = encounter?.participant ?? []
+  const hasTypedParticipants = participants.some((participant) =>
+    participant.type?.some((type) => type.coding?.some((coding) => coding.code)))
+  const physicians = hasTypedParticipants ? participants.filter((participant) =>
+    participant.type?.some((type) => type.coding?.some((coding) =>
+      coding.system === 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType'
+      && (coding.code === 'ATND' || coding.code === 'PPRF')))) : participants
   const outpatient = isOutpatient ? {
     department: encounter?.serviceType?.text?.trim()
       || encounter?.serviceType?.coding?.find((coding) => coding.display?.trim())?.display?.trim(),
-    physician: encounter?.participant?.map((participant) =>
+    physician: physicians.map((participant) =>
       participant.individual?.display?.trim() || participant.actor?.display?.trim()).filter(Boolean).join('、') || undefined,
   } : undefined
   const primaryDiagnosis = isOutpatient
