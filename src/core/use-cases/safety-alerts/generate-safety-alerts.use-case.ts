@@ -64,7 +64,7 @@ const NO_POSITIONAL_RULE =
 
 // Appended to both prompts: how to cite the SOURCE LIST in "sources".
 const SOURCE_RULE =
-  LAB_SOURCE_EVIDENCE_RULE +
+  ' ' + LAB_SOURCE_EVIDENCE_RULE +
   ' In "sources", list the SOURCE LIST key(s) (e.g. "L3", "M2") for the records this alert is based on; ' +
   'use ONLY keys that appear in the SOURCE LIST, and omit any you cannot match. This is separate from "evidence" (which stays human-readable). ' +
   'When an alert relies on a discharge summary or other clinical document, cite its matching D# source key. ' +

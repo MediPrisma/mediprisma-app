@@ -24,7 +24,8 @@ export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 // medsummary37: problem rows carry shortSpanChronic.
 // medsummary38: 影像與病理重點 lists unread reports apart (unreviewed); a
 // cached result from before would still call them unremarkable.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary38', scanKey)
+// medsummary39: invalidate results before source/anatomy attribution checks.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary39', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

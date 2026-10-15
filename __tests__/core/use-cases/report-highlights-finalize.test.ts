@@ -101,9 +101,9 @@ describe('organ enum', () => {
       { organ: 'chest-lung', points: [point('疑似支氣管擴張', [XR], [[XR, 'Suspicious for bronchiectasis over bilateral lower lung field.']])] },
     ]))
     expect(highlights.groups.map((group) => [group.organ, group.label, group.points.length])).toEqual([
+      ['abdomen-liver-biliary', 'Liver & biliary', 1],
       ['chest-lung', 'Lungs', 2],
       ['abdomen-other', 'Abdomen', 1],
-      ['other', 'Other', 1],
     ])
     expect(finalize(moduleOf([
       { organ: 'chest-lung', points: [point('nodule', [CT], [[CT, 'Suspect primary lung cancer, cT1bN0.']])] },
