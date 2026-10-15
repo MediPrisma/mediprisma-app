@@ -49,20 +49,22 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
 | `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
 
-## AI summary · 初診快覽 v3 (all routes; branch `claude/first-visit-overview`, draft — not on production)
+## AI summary · 初診快覽 v3 (all routes; PR #237)
 
 These remove cards from the 醫療摘要 first-visit summary on every route. They
 are not route gates; they are listed here because they take a clinical
 surface away. Nothing below may reach production without the owner's own yes
-(owner, in chat 2026-10-03: the AI summary needs more testing first).
+(owner, in chat 2026-10-03: the AI summary needs more testing first; owner approved
+production in chat 2026-10-15).
 
 | Surface | Change | Owner decision |
 |---|---|---|
 | 開藥前必看 (overview `mustKnow` grid) | Removed on all routes; the problem list and 開藥注意 carry the content | Owner, in chat 2026-10-02 |
 | 最可能的就診主因 (Focus card) and 最近 90 天 (Recent events card) | Removed on all routes | Owner, in chat 2026-10-02 |
 | Red high-alert banner under the headline | Removed; 開藥注意 is one neutral list ordered by importance, placed under 影像與病理重點 | Owner, in chat 2026-10-02: 「不要有什麼高危的紅色警示…照著重要度排序」 |
-| 民眾 audience: 最近需要注意的三件事, 就醫歷程 | Not shown (they rode on the removed cards) | **Pending — ask the owner before the PR leaves draft** |
-| 「雲端無過敏資料，非確認無過敏」 row | Not shown | **Pending — ask the owner before the PR leaves draft** |
+| 民眾 audience: 最近需要注意的三件事, 就醫歷程 | Not shown (they rode on the removed cards) | Owner, in chat 2026-10-15 |
+| 「雲端無過敏資料，非確認無過敏」 row | Not shown | Owner, in chat 2026-10-15 |
+| AI data scope, every AI surface (醫療摘要, 臨床對話, insights) | Adds, beyond the saved time window, the newest prescribing-relevant lab value and the newest report of each modality class within 730 days, and sends pathology reports with the imaging selection; only the 醫療摘要 data drawer notes it | Owner, in chat 2026-10-15: 「照現狀」 (same as pilot/hmc) |
 | 目前重點 (CurrentPrioritiesCard) | Removed on all routes; the headline replaces it | Owner, in chat 2026-10-13 |
 | 健康提醒／安全警示卡 (CareRemindersSafetyCard) | Removed on all routes; the scan shows as 開藥注意 under 影像與病理重點, with 「未發現明顯安全風險」 when a finished scan found nothing | Owner, in chat 2026-10-13 |
 | 跨院時間軸 (CrossFacilityTimeline) | Removed on all routes | Owner, in chat 2026-10-13 |
