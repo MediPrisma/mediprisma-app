@@ -1094,6 +1094,49 @@ export function createFhirTools(getData: () => AgentDataSource) {
   const scrub = <T,>(payload: T): T =>
     scrubPii(payload, buildPatientTextLiterals(getData().patient))
 
+  // A failed name/category/date match is not an empty chart. Give the model
+  // actual values within the requested date/abnormality scope to discover the source's names without another
+  // guessed lookup. Keep matches separate from recovery evidence, and bound
+  // the inventory by analyte rather than letting repeated tests crowd it out.
+  const scrubLabResult = <T extends { success: boolean; count?: number }>(
+    payload: T,
+    filters?: { discovery: boolean; dateFrom?: string; dateTo?: string; abnormalOnly?: boolean },
+  ) => {
+    const collection = getData().collection
+    if (!payload.success || payload.count !== 0 || !collection || !filters?.discovery) return scrub(payload)
+    const observations = uniqueObservations(collection)
+      .flatMap(observation => expandObservationValues(observation))
+      .filter(observation => observation.status !== 'entered-in-error'
+        && (!(filters.dateFrom || filters.dateTo)
+          || isWithinDateRange(observationDate(observation), filters.dateFrom, filters.dateTo))
+        && (!filters.abnormalOnly || isAbnormalObservation(observation)))
+      .sort((a, b) => (observationDate(b) || '').localeCompare(observationDate(a) || ''))
+    const latest = new Map<string, (typeof observations)[number]>()
+    for (const observation of observations) {
+      const key = labAnalyteKey(observation)
+      if (!latest.has(key)) latest.set(key, observation)
+    }
+    if (latest.size === 0) return scrub(payload)
+    const data = [...latest.values()].slice(0, 30).map(observationResult)
+    const queryIssues = queryIssuesFor(collection, ['Observation'])
+    return scrub({
+      ...payload,
+      availableObservationRecovery: {
+        scope: 'Latest value per analyte within the requested date and abnormality filters; name/code/category relaxed. NOT matches for the original query.',
+        dateRange: { from: filters.dateFrom, to: filters.dateTo },
+        abnormalOnly: filters.abnormalOnly ?? false,
+        totalAnalytes: latest.size,
+        returnedAnalytes: data.length,
+        truncated: latest.size > data.length,
+        incomplete: queryIssues.length > 0,
+        canConcludeAbsence: false,
+        queryIssues,
+        instruction: 'The chart contains these observations. Zero matches applies ONLY to the original filters. Do not say all observations are missing. Use these names to query details or trends; do not substitute another analyte or date for the requested result. This inventory is not a complete history and cannot establish absence. Use only supplied normalityStatus and referenceRange.',
+        data,
+      },
+    })
+  }
+
   return {
     // ── Patient ────────────────────────────────────────────────────────────
 
@@ -1673,7 +1716,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '檢驗或觀察數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const list = uniqueObservations(collection!)
 
@@ -1710,7 +1753,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗數據', dateFrom, dateTo)
 
         if (summarize) {
-          return scrub({
+          return scrubLabResult({
             success: true,
             summary,
             count: filtered.length,
@@ -1724,10 +1767,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
               effectiveDateTime: o.effectiveDateTime,
               abnormal: isAbnormalObservation(o),
             })),
-          })
+          }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
         }
 
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary,
           count: filtered.length,
@@ -1745,7 +1788,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             status: o.status,
             ...observationComponentFields(o),
           })),
-        })
+        }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1760,7 +1803,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['DiagnosticReport'],
           '檢驗或診斷報告',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
         // Report names/conclusions remain usable if the separate Observation
         // search failed, but component-result coverage may then be incomplete.
         const queryIssues = queryIssuesFor(collection!, ['Observation'])
@@ -1801,7 +1844,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗報告', dateFrom, dateTo)
 
         if (summarize) {
-          return scrub({
+          return scrubLabResult({
             success: filtered.length > 0 || !incomplete,
             summary,
             count: filtered.length,
@@ -1824,10 +1867,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
               imageAttachmentCount: attachmentDetails(r)
                 .filter((attachment: any) => attachment.kind === 'image').length,
             })),
-          })
+          }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
         }
 
-        return scrub({
+        return scrubLabResult({
           success: filtered.length > 0 || !incomplete,
           summary,
           count: filtered.length,
@@ -1840,7 +1883,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           unmatchedQueryTerms,
           dateRange: { from: dateFrom, to: dateTo },
           data: capped.map(diagnosticReportOutput),
-        })
+        }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1855,7 +1898,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '指定分類的檢驗數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const categoryDefinition = LAB_CATEGORIES.find(item => item.id === category)!
         const expanded = collection!.observations
@@ -1911,7 +1954,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         const capped = applyLimit(groups, limit, 50)
         const page = paginationMeta(groups.length, capped.length)
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary: groups.length > 0
             ? `Found ${groups.length} analyte(s) in lab category "${category}"`
@@ -1944,7 +1987,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             instruction: 'Do not add customary ranges, diagnose a condition, or infer the cause of an abnormal result.',
           },
           data: capped,
-        })
+        }, { discovery: true, dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -2093,7 +2136,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '指定名稱的檢驗或觀察數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const unique = uniqueObservations(collection!)
 
@@ -2150,7 +2193,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const capped = applyLimit(flat, limit, 50)
         const page = paginationMeta(flat.length, capped.length)
 
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary: matches.length > 0
             ? `Matched ${matches.length} observation(s) across ${byCode.size} code(s) for "${query}"`
@@ -2168,7 +2211,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             abnormal: isAbnormalObservation(obs),
             ...observationComponentFields(obs),
           })),
-        })
+        }, { discovery: Boolean(query) })
       },
     }),
 

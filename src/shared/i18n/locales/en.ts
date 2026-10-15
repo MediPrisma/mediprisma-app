@@ -2405,7 +2405,7 @@ export const en = {
     thinking: 'Thinking...',
     organizingResults: 'Organizing query results...',
     repeatedQueryStopped: 'Stopped after the same query was repeated three times in a row; this answer is organized from the data already retrieved.',
-    repeatedQueryHint: '\n\nNote: the previous round was stopped because the same query was repeated three times in a row. If you still need other data, query it directly and do not repeat that same query. If something could not be retrieved, say so in your answer.',
+    repeatedQueryHint: '\n\nNote: the previous round was stopped because the same query was repeated three times in a row. Answer from the evidence already retrieved. No further tools are available in this response; explicitly state which requested facts remain unverified.',
     stepLimitReached: 'Stopped after the tool-call step limit was reached; this answer is organized from the data already retrieved and may be incomplete.',
     stepLimitHint: '\n\nNote: the previous round stopped because the tool-call step limit was reached, not because the search was complete. Answer from what was retrieved and say explicitly which parts of the question could not be checked.',
     noTextGenerated: 'AI executed the query but did not generate a response. Please try again or rephrase your question.',
