@@ -175,7 +175,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
       else if (quantity.comparator && !['<', '<=', '>', '>='].includes(quantity.comparator)) valueIssue = 'comparator-invalid'
       else valueIssue = 'value-invalid' // Conversion overflow is not an unsupported unit.
     }
-    const quantityText = quantity && typeof quantity === 'object' && text(quantity.value) !== undefined
+    const quantityText = quantity && typeof quantity === 'object' && text(quantity.value)?.trim()
       ? [text(quantity.comparator), text(quantity.value)].filter(value => value !== undefined).join(' ') : undefined
     excludedLabs.push({ row, reason,
       ...(valueIssue ? { valueIssue } : {}),
