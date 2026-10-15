@@ -57,3 +57,16 @@ test('IPS roundtrip of a non-de-identified patient retains accepted CDSS identit
   expect(reimported.deidentified).not.toBe(true)
   expect(await cdssPatientIdentity(reimported)).toEqual(await cdssPatientIdentity(patient))
 })
+
+test('hospital de-identification survives demographic supplementation and IPS roundtrip', async () => {
+  const patient = PatientMapper.toDomain({ ...source, name: [{ use: 'official', text: 'DEID-0123abcd' }],
+    identifier: [{ system: 'urn:oid:his.patient.mrn', value: '0123abcd'.repeat(4) }], birthDate: '1970',
+  })!
+  expect(patient.deidentified).toBe(true)
+  const supplemented = applyUserEnteredPatientProfile(patient, {
+    source: 'user-entered', name: '測試病人', birthDate: '1970-01-15', updatedAt: '2026-10-15T00:00:00Z',
+  })
+  const reimported = PatientMapper.toDomain(buildPatient(supplemented, { includeIdentifiers: true }).entry.resource)!
+  await expect(cdssPatientIdentity(supplemented)).rejects.toThrow('cdss_patient_deidentified')
+  await expect(cdssPatientIdentity(reimported)).rejects.toThrow('cdss_patient_deidentified')
+})

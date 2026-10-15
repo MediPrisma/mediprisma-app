@@ -502,3 +502,9 @@ test('hospital bridge deidentified export explains reimport rather than a missin
     identifier: [{ system: 'urn:oid:his.patient.mrn', value: '0123abcd'.repeat(4) }],
   })).rejects.toThrow('cdss_patient_deidentified')
 })
+
+test('reserved hospital storage namespace is not accepted as an imported source', async () => {
+  await expect(cdssPatientIdentity({ ...input.patient, identifier: [
+    { system: 'urn:mediprisma:vghtpe-bridge:national-id', value: 'A123XXX789' },
+  ] })).rejects.toThrow('cdss_identity_unavailable')
+})

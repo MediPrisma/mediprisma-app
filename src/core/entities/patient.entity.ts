@@ -62,7 +62,10 @@ export interface PatientEntity {
 
 /** Cloud export marks de-identified names as anonymous; ID masking alone is not this option. */
 export function isDeidentifiedPatient(patient: PatientEntity): boolean {
-  return patient.deidentified === true || (Array.isArray(patient.name) && patient.name.some(name => name?.use === 'anonymous'))
+  const hospitalExport = Array.isArray(patient.identifier) && patient.identifier.some(identifier =>
+    identifier?.system?.normalize('NFKC').trim() === 'urn:oid:his.patient.mrn')
+    && Array.isArray(patient.name) && patient.name.some(name => /^DEID-[0-9a-f]{8}$/i.test(name?.text?.normalize('NFKC').trim() ?? ''))
+  return patient.deidentified === true || hospitalExport || (Array.isArray(patient.name) && patient.name.some(name => name?.use === 'anonymous'))
 }
 
 export type PatientDemographicField = 'name' | 'gender' | 'birthDate'

@@ -284,14 +284,14 @@ test('三區塊 does not offer saving or records, and switching to it neither ca
   view.unmount()
 })
 
-test.each([false, true])('uncertain save outcomes ask users to check records (English=%s)', async english => {
+test.each([false, true].flatMap(english => ['cdss_save_timeout', 'cdss_save_interrupted', 'cdss_network_unavailable'].map(code => [english, code] as const)))('uncertain save outcomes ask users to check records (English=%s, code=%s)', async (english, code) => {
   jest.clearAllMocks()
-  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new Error('cdss_save_timeout'))
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new Error(code))
   const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
   fireEvent.click(screen.getByTestId('cdss-save-record'))
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
     english ? 'CDSS save was not confirmed.' : 'CDSS 儲存結果未確認。',
-    expect.objectContaining({ description: expect.stringContaining('cdss_save_timeout') }),
+    expect.objectContaining({ description: expect.stringContaining(code) }),
   ))
   view.unmount()
 })
