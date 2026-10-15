@@ -3188,9 +3188,12 @@ export function finalizeReportHighlights(
   // verification, or that returned nothing at all, said nothing about them:
   // present it like an unavailable summary (each report's own conclusion)
   // instead of implying the reports are unremarkable.
+  // Only a report the request carried whole can have been judged
+  // unremarkable; a verdict on one the cut removed says nothing, and must not
+  // make the reply count as a summary that the retry round trip cannot keep.
   const unremarkableCount = (module?.unremarkable ?? [])
     .map(normaliseSummarySourceKey)
-    .filter((key) => itemByKey.has(key))
+    .filter((key) => itemByKey.has(key) && sentKeys.has(key))
     .length
   const summarized = module !== undefined &&
     (groups.length > 0 || (hiddenPointCount === 0 && unremarkableCount > 0))

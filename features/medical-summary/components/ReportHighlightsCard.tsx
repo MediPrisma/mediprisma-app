@@ -118,6 +118,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   const newestYear = [
     ...groups.flatMap((group) => group.points.flatMap((point) => point.sources.map((source) => source.date))),
     ...others.map((row) => row.date),
+    ...unreviewed.map((row) => row.date),
     ...unverifiedPoints.flatMap((point) => point.sources.map((source) => source.date)),
   ]
     .filter((date): date is string => Boolean(date))

@@ -331,3 +331,20 @@ describe('ReportHighlightsCard — only unread reports', () => {
     expect(container.querySelector('[data-report-unreviewed] [data-report-row="L41"]')?.textContent).toContain('Stable nodule.')
   })
 })
+
+describe('ReportHighlightsCard — chip years with unread reports', () => {
+  it('counts an unread report when deciding which year a chip may leave out', () => {
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{
+          ...HIGHLIGHTS,
+          groups: [{ organ: 'heart', label: 'Heart', points: [{ text: 'Cardiomegaly', displayAs: 'text', quotes: [{ key: 'L50', quote: 'Cardiomegaly.' }], sources: [source('L50', 'xray', '2025-03-10')] }] }],
+          others: [],
+          unreviewed: [row('L51', 'xray', '2026-03-10', { excerpt: 'Clear lungs.', excerptSource: 'conclusion' })],
+        }}
+        labels={LABELS}
+      />,
+    )
+    expect(container.querySelector('[data-report-chip="L50"]')?.textContent).toContain('2025-03-10')
+  })
+})

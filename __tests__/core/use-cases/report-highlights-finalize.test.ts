@@ -829,6 +829,24 @@ describe('reports the model never finished reading — coverage and retries', ()
     expect(again.unreviewed!.map((row) => row.key).sort()).toEqual([CT, PATH, XR_OLD].sort())
   })
 
+  it('reads a verdict on a report the cut removed as no summary, the same before and after a retry', () => {
+    const first = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([], [CT]), sentKeys: [] },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    )
+    const highlights = first.reportHighlights!
+    expect(highlights.summarized).toBe(false)
+    expect(highlights.unreviewed).toBeUndefined()
+    expect(highlights.others).toHaveLength(5)
+    const again = useCase.finalizeResult(useCase.createAiDraftFromResult(first), catalog, { clinicalData, audience: 'medical', locale: 'zh-TW' }).reportHighlights!
+    expect(again.summarized).toBe(false)
+    expect(again.others.map((row) => row.key)).toEqual(highlights.others.map((row) => row.key))
+  })
+
   it('lists every report with its excerpt, the same way before and after a retry, when nothing verified', () => {
     const first = useCase.finalizeResult(
       {
