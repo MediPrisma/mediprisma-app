@@ -128,8 +128,8 @@ export function ProblemsCard({
       </div>
 
       {/* @container: three columns from 38rem of card width; below that the
-          same cells dissolve (display: contents) into layered rows — name and
-          facility on one line from 28rem, everything stacked under it. */}
+          same cells dissolve (display: contents) into layered rows —
+          basis and facility on one line from 28rem, with the name above. */}
       <div className="@container">
         {/* One grid for the whole list in the three-column layout, each row a
             subgrid: the columns are sized by every row's content together —
@@ -231,8 +231,8 @@ export function ProblemsCard({
                 key={`${problem.label}-${index}`}
                 className={cn(
                   "grid gap-x-3 gap-y-0.5 border-b border-border py-1.5 last:border-b-0",
-                  "grid-cols-1 [grid-template-areas:'name'_'org'_'basis'_'metric'_'meds']",
-                  "@min-[28rem]:grid-cols-[minmax(0,1fr)_auto] @min-[28rem]:[grid-template-areas:'name_org'_'basis_basis'_'metric_metric'_'meds_meds']",
+                  "grid-cols-1 [grid-template-areas:'name'_'basis'_'org'_'metric'_'meds']",
+                  "@min-[28rem]:grid-cols-[minmax(0,1fr)_auto] @min-[28rem]:[grid-template-areas:'name_name'_'basis_org'_'metric_metric'_'meds_meds']",
                   "@min-[38rem]:col-span-3 @min-[38rem]:grid-cols-subgrid @min-[38rem]:[grid-template-areas:none] @min-[38rem]:items-start",
                 )}
               >
@@ -258,8 +258,8 @@ export function ProblemsCard({
                     ) : null}
                   </p>
                   {problem.basis ? (
-                    <p className="text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground break-words [grid-area:basis]">
-                      <span className="text-muted-foreground/80">{basisLabel}</span>
+                    <p className="text-[length:max(14px,0.875rem)] leading-snug text-foreground/80 break-words [grid-area:basis]">
+                      <span>{basisLabel}</span>
                       {perColumn ? cited(problem.basisSourceKeys, basisText) : basisText}
                     </p>
                   ) : null}
@@ -268,7 +268,7 @@ export function ProblemsCard({
                   {problem.metric ? (
                     <div className="flex min-w-0 items-start gap-0.5 [grid-area:metric]">
                       <RowFillClamp
-                        className="min-w-0 flex-1 text-[length:max(13px,0.8125rem)] leading-snug tabular-nums text-foreground break-words"
+                        className="min-w-0 flex-1 text-[length:max(14px,0.875rem)] leading-snug tabular-nums text-foreground break-words"
                         title={problem.metric}
                       >
                         <span className="mr-1.5 text-[length:max(12px,0.75rem)] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
@@ -293,7 +293,7 @@ export function ProblemsCard({
                         {/* The model often writes the date into the value
                             ("Echo: … (2026-07-07)"); then it is not repeated. */}
                         {problem.metricMeta && !problem.metric.includes(problem.metricMeta) ? (
-                          <span className="ml-1 text-[length:max(12px,0.75rem)] text-muted-foreground">（{problem.metricMeta}）</span>
+                          <span className="ml-1 text-[length:max(14px,0.875rem)] text-foreground/80">（{problem.metricMeta}）</span>
                         ) : null}
                       </RowFillClamp>
                       {/* Kept outside the two-line clamp: the review tag must
@@ -308,7 +308,13 @@ export function ProblemsCard({
                 </div>
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0 @min-[38rem]:space-y-0.5" data-problem-column="care">
                   {managedByLine ? (
-                    <p className="text-[length:max(13px,0.8125rem)] leading-snug tabular-nums text-muted-foreground break-words [grid-area:org] @min-[28rem]:text-right @min-[38rem]:text-left" data-problem-managed-by>
+                    <p className={cn(
+                      "min-w-0 text-[length:max(14px,0.875rem)] leading-snug tabular-nums text-foreground/80 break-words [grid-area:org]",
+                      problem.basis
+                        ? "@min-[28rem]:max-w-56 @min-[28rem]:text-right"
+                        : "@min-[28rem]:col-[1/-1] @min-[28rem]:text-left",
+                      "@min-[38rem]:max-w-none @min-[38rem]:text-left",
+                    )} data-problem-managed-by>
                       {cited(problem.managedBySourceKey ? [problem.managedBySourceKey] : undefined, managedByLine)}
                     </p>
                   ) : null}

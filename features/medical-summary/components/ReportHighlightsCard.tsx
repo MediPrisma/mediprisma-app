@@ -138,7 +138,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
     const label = sameDayCount > 1 ? `${chipLabel(source)} ×${sameDayCount}` : chipLabel(source)
     const evidenceQuote = quotes.find((quote) => quote.key === source.key)?.quote
     const className =
-      "relative ml-1 inline-flex items-center whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 align-baseline text-[length:max(12px,0.75rem)] leading-[1.375rem] tabular-nums text-muted-foreground"
+      "relative ml-1 inline-flex items-center whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 align-baseline text-[length:max(14px,0.875rem)] leading-[1.375rem] tabular-nums text-foreground/80"
     if (!onNavigate) {
       return <span key={source.key} className={className} data-report-chip={source.key}>{label}</span>
     }
@@ -188,7 +188,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
             type="button"
             onClick={() => togglePoint(id)}
             aria-label={labels.moreSources.replace("{count}", String(hidden))}
-            className="relative ml-1 inline-flex items-center rounded px-1 align-baseline text-[length:max(12px,0.75rem)] leading-[1.375rem] tabular-nums text-muted-foreground transition-colors hover:text-foreground before:absolute before:-inset-x-0.5 before:-inset-y-3 before:content-[''] lg:before:-inset-y-1"
+            className="relative ml-1 inline-flex items-center rounded px-1 align-baseline text-[length:max(14px,0.875rem)] leading-[1.375rem] tabular-nums text-foreground/80 transition-colors hover:text-foreground before:absolute before:-inset-x-0.5 before:-inset-y-3 before:content-[''] lg:before:-inset-y-1"
             data-report-more-sources
           >
             +{hidden}
@@ -261,14 +261,14 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
 
       {groups.length > 0 ? (
         <div className="@container">
-          <ul>
+          <ul className="@min-[38rem]:grid @min-[38rem]:grid-cols-[fit-content(9rem)_minmax(0,1fr)] @min-[38rem]:gap-x-3">
             {groups.map((group) => (
               <li
                 key={group.organ}
                 data-report-organ={group.organ}
-                className="grid grid-cols-1 gap-x-3 border-b border-border py-1.5 last:border-b-0 @min-[26rem]:grid-cols-[max(4.5rem,66px)_minmax(0,1fr)]"
+                className="grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border py-1.5 last:border-b-0 @min-[38rem]:col-span-2 @min-[38rem]:grid-cols-subgrid"
               >
-                <span className="text-[length:max(13px,0.8125rem)] font-semibold leading-snug text-foreground/80 @min-[26rem]:pt-px">
+                <span className="min-w-0 [overflow-wrap:anywhere] text-[length:max(13px,0.8125rem)] font-semibold leading-snug text-foreground/80 @min-[38rem]:pt-px">
                   {group.label}
                 </span>
                 <ul className="min-w-0 space-y-0.5">
@@ -292,7 +292,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                           </button>
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="break-words text-[length:max(13px,0.875rem)] leading-snug text-foreground">
+                          <p className="break-words text-[length:max(14px,0.875rem)] leading-snug text-foreground">
                             {showAsQuote ? (
                               <>
                                 <span
@@ -330,12 +330,12 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                                 return (
                                   <li
                                     key={`${quote.key}-${quoteIndex}`}
-                                    className="break-words text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground"
+                                    className="break-words text-[length:max(14px,0.875rem)] leading-snug text-foreground"
                                     data-verified-quote={quote.key}
                                   >
                                     {quoted(quote.quote)}
                                     {source ? (
-                                      <span className="ml-1 whitespace-nowrap tabular-nums text-muted-foreground/80">
+                                      <span className="ml-1 inline-block text-[length:max(14px,0.875rem)] tabular-nums text-foreground/80">
                                         {labels.kindLabels[source.kind]} {reportChipDate(source.date, newestYear)}
                                       </span>
                                     ) : null}
