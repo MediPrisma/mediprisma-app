@@ -40,7 +40,7 @@ export function createObservationRecoveryBudget(maxCharacters = 16_000) {
         ...rest,
         observationRecoveryNotice: duplicate
           ? 'The same recovery inventory was already returned earlier in this turn. Refer to that evidence; this empty match is not an empty chart.'
-          : 'Additional recovery values were omitted because the per-turn evidence budget is exhausted. Query a specific analyte/date for details; do not infer absence.',
+          : 'Recovery values were omitted because the per-turn evidence budget is exhausted. Query a specific analyte/date for details; do not infer absence.',
       }
     }
     seen.add(serialized)
@@ -274,6 +274,13 @@ _${note}_` : text
   }
   const toolResults: Array<{ toolName: string; result: unknown }> = []
   const usedToolNames: string[] = []
+  const recordToolFailure = (round: number, toolName: string, results: typeof toolResults) => {
+    const result = { success: false, incomplete: true, canConcludeAbsence: false,
+      summary: 'Tool execution failed; requested facts remain unverified.', data: null }
+    results.push({ toolName, result })
+    trajectory.push({ round, kind: 'tool-result', toolName, result })
+    emit({ type: 'tool-result', toolName, result })
+  }
 
   const initialTool = initialToolName ? tools?.[initialToolName] : undefined
   const executableInitialTool = initialTool as {
@@ -360,6 +367,8 @@ _${note}_` : text
         toolResults.push({ toolName: chunk.toolName, result: toolResult })
         trajectory.push({ round: 1, kind: "tool-result", toolName: chunk.toolName, result: toolResult })
         emit({ type: "tool-result", toolName: chunk.toolName, result: toolResult })
+      } else if (chunk.type === "tool-error") {
+        recordToolFailure(1, chunk.toolName, toolResults)
       } else if (chunk.type === "error") {
         // A failed request (proxy 401 / no guest token / network) arrives as an
         // error chunk, NOT a throw. Propagate so the caller's catch surfaces it.
@@ -400,10 +409,20 @@ _${note}_` : text
         ? t.answerQuestion + (t.answerQuestionCitationsHint ?? "")
         : t.answerQuestion) +
       (stoppedByRepeat ? (t.repeatedQueryHint ?? "") : stoppedByStepLimit ? (t.stepLimitHint ?? "") : "")
-    const snapshotOnly = shouldPreExecute && initialToolName === 'getHealthSummarySnapshot'
-      && Object.keys(tools ?? {}).length === 1
+    const prefetched = toolResults[0]?.result as {
+      success?: boolean; incomplete?: boolean; canConcludeAbsence?: boolean
+      truncated?: boolean | Record<string, boolean>; hasMore?: boolean; data?: unknown
+    } | undefined
+    const prefetchTruncated = typeof prefetched?.truncated === 'object'
+      ? Object.values(prefetched.truncated).some(Boolean) : prefetched?.truncated
+    // Complete single-tool lookups need only an answer. Partial lookups still
+    // allow refinement, including when the follow-up serializer caps a list.
+    const completeSinglePrefetch = shouldPreExecute && Object.keys(tools ?? {}).length === 1
+      && prefetched?.success === true && !prefetched.incomplete && prefetched.canConcludeAbsence !== false
+      && !prefetchTruncated && !prefetched.hasMore
+      && !(Array.isArray(prefetched.data) && prefetched.data.length > 10)
     const remainingSteps = Math.max(0, MAX_TOOL_STEPS - stepCount)
-    const canContinueTools = !snapshotOnly && !stoppedByRepeat && !stoppedByStepLimit
+    const canContinueTools = !completeSinglePrefetch && !stoppedByRepeat && !stoppedByStepLimit
       && remainingSteps > 0 && Object.keys(tools ?? {}).length > 0
     const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
       messages,
@@ -478,6 +497,8 @@ _${note}_` : text
             followUpToolResults.push({ toolName: chunk.toolName, result: toolResult })
             trajectory.push({ round: 2, kind: "tool-result", toolName: chunk.toolName, result: toolResult })
             emit({ type: "tool-result", toolName: chunk.toolName, result: toolResult })
+          } else if (chunk.type === "tool-error") {
+            recordToolFailure(2, chunk.toolName, followUpToolResults)
           } else if (chunk.type === "error") {
             throw (chunk as { error?: unknown }).error ?? new Error("AI stream error")
           }
@@ -500,7 +521,7 @@ _${note}_` : text
     if (followUpToolResults.length > 0 && (followUpContent.length === 0 || followUpLastStepHadToolCalls)) {
       emit({ type: "status", state: `📝 ${t.organizingResults}` })
 
-      const { summary: finalToolSummary } =
+      const { summary: finalToolSummary, citations: finalCitations } =
         processAgentStreamUseCase.buildToolResultsSummary([...toolResults, ...followUpToolResults], summaryTranslations)
 
       const finalMessages = processAgentStreamUseCase.buildFollowUpMessages(
@@ -508,6 +529,7 @@ _${note}_` : text
         finalToolSummary,
         originalQuestion,
         { queriedFhirData: t.queriedFhirData, answerQuestion: t.synthesizeResults
+          + (finalCitations.length > 0 ? (t.answerQuestionCitationsHint ?? '') : '')
           + (stoppedByRepeat ? (t.repeatedQueryHint ?? '') : stoppedByStepLimit ? (t.stepLimitHint ?? '') : '') },
         false,
       )

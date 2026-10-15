@@ -413,3 +413,81 @@ describe('prefetched multi-step follow-up safeguards', () => {
     expect(mockStreamText).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('review regression cases', () => {
+  const usage = Promise.resolve({})
+  const params = () => ({
+    model: {} as never, messages: [{ role: 'user' as const, content: 'Q' }],
+    tools: { queryObservations: { execute: jest.fn() } } as never,
+    translations: { ...translations, answerQuestionCitationsHint: 'KEEP REFERENCES' },
+    idleMs: 1000, abortController: new AbortController(),
+  })
+  beforeEach(() => jest.clearAllMocks())
+
+  it.each(['getDataOverview', 'queryImagingRecords'])('does not requery a complete single %s prefetch', async (name) => {
+    mockStreamText.mockReturnValue({ fullStream: textStream('Answer'), usage })
+    const execute = jest.fn().mockResolvedValue({ success: true, count: 1, data: [{ id: 'one' }] })
+    await runDeepModeAgent({ ...params(), tools: { [name]: { execute } } as never, initialToolName: name, preExecuteInitialTool: true })
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(mockStreamText.mock.calls[0][0].tools).toBeUndefined()
+  })
+
+  it.each([
+    { success: false }, { incomplete: true }, { canConcludeAbsence: false },
+    { truncated: true }, { truncated: { imaging: true } }, { hasMore: true },
+    { data: Array.from({ length: 11 }, (_, id) => ({ id })) },
+  ])('allows refinement of partial single-tool evidence %j', async (partial) => {
+    mockStreamText.mockReturnValue({ fullStream: textStream('Partial'), usage })
+    await runDeepModeAgent({ ...params(), tools: { queryImagingRecords: { execute: jest.fn().mockResolvedValue({ success: true, ...partial }) } } as never,
+      initialToolName: 'queryImagingRecords', preExecuteInitialTool: true })
+    expect(mockStreamText.mock.calls[0][0].tools).toHaveProperty('queryImagingRecords')
+  })
+
+  it.each([false, true])('finishes an all-failed tool round (preamble=%s)', async (preamble) => {
+    const events: Array<{ type: string }> = []
+    async function* failure() {
+      if (preamble) yield { type: 'text-delta', text: 'Checking…' }
+      yield { type: 'tool-call', toolName: 'queryObservations', input: {} }
+      yield { type: 'tool-error', toolName: 'queryObservations', error: new Error('private provider details') }
+      mockStreamText.mock.calls[0][0].onStepFinish({ toolCalls: [{ toolName: 'queryObservations' }] })
+    }
+    mockStreamText.mockReturnValueOnce({ fullStream: failure(), usage })
+      .mockReturnValueOnce({ fullStream: textStream('Unable to verify labs'), usage })
+    const result = await runDeepModeAgent({ ...params(), onEvent: e => events.push(e) })
+    expect(result.answer).toBe('Unable to verify labs')
+    expect(events.filter(e => e.type === 'final')).toHaveLength(1)
+    const messages = JSON.stringify(mockStreamText.mock.calls[1][0].messages)
+    expect(messages).toContain('requested facts remain unverified')
+    expect(messages).not.toContain('private provider details')
+    expect(result.trajectory).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'tool-result', result: expect.objectContaining({ success: false, canConcludeAbsence: false }) })]))
+  })
+
+  it('synthesizes failed follow-up evidence without replaying the tool call', async () => {
+    async function* failure() {
+      yield { type: 'tool-call', toolName: 'queryObservations', input: {} }
+      yield { type: 'tool-error', toolName: 'queryObservations', error: new Error('failed') }
+      mockStreamText.mock.calls[0][0].onStepFinish({ toolCalls: [{ toolName: 'queryObservations' }] })
+    }
+    mockStreamText.mockReturnValueOnce({ fullStream: failure(), usage })
+      .mockReturnValueOnce({ fullStream: textStream('Labs unverified'), usage })
+    const result = await runDeepModeAgent({ ...params(), initialToolName: 'getDataOverview', preExecuteInitialTool: true,
+      tools: { getDataOverview: { execute: jest.fn().mockResolvedValue({ success: true, data: {} }) }, queryObservations: { execute: jest.fn() } } as never })
+    expect(mockStreamText).toHaveBeenCalledTimes(2)
+    expect(mockStreamText.mock.calls[1][0].tools).toBeUndefined()
+    expect(JSON.stringify(mockStreamText.mock.calls[1][0].messages)).toContain('requested facts remain unverified')
+    expect(result.answer).toBe('Labs unverified')
+  })
+
+  it.each([1, 2])('preserves the citation hint in synthesis for literature from round %s', async (literatureRound) => {
+    async function* round(n: number) {
+      yield { type: 'tool-result', toolName: literatureRound === n ? 'searchMedicalLiterature' : 'queryObservations',
+        output: literatureRound === n ? { success: true, content: 'Reference [1]', citations: ['https://example.org/paper'] } : { success: true, count: 1, data: [{ value: 103 }] } }
+    }
+    mockStreamText.mockReturnValueOnce({ fullStream: round(1), usage })
+      .mockReturnValueOnce({ fullStream: round(2), usage })
+      .mockReturnValueOnce({ fullStream: textStream('Evidence [1]'), usage })
+    const result = await runDeepModeAgent(params())
+    expect(JSON.stringify(mockStreamText.mock.calls[2][0].messages)).toContain('KEEP REFERENCES')
+    expect(result.answer).toContain('[[1]](https://example.org/paper)')
+  })
+})

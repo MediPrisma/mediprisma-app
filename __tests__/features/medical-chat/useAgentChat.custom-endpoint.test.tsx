@@ -118,6 +118,21 @@ describe('useAgentChat custom endpoint lifecycle', () => {
     })
   })
 
+  it('routes a short reply from its own question and leaves quote-dependent arguments to the model', async () => {
+    const excerpt = 'Long prior clinical context. '.repeat(30)
+    mockChatMessages = [{ id: 'prior', role: 'assistant', content: excerpt, timestamp: 1, dataScope: 'patient' }]
+    mockFhirTools.mockReturnValue({ queryMedications: {}, getActiveMedicationList: {}, getDataOverview: {}, queryObservations: {} })
+    setProfiles([{ ...profile, agentMode: 'auto', agentCapability: 'verified', agentCapabilityTestedAt: 1721234567890 }])
+    const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
+    await act(async () => result.current.handleSend('「Lipitor」的成分是什麼？', undefined,
+      { messageId: 'prior', role: 'assistant', label: 'Previous answer', excerpt, timestamp: 1 }))
+    const request = mockRunDeepModeAgent.mock.calls[0][0]
+    expect(request.tools).toHaveProperty('queryMedications')
+    expect(request.tools).not.toHaveProperty('getDataOverview')
+    expect(request.preExecuteInitialTool).toBe(false)
+    expect(JSON.stringify(request.messages)).toContain(excerpt)
+  })
+
   it('re-resolves a captured send callback and never streams after profile deletion', async () => {
     const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
     const capturedSend = result.current.handleSend
