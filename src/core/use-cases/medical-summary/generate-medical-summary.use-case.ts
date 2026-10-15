@@ -333,8 +333,8 @@ function catalogMedication(m: MedicationEntity): Pick<SummarySourceCatalogEntry,
   const substance = (t?.atcNameEn ?? a?.atcNameEn ?? t?.ingredientText ?? '').trim().toLowerCase()
   const groupCode = t?.atcLevel3Code ?? a?.atcLevel3Code ?? t?.atcLevel2Code ?? a?.atcLevel2Code
   const groupName = t?.atcLevel3NameEn ?? a?.atcLevel3NameEn ?? t?.atcLevel2NameEn ?? a?.atcLevel2NameEn
-  const group = groupCode ? [groupCode, groupName].filter(Boolean).join(' ') : medicationAtcCode(m)
-  const medicine = medicineProfile({ atcCode: medicationAtcCode(m), ingredientText: t?.ingredientText })
+  const group = groupCode ? [groupCode, groupName].filter(Boolean).join(' ') : ''
+  const medicine = medicineProfile({ atcCode: t?.atcCode ?? a?.atcCode, ingredientText: t?.ingredientText })
   const label = [substance, group, medicine.mechanism ?? ''].filter(Boolean).join(' · ')
   return {
     ...(label ? { medicationClass: label } : {}),
@@ -1869,8 +1869,7 @@ function prescriberFromCitedRecords(
 }
 
 const medicationAtcCode = (medication?: MedicationEntity): string =>
-  (medication?.drugTerminology?.atcCode?.trim() || medication?.atcClassification?.atcCode?.trim() ||
-    medication?.medicationCodeableConcept?.coding?.find(coding => /^https?:\/\/www\.whocc\.no\/atc\/?$/i.test(coding.system ?? '') && coding.code?.trim())?.code || '').trim().toUpperCase()
+  (medication?.drugTerminology?.atcCode ?? medication?.atcClassification?.atcCode ?? '').trim().toUpperCase()
 
 /** Longest gap between a chronic prescription's visit and a refill of it:
  *  NHI 慢箋 cover up to three 28–30-day fills (measured on the authorized
@@ -3000,7 +2999,7 @@ export class GenerateMedicalSummaryUseCase {
           : p.medications?.trim() || undefined,
         ...(medicationItems.length > 0 ? { medicationItems } : {}),
         ...(medicationReviewKeys.length > 0 ? { medicationReviewKeys } : {}),
-        flag: (p.flag ?? false) || (medicationOnly && medicationReviewKeys.length > 0),
+        flag: p.flag ?? false,
         ...(medicationOnly ? { inferredFromMedication: true as const } : {}),
         ...(singleUnassessedLab ? { singleUnassessedLab: true as const } : {}),
         ...(shortSpanChronic ? { shortSpanChronic: true as const } : {}),

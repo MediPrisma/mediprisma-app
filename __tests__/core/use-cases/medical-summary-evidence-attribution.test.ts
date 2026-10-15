@@ -1,6 +1,8 @@
 import { buildSourceCatalog, formatSourceList, GenerateMedicalSummaryUseCase } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { GenerateSafetyAlertsUseCase } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import { LAB_SOURCE_EVIDENCE_RULE } from '@/src/core/use-cases/medical-summary/source-evidence-contract'
+import { enrichLocalFhirImport } from '@/src/application/services/local-fhir-import-enrichment.service'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 const date = '2026-07-01'
 const data: any = {
@@ -48,34 +50,33 @@ test('individual observations remain authoritative, including ranges', () => {
   expect(row('Na 99 mmol/L', 'sodium').metric).toBe('Na 139 mmol/L')
 })
 
-test('reads original FHIR ATC without enrichment or brand-name matching', () => {
-  const entry = catalog.find(entry => entry.resourceId === 'unknown-brand')!
-  expect(entry.medicationClass).toContain('H01BA02')
-  expect(entry.medicine?.mechanism).toContain('Vasopressin')
-  expect(catalog.find(entry => entry.resourceId === 'other-brand')!.medicine?.mechanism).toBeTruthy()
-  const result = useCase.finalizeResult({ headline: '', problems: [{ label: 'Hypothyroidism', medicationSources: [entry.key] }] } as any, catalog, { clinicalData: data })
-  expect(result.problems[0]).toEqual(expect.objectContaining({ inferredFromMedication: true, medicationReviewKeys: [entry.key], flag: true }))
-  const correct = useCase.finalizeResult({ headline: '', problems: [{ label: 'Hypothyroidism', medicationSources: [key('thyroid')] }] } as any, catalog, { clinicalData: data })
-  expect(correct.problems[0].medicationReviewKeys).toBeUndefined()
-  expect(correct.problems[0].flag).toBe(false)
-})
-
-test('standalone safety prompt receives the same source-owned facts and mechanism', () => {
+test('standalone safety prompt receives the same source-owned facts', () => {
   const messages = new GenerateSafetyAlertsUseCase().buildMessages({ clinicalContext: '', catalog, locale: 'en', audience: 'medical' } as any)
   const text = messages.map(message => message.content).join('\n')
   expect(text).toContain('OCCULT = Negative')
   expect(text).toContain('6–9 /HPF')
-  expect(text).toContain('Vasopressin')
 })
 
-test('ignores lookalike codes from non-ATC systems and falls back past empty enrichment', () => {
-  const meds = [
-    { ...data.medications[0], id: 'lookalike', medicationCodeableConcept: { text: 'Unmapped', coding: [{ system: 'https://example.org/local', code: 'H01BA02' }] } },
-    { ...data.medications[0], id: 'empty-enrichment', drugTerminology: { atcCode: ' ' } },
-  ]
-  const sources = buildSourceCatalog({ medications: meds })
-  expect(sources.find(entry => entry.resourceId === 'lookalike')!.medicine).toBeUndefined()
-  expect(sources.find(entry => entry.resourceId === 'empty-enrichment')!.medicine?.mechanism).toContain('Vasopressin')
+test('uses the production import boundary before checking ingredient and mechanism delivery', async () => {
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { resource: { resourceType: 'Patient', id: 'synthetic-patient' } },
+    { resource: { resourceType: 'MedicationRequest', id: 'synthetic-medication', status: 'active', intent: 'order', authoredOn: date,
+      subject: { reference: 'Patient/synthetic-patient' }, medicationCodeableConcept: { text: 'Synthetic source name', coding: [
+        { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code', code: 'AC49322100' },
+      ] } } },
+  ] }
+  const parsed = LocalBundleService.parse(await enrichLocalFhirImport(bundle))!
+  expect(parsed).not.toBeNull()
+  const medication = parsed.collection.medications![0]
+  expect(medication.drugTerminology?.ingredientText).toBeTruthy()
+  expect(medication.drugTerminology?.atcCode).toBeTruthy()
+  const sources = buildSourceCatalog(parsed.collection)
+  const entry = sources.find(source => source.resourceType === 'MedicationRequest')!
+  expect(entry.medicationClass).toContain(medication.drugTerminology!.atcNameEn!.toLowerCase())
+  expect(entry.medicine?.mechanism).toBeTruthy()
+  const safety = new GenerateSafetyAlertsUseCase().buildMessages({ clinicalContext: '', catalog: sources, locale: 'en' } as any)
+  expect(safety.map(message => message.content).join('\n')).toContain(entry.medicationClass)
+  expect(formatSourceList(sources)).toContain(entry.medicationClass)
 })
 
 test.each([
