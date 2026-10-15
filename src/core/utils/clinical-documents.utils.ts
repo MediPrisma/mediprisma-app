@@ -171,7 +171,8 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
       title: d.type?.text || d.type?.coding?.[0]?.display || att?.title || 'Document',
       isDischargeSummary: hasDischargeLoinc(d.type?.coding),
       isOutpatientSupplement: d.meta?.tag?.some((tag) =>
-        tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement'),
+        tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')
+        && d.type?.text === '門診 SOAP 與醫囑',
       get text() { return (textCache ??= documentReferenceText(d)) },
     })
   }
@@ -258,17 +259,28 @@ export function formatDocumentsSection(
   if (docs.length === 0) return null
   const escapeBoundaryToken = (value: string): string =>
     value.replace(/<(BEGIN_DOCUMENT|END_DOCUMENT)\b/gi, '&lt;$1')
-  const perDocumentBudget = documentTokenBudget === undefined
-    ? undefined
-    : Math.max(1, Math.floor(documentTokenBudget / docs.length))
+  // Short notes consume only what they need, leaving unused shares available
+  // to longer summaries instead of unnecessarily truncating their middle.
+  const budgets = new Map<ClinicalDocumentRef, number>()
+  if (documentTokenBudget !== undefined) {
+    const costs = docs.map(doc => ({ doc, cost: estimateTokens(doc.text || '[No document body was available]') }))
+      .sort((a, b) => a.cost - b.cost)
+    let remaining = Math.max(0, documentTokenBudget)
+    costs.forEach(({ doc, cost }, index) => {
+      const share = Math.max(1, Math.floor(remaining / (costs.length - index)))
+      const allocation = Math.min(cost, share)
+      budgets.set(doc, allocation)
+      remaining = Math.max(0, remaining - allocation)
+    })
+  }
   const items = docs.map((d) => {
     const date = d.date ? new Date(d.date).toLocaleDateString() : ''
     const header = `${d.title}${date ? ` (${date})` : ''}`
     const bodyText = d.text || '[No document body was available]'
     const body = escapeBoundaryToken(
-      perDocumentBudget === undefined
+      documentTokenBudget === undefined
         ? bodyText
-        : fitDocumentTextToTokenBudget(bodyText, perDocumentBudget),
+        : fitDocumentTextToTokenBudget(bodyText, budgets.get(d) ?? 0),
     )
     // Only a sanitized FHIR id is allowed in the delimiter. Document titles
     // are untrusted source text and must not be able to close or mutate the

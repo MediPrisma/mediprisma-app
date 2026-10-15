@@ -5,13 +5,14 @@ import { DEFAULT_DATA_SELECTION, DEFAULT_DATA_FILTERS } from '@/src/shared/const
 import { createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
 import { documentNarrative } from '@voho0000/personalized-care-fhir'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { estimateTokens } from '@/src/shared/utils/token-estimator'
 
 // Entirely synthetic: two physicians, primary/secondary diagnoses and orders
 // without results. Exercise the real import, AI selection and CDSS adapters.
 const note = (id: string, date: string, body: string) => FhirMapper.toDocumentReference({
   resourceType: 'DocumentReference', id, status: 'current', date,
   meta: { tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] },
-  type: { text: 'Outpatient SOAP and orders' },
+  type: { text: '門診 SOAP 與醫囑' },
   content: [{ attachment: { contentType: 'text/html', data: Buffer.from(body).toString('base64') } }],
 })
 const documents = [
@@ -62,4 +63,27 @@ test('local bundle ingestion retains supplement metadata and both documents', ()
   expect(parsed).not.toBeNull()
   const selected = resolveSelectedDocuments(listClinicalDocuments(parsed!.collection), 'latestAdmission', [])
   expect(selected.map(d => d.id)).toEqual(['vgh-one', 'vgh-two'])
+})
+
+test.each(['latestAdmission', 'recentAdmissions'] as const)('%s keeps discharge plus SOAP, without forcing other tagged reports', (mode) => {
+  const discharge = { ...documents[0], id: 'discharge', date: '2026-09-01', type: { coding: [{ code: '18842-5' }] } }
+  const report = { ...documents[0], id: 'other-report', type: { text: 'Radiology report' } }
+  const docs = listClinicalDocuments({ documentReferences: [discharge, ...documents, report] })
+  const selected = resolveSelectedDocuments(docs, mode, [])
+  expect(selected.map(d => d.id)).toEqual(['discharge', 'vgh-one', 'vgh-two'])
+  expect(resolveSelectedDocuments(docs, 'custom', ['vgh-two']).map(d => d.id)).toEqual(['vgh-two'])
+})
+
+test('short SOAP notes donate unused token shares to a longer discharge summary', () => {
+  const longText = 'Discharge diagnosis and course. '.repeat(100)
+  const docs = [{ id: 'discharge', title: 'Discharge', isDischargeSummary: true, text: longText },
+    ...listClinicalDocuments({ documentReferences: documents })]
+  const exactBudget = docs.reduce((sum, doc) => sum + estimateTokens(doc.text), 0)
+  const section = formatDocumentsSection(docs, exactBudget)!
+  expect(section.items[0]).toContain(longText)
+  expect(JSON.stringify(section)).not.toContain('middle of document omitted')
+  const constrained = formatDocumentsSection(docs, Math.floor(exactBudget / 2))!
+  expect(constrained.items[0]).toContain('middle of document omitted')
+  expect(constrained.items[1]).toContain(docs[1].text)
+  expect(constrained.items[2]).toContain(docs[2].text)
 })
