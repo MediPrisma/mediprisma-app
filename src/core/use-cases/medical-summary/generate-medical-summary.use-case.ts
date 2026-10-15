@@ -2540,9 +2540,12 @@ export class GenerateMedicalSummaryUseCase {
                   quotes: point.quotes.map((quote) => ({ source: quote.key, quote: quote.quote })),
                 })),
               })),
-              // An all-unremarkable reply has no groups; its verdict must
-              // survive another card's retry.
-              unremarkable: highlights.groups.length === 0 ? highlights.others.map((row) => row.key) : [],
+              // An all-unremarkable reply has no groups, and a cut-off reply
+              // read only what it cited or called unremarkable: either way the
+              // verdict must survive another card's retry.
+              unremarkable: highlights.groups.length === 0 || highlights.incomplete
+                ? highlights.others.map((row) => row.key)
+                : [],
               ...(highlights.incomplete ? { incomplete: true } : {}),
               ...(highlights.sentKeys ? { sentKeys: highlights.sentKeys } : {}),
             },

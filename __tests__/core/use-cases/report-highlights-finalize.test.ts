@@ -814,6 +814,21 @@ describe('reports the model never finished reading — coverage and retries', ()
     expect(again.unreviewed).toEqual(first.reportHighlights!.unreviewed)
   })
 
+  it('keeps a cut-off reply\'s explicit unremarkable verdict, beside a verified finding, across a retry', () => {
+    const first = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([{ organ: 'heart', points: [point1()] }], [US]), incomplete: true },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    )
+    const again = useCase.finalizeResult(useCase.createAiDraftFromResult(first), catalog, { clinicalData, audience: 'medical', locale: 'zh-TW' }).reportHighlights!
+    expect(first.reportHighlights!.others.map((row) => row.key)).toEqual([US])
+    expect(again.others.map((row) => row.key)).toEqual([US])
+    expect(again.unreviewed!.map((row) => row.key).sort()).toEqual([CT, PATH, XR_OLD].sort())
+  })
+
   it('lists every report with its excerpt, the same way before and after a retry, when nothing verified', () => {
     const first = useCase.finalizeResult(
       {
