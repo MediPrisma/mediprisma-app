@@ -33,6 +33,19 @@ const names = [
 ]
 
 describe('agent tool router', () => {
+  it('does not turn a quoted guideline title in a clinical template into a drug filter', () => {
+    const question = '# 血脂健保給付判讀\n依據「藥品給付規定」，掃描病人 Patient 年齡、診斷、用藥、檢驗 Observation 與影像。\n'
+      + '基線指未用藥時的值；確認目前使用的是哪種藥，並整理所有日期與數值。\n'.repeat(10)
+    expect(extractMedicationRecordQuery(question)).toBeUndefined()
+    expect(localAgentPrefetchInput(question, 'queryMedications')).toEqual({})
+    const selected = selectAgentToolNames(question, names, 'patient')
+    expect(selected).toContain('queryPatientInfo')
+    expect(selected).toContain('queryObservations')
+    expect(selected).toContain('queryMedications')
+    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBe('getDataOverview')
+    expect(selectAgentToolNames(question, names, 'general')).not.toContain('queryObservations')
+  })
+
   it('routes a lab trend question to lab tools only', () => {
     const selected = selectAgentToolNames('請查最近兩次 HbA1c 的數值與趨勢', names, 'patient')
     expect(selected).toContain('searchObservationByName')

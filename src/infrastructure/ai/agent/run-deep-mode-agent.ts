@@ -375,6 +375,11 @@ _${note}_` : text
     let followUpContent = ""
     const followUpToolResults: Array<{ toolName: string; result: unknown }> = []
     const maxFollowUpAttempts = shouldPreExecute ? 2 : 1
+    // Only a deliberately routed, sole compact snapshot is a complete lookup.
+    // A prefetched medication search or inventory must not end a multi-domain
+    // investigation before the model can query Patient, labs and encounters.
+    const snapshotOnly = shouldPreExecute && initialToolName === 'getHealthSummarySnapshot'
+      && Object.keys(tools ?? {}).length === 1
     for (let attempt = 0; attempt < maxFollowUpAttempts; attempt += 1) {
       const requestController = shouldPreExecute ? new AbortController() : abortController
       const forwardAbort = () => requestController.abort()
@@ -386,9 +391,8 @@ _${note}_` : text
         const followUpResult = await streamText({
           model,
           messages: followUpMessages as ModelMessage[],
-          // A locally prefetched, unambiguous snapshot is complete for this turn;
-          // withholding tools prevents the small model from requesting it again.
-          tools: shouldPreExecute ? undefined : tools,
+          tools: snapshotOnly ? undefined : tools,
+          stopWhen: [stepCountIs(MAX_TOOL_STEPS), repeatedToolCallIs(3)],
           ...reasoningOptions,
           abortSignal: requestController.signal,
         })

@@ -122,6 +122,32 @@ describe('runDeepModeAgent compact snapshot prefetch', () => {
     expect(result.usage.totalTokens).toBe(100)
   })
 
+  it('keeps patient and lab tools available after an empty medication prefetch', async () => {
+    const tools = {
+      queryMedications: { execute: jest.fn().mockResolvedValue({ success: true, count: 0, data: [] }) },
+      queryPatientInfo: { execute: jest.fn() },
+      queryObservations: { execute: jest.fn() },
+    }
+    mockStreamText.mockReturnValue({
+      fullStream: textStream('Needs lab lookup'),
+      usage: Promise.resolve({}),
+    })
+    await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'user', content: '查用藥與檢驗' }],
+      tools: tools as never,
+      initialToolName: 'queryMedications',
+      preExecuteInitialTool: true,
+      translations,
+      idleMs: 1_000,
+      abortController: new AbortController(),
+    })
+    const request = mockStreamText.mock.calls[0][0]
+    expect(request.tools).toBe(tools)
+    expect(request.stopWhen).toHaveLength(2)
+    expect(JSON.stringify(request.messages)).toContain('Unqueried resource types are unknown, not empty')
+  })
+
   it('surfaces a second idle timeout instead of treating it as a user abort', async () => {
     const execute = jest.fn().mockResolvedValue({ success: true, data: {} })
     mockStreamText.mockReturnValue({

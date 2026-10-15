@@ -132,6 +132,9 @@ function cleanMedicationQuery(value: string | undefined): string | undefined {
 }
 
 export function extractMedicationRecordQuery(question: string): string | undefined {
+  // This extractor is for a single drug lookup, not a pasted clinical protocol.
+  // A template's first quotation can be a guideline title rather than a drug.
+  if (question.length > 300 || /[\r\n]/.test(question)) return undefined
   const quoted = question.match(/[「『\"“]([^」』\"”]{2,120})[」』\"”]/)?.[1]
   if (quoted) return cleanMedicationQuery(quoted)
   const nhiCode = question.match(/\b[A-Z]{2}\d{8}\b/i)?.[0]
@@ -176,6 +179,9 @@ export function selectAgentToolNames(
   if (matchesAny(question, NO_RECORD_QUERY)) {
     return generalKnowledge ? literatureOnly() : []
   }
+  // Structured protocols can require several resource types even when a
+  // summary/evidence keyword would otherwise select just one compact tool.
+  if (dataScope !== 'general' && isStructuredClinicalRequest(question)) return scopeAllowedNames
   if (
     dataScope !== 'general' &&
     scopeAllowedNames.includes('getHealthSummarySnapshot') &&
@@ -249,6 +255,10 @@ export function forcedInitialAgentToolName(
   }
   if (selectedToolNames.length === 1) return selectedToolNames[0]
 
+  if (isStructuredClinicalRequest(question) && selectedToolNames.includes('getDataOverview')) {
+    return 'getDataOverview'
+  }
+
   const priority: string[] = []
   if (MEDICATION_IDENTITY_QUERY.test(question) && extractMedicationRecordQuery(question)) {
     priority.push('queryMedications')
@@ -288,6 +298,10 @@ export function forcedInitialAgentToolName(
   }
   priority.push('queryPatientInfo', 'getDataOverview', ...selectedToolNames)
   return priority.find((name) => selectedToolNames.includes(name))
+}
+
+function isStructuredClinicalRequest(question: string): boolean {
+  return question.length > 300 && /[\r\n]/.test(question)
 }
 
 /**

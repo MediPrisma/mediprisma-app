@@ -63,6 +63,9 @@ export class ProcessAgentStreamUseCase {
     const summary = toolResults
       .map((tr) => {
         const r = tr.result as any
+        const recovery = r?.availableObservationRecovery
+          ? `\nAVAILABLE OBSERVATIONS (recovery inventory, NOT query matches):\n${JSON.stringify(r.availableObservationRecovery, null, 2)}`
+          : ''
 
         // Handle literature search results differently from FHIR results
         if (tr.toolName === 'searchMedicalLiterature') {
@@ -133,7 +136,7 @@ export class ProcessAgentStreamUseCase {
         ) {
           return `${tr.toolName} ${translations.queryFailed}: ${
             r?.summary || translations.noData
-          }${queryCoverage}\nIMPORTANT: this result is incomplete and MUST NOT be interpreted as clinical absence.\n${
+          }${queryCoverage}${recovery}\nIMPORTANT: this result is incomplete and MUST NOT be interpreted as clinical absence.\n${
             r?.queryIssues ? JSON.stringify(r.queryIssues, null, 2) : ''
           }`
         }
@@ -158,7 +161,7 @@ export class ProcessAgentStreamUseCase {
             : ''
         return `${tr.toolName} ${translations.queryResult}: ${
           r?.success ? countInfo : translations.queryFailed
-        }${queryCoverage}${truncationWarning}${summaryCapWarning}${completenessWarning}\n${r?.count > 0 ? JSON.stringify(summaryData, null, 2) : translations.noData}`
+        }${queryCoverage}${truncationWarning}${summaryCapWarning}${completenessWarning}\n${r?.count > 0 ? JSON.stringify(summaryData, null, 2) : translations.noData}${recovery}`
       })
       .join('\n\n')
 
@@ -177,7 +180,7 @@ export class ProcessAgentStreamUseCase {
       answerQuestion: string
     }
   ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-    const assistantMsg = `${translations.queriedFhirData}\n\n${toolResultsSummary}`
+    const assistantMsg = `${translations.queriedFhirData}\n\n${toolResultsSummary}\n\nOnly the listed tools have been queried. Unqueried resource types are unknown, not empty. A zero result with filters does not mean the entire chart is empty. Continue using available tools for the remaining requested facts before answering.`
     const userMsg = translations.answerQuestion.replace('{question}', originalQuestion)
 
     return [
