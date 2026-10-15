@@ -178,6 +178,12 @@ const UNIT_NORMALIZATION: Record<
     scaleOf: egfrScale,
     defaultWhenMissing: true,
   },
+  'EGFR(PED)': {
+    unit: 'mL/min/1.73m²',
+    scale: 1,
+    scaleOf: egfrScale,
+    defaultWhenMissing: true,
+  },
   EGFR: {
     unit: 'mL/min/1.73m²',
     scale: 1,

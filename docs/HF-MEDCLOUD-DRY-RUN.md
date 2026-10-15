@@ -21,6 +21,7 @@ The adapter:
 - Preserves exact recognized ICD system URLs/editions, validates code syntax, deduplicates the same ICD family/code and reports unsupported diagnoses. WHO ICD-10 is not relabelled as ICD-10-CM.
 - Collapses identical inpatient episodes but retains separate outpatient visits. Excludes future discharge dates and discharge-derived diagnoses of ongoing admissions.
 - Uses only audited LOINC assays, supported units and actual collection/effective dates. Never substitutes a report date or normal/zero lab value.
+- Blood WBC/platelet counts exported per microlitre by EHR-FHIR-BRIDGE are divided by 1000 for the model's `10*3/uL` unit. Micro symbols `µ` and `μ` normalize to `u`; unknown units and non-blood assays remain excluded. Fasting serum/plasma glucose `1558-6` feeds the existing general glucose feature `2345-7`; this does not establish fasting status for any other glucose assay. The projected wire codes/units remain compatible with the existing SaMD transport contract.
 - Reports unavailable modules, unverified longitudinal coverage and missing inpatient ranks without inventing them.
 - Accepts only exact recognized ICD procedure systems and formats; NHI order codes are not relabelled.
 
@@ -119,3 +120,11 @@ After running, step 2 collapses to one line with 「修改」 (owner approval in
 ## Cloud laboratory status (2026-10-07)
 
 The medcloud2 and health-bank bridges mark every laboratory Observation `status: unknown`, because NHI cloud data carries no workflow status. The projection required final/amended/corrected, so every cloud lab was dropped and the model received none (a real v0.13.6 export: 315 labs, 0 sent; the model then reported hemoglobin and creatinine as untested). Owner decision in chat: from the medcloud and health-bank sources, an `unknown` result with a numeric value, a supported unit and a collection date is sent and counted as `lab-status-unreported`; preliminary, registered, cancelled and entered-in-error stay excluded, and the TVGH EHR bridge keeps the strict rule. Unit matching ignores whitespace (`g /dL`). When no model lab will be sent, the pre-run box says so with the reasons and counts. A separate bridge task proposes emitting `final` at the source.
+
+### 逐筆未納入明細
+
+HF 畫面提供「未納入的檢驗／觀察項目明細」，列出所選病人在本次整理中被排除的 Observation：檢驗名稱、整理後序號、採檢日期、原始結果、顯示單位、單位代碼、狀態及來源代碼。每筆記錄第一個未通過的篩選原因；數值／單位問題進一步區分數字無效、缺單位、不支援的單位及比較符號。整理後序號是本次正規化輸入的 entry 位置，並非病歷號。
+
+這份清單包含模型不使用的觀察項目，並不代表沒有抽驗；尚未匯入來源的檢驗無法列出。每次顯示 20 筆，可繼續展開全部紀錄。切換病例、院所或基準門診會依目前輸入重建明細。明細僅保留於瀏覽器的 HfInput.excludedLabs，不放進去識別化 Bundle、不傳送至 HF 服務；既有輸入篩選與模型規則不變。
+
+無法核對病人歸屬的 Observation 另以 unlinkedObservationCount 計數並顯示提示，不保留或顯示其名稱、結果等臨床內容；此計數也不放入傳輸 Bundle。

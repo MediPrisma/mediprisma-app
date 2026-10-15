@@ -163,9 +163,9 @@ describe('ReportRow mobile actions', () => {
     expect(aiButton.parentElement).toHaveClass('flex-wrap', 'justify-start')
     expect(aiButton.parentElement).toHaveClass('@min-[520px]:flex-nowrap', '@min-[520px]:justify-end')
 
-    // The collapsed narrative is available before docking, but does not
-    // consume a third line in the compact phone list.
-    expect(screen.getByText(/No focal consolidation/)).toHaveClass('max-sm:hidden')
+    // The collapsed preview shows on phones too — the conclusion is what a
+    // reader scanning the list needs, at every width.
+    expect(screen.getByText(/No focal consolidation/)).not.toHaveClass('max-sm:hidden')
     expect(header).toHaveAttribute('aria-expanded', 'false')
 
     fireEvent.click(aiButton)
