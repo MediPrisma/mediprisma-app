@@ -175,13 +175,14 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
       else if (quantity.comparator && !['<', '<=', '>', '>='].includes(quantity.comparator)) valueIssue = 'comparator-invalid'
       else valueIssue = 'value-invalid' // Conversion overflow is not an unsupported unit.
     }
+    const quantityText = quantity && typeof quantity === 'object' && text(quantity.value) !== undefined
+      ? [text(quantity.comparator), text(quantity.value)].filter(value => value !== undefined).join(' ') : undefined
     excludedLabs.push({ row, reason,
       ...(valueIssue ? { valueIssue } : {}),
       name: text(resource.code?.text) || codes.map(code => text(code.display)).find(Boolean) || matchedLab?.key,
       codes: [...new Set(codes.map(code => [text(code.system), text(code.code)].filter(Boolean).join(' | ')).filter(Boolean))],
       date: text(resource.effectiveDateTime ?? resource.effectivePeriod?.start),
-      value: (quantity && text(quantity.value) !== undefined ? [text(quantity.comparator), text(quantity.value)].filter(value => value !== undefined).join(' ') || undefined : undefined)
-        ?? text(quantity) ?? text(resource.valueString) ?? text(resource.valueCodeableConcept?.text),
+      value: quantityText || text(resource.valueString) || text(resource.valueCodeableConcept?.text) || text(quantity) || undefined,
       unit: text(quantity?.unit), unitCode: text(quantity?.code), status: text(resource.status),
     })
   }
