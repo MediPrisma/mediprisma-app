@@ -45,6 +45,7 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
 import { runGenerationJob, type AiGenerationMeasurement } from './run-generation-job'
+import { withCollectorOperation } from '@/src/application/telemetry/collector-operation'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
 import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
@@ -527,7 +528,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       shouldCommit: () => (
         (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
-      produce: (measureResult) =>
+      produce: (measureResult, operation) =>
         run({
           measureResult,
           clinicalContext,
@@ -536,7 +537,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           catalog,
           locale,
           audience,
-          ai,
+          ai: withCollectorOperation(ai, operation),
           modelId: resolvedModelId,
           modelName: resolvedModelName,
           requestedModelId: selectedModelId,

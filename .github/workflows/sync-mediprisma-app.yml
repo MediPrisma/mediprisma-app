@@ -25,7 +25,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  collector-compatibility:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/collector-compatibility.yml
+    secrets:
+      COLLECTOR_GATEWAY_READ_TOKEN: ${{ secrets.COLLECTOR_GATEWAY_READ_TOKEN }}
+
   sync:
+    needs: collector-compatibility
     runs-on: ubuntu-latest
     environment: mediprisma-site-publish
     # Only run when CI actually succeeded (workflow_run fires on failure too),

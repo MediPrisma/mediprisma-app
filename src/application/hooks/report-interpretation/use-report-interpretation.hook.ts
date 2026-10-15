@@ -221,7 +221,7 @@ export function useReportInterpretation(
           // one report the user pressed the button on.
           fedCounts: SINGLE_REPORT_FED_COUNTS,
         },
-        produce: async () => {
+        produce: async (_measure, operation) => {
           const messages = generateReportInterpretationUseCase.buildMessages({
             reportText: clean,
             reportTitle,
@@ -237,6 +237,7 @@ export function useReportInterpretation(
               modelId: effectiveModelId,
               operationKey: myKey,
               diagnosticFeature: 'report-interpretation',
+              collectorContext: { operation },
               signal,
               throwOnAbort: true,
               maxTokens: mode === 'long-document'

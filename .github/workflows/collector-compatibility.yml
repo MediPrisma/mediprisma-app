@@ -1,0 +1,51 @@
+name: Collector sender receiver compatibility
+on:
+  workflow_call:
+    secrets:
+      COLLECTOR_GATEWAY_READ_TOKEN:
+        required: true
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install APP public dependencies without credentials
+        run: npm ci --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ""
+      - name: Validate optional immutable receiver pin
+        env:
+          RECEIVER_REVISION: ${{ vars.COLLECTOR_GATEWAY_COMPAT_REVISION }}
+        run: |
+          if [[ -n "$RECEIVER_REVISION" && ! "$RECEIVER_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'COLLECTOR_GATEWAY_COMPAT_REVISION must be a full reviewed commit SHA, not a branch or URL.'
+            exit 1
+          fi
+      - name: Checkout receiver compatibility target
+        uses: actions/checkout@v7
+        with:
+          repository: MediPrisma/tvgh-mediprisma-gateway
+          token: ${{ secrets.COLLECTOR_GATEWAY_READ_TOKEN }}
+          # Optional reviewed SHA; otherwise the checked-out main SHA is logged.
+          ref: ${{ vars.COLLECTOR_GATEWAY_COMPAT_REVISION || 'main' }}
+          path: collector-compat-receiver
+          persist-credentials: false
+      - name: Record exact receiver revision
+        run: git -C collector-compat-receiver rev-parse HEAD
+      - name: Build synthetic receiver
+        working-directory: collector-compat-receiver
+        run: npm ci && npm run build
+      - name: Test actual sender against real isolated receiver
+        run: node node_modules/jest/bin/jest.js --ci --runInBand --testMatch '**/e2e/collector-contract.integration.test.ts'
+        env:
+          COLLECTOR_GATEWAY_CHECKOUT: ${{ github.workspace }}/collector-compat-receiver

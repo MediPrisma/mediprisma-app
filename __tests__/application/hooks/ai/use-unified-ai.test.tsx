@@ -4,7 +4,8 @@ import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constan
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
-import { cancelCollectorRequests } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, cancelCollectorRequests } from '@/src/application/telemetry/collector'
+import { withCollectorOperation } from '@/src/application/telemetry/collector-operation'
 import { mockCollectorPermission } from '../../../helpers/collector-permissions'
 
 const mockStream = jest.fn()
@@ -61,6 +62,33 @@ jest.mock('@/src/infrastructure/ai/streaming/stream-orchestrator', () => ({
 }))
 
 describe('useUnifiedAi cancellation', () => {
+  it('real hook scopes failed and retried transports into one parent event', async () => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
+    const timeout = new Error('SYNTHETIC-PRIVATE-TIMEOUT')
+    timeout.name = 'TimeoutError'
+    mockStream.mockRejectedValueOnce(timeout).mockImplementationOnce(async options => { options.onChunk('SYNTHETIC-PRIVATE-ANSWER') })
+    try {
+      const parent = beginCollectorObservation({ feature: 'summary', modelId: 'gpt-5.4-nano', sampleKind: 'feature', mode: 'structured' })
+      const { result } = renderHook(() => useUnifiedAi())
+      const ai = withCollectorOperation(result.current, parent.operation)
+      await act(async () => {
+        await expect(ai.stream([{ role: 'user', content: 'SYNTHETIC-PRIVATE-PROMPT' }], { diagnosticFeature: 'medical-summary', throwOnAbort: true })).rejects.toBe(timeout)
+        expect(await ai.stream([{ role: 'user', content: 'SYNTHETIC-PRIVATE-RETRY' }], { diagnosticFeature: 'medical-summary', throwOnAbort: true })).toBe('SYNTHETIC-PRIVATE-ANSWER')
+      })
+      expect(fetch).not.toHaveBeenCalled()
+      parent.finish({ outcome: 'ok', summaryCards: { succeeded: 6, failed: 0 } })
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+      const event = JSON.parse(jest.mocked(fetch).mock.calls[0][1]!.body as string)
+      expect(event).toMatchObject({ schema_version: 6, sample_kind: 'feature',
+        diagnostics: { requests: { count: 2, omitted: 0, details: [
+          { status: 'error', error_class: 'timeout' }, { status: 'completed', response_complete: true },
+        ] } } })
+      expect(JSON.stringify(event)).not.toMatch(/SYNTHETIC-PRIVATE/)
+      expect(result.current.isLoading).toBe(false)
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
   it.each(['query', 'stream'] as const)('completes %s while an enabled collector is offline, without forwarding full diagnostics', async (transport) => {
     const permission = mockCollectorPermission()
     window.history.replaceState({}, '', '/?site=vghtpe')

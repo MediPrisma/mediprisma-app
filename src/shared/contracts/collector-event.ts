@@ -1,4 +1,4 @@
-// Wire contracts v2-v5. Kept identical across sender and gateway.
+// Canonical wire contracts v2-v6. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Only declared metadata; no arbitrary objects, URLs, messages or clinical text.
 import { z } from 'zod'
 
@@ -118,3 +118,49 @@ export const collectorEventV5Schema = collectorEventV4BaseSchema.extend({
   }
 })
 export type CollectorEventV5 = z.infer<typeof collectorEventV5Schema>
+
+// v6: one operation contains bounded, ordered request observations. No bodies or identity.
+export const MAX_COLLECTOR_REQUEST_DETAILS = 64
+const requestBaseSchema = collectorEventBaseSchema.pick({
+  provider: true, model: true, model_source: true, latency_ms: true,
+  error_class: true, response_complete: true,
+}).extend({
+  status: z.enum(['completed', 'error', 'aborted', 'incomplete']),
+  phase: collectorEventBaseSchema.shape.diagnostics.shape.phase,
+  mode: collectorEventBaseSchema.shape.diagnostics.shape.mode,
+  first_chunk_ms: elapsed.optional(),
+  http_status: z.number().int().min(100).max(599).optional(),
+}).strict()
+export const collectorRequestSchema = requestBaseSchema.superRefine((r, ctx) => {
+  if (r.status === 'incomplete') {
+    if (r.error_class !== null || r.response_complete !== null)
+      ctx.addIssue({ code: 'custom', message: 'Incomplete observation has no terminal outcome' })
+  } else {
+    validateOutcome({ ...r, diagnostics: { first_chunk_ms: r.first_chunk_ms } }, ctx)
+  }
+})
+export type CollectorRequest = z.infer<typeof collectorRequestSchema>
+const operationRequestsSchema = z.object({
+  count: resourceCountSchema,
+  omitted: resourceCountSchema,
+  details: z.array(collectorRequestSchema).max(MAX_COLLECTOR_REQUEST_DETAILS),
+}).strict().superRefine((r, ctx) => {
+  if (r.count !== r.details.length + r.omitted)
+    ctx.addIssue({ code: 'custom', message: 'Request count must include every retained and omitted observation' })
+})
+export const collectorEventV6Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(6),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    summary_cards: summaryCardCountsSchema.optional(),
+    requests: operationRequestsSchema.optional(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v5 invariant rather than maintaining another copy.
+  const { requests, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV5Schema.safeParse({ ...e, schema_version: 5, diagnostics })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+  if (requests && e.sample_kind !== 'feature')
+    ctx.addIssue({ code: 'custom', message: 'Only operation events contain request observations' })
+})
+export type CollectorEventV6 = z.infer<typeof collectorEventV6Schema>

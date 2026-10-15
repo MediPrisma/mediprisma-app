@@ -1,5 +1,25 @@
 # TVGH 旁路紀錄試行
 
+## 發布相容性檢查（2026-10-07，尚未啟用）
+
+master CI 及正式 /app 自動／手動同步共用 collector-compatibility.yml：真正 sender 經隨機 loopback HTTP 傳給真正 Gateway，僅合成資料／臨時加密 DB。Gateway checkout 預設 main，可用 COLLECTOR_GATEWAY_COMPAT_REVISION 指定已審核 SHA；CI 記錄實際 SHA。不繼承發布金鑰、不改 HMC 發布鏈。先合併 Gateway v6，否則這個檢查應拒絕新版 sender 發布。
+
+此 CI 不等於 VM 驗收。院內部署後仍須執行 Gateway scripts/check-collector-readiness.mjs 的 HTTPS /health v6 預檢，並确认 DNS／工作站連線。GitHub runner 無法連私有 VM，尚未自動串接實機 readiness；沒有偷偷停用 sender 或影響臨床功能。
+
+Gateway repo 已確認是 private；合併前在本 APP repo 設定 COLLECTOR_GATEWAY_READ_TOKEN secret：fine-grained PAT 僅選 MediPrisma/tvgh-mediprisma-gateway，Contents=Read，Metadata 隱含。不要貼在 chat，不使用 owner token；workflow 只傳此 named secret、不 inherit 發布金鑰。未建立 secret，fork PR 沒有 secret 時不可繞過 gate／改 pull_request_target。
+
+## 2026-10-07：一次操作一筆，內嵌 AI 請求明細（未發布）
+
+Gateway canonical wire contract 產生本 repo 的 src/shared/contracts/collector-event.ts；不要手改 copy。兩端 checksum test 與 Gateway scripts/sync-collector-contract.mjs --check --app <checkout> 檢查漂移。這不是依賴 live Gateway 的建置，也沒有新增 private package／第三個 repo。
+
+Feature sender 使用 v6，operation capability 以 CollectorContext 傳到 query/stream。共同 slot engine 的 scoped AI wrapper 收集摘要／安全功能及其應用層重試；報告解讀與 NHI lipid 明確傳 capability，不依 operationKey、病人資訊、時間或模型猜測配對。Feature 一筆包含其觀察到的 request 明細，不另外送子事件；無父操作的 query/stream／語音／文獻仍獨立 v5。直接 agent/provider 內部呼叫並未全面 instrument；requests 省略表示未觀察，不是零次呼叫。
+
+最多64筆，保留開始順序、失敗與重試、精確 omitted count；未觀察終態標 incomplete，不偽造成功。Feature 最終 parse/validation status 與 transport 成功分開。無 prompt、response、raw errors、新身分欄位或臨床結果/cache 改動；site=vghtpe／既有權限／auth／旁路可用性不變。
+
+先部署 Gateway v6 reader，再發布 APP。舊 v1-v5 rows 保留，不回填或猜合併；rollback sender 時保留 v6 reader和原 DB/key。沒有更改正式 collector URL、VM、DNS、retention、AI endpoints、HMC發布流程或 pilot/hmc。此分支尚未發布，現有線上網站仍是舊行為。
+
+Visible behaviour changes: none（臨床 APP）。
+
 初始紀錄（2026-09-22）：先 pull 最新 origin/master `338a5d70`，於 `codex/vghtpe-collector-telemetry` 修改。當時使用者授權跨 repo sender 與 Gateway 契約擴充，尚未發布網站或啟用真實紀錄。以下保留各階段的驗證範圍；最新狀態以日期較新的段落為準。
 
 ## 2026-09-23：已授權才送、不觸發區域網路詢問（本次修改，尚未發布）

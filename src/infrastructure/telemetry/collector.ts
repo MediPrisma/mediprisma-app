@@ -1,6 +1,6 @@
 'use client'
 
-import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
+import { collectorEventV5Schema, collectorEventV6Schema, MAX_COLLECTOR_REQUEST_DETAILS, collectorModelSchema, featureSchema, type CollectorEventV6 as CollectorEvent, type CollectorRequest, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -9,6 +9,8 @@ type Diagnostics = CollectorEvent['diagnostics']
 type ResourceCounts = Partial<Record<'resource_count' | 'encounter_count' | 'med_count' | 'obs_count' | 'report_count' | 'doc_count', number>>
 type PreparedCounts = Partial<Record<'fed_resource_count' | 'fed_encounter_count' | 'fed_med_count' | 'fed_obs_count' | 'fed_report_count' | 'fed_doc_count', number>>
 export interface CollectorContext {
+  /** Per-run capability; never serialized or inferred from patient/slot/time. */
+  operation?: CollectorOperation
   counts?: ResourceCounts
   fedCounts?: PreparedCounts
   contextTokens?: number
@@ -30,7 +32,8 @@ type Finish = {
   httpStatus?: number
   summaryCards?: SummaryCardCounts
 }
-interface Observation { finish: (result: Finish) => void; firstChunk: () => void }
+export interface CollectorOperation { observeRequest: (input: Start) => Observation }
+interface Observation { finish: (result: Finish) => void; firstChunk: () => void; operation?: CollectorOperation }
 const NOOP: Observation = Object.freeze({ finish: () => {}, firstChunk: () => {} })
 const REQUEST_TIMEOUT_MS = 5_000
 const MAX_IN_FLIGHT = 2
@@ -194,12 +197,19 @@ function dispatch(event: CollectorEvent, owner: number, endpoint: string, auth: 
 /** Captures exact resource counts and a token estimate bucket at START; rechecks site at END/send. */
 export function beginCollectorObservation(input: Start): Observation {
   try {
+    if (input.sampleKind === 'request' && input.operation) return input.operation.observeRequest(input)
+    return observe(input)
+  } catch { return NOOP }
+}
+
+function observe(input: Start, collect?: (event: CollectorEvent) => void): Observation {
+  try {
     if (!isCollectorSite()) return NOOP
     const endpoint = configuredEndpoint()
     if (!endpoint) return NOOP
     const owner = generation
     const browser = browserIdentity()
-    const auth = captureCollectorAuth().catch(() => null)
+    const auth = collect ? null : captureCollectorAuth().catch(() => null)
     const started = nowMs()
     const id = crypto.randomUUID()
     const loaded = counts(input.counts)
@@ -213,16 +223,50 @@ export function beginCollectorObservation(input: Start): Observation {
     const trimmed = input.contextTrimmed
     let ended = false
     let firstChunk: number | undefined
+    const requests: CollectorRequest[] = []
+    let requestCount = 0
+    const operation: CollectorOperation | undefined = kind === 'feature' ? {
+      observeRequest: (child) => {
+        if (ended || generation !== owner || !isCollectorSite()) return NOOP
+        requestCount++
+        if (requests.length >= MAX_COLLECTOR_REQUEST_DETAILS) return NOOP
+        const index = requests.length
+        const model = modelInfo(child.modelId, child.provider)
+        const childStarted = nowMs()
+        requests.push({ ...model, model_source: 'configured', latency_ms: 0,
+          status: 'incomplete', error_class: null, response_complete: null, phase: 'unknown', mode: child.mode })
+        const observation = observe({ ...child, operation: undefined }, (event) => {
+          if (ended) return
+          const d = event.diagnostics
+          requests[index] = { provider: event.provider, model: event.model, model_source: event.model_source,
+            latency_ms: event.latency_ms, status: event.status, error_class: event.error_class,
+            response_complete: event.response_complete, phase: d.phase, mode: d.mode,
+            ...(d.first_chunk_ms !== undefined ? { first_chunk_ms: d.first_chunk_ms } : {}),
+            ...(d.http_status !== undefined ? { http_status: d.http_status } : {}) }
+        })
+        // A parent may end while a cancelled transport has not produced its terminal callback.
+        // Leave an explicit incomplete observation, not a fabricated success/abort.
+        const snapshot = () => {
+          if (requests[index].status === 'incomplete')
+            requests[index].latency_ms = Math.min(86_400_000, Math.max(0, Math.round(nowMs() - childStarted)))
+        }
+        requestSnapshots.push(snapshot)
+        return observation
+      },
+    } : undefined
+    const requestSnapshots: Array<() => void> = []
     return {
+      operation,
       firstChunk: () => { try { firstChunk ??= Math.max(0, Math.round(nowMs() - started)) } catch {} },
       finish: (result) => {
         try {
           if (ended) return
           ended = true
           if (generation !== owner || !isCollectorSite()) return
+          for (const snapshot of requestSnapshots) snapshot()
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
-          const parsed = collectorEventV5Schema.safeParse({
-            schema_version: 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
+          const parsed = (kind === 'feature' ? collectorEventV6Schema : collectorEventV5Schema).safeParse({
+            schema_version: kind === 'feature' ? 6 : 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
             status: result.outcome === 'ok' ? 'completed' : result.outcome === 'aborted' ? 'aborted' : 'error',
@@ -237,9 +281,13 @@ export function beginCollectorObservation(input: Start): Observation {
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
+              ...(kind === 'feature' && requestCount > 0 ? { requests: { count: requestCount, omitted: requestCount - requests.length, details: requests } } : {}),
             },
           })
-          if (parsed.success) dispatch(parsed.data, owner, endpoint, auth)
+          if (parsed.success) {
+            if (collect) collect(parsed.data as CollectorEvent)
+            else if (auth) dispatch(parsed.data as CollectorEvent, owner, endpoint, auth)
+          }
           else dropped++
         } catch { /* Telemetry must not affect clinical outcomes, even synchronously. */ }
       },

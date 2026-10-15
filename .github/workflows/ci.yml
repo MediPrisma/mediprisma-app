@@ -37,6 +37,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  collector-compatibility:
+    # Only the owner's /app release line; never change pilot/hmc machinery.
+    if: github.ref == 'refs/heads/master' || github.base_ref == 'master'
+    uses: ./.github/workflows/collector-compatibility.yml
+    secrets:
+      COLLECTOR_GATEWAY_READ_TOKEN: ${{ secrets.COLLECTOR_GATEWAY_READ_TOKEN }}
+    permissions:
+      contents: read
+
   public-deployment:
     runs-on: ubuntu-latest
     steps:
