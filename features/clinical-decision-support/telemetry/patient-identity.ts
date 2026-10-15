@@ -48,7 +48,7 @@ function maskedName(name: string): string {
   return visible.join('')
 }
 
-function nationalId(patient: PatientEntity): { system: string; value: string; displayValue?: string } {
+function nationalId(patient: PatientEntity): { system: string; value: string } {
   const matches = (patient.identifier ?? [])
     .map((identifier) => ({
       system: normalizedIdentifierSystem(identifier.system),
@@ -58,13 +58,12 @@ function nationalId(patient: PatientEntity): { system: string; value: string; di
       || isMedcloudSystem(identifier.system, MEDCLOUD_NATIONAL_ID_SYSTEM)
       || identifier.system === TVGH_NATIONAL_ID_SYSTEM
       || (!isMedcloudNamespace(identifier.system) && NATIONAL_ID_SYSTEM.test(identifier.system)))
-  // The hospital bridge supplies a full ID in this explicit namespace. Keep
-  // the full value in the local digest input, never in the transmitted display.
+  // Match the existing cloud identity's privacy boundary: discard hidden
+  // digits before hashing as well as before constructing display fields.
   if (matches.length === 1 && matches[0].system === TVGH_NATIONAL_ID_SYSTEM) {
     const value = matches[0].value
     if (!/^[A-Z][12][0-9]{8}$/.test(value)) throw new Error('cdss_identity_unavailable')
-    return { system: TWCORE_NATIONAL_ID_SYSTEM, value,
-      displayValue: `${value.slice(0, 4)}XXX${value.slice(7)}` }
+    return { system: TWCORE_NATIONAL_ID_SYSTEM, value: `${value.slice(0, 4)}XXX${value.slice(7)}` }
   }
   if (matches.length !== 1 || !MASKED_NATIONAL_ID.test(matches[0].value)
     || !MASK.test(matches[0].value.slice(1))) {
@@ -112,7 +111,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
     patient_identity: {
       name_masked: maskedName(name),
       birth_year: birthDate.slice(0, 4),
-      identifier_masked: identifier.displayValue ?? identifier.value,
+      identifier_masked: identifier.value,
       identifier_system: identifier.system,
     },
   }

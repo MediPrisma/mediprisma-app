@@ -161,7 +161,7 @@ export async function saveCdssSnapshot(input: {
     })
     if (response.status !== 201) throw new CdssSaveError('cdss_gateway_rejected', stage, response.status)
     stage = 'receipt'
-    const ack = await response.json() as { status?: string; save_id?: string } | null
+    const ack = await cancellable(response.json(), controller.signal) as { status?: string; save_id?: string } | null
     if (!isCollectorSite() || controller.signal.aborted || !auth.isCurrent()) throw new Error('cdss_site_changed')
     if (ack?.status !== 'stored' || ack?.save_id !== parsed.save_id) throw new Error('cdss_gateway_unconfirmed')
     const current = pending.get(patientId) ?? []
@@ -169,7 +169,7 @@ export async function saveCdssSnapshot(input: {
     pending.set(patientId, current.filter((event) => !saved.has(event)))
     retryable.delete(retryKey)
   } catch (failure) {
-    if (timedOut) throw new CdssSaveError('cdss_save_timeout', stage)
+    if (timedOut) throw new CdssSaveError(['request', 'receipt'].includes(stage) ? 'cdss_save_timeout' : 'cdss_prepare_timeout', stage)
     if (controller.signal.aborted) throw new CdssSaveError('cdss_site_changed', stage)
     if (failure instanceof CdssSaveError) throw failure
     if (failure instanceof Error && failure.message === 'cdss_site_changed') throw new CdssSaveError('cdss_site_changed', stage)
