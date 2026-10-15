@@ -84,13 +84,16 @@ describe('HF dry-run Gateway integration', () => {
 describe('HF browser transport', () => {
   it('uses HTTPS, no credentials/cache/referrer/redirect fallback and sends only the projected input', async () => {
     const fetchFn = jest.fn(async () => new Response(JSON.stringify(outcome), { status: 200 }))
-    const result = await requestHfDryRun(input(), { origin: 'https://hf-gateway.test', token: 'SYNTHETIC', signal: new AbortController().signal, requestId: randomUUID(), fetch: fetchFn })
+    const prepared = input()
+    prepared.excludedLabs = [{ row: 5, name: 'LOCAL-ONLY-EXCLUDED-LAB', codes: ['LOCAL-ONLY-CODE'], reason: 'lab-unmapped' }]
+    prepared.unlinkedObservationCount = 2
+    const result = await requestHfDryRun(prepared, { origin: 'https://hf-gateway.test', token: 'SYNTHETIC', signal: new AbortController().signal, requestId: randomUUID(), fetch: fetchFn })
     expect(result.verdict).toBe('accepted')
     const [url, options] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toContain('/hf/v1/dry-run?claim=P1_CD_mortality_1m')
     expect(url).toContain('dryRun=true')
     expect(options).toMatchObject({ credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', redirect: 'error' })
-    expect(options.body).not.toMatch(/FAKE-ID|PRIVATE|synthetic-patient/)
+    expect(options.body).not.toMatch(/FAKE-ID|PRIVATE|synthetic-patient|excludedLabs|unlinkedObservationCount|LOCAL-ONLY/)
   })
   it.each(['http://10.121.12.179:8088', 'https://user:password@hf.test', 'https://hf.test/path', 'https://hf.test?token=bad'])('rejects unsafe or ambiguous origin %s', origin => {
     expect(() => hfGatewayUrl(origin)).toThrow()

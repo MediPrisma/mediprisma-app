@@ -500,6 +500,7 @@ export class FhirMapper implements IDataMapper {
 
   static toDocumentReference(fhirResource: any): DocumentReferenceEntity {
     return {
+      meta: fhirResource.meta ? { source: fhirResource.meta.source, tag: fhirResource.meta.tag } : undefined,
       id: fhirResource.id || '',
       status: fhirResource.status,
       type: fhirResource.type,

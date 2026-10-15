@@ -54,6 +54,23 @@ beforeEach(() => {
 })
 afterEach(() => { delete process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN; delete process.env.NEXT_PUBLIC_HF_AUTH_POLICY })
 
+it('shows excluded lab details in the HF screen and clears them on patient import changes', async () => {
+  const bundle = hfMedcloudFixture()
+  bundle.entry.at(-1).resource.code.text = 'Synthetic excluded WBC'
+  bundle.entry.at(-1).resource.valueQuantity.unit = 'unknown-unit'
+  jest.mocked(LocalBundleService.load).mockResolvedValue(bundle)
+  render(<HfMedcloudDryRun locale="zh-TW" />)
+  await prepared()
+  fireEvent.click(screen.getByText(/未納入的檢驗／觀察項目明細/))
+  expect(screen.getByText('Synthetic excluded WBC')).toBeVisible()
+  expect(screen.getByText(/單位無法換算成模型要求/)).toBeVisible()
+  jest.mocked(LocalBundleService.load).mockResolvedValue(hfMedcloudFixture())
+  importId = 'synthetic-import-2'
+  act(() => window.dispatchEvent(new Event('storage')))
+  await waitFor(() => expect(screen.queryByText('Synthetic excluded WBC')).not.toBeInTheDocument())
+  expect(requestHfDryRun).not.toHaveBeenCalled()
+})
+
 it('prepares data locally on open with no network requests and explains the transmitted inputs', async () => {
   const bundle = hfMedcloudFixture()
   bundle.entry[0].resource.birthDate = '1960'
