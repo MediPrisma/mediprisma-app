@@ -52,7 +52,7 @@ import {
   type LabDataReportLabelResolver,
 } from "../utils/build-lab-data-report"
 import { findDescriptionIdentifiers } from "../utils/identifier-scan"
-import { rawCaptureOrigin } from "../utils/raw-capture-client"
+import { medcloudExtensionVersion, rawCaptureOrigin, supportsRawCapture } from "../utils/raw-capture-client"
 import { assembleRawLabSource, type RawLabExtract } from "../utils/raw-lab-rows"
 import { importedBundleId, readRawLabRows, type RawLabRead } from "../utils/read-raw-lab-rows"
 import { sendLabDataReportInBackground } from "../utils/send-in-background"
@@ -237,12 +237,16 @@ export function LabDataReportDialog({
   const institutionSkipped = mode === 'team-and-institution' && !institutionReady
   const institutionBlocked = mode === 'institution' && !institutionReady
 
-  // Raw rows are offered only for a 雲端病歷 patient on a page the extension
+  // Raw rows are offered only for a 雲端病歷 patient whose data came from an
+  // extension that can hand the raw capture back (≥ 0.12.19 — an older one
+  // never answers, and 送出 would wait for nothing), on a page the extension
   // serves, with the imported Bundle.id to pair the capture with. Nothing is
   // read until 送出 (or the raw preview) is pressed.
   const rawCapable = useMemo(
-    () => context.dataSource === 'medcloud' && rawCaptureOrigin() !== null,
-    [context.dataSource],
+    () => context.dataSource === 'medcloud'
+      && rawCaptureOrigin() !== null
+      && supportsRawCapture(medcloudExtensionVersion(collected.candidates.map((candidate) => candidate.observation))),
+    [collected, context.dataSource],
   )
   useEffect(() => {
     if (!open || !rawCapable) return

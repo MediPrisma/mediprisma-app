@@ -159,6 +159,17 @@ the input stays.
 | A point's decision buttons (the map's button row, its 「其他」 menu, the recorded-decision card) | The Artifact's: the recommendation as the one filled button, the rest beside it or behind 「其他」 opening in place when there are three or more; once recorded, ✓ the choice, 「改」, and what to recheck. The same actions and the same record | — (layout only; the first 決策地圖 is retired) | Layout only: Owner, in chat 2026-09-30: 「都照著CDSS小麻式版面原形，不要使用任何原本的外觀」 | `visit-book-layout` 「draws nothing of the other layouts' look」 (no `[data-slot="button"]`), the decision cases in both modes |
 | 決策地圖's 「今天要決定」 queue and 01's 診斷／追蹤 switch | Each point decides on its own row or box; the decision-map rail marks what is open; 「今天的計畫」 lists what was decided | — (layout only; the first 決策地圖 is retired) | Layout only; owner added 決策地圖 v2 to the switch in 8273f5cb, 2026-09-30 | `visit-book-layout` 「records a chain in its box and marks it settled in the map」 |
 
+## 回報檢驗資料問題 (all launch routes)
+
+The raw-row option exists only for 雲端病歷 data on the pages the extension
+answers (`/app/` and `/app-hmc/` on mediprisma.tw); this gate narrows it
+further by the extension that produced the data. It does not depend on site,
+role or sign-in state.
+
+| Surface | Behaviour | Owner decision | Tests |
+|---|---|---|---|
+| 「附上雲端病歷原始檢驗列」 in the 回報 dialog | **不顯示** when the patient's 雲端病歷 data carries no adapter-version tag (`https://cloud-wildcatch.invalid/fhir/CodeSystem/adapter-version`), an invalid one, or one below 0.12.19 — the highest stamped version counts. Those extensions have no raw-capture interface: the option could send nothing and made 送出 wait. Data from 0.12.19 or later: offered and ticked by default, as before. The converted rows are sent either way, and the report itself is unchanged. | Owner, in chat 2026-10-02, asked whether to hide it for data from extensions older than 0.12.19 or with a missing／invalid version tag (0.12.19 and later unchanged), answered 「同意隱藏」 | `LabDataReportDialog.raw` (0.12.19: offered, read and sent; 0.12.13: not offered, nothing read, nothing extra sent), `raw-capture-client` (version gate: 0.12.19／0.12.20／0.13.0／1.0 yes; 0.12.18／0.12.13／0.9.99／non-numeric／missing no; highest version wins) |
+
 ## Adding or changing a gate
 
 HF new-flow clinical information card: owner requested replacing the height tile with calculated BMI on 2026-09-12. Height remains editable in the shared clinical-values dialog; BMI is only displayed when positive height and weight are available, and its tooltip includes both measurement dates. Other values use two rows beside LVEF on desktop.
