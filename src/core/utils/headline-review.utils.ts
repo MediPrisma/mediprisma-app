@@ -142,7 +142,11 @@ export function reviewHeadline(
     const acronyms = item.match(/\b[A-Z][A-Z0-9]{1,5}\b/g) ?? []
     if (content.length === 0 && acronyms.length === 0) continue
     const named = content.some((word) => problemWords.has(word))
-    const byAcronym = acronyms.some((acronym) => problemLabels.some((label) => acronymMatches(acronym, label)))
+    // "AF" against a label that writes it ("AF", "Paroxysmal AF"), then
+    // against the initials of a spelled-out one ("Atrial fibrillation").
+    const labelTokens = new Set(problemLabels.flatMap((label) => label.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)))
+    const byAcronym = acronyms.some((acronym) => labelTokens.has(acronym.toLowerCase()) ||
+      problemLabels.some((label) => acronymMatches(acronym, label)))
     if (!named && !byAcronym) review.unlisted.push(item)
   }
   return review.unlisted.length || review.medicines.length || review.values.length ? review : undefined

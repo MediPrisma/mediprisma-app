@@ -63,6 +63,10 @@ describe('reviewHeadline', () => {
       expect(reviewHeadline(`70F with ${abbreviation}`, [], [])?.unlisted).toEqual([abbreviation])
     }
     expect(reviewHeadline('70F with AF', ['Atrial fibrillation'], [])).toBeUndefined()
+    // A label may write the abbreviation itself.
+    expect(reviewHeadline('70F with AF', ['AF'], [])).toBeUndefined()
+    expect(reviewHeadline('70F with AF and HF', ['Paroxysmal AF', 'HF'], [])).toBeUndefined()
+    expect(reviewHeadline('70F with RA', ['ra'], [])).toBeUndefined()
     expect(headlineItems('94-year-old man with CKD 3b and gout.')).toEqual(['CKD 3b', 'gout'])
   })
 })
