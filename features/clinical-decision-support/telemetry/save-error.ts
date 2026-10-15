@@ -11,7 +11,8 @@ const help: Record<string, [string, string]> = {
   cdss_site_changed: ['儲存期間帳號或頁面已變更，請確認後重試。', 'The account or page changed. Check and retry.'],
   cdss_save_timeout: ['儲存超過 15 秒，結果尚未確認；請先查看紀錄。', 'Save timed out after 15 seconds. Check records before retrying.'],
   cdss_prepare_timeout: ['送出前準備超過 15 秒，資料尚未送出；請確認登入後重試。', 'Preparation timed out after 15 seconds. Nothing was sent; check sign-in and retry.'],
-  cdss_network_unavailable: ['無法取得儲存服務回應，請確認網路與瀏覽器連線限制。', 'No response from storage. Check network and browser restrictions.'],
+  cdss_network_unavailable: ['無法取得儲存服務回應，請確認網路與瀏覽器連線限制；重試前請先查看紀錄。', 'No response from storage. Check network and browser restrictions; check records before retrying.'],
+  cdss_save_interrupted: ['送出後帳號或頁面已變更，儲存結果未確認；請回到原帳號與病人查看紀錄後再重試。', 'The account or page changed after sending. Return to the original account and patient and check records before retrying.'],
   cdss_payload_invalid: ['儲存資料格式檢查失敗，請提供此錯誤代碼給維護人員。', 'Snapshot validation failed. Report this code to support.'],
   cdss_payload_too_large: ['儲存資料超過 4 MB 限制。', 'Snapshot exceeds the 4 MB limit.'],
   cdss_gateway_unconfirmed: ['服務回覆無法確認儲存結果，請先查看紀錄。', 'The receipt could not be confirmed. Check records first.'],
@@ -22,7 +23,7 @@ const help: Record<string, [string, string]> = {
 }
 
 export function cdssSaveOutcomeUncertain(failure: unknown): boolean {
-  return failure instanceof Error && ['cdss_save_timeout', 'cdss_network_unavailable', 'cdss_gateway_unconfirmed'].includes(failure.message)
+  return failure instanceof Error && ['cdss_save_timeout', 'cdss_network_unavailable', 'cdss_gateway_unconfirmed', 'cdss_save_interrupted'].includes(failure.message)
 }
 
 export function cdssSaveErrorDescription(failure: unknown, english: boolean): string {

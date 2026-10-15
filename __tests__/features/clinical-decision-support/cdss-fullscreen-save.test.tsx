@@ -282,3 +282,15 @@ test('三區塊 does not offer saving or records, and switching to it neither ca
   expect(screen.getByTestId('cdss-history-records')).toBeVisible()
   view.unmount()
 })
+
+test.each([false, true])('uncertain save outcomes ask users to check records (English=%s)', async english => {
+  jest.clearAllMocks()
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new Error('cdss_save_timeout'))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+    english ? 'CDSS save was not confirmed.' : 'CDSS 儲存結果未確認。',
+    expect.objectContaining({ description: expect.stringContaining('cdss_save_timeout') }),
+  ))
+  view.unmount()
+})

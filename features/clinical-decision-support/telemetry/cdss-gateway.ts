@@ -170,9 +170,10 @@ export async function saveCdssSnapshot(input: {
     retryable.delete(retryKey)
   } catch (failure) {
     if (timedOut) throw new CdssSaveError(['request', 'receipt'].includes(stage) ? 'cdss_save_timeout' : 'cdss_prepare_timeout', stage)
-    if (controller.signal.aborted) throw new CdssSaveError('cdss_site_changed', stage)
+    if (controller.signal.aborted || (failure instanceof Error && failure.message === 'cdss_site_changed')) {
+      throw new CdssSaveError(['request', 'receipt'].includes(stage) ? 'cdss_save_interrupted' : 'cdss_site_changed', stage)
+    }
     if (failure instanceof CdssSaveError) throw failure
-    if (failure instanceof Error && failure.message === 'cdss_site_changed') throw new CdssSaveError('cdss_site_changed', stage)
     if (stage === 'request') throw new CdssSaveError('cdss_network_unavailable', stage)
     if (stage === 'receipt') throw new CdssSaveError('cdss_gateway_unconfirmed', stage)
     throw failure
