@@ -14,7 +14,7 @@ import type { AiMessage } from '@/src/core/entities/ai.entity'
 import { LAB_SOURCE_EVIDENCE_RULE, CLINICAL_ATTRIBUTION_RULE } from './source-evidence-contract'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { getOriginalAnalyteDisplayForObs, getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
-import { labClaimConflicts, reportOrganFromQuotes } from '@/src/core/utils/summary-evidence-fit.utils'
+import { labClaimConflicts, reportOrganFromQuotes, pathologySpecimenDescriptors } from '@/src/core/utils/summary-evidence-fit.utils'
 import { getAnalyteCanonicalKey, TEST_ALIASES } from '@voho0000/clinical-lab-normalization/canonical'
 import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import type {
@@ -110,7 +110,6 @@ import {
   allDigestItems,
   buildReportDigest,
   deterministicReportExcerpt,
-  findConclusionSection,
   type ReportDigestItem,
 } from './report-digest'
 
@@ -3330,24 +3329,8 @@ export function finalizeReportHighlights(
         finalized.point.sources.flatMap(source => {
           const item = readItemByKey.get(source.key)
           if (!item || item.kind !== 'pathology') return []
-          // Numbered specimens are independent diagnoses, not addenda. Use
-          // only sections that actually contain this point's verified quote;
-          // repeated ambiguous quotes retain all matching sections.
-          const matching: string[] = []
-          let remaining = item.narrative
-          for (let section = findConclusionSection(remaining); section; section = findConclusionSection(remaining)) {
-            const content = remaining.slice(section.contentStart, section.end)
-            // Only the specimen descriptor immediately before a diagnosis
-            // may supply omitted anatomy. Never borrow from a sibling finding
-            // in an imaging impression or a multi-item pathological section.
-            const lines = content.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
-            const descriptor = lines[0] ?? ''
-            const diagnosis = lines[1] ?? ''
-            if (descriptor.length <= 200 && !/[.!?。;；]/.test(descriptor) && !/^\d+[.)]/.test(descriptor) &&
-                verifiedQuotes.some(quote => quote.key === source.key && verifyReportQuote(quote.quote, diagnosis))) matching.push(descriptor)
-            remaining = remaining.slice(0, section.headerStart)
-          }
-          return matching
+          return pathologySpecimenDescriptors(item.narrative,
+            verifiedQuotes.filter(quote => quote.key === source.key).map(quote => quote.quote))
         }))
       const points = pointsByOrgan.get(verifiedOrgan)
       if (points) points.push(finalized.point)

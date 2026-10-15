@@ -178,7 +178,7 @@ function stripAdministrativeLines(text: string): string {
 // nothing. "Clinical diagnosis:" (the requester's working diagnosis) and a
 // sentence such as "Diagnosis of ..." are deliberately not headers.
 const CONCLUSION_HEADER =
-  /^[ \t]{0,40}(?:[#*•>\-–]{1,4}[ \t]{0,8})?(?:\d{1,3}[.)][ \t]{0,8})?[【[(（]?[ \t]{0,8}(?:(?:(?:patholog(?:ic|ical)|final|sonar|sonographic|ultrasound|imaging|radiologic(?:al)?)[ \t]{1,8})?diagnos[ie]s|impressions?(?:[ \t]{1,8}and[ \t]{1,8}recommendations?)?|conclusions?|(?:病理|最終|影像)?(?:診斷|結論|印象))(?:[ \t]{0,8}\d{1,3})?[ \t]{0,8}[】\])）]?[ \t]{0,8}(?:[:：]|$)/i
+  /^[ \t]{0,40}(?:[#*•>\-–]{1,4}[ \t]{0,8})?(?:\d{1,3}[.)][ \t]{0,8})?[【[(（]?[ \t]{0,8}(?:(?:(?:patholog(?:ic|ical)|final|sonar|sonographic|ultrasound|imaging|radiologic(?:al)?)[ \t]{1,8})?diagnos[ie]s|impressions?(?:[ \t]{1,8}and[ \t]{1,8}recommendations?)?|conclusions?|(?:病理|最終|影像)?(?:診斷|結論|印象))[ \t]{0,8}[】\])）]?[ \t]{0,8}(?:[:：]|$)/i
 
 // A line that is only a section heading ("Other Interpretations:", "建議：")
 // closes the conclusion section that precedes it.

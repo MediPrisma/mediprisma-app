@@ -1,4 +1,5 @@
-import { labClaimConflicts, reportOrganFromQuotes } from '@/src/core/utils/summary-evidence-fit.utils'
+import { labClaimConflicts, reportOrganFromQuotes, pathologySpecimenDescriptors } from '@/src/core/utils/summary-evidence-fit.utils'
+import { buildReportPromptBody, deterministicReportExcerpt } from '@/src/core/use-cases/medical-summary/report-digest'
 import { buildSourceCatalog, GenerateMedicalSummaryUseCase, finalizeReportHighlights } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 
 test.each([
@@ -111,4 +112,17 @@ test.each([
   const key = catalog[0].key
   const result = finalizeReportHighlights({ groups: [{ organ, points: [{ text: quote, sources: [key], quotes: [{ source: key, quote }] }] }], unremarkable: [] }, data, catalog)
   expect(result.groups[0].organ).toBe(organ)
+})
+
+test('a preceding diagnosis is not a pathology specimen descriptor', () => {
+  expect(pathologySpecimenDescriptors('Diagnosis:\nLymph node metastasis\nAdenocarcinoma', ['Adenocarcinoma'])).toEqual([])
+})
+
+test('numbered specimen parsing does not change report excerpt or prompt visibility', () => {
+  const text = '病理診斷 1：Uterus, myometrium\nLeiomyoma\n病理診斷 2：Bone, femoral head\nFracture'
+  expect(deterministicReportExcerpt(text)?.excerpt).toContain('Leiomyoma')
+  expect(buildReportPromptBody(text).text).toContain('Leiomyoma')
+  expect(buildReportPromptBody(text).text.indexOf('Leiomyoma')).toBeLessThan(buildReportPromptBody(text).text.indexOf('Fracture'))
+  expect(pathologySpecimenDescriptors(text, ['Leiomyoma'])).toEqual(['Uterus, myometrium'])
+  expect(pathologySpecimenDescriptors(text, ['Fracture'])).toEqual(['Bone, femoral head'])
 })

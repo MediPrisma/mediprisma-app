@@ -2,6 +2,25 @@ import type { ReportOrgan } from '@/src/core/entities/medical-summary.entity'
 import type { ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
 import { getOriginalAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
+import { verifyReportQuote } from '@/src/core/utils/report-quote.utils'
+
+/** Separate from report-digest's last-addendum policy: numbered pathology
+ * specimens are independent. This helper never changes excerpts/prompts. */
+export function pathologySpecimenDescriptors(narrative: string, quotes: readonly string[]): string[] {
+  const headers = [...narrative.matchAll(/^[ \t]*(?:(?:(?:patholog(?:ic|ical)|final)[ \t]+)?diagnos[ie]s|(?:病理|最終)?診斷)(?:[ \t]*\d{1,3})?[ \t]*[:：][ \t]*/gim)]
+  return headers.flatMap((header, index) => {
+    const start = header.index! + header[0].length
+    const end = headers[index + 1]?.index ?? narrative.length
+    const lines = narrative.slice(start, end).split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+    const descriptor = lines[0] ?? ''
+    const diagnosis = lines[1] ?? ''
+    // A specimen descriptor has an organ/site/procedure list or label shape,
+    // not just a preceding disease name in a multiline list of diagnoses.
+    return descriptor.length <= 200 && /[,，]|[:：]$/.test(descriptor) &&
+      !/[.!?。;；]/.test(descriptor) && !/^\d+[.)]/.test(descriptor) &&
+      quotes.some(quote => verifyReportQuote(quote, diagnosis)) ? [descriptor] : []
+  })
+}
 
 // Narrow biochemical identities, not diagnostic thresholds. Unknown tests
 // receive no opinion; broad syndromes (such as anemia) have many valid tests.
