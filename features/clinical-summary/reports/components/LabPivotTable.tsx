@@ -262,9 +262,9 @@ export const LabPivotTable = memo(function LabPivotTable({
         )}
         {flatTests.some(test => test.values.get(date)?.adultPreventive) && (
           <span className="ml-1 inline-flex"
-            title={locale.startsWith('zh') ? '本日期包含成人健檢來源結果，不代表同日所有檢驗皆為成人健檢。' : 'This date includes adult preventive-care results; other same-day tests may have a different source.'}
-            aria-label={locale.startsWith('zh') ? '含成人健檢結果' : 'Includes adult preventive-care results'}>
-            <ReportSourceProgramBadge sourceProgram="adult-preventive" label={locale.startsWith('zh') ? '成健' : 'Preventive'} />
+            title={locale.startsWith('zh') ? '本日期包含成人預防保健來源結果，不代表同日所有檢驗皆為成人預防保健。' : 'This date includes adult preventive-care results; other same-day tests may have a different source.'}
+            aria-label={locale.startsWith('zh') ? '含成人預防保健結果' : 'Includes adult preventive-care results'}>
+            <ReportSourceProgramBadge sourceProgram="adult-preventive" label={locale.startsWith('zh') ? '健' : 'Preventive'} />
           </span>
         )}
       </td>

@@ -104,9 +104,9 @@ describe('AdultPreventiveGroupCard', () => {
   it('summarizes one adult health-exam encounter in a compact row', () => {
     renderCard()
 
-    const toggle = screen.getByRole('button', { name: '展開成人健檢項目' })
+    const toggle = screen.getByRole('button', { name: '展開成人預防保健項目' })
     expect(toggle).toHaveClass('min-h-11', 'py-1.5')
-    expect(toggle).toHaveTextContent('成人健檢')
+    expect(toggle).toHaveTextContent('成人預防保健')
     expect(toggle).toHaveTextContent('良安診所')
     expect(toggle.querySelector('time[datetime="2024-06-28"]')).toBeInTheDocument()
     expect(toggle).toHaveTextContent('3 項')
@@ -127,7 +127,7 @@ describe('AdultPreventiveGroupCard', () => {
       .toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByText('AST')).not.toBeInTheDocument()
     expect(screen.queryByText('ALT')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '收合成人健檢項目' }))
+    expect(screen.getByRole('button', { name: '收合成人預防保健項目' }))
       .toHaveAttribute('aria-expanded', 'true')
   })
 })
