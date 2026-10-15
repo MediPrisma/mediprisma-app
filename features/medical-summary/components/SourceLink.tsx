@@ -202,9 +202,9 @@ export function SourceLink({
                 onNavigate(navTarget(s))
               }}
               className={cn(
-                "group -mx-1 flex w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 text-left text-[length:max(13px,0.8125rem)] leading-snug tabular-nums transition-colors",
+                "group -mx-1 flex w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 text-left text-[length:max(14px,0.875rem)] leading-snug tabular-nums transition-colors",
                 s.verified && !isSuspect(s)
-                  ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "text-foreground/80 hover:bg-muted hover:text-foreground"
                   : "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10",
               )}
             >
@@ -222,8 +222,8 @@ export function SourceLink({
             <p
               key={s.key}
               className={cn(
-                "text-[length:max(13px,0.8125rem)] leading-snug tabular-nums",
-                s.verified && !isSuspect(s) ? "text-muted-foreground" : "text-amber-700 dark:text-amber-300",
+                "text-[length:max(14px,0.875rem)] leading-snug tabular-nums",
+                s.verified && !isSuspect(s) ? "text-foreground/80" : "text-amber-700 dark:text-amber-300",
               )}
             >
               {s.verified ? (

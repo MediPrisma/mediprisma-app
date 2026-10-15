@@ -60,9 +60,9 @@ export function OverviewHeroCard({
           >
             {title}
           </h3>
-          <span className="ml-auto flex items-center gap-2">
+          <span className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
             {dataRange ? (
-              <span className="text-[length:max(12px,0.75rem)] tabular-nums text-muted-foreground">{dataRange}</span>
+              <span className="text-[length:max(14px,0.875rem)] tabular-nums text-foreground/80">{dataRange}</span>
             ) : null}
             <Button
               type="button"

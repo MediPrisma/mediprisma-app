@@ -138,7 +138,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
     const label = sameDayCount > 1 ? `${chipLabel(source)} ×${sameDayCount}` : chipLabel(source)
     const evidenceQuote = quotes.find((quote) => quote.key === source.key)?.quote
     const className =
-      "relative ml-1 inline-flex items-center whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 align-baseline text-[length:max(12px,0.75rem)] leading-[1.375rem] tabular-nums text-muted-foreground"
+      "relative ml-1 inline-flex items-center whitespace-nowrap rounded border border-border bg-muted/40 px-1.5 align-baseline text-[length:max(14px,0.875rem)] leading-[1.375rem] tabular-nums text-foreground/80"
     if (!onNavigate) {
       return <span key={source.key} className={className} data-report-chip={source.key}>{label}</span>
     }
@@ -266,9 +266,9 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
               <li
                 key={group.organ}
                 data-report-organ={group.organ}
-                className="grid grid-cols-1 gap-x-3 border-b border-border py-1.5 last:border-b-0 @min-[26rem]:grid-cols-[max(4.5rem,66px)_minmax(0,1fr)]"
+                className="grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border py-1.5 last:border-b-0 @min-[38rem]:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]"
               >
-                <span className="text-[length:max(13px,0.8125rem)] font-semibold leading-snug text-foreground/80 @min-[26rem]:pt-px">
+                <span className="min-w-0 [overflow-wrap:anywhere] text-[length:max(13px,0.8125rem)] font-semibold leading-snug text-foreground/80 @min-[38rem]:pt-px">
                   {group.label}
                 </span>
                 <ul className="min-w-0 space-y-0.5">
@@ -335,7 +335,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                                   >
                                     {quoted(quote.quote)}
                                     {source ? (
-                                      <span className="ml-1 whitespace-nowrap tabular-nums text-muted-foreground/80">
+                                      <span className="ml-1 inline-block text-[length:max(14px,0.875rem)] tabular-nums text-foreground/80">
                                         {labels.kindLabels[source.kind]} {reportChipDate(source.date, newestYear)}
                                       </span>
                                     ) : null}
