@@ -1602,7 +1602,7 @@ function composeLabMetric(
   clinicalData: SummaryCatalogInput | undefined,
   audience: 'medical' | 'patient',
   locale: SummaryLocale,
-): { text: string; segments: MetricSegment[]; testNames: string[] } | undefined {
+): { text: string; segments: MetricSegment[]; testNames: string[]; labels: string[] } | undefined {
   if (keys.length === 0 || !clinicalData) return undefined
   const observationById = reportObservationMap(clinicalData.observations)
   const reportById = new Map((clinicalData.diagnosticReports ?? [])
@@ -1699,7 +1699,8 @@ function composeLabMetric(
     })
     if (sharedUnit) push(sharedUnit === '%' ? '%' : ` ${sharedUnit}`)
   })
-  return { text: segments.map((segment) => segment.text).join(''), segments, testNames: [...new Set(values.map(value => metricTestName(value.label)))] }
+  const labels = [...new Set(values.map(value => value.label))]
+  return { text: segments.map((segment) => segment.text).join(''), segments, testNames: labels.map(label => metricTestName(values.find(value => value.label === label)!.group)), labels }
 }
 
 function metricTestName(name: string): string {
@@ -1713,17 +1714,32 @@ function metricTestName(name: string): string {
  * Canonical names accept aliases without treating a substring (K in CK) as
  * the same analyte. Unknown named measurements such as baPWV must also match.
  */
-function metricTestNames(text: string): string[] {
+function metricTestNames(text: string, labels: string[], recorded: string[]): string[] {
   return text.split(/[;；,，]/).flatMap((part) => {
-    const name = /^\s*([^\d].*?)\s+(?=[<>≤≥]?[\d.])/.exec(part)?.[1]?.trim().replace(/[:：]$/, '')
-    if (!name) return []
-    return [metricTestName(name)]
+    if (!/^\s*[^\d\s]/.test(part)) return []
+    const candidates = [...part.matchAll(/\s+(?=[<>≤≥]?[\d.])/g)]
+      .map(match => part.slice(0, match.index).trim().replace(/[:：]$/, ''))
+      .filter(Boolean)
+    // Prefer the complete recognized name, not the first number: CA 19-9
+    // contains a number in its name. Exact app labels also cover translated
+    // patient-facing names on a subsequent card retry.
+    for (const name of [...candidates].reverse()) {
+      const label = labels.find(label => name.toLowerCase() === label.toLowerCase())
+      if (label) return [recorded[labels.indexOf(label)]]
+      // Narrative qualifiers ("Rising creatinine") do not change the test.
+      const words = name.split(/\s+/)
+      for (let start = 0; start < words.length; start++) {
+        const suffix = words.slice(start).join(' ')
+        if (getAnalyteCanonicalKey({ code: { text: suffix } })) return [metricTestName(suffix)]
+      }
+    }
+    return candidates.length ? [metricTestName(candidates[0])] : []
   })
 }
 
-function metricTestNamesConflict(modelMetric: string | undefined, recorded: string[]): boolean {
+function metricTestNamesConflict(modelMetric: string | undefined, recorded: string[], labels: string[]): boolean {
   if (!modelMetric) return false
-  const requested = metricTestNames(modelMetric)
+  const requested = metricTestNames(modelMetric, labels, recorded)
   if (!requested.length) return false
   return !requested.every((name) => recorded.includes(name)) || !recorded.every((name) => requested.includes(name))
 }
@@ -2853,7 +2869,7 @@ export class GenerateMedicalSummaryUseCase {
         options.audience === 'patient' ? 'patient' : 'medical',
         locale,
       )
-      const metricSourceConflict = Boolean(labMetric && metricTestNamesConflict(p.metric, labMetric.testNames))
+      const metricSourceConflict = Boolean(labMetric && metricTestNamesConflict(p.metric, labMetric.testNames, labMetric.labels))
       const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = metricSourceConflict
         ? { metric: p.metric?.trim().split(METRIC_ARROW).join('；'), metricNeedsReview: true }
         : labMetric

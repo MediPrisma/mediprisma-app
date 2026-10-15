@@ -5,6 +5,7 @@ const data: any = {
     { id: 'urine', code: { text: 'TURBIDITY' }, valueString: 'Clear', effectiveDateTime: '2026-06-08' },
     { id: 'creatinine', code: { text: 'Creatinine' }, valueQuantity: { value: 1.2, unit: 'mg/dL' }, effectiveDateTime: '2026-06-08' },
     { id: 'a1c', code: { text: 'HbA1c' }, valueQuantity: { value: 7, unit: '%' }, effectiveDateTime: '2026-06-08' },
+    { id: 'ca199', code: { text: 'CA 19-9' }, valueQuantity: { value: 35, unit: 'U/mL' }, effectiveDateTime: '2026-06-08' },
   ],
   diagnosticReports: [{ id: 'vascular', code: { text: 'Doppler baPWV' }, effectiveDateTime: '2026-06-08', conclusion: 'baPWV right 1500 / left 1600; arterial stiffness' }],
 }
@@ -61,4 +62,30 @@ it('accepts a Chinese analyte name without confusing a different numeric value f
   const row = run('肌酸酐 99 mg/dL', ['creatinine']).problems[0]
   expect(row.metric).toContain('1.2')
   expect(row.metricNeedsReview).toBeUndefined()
+})
+
+it.each(['CA 19-9 99 U/mL', 'CA19-9 99 U/mL'])('corrects numeric-name analyte %s and remains stable on retry', metric => {
+  const first = run(metric, ['ca199'])
+  const second = useCase.finalizeResult(useCase.createAiDraftFromResult(first), catalog, { clinicalData: data })
+  for (const result of [first, second]) {
+    expect(result.problems[0].metric).toContain('35')
+    expect(result.problems[0].metricNeedsReview).toBeUndefined()
+    expect(result.problems[0].metricMeta).toBe('2026-06-08')
+  }
+})
+
+it('does not turn a narrative qualifier into a different analyte', () => {
+  const row = run('Rising creatinine 99 → 100 mg/dL', ['creatinine']).problems[0]
+  expect(row.metric).toContain('1.2')
+  expect(row.metricNeedsReview).toBeUndefined()
+})
+
+it('keeps translated patient-facing numeric test names stable on retry', () => {
+  const initial = run('CA19-9 99 U/mL', ['ca199'])
+  const options = { clinicalData: data, audience: 'patient' as const, locale: 'zh-TW' as const }
+  const first = useCase.finalizeResult(useCase.createAiDraftFromResult(initial), catalog, options)
+  const second = useCase.finalizeResult(useCase.createAiDraftFromResult(first), catalog, options)
+  expect(second.problems[0].metric).toBe(first.problems[0].metric)
+  expect(first.problems[0].metricNeedsReview).toBeUndefined()
+  expect(second.problems[0].metricNeedsReview).toBeUndefined()
 })
