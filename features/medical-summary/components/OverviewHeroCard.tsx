@@ -56,7 +56,7 @@ export function OverviewHeroCard({
           </div>
           <h3
             id="medical-summary-overview-title"
-            className="min-w-0 text-sm font-semibold text-foreground"
+            className="min-w-0 text-[length:max(14px,0.875rem)] font-semibold text-foreground"
           >
             {title}
           </h3>

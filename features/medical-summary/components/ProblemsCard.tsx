@@ -268,7 +268,7 @@ export function ProblemsCard({
                   {problem.metric ? (
                     <div className="flex min-w-0 items-start gap-0.5 [grid-area:metric]">
                       <RowFillClamp
-                        className="min-w-0 flex-1 text-[length:max(13px,0.8125rem)] leading-snug tabular-nums text-foreground break-words"
+                        className="min-w-0 flex-1 text-[length:max(14px,0.875rem)] leading-snug tabular-nums text-foreground break-words"
                         title={problem.metric}
                       >
                         <span className="mr-1.5 text-[length:max(12px,0.75rem)] text-muted-foreground @min-[38rem]:sr-only">{metricLabel}</span>
@@ -308,7 +308,13 @@ export function ProblemsCard({
                 </div>
                 <div className="contents @min-[38rem]:block @min-[38rem]:min-w-0 @min-[38rem]:space-y-0.5" data-problem-column="care">
                   {managedByLine ? (
-                    <p className="min-w-0 text-[length:max(14px,0.875rem)] leading-snug tabular-nums text-foreground/80 break-words [grid-area:org] @min-[28rem]:max-w-56 @min-[28rem]:text-right @min-[38rem]:max-w-none @min-[38rem]:text-left" data-problem-managed-by>
+                    <p className={cn(
+                      "min-w-0 text-[length:max(14px,0.875rem)] leading-snug tabular-nums text-foreground/80 break-words [grid-area:org]",
+                      problem.basis
+                        ? "@min-[28rem]:max-w-56 @min-[28rem]:text-right"
+                        : "@min-[28rem]:col-[1/-1] @min-[28rem]:text-left",
+                      "@min-[38rem]:max-w-none @min-[38rem]:text-left",
+                    )} data-problem-managed-by>
                       {cited(problem.managedBySourceKey ? [problem.managedBySourceKey] : undefined, managedByLine)}
                     </p>
                   ) : null}

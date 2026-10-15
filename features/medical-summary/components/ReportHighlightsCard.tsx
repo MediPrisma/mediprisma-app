@@ -188,7 +188,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
             type="button"
             onClick={() => togglePoint(id)}
             aria-label={labels.moreSources.replace("{count}", String(hidden))}
-            className="relative ml-1 inline-flex items-center rounded px-1 align-baseline text-[length:max(12px,0.75rem)] leading-[1.375rem] tabular-nums text-muted-foreground transition-colors hover:text-foreground before:absolute before:-inset-x-0.5 before:-inset-y-3 before:content-[''] lg:before:-inset-y-1"
+            className="relative ml-1 inline-flex items-center rounded px-1 align-baseline text-[length:max(14px,0.875rem)] leading-[1.375rem] tabular-nums text-foreground/80 transition-colors hover:text-foreground before:absolute before:-inset-x-0.5 before:-inset-y-3 before:content-[''] lg:before:-inset-y-1"
             data-report-more-sources
           >
             +{hidden}
@@ -261,12 +261,12 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
 
       {groups.length > 0 ? (
         <div className="@container">
-          <ul>
+          <ul className="@min-[38rem]:grid @min-[38rem]:grid-cols-[fit-content(9rem)_minmax(0,1fr)] @min-[38rem]:gap-x-3">
             {groups.map((group) => (
               <li
                 key={group.organ}
                 data-report-organ={group.organ}
-                className="grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border py-1.5 last:border-b-0 @min-[38rem]:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]"
+                className="grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border py-1.5 last:border-b-0 @min-[38rem]:col-span-2 @min-[38rem]:grid-cols-subgrid"
               >
                 <span className="min-w-0 [overflow-wrap:anywhere] text-[length:max(13px,0.8125rem)] font-semibold leading-snug text-foreground/80 @min-[38rem]:pt-px">
                   {group.label}
@@ -292,7 +292,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                           </button>
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="break-words text-[length:max(13px,0.875rem)] leading-snug text-foreground">
+                          <p className="break-words text-[length:max(14px,0.875rem)] leading-snug text-foreground">
                             {showAsQuote ? (
                               <>
                                 <span
@@ -330,7 +330,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
                                 return (
                                   <li
                                     key={`${quote.key}-${quoteIndex}`}
-                                    className="break-words text-[length:max(13px,0.8125rem)] leading-snug text-muted-foreground"
+                                    className="break-words text-[length:max(14px,0.875rem)] leading-snug text-foreground"
                                     data-verified-quote={quote.key}
                                   >
                                     {quoted(quote.quote)}

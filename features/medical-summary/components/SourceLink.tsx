@@ -211,7 +211,7 @@ export function SourceLink({
               <span className="min-w-0 flex-1">
                 {describe(s)}
                 {s.display ? (
-                  <span className="block text-foreground/80">{localizeDemoDisplayText(s.display, locale)}</span>
+                  <span className="block text-foreground">{localizeDemoDisplayText(s.display, locale)}</span>
                 ) : null}
                 {!s.verified ? <span className="block font-medium">{unverifiedLabel}</span> : null}
                 {notes(s)}
@@ -230,7 +230,7 @@ export function SourceLink({
                 <>
                   {describe(s)}
                   {s.display ? (
-                    <span className="block text-foreground/80">{localizeDemoDisplayText(s.display, locale)}</span>
+                    <span className="block text-foreground">{localizeDemoDisplayText(s.display, locale)}</span>
                   ) : null}
                   {notes(s)}
                 </>
