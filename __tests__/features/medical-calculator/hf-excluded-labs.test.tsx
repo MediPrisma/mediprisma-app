@@ -9,6 +9,40 @@ const selection = { provider: 'SYNTHETIC-HOSPITAL', encounter: 'Encounter/synthe
 const build = (bundle: FhirRecord) => buildMedcloudHfInput(bundle, selection, { today: '2026-10-04', uuid: randomUUID })
 
 describe('HF excluded observation diagnostics', () => {
+  it.each([undefined, { display: 'FOREIGN PATIENT' }, { reference: 'Patient/foreign' }])('counts unlinked subject %j without retaining clinical details', subject => {
+    const bundle = hfMedcloudFixture()
+    Object.assign(bundle.entry.at(-1).resource, { subject, code: { text: 'FOREIGN CLINICAL DETAIL' } })
+    const result = build(bundle)
+    expect(result.unlinkedObservationCount).toBe(1)
+    expect(result.gaps).toContainEqual({ code: 'lab-subject-unlinked', count: 1 })
+    expect(result.excludedLabs).toEqual([])
+    expect(JSON.stringify(result)).not.toContain('FOREIGN')
+  })
+
+  it.each([
+    [{ unit: 'mg/dL' }, 'positive', 'positive'],
+    [{ comparator: '<', unit: 'mg/dL' }, 'positive', 'positive'],
+    ['7 mg/dL', undefined, '7 mg/dL'],
+  ])('preserves a textual result when quantity is malformed (%j)', (valueQuantity, valueString, expected) => {
+    const bundle = hfMedcloudFixture()
+    Object.assign(bundle.entry.at(-1).resource, { valueQuantity, valueString })
+    expect(build(bundle).excludedLabs![0].value).toBe(expected)
+  })
+
+  it('deduplicates repeated source codings', () => {
+    const bundle = hfMedcloudFixture()
+    const lab = bundle.entry.at(-1).resource
+    lab.code.coding.push({ ...lab.code.coding[0] })
+    lab.valueQuantity.unit = 'unknown'
+    expect(build(bundle).excludedLabs![0].codes).toEqual(['http://loinc.org | 2160-0'])
+  })
+
+  it('shows the count-only warning even with no linked excluded rows', () => {
+    render(<HfExcludedLabs items={[]} unlinkedCount={2} indexDate="2026-10-01" locale="zh" />)
+    expect(screen.getByText(/另 2 筆無法核對病人歸屬/)).toBeInTheDocument()
+    expect(screen.getByText(/僅顯示筆數，不揭露其臨床內容/)).toBeInTheDocument()
+    expect(screen.getByText(/可核對為本病人的檢驗/)).toBeInTheDocument()
+  })
   it.each([
     [{ value: '7' }, 'value-invalid'],
     [{ value: 7 }, 'unit-missing'],

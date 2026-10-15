@@ -10,6 +10,7 @@ import { HfProvenance, HfResultsView, hfResultText } from './HfPredictionResult'
 import { HfExcludedLabs } from './HfExcludedLabs'
 
 const GAP: Record<string, [string, string]> = {
+  'lab-subject-unlinked': ['檢驗無法核對為本病人，僅計數、不顯示內容或送出', 'Observations not linked to this patient are counted only; details are withheld and not sent'],
   'index-diagnosis-missing': ['門診缺少可核對的 ICD-10-CM／ICD-9-CM 診斷；一般 ICD-10 不自行換碼，可由醫師確認後補充本次診斷', 'The index visit lacks a verified ICD-10-CM/ICD-9-CM diagnosis; correct the source or explicitly supply HF for this exact visit'],
   'hospital-name-only': ['來源僅提供院所名稱；同名院所無法可靠區分，請核對所選院所及資料範圍', 'Source provides hospital names only; identically named institutions cannot be distinguished reliably. Verify hospital identity and record scope'],
   'patient-birthdate': ['生日未含完整年月日；不以出生年推算日期', 'Full birth date missing; no date inferred from a birth year'],
@@ -309,7 +310,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       </div>
     </details>}
 
-    {current && <HfExcludedLabs key={`${current.importId}:${current.selection.provider}:${current.selection.encounter}`} items={current.input.excludedLabs ?? []} indexDate={current.input.indexDate} locale={locale} />}
+    {current && <HfExcludedLabs key={`${current.importId}:${current.selection.provider}:${current.selection.encounter}`} items={current.input.excludedLabs ?? []} unlinkedCount={current.input.unlinkedObservationCount ?? 0} indexDate={current.input.indexDate} locale={locale} />}
 
     {runs && <details className="group rounded-lg border border-border bg-background">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">{chevron}{en ? 'Attestation and calculation record' : '醫師聲明與計算紀錄'}</summary>

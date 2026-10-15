@@ -17,22 +17,24 @@ const REASONS: Record<string, [string, string]> = {
   'comparator-invalid': ['數值比較符號不支援；僅接受 <、<=、>、>=', 'Unsupported comparator; only <, <=, > and >= are accepted'],
 }
 
-export function HfExcludedLabs({ items, indexDate, locale }: { items: HfExcludedLab[]; indexDate: string; locale: string }) {
+export function HfExcludedLabs({ items, indexDate, locale, unlinkedCount = 0 }: { items: HfExcludedLab[]; indexDate: string; locale: string; unlinkedCount?: number }) {
   const [limit, setLimit] = useState(20)
   const en = locale === 'en'
   const missing = en ? 'Not provided' : '未提供'
   return <details className="rounded-lg border border-border bg-background">
     <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold">
       {en ? 'Excluded lab / observation details' : '未納入的檢驗／觀察項目明細'} · {items.length} {en ? 'results' : '筆'}
+      {unlinkedCount > 0 && (en ? ` · ${unlinkedCount} additional records not linked to this patient` : ` · 另 ${unlinkedCount} 筆無法核對病人歸屬`)}
     </summary>
     <div className="space-y-3 px-3 pb-3">
       <p className="text-xs text-muted-foreground">{en
         ? `Index visit: ${indexDate}. Each row shows its first exclusion reason. This list includes non-model items; exclusion does not mean a test was never performed. Details stay in this browser and are not sent to the model.`
         : `基準門診日：${indexDate}。每筆顯示第一個未通過的原因；包含模型不使用的項目，未納入不代表沒有抽驗。明細僅供本機核對，不送給模型。`}</p>
-      {!items.length && <p className="text-sm">{en ? 'No excluded observations in this preparation. Tests absent from the source cannot be listed here.' : '本次整理沒有被排除的檢驗／觀察紀錄；來源未匯入的檢驗無法列在此處。'}</p>}
+      {unlinkedCount > 0 && <p className="text-sm">{en ? `${unlinkedCount} observations were excluded because they could not be linked to this patient. Only the count is shown; their clinical details are withheld.` : `${unlinkedCount} 筆觀察紀錄因無法核對為本病人而未納入；僅顯示筆數，不揭露其臨床內容。`}</p>}
+      {!items.length && <p className="text-sm">{en ? 'No excluded observations linked to this patient. Tests absent from the source cannot be listed here.' : '可核對為本病人的檢驗／觀察紀錄中，沒有被排除的項目；來源未匯入的檢驗無法列在此處。'}</p>}
       <ol className="divide-y divide-border">
         {items.slice(0, limit).map(item => <li key={item.row} className="space-y-1 break-words py-3 text-xs [overflow-wrap:anywhere]">
-          <p className="text-sm font-semibold">{item.name || (en ? 'Unnamed item' : '未命名項目')} <span className="font-normal text-muted-foreground">· {en ? 'Source row' : '來源序號'} {item.row}</span></p>
+          <p className="text-sm font-semibold">{item.name || (en ? 'Unnamed item' : '未命名項目')} <span className="font-normal text-muted-foreground">· {en ? 'Prepared row' : '整理後序號'} {item.row}</span></p>
           <p className="font-medium">{(REASONS[item.valueIssue ?? item.reason] ?? [item.reason, item.reason])[en ? 1 : 0]}</p>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 tabular-nums">
             <dt className="text-muted-foreground">{en ? 'Collection date' : '採檢日期'}</dt><dd>{item.date || missing}</dd>
