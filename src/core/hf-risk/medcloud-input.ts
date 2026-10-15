@@ -83,6 +83,7 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   const uuid = options.uuid ?? (() => crypto.randomUUID())
   const gaps = new Map<string, number>()
   const excludedLabs: HfExcludedLab[] = []
+  let unlinkedObservationCount = 0
   const gap = (code: string, count = 1) => gaps.set(code, (gaps.get(code) ?? 0) + count)
   const output: FhirRecord[] = []
   const add = (resource: FhirRecord) => output.push({ fullUrl: 'urn:uuid:' + resource.id, resource })
@@ -177,16 +178,21 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
     excludedLabs.push({ row, reason,
       ...(valueIssue ? { valueIssue } : {}),
       name: text(resource.code?.text) || codes.map(code => text(code.display)).find(Boolean) || matchedLab?.key,
-      codes: codes.map(code => [text(code.system), text(code.code)].filter(Boolean).join(' | ')).filter(Boolean),
+      codes: [...new Set(codes.map(code => [text(code.system), text(code.code)].filter(Boolean).join(' | ')).filter(Boolean))],
       date: text(resource.effectiveDateTime ?? resource.effectivePeriod?.start),
-      value: quantity ? [text(quantity.comparator), text(quantity.value)].filter(value => value !== undefined).join(' ') || undefined
-        : text(resource.valueString) ?? text(resource.valueCodeableConcept?.text),
+      value: (quantity && text(quantity.value) !== undefined ? [text(quantity.comparator), text(quantity.value)].filter(value => value !== undefined).join(' ') || undefined : undefined)
+        ?? text(quantity) ?? text(resource.valueString) ?? text(resource.valueCodeableConcept?.text),
       unit: text(quantity?.unit), unitCode: text(quantity?.code), status: text(resource.status),
     })
   }
   for (const [row, item] of entry.entries()) {
     const resource = item.resource
-    if (!['Observation', 'Procedure'].includes(resource.resourceType) || !belongs(resource)) continue
+    if (!['Observation', 'Procedure'].includes(resource.resourceType)) continue
+    if (!belongs(resource)) {
+      // Count uncertain/foreign subjects without exposing their clinical details.
+      if (resource.resourceType === 'Observation') { unlinkedObservationCount++; gap('lab-subject-unlinked') }
+      continue
+    }
     if (provider(resource) !== selection.provider) { omitLab(resource, row + 1, 'source-omitted'); continue }
     if (voided(resource)) { omitLab(resource, row + 1, 'void-omitted'); continue }
     if (resource.resourceType === 'Observation') {
@@ -226,5 +232,5 @@ export function buildMedcloudHfInput(input: unknown, selection: HfSelection, opt
   const indexEncounter = output.find(item => item.resource.id === encounterIds.get(resolve(selection.encounter)!))?.resource
   if (!indexEncounter?.diagnosis?.length) gap('index-diagnosis-missing')
   return { bundle: { resourceType: 'Bundle', type: 'collection', entry: output }, indexDate, indexEncounterReference: indexEncounter ? 'urn:uuid:' + indexEncounter.id : undefined, claim: selection.claim,
-    gaps: [...gaps].map(([code, count]) => ({ code, count })), counts, excludedLabs }
+    gaps: [...gaps].map(([code, count]) => ({ code, count })), counts, excludedLabs, unlinkedObservationCount }
 }

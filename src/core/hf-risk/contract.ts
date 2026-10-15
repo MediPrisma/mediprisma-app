@@ -27,6 +27,7 @@ export interface HfInput {
   claim: HfDryRunClaim
   gaps: HfGap[]
   excludedLabs?: HfExcludedLab[]
+  unlinkedObservationCount?: number
   physicianDiagnosis?: HfPhysicianDiagnosis
   indexEncounterReference?: string
   counts: Record<string, number>
