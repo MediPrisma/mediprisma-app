@@ -1307,7 +1307,14 @@ function localRulesForModules(
   moduleIds: readonly MedicalSummaryModuleId[],
 ): string {
   // `reports` never joins a narrative request; it has its own system prompt.
-  return LOCAL_CORE_RULES + moduleIds.filter(isNarrativeModule).map((moduleId) => LOCAL_MODULE_RULES[moduleId]).join('')
+  const narrative = moduleIds.filter(isNarrativeModule)
+  // The overview defers to the medication-only rule, which rides with the
+  // problems block; an overview asked for on its own (the fast lane) gets it
+  // here, multi-use exceptions included.
+  const medicationRule = narrative.includes('overview') && !narrative.includes('problems')
+    ? MEDICATION_INFERENCE_RULE
+    : ''
+  return LOCAL_CORE_RULES + narrative.map((moduleId) => LOCAL_MODULE_RULES[moduleId]).join('') + medicationRule
 }
 
 const FULL_OUTPUT_INSTRUCTION =
@@ -2537,6 +2544,7 @@ export class GenerateMedicalSummaryUseCase {
               // survive another card's retry.
               unremarkable: highlights.groups.length === 0 ? highlights.others.map((row) => row.key) : [],
               ...(highlights.incomplete ? { incomplete: true } : {}),
+              ...(highlights.sentKeys ? { sentKeys: highlights.sentKeys } : {}),
             },
           }
         : {}),
@@ -3115,7 +3123,16 @@ export function finalizeReportHighlights(
   // none of them when the reply was cut off — a salvaged reply's silence on a
   // report says nothing about it.
   const incomplete = module?.incomplete === true
-  const reviewedKeys = new Set(incomplete ? [] : digest.items.map((item) => item.key))
+  // `sentKeys`: the reports whose whole text the request carried after any
+  // context-window reduction (app-owned, see the reports lane). A cut-off
+  // reply read only what it explicitly called unremarkable or cited.
+  const sentKeys = new Set(module?.sentKeys ?? digest.items.map((item) => item.key))
+  const reviewedKeys = new Set(
+    (incomplete
+      ? (module?.unremarkable ?? []).map(normaliseSummarySourceKey)
+      : digest.items.map((item) => item.key)
+    ).filter((key) => sentKeys.has(key)),
+  )
   let droppedQuoteCount = options.carried?.droppedQuoteCount ?? 0
   let hiddenPointCount = options.carried?.hiddenPointCount ?? 0
   const hiddenPoints: UnverifiedReportPoint[] = [...(options.carried?.hiddenPoints ?? [])]
@@ -3163,14 +3180,6 @@ export function finalizeReportHighlights(
   const uncited = digestItems
     .filter((item) => !citedKeys.has(item.key))
     .sort(newestFirst)
-  // Without a summary every report is listed with its excerpt anyway.
-  const separateUnreviewed = module !== undefined
-  const others = uncited
-    .filter((item) => !separateUnreviewed || reviewedKeys.has(item.key))
-    .map(reportRow)
-  const unreviewed = separateUnreviewed
-    ? uncited.filter((item) => !reviewedKeys.has(item.key)).map(reportRow)
-    : []
   // "其餘 N 份無特殊發現" is a statement about the reports, so it needs the
   // model to have actually said so. A reply whose every point failed
   // verification, or that returned nothing at all, said nothing about them:
@@ -3182,12 +3191,22 @@ export function finalizeReportHighlights(
     .length
   const summarized = module !== undefined &&
     (groups.length > 0 || (hiddenPointCount === 0 && unremarkableCount > 0))
+  // Without a summary every report is listed with its excerpt anyway, so the
+  // unread ones need no list of their own — and the same reports read the
+  // same way after another card's retry drops the unsummarized module.
+  const others = uncited
+    .filter((item) => !summarized || reviewedKeys.has(item.key))
+    .map(reportRow)
+  const unreviewed = summarized
+    ? uncited.filter((item) => !reviewedKeys.has(item.key)).map(reportRow)
+    : []
   return {
     summarized,
     groups,
     others,
     ...(unreviewed.length > 0 ? { unreviewed } : {}),
-    ...(incomplete ? { incomplete: true as const } : {}),
+    ...(summarized && incomplete ? { incomplete: true as const } : {}),
+    ...(summarized && module?.sentKeys ? { sentKeys: [...sentKeys] } : {}),
     totalReports: digestItems.length,
     droppedQuoteCount,
     hiddenPointCount,

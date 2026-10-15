@@ -753,6 +753,17 @@ describe('modular summary generation contract', () => {
     }
   })
 
+  it('gives an overview asked for alone the medication-only rule it defers to', () => {
+    for (const audience of ['medical', 'patient'] as const) {
+      const input = { ...promptInput, harnessProfile: 'local-small' as const, audience }
+      const overview = MEDICAL_SUMMARY_CARD_REGISTRY.overview
+      const content = useCase.buildRegisteredCardBatchMessages(input, [overview.buildBatchInstruction(input)], ['overview'])
+        .map((message) => message.content).join('\n')
+      expect(content).toContain('Medication-only problems')
+      expect(content).toContain('an SGLT2 inhibitor alone')
+    }
+  })
+
   it('never asks the patient audience for 影像與病理重點', () => {
     expect(registeredMedicalSummaryCards({ ...promptInput, audience: 'patient' }).map((card) => card.id))
       .toEqual(['overview', 'problems', 'safety'])

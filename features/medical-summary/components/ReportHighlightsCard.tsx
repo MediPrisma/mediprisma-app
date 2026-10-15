@@ -100,10 +100,10 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   const unreviewed = highlights.unreviewed ?? []
   // Nothing to list at all: the section has no content of its own.
   const [othersOpen, setOthersOpen] = useState(groups.length === 0)
-  const [unreviewedOpen, setUnreviewedOpen] = useState(false)
+  const [unreviewedOpen, setUnreviewedOpen] = useState(groups.length === 0 && others.length === 0)
   const [openPoints, setOpenPoints] = useState<ReadonlySet<string>>(new Set())
   const unverifiedPoints = highlights.hiddenPoints ?? []
-  if (groups.length === 0 && others.length === 0 && unverifiedPoints.length === 0) {
+  if (groups.length === 0 && others.length === 0 && unreviewed.length === 0 && unverifiedPoints.length === 0) {
     if (!labels.noReports || highlights.totalReports > 0) return null
     return (
       <section className="rounded-lg border border-border bg-card px-3 py-2.5" aria-labelledby="medical-summary-reports-title">

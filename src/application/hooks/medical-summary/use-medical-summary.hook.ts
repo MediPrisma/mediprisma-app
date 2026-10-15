@@ -36,7 +36,7 @@ import {
   usesCompactSummaryHarness,
 } from '@/src/core/use-cases/medical-summary/medical-summary-harness'
 import { buildOverviewSnapshot } from '@/src/core/use-cases/medical-summary/overview-snapshot'
-import { buildReportDigest } from '@/src/core/use-cases/medical-summary/report-digest'
+import { buildReportDigest, sentReportKeys } from '@/src/core/use-cases/medical-summary/report-digest'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type {
   MedicalSummaryCardErrors,
@@ -801,7 +801,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       const requestOnce = async (): Promise<{ module: ReportsModuleDraft; execution: AiModelExecution }> => {
         let execution = initialExecution()
         let completePoints = 0
-        const { value } = await streamModelRequest({
+        const { value, clinicalContext: sentReportsText } = await streamModelRequest({
           laneId: 'reports',
           clinicalContext: digest.promptText,
           buildMessages: (reportsText) => generateMedicalSummaryUseCase.buildReportHighlightMessages({
@@ -825,14 +825,20 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             return true
           },
         })
+        // A context-window reduction cuts the middle of the report text: only
+        // the reports whose whole text survived were read.
+        const sentKeys = sentReportKeys(digest, sentReportsText)
+        const coverage = sentKeys ? { sentKeys } : {}
         const parsedReply = card.parseBatch(value.fullText, ctx.catalog) as ReportsModuleDraft | null
-        // `incomplete` is the app's to set, never the model's.
-        const parsed = parsedReply ? { ...parsedReply, incomplete: undefined } : null
+        // `incomplete` and `sentKeys` are the app's to set, never the model's.
+        const parsed = parsedReply
+          ? { ...parsedReply, incomplete: undefined, sentKeys: undefined, ...coverage }
+          : null
         if (parsed && !value.timedOut) return { module: parsed, execution }
         const salvaged = generateMedicalSummaryUseCase.salvageReportsModule(value.fullText)
         // Cut off: what finished is shown, and the reports it never reached
         // are listed as unreviewed rather than as nothing notable.
-        if (salvaged.pointCount > 0) return { module: { ...salvaged.module, incomplete: true }, execution }
+        if (salvaged.pointCount > 0) return { module: { ...salvaged.module, incomplete: true, sentKeys: undefined, ...coverage }, execution }
         if (parsed) return { module: value.timedOut ? { ...parsed, incomplete: true } : parsed, execution }
         if (value.timedOut) throw new MedicalSummaryCardProgressTimeoutError(MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS)
         throw new ReportsParseError()

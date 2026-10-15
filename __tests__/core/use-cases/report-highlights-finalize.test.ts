@@ -368,8 +368,10 @@ describe('chips and footer are the app\'s', () => {
       )),
     } as any
     const manyCatalog = buildSourceCatalog(many)
+    // A summarized reply (it called the newest report unremarkable).
+    const newest = manyCatalog.find((entry) => entry.resourceType === 'DiagnosticReport' && entry.key === 'L1')!.key
     const result = useCase.finalizeResult(
-      { ...useCase.createEmptyAiResult(), reports: { groups: [], unremarkable: [] } },
+      { ...useCase.createEmptyAiResult(), reports: { groups: [], unremarkable: [newest] } },
       manyCatalog,
       { clinicalData: many, audience: 'medical', locale: 'zh-TW' },
     ).reportHighlights!
@@ -761,5 +763,72 @@ describe('reports the model never finished reading', () => {
     expect(highlights.others).toEqual([])
     expect(highlights.unreviewed!.map((row) => row.key).sort()).toEqual([CT, PATH, XR_OLD, US].sort())
     expect(highlights.incomplete).toBe(true)
+  })
+})
+
+describe('reports the model never finished reading — coverage and retries', () => {
+  const point1 = () => point('Cardiomegaly', [XR], [[XR, 'Cardiomegaly.']])
+
+  it('treats a report the reduced request cut as unread', () => {
+    const highlights = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([{ organ: 'heart', points: [point1()] }]), sentKeys: [XR, CT] },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    expect(highlights.others.map((row) => row.key)).toEqual([CT])
+    expect(highlights.unreviewed!.map((row) => row.key).sort()).toEqual([PATH, XR_OLD, US].sort())
+  })
+
+  it('keeps what a cut-off reply explicitly called unremarkable among the read reports', () => {
+    const highlights = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([{ organ: 'heart', points: [point1()] }], [US]), incomplete: true },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    expect(highlights.others.map((row) => row.key)).toEqual([US])
+    expect(highlights.unreviewed!.map((row) => row.key).sort()).toEqual([CT, PATH, XR_OLD].sort())
+  })
+
+  it('keeps the unread list across another card\'s retry', () => {
+    const first = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([{ organ: 'heart', points: [point1()] }]), incomplete: true, sentKeys: [XR, CT, US] },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    )
+    const again = useCase.finalizeResult(
+      useCase.createAiDraftFromResult(first),
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    expect(again.incomplete).toBe(true)
+    expect(again.others).toEqual(first.reportHighlights!.others)
+    expect(again.unreviewed).toEqual(first.reportHighlights!.unreviewed)
+  })
+
+  it('lists every report with its excerpt, the same way before and after a retry, when nothing verified', () => {
+    const first = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([{ organ: 'heart', points: [point('Cardiomegaly', [XR], [[XR, 'words the report never wrote']])] }]), incomplete: true },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    )
+    const highlights = first.reportHighlights!
+    expect(highlights.summarized).toBe(false)
+    expect(highlights.unreviewed).toBeUndefined()
+    expect(highlights.others).toHaveLength(5)
+    const again = useCase.finalizeResult(useCase.createAiDraftFromResult(first), catalog, { clinicalData, audience: 'medical', locale: 'zh-TW' }).reportHighlights!
+    expect(again.others.map((row) => row.key)).toEqual(highlights.others.map((row) => row.key))
+    expect(again.unreviewed).toBeUndefined()
   })
 })

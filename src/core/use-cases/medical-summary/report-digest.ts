@@ -96,6 +96,15 @@ export interface ReportDigest {
 }
 
 /** Every report the section renders, in display order (newest first). */
+/** The digest's reports whose whole text a request carried. A context-window
+ *  reduction cuts the middle of the text (`fitClinicalContextTextToTokenBudget`),
+ *  so a report is read only when its full block survived; undefined when every
+ *  report did. */
+export function sentReportKeys(digest: ReportDigest, sentText: string): string[] | undefined {
+  const sent = digest.items.filter((item) => sentText.includes(item.promptText))
+  return sent.length < digest.items.length ? sent.map((item) => item.key) : undefined
+}
+
 export function allDigestItems(digest: ReportDigest): ReportDigestItem[] {
   return [...digest.items, ...digest.overflow]
 }

@@ -312,3 +312,22 @@ describe('ReportHighlightsCard — reports the AI did not get to', () => {
     expect(listed.textContent).toContain('Old nodule, stable.')
   })
 })
+
+describe('ReportHighlightsCard — only unread reports', () => {
+  it('still draws the section, with the unread list open', () => {
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{
+          ...HIGHLIGHTS,
+          groups: [],
+          others: [],
+          hiddenPoints: undefined,
+          hiddenPointCount: 0,
+          unreviewed: [row('L41', 'ct', '2024-02-03', { excerpt: 'Stable nodule.', excerptSource: 'conclusion' })],
+        }}
+        labels={LABELS}
+      />,
+    )
+    expect(container.querySelector('[data-report-unreviewed] [data-report-row="L41"]')?.textContent).toContain('Stable nodule.')
+  })
+})

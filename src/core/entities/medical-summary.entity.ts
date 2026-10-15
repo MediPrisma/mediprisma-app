@@ -250,6 +250,10 @@ export const MedicalSummaryReportsModuleSchema = z.object({
    *  what it finished was salvaged, so its silence on a report is not a
    *  verdict on it. */
   incomplete: z.boolean().optional(),
+  /** Set by the app, never the model: the reports whose whole text the
+   *  request carried after any context-window reduction. Absent = every
+   *  report in the digest's request. */
+  sentKeys: reportKeyList(60).optional(),
 })
 export type ReportsModuleDraft = z.infer<typeof MedicalSummaryReportsModuleSchema>
 
@@ -584,6 +588,9 @@ export interface ReportHighlights {
   unreviewed?: ReportRow[]
   /** The reply was cut off and salvaged; round-trips with the module. */
   incomplete?: true
+  /** Reports whose whole text the request carried, when context reduction
+   *  dropped some; round-trips with the module. */
+  sentKeys?: string[]
   /** Reports in the digest, including the ones past the request budget. */
   totalReports: number
   /** Quotes that failed the verbatim check or named no listed report. */

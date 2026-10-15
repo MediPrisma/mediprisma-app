@@ -10,7 +10,9 @@ import {
   REPORT_DIGEST_TOKEN_BUDGET,
   deterministicReportExcerpt,
   findConclusionSection,
+  sentReportKeys,
 } from '@/src/core/use-cases/medical-summary/report-digest'
+import { fitClinicalContextTextToTokenBudget } from '@/src/core/utils/adaptive-clinical-context.utils'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 
 const RAD = [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }]
@@ -265,5 +267,28 @@ describe('deterministic excerpts', () => {
   it('marks a hard cut when no sentence boundary fits', () => {
     const cut = cutAtSentenceBoundary('x'.repeat(250), 200)
     expect(cut).toEqual({ text: 'x'.repeat(200), truncated: true })
+  })
+})
+
+describe('report digest — what a reduced request still carried', () => {
+  const reports = Array.from({ length: 12 }, (_, index) => report(
+    `xr-${index}`, `2026-0${(index % 9) + 1}-1${index % 9}`, 'Chest X-ray',
+    `Impression: Finding number ${index} is stable over several studies with no new lesion.`,
+  ))
+
+  it('is undefined when every report went out whole', () => {
+    const { digest } = digestFor(reports)
+    expect(sentReportKeys(digest, digest.promptText)).toBeUndefined()
+  })
+
+  it('names only the reports whose whole text survived a context-window cut', () => {
+    const { digest } = digestFor(reports)
+    const reduced = fitClinicalContextTextToTokenBudget(digest.promptText, Math.floor(digest.estimatedTokens / 3))
+    const sent = sentReportKeys(digest, reduced)!
+    expect(sent.length).toBeGreaterThan(0)
+    expect(sent.length).toBeLessThan(digest.items.length)
+    for (const item of digest.items) {
+      expect(sent.includes(item.key)).toBe(reduced.includes(item.promptText))
+    }
   })
 })
