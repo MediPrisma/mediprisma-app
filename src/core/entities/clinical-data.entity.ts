@@ -809,6 +809,7 @@ export interface EncounterEntity {
 }
 
 export interface DocumentReferenceEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   status?: string
   type?: {

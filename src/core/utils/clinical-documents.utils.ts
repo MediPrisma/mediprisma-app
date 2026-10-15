@@ -26,6 +26,7 @@ export interface ClinicalDocumentRef {
   date?: string
   title: string
   isDischargeSummary: boolean
+  isOutpatientSupplement?: boolean
   /** Plain-text body for the AI context (HTML/XHTML stripped). */
   text: string
 }
@@ -169,6 +170,8 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
       date: d.context?.period?.start ?? d.date,
       title: d.type?.text || d.type?.coding?.[0]?.display || att?.title || 'Document',
       isDischargeSummary: hasDischargeLoinc(d.type?.coding),
+      isOutpatientSupplement: d.meta?.tag?.some((tag) =>
+        tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement'),
       get text() { return (textCache ??= documentReferenceText(d)) },
     })
   }
@@ -194,15 +197,19 @@ export function resolveSelectedDocuments(
     const set = new Set(ids)
     return docs.filter((d) => set.has(d.id))
   }
+  // The importer has already selected the latest visit per physician. Keep
+  // that outpatient context together; explicit custom selections still win.
+  const includeSupplement = (selected: ClinicalDocumentRef[]) => docs.filter((doc) =>
+    doc.isOutpatientSupplement || selected.includes(doc))
   if (mode === 'recentAdmissions') {
     const discharges = docs.filter((d) => d.isDischargeSummary)
     const pool = discharges.length ? discharges : docs
-    return pool.slice(0, RECENT_ADMISSIONS_COUNT)
+    return includeSupplement(pool.slice(0, RECENT_ADMISSIONS_COUNT))
   }
   // latestAdmission
   const discharge = docs.find((d) => d.isDischargeSummary)
-  if (discharge) return [discharge]
-  return docs.length ? [docs[0]] : []
+  if (discharge) return includeSupplement([discharge])
+  return includeSupplement(docs.length ? [docs[0]] : [])
 }
 
 export const DOCUMENT_CONTEXT_OMISSION_MARKER =
