@@ -90,6 +90,7 @@ export interface ReferenceRange {
 }
 
 export interface Observation {
+  basedOn?: Reference[]
   extension?: FhirExtension[]
   id?: string
   resourceType?: string
@@ -123,6 +124,7 @@ export interface Observation {
 
 // Diagnostic Report Types
 export interface DiagnosticReport {
+  basedOn?: Reference[]
   id?: string
   resourceType?: string
   meta?: {

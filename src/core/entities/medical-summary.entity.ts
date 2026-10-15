@@ -341,6 +341,8 @@ export type EncounterClass = 'inpatient' | 'emergency' | 'outpatient'
 
 /** One citable data point, built deterministically from the bundle. */
 export interface SummarySourceCatalogEntry {
+  /** Recorded order labels resolved from basedOn; never inferred from dates. */
+  orderNames?: string[]
   /** Stable prompt key, e.g. "E1" (encounter), "M3" (medication). */
   key: string
   resourceType: string
