@@ -77,6 +77,33 @@ jobs:
             app/package-lock.json
             personalization/package-lock.json
 
+      - name: Check owner-set HF gateway variables
+        env:
+          NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}
+          NEXT_PUBLIC_HF_AUTH_POLICY: ${{ vars.NEXT_PUBLIC_HF_AUTH_POLICY }}
+        shell: bash
+        run: |
+          # Diagnose owner-controlled configuration early without blocking
+          # unrelated pilot deployments when HF configuration is unavailable.
+          node --input-type=module <<'NODE'
+          const warn = message => console.log(`::warning title=HF configuration requires repository owner action::${message}`)
+          const origin = process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN
+          const policy = process.env.NEXT_PUBLIC_HF_AUTH_POLICY
+          if (!origin) {
+            warn('Set repository variable NEXT_PUBLIC_HF_GATEWAY_ORIGIN; HF prediction will remain disabled until the next configured build.')
+          } else {
+            try {
+              const url = new URL(origin)
+              if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Invalid origin')
+            } catch {
+              warn('NEXT_PUBLIC_HF_GATEWAY_ORIGIN must be an HTTPS origin; HF prediction will remain disabled until the next configured build.')
+            }
+          }
+          if (!['firebase', 'intranet'].includes(policy)) {
+            warn('Set repository variable NEXT_PUBLIC_HF_AUTH_POLICY explicitly to firebase or intranet; an omitted policy uses the runtime Firebase default.')
+          }
+          NODE
+
       - name: Align personalization source workspace versions
         working-directory: personalization
         shell: bash
@@ -360,20 +387,6 @@ jobs:
             fi
           }
           trap restore_api EXIT
-          # Public settings must be inlined at build time. Refuse an artifact
-          # whose HF prediction button would be permanently disabled.
-          node --input-type=module <<'NODE'
-          const origin = process.env.NEXT_PUBLIC_HF_GATEWAY_ORIGIN
-          const policy = process.env.NEXT_PUBLIC_HF_AUTH_POLICY
-          if (!origin) throw new Error('Set repository variable NEXT_PUBLIC_HF_GATEWAY_ORIGIN')
-          const url = new URL(origin)
-          if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
-            throw new Error('NEXT_PUBLIC_HF_GATEWAY_ORIGIN must be an HTTPS origin')
-          }
-          if (!['firebase', 'intranet'].includes(policy)) {
-            throw new Error('Set repository variable NEXT_PUBLIC_HF_AUTH_POLICY to firebase or intranet')
-          }
-          NODE
           if [ -d app/api ]; then
             mv app/api .api-stash-hmc-build
           fi
