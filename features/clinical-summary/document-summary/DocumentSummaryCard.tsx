@@ -344,7 +344,10 @@ function DocumentEntryCard({
         <div className="mb-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.8125rem] font-medium text-foreground/90">
           {entry.outpatient && <span className="text-xs text-muted-foreground">{locale === 'en' ? 'Primary diagnosis:' : '主診斷：'}</span>}
           {entry.primaryDiagnosis.code && (
-            <span className="font-mono text-xs">{entry.primaryDiagnosis.code}</span>
+            <span
+              className={cn('font-mono text-xs', !entry.outpatient && 'text-muted-foreground cursor-help')}
+              title={entry.outpatient ? undefined : strings.primaryDiagnosisTooltip}
+            >{entry.primaryDiagnosis.code}</span>
           )}
           <span
             title={entry.outpatient ? undefined : strings.primaryDiagnosisTooltip}

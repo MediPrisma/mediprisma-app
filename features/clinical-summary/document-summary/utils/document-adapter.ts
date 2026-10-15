@@ -70,17 +70,26 @@ function outpatientPrimaryDiagnosis(
   const reference = primary?.condition?.reference
   const concept = reference ? conditions?.get(reference.replace(/^Condition\//, ''))?.code : undefined
   if (concept) {
-    const coding = concept.coding?.find((item) => item.code)
+    const coding = concept.coding?.find((item) => item.code &&
+      /\/sid\/icd-10(?:-cm)?$/.test(item.system || ''))
+      || concept.coding?.find((item) => item.code)
     const code = coding?.code?.trim()
     const display = coding?.display?.trim() || ''
     const rawText = concept.text?.trim() || ''
-    const text = rawText === code ? '' : stripIcdPrefix(rawText)
+    const text = rawText === code ? ''
+      : code && rawText.startsWith(`${code} `) ? rawText.slice(code.length).trim()
+      : stripIcdPrefix(rawText)
     return { code, text: (locale === 'en' ? display || text : text || display) }
   }
-  if (primary?.condition?.display?.trim()) return { text: primary.condition.display.trim() }
+  const referenceDisplay = primary?.condition?.display?.trim()
+  if (referenceDisplay) {
+    const match = referenceDisplay.match(/^([A-Z][0-9][A-Z0-9](?:\.[A-Z0-9]{1,4})?)\s+(.+)$/)
+    return match ? { code: match[1], text: match[2] } : { text: referenceDisplay }
+  }
   // A reason string may contain all diagnosis codes. Do not relabel it as
-  // the primary when a structured diagnosis list exists but cannot resolve.
-  if (encounter?.diagnosis?.length) return undefined
+  // the primary when a ranked primary exists but cannot resolve. Unranked
+  // diagnoses from other FHIR sources retain the existing reason fallback.
+  if (primary) return undefined
   return extractPrimaryDiagnosis(encounter, locale)
 }
 

@@ -291,6 +291,18 @@ describe('outpatient document context', () => {
     expect(entry.primaryDiagnosis).toBeUndefined()
     expect(entry.outpatient).toEqual({ department: undefined, physician: undefined })
   })
+  it('retains the reason fallback for other sources with unranked diagnoses', () => {
+    const unranked = { ...visit, reasonCode: [{ text: 'J06.9 Acute URI' }], diagnosis: [{ condition: { reference: 'urn:uuid:other' } }] }
+    expect(buildDocumentEntries([], [doc], {}, [unranked], 'en', [])[0].primaryDiagnosis?.text).toBe('Acute URI')
+  })
+  it('splits a ranked reference display when its Condition is unavailable', () => {
+    const displayOnly = { ...visit, diagnosis: [{ rank: 1, condition: { display: 'B02.9 帶狀疱疹' } }] }
+    expect(buildDocumentEntries([], [doc], {}, [displayOnly], 'zh-TW', [])[0].primaryDiagnosis).toEqual({ code: 'B02.9', text: '帶狀疱疹' })
+  })
+  it('prefers ICD-10-CM over a SNOMED-first coding list', () => {
+    const multi = [{ id: 'primary', code: { coding: [{ system: 'http://snomed.info/sct', code: '4740000', display: 'Herpes zoster' }, { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'B02.9', display: 'Zoster without complications' }] } }]
+    expect(buildDocumentEntries([], [doc], {}, [visit], 'en', multi)[0].primaryDiagnosis).toEqual({ code: 'B02.9', text: 'Zoster without complications' })
+  })
   it('prefers the supplied localized name and preserves the English coding display', () => {
     const localized = [{ ...conditions[1], code: { ...conditions[1].code, text: 'B02.9 帶狀疱疹' } }]
     expect(buildDocumentEntries([], [doc], {}, [visit], 'zh-TW', localized)[0].primaryDiagnosis?.text).toBe('帶狀疱疹')
