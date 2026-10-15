@@ -123,6 +123,7 @@ describe('agent tool router', () => {
 
   it.each([
     ['Traceton 是什麼藥？', 'Traceton'],
+    ['請查\n「Lipitor」用藥紀錄', 'Lipitor'],
     ['Traceton 是抗組織胺藥物嗎？', 'Traceton'],
     ['「服安痛膜衣錠」的成分是什麼？', '服安痛膜衣錠'],
     ['AC56706100 的 ATC 分類', 'AC56706100'],

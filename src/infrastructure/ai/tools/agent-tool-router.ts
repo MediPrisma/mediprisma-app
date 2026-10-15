@@ -134,7 +134,7 @@ function cleanMedicationQuery(value: string | undefined): string | undefined {
 export function extractMedicationRecordQuery(question: string): string | undefined {
   // This extractor is for a single drug lookup, not a pasted clinical protocol.
   // A template's first quotation can be a guideline title rather than a drug.
-  if (question.length > 300 || /[\r\n]/.test(question)) return undefined
+  if (question.length > 300) return undefined
   const quoted = question.match(/[「『\"“]([^」』\"”]{2,120})[」』\"”]/)?.[1]
   if (quoted) return cleanMedicationQuery(quoted)
   const nhiCode = question.match(/\b[A-Z]{2}\d{8}\b/i)?.[0]

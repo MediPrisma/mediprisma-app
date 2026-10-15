@@ -35,7 +35,6 @@ describe('empty lab query recovery', () => {
     ['searchObservationByName', { query: 'no-such-test' }],
     ['queryLabResultsByCategory', { category: 'tumor' }],
     ['queryDiagnosticReports', { query: 'no-such-test' }],
-    ['queryObservations', { dateFrom: '2099-01-01' }],
   ])('supplies real values separately from zero matches: %s', async (name, input) => {
     const result = await (recoveryTools as any)[name].execute(input)
     expect(result.count).toBe(0)
@@ -58,6 +57,30 @@ describe('empty lab query recovery', () => {
     expect(summary).toContain('NOT query matches')
   })
 
+  it.each([
+    { dateFrom: '2099-01-01' },
+    { abnormalOnly: true },
+    { codeQuery: 'no-match', dateFrom: '2099-01-01' },
+    { codeQuery: 'no-match', abnormalOnly: true },
+  ])('never relaxes date or abnormality filters: %j', async (input) => {
+    const result = await (recoveryTools.queryObservations as any).execute(input)
+    expect(result.count).toBe(0)
+    expect(result.availableObservationRecovery).toBeUndefined()
+  })
+
+  it('keeps only in-window observations when relaxing a name filter', async () => {
+    const result = await (recoveryTools.queryObservations as any).execute({
+      codeQuery: 'no-match', dateFrom: '2025-01-01', dateTo: '2025-12-31',
+    })
+    expect(result.availableObservationRecovery.data).toEqual([
+      expect.objectContaining({ name: 'TG', value: 90, date: '2025-06-24' }),
+    ])
+    const summary = processAgentStreamUseCase.buildToolResultsSummary([
+      { toolName: 'queryObservations', result }, { toolName: 'searchObservationByName', result },
+    ], { queryResult: 'result', queryFailed: 'failed', noData: 'empty', noDataFound: 'none', foundRecords: '{count}' }).summary
+    expect(summary.match(/AVAILABLE OBSERVATIONS/g)).toHaveLength(1)
+  })
+
   it('does not expand a successful lookup or an unloaded chart', async () => {
     expect((await (recoveryTools.queryObservations as any).execute({})).availableObservationRecovery).toBeUndefined()
     const unloaded = createFhirTools(() => ({ patient: null, collection: null }))
@@ -73,7 +96,7 @@ describe('empty lab query recovery', () => {
     } }))
     const result = await (large.queryObservations as any).execute({ codeQuery: 'no-match' })
     expect(result.availableObservationRecovery).toMatchObject({
-      totalAnalytes: 105, returnedAnalytes: 100, truncated: true, canConcludeAbsence: false,
+      totalAnalytes: 105, returnedAnalytes: 30, truncated: true, canConcludeAbsence: false,
     })
   })
 })

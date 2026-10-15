@@ -1095,15 +1095,21 @@ export function createFhirTools(getData: () => AgentDataSource) {
     scrubPii(payload, buildPatientTextLiterals(getData().patient))
 
   // A failed name/category/date match is not an empty chart. Give the model
-  // actual, unfiltered values to discover the source's names without another
+  // actual values within the requested date/abnormality scope to discover the source's names without another
   // guessed lookup. Keep matches separate from recovery evidence, and bound
   // the inventory by analyte rather than letting repeated tests crowd it out.
-  const scrubLabResult = <T extends { success: boolean; count?: number }>(payload: T) => {
+  const scrubLabResult = <T extends { success: boolean; count?: number }>(
+    payload: T,
+    filters?: { discovery: boolean; dateFrom?: string; dateTo?: string; abnormalOnly?: boolean },
+  ) => {
     const collection = getData().collection
-    if (!payload.success || payload.count !== 0 || !collection) return scrub(payload)
+    if (!payload.success || payload.count !== 0 || !collection || !filters?.discovery) return scrub(payload)
     const observations = uniqueObservations(collection)
       .flatMap(observation => expandObservationValues(observation))
-      .filter(observation => observation.status !== 'entered-in-error')
+      .filter(observation => observation.status !== 'entered-in-error'
+        && (!(filters.dateFrom || filters.dateTo)
+          || isWithinDateRange(observationDate(observation), filters.dateFrom, filters.dateTo))
+        && (!filters.abnormalOnly || isAbnormalObservation(observation)))
       .sort((a, b) => (observationDate(b) || '').localeCompare(observationDate(a) || ''))
     const latest = new Map<string, (typeof observations)[number]>()
     for (const observation of observations) {
@@ -1111,12 +1117,14 @@ export function createFhirTools(getData: () => AgentDataSource) {
       if (!latest.has(key)) latest.set(key, observation)
     }
     if (latest.size === 0) return scrub(payload)
-    const data = [...latest.values()].slice(0, 100).map(observationResult)
+    const data = [...latest.values()].slice(0, 30).map(observationResult)
     const queryIssues = queryIssuesFor(collection, ['Observation'])
     return scrub({
       ...payload,
       availableObservationRecovery: {
-        scope: 'Unfiltered latest value per analyte; not matches for the original query',
+        scope: 'Latest value per analyte within the requested date and abnormality filters; name/code/category relaxed. NOT matches for the original query.',
+        dateRange: { from: filters.dateFrom, to: filters.dateTo },
+        abnormalOnly: filters.abnormalOnly ?? false,
         totalAnalytes: latest.size,
         returnedAnalytes: data.length,
         truncated: latest.size > data.length,
@@ -1759,7 +1767,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
               effectiveDateTime: o.effectiveDateTime,
               abnormal: isAbnormalObservation(o),
             })),
-          })
+          }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
         }
 
         return scrubLabResult({
@@ -1780,7 +1788,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             status: o.status,
             ...observationComponentFields(o),
           })),
-        })
+        }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1859,7 +1867,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
               imageAttachmentCount: attachmentDetails(r)
                 .filter((attachment: any) => attachment.kind === 'image').length,
             })),
-          })
+          }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
         }
 
         return scrubLabResult({
@@ -1875,7 +1883,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           unmatchedQueryTerms,
           dateRange: { from: dateFrom, to: dateTo },
           data: capped.map(diagnosticReportOutput),
-        })
+        }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1979,7 +1987,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             instruction: 'Do not add customary ranges, diagnose a condition, or infer the cause of an abnormal result.',
           },
           data: capped,
-        })
+        }, { discovery: true, dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -2203,7 +2211,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             abnormal: isAbnormalObservation(obs),
             ...observationComponentFields(obs),
           })),
-        })
+        }, { discovery: Boolean(query) })
       },
     }),
 

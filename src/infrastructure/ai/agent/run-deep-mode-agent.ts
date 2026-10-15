@@ -25,6 +25,30 @@ import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-ag
 import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
 import { withIdleTimeout } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 
+/** Bound extra recovery evidence across all tool calls in one agent turn. */
+export function createObservationRecoveryBudget(maxCharacters = 16_000) {
+  const seen = new Set<string>()
+  let characters = 0
+  return (result: unknown): unknown => {
+    if (!result || typeof result !== 'object' || !('availableObservationRecovery' in result)) return result
+    const { availableObservationRecovery, ...rest } = result
+    const serialized = JSON.stringify(availableObservationRecovery)
+    if (!serialized) return result
+    const duplicate = seen.has(serialized)
+    if (duplicate || characters + serialized.length > maxCharacters) {
+      return {
+        ...rest,
+        observationRecoveryNotice: duplicate
+          ? 'The same recovery inventory was already returned earlier in this turn. Refer to that evidence; this empty match is not an empty chart.'
+          : 'Additional recovery values were omitted because the per-turn evidence budget is exhausted. Query a specific analyte/date for details; do not infer absence.',
+      }
+    }
+    seen.add(serialized)
+    characters += serialized.length
+    return result
+  }
+}
+
 export type AgentRunRole = "system" | "user" | "assistant"
 
 export interface AgentRunMessage {
@@ -184,7 +208,7 @@ export async function runDeepModeAgent(
   const {
     model,
     messages,
-    tools,
+    tools: suppliedTools,
     translations: t,
     idleMs,
     abortController,
@@ -194,6 +218,16 @@ export async function runDeepModeAgent(
     reasoningEffort,
     onEvent,
   } = params
+
+  // Each invocation gets its own recovery budget; no patient data survives a turn.
+  const boundRecovery = createObservationRecoveryBudget()
+  const recoveryToolNames = new Set(['queryObservations', 'queryDiagnosticReports', 'queryLabResultsByCategory', 'searchObservationByName'])
+  const tools = suppliedTools && Object.fromEntries(Object.entries(suppliedTools).map(([name, tool]) => {
+    const execute = tool.execute
+    if (!execute || !recoveryToolNames.has(name)) return [name, tool]
+    return [name, { ...tool, execute: (async (...args: Parameters<typeof execute>) =>
+      boundRecovery(await execute(...args))) as typeof execute }]
+  }))
 
   const reasoningOptions = reasoningEffort === undefined
     ? {}
@@ -259,6 +293,7 @@ _${note}_` : text
       state: `🔍 ${displayName}...`,
       toolCalls: [...usedToolNames],
     })
+    stepCount += 1
     const toolResult = await executableInitialTool.execute(initialToolInput)
     toolResults.push({ toolName: initialToolName, result: toolResult })
     trajectory.push({ round: 1, kind: 'tool-result', toolName: initialToolName, result: toolResult })
@@ -339,7 +374,7 @@ _${note}_` : text
     if (stopNote) emit({ type: "status", state: `⚠️ ${stopNote}` })
   }
 
-  if (accumulatedContent.length > 0) {
+  if (accumulatedContent.length > 0 && !lastStepHadToolCalls) {
     accumulatedContent = repeatNote(accumulatedContent)
     trajectory.push({ round: 1, kind: "text", text: accumulatedContent })
     emit({
@@ -350,7 +385,7 @@ _${note}_` : text
   }
 
   // Round 2 — follow-up when there are tool results but the model produced no text.
-  if (toolResults.length > 0 && accumulatedContent.length === 0) {
+  if (toolResults.length > 0 && (accumulatedContent.length === 0 || lastStepHadToolCalls)) {
     emit({ type: "status", state: `📝 ${t.organizingResults}` })
 
     const { summary: toolResultsSummary, citations: literatureCitations } =
@@ -365,21 +400,24 @@ _${note}_` : text
         ? t.answerQuestion + (t.answerQuestionCitationsHint ?? "")
         : t.answerQuestion) +
       (stoppedByRepeat ? (t.repeatedQueryHint ?? "") : stoppedByStepLimit ? (t.stepLimitHint ?? "") : "")
+    const snapshotOnly = shouldPreExecute && initialToolName === 'getHealthSummarySnapshot'
+      && Object.keys(tools ?? {}).length === 1
+    const remainingSteps = Math.max(0, MAX_TOOL_STEPS - stepCount)
+    const canContinueTools = !snapshotOnly && !stoppedByRepeat && !stoppedByStepLimit
+      && remainingSteps > 0 && Object.keys(tools ?? {}).length > 0
     const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
       messages,
       toolResultsSummary,
       originalQuestion,
       { queriedFhirData: t.queriedFhirData, answerQuestion: answerQuestionText },
+      canContinueTools,
     )
 
     let followUpContent = ""
     const followUpToolResults: Array<{ toolName: string; result: unknown }> = []
     const maxFollowUpAttempts = shouldPreExecute ? 2 : 1
-    // Only a deliberately routed, sole compact snapshot is a complete lookup.
-    // A prefetched medication search or inventory must not end a multi-domain
-    // investigation before the model can query Patient, labs and encounters.
-    const snapshotOnly = shouldPreExecute && initialToolName === 'getHealthSummarySnapshot'
-      && Object.keys(tools ?? {}).length === 1
+    let followUpLastStepHadToolCalls = false
+    let followUpHadToolCall = false
     for (let attempt = 0; attempt < maxFollowUpAttempts; attempt += 1) {
       const requestController = shouldPreExecute ? new AbortController() : abortController
       const forwardAbort = () => requestController.abort()
@@ -388,11 +426,23 @@ _${note}_` : text
         abortController.signal.addEventListener('abort', forwardAbort, { once: true })
       }
       try {
+        const repeatStop = repeatedToolCallIs(3)
         const followUpResult = await streamText({
           model,
           messages: followUpMessages as ModelMessage[],
-          tools: snapshotOnly ? undefined : tools,
-          stopWhen: [stepCountIs(MAX_TOOL_STEPS), repeatedToolCallIs(3)],
+          tools: canContinueTools ? tools : undefined,
+          stopWhen: [stepCountIs(Math.max(1, remainingSteps)), (context) => {
+            if (!repeatStop(context)) return false
+            stoppedByRepeat = true
+            return true
+          }],
+          onStepFinish: ({ toolCalls }) => {
+            stepCount += 1
+            followUpLastStepHadToolCalls = Boolean(toolCalls?.length)
+            if (canContinueTools && !stoppedByRepeat && stepCount >= MAX_TOOL_STEPS && followUpLastStepHadToolCalls) {
+              stoppedByStepLimit = true
+            }
+          },
           ...reasoningOptions,
           abortSignal: requestController.signal,
         })
@@ -407,6 +457,7 @@ _${note}_` : text
             followUpContent += chunk.text
             emit({ type: "content", content: followUpContent })
           } else if (chunk.type === "tool-call") {
+            followUpHadToolCall = true
             const displayName = getToolDisplayName(chunk.toolName, t.toolNames)
             if (!usedToolNames.includes(chunk.toolName)) usedToolNames.push(chunk.toolName)
             trajectory.push({
@@ -435,7 +486,7 @@ _${note}_` : text
         break
       } catch (error) {
         const mayRetry = shouldPreExecute && attempt + 1 < maxFollowUpAttempts &&
-          followUpContent.length === 0 && !abortController.signal.aborted
+          followUpContent.length === 0 && !followUpHadToolCall && followUpToolResults.length === 0 && !abortController.signal.aborted
         if (!mayRetry) throw error
         emit({ type: 'status', state: `📝 ${t.organizingResults}` })
       } finally {
@@ -446,16 +497,20 @@ _${note}_` : text
     }
 
     // Round 3 — synthesis: follow-up itself called tools but still emitted no text.
-    if (followUpToolResults.length > 0 && followUpContent.length === 0) {
+    if (followUpToolResults.length > 0 && (followUpContent.length === 0 || followUpLastStepHadToolCalls)) {
       emit({ type: "status", state: `📝 ${t.organizingResults}` })
 
       const { summary: finalToolSummary } =
-        processAgentStreamUseCase.buildToolResultsSummary(followUpToolResults, summaryTranslations)
+        processAgentStreamUseCase.buildToolResultsSummary([...toolResults, ...followUpToolResults], summaryTranslations)
 
-      const finalMessages = [
-        ...followUpMessages,
-        { role: "user" as const, content: `${finalToolSummary}\n\n${t.synthesizeResults}` },
-      ]
+      const finalMessages = processAgentStreamUseCase.buildFollowUpMessages(
+        messages,
+        finalToolSummary,
+        originalQuestion,
+        { queriedFhirData: t.queriedFhirData, answerQuestion: t.synthesizeResults
+          + (stoppedByRepeat ? (t.repeatedQueryHint ?? '') : stoppedByStepLimit ? (t.stepLimitHint ?? '') : '') },
+        false,
+      )
 
       const finalResult = await streamText({
         model,

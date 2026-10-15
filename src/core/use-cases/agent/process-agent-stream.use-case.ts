@@ -59,13 +59,18 @@ export class ProcessAgentStreamUseCase {
     }
   ): { summary: string; citations: string[] } {
     const literatureCitations: string[] = []
+    const recoveryInventories = new Set<string>()
 
     const summary = toolResults
       .map((tr) => {
         const r = tr.result as any
-        const recovery = r?.availableObservationRecovery
-          ? `\nAVAILABLE OBSERVATIONS (recovery inventory, NOT query matches):\n${JSON.stringify(r.availableObservationRecovery, null, 2)}`
-          : ''
+        const inventory = r?.availableObservationRecovery
+          ? JSON.stringify(r.availableObservationRecovery)
+          : undefined
+        const recovery = inventory && !recoveryInventories.has(inventory)
+          ? '\nAVAILABLE OBSERVATIONS (recovery inventory, NOT query matches):\n' + inventory
+          : (r?.observationRecoveryNotice ? '\n' + r.observationRecoveryNotice : '')
+        if (inventory) recoveryInventories.add(inventory)
 
         // Handle literature search results differently from FHIR results
         if (tr.toolName === 'searchMedicalLiterature') {
@@ -178,9 +183,10 @@ export class ProcessAgentStreamUseCase {
     translations: {
       queriedFhirData: string
       answerQuestion: string
-    }
+    },
+    toolsAvailable = false,
   ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-    const assistantMsg = `${translations.queriedFhirData}\n\n${toolResultsSummary}\n\nOnly the listed tools have been queried. Unqueried resource types are unknown, not empty. A zero result with filters does not mean the entire chart is empty. Continue using available tools for the remaining requested facts before answering.`
+    const assistantMsg = `${translations.queriedFhirData}\n\n${toolResultsSummary}\n\nOnly the listed tools have been queried. Unqueried resource types are unknown, not empty. A zero result with filters does not mean the entire chart is empty. ${toolsAvailable ? 'Continue using available tools for the remaining requested facts before answering.' : 'Answer only from retrieved evidence; state which requested facts remain unverified. Do not call tools.'}`
     const userMsg = translations.answerQuestion.replace('{question}', originalQuestion)
 
     return [

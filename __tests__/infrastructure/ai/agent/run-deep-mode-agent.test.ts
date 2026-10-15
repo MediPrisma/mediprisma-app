@@ -1,8 +1,10 @@
 /** @jest-environment node */
 import {
+  createObservationRecoveryBudget,
   repeatedToolCallIs,
   runDeepModeAgent,
 } from '@/src/infrastructure/ai/agent/run-deep-mode-agent'
+import { stepCountIs } from 'ai'
 import { StreamIdleTimeoutError } from '@/src/infrastructure/ai/streaming/stream-idle-timeout'
 
 const mockStreamText = jest.fn()
@@ -80,6 +82,7 @@ describe('runDeepModeAgent compact snapshot prefetch', () => {
       tools: undefined,
       providerOptions: { openai: { reasoningEffort: 'low' } },
     }))
+    expect(JSON.stringify(mockStreamText.mock.calls[0][0].messages)).not.toContain('Continue using available tools')
     expect(result.answer).toBe('Complete answer')
     expect(result.toolCalls).toEqual(['getHealthSummarySnapshot'])
     expect(result.usage.totalTokens).toBe(120)
@@ -143,7 +146,7 @@ describe('runDeepModeAgent compact snapshot prefetch', () => {
       abortController: new AbortController(),
     })
     const request = mockStreamText.mock.calls[0][0]
-    expect(request.tools).toBe(tools)
+    expect(Object.keys(request.tools)).toEqual(Object.keys(tools))
     expect(request.stopWhen).toHaveLength(2)
     expect(JSON.stringify(request.messages)).toContain('Unqueried resource types are unknown, not empty')
   })
@@ -244,6 +247,8 @@ describe('runDeepModeAgent repeated-query stop', () => {
     expect(events.some((e) => e.type === 'status' && e.state?.includes('Stopped: repeated query'))).toBe(true)
     const followUp = mockStreamText.mock.calls[1][0].messages as Array<{ role: string; content: string }>
     expect(followUp[followUp.length - 1].content).toContain('HINT')
+    expect(mockStreamText.mock.calls[1][0].tools).toBeUndefined()
+    expect(JSON.stringify(followUp)).not.toContain('Continue using available tools')
     expect(result.answer).toBe('Answer from retrieved data\n\n_Stopped: repeated query_')
   })
 
@@ -337,5 +342,74 @@ describe('runDeepModeAgent step-limit stop', () => {
 
     expect(events.some((e) => e.state?.includes('Stopped: step limit'))).toBe(false)
     expect(result.answer).toBe('Plain answer')
+  })
+})
+
+describe('turn recovery budget', () => {
+  const result = { success: true, count: 0, data: [], availableObservationRecovery: { data: [{ name: 'TG', value: 103 }] } }
+  it('sends identical inventory once per turn while preserving match semantics', () => {
+    const bound = createObservationRecoveryBudget()
+    expect(bound(result)).toBe(result)
+    expect(bound(result)).toMatchObject({ success: true, count: 0, data: [], observationRecoveryNotice: expect.stringContaining('already returned') })
+    expect((bound(result) as any).availableObservationRecovery).toBeUndefined()
+    expect(createObservationRecoveryBudget()(result)).toBe(result)
+  })
+  it('caps total recovery characters even for different inventories', () => {
+    const bound = createObservationRecoveryBudget(JSON.stringify(result.availableObservationRecovery).length)
+    expect(bound(result)).toBe(result)
+    const next = { ...result, availableObservationRecovery: { data: [{ name: 'ALT', value: 122 }] } }
+    expect(bound(next)).toMatchObject({ observationRecoveryNotice: expect.stringContaining('budget is exhausted') })
+    expect(bound({ success: true, data: [{ value: 122 }] })).toEqual({ success: true, data: [{ value: 122 }] })
+  })
+})
+
+describe('prefetched multi-step follow-up safeguards', () => {
+  const usage = Promise.resolve({ inputTokens: 1, outputTokens: 1 })
+  const toolStep = { toolCalls: [{ toolName: 'queryObservations', input: {} }] }
+  const params = () => ({
+    model: {} as never,
+    messages: [{ role: 'user' as const, content: '查基本資料、檢驗與用藥' }],
+    tools: {
+      getDataOverview: { execute: jest.fn().mockResolvedValue({ success: true, data: { observations: 12 } }) },
+      queryObservations: { execute: jest.fn() },
+    } as never,
+    initialToolName: 'getDataOverview', preExecuteInitialTool: true,
+    translations: { ...translations, stepLimitReached: 'STEP LIMIT', stepLimitHint: '\nLIMIT-HINT', repeatedQueryStopped: 'REPEAT STOP', repeatedQueryHint: '\nREPEAT-HINT' },
+    idleMs: 1000, abortController: new AbortController(),
+  })
+  beforeEach(() => jest.clearAllMocks())
+
+  it.each(['limit', 'repeat'])('synthesizes after a tool-ending preamble and exposes the %s stop', async (reason) => {
+    async function* lookup() {
+      yield { type: 'text-delta', text: '我再查檢驗…' }
+      yield { type: 'tool-call', toolName: 'queryObservations', input: {} }
+      yield { type: 'tool-result', toolName: 'queryObservations', output: { success: true, count: 1, data: [{ value: 103 }] } }
+      const request = mockStreamText.mock.calls[0][0]
+      if (reason === 'repeat') request.stopWhen[1]({ steps: [toolStep, toolStep, toolStep] })
+      for (let i = 0; i < (reason === 'limit' ? 9 : 3); i++) request.onStepFinish(toolStep)
+    }
+    mockStreamText.mockReturnValueOnce({ fullStream: lookup(), usage })
+      .mockReturnValueOnce({ fullStream: textStream('已有檢驗，其他項目未完成查詢'), usage })
+    const result = await runDeepModeAgent(params())
+    expect(mockStreamText).toHaveBeenCalledTimes(2)
+    expect(stepCountIs).toHaveBeenCalledWith(9)
+    const synthesis = mockStreamText.mock.calls[1][0]
+    expect(synthesis.tools).toBeUndefined()
+    expect(JSON.stringify(synthesis.messages)).not.toContain('Continue using available tools')
+    expect(JSON.stringify(synthesis.messages)).toContain(reason === 'limit' ? 'LIMIT-HINT' : 'REPEAT-HINT')
+    expect(result.answer).toContain('已有檢驗')
+    expect(result.answer).toContain(reason === 'limit' ? 'STEP LIMIT' : 'REPEAT STOP')
+    expect(result.trajectory).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'tool-result', toolName: 'queryObservations' })]))
+  })
+
+  it('does not replay a failed follow-up after any tool call', async () => {
+    async function* lookup() {
+      yield { type: 'tool-call', toolName: 'queryObservations', input: {} }
+      yield { type: 'tool-result', toolName: 'queryObservations', output: { success: true, count: 0, data: [] } }
+      throw new Error('provider failed after executing tool')
+    }
+    mockStreamText.mockReturnValue({ fullStream: lookup(), usage })
+    await expect(runDeepModeAgent(params())).rejects.toThrow('provider failed')
+    expect(mockStreamText).toHaveBeenCalledTimes(1)
   })
 })
