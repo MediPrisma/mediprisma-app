@@ -50,6 +50,8 @@ jobs:
         run: npm run build:mediprisma
         env:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          # Opt-in validation only; unset preserves existing deployment profiles.
+          MEDIPRISMA_DEPLOYMENT_PROFILE: ${{ vars.MEDIPRISMA_DEPLOYMENT_PROFILE }}
           # Public origin only (no secrets); baked into /app, not a runtime switch.
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}
           NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}
