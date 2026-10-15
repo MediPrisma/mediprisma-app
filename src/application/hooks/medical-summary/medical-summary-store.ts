@@ -22,7 +22,9 @@ export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 // medsummary36: the anticholinergic label is printed only for a medicine
 // supplied in the last 90 days.
 // medsummary37: problem rows carry shortSpanChronic.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary37', scanKey)
+// medsummary38: 影像與病理重點 lists unread reports apart (unreviewed); a
+// cached result from before would still call them unremarkable.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary38', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

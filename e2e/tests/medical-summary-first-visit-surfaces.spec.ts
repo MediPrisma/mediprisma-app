@@ -9,17 +9,17 @@ import { mockAiStream } from '../fixtures/mock-stream'
 // banner. Synthetic bundles and a mocked model only.
 const TEST_MODEL_ID = 'gpt-5.4-nano'
 const block = (id: string, body: unknown) => `<<<MEDIPRISMA_MODULE:${id}>>>${JSON.stringify(body)}<<<END_MEDIPRISMA_MODULE:${id}>>>`
-const reply = (safety: string) => [
+const reply = (safety: string, problems = block('problems', { problems: [] })) => [
   block('overview', { headline: 'Synthetic review patient', medicationEducation: [] }),
-  block('problems', { problems: [] }),
+  problems,
   safety,
   block('reports', { groups: [], unremarkable: [] }),
 ].join('\n')
 const EMPTY_SCAN = block('safety', { scannedCount: 0, alerts: [] })
 const BROKEN_SCAN = '<<<MEDIPRISMA_MODULE:safety>>>{ not json <<<END_MEDIPRISMA_MODULE:safety>>>'
 
-async function generate(page: import('@playwright/test').Page, bundle: string, safety: string) {
-  await mockAiStream(page, { model: TEST_MODEL_ID, markdown: reply(safety) })
+async function generate(page: import('@playwright/test').Page, bundle: string, safety: string, problems?: string) {
+  await mockAiStream(page, { model: TEST_MODEL_ID, markdown: reply(safety, problems) })
   await importBundle(page, { bundlePath: path.join(__dirname, '..', 'fixtures', bundle) })
   await openFeaturePanel(page)
   const panel = page.getByRole('tabpanel', { name: '醫療摘要' })
@@ -55,5 +55,11 @@ test.describe('first-visit summary surfaces (mocked)', () => {
     const alert = panel.getByRole('alert')
     await expect(alert.getByText('開藥注意', { exact: false })).toHaveCount(1, { timeout: 30_000 })
     await expect(panel.getByRole('region', { name: '開藥注意' })).toHaveCount(0)
+  })
+
+  test('a headline with no problem list to compare against is labelled 待核對', async ({ page }) => {
+    const brokenProblems = '<<<MEDIPRISMA_MODULE:problems>>>{ not json <<<END_MEDIPRISMA_MODULE:problems>>>'
+    const panel = await generate(page, 'medcloud-no-reports-bundle.json', EMPTY_SCAN, brokenProblems)
+    await expect(panel.getByText('待核對：問題清單未產生，首段未經比對')).toBeVisible({ timeout: 30_000 })
   })
 })

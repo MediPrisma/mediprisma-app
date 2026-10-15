@@ -103,12 +103,28 @@ export function headlineItems(headline: string): string[] {
     .filter((item) => item.length > 1)
 }
 
+/** Whether the problem list a headline is compared with is final, read from
+ *  the summary on screen — not the selected generation slot, which can belong
+ *  to another model whose summary is not the one shown. */
+export function headlineProblemListState(result: {
+  problems?: readonly unknown[]
+  completedCardIds?: readonly string[]
+  cardErrors?: Partial<Record<string, unknown>>
+} | undefined): 'failed' | 'pending' | 'settled' {
+  if (result?.cardErrors?.problems) return 'failed'
+  if (result?.completedCardIds?.includes('problems') || (result?.problems?.length ?? 0) > 0) return 'settled'
+  return 'pending'
+}
+
 export function reviewHeadline(
   headline: string,
   problemLabels: readonly string[],
   medicineNames: readonly string[],
 ): HeadlineReview | undefined {
-  if (!headline.trim() || problemLabels.length === 0) return undefined
+  // An empty list is a list: a headline naming problems beside it names
+  // problems the list does not hold. The caller decides when the list is
+  // final (not still streaming, not failed).
+  if (!headline.trim()) return undefined
   const problemWords = new Set(problemLabels.flatMap(contentWords))
   // Five letters and up: "iron" is also a word in "iron deficiency anemia".
   const medicines = medicineNames.map((name) => name.trim().toLowerCase()).filter((name) => name.length >= 5)
@@ -121,10 +137,16 @@ export function reviewHeadline(
       continue
     }
     const content = contentWords(item)
-    if (content.length === 0) continue
-    const named = content.some((word) => problemWords.has(word))
+    // "AF", "HF", "RA": a two-letter abbreviation has no content word, yet
+    // names a problem the list must hold.
     const acronyms = item.match(/\b[A-Z][A-Z0-9]{1,5}\b/g) ?? []
-    const byAcronym = acronyms.some((acronym) => problemLabels.some((label) => acronymMatches(acronym, label)))
+    if (content.length === 0 && acronyms.length === 0) continue
+    const named = content.some((word) => problemWords.has(word))
+    // "AF" against a label that writes it ("AF", "Paroxysmal AF"), then
+    // against the initials of a spelled-out one ("Atrial fibrillation").
+    const labelTokens = new Set(problemLabels.flatMap((label) => label.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)))
+    const byAcronym = acronyms.some((acronym) => labelTokens.has(acronym.toLowerCase()) ||
+      problemLabels.some((label) => acronymMatches(acronym, label)))
     if (!named && !byAcronym) review.unlisted.push(item)
   }
   return review.unlisted.length || review.medicines.length || review.values.length ? review : undefined

@@ -20,4 +20,4 @@
 export const PROBLEM_INFERENCE_SYNTHESIS_RULE =
   'infer the patient\'s ACTIVE problem list by SYNTHESISING across ALL data — not just claim diagnosis codes: ' +
   'coded diagnoses, ABNORMAL LAB patterns (e.g. repeatedly low Hb → 貧血), DISPENSED MEDICATIONS that imply a condition ' +
-  '(e.g. glaucoma eye drops → 青光眼, BPH drugs like Harnalidge/Detrusitol → 良性攝護腺增生), care plans, and discharge summaries.'
+  '(when the medicine\'s class points to one condition, e.g. antiglaucoma drops → glaucoma or ocular hypertension, thyroid hormone → hypothyroidism; a class with several uses only together with other evidence), care plans, and discharge summaries.'
