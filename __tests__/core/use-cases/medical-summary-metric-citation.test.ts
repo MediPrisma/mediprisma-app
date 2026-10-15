@@ -8,6 +8,8 @@ const data: any = {
     { id: 'ca199', code: { text: 'CA 19-9' }, valueQuantity: { value: 35, unit: 'U/mL' }, effectiveDateTime: '2026-06-08' },
     { id: 'ldl', code: { text: 'LDL' }, valueQuantity: { value: 110, unit: 'mg/dL' }, effectiveDateTime: '2026-06-08' },
     { id: 'wbc', code: { text: 'WBC' }, valueQuantity: { value: 9.8, unit: 'K' }, effectiveDateTime: '2026-06-08' },
+    { id: 'odd', code: { text: '某院特殊檢驗 ;(Zeta assay)' }, valueQuantity: { value: 3, unit: 'U' }, effectiveDateTime: '2026-06-08' },
+    { id: 'ethanol', code: { text: 'Ethanol in Serum, Plasma or Blood' }, valueQuantity: { value: 50, unit: 'mg/dL' }, effectiveDateTime: '2026-06-08' },
   ],
   diagnosticReports: [{ id: 'vascular', code: { text: 'Doppler baPWV' }, effectiveDateTime: '2026-06-08', conclusion: 'baPWV right 1500 / left 1600; arterial stiffness' }],
 }
@@ -108,4 +110,26 @@ it('does not interpret a later K unit as a potassium test name', () => {
   const row = run('WBC 12.3 K → 9.8 K', ['wbc']).problems[0]
   expect(row.metric).toContain('9.8')
   expect(row.metricNeedsReview).toBeUndefined()
+})
+
+it.each(['某院特殊檢驗 99 U', 'Zeta assay 99 U', '某院特殊檢驗 ;(Zeta assay) 99 U'])('accepts bilingual source name %s and its patient-facing retry', metric => {
+  const options = { clinicalData: data, audience: 'patient' as const, locale: 'zh-TW' as const }
+  const first = useCase.finalizeResult({ headline: '', problems: [{ label: 'Finding', metric, metricSources: [key('odd')] }] } as any, catalog, options)
+  const second = useCase.finalizeResult(useCase.createAiDraftFromResult(first), catalog, options)
+  for (const result of [first, second]) {
+    expect(result.problems[0].metric).toContain('3 U')
+    expect(result.problems[0].metricNeedsReview).toBeUndefined()
+    expect(result.problems[0].metricMeta).toBe('2026-06-08')
+  }
+})
+
+it('preserves commas inside source names while splitting separate test clauses', () => {
+  const first = run('Ethanol in Serum, Plasma or Blood 99 mg/dL; HbA1c 88%', ['ethanol', 'a1c'])
+  const second = useCase.finalizeResult(useCase.createAiDraftFromResult(first), catalog, { clinicalData: data })
+  for (const result of [first, second]) {
+    expect(result.problems[0].metric).toContain('50')
+    expect(result.problems[0].metric).toContain('7%')
+    expect(result.problems[0].metricNeedsReview).toBeUndefined()
+  }
+  expect(run('Ethanol in Serum, Plasma or Blood 50 mg/dL; baPWV 1500', ['ethanol', 'urine']).problems[0].metricNeedsReview).toBe(true)
 })

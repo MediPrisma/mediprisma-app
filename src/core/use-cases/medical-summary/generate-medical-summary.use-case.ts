@@ -1644,7 +1644,10 @@ function composeLabMetric(
           getAnalyteDisplayForObs(observation, 'patient', 'en'),
           getAnalyteDisplayForObs(observation, 'patient', 'zh-TW'),
           ...(getAnalyteCanonicalKey(observation) === 'CREA' ? ['Cr'] : []),
-        ].flatMap(name => [name, name.replace(/\s*\([^)]*\)\s*$/, '').trim()]).filter(Boolean),
+        ].flatMap(name => {
+          const bilingual = name.match(/^(.*?)\s*[;；,，]\s*\((.+)\)\s*$/)
+          return [name, name.replace(/\s*\([^)]*\)\s*$/, '').trim(), ...(bilingual ? [bilingual[1].trim(), bilingual[2].trim()] : [])]
+        }).filter(Boolean),
         date: obsDate(observation) ?? entry.date ?? '',
         value,
         unit: unitless ? undefined : observation.valueQuantity?.unit?.trim() || undefined,
@@ -1723,7 +1726,34 @@ function metricTestName(name: string): string {
  * the same analyte. Unknown named measurements such as baPWV must also match.
  */
 function metricTestNames(text: string, labels: string[], recorded: string[]): string[] {
-  return text.split(/[;；,，]/).flatMap((part) => {
+  // A source name can itself contain punctuation (NHI bilingual names or
+  // LOINC's "Serum, Plasma or Blood"). Preserve separators inside a complete
+  // record label followed by a numeric value before splitting metric clauses.
+  const protectedSeparators = new Set<number>()
+  const lowerText = text.toLowerCase()
+  for (const label of [...labels].sort((a, b) => b.length - a.length)) {
+    if (!/[;；,，]/.test(label)) continue
+    const lowerLabel = label.toLowerCase()
+    let start = lowerText.indexOf(lowerLabel)
+    while (start !== -1) {
+      if (/^\s*[:：]?\s+[<>≤≥]?[\d.]/.test(text.slice(start + label.length))) {
+        for (let offset = 0; offset < label.length; offset++) {
+          if (/[;；,，]/.test(label[offset])) protectedSeparators.add(start + offset)
+        }
+      }
+      start = lowerText.indexOf(lowerLabel, start + 1)
+    }
+  }
+  const parts: string[] = []
+  let clauseStart = 0
+  for (let index = 0; index < text.length; index++) {
+    if (/[;；,，]/.test(text[index]) && !protectedSeparators.has(index)) {
+      parts.push(text.slice(clauseStart, index))
+      clauseStart = index + 1
+    }
+  }
+  parts.push(text.slice(clauseStart))
+  return parts.flatMap((part) => {
     if (!/^\s*[^\d\s]/.test(part)) return []
     const candidates = [...part.matchAll(/\s+(?=[<>≤≥]?[\d.])/g)]
       .map(match => part.slice(0, match.index).trim().replace(/[:：]$/, ''))
