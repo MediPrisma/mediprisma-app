@@ -30,13 +30,13 @@ const row = (metric: string, id: string) => useCase.finalizeResult({ headline: '
 test('pairs panel members with their own names, values and existing Observation keys', () => {
   const facts = catalog.find(entry => entry.resourceId === 'urine-panel')!.observationFacts!
   expect(facts).toContain(`[${key('occult')}]`)
-  expect(formatSourceList(catalog)).toContain('Occult blood = Negative')
+  expect(formatSourceList(catalog)).toContain('= Negative')
   expect(facts).toContain(`[${key('cells')}]`)
-  expect(formatSourceList(catalog)).toContain('WBC/HPF = 6–9 /HPF')
+  expect(formatSourceList(catalog)).toContain('= 6–9 /HPF')
   const electrolyteFacts = catalog.find(entry => entry.resourceId === 'electrolytes')!.observationFacts!
   expect(electrolyteFacts).toContain(`[${key('sodium')}]`)
-  expect(formatSourceList(catalog)).toContain('Na = 139 mmol/L')
-  expect(formatSourceList(catalog)).toContain('K = 4.1 mmol/L')
+  expect(formatSourceList(catalog)).toContain('= 139 mmol/L')
+  expect(formatSourceList(catalog)).toContain('= 4.1 mmol/L')
   expect(formatSourceList(catalog)).toContain(facts)
 })
 
@@ -63,21 +63,27 @@ test('a redundant panel key does not invalidate a correctly named individual res
   expect(result.metricNeedsReview).toBeUndefined()
 })
 
+test('redundant panel dates do not manufacture an individual result trend', () => {
+  const sources = catalog.map(entry => entry.resourceId === 'urine-panel' ? { ...entry, date: '2025-01-01' } : entry)
+  const result = useCase.finalizeResult({ headline: '', problems: [{ label: 'Finding', metric: 'WBC/HPF 6–9 /HPF', metricSources: [key('urine-panel'), key('cells')] }] } as any, sources, { clinicalData: data }).problems[0]
+  expect(result.metricMeta).toBe(date)
+})
+
 test('retains specimen qualifiers and emits each fact once, including urine creatinine and glucose', () => {
   const sources = buildSourceCatalog({ observations: [
     { id: 'u1', code: { text: 'Urine Creatinine' }, valueQuantity: { value: 82, unit: 'mg/dL' } },
     { id: 'u2', code: { text: 'Urine Glucose' }, valueCodeableConcept: { text: 'Negative' } },
   ], diagnosticReports: [{ id: 'panel', code: { text: 'Urine panel' }, result: [{ reference: 'Observation/u1' }, { reference: 'Observation/u2' }] }] } as any)
   const text = formatSourceList(sources)
-  expect(text).toContain('Urine Creatinine = 82 mg/dL')
-  expect(text).toContain('Urine Glucose = Negative')
+  expect(text).toContain('Urine Creatinine')
+  expect(text).toContain('Urine Glucose')
   expect(text.match(/= 82 mg\/dL/g)).toHaveLength(1)
 })
 
 test('standalone safety prompt receives the same source-owned facts', () => {
   const messages = new GenerateSafetyAlertsUseCase().buildMessages({ clinicalContext: '', catalog, locale: 'en', audience: 'medical' } as any)
   const text = messages.map(message => message.content).join('\n')
-  expect(text).toContain('Occult blood = Negative')
+  expect(text).toContain('= Negative')
   expect(text).toContain('6–9 /HPF')
 })
 
@@ -110,7 +116,7 @@ test.each([
   [{ low: { value: 1, unit: 'mg' }, high: { value: 2, unit: 'g' } }, '1 mg–2 g'],
 ])('preserves range bounds and units: %j', (valueRange, expected) => {
   const sources = buildSourceCatalog({ observations: [{ id: 'range', code: { text: 'Synthetic assay' }, valueRange }] } as any)
-  expect(sources[0].observationFacts).toContain(` = ${expected}`)
+  expect(sources[0].observationFacts).toContain(`= ${expected}`)
 })
 
 test.each(['local-small', 'frontier'])('uses the same general evidence rule for %s, without case-specific instructions', harnessProfile => {

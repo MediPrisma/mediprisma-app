@@ -9,15 +9,16 @@ test.each([
   ['Anemia', ['Hemoglobin'], false],
   ['Unknown condition', ['Unfamiliar test'], false],
 ])('checks narrow biochemical evidence without diagnosing: %s', (label, names, conflict) => {
-  expect(labClaimConflicts(label, names)).toBe(conflict)
+  expect(labClaimConflicts(label, names.map(name => ({ code: { text: name } })))).toBe(conflict)
 })
 
-test('unrelated lab-only disease remains visible and flagged, without verified metric date', () => {
+test('unrelated lab-only disease remains visible and flagged, with verified metric and date preserved', () => {
   const data: any = { observations: [{ id: 'protein', code: { text: 'Urine Protein' }, valueQuantity: { value: 17, unit: 'mg/dL' }, effectiveDateTime: '2026-01-01' }] }
   const catalog = buildSourceCatalog(data)
   const result = new GenerateMedicalSummaryUseCase().finalizeResult({ headline: '', problems: [{ label: 'Hyperuricemia', kind: 'lab', basisSources: [catalog[0].key], metricSources: [catalog[0].key], metric: 'PROT 17 mg/dL' }] } as any, catalog, { clinicalData: data })
-  expect(result.problems[0]).toMatchObject({ label: 'Hyperuricemia', flag: true, metricNeedsReview: true })
-  expect(result.problems[0].metricMeta).toBeUndefined()
+  expect(result.problems[0]).toMatchObject({ label: 'Hyperuricemia', flag: true, metric: 'PROT 17 mg/dL' })
+  expect(result.problems[0].metricMeta).toBe('2026-01-01')
+  expect(result.problems[0].metricNeedsReview).toBeUndefined()
 })
 
 test.each([
@@ -43,4 +44,36 @@ test('a short quote uses only unambiguous source anatomy, never an unrelated rep
   expect(reportOrganFromQuotes('gynecologic', ['Fracture'], ['Bone, femoral head. Diagnosis: Fracture.'])).toBe('musculoskeletal')
   expect(reportOrganFromQuotes('other', ['Cyst'], ['Liver cyst. Renal cyst.'])).toBe('other')
   expect(reportOrganFromQuotes('heart', ['Tricuspid regurgitation'], ['Lungs clear. Tricuspid regurgitation.'])).toBe('heart')
+})
+
+test.each([
+  ['abdomen-liver-biliary', 'Arterial phase hyperenhancement with washout'],
+  ['brain', 'Mild ventriculomegaly'],
+  ['brain', 'Dilated lateral ventricle'],
+])('does not mistake acquisition wording or shared anatomy for another organ', (organ, quote) => {
+  expect(reportOrganFromQuotes(organ as any, [quote])).toBe(organ)
+})
+
+test('sex and clinical history cannot establish finding anatomy', () => {
+  expect(reportOrganFromQuotes('breast', ['Nodule'], ['Female, 60 y/o'])).toBe('breast')
+})
+
+test.each([
+  ['Hypokalemia', '鉀'], ['Hyponatremia', '鈉'], ['Hypercalcemia', '鈣'],
+  ['Hyperglycemia', 'Hb A1c'], ['Hyperglycemia', 'A1C'], ['Hyperglycemia', 'Glu-PC'],
+  ['Hypercalcemia', 'iCa'], ['Anemia', 'Ferritin'], ['Anemia', '血色素'],
+])('recognizes aliases or defers broad diagnoses: %s / %s', (label, name) => {
+  expect(labClaimConflicts(label, [{ code: { text: name } }])).toBe(false)
+})
+
+test('tumour marker Ca spelling is not calcium', () => {
+  expect(labClaimConflicts('Hypercalcemia', [{ code: { text: 'CA-125' } }])).toBe(true)
+})
+
+test('numbered pathological diagnosis supplies anatomy but clinical history does not', () => {
+  const data: any = { diagnosticReports: [{ id: 'p', code: { text: 'Pathology' }, category: [{ text: 'pathology' }], conclusion: 'Clinical history: uterine fibroid\n病理診斷 1：Bone, humeral head\nFracture\nGross description:\nTissue received.' }] }
+  const catalog = buildSourceCatalog(data)
+  const key = catalog[0].key
+  const result = finalizeReportHighlights({ groups: [{ organ: 'gynecologic', points: [{ text: 'Fracture', sources: [key], quotes: [{ source: key, quote: 'Fracture' }] }] }], unremarkable: [] }, data, catalog)
+  expect(result.groups[0].organ).toBe('musculoskeletal')
 })

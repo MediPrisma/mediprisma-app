@@ -110,6 +110,7 @@ import {
   allDigestItems,
   buildReportDigest,
   deterministicReportExcerpt,
+  findConclusionSection,
   type ReportDigestItem,
 } from './report-digest'
 
@@ -655,7 +656,8 @@ export function buildSourceCatalog(
     // Long free-text results already live in clinical context. Do not duplicate
     // or truncate them into a misleading scalar value in the source index.
     if (!entry || !value || value.length > 80) return undefined
-    return `[${entry.key}] ${getOriginalAnalyteDisplayForObs(observation)} = ${value}`
+    const name = getOriginalAnalyteDisplayForObs(observation)
+    return `${name === entry.display ? '' : `${name} `}= ${value}`
   }
   for (const observation of input.observations ?? []) {
     const entry = observation.id ? observationEntries.get(observation.id) : undefined
@@ -2816,6 +2818,8 @@ export class GenerateMedicalSummaryUseCase {
     })
 
     const medicationById = new Map((options.clinicalData?.medications ?? []).filter((m) => m.id).map((m) => [m.id, m]))
+    const observationsById = reportObservationMap(options.clinicalData?.observations)
+    const reportsById = new Map((options.clinicalData?.diagnosticReports ?? []).map(report => [report.id, report]))
     const medicationDisplays = catalog
       .filter((entry) => entry.resourceType.startsWith('Medication'))
       .map((entry) => compactName(entry.display))
@@ -2934,7 +2938,17 @@ export class GenerateMedicalSummaryUseCase {
           medicationAtcCode(medicationById.get(byKey.get(item.key)?.resourceId ?? '')),
         ) === false)
         .map((item) => item.key)
-      const metricDates = metricKeys
+      const modelMetric = isPlaceholderText(p.metric) || namesMedication(p.metric, medicationDisplays) || isCodeOrVisitMetric(p.metric)
+        ? undefined : p.metric?.trim()
+      const panelKeys = metricKeys.filter(key => {
+        const entry = byKey.get(key)
+        const report = entry?.resourceType === 'DiagnosticReport'
+          ? reportsById.get(entry.resourceId) : undefined
+        return report && observationsForReport(report, observationsById).length > 1
+      })
+      const individualKeys = metricKeys.filter(key => byKey.get(key)?.resourceType === 'Observation')
+      const labKeys = individualKeys.length ? metricKeys.filter(key => !panelKeys.includes(key)) : metricKeys
+      const metricDates = labKeys
         .map((key) => byKey.get(key)?.date)
         .filter((date): date is string => Boolean(date))
         .sort()
@@ -2943,16 +2957,6 @@ export class GenerateMedicalSummaryUseCase {
         : metricDates[0] === metricDates.at(-1)
           ? metricDates[0]
           : `${metricDates[0]} → ${metricDates.at(-1)}`
-      const modelMetric = isPlaceholderText(p.metric) || namesMedication(p.metric, medicationDisplays) || isCodeOrVisitMetric(p.metric)
-        ? undefined : p.metric?.trim()
-      const panelKeys = metricKeys.filter(key => {
-        const entry = byKey.get(key)
-        const report = entry?.resourceType === 'DiagnosticReport'
-          ? options.clinicalData?.diagnosticReports?.find(report => report.id === entry.resourceId) : undefined
-        return report && observationsForReport(report, reportObservationMap(options.clinicalData?.observations)).length > 1
-      })
-      const individualKeys = metricKeys.filter(key => byKey.get(key)?.resourceType === 'Observation')
-      const labKeys = individualKeys.length ? metricKeys.filter(key => !panelKeys.includes(key)) : metricKeys
       const labMetric = composeLabMetric(
         labKeys,
         byKey,
@@ -2967,12 +2971,15 @@ export class GenerateMedicalSummaryUseCase {
       const ambiguousPanelMetric = Boolean(modelMetric) && panelKeys.length > 0 && (!individualKeys.length || !labMetric)
       const labOnly = resolvedSources.length > 0 && resolvedSources.every(entry => entry.resourceType === 'Observation' || entry.resourceType === 'DiagnosticReport')
       const citedTests = resolvedSources.flatMap(entry => {
-        if (entry.resourceType === 'Observation') return [entry.display]
-        const report = options.clinicalData?.diagnosticReports?.find(report => report.id === entry.resourceId)
-        return report ? observationsForReport(report, reportObservationMap(options.clinicalData?.observations)).map(obs => getOriginalAnalyteDisplayForObs(obs)) : []
+        if (entry.resourceType === 'Observation') {
+          const observation = observationsById.get(entry.resourceId)
+          return observation ? [observation] : []
+        }
+        const report = reportsById.get(entry.resourceId)
+        return report ? observationsForReport(report, observationsById) : []
       })
       const claimConflict = labOnly && labClaimConflicts(p.label, citedTests)
-      const metricSourceConflict = claimConflict || ambiguousPanelMetric || Boolean(labMetric && metricTestNamesConflict(modelMetric, labMetric.testNames, labMetric.labels))
+      const metricSourceConflict = ambiguousPanelMetric || Boolean(labMetric && metricTestNamesConflict(modelMetric, labMetric.testNames, labMetric.labels))
       const metricView: { metric?: string; metricNeedsReview?: true; metricSegments?: MetricSegment[] } = metricSourceConflict
         ? { metric: (modelMetric ?? labMetric?.text)?.split(METRIC_ARROW).join('；'), metricNeedsReview: true }
         : labMetric
@@ -3319,7 +3326,12 @@ export function finalizeReportHighlights(
       if (finalized.point.displayAs === 'quote') uncertaintyRewriteCount += 1
       finalized.point.sources.forEach((source) => citedKeys.add(source.key))
       const verifiedOrgan = reportOrganFromQuotes(organ, finalized.point.quotes.map(quote => quote.quote),
-        finalized.point.sources.map(source => readItemByKey.get(source.key)?.narrative ?? ''))
+        finalized.point.sources.flatMap(source => {
+          const item = readItemByKey.get(source.key)
+          if (!item) return []
+          const section = findConclusionSection(item.narrative)
+          return [item.title, ...(section ? [item.narrative.slice(section.contentStart, section.end)] : [])]
+        }))
       const points = pointsByOrgan.get(verifiedOrgan)
       if (points) points.push(finalized.point)
       else pointsByOrgan.set(verifiedOrgan, [finalized.point])
