@@ -21,6 +21,7 @@ The adapter:
 - Preserves exact recognized ICD system URLs/editions, validates code syntax, deduplicates the same ICD family/code and reports unsupported diagnoses. WHO ICD-10 is not relabelled as ICD-10-CM.
 - Collapses identical inpatient episodes but retains separate outpatient visits. Excludes future discharge dates and discharge-derived diagnoses of ongoing admissions.
 - Uses only audited LOINC assays, supported units and actual collection/effective dates. Never substitutes a report date or normal/zero lab value.
+- Blood WBC/platelet counts exported per microlitre by EHR-FHIR-BRIDGE are divided by 1000 for the model's `10*3/uL` unit. Micro symbols `µ` and `μ` normalize to `u`; unknown units and non-blood assays remain excluded. Fasting serum/plasma glucose `1558-6` feeds the existing general glucose feature `2345-7`; this does not establish fasting status for any other glucose assay. The projected wire codes/units remain compatible with the existing SaMD transport contract.
 - Reports unavailable modules, unverified longitudinal coverage and missing inpatient ranks without inventing them.
 - Accepts only exact recognized ICD procedure systems and formats; NHI order codes are not relabelled.
 

@@ -10,6 +10,46 @@ const resources = (bundle: FhirRecord, type: string): FhirRecord[] => bundle.ent
 const add = (bundle: FhirRecord, resource: FhirRecord) => bundle.entry.push({ fullUrl: resource.resourceType + '/' + resource.id, resource })
 
 describe('NHI cloud HF input preparation', () => {
+  it.each([
+    ['6690-2', 7200, '/uL', 7.2, 'WBC', '10*3/uL'],
+    ['777-3', 210000, '/uL', 210, 'PLT', '10*3/uL'],
+    ['6690-2', 7200, 'cells/µL', 7.2, 'WBC', '10*3/uL'],
+    ['777-3', 210000, '#/μL', 210, 'PLT', '10*3/uL'],
+    ['6690-2', 7.2, 'K/μL', 7.2, 'WBC', '10*3/uL'],
+    ['777-3', 210, 'K/µL', 210, 'PLT', '10*3/uL'],
+    ['6690-2', 7.2, '10*9/L', 7.2, 'WBC', '10*3/uL'],
+    ['1558-6', 110, 'mg/dL', 110, 'GLU', 'mg/dL'],
+    ['1558-6', 5, 'mmol/L', 90.08, 'GLU', 'mg/dL'],
+  ])('projects bridge lab %s with %s %s into the existing model feature', (loinc, value, unit, expected, key, modelUnit) => {
+    const bundle = hfMedcloudFixture()
+    const lab = resources(bundle, 'Observation')[0]
+    lab.code = { coding: [{ system: 'http://loinc.org', code: loinc }] }
+    lab.valueQuantity = { value, unit, code: unit }
+    const result = build(bundle)
+    const projected = resources(result.bundle, 'Observation')
+    expect(projected).toHaveLength(1)
+    expect(projected[0].valueQuantity).toMatchObject({ value: expected, unit: modelUnit, code: modelUnit })
+    expect(projected[0].code.coding).toContainEqual({ system: HF_NAMESPACE + '/CodeSystem/hf-source-lab-item', code: key })
+    expect(validateHfTransportBundle(result.bundle, result.indexDate)).toBe(true)
+  })
+  it('keeps specimen, unit and historical-date exclusions for newly supported inputs', () => {
+    for (const [loinc, unit, date, gap] of [
+      ['5821-4', '/uL', '2026-09-30', 'lab-unmapped'], // urine WBC is not blood WBC
+      ['2350-7', 'mg/dL', '2026-09-30', 'lab-unmapped'], // urine glucose is not serum glucose
+      ['6690-2', '/HPF', '2026-09-30', 'lab-value-unit'],
+      ['777-3', '', '2026-09-30', 'lab-value-unit'],
+      ['1558-6', 'mg/dL', '2026-10-02', 'future-omitted'],
+    ]) {
+      const bundle = hfMedcloudFixture()
+      const lab = resources(bundle, 'Observation')[0]
+      lab.code = { coding: [{ system: 'http://loinc.org', code: loinc }] }
+      lab.valueQuantity = { value: 100, unit }
+      lab.effectiveDateTime = date
+      const result = build(bundle)
+      expect(result.counts.Observation).toBeUndefined()
+      expect(result.gaps).toContainEqual({ code: gap, count: 1 })
+    }
+  })
   it('projects an immutable single-patient Bundle, converts explicit units and strips identity/narrative', () => {
     const original = hfMedcloudFixture()
     const before = JSON.stringify(original)
