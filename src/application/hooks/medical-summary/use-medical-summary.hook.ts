@@ -825,11 +825,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             return true
           },
         })
-        const parsed = card.parseBatch(value.fullText, ctx.catalog) as ReportsModuleDraft | null
+        const parsedReply = card.parseBatch(value.fullText, ctx.catalog) as ReportsModuleDraft | null
+        // `incomplete` is the app's to set, never the model's.
+        const parsed = parsedReply ? { ...parsedReply, incomplete: undefined } : null
         if (parsed && !value.timedOut) return { module: parsed, execution }
         const salvaged = generateMedicalSummaryUseCase.salvageReportsModule(value.fullText)
-        if (salvaged.pointCount > 0) return { module: salvaged.module, execution }
-        if (parsed) return { module: parsed, execution }
+        // Cut off: what finished is shown, and the reports it never reached
+        // are listed as unreviewed rather than as nothing notable.
+        if (salvaged.pointCount > 0) return { module: { ...salvaged.module, incomplete: true }, execution }
+        if (parsed) return { module: value.timedOut ? { ...parsed, incomplete: true } : parsed, execution }
         if (value.timedOut) throw new MedicalSummaryCardProgressTimeoutError(MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS)
         throw new ReportsParseError()
       }

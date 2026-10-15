@@ -108,7 +108,10 @@ export function reviewHeadline(
   problemLabels: readonly string[],
   medicineNames: readonly string[],
 ): HeadlineReview | undefined {
-  if (!headline.trim() || problemLabels.length === 0) return undefined
+  // An empty list is a list: a headline naming problems beside it names
+  // problems the list does not hold. The caller decides when the list is
+  // final (not still streaming, not failed).
+  if (!headline.trim()) return undefined
   const problemWords = new Set(problemLabels.flatMap(contentWords))
   // Five letters and up: "iron" is also a word in "iron deficiency anemia".
   const medicines = medicineNames.map((name) => name.trim().toLowerCase()).filter((name) => name.length >= 5)

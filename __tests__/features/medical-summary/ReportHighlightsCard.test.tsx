@@ -25,6 +25,7 @@ const LABELS = {
   hideQuotes: ms.reportsHideQuotes,
   othersSummarized: ms.reportsOthers,
   othersAll: ms.reportsAll,
+  unreviewed: ms.reportsUnreviewed,
   unavailable: ms.reportsUnavailable,
   hiddenPoints: ms.reportsHiddenPoints,
   unverifiedTag: ms.reportsUnverifiedTag,
@@ -291,5 +292,23 @@ describe('ReportHighlightsCard — many serial studies on one finding', () => {
     // Opened: every study is its own chip again.
     expect(chips()).toHaveLength(5)
     expect(chips().some((label) => label?.includes('×'))).toBe(false)
+  })
+})
+
+describe('ReportHighlightsCard — reports the AI did not get to', () => {
+  it('lists them apart from 「無特殊發現」, with their conclusions', () => {
+    const { container } = render(
+      <ReportHighlightsCard
+        highlights={{
+          ...HIGHLIGHTS,
+          unreviewed: [row('L40', 'ct', '2024-01-02', { excerpt: 'Old nodule, stable.', excerptSource: 'conclusion' })],
+        }}
+        labels={LABELS}
+      />,
+    )
+    const toggle = screen.getByRole('button', { name: ms.reportsUnreviewed.replace('{count}', '1') })
+    fireEvent.click(toggle)
+    const listed = container.querySelector('[data-report-unreviewed] [data-report-row="L40"]')!
+    expect(listed.textContent).toContain('Old nodule, stable.')
   })
 })

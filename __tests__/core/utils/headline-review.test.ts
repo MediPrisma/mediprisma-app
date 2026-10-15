@@ -53,8 +53,11 @@ describe('reviewHeadline', () => {
       .toEqual({ unlisted: ['recent pneumonia'], medicines: [], values: [] })
   })
 
-  it('waits for the problem list, and reads the age and sex as no item', () => {
-    expect(reviewHeadline('70F with hyperkalemia', [], [])).toBeUndefined()
+  it('reviews against a settled empty list, and reads the age and sex as no item', () => {
+    // Waiting for a list still streaming is the caller's decision; an empty
+    // list that has landed holds none of the headline's problems.
+    expect(reviewHeadline('70F with hyperkalemia', [], [])).toEqual({ unlisted: ['hyperkalemia'], medicines: [], values: [] })
+    expect(reviewHeadline('70F', [], [])).toBeUndefined()
     expect(headlineItems('94-year-old man with CKD 3b and gout.')).toEqual(['CKD 3b', 'gout'])
   })
 })

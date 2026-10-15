@@ -246,6 +246,10 @@ export const MedicalSummaryReportsModuleSchema = z.object({
   groups: lenientArray(ReportGroupSchema, REPORT_MAX_GROUPS),
   // 30 reports in the digest at most; a generous bound stops a loop.
   unremarkable: reportKeyList(60),
+  /** Set by the app, never the model: the reply was cut off (watchdog) and
+   *  what it finished was salvaged, so its silence on a report is not a
+   *  verdict on it. */
+  incomplete: z.boolean().optional(),
 })
 export type ReportsModuleDraft = z.infer<typeof MedicalSummaryReportsModuleSchema>
 
@@ -572,8 +576,14 @@ export interface ReportHighlights {
    *  with its deterministic excerpt and says the summary is unavailable. */
   summarized: boolean
   groups: ReportFindingGroup[]
-  /** Newest first. */
+  /** Newest first. Reports the model read and did not cite. */
   others: ReportRow[]
+  /** Newest first. Reports the model never finished reading: past the
+   *  digest's report or token cap, or after a reply that was cut off. Shown
+   *  with their excerpt, never as 「無特殊發現」. */
+  unreviewed?: ReportRow[]
+  /** The reply was cut off and salvaged; round-trips with the module. */
+  incomplete?: true
   /** Reports in the digest, including the ones past the request budget. */
   totalReports: number
   /** Quotes that failed the verbatim check or named no listed report. */

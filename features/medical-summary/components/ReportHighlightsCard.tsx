@@ -55,6 +55,9 @@ export interface ReportHighlightsCardLabels {
   othersSummarized: string
   /** "{count}" — footer when the summary is unavailable. */
   othersAll: string
+  /** "{count}" — reports the model never finished reading (past the cap, or
+   *  a reply cut off); listed with their excerpt. */
+  unreviewed: string
   /** One-line note when the summary failed or never ran. */
   unavailable: string
   /** "{count}" — points not shown because no quote matched. */
@@ -94,8 +97,10 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   const locale = language?.locale ?? "zh-TW"
   const groups = highlights.groups ?? []
   const others = highlights.others ?? []
+  const unreviewed = highlights.unreviewed ?? []
   // Nothing to list at all: the section has no content of its own.
   const [othersOpen, setOthersOpen] = useState(groups.length === 0)
+  const [unreviewedOpen, setUnreviewedOpen] = useState(false)
   const [openPoints, setOpenPoints] = useState<ReadonlySet<string>>(new Set())
   const unverifiedPoints = highlights.hiddenPoints ?? []
   if (groups.length === 0 && others.length === 0 && unverifiedPoints.length === 0) {
@@ -195,9 +200,9 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   const footerLabel = (highlights.summarized ? labels.othersSummarized : labels.othersAll)
     .replace("{count}", String(others.length))
 
-  const otherRow = (row: ReportRow) => {
+  const otherRow = (row: ReportRow, withExcerpt = !highlights.summarized) => {
     const organizationLabel = row.organization ? formatOrganizationDisplay(row.organization, locale) : ""
-    const showExcerpt = !highlights.summarized && row.excerpt
+    const showExcerpt = withExcerpt && row.excerpt
     const inner = (
       <span className="block min-w-0">
         <span className="block text-[length:max(13px,0.8125rem)] leading-snug text-foreground/90">
@@ -387,7 +392,22 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
             <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 -rotate-90 transition-transform", othersOpen && "rotate-0")} aria-hidden="true" />
             {footerLabel}
           </button>
-          {othersOpen ? <ul className="pb-0.5">{others.map(otherRow)}</ul> : null}
+          {othersOpen ? <ul className="pb-0.5">{others.map((row) => otherRow(row))}</ul> : null}
+        </div>
+      ) : null}
+
+      {unreviewed.length > 0 ? (
+        <div className={cn((groups.length > 0 || others.length > 0) && "border-t border-border")} data-report-unreviewed>
+          <button
+            type="button"
+            onClick={() => setUnreviewedOpen((value) => !value)}
+            aria-expanded={unreviewedOpen}
+            className="flex min-h-[44px] w-full items-center gap-1.5 text-left text-[length:max(13px,0.8125rem)] text-muted-foreground transition-colors hover:text-foreground lg:min-h-8"
+          >
+            <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 -rotate-90 transition-transform", unreviewedOpen && "rotate-0")} aria-hidden="true" />
+            {labels.unreviewed.replace("{count}", String(unreviewed.length))}
+          </button>
+          {unreviewedOpen ? <ul className="pb-0.5">{unreviewed.map((row) => otherRow(row, true))}</ul> : null}
         </div>
       ) : null}
     </section>

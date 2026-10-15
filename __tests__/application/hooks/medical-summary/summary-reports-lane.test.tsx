@@ -196,6 +196,10 @@ test('a reply cut off mid-point keeps the points it finished', async () => {
 
   expect(mockResult.cardErrors).toBeUndefined()
   expect(mockResult.reportHighlights.groups[0].points.map((point: any) => point.text)).toEqual(['多處穩定病灶'])
+  // The reports it never reached are not called unremarkable.
+  expect(mockResult.reportHighlights.incomplete).toBe(true)
+  expect(mockResult.reportHighlights.others).toEqual([])
+  expect(mockResult.reportHighlights.unreviewed.length).toBeGreaterThan(0)
 })
 
 test('an unparseable reply fails the card, and the section still lists every report from the digest', async () => {

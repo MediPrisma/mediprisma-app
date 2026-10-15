@@ -1172,9 +1172,6 @@ const SHARED_RULES =
   'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
   '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
   'a complex multi-morbid patient typically yields 8–12 problems, not 5–6. ' +
-  'Cross-hospital lens: surface care fragmented across providers and follow-up gaps. ' +
-  'For duplicate medications, be strict: these are NHI cross-facility records where ONE prescription appears twice (the prescribing clinic AND the 藥局 / pharmacy that dispenses the 慢箋), ' +
-  'and same-clinic refills are one ongoing therapy — NEITHER is duplication. Only call out duplication when the SAME drug (or same-class additive drugs) is prescribed by TWO DIFFERENT CLINICS in a short window. ' +
   'For "medicationEducation": this is ONLY for the patient audience; for the medical audience return an empty array. ' +
   'For patients, select 3–5 of the most relevant recent or long-term medicines (or clinically coherent medicine groups) that actually appear in the records. ' +
   'Lead with BENEFIT: explain in plain language how each medicine may support a documented condition or care goal. Then give exactly one calm, practical "attention" reminder. ' +
@@ -1252,7 +1249,7 @@ const MEDICAL_ENGLISH_LANGUAGE_CONTRACT =
 
 const LOCAL_MODULE_RULES: Record<MedicalSummaryNarrativeModuleId, string> = {
   overview:
-    'OVERVIEW: The headline states only documented facts. Do not infer a disease from a medicine or infer control/stability from one value. ' +
+    'OVERVIEW: The headline states only documented facts: a problem the records establish (a medicine establishes one only as the medication-only rule allows), never control or stability read from one value. ' +
     'Keep it to ~30 words naming at most about six problems, each one a problem this patient\'s records establish — no medicine names, no lab values or units, no ICD or other codes. ' +
     'Name a coded diagnosis as the diagnosis-code rule above allows, never with "claim code only". ' +
     'medicationEducation is for patients only and must cite a real M key. Use no treatment advice. ' +
@@ -1398,10 +1395,10 @@ const BATCH_OUTPUT_INSTRUCTION = (
 
 const SYSTEM_MEDICAL_PREFIX =
   'You are preparing 初診快覽 — a first-visit overview for a physician who is seeing this patient ' +
-  'without knowing their history at other facilities. Precise clinical language; cite actual values and trends. ' +
+  'without knowing their history at other facilities. Precise clinical language; give actual values and trends where a section asks for them (a problem\'s key values), never in the headline. ' +
   'The reader has about thirty seconds before the consultation starts, so every line must be something they would otherwise miss. ' +
   'Return "medicationEducation" as an empty array; that benefit-first education list is patient-facing. ' +
-  'Safety alerts are handled by the Safety module in this same batch — do not restate them as extra prose.'
+  'Safety alerts have their own section — do not restate them as extra prose.'
 
 const SYSTEM_PATIENT_PREFIX =
   'You are helping a patient (a layperson, NOT a clinician) understand their own NHI 健康存摺 records. ' +
@@ -1414,7 +1411,7 @@ const SYSTEM_PATIENT_PREFIX =
   'check with the doctor, not a danger. ' +
   'Populate "medicationEducation" as benefit-first, reassuring medication education ' +
   'grounded in the patient\'s medication records. ' +
-  'Safety reminders are handled by the Safety module in this same batch.'
+  'Safety reminders have their own section.'
 
 // ---------------------------------------------------------------------------
 // 影像與病理重點 (`reports` lane) — organ-grouped key findings over the digest
@@ -1423,7 +1420,7 @@ const SYSTEM_PATIENT_PREFIX =
 const REPORT_HIGHLIGHTS_SYSTEM =
   'You are writing the key findings of a patient\'s imaging and pathology reports for a physician who has no time to read every report. ' +
   'You select the findings that matter and state each one in one short line. The app writes every date, examination type, hospital and report title itself, ' +
-  'and checks every quote you give character-for-character against the report: a point none of whose quotes matches is never shown.'
+  'and checks every quote you give character-for-character against the report: a point none of whose quotes matches is shown only as an unverified line the physician must check.'
 
 const REPORT_HIGHLIGHTS_RULES =
   '\n\nKEY-FINDINGS CONTRACT: ' +
@@ -1433,7 +1430,7 @@ const REPORT_HIGHLIGHTS_RULES =
   'Prefer abnormal, new, changing or clinically actionable findings: pathology diagnoses and staging, sizes, and comparisons with prior studies. ' +
   'Omit normal findings and incidental age-related findings unless they are clinically meaningful. ' +
   '"text" states the finding only: never a date, a modality or examination name, a hospital, a recommendation, or a diagnosis the cited text does not state. ' +
-  'Keep the source\'s uncertainty words in "text" (r/o, rule out, favor, suspect, suspicious, possible, probable, likely, cannot be ruled out, age undetermined, DDx, 疑似, 待排除, 不排除, 可能): write "Suspicious for bronchiectasis", never "Bronchiectasis", when the report says "suspicious for bronchiectasis". ' +
+  'Keep the source\'s uncertainty words in "text" (r/o, rule out, favor, suspect, suspicious, possible, probable, likely, cannot be ruled out, age undetermined, DDx; a Chinese report\'s 疑似, 待排除, 不排除, 可能 become suspected, to be ruled out, cannot be excluded, possible): write "Suspicious for bronchiectasis", never "Bronchiectasis", when the report says "suspicious for bronchiectasis". ' +
   'Copy the L prefix of each report key exactly; never replace L with H or invent a different key. ' +
   'Every point needs at least one entry in "quotes": one contiguous sentence or clause copied character-for-character from one of the cited reports, with that report\'s key in "source". ' +
   'Never translate, abbreviate, expand, correct spelling, merge two places, or add words inside a quote. Never quote the header line the app wrote, an administrative line (patient identity, order or specimen numbers, names of staff, sign-off times), or across a "[…]" line, which marks text the app omitted. ' +
@@ -2539,6 +2536,7 @@ export class GenerateMedicalSummaryUseCase {
               // An all-unremarkable reply has no groups; its verdict must
               // survive another card's retry.
               unremarkable: highlights.groups.length === 0 ? highlights.others.map((row) => row.key) : [],
+              ...(highlights.incomplete ? { incomplete: true } : {}),
             },
           }
         : {}),
@@ -3110,8 +3108,14 @@ export function finalizeReportHighlights(
   catalog: readonly SummarySourceCatalogEntry[],
   options: FinalizeReportHighlightsOptions = {},
 ): ReportHighlights {
-  const digestItems = allDigestItems(buildReportDigest({ clinicalData, catalog }))
+  const digest = buildReportDigest({ clinicalData, catalog })
+  const digestItems = allDigestItems(digest)
   const itemByKey = new Map(digestItems.map((item) => [item.key, item]))
+  // What the model actually finished reading: the reports in its prompt, and
+  // none of them when the reply was cut off — a salvaged reply's silence on a
+  // report says nothing about it.
+  const incomplete = module?.incomplete === true
+  const reviewedKeys = new Set(incomplete ? [] : digest.items.map((item) => item.key))
   let droppedQuoteCount = options.carried?.droppedQuoteCount ?? 0
   let hiddenPointCount = options.carried?.hiddenPointCount ?? 0
   const hiddenPoints: UnverifiedReportPoint[] = [...(options.carried?.hiddenPoints ?? [])]
@@ -3156,10 +3160,17 @@ export function finalizeReportHighlights(
     label: REPORT_ORGAN_LABELS.en[organ],
     points: pointsByOrgan.get(organ)!,
   }))
-  const others = digestItems
+  const uncited = digestItems
     .filter((item) => !citedKeys.has(item.key))
     .sort(newestFirst)
+  // Without a summary every report is listed with its excerpt anyway.
+  const separateUnreviewed = module !== undefined
+  const others = uncited
+    .filter((item) => !separateUnreviewed || reviewedKeys.has(item.key))
     .map(reportRow)
+  const unreviewed = separateUnreviewed
+    ? uncited.filter((item) => !reviewedKeys.has(item.key)).map(reportRow)
+    : []
   // "其餘 N 份無特殊發現" is a statement about the reports, so it needs the
   // model to have actually said so. A reply whose every point failed
   // verification, or that returned nothing at all, said nothing about them:
@@ -3175,6 +3186,8 @@ export function finalizeReportHighlights(
     summarized,
     groups,
     others,
+    ...(unreviewed.length > 0 ? { unreviewed } : {}),
+    ...(incomplete ? { incomplete: true as const } : {}),
     totalReports: digestItems.length,
     droppedQuoteCount,
     hiddenPointCount,

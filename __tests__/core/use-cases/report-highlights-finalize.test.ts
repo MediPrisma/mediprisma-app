@@ -358,7 +358,7 @@ describe('chips and footer are the app\'s', () => {
     expect(highlights.others.map((row) => row.key)).toContain(PATH)
   })
 
-  it('lists the reports past the request budget in the footer', () => {
+  it('lists every report, the ones past the request budget apart as unreviewed', () => {
     const many = {
       diagnosticReports: Array.from({ length: 33 }, (_, index) => report(
         `xr-${index}`,
@@ -374,9 +374,12 @@ describe('chips and footer are the app\'s', () => {
       { clinicalData: many, audience: 'medical', locale: 'zh-TW' },
     ).reportHighlights!
     expect(result.totalReports).toBe(33)
-    expect(result.others).toHaveLength(33)
-    const dates = result.others.map((row) => row.date ?? '')
-    expect([...dates].sort().reverse()).toEqual(dates)
+    expect(result.others).toHaveLength(30)
+    expect(result.unreviewed).toHaveLength(3)
+    for (const rows of [result.others, result.unreviewed!]) {
+      const dates = rows.map((row) => row.date ?? '')
+      expect([...dates].sort().reverse()).toEqual(dates)
+    }
   })
 })
 
@@ -600,6 +603,13 @@ describe('reports prompt', () => {
     piiLiterals: ['王小明'],
   })
 
+  it('says what happens to an unmatched quote, and keeps Chinese hedges as English ones', () => {
+    const system = messages('en')[0].content
+    expect(system).not.toContain('is never shown')
+    expect(system).toContain('shown only as an unverified line')
+    expect(system).toContain('疑似, 待排除, 不排除, 可能 become suspected')
+  })
+
   it('states the organ enum, the merge rule, the quote rule and the bounds', () => {
     const system = messages('zh-TW')[0].content
     for (const organ of REPORT_ORGANS) expect(system).toContain(organ)
@@ -707,5 +717,49 @@ describe('hospital-model report key prefix drift', () => {
     const result=run(quote,source)
     expect(result.hiddenPointCount).toBe(1)
     expect(result.groups).toEqual([])
+  })
+})
+
+describe('reports the model never finished reading', () => {
+  it('lists reports past the digest cap as unreviewed, not as nothing notable', () => {
+    // 32 reports: the digest sends the newest 30; the two oldest overflow.
+    const many = {
+      diagnosticReports: Array.from({ length: 32 }, (_, index) => {
+        const day = String(index + 1).padStart(2, '0')
+        const month = index < 28 ? '03' : '01'
+        return report(`r-${index}`, `2026-${month}-${day.slice(-2) === '00' ? '01' : day.slice(-2)}`, 'Chest X-ray', `Finding number ${index}. Lungs are clear.`)
+      }),
+    } as any
+    const manyCatalog = buildSourceCatalog(many)
+    const key = (id: string) => manyCatalog.find((entry) => entry.resourceId === id)!.key
+    const highlights = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: moduleOf([{ organ: 'chest-lung', points: [point('Finding number 0', [key('r-0')], [[key('r-0'), 'Finding number 0.']])] }]),
+      },
+      manyCatalog,
+      { clinicalData: many, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    expect(highlights.totalReports).toBe(32)
+    expect(highlights.unreviewed).toHaveLength(2)
+    expect(highlights.others).toHaveLength(29)
+    expect(highlights.unreviewed!.every((row) => row.excerpt)).toBe(true)
+    const listed = new Set([...highlights.others, ...highlights.unreviewed!].map((row) => row.key))
+    expect(listed.size).toBe(31)
+  })
+
+  it('treats every uncited report as unreviewed after a reply that was cut off', () => {
+    const highlights = useCase.finalizeResult(
+      {
+        ...useCase.createEmptyAiResult(),
+        reports: { ...moduleOf([{ organ: 'heart', points: [point('Cardiomegaly', [XR], [[XR, 'Cardiomegaly.']])] }]), incomplete: true },
+      },
+      catalog,
+      { clinicalData, audience: 'medical', locale: 'zh-TW' },
+    ).reportHighlights!
+    expect(highlights.summarized).toBe(true)
+    expect(highlights.others).toEqual([])
+    expect(highlights.unreviewed!.map((row) => row.key).sort()).toEqual([CT, PATH, XR_OLD, US].sort())
+    expect(highlights.incomplete).toBe(true)
   })
 })

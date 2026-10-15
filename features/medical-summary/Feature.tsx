@@ -462,18 +462,25 @@ export default function MedicalSummaryFeature() {
   // 待核對 under a clinician headline that does not match the problem list —
   // problems the list does not hold, medicines, lab values. Judged only once
   // both requests have answered; labels, never rewrites.
+  const problemsSettled = Boolean(result?.completedCardIds?.includes("problems"))
+  const problemsFailed = Boolean(cardErrors.problems)
   const headlineReviewLabel = useMemo(() => {
-    if (isPatient || !headline || !problemList?.length) return undefined
+    if (isPatient || !headline) return undefined
+    // Nothing to compare with: the headline is the claim most prone to
+    // invention, so it is labelled rather than shown as if checked.
+    if (problemsFailed) return ms.headlineReviewNoProblems
+    // Still streaming: the list it is compared with has not landed yet.
+    if (!problemsSettled && !problemList?.length) return undefined
     const medicineNames = (safetySourceCatalog ?? [])
       .filter((entry) => entry.resourceType.startsWith("Medication"))
       .flatMap((entry) => [entry.medicationClass?.split(" · ")[0] ?? "", /^[A-Za-z][A-Za-z-]+/.exec(entry.display.trim())?.[0] ?? ""])
-    const review = reviewHeadline(headline, problemList.map((problem) => problem.label), medicineNames)
+    const review = reviewHeadline(headline, (problemList ?? []).map((problem) => problem.label), medicineNames)
     if (!review) return undefined
     return [
       review.unlisted.length ? ms.headlineReviewUnlisted.replace("{items}", review.unlisted.join("、")) : undefined,
       review.medicines.length || review.values.length ? ms.headlineReviewMedsValues : undefined,
     ].filter(Boolean).join("；")
-  }, [isPatient, headline, problemList, safetySourceCatalog, ms.headlineReviewUnlisted, ms.headlineReviewMedsValues])
+  }, [isPatient, headline, problemList, problemsFailed, problemsSettled, safetySourceCatalog, ms.headlineReviewUnlisted, ms.headlineReviewMedsValues, ms.headlineReviewNoProblems])
   // Keys the model wrote into an alert's prose ("NSAID use (M8, M11)") read
   // as the records they name, in the sentence's own language.
   const resolveSafetyMentions = useCallback(
@@ -1033,6 +1040,7 @@ export default function MedicalSummaryFeature() {
                   hideQuotes: ms.reportsHideQuotes,
                   othersSummarized: ms.reportsOthers,
                   othersAll: ms.reportsAll,
+                  unreviewed: ms.reportsUnreviewed,
                   unavailable: ms.reportsUnavailable,
                   hiddenPoints: ms.reportsHiddenPoints,
                   unverifiedTag: ms.reportsUnverifiedTag,

@@ -733,6 +733,26 @@ describe('modular summary generation contract', () => {
       .toBeLessThan(content.indexOf('<<<MEDIPRISMA_MODULE:safety>>>'))
   })
 
+  it('asks for nothing the summary no longer has, and contradicts none of its own rules', () => {
+    for (const profile of ['frontier', 'local-small'] as const) {
+      for (const audience of ['medical', 'patient'] as const) {
+        const input = { ...promptInput, harnessProfile: profile, audience }
+        const cards = registeredMedicalSummaryCards(input).filter((card) => card.id !== 'reports')
+        const content = useCase.buildRegisteredCardBatchMessages(input, cards.map((card) => card.buildBatchInstruction(input)))
+          .map((message) => message.content).join('\n')
+        // The cross-facility reconciliation and priorities cards are gone.
+        expect(content).not.toMatch(/Cross-hospital lens|For duplicate medications/)
+        // The fast lane carries no safety module.
+        expect(content).not.toContain('in this same batch')
+        // The headline names no values; the medication-only rule allows medicine-backed problems.
+        expect(content).not.toContain('cite actual values and trends')
+        expect(content).not.toContain('Do not infer a disease from a medicine')
+        // Brand names from a test chart, and a bladder antimuscarinic called a BPH drug.
+        expect(content).not.toMatch(/Harnalidge|Detrusitol/)
+      }
+    }
+  })
+
   it('never asks the patient audience for 影像與病理重點', () => {
     expect(registeredMedicalSummaryCards({ ...promptInput, audience: 'patient' }).map((card) => card.id))
       .toEqual(['overview', 'problems', 'safety'])
