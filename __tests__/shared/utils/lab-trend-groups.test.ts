@@ -16,6 +16,29 @@ function analyze(observations: any[], categoryId = 'chem') {
 }
 
 describe('unit groups for all laboratory trends', () => {
+  it('defaults to the most recent chartable group even when an older group is larger', () => {
+    const old = [1, 2, 3].map(day => ({ ...observation(day, 90 + day, 'µmol/L'), effectiveDateTime: `2020-01-0${day}` }))
+    const recent = [observation(4, 1, 'mg/dL'), observation(5, 1.2, 'mg/dL')]
+    const { groups } = analyze([...old, ...recent, observation(6, 5, 'source label')])
+    expect(groups[0].unit).toBe('mg/dL')
+    expect(groups[0].chartPoints).toHaveLength(2)
+    expect(groups[1].unit).toBe('µmol/L')
+    expect(groups[2].chartable).toBe(false)
+  })
+
+  it.each([['mg/dl', 'mg/dL'], ['ml/min', 'mL/min'], ['U/l', 'U/L']])(
+    'combines liter spelling variants %s and %s without rescaling', (firstUnit, secondUnit) => {
+      const { groups, row } = analyze([observation(1, 1, firstUnit), observation(2, 2, secondUnit)])
+      expect(row?.trendChartable).toBe(true)
+      expect(groups).toHaveLength(1)
+      expect(groups[0].chartPoints.map(point => point.value)).toEqual([1, 2])
+    },
+  )
+
+  it('preserves reference bounds when their own source unit differs only in case', () => {
+    const results = [1, 2].map(day => ({ ...observation(day, 1, 'mg/dL'), referenceRange: [{ low: { value: 0.7, unit: 'mg/dl' }, high: { value: 1.3, unit: 'mg/dl' } }] }))
+    expect(analyze(results).groups[0].sharedReferenceRange).toEqual({ low: 0.7, high: 1.3 })
+  })
   it('opens non-eGFR groups independently and never shares ranges across units', () => {
     const results = [observation(1, 1, 'mg/dL'), observation(2, 1.2, 'mg/dL'), observation(3, 90, 'µmol/L'), observation(4, 95, 'µmol/L')]
       .map((point, index) => ({ ...point, referenceRange: [{ high: { value: index < 2 ? 1.3 : 110, unit: point.valueQuantity.unit } }] }))

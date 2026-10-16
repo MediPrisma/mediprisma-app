@@ -165,6 +165,9 @@ function normalizeRange(
 
   const context = { loincCode: loincCode(observation) }
   const rawPointUnit = conversionUnit(observation)
+  // Preserve the existing comparison for a range attached to its own result.
+  // Cross-result grouping has a separate, case-preserving unit identity.
+  const rangeUnitKey = (unit: string | undefined) => compactUnit(unit).toLowerCase()
 
   const normalizeBound = (
     value: number | undefined,
@@ -174,11 +177,11 @@ function normalizeRange(
     const sourceUnit = boundUnit || rawPointUnit
     const normalized = normalizeAnalyteUnit(testKey, value, sourceUnit, context)
     if (pointWasNormalized) {
-      return normalized && compactUnit(normalized.unit) === compactUnit(pointUnit)
+      return normalized && rangeUnitKey(normalized.unit) === rangeUnitKey(pointUnit)
         ? normalized.value
         : undefined
     }
-    return compactUnit(sourceUnit) === compactUnit(pointUnit) ? value : undefined
+    return rangeUnitKey(sourceUnit) === rangeUnitKey(pointUnit) ? value : undefined
   }
 
   const low = normalizeBound(bounds?.low, range?.low?.unit)
@@ -239,8 +242,8 @@ export function groupLabTrendPoints(points: LabTrendPoint[], categoryId: string)
     }
   }).sort((a, b) => (
     Number(b.chartable) - Number(a.chartable)
+    || (b.chartPoints.at(-1)?.timestamp ?? b.points.at(-1)?.timestamp ?? 0) - (a.chartPoints.at(-1)?.timestamp ?? a.points.at(-1)?.timestamp ?? 0)
     || b.chartPoints.length - a.chartPoints.length
-    || (b.points.at(-1)?.timestamp ?? 0) - (a.points.at(-1)?.timestamp ?? 0)
     || a.key.localeCompare(b.key)
   ))
 }

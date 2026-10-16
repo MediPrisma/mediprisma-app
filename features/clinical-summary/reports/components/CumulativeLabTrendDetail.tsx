@@ -368,6 +368,7 @@ export function CumulativeLabTrendDetail({
   }
 
   const latest = group?.points.at(-1)
+  const newestOverall = series.points.at(-1)
   const previousComparable = chartPoints.length >= 2
     ? chartPoints.at(-2)
     : undefined
@@ -492,6 +493,14 @@ export function CumulativeLabTrendDetail({
           </div>
         )}
       </div>
+
+      {latest && newestOverall && newestOverall.timestamp > latest.timestamp && (
+        <p className="text-xs text-muted-foreground">
+          {zh
+            ? `另有較新結果（${formatDateTimeLabel(newestOverall.effectiveTime, locale)}）位於其他單位／檢體組，可切換查看。`
+            : `A newer result (${formatDateTimeLabel(newestOverall.effectiveTime, locale)}) is in another unit/specimen group; select that group to view it.`}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label={zh ? '趨勢時間範圍' : 'Trend time range'}>
         {([

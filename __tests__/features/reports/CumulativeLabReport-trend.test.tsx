@@ -66,6 +66,7 @@ describe('CumulativeLabReport trend entry', () => {
     const detail = await screen.findByTestId('cumulative-trend-detail')
     expect(detail).toHaveTextContent('其餘單位或血氣檢體分組顯示')
     expect(detail).toHaveTextContent('eGFR(MDRD)')
+    expect(detail).toHaveTextContent('另有較新結果')
     expect(detail).toHaveTextContent('其他單位／檢體組，未納入目前曲線')
     expect(detail).toHaveTextContent('較前次')
     const picker = screen.getByRole('combobox', { name: '繪圖單位／檢體' })
