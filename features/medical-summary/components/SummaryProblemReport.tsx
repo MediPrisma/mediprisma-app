@@ -63,7 +63,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
     finally { clearTimeout(timer); if (active.current === controller) { active.current = null; setSending(false) } }
   }
   return <>
-    <Button variant="outline" size="sm" onClick={prepare} disabled={busy}>回報問題</Button>
+    <Button className="min-h-[44px]" variant="outline" size="sm" onClick={prepare} disabled={busy}>回報問題</Button>
     {!snapshot && message && <span role="status" className="text-sm text-muted-foreground">{message}</span>}
     <Dialog open={Boolean(snapshot)} onOpenChange={open => { if (!open && !sending) setSnapshot(null) }}>
       <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden">
@@ -86,9 +86,9 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={consent} disabled={sending || sent} onChange={e => setConsent(e.target.checked)} className="mt-1" />我已確認內容，並同意將這份病歷相關資料傳送至上述院內收件位置。</label>
         <p role="status" className="break-all text-sm">{message}</p>
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="outline" onClick={download}>下載這份回報</Button>
-          <Button variant="outline" disabled={sending} onClick={() => setSnapshot(null)}>關閉</Button>
-          <Button disabled={!consent || sending || sent} onClick={() => void submit()}>{sending ? '傳送中…' : sent ? '已送出' : '確認送出回報'}</Button>
+          <Button className="min-h-[44px]" variant="outline" onClick={download}>下載這份回報</Button>
+          <Button className="min-h-[44px]" variant="outline" disabled={sending} onClick={() => setSnapshot(null)}>關閉</Button>
+          <Button className="min-h-[44px]" disabled={!consent || sending || sent} onClick={() => void submit()}>{sending ? '傳送中…' : sent ? '已送出' : '確認送出回報'}</Button>
         </div>
       </DialogContent>
     </Dialog>
