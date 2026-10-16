@@ -23,10 +23,21 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
   const [blocked, setBlocked] = useState(false)
   const active = useRef<AbortController | null>(null)
   const preview = useMemo(() => snapshot ? JSON.parse(snapshot.json) as AiReport : null, [snapshot])
+  const currentRuns = [...new Set(records.flatMap(r => r.technical ? [r.technical.run_id] : []))].sort().join(',')
+  const previewRuns = preview ? [...new Set(preview.executions.map(e => e.technical.run_id))].sort().join(',') : ''
+  const earlierRun = Boolean(preview && currentRuns && previewRuns !== currentRuns)
+  const [previousRuns, setPreviousRuns] = useState(currentRuns)
+  if (previousRuns !== currentRuns) {
+    // A regenerated operation must never reopen an older dialog on its own.
+    setPreviousRuns(currentRuns)
+    setReportOpen(false)
+    setConsent(false)
+  }
   useEffect(() => () => { active.current?.abort() }, [])
   if (!records.some(r => r.technical) || !eligible) return null
 
   const prepare = (fresh = false) => {
+    if (sent && earlierRun) fresh = true
     setMessage(sent && !fresh && receiptId ? `回報已收到，編號：${receiptId}` : ''); setConsent(false); setBlocked(false)
     if (snapshot && !fresh) {
       setSnapshot({ ...snapshot, auth: captureCollectorAuth().catch(() => null) })
@@ -106,6 +117,11 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
         </DialogHeader>
         <p className="break-all text-sm">收件位置：{snapshot ? new URL(snapshot.endpoint).origin : ''}</p>
         <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-md border bg-muted/30 p-3 text-sm">
+          {earlierRun && <div role="note" className="space-y-2 rounded-md border bg-background p-3">
+            <p className="font-semibold">這是較早一輪摘要的回報，建立時間：{preview?.created_at}</p>
+            <p>先前收件狀態尚未確認。您可以保留這份內容並重新確認送出，或改用最新一輪紀錄。建立另一份回報可能造成重複收件。</p>
+            <Button variant="outline" className="min-h-[44px] whitespace-normal" disabled={sending} onClick={() => prepare(true)}>建立最新一輪的回報</Button>
+          </div>}
           <p className="font-medium">共 {preview?.executions.length} 次 AI 請求，包含重試紀錄</p>
           {preview?.executions.map(execution => <section key={execution.technical.request_id} className="space-y-2 rounded-md border bg-background p-3">
             <h3 className="font-semibold">第 {execution.technical.attempt} 次請求 · {summaryReportOutcomeLabel(execution)}</h3>
@@ -124,7 +140,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
         <div className="flex flex-wrap justify-end gap-2">
           <Button className="min-h-[44px]" variant="outline" onClick={download}>下載這份回報</Button>
           <Button className="min-h-[44px]" variant="outline" disabled={sending} onClick={close}>關閉</Button>
-          <Button className="min-h-[44px]" disabled={!consent || sending || sent || blocked} onClick={() => void submit()}>{sending ? '傳送中…' : sent ? '已送出' : blocked ? '暫時無法送出' : '確認送出回報'}</Button>
+          <Button className="min-h-[44px]" disabled={!consent || sending || sent || blocked} onClick={() => void submit()}>{sending ? '傳送中…' : sent ? '已送出' : blocked ? '暫時無法送出' : earlierRun ? '確認送出較早的回報' : '確認送出回報'}</Button>
         </div>
       </DialogContent>
     </Dialog>
