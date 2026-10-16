@@ -8,6 +8,16 @@ export interface SummaryDiagnosticContext {
   inspect: (text: string) => SummaryAttempt['parse_state']
 }
 
+/** A malformed complete card must not be hidden by a different missing card. */
+export function inspectSummaryBlocks(text: string, blocks: Array<{
+  complete: (text: string) => boolean
+  parse: (text: string) => unknown
+}>): SummaryAttempt['parse_state'] {
+  const complete = blocks.filter(block => block.complete(text))
+  if (complete.some(block => !block.parse(text))) return 'invalid'
+  return complete.length === blocks.length ? 'valid' : 'incomplete'
+}
+
 /** Correlation only, never authentication. Plain HTTP may lack randomUUID. */
 export function diagnosticUuid(): string {
   try { return crypto.randomUUID() } catch { /* supported fallback below */ }
