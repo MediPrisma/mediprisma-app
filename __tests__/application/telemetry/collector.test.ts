@@ -324,17 +324,17 @@ test('5-second timeout, bounded concurrency and automatic recovery without eight
   jest.mocked(fetch).mockImplementation((_url, options) => new Promise((_resolve, reject) => {
     options?.signal?.addEventListener('abort', () => reject(new Error('timeout')), { once: true })
   }))
-  for (let i = 0; i < 20; i++) start().finish({ outcome: 'ok' })
+  for (let i = 0; i < 20; i++) beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(2)
   expect(collectorStatus().in_flight).toBe(2)
   await jest.advanceTimersByTimeAsync(5000)
   expect(collectorStatus().in_flight).toBe(0)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   await jest.advanceTimersByTimeAsync(5000)
   expect(collectorStatus().cooling_down).toBe(true)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(3)
   await jest.advanceTimersByTimeAsync(60_000)
@@ -342,7 +342,7 @@ test('5-second timeout, bounded concurrency and automatic recovery without eight
   await jest.advanceTimersByTimeAsync(8 * 60 * 60 * 1000)
   expect(collectorStatus().enabled).toBe(true)
   jest.mocked(fetch).mockResolvedValue({ status: 201 } as Response)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(4)
 })
@@ -350,11 +350,11 @@ test('5-second timeout, bounded concurrency and automatic recovery without eight
 test.each([401, 403])('credential rejection %i does not require manual reactivation', async (status) => {
 
   jest.mocked(fetch).mockResolvedValue({ status } as Response)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(collectorStatus().enabled).toBe(true)
   jest.mocked(fetch).mockResolvedValue({ status: 201 } as Response)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(2)
 })
@@ -428,4 +428,30 @@ test('navigation during asynchronous credential retrieval prevents transmission'
   resolveToken(TOKEN)
   await settle()
   expect(fetch).not.toHaveBeenCalled()
+})
+
+test('queues concurrent v7 attempts and sends completed-but-unparseable responses', async () => {
+  const releases: Array<() => void> = []
+  jest.mocked(fetch).mockImplementation(() => new Promise(resolve => releases.push(() => resolve({status:201} as Response))))
+  for (let attempt = 1; attempt <= 4; attempt++) beginCollectorObservation({feature:'summary', modelId:'custom', sampleKind:'request', mode:'stream'}).finish({
+    outcome:'parse_failed', responseComplete:true, phase:'parse', summaryAttempt:{
+      run_id:'10000000-0000-4000-8000-000000000001', request_id:'20000000-0000-4000-8000-'+String(attempt).padStart(12,'0'),
+      attempt, lane:'full', output_chars:12, last_chunk_ms:0, parse_state:'invalid',
+    },
+  })
+  start().finish({outcome:'parse_failed',summaryCards:{succeeded:2,failed:2}})
+  await settle()
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(collectorStatus().queued).toBe(3)
+  releases.splice(0).forEach(release => release()); await settle()
+  expect(fetch).toHaveBeenCalledTimes(4)
+  expect(collectorStatus().queued).toBe(1)
+  releases.splice(0).forEach(release => release()); await settle()
+  expect(fetch).toHaveBeenCalledTimes(5)
+  expect(collectorStatus().queued).toBe(0)
+  const sent = jest.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+  expect(sent.slice(0,4).map(e => e.diagnostics.summary_attempt.attempt)).toEqual([1,2,3,4])
+  expect(sent.slice(0,4).every(e => e.response_complete === true && e.error_class === 'parse_failed')).toBe(true)
+  expect(sent[4].diagnostics.summary_cards).toEqual({succeeded:2,failed:2})
+  releases.splice(0).forEach(release => release()); await settle()
 })

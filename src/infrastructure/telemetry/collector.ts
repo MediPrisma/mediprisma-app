@@ -3,6 +3,7 @@
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
+import { collectorEventV7Schema, type CollectorEventV7, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -29,6 +30,7 @@ type Finish = {
   modelSource?: CollectorEvent['model_source']
   httpStatus?: number
   summaryCards?: SummaryCardCounts
+  summaryAttempt?: SummaryAttempt
 }
 interface Observation { finish: (result: Finish) => void; firstChunk: () => void }
 const NOOP: Observation = Object.freeze({ finish: () => {}, firstChunk: () => {} })
@@ -36,6 +38,9 @@ const REQUEST_TIMEOUT_MS = 5_000
 const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
+// Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
+const pending: Array<{event: CollectorEvent | CollectorEventV7; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
+const MAX_PENDING = 64
 let failures = 0
 let cooldownUntil = 0
 let sent = 0
@@ -51,7 +56,7 @@ export function isCollectorSite(): boolean {
   } catch { return false }
 }
 
-function configuredEndpoint(): string | null {
+export function configuredEndpoint(): string | null {
   try {
     // Public deployment setting contains a URL only, never a token.
     const url = new URL(process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN || 'http://127.0.0.1:8787')
@@ -64,6 +69,8 @@ function configuredEndpoint(): string | null {
 /** Cancel old-page observations, not an opt-in switch. Next operation is automatic. */
 export function cancelCollectorRequests(): void {
   generation++
+  dropped += pending.length
+  pending.length = 0
   failures = 0
   cooldownUntil = 0
   for (const controller of active) controller.abort()
@@ -86,7 +93,7 @@ function browserIdentity() {
 
 export function collectorStatus() {
   return { enabled: Boolean(isCollectorSite() && configuredEndpoint()),
-    in_flight: active.size, sent, dropped, cooling_down: Date.now() < cooldownUntil }
+    in_flight: active.size, queued: pending.length, sent, dropped, cooling_down: Date.now() < cooldownUntil }
 }
 
 const countKeys = { total: 'resource_count', encounters: 'encounter_count', medications: 'med_count',
@@ -142,9 +149,14 @@ export function collectorFeature(label?: string): Start['feature'] {
   return parsed.success ? parsed.data : (label && Object.hasOwn(aliases, label) ? aliases[label] : 'ai_other')
 }
 
-function dispatch(event: CollectorEvent, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
-  if (generation !== owner || !isCollectorSite() || Date.now() < cooldownUntil || active.size >= MAX_IN_FLIGHT) {
+function dispatch(event: CollectorEvent | CollectorEventV7, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
+  if (generation !== owner || !isCollectorSite() || Date.now() < cooldownUntil) {
     dropped++
+    return
+  }
+  if (active.size >= MAX_IN_FLIGHT) {
+    if ((event.schema_version === 7 || (event.feature === 'summary' && event.sample_kind === 'feature')) && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
+    else dropped++
     return
   }
   const controller = new AbortController()
@@ -188,7 +200,12 @@ function dispatch(event: CollectorEvent, owner: number, endpoint: string, auth: 
   void Promise.race([send, aborted]).catch(() => {
     dropped++
     if (generation === owner && ++failures >= 3) cooldownUntil = Date.now() + 60_000
-  }).finally(() => { clearTimeout(timer); controller.signal.removeEventListener('abort', onAbort); active.delete(controller) })
+  }).finally(() => { clearTimeout(timer); controller.signal.removeEventListener('abort', onAbort); active.delete(controller)
+    while (pending.length && active.size < MAX_IN_FLIGHT) {
+      const next = pending.shift()!
+      dispatch(next.event, next.owner, next.endpoint, next.auth)
+    }
+  })
 }
 
 /** Captures exact resource counts and a token estimate bucket at START; rechecks site at END/send. */
@@ -221,8 +238,8 @@ export function beginCollectorObservation(input: Start): Observation {
           ended = true
           if (generation !== owner || !isCollectorSite()) return
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
-          const parsed = collectorEventV5Schema.safeParse({
-            schema_version: 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
+          const parsed = (result.summaryAttempt ? collectorEventV7Schema : collectorEventV5Schema).safeParse({
+            schema_version: result.summaryAttempt ? 7 : 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
             status: result.outcome === 'ok' ? 'completed' : result.outcome === 'aborted' ? 'aborted' : 'error',
@@ -236,6 +253,7 @@ export function beginCollectorObservation(input: Start): Observation {
               ...(firstChunk !== undefined ? { first_chunk_ms: firstChunk } : {}),
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
+              ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
             },
           })

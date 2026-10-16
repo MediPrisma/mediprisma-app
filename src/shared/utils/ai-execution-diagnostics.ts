@@ -1,4 +1,5 @@
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
+import type { SummaryAttempt, AiReport } from '@/src/shared/contracts/collector-event'
 
 export type AiExecutionStatus = 'completed' | 'error' | 'aborted'
 
@@ -18,6 +19,8 @@ export interface AiExecutionDiagnosticRecord {
   hasError: boolean
   errorMessage: string | null
   status: AiExecutionStatus
+  technical?: SummaryAttempt
+  outcome?: AiReport['executions'][number]['outcome']
 }
 
 export interface AiExecutionDiagnosticsExport {
