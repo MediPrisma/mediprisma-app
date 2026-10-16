@@ -49,8 +49,7 @@ function mixedUnitSeries(testKey = 'FT4'): LabTrendSeries {
     },
     points: chartPoints,
     chartPoints,
-    chartable: false,
-    unavailableReason: 'mixed-units',
+    chartable: true,
     mixedUnits: true,
     mixedSpecimens: false,
     referenceRangesVary: true,
@@ -81,7 +80,7 @@ function RememberedWindowHarness() {
 }
 
 describe('CumulativeLabTrendDetail visible-window unit safety', () => {
-  it('draws a recent trend when incompatible units exist only outside the selected range', () => {
+  it('keeps unit groups separate across time windows and switches the group-specific delta', () => {
     const series = mixedUnitSeries()
 
     render(
@@ -95,7 +94,17 @@ describe('CumulativeLabTrendDetail visible-window unit safety', () => {
     expect(screen.queryByText(/所選時間範圍包含無法安全合併的不同單位/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '全部' }))
-    expect(screen.getByText(/所選時間範圍包含無法安全合併的不同單位/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+    expect(screen.getByText('+0.89', { exact: true })).toBeInTheDocument()
+    const picker = screen.getByRole('combobox', { name: '繪圖單位／檢體' })
+    fireEvent.change(picker, { target: { value: JSON.stringify(['pmol/L', '']) } })
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+    expect(screen.getByText('-0.39', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('+0.89', { exact: true })).not.toBeInTheDocument()
+    fireEvent.change(picker, { target: { value: JSON.stringify(['ng/dL', '']) } })
+
+    fireEvent.click(screen.getByRole('button', { name: '6 個月' }))
+    expect(screen.getByText(/至少需要兩筆/)).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: /檢驗趨勢圖/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '1 年' }))

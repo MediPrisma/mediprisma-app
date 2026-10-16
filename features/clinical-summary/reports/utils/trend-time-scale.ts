@@ -61,11 +61,13 @@ export function buildTrendTimeScale(
     const earliest = timestamps[0]
     const startDate = new Date(earliest)
     const endDate = new Date(end)
-    const monthSpan = Math.max(1,
+    let monthSpan = Math.max(1,
       (endDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12
-      + endDate.getUTCMonth() - startDate.getUTCMonth()
-      + (endDate.getUTCDate() >= startDate.getUTCDate() ? 0 : 1),
+      + endDate.getUTCMonth() - startDate.getUTCMonth(),
     )
+    // The first tick must contain the earliest result, including its day and
+    // time. A March 6 → June 10 group needs four calendar months, not three.
+    if (shiftUtcMonths(end, -monthSpan) > earliest) monthSpan += 1
     stepMonths = STANDARD_ALL_WINDOW_STEPS.find((step) => Math.ceil(monthSpan / step) <= 6)
       ?? STANDARD_ALL_WINDOW_STEPS.at(-1)!
     segments = Math.max(1, Math.ceil(monthSpan / stepMonths))

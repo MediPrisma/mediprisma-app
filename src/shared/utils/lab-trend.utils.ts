@@ -2,7 +2,8 @@ import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/displ
 import { isParaproteinTextKey } from '@/src/shared/utils/paraprotein-analytes'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
-import { hasUnrecognizedEgfrUnit, normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
+import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
+import { compactLabTrendUnit as compactUnit, labTrendGroupKey } from '@/src/shared/utils/lab-trend-group.utils'
 import {
   getAuditedReferenceRangeBounds,
   getInterpretationCode,
@@ -54,7 +55,6 @@ export interface LabTrendPoint {
   specimen?: string
   unitInferred: boolean
   plotEligible: boolean
-  plotExclusionReason?: 'unrecognized-unit'
 }
 
 export type LabTrendUnavailableReason =
@@ -65,7 +65,9 @@ export type LabTrendUnavailableReason =
 export interface LabTrendSeries {
   selection: LabTrendSelection
   points: LabTrendPoint[]
+  /** Exact results across all groups. Use groupLabTrendPoints before drawing. */
   chartPoints: LabTrendPoint[]
+  /** At least one unit/specimen group contains enough comparable points. */
   chartable: boolean
   unavailableReason?: LabTrendUnavailableReason
   unit?: string
@@ -105,16 +107,6 @@ function observationEffectiveTime(observation: any): string | undefined {
   return observation?.effectiveDateTime
     || observation?.effectivePeriod?.start
     || observation?.issued
-}
-
-function compactUnit(unit: string | undefined): string {
-  if (!unit) return '__missing__'
-  return unit
-    .normalize('NFKC')
-    .trim()
-    .replace(/\s+/g, '')
-    .replace(/μ/g, 'µ')
-    .toLowerCase() || '__missing__'
 }
 
 /**
@@ -207,6 +199,52 @@ function rangeSignature(range: LabTrendReferenceRange | undefined): string {
   return `${range.low ?? ''}|${range.high ?? ''}`
 }
 
+export interface LabTrendGroup extends LabTrendCompatibility {
+  key: string
+  specimen?: string
+  points: LabTrendPoint[]
+  chartPoints: LabTrendPoint[]
+  sharedReferenceRange?: LabTrendReferenceRange
+  referenceRangesVary: boolean
+}
+
+function summarizeReferenceRanges(chartPoints: LabTrendPoint[]) {
+  const signatures = new Set(chartPoints.map(point => rangeSignature(point.referenceRange)))
+  const allHaveRange = chartPoints.length > 0 && chartPoints.every(point => (
+    point.referenceRange?.low !== undefined || point.referenceRange?.high !== undefined
+  ))
+  const sharedReferenceRange = allHaveRange && signatures.size === 1 ? chartPoints[0]?.referenceRange : undefined
+  return { sharedReferenceRange, referenceRangesVary: chartPoints.some(point => point.referenceRange) && !sharedReferenceRange }
+}
+
+/** Each group is independently charted; no line, delta or range crosses units
+ * or blood-gas specimens. Comparator results remain in their group's history. */
+export function groupLabTrendPoints(points: LabTrendPoint[], categoryId: string): LabTrendGroup[] {
+  const buckets = new Map<string, LabTrendPoint[]>()
+  for (const point of points) {
+    const key = labTrendGroupKey(point.unit, point.specimen, categoryId)
+    const bucket = buckets.get(key) ?? []
+    bucket.push(point)
+    buckets.set(key, bucket)
+  }
+  return [...buckets].map(([key, groupPoints]) => {
+    const sorted = [...groupPoints].sort((a, b) => a.timestamp - b.timestamp || a.effectiveTime.localeCompare(b.effectiveTime) || a.id.localeCompare(b.id))
+    const chartPoints = sorted.filter(point => point.plotEligible)
+    return {
+      key, points: sorted, chartPoints,
+      ...assessLabTrendCompatibility(chartPoints, categoryId),
+      unit: sorted[0]?.unit,
+      specimen: categoryId === 'bloodgas' ? sorted[0]?.specimen : undefined,
+      ...summarizeReferenceRanges(chartPoints),
+    }
+  }).sort((a, b) => (
+    Number(b.chartable) - Number(a.chartable)
+    || b.chartPoints.length - a.chartPoints.length
+    || (b.points.at(-1)?.timestamp ?? 0) - (a.points.at(-1)?.timestamp ?? 0)
+    || a.key.localeCompare(b.key)
+  ))
+}
+
 function sourceMatchesSelection(
   observation: any,
   selection: LabTrendSelection,
@@ -267,7 +305,6 @@ export function buildLabTrendSeries(
     }
 
     const rawUnit = conversionUnit(observation)
-    const unrecognizedUnit = hasUnrecognizedEgfrUnit(selection.testKey, rawUnit)
     const normalized = normalizeAnalyteUnit(
       selection.testKey,
       rawValue,
@@ -314,18 +351,8 @@ export function buildLabTrendSeries(
       specimen,
       unitInferred: isInferredObservationUnit(observation),
       plotEligible: !comparator,
-      ...(unrecognizedUnit ? { plotExclusionReason: 'unrecognized-unit' as const } : {}),
     })
   })
-
-  // Only prefer recognized units when there is an eligible recognized point.
-  // Otherwise preserve the existing compatibility rule for the entire series;
-  // this fix must not hide an already-available uniform-unit trend.
-  const hasRecognizedPoint = points.some((point) => point.plotEligible && !point.plotExclusionReason)
-  for (const point of points) {
-    if (hasRecognizedPoint && point.plotExclusionReason) point.plotEligible = false
-    else if (!hasRecognizedPoint) delete point.plotExclusionReason
-  }
 
   points.sort((left, right) => (
     left.timestamp - right.timestamp
@@ -335,16 +362,11 @@ export function buildLabTrendSeries(
 
   const chartPoints = points.filter((point) => point.plotEligible)
   const compatibility = assessLabTrendCompatibility(chartPoints, selection.categoryId)
-
-  const rangeSignatures = new Set(chartPoints.map((point) => rangeSignature(point.referenceRange)))
-  const allHaveNumericRange = chartPoints.length > 0 && chartPoints.every((point) => (
-    point.referenceRange?.low !== undefined || point.referenceRange?.high !== undefined
-  ))
-  const sharedReferenceRange = allHaveNumericRange && rangeSignatures.size === 1
-    ? chartPoints[0]?.referenceRange
-    : undefined
-  const hasAnyRange = chartPoints.some((point) => point.referenceRange)
-  const referenceRangesVary = hasAnyRange && !sharedReferenceRange
+  const groups = groupLabTrendPoints(points, selection.categoryId)
+  const chartable = groups.some(group => group.chartable)
+  const { sharedReferenceRange, referenceRangesVary } = summarizeReferenceRanges(
+    compatibility.mixedUnits || compatibility.mixedSpecimens ? [] : chartPoints,
+  )
 
   const dayCounts = new Map<string, number>()
   for (const point of points) {
@@ -357,8 +379,8 @@ export function buildLabTrendSeries(
     selection,
     points,
     chartPoints,
-    chartable: compatibility.chartable,
-    unavailableReason: compatibility.unavailableReason,
+    chartable,
+    unavailableReason: chartable ? undefined : compatibility.unavailableReason,
     unit: compatibility.unit,
     mixedUnits: compatibility.mixedUnits,
     mixedSpecimens: compatibility.mixedSpecimens,

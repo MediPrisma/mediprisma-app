@@ -1,6 +1,7 @@
 import {
   assessLabTrendCompatibility,
   buildLabTrendSeries,
+  groupLabTrendPoints,
   type LabTrendSelection,
 } from '@/src/shared/utils/lab-trend.utils'
 import { buildLabPivots, getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
@@ -27,7 +28,7 @@ describe('buildLabTrendSeries', () => {
       const series = buildLabTrendSeries(observations, selection)
       expect(series.chartable).toBe(true)
       expect(series.chartPoints).toHaveLength(3)
-      expect(series.points.every(point => point.plotExclusionReason === undefined)).toBe(true)
+      expect(groupLabTrendPoints(series.points, selection.categoryId)).toHaveLength(1)
       expect(series.unit).toBe(unit)
       expect(buildLabPivots(observations).chem.rows.find(row => row.testKey === selection.testKey)?.trendChartable).toBe(true)
       const mixed = [observations[0], { ...observations[1], valueQuantity: { value: 68, unit: 'different unknown unit' } }]
@@ -46,9 +47,11 @@ describe('buildLabTrendSeries', () => {
       const selection = selectionFor(observations[0])
       const series = buildLabTrendSeries(observations, selection)
       expect(series.chartable).toBe(true)
-      expect(series.chartPoints.map(point => point.value)).toEqual([70, 65])
+      const groups = groupLabTrendPoints(series.points, selection.categoryId)
+      expect(groups[0].chartPoints.map(point => point.value)).toEqual([70, 65])
+      expect(groups[1]).toMatchObject({ unit, chartable: false })
       expect(series.points).toHaveLength(3)
-      expect(series.points[2]).toMatchObject({ value: 60, rawUnit: unit, plotEligible: false, plotExclusionReason: 'unrecognized-unit' })
+      expect(series.points[2]).toMatchObject({ value: 60, rawUnit: unit, plotEligible: true })
       expect(buildLabPivots(observations).chem.rows.find(row => row.testKey === selection.testKey)?.trendChartable).toBe(true)
       const insufficient = observations.slice(1)
       expect(buildLabTrendSeries(insufficient, selection).chartable).toBe(false)

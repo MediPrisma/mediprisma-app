@@ -3,6 +3,14 @@ import { buildTrendTimeScale } from '@/features/clinical-summary/reports/utils/t
 const point = (iso: string) => ({ timestamp: Date.parse(iso) })
 
 describe('fixed lab trend time scale', () => {
+  it.each([
+    ['2024-03-06T00:00:00Z', '2024-06-10T00:00:00Z'],
+    ['2024-03-10T00:00:00Z', '2024-06-10T12:00:00Z'],
+  ])('keeps both endpoints in an all-history group from %s to %s', (start, end) => {
+    const scale = buildTrendTimeScale([point(start), point(end)], 'all')
+    expect(scale.domain[0]).toBeLessThanOrEqual(Date.parse(start))
+    expect(scale.domain[1]).toBe(Date.parse(end))
+  })
   it('divides a six-month window into six calendar-month intervals', () => {
     const points = [
       point('2026-05-12T00:00:00.000Z'),
