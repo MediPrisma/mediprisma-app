@@ -845,7 +845,6 @@ export default function MedicalSummaryFeature() {
                 </>
               ) : null}
               <div className="flex justify-end border-t pt-1">
-                <SummaryProblemReport key={summaryGenerationSlotKey} records={visibleAiDiagnostics} busy={isBusy} />
                 <AiDiagnosticsButton
                   hasRecords={visibleAiDiagnostics.length > 0}
                   availableLabel={ms.exportAiDiagnosticsTitle}
@@ -861,6 +860,9 @@ export default function MedicalSummaryFeature() {
         </div>
       </div>
 
+      <div className="flex justify-end">
+        <SummaryProblemReport key={summaryGenerationSlotKey} records={visibleAiDiagnostics} busy={isBusy} />
+      </div>
         <TabsContent value="standard" forceMount className="mt-0 space-y-2">
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">{ms.emptyNoPatient}</div>

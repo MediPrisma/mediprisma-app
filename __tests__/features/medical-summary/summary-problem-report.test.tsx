@@ -37,7 +37,7 @@ it('retains the frozen report after failed upload and reuses the same submission
   jest.mocked(fetch).mockClear()
   jest.mocked(fetch).mockResolvedValueOnce({status:503} as Response).mockResolvedValueOnce({status:201,json:async()=>({success:true,reportId:'30000000-0000-4000-8000-000000000001'})} as Response)
   render(<SummaryProblemReport records={records} busy={false}/>)
-  fireEvent.click(screen.getByRole('button',{name:'回報問題',exact:true}))
+  fireEvent.click(screen.getByRole('button',{name:'回報問題'}))
   fireEvent.click(screen.getByRole('checkbox'))
   fireEvent.click(screen.getByRole('button',{name:'確認送出回報'}))
   await screen.findByText(/尚未確認收件成功/)
