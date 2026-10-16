@@ -55,6 +55,20 @@ function Providers({ children, detailHost = false }: { children: ReactNode; deta
 }
 
 describe('CumulativeLabReport trend entry', () => {
+  it('opens eGFR despite a formula in the unit field and explains the retained excluded result', async () => {
+    const renal = ['mL/min/1.73m2', 'mL/min/1.73m²', 'eGFR(MDRD)'].map((unit, index) => ({
+      id: `egfr-${index}`, status: 'final', code: { text: 'eGFR' },
+      effectiveDateTime: `2026-01-0${index + 1}`,
+      valueQuantity: { value: 70 - index * 5, unit },
+    }))
+    render(<Providers detailHost><CumulativeLabReport observations={renal} activeCategoryId="chem" /></Providers>)
+    fireEvent.click(screen.getByRole('button', { name: /查看 eGFR 趨勢/ }))
+    const detail = await screen.findByTestId('cumulative-trend-detail')
+    expect(detail).toHaveTextContent('1 筆 eGFR 結果的單位無法確認')
+    expect(detail).toHaveTextContent('eGFR(MDRD)')
+    expect(detail).toHaveTextContent('單位無法確認，未納入曲線')
+    expect(detail).not.toHaveTextContent('較前次')
+  })
   beforeEach(() => {
     mockBuildLabTrendSeries.mockClear()
   })

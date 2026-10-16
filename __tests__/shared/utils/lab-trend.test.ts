@@ -3,7 +3,7 @@ import {
   buildLabTrendSeries,
   type LabTrendSelection,
 } from '@/src/shared/utils/lab-trend.utils'
-import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
+import { buildLabPivots, getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
 
 function selectionFor(observation: any, categoryId = 'chem'): LabTrendSelection {
   const identity = getLabPivotTestIdentity(observation, categoryId, 'standardized')
@@ -17,6 +17,26 @@ function selectionFor(observation: any, categoryId = 'chem'): LabTrendSelection 
 }
 
 describe('buildLabTrendSeries', () => {
+  it.each(['eGFR(MDRD)', 'eGFR(CKD-EPI,新)', 'mL/min', '%'])(
+    'retains an eGFR result with unit %s in history while charting comparable results', (unit) => {
+      const make = (day: string, value: number, unit: string) => ({
+        id: `egfr-${day}`, status: 'final', code: { text: 'eGFR' },
+        effectiveDateTime: `2026-01-${day}`,
+        valueQuantity: { value, unit },
+      })
+      const observations = [make('01', 70, 'mL/min/1.73m2'), make('02', 65, 'mL/min/1.73m²'), make('03', 60, unit)]
+      const selection = selectionFor(observations[0])
+      const series = buildLabTrendSeries(observations, selection)
+      expect(series.chartable).toBe(true)
+      expect(series.chartPoints.map(point => point.value)).toEqual([70, 65])
+      expect(series.points).toHaveLength(3)
+      expect(series.points[2]).toMatchObject({ value: 60, rawUnit: unit, plotEligible: false, plotExclusionReason: 'unrecognized-unit' })
+      expect(buildLabPivots(observations).chem.rows.find(row => row.testKey === selection.testKey)?.trendChartable).toBe(true)
+      const insufficient = observations.slice(1)
+      expect(buildLabTrendSeries(insufficient, selection).chartable).toBe(false)
+      expect(buildLabPivots(insufficient).chem.rows.find(row => row.testKey === selection.testKey)?.trendChartable).toBe(false)
+    },
+  )
   it('assesses unit compatibility from the selected points instead of all history', () => {
     const fullHistory = assessLabTrendCompatibility([
       { unit: 'pmol/L' },

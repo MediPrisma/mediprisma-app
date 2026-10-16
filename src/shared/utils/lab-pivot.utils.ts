@@ -34,7 +34,7 @@ import {
   getOriginalAnalyteDisplayForObs,
   type AnalyteNameMode,
 } from '@voho0000/clinical-lab-normalization/display'
-import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
+import { hasUnrecognizedEgfrUnit, normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
 import {
@@ -1015,6 +1015,7 @@ export function buildLabPivots(
         && Number.isFinite(trendTimestamp)
         && !INVALID_TREND_STATUSES.has(normalizedStatus)
         && !obs.valueQuantity?.comparator
+        && !hasUnrecognizedEgfrUnit(testKey, trendUnit)
       if (hasTrendPoint) {
         const stats = trendAvailability.get(mapKey) ?? {
           pointCount: 0,

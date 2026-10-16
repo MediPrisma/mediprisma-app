@@ -81,6 +81,15 @@ function egfrScale(rawUnit: string | undefined | null): number | null {
   return aliasScale(rawUnit, EGFR_ALIASES)
 }
 
+/** Keep unrecognized eGFR units in history, without letting them suppress
+ * comparable results or silently assigning them a clinical unit. Missing
+ * units retain the existing approved eGFR default policy. */
+export function hasUnrecognizedEgfrUnit(testKey: string, rawUnit: string | undefined | null): boolean {
+  return ['EGFR', 'EGFR(M)', 'EGFR(EPI)', 'EGFR(PED)'].includes(testKey.toUpperCase())
+    && !!rawUnit?.trim()
+    && egfrScale(rawUnit) === null
+}
+
 /**
  * Scale of a count-per-microlitre unit relative to "/µL" = 1. Returns null for
  * anything that is NOT a recognised count-per-µL unit. Handles the spelling /

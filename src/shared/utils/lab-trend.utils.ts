@@ -2,7 +2,7 @@ import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/displ
 import { isParaproteinTextKey } from '@/src/shared/utils/paraprotein-analytes'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getLabPivotTestIdentity } from '@/src/shared/utils/lab-pivot.utils'
-import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
+import { hasUnrecognizedEgfrUnit, normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import {
   getAuditedReferenceRangeBounds,
   getInterpretationCode,
@@ -54,6 +54,7 @@ export interface LabTrendPoint {
   specimen?: string
   unitInferred: boolean
   plotEligible: boolean
+  plotExclusionReason?: 'unrecognized-unit'
 }
 
 export type LabTrendUnavailableReason =
@@ -266,6 +267,7 @@ export function buildLabTrendSeries(
     }
 
     const rawUnit = conversionUnit(observation)
+    const unrecognizedUnit = hasUnrecognizedEgfrUnit(selection.testKey, rawUnit)
     const normalized = normalizeAnalyteUnit(
       selection.testKey,
       rawValue,
@@ -311,7 +313,8 @@ export function buildLabTrendSeries(
       performer,
       specimen,
       unitInferred: isInferredObservationUnit(observation),
-      plotEligible: !comparator,
+      plotEligible: !comparator && !unrecognizedUnit,
+      ...(unrecognizedUnit ? { plotExclusionReason: 'unrecognized-unit' as const } : {}),
     })
   })
 

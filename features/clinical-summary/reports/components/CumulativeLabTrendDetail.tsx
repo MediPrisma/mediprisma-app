@@ -353,6 +353,8 @@ export function CumulativeLabTrendDetail({
 }: CumulativeLabTrendDetailProps) {
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
+  const unrecognizedUnitCount = series.points.filter((point) => point.plotExclusionReason === 'unrecognized-unit').length
+  const unitExclusionLabel = zh ? '單位無法確認，未納入曲線' : 'Unit unrecognized; excluded from chart'
   const [window, setWindow] = useState<TrendWindow>(() => initialWindow ?? defaultWindow(series))
   const selectWindow = (value: TrendWindow) => {
     setWindow(value)
@@ -491,6 +493,13 @@ export function CumulativeLabTrendDetail({
         ))}
       </div>
 
+      {unrecognizedUnitCount > 0 && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {zh
+            ? `${unrecognizedUnitCount} 筆 eGFR 結果的單位無法確認，未納入曲線；原始數值與單位保留於下方紀錄。`
+            : `${unrecognizedUnitCount} eGFR results have unrecognized units and are excluded from the chart; original values and units remain in the history below.`}
+        </p>
+      )}
       <div className="overflow-hidden rounded-xl border bg-card">
         {visibleCompatibility.chartable ? (
           <TrendChart
@@ -540,6 +549,7 @@ export function CumulativeLabTrendDetail({
                 <span>{rangeLabel(point.referenceRange, point.unit) || '—'}</span>
                 <span>{zh ? '狀態' : 'Status'}</span>
                 <span>{statusLabel(point.status, zh) || '—'}{point.corrected ? ` · ${zh ? '修訂' : 'revised'}` : ''}</span>
+                {point.plotExclusionReason && <><span>{zh ? '趨勢' : 'Trend'}</span><span>{unitExclusionLabel}</span></>}
                 {point.performer && <><span>{zh ? '來源' : 'Source'}</span><span>{point.performer}</span></>}
               </div>
             </article>
@@ -570,6 +580,7 @@ export function CumulativeLabTrendDetail({
                   </td>
                   <td className="px-2.5 py-2 text-muted-foreground">
                     <div>{statusLabel(point.status, zh) || '—'}{point.corrected ? ` · ${zh ? '修訂' : 'revised'}` : ''}</div>
+                    {point.plotExclusionReason && <div>{unitExclusionLabel}</div>}
                     {point.performer && <div className="mt-0.5 max-w-56 truncate" title={point.performer}>{point.performer}</div>}
                   </td>
                 </tr>
