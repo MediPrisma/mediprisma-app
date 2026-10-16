@@ -44,7 +44,7 @@ export function labClaimConflicts(label: string, observations: readonly Observat
 // clinical history. Fallback receives only the quote's adjacent pathology specimen descriptor. Ambiguity stays
 // in Other; no keyword decides a diagnosis or removes a finding.
 const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
-  ['brain', /\b(?:brain|cerebr\w*|cerebell\w*|basal gangli\w*)\b|腦/iu],
+  ['brain', /\b(?:brain|cerebr\w*|cerebell\w*|basal gangli\w*)\b|(?<!電)腦/iu],
   ['head-neck', /\b(?:thyroid|pharyn\w*|laryn\w*|parotid|maxillary sinus|paranasal sinus\w*)\b|甲狀腺|咽|喉|腮腺|鼻竇/iu],
   ['chest-lung', /\b(?:lungs?|mediastin\w*|pleur\w*|bronch\w*|atelectasis)\b|肺|胸膜/iu],
   ['heart', /\b(?:heart|cardiac|coronary|(?:left|right) ventric\w*|cardiomegaly|mitral|tricuspid|pericardi\w*)\b|心臟|心室|二尖瓣|三尖瓣|冠狀動脈/iu],

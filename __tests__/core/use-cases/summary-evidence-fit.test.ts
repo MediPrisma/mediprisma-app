@@ -134,6 +134,8 @@ test.each([
   ['chest-lung', 'Lymphangitic carcinomatosis'],
   ['abdomen-other', 'Polyp at hepatic flexure'],
   ['abdomen-other', '腎上腺結節'],
+  ['abdomen-other', '腹部電腦斷層：腹水'],
+  ['brain', '腦部萎縮'],
 ])('does not confuse morphological adjectives with organ identity: %s / %s', (organ, quote) => {
   expect(reportOrganFromQuotes(organ as any, [quote])).toBe(organ)
 })
