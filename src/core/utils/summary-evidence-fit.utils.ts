@@ -49,14 +49,14 @@ const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
   ['chest-lung', /\b(?:lungs?|mediastin\w*|pleur\w*|bronch\w*|atelectasis)\b|肺|胸膜/iu],
   ['heart', /\b(?:heart|cardiac|coronary|(?:left|right) ventric\w*|cardiomegaly|mitral|tricuspid|pericardi\w*)\b|心臟|心室|二尖瓣|三尖瓣|冠狀動脈/iu],
   ['breast', /\b(?:breast|mammary)\b|乳房|乳腺/iu],
-  ['abdomen-liver-biliary', /\b(?:liver|hepatic|gall[\s-]?bladder|biliary|bile duct)\b|肝|膽囊|膽管/iu],
+  ['abdomen-liver-biliary', /\b(?:liver|hepatic(?!\s+flexure)|gall[\s-]?bladder|biliary|bile duct)\b|肝|膽囊|膽管/iu],
   ['abdomen-other', /\b(?:stomach|gastric|bowel|colon|pancrea\w*|spleen|splenic|hiatal)\b|胃|腸|胰|脾/iu],
-  ['kidney-urinary', /\b(?:kidney|renal|ureter\w*|(?<!gall[\s-]?)bladder)\b|腎|輸尿管|膀胱/iu],
+  ['kidney-urinary', /\b(?:kidney|renal|ureter\w*|(?<!gall[\s-]?)bladder)\b|腎(?!上腺)|輸尿管|膀胱/iu],
   ['gynecologic', /\b(?:uter\w*|endometr\w*|ovary|ovarian|adnexa\w*|vagina\w*)\b|子宮|卵巢|陰道/iu],
   ['prostate', /\bprostat\w*\b|攝護腺|前列腺/iu],
   ['musculoskeletal', /\b(?:bone|femur|femoral|tibia\w*|humer\w*|vertebr\w*|spine|spinal|spondylosis|knee|hip|joint|osteoarthr\w*)\b|股骨|肱骨|脛骨|脊椎|骨折|骨骼|關節/iu],
   ['vascular', /\b(?:aorta|artery|arteries|veins?)\b|動脈(?!期)|靜脈(?!期)/iu],
-  ['hematologic-lymph', /\b(?:lymph\w*|marrow)\b|淋巴|骨髓/iu],
+  ['hematologic-lymph', /\b(?:lymph(?:\s+nodes?|adenopathy|oma)s?|marrow)\b|淋巴結|骨髓/iu],
 ]
 
 export function reportOrganFromQuotes(proposed: ReportOrgan, quotes: readonly string[], sourceNarratives: readonly string[] = []): ReportOrgan {

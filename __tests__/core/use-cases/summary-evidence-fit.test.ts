@@ -126,3 +126,14 @@ test('numbered specimen parsing does not change report excerpt or prompt visibil
   expect(pathologySpecimenDescriptors(text, ['Leiomyoma'])).toEqual(['Uterus, myometrium'])
   expect(pathologySpecimenDescriptors(text, ['Fracture'])).toEqual(['Bone, femoral head'])
 })
+
+test.each([
+  ['breast', 'Lymphovascular invasion: present'],
+  ['abdomen-other', 'Lymphocytic colitis'],
+  ['abdomen-other', 'Chronic lymphocytic gastritis'],
+  ['chest-lung', 'Lymphangitic carcinomatosis'],
+  ['abdomen-other', 'Polyp at hepatic flexure'],
+  ['abdomen-other', '腎上腺結節'],
+])('does not confuse morphological adjectives with organ identity: %s / %s', (organ, quote) => {
+  expect(reportOrganFromQuotes(organ as any, [quote])).toBe(organ)
+})
