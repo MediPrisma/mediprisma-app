@@ -59,6 +59,7 @@ function catalogSignatureText(catalog: SummarySourceCatalogEntry[]): string {
       entry.date ?? '',
       entry.organization ?? '',
       entry.encounterClass ?? '',
+      entry.observationFacts ?? '',
     ].join('\u001f'))
     .join('\u001e')
 }
