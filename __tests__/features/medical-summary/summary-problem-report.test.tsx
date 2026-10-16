@@ -1,0 +1,34 @@
+import { TextEncoder } from 'util'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { SummaryProblemReport } from '@/features/medical-summary/components/SummaryProblemReport'
+import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
+Object.assign(globalThis, { TextEncoder })
+jest.mock('@/src/infrastructure/telemetry/collector', () => ({
+  isCollectorSite: () => true, configuredEndpoint: () => 'https://collector.example/collector/v1/events',
+}))
+jest.mock('@/src/infrastructure/telemetry/collector-auth', () => ({
+  captureCollectorAuth: async () => ({ getToken: async () => 'synthetic-token' }),
+}))
+const records: AiExecutionDiagnosticRecord[] = [1, 2, 3].map(attempt => ({
+  version: 1, id: String(attempt), feature: 'medical-summary', operationKey: 'private-cache-key', transport: 'stream', modelName: 'custom', modelId: 'custom', timestamp: '2026-10-16T00:00:00.000Z',
+  prompt: 'SYNTHETIC PROMPT', inputData: {}, outputData: 'SYNTHETIC OUTPUT', hasError: true, errorMessage: null, status: 'aborted',
+  technical: { run_id: '10000000-0000-4000-8000-000000000001', request_id: `20000000-0000-4000-8000-${String(attempt).padStart(12, '0')}`, attempt, lane: 'full', output_chars: 16, last_chunk_ms: 30, parse_state: 'incomplete' },
+}))
+it('never uploads on failure or preview; sends the frozen preview only after explicit confirmation', async () => {
+  jest.mocked(fetch).mockClear()
+  jest.mocked(fetch).mockResolvedValue({ status: 201, json: async () => ({ success: true, reportId: '30000000-0000-4000-8000-000000000001' }) } as Response)
+  const view = render(<SummaryProblemReport records={records} busy={false} />)
+  expect(fetch).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: '回報問題' }))
+  const preview = screen.getByLabelText('完整回報預覽').textContent
+  expect(screen.getByRole('button', { name: '確認送出回報' })).toBeDisabled()
+  expect(fetch).not.toHaveBeenCalled()
+  view.rerender(<SummaryProblemReport records={[...records, { ...records[0], prompt: 'LATER DATA' }]} busy={false} />)
+  fireEvent.click(screen.getByRole('checkbox'))
+  fireEvent.click(screen.getByRole('button', { name: '確認送出回報' }))
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+  expect(jest.mocked(fetch).mock.calls[0][1]?.body).toBe(preview)
+  expect(preview).not.toContain('private-cache-key')
+  expect(JSON.parse(preview!).executions).toHaveLength(3)
+  await screen.findByText(/回報已收到/)
+})

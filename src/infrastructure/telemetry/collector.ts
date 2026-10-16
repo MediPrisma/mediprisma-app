@@ -3,6 +3,7 @@
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
+import { collectorEventV7Schema, type CollectorEventV7, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -29,6 +30,7 @@ type Finish = {
   modelSource?: CollectorEvent['model_source']
   httpStatus?: number
   summaryCards?: SummaryCardCounts
+  summaryAttempt?: SummaryAttempt
 }
 interface Observation { finish: (result: Finish) => void; firstChunk: () => void }
 const NOOP: Observation = Object.freeze({ finish: () => {}, firstChunk: () => {} })
@@ -51,7 +53,7 @@ export function isCollectorSite(): boolean {
   } catch { return false }
 }
 
-function configuredEndpoint(): string | null {
+export function configuredEndpoint(): string | null {
   try {
     // Public deployment setting contains a URL only, never a token.
     const url = new URL(process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN || 'http://127.0.0.1:8787')
@@ -142,7 +144,7 @@ export function collectorFeature(label?: string): Start['feature'] {
   return parsed.success ? parsed.data : (label && Object.hasOwn(aliases, label) ? aliases[label] : 'ai_other')
 }
 
-function dispatch(event: CollectorEvent, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
+function dispatch(event: CollectorEvent | CollectorEventV7, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
   if (generation !== owner || !isCollectorSite() || Date.now() < cooldownUntil || active.size >= MAX_IN_FLIGHT) {
     dropped++
     return
@@ -221,8 +223,8 @@ export function beginCollectorObservation(input: Start): Observation {
           ended = true
           if (generation !== owner || !isCollectorSite()) return
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
-          const parsed = collectorEventV5Schema.safeParse({
-            schema_version: 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
+          const parsed = (result.summaryAttempt ? collectorEventV7Schema : collectorEventV5Schema).safeParse({
+            schema_version: result.summaryAttempt ? 7 : 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
             status: result.outcome === 'ok' ? 'completed' : result.outcome === 'aborted' ? 'aborted' : 'error',
@@ -236,6 +238,7 @@ export function beginCollectorObservation(input: Start): Observation {
               ...(firstChunk !== undefined ? { first_chunk_ms: firstChunk } : {}),
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
+              ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
             },
           })

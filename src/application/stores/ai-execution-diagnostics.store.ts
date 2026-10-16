@@ -21,9 +21,17 @@ interface AiExecutionDiagnosticsState {
 }
 
 // Diagnostics may contain the complete clinical prompt and model output. Keep
-// only the two newest requests in volatile tab memory; this store deliberately
+// complete summary runs in volatile tab memory; this store deliberately
 // has no persistence middleware and never writes diagnostics to web storage.
 const MAX_SESSION_RECORDS = 2
+
+export function retainDiagnostics(records: AiExecutionDiagnosticRecord[]) {
+  // Evict whole runs, never individual retries. Unrelated AI requests cannot
+  // overwrite a failed summary's history. Patient/page cleanup still applies.
+  const runs = [...new Set(records.map(r => r.technical?.run_id).filter(Boolean))].slice(-3)
+  const other = records.filter(r => !r.technical).slice(-MAX_SESSION_RECORDS)
+  return records.filter(r => r.technical ? runs.includes(r.technical.run_id) : other.includes(r))
+}
 
 /**
  * Session-only AI diagnostics. Clinical inputs are deliberately never
@@ -32,7 +40,7 @@ const MAX_SESSION_RECORDS = 2
 export const useAiExecutionDiagnosticsStore = create<AiExecutionDiagnosticsState>()((set) => ({
   records: [],
   addRecord: (record) => set((state) => ({
-    records: [...state.records, record].slice(-MAX_SESSION_RECORDS),
+    records: retainDiagnostics([...state.records, record]),
   })),
   markLatestOperationFeatureError: (operationKey, feature, errorMessage) => set((state) => {
     let index = -1

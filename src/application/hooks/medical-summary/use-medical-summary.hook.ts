@@ -1,3 +1,6 @@
+'use client'
+
+import type { SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
 // Medical Summary hook — thin adapter over the shared AI slot-generation
 // engine (src/application/hooks/ai-generation/): runs the structured
 // generation on the selected summary model, verifies citations against the
@@ -8,7 +11,6 @@
 // runs once after cache/auth hydration. Changing the picker restores that
 // model's completed version when available; otherwise the current version
 // remains visible until an explicit regeneration succeeds.
-'use client'
 
 import { detectClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { createModelExecution, modelExecutionLabel, mergeModelExecutions } from '@/src/shared/utils/ai-model-execution'
@@ -284,6 +286,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const runStartedAt = nowMs()
     let firstCardMs: number | undefined
     const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
+    const previousAttempts = retryRequest ? useAiExecutionDiagnosticsStore.getState().records
+      .filter(r => r.operationKey === ctx.operationKey && r.technical).map(r => r.technical!) : []
+    const diagnosticRunId = previousAttempts.at(-1)?.run_id ?? crypto.randomUUID()
+    let diagnosticAttempt = Math.max(0, ...previousAttempts.map(r => r.attempt))
+
     moduleRetryRequestsRef.current.delete(ctx.operationKey)
     if (!retryRequest) {
       useAiExecutionDiagnosticsStore.getState().clearOperationFeature(ctx.operationKey, 'medical-summary')
@@ -440,6 +447,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
      */
     const streamModelRequest = (request: {
       laneId: string
+      inspect: SummaryDiagnosticContext['inspect']
       clinicalContext: string
       buildMessages: (fittedClinicalContext: string) => AiMessage[]
       hiddenReasoning?: 'off'
@@ -468,6 +476,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             modelId: ctx.modelId,
             operationKey: ctx.operationKey,
             diagnosticFeature: 'medical-summary',
+            summaryDiagnostics: {
+              runId: diagnosticRunId, attempt: ++diagnosticAttempt,
+              lane: request.laneId as SummaryDiagnosticContext['lane'], inspect: request.inspect,
+            },
             requestedModelId: ctx.requestedModelId,
             onModelExecution: request.onModelExecution,
             throwOnAbort: true,
@@ -561,6 +573,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       ) => {
         const outcome = await streamModelRequest({
           laneId,
+          inspect: (text) => cards.every(card => card.hasCompleteBatchBlock(text))
+            ? cards.every(card => parseLaneBatch(card, text)) ? 'valid' : 'invalid'
+            : 'incomplete',
           clinicalContext: transportClinicalContext,
           buildMessages: (fittedClinicalContext) => {
             const fittedPromptInput = {
@@ -803,6 +818,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         let completePoints = 0
         const { value, clinicalContext: sentReportsText } = await streamModelRequest({
           laneId: 'reports',
+          inspect: (text) => card.hasCompleteBatchBlock(text)
+            ? card.parseBatch(text, ctx.catalog) ? 'valid' : 'invalid' : 'incomplete',
           clinicalContext: digest.promptText,
           buildMessages: (reportsText) => generateMedicalSummaryUseCase.buildReportHighlightMessages({
             locale: outputLocale,
