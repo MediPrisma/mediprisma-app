@@ -1,6 +1,6 @@
 'use client'
 
-import type { SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
+import { diagnosticUuid, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
 // Medical Summary hook — thin adapter over the shared AI slot-generation
 // engine (src/application/hooks/ai-generation/): runs the structured
 // generation on the selected summary model, verifies citations against the
@@ -288,7 +288,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
     const previousAttempts = retryRequest ? useAiExecutionDiagnosticsStore.getState().records
       .filter(r => r.operationKey === ctx.operationKey && r.technical).map(r => r.technical!) : []
-    const diagnosticRunId = previousAttempts.at(-1)?.run_id ?? crypto.randomUUID()
+    const diagnosticRunId = previousAttempts.at(-1)?.run_id ?? diagnosticUuid()
     let diagnosticAttempt = Math.max(0, ...previousAttempts.map(r => r.attempt))
 
     moduleRetryRequestsRef.current.delete(ctx.operationKey)
@@ -446,7 +446,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
      * reasoning is turned off.
      */
     const streamModelRequest = (request: {
-      laneId: string
+      laneId: SummaryDiagnosticContext['lane']
       inspect: SummaryDiagnosticContext['inspect']
       clinicalContext: string
       buildMessages: (fittedClinicalContext: string) => AiMessage[]
@@ -478,7 +478,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             diagnosticFeature: 'medical-summary',
             summaryDiagnostics: {
               runId: diagnosticRunId, attempt: ++diagnosticAttempt,
-              lane: request.laneId as SummaryDiagnosticContext['lane'], inspect: request.inspect,
+              lane: request.laneId, inspect: request.inspect,
             },
             requestedModelId: ctx.requestedModelId,
             onModelExecution: request.onModelExecution,
@@ -538,7 +538,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
      * is recorded per card.
      */
     const runLane = async (
-      laneId: string,
+      laneId: SummaryDiagnosticContext['lane'],
       laneCards: MedicalSummaryCardDefinition[],
       laneInput: GenerateMedicalSummaryInput,
       /** Fast lane only. See the lane list below for why. */
@@ -748,7 +748,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       )
     }
     const lanes: Array<{
-      id: string
+      id: SummaryDiagnosticContext['lane']
       cards: MedicalSummaryCardDefinition[]
       input: GenerateMedicalSummaryInput
       hiddenReasoning?: 'off'

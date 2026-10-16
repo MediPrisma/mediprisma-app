@@ -1,5 +1,5 @@
 import { TextEncoder } from 'util'
-import { buildSummaryReport, redactDiagnosticText } from '@/src/shared/utils/summary-diagnostics'
+import { buildSummaryReport, redactDiagnosticText, diagnosticUuid } from '@/src/shared/utils/summary-diagnostics'
 import { retainDiagnostics } from '@/src/application/stores/ai-execution-diagnostics.store'
 import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
 
@@ -27,4 +27,17 @@ it('evicts complete older runs rather than truncating retries', () => {
   const kept = retainDiagnostics(history)
   expect(kept).toHaveLength(9)
   expect(kept.some(r => r.technical?.run_id === '0')).toBe(false)
+})
+
+it('evicts by last activity so a recently retried run keeps its full history', () => {
+  const r = (run_id: string, attempt: number) => ({...record(attempt), technical:{...record(attempt).technical!,run_id}})
+  const retained = retainDiagnostics([r('A',1),r('B',1),r('C',1),r('A',2),r('A',3),r('D',1)])
+  expect(retained.filter(r=>r.technical?.run_id==='A')).toHaveLength(3)
+  expect(retained.some(r=>r.technical?.run_id==='B')).toBe(false)
+})
+
+it('correlation IDs work when randomUUID is unavailable in a plain HTTP context', () => {
+  const spy = jest.spyOn(crypto, 'randomUUID').mockImplementation(() => {throw new Error('unavailable')})
+  try { expect(diagnosticUuid()).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/) }
+  finally {spy.mockRestore()}
 })
