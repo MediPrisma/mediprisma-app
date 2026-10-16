@@ -61,6 +61,20 @@ jest.mock('@/src/infrastructure/ai/streaming/stream-orchestrator', () => ({
 }))
 
 describe('useUnifiedAi cancellation', () => {
+  it('classifies a completed unparseable response as parse phase', async () => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockResolvedValue({status:201} as Response)
+    mockStream.mockImplementationOnce(async options=>options.onChunk('SYNTHETIC INVALID'))
+    const {result}=renderHook(()=>useUnifiedAi())
+    try {
+      await act(async()=>{await result.current.stream([{role:'user',content:'synthetic'}],{
+        modelId:'gpt-5.4-nano',diagnosticFeature:'medical-summary',summaryDiagnostics:{runId:'10000000-0000-4000-8000-000000000001',attempt:1,lane:'full',inspect:()=> 'invalid'},
+      })})
+      await waitFor(()=>expect(fetch).toHaveBeenCalled())
+      expect(JSON.parse(String(jest.mocked(fetch).mock.calls.at(-1)?.[1]?.body))).toMatchObject({error_class:'parse_failed',response_complete:true,diagnostics:{phase:'parse'}})
+    } finally {cancelCollectorRequests();permission.restore();window.history.replaceState({},'', '/')}
+  })
   it('correlates all watchdog retries with technical-only automatic payloads', async () => {
     const permission = mockCollectorPermission()
     window.history.replaceState({}, '', '/?site=vghtpe')
@@ -71,7 +85,7 @@ describe('useUnifiedAi cancellation', () => {
       for (let attempt = 1; attempt <= 3; attempt++) {
         const controller = new AbortController()
         mockStream.mockImplementationOnce(async (options) => {
-          options.onChunk('SYNTHETIC-OUTPUT openai-key')
+          options.onChunk('SYNTHETIC-OUTPUT Bearer openai-key')
           const timeout = new Error('watchdog'); timeout.name = 'MedicalSummaryCardProgressTimeoutError'
           controller.abort(timeout)
         })

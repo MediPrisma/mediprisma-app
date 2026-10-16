@@ -46,3 +46,14 @@ it('retains the frozen report after failed upload and reuses the same submission
   expect(fetch).toHaveBeenCalledTimes(2)
   expect(jest.mocked(fetch).mock.calls[1][1]?.body).toBe(jest.mocked(fetch).mock.calls[0][1]?.body)
 })
+
+it.each([429,413])('explains permanent rejection %s and offers download instead of immediate retry',async status=>{
+  jest.mocked(fetch).mockClear();jest.mocked(fetch).mockResolvedValue({status} as Response)
+  render(<SummaryProblemReport records={records} busy={false}/>)
+  fireEvent.click(screen.getByRole('button',{name:'回報問題'}));fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'確認送出回報'}))
+  await screen.findByRole('button',{name:'暫時無法送出'})
+  expect(screen.getByRole('button',{name:'暫時無法送出'})).toBeDisabled()
+  expect(screen.getByRole('status')).toHaveTextContent('請下載這份回報')
+  expect(screen.getByRole('button',{name:'下載這份回報'})).toBeEnabled()
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
