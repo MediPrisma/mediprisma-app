@@ -1,22 +1,27 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { configuredEndpoint, isCollectorSite } from '@/src/infrastructure/telemetry/collector'
-import { captureCollectorAuth } from '@/src/infrastructure/telemetry/collector-auth'
+import { configuredEndpoint, isCollectorSite, captureCollectorAuth } from '@/src/application/telemetry/summary-report'
 import { buildSummaryReport } from '@/src/shared/utils/summary-diagnostics'
 import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
+import type { AiReport } from '@/src/shared/contracts/collector-event'
+
+const subscribe = () => () => {}
+const serverSite = () => false
 
 export function SummaryProblemReport({ records, busy }: { records: AiExecutionDiagnosticRecord[]; busy: boolean }) {
+  const eligible = useSyncExternalStore(subscribe, isCollectorSite, serverSite)
   const [snapshot, setSnapshot] = useState<{ json: string; endpoint: string; auth: ReturnType<typeof captureCollectorAuth> } | null>(null)
   const [consent, setConsent] = useState(false)
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
   const active = useRef<AbortController | null>(null)
+  const preview = useMemo(() => snapshot ? JSON.parse(snapshot.json) as AiReport : null, [snapshot])
   useEffect(() => () => { active.current?.abort() }, [])
-  if (!records.some(r => r.technical) || !isCollectorSite()) return null
+  if (!records.some(r => r.technical) || !eligible) return null
 
   const prepare = () => {
     setMessage(''); setConsent(false); setSent(false)
@@ -63,7 +68,17 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
           <DialogDescription>自動診斷只傳送技術資訊。此回報包含整次操作的提示詞、病歷內容與 AI 回答，請先確認下方預覽。紀錄僅暫存在此頁，重新整理後會消失。</DialogDescription>
         </DialogHeader>
         <p className="break-all text-sm">收件位置：{snapshot ? new URL(snapshot.endpoint).origin : ''}</p>
-        <pre aria-label="完整回報預覽" className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 text-sm">{snapshot?.json}</pre>
+        <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-md border bg-muted/30 p-3 text-sm">
+          <p className="font-medium">共 {preview?.executions.length} 次 AI 請求，包含重試紀錄</p>
+          {preview?.executions.map(execution => <section key={execution.technical.request_id} className="space-y-2 rounded-md border bg-background p-3">
+            <h3 className="font-semibold">第 {execution.technical.attempt} 次請求 · {execution.status === 'completed' ? '完成' : execution.status === 'aborted' ? '中止' : '失敗'}</h3>
+            <p className="font-medium">送給 AI 的內容</p>
+            <pre className="whitespace-pre-wrap break-all font-sans">{execution.prompt}</pre>
+            <p className="font-medium">AI 回答（可能未完成）</p>
+            <pre className="whitespace-pre-wrap break-all font-sans">{execution.output || '尚未收到回答'}</pre>
+          </section>)}
+          <details><summary className="cursor-pointer py-2">查看完整技術紀錄</summary><pre aria-label="完整回報預覽" className="whitespace-pre-wrap break-all">{snapshot?.json}</pre></details>
+        </div>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={consent} disabled={sending || sent} onChange={e => setConsent(e.target.checked)} className="mt-1" />我已確認內容，並同意將這份病歷相關資料傳送至上述院內收件位置。</label>
         <p role="status" className="break-all text-sm">{message}</p>
         <div className="flex flex-wrap justify-end gap-2">
