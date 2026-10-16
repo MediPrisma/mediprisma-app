@@ -1,5 +1,5 @@
-// Canonical wire contracts v2-v6. Generate the APP copy with scripts/sync-collector-contract.mjs.
-// Only declared metadata; no arbitrary objects, URLs, messages or clinical text.
+// Canonical wire contracts v2-v7 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
 export const resourceBucketSchema = z.enum(['0', '1-10', '11-50', '51-200', '201-1000', '1000+'])

@@ -429,3 +429,24 @@ test('navigation during asynchronous credential retrieval prevents transmission'
   await settle()
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test('queues concurrent v7 attempts and sends completed-but-unparseable responses', async () => {
+  const releases: Array<() => void> = []
+  jest.mocked(fetch).mockImplementation(() => new Promise(resolve => releases.push(() => resolve({status:201} as Response))))
+  for (let attempt = 1; attempt <= 4; attempt++) beginCollectorObservation({feature:'summary', modelId:'custom', sampleKind:'request', mode:'stream'}).finish({
+    outcome:'parse_failed', responseComplete:true, phase:'parse', summaryAttempt:{
+      run_id:'10000000-0000-4000-8000-000000000001', request_id:'20000000-0000-4000-8000-'+String(attempt).padStart(12,'0'),
+      attempt, lane:'full', output_chars:12, last_chunk_ms:0, parse_state:'invalid',
+    },
+  })
+  await settle()
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(collectorStatus().queued).toBe(2)
+  releases.splice(0).forEach(release => release()); await settle()
+  expect(fetch).toHaveBeenCalledTimes(4)
+  expect(collectorStatus().queued).toBe(0)
+  const sent = jest.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+  expect(sent.map(e => e.diagnostics.summary_attempt.attempt)).toEqual([1,2,3,4])
+  expect(sent.every(e => e.response_complete === true && e.error_class === 'parse_failed')).toBe(true)
+  releases.splice(0).forEach(release => release()); await settle()
+})

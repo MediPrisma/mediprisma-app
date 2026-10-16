@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { configuredEndpoint, isCollectorSite, captureCollectorAuth } from '@/src/application/telemetry/summary-report'
+import { configuredEndpoint, isCollectorSite, captureCollectorAuth, awaitReportStep } from '@/src/application/telemetry/summary-report'
 import { buildSummaryReport } from '@/src/shared/utils/summary-diagnostics'
 import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
 import type { AiReport } from '@/src/shared/contracts/collector-event'
@@ -30,7 +30,11 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
     try {
       // Freeze exactly what is previewed. Later retries cannot silently join it.
       setSnapshot({ json: buildSummaryReport(records), endpoint, auth: captureCollectorAuth().catch(() => null) })
-    } catch { setMessage('完整紀錄超過回報大小限制，請從診斷紀錄下載；沒有傳送任何資料。') }
+    } catch (error) {
+      setMessage(error instanceof Error && error.message === 'report_too_large'
+        ? '完整紀錄超過回報大小限制，請從診斷紀錄下載；沒有傳送任何資料。'
+        : '無法準備這份回報，請從診斷紀錄下載；沒有傳送任何資料。')
+    }
   }
   const download = () => {
     if (!snapshot) return
@@ -44,8 +48,8 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
     setSending(true); setMessage('')
     const timer = setTimeout(() => controller.abort(), 15000)
     try {
-      const credential = await snapshot.auth
-      const token = await credential?.getToken()
+      const credential = await awaitReportStep(snapshot.auth, controller.signal)
+      const token = credential ? await awaitReportStep(credential.getToken(), controller.signal) : null
       if (!token || controller.signal.aborted || !isCollectorSite()) throw new Error('unavailable')
       const response = await fetch(snapshot.endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -65,7 +69,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
       <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>回報摘要問題</DialogTitle>
-          <DialogDescription>自動診斷只傳送技術資訊。此回報包含整次操作的提示詞、病歷內容與 AI 回答，請先確認下方預覽。紀錄僅暫存在此頁，重新整理後會消失。</DialogDescription>
+          <DialogDescription>自動診斷只傳送技術資訊。此回報包含整次操作的提示詞、病歷內容與 AI 回答，請先確認下方預覽。收件端會另記錄您的登入帳號與來源電腦資訊，供追蹤處理。紀錄僅暫存在此頁，重新整理後會消失。</DialogDescription>
         </DialogHeader>
         <p className="break-all text-sm">收件位置：{snapshot ? new URL(snapshot.endpoint).origin : ''}</p>
         <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-md border bg-muted/30 p-3 text-sm">

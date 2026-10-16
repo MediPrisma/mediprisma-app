@@ -8,6 +8,17 @@ export interface SummaryDiagnosticContext {
   inspect: (text: string) => SummaryAttempt['parse_state']
 }
 
+/** Correlation only, never authentication. Plain HTTP may lack randomUUID. */
+export function diagnosticUuid(): string {
+  try { return crypto.randomUUID() } catch { /* supported fallback below */ }
+  const bytes = new Uint8Array(16)
+  try { crypto.getRandomValues(bytes) }
+  catch { for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256) }
+  bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 /** Credentials are never part of the report DTO. Also remove a provider echo
  * of the exact credential before retaining the request in volatile memory. */
 export function redactDiagnosticText(text: string, secret?: string | null): string {
@@ -18,7 +29,7 @@ export function redactDiagnosticText(text: string, secret?: string | null): stri
 
 export function buildSummaryReport(records: AiExecutionDiagnosticRecord[]) {
   const report = aiReportSchema.parse({
-    schema_version: 1, submission_id: crypto.randomUUID(), consent: true,
+    schema_version: 1, submission_id: diagnosticUuid(), consent: true,
     created_at: new Date().toISOString(),
     executions: records.filter(r => r.technical).map(r => ({
       timestamp: r.timestamp, status: r.status, technical: r.technical,

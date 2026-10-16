@@ -1,6 +1,6 @@
 'use client'
 
-import { redactDiagnosticText, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
+import { diagnosticUuid, redactDiagnosticText, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
 import type { SummaryAttempt } from '@/src/shared/contracts/collector-event'
 /**
  * Unified AI Hook
@@ -281,8 +281,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         modelId, sampleKind: 'request', mode: 'stream',
       })
       const timestamp = new Date().toISOString()
-      const diagnosticStart = performance.now()
-      const requestId = crypto.randomUUID()
+      const diagnosticNow = () => { try { return performance.now() } catch { return Date.now() } }
+      const diagnosticStart = streamOptions?.summaryDiagnostics ? diagnosticNow() : 0
+      const requestId = streamOptions?.summaryDiagnostics ? diagnosticUuid() : ''
       let lastChunkMs: number | null = null
       let measured: SummaryAttempt | undefined
       const technical = (): SummaryAttempt | undefined => {
@@ -353,7 +354,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           },
           onChunk: (chunk: string) => {
             if (chunk.length > 0) collector.firstChunk()
-            if (chunk.length > fullText.length) lastChunkMs = Math.max(0, Math.round(performance.now() - diagnosticStart))
+            if (chunk.length > fullText.length) lastChunkMs = Math.max(0, Math.round(diagnosticNow() - diagnosticStart))
             fullText = chunk
             streamOptions?.onChunk?.(chunk)
           },

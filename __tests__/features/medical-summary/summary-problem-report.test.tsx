@@ -32,3 +32,17 @@ it('never uploads on failure or preview; sends the frozen preview only after exp
   expect(JSON.parse(preview!).executions).toHaveLength(3)
   await screen.findByText(/回報已收到/)
 })
+
+it('retains the frozen report after failed upload and reuses the same submission on retry', async () => {
+  jest.mocked(fetch).mockClear()
+  jest.mocked(fetch).mockResolvedValueOnce({status:503} as Response).mockResolvedValueOnce({status:201,json:async()=>({success:true,reportId:'30000000-0000-4000-8000-000000000001'})} as Response)
+  render(<SummaryProblemReport records={records} busy={false}/>)
+  fireEvent.click(screen.getByRole('button',{name:'回報問題',exact:true}))
+  fireEvent.click(screen.getByRole('checkbox'))
+  fireEvent.click(screen.getByRole('button',{name:'確認送出回報'}))
+  await screen.findByText(/尚未確認收件成功/)
+  fireEvent.click(screen.getByRole('button',{name:'確認送出回報'}))
+  await screen.findByText(/回報已收到/)
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(jest.mocked(fetch).mock.calls[1][1]?.body).toBe(jest.mocked(fetch).mock.calls[0][1]?.body)
+})

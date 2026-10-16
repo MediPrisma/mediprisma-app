@@ -28,7 +28,7 @@ const MAX_SESSION_RECORDS = 2
 export function retainDiagnostics(records: AiExecutionDiagnosticRecord[]) {
   // Evict whole runs, never individual retries. Unrelated AI requests cannot
   // overwrite a failed summary's history. Patient/page cleanup still applies.
-  const runs = [...new Set(records.map(r => r.technical?.run_id).filter(Boolean))].slice(-3)
+  const runs = [...new Set([...records].reverse().map(r => r.technical?.run_id).filter(Boolean))].slice(0, 3)
   const other = records.filter(r => !r.technical).slice(-MAX_SESSION_RECORDS)
   return records.filter(r => r.technical ? runs.includes(r.technical.run_id) : other.includes(r))
 }
