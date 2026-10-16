@@ -20,7 +20,7 @@ it('retains every attempt across interleaved unrelated requests and exports only
   expect(json).toContain('synthetic clinical context')
 })
 it('removes provider-echoed credentials without treating this as clinical anonymisation', () => {
-  expect(redactDiagnosticText('secret-value Bearer abc.def.ghi', 'secret-value')).toBe('[REDACTED] Bearer [REDACTED]')
+  expect(redactDiagnosticText('synthetic-secret-value-123 Bearer abc.def.ghi', 'synthetic-secret-value-123')).toBe('[REDACTED] Bearer [REDACTED]')
 })
 it('evicts complete older runs rather than truncating retries', () => {
   const history = Array.from({ length: 4 }, (_, i) => [record(1), record(2), record(3)].map(r => ({ ...r, technical: { ...r.technical!, run_id: String(i) } }))).flat()
@@ -41,3 +41,5 @@ it('correlation IDs work when randomUUID is unavailable in a plain HTTP context'
   try { expect(diagnosticUuid()).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/) }
   finally {spy.mockRestore()}
 })
+
+it('does not corrupt clinical words when the local model key is a short placeholder',()=>{expect(redactDiagnosticText('Allergies: none; x-ray, Rx','none')).toBe('Allergies: none; x-ray, Rx');expect(redactDiagnosticText('x-ray, Rx','x')).toBe('x-ray, Rx')})

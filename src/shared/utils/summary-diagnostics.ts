@@ -22,7 +22,9 @@ export function diagnosticUuid(): string {
 /** Credentials are never part of the report DTO. Also remove a provider echo
  * of the exact credential before retaining the request in volatile memory. */
 export function redactDiagnosticText(text: string, secret?: string | null): string {
-  const clean = secret ? text.split(secret).join('[REDACTED]') : text
+  // Local endpoints often use placeholders such as "none" or "x". Replacing
+  // these as substrings would destroy clinical terms ("allergies: none").
+  const clean = secret && secret.length >= 16 ? text.split(secret).join('[REDACTED]') : text
   return clean.replace(/Bearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
     .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, '[REDACTED]')
 }

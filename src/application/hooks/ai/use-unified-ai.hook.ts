@@ -375,7 +375,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         }
 
         streamOptions?.onComplete?.(fullText)
-        collector.finish({ summaryAttempt: technical(), outcome: ['invalid', 'incomplete', 'empty'].includes(technical()?.parse_state ?? '') ? 'parse_failed' : 'ok', phase: 'stream', responseComplete: true,
+        const parseFailed = ['invalid', 'incomplete', 'empty'].includes(technical()?.parse_state ?? '')
+        collector.finish({ summaryAttempt: technical(), outcome: parseFailed ? 'parse_failed' : 'ok', phase: parseFailed ? 'parse' : 'stream', responseComplete: true,
           modelId: modelExecution.actualModelId ?? modelId,
           modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
         record('completed')

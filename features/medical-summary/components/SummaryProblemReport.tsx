@@ -18,13 +18,14 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
+  const [blocked, setBlocked] = useState(false)
   const active = useRef<AbortController | null>(null)
   const preview = useMemo(() => snapshot ? JSON.parse(snapshot.json) as AiReport : null, [snapshot])
   useEffect(() => () => { active.current?.abort() }, [])
   if (!records.some(r => r.technical) || !eligible) return null
 
   const prepare = () => {
-    setMessage(''); setConsent(false); setSent(false)
+    setMessage(''); setConsent(false); setSent(false); setBlocked(false)
     const endpoint = configuredEndpoint()?.replace(/\/events$/, '/ai-reports')
     if (!endpoint) { setMessage('尚未設定回報收件位置，請使用診斷紀錄下載。'); return }
     try {
@@ -43,7 +44,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
   const submit = async () => {
-    if (!snapshot || !consent || active.current || sent || !isCollectorSite()) return
+    if (!snapshot || !consent || active.current || sent || blocked || !isCollectorSite()) return
     const controller = new AbortController(); active.current = controller
     setSending(true); setMessage('')
     const timer = setTimeout(() => controller.abort(), 15000)
@@ -55,7 +56,16 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: snapshot.json, signal: controller.signal, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
       })
-      if (response.status !== 200 && response.status !== 201) { void response.body?.cancel(); throw new Error('rejected') }
+      if (response.status >= 400 && response.status < 500) {
+        void response.body?.cancel().catch(() => {})
+        setBlocked(true)
+        setMessage(response.status === 429 ? '回報已達收件限制，請下載這份回報，稍後再試。'
+          : response.status === 413 ? '這份回報超過收件大小限制，請下載這份回報。'
+          : response.status === 401 || response.status === 403 ? '目前無法驗證回報權限，請下載這份回報，重新登入後再開啟回報。'
+          : '收件端無法接受這份回報，請下載這份回報供後續處理。')
+        return
+      }
+      if (response.status !== 200 && response.status !== 201) { void response.body?.cancel().catch(() => {}); throw new Error('rejected') }
       const result = await response.json()
       if (result.success !== true || typeof result.reportId !== 'string' || !/^[0-9a-f-]{36}$/i.test(result.reportId)) throw new Error('receipt')
       setSent(true); setMessage(`回報已收到，編號：${result.reportId}`)
@@ -88,7 +98,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
         <div className="flex flex-wrap justify-end gap-2">
           <Button className="min-h-[44px]" variant="outline" onClick={download}>下載這份回報</Button>
           <Button className="min-h-[44px]" variant="outline" disabled={sending} onClick={() => setSnapshot(null)}>關閉</Button>
-          <Button className="min-h-[44px]" disabled={!consent || sending || sent} onClick={() => void submit()}>{sending ? '傳送中…' : sent ? '已送出' : '確認送出回報'}</Button>
+          <Button className="min-h-[44px]" disabled={!consent || sending || sent || blocked} onClick={() => void submit()}>{sending ? '傳送中…' : sent ? '已送出' : blocked ? '暫時無法送出' : '確認送出回報'}</Button>
         </div>
       </DialogContent>
     </Dialog>

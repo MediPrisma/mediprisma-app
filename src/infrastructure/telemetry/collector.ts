@@ -155,7 +155,7 @@ function dispatch(event: CollectorEvent | CollectorEventV7, owner: number, endpo
     return
   }
   if (active.size >= MAX_IN_FLIGHT) {
-    if (event.schema_version === 7 && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
+    if ((event.schema_version === 7 || (event.feature === 'summary' && event.sample_kind === 'feature')) && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
     else dropped++
     return
   }
