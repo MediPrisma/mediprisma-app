@@ -17,6 +17,24 @@ function selectionFor(observation: any, categoryId = 'chem'): LabTrendSelection 
 }
 
 describe('buildLabTrendSeries', () => {
+  it.each(['eGFR(MDRD)', 'mL/min'])(
+    'preserves existing uniform-unit eGFR trends when all units are %s', (unit) => {
+      const observations = [1, 2, 3].map(day => ({
+        id: `uniform-egfr-${day}`, code: { text: 'eGFR' },
+        effectiveDateTime: `2026-01-0${day}`, valueQuantity: { value: 70 - day, unit },
+      }))
+      const selection = selectionFor(observations[0])
+      const series = buildLabTrendSeries(observations, selection)
+      expect(series.chartable).toBe(true)
+      expect(series.chartPoints).toHaveLength(3)
+      expect(series.points.every(point => point.plotExclusionReason === undefined)).toBe(true)
+      expect(series.unit).toBe(unit)
+      expect(buildLabPivots(observations).chem.rows.find(row => row.testKey === selection.testKey)?.trendChartable).toBe(true)
+      const mixed = [observations[0], { ...observations[1], valueQuantity: { value: 68, unit: 'different unknown unit' } }]
+      expect(buildLabTrendSeries(mixed, selection).chartable).toBe(false)
+      expect(buildLabPivots(mixed).chem.rows.find(row => row.testKey === selection.testKey)?.trendChartable).toBe(false)
+    },
+  )
   it.each(['eGFR(MDRD)', 'eGFR(CKD-EPI,新)', 'mL/min', '%'])(
     'retains an eGFR result with unit %s in history while charting comparable results', (unit) => {
       const make = (day: string, value: number, unit: string) => ({

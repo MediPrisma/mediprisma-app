@@ -497,7 +497,7 @@ export function CumulativeLabTrendDetail({
         <p className="text-xs text-muted-foreground" role="status">
           {zh
             ? `${unrecognizedUnitCount} 筆 eGFR 結果的單位無法確認，未納入曲線；原始數值與單位保留於下方紀錄。`
-            : `${unrecognizedUnitCount} eGFR results have unrecognized units and are excluded from the chart; original values and units remain in the history below.`}
+            : `${unrecognizedUnitCount} eGFR ${unrecognizedUnitCount === 1 ? 'result has an unrecognized unit and is' : 'results have unrecognized units and are'} excluded from the chart; original values and units remain in the history below.`}
         </p>
       )}
       <div className="overflow-hidden rounded-xl border bg-card">

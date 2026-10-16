@@ -313,10 +313,19 @@ export function buildLabTrendSeries(
       performer,
       specimen,
       unitInferred: isInferredObservationUnit(observation),
-      plotEligible: !comparator && !unrecognizedUnit,
+      plotEligible: !comparator,
       ...(unrecognizedUnit ? { plotExclusionReason: 'unrecognized-unit' as const } : {}),
     })
   })
+
+  // Only prefer recognized units when there is an eligible recognized point.
+  // Otherwise preserve the existing compatibility rule for the entire series;
+  // this fix must not hide an already-available uniform-unit trend.
+  const hasRecognizedPoint = points.some((point) => point.plotEligible && !point.plotExclusionReason)
+  for (const point of points) {
+    if (hasRecognizedPoint && point.plotExclusionReason) point.plotEligible = false
+    else if (!hasRecognizedPoint) delete point.plotExclusionReason
+  }
 
   points.sort((left, right) => (
     left.timestamp - right.timestamp

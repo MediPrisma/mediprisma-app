@@ -928,6 +928,7 @@ export function buildLabPivots(
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
     const trendAvailability = new Map<string, TrendAvailabilityStats>()
+    const allUnitTrendAvailability = new Map<string, TrendAvailabilityStats>()
 
     for (const obs of obsList) {
       // Cumulative display preference only. Preserve every original resource;
@@ -1015,21 +1016,25 @@ export function buildLabPivots(
         && Number.isFinite(trendTimestamp)
         && !INVALID_TREND_STATUSES.has(normalizedStatus)
         && !obs.valueQuantity?.comparator
-        && !hasUnrecognizedEgfrUnit(testKey, trendUnit)
       if (hasTrendPoint) {
-        const stats = trendAvailability.get(mapKey) ?? {
-          pointCount: 0,
-          units: new Set<string>(),
-          specimens: new Set<string>(),
+        const indexes = hasUnrecognizedEgfrUnit(testKey, trendUnit)
+          ? [allUnitTrendAvailability]
+          : [allUnitTrendAvailability, trendAvailability]
+        for (const index of indexes) {
+          const stats = index.get(mapKey) ?? {
+            pointCount: 0,
+            units: new Set<string>(),
+            specimens: new Set<string>(),
+          }
+          stats.pointCount += 1
+          stats.units.add(compactTrendUnit(trendUnit))
+          stats.specimens.add(
+            obs.specimen?.display?.normalize('NFKC').trim().toLowerCase()
+              || obs.specimen?.reference?.normalize('NFKC').trim().toLowerCase()
+              || '__missing__',
+          )
+          index.set(mapKey, stats)
         }
-        stats.pointCount += 1
-        stats.units.add(compactTrendUnit(trendUnit))
-        stats.specimens.add(
-          obs.specimen?.display?.normalize('NFKC').trim().toLowerCase()
-            || obs.specimen?.reference?.normalize('NFKC').trim().toLowerCase()
-            || '__missing__',
-        )
-        trendAvailability.set(mapKey, stats)
       }
 
       const cell: LabCell = {
@@ -1139,7 +1144,8 @@ export function buildLabPivots(
       row.unit = everyCellHasUnit && distinctUnits.size === 1
         ? distinctUnits.values().next().value
         : undefined
-      const trendStats = trendAvailability.get(row.mapKey)
+      // Without a recognized-unit point, retain the existing same-unit rule.
+      const trendStats = trendAvailability.get(row.mapKey) ?? allUnitTrendAvailability.get(row.mapKey)
       row.trendChartable = !!trendStats
         && trendStats.pointCount >= 2
         && trendStats.units.size <= 1
