@@ -77,6 +77,7 @@ import {
   getSummaryGenerationActivityState,
   SummaryGenerationButton,
 } from "./components/SummaryGenerationButton"
+import { SummaryProblemReport } from "./components/SummaryProblemReport"
 import { AiDiagnosticsButton } from "./components/AiDiagnosticsButton"
 import { SourceLink } from "./components/SourceLink"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
@@ -844,6 +845,7 @@ export default function MedicalSummaryFeature() {
                 </>
               ) : null}
               <div className="flex justify-end border-t pt-1">
+                <SummaryProblemReport key={summaryGenerationSlotKey} records={visibleAiDiagnostics} busy={isBusy} />
                 <AiDiagnosticsButton
                   hasRecords={visibleAiDiagnostics.length > 0}
                   availableLabel={ms.exportAiDiagnosticsTitle}

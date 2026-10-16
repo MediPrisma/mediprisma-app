@@ -61,6 +61,37 @@ jest.mock('@/src/infrastructure/ai/streaming/stream-orchestrator', () => ({
 }))
 
 describe('useUnifiedAi cancellation', () => {
+  it('correlates all watchdog retries with technical-only automatic payloads', async () => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    useAiExecutionDiagnosticsStore.getState().clearAll()
+    jest.mocked(fetch).mockResolvedValue({ status: 201 } as Response)
+    const { result } = renderHook(() => useUnifiedAi())
+    try {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const controller = new AbortController()
+        mockStream.mockImplementationOnce(async (options) => {
+          options.onChunk('SYNTHETIC-OUTPUT openai-key')
+          const timeout = new Error('watchdog'); timeout.name = 'MedicalSummaryCardProgressTimeoutError'
+          controller.abort(timeout)
+        })
+        await act(async () => {
+          await result.current.stream([{ role: 'user', content: 'SYNTHETIC-PROMPT' }], {
+            signal: controller.signal, modelId: 'gpt-5.4-nano', diagnosticFeature: 'medical-summary', operationKey: 'PRIVATE-PATIENT',
+            summaryDiagnostics: { runId: '10000000-0000-4000-8000-000000000001', attempt, lane: 'full', inspect: () => 'incomplete' },
+          })
+        })
+        await waitFor(() => expect(fetch).toHaveBeenCalledTimes(attempt))
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+      const wires = jest.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+      expect(wires.map(w => w.diagnostics.summary_attempt.attempt)).toEqual([1, 2, 3])
+      expect(wires.every(w => w.schema_version === 7 && w.error_class === 'timeout')).toBe(true)
+      expect(JSON.stringify(wires)).not.toMatch(/SYNTHETIC-PROMPT|SYNTHETIC-OUTPUT|PRIVATE-PATIENT|openai-key/)
+      expect(useAiExecutionDiagnosticsStore.getState().records).toHaveLength(3)
+      expect(useAiExecutionDiagnosticsStore.getState().records[0].outputData).not.toContain('openai-key')
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
   it.each(['query', 'stream'] as const)('completes %s while an enabled collector is offline, without forwarding full diagnostics', async (transport) => {
     const permission = mockCollectorPermission()
     window.history.replaceState({}, '', '/?site=vghtpe')
