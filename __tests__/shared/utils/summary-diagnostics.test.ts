@@ -1,5 +1,5 @@
 import { TextEncoder } from 'util'
-import { buildSummaryReport, redactDiagnosticText, diagnosticUuid } from '@/src/shared/utils/summary-diagnostics'
+import { buildSummaryReport, redactDiagnosticText, diagnosticUuid, inspectSummaryBlocks } from '@/src/shared/utils/summary-diagnostics'
 import { retainDiagnostics } from '@/src/application/stores/ai-execution-diagnostics.store'
 import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
 
@@ -43,3 +43,12 @@ it('correlation IDs work when randomUUID is unavailable in a plain HTTP context'
 })
 
 it('does not corrupt clinical words when the local model key is a short placeholder',()=>{expect(redactDiagnosticText('Allergies: none; x-ray, Rx','none')).toBe('Allergies: none; x-ray, Rx');expect(redactDiagnosticText('x-ray, Rx','x')).toBe('x-ray, Rx')})
+
+it('reports malformed complete blocks even when another block is missing',()=>{
+  const malformed={complete:()=>true,parse:()=>null}
+  const missing={complete:()=>false,parse:()=>{throw new Error('must not parse missing card')}}
+  const valid={complete:()=>true,parse:()=>({ok:true})}
+  expect(inspectSummaryBlocks('synthetic',[malformed,missing])).toBe('invalid')
+  expect(inspectSummaryBlocks('synthetic',[valid,missing])).toBe('incomplete')
+  expect(inspectSummaryBlocks('synthetic',[valid,valid])).toBe('valid')
+})

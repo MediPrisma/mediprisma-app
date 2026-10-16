@@ -1,6 +1,6 @@
 'use client'
 
-import { diagnosticUuid, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
+import { diagnosticUuid, inspectSummaryBlocks, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
 // Medical Summary hook — thin adapter over the shared AI slot-generation
 // engine (src/application/hooks/ai-generation/): runs the structured
 // generation on the selected summary model, verifies citations against the
@@ -573,9 +573,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       ) => {
         const outcome = await streamModelRequest({
           laneId,
-          inspect: (text) => cards.every(card => card.hasCompleteBatchBlock(text))
-            ? cards.every(card => parseLaneBatch(card, text)) ? 'valid' : 'invalid'
-            : 'incomplete',
+          inspect: (text) => inspectSummaryBlocks(text, cards.map(card => ({
+            complete: value => card.hasCompleteBatchBlock(value),
+            parse: value => parseLaneBatch(card, value),
+          }))),
           clinicalContext: transportClinicalContext,
           buildMessages: (fittedClinicalContext) => {
             const fittedPromptInput = {
