@@ -79,3 +79,21 @@ it('missing authentication makes no upload and gives sign-in guidance rather tha
   expect(fetch).not.toHaveBeenCalled()
   expect(screen.getByRole('button',{name:'暫時無法送出'})).toBeDisabled()
 })
+
+it('reopens a confirmed receipt without creating a new submission',async()=>{
+  jest.mocked(fetch).mockClear();jest.mocked(fetch).mockResolvedValue({status:201,json:async()=>({success:true,reportId:'30000000-0000-4000-8000-000000000001'})} as Response)
+  render(<SummaryProblemReport records={records} busy={false}/>)
+  fireEvent.click(screen.getByRole('button',{name:'回報問題'}));fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'確認送出回報'}))
+  await screen.findByText(/回報已收到/);fireEvent.click(screen.getByRole('button',{name:'關閉'}));fireEvent.click(screen.getByRole('button',{name:'回報問題'}))
+  expect(screen.getByText(/回報已收到/)).toBeInTheDocument()
+  expect(screen.getByRole('button',{name:'已送出'})).toBeDisabled()
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+it('disabled intake gives download guidance instead of retrying forever',async()=>{
+  jest.mocked(fetch).mockClear();jest.mocked(fetch).mockResolvedValue({status:503,json:async()=>({reason:'unconfigured'})} as Response)
+  render(<SummaryProblemReport records={records} busy={false}/>)
+  fireEvent.click(screen.getByRole('button',{name:'回報問題'}));fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'確認送出回報'}))
+  await screen.findByText(/聯絡管理者/)
+  expect(screen.getByRole('button',{name:'暫時無法送出'})).toBeDisabled()
+  expect(fetch).toHaveBeenCalledTimes(1)
+})

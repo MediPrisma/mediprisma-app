@@ -15,7 +15,7 @@ import { diagnosticUuid, inspectSummaryBlocks, type SummaryDiagnosticContext } f
 import { detectClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { createModelExecution, modelExecutionLabel, mergeModelExecutions } from '@/src/shared/utils/ai-model-execution'
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   isContextOverflowError,
   type ContextOverflowIssue,
@@ -295,6 +295,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     if (!retryRequest) {
       useAiExecutionDiagnosticsStore.getState().clearOperationFeature(ctx.operationKey, 'medical-summary')
     }
+    useAiExecutionDiagnosticsStore.getState().beginSummaryRun(ctx.operationKey, diagnosticRunId)
     runMetricsRef.current.delete(ctx.operationKey)
     const initialExecution = () => createModelExecution(ctx.requestedModelId ?? ctx.modelId, ctx.modelId, ctx.modelName)
     // Provenance fallback for cards no lane managed to attribute. Each lane
@@ -1041,6 +1042,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // estimate is worded as one, never as a stop.
     contextVariant: 'first-visit-summary',
   })
+
+  // Clear clinical diagnostic memory before passive auto-generation effects
+  // run for another patient/input scope. Late prior streams are then rejected.
+  useLayoutEffect(() => {
+    useAiExecutionDiagnosticsStore.getState().setSummaryScope(slot.scopeKey)
+  }, [slot.scopeKey])
 
   // Deterministic coverage stats for the coverage card — recomputes only when
   // the bundle changes.

@@ -1,4 +1,4 @@
-import { aiReportSchema, AI_REPORT_MAX_BODY_BYTES, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
+import { aiReportSchema, AI_REPORT_MAX_BODY_BYTES, type SummaryAttempt, type AiReport } from '@/src/shared/contracts/collector-event'
 import type { AiExecutionDiagnosticRecord } from './ai-execution-diagnostics'
 
 export interface SummaryDiagnosticContext {
@@ -40,15 +40,26 @@ export function redactDiagnosticText(text: string, secret?: string | null): stri
 }
 
 export function buildSummaryReport(records: AiExecutionDiagnosticRecord[]) {
+  const executions = records.filter(r => r.technical).map(r => ({
+    timestamp: r.timestamp, status: r.status, technical: r.technical,
+    outcome: r.outcome,
+    prompt: redactDiagnosticText(r.prompt), output: redactDiagnosticText(r.outputData),
+  }))
+  if (executions.length > 256 || executions.some(e => e.prompt.length > 2_000_000 || e.output.length > 2_000_000)) throw new Error('report_too_large')
   const report = aiReportSchema.parse({
     schema_version: 1, submission_id: diagnosticUuid(), consent: true,
     created_at: new Date().toISOString(),
-    executions: records.filter(r => r.technical).map(r => ({
-      timestamp: r.timestamp, status: r.status, technical: r.technical,
-      prompt: redactDiagnosticText(r.prompt), output: redactDiagnosticText(r.outputData),
-    })),
+    executions,
   })
   const json = JSON.stringify(report, null, 2)
   if (new TextEncoder().encode(json).length > AI_REPORT_MAX_BODY_BYTES) throw new Error('report_too_large')
   return json
+}
+
+export function summaryReportOutcomeLabel(execution: AiReport['executions'][number]): string {
+  if (execution.outcome === 'timeout') return '逾時'
+  if (execution.outcome === 'aborted') return '已停止'
+  if (execution.outcome === 'parse_failed' || ['invalid', 'incomplete', 'empty'].includes(execution.technical.parse_state) && execution.status === 'completed') return '格式解析失敗'
+  if (execution.outcome) return '失敗'
+  return execution.status === 'completed' ? '完成' : execution.status === 'aborted' ? '中止（原因未記錄）' : '失敗'
 }
