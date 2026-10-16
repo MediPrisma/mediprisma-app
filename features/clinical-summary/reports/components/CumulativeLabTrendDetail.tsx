@@ -18,11 +18,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
   assessLabTrendCompatibility,
+  groupLabTrendPoints,
   type LabTrendPoint,
   type LabTrendReferenceRange,
   type LabTrendSeries,
 } from '@/src/shared/utils/lab-trend.utils'
 import { formatNumberSmart } from '../utils/number-format.utils'
+import { labTrendGroupKey } from '@/src/shared/utils/lab-trend-group.utils'
 import {
   buildTrendTimeScale,
   type TrendTimeScale,
@@ -87,7 +89,7 @@ function rangeLabel(range: LabTrendReferenceRange | undefined, unit: string | un
   return range.text
 }
 
-function defaultWindow(series: LabTrendSeries): TrendWindow {
+function defaultWindow(series: Pick<LabTrendSeries, 'chartPoints'>): TrendWindow {
   if (series.chartPoints.length < 2) return 'all'
   const latest = series.chartPoints.at(-1)?.timestamp
   if (!latest) return 'all'
@@ -353,30 +355,37 @@ export function CumulativeLabTrendDetail({
 }: CumulativeLabTrendDetailProps) {
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
-  const [window, setWindow] = useState<TrendWindow>(() => initialWindow ?? defaultWindow(series))
+  const groups = useMemo(() => groupLabTrendPoints(series.points, series.selection.categoryId), [series.points, series.selection.categoryId])
+  const [selectedGroupKey, setSelectedGroupKey] = useState('')
+  const group = groups.find(item => item.key === selectedGroupKey) ?? groups[0]
+  const chartPoints = useMemo(() => group?.chartPoints ?? [], [group])
+  const isOtherGroup = (point: LabTrendPoint) => labTrendGroupKey(point.unit, point.specimen, series.selection.categoryId) !== group?.key
+  const otherGroupLabel = zh ? '其他單位／檢體組，未納入目前曲線' : 'Other unit/specimen group; not in the current chart'
+  const [window, setWindow] = useState<TrendWindow>(() => initialWindow ?? defaultWindow({ chartPoints }))
   const selectWindow = (value: TrendWindow) => {
     setWindow(value)
     onWindowChange?.(value)
   }
 
-  const latest = series.points.at(-1)
-  const previousComparable = series.chartPoints.length >= 2
-    ? series.chartPoints.at(-2)
+  const latest = group?.points.at(-1)
+  const newestOverall = series.points.at(-1)
+  const previousComparable = chartPoints.length >= 2
+    ? chartPoints.at(-2)
     : undefined
-  const delta = latest?.plotEligible && previousComparable && latest.unit === previousComparable.unit
+  const delta = latest?.plotEligible && previousComparable
     ? differenceForDisplay(latest.value, previousComparable.value)
     : undefined
 
   const timeScale = useMemo(
-    () => buildTrendTimeScale(series.chartPoints, window),
-    [series.chartPoints, window],
+    () => buildTrendTimeScale(chartPoints, window),
+    [chartPoints, window],
   )
   const visiblePoints = useMemo(() => {
     const [start, end] = timeScale.domain
-    return series.chartPoints.filter((point) => (
+    return chartPoints.filter((point) => (
       point.timestamp >= start && point.timestamp <= end
     ))
-  }, [series.chartPoints, timeScale])
+  }, [chartPoints, timeScale])
   const visibleCompatibility = useMemo(
     () => assessLabTrendCompatibility(visiblePoints, series.selection.categoryId),
     [series.selection.categoryId, visiblePoints],
@@ -384,13 +393,13 @@ export function CumulativeLabTrendDetail({
   const chartReferenceRange = useMemo(
     () => resolveTrendChartReferenceRange({
       chartPoints: visiblePoints,
-      sharedReferenceRange: series.sharedReferenceRange,
+      sharedReferenceRange: group?.sharedReferenceRange,
     }),
-    [series.sharedReferenceRange, visiblePoints],
+    [group?.sharedReferenceRange, visiblePoints],
   )
 
   const strings = {
-    latest: zh ? '最新結果' : 'Latest result',
+    latest: groups.length > 1 ? (zh ? '本組最新結果' : 'Latest result in this group') : (zh ? '最新結果' : 'Latest result'),
     previous: zh ? '較前次' : 'vs previous',
     history: zh ? '精確數值' : 'Exact results',
     rangeVaries: zh
@@ -421,6 +430,24 @@ export function CumulativeLabTrendDetail({
 
   return (
     <div className="min-w-0 space-y-3" data-testid="cumulative-trend-detail">
+      {groups.length > 1 && (
+        <label className="block space-y-1 text-xs font-medium">
+          <span>{zh ? '繪圖單位／檢體' : 'Chart unit / specimen'}</span>
+          <select
+            className="min-h-[44px] w-full min-w-0 rounded-md border bg-background px-2 text-sm text-foreground"
+            value={group?.key}
+            onChange={(event) => setSelectedGroupKey(event.target.value)}
+          >
+            {groups.map(item => (
+              <option key={item.key} value={item.key}>
+                {item.unit || (zh ? '未提供單位' : 'Unit not provided')}
+                {series.selection.categoryId === 'bloodgas' ? ` · ${item.specimen || (zh ? '未提供檢體' : 'Specimen not provided')}` : ''}
+                {` · ${item.chartPoints.length} ${zh ? '筆精確數值' : item.chartPoints.length === 1 ? 'exact result' : 'exact results'}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="grid gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="min-w-0">
           <div className="text-xs font-medium text-muted-foreground">{strings.latest}</div>
@@ -467,6 +494,14 @@ export function CumulativeLabTrendDetail({
         )}
       </div>
 
+      {latest && newestOverall && newestOverall.timestamp > latest.timestamp && (
+        <p className="text-xs text-muted-foreground">
+          {zh
+            ? `另有較新結果（${formatDateTimeLabel(newestOverall.effectiveTime, locale)}）位於其他單位／檢體組，可切換查看。`
+            : `A newer result (${formatDateTimeLabel(newestOverall.effectiveTime, locale)}) is in another unit/specimen group; select that group to view it.`}
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label={zh ? '趨勢時間範圍' : 'Trend time range'}>
         {([
           ['6m', zh ? '6 個月' : '6 months'],
@@ -491,6 +526,13 @@ export function CumulativeLabTrendDetail({
         ))}
       </div>
 
+      {groups.length > 1 && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {zh
+            ? '可換算的單位已合併；其餘單位或血氣檢體分組顯示，不跨組連線。每組至少兩筆精確數值才畫線，全部紀錄保留於下方。'
+            : 'Convertible units are combined; other units or blood-gas specimens are shown in separate groups. Lines require two exact results in a group. All results remain below.'}
+        </p>
+      )}
       <div className="overflow-hidden rounded-xl border bg-card">
         {visibleCompatibility.chartable ? (
           <TrendChart
@@ -512,9 +554,9 @@ export function CumulativeLabTrendDetail({
         )}
       </div>
 
-      {(series.referenceRangesVary || series.sameDayMultiple || series.points.some((point) => point.unitInferred)) && (
+      {(group?.referenceRangesVary || series.sameDayMultiple || series.points.some((point) => point.unitInferred)) && (
         <div className="space-y-1.5 rounded-lg border border-sky-200 bg-sky-50/70 p-2.5 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-          {series.referenceRangesVary && <p className="flex gap-2"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />{strings.rangeVaries}</p>}
+          {group?.referenceRangesVary && <p className="flex gap-2"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />{strings.rangeVaries}</p>}
           {series.sameDayMultiple && <p className="flex gap-2"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />{strings.sameDay}</p>}
           {series.points.some((point) => point.unitInferred) && <p className="flex gap-2"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />{strings.inferred}</p>}
         </div>
@@ -540,6 +582,7 @@ export function CumulativeLabTrendDetail({
                 <span>{rangeLabel(point.referenceRange, point.unit) || '—'}</span>
                 <span>{zh ? '狀態' : 'Status'}</span>
                 <span>{statusLabel(point.status, zh) || '—'}{point.corrected ? ` · ${zh ? '修訂' : 'revised'}` : ''}</span>
+                {isOtherGroup(point) && <><span>{zh ? '趨勢' : 'Trend'}</span><span>{otherGroupLabel}</span></>}
                 {point.performer && <><span>{zh ? '來源' : 'Source'}</span><span>{point.performer}</span></>}
               </div>
             </article>
@@ -570,6 +613,7 @@ export function CumulativeLabTrendDetail({
                   </td>
                   <td className="px-2.5 py-2 text-muted-foreground">
                     <div>{statusLabel(point.status, zh) || '—'}{point.corrected ? ` · ${zh ? '修訂' : 'revised'}` : ''}</div>
+                    {isOtherGroup(point) && <div>{otherGroupLabel}</div>}
                     {point.performer && <div className="mt-0.5 max-w-56 truncate" title={point.performer}>{point.performer}</div>}
                   </td>
                 </tr>
