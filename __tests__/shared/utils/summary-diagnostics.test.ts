@@ -1,6 +1,6 @@
 import { TextEncoder } from 'util'
-import { buildSummaryReport, redactDiagnosticText, diagnosticUuid, inspectSummaryBlocks } from '@/src/shared/utils/summary-diagnostics'
-import { retainDiagnostics } from '@/src/application/stores/ai-execution-diagnostics.store'
+import { buildSummaryReport, redactDiagnosticText, diagnosticUuid, inspectSummaryBlocks, summaryReportOutcomeLabel } from '@/src/shared/utils/summary-diagnostics'
+import { retainDiagnostics, useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
 
 Object.assign(globalThis, { TextEncoder })
@@ -51,4 +51,29 @@ it('reports malformed complete blocks even when another block is missing',()=>{
   expect(inspectSummaryBlocks('synthetic',[malformed,missing])).toBe('invalid')
   expect(inspectSummaryBlocks('synthetic',[valid,missing])).toBe('incomplete')
   expect(inspectSummaryBlocks('synthetic',[valid,valid])).toBe('valid')
+})
+
+it('rejects late records from a superseded run and clears patient/scope diagnostic memory',()=>{
+  const store=useAiExecutionDiagnosticsStore.getState(), key='PRIVATE-PATIENT-CACHE-KEY'
+  const a='10000000-0000-4000-8000-000000000001',b='10000000-0000-4000-8000-000000000002'
+  store.clearAll();store.setSummaryScope('scope-A');store.beginSummaryRun(key,a);store.addRecord(record(1))
+  store.beginSummaryRun(key,b);store.addRecord({...record(2),technical:{...record(2).technical!,run_id:b}})
+  store.addRecord(record(3))
+  expect(JSON.parse(buildSummaryReport(useAiExecutionDiagnosticsStore.getState().records)).executions.map((e:{technical:{run_id:string}})=>e.technical.run_id)).toEqual([b])
+  store.setSummaryScope('scope-B');store.addRecord({...record(4),technical:{...record(4).technical!,run_id:b}})
+  expect(useAiExecutionDiagnosticsStore.getState().records).toHaveLength(0)
+  store.beginSummaryRun(key,b);store.addRecord({...record(5),technical:{...record(5).technical!,run_id:b}})
+  window.dispatchEvent(new Event('pagehide'))
+  expect(useAiExecutionDiagnosticsStore.getState().records).toHaveLength(0)
+  expect(useAiExecutionDiagnosticsStore.getState().summaryRuns).toEqual({})
+})
+it('reports excessive retry count explicitly rather than silently dropping attempts',()=>{
+  expect(()=>buildSummaryReport(Array.from({length:257},(_,i)=>record(i+1)))).toThrow('report_too_large')
+})
+
+it('labels timeout, explicit stop and parse failure distinctly in the full report',()=>{
+  const execution=JSON.parse(buildSummaryReport([record(1)])).executions[0]
+  expect(summaryReportOutcomeLabel({...execution,outcome:'timeout'})).toBe('逾時')
+  expect(summaryReportOutcomeLabel({...execution,outcome:'aborted'})).toBe('已停止')
+  expect(summaryReportOutcomeLabel({...execution,outcome:'parse_failed'})).toBe('格式解析失敗')
 })

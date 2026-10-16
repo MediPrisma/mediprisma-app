@@ -197,6 +197,8 @@ export const aiReportSchema = z.object({
   consent: z.literal(true), created_at: z.string().datetime(),
   executions: z.array(z.object({
     timestamp: z.string().datetime(), status: z.enum(['completed', 'error', 'aborted']),
+    // Optional for existing v1 records; new senders always populate this.
+    outcome: errorClassSchema.nullable().optional(),
     technical: summaryAttemptSchema,
     prompt: z.string().max(2_000_000), output: z.string().max(2_000_000),
   }).strict()).min(1).max(256),

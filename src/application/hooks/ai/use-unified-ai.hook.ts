@@ -1,7 +1,7 @@
 'use client'
 
 import { diagnosticUuid, redactDiagnosticText, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
-import type { SummaryAttempt } from '@/src/shared/contracts/collector-event'
+import type { SummaryAttempt, AiReport } from '@/src/shared/contracts/collector-event'
 /**
  * Unified AI Hook
  * Provides a consistent interface for AI operations across all features
@@ -298,7 +298,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       const abortOutcome = () => abortController.signal.reason instanceof Error &&
         abortController.signal.reason.name === 'MedicalSummaryCardProgressTimeoutError' ? 'timeout' as const : 'aborted' as const
       let recorded = false
-      const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
+      const record = (status: AiExecutionStatus, errorMessage: string | null = null, outcome: AiReport['executions'][number]['outcome'] = status === 'completed' ? null : status === 'aborted' ? abortOutcome() : 'error') => {
         if (recorded) return
         recorded = true
         useAiExecutionDiagnosticsStore.getState().addRecord({
@@ -312,6 +312,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           modelExecution,
           timestamp,
           technical: technical(),
+          outcome: streamOptions?.summaryDiagnostics ? outcome : undefined,
           prompt: redactDiagnosticText(diagnosticPrompt(messages), apiKey),
           inputData: {
             messages: messages.map(m => ({ ...m, content: redactDiagnosticText(m.content, apiKey) })),
@@ -379,11 +380,13 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         collector.finish({ summaryAttempt: technical(), outcome: parseFailed ? 'parse_failed' : 'ok', phase: parseFailed ? 'parse' : 'stream', responseComplete: true,
           modelId: modelExecution.actualModelId ?? modelId,
           modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
-        record('completed')
+        record(parseFailed ? 'error' : 'completed', null, parseFailed ? 'parse_failed' : null)
         options.onSuccess?.(fullText)
         return fullText
       } catch (err) {
-        collector.finish({ summaryAttempt: technical(), outcome: abortController.signal.aborted ? abortOutcome() : collectorError(err), phase: 'stream', responseComplete: false })
+        const classified = collectorError(err)
+        const failure = classified === 'ok' ? 'error' : classified
+        collector.finish({ summaryAttempt: technical(), outcome: abortController.signal.aborted ? abortOutcome() : failure, phase: 'stream', responseComplete: false })
         if (abortController.signal.aborted) {
           const abortReason = abortController.signal.reason
           record(
@@ -409,7 +412,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         }
 
         const errorMessage = getUserErrorMessage(err)
-        record('error', errorMessage)
+        record('error', errorMessage, failure)
         setError(errorMessage)
         options.onError?.(errorMessage)
         throw err

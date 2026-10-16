@@ -8,6 +8,10 @@ export type {
 
 interface AiExecutionDiagnosticsState {
   records: AiExecutionDiagnosticRecord[]
+  summaryRuns: Record<string, string>
+  summaryScope: string | null
+  setSummaryScope: (scope: string) => void
+  beginSummaryRun: (operationKey: string, runId: string) => void
   addRecord: (record: AiExecutionDiagnosticRecord) => void
   markLatestOperationFeatureError: (
     operationKey: string,
@@ -39,9 +43,16 @@ export function retainDiagnostics(records: AiExecutionDiagnosticRecord[]) {
  */
 export const useAiExecutionDiagnosticsStore = create<AiExecutionDiagnosticsState>()((set) => ({
   records: [],
-  addRecord: (record) => set((state) => ({
-    records: retainDiagnostics([...state.records, record]),
+  summaryRuns: {}, summaryScope: null,
+  setSummaryScope: (scope) => set(state => state.summaryScope === scope ? state : { summaryScope: scope, records: [], summaryRuns: {} }),
+  beginSummaryRun: (operationKey, runId) => set(state => ({
+    summaryRuns: { ...state.summaryRuns, [operationKey]: runId },
+    records: state.records.filter(r => r.operationKey !== operationKey || !r.technical || r.technical.run_id === runId),
   })),
+  addRecord: (record) => set((state) => {
+    if (record.technical && (!record.operationKey || state.summaryRuns[record.operationKey] !== record.technical.run_id)) return state
+    return { records: retainDiagnostics([...state.records, record]) }
+  }),
   markLatestOperationFeatureError: (operationKey, feature, errorMessage) => set((state) => {
     let index = -1
     for (let candidate = state.records.length - 1; candidate >= 0; candidate -= 1) {
@@ -63,14 +74,19 @@ export const useAiExecutionDiagnosticsStore = create<AiExecutionDiagnosticsState
   }),
   clearOperation: (operationKey) => set((state) => ({
     records: state.records.filter((record) => record.operationKey !== operationKey),
+    summaryRuns: Object.fromEntries(Object.entries(state.summaryRuns).filter(([key]) => key !== operationKey)),
   })),
   clearOperationFeature: (operationKey, feature) => set((state) => ({
+    summaryRuns: feature === 'medical-summary' ? Object.fromEntries(Object.entries(state.summaryRuns).filter(([key]) => key !== operationKey)) : state.summaryRuns,
     records: state.records.filter((record) => (
       record.operationKey !== operationKey || record.feature !== feature
     )),
   })),
   clearFeature: (feature) => set((state) => ({
     records: state.records.filter((record) => record.feature !== feature),
+    summaryRuns: feature === 'medical-summary' ? {} : state.summaryRuns,
   })),
-  clearAll: () => set({ records: [] }),
+  clearAll: () => set({ records: [], summaryRuns: {}, summaryScope: null }),
 }))
+
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => useAiExecutionDiagnosticsStore.getState().clearAll())

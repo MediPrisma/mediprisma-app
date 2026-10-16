@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { configuredEndpoint, isCollectorSite, captureCollectorAuth, awaitReportStep } from '@/src/application/telemetry/summary-report'
-import { buildSummaryReport } from '@/src/shared/utils/summary-diagnostics'
+import { buildSummaryReport, summaryReportOutcomeLabel } from '@/src/shared/utils/summary-diagnostics'
 import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
 import type { AiReport } from '@/src/shared/contracts/collector-event'
 
@@ -19,6 +19,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
+  const [receiptId, setReceiptId] = useState<string | null>(null)
   const [blocked, setBlocked] = useState(false)
   const active = useRef<AbortController | null>(null)
   const preview = useMemo(() => snapshot ? JSON.parse(snapshot.json) as AiReport : null, [snapshot])
@@ -26,8 +27,8 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
   if (!records.some(r => r.technical) || !eligible) return null
 
   const prepare = (fresh = false) => {
-    setMessage(''); setConsent(false); setSent(false); setBlocked(false)
-    if (snapshot && !sent && !fresh) {
+    setMessage(sent && !fresh && receiptId ? `回報已收到，編號：${receiptId}` : ''); setConsent(false); setBlocked(false)
+    if (snapshot && !fresh) {
       setSnapshot({ ...snapshot, auth: captureCollectorAuth().catch(() => null) })
       setReportOpen(true)
       return
@@ -37,10 +38,12 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
     try {
       // Freeze exactly what is previewed. Later retries cannot silently join it.
       setSnapshot({ json: buildSummaryReport(records), endpoint, auth: captureCollectorAuth().catch(() => null) })
+      setSent(false); setReceiptId(null)
       setReportOpen(true)
     } catch (error) {
+      setBlocked(true)
       setMessage(error instanceof Error && error.message === 'report_too_large'
-        ? '完整紀錄超過回報大小限制，請從診斷紀錄下載；沒有傳送任何資料。'
+        ? '完整紀錄超過回報筆數或大小限制，請從診斷紀錄下載；沒有傳送任何資料。'
         : '無法準備這份回報，請從診斷紀錄下載；沒有傳送任何資料。')
     }
   }
@@ -69,6 +72,13 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: snapshot.json, signal: controller.signal, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
       })
+      if (response.status === 503) {
+        let unconfigured = false
+        try { unconfigured = (await response.json()).reason === 'unconfigured' } catch { /* no raw server text is shown */ }
+        if (unconfigured) {
+          setBlocked(true); setMessage('目前收件功能無法使用，請下載這份回報並聯絡管理者。'); return
+        }
+      }
       if (response.status >= 400 && response.status < 500) {
         void response.body?.cancel().catch(() => {})
         setBlocked(true)
@@ -81,7 +91,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
       if (response.status !== 200 && response.status !== 201) { void response.body?.cancel().catch(() => {}); throw new Error('rejected') }
       const result = await response.json()
       if (result.success !== true || typeof result.reportId !== 'string' || !/^[0-9a-f-]{36}$/i.test(result.reportId)) throw new Error('receipt')
-      setSent(true); setMessage(`回報已收到，編號：${result.reportId}`)
+      setSent(true); setReceiptId(result.reportId); setMessage(`回報已收到，編號：${result.reportId}`)
     } catch { if (active.current === controller) setMessage('尚未確認收件成功。紀錄仍保留，可重試或下載；重試同一份回報不會重複建立。') }
     finally { clearTimeout(timer); if (active.current === controller) { active.current = null; setSending(false) } }
   }
@@ -98,7 +108,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
         <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-md border bg-muted/30 p-3 text-sm">
           <p className="font-medium">共 {preview?.executions.length} 次 AI 請求，包含重試紀錄</p>
           {preview?.executions.map(execution => <section key={execution.technical.request_id} className="space-y-2 rounded-md border bg-background p-3">
-            <h3 className="font-semibold">第 {execution.technical.attempt} 次請求 · {execution.status === 'completed' ? '完成' : execution.status === 'aborted' ? '中止' : '失敗'}</h3>
+            <h3 className="font-semibold">第 {execution.technical.attempt} 次請求 · {summaryReportOutcomeLabel(execution)}</h3>
             <p className="font-medium">送給 AI 的內容</p>
             <pre className="whitespace-pre-wrap break-all font-sans">{execution.prompt}</pre>
             <p className="font-medium">AI 回答（可能未完成）</p>
