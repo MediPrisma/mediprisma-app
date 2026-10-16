@@ -97,3 +97,26 @@ it('disabled intake gives download guidance instead of retrying forever',async()
   expect(screen.getByRole('button',{name:'暫時無法送出'})).toBeDisabled()
   expect(fetch).toHaveBeenCalledTimes(1)
 })
+
+it.each([false,true])('distinguishes a new generation from a frozen report (confirmed=%s)',async confirmed=>{
+  jest.mocked(fetch).mockClear();jest.mocked(fetch).mockResolvedValue(confirmed?{status:201,json:async()=>({success:true,reportId:'30000000-0000-4000-8000-000000000001'})} as Response:{status:503} as Response)
+  const view=render(<SummaryProblemReport records={records} busy={false}/>)
+  fireEvent.click(screen.getByRole('button',{name:'回報問題'}));fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'確認送出回報'}))
+  await screen.findByText(confirmed?/回報已收到/:/尚未確認收件成功/)
+  const oldBody=screen.getByLabelText('完整回報預覽').textContent
+  view.rerender(<SummaryProblemReport records={[]} busy={true}/>)
+  const newRecords=records.map(r=>({...r,prompt:'NEW RUN',technical:{...r.technical!,run_id:'10000000-0000-4000-8000-000000000002'}}))
+  view.rerender(<SummaryProblemReport records={newRecords} busy={false}/>)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'回報問題'}))
+  if(!confirmed){
+    expect(screen.getByRole('note')).toHaveTextContent('較早一輪')
+    expect(screen.getByLabelText('完整回報預覽').textContent).toBe(oldBody)
+    expect(screen.getByRole('button',{name:'確認送出較早的回報'})).toBeDisabled()
+    fireEvent.click(screen.getByRole('button',{name:'建立最新一輪的回報'}))
+  }
+  expect(screen.getByLabelText('完整回報預覽')).toHaveTextContent('NEW RUN')
+  expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  expect(screen.getByRole('button',{name:'確認送出回報'})).toBeDisabled()
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
