@@ -122,3 +122,49 @@ describe('CumulativeLabTrendDetail visible-window unit safety', () => {
     expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'false')
   })
 })
+
+function admissionSeries(): LabTrendSeries {
+  const base = mixedUnitSeries('CRE')
+  const dates = [
+    '2025-10-05', '2025-12-28',
+    '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06', '2026-03-08',
+    '2026-06-01', '2026-09-20',
+  ]
+  const chartPoints = dates.map((date, index) => point(`cre-${index}`, `${date}T00:00:00.000Z`, 1 + index / 10, 'mg/dL'))
+  return { ...base, points: chartPoints, chartPoints, mixedUnits: false, referenceRangesVary: false }
+}
+
+describe('CumulativeLabTrendDetail zoom', () => {
+  it('zooms into a dense run from its button and clears back to the preset window', () => {
+    const onWindowChange = jest.fn()
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} onWindowChange={onWindowChange} />
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /放大 .*6 筆/ }))
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByRole('button', { name: /放大 .*6 筆/ })).not.toBeInTheDocument()
+    expect(onWindowChange).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '清除自訂範圍' }))
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('leaves the zoom when a preset window is chosen', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /放大 .*6 筆/ }))
+    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+    expect(screen.queryByRole('button', { name: '清除自訂範圍' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})

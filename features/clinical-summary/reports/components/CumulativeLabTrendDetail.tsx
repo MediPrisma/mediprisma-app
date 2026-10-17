@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertTriangle, Clock3, Info, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Clock3, Info, MoveHorizontal, TrendingDown, TrendingUp, X, ZoomIn } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
@@ -26,7 +26,11 @@ import {
 import { formatNumberSmart } from '../utils/number-format.utils'
 import { labTrendGroupKey } from '@/src/shared/utils/lab-trend-group.utils'
 import {
+  buildCustomTrendTimeScale,
   buildTrendTimeScale,
+  findDenseTrendClusters,
+  padTrendRange,
+  type TrendCustomRange,
   type TrendTimeScale,
   type TrendWindow,
 } from '../utils/trend-time-scale'
@@ -58,11 +62,27 @@ function formatDateTimeLabel(value: string, locale: string): string {
   }).format(date)
 }
 
-function formatAxisDate(timestamp: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    year: '2-digit',
-    month: '2-digit',
-  }).format(new Date(timestamp))
+function formatAxisDate(timestamp: number, locale: string, unit: TrendTimeScale['tickUnit']): string {
+  const options: Intl.DateTimeFormatOptions = unit === 'hour'
+    ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+    : unit === 'day'
+      ? { month: '2-digit', day: '2-digit' }
+      : { year: '2-digit', month: '2-digit' }
+  return new Intl.DateTimeFormat(locale, options).format(new Date(timestamp))
+}
+
+function formatMonthDay(timestamp: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit' }).format(new Date(timestamp))
+}
+
+function formatRangeLabel(range: TrendCustomRange, locale: string): string {
+  const startYear = new Date(range.start).getFullYear()
+  const endYear = new Date(range.end).getFullYear()
+  const start = new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(range.start))
+  const end = startYear === endYear
+    ? formatMonthDay(range.end, locale)
+    : new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(range.end))
+  return `${start}–${end}`
 }
 
 function statusLabel(status: string | undefined, zh: boolean): string | undefined {
@@ -110,11 +130,17 @@ function differenceForDisplay(current: number, previous: number): number {
   return Number((current - previous).toFixed(precision))
 }
 
+// A zoomed-in range is spread across the full plot width, so it can carry
+// more always-on labels before they collide than a preset window can.
+const MAX_LABELLED_POINTS = 8
+const MAX_LABELLED_POINTS_ZOOMED = 20
+
 export function shouldShowTrendPointLabel(
   points: ReadonlyArray<Pick<LabTrendPoint, 'abnormal'>>,
   index: number,
+  zoomed = false,
 ): boolean {
-  return points.length <= 8
+  return points.length <= (zoomed ? MAX_LABELLED_POINTS_ZOOMED : MAX_LABELLED_POINTS)
     || points[index]?.abnormal === true
     || index === points.length - 1
 }
@@ -178,15 +204,35 @@ function TrendChart({
   referenceRange,
   referenceRangeLabel,
   timeScale,
+  zoomed,
+  onSelectRange,
 }: {
   points: LabTrendPoint[]
   unit?: string
   referenceRange?: LabTrendReferenceRange
   referenceRangeLabel: string
   timeScale: TrendTimeScale
+  zoomed: boolean
+  /** Called with the first and last selected results after a drag-select. */
+  onSelectRange: (selected: LabTrendPoint[]) => void
 }) {
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
+  // Drag-to-zoom snaps both ends to the nearest result (recharts' active
+  // tooltip index), so a selection always starts and ends on real data.
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null)
+  const indexOf = (state: { activeTooltipIndex?: unknown }) => {
+    const index = Number(state.activeTooltipIndex)
+    return Number.isInteger(index) && index >= 0 && index < points.length ? index : undefined
+  }
+  const finishDrag = () => {
+    if (drag && drag.from !== drag.to) {
+      const low = Math.min(drag.from, drag.to)
+      const high = Math.max(drag.from, drag.to)
+      onSelectRange(points.slice(low, high + 1))
+    }
+    setDrag(null)
+  }
   const { domain, ticks } = useMemo(() => {
     if (points.length === 0) return { domain: [0, 1] as [number, number], ticks: [0, 1] }
     let low = Math.min(...points.map((point) => point.value))
@@ -195,7 +241,7 @@ function TrendChart({
     if (referenceRange?.high !== undefined) high = Math.max(high, referenceRange.high)
     return niceAxis(low, high)
   }, [points, referenceRange])
-  const labelEveryPoint = points.length <= 8
+  const labelEveryPoint = points.length <= (zoomed ? MAX_LABELLED_POINTS_ZOOMED : MAX_LABELLED_POINTS)
 
   if (points.length < 2) {
     return (
@@ -214,7 +260,24 @@ function TrendChart({
         : `Lab trend chart with ${points.length} results, oldest to newest`}
     >
       <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-        <LineChart data={points} margin={{ top: 24, right: 18, bottom: 6, left: 2 }}>
+        <LineChart
+          data={points}
+          margin={{ top: 24, right: 18, bottom: 6, left: 2 }}
+          onMouseDown={(state, event) => {
+            const index = indexOf(state)
+            if (index === undefined) return
+            // Keep the drag from also selecting the axis and label text.
+            event.preventDefault()
+            setDrag({ from: index, to: index })
+          }}
+          onMouseMove={(state) => {
+            const index = indexOf(state)
+            if (drag && index !== undefined && index !== drag.to) setDrag({ ...drag, to: index })
+          }}
+          onMouseUp={finishDrag}
+          onMouseLeave={() => setDrag(null)}
+          style={{ cursor: 'crosshair' }}
+        >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
             dataKey="timestamp"
@@ -223,7 +286,7 @@ function TrendChart({
             domain={timeScale.domain}
             ticks={timeScale.ticks}
             allowDataOverflow
-            tickFormatter={(value: number) => formatAxisDate(value, locale)}
+            tickFormatter={(value: number) => formatAxisDate(value, locale, timeScale.tickUnit)}
             tick={{ fontSize: 10 }}
             tickLine={false}
             interval={0}
@@ -322,7 +385,7 @@ function TrendChart({
                 const { x, y, value, index } = props
                 const point = typeof index === 'number' ? points[index] : undefined
                 const show = typeof index === 'number'
-                  ? shouldShowTrendPointLabel(points, index)
+                  ? shouldShowTrendPointLabel(points, index, zoomed)
                   : labelEveryPoint
                 if (!show || x == null || y == null || typeof value !== 'number') return null
                 return (
@@ -342,6 +405,18 @@ function TrendChart({
               }}
             />
           </Line>
+
+          {drag && drag.from !== drag.to && (
+            <ReferenceArea
+              x1={points[Math.min(drag.from, drag.to)].timestamp}
+              x2={points[Math.max(drag.from, drag.to)].timestamp}
+              fill="#2563eb"
+              fillOpacity={0.12}
+              stroke="#2563eb"
+              strokeOpacity={0.6}
+              strokeDasharray="4 3"
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -357,6 +432,10 @@ export function CumulativeLabTrendDetail({
   const zh = locale.startsWith('zh')
   const groups = useMemo(() => groupLabTrendPoints(series.points, series.selection.categoryId), [series.points, series.selection.categoryId])
   const [selectedGroupKey, setSelectedGroupKey] = useState('')
+  // A zoomed range belongs to this analyte and group only; unlike the preset
+  // window it is not reported through onWindowChange.
+  const [customRange, setCustomRange] = useState<TrendCustomRange | null>(null)
+  const [zoomNotice, setZoomNotice] = useState('')
   const group = groups.find(item => item.key === selectedGroupKey) ?? groups[0]
   const chartPoints = useMemo(() => group?.chartPoints ?? [], [group])
   const isOtherGroup = (point: LabTrendPoint) => labTrendGroupKey(point.unit, point.specimen, series.selection.categoryId) !== group?.key
@@ -364,7 +443,17 @@ export function CumulativeLabTrendDetail({
   const [window, setWindow] = useState<TrendWindow>(() => initialWindow ?? defaultWindow({ chartPoints }))
   const selectWindow = (value: TrendWindow) => {
     setWindow(value)
+    setCustomRange(null)
+    setZoomNotice('')
     onWindowChange?.(value)
+  }
+  const zoomTo = (start: number, end: number) => {
+    setCustomRange(padTrendRange(start, end))
+    setZoomNotice('')
+  }
+  const clearZoom = () => {
+    setCustomRange(null)
+    setZoomNotice('')
   }
 
   const latest = group?.points.at(-1)
@@ -377,8 +466,12 @@ export function CumulativeLabTrendDetail({
     : undefined
 
   const timeScale = useMemo(
-    () => buildTrendTimeScale(chartPoints, window),
-    [chartPoints, window],
+    () => customRange ? buildCustomTrendTimeScale(customRange) : buildTrendTimeScale(chartPoints, window),
+    [chartPoints, customRange, window],
+  )
+  const denseClusters = useMemo(
+    () => customRange ? [] : findDenseTrendClusters(chartPoints, timeScale.domain),
+    [chartPoints, customRange, timeScale],
   )
   const visiblePoints = useMemo(() => {
     const [start, end] = timeScale.domain
@@ -436,7 +529,10 @@ export function CumulativeLabTrendDetail({
           <select
             className="min-h-[44px] w-full min-w-0 rounded-md border bg-background px-2 text-sm text-foreground"
             value={group?.key}
-            onChange={(event) => setSelectedGroupKey(event.target.value)}
+            onChange={(event) => {
+              setSelectedGroupKey(event.target.value)
+              clearZoom()
+            }}
           >
             {groups.map(item => (
               <option key={item.key} value={item.key}>
@@ -513,10 +609,10 @@ export function CumulativeLabTrendDetail({
             key={value}
             type="button"
             onClick={() => selectWindow(value)}
-            aria-pressed={window === value}
+            aria-pressed={!customRange && window === value}
             className={cn(
               'min-h-[44px] rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              window === value
+              !customRange && window === value
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
@@ -524,7 +620,52 @@ export function CumulativeLabTrendDetail({
             {label}
           </button>
         ))}
+        {customRange && (
+          <div className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-primary bg-primary/10 pl-3 text-xs font-semibold text-primary">
+            <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{zh ? '自訂' : 'Custom'} {formatRangeLabel(customRange, locale)}</span>
+            <button
+              type="button"
+              onClick={clearZoom}
+              aria-label={zh ? '清除自訂範圍' : 'Clear custom range'}
+              className="flex h-[44px] w-10 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
+
+      {denseClusters.length > 0 && visibleCompatibility.chartable && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 p-1.5 pl-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          <span className="min-w-0 flex-1">
+            {zh ? '這段期間結果密集，圖上不易分辨' : 'Results are tightly packed here and hard to read'}
+          </span>
+          {denseClusters.map((cluster) => (
+            <button
+              key={cluster.start}
+              type="button"
+              onClick={() => zoomTo(cluster.start, cluster.end)}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border border-amber-400 bg-background px-3 font-semibold text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-200 dark:hover:bg-amber-900/40"
+            >
+              <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+              {zh ? '放大' : 'Zoom to'} {formatMonthDay(cluster.start, locale)}–{formatMonthDay(cluster.end, locale)} · {cluster.count} {zh ? '筆' : 'results'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visibleCompatibility.chartable && (
+        <p
+          className={cn('flex items-center gap-1.5 text-xs', zoomNotice ? 'text-amber-700 dark:text-amber-300' : 'hidden text-muted-foreground sm:flex')}
+          role="status"
+        >
+          <MoveHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {zoomNotice || (customRange
+            ? (zh ? '可再拖曳選取細看，或按「✕」回到原本範圍。' : 'Drag again to narrow further, or clear to return to the previous range.')
+            : (zh ? '在圖上按住左右拖曳，可放大那段時間。' : 'Drag across the chart to zoom into that period.'))}
+        </p>
+      )}
 
       {groups.length > 1 && (
         <p className="text-xs text-muted-foreground" role="status">
@@ -543,6 +684,14 @@ export function CumulativeLabTrendDetail({
               ? (zh ? '共同參考範圍' : 'Shared range')
               : (zh ? '最新可用參考範圍' : 'Latest available range')}
             timeScale={timeScale}
+            zoomed={!!customRange}
+            onSelectRange={(selected) => {
+              if (selected.length < 2) {
+                setZoomNotice(zh ? '選取範圍內少於兩筆結果，未放大。' : 'Fewer than two results selected; not zoomed.')
+                return
+              }
+              zoomTo(selected[0].timestamp, selected[selected.length - 1].timestamp)
+            }}
           />
         ) : (
           <div className="flex min-h-56 items-center justify-center p-6 text-center">
