@@ -53,8 +53,10 @@ const isFastLaneRequest = (messages: Array<{ content: string }>) => {
     !contract.includes('<<<MEDIPRISMA_MODULE:problems>>>')
 }
 
+let mockIdentifySummaryRun: jest.Mock | undefined
 const runGeneration = (contextLimit: number) => async () => {
   mockResult = await mockSlotOptions.run({
+    identifySummaryRun: mockIdentifySummaryRun,
     operationKey: SLOT,
     modelId: 'gpt-nano-2',
     requestedModelId: 'gpt-nano-2',
@@ -94,7 +96,26 @@ beforeEach(() => {
   medicalSummaryStore.setState({ byKey: {}, running: { [SLOT]: true } } as any)
 })
 
-afterEach(() => jest.restoreAllMocks())
+afterEach(() => { mockIdentifySummaryRun = undefined; jest.restoreAllMocks() })
+
+test('the run names the operation with the same random ID every attempt sends', async () => {
+  mockIdentifySummaryRun = jest.fn()
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    const block = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : FULL_BLOCKS
+    options.onChunk(block)
+    return block
+  })
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => { await result.current.generate() })
+  expect(mockIdentifySummaryRun).toHaveBeenCalledTimes(1)
+  const runId = mockIdentifySummaryRun.mock.calls[0][0]
+  expect(runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  expect(runId).not.toContain(SLOT)
+  // The v7 attempt events are built from what each stream call receives.
+  const sent = mockStream.mock.calls.map(([, options]) => options.summaryDiagnostics)
+  expect(sent.length).toBeGreaterThanOrEqual(2)
+  expect(sent.map((d) => d.runId)).toEqual(sent.map(() => runId))
+})
 
 test('the overview lane publishes its section while the full lane is still streaming', async () => {
   let releaseFullLane: (() => void) | undefined

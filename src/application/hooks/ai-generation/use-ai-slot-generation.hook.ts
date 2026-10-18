@@ -74,6 +74,8 @@ import { providerClinicalContextSafetyFraction } from './context-window-retry'
 export interface AiSlotRunContext {
   /** Optional terminal measurement; does not change result/cache acceptance. */
   measureResult?: (result: AiGenerationMeasurement) => void
+  /** Optional: the random diagnostic run ID, joined to the operation telemetry event. */
+  identifySummaryRun?: (runId: string) => void
   /** Exact model-fitted text sent by this run. */
   clinicalContext: string
   /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
@@ -597,9 +599,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
       readRunMetrics: readRunMetrics ? () => readRunMetrics(slotKey) : undefined,
-      produce: (measureResult) =>
+      produce: (measureResult, identifySummaryRun) =>
         run({
           measureResult,
+          identifySummaryRun,
           clinicalContext,
           piiLiterals,
           clinicalData: scopedClinicalData,
