@@ -182,6 +182,16 @@ HF new-flow clinical information card: owner requested replacing the height tile
 
 AF is listed alongside HF and lipid in the HMC host, including production builds for `/app-hmc/`. The existing Beta and unattended launch rules apply; HF remains the default. Owner authorized AF integration and deployment on 2026-09-19.
 
+## CAD (coronary disease) preview
+
+2026-10-18: the owner asked for the app side of the CAD CDSS (「接著做 app 端」). Coronary disease (`chronic-coronary-disease-cdss`) is listed after AF in the HMC host. The package ships it `enabled: false`, so it shows only under the existing Beta switch and pilot ids, and the unattended Medcloud rule applies as for the other unreleased packs; HF remains the default. No existing clinical surface is removed.
+
+| Surface | Behaviour | Owner decision | Tests |
+|---|---|---|---|
+| 冠心病 in the disease switcher | Listed; visible with Beta or the pilot id, as dyslipidemia and AF | Owner, in chat 2026-10-18: 「接著做 app 端」 | `cad-host` |
+| CAD 決策地圖 v2 asks: 「心絞痛比上次」 (更多／一樣／較少／沒有) and 「出血」 | Asked on the CAD page; the bleeding answer is the one the AF page asks, kept once per patient | Same | `cad-host` |
+| 在地層：健保給付 lines under a point (CAD DP-12's P2Y12 reminder) | Drawn on every route of this host, which runs the Taiwan layer (`setLocaleLayer('taiwan')`); a deployment set to `'none'` draws none and nothing else changes | Owner, in chat 2026-10-18, asked that coverage be separable for deployment in other countries | `cad-host` |
+
 ## Optional private integrations (all routes)
 
 2026-10-04，使用者指定 FHIR 讀寫暫只開放已登入 Firebase 的 CDSS 協作者。site=vghtpe 的有效CDSS結果保留人工儲存／歷史控制，firebase 模式沿用既有登入、由API查UID名單；不顯示額外FHIR登入鈕。只有明確 oauth2 設定提供「登入 FHIR 授權／斷開 FHIR 授權」。其餘臨床surface與既有Beta／院別規則保留，FHIR不經Gateway；詳見CDSS-FHIR-PILOT.md。

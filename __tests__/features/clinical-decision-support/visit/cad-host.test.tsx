@@ -1,0 +1,108 @@
+/**
+ * Coronary disease on this host: listed in the switcher behind Beta, drawn as
+ * 決策地圖 v2 from the pack's own model, asking 「心絞痛比上次」 and 「出血」,
+ * and — on this Taiwan deployment — the 健保給付 line under DP-12, which a
+ * deployment without the locale layer does not draw (CAD core §7.2).
+ *
+ * The patient is the review draft's case 13 (NSTEMI admitted 2026-01-20,
+ * aspirin with ticagrelor, seen 2026-10-17); every value is invented.
+ */
+import { render, screen, within } from '@testing-library/react'
+import {
+  CORONARY_DISEASE_GUIDELINE_PACK,
+  buildVisitDecisionModel,
+  resetLocaleLayer,
+  setLocaleLayer,
+  type CdssFact,
+  type CdssPatientProfile,
+} from '@voho0000/personalized-care'
+import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
+import { HOST_CARE_PACKS } from '@/features/clinical-decision-support/guideline-packs/registry'
+
+jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
+  useClinicalData: () => ({ diagnosticReports: [] }),
+}))
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const webStreams = require('node:stream/web')
+for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as const) {
+  if (typeof (globalThis as Record<string, unknown>)[name] === 'undefined') {
+    ;(globalThis as Record<string, unknown>)[name] = webStreams[name]
+  }
+}
+
+const PACK_ID = 'chronic-coronary-disease-cdss'
+
+function fact(value: string, numericValue?: number, date = '2026-09-30'): CdssFact {
+  return { zh: value, en: value, ...(numericValue === undefined ? {} : { numericValue }), date }
+}
+
+function med(names: string[], factKey: string) {
+  return {
+    state: 'confirmed-current' as const,
+    medicationNames: names,
+    factKey,
+    lastPrescriptionDate: '2026-10-01',
+    dataWindowStartDate: '2025-10-17',
+    dataWindowEndDate: '2026-10-17',
+  }
+}
+
+const PROFILE: CdssPatientProfile = {
+  id: 'cad-host',
+  evaluatedAt: '2026-10-17T09:00:00+08:00',
+  facts: {
+    age: fact('62 歲', 62),
+    chronicCoronarySyndromeDiagnosis: fact('慢性冠心病診斷：I25.10', undefined, '2026-07-18'),
+    acuteCoronarySyndromeAdmission: fact('365 天內有以急性冠心症為就診原因的住院紀錄（2026-01-20）', undefined, '2026-01-20'),
+    LDL: fact('68 mg/dL', 68),
+    eGFR: fact('78 mL/min/1.73m²', 78),
+    LVEF: fact('52%', 52, '2026-01-22'),
+  },
+  medicationClassContexts: {
+    aspirin: med(['Bokey 100 mg'], 'aspirinTherapy'),
+    'p2y12-inhibitor': med(['ticagrelor 90 mg'], 'p2y12Therapy'),
+    statin: med(['rosuvastatin 20 mg'], 'statinTherapy'),
+  },
+}
+
+function draw() {
+  const result = CORONARY_DISEASE_GUIDELINE_PACK.build({ profile: PROFILE, locale: 'zh-TW' })
+  const visitModel = buildVisitDecisionModel({ packId: PACK_ID, result, profile: PROFILE, locale: 'zh-TW' })
+  return render(<ClinicalDecisionSupportView result={result} locale="zh-TW" layout="map" patientId="cad-host" visitModel={visitModel} />)
+}
+
+const entry = (dp: string) => document.querySelector<HTMLElement>(`[data-book-dp="${dp}"]`)!
+
+afterEach(() => resetLocaleLayer())
+
+describe('coronary disease on this host', () => {
+  it('lists coronary disease after AF, behind Beta as the package ships it', () => {
+    expect(HOST_CARE_PACKS.map((pack) => pack.id).at(-1)).toBe(PACK_ID)
+    expect(HOST_CARE_PACKS.find((pack) => pack.id === PACK_ID)?.enabled).toBe(false)
+  })
+
+  it('draws the CAD chapters and asks angina and bleeding', () => {
+    draw()
+    expect(screen.getByRole('heading', { name: /抗栓：DAPT 走到哪一步？/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /事件預防：哪些還沒到位？/ })).toBeInTheDocument()
+    for (const label of ['更多', '一樣', '較少', '沒有']) {
+      expect(screen.getAllByRole('button', { name: label }).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('draws the 健保給付 line under DP-12 on this Taiwan deployment', () => {
+    draw()
+    const coverage = within(entry('DP-12')).getByText(/2\.1\.1\.9/)
+    expect(coverage.closest('[data-book-coverage]')).not.toBeNull()
+    expect(within(entry('DP-12')).getByText('健保給付')).toBeInTheDocument()
+    expect(coverage.textContent).toContain('2026-10-20')
+  })
+
+  it('draws no coverage line where the deployment runs without the locale layer', () => {
+    setLocaleLayer('none')
+    draw()
+    expect(document.querySelector('[data-book-coverage]')).toBeNull()
+    expect(entry('DP-12')).toBeInTheDocument()
+  })
+})

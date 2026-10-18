@@ -127,5 +127,16 @@
    "bleeding": "無"
   },
   "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p12-cad-nstemi-dapt",
+  "title": "CAD 追蹤：NSTEMI 後第 9 個月",
+  "kind": "follow-up",
+  "page": "cad",
+  "oneLine": "62 歲男，2026-01-20 NSTEMI 住院同日 LAD DES；aspirin＋ticagrelor；LDL 68、HbA1c 7.4；ticagrelor 健保 9 個月提醒點 10-20",
+  "visit": {
+   "angina": "較少",
+   "bleeding": "無"
+  }
  }
 ]
