@@ -7,7 +7,6 @@ import { act, renderHook } from '@testing-library/react'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
-import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 const SLOT = 'lane-slot'
 
@@ -99,11 +98,8 @@ beforeEach(() => {
 
 afterEach(() => { mockIdentifySummaryRun = undefined; jest.restoreAllMocks() })
 
-test('the run names the operation with the same random ID its attempts carry', async () => {
-  const seen: Array<[string, string | undefined]> = []
-  mockIdentifySummaryRun = jest.fn((runId: string) => {
-    seen.push([runId, useAiExecutionDiagnosticsStore.getState().summaryRuns[SLOT]])
-  })
+test('the run names the operation with the same random ID every attempt sends', async () => {
+  mockIdentifySummaryRun = jest.fn()
   mockStream.mockImplementation(async (messages: any[], options: any) => {
     const block = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : FULL_BLOCKS
     options.onChunk(block)
@@ -112,10 +108,13 @@ test('the run names the operation with the same random ID its attempts carry', a
   const { result } = renderHook(() => useMedicalSummary())
   await act(async () => { await result.current.generate() })
   expect(mockIdentifySummaryRun).toHaveBeenCalledTimes(1)
-  const [[runId, attemptRunId]] = seen
+  const runId = mockIdentifySummaryRun.mock.calls[0][0]
   expect(runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
-  expect(runId).toBe(attemptRunId)
   expect(runId).not.toContain(SLOT)
+  // The v7 attempt events are built from what each stream call receives.
+  const sent = mockStream.mock.calls.map(([, options]) => options.summaryDiagnostics)
+  expect(sent.length).toBeGreaterThanOrEqual(2)
+  expect(sent.map((d) => d.runId)).toEqual(sent.map(() => runId))
 })
 
 test('the overview lane publishes its section while the full lane is still streaming', async () => {
