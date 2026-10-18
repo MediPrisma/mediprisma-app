@@ -5,7 +5,7 @@ import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 import { REPORT_SOURCE_TONE } from './report-color-roles'
-import { formatSourceInstitution } from '../utils/source-institution-display'
+import { sourceInstitutionDisplay } from '../utils/source-institution-display'
 import type { HospitalSource } from '../adapters/vghtpe-source-display'
 
 /** Backwards-compatible name for report callers and tests. */
@@ -31,9 +31,7 @@ export function ReportInstitutionLabel({
   stopPropagation?: boolean
   locale?: string
 }) {
-  const displayInstitution = formatSourceInstitution(institution, hospitalSource, locale)
-  const sourceSuffix = displayInstitution?.match(/(\((?:院內(?:\+雲端)?|Cloud \+ in-house|In-house)\))$/)?.[0] ?? ''
-  const institutionName = sourceSuffix ? displayInstitution?.slice(0, -sourceSuffix.length) : displayInstitution
+  const { name: institutionName, suffix: sourceSuffix, label: displayInstitution } = sourceInstitutionDisplay(institution, hospitalSource, locale)
   return (
     <TapTooltip
       side="top"

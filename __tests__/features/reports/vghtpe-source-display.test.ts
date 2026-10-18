@@ -1,10 +1,27 @@
-import { getVghtpeSource } from '@/features/clinical-summary/reports/adapters/vghtpe-source-display'
-import { formatSourceInstitution } from '@/features/clinical-summary/reports/utils/source-institution-display'
+import { getVghtpeSource, mergeHospitalSources } from '@/features/clinical-summary/reports/adapters/vghtpe-source-display'
+import { formatSourceInstitution, sourceInstitutionDisplay } from '@/features/clinical-summary/reports/utils/source-institution-display'
 import { buildReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
 import { groupLabReportsByDay } from '@/features/clinical-summary/reports/utils/lab-day-grouping'
 
 const internal = { meta: { tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] } }
 const cloud = { meta: { source: 'https://medcloud2.nhi.gov.tw/' } }
+
+it('aggregates provenance independently of member arrival order', () => {
+  expect(mergeHospitalSources([undefined, 'cloud'])).toBe('cloud')
+  expect(mergeHospitalSources(['cloud', undefined])).toBe('cloud')
+  expect(mergeHospitalSources(['in-house', 'cloud'])).toBe('cloud-and-in-house')
+  expect(mergeHospitalSources(['cloud', 'in-house'])).toBe('cloud-and-in-house')
+  expect(getVghtpeSource([{meta:{source:'https://medcloud2.nhi.gov.tw'}}])).toBe('cloud')
+})
+
+it('returns explicit name and suffix parts without parsing institution text', () => {
+  expect(sourceInstitutionDisplay('臺北榮總', 'in-house', 'en')).toEqual({
+    name:'臺北榮總', suffix:'(In-house)', label:'臺北榮總 (In-house)',
+  })
+  expect(sourceInstitutionDisplay('Test Hospital(院內)', undefined, 'zh-TW')).toEqual({
+    name:'Test Hospital(院內)', suffix:'', label:'Test Hospital(院內)',
+  })
+})
 
 it('preserves raw institution identity through report mapping and aggregates source labels', () => {
   const report = (id: string, source: object) => ({

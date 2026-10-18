@@ -613,7 +613,8 @@ function VitalReportMetadata({
       >
         {row.institution && (
           <ReportInstitutionLabel
-            institution={row.institution} hospitalSource={row.hospitalSource}
+            institution={row.institution}
+            hospitalSource={row.hospitalSource}
             locale={locale}
             className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none @min-[800px]:w-full @min-[800px]:max-w-full"
           />
