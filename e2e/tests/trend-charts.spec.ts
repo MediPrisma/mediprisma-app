@@ -39,6 +39,98 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(detailPanel.getByText('4.3').first()).toBeVisible()
   })
 
+  test('dragging across the trend zooms in, and a drag on one result explains why it did not', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+    const midY = box.y + box.height / 2
+
+    // A short drag that stays nearest the first result selects only one.
+    await page.mouse.move(box.x + 60, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 80, midY, { steps: 4 })
+    await page.mouse.up()
+    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toBeVisible()
+    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toHaveCount(0)
+
+    // Dragging from the first result to the last zooms to them.
+    await page.mouse.move(box.x + 60, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, midY, { steps: 12 })
+    await page.mouse.up()
+    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toBeVisible()
+    await expect(detailPanel.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('a release in the same frame as the last drag move settles on the release point', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+    const midY = box.y + box.height / 2
+
+    await page.mouse.move(box.x + 60, midY)
+    await page.mouse.down()
+    // Move to the last result and release inside one JS task, as a fast
+    // flick does, then let any deferred move callbacks run.
+    await chart.evaluate((element, { x, y }) => {
+      const target = element.querySelector('.recharts-wrapper') ?? element
+      const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window }
+      target.dispatchEvent(new MouseEvent('mousemove', init))
+      target.dispatchEvent(new MouseEvent('mouseup', init))
+      return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    }, { x: box.x + box.width - 20, y: midY })
+    await page.mouse.up()
+
+    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toBeVisible()
+    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toHaveCount(0)
+    // Only the normal-range band remains; no orphaned selection overlay.
+    await expect(chart.locator('.recharts-reference-area')).toHaveCount(1)
+  })
+
+  test('releasing a drag over the axis keeps the last result under the pointer', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+
+    // The drag cue is its own row above the plot, never over a value label.
+    const cue = detailPanel.getByText('拖曳圖表可放大')
+    await expect(cue).toBeVisible()
+    expect((await cue.boundingBox())!.y + (await cue.boundingBox())!.height).toBeLessThanOrEqual(box.y)
+
+    // Middle result → last result, then down onto the X axis and release.
+    await page.mouse.move(box.x + box.width * 0.45, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2, { steps: 8 })
+    await page.mouse.move(box.x + box.width - 20, box.y + box.height - 4, { steps: 4 })
+    await page.mouse.up()
+
+    await expect(detailPanel.getByRole('button', { name: /^自訂 2025\/02\/12–2026\/06\/02$/ })).toBeVisible()
+  })
+
   test('phone cumulative trend uses the same visible close action as other report trends', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 })
     await importBundle(page)

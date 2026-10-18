@@ -5,6 +5,8 @@ export type TrendWindow = '6m' | '1y' | '3y' | 'all'
 export interface TrendTimeScale {
   domain: [number, number]
   ticks: number[]
+  /** Granularity the axis labels should print. Preset windows are monthly. */
+  tickUnit: 'month' | 'day' | 'time'
 }
 
 /**
@@ -51,7 +53,7 @@ export function buildTrendTimeScale(
     .filter(Number.isFinite)
     .sort((left, right) => left - right)
 
-  if (timestamps.length === 0) return { domain: [0, 1], ticks: [0, 1] }
+  if (timestamps.length === 0) return { domain: [0, 1], ticks: [0, 1], tickUnit: 'month' }
 
   const end = timestamps.at(-1)!
   let stepMonths: number
@@ -84,5 +86,126 @@ export function buildTrendTimeScale(
   return {
     domain: [ticks[0], end],
     ticks,
+    tickUnit: 'month',
   }
+}
+
+export interface TrendCustomRange {
+  start: number
+  end: number
+}
+
+export interface TrendCluster extends TrendCustomRange {
+  count: number
+}
+
+const MINUTE_MS = 60 * 1000
+const HOUR_MS = 60 * MINUTE_MS
+const DAY_MS = 24 * HOUR_MS
+const CUSTOM_MAX_SEGMENTS = 6
+const CUSTOM_MINUTE_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 180, 360, 720]
+const CUSTOM_DAY_STEPS = [1, 2, 3, 7, 14]
+const CUSTOM_MONTH_STEPS = [1, 2, 3, 6, 12, 24]
+
+/**
+ * Pad a zoom selection so the first and last results sit inside the plot
+ * instead of on its edges. The pad scales with the selection, so results a few
+ * minutes apart still spread across the plot; only a selection with no span
+ * (results sharing one timestamp) falls back to a fixed half day each side.
+ */
+export function padTrendRange(start: number, end: number): TrendCustomRange {
+  const span = end - start
+  const pad = span > 0 ? span * 0.1 : DAY_MS / 2
+  return { start: start - pad, end: end + pad }
+}
+
+function localStartOfDay(timestamp: number): number {
+  const date = new Date(timestamp)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+/**
+ * X axis for a user-selected range. The tick unit follows the span so a
+ * two-week admission reads in days and a single day in hours or minutes,
+ * rather than the month ticks the preset windows use. Ticks fall on local
+ * midnights / round clock times so they line up with the labels printed.
+ */
+export function buildCustomTrendTimeScale(range: TrendCustomRange): TrendTimeScale {
+  const { start, end } = range
+  const span = end - start
+  const ticks: number[] = []
+
+  if (span <= 2 * DAY_MS) {
+    const stepMinutes = CUSTOM_MINUTE_STEPS.find((step) => span / (step * MINUTE_MS) <= CUSTOM_MAX_SEGMENTS)
+      ?? CUSTOM_MINUTE_STEPS.at(-1)!
+    const step = stepMinutes * MINUTE_MS
+    // Align to a round local clock time (08:00, 08:15…), counted from local
+    // midnight so whole-hour steps stay on the hour in any timezone.
+    const midnight = localStartOfDay(start)
+    const first = midnight + Math.ceil((start - midnight) / step) * step
+    for (let tick = first; tick <= end; tick += step) ticks.push(tick)
+    return { domain: [start, end], ticks, tickUnit: 'time' }
+  }
+
+  if (span <= 120 * DAY_MS) {
+    const stepDays = CUSTOM_DAY_STEPS.find((step) => span / (step * DAY_MS) <= CUSTOM_MAX_SEGMENTS)
+      ?? CUSTOM_DAY_STEPS.at(-1)!
+    const cursor = new Date(localStartOfDay(start))
+    if (cursor.getTime() < start) cursor.setDate(cursor.getDate() + 1)
+    while (cursor.getTime() <= end) {
+      ticks.push(cursor.getTime())
+      cursor.setDate(cursor.getDate() + stepDays)
+    }
+    return { domain: [start, end], ticks, tickUnit: 'day' }
+  }
+
+  const spanMonths = span / (30 * DAY_MS)
+  const stepMonths = CUSTOM_MONTH_STEPS.find((step) => spanMonths / step <= CUSTOM_MAX_SEGMENTS)
+    ?? CUSTOM_MONTH_STEPS.at(-1)!
+  const cursor = new Date(localStartOfDay(start))
+  cursor.setDate(1)
+  if (cursor.getTime() < start) cursor.setMonth(cursor.getMonth() + 1)
+  while (cursor.getTime() <= end) {
+    ticks.push(cursor.getTime())
+    cursor.setMonth(cursor.getMonth() + stepMonths)
+  }
+  return { domain: [start, end], ticks, tickUnit: 'month' }
+}
+
+/**
+ * Runs of results taken close together (e.g. daily labs during an admission)
+ * that occupy a sliver of the current window, so their points and labels pile
+ * up. Offered as one-tap zoom targets; never used to hide or merge results.
+ */
+export function findDenseTrendClusters(
+  points: ReadonlyArray<Pick<LabTrendPoint, 'timestamp'>>,
+  domain: [number, number],
+  {
+    maxGapMs = 3 * DAY_MS,
+    minCount = 4,
+    maxShareOfWindow = 0.1,
+    limit = 3,
+  }: { maxGapMs?: number; minCount?: number; maxShareOfWindow?: number; limit?: number } = {},
+): TrendCluster[] {
+  const [windowStart, windowEnd] = domain
+  const windowSpan = windowEnd - windowStart
+  const timestamps = points
+    .map((point) => point.timestamp)
+    .filter((timestamp) => Number.isFinite(timestamp) && timestamp >= windowStart && timestamp <= windowEnd)
+    .sort((left, right) => left - right)
+
+  const clusters: TrendCluster[] = []
+  let runStart = 0
+  for (let index = 1; index <= timestamps.length; index += 1) {
+    if (index < timestamps.length && timestamps[index] - timestamps[index - 1] <= maxGapMs) continue
+    const count = index - runStart
+    const start = timestamps[runStart]
+    const end = timestamps[index - 1]
+    if (count >= minCount && end - start < windowSpan * maxShareOfWindow) {
+      clusters.push({ start, end, count })
+    }
+    runStart = index
+  }
+  return clusters.slice(0, limit)
 }
