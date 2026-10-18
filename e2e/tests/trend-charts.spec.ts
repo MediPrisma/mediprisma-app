@@ -39,7 +39,7 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(detailPanel.getByText('4.3').first()).toBeVisible()
   })
 
-  test('dragging across the trend zooms in, and a drag on one result explains why it did not', async ({ page }) => {
+  test('dragging a box over the trend zooms in, and a box without two results explains why it did not', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 1000 })
     await openReportsSubTab(page, '檢驗')
     await page.getByRole('button', { name: '單項列表' }).click()
@@ -50,27 +50,36 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await detailPanel.getByRole('button', { name: '全部' }).click()
     const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
     await expect(chart).toBeVisible()
+    // The how-to sits in the chart's status row, above the plot.
+    const cue = detailPanel.getByText('在圖上按住滑鼠左右拖曳，框出要放大的時間')
+    await expect(cue).toBeVisible()
     const box = (await chart.boundingBox())!
+    expect((await cue.boundingBox())!.y + (await cue.boundingBox())!.height).toBeLessThanOrEqual(box.y)
     const midY = box.y + box.height / 2
 
-    // A short drag that stays nearest the first result selects only one.
-    await page.mouse.move(box.x + 60, midY)
-    await page.mouse.down()
-    await page.mouse.move(box.x + 80, midY, { steps: 4 })
-    await page.mouse.up()
-    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toBeVisible()
-    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toHaveCount(0)
-
-    // Dragging from the first result to the last zooms to them.
-    await page.mouse.move(box.x + 60, midY)
+    // While dragging, the box follows the pointer, the tooltip stays hidden
+    // and the status row reads out the selection.
+    await page.mouse.move(box.x + 75, midY)
     await page.mouse.down()
     await page.mouse.move(box.x + box.width - 20, midY, { steps: 12 })
+    await expect(chart.getByTestId('trend-drag-selection')).toBeVisible()
+    await expect(detailPanel.getByText(/^選取 .* · 3 筆，放開即可放大$/)).toBeVisible()
     await page.mouse.up()
-    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toBeVisible()
+    await expect(detailPanel.getByText(/^已放大 2024\/03\/06–2026\/06\/02$/)).toBeVisible()
+    await expect(chart.getByTestId('trend-drag-selection')).toHaveCount(0)
     await expect(detailPanel.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'false')
+    await detailPanel.getByRole('button', { name: '還原' }).click()
+
+    // A short box that holds at most one result does not zoom, and says so.
+    await page.mouse.move(box.x + 75, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 100, midY, { steps: 4 })
+    await page.mouse.up()
+    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toBeVisible()
+    await expect(detailPanel.getByRole('button', { name: '還原' })).toHaveCount(0)
   })
 
-  test('a release in the same frame as the last drag move settles on the release point', async ({ page }) => {
+  test('a release in the same task as the last drag move settles on the release point', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 1000 })
     await openReportsSubTab(page, '檢驗')
     await page.getByRole('button', { name: '單項列表' }).click()
@@ -84,26 +93,24 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     const box = (await chart.boundingBox())!
     const midY = box.y + box.height / 2
 
-    await page.mouse.move(box.x + 60, midY)
+    await page.mouse.move(box.x + 75, midY)
     await page.mouse.down()
-    // Move to the last result and release inside one JS task, as a fast
-    // flick does, then let any deferred move callbacks run.
+    // Move to the far end and release inside one JS task, as a fast flick
+    // does, then let any deferred work run.
     await chart.evaluate((element, { x, y }) => {
-      const target = element.querySelector('.recharts-wrapper') ?? element
-      const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window }
-      target.dispatchEvent(new MouseEvent('mousemove', init))
-      target.dispatchEvent(new MouseEvent('mouseup', init))
+      const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, view: window }
+      element.dispatchEvent(new PointerEvent('pointermove', init))
+      element.dispatchEvent(new PointerEvent('pointerup', init))
       return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     }, { x: box.x + box.width - 20, y: midY })
     await page.mouse.up()
 
-    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toBeVisible()
+    await expect(detailPanel.getByText(/^已放大 2024\/03\/06–2026\/06\/02$/)).toBeVisible()
     await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toHaveCount(0)
-    // Only the normal-range band remains; no orphaned selection overlay.
-    await expect(chart.locator('.recharts-reference-area')).toHaveCount(1)
+    await expect(chart.getByTestId('trend-drag-selection')).toHaveCount(0)
   })
 
-  test('releasing a drag over the axis keeps the last result under the pointer', async ({ page }) => {
+  test('releasing a drag over the axis keeps the time under the pointer', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 1000 })
     await openReportsSubTab(page, '檢驗')
     await page.getByRole('button', { name: '單項列表' }).click()
@@ -116,19 +123,15 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(chart).toBeVisible()
     const box = (await chart.boundingBox())!
 
-    // The drag cue is its own row above the plot, never over a value label.
-    const cue = detailPanel.getByText('拖曳圖表可放大')
-    await expect(cue).toBeVisible()
-    expect((await cue.boundingBox())!.y + (await cue.boundingBox())!.height).toBeLessThanOrEqual(box.y)
-
-    // Middle result → last result, then down onto the X axis and release.
+    // Just before the middle result → past the last one, then down onto the
+    // X axis and release there.
     await page.mouse.move(box.x + box.width * 0.45, box.y + box.height / 2)
     await page.mouse.down()
     await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2, { steps: 8 })
     await page.mouse.move(box.x + box.width - 20, box.y + box.height - 4, { steps: 4 })
     await page.mouse.up()
 
-    await expect(detailPanel.getByRole('button', { name: /^自訂 2025\/02\/12–2026\/06\/02$/ })).toBeVisible()
+    await expect(detailPanel.getByText(/^已放大 2025\/02\/12–2026\/06\/02$/)).toBeVisible()
   })
 
   test('phone cumulative trend uses the same visible close action as other report trends', async ({ page }) => {
