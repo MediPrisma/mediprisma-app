@@ -70,6 +70,39 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(detailPanel.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'false')
   })
 
+  test('a release in the same frame as the last drag move settles on the release point', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+    const midY = box.y + box.height / 2
+
+    await page.mouse.move(box.x + 60, midY)
+    await page.mouse.down()
+    // Move to the last result and release inside one JS task, as a fast
+    // flick does, then let any deferred move callbacks run.
+    await chart.evaluate((element, { x, y }) => {
+      const target = element.querySelector('.recharts-wrapper') ?? element
+      const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window }
+      target.dispatchEvent(new MouseEvent('mousemove', init))
+      target.dispatchEvent(new MouseEvent('mouseup', init))
+      return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    }, { x: box.x + box.width - 20, y: midY })
+    await page.mouse.up()
+
+    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toBeVisible()
+    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toHaveCount(0)
+    // Only the normal-range band remains; no orphaned selection overlay.
+    await expect(chart.locator('.recharts-reference-area')).toHaveCount(1)
+  })
+
   test('phone cumulative trend uses the same visible close action as other report trends', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 })
     await importBundle(page)

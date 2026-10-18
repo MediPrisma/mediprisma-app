@@ -208,4 +208,20 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
     fireEvent.click(zoom)
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
   })
+
+  it('shows only the picked results when dense results sit just past the picked end', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '自訂起訖' }))
+    // 2025-10-05 → 2026-03-02; five more results follow within six days.
+    fireEvent.change(screen.getByRole('combobox', { name: '起' }), { target: { value: '0' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '迄' }), { target: { value: '2' } })
+    fireEvent.click(screen.getByRole('button', { name: '放大' }))
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })).toBeInTheDocument()
+    expect(screen.getByText(/自訂 2025\/10\/05–2026\/03\/02/)).toBeInTheDocument()
+  })
 })

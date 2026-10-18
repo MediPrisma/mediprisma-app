@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   CartesianGrid,
   LabelList,
@@ -245,18 +245,28 @@ function TrendChart({
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
   // Drag-to-zoom snaps both ends to the nearest result (recharts' active
-  // tooltip index), so a selection always starts and ends on real data.
-  const [drag, setDrag] = useState<{ from: number; to: number; startX: number } | null>(null)
+  // tooltip index), so a selection always starts and ends on real data. The
+  // ref is the source of truth so a move callback that runs after mouse-up
+  // cannot revive a finished drag; the state only draws the selection.
+  type Drag = { from: number; to: number; startX: number }
+  const dragRef = useRef<Drag | null>(null)
+  const [drag, setDragState] = useState<Drag | null>(null)
+  const setDrag = (next: Drag | null) => {
+    dragRef.current = next
+    setDragState(next)
+  }
   const indexOf = (state: { activeTooltipIndex?: unknown }) => {
     const index = Number(state.activeTooltipIndex)
     return Number.isInteger(index) && index >= 0 && index < points.length ? index : undefined
   }
-  const finishDrag = (clientX: number) => {
-    if (drag) {
-      const result = resolveTrendDragSelection(points, drag.from, drag.to, Math.abs(clientX - drag.startX))
-      if (result.kind !== 'click') onDragEnd(result)
-    }
+  const finishDrag = (finalIndex: number | undefined, clientX: number) => {
+    const current = dragRef.current
     setDrag(null)
+    if (!current) return
+    // Settle on the result under the pointer at release, not the last move seen.
+    const to = finalIndex ?? current.to
+    const result = resolveTrendDragSelection(points, current.from, to, Math.abs(clientX - current.startX))
+    if (result.kind !== 'click') onDragEnd(result)
   }
   const { domain, ticks } = useMemo(() => {
     if (points.length === 0) return { domain: [0, 1] as [number, number], ticks: [0, 1] }
@@ -296,11 +306,17 @@ function TrendChart({
             setDrag({ from: index, to: index, startX: event.clientX })
           }}
           onMouseMove={(state) => {
+            const current = dragRef.current
             const index = indexOf(state)
-            if (drag && index !== undefined && index !== drag.to) setDrag({ ...drag, to: index })
+            if (current && index !== undefined && index !== current.to) setDrag({ ...current, to: index })
           }}
-          onMouseUp={(_state, event) => finishDrag(event.clientX)}
+          onMouseUp={(state, event) => finishDrag(indexOf(state), event.clientX)}
           onMouseLeave={() => setDrag(null)}
+          // Recharts defers mousemove (its tooltip index and our callback) to
+          // the next animation frame but runs mouseup at once, so a release in
+          // the same frame as the last move would read a stale index. A trend
+          // has few points, so handle mousemove synchronously.
+          throttledEvents={['touchmove', 'pointermove', 'scroll', 'wheel']}
           style={{ cursor: 'crosshair' }}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -458,7 +474,9 @@ export function CumulativeLabTrendDetail({
   const groups = useMemo(() => groupLabTrendPoints(series.points, series.selection.categoryId), [series.points, series.selection.categoryId])
   const [selectedGroupKey, setSelectedGroupKey] = useState('')
   // A zoomed range belongs to this analyte and group only; unlike the preset
-  // window it is not reported through onWindowChange.
+  // window it is not reported through onWindowChange. It holds the selected
+  // first and last results' times, unpadded: it decides which results are
+  // shown and labels the range, while only the axis domain is padded.
   const [customRange, setCustomRange] = useState<TrendCustomRange | null>(null)
   const [zoomNotice, setZoomNotice] = useState('')
   // Keyboard-operable equivalent of drag-to-zoom: pick the first and last
@@ -476,7 +494,7 @@ export function CumulativeLabTrendDetail({
     onWindowChange?.(value)
   }
   const zoomTo = (start: number, end: number) => {
-    setCustomRange(padTrendRange(start, end))
+    setCustomRange({ start, end })
     setZoomNotice('')
   }
   const clearZoom = () => {
@@ -494,7 +512,9 @@ export function CumulativeLabTrendDetail({
     : undefined
 
   const timeScale = useMemo(
-    () => customRange ? buildCustomTrendTimeScale(customRange) : buildTrendTimeScale(chartPoints, window),
+    () => customRange
+      ? buildCustomTrendTimeScale(padTrendRange(customRange.start, customRange.end))
+      : buildTrendTimeScale(chartPoints, window),
     [chartPoints, customRange, window],
   )
   const denseClusters = useMemo(
@@ -502,11 +522,11 @@ export function CumulativeLabTrendDetail({
     [chartPoints, customRange, timeScale],
   )
   const visiblePoints = useMemo(() => {
-    const [start, end] = timeScale.domain
+    const [start, end] = customRange ? [customRange.start, customRange.end] : timeScale.domain
     return chartPoints.filter((point) => (
       point.timestamp >= start && point.timestamp <= end
     ))
-  }, [chartPoints, timeScale])
+  }, [chartPoints, customRange, timeScale])
   const toggleRangePicker = () => {
     if (rangePicker) {
       setRangePicker(null)
