@@ -79,6 +79,35 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(detailPanel.getByRole('button', { name: '還原' })).toHaveCount(0)
   })
 
+  test('the chart does not move between idle, dragging, zoomed and reset', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖/ })
+    await expect(chart).toBeVisible()
+    const top = async () => (await chart.boundingBox())!.y
+    const idle = await top()
+    const box = (await chart.boundingBox())!
+    const midY = box.y + box.height / 2
+
+    await page.mouse.move(box.x + 75, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, midY, { steps: 8 })
+    await expect(detailPanel.getByText(/^選取 /)).toBeVisible()
+    expect(await top()).toBe(idle)
+    await page.mouse.up()
+    await expect(detailPanel.getByRole('button', { name: '還原' })).toBeVisible()
+    expect(await top()).toBe(idle)
+    await detailPanel.getByRole('button', { name: '還原' }).click()
+    await expect(detailPanel.getByRole('button', { name: '還原' })).toHaveCount(0)
+    expect(await top()).toBe(idle)
+  })
+
   test('a release in the same task as the last drag move settles on the release point', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 1000 })
     await openReportsSubTab(page, '檢驗')

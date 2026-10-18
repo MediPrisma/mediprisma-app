@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   CartesianGrid,
-  LabelList,
   Line,
   LineChart,
   ReferenceArea,
@@ -14,6 +13,8 @@ import {
   YAxis,
   usePlotArea,
   useXAxisInverseScale,
+  useXAxisScale,
+  useYAxisScale,
 } from 'recharts'
 import { AlertTriangle, CalendarRange, Clock3, Info, RotateCcw, SquareDashedMousePointer, TrendingDown, TrendingUp, ZoomIn } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -134,33 +135,105 @@ function differenceForDisplay(current: number, previous: number): number {
 }
 
 const MAX_LABELLED_POINTS = 8
-// In a zoomed range a value label shows only when its result sits at least
-// this share of the visible span away from both neighbours (~14 px on a
-// phone-width plot, ~30 px on desktop: room for a 3–4 character value), so
-// labels follow the real spacing rather than a count.
-const MIN_ZOOMED_LABEL_GAP_SHARE = 1 / 24
 
 /**
- * Preset windows: every label for up to eight results, else only abnormal
- * results and the latest. Zoomed (`zoomedSpan` = visible domain width in ms):
- * the latest plus every result with room for its label.
+ * Which results are candidates for an always-on value label. Preset windows:
+ * every result when there are up to eight, else only abnormal results and the
+ * latest. Zoomed: every result. Candidates are then thinned by
+ * `pickTrendLabels` so no two labels collide on screen.
  */
 export function shouldShowTrendPointLabel(
-  points: ReadonlyArray<Pick<LabTrendPoint, 'abnormal'> & Partial<Pick<LabTrendPoint, 'timestamp'>>>,
+  points: ReadonlyArray<Pick<LabTrendPoint, 'abnormal'>>,
   index: number,
-  zoomedSpan?: number,
+  zoomed = false,
 ): boolean {
-  if (index === points.length - 1) return true
-  if (zoomedSpan === undefined) {
-    return points.length <= MAX_LABELLED_POINTS || points[index]?.abnormal === true
+  return zoomed
+    || index === points.length - 1
+    || points.length <= MAX_LABELLED_POINTS
+    || points[index]?.abnormal === true
+}
+
+// Labels are 10px semibold digits: ~6px per character, ~9px above the baseline.
+const LABEL_CHAR_PX = 6
+const LABEL_ASCENT_PX = 9
+const LABEL_DESCENT_PX = 2
+const LABEL_GAP_PX = 2
+
+export interface TrendLabelBox {
+  index: number
+  /** Label centre and baseline, in chart pixels. */
+  x: number
+  y: number
+  text: string
+  /** Higher first: the latest, then abnormal results, then newer before older. */
+  priority: number
+}
+
+/**
+ * Keep the labels that fit: greedily by priority, dropping any whose box
+ * overlaps one already kept. Only labels are dropped — every point is drawn.
+ */
+export function pickTrendLabels(boxes: ReadonlyArray<TrendLabelBox>): Set<number> {
+  const kept: Array<{ left: number; right: number; top: number; bottom: number }> = []
+  const picked = new Set<number>()
+  for (const box of [...boxes].sort((a, b) => b.priority - a.priority)) {
+    const half = (box.text.length * LABEL_CHAR_PX) / 2 + LABEL_GAP_PX / 2
+    const rect = {
+      left: box.x - half,
+      right: box.x + half,
+      top: box.y - LABEL_ASCENT_PX,
+      bottom: box.y + LABEL_DESCENT_PX,
+    }
+    const collides = kept.some((other) => (
+      rect.left < other.right && rect.right > other.left
+      && rect.top < other.bottom && rect.bottom > other.top
+    ))
+    if (collides) continue
+    kept.push(rect)
+    picked.add(box.index)
   }
-  const at = points[index]?.timestamp
-  if (at === undefined) return false
-  const minGap = zoomedSpan * MIN_ZOOMED_LABEL_GAP_SHARE
-  const before = points[index - 1]?.timestamp
-  const after = points[index + 1]?.timestamp
-  return (before === undefined || at - before >= minGap)
-    && (after === undefined || after - at >= minGap)
+  return picked
+}
+
+/**
+ * Value labels drawn from the chart's own scales, so collisions are judged in
+ * real pixels at whatever width the side panel has.
+ */
+function TrendValueLabels({ points, zoomed }: { points: LabTrendPoint[]; zoomed: boolean }) {
+  const xScale = useXAxisScale()
+  const yScale = useYAxisScale()
+  if (!xScale || !yScale) return null
+  const last = points.length - 1
+  const boxes: TrendLabelBox[] = []
+  points.forEach((point, index) => {
+    if (!shouldShowTrendPointLabel(points, index, zoomed)) return
+    const x = Number(xScale(point.timestamp))
+    const y = Number(yScale(point.value))
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    const priority = index === last ? 3 * points.length : point.abnormal ? 2 * points.length + index : index
+    boxes.push({ index, x, y: y - 10, text: formatNumberSmart(point.value), priority })
+  })
+  const picked = pickTrendLabels(boxes)
+  return (
+    <g className="trend-value-labels">
+      {boxes.filter((box) => picked.has(box.index)).map((box) => (
+        <text
+          key={points[box.index].id}
+          x={box.x}
+          y={box.y}
+          textAnchor="middle"
+          pointerEvents="none"
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            fill: points[box.index].abnormal ? '#dc2626' : 'hsl(var(--foreground))',
+          }}
+        >
+          {box.text}
+        </text>
+      ))}
+    </g>
+  )
 }
 
 export function resolveTrendChartReferenceRange(
@@ -376,8 +449,6 @@ function TrendChart({
     if (referenceRange?.high !== undefined) high = Math.max(high, referenceRange.high)
     return niceAxis(low, high)
   }, [points, referenceRange])
-  const labelEveryPoint = !zoomed && points.length <= MAX_LABELLED_POINTS
-  const zoomedSpan = zoomed ? timeScale.domain[1] - timeScale.domain[0] : undefined
 
   if (points.length < 2) {
     return (
@@ -533,34 +604,9 @@ function TrendChart({
               )
             }}
             activeDot={{ r: 7, fill: '#2563eb', stroke: 'hsl(var(--card))', strokeWidth: 2 }}
-          >
-            <LabelList
-              dataKey="value"
-              content={(props: any) => {
-                const { x, y, value, index } = props
-                const point = typeof index === 'number' ? points[index] : undefined
-                const show = typeof index === 'number'
-                  ? shouldShowTrendPointLabel(points, index, zoomedSpan)
-                  : labelEveryPoint
-                if (!show || x == null || y == null || typeof value !== 'number') return null
-                return (
-                  <text
-                    x={x}
-                    y={y - 10}
-                    textAnchor="middle"
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      fill: point?.abnormal ? '#dc2626' : 'hsl(var(--foreground))',
-                    }}
-                  >
-                    {formatNumberSmart(value)}
-                  </text>
-                )
-              }}
-            />
-          </Line>
+          />
 
+          <TrendValueLabels points={points} zoomed={zoomed} />
           <TrendChartDragLayer geometryRef={geometryRef} selection={drag} />
         </LineChart>
       </ResponsiveContainer>
@@ -861,78 +907,83 @@ export function CumulativeLabTrendDetail({
       )}
       <div className="overflow-hidden rounded-xl border bg-card">
         {visibleCompatibility.chartable && visiblePoints.length >= 2 && (
-          // One status row with a steady place above the plot: how to zoom, the
-          // live selection, or the zoomed range on the left; the dense-run
-          // zoom and 還原 on the right. Nothing above the chart shifts on zoom.
-          <div className="flex min-h-[44px] flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-muted/30 px-3 py-1.5">
+          // A status block of fixed height above the plot, so the chart never
+          // moves between idle, dragging, zoomed and reset: a text line (up to
+          // two lines, clamped) for how to zoom, the live selection or the
+          // zoomed range; then a row for the dense-run zoom and 還原, kept at
+          // its height even when it has no buttons.
+          <div data-testid="trend-status" className="border-b bg-muted/30 px-3 pb-1 pt-1.5">
             <p
               aria-live="polite"
               className={cn(
-                'flex min-w-0 flex-1 basis-56 items-center gap-1.5 text-xs',
+                'flex h-10 items-center gap-1.5 text-xs leading-5',
                 zoomNotice
                   ? 'text-amber-700 dark:text-amber-300'
                   : dragPreview ? 'font-medium text-primary' : 'text-foreground/80',
               )}
             >
               {zoomNotice ? (
-                <>
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {zoomNotice}
-                </>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               ) : dragPreview ? (
-                <>
-                  <SquareDashedMousePointer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {dragPreview.count >= 2
-                    ? (zh
-                      ? `選取 ${formatRangeLabel(dragPreview, locale)} · ${dragPreview.count} 筆，放開即可放大`
-                      : `Selecting ${formatRangeLabel(dragPreview, locale)} · ${dragPreview.count} results; release to zoom`)
-                    : (zh ? '框內需至少兩筆結果才能放大' : 'Include at least two results to zoom')}
-                </>
+                <SquareDashedMousePointer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               ) : customRange ? (
-                <>
-                  <ZoomIn className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-                  <span>
-                    <span className="font-semibold text-primary">
-                      {zh ? '已放大' : 'Zoomed to'} {formatRangeLabel(customRange, locale)}
-                    </span>
-                    {` · ${visiblePoints.length} ${zh ? '筆' : 'results'}`}
-                  </span>
-                </>
+                <ZoomIn className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
               ) : (
                 <>
                   {/* Dragging needs a mouse; touch users get the 自訂範圍 route. */}
                   <SquareDashedMousePointer className="hidden h-3.5 w-3.5 shrink-0 text-primary pointer-fine:inline" aria-hidden="true" />
                   <CalendarRange className="h-3.5 w-3.5 shrink-0 text-primary pointer-fine:hidden" aria-hidden="true" />
-                  <span className="hidden pointer-fine:inline">
-                    {zh ? '在圖上按住滑鼠左右拖曳，框出要放大的時間' : 'Click and drag across the chart to box the period to zoom into'}
-                  </span>
-                  <span className="pointer-fine:hidden">
-                    {zh ? '用「自訂範圍」選擇要放大的時間' : 'Use 「Custom range」 to pick a period to zoom into'}
-                  </span>
                 </>
               )}
+              <span className="line-clamp-2 min-w-0">
+                {zoomNotice ? zoomNotice : dragPreview ? (
+                  dragPreview.count >= 2
+                    ? (zh
+                      ? `選取 ${formatRangeLabel(dragPreview, locale)} · ${dragPreview.count} 筆，放開即可放大`
+                      : `Selecting ${formatRangeLabel(dragPreview, locale)} · ${dragPreview.count} results; release to zoom`)
+                    : (zh ? '框內需至少兩筆結果才能放大' : 'Include at least two results to zoom')
+                ) : customRange ? (
+                  <>
+                    <span className="font-semibold text-primary">
+                      {zh ? '已放大' : 'Zoomed to'} {formatRangeLabel(customRange, locale)}
+                    </span>
+                    {` · ${visiblePoints.length} ${zh ? '筆' : 'results'}`}
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden pointer-fine:inline">
+                      {zh ? '在圖上按住滑鼠左右拖曳，框出要放大的時間' : 'Click and drag across the chart to box the period to zoom into'}
+                    </span>
+                    <span className="pointer-fine:hidden">
+                      {zh ? '用「自訂範圍」選擇要放大的時間' : 'Use 「Custom range」 to pick a period to zoom into'}
+                    </span>
+                  </>
+                )}
+              </span>
             </p>
-            {denseClusters.map((cluster) => (
-              <button
-                key={cluster.start}
-                type="button"
-                onClick={() => zoomTo(cluster.start, cluster.end)}
-                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-md border border-amber-400 bg-amber-50 px-2.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
-              >
-                <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
-                {zh ? '放大密集區' : 'Zoom dense run'} {formatMonthDay(cluster.start, locale)}–{formatMonthDay(cluster.end, locale)}（{cluster.count} {zh ? '筆' : 'results'}）
-              </button>
-            ))}
-            {customRange && (
-              <button
-                type="button"
-                onClick={clearZoom}
-                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                {zh ? '還原' : 'Reset'}
-              </button>
-            )}
+            <div className="flex h-9 items-center gap-2 overflow-x-auto">
+              {denseClusters.map((cluster) => (
+                <button
+                  key={cluster.start}
+                  type="button"
+                  onClick={() => zoomTo(cluster.start, cluster.end)}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-amber-400 bg-amber-50 px-2.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+                  {zh ? '放大密集區' : 'Zoom dense run'} {formatMonthDay(cluster.start, locale)}–{formatMonthDay(cluster.end, locale)}（{cluster.count} {zh ? '筆' : 'results'}）
+                </button>
+              ))}
+              {customRange && (
+                <button
+                  type="button"
+                  onClick={clearZoom}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  {zh ? '還原' : 'Reset'}
+                </button>
+              )}
+            </div>
           </div>
         )}
         {visibleCompatibility.chartable ? (
