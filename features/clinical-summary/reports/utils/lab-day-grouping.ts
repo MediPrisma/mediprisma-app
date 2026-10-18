@@ -249,6 +249,9 @@ function buildDayGroupRow(rows: Row[]): Row {
   const categoryId = rowCategoryId(head)
   return {
     ...head,
+    hospitalSource: rows.some(row => row.hospitalSource === 'cloud-and-in-house')
+      || (rows.some(row => row.hospitalSource === 'in-house') && rows.some(row => row.hospitalSource === 'cloud'))
+      ? 'cloud-and-in-house' : rows.some(row => row.hospitalSource === 'in-house') ? 'in-house' : head.hospitalSource,
     // Distinct id so virtualizer keys don't collide with the underlying row.
     id: `labday:${clusterKey(head)}`,
     title: head.title, // a11y / plain-Row-consumer fallback; the card renders its own header

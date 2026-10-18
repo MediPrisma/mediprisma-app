@@ -5,6 +5,8 @@ import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 import { REPORT_SOURCE_TONE } from './report-color-roles'
+import { formatSourceInstitution } from '../utils/source-institution-display'
+import type { HospitalSource } from '../adapters/vghtpe-source-display'
 
 /** Backwards-compatible name for report callers and tests. */
 export const formatReportInstitution = formatOrganizationDisplay
@@ -16,18 +18,22 @@ export const formatReportInstitution = formatOrganizationDisplay
  *  name instead of toggling the row. */
 export function ReportInstitutionLabel({
   institution,
+  hospitalSource,
   className,
   stopPropagation = true,
   locale = 'zh-TW',
 }: {
   institution: string
+  hospitalSource?: HospitalSource
   className?: string
   /** Keep the default tooltip-only tap in ordinary report rows. Group-header
    *  buttons can opt out so the institution still toggles the whole row. */
   stopPropagation?: boolean
   locale?: string
 }) {
-  const displayInstitution = formatReportInstitution(institution, locale)
+  const displayInstitution = formatSourceInstitution(institution, hospitalSource, locale)
+  const sourceSuffix = displayInstitution?.match(/(\((?:院內(?:\+雲端)?|Cloud \+ in-house|In-house)\))$/)?.[0] ?? ''
+  const institutionName = sourceSuffix ? displayInstitution?.slice(0, -sourceSuffix.length) : displayInstitution
   return (
     <TapTooltip
       side="top"
@@ -42,7 +48,8 @@ export function ReportInstitutionLabel({
       )}
     >
       <Building2 className="h-3 w-3 shrink-0" aria-hidden />
-      <span className="truncate">{displayInstitution}</span>
+      <span className="truncate">{institutionName}</span>
+      {sourceSuffix && <span className="shrink-0">{sourceSuffix}</span>}
     </TapTooltip>
   )
 }

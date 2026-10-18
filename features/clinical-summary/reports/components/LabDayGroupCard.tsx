@@ -184,6 +184,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
             ) : row.institution ? (
               <ReportInstitutionLabel
                 institution={row.institution}
+                hospitalSource={row.hospitalSource}
                 locale={locale}
                 className="min-w-0 flex-1 max-w-full"
               />
