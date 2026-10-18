@@ -682,35 +682,40 @@ export function CumulativeLabTrendDetail({
             {label}
           </button>
         ))}
+        {/* The custom range is the fifth time-range option, styled like the
+            presets so it reads as one of the choices. It opens the start/end
+            picker and, while zoomed, shows the range with a clear button. */}
         {chartPoints.length >= 2 && (
-          <button
-            type="button"
-            onClick={toggleRangePicker}
-            aria-expanded={!!rangePicker}
-            aria-controls="cumulative-trend-range-picker"
-            className={cn(
-              'inline-flex min-h-[44px] items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              rangePicker
-                ? 'border-primary text-primary'
-                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
-            {zh ? '自訂起訖' : 'Pick range'}
-          </button>
-        )}
-        {customRange && (
-          <div className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-primary bg-primary/10 pl-3 text-xs font-semibold text-primary">
-            <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{zh ? '自訂' : 'Custom'} {formatRangeLabel(customRange, locale)}</span>
+          <div className="inline-flex items-stretch">
             <button
               type="button"
-              onClick={clearZoom}
-              aria-label={zh ? '清除自訂範圍' : 'Clear custom range'}
-              className="flex h-[44px] w-10 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={toggleRangePicker}
+              aria-expanded={!!rangePicker}
+              aria-controls="cumulative-trend-range-picker"
+              className={cn(
+                'inline-flex min-h-[44px] items-center gap-1.5 border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                customRange ? 'rounded-l-md border-r-0' : 'rounded-md',
+                customRange || rangePicker
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                customRange && 'font-semibold',
+              )}
             >
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
+              <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
+              {customRange
+                ? <span>{zh ? '自訂' : 'Custom'} {formatRangeLabel(customRange, locale)}</span>
+                : (zh ? '自訂範圍' : 'Custom range')}
             </button>
+            {customRange && (
+              <button
+                type="button"
+                onClick={clearZoom}
+                aria-label={zh ? '清除自訂範圍' : 'Clear custom range'}
+                className="flex min-h-[44px] w-10 items-center justify-center rounded-r-md border border-primary bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -772,17 +777,13 @@ export function CumulativeLabTrendDetail({
         </div>
       )}
 
-      {visibleCompatibility.chartable && (
-        <p
-          className={cn('flex items-center gap-1.5 text-xs', zoomNotice ? 'text-amber-700 dark:text-amber-300' : 'hidden text-muted-foreground sm:flex')}
-          role="status"
-        >
-          <MoveHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {zoomNotice || (customRange
-            ? (zh ? '可再拖曳選取細看，或按「✕」回到原本範圍。' : 'Drag again to narrow further, or clear to return to the previous range.')
-            : (zh ? '在圖上按住左右拖曳，可放大那段時間。' : 'Drag across the chart to zoom into that period.'))}
-        </p>
-      )}
+      <p
+        className={zoomNotice ? 'flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300' : 'sr-only'}
+        role="status"
+      >
+        {zoomNotice && <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+        {zoomNotice}
+      </p>
 
       {groups.length > 1 && (
         <p className="text-xs text-muted-foreground" role="status">
@@ -791,7 +792,20 @@ export function CumulativeLabTrendDetail({
             : 'Convertible units are combined; other units or blood-gas specimens are shown in separate groups. Lines require two exact results in a group. All results remain below.'}
         </p>
       )}
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="relative overflow-hidden rounded-xl border bg-card">
+        {visibleCompatibility.chartable && visiblePoints.length >= 2 && (
+          // Drag-to-zoom needs a mouse, so the cue only shows on fine pointers;
+          // touch and keyboard users have the 自訂範圍 option instead.
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-14 top-1.5 z-10 hidden items-center gap-1 rounded-full border bg-background/90 px-2 py-0.5 text-[0.6875rem] font-medium text-muted-foreground shadow-sm pointer-fine:inline-flex"
+          >
+            <MoveHorizontal className="h-3 w-3" />
+            {customRange
+              ? (zh ? '可再拖曳選取細看' : 'Drag to narrow further')
+              : (zh ? '拖曳圖表可放大' : 'Drag across to zoom')}
+          </div>
+        )}
         {visibleCompatibility.chartable ? (
           <TrendChart
             points={visiblePoints}

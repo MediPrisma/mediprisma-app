@@ -177,7 +177,7 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
       </LanguageProvider>,
     )
 
-    const toggle = screen.getByRole('button', { name: '自訂起訖' })
+    const toggle = screen.getByRole('button', { name: '自訂範圍' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
@@ -215,7 +215,7 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
         <CumulativeLabTrendDetail series={admissionSeries()} />
       </LanguageProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '自訂起訖' }))
+    fireEvent.click(screen.getByRole('button', { name: '自訂範圍' }))
     // 2025-10-05 → 2026-03-02; five more results follow within six days.
     fireEvent.change(screen.getByRole('combobox', { name: '起' }), { target: { value: '0' } })
     fireEvent.change(screen.getByRole('combobox', { name: '迄' }), { target: { value: '2' } })
