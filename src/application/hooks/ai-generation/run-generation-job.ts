@@ -16,7 +16,7 @@ import {
 } from '@/src/application/telemetry/usage-analytics'
 import { bucketDuration, classifyAiOutcome, nowMs } from '@/src/application/telemetry/ai-outcome'
 import type { AiResultStore } from './create-ai-result-store'
-import { beginCollectorObservation } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, type CollectorOperation } from '@/src/application/telemetry/collector'
 import type { SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 
 /** Per-run measurements only; never stored in the clinical result/cache. */
@@ -72,6 +72,8 @@ export async function runGenerationJob<T>(options: {
   produce: (
     measure: (result: AiGenerationMeasurement) => void,
     identifySummaryRun: (runId: string) => void,
+    /** Scopes this run's AI requests into its one operation event. */
+    operation?: CollectorOperation,
   ) => Promise<T | null>
   /** A user cancellation invalidates the run without surfacing an error. */
   shouldCommit?: () => boolean
@@ -114,7 +116,7 @@ export async function runGenerationJob<T>(options: {
   }
   try {
     let measurement: AiGenerationMeasurement | undefined
-    const parsed = await produce((result) => { measurement = result }, (runId) => { summaryRunId = runId })
+    const parsed = await produce((result) => { measurement = result }, (runId) => { summaryRunId = runId }, collector?.operation)
     // A cancelled or superseded run is not a failure of the model.
     if (!isCurrentBundle() || !shouldCommit()) {
       report('aborted')
