@@ -224,4 +224,22 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })).toBeInTheDocument()
     expect(screen.getByText(/自訂 2025\/10\/05–2026\/03\/02/)).toBeInTheDocument()
   })
+
+  it('keeps offering the dense-run zoom inside a wide custom range that still squeezes it', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '自訂範圍' }))
+    fireEvent.change(screen.getByRole('combobox', { name: '起' }), { target: { value: '0' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '迄' }), { target: { value: '9' } })
+    fireEvent.click(screen.getByRole('button', { name: '放大' }))
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /放大 .*6 筆/ }))
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
+    // Once the run fills the view there is nothing left to offer.
+    expect(screen.queryByRole('button', { name: /放大 .*6 筆/ })).not.toBeInTheDocument()
+  })
 })

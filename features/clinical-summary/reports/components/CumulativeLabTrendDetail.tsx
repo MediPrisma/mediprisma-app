@@ -130,19 +130,33 @@ function differenceForDisplay(current: number, previous: number): number {
   return Number((current - previous).toFixed(precision))
 }
 
-// A zoomed-in range is spread across the full plot width, so it can carry
-// more always-on labels before they collide than a preset window can.
 const MAX_LABELLED_POINTS = 8
-const MAX_LABELLED_POINTS_ZOOMED = 20
+// In a zoomed range a value label shows only when its result sits at least
+// this share of the visible span away from both neighbours (~19 px on a
+// phone-width plot), so labels follow the real spacing rather than a count.
+const MIN_ZOOMED_LABEL_GAP_SHARE = 1 / 16
 
+/**
+ * Preset windows: every label for up to eight results, else only abnormal
+ * results and the latest. Zoomed (`zoomedSpan` = visible domain width in ms):
+ * the latest plus every result with room for its label.
+ */
 export function shouldShowTrendPointLabel(
-  points: ReadonlyArray<Pick<LabTrendPoint, 'abnormal'>>,
+  points: ReadonlyArray<Pick<LabTrendPoint, 'abnormal'> & Partial<Pick<LabTrendPoint, 'timestamp'>>>,
   index: number,
-  zoomed = false,
+  zoomedSpan?: number,
 ): boolean {
-  return points.length <= (zoomed ? MAX_LABELLED_POINTS_ZOOMED : MAX_LABELLED_POINTS)
-    || points[index]?.abnormal === true
-    || index === points.length - 1
+  if (index === points.length - 1) return true
+  if (zoomedSpan === undefined) {
+    return points.length <= MAX_LABELLED_POINTS || points[index]?.abnormal === true
+  }
+  const at = points[index]?.timestamp
+  if (at === undefined) return false
+  const minGap = zoomedSpan * MIN_ZOOMED_LABEL_GAP_SHARE
+  const before = points[index - 1]?.timestamp
+  const after = points[index + 1]?.timestamp
+  return (before === undefined || at - before >= minGap)
+    && (after === undefined || after - at >= minGap)
 }
 
 export function resolveTrendChartReferenceRange(
@@ -256,6 +270,9 @@ function TrendChart({
     setDragState(next)
   }
   const indexOf = (state: { activeTooltipIndex?: unknown }) => {
+    // Recharts reports null once the pointer leaves the plot (axis, margin);
+    // Number(null) would be 0 and silently pick the first result.
+    if (state.activeTooltipIndex == null) return undefined
     const index = Number(state.activeTooltipIndex)
     return Number.isInteger(index) && index >= 0 && index < points.length ? index : undefined
   }
@@ -276,7 +293,8 @@ function TrendChart({
     if (referenceRange?.high !== undefined) high = Math.max(high, referenceRange.high)
     return niceAxis(low, high)
   }, [points, referenceRange])
-  const labelEveryPoint = points.length <= (zoomed ? MAX_LABELLED_POINTS_ZOOMED : MAX_LABELLED_POINTS)
+  const labelEveryPoint = !zoomed && points.length <= MAX_LABELLED_POINTS
+  const zoomedSpan = zoomed ? timeScale.domain[1] - timeScale.domain[0] : undefined
 
   if (points.length < 2) {
     return (
@@ -426,7 +444,7 @@ function TrendChart({
                 const { x, y, value, index } = props
                 const point = typeof index === 'number' ? points[index] : undefined
                 const show = typeof index === 'number'
-                  ? shouldShowTrendPointLabel(points, index, zoomed)
+                  ? shouldShowTrendPointLabel(points, index, zoomedSpan)
                   : labelEveryPoint
                 if (!show || x == null || y == null || typeof value !== 'number') return null
                 return (
@@ -518,8 +536,10 @@ export function CumulativeLabTrendDetail({
     [chartPoints, customRange, window],
   )
   const denseClusters = useMemo(
-    () => customRange ? [] : findDenseTrendClusters(chartPoints, timeScale.domain),
-    [chartPoints, customRange, timeScale],
+    // Judged against whatever is on screen, so a wide custom range that still
+    // squeezes a run together keeps offering to zoom into it.
+    () => findDenseTrendClusters(chartPoints, timeScale.domain),
+    [chartPoints, timeScale],
   )
   const visiblePoints = useMemo(() => {
     const [start, end] = customRange ? [customRange.start, customRange.end] : timeScale.domain
@@ -792,13 +812,14 @@ export function CumulativeLabTrendDetail({
             : 'Convertible units are combined; other units or blood-gas specimens are shown in separate groups. Lines require two exact results in a group. All results remain below.'}
         </p>
       )}
-      <div className="relative overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-hidden rounded-xl border bg-card">
         {visibleCompatibility.chartable && visiblePoints.length >= 2 && (
           // Drag-to-zoom needs a mouse, so the cue only shows on fine pointers;
-          // touch and keyboard users have the 自訂範圍 option instead.
+          // touch and keyboard users have the 自訂範圍 option instead. It is
+          // its own row above the plot so it never covers a value label.
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-14 top-1.5 z-10 hidden items-center gap-1 rounded-full border bg-background/90 px-2 py-0.5 text-[0.6875rem] font-medium text-muted-foreground shadow-sm pointer-fine:inline-flex"
+            className="hidden items-center gap-1 px-3 pt-2 text-[0.6875rem] font-medium text-muted-foreground pointer-fine:flex"
           >
             <MoveHorizontal className="h-3 w-3" />
             {customRange

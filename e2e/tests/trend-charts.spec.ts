@@ -103,6 +103,34 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(chart.locator('.recharts-reference-area')).toHaveCount(1)
   })
 
+  test('releasing a drag over the axis keeps the last result under the pointer', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+
+    // The drag cue is its own row above the plot, never over a value label.
+    const cue = detailPanel.getByText('拖曳圖表可放大')
+    await expect(cue).toBeVisible()
+    expect((await cue.boundingBox())!.y + (await cue.boundingBox())!.height).toBeLessThanOrEqual(box.y)
+
+    // Middle result → last result, then down onto the X axis and release.
+    await page.mouse.move(box.x + box.width * 0.45, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2, { steps: 8 })
+    await page.mouse.move(box.x + box.width - 20, box.y + box.height - 4, { steps: 4 })
+    await page.mouse.up()
+
+    await expect(detailPanel.getByRole('button', { name: /^自訂 2025\/02\/12–2026\/06\/02$/ })).toBeVisible()
+  })
+
   test('phone cumulative trend uses the same visible close action as other report trends', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 })
     await importBundle(page)
