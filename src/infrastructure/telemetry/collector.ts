@@ -3,7 +3,7 @@
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
-import { collectorEventV7Schema, type CollectorEventV7, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
+import { collectorEventV7Schema, collectorEventV8Schema, type CollectorEventV7, type CollectorEventV8, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -31,6 +31,8 @@ type Finish = {
   httpStatus?: number
   summaryCards?: SummaryCardCounts
   summaryAttempt?: SummaryAttempt
+  /** Random run ID shared with this summary's v7 attempts; names the operation (v8). */
+  summaryRunId?: string
 }
 interface Observation { finish: (result: Finish) => void; firstChunk: () => void }
 const NOOP: Observation = Object.freeze({ finish: () => {}, firstChunk: () => {} })
@@ -39,7 +41,8 @@ const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
 // Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
-const pending: Array<{event: CollectorEvent | CollectorEventV7; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
+type WireEvent = CollectorEvent | CollectorEventV7 | CollectorEventV8
+const pending: Array<{event: WireEvent; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
 const MAX_PENDING = 64
 let failures = 0
 let cooldownUntil = 0
@@ -149,7 +152,7 @@ export function collectorFeature(label?: string): Start['feature'] {
   return parsed.success ? parsed.data : (label && Object.hasOwn(aliases, label) ? aliases[label] : 'ai_other')
 }
 
-function dispatch(event: CollectorEvent | CollectorEventV7, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
+function dispatch(event: WireEvent, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
   if (generation !== owner || !isCollectorSite() || Date.now() < cooldownUntil) {
     dropped++
     return
@@ -238,8 +241,11 @@ export function beginCollectorObservation(input: Start): Observation {
           ended = true
           if (generation !== owner || !isCollectorSite()) return
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
-          const parsed = (result.summaryAttempt ? collectorEventV7Schema : collectorEventV5Schema).safeParse({
-            schema_version: result.summaryAttempt ? 7 : 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
+          // v8 only for a summary operation that knows its run; everything else keeps v5/v7.
+          const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
+          const version = result.summaryAttempt ? 7 : runId ? 8 : 5
+          const parsed = (version === 7 ? collectorEventV7Schema : version === 8 ? collectorEventV8Schema : collectorEventV5Schema).safeParse({
+            schema_version: version, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
             status: result.outcome === 'ok' ? 'completed' : result.outcome === 'aborted' ? 'aborted' : 'error',
@@ -254,6 +260,7 @@ export function beginCollectorObservation(input: Start): Observation {
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
+              ...(runId ? { summary_run_id: runId } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
             },
           })

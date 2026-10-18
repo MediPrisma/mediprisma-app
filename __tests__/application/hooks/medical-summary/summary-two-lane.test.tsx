@@ -7,6 +7,7 @@ import { act, renderHook } from '@testing-library/react'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 const SLOT = 'lane-slot'
 
@@ -53,8 +54,10 @@ const isFastLaneRequest = (messages: Array<{ content: string }>) => {
     !contract.includes('<<<MEDIPRISMA_MODULE:problems>>>')
 }
 
+let mockIdentifySummaryRun: jest.Mock | undefined
 const runGeneration = (contextLimit: number) => async () => {
   mockResult = await mockSlotOptions.run({
+    identifySummaryRun: mockIdentifySummaryRun,
     operationKey: SLOT,
     modelId: 'gpt-nano-2',
     requestedModelId: 'gpt-nano-2',
@@ -94,7 +97,26 @@ beforeEach(() => {
   medicalSummaryStore.setState({ byKey: {}, running: { [SLOT]: true } } as any)
 })
 
-afterEach(() => jest.restoreAllMocks())
+afterEach(() => { mockIdentifySummaryRun = undefined; jest.restoreAllMocks() })
+
+test('the run names the operation with the same random ID its attempts carry', async () => {
+  const seen: Array<[string, string | undefined]> = []
+  mockIdentifySummaryRun = jest.fn((runId: string) => {
+    seen.push([runId, useAiExecutionDiagnosticsStore.getState().summaryRuns[SLOT]])
+  })
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    const block = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : FULL_BLOCKS
+    options.onChunk(block)
+    return block
+  })
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => { await result.current.generate() })
+  expect(mockIdentifySummaryRun).toHaveBeenCalledTimes(1)
+  const [[runId, attemptRunId]] = seen
+  expect(runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  expect(runId).toBe(attemptRunId)
+  expect(runId).not.toContain(SLOT)
+})
 
 test('the overview lane publishes its section while the full lane is still streaming', async () => {
   let releaseFullLane: (() => void) | undefined

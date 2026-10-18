@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v7 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v8 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -188,6 +188,26 @@ export const collectorEventV7Schema = collectorEventV4BaseSchema.extend({
     ctx.addIssue({ code: 'custom', message: 'Invalid summary attempt' })
 })
 export type CollectorEventV7 = z.infer<typeof collectorEventV7Schema>
+
+// v8: a v6 summary operation that names its run. summary_run_id equals the random
+// summary_attempt.run_id of the same run's v7 requests; never patient or cache derived.
+export const collectorEventV8Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(8),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    summary_cards: summaryCardCountsSchema.optional(),
+    requests: operationRequestsSchema.optional(),
+    summary_run_id: z.string().uuid(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v6 invariant rather than maintaining another copy.
+  const { summary_run_id, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV6Schema.safeParse({ ...e, schema_version: 6, diagnostics })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+  if (e.feature !== 'summary' || e.sample_kind !== 'feature')
+    ctx.addIssue({ code: 'custom', message: 'Only summary operation events name a summary run' })
+})
+export type CollectorEventV8 = z.infer<typeof collectorEventV8Schema>
 
 // Separate, explicitly consented sensitive-content endpoint; never accepted by
 // /events. Prompt includes the clinical context actually sent to the model.

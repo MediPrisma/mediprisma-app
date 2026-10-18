@@ -296,6 +296,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       useAiExecutionDiagnosticsStore.getState().clearOperationFeature(ctx.operationKey, 'medical-summary')
     }
     useAiExecutionDiagnosticsStore.getState().beginSummaryRun(ctx.operationKey, diagnosticRunId)
+    ctx.identifySummaryRun?.(diagnosticRunId)
     runMetricsRef.current.delete(ctx.operationKey)
     const initialExecution = () => createModelExecution(ctx.requestedModelId ?? ctx.modelId, ctx.modelId, ctx.modelName)
     // Provenance fallback for cards no lane managed to attribute. Each lane

@@ -1,5 +1,5 @@
 import { beginCollectorObservation, collectorError, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
-import { collectorEventV5Schema } from '@/src/shared/contracts/collector-event'
+import { collectorEventV5Schema, collectorEventV8Schema } from '@/src/shared/contracts/collector-event'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
@@ -317,6 +317,42 @@ test.each(['cancelled', 'superseded', 'thrown'] as const)('a %s run overrides pe
   expect(body().status).toBe(kind === 'thrown' ? 'error' : 'aborted')
   expect(body().diagnostics).not.toHaveProperty('summary_cards')
   expect(store.getState().byKey.summary).toBeUndefined()
+})
+
+const SYNTHETIC_RUN = '10000000-0000-4000-8000-0000000000aa'
+test.each(['ok', 'parse_failed', 'aborted'] as const)('a summary operation names its diagnostic run as v8 (%s)', async (kind) => {
+  const store = createAiResultStore<object>()
+  let commit = true
+  await runGenerationJob({
+    store, key: 'summary', cacheKey: 'synthetic-summary',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, shouldCommit: () => commit,
+    produce: async (measure, identifySummaryRun) => {
+      identifySummaryRun(SYNTHETIC_RUN)
+      if (kind === 'parse_failed') return null
+      if (kind === 'aborted') { commit = false; return {} }
+      measure({ outcome: 'ok', summaryCards: { succeeded: 6, failed: 0 } })
+      return {}
+    },
+  })
+  await settle()
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(body()).toMatchObject({ schema_version: 8, feature: 'summary', sample_kind: 'feature', diagnostics: { summary_run_id: SYNTHETIC_RUN } })
+  expect(collectorEventV8Schema.safeParse(body()).success).toBe(true)
+})
+
+test('operations without a run, and non-summary features, stay v5 without summary_run_id', async () => {
+  const store = createAiResultStore<object>()
+  await runGenerationJob({ store, key: 'summary', cacheKey: 'synthetic-summary',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, produce: async () => ({}) })
+  await settle()
+  expect(body().schema_version).toBe(5)
+  expect(body().diagnostics).not.toHaveProperty('summary_run_id')
+  await runGenerationJob({ store, key: 'insights', cacheKey: 'synthetic-insights',
+    analytics: { surface: 'insights', modelId: 'gpt-5.4-nano' },
+    produce: async (_measure, identifySummaryRun) => { identifySummaryRun(SYNTHETIC_RUN); return {} } })
+  await settle()
+  expect(body()).toMatchObject({ schema_version: 5, feature: 'insights' })
+  expect(body().diagnostics).not.toHaveProperty('summary_run_id')
 })
 
 test('5-second timeout, bounded concurrency and automatic recovery without eight-hour expiry', async () => {
