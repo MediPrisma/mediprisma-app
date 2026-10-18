@@ -223,6 +223,8 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
 
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })).toBeInTheDocument()
     expect(screen.getByText(/自訂 2025\/10\/05–2026\/03\/02/)).toBeInTheDocument()
+    // The run that starts on the picked end is mostly outside the range.
+    expect(screen.queryByRole('button', { name: /放大 03\/02/ })).not.toBeInTheDocument()
   })
 
   it('keeps offering the dense-run zoom inside a wide custom range that still squeezes it', () => {

@@ -535,18 +535,19 @@ export function CumulativeLabTrendDetail({
       : buildTrendTimeScale(chartPoints, window),
     [chartPoints, customRange, window],
   )
-  const denseClusters = useMemo(
-    // Judged against whatever is on screen, so a wide custom range that still
-    // squeezes a run together keeps offering to zoom into it.
-    () => findDenseTrendClusters(chartPoints, timeScale.domain),
-    [chartPoints, timeScale],
-  )
   const visiblePoints = useMemo(() => {
     const [start, end] = customRange ? [customRange.start, customRange.end] : timeScale.domain
     return chartPoints.filter((point) => (
       point.timestamp >= start && point.timestamp <= end
     ))
   }, [chartPoints, customRange, timeScale])
+  const denseClusters = useMemo(
+    // Runs are judged against whatever is on screen, so a wide custom range
+    // that still squeezes a run keeps offering to zoom into it. Only shown
+    // results count: the padded axis domain can reach past a picked end.
+    () => findDenseTrendClusters(visiblePoints, timeScale.domain),
+    [visiblePoints, timeScale],
+  )
   const toggleRangePicker = () => {
     if (rangePicker) {
       setRangePicker(null)
