@@ -175,8 +175,10 @@ export function buildCustomTrendTimeScale(range: TrendCustomRange): TrendTimeSca
 
 /**
  * Runs of results taken close together (e.g. daily labs during an admission)
- * that occupy a sliver of the current window, so their points and labels pile
- * up. Offered as one-tap zoom targets; never used to hide or merge results.
+ * that are squeezed into part of the current window, so their points and
+ * labels pile up. A run stops counting once it fills half the window, i.e.
+ * after the user has zoomed onto it. Offered as one-tap zoom targets; never
+ * used to hide or merge results.
  */
 export function findDenseTrendClusters(
   points: ReadonlyArray<Pick<LabTrendPoint, 'timestamp'>>,
@@ -184,7 +186,7 @@ export function findDenseTrendClusters(
   {
     maxGapMs = 3 * DAY_MS,
     minCount = 4,
-    maxShareOfWindow = 0.1,
+    maxShareOfWindow = 0.5,
     limit = 3,
   }: { maxGapMs?: number; minCount?: number; maxShareOfWindow?: number; limit?: number } = {},
 ): TrendCluster[] {

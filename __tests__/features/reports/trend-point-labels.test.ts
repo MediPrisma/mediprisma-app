@@ -1,4 +1,4 @@
-import { shouldShowTrendPointLabel } from '@/features/clinical-summary/reports/components/CumulativeLabTrendDetail'
+import { pickTrendLabels, shouldShowTrendPointLabel } from '@/features/clinical-summary/reports/components/CumulativeLabTrendDetail'
 
 describe('lab trend point labels', () => {
   it('keeps abnormal values visible in a long time window', () => {
@@ -18,25 +18,33 @@ describe('lab trend point labels', () => {
     expect(points.every((_, index) => shouldShowTrendPointLabel(points, index))).toBe(true)
   })
 
-  it('labels a zoomed range by spacing, not by count', () => {
-    const DAY = 24 * 60 * 60 * 1000
-    // Two spread-out results, then six squeezed into six days, in a ~1 year view.
-    const days = [0, 80, 150, 151, 152, 153, 154, 156, 240, 350]
-    const points = days.map((day) => ({ abnormal: true, timestamp: day * DAY }))
-    const span = 360 * DAY
+  it('makes every result a candidate when zoomed', () => {
+    const points = Array.from({ length: 19 }, () => ({ abnormal: false }))
+    expect(points.every((_, index) => shouldShowTrendPointLabel(points, index, true))).toBe(true)
+  })
+})
 
-    expect(shouldShowTrendPointLabel(points, 0, span)).toBe(true)
-    expect(shouldShowTrendPointLabel(points, 1, span)).toBe(true)
-    // Crowded results stay unlabelled even though they are abnormal.
-    for (const index of [2, 3, 4, 5, 6, 7]) {
-      expect(shouldShowTrendPointLabel(points, index, span)).toBe(false)
-    }
-    expect(shouldShowTrendPointLabel(points, 8, span)).toBe(true)
-    // The latest result is always labelled.
-    expect(shouldShowTrendPointLabel(points, 9, span)).toBe(true)
+describe('pickTrendLabels', () => {
+  const box = (index: number, x: number, y: number, priority: number, text = '4.3') => ({ index, x, y, text, priority })
 
-    // Narrowed to the crowded week, the same results have room again.
-    const week = points.slice(2, 8)
-    expect(week.every((_, index) => shouldShowTrendPointLabel(week, index, 7 * DAY))).toBe(true)
+  it('drops labels that would collide on a narrow plot and keeps the latest', () => {
+    // 19 equal daily values ~12px apart: '4.3' is ~18px wide, so neighbours collide.
+    const boxes = Array.from({ length: 19 }, (_, index) => box(index, 40 + index * 12.13, 100, index === 18 ? 1000 : index))
+    const picked = pickTrendLabels(boxes)
+    expect(picked.has(18)).toBe(true)
+    const xs = [...picked].map((index) => boxes[index].x).sort((a, b) => a - b)
+    for (let i = 1; i < xs.length; i += 1) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(20)
+    expect(picked.size).toBeGreaterThan(5)
+    expect(picked.size).toBeLessThan(19)
+  })
+
+  it('keeps labels that are close in time but far apart vertically', () => {
+    const picked = pickTrendLabels([box(0, 100, 50, 1), box(1, 106, 120, 2)])
+    expect([...picked].sort()).toEqual([0, 1])
+  })
+
+  it('keeps every label when there is room, and prefers higher priority on a clash', () => {
+    expect(pickTrendLabels([box(0, 50, 80, 1), box(1, 100, 80, 2), box(2, 150, 80, 3)]).size).toBe(3)
+    expect([...pickTrendLabels([box(0, 100, 80, 1), box(1, 105, 80, 9)])]).toEqual([1])
   })
 })

@@ -108,18 +108,21 @@ describe('custom trend time scale', () => {
 
 describe('drag selection on the trend chart', () => {
   const points = [point('2026-03-02T00:00:00Z'), point('2026-03-03T00:00:00Z'), point('2026-03-05T00:00:00Z')]
+  const at = (iso: string) => Date.parse(iso)
 
   it('treats a short pointer travel as a click', () => {
-    expect(resolveTrendDragSelection(points, 0, 2, 3)).toEqual({ kind: 'click' })
+    expect(resolveTrendDragSelection(points, at('2026-03-01T00:00:00Z'), at('2026-03-06T00:00:00Z'), 3)).toEqual({ kind: 'click' })
   })
 
-  it('reports a real drag that stays on one result instead of ignoring it', () => {
-    expect(resolveTrendDragSelection(points, 1, 1, 40)).toEqual({ kind: 'too-few' })
+  it('reports a box that holds fewer than two results instead of ignoring it', () => {
+    // Empty box between results, and a box around a single result.
+    expect(resolveTrendDragSelection(points, at('2026-03-03T06:00:00Z'), at('2026-03-04T18:00:00Z'), 40)).toEqual({ kind: 'too-few' })
+    expect(resolveTrendDragSelection(points, at('2026-03-04T00:00:00Z'), at('2026-03-06T00:00:00Z'), 40)).toEqual({ kind: 'too-few' })
   })
 
-  it('zooms between the first and last selected results in either drag direction', () => {
-    const expected = { kind: 'zoom', start: points[0].timestamp, end: points[2].timestamp }
-    expect(resolveTrendDragSelection(points, 0, 2, 120)).toEqual(expected)
-    expect(resolveTrendDragSelection(points, 2, 0, 120)).toEqual(expected)
+  it('zooms to the first and last results inside the box, in either drag direction', () => {
+    const expected = { kind: 'zoom', start: points[0].timestamp, end: points[1].timestamp }
+    expect(resolveTrendDragSelection(points, at('2026-03-01T00:00:00Z'), at('2026-03-04T00:00:00Z'), 120)).toEqual(expected)
+    expect(resolveTrendDragSelection(points, at('2026-03-04T00:00:00Z'), at('2026-03-01T00:00:00Z'), 120)).toEqual(expected)
   })
 })

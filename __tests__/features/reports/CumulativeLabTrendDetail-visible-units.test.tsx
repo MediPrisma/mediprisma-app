@@ -144,14 +144,14 @@ describe('CumulativeLabTrendDetail zoom', () => {
     )
 
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /放大 .*6 筆/ }))
+    fireEvent.click(screen.getByRole('button', { name: /放大密集區.*6 筆/ }))
 
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.queryByRole('button', { name: /放大 .*6 筆/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /放大密集區.*6 筆/ })).not.toBeInTheDocument()
     expect(onWindowChange).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: '清除自訂範圍' }))
+    fireEvent.click(screen.getByRole('button', { name: '還原' }))
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'true')
   })
@@ -162,9 +162,9 @@ describe('CumulativeLabTrendDetail zoom', () => {
         <CumulativeLabTrendDetail series={admissionSeries()} />
       </LanguageProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: /放大 .*6 筆/ }))
+    fireEvent.click(screen.getByRole('button', { name: /放大密集區.*6 筆/ }))
     fireEvent.click(screen.getByRole('button', { name: '全部' }))
-    expect(screen.queryByRole('button', { name: '清除自訂範圍' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '還原' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'true')
   })
 })
@@ -196,7 +196,7 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
     fireEvent.change(to, { target: { value: '1' } })
     fireEvent.click(zoom)
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '清除自訂範圍' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '還原' })).toBeInTheDocument()
 
     // Narrow an already zoomed dense run further.
     fireEvent.change(from, { target: { value: '2' } })
@@ -222,9 +222,9 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
     fireEvent.click(screen.getByRole('button', { name: '放大' }))
 
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })).toBeInTheDocument()
-    expect(screen.getByText(/自訂 2025\/10\/05–2026\/03\/02/)).toBeInTheDocument()
+    expect(screen.getByText(/已放大 2025\/10\/05–2026\/03\/02/)).toBeInTheDocument()
     // The run that starts on the picked end is mostly outside the range.
-    expect(screen.queryByRole('button', { name: /放大 03\/02/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /放大密集區 03\/02/ })).not.toBeInTheDocument()
   })
 
   it('keeps offering the dense-run zoom inside a wide custom range that still squeezes it', () => {
@@ -239,9 +239,9 @@ describe('CumulativeLabTrendDetail keyboard range picker', () => {
     fireEvent.click(screen.getByRole('button', { name: '放大' }))
 
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /放大 .*6 筆/ }))
+    fireEvent.click(screen.getByRole('button', { name: /放大密集區.*6 筆/ }))
     expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
     // Once the run fills the view there is nothing left to offer.
-    expect(screen.queryByRole('button', { name: /放大 .*6 筆/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /放大密集區.*6 筆/ })).not.toBeInTheDocument()
   })
 })
