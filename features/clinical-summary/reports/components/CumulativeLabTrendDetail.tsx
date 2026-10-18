@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertTriangle, Clock3, Info, MoveHorizontal, TrendingDown, TrendingUp, X, ZoomIn } from 'lucide-react'
+import { AlertTriangle, CalendarRange, Clock3, Info, MoveHorizontal, TrendingDown, TrendingUp, X, ZoomIn } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
@@ -63,7 +63,7 @@ function formatDateTimeLabel(value: string, locale: string): string {
 }
 
 function formatAxisDate(timestamp: number, locale: string, unit: TrendTimeScale['tickUnit']): string {
-  const options: Intl.DateTimeFormatOptions = unit === 'hour'
+  const options: Intl.DateTimeFormatOptions = unit === 'time'
     ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
     : unit === 'day'
       ? { month: '2-digit', day: '2-digit' }
@@ -161,6 +161,33 @@ export function resolveTrendChartReferenceRange(
     : undefined
 }
 
+// Pointer travel below this is a click (which shows the tooltip), not a drag.
+const DRAG_MIN_PX = 8
+
+export type TrendDragResult =
+  | { kind: 'click' }
+  | { kind: 'too-few' }
+  | { kind: 'zoom'; start: number; end: number }
+
+/**
+ * Decide what a finished drag on the chart means. Both ends are indices of the
+ * results nearest the pointer, so a real drag that stays on one result selects
+ * fewer than two and is reported instead of silently ignored.
+ */
+export function resolveTrendDragSelection(
+  points: ReadonlyArray<Pick<LabTrendPoint, 'timestamp'>>,
+  from: number,
+  to: number,
+  travelledPx: number,
+): TrendDragResult {
+  if (travelledPx < DRAG_MIN_PX) return { kind: 'click' }
+  if (from === to) return { kind: 'too-few' }
+  const low = points[Math.min(from, to)]
+  const high = points[Math.max(from, to)]
+  if (!low || !high) return { kind: 'too-few' }
+  return { kind: 'zoom', start: low.timestamp, end: high.timestamp }
+}
+
 function TrendTooltip({
   active,
   payload,
@@ -205,7 +232,7 @@ function TrendChart({
   referenceRangeLabel,
   timeScale,
   zoomed,
-  onSelectRange,
+  onDragEnd,
 }: {
   points: LabTrendPoint[]
   unit?: string
@@ -213,23 +240,21 @@ function TrendChart({
   referenceRangeLabel: string
   timeScale: TrendTimeScale
   zoomed: boolean
-  /** Called with the first and last selected results after a drag-select. */
-  onSelectRange: (selected: LabTrendPoint[]) => void
+  onDragEnd: (result: TrendDragResult) => void
 }) {
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
   // Drag-to-zoom snaps both ends to the nearest result (recharts' active
   // tooltip index), so a selection always starts and ends on real data.
-  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null)
+  const [drag, setDrag] = useState<{ from: number; to: number; startX: number } | null>(null)
   const indexOf = (state: { activeTooltipIndex?: unknown }) => {
     const index = Number(state.activeTooltipIndex)
     return Number.isInteger(index) && index >= 0 && index < points.length ? index : undefined
   }
-  const finishDrag = () => {
-    if (drag && drag.from !== drag.to) {
-      const low = Math.min(drag.from, drag.to)
-      const high = Math.max(drag.from, drag.to)
-      onSelectRange(points.slice(low, high + 1))
+  const finishDrag = (clientX: number) => {
+    if (drag) {
+      const result = resolveTrendDragSelection(points, drag.from, drag.to, Math.abs(clientX - drag.startX))
+      if (result.kind !== 'click') onDragEnd(result)
     }
     setDrag(null)
   }
@@ -268,13 +293,13 @@ function TrendChart({
             if (index === undefined) return
             // Keep the drag from also selecting the axis and label text.
             event.preventDefault()
-            setDrag({ from: index, to: index })
+            setDrag({ from: index, to: index, startX: event.clientX })
           }}
           onMouseMove={(state) => {
             const index = indexOf(state)
             if (drag && index !== undefined && index !== drag.to) setDrag({ ...drag, to: index })
           }}
-          onMouseUp={finishDrag}
+          onMouseUp={(_state, event) => finishDrag(event.clientX)}
           onMouseLeave={() => setDrag(null)}
           style={{ cursor: 'crosshair' }}
         >
@@ -436,6 +461,9 @@ export function CumulativeLabTrendDetail({
   // window it is not reported through onWindowChange.
   const [customRange, setCustomRange] = useState<TrendCustomRange | null>(null)
   const [zoomNotice, setZoomNotice] = useState('')
+  // Keyboard-operable equivalent of drag-to-zoom: pick the first and last
+  // result by index into chartPoints. null while the picker is closed.
+  const [rangePicker, setRangePicker] = useState<{ start: number; end: number } | null>(null)
   const group = groups.find(item => item.key === selectedGroupKey) ?? groups[0]
   const chartPoints = useMemo(() => group?.chartPoints ?? [], [group])
   const isOtherGroup = (point: LabTrendPoint) => labTrendGroupKey(point.unit, point.specimen, series.selection.categoryId) !== group?.key
@@ -479,6 +507,19 @@ export function CumulativeLabTrendDetail({
       point.timestamp >= start && point.timestamp <= end
     ))
   }, [chartPoints, timeScale])
+  const toggleRangePicker = () => {
+    if (rangePicker) {
+      setRangePicker(null)
+      return
+    }
+    // Start from what the chart shows now; fall back to the whole group.
+    const first = visiblePoints.length > 0 ? chartPoints.indexOf(visiblePoints[0]) : -1
+    const last = visiblePoints.length > 0 ? chartPoints.indexOf(visiblePoints[visiblePoints.length - 1]) : -1
+    setRangePicker({
+      start: first >= 0 ? first : 0,
+      end: last >= 0 ? last : chartPoints.length - 1,
+    })
+  }
   const visibleCompatibility = useMemo(
     () => assessLabTrendCompatibility(visiblePoints, series.selection.categoryId),
     [series.selection.categoryId, visiblePoints],
@@ -532,6 +573,7 @@ export function CumulativeLabTrendDetail({
             onChange={(event) => {
               setSelectedGroupKey(event.target.value)
               clearZoom()
+              setRangePicker(null)
             }}
           >
             {groups.map(item => (
@@ -620,6 +662,23 @@ export function CumulativeLabTrendDetail({
             {label}
           </button>
         ))}
+        {chartPoints.length >= 2 && (
+          <button
+            type="button"
+            onClick={toggleRangePicker}
+            aria-expanded={!!rangePicker}
+            aria-controls="cumulative-trend-range-picker"
+            className={cn(
+              'inline-flex min-h-[44px] items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              rangePicker
+                ? 'border-primary text-primary'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
+            {zh ? '自訂起訖' : 'Pick range'}
+          </button>
+        )}
         {customRange && (
           <div className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-primary bg-primary/10 pl-3 text-xs font-semibold text-primary">
             <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
@@ -635,6 +694,44 @@ export function CumulativeLabTrendDetail({
           </div>
         )}
       </div>
+
+      {rangePicker && (
+        <div
+          id="cumulative-trend-range-picker"
+          className="grid gap-2 rounded-lg border bg-muted/20 p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
+        >
+          {(['start', 'end'] as const).map((edge) => (
+            <label key={edge} className="block min-w-0 space-y-1 text-xs font-medium">
+              <span>{edge === 'start' ? (zh ? '起' : 'From') : (zh ? '迄' : 'To')}</span>
+              <select
+                className="min-h-[44px] w-full min-w-0 rounded-md border bg-background px-2 text-sm text-foreground"
+                value={rangePicker[edge]}
+                onChange={(event) => setRangePicker({ ...rangePicker, [edge]: Number(event.target.value) })}
+              >
+                {chartPoints.map((point, index) => (
+                  <option key={point.id} value={index}>
+                    {formatDateTimeLabel(point.effectiveTime, locale)} · {point.comparator}{formatNumberSmart(point.value)}{point.unit ? ` ${point.unit}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <button
+            type="button"
+            disabled={rangePicker.end <= rangePicker.start}
+            onClick={() => zoomTo(chartPoints[rangePicker.start].timestamp, chartPoints[rangePicker.end].timestamp)}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md border border-primary bg-primary/10 px-4 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted-foreground"
+          >
+            <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+            {zh ? '放大' : 'Zoom'}
+          </button>
+          {rangePicker.end <= rangePicker.start && (
+            <p className="text-xs text-muted-foreground sm:col-span-3">
+              {zh ? '迄點需晚於起點，至少包含兩筆結果。' : 'Pick an end result after the start; at least two results are needed.'}
+            </p>
+          )}
+        </div>
+      )}
 
       {denseClusters.length > 0 && visibleCompatibility.chartable && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 p-1.5 pl-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
@@ -685,12 +782,9 @@ export function CumulativeLabTrendDetail({
               : (zh ? '最新可用參考範圍' : 'Latest available range')}
             timeScale={timeScale}
             zoomed={!!customRange}
-            onSelectRange={(selected) => {
-              if (selected.length < 2) {
-                setZoomNotice(zh ? '選取範圍內少於兩筆結果，未放大。' : 'Fewer than two results selected; not zoomed.')
-                return
-              }
-              zoomTo(selected[0].timestamp, selected[selected.length - 1].timestamp)
+            onDragEnd={(result) => {
+              if (result.kind === 'zoom') zoomTo(result.start, result.end)
+              else setZoomNotice(zh ? '選取範圍內少於兩筆結果，未放大。' : 'Fewer than two results selected; not zoomed.')
             }}
           />
         ) : (

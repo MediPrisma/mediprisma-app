@@ -1,3 +1,4 @@
+import { resolveTrendDragSelection } from '@/features/clinical-summary/reports/components/CumulativeLabTrendDetail'
 import {
   buildCustomTrendTimeScale,
   buildTrendTimeScale,
@@ -51,6 +52,24 @@ describe('custom trend time scale', () => {
     expect(sameTime.end - sameTime.start).toBe(DAY)
   })
 
+  it('scales the pad with a minutes-apart selection so the results spread across the plot', () => {
+    const start = Date.parse('2026-03-02T08:00:00+08:00')
+    const end = Date.parse('2026-03-02T08:05:00+08:00')
+    const range = padTrendRange(start, end)
+    // The two results occupy most of the domain instead of ~0.3% of a day.
+    expect((end - start) / (range.end - range.start)).toBeGreaterThan(0.8)
+
+    const scale = buildCustomTrendTimeScale(range)
+    expect(scale.tickUnit).toBe('time')
+    expect(scale.ticks.length).toBeGreaterThanOrEqual(2)
+    expect(scale.ticks.length).toBeLessThanOrEqual(7)
+    for (const tick of scale.ticks) {
+      expect(tick).toBeGreaterThanOrEqual(range.start)
+      expect(tick).toBeLessThanOrEqual(range.end)
+      expect(new Date(tick).getSeconds()).toBe(0)
+    }
+  })
+
   it('uses day ticks on local midnights for an admission-length range', () => {
     const scale = buildCustomTrendTimeScale(padTrendRange(
       Date.parse('2026-03-02T00:00:00.000Z'),
@@ -72,7 +91,8 @@ describe('custom trend time scale', () => {
       start: Date.parse('2026-03-02T00:00:00.000Z'),
       end: Date.parse('2026-03-02T20:00:00.000Z'),
     })
-    expect(day.tickUnit).toBe('hour')
+    expect(day.tickUnit).toBe('time')
+    for (const tick of day.ticks) expect(new Date(tick).getMinutes()).toBe(0)
     expect(day.ticks.length).toBeGreaterThanOrEqual(3)
     expect(day.ticks.length).toBeLessThanOrEqual(7)
 
@@ -83,5 +103,23 @@ describe('custom trend time scale', () => {
     expect(long.tickUnit).toBe('month')
     expect(long.ticks.length).toBeLessThanOrEqual(7)
     expect(new Date(long.ticks[0]).getDate()).toBe(1)
+  })
+})
+
+describe('drag selection on the trend chart', () => {
+  const points = [point('2026-03-02T00:00:00Z'), point('2026-03-03T00:00:00Z'), point('2026-03-05T00:00:00Z')]
+
+  it('treats a short pointer travel as a click', () => {
+    expect(resolveTrendDragSelection(points, 0, 2, 3)).toEqual({ kind: 'click' })
+  })
+
+  it('reports a real drag that stays on one result instead of ignoring it', () => {
+    expect(resolveTrendDragSelection(points, 1, 1, 40)).toEqual({ kind: 'too-few' })
+  })
+
+  it('zooms between the first and last selected results in either drag direction', () => {
+    const expected = { kind: 'zoom', start: points[0].timestamp, end: points[2].timestamp }
+    expect(resolveTrendDragSelection(points, 0, 2, 120)).toEqual(expected)
+    expect(resolveTrendDragSelection(points, 2, 0, 120)).toEqual(expected)
   })
 })

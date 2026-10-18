@@ -168,3 +168,44 @@ describe('CumulativeLabTrendDetail zoom', () => {
     expect(screen.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'true')
   })
 })
+
+describe('CumulativeLabTrendDetail keyboard range picker', () => {
+  it('zooms to a start and end result chosen with form controls, including inside a zoom', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+
+    const toggle = screen.getByRole('button', { name: '自訂起訖' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    const from = screen.getByRole('combobox', { name: '起' })
+    const to = screen.getByRole('combobox', { name: '迄' })
+    const zoom = screen.getByRole('button', { name: '放大' })
+
+    // End before start cannot be applied.
+    fireEvent.change(from, { target: { value: '5' } })
+    fireEvent.change(to, { target: { value: '4' } })
+    expect(zoom).toBeDisabled()
+
+    // Two ordinary results that no dense-run button covers.
+    fireEvent.change(from, { target: { value: '0' } })
+    fireEvent.change(to, { target: { value: '1' } })
+    fireEvent.click(zoom)
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '清除自訂範圍' })).toBeInTheDocument()
+
+    // Narrow an already zoomed dense run further.
+    fireEvent.change(from, { target: { value: '2' } })
+    fireEvent.change(to, { target: { value: '7' } })
+    fireEvent.click(zoom)
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
+    fireEvent.change(from, { target: { value: '3' } })
+    fireEvent.change(to, { target: { value: '4' } })
+    fireEvent.click(zoom)
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+  })
+})

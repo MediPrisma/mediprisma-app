@@ -39,6 +39,37 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     await expect(detailPanel.getByText('4.3').first()).toBeVisible()
   })
 
+  test('dragging across the trend zooms in, and a drag on one result explains why it did not', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+    const midY = box.y + box.height / 2
+
+    // A short drag that stays nearest the first result selects only one.
+    await page.mouse.move(box.x + 60, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 80, midY, { steps: 4 })
+    await page.mouse.up()
+    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toBeVisible()
+    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toHaveCount(0)
+
+    // Dragging from the first result to the last zooms to them.
+    await page.mouse.move(box.x + 60, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, midY, { steps: 12 })
+    await page.mouse.up()
+    await expect(detailPanel.getByRole('button', { name: '清除自訂範圍' })).toBeVisible()
+    await expect(detailPanel.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   test('phone cumulative trend uses the same visible close action as other report trends', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 })
     await importBundle(page)

@@ -6,7 +6,7 @@ export interface TrendTimeScale {
   domain: [number, number]
   ticks: number[]
   /** Granularity the axis labels should print. Preset windows are monthly. */
-  tickUnit: 'month' | 'day' | 'hour'
+  tickUnit: 'month' | 'day' | 'time'
 }
 
 /**
@@ -99,19 +99,23 @@ export interface TrendCluster extends TrendCustomRange {
   count: number
 }
 
-const HOUR_MS = 60 * 60 * 1000
+const MINUTE_MS = 60 * 1000
+const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
 const CUSTOM_MAX_SEGMENTS = 6
-const CUSTOM_HOUR_STEPS = [1, 2, 3, 6, 12]
+const CUSTOM_MINUTE_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 180, 360, 720]
 const CUSTOM_DAY_STEPS = [1, 2, 3, 7, 14]
 const CUSTOM_MONTH_STEPS = [1, 2, 3, 6, 12, 24]
 
 /**
  * Pad a zoom selection so the first and last results sit inside the plot
- * instead of on its edges. Half a day at minimum keeps a same-day pair readable.
+ * instead of on its edges. The pad scales with the selection, so results a few
+ * minutes apart still spread across the plot; only a selection with no span
+ * (results sharing one timestamp) falls back to a fixed half day each side.
  */
 export function padTrendRange(start: number, end: number): TrendCustomRange {
-  const pad = Math.max((end - start) * 0.05, DAY_MS / 2)
+  const span = end - start
+  const pad = span > 0 ? span * 0.1 : DAY_MS / 2
   return { start: start - pad, end: end + pad }
 }
 
@@ -123,9 +127,9 @@ function localStartOfDay(timestamp: number): number {
 
 /**
  * X axis for a user-selected range. The tick unit follows the span so a
- * two-week admission reads in days and a single day in hours, rather than the
- * month ticks the preset windows use. Ticks fall on local midnights / hours so
- * they line up with the dates the axis labels print.
+ * two-week admission reads in days and a single day in hours or minutes,
+ * rather than the month ticks the preset windows use. Ticks fall on local
+ * midnights / round clock times so they line up with the labels printed.
  */
 export function buildCustomTrendTimeScale(range: TrendCustomRange): TrendTimeScale {
   const { start, end } = range
@@ -133,13 +137,15 @@ export function buildCustomTrendTimeScale(range: TrendCustomRange): TrendTimeSca
   const ticks: number[] = []
 
   if (span <= 2 * DAY_MS) {
-    const stepHours = CUSTOM_HOUR_STEPS.find((step) => span / (step * HOUR_MS) <= CUSTOM_MAX_SEGMENTS)
-      ?? CUSTOM_HOUR_STEPS.at(-1)!
-    const step = stepHours * HOUR_MS
-    let first = Math.ceil(start / HOUR_MS) * HOUR_MS
-    while (new Date(first).getHours() % stepHours !== 0) first += HOUR_MS
+    const stepMinutes = CUSTOM_MINUTE_STEPS.find((step) => span / (step * MINUTE_MS) <= CUSTOM_MAX_SEGMENTS)
+      ?? CUSTOM_MINUTE_STEPS.at(-1)!
+    const step = stepMinutes * MINUTE_MS
+    // Align to a round local clock time (08:00, 08:15…), counted from local
+    // midnight so whole-hour steps stay on the hour in any timezone.
+    const midnight = localStartOfDay(start)
+    const first = midnight + Math.ceil((start - midnight) / step) * step
     for (let tick = first; tick <= end; tick += step) ticks.push(tick)
-    return { domain: [start, end], ticks, tickUnit: 'hour' }
+    return { domain: [start, end], ticks, tickUnit: 'time' }
   }
 
   if (span <= 120 * DAY_MS) {
