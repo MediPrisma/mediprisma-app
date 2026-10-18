@@ -143,3 +143,17 @@ test('a summary attempt is still sent on its own and the v8 operation nests it u
   expect(sent[2]).toMatchObject({ sample_kind: 'feature', diagnostics: { summary_run_id: runId, requests: { count: 2, omitted: 0 } } })
   expect(sent[2].diagnostics.requests.details.map((r: { status: string }) => r.status)).toEqual(['aborted', 'completed'])
 })
+
+test('past the detail cap a summary attempt is still sent on its own and only counted in the operation', async () => {
+  const runId = '1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f'
+  const operation = parent()
+  for (let i = 0; i < MAX_COLLECTOR_REQUEST_DETAILS; i++) child(operation.operation).finish({ outcome: 'ok' })
+  child(operation.operation).finish({ outcome: 'aborted', phase: 'stream', responseComplete: false, summaryAttempt: {
+    run_id: runId, request_id: '1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e60', attempt: 1, lane: 'full', output_chars: 0, last_chunk_ms: null, parse_state: 'empty' } })
+  operation.finish({ outcome: 'ok', summaryRunId: runId })
+  await settle()
+  const sent = payloads()
+  expect(sent.map(p => p.schema_version)).toEqual([7, 8])
+  expect(sent[0].diagnostics.summary_attempt.run_id).toBe(runId)
+  expect(sent[1].diagnostics.requests).toMatchObject({ count: MAX_COLLECTOR_REQUEST_DETAILS + 1, omitted: 1 })
+})

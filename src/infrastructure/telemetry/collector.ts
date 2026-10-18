@@ -254,7 +254,10 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
       observeRequest: (child) => {
         if (ended || generation !== owner || !isCollectorSite()) return NOOP
         requestCount++
-        if (requests.length >= MAX_COLLECTOR_REQUEST_DETAILS) return NOOP
+        // Past the detail cap the request is only counted, but a summary attempt is still sent.
+        if (requests.length >= MAX_COLLECTOR_REQUEST_DETAILS) return observe({ ...child, operation: undefined }, (event) => {
+          if (event.schema_version === 7) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
+        })
         const index = requests.length
         const childStarted = nowMs()
         requests.push({ ...modelInfo(child.modelId, child.provider), model_source: 'configured', latency_ms: 0,
