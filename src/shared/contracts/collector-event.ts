@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v8 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v9 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -22,6 +22,8 @@ export const collectorModelSchema = z.enum([
   'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.1-pro-preview',
   'claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5',
   'custom', 'unknown', 'whisper-1', 'provider-managed',
+  // The hospital-managed endpoint profile names this model; any user-defined endpoint stays 'custom'.
+  'tvghbrain3.5',
 ])
 const elapsed = z.number().int().min(0).max(86_400_000)
 const collectorEventBaseSchema = z.object({
@@ -208,6 +210,30 @@ export const collectorEventV8Schema = collectorEventV4BaseSchema.extend({
     ctx.addIssue({ code: 'custom', message: 'Only summary operation events name a summary run' })
 })
 export type CollectorEventV8 = z.infer<typeof collectorEventV8Schema>
+
+// v9: a custom summary (insights) request names its template, so the admin page can tell which
+// template failed. The title is user-typed free text, sent as-is by explicit owner decision
+// (D071); control characters are rejected and both fields are length-bounded.
+// Rejects every Unicode control character (C0, DEL and C1), bidi controls and any unpaired surrogate.
+const noControl = (value: string) => !/\p{Cc}/u.test(value) &&
+  !/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/.test(value) &&
+  !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value)
+export const summaryTemplateSchema = z.object({
+  id: z.string().min(1).max(128).refine(noControl, 'Template id contains control characters'),
+  title: z.string().min(1).max(200).refine(noControl, 'Template title contains control characters'),
+}).strict()
+export type SummaryTemplate = z.infer<typeof summaryTemplateSchema>
+export const collectorEventV9Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(9),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    template: summaryTemplateSchema,
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  validateOutcome(e, ctx)
+  if (e.feature !== 'insights' || e.sample_kind !== 'request')
+    ctx.addIssue({ code: 'custom', message: 'Only custom summary requests name a template' })
+})
+export type CollectorEventV9 = z.infer<typeof collectorEventV9Schema>
 
 // Separate, explicitly consented sensitive-content endpoint; never accepted by
 // /events. Prompt includes the clinical context actually sent to the model.

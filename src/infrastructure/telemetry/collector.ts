@@ -1,9 +1,9 @@
 'use client'
 
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
-import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
-import { collectorEventV6Schema, collectorEventV7Schema, collectorEventV8Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
+import { collectorEventV6Schema, collectorEventV7Schema, collectorEventV8Schema, collectorEventV9Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -12,6 +12,8 @@ type PreparedCounts = Partial<Record<'fed_resource_count' | 'fed_encounter_count
 export interface CollectorContext {
   /** Per-run capability; never serialized or inferred from patient/slot/time. */
   operation?: CollectorOperation
+  /** Custom summary template; its title is user-typed and sent as-is by owner decision (gateway D071). */
+  template?: { id: string; title: string }
   counts?: ResourceCounts
   fedCounts?: PreparedCounts
   contextTokens?: number
@@ -45,7 +47,7 @@ const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
 // Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
-type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8
+type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9
 const pending: Array<{event: WireEvent; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
 const MAX_PENDING = 64
 let failures = 0
@@ -118,8 +120,38 @@ function tokenBucket(n: number | undefined): Diagnostics['context_tokens_bucket'
   if (n === undefined || !Number.isFinite(n) || n < 0) return undefined
   return n === 0 ? '0' : n <= 2000 ? '1-2000' : n <= 8000 ? '2001-8000' : n <= 32000 ? '8001-32000' : n <= 128000 ? '32001-128000' : '128000+'
 }
+type CollectorModel = ReturnType<typeof collectorModelSchema.parse>
+// Endpoint profiles the hospital provisions (through the authenticated Extension) and the one
+// model each serves. Only these fixed codes leave the browser; a user-defined endpoint's
+// profile ID, name, URL or reported model never does, so it stays 'custom'.
+export const INSTITUTION_ENDPOINT_MODELS: Readonly<Record<string, CollectorModel>> = Object.freeze({
+  [customOpenAiModelIdForProfile('vghtpe-tvghbrain')]: 'tvghbrain3.5',
+})
+// Control characters dropped, whitespace collapsed, lengths bounded to the contract (id 128, title 200).
+// Unpaired surrogates, control characters (Cc) and bidi controls never leave the browser.
+const UNPAIRED_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
+const BIDI_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
+function templateLabel(input: CollectorContext['template']): { id: string; title: string } | undefined {
+  if (!input || typeof input.id !== 'string' || typeof input.title !== 'string') return undefined
+  // The ID is how a template is found, so it is sent exactly or not at all.
+  // Checked as given, never trimmed: surrounding whitespace also leaves the template out.
+  const id = input.id
+  if (!id || id !== id.trim() || id.length > 128 || /\p{Cc}/u.test(id) || new RegExp(BIDI_CONTROL.source).test(id) ||
+      new RegExp(UNPAIRED_SURROGATE.source).test(id)) return undefined
+  // The title is cleaned, then cut on whole characters to the contract's UTF-16 bound.
+  const text = input.title.replace(UNPAIRED_SURROGATE, '').replace(BIDI_CONTROL, '')
+    .replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim()
+  let title = ''
+  for (const char of text) {
+    if (title.length + char.length > 200) break
+    title += char
+  }
+  title = title.trim()
+  return title ? { id, title } : undefined
+}
 function modelInfo(id: string, provider?: Start['provider']) {
-  if (isCustomOpenAiModelId(id) || id === 'custom') return { model: 'custom' as const, provider: 'custom' as const }
+  if (isCustomOpenAiModelId(id) || id === 'custom')
+    return { model: Object.hasOwn(INSTITUTION_ENDPOINT_MODELS, id) ? INSTITUTION_ENDPOINT_MODELS[id] : 'custom' as const, provider: 'custom' as const }
   const model = collectorModelSchema.safeParse(id)
   const definition = getModelDefinition(id)
   return { model: model.success ? model.data : 'unknown' as const,
@@ -162,9 +194,20 @@ function dispatch(event: WireEvent, owner: number, endpoint: string, auth: Retur
     return
   }
   if (active.size >= MAX_IN_FLIGHT) {
-    // An operation event is the only record of a user operation; queue it rather than drop it.
-    if ((event.schema_version === 7 || event.sample_kind === 'feature') && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
-    else dropped++
+    // An operation event (or summary attempt) is the only record of a user operation and gets the
+    // whole queue; a custom summary request (v9) may use half, and is the first to give way.
+    const queued = { event, owner, endpoint, auth }
+    if (event.schema_version === 7 || event.sample_kind === 'feature') {
+      if (pending.length >= MAX_PENDING) {
+        const v9 = pending.findIndex(item => item.event.schema_version === 9)
+        if (v9 < 0) { dropped++; return }
+        pending.splice(v9, 1)
+        dropped++
+      }
+      pending.push(queued)
+    } else if (event.schema_version === 9 && pending.filter(item => item.event.schema_version === 9).length < MAX_PENDING / 2 && pending.length < MAX_PENDING) {
+      pending.push(queued)
+    } else dropped++
     return
   }
   const controller = new AbortController()
@@ -245,6 +288,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
     const configured = modelInfo(input.modelId, input.provider)
     const provider = input.provider
     const trimmed = input.contextTrimmed
+    const template = feature === 'insights' && kind === 'request' ? templateLabel(input.template) : undefined
     let ended = false
     let firstChunk: number | undefined
     const requests: CollectorRequest[] = []
@@ -294,8 +338,8 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
           // v8: a summary operation that knows its run; v6: any other operation; v7/v5: requests.
           const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
-          const version = result.summaryAttempt ? 7 : runId ? 8 : kind === 'feature' ? 6 : 5
-          const schema = version === 7 ? collectorEventV7Schema : version === 8 ? collectorEventV8Schema : version === 6 ? collectorEventV6Schema : collectorEventV5Schema
+          const version = result.summaryAttempt ? 7 : runId ? 8 : kind === 'feature' ? 6 : template ? 9 : 5
+          const schema = version === 7 ? collectorEventV7Schema : version === 8 ? collectorEventV8Schema : version === 6 ? collectorEventV6Schema : version === 9 ? collectorEventV9Schema : collectorEventV5Schema
           const parsed = schema.safeParse({
             schema_version: version, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
@@ -313,6 +357,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
               ...(runId ? { summary_run_id: runId } : {}),
+              ...(version === 9 ? { template } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
               ...(kind === 'feature' && requestCount > 0 ? { requests: { count: requestCount, omitted: requestCount - requests.length, details: requests } } : {}),
             },

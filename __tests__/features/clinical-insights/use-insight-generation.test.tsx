@@ -142,6 +142,8 @@ describe("useInsightGeneration provenance", () => {
       maxTokens: 4096,
       allowTruncatedOutput: true,
       reasoningEffort: "low",
+      // The collector names the template so the admin page can find which one failed.
+      collectorContext: { template: { id: "soap", title: "SOAP" } },
     })
   })
 

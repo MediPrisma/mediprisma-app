@@ -157,3 +157,91 @@ test('past the detail cap a summary attempt is still sent on its own and only co
   expect(sent[0].diagnostics.summary_attempt.run_id).toBe(runId)
   expect(sent[1].diagnostics.requests).toMatchObject({ count: MAX_COLLECTOR_REQUEST_DETAILS + 1, omitted: 1 })
 })
+
+test('the hospital endpoint profile reports its fixed model code; a user-defined endpoint stays custom', async () => {
+  const { customOpenAiModelIdForProfile } = await import('@/src/shared/constants/ai-models.constants')
+  const { VGTPE_TVGHBRAIN_PROFILE_ID, VGTPE_TVGHBRAIN_MODEL_ID } = await import('@/src/application/launch/medcloud-launch-context')
+  const { INSTITUTION_ENDPOINT_MODELS } = await import('@/src/infrastructure/telemetry/collector')
+  const { collectorModelSchema } = await import('@/src/shared/contracts/collector-event')
+  // The mapping must follow the launch profile; a renamed profile or new model must update both.
+  expect(INSTITUTION_ENDPOINT_MODELS[customOpenAiModelIdForProfile(VGTPE_TVGHBRAIN_PROFILE_ID)]).toBe(VGTPE_TVGHBRAIN_MODEL_ID)
+  expect(collectorModelSchema.safeParse(VGTPE_TVGHBRAIN_MODEL_ID).success).toBe(true)
+  const hospital = parent(customOpenAiModelIdForProfile(VGTPE_TVGHBRAIN_PROFILE_ID))
+  child(hospital.operation, customOpenAiModelIdForProfile(VGTPE_TVGHBRAIN_PROFILE_ID)).finish({ outcome: 'ok' })
+  hospital.finish({ outcome: 'ok' })
+  const own = parent(customOpenAiModelIdForProfile('SYNTHETIC-PRIVATE-PROFILE'))
+  own.finish({ outcome: 'ok' })
+  await settle()
+  const [first, second] = payloads()
+  expect(first).toMatchObject({ model: 'tvghbrain3.5', provider: 'custom' })
+  expect(first.diagnostics.requests.details[0]).toMatchObject({ model: 'tvghbrain3.5', provider: 'custom' })
+  expect(second).toMatchObject({ model: 'custom', provider: 'custom' })
+  expect(JSON.stringify(payloads())).not.toMatch(/SYNTHETIC-PRIVATE|vghtpe-tvghbrain/)
+})
+
+test('a custom summary request names its template (v9); other features never carry one', async () => {
+  const { collectorEventV9Schema } = await import('@/src/shared/contracts/collector-event')
+  const longTitle = '心'.repeat(150) + '😀'.repeat(60)
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'changes', title: '  重要\n變化\t模板  ' } }).finish({ outcome: 'timeout', phase: 'stream' })
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'synthetic-id', title: longTitle } }).finish({ outcome: 'ok' })
+  await settle()
+  beginCollectorObservation({ feature: 'chat_followup', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'stream',
+    template: { id: 'x', title: 'y' } }).finish({ outcome: 'ok' })
+  await settle()
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query' }).finish({ outcome: 'ok' })
+  await settle()
+  const [first, second, third, fourth] = payloads()
+  expect(first).toMatchObject({ schema_version: 9, feature: 'insights', status: 'error', diagnostics: { template: { id: 'changes', title: '重要 變化 模板' } } })
+  expect(collectorEventV9Schema.safeParse(first).success).toBe(true)
+  expect(second.schema_version).toBe(9)
+  expect(second.diagnostics.template.title.length).toBeLessThanOrEqual(200)
+  expect(second.diagnostics.template.title).not.toMatch(/[\uD800-\uDBFF]$/)
+  expect(collectorEventV9Schema.safeParse(second).success).toBe(true)
+  expect(third.schema_version).toBe(5)
+  expect(third.diagnostics).not.toHaveProperty('template')
+  expect(fourth.schema_version).toBe(5)
+})
+
+test('template titles drop control, bidi and unpaired surrogate characters; an unusable ID is not rewritten', async () => {
+  const { collectorEventV9Schema } = await import('@/src/shared/contracts/collector-event')
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'changes', title: '甲\u0085乙\uD800丙‮😀' } }).finish({ outcome: 'ok' })
+  await settle()
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'id\u0085x', title: '重要變化' } }).finish({ outcome: 'ok' })
+  await settle()
+  for (const id of [' changes ', '\nchanges', 'changes‮']) {
+    beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+      template: { id, title: '重要變化' } }).finish({ outcome: 'ok' })
+    await settle()
+  }
+  const [cleaned, badId, ...edgeIds] = payloads()
+  for (const sent of edgeIds) expect(sent.diagnostics).not.toHaveProperty('template')
+  expect(edgeIds).toHaveLength(3)
+  expect(cleaned.diagnostics.template).toEqual({ id: 'changes', title: '甲 乙丙😀' })
+  expect(collectorEventV9Schema.safeParse(cleaned).success).toBe(true)
+  // The ID is how a template is found: one that would need rewriting is left out, never altered.
+  expect(badId.schema_version).toBe(5)
+  expect(badId.diagnostics).not.toHaveProperty('template')
+})
+
+test('custom summary requests (v9) use at most half the retry queue and give way to operation events', async () => {
+  const { collectorStatus } = await import('@/src/application/telemetry/collector')
+  jest.mocked(fetch).mockReset().mockImplementation(() => new Promise<Response>(() => {}))
+  const v9 = () => beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'changes', title: '重要變化' } }).finish({ outcome: 'ok' })
+  // Two sends stall in flight; everything after them queues or drops.
+  v9(); v9()
+  for (let i = 0; i < 40; i++) v9()
+  expect(collectorStatus().queued).toBe(32)
+  for (let i = 0; i < 32; i++) parent().finish({ outcome: 'ok' })
+  expect(collectorStatus().queued).toBe(64)
+  // A full queue: each further operation event replaces a queued custom summary request.
+  for (let i = 0; i < 32; i++) parent().finish({ outcome: 'ok' })
+  expect(collectorStatus().queued).toBe(64)
+  const dropped = collectorStatus().dropped
+  parent().finish({ outcome: 'ok' })
+  expect(collectorStatus()).toMatchObject({ queued: 64, dropped: dropped + 1 })
+})
