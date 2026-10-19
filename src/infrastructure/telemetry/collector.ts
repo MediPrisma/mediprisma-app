@@ -1,7 +1,7 @@
 'use client'
 
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
-import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
 import { collectorEventV6Schema, collectorEventV7Schema, collectorEventV8Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -118,8 +118,16 @@ function tokenBucket(n: number | undefined): Diagnostics['context_tokens_bucket'
   if (n === undefined || !Number.isFinite(n) || n < 0) return undefined
   return n === 0 ? '0' : n <= 2000 ? '1-2000' : n <= 8000 ? '2001-8000' : n <= 32000 ? '8001-32000' : n <= 128000 ? '32001-128000' : '128000+'
 }
+type CollectorModel = ReturnType<typeof collectorModelSchema.parse>
+// Endpoint profiles the hospital provisions (through the authenticated Extension) and the one
+// model each serves. Only these fixed codes leave the browser; a user-defined endpoint's
+// profile ID, name, URL or reported model never does, so it stays 'custom'.
+export const INSTITUTION_ENDPOINT_MODELS: Readonly<Record<string, CollectorModel>> = Object.freeze({
+  [customOpenAiModelIdForProfile('vghtpe-tvghbrain')]: 'tvghbrain3.5',
+})
 function modelInfo(id: string, provider?: Start['provider']) {
-  if (isCustomOpenAiModelId(id) || id === 'custom') return { model: 'custom' as const, provider: 'custom' as const }
+  if (isCustomOpenAiModelId(id) || id === 'custom')
+    return { model: Object.hasOwn(INSTITUTION_ENDPOINT_MODELS, id) ? INSTITUTION_ENDPOINT_MODELS[id] : 'custom' as const, provider: 'custom' as const }
   const model = collectorModelSchema.safeParse(id)
   const definition = getModelDefinition(id)
   return { model: model.success ? model.data : 'unknown' as const,

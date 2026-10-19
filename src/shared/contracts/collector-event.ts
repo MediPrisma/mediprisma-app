@@ -22,6 +22,8 @@ export const collectorModelSchema = z.enum([
   'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.1-pro-preview',
   'claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5',
   'custom', 'unknown', 'whisper-1', 'provider-managed',
+  // The hospital-managed endpoint profile names this model; any user-defined endpoint stays 'custom'.
+  'tvghbrain3.5',
 ])
 const elapsed = z.number().int().min(0).max(86_400_000)
 const collectorEventBaseSchema = z.object({
