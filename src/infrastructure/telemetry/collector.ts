@@ -3,12 +3,15 @@
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
+import { collectorEventV6Schema, collectorEventV7Schema, collectorEventV8Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
 type ResourceCounts = Partial<Record<'resource_count' | 'encounter_count' | 'med_count' | 'obs_count' | 'report_count' | 'doc_count', number>>
 type PreparedCounts = Partial<Record<'fed_resource_count' | 'fed_encounter_count' | 'fed_med_count' | 'fed_obs_count' | 'fed_report_count' | 'fed_doc_count', number>>
 export interface CollectorContext {
+  /** Per-run capability; never serialized or inferred from patient/slot/time. */
+  operation?: CollectorOperation
   counts?: ResourceCounts
   fedCounts?: PreparedCounts
   contextTokens?: number
@@ -29,13 +32,22 @@ type Finish = {
   modelSource?: CollectorEvent['model_source']
   httpStatus?: number
   summaryCards?: SummaryCardCounts
+  summaryAttempt?: SummaryAttempt
+  /** Random run ID shared with this summary's v7 attempts; names the operation (v8). */
+  summaryRunId?: string
 }
-interface Observation { finish: (result: Finish) => void; firstChunk: () => void }
+/** One user operation: AI requests made inside it are recorded into its single event. */
+export interface CollectorOperation { observeRequest: (input: Start) => Observation }
+interface Observation { finish: (result: Finish) => void; firstChunk: () => void; operation?: CollectorOperation }
 const NOOP: Observation = Object.freeze({ finish: () => {}, firstChunk: () => {} })
 const REQUEST_TIMEOUT_MS = 5_000
 const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
+// Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
+type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8
+const pending: Array<{event: WireEvent; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
+const MAX_PENDING = 64
 let failures = 0
 let cooldownUntil = 0
 let sent = 0
@@ -51,7 +63,7 @@ export function isCollectorSite(): boolean {
   } catch { return false }
 }
 
-function configuredEndpoint(): string | null {
+export function configuredEndpoint(): string | null {
   try {
     // Public deployment setting contains a URL only, never a token.
     const url = new URL(process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN || 'http://127.0.0.1:8787')
@@ -64,6 +76,8 @@ function configuredEndpoint(): string | null {
 /** Cancel old-page observations, not an opt-in switch. Next operation is automatic. */
 export function cancelCollectorRequests(): void {
   generation++
+  dropped += pending.length
+  pending.length = 0
   failures = 0
   cooldownUntil = 0
   for (const controller of active) controller.abort()
@@ -86,7 +100,7 @@ function browserIdentity() {
 
 export function collectorStatus() {
   return { enabled: Boolean(isCollectorSite() && configuredEndpoint()),
-    in_flight: active.size, sent, dropped, cooling_down: Date.now() < cooldownUntil }
+    in_flight: active.size, queued: pending.length, sent, dropped, cooling_down: Date.now() < cooldownUntil }
 }
 
 const countKeys = { total: 'resource_count', encounters: 'encounter_count', medications: 'med_count',
@@ -142,9 +156,15 @@ export function collectorFeature(label?: string): Start['feature'] {
   return parsed.success ? parsed.data : (label && Object.hasOwn(aliases, label) ? aliases[label] : 'ai_other')
 }
 
-function dispatch(event: CollectorEvent, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
-  if (generation !== owner || !isCollectorSite() || Date.now() < cooldownUntil || active.size >= MAX_IN_FLIGHT) {
+function dispatch(event: WireEvent, owner: number, endpoint: string, auth: ReturnType<typeof captureCollectorAuth>) {
+  if (generation !== owner || !isCollectorSite() || Date.now() < cooldownUntil) {
     dropped++
+    return
+  }
+  if (active.size >= MAX_IN_FLIGHT) {
+    // An operation event is the only record of a user operation; queue it rather than drop it.
+    if ((event.schema_version === 7 || event.sample_kind === 'feature') && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
+    else dropped++
     return
   }
   const controller = new AbortController()
@@ -188,18 +208,32 @@ function dispatch(event: CollectorEvent, owner: number, endpoint: string, auth: 
   void Promise.race([send, aborted]).catch(() => {
     dropped++
     if (generation === owner && ++failures >= 3) cooldownUntil = Date.now() + 60_000
-  }).finally(() => { clearTimeout(timer); controller.signal.removeEventListener('abort', onAbort); active.delete(controller) })
+  }).finally(() => { clearTimeout(timer); controller.signal.removeEventListener('abort', onAbort); active.delete(controller)
+    while (pending.length && active.size < MAX_IN_FLIGHT) {
+      const next = pending.shift()!
+      dispatch(next.event, next.owner, next.endpoint, next.auth)
+    }
+  })
 }
 
-/** Captures exact resource counts and a token estimate bucket at START; rechecks site at END/send. */
+/** Captures exact resource counts and a token estimate bucket at START; rechecks site at END/send.
+ * A request made inside an operation is recorded into that operation's one event instead of
+ * being sent on its own. */
 export function beginCollectorObservation(input: Start): Observation {
+  try {
+    if (input.sampleKind === 'request' && input.operation) return input.operation.observeRequest(input)
+    return observe(input)
+  } catch { return NOOP }
+}
+
+function observe(input: Start, collect?: (event: WireEvent) => void): Observation {
   try {
     if (!isCollectorSite()) return NOOP
     const endpoint = configuredEndpoint()
     if (!endpoint) return NOOP
     const owner = generation
     const browser = browserIdentity()
-    const auth = captureCollectorAuth().catch(() => null)
+    const auth = collect ? null : captureCollectorAuth().catch(() => null)
     const started = nowMs()
     const id = crypto.randomUUID()
     const loaded = counts(input.counts)
@@ -213,16 +247,57 @@ export function beginCollectorObservation(input: Start): Observation {
     const trimmed = input.contextTrimmed
     let ended = false
     let firstChunk: number | undefined
+    const requests: CollectorRequest[] = []
+    const requestSnapshots: Array<() => void> = []
+    let requestCount = 0
+    const operation: CollectorOperation | undefined = kind === 'feature' ? {
+      observeRequest: (child) => {
+        if (ended || generation !== owner || !isCollectorSite()) return NOOP
+        requestCount++
+        // Past the detail cap the request is only counted, but a summary attempt is still sent.
+        if (requests.length >= MAX_COLLECTOR_REQUEST_DETAILS) return observe({ ...child, operation: undefined }, (event) => {
+          if (event.schema_version === 7) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
+        })
+        const index = requests.length
+        const childStarted = nowMs()
+        requests.push({ ...modelInfo(child.modelId, child.provider), model_source: 'configured', latency_ms: 0,
+          status: 'incomplete', error_class: null, response_complete: null, phase: 'unknown', mode: child.mode })
+        const observation = observe({ ...child, operation: undefined }, (event) => {
+          // A summary attempt (v7) is still sent on its own as soon as it ends, so a summary the
+          // user abandons keeps its per-attempt diagnostics; the operation names its run (v8).
+          if (event.schema_version === 7) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
+          if (ended) return
+          const d = event.diagnostics
+          requests[index] = { provider: event.provider, model: event.model, model_source: event.model_source,
+            latency_ms: event.latency_ms, status: event.status, error_class: event.error_class,
+            response_complete: event.response_complete, phase: d.phase, mode: d.mode,
+            ...(d.first_chunk_ms !== undefined ? { first_chunk_ms: d.first_chunk_ms } : {}),
+            ...(d.http_status !== undefined ? { http_status: d.http_status } : {}) }
+        })
+        // A parent may end before a cancelled transport reports; keep an explicit incomplete entry.
+        requestSnapshots.push(() => {
+          if (requests[index].status === 'incomplete')
+            requests[index].latency_ms = Math.min(86_400_000, Math.max(0, Math.round(nowMs() - childStarted)))
+        })
+        return observation
+      },
+    } : undefined
     return {
+      operation,
       firstChunk: () => { try { firstChunk ??= Math.max(0, Math.round(nowMs() - started)) } catch {} },
       finish: (result) => {
         try {
           if (ended) return
           ended = true
           if (generation !== owner || !isCollectorSite()) return
+          for (const snapshot of requestSnapshots) snapshot()
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
-          const parsed = collectorEventV5Schema.safeParse({
-            schema_version: 5, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
+          // v8: a summary operation that knows its run; v6: any other operation; v7/v5: requests.
+          const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
+          const version = result.summaryAttempt ? 7 : runId ? 8 : kind === 'feature' ? 6 : 5
+          const schema = version === 7 ? collectorEventV7Schema : version === 8 ? collectorEventV8Schema : version === 6 ? collectorEventV6Schema : collectorEventV5Schema
+          const parsed = schema.safeParse({
+            schema_version: version, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
             status: result.outcome === 'ok' ? 'completed' : result.outcome === 'aborted' ? 'aborted' : 'error',
@@ -236,11 +311,15 @@ export function beginCollectorObservation(input: Start): Observation {
               ...(firstChunk !== undefined ? { first_chunk_ms: firstChunk } : {}),
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
+              ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
+              ...(runId ? { summary_run_id: runId } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
+              ...(kind === 'feature' && requestCount > 0 ? { requests: { count: requestCount, omitted: requestCount - requests.length, details: requests } } : {}),
             },
           })
-          if (parsed.success) dispatch(parsed.data, owner, endpoint, auth)
-          else dropped++
+          if (!parsed.success) { dropped++; return }
+          if (collect) collect(parsed.data as WireEvent)
+          else if (auth) dispatch(parsed.data as WireEvent, owner, endpoint, auth)
         } catch { /* Telemetry must not affect clinical outcomes, even synchronously. */ }
       },
     }

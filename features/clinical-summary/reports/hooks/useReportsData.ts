@@ -1,5 +1,6 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
+import { getVghtpeSource } from '../adapters/vghtpe-source-display'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferReportDisplayGroup } from '../utils/grouping-helpers'
@@ -846,6 +847,7 @@ export function buildReportsData(
         obs: obsWithSummary,
         group: reportGroup,
         institution,
+        hospitalSource: getVghtpeSource([...grp, ...allObs]),
         sourceProgram: grp.some(isAdultPreventiveReport)
           ? 'adult-preventive'
           : undefined,

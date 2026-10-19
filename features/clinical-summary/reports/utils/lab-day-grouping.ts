@@ -34,6 +34,7 @@ import {
 import { getAnalyteLabel, getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
 import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import type { Observation, Row } from '../types'
+import { mergeHospitalSources } from '../adapters/vghtpe-source-display'
 
 const CHEM_CATEGORY = LAB_CATEGORIES.find((c) => c.id === 'chem') ?? null
 
@@ -249,6 +250,7 @@ function buildDayGroupRow(rows: Row[]): Row {
   const categoryId = rowCategoryId(head)
   return {
     ...head,
+    hospitalSource: mergeHospitalSources(rows.map(row => row.hospitalSource)),
     // Distinct id so virtualizer keys don't collide with the underlying row.
     id: `labday:${clusterKey(head)}`,
     title: head.title, // a11y / plain-Row-consumer fallback; the card renders its own header

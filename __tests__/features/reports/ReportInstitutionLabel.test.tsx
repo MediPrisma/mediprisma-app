@@ -11,6 +11,14 @@ class ResizeObserverMock {
 }
 
 describe('ReportInstitutionLabel', () => {
+  it.each([
+    ['in-house', '臺北榮總(院內)'],
+    ['cloud-and-in-house', '臺北榮總(院內+雲端)'],
+  ] as const)('renders the %s source suffix', (hospitalSource, label) => {
+    render(<ReportInstitutionLabel institution="臺北榮民總醫院" hospitalSource={hospitalSource} />)
+    expect(screen.getByLabelText(label)).toBeInTheDocument()
+    expect(screen.getByText(hospitalSource === 'in-house' ? '(院內)' : '(院內+雲端)')).toHaveClass('shrink-0')
+  })
   beforeAll(() => {
     Object.defineProperty(globalThis, 'ResizeObserver', {
       configurable: true,

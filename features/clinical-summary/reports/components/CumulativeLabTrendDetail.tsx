@@ -1,9 +1,8 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   CartesianGrid,
-  LabelList,
   Line,
   LineChart,
   ReferenceArea,
@@ -12,8 +11,12 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  usePlotArea,
+  useXAxisInverseScale,
+  useXAxisScale,
+  useYAxisScale,
 } from 'recharts'
-import { AlertTriangle, Clock3, Info, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, CalendarRange, Clock3, Info, RotateCcw, SquareDashedMousePointer, TrendingDown, TrendingUp, ZoomIn } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
@@ -26,7 +29,12 @@ import {
 import { formatNumberSmart } from '../utils/number-format.utils'
 import { labTrendGroupKey } from '@/src/shared/utils/lab-trend-group.utils'
 import {
+  buildCustomTrendTimeScale,
   buildTrendTimeScale,
+  findDenseTrendClusters,
+  padTrendRange,
+  type TrendCluster,
+  type TrendCustomRange,
   type TrendTimeScale,
   type TrendWindow,
 } from '../utils/trend-time-scale'
@@ -58,11 +66,27 @@ function formatDateTimeLabel(value: string, locale: string): string {
   }).format(date)
 }
 
-function formatAxisDate(timestamp: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    year: '2-digit',
-    month: '2-digit',
-  }).format(new Date(timestamp))
+function formatAxisDate(timestamp: number, locale: string, unit: TrendTimeScale['tickUnit']): string {
+  const options: Intl.DateTimeFormatOptions = unit === 'time'
+    ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+    : unit === 'day'
+      ? { month: '2-digit', day: '2-digit' }
+      : { year: '2-digit', month: '2-digit' }
+  return new Intl.DateTimeFormat(locale, options).format(new Date(timestamp))
+}
+
+function formatMonthDay(timestamp: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit' }).format(new Date(timestamp))
+}
+
+function formatRangeLabel(range: TrendCustomRange, locale: string): string {
+  const startYear = new Date(range.start).getFullYear()
+  const endYear = new Date(range.end).getFullYear()
+  const start = new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(range.start))
+  const end = startYear === endYear
+    ? formatMonthDay(range.end, locale)
+    : new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(range.end))
+  return `${start}–${end}`
 }
 
 function statusLabel(status: string | undefined, zh: boolean): string | undefined {
@@ -110,13 +134,106 @@ function differenceForDisplay(current: number, previous: number): number {
   return Number((current - previous).toFixed(precision))
 }
 
+const MAX_LABELLED_POINTS = 8
+
+/**
+ * Which results are candidates for an always-on value label. Preset windows:
+ * every result when there are up to eight, else only abnormal results and the
+ * latest. Zoomed: every result. Candidates are then thinned by
+ * `pickTrendLabels` so no two labels collide on screen.
+ */
 export function shouldShowTrendPointLabel(
   points: ReadonlyArray<Pick<LabTrendPoint, 'abnormal'>>,
   index: number,
+  zoomed = false,
 ): boolean {
-  return points.length <= 8
-    || points[index]?.abnormal === true
+  return zoomed
     || index === points.length - 1
+    || points.length <= MAX_LABELLED_POINTS
+    || points[index]?.abnormal === true
+}
+
+// Labels are 10px semibold digits: ~6px per character, ~9px above the baseline.
+const LABEL_CHAR_PX = 6
+const LABEL_ASCENT_PX = 9
+const LABEL_DESCENT_PX = 2
+const LABEL_GAP_PX = 2
+
+export interface TrendLabelBox {
+  index: number
+  /** Label centre and baseline, in chart pixels. */
+  x: number
+  y: number
+  text: string
+  /** Higher first: the latest, then abnormal results, then newer before older. */
+  priority: number
+}
+
+/**
+ * Keep the labels that fit: greedily by priority, dropping any whose box
+ * overlaps one already kept. Only labels are dropped — every point is drawn.
+ */
+export function pickTrendLabels(boxes: ReadonlyArray<TrendLabelBox>): Set<number> {
+  const kept: Array<{ left: number; right: number; top: number; bottom: number }> = []
+  const picked = new Set<number>()
+  for (const box of [...boxes].sort((a, b) => b.priority - a.priority)) {
+    const half = (box.text.length * LABEL_CHAR_PX) / 2 + LABEL_GAP_PX / 2
+    const rect = {
+      left: box.x - half,
+      right: box.x + half,
+      top: box.y - LABEL_ASCENT_PX,
+      bottom: box.y + LABEL_DESCENT_PX,
+    }
+    const collides = kept.some((other) => (
+      rect.left < other.right && rect.right > other.left
+      && rect.top < other.bottom && rect.bottom > other.top
+    ))
+    if (collides) continue
+    kept.push(rect)
+    picked.add(box.index)
+  }
+  return picked
+}
+
+/**
+ * Value labels drawn from the chart's own scales, so collisions are judged in
+ * real pixels at whatever width the side panel has.
+ */
+function TrendValueLabels({ points, zoomed }: { points: LabTrendPoint[]; zoomed: boolean }) {
+  const xScale = useXAxisScale()
+  const yScale = useYAxisScale()
+  if (!xScale || !yScale) return null
+  const last = points.length - 1
+  const boxes: TrendLabelBox[] = []
+  points.forEach((point, index) => {
+    if (!shouldShowTrendPointLabel(points, index, zoomed)) return
+    const x = Number(xScale(point.timestamp))
+    const y = Number(yScale(point.value))
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    const priority = index === last ? 3 * points.length : point.abnormal ? 2 * points.length + index : index
+    boxes.push({ index, x, y: y - 10, text: formatNumberSmart(point.value), priority })
+  })
+  const picked = pickTrendLabels(boxes)
+  return (
+    <g className="trend-value-labels">
+      {boxes.filter((box) => picked.has(box.index)).map((box) => (
+        <text
+          key={points[box.index].id}
+          x={box.x}
+          y={box.y}
+          textAnchor="middle"
+          pointerEvents="none"
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            fill: points[box.index].abnormal ? '#dc2626' : 'hsl(var(--foreground))',
+          }}
+        >
+          {box.text}
+        </text>
+      ))}
+    </g>
+  )
 }
 
 export function resolveTrendChartReferenceRange(
@@ -133,6 +250,93 @@ export function resolveTrendChartReferenceRange(
   return latestAvailable
     ? { range: latestAvailable, source: 'latest' }
     : undefined
+}
+
+// Pointer travel below this is a click (which shows the tooltip), not a drag.
+const DRAG_MIN_PX = 8
+
+export type TrendDragResult =
+  | { kind: 'click' }
+  | { kind: 'too-few' }
+  | { kind: 'zoom'; start: number; end: number }
+
+/**
+ * Decide what a finished drag on the chart means. `from`/`to` are the times
+ * under the pointer at press and release, so the box covers exactly what was
+ * dragged over; the zoom then spans the first to last result inside it.
+ */
+export function resolveTrendDragSelection(
+  points: ReadonlyArray<Pick<LabTrendPoint, 'timestamp'>>,
+  from: number,
+  to: number,
+  travelledPx: number,
+): TrendDragResult {
+  if (travelledPx < DRAG_MIN_PX) return { kind: 'click' }
+  const inside = selectedTrendPoints(points, from, to)
+  if (inside.length < 2) return { kind: 'too-few' }
+  return { kind: 'zoom', start: inside[0].timestamp, end: inside[inside.length - 1].timestamp }
+}
+
+function selectedTrendPoints<T extends Pick<LabTrendPoint, 'timestamp'>>(
+  points: ReadonlyArray<T>,
+  from: number,
+  to: number,
+): T[] {
+  const low = Math.min(from, to)
+  const high = Math.max(from, to)
+  return points
+    .filter((point) => point.timestamp >= low && point.timestamp <= high)
+    .sort((left, right) => left.timestamp - right.timestamp)
+}
+
+export interface TrendDragPreview {
+  start: number
+  end: number
+  count: number
+}
+
+interface ChartGeometry {
+  left: number
+  right: number
+  invert: (pixel: number) => number
+}
+
+/**
+ * Lives inside the chart so it can read the plot area and the X scale, which
+ * it hands to the pointer handlers on the chart's container. It also draws the
+ * selection box, under the pointer and never intercepting it.
+ */
+function TrendChartDragLayer({
+  geometryRef,
+  selection,
+}: {
+  geometryRef: MutableRefObject<ChartGeometry | null>
+  selection: { from: number; to: number } | null
+}) {
+  const plot = usePlotArea()
+  const invert = useXAxisInverseScale()
+  useEffect(() => {
+    geometryRef.current = plot && invert
+      ? { left: plot.x, right: plot.x + plot.width, invert: (pixel) => Number(invert(pixel)) }
+      : null
+  }, [geometryRef, plot, invert])
+  if (!plot || !selection) return null
+  const x = Math.min(selection.from, selection.to)
+  return (
+    <rect
+      data-testid="trend-drag-selection"
+      x={x}
+      y={plot.y}
+      width={Math.abs(selection.to - selection.from)}
+      height={plot.height}
+      fill="#2563eb"
+      fillOpacity={0.14}
+      stroke="#2563eb"
+      strokeOpacity={0.7}
+      strokeDasharray="4 3"
+      pointerEvents="none"
+    />
+  )
 }
 
 function TrendTooltip({
@@ -178,15 +382,65 @@ function TrendChart({
   referenceRange,
   referenceRangeLabel,
   timeScale,
+  zoomed,
+  denseRuns,
+  onDragPreview,
+  onDragEnd,
 }: {
   points: LabTrendPoint[]
   unit?: string
   referenceRange?: LabTrendReferenceRange
   referenceRangeLabel: string
   timeScale: TrendTimeScale
+  zoomed: boolean
+  /** Crowded runs to tint on the plot, matching the dense-run buttons. */
+  denseRuns: TrendCluster[]
+  /** The live selection while dragging; null once the drag ends. */
+  onDragPreview: (preview: TrendDragPreview | null) => void
+  onDragEnd: (result: TrendDragResult) => void
 }) {
   const { locale } = useLanguage()
   const zh = locale.startsWith('zh')
+  // Drag-to-zoom draws a free box: it follows the pointer and is converted to
+  // times with the chart's own X scale. Pointer events on the container (with
+  // capture) keep the drag going over dots, labels and the axes; the ref is the
+  // source of truth so nothing can revive a finished drag.
+  type Drag = { pointerId: number; from: number; to: number }
+  const geometryRef = useRef<ChartGeometry | null>(null)
+  const dragRef = useRef<Drag | null>(null)
+  const [drag, setDragState] = useState<Drag | null>(null)
+  const setDrag = (next: Drag | null) => {
+    dragRef.current = next
+    setDragState(next)
+  }
+  const pointerX = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const x = event.clientX - event.currentTarget.getBoundingClientRect().left
+    const geometry = geometryRef.current
+    return geometry ? Math.min(geometry.right, Math.max(geometry.left, x)) : x
+  }
+  const preview = (from: number, to: number): TrendDragPreview | null => {
+    const geometry = geometryRef.current
+    if (!geometry || Math.abs(to - from) < DRAG_MIN_PX) return null
+    const start = geometry.invert(Math.min(from, to))
+    const end = geometry.invert(Math.max(from, to))
+    return { start, end, count: selectedTrendPoints(points, start, end).length }
+  }
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>, commit: boolean) => {
+    const current = dragRef.current
+    if (!current || current.pointerId !== event.pointerId) return
+    setDrag(null)
+    onDragPreview(null)
+    const geometry = geometryRef.current
+    if (!commit || !geometry) return
+    const to = pointerX(event)
+    const result = resolveTrendDragSelection(
+      points,
+      geometry.invert(current.from),
+      geometry.invert(to),
+      Math.abs(to - current.from),
+    )
+    if (result.kind !== 'click') onDragEnd(result)
+  }
   const { domain, ticks } = useMemo(() => {
     if (points.length === 0) return { domain: [0, 1] as [number, number], ticks: [0, 1] }
     let low = Math.min(...points.map((point) => point.value))
@@ -195,7 +449,6 @@ function TrendChart({
     if (referenceRange?.high !== undefined) high = Math.max(high, referenceRange.high)
     return niceAxis(low, high)
   }, [points, referenceRange])
-  const labelEveryPoint = points.length <= 8
 
   if (points.length < 2) {
     return (
@@ -207,14 +460,37 @@ function TrendChart({
 
   return (
     <div
-      className="h-[260px] w-full sm:h-[300px]"
+      className="h-[260px] w-full cursor-crosshair select-none sm:h-[300px]"
+      data-testid="trend-chart-drag-surface"
+      onPointerDown={(event) => {
+        // Touch keeps scrolling the page; touch users zoom with 自訂範圍.
+        if (event.pointerType === 'touch' || event.button !== 0) return
+        const geometry = geometryRef.current
+        const x = event.clientX - event.currentTarget.getBoundingClientRect().left
+        if (!geometry || x < geometry.left || x > geometry.right) return
+        event.preventDefault()
+        try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* pointer already gone */ }
+        setDrag({ pointerId: event.pointerId, from: x, to: x })
+      }}
+      onPointerMove={(event) => {
+        const current = dragRef.current
+        if (!current || current.pointerId !== event.pointerId) return
+        const to = pointerX(event)
+        setDrag({ ...current, to })
+        onDragPreview(preview(current.from, to))
+      }}
+      onPointerUp={(event) => endDrag(event, true)}
+      onPointerCancel={(event) => endDrag(event, false)}
       role="img"
       aria-label={zh
         ? `檢驗趨勢圖，共 ${points.length} 筆，時間由左至右`
         : `Lab trend chart with ${points.length} results, oldest to newest`}
     >
       <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-        <LineChart data={points} margin={{ top: 24, right: 18, bottom: 6, left: 2 }}>
+        <LineChart
+          data={points}
+          margin={{ top: 24, right: 18, bottom: 6, left: 2 }}
+        >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis
             dataKey="timestamp"
@@ -223,7 +499,7 @@ function TrendChart({
             domain={timeScale.domain}
             ticks={timeScale.ticks}
             allowDataOverflow
-            tickFormatter={(value: number) => formatAxisDate(value, locale)}
+            tickFormatter={(value: number) => formatAxisDate(value, locale, timeScale.tickUnit)}
             tick={{ fontSize: 10 }}
             tickLine={false}
             interval={0}
@@ -247,6 +523,8 @@ function TrendChart({
             className="text-muted-foreground"
           />
           <Tooltip
+            // Hidden while dragging so it never covers the box being drawn.
+            active={drag ? false : undefined}
             content={(props) => (
               <TrendTooltip
                 active={props.active}
@@ -272,6 +550,17 @@ function TrendChart({
               }}
             />
           )}
+          {denseRuns.map((run) => (
+            <ReferenceArea
+              key={run.start}
+              x1={run.start}
+              x2={run.end}
+              fill="#f59e0b"
+              fillOpacity={0.14}
+              stroke="none"
+              ifOverflow="hidden"
+            />
+          ))}
           {referenceRange?.low !== undefined && (
             <ReferenceLine y={referenceRange.low} stroke="var(--chart-2)" strokeOpacity={0.55} strokeDasharray="4 4" />
           )}
@@ -315,33 +604,10 @@ function TrendChart({
               )
             }}
             activeDot={{ r: 7, fill: '#2563eb', stroke: 'hsl(var(--card))', strokeWidth: 2 }}
-          >
-            <LabelList
-              dataKey="value"
-              content={(props: any) => {
-                const { x, y, value, index } = props
-                const point = typeof index === 'number' ? points[index] : undefined
-                const show = typeof index === 'number'
-                  ? shouldShowTrendPointLabel(points, index)
-                  : labelEveryPoint
-                if (!show || x == null || y == null || typeof value !== 'number') return null
-                return (
-                  <text
-                    x={x}
-                    y={y - 10}
-                    textAnchor="middle"
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      fill: point?.abnormal ? '#dc2626' : 'hsl(var(--foreground))',
-                    }}
-                  >
-                    {formatNumberSmart(value)}
-                  </text>
-                )
-              }}
-            />
-          </Line>
+          />
+
+          <TrendValueLabels points={points} zoomed={zoomed} />
+          <TrendChartDragLayer geometryRef={geometryRef} selection={drag} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -357,6 +623,16 @@ export function CumulativeLabTrendDetail({
   const zh = locale.startsWith('zh')
   const groups = useMemo(() => groupLabTrendPoints(series.points, series.selection.categoryId), [series.points, series.selection.categoryId])
   const [selectedGroupKey, setSelectedGroupKey] = useState('')
+  // A zoomed range belongs to this analyte and group only; unlike the preset
+  // window it is not reported through onWindowChange. It holds the selected
+  // first and last results' times, unpadded: it decides which results are
+  // shown and labels the range, while only the axis domain is padded.
+  const [customRange, setCustomRange] = useState<TrendCustomRange | null>(null)
+  const [zoomNotice, setZoomNotice] = useState('')
+  const [dragPreview, setDragPreview] = useState<TrendDragPreview | null>(null)
+  // Keyboard-operable equivalent of drag-to-zoom: pick the first and last
+  // result by index into chartPoints. null while the picker is closed.
+  const [rangePicker, setRangePicker] = useState<{ start: number; end: number } | null>(null)
   const group = groups.find(item => item.key === selectedGroupKey) ?? groups[0]
   const chartPoints = useMemo(() => group?.chartPoints ?? [], [group])
   const isOtherGroup = (point: LabTrendPoint) => labTrendGroupKey(point.unit, point.specimen, series.selection.categoryId) !== group?.key
@@ -364,7 +640,17 @@ export function CumulativeLabTrendDetail({
   const [window, setWindow] = useState<TrendWindow>(() => initialWindow ?? defaultWindow({ chartPoints }))
   const selectWindow = (value: TrendWindow) => {
     setWindow(value)
+    setCustomRange(null)
+    setZoomNotice('')
     onWindowChange?.(value)
+  }
+  const zoomTo = (start: number, end: number) => {
+    setCustomRange({ start, end })
+    setZoomNotice('')
+  }
+  const clearZoom = () => {
+    setCustomRange(null)
+    setZoomNotice('')
   }
 
   const latest = group?.points.at(-1)
@@ -377,15 +663,37 @@ export function CumulativeLabTrendDetail({
     : undefined
 
   const timeScale = useMemo(
-    () => buildTrendTimeScale(chartPoints, window),
-    [chartPoints, window],
+    () => customRange
+      ? buildCustomTrendTimeScale(padTrendRange(customRange.start, customRange.end))
+      : buildTrendTimeScale(chartPoints, window),
+    [chartPoints, customRange, window],
   )
   const visiblePoints = useMemo(() => {
-    const [start, end] = timeScale.domain
+    const [start, end] = customRange ? [customRange.start, customRange.end] : timeScale.domain
     return chartPoints.filter((point) => (
       point.timestamp >= start && point.timestamp <= end
     ))
-  }, [chartPoints, timeScale])
+  }, [chartPoints, customRange, timeScale])
+  const denseClusters = useMemo(
+    // Runs are judged against whatever is on screen, so a wide custom range
+    // that still squeezes a run keeps offering to zoom into it. Only shown
+    // results count: the padded axis domain can reach past a picked end.
+    () => findDenseTrendClusters(visiblePoints, timeScale.domain),
+    [visiblePoints, timeScale],
+  )
+  const toggleRangePicker = () => {
+    if (rangePicker) {
+      setRangePicker(null)
+      return
+    }
+    // Start from what the chart shows now; fall back to the whole group.
+    const first = visiblePoints.length > 0 ? chartPoints.indexOf(visiblePoints[0]) : -1
+    const last = visiblePoints.length > 0 ? chartPoints.indexOf(visiblePoints[visiblePoints.length - 1]) : -1
+    setRangePicker({
+      start: first >= 0 ? first : 0,
+      end: last >= 0 ? last : chartPoints.length - 1,
+    })
+  }
   const visibleCompatibility = useMemo(
     () => assessLabTrendCompatibility(visiblePoints, series.selection.categoryId),
     [series.selection.categoryId, visiblePoints],
@@ -436,7 +744,11 @@ export function CumulativeLabTrendDetail({
           <select
             className="min-h-[44px] w-full min-w-0 rounded-md border bg-background px-2 text-sm text-foreground"
             value={group?.key}
-            onChange={(event) => setSelectedGroupKey(event.target.value)}
+            onChange={(event) => {
+              setSelectedGroupKey(event.target.value)
+              clearZoom()
+              setRangePicker(null)
+            }}
           >
             {groups.map(item => (
               <option key={item.key} value={item.key}>
@@ -513,10 +825,10 @@ export function CumulativeLabTrendDetail({
             key={value}
             type="button"
             onClick={() => selectWindow(value)}
-            aria-pressed={window === value}
+            aria-pressed={!customRange && window === value}
             className={cn(
               'min-h-[44px] rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              window === value
+              !customRange && window === value
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
@@ -524,7 +836,67 @@ export function CumulativeLabTrendDetail({
             {label}
           </button>
         ))}
+        {/* The custom range is the fifth time-range option, styled like the
+            presets so it reads as one of the choices. It opens the start/end
+            picker; the zoomed range and 還原 live in the chart's status row,
+            so this row keeps its width and never wraps on zoom. */}
+        {chartPoints.length >= 2 && (
+          <button
+            type="button"
+            onClick={toggleRangePicker}
+            aria-expanded={!!rangePicker}
+            aria-controls="cumulative-trend-range-picker"
+            aria-pressed={!!customRange}
+            className={cn(
+              'inline-flex min-h-[44px] items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              customRange || rangePicker
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
+            {zh ? '自訂範圍' : 'Custom range'}
+          </button>
+        )}
       </div>
+
+      {rangePicker && (
+        <div
+          id="cumulative-trend-range-picker"
+          className="grid gap-2 rounded-lg border bg-muted/20 p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
+        >
+          {(['start', 'end'] as const).map((edge) => (
+            <label key={edge} className="block min-w-0 space-y-1 text-xs font-medium">
+              <span>{edge === 'start' ? (zh ? '起' : 'From') : (zh ? '迄' : 'To')}</span>
+              <select
+                className="min-h-[44px] w-full min-w-0 rounded-md border bg-background px-2 text-sm text-foreground"
+                value={rangePicker[edge]}
+                onChange={(event) => setRangePicker({ ...rangePicker, [edge]: Number(event.target.value) })}
+              >
+                {chartPoints.map((point, index) => (
+                  <option key={point.id} value={index}>
+                    {formatDateTimeLabel(point.effectiveTime, locale)} · {point.comparator}{formatNumberSmart(point.value)}{point.unit ? ` ${point.unit}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <button
+            type="button"
+            disabled={rangePicker.end <= rangePicker.start}
+            onClick={() => zoomTo(chartPoints[rangePicker.start].timestamp, chartPoints[rangePicker.end].timestamp)}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md border border-primary bg-primary/10 px-4 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted-foreground"
+          >
+            <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+            {zh ? '放大' : 'Zoom'}
+          </button>
+          {rangePicker.end <= rangePicker.start && (
+            <p className="text-xs text-muted-foreground sm:col-span-3">
+              {zh ? '迄點需晚於起點，至少包含兩筆結果。' : 'Pick an end result after the start; at least two results are needed.'}
+            </p>
+          )}
+        </div>
+      )}
 
       {groups.length > 1 && (
         <p className="text-xs text-muted-foreground" role="status">
@@ -534,6 +906,86 @@ export function CumulativeLabTrendDetail({
         </p>
       )}
       <div className="overflow-hidden rounded-xl border bg-card">
+        {visibleCompatibility.chartable && visiblePoints.length >= 2 && (
+          // A status block of fixed height above the plot, so the chart never
+          // moves between idle, dragging, zoomed and reset: a text line (up to
+          // two lines, clamped) for how to zoom, the live selection or the
+          // zoomed range; then a row for the dense-run zoom and 還原, kept at
+          // its height even when it has no buttons.
+          <div data-testid="trend-status" className="border-b bg-muted/30 px-3 pb-1 pt-1.5">
+            <p
+              aria-live="polite"
+              className={cn(
+                'flex h-10 items-center gap-1.5 text-xs leading-5',
+                zoomNotice
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : dragPreview ? 'font-medium text-primary' : 'text-foreground/80',
+              )}
+            >
+              {zoomNotice ? (
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : dragPreview ? (
+                <SquareDashedMousePointer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : customRange ? (
+                <ZoomIn className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              ) : (
+                <>
+                  {/* Dragging needs a mouse; touch users get the 自訂範圍 route. */}
+                  <SquareDashedMousePointer className="hidden h-3.5 w-3.5 shrink-0 text-primary pointer-fine:inline" aria-hidden="true" />
+                  <CalendarRange className="h-3.5 w-3.5 shrink-0 text-primary pointer-fine:hidden" aria-hidden="true" />
+                </>
+              )}
+              <span className="line-clamp-2 min-w-0">
+                {zoomNotice ? zoomNotice : dragPreview ? (
+                  dragPreview.count >= 2
+                    ? (zh
+                      ? `選取 ${formatRangeLabel(dragPreview, locale)} · ${dragPreview.count} 筆，放開即可放大`
+                      : `Selecting ${formatRangeLabel(dragPreview, locale)} · ${dragPreview.count} results; release to zoom`)
+                    : (zh ? '框內需至少兩筆結果才能放大' : 'Include at least two results to zoom')
+                ) : customRange ? (
+                  <>
+                    <span className="font-semibold text-primary">
+                      {zh ? '已放大' : 'Zoomed to'} {formatRangeLabel(customRange, locale)}
+                    </span>
+                    {` · ${visiblePoints.length} ${zh ? '筆' : 'results'}`}
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden pointer-fine:inline">
+                      {zh ? '在圖上按住滑鼠左右拖曳，框出要放大的時間' : 'Click and drag across the chart to box the period to zoom into'}
+                    </span>
+                    <span className="pointer-fine:hidden">
+                      {zh ? '用「自訂範圍」選擇要放大的時間' : 'Use 「Custom range」 to pick a period to zoom into'}
+                    </span>
+                  </>
+                )}
+              </span>
+            </p>
+            <div className="flex h-9 items-center gap-2 overflow-x-auto">
+              {denseClusters.map((cluster) => (
+                <button
+                  key={cluster.start}
+                  type="button"
+                  onClick={() => zoomTo(cluster.start, cluster.end)}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-amber-400 bg-amber-50 px-2.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+                  {zh ? '放大密集區' : 'Zoom dense run'} {formatMonthDay(cluster.start, locale)}–{formatMonthDay(cluster.end, locale)}（{cluster.count} {zh ? '筆' : 'results'}）
+                </button>
+              ))}
+              {customRange && (
+                <button
+                  type="button"
+                  onClick={clearZoom}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  {zh ? '還原' : 'Reset'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {visibleCompatibility.chartable ? (
           <TrendChart
             points={visiblePoints}
@@ -543,6 +995,16 @@ export function CumulativeLabTrendDetail({
               ? (zh ? '共同參考範圍' : 'Shared range')
               : (zh ? '最新可用參考範圍' : 'Latest available range')}
             timeScale={timeScale}
+            zoomed={!!customRange}
+            denseRuns={denseClusters}
+            onDragPreview={(preview) => {
+              setDragPreview(preview)
+              if (preview) setZoomNotice('')
+            }}
+            onDragEnd={(result) => {
+              if (result.kind === 'zoom') zoomTo(result.start, result.end)
+              else setZoomNotice(zh ? '選取範圍內少於兩筆結果，未放大。' : 'Fewer than two results selected; not zoomed.')
+            }}
           />
         ) : (
           <div className="flex min-h-56 items-center justify-center p-6 text-center">

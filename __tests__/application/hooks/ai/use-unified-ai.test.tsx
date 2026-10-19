@@ -1,3 +1,4 @@
+import { buildSummaryReport } from '@/src/shared/utils/summary-diagnostics'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
@@ -61,6 +62,60 @@ jest.mock('@/src/infrastructure/ai/streaming/stream-orchestrator', () => ({
 }))
 
 describe('useUnifiedAi cancellation', () => {
+  it.each([['MedicalSummaryCardProgressTimeoutError','timeout'],['AbortError','aborted']])('preserves %s in the consented full report',async(name,outcome)=>{
+    const controller=new AbortController()
+    mockStream.mockImplementationOnce(async options=>{options.onChunk('synthetic partial');const reason=new Error('synthetic');reason.name=name;controller.abort(reason)})
+    const {result}=renderHook(()=>useUnifiedAi())
+    await act(async()=>{await result.current.stream([{role:'user',content:'synthetic'}],{modelId:'gpt-5.4-nano',operationKey:'PRIVATE-PATIENT',diagnosticFeature:'medical-summary',signal:controller.signal,summaryDiagnostics:{runId:'10000000-0000-4000-8000-000000000001',attempt:1,lane:'full',inspect:()=> 'incomplete'}})})
+    const report=JSON.parse(buildSummaryReport(useAiExecutionDiagnosticsStore.getState().records))
+    expect(report.executions[0].outcome).toBe(outcome)
+  })
+  it('classifies a completed unparseable response as parse phase', async () => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockResolvedValue({status:201} as Response)
+    mockStream.mockImplementationOnce(async options=>options.onChunk('SYNTHETIC INVALID'))
+    const {result}=renderHook(()=>useUnifiedAi())
+    try {
+      await act(async()=>{await result.current.stream([{role:'user',content:'synthetic'}],{
+        modelId:'gpt-5.4-nano',operationKey:'synthetic-summary',diagnosticFeature:'medical-summary',summaryDiagnostics:{runId:'10000000-0000-4000-8000-000000000001',attempt:1,lane:'full',inspect:()=> 'invalid'},
+      })})
+      await waitFor(()=>expect(fetch).toHaveBeenCalled())
+      expect(JSON.parse(String(jest.mocked(fetch).mock.calls.at(-1)?.[1]?.body))).toMatchObject({error_class:'parse_failed',response_complete:true,diagnostics:{phase:'parse'}})
+    } finally {cancelCollectorRequests();permission.restore();window.history.replaceState({},'', '/')}
+  })
+  it('correlates all watchdog retries with technical-only automatic payloads', async () => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    useAiExecutionDiagnosticsStore.getState().clearAll()
+    useAiExecutionDiagnosticsStore.getState().beginSummaryRun('PRIVATE-PATIENT','10000000-0000-4000-8000-000000000001')
+    jest.mocked(fetch).mockResolvedValue({ status: 201 } as Response)
+    const { result } = renderHook(() => useUnifiedAi())
+    try {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const controller = new AbortController()
+        mockStream.mockImplementationOnce(async (options) => {
+          options.onChunk('SYNTHETIC-OUTPUT Bearer openai-key')
+          const timeout = new Error('watchdog'); timeout.name = 'MedicalSummaryCardProgressTimeoutError'
+          controller.abort(timeout)
+        })
+        await act(async () => {
+          await result.current.stream([{ role: 'user', content: 'SYNTHETIC-PROMPT' }], {
+            signal: controller.signal, modelId: 'gpt-5.4-nano', diagnosticFeature: 'medical-summary', operationKey: 'PRIVATE-PATIENT',
+            summaryDiagnostics: { runId: '10000000-0000-4000-8000-000000000001', attempt, lane: 'full', inspect: () => 'incomplete' },
+          })
+        })
+        await waitFor(() => expect(fetch).toHaveBeenCalledTimes(attempt))
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+      const wires = jest.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+      expect(wires.map(w => w.diagnostics.summary_attempt.attempt)).toEqual([1, 2, 3])
+      expect(wires.every(w => w.schema_version === 7 && w.error_class === 'timeout')).toBe(true)
+      expect(JSON.stringify(wires)).not.toMatch(/SYNTHETIC-PROMPT|SYNTHETIC-OUTPUT|PRIVATE-PATIENT|openai-key/)
+      expect(useAiExecutionDiagnosticsStore.getState().records).toHaveLength(3)
+      expect(useAiExecutionDiagnosticsStore.getState().records[0].outputData).not.toContain('openai-key')
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
   it.each(['query', 'stream'] as const)('completes %s while an enabled collector is offline, without forwarding full diagnostics', async (transport) => {
     const permission = mockCollectorPermission()
     window.history.replaceState({}, '', '/?site=vghtpe')
@@ -104,6 +159,9 @@ describe('useUnifiedAi cancellation', () => {
   })
 
   beforeEach(() => {
+    useAiExecutionDiagnosticsStore.getState().clearAll()
+    useAiExecutionDiagnosticsStore.getState().beginSummaryRun('PRIVATE-PATIENT', '10000000-0000-4000-8000-000000000001')
+    useAiExecutionDiagnosticsStore.getState().beginSummaryRun('synthetic-summary', '10000000-0000-4000-8000-000000000001')
     jest.clearAllMocks()
     mockStoreListeners.clear()
     mockAiConfigState = {

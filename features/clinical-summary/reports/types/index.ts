@@ -69,6 +69,8 @@ export type Row = {
   obs: Observation[]
   group: ReportGroup
   institution?: string
+  /** Display-only provenance; raw institution remains the grouping identity. */
+  hospitalSource?: import('../adapters/vghtpe-source-display').HospitalSource
   /** Explicit source-program provenance supplied by the source resource.
    *  Never infer this from the analyte name or value. */
   sourceProgram?: ReportSourceProgram

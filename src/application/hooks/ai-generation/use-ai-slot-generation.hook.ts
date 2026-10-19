@@ -45,6 +45,7 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
 import { runGenerationJob, type AiGenerationMeasurement, type AiRunMetrics } from './run-generation-job'
+import { withCollectorOperation } from '@/src/application/telemetry/collector-operation'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
 import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
@@ -74,6 +75,8 @@ import { providerClinicalContextSafetyFraction } from './context-window-retry'
 export interface AiSlotRunContext {
   /** Optional terminal measurement; does not change result/cache acceptance. */
   measureResult?: (result: AiGenerationMeasurement) => void
+  /** Optional: the random diagnostic run ID, joined to the operation telemetry event. */
+  identifySummaryRun?: (runId: string) => void
   /** Exact model-fitted text sent by this run. */
   clinicalContext: string
   /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
@@ -597,9 +600,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
       readRunMetrics: readRunMetrics ? () => readRunMetrics(slotKey) : undefined,
-      produce: (measureResult) =>
+      produce: (measureResult, identifySummaryRun, operation) =>
         run({
           measureResult,
+          identifySummaryRun,
           clinicalContext,
           piiLiterals,
           clinicalData: scopedClinicalData,
@@ -608,7 +612,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           catalog,
           locale,
           audience,
-          ai,
+          ai: withCollectorOperation(ai, operation),
           modelId: resolvedModelId,
           modelName: resolvedModelName,
           requestedModelId: selectedModelId,

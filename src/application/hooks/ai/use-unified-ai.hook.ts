@@ -1,3 +1,7 @@
+'use client'
+
+import { diagnosticUuid, redactDiagnosticText, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
+import type { SummaryAttempt, AiReport } from '@/src/shared/contracts/collector-event'
 /**
  * Unified AI Hook
  * Provides a consistent interface for AI operations across all features
@@ -39,6 +43,7 @@ interface UseUnifiedAiOptions {
 }
 
 interface QueryOptions {
+  summaryDiagnostics?: SummaryDiagnosticContext
   requestedModelId?: string
   onModelExecution?: (execution: AiModelExecution) => void
   modelId?: string
@@ -276,8 +281,24 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         modelId, sampleKind: 'request', mode: 'stream',
       })
       const timestamp = new Date().toISOString()
+      const diagnosticNow = () => { try { return performance.now() } catch { return Date.now() } }
+      const diagnosticStart = streamOptions?.summaryDiagnostics ? diagnosticNow() : 0
+      const requestId = streamOptions?.summaryDiagnostics ? diagnosticUuid() : ''
+      let lastChunkMs: number | null = null
+      let measured: SummaryAttempt | undefined
+      const technical = (): SummaryAttempt | undefined => {
+        if (measured) return measured
+        const context = streamOptions?.summaryDiagnostics
+        if (!context) return undefined
+        let parseState: SummaryAttempt['parse_state'] = fullText ? 'unknown' : 'empty'
+        try { if (fullText) parseState = context.inspect(fullText) } catch { parseState = 'unknown' }
+        return measured = { run_id: context.runId, request_id: requestId, attempt: context.attempt,
+          lane: context.lane, output_chars: fullText.length, last_chunk_ms: lastChunkMs, parse_state: parseState }
+      }
+      const abortOutcome = () => abortController.signal.reason instanceof Error &&
+        abortController.signal.reason.name === 'MedicalSummaryCardProgressTimeoutError' ? 'timeout' as const : 'aborted' as const
       let recorded = false
-      const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
+      const record = (status: AiExecutionStatus, errorMessage: string | null = null, outcome: AiReport['executions'][number]['outcome'] = status === 'completed' ? null : status === 'aborted' ? abortOutcome() : 'error') => {
         if (recorded) return
         recorded = true
         useAiExecutionDiagnosticsStore.getState().addRecord({
@@ -290,16 +311,18 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           modelId: modelExecution.actualModelId ?? 'unreported',
           modelExecution,
           timestamp,
-          prompt: diagnosticPrompt(messages),
+          technical: technical(),
+          outcome: streamOptions?.summaryDiagnostics ? outcome : undefined,
+          prompt: redactDiagnosticText(diagnosticPrompt(messages), apiKey),
           inputData: {
-            messages,
+            messages: messages.map(m => ({ ...m, content: redactDiagnosticText(m.content, apiKey) })),
             temperature: streamOptions?.temperature ?? null,
             maxTokens: streamOptions?.maxTokens ?? null,
             responseFormat: streamOptions?.responseFormat ?? null,
           },
-          outputData: fullText,
+          outputData: redactDiagnosticText(fullText, apiKey),
           hasError: status === 'error',
-          errorMessage,
+          errorMessage: errorMessage ? redactDiagnosticText(errorMessage, apiKey) : null,
           status,
         })
       }
@@ -332,6 +355,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           },
           onChunk: (chunk: string) => {
             if (chunk.length > 0) collector.firstChunk()
+            if (chunk.length > fullText.length) lastChunkMs = Math.max(0, Math.round(diagnosticNow() - diagnosticStart))
             fullText = chunk
             streamOptions?.onChunk?.(chunk)
           },
@@ -341,7 +365,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         // instead of rejecting. Structured callers still need a hard stop so
         // they neither parse buffered text nor launch their parse-retry pass.
         if (abortController.signal.aborted) {
-          collector.finish({ outcome: 'aborted', phase: 'stream', responseComplete: false })
+          collector.finish({ summaryAttempt: technical(), outcome: abortOutcome(), phase: 'stream', responseComplete: false })
           record('aborted', 'The operation was aborted')
           if (streamOptions?.throwOnAbort) {
             const abortError = new Error('The operation was aborted')
@@ -352,14 +376,17 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         }
 
         streamOptions?.onComplete?.(fullText)
-        collector.finish({ outcome: 'ok', phase: 'stream', responseComplete: true,
+        const parseFailed = ['invalid', 'incomplete', 'empty'].includes(technical()?.parse_state ?? '')
+        collector.finish({ summaryAttempt: technical(), outcome: parseFailed ? 'parse_failed' : 'ok', phase: parseFailed ? 'parse' : 'stream', responseComplete: true,
           modelId: modelExecution.actualModelId ?? modelId,
           modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
-        record('completed')
+        record(parseFailed ? 'error' : 'completed', null, parseFailed ? 'parse_failed' : null)
         options.onSuccess?.(fullText)
         return fullText
       } catch (err) {
-        collector.finish({ outcome: abortController.signal.aborted ? 'aborted' : collectorError(err), phase: 'stream', responseComplete: false })
+        const classified = collectorError(err)
+        const failure = classified === 'ok' ? 'error' : classified
+        collector.finish({ summaryAttempt: technical(), outcome: abortController.signal.aborted ? abortOutcome() : failure, phase: 'stream', responseComplete: false })
         if (abortController.signal.aborted) {
           const abortReason = abortController.signal.reason
           record(
@@ -385,7 +412,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         }
 
         const errorMessage = getUserErrorMessage(err)
-        record('error', errorMessage)
+        record('error', errorMessage, failure)
         setError(errorMessage)
         options.onError?.(errorMessage)
         throw err
