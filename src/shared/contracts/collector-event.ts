@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v8 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v9 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -210,6 +210,27 @@ export const collectorEventV8Schema = collectorEventV4BaseSchema.extend({
     ctx.addIssue({ code: 'custom', message: 'Only summary operation events name a summary run' })
 })
 export type CollectorEventV8 = z.infer<typeof collectorEventV8Schema>
+
+// v9: a custom summary (insights) request names its template, so the admin page can tell which
+// template failed. The title is user-typed free text, sent as-is by explicit owner decision
+// (D071); control characters are rejected and both fields are length-bounded.
+const noControl = (value: string) => !/[\u0000-\u001f\u007f]/.test(value)
+export const summaryTemplateSchema = z.object({
+  id: z.string().min(1).max(128).refine(noControl, 'Template id contains control characters'),
+  title: z.string().min(1).max(200).refine(noControl, 'Template title contains control characters'),
+}).strict()
+export type SummaryTemplate = z.infer<typeof summaryTemplateSchema>
+export const collectorEventV9Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(9),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    template: summaryTemplateSchema,
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  validateOutcome(e, ctx)
+  if (e.feature !== 'insights' || e.sample_kind !== 'request')
+    ctx.addIssue({ code: 'custom', message: 'Only custom summary requests name a template' })
+})
+export type CollectorEventV9 = z.infer<typeof collectorEventV9Schema>
 
 // Separate, explicitly consented sensitive-content endpoint; never accepted by
 // /events. Prompt includes the clinical context actually sent to the model.

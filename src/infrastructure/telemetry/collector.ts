@@ -3,7 +3,7 @@
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
-import { collectorEventV6Schema, collectorEventV7Schema, collectorEventV8Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
+import { collectorEventV6Schema, collectorEventV7Schema, collectorEventV8Schema, collectorEventV9Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -12,6 +12,8 @@ type PreparedCounts = Partial<Record<'fed_resource_count' | 'fed_encounter_count
 export interface CollectorContext {
   /** Per-run capability; never serialized or inferred from patient/slot/time. */
   operation?: CollectorOperation
+  /** Custom summary template; its title is user-typed and sent as-is by owner decision (gateway D071). */
+  template?: { id: string; title: string }
   counts?: ResourceCounts
   fedCounts?: PreparedCounts
   contextTokens?: number
@@ -45,7 +47,7 @@ const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
 // Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
-type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8
+type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9
 const pending: Array<{event: WireEvent; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
 const MAX_PENDING = 64
 let failures = 0
@@ -125,6 +127,22 @@ type CollectorModel = ReturnType<typeof collectorModelSchema.parse>
 export const INSTITUTION_ENDPOINT_MODELS: Readonly<Record<string, CollectorModel>> = Object.freeze({
   [customOpenAiModelIdForProfile('vghtpe-tvghbrain')]: 'tvghbrain3.5',
 })
+// Control characters dropped, whitespace collapsed, lengths bounded to the contract (id 128, title 200).
+function templateLabel(input: CollectorContext['template']): { id: string; title: string } | undefined {
+  if (!input) return undefined
+  // The contract bounds UTF-16 length; cut on whole characters so no surrogate half is sent.
+  const clean = (value: unknown, max: number) => {
+    if (typeof value !== 'string') return ''
+    let out = ''
+    for (const char of value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()) {
+      if (out.length + char.length > max) break
+      out += char
+    }
+    return out.trim()
+  }
+  const id = clean(input.id, 128), title = clean(input.title, 200)
+  return id && title ? { id, title } : undefined
+}
 function modelInfo(id: string, provider?: Start['provider']) {
   if (isCustomOpenAiModelId(id) || id === 'custom')
     return { model: Object.hasOwn(INSTITUTION_ENDPOINT_MODELS, id) ? INSTITUTION_ENDPOINT_MODELS[id] : 'custom' as const, provider: 'custom' as const }
@@ -170,8 +188,8 @@ function dispatch(event: WireEvent, owner: number, endpoint: string, auth: Retur
     return
   }
   if (active.size >= MAX_IN_FLIGHT) {
-    // An operation event is the only record of a user operation; queue it rather than drop it.
-    if ((event.schema_version === 7 || event.sample_kind === 'feature') && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
+    // An operation event, or a custom summary request (v9), is the only record of that user action; queue it rather than drop it.
+    if ((event.schema_version === 7 || event.schema_version === 9 || event.sample_kind === 'feature') && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
     else dropped++
     return
   }
@@ -253,6 +271,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
     const configured = modelInfo(input.modelId, input.provider)
     const provider = input.provider
     const trimmed = input.contextTrimmed
+    const template = feature === 'insights' && kind === 'request' ? templateLabel(input.template) : undefined
     let ended = false
     let firstChunk: number | undefined
     const requests: CollectorRequest[] = []
@@ -302,8 +321,8 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
           // v8: a summary operation that knows its run; v6: any other operation; v7/v5: requests.
           const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
-          const version = result.summaryAttempt ? 7 : runId ? 8 : kind === 'feature' ? 6 : 5
-          const schema = version === 7 ? collectorEventV7Schema : version === 8 ? collectorEventV8Schema : version === 6 ? collectorEventV6Schema : collectorEventV5Schema
+          const version = result.summaryAttempt ? 7 : runId ? 8 : kind === 'feature' ? 6 : template ? 9 : 5
+          const schema = version === 7 ? collectorEventV7Schema : version === 8 ? collectorEventV8Schema : version === 6 ? collectorEventV6Schema : version === 9 ? collectorEventV9Schema : collectorEventV5Schema
           const parsed = schema.safeParse({
             schema_version: version, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
@@ -321,6 +340,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
               ...(runId ? { summary_run_id: runId } : {}),
+              ...(version === 9 ? { template } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
               ...(kind === 'feature' && requestCount > 0 ? { requests: { count: requestCount, omitted: requestCount - requests.length, details: requests } } : {}),
             },

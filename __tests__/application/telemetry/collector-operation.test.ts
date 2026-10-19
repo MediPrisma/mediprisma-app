@@ -178,3 +178,28 @@ test('the hospital endpoint profile reports its fixed model code; a user-defined
   expect(second).toMatchObject({ model: 'custom', provider: 'custom' })
   expect(JSON.stringify(payloads())).not.toMatch(/SYNTHETIC-PRIVATE|vghtpe-tvghbrain/)
 })
+
+test('a custom summary request names its template (v9); other features never carry one', async () => {
+  const { collectorEventV9Schema } = await import('@/src/shared/contracts/collector-event')
+  const longTitle = '心'.repeat(150) + '😀'.repeat(60)
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'changes', title: '  重要\n變化\t模板  ' } }).finish({ outcome: 'timeout', phase: 'stream' })
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'synthetic-id', title: longTitle } }).finish({ outcome: 'ok' })
+  await settle()
+  beginCollectorObservation({ feature: 'chat_followup', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'stream',
+    template: { id: 'x', title: 'y' } }).finish({ outcome: 'ok' })
+  await settle()
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query' }).finish({ outcome: 'ok' })
+  await settle()
+  const [first, second, third, fourth] = payloads()
+  expect(first).toMatchObject({ schema_version: 9, feature: 'insights', status: 'error', diagnostics: { template: { id: 'changes', title: '重要 變化 模板' } } })
+  expect(collectorEventV9Schema.safeParse(first).success).toBe(true)
+  expect(second.schema_version).toBe(9)
+  expect(second.diagnostics.template.title.length).toBeLessThanOrEqual(200)
+  expect(second.diagnostics.template.title).not.toMatch(/[\uD800-\uDBFF]$/)
+  expect(collectorEventV9Schema.safeParse(second).success).toBe(true)
+  expect(third.schema_version).toBe(5)
+  expect(third.diagnostics).not.toHaveProperty('template')
+  expect(fourth.schema_version).toBe(5)
+})
