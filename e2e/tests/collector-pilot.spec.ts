@@ -5,9 +5,14 @@ import { collectorEventV5Schema, collectorEventV6Schema } from '../../src/shared
 import type { Page } from '@playwright/test'
 
 // Real browser/app, synthetic chart and AI; collector HTTP is intercepted.
-// Since one-event-per-operation (#323) a chat reply is a v6 operation event; single requests stay v5.
+// Since one-event-per-operation (#323) a chat reply is a v6 operation event; a lone AI request is v5
+// (a custom summary naming its template is v9, which these chat flows never send).
 const isCollectorEvent = (payload: unknown) =>
   collectorEventV5Schema.safeParse(payload).success || collectorEventV6Schema.safeParse(payload).success
+const chatOperations = (payloads: unknown[]) => payloads.flatMap(payload => {
+  const parsed = collectorEventV6Schema.safeParse(payload)
+  return parsed.success && parsed.data.feature === 'chat' && parsed.data.sample_kind === 'feature' ? [parsed.data] : []
+})
 // This is not a claim that the hospital TLS/private-network path is validated.
 
 type TestPermission = PermissionState | 'unsupported'
@@ -62,10 +67,10 @@ test('site gate and offline collector leave chat operational, with no clinical t
   await page.getByRole('button', { name: '傳送', exact: true }).click()
   await expect(chatPanel(page).locator('.prose').last()).toContainText('SYNTHETIC-COLLECTOR-ANSWER', { timeout: 25_000 })
   await expect.poll(() => payloads.length).toBeGreaterThan(0)
-  // The chat reply itself arrives as one operation event.
-  expect(payloads.some(payload => collectorEventV6Schema.safeParse(payload).success &&
-    (payload as { feature?: string; sample_kind?: string }).feature === 'chat' &&
-    (payload as { sample_kind?: string }).sample_kind === 'feature')).toBe(true)
+  // The chat reply arrives as exactly one operation event, not one per AI call.
+  await expect.poll(() => chatOperations(payloads).length).toBeGreaterThan(0)
+  await page.waitForTimeout(500)
+  expect(chatOperations(payloads)).toHaveLength(1)
   for (const payload of payloads) {
     expect(isCollectorEvent(payload)).toBe(true)
     expect(JSON.stringify(payload)).not.toMatch(/SYNTHETIC-PRIVATE-PROMPT|SYNTHETIC-COLLECTOR-ANSWER|王小明|patientId|operationKey/)
