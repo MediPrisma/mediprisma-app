@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { configuredEndpoint, isCollectorSite, captureCollectorAuth, awaitReportStep } from '@/src/application/telemetry/summary-report'
@@ -11,7 +11,12 @@ import type { AiReport } from '@/src/shared/contracts/collector-event'
 const subscribe = () => () => {}
 const serverSite = () => false
 
-export function SummaryProblemReport({ records, busy }: { records: AiExecutionDiagnosticRecord[]; busy: boolean }) {
+export function SummaryProblemReport({ records, busy, onOpen, renderTrigger }: {
+  records: AiExecutionDiagnosticRecord[]
+  busy: boolean
+  onOpen?: () => void
+  renderTrigger?: (trigger: ReactNode) => ReactNode
+}) {
   const eligible = useSyncExternalStore(subscribe, isCollectorSite, serverSite)
   const [snapshot, setSnapshot] = useState<{ json: string; endpoint: string; auth: ReturnType<typeof captureCollectorAuth> } | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
@@ -34,7 +39,7 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
     setConsent(false)
   }
   useEffect(() => () => { active.current?.abort() }, [])
-  if (!records.some(r => r.technical) || !eligible) return null
+  if (!records.some(r => r.technical) || !eligible) return renderTrigger?.(null) ?? null
 
   const prepare = (fresh = false) => {
     if (sent && earlierRun) fresh = true
@@ -106,8 +111,11 @@ export function SummaryProblemReport({ records, busy }: { records: AiExecutionDi
     } catch { if (active.current === controller) setMessage('尚未確認收件成功。紀錄仍保留，可重試或下載；重試同一份回報不會重複建立。') }
     finally { clearTimeout(timer); if (active.current === controller) { active.current = null; setSending(false) } }
   }
+  const trigger = <Button className="min-h-[44px] w-full justify-start px-2 text-xs" variant="ghost" size="sm" onClick={() => { onOpen?.(); prepare() }} disabled={busy}>回報問題</Button>
+  // Render the settings popover around the trigger, keeping report state and
+  // the dialog mounted when that popover closes.
   return <>
-    <Button className="min-h-[44px]" variant="outline" size="sm" onClick={() => prepare()} disabled={busy}>回報問題</Button>
+    {renderTrigger ? renderTrigger(trigger) : trigger}
     {!reportOpen && message && <span role="status" className="text-sm text-muted-foreground">{message}</span>}
     <Dialog open={reportOpen} onOpenChange={open => { if (!open) close() }}>
       <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden">

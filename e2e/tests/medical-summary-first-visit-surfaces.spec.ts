@@ -57,9 +57,35 @@ test.describe('first-visit summary surfaces (mocked)', () => {
     await expect(panel.getByRole('region', { name: '開藥注意' })).toHaveCount(0)
   })
 
-  test('a headline with no problem list to compare against is labelled 待核對', async ({ page }) => {
+  test('a failed problem list leaves an inline comparison-unavailable notice', async ({ page }) => {
     const brokenProblems = '<<<MEDIPRISMA_MODULE:problems>>>{ not json <<<END_MEDIPRISMA_MODULE:problems>>>'
     const panel = await generate(page, 'medcloud-no-reports-bundle.json', EMPTY_SCAN, brokenProblems)
-    await expect(panel.getByText('待核對：問題清單未產生，首段未經比對')).toBeVisible({ timeout: 30_000 })
+    await expect(panel.getByText('摘要核對未完成：問題清單未產生，請回查原始紀錄')).toBeVisible({ timeout: 30_000 })
+    await expect(panel.getByRole('button', { name: '摘要核對', exact: true })).toHaveCount(0)
+  })
+
+  test('ordinary wording differences are available through Summary check', async ({ page }) => {
+    const panel = await generate(page, 'medcloud-no-reports-bundle.json', EMPTY_SCAN)
+    const detail = '與問題清單未完全對應（Synthetic review patient）'
+    await expect(panel.getByRole('button', { name: '摘要核對', exact: true })).toBeVisible()
+    await expect(page.getByText(detail, { exact: true })).toHaveCount(0)
+    await panel.getByRole('button', { name: '摘要核對', exact: true }).click()
+    const check = page.getByRole('dialog', { name: '摘要核對', exact: true })
+    await expect(check.getByText(detail, { exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(check).toBeHidden()
+  })
+
+  test('summary check preserves its font-size floor on a fresh phone load', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const panel = await generate(page, 'medcloud-no-reports-bundle.json', EMPTY_SCAN)
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('12px')
+    await panel.getByRole('button', { name: '摘要核對', exact: true }).click()
+    const check = page.getByRole('dialog', { name: '摘要核對', exact: true })
+    await expect(check).toBeVisible()
+    const sizes = await check.locator('p').evaluateAll(elements => elements.map(element => parseFloat(getComputedStyle(element).fontSize)))
+    await page.screenshot({ path: testInfo.outputPath('summary-check-phone.png'), animations: 'disabled' })
+    expect(sizes).toHaveLength(2)
+    for (const size of sizes) expect(size).toBeGreaterThanOrEqual(13)
   })
 })

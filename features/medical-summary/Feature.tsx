@@ -460,9 +460,8 @@ export default function MedicalSummaryFeature() {
     },
     [resolveSafetySource, currentAnticholinergics, problemList, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle, ms.safetyAnticholinergicUnnamed],
   )
-  // 待核對 under a clinician headline that does not match the problem list —
-  // problems the list does not hold, medicines, lab values. Judged only once
-  // both requests have answered; labels, never rewrites.
+  // Compare clinician headline wording once both requests settle. Ordinary
+  // differences are disclosed on demand; a failed comparison stays inline.
   const problemListState = headlineProblemListState(result ?? undefined)
   const headlineReviewLabel = useMemo(() => {
     if (isPatient || !headline) return undefined
@@ -764,6 +763,12 @@ export default function MedicalSummaryFeature() {
               <CircleHelp className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
+          <SummaryProblemReport
+            key={summaryGenerationSlotKey}
+            records={visibleAiDiagnostics}
+            busy={isBusy}
+            onOpen={() => setSummarySettingsOpen(false)}
+            renderTrigger={(reportTrigger) => (
           <Popover open={!tourActive && summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -845,6 +850,7 @@ export default function MedicalSummaryFeature() {
                   </Button>
                 </>
               ) : null}
+              {reportTrigger ? <div className="border-t pt-1">{reportTrigger}</div> : null}
               <div className="flex justify-end border-t pt-1">
                 <AiDiagnosticsButton
                   hasRecords={visibleAiDiagnostics.length > 0}
@@ -858,12 +864,11 @@ export default function MedicalSummaryFeature() {
               </div>
             </PopoverContent>
           </Popover>
+            )}
+          />
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <SummaryProblemReport key={summaryGenerationSlotKey} records={visibleAiDiagnostics} busy={isBusy} />
-      </div>
         <TabsContent value="standard" forceMount className="mt-0 space-y-2">
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">{ms.emptyNoPatient}</div>
@@ -972,6 +977,9 @@ export default function MedicalSummaryFeature() {
                 copiedLabel={t.common.copied}
                 copyFailedLabel={t.common.copyFailed}
                 reviewLabel={headlineReviewLabel}
+                reviewButtonLabel={ms.headlineReviewTitle}
+                reviewDescription={ms.headlineReviewDescription}
+                reviewUnavailable={problemListState === "failed"}
               />
             ) : null,
           )}

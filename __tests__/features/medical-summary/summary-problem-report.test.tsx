@@ -1,7 +1,9 @@
 import { captureCollectorAuth } from '@/src/infrastructure/telemetry/collector-auth'
 import { TextEncoder } from 'util'
+import { useState } from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SummaryProblemReport } from '@/features/medical-summary/components/SummaryProblemReport'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { AiExecutionDiagnosticRecord } from '@/src/shared/utils/ai-execution-diagnostics'
 Object.assign(globalThis, { TextEncoder })
 jest.mock('@/src/infrastructure/telemetry/collector', () => ({
@@ -15,6 +17,36 @@ const records: AiExecutionDiagnosticRecord[] = [1, 2, 3].map(attempt => ({
   prompt: 'SYNTHETIC PROMPT', inputData: {}, outputData: 'SYNTHETIC OUTPUT', hasError: true, errorMessage: null, status: 'aborted',
   technical: { run_id: '10000000-0000-4000-8000-000000000001', request_id: `20000000-0000-4000-8000-${String(attempt).padStart(12, '0')}`, attempt, lane: 'full', output_chars: 16, last_chunk_ms: 30, parse_state: 'incomplete' },
 }))
+
+it('keeps summary settings available before report diagnostics exist', () => {
+  render(<SummaryProblemReport records={[]} busy={false} renderTrigger={trigger => (
+    <div><button>摘要設定</button>{trigger}</div>
+  )} />)
+  expect(screen.getByRole('button', { name: '摘要設定' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: '回報問題' })).not.toBeInTheDocument()
+})
+
+it('keeps the report preview open after its settings menu closes', async () => {
+  function SettingsHarness() {
+    const [open, setOpen] = useState(false)
+    return <SummaryProblemReport records={records} busy={false} onOpen={() => setOpen(false)} renderTrigger={trigger => (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger>摘要設定</PopoverTrigger>
+        <PopoverContent>{trigger}</PopoverContent>
+      </Popover>
+    )} />
+  }
+  jest.mocked(fetch).mockClear()
+  render(<SettingsHarness />)
+  expect(screen.queryByRole('button', { name: '回報問題' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '摘要設定' }))
+  fireEvent.click(await screen.findByRole('button', { name: '回報問題' }))
+  expect(await screen.findByRole('dialog', { name: '回報摘要問題' })).toBeVisible()
+  await waitFor(() => expect(screen.queryByRole('button', { name: '回報問題' })).not.toBeInTheDocument())
+  expect(screen.getByLabelText('完整回報預覽')).toHaveTextContent('SYNTHETIC PROMPT')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
 it('never uploads on failure or preview; sends the frozen preview only after explicit confirmation', async () => {
   jest.mocked(fetch).mockClear()
   jest.mocked(fetch).mockResolvedValue({ status: 201, json: async () => ({ success: true, reportId: '30000000-0000-4000-8000-000000000001' }) } as Response)
