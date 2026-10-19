@@ -903,6 +903,7 @@ export default function LiveClinicalDecisionSupportFeature({
       <ClinicalDecisionSupportView
         afAnswers={afAnswers}
         onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
+        coronaryPhaseAnswer={coronaryPhaseAnswer}
         onCoronaryPhase={patientId ? (answer) => useCoronaryPhaseStore.getState().setAnswer(patientId, answer) : undefined}
         result={result}
         englishResult={englishResult ?? undefined}

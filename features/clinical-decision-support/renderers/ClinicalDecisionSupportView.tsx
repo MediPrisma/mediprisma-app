@@ -98,8 +98,9 @@ import type { VisitAnswerProvenance } from './visit/VisitAsks'
 interface ClinicalDecisionSupportViewProps {
   afAnswers?: AfAnswers
   onAfAnswer?: (id: string, value: boolean | undefined) => void
-  /** CAD DP-01's class, pressed on the decision map. */
+  /** CAD DP-01's class, pressed on the decision map, and the answer as kept. */
   onCoronaryPhase?: (answer: CoronaryPhaseAnswer) => void
+  coronaryPhaseAnswer?: CoronaryPhaseAnswer
   result: CdssResult
   englishResult?: CdssResult
   locale: CdssLocale
@@ -2127,6 +2128,7 @@ export function ClinicalDecisionSupportView({
   afAnswers,
   onAfAnswer,
   onCoronaryPhase,
+  coronaryPhaseAnswer,
   result,
   englishResult,
   locale,
@@ -2405,6 +2407,7 @@ export function ClinicalDecisionSupportView({
           answers={visitAnswers ?? {}}
           {...(visitAnswerSources ? { answerSources: visitAnswerSources } : {})}
           onAnswer={onVisitAnswer}
+          {...(coronaryPhaseAnswer ? { coronaryPhase: coronaryPhaseAnswer } : {})}
           onPhysicianInput={onAnswerPhenotype || onAfAnswer || onCoronaryPhase ? (input) => {
             // CAD DP-01 answers the coronary phase; AF DP-01 the AF diagnosis
             // and its type; the rest are the heart-failure phenotype gate's.

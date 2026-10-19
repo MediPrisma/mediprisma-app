@@ -22,6 +22,7 @@ import { VisitBookChromeContext, isVisitBookMode } from './visit-book-chrome'
 import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 import styles from './VisitBookLayout.module.css'
 import { coronaryPhaseInput } from './physician-input'
+import type { CoronaryPhaseAnswer } from '../../stores/coronary-phase.store'
 
 /**
  * The visit laid out as a pocket-handbook page (owner request 2026-09-30,
@@ -110,6 +111,8 @@ export interface VisitBookLayoutProps {
    * is read-only.
    */
   onChooseClass?: (point: DecisionPointView, input: ClassInput) => void
+  /** The month already given with CAD DP-01's class, shown back in its 「知道年月？」 field. */
+  coronaryPhase?: CoronaryPhaseAnswer
   /**
    * Writes an answer to a point's questions (AF DP-08's valves) into the named
    * answer set (`af-clinical`); `undefined` withdraws it. Without it the
@@ -622,7 +625,7 @@ function classificationOf(point: object | undefined): ClassificationView | undef
  * 「新的可能要讓醫師可以點」): a button under each class it offers, and the
  * answers beside the classes (「還不確定」) under the table.
  */
-function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string }) {
+function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string; coronaryPhase?: CoronaryPhaseAnswer }) {
   const choiceId = useId()
   const table = classificationOf(point)
   if (!table) return null
@@ -631,6 +634,7 @@ function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: Decis
   // The month field belongs to CAD DP-01's two windowed classes, once chosen.
   const chosenPhase = table.classes.find((item) => item.chosen && item.physicianInput?.request === 'cad-phase')?.id
   const monthFor = chosenPhase === 'acs-recent' || chosenPhase === 'pci-recent' ? chosenPhase : undefined
+  const savedMonth = monthFor && coronaryPhase?.phase === monthFor ? coronaryPhase.eventMonth : undefined
   const choose = (item: ClassChoice) => {
     // The same answer again writes nothing new.
     if (item.physicianInput && !item.chosen) onChoose?.(item.physicianInput)
@@ -685,7 +689,7 @@ function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: Decis
               </button>
             ))}
           </div>
-          {monthFor ? <EventMonthField key={monthFor} isEnglish={isEnglish} onSet={(month) => onChoose?.(coronaryPhaseInput(monthFor, month))} /> : null}
+          {monthFor ? <EventMonthField key={monthFor} isEnglish={isEnglish} month={savedMonth} onSet={(month) => onChoose?.(coronaryPhaseInput(monthFor, month))} /> : null}
         </div>
       ) : null}
     </div>
@@ -697,9 +701,19 @@ function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: Decis
  * user 知道具體年月想寫上去」): closed until asked for, and never required.
  * The month rides on the same `cad-phase` answer as the class it dates.
  */
-function EventMonthField({ isEnglish, onSet }: { isEnglish: boolean; onSet: (month: string) => void }) {
-  const [open, setOpen] = useState(false)
+function EventMonthField({ isEnglish, month, onSet }: { isEnglish: boolean; month?: string; onSet: (month: string | undefined) => void }) {
+  // The answer allows a year alone; this field only ever writes 年-月, so only that shows.
+  const saved = month && /^\d{4}-\d{2}$/.test(month) ? month : ''
+  const [open, setOpen] = useState(Boolean(month))
+  const [value, setValue] = useState(saved)
+  const [shown, setShown] = useState(saved)
   const id = useId()
+  // The kept month changed underneath (written, read back, carried): show it.
+  if (shown !== saved) {
+    setShown(saved)
+    setValue(saved)
+    if (saved) setOpen(true)
+  }
   if (!open) {
     return (
       <button type="button" className={styles.askNote} onClick={() => setOpen(true)} data-testid="cdss-book-class-month-open">
@@ -714,7 +728,14 @@ function EventMonthField({ isEnglish, onSet }: { isEnglish: boolean; onSet: (mon
         id={id}
         type="month"
         max={new Date().toISOString().slice(0, 7)}
-        onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) onSet(event.target.value) }}
+        value={value}
+        onChange={(event) => {
+          const next = event.target.value
+          // Emptied: the class stays, its month goes.
+          if (!next && (value || month)) onSet(undefined)
+          else if (/^\d{4}-\d{2}$/.test(next)) onSet(next)
+          setValue(next)
+        }}
         data-testid="cdss-book-class-month"
       />
     </span>
@@ -1028,6 +1049,7 @@ export function VisitBookLayout({
   decided,
   summaryText,
   onChooseClass,
+  coronaryPhase,
   onAnswerQuestion,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
@@ -1083,6 +1105,7 @@ export function VisitBookLayout({
       point={point}
       isEnglish={isEnglish}
       {...(tag ? { tag } : {})}
+      {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onChooseClass ? { onChoose: (input: ClassInput) => onChooseClass(point, input) } : {})}
     />
   )

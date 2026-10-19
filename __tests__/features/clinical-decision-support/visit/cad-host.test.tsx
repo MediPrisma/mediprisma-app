@@ -126,7 +126,7 @@ describe('CAD DP-01 phase classes', () => {
   function drawWith(profile: CdssPatientProfile, onCoronaryPhase: (answer: NonNullable<CdssPatientProfile['coronaryPhaseAnswer']>) => void) {
     const result = CORONARY_DISEASE_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
     const visitModel = buildVisitDecisionModel({ packId: PACK_ID, result, profile, locale: 'zh-TW' })
-    return render(<ClinicalDecisionSupportView result={result} locale="zh-TW" layout="map" patientId="cad-host" visitModel={visitModel} onCoronaryPhase={onCoronaryPhase} />)
+    return render(<ClinicalDecisionSupportView result={result} locale="zh-TW" layout="map" patientId="cad-host" visitModel={visitModel} coronaryPhaseAnswer={profile.coronaryPhaseAnswer} onCoronaryPhase={onCoronaryPhase} />)
   }
 
   it('draws the four classes with the record\'s marked, and one press writes the answer', () => {
@@ -148,5 +148,23 @@ describe('CAD DP-01 phase classes', () => {
     fireEvent.click(screen.getByTestId('cdss-book-class-month-open'))
     fireEvent.change(screen.getByTestId('cdss-book-class-month'), { target: { value: '2026-04' } })
     expect(answers.at(-1)).toMatchObject({ phase: 'acs-recent', eventMonth: '2026-04' })
+  })
+
+  it('emptying the month keeps the class and drops the month', () => {
+    const answers: NonNullable<CdssPatientProfile['coronaryPhaseAnswer']>[] = []
+    drawWith({ ...CHRONIC, coronaryPhaseAnswer: { phase: 'acs-recent', answeredOn: '2026-10-17' } }, (answer) => answers.push(answer))
+    fireEvent.click(screen.getByTestId('cdss-book-class-month-open'))
+    fireEvent.change(screen.getByTestId('cdss-book-class-month'), { target: { value: '2026-04' } })
+    fireEvent.change(screen.getByTestId('cdss-book-class-month'), { target: { value: '' } })
+    expect(answers.at(-1)).toEqual({ phase: 'acs-recent', answeredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
+  })
+
+  it('shows a kept month back in the field, and emptying it drops the month', () => {
+    const answers: NonNullable<CdssPatientProfile['coronaryPhaseAnswer']>[] = []
+    drawWith({ ...CHRONIC, coronaryPhaseAnswer: { phase: 'pci-recent', answeredOn: '2026-10-17', eventMonth: '2026-08' } }, (answer) => answers.push(answer))
+    const field = screen.getByTestId('cdss-book-class-month') as HTMLInputElement
+    expect(field.value).toBe('2026-08')
+    fireEvent.change(field, { target: { value: '' } })
+    expect(answers).toEqual([{ phase: 'pci-recent', answeredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }])
   })
 })
