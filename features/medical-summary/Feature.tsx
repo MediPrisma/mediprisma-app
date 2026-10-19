@@ -764,6 +764,12 @@ export default function MedicalSummaryFeature() {
               <CircleHelp className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
+          <SummaryProblemReport
+            key={summaryGenerationSlotKey}
+            records={visibleAiDiagnostics}
+            busy={isBusy}
+            onOpen={() => setSummarySettingsOpen(false)}
+            renderTrigger={(reportTrigger) => (
           <Popover open={!tourActive && summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -844,6 +850,7 @@ export default function MedicalSummaryFeature() {
                   </Button>
                 </>
               ) : null}
+              {reportTrigger ? <div className="border-t pt-1">{reportTrigger}</div> : null}
               <div className="flex justify-end border-t pt-1">
                 <AiDiagnosticsButton
                   hasRecords={visibleAiDiagnostics.length > 0}
@@ -857,12 +864,11 @@ export default function MedicalSummaryFeature() {
               </div>
             </PopoverContent>
           </Popover>
+            )}
+          />
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <SummaryProblemReport key={summaryGenerationSlotKey} records={visibleAiDiagnostics} busy={isBusy} />
-      </div>
         <TabsContent value="standard" forceMount className="mt-0 space-y-2">
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">{ms.emptyNoPatient}</div>
