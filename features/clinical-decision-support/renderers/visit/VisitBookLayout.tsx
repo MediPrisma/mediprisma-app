@@ -119,6 +119,23 @@ export interface VisitBookLayoutProps {
    * questions are read-only.
    */
   onAnswerQuestion?: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => void
+  /**
+   * Tools drawn at the head of the page beside 全螢幕 (the heart-failure
+   * page's 計算機), handed the page's way to a point and the chapter a point
+   * sits in.
+   */
+  headTools?: (page: BookHeadToolsPage) => ReactNode
+  /** Notes attached to points from a calculator, listed in 今天的計畫. */
+  calculatorNotes?: readonly { key: string; dp: string; source: string; text: string }[]
+  onRemoveCalculatorNote?: (key: string) => void
+}
+
+/** What the page hands its head tools. */
+export interface BookHeadToolsPage {
+  /** Brings a point into view (DP-34 at DP-01's table, where it is drawn); this page's unless `source` names another. */
+  goTo: (dp: string, source?: DecisionPointView['source']) => void
+  /** The title of the chapter a point sits in. */
+  chapterOf: (dp: string, source?: DecisionPointView['source']) => string | undefined
 }
 
 /** A chapter as the model carries it (`VisitBookChapter`), read defensively. */
@@ -1056,6 +1073,9 @@ export function VisitBookLayout({
   onChooseClass,
   coronaryPhase,
   onAnswerQuestion,
+  headTools,
+  calculatorNotes,
+  onRemoveCalculatorNote,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const onSaveTarget = chrome?.onSaveTarget
@@ -1148,6 +1168,17 @@ export function VisitBookLayout({
   const goTo = (point: DecisionPointView) => {
     const entry = entryOf(point)
     scrollTo(bookAnchor(entry.kind === 'skip' ? entry.anchorOf : point))
+  }
+  const pagePointOf = (dp: string, source?: DecisionPointView['source']) => points.find((point) => point.dp === dp && point.source === (source ?? sourceOfPage))
+  const headToolsPage: BookHeadToolsPage = {
+    goTo: (dp, source) => {
+      const point = pagePointOf(dp, source)
+      if (point) goTo(point)
+    },
+    chapterOf: (dp, source) => {
+      const point = pagePointOf(dp, source)
+      return point ? sections.find((section) => section.points.includes(point))?.title : undefined
+    },
   }
   const marks = new Map(points.map((point) => [point, markOf(point)] as const))
   const pending = points.filter((point) => ['act', 'safety'].includes(marks.get(point)!))
@@ -2006,6 +2037,7 @@ export function VisitBookLayout({
                   ? MARK_WORDS.wait[isEnglish ? 'en' : 'zh']
                   : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
+          {headTools ? headTools(headToolsPage) : null}
           {chrome?.onSaveTarget ? <div ref={attachSaveTarget} className={styles.saveRecord} data-testid="cdss-book-save-target" /> : null}
           {/* One button either way (the shared key): pressed from the keyboard,
               focus stays on it as the page moves between panel and window. */}
@@ -2124,6 +2156,21 @@ export function VisitBookLayout({
                 {isEnglish ? 'No decision recorded yet.' : '還沒有記錄任何決定。'}
               </p>
             )}
+            {calculatorNotes?.length ? (
+              <ul className={styles.planList} data-testid="cdss-visit-plan-calculator-notes">
+                {calculatorNotes.map((note) => (
+                  <li key={note.key} data-dp={note.dp}>
+                    <span className={styles.dpTag}>{note.source !== sourceOfPage ? `${note.source.toUpperCase()} ` : ''}{note.dp}</span>
+                    {isEnglish ? '　Note: ' : '　附註：'}{note.text}
+                    {onRemoveCalculatorNote ? (
+                      <button type="button" className={styles.change} onClick={() => onRemoveCalculatorNote(note.key)} aria-label={isEnglish ? `Remove the note on ${note.dp}` : `移除 ${note.dp} 的附註`}>
+                        {isEnglish ? 'Remove' : '移除'}
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {pending.length ? (
               <p className={styles.planPending}>
                 <b>{isEnglish ? 'Not yet decided　' : '尚未決定　'}</b>

@@ -35,10 +35,13 @@ import type {
   VisitDecisionModel,
 } from '../../types'
 import { BookAsks, examAsksOf } from './BookAsks'
-import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type BookMark } from './VisitBookLayout'
+import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type BookHeadToolsPage, type BookMark } from './VisitBookLayout'
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
 import { displayDate, visitStatusSentence, VisitStatusLine } from './VisitStatusHeader'
+import { VisitCalculators } from './VisitCalculators'
+import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
+import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
 
 export interface VisitDecisionScreenProps {
   model: VisitDecisionModel
@@ -77,6 +80,12 @@ export interface VisitDecisionScreenProps {
    * `null` withdraws it.
    */
   onGrade?: (id: string, value: string | null) => void
+  /**
+   * The record's values for the HF prognosis models whose formula is not
+   * connected (SHFM, GWTG-HF), shown when the heart-failure page's 計算機
+   * opens one.
+   */
+  prognosisEvidence?: PrognosisEvidence
 }
 
 /**
@@ -106,6 +115,7 @@ export function VisitDecisionScreen({
   coronaryPhase,
   onPointAnswer,
   onGrade,
+  prognosisEvidence,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -118,10 +128,17 @@ export function VisitDecisionScreen({
   }, [screenKey, screenShown])
 
   const plan = useMemo(() => buildVisitPlan(model, decisions, now), [decisions, model, now])
-  const summaryText = useMemo(
-    () => buildVisitSummaryText({ model, answers, decisions, now, isEnglish }),
-    [answers, decisions, isEnglish, model, now],
-  )
+  // What the clinician attached from a calculator today: a note in the plan
+  // and in the copied text, never an input the pack reads.
+  const calculatorNotes = useVisitCalculatorNotes(screenKey, now)
+  const attachCalculatorNote = useVisitCalculatorNotesStore((state) => state.attach)
+  const removeCalculatorNote = useVisitCalculatorNotesStore((state) => state.remove)
+  const summaryText = useMemo(() => {
+    const text = buildVisitSummaryText({ model, answers, decisions, now, isEnglish })
+    if (!calculatorNotes.length) return text
+    const heading = isEnglish ? 'Calculator notes (not part of the recommendations)' : '計算機附註（不改變指引建議）'
+    return [text, '', heading, ...calculatorNotes.map((note) => `- ${note.dp} ${note.text}`)].join('\n')
+  }, [answers, calculatorNotes, decisions, isEnglish, model, now])
   // What today's decisions settle, point by point, as the pack reads them.
   const settlement = useMemo(() => settleDecisions(model, decisions, now), [decisions, model, now])
   // A chain with a step still open — 「開始抗凝」 recorded, the DOAC not yet
@@ -168,6 +185,8 @@ export function VisitDecisionScreen({
   // What an open decision reads from the record, under its row. LVEF heads the
   // page's values line, so it is not repeated on every pillar.
   const headedKeys = useMemo(() => new Set(model.keyValues.filter((item) => item.key === 'LVEF').map((item) => item.key)), [model.keyValues])
+  const lvefValue = Number.parseFloat(model.keyValues.find((item) => item.key === 'LVEF')?.value ?? '')
+  const lvef = Number.isFinite(lvefValue) ? lvefValue : undefined
   const basisOf = (point: DecisionPointView) => decisionBasis(point, modules, headedKeys, (date) => displayDate(date, now))
   const unansweredAsks = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value)
 
@@ -323,6 +342,23 @@ export function VisitDecisionScreen({
         // question's own control wrote, handed back the same way.
         {...(coronaryPhase ? { coronaryPhase } : {})}
         {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
+        {...(sourceOfPage === 'hf' ? {
+          headTools: (page: BookHeadToolsPage) => (
+            <VisitCalculators
+              isEnglish={isEnglish}
+              points={model.points}
+              sourceOfPage={sourceOfPage}
+              {...(lvef !== undefined ? { lvef } : {})}
+              {...(prognosisEvidence ? { evidence: prognosisEvidence } : {})}
+              chapterOf={page.chapterOf}
+              goTo={page.goTo}
+              attached={new Set(calculatorNotes.map((note) => note.calculatorId))}
+              onAttach={(note) => attachCalculatorNote(screenKey, { ...note, at: new Date().toISOString() })}
+            />
+          ),
+          calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
+          onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
+        } : {})}
         {...(onPointAnswer ? { onAnswerQuestion: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value, questionRowOf(point, id)?.terms) } : {})}
       />
     </div>
