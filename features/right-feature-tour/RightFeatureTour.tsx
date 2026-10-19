@@ -10,6 +10,7 @@ import { useBetaFeatures } from '@/src/application/hooks/use-beta-features.hook'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { TourSpotlight } from '@/features/guided-tour/spotlight/TourSpotlight'
 import { useTourTarget } from '@/features/guided-tour/spotlight/use-tour-target'
+import { markTourCompleted } from '@/features/guided-tour/guided-tour.progress'
 import {
   CUSTOM_SUMMARY_CHAPTERS,
   type RightFeatureTourStepId,
@@ -63,8 +64,12 @@ export function RightFeatureTour() {
 
   const goBack = () => setStep(steps[Math.max(0, stepIndex - 1)].id)
   const goNext = () => {
-    if (stepIndex >= steps.length - 1) finish()
-    else setStep(steps[stepIndex + 1].id)
+    if (stepIndex >= steps.length - 1) {
+      // Only an explicit finish on the last step counts as viewed in the
+      // tour hub; Skip, Close and Escape leave it unticked.
+      markTourCompleted('custom-summary')
+      finish()
+    } else setStep(steps[stepIndex + 1].id)
   }
 
   return (

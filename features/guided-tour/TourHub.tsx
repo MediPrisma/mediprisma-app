@@ -26,7 +26,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useRightFeatureTourStore } from '@/features/right-feature-tour/right-feature-tour.store'
 import { cn } from '@/src/shared/utils/cn.utils'
-import { useGuidedTourStore } from './guided-tour.store'
+import { takeHubOpener, useGuidedTourStore } from './guided-tour.store'
 import { markNewsSeen, useTourProgress } from './guided-tour.progress'
 import {
   TASK_TOUR_IDS,
@@ -55,6 +55,23 @@ const ICONS: Record<GuidedTourIcon, LucideIcon> = {
   education: GraduationCap,
   sliders: SlidersHorizontal,
   sparkles: Sparkles,
+}
+
+/** The visible hub entry: the header button, or 更多 where the header is compact. */
+const HUB_ENTRY_SELECTORS = ['[data-tour="tour-hub-button"]', '[data-tour="header-more"]']
+
+function hubEntry(): HTMLElement | null {
+  const entries = HUB_ENTRY_SELECTORS
+    .map((selector) => document.querySelector<HTMLElement>(selector))
+    .filter((element): element is HTMLElement => element !== null)
+  return entries.find((element) => element.getClientRects().length > 0) ?? entries[0] ?? null
+}
+
+function handedOver(): boolean {
+  const right = useRightFeatureTourStore.getState()
+  return useGuidedTourStore.getState().tourId !== null
+    || right.launcherOpen
+    || (right.active && right.kind === 'custom-summary')
 }
 
 function text(value: Localized, locale: string): string {
@@ -96,6 +113,17 @@ export function TourHub() {
   const news = useMemo(() => announcements.filter((item) => !item.opensHub), [announcements])
   const doneCount = tasks.filter((tour) => progress.completed.includes(tour.id)).length
 
+  // The hub has no DialogTrigger (it opens from the header, the 更多 menu or a
+  // hint), so focus goes back to where it was, or to the hub's entry.
+  const restoreFocus = (event: Event) => {
+    event.preventDefault()
+    const opener = takeHubOpener()
+    // A started tour or guide takes focus into its own card.
+    if (handedOver()) return
+    const target = opener?.isConnected ? opener : hubEntry()
+    target?.focus({ preventScroll: true })
+  }
+
   // Opening the hub is reading the announcements: they stop counting as new
   // once it closes, while their rows stay listed for the visit.
   const shownNewsRef = useRef<string[]>([])
@@ -129,6 +157,7 @@ export function TourHub() {
     <Dialog open={open} onOpenChange={(next) => { if (!next) closeHub() }}>
       <DialogContent
         data-testid="tour-hub"
+        onCloseAutoFocus={restoreFocus}
         overlayClassName="bg-black/25"
         className={cn(
           'flex max-h-[min(860px,calc(100dvh-4.5rem))] flex-col gap-0 overflow-hidden p-0',

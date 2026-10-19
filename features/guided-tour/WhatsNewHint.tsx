@@ -11,6 +11,7 @@ import type { WhatsNewItem } from './guided-tour.types'
 import { useUnseenNews } from './use-unseen-news'
 
 const CHECK_INTERVAL_MS = 1500
+const MODAL_SELECTOR = '[role="dialog"], [role="alertdialog"]'
 const CARD_WIDTH = 320
 
 /**
@@ -31,7 +32,7 @@ export function WhatsNewHint({ eligible }: { eligible: boolean }) {
   useEffect(() => {
     if (!eligible || shown || usedRef.current || unseen.length === 0) return
     const check = () => {
-      if (document.querySelector('[role="dialog"]')) return
+      if (document.querySelector(MODAL_SELECTOR)) return
       for (const item of unseen) {
         const element = visibleTarget(item.anchor)
         if (!element) continue
@@ -46,11 +47,13 @@ export function WhatsNewHint({ eligible }: { eligible: boolean }) {
     return () => window.clearInterval(timer)
   }, [eligible, shown, unseen])
 
-  // Follow the control while the hint is up.
+  // Follow the control while the hint is up. A dialog opening over the page,
+  // or the control leaving it, withdraws the hint without acknowledging it,
+  // so it can return on a later visit.
   useEffect(() => {
     if (!shown) return
     const update = () => {
-      const element = visibleTarget(shown.item.anchor)
+      const element = document.querySelector(MODAL_SELECTOR) ? null : visibleTarget(shown.item.anchor)
       if (!element) {
         setShown(null)
         return
@@ -60,9 +63,12 @@ export function WhatsNewHint({ eligible }: { eligible: boolean }) {
         ? { ...current, rect }
         : current)
     }
+    const observer = new MutationObserver(update)
+    observer.observe(document.body, { childList: true, subtree: true })
     window.addEventListener('resize', update)
     window.addEventListener('scroll', update, true)
     return () => {
+      observer.disconnect()
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
     }

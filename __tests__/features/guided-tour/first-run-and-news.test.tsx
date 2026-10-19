@@ -74,3 +74,30 @@ describe('first-run offer and announcements', () => {
     expect(screen.queryByTestId('whats-new-hint')).toBeNull()
   })
 })
+
+describe('announcement hint and later dialogs', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+    localStorage.clear()
+    localStorage.setItem(LEFT_BROWSER_TOUR_STORAGE_KEY, '1')
+  })
+
+  afterEach(() => jest.useRealTimers())
+
+  it('withdraws a shown hint, unread, when a dialog opens over it', async () => {
+    const { rerender } = render(<><button type="button" data-tour="tour-hub-button">導覽</button><WhatsNewHint eligible /></>)
+    act(() => { jest.advanceTimersByTime(1600) })
+    expect(screen.getByTestId('whats-new-hint')).toBeTruthy()
+
+    rerender(<>
+      <button type="button" data-tour="tour-hub-button">導覽</button>
+      <WhatsNewHint eligible />
+      <div role="dialog" aria-label="報告全文">全文</div>
+    </>)
+    // The hint notices through a MutationObserver, delivered as a microtask.
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.queryByTestId('whats-new-hint')).toBeNull()
+    expect(readTourProgress().seenNews).not.toContain('2026-10-tour-hub')
+  })
+})

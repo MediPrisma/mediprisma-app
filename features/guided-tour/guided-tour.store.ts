@@ -5,6 +5,15 @@ import type { GuidedTourId } from './guided-tour.types'
 
 export type TourOutcome = 'finish' | 'abandon'
 
+// Where focus was when the hub opened, read when it closes. Captured in the
+// action itself: by the time any effect runs, the dialog has taken focus.
+let hubOpener: HTMLElement | null = null
+export function takeHubOpener(): HTMLElement | null {
+  const opener = hubOpener
+  hubOpener = null
+  return opener
+}
+
 interface GuidedTourState {
   /** The running tour, or null. */
   tourId: GuidedTourId | null
@@ -36,6 +45,12 @@ export const useGuidedTourStore = create<GuidedTourState>((set) => ({
   })),
   setStep: (stepId) => set({ stepId }),
   stop: (outcome) => set({ tourId: null, stepId: null, lastOutcome: outcome }),
-  openHub: () => set({ hubOpen: true }),
+  openHub: () => {
+    if (typeof document !== 'undefined') {
+      const active = document.activeElement
+      hubOpener = active instanceof HTMLElement && active !== document.body ? active : null
+    }
+    set({ hubOpen: true })
+  },
   closeHub: () => set({ hubOpen: false }),
 }))
