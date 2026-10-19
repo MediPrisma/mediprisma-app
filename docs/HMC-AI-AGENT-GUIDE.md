@@ -37,7 +37,7 @@ app 推送 `pilot/hmc` 後會啟動建置。既有 personalization relay 訊號�
 
 兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；規則對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
 
-未經 owner 明確授權，AI agent 不得自行建立 deployment credential、發布或修改 npm package 版本、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。app 的套件 pin 更新須經 owner 審查的 PR；workflow 變更也須取得 owner 確認。issue 的「yours」是指 HMC 本人負責診斷與提出修正，不構成 AI agent 的額外授權。建置成功但 `/app-hmc` 沒更新時，應停下來通知 owner，檢查 master 的發布端；不要自行把檔案補回 master。
+AI agent 不得自行建立 deployment credential、發布或修改 npm package 版本，或碰觸 `mediprisma-site` 來另行部署。app 的套件 pin 更新與 workflow 修改須經 owner 明確授權，並透過 owner 審查的 PR 進行。issue 的「yours」是指 HMC 本人負責診斷與提出修正，不構成 AI agent 的額外授權。建置成功但 `/app-hmc` 沒更新時，應停下來通知 owner，檢查 master 的發布端；不要自行把檔案補回 master。
 
 ## 第一次設定
 
