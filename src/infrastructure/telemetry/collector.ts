@@ -134,7 +134,10 @@ function templateLabel(input: CollectorContext['template']): { id: string; title
   const clean = (value: unknown, max: number) => {
     if (typeof value !== 'string') return ''
     let out = ''
-    for (const char of value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()) {
+    // Every Unicode control character and any unpaired surrogate is dropped before cutting.
+    const text = value.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+      .replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim()
+    for (const char of text) {
       if (out.length + char.length > max) break
       out += char
     }
@@ -188,9 +191,20 @@ function dispatch(event: WireEvent, owner: number, endpoint: string, auth: Retur
     return
   }
   if (active.size >= MAX_IN_FLIGHT) {
-    // An operation event, or a custom summary request (v9), is the only record of that user action; queue it rather than drop it.
-    if ((event.schema_version === 7 || event.schema_version === 9 || event.sample_kind === 'feature') && pending.length < MAX_PENDING) pending.push({ event, owner, endpoint, auth })
-    else dropped++
+    // An operation event (or summary attempt) is the only record of a user operation and gets the
+    // whole queue; a custom summary request (v9) may use half, and is the first to give way.
+    const queued = { event, owner, endpoint, auth }
+    if (event.schema_version === 7 || event.sample_kind === 'feature') {
+      if (pending.length >= MAX_PENDING) {
+        const v9 = pending.findIndex(item => item.event.schema_version === 9)
+        if (v9 < 0) { dropped++; return }
+        pending.splice(v9, 1)
+        dropped++
+      }
+      pending.push(queued)
+    } else if (event.schema_version === 9 && pending.filter(item => item.event.schema_version === 9).length < MAX_PENDING / 2 && pending.length < MAX_PENDING) {
+      pending.push(queued)
+    } else dropped++
     return
   }
   const controller = new AbortController()

@@ -203,3 +203,32 @@ test('a custom summary request names its template (v9); other features never car
   expect(third.diagnostics).not.toHaveProperty('template')
   expect(fourth.schema_version).toBe(5)
 })
+
+test('template titles drop every control character and unpaired surrogate before sending', async () => {
+  const { collectorEventV9Schema } = await import('@/src/shared/contracts/collector-event')
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'id\u0085x\uDC00', title: '甲\u0085乙\uD800丙😀' } }).finish({ outcome: 'ok' })
+  await settle()
+  const [sent] = payloads()
+  expect(sent.diagnostics.template).toEqual({ id: 'id x', title: '甲 乙丙😀' })
+  expect(collectorEventV9Schema.safeParse(sent).success).toBe(true)
+})
+
+test('custom summary requests (v9) use at most half the retry queue and give way to operation events', async () => {
+  const { collectorStatus } = await import('@/src/application/telemetry/collector')
+  jest.mocked(fetch).mockReset().mockImplementation(() => new Promise<Response>(() => {}))
+  const v9 = () => beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'changes', title: '重要變化' } }).finish({ outcome: 'ok' })
+  // Two sends stall in flight; everything after them queues or drops.
+  v9(); v9()
+  for (let i = 0; i < 40; i++) v9()
+  expect(collectorStatus().queued).toBe(32)
+  for (let i = 0; i < 32; i++) parent().finish({ outcome: 'ok' })
+  expect(collectorStatus().queued).toBe(64)
+  // A full queue: each further operation event replaces a queued custom summary request.
+  for (let i = 0; i < 32; i++) parent().finish({ outcome: 'ok' })
+  expect(collectorStatus().queued).toBe(64)
+  const dropped = collectorStatus().dropped
+  parent().finish({ outcome: 'ok' })
+  expect(collectorStatus()).toMatchObject({ queued: 64, dropped: dropped + 1 })
+})

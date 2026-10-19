@@ -214,7 +214,9 @@ export type CollectorEventV8 = z.infer<typeof collectorEventV8Schema>
 // v9: a custom summary (insights) request names its template, so the admin page can tell which
 // template failed. The title is user-typed free text, sent as-is by explicit owner decision
 // (D071); control characters are rejected and both fields are length-bounded.
-const noControl = (value: string) => !/[\u0000-\u001f\u007f]/.test(value)
+// Rejects every Unicode control character (C0, DEL and C1) and any unpaired surrogate.
+const noControl = (value: string) => !/\p{Cc}/u.test(value) &&
+  !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value)
 export const summaryTemplateSchema = z.object({
   id: z.string().min(1).max(128).refine(noControl, 'Template id contains control characters'),
   title: z.string().min(1).max(200).refine(noControl, 'Template title contains control characters'),
