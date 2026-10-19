@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Calculator, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -158,8 +158,11 @@ interface VisitCalculatorsValue {
   isEnglish: boolean
   /** The page's calculators, in the order of its chapters. */
   rows: readonly CalculatorRow[]
-  /** Opens a calculator's panel. */
-  open: (id: string) => void
+  /**
+   * Opens a calculator's panel; `from` is the control that opened it, where
+   * focus goes back when the panel closes.
+   */
+  open: (id: string, from: HTMLElement | null) => void
   /** Where a calculator's name sits in a line of the page, for its link. */
   pattern?: RegExp
 }
@@ -198,6 +201,9 @@ export function VisitCalculatorsProvider({
   const { isFavorite, toggleFavorite } = useCalcFavorites()
   const [selected, setSelected] = useState<string | null>(null)
   const [result, setResult] = useState<CalcResult | null>(null)
+  // The panel opens from state, with no trigger of its own: Radix has nowhere
+  // to return focus on close, so it is put back here (#334 review).
+  const returnFocus = useRef<HTMLElement | null>(null)
 
   const pointOf = useCallback((dp: string, source?: DecisionPointView['source']) => (
     points.find((point) => point.dp === dp && point.source === (source ?? sourceOfPage))
@@ -222,7 +228,8 @@ export function VisitCalculatorsProvider({
   const value = useMemo<VisitCalculatorsValue>(() => ({
     isEnglish,
     rows,
-    open: (id: string) => {
+    open: (id: string, from: HTMLElement | null) => {
+      returnFocus.current = from
       setResult(null)
       setSelected(id)
     },
@@ -244,6 +251,12 @@ export function VisitCalculatorsProvider({
           <DialogContent
             overlayClassName="z-[70]"
             onEscapeKeyDown={(event) => { event.preventDefault(); close() }}
+            onCloseAutoFocus={(event) => {
+              const from = returnFocus.current
+              if (!from?.isConnected) return
+              event.preventDefault()
+              from.focus()
+            }}
             // A sheet from the bottom on a phone, a panel on the right beside the page from 768px.
             className="@container z-[70] top-auto right-0 bottom-0 left-0 flex max-h-[88dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-b-none rounded-t-xl p-0 data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100 md:top-0 md:left-auto md:h-dvh md:max-h-dvh md:w-[min(520px,100vw)] md:rounded-none"
             data-testid="cdss-book-calculator-panel"
@@ -307,6 +320,8 @@ export function VisitCalculatorsButton({ chapterOf, goTo }: {
 }) {
   const calculators = useContext(VisitCalculatorsContext)
   const [listOpen, setListOpen] = useState(false)
+  // The list's rows go when it closes: the panel hands focus back to this button.
+  const triggerRef = useRef<HTMLButtonElement>(null)
   if (!calculators?.rows.length) return null
   const { isEnglish, rows, open } = calculators
   const byChapter = new Map<string, CalculatorRow[]>()
@@ -317,12 +332,13 @@ export function VisitCalculatorsButton({ chapterOf, goTo }: {
   const choose = (row: CalculatorRow) => {
     setListOpen(false)
     goTo(row.entry.dp, row.entry.source)
-    open(row.entry.id)
+    open(row.entry.id, triggerRef.current)
   }
   return (
     <Popover open={listOpen} onOpenChange={setListOpen}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className={styles.trigger}
           aria-label={isEnglish ? `Calculators, ${rows.length} available` : `計算機，${rows.length} 個可用`}
@@ -380,7 +396,7 @@ export function FormulaText({ text }: { text: string }) {
         key={`${index}:${row.entry.id}`}
         type="button"
         className={styles.formulaLink}
-        onClick={() => calculators.open(row.entry.id)}
+        onClick={(event) => calculators.open(row.entry.id, event.currentTarget)}
         aria-label={calculators.isEnglish ? `${match[0]}, open the calculator` : `${match[0]}，開啟計算機`}
         data-calculator-link={row.entry.id}
       >

@@ -6,7 +6,7 @@
  * recommendation (「預後只當附註就好」).
  */
 import { useMemo } from 'react'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
@@ -193,6 +193,29 @@ describe('決策地圖 v2 · a calculator named in a line of the page', () => {
     const pattern = HF_VISIT_CALCULATORS.find((entry) => entry.id === 'cha2ds2-va')!.names
     expect(pattern.test('CHA₂DS₂-VA ≥2')).toBe(true)
     expect(pattern.test('CHA₂DS₂-VASc ≥2')).toBe(false)
+  })
+})
+
+describe('決策地圖 v2 · focus after the calculator closes (#334 review)', () => {
+  it('goes back to the link in the line that opened it', async () => {
+    render(<Page id="p9-hfpef-af-dose" page="hf" />)
+    const dp14 = document.querySelector<HTMLElement>('[data-book-dp="DP-14"]')!
+    fireEvent.click(within(dp14).getByRole('button', { name: /看依據/ }))
+    const link = document.querySelector<HTMLButtonElement>('[data-calculator-link="cha2ds2-va"]')!
+    link.focus()
+    fireEvent.click(link)
+    fireEvent.keyDown(screen.getByTestId('cdss-book-calculator-panel'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('cdss-book-calculator-panel')).toBeNull())
+    await waitFor(() => expect(link).toHaveFocus())
+  })
+
+  it('goes back to 計算機 when it was opened from the list', async () => {
+    render(<Page id="p9-hfpef-af-dose" page="hf" />)
+    openList()
+    fireEvent.click(screen.getByTestId('cdss-book-calculator-maggic'))
+    fireEvent.click(within(screen.getByTestId('cdss-book-calculator-panel')).getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByTestId('cdss-book-calculator-panel')).toBeNull())
+    await waitFor(() => expect(screen.getByTestId('cdss-book-calculators')).toHaveFocus())
   })
 })
 

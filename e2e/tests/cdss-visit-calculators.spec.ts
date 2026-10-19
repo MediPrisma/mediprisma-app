@@ -70,6 +70,7 @@ for (const width of [390, 1280]) {
         await page.keyboard.press('Escape')
         await expect(panel).toBeHidden()
         await expect(page.getByTestId('cdss-visit-book')).toBeVisible()
+        await expect(page.getByTestId('cdss-book-calculators')).toBeFocused()
 
         // A calculator named in a line of the page opens it too: the guideline's 「CHA2DS2-VA」 under DP-14's 看依據.
         const dp14 = page.locator('[data-book-dp="DP-14"]')
@@ -83,6 +84,8 @@ for (const width of [390, 1280]) {
         await expect(panel).toContainText('AF DP-14')
         await page.keyboard.press('Escape')
         await expect(panel).toBeHidden()
+        // Focus goes back to the link that opened it (#334 review).
+        await expect(link).toBeFocused()
 
         const overflow = await page.evaluate(() => {
           const book = document.querySelector<HTMLElement>('[data-testid="cdss-visit-book"]')!
