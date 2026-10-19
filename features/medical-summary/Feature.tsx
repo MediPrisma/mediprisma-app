@@ -77,6 +77,7 @@ import {
   getSummaryGenerationActivityState,
   SummaryGenerationButton,
 } from "./components/SummaryGenerationButton"
+import { SummaryProblemReport } from "./components/SummaryProblemReport"
 import { AiDiagnosticsButton } from "./components/AiDiagnosticsButton"
 import { SourceLink } from "./components/SourceLink"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
@@ -459,9 +460,8 @@ export default function MedicalSummaryFeature() {
     },
     [resolveSafetySource, currentAnticholinergics, problemList, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle, ms.safetyAnticholinergicUnnamed],
   )
-  // 待核對 under a clinician headline that does not match the problem list —
-  // problems the list does not hold, medicines, lab values. Judged only once
-  // both requests have answered; labels, never rewrites.
+  // Compare clinician headline wording once both requests settle. Ordinary
+  // differences are disclosed on demand; a failed comparison stays inline.
   const problemListState = headlineProblemListState(result ?? undefined)
   const headlineReviewLabel = useMemo(() => {
     if (isPatient || !headline) return undefined
@@ -763,11 +763,18 @@ export default function MedicalSummaryFeature() {
               <CircleHelp className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
+          <SummaryProblemReport
+            key={summaryGenerationSlotKey}
+            records={visibleAiDiagnostics}
+            busy={isBusy}
+            onOpen={() => setSummarySettingsOpen(false)}
+            renderTrigger={(reportTrigger) => (
           <Popover open={!tourActive && summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
                 size="sm"
+                data-tour="medical-summary-settings"
                 variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "outline"}
                 className="h-[44px] shrink-0 gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7 @max-[36rem]:h-10 @max-[36rem]:w-10 @max-[36rem]:justify-center @max-[36rem]:px-0"
                 title={ms.summaryControls}
@@ -843,6 +850,7 @@ export default function MedicalSummaryFeature() {
                   </Button>
                 </>
               ) : null}
+              {reportTrigger ? <div className="border-t pt-1">{reportTrigger}</div> : null}
               <div className="flex justify-end border-t pt-1">
                 <AiDiagnosticsButton
                   hasRecords={visibleAiDiagnostics.length > 0}
@@ -856,6 +864,8 @@ export default function MedicalSummaryFeature() {
               </div>
             </PopoverContent>
           </Popover>
+            )}
+          />
         </div>
       </div>
 
@@ -967,6 +977,9 @@ export default function MedicalSummaryFeature() {
                 copiedLabel={t.common.copied}
                 copyFailedLabel={t.common.copyFailed}
                 reviewLabel={headlineReviewLabel}
+                reviewButtonLabel={ms.headlineReviewTitle}
+                reviewDescription={ms.headlineReviewDescription}
+                reviewUnavailable={problemListState === "failed"}
               />
             ) : null,
           )}
@@ -1099,7 +1112,7 @@ export default function MedicalSummaryFeature() {
           </div>
 
           {!hasAnyResult && displayedGenerationErrors.length === 0 ? (
-            <div className="flex min-h-[clamp(18rem,45vh,32rem)] items-center justify-center px-4 py-12">
+            <div data-tour="medical-summary-empty" className="flex min-h-[clamp(18rem,45vh,32rem)] items-center justify-center px-4 py-12">
               <SummaryGenerationButton
                 presentation="empty"
                 isBusy={isBusy}

@@ -16,7 +16,7 @@ import {
 } from '@/src/application/telemetry/usage-analytics'
 import { bucketDuration, classifyAiOutcome, nowMs } from '@/src/application/telemetry/ai-outcome'
 import type { AiResultStore } from './create-ai-result-store'
-import { beginCollectorObservation } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, type CollectorOperation } from '@/src/application/telemetry/collector'
 import type { SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 
 /** Per-run measurements only; never stored in the clinical result/cache. */
@@ -66,8 +66,15 @@ export async function runGenerationJob<T>(options: {
   key: string
   /** Encrypted-session-cache key — each feature keeps its historical format. */
   cacheKey: string
-  /** Streams + parses one reply; null = parse failed (after any internal retry). */
-  produce: (measure: (result: AiGenerationMeasurement) => void) => Promise<T | null>
+  /** Streams + parses one reply; null = parse failed (after any internal retry).
+   *  `identifySummaryRun` names the random diagnostic run so the operation event
+   *  can be joined to its attempt events; it never affects the result. */
+  produce: (
+    measure: (result: AiGenerationMeasurement) => void,
+    identifySummaryRun: (runId: string) => void,
+    /** Scopes this run's AI requests into its one operation event. */
+    operation?: CollectorOperation,
+  ) => Promise<T | null>
   /** A user cancellation invalidates the run without surfacing an error. */
   shouldCommit?: () => boolean
   /** Opt in to the `ai_result` reliability event. Omit and nothing is sent. */
@@ -100,15 +107,16 @@ export async function runGenerationJob<T>(options: {
     contextTrimmed: analytics.contextTrimmed,
   }) : undefined
   let reported = false
+  let summaryRunId: string | undefined
   const report = (outcome: AiOutcome, summaryCards?: SummaryCardCounts) => {
     if (reported || !analytics) return
     reported = true
-    collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown', summaryCards })
+    collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown', summaryCards, summaryRunId })
     reportAiResult(analytics, outcome, nowMs() - startedAt, readRunMetrics?.())
   }
   try {
     let measurement: AiGenerationMeasurement | undefined
-    const parsed = await produce((result) => { measurement = result })
+    const parsed = await produce((result) => { measurement = result }, (runId) => { summaryRunId = runId }, collector?.operation)
     // A cancelled or superseded run is not a failure of the model.
     if (!isCurrentBundle() || !shouldCommit()) {
       report('aborted')

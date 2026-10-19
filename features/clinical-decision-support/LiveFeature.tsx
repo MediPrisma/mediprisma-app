@@ -76,6 +76,7 @@ import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitM
 import { intolerantPillars } from './renderers/visit/visit-decisions'
 import type { VisitAnswerProvenance } from './renderers/visit/VisitAsks'
 import { useAfAnswers, useAfAnswersHydrated, useAfAnswersStore } from './stores/af-answers.store'
+import { useCoronaryPhaseAnswer, useCoronaryPhaseHydrated, useCoronaryPhaseStore } from './stores/coronary-phase.store'
 import { useLocalDay } from './hooks/use-local-day.hook'
 import { HEART_FAILURE_PACK_ID } from './renderers/heart-failure-board'
 import { useLabAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -333,6 +334,8 @@ export default function LiveClinicalDecisionSupportFeature({
   const preventInputs = usePreventInputs(patientId)
   const afAnswers = useAfAnswers(patientId)
   useEffect(() => { useAfAnswersStore.getState().setPatient(patientId) }, [patientId])
+  const coronaryPhaseAnswer = useCoronaryPhaseAnswer(patientId)
+  useEffect(() => { useCoronaryPhaseStore.getState().setPatient(patientId) }, [patientId])
   const evidenceOverrides = useEvidenceOverrides(patientId)
   const hydrateEvidenceOverrides = useEvidenceOverridesStore((state) => state.hydrate)
   const clearEvidenceOverrides = useEvidenceOverridesStore((state) => state.clearOverrides)
@@ -394,6 +397,7 @@ export default function LiveClinicalDecisionSupportFeature({
     usePhenotypeAnswerHydrated(patientId),
     useVisitAnswersHydrated(patientId),
     useAfAnswersHydrated(patientId),
+    useCoronaryPhaseHydrated(patientId),
     useEvidenceOverridesHydrated(patientId),
   ].every(Boolean)
   // A carried answer the clinician changed or cleared is theirs from then on: its mark goes
@@ -490,7 +494,12 @@ export default function LiveClinicalDecisionSupportFeature({
   const answeredProfile = useMemo(() => (
     recordProfile && answersHydrated
       ? { ...applyPhenotypeAnswer(
-          applyClinicVitals({ ...recordProfile, evidenceOverrides, afClinicalAnswers: afAnswers }, clinicVitals),
+          applyClinicVitals({
+            ...recordProfile,
+            evidenceOverrides,
+            afClinicalAnswers: afAnswers,
+            ...(coronaryPhaseAnswer ? { coronaryPhaseAnswer } : {}),
+          }, clinicVitals),
           phenotypeAnswer,
         ),
         nhiLipidReview,
@@ -508,7 +517,7 @@ export default function LiveClinicalDecisionSupportFeature({
         ),
       }
       : null
-  ), [afAnswers, answersHydrated, clinicVitals, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
+  ), [afAnswers, answersHydrated, clinicVitals, coronaryPhaseAnswer, evidenceOverrides, phenotypeAnswer, recordProfile, nhiLipidReview, nhiLipidReviewProvenance])
 
   // The HFpEF scores are computed here, once, by the host's own calculator —
   // reading the echo report, the ECG and what the clinician typed — and handed
@@ -776,6 +785,7 @@ export default function LiveClinicalDecisionSupportFeature({
     clearPhenotypeAnswer(patientId)
     clearVisitAnswers(patientId)
     useAfAnswersStore.getState().clear(patientId)
+    useCoronaryPhaseStore.getState().clear(patientId)
     useCarriedAnswersStore.getState().clear(patientId)
     toast.success(cdssLocale === 'en' ? 'Page defaults restored.' : '已恢復本頁預設。')
   }
@@ -813,7 +823,7 @@ export default function LiveClinicalDecisionSupportFeature({
             packLabel={(packId) => guidelinePacks.find((pack) => pack.id === packId)?.label[cdssLocale === 'en' ? 'en' : 'zh']}
             onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
             packId: result.packId, profile, result,
-            physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers,
+            physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers, coronaryPhaseAnswer,
               nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
             physicianDecisions: { ...physicianDecisions },
           }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
@@ -893,6 +903,8 @@ export default function LiveClinicalDecisionSupportFeature({
       <ClinicalDecisionSupportView
         afAnswers={afAnswers}
         onAfAnswer={patientId ? (id, value) => useAfAnswersStore.getState().answer(patientId, id, value) : undefined}
+        coronaryPhaseAnswer={coronaryPhaseAnswer}
+        onCoronaryPhase={patientId ? (answer) => useCoronaryPhaseStore.getState().setAnswer(patientId, answer) : undefined}
         result={result}
         englishResult={englishResult ?? undefined}
         locale={cdssLocale}

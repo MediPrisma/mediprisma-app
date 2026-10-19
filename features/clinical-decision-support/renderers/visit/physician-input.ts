@@ -12,6 +12,7 @@
  */
 import { todayIsoDate } from '../../stores/clinic-vitals.store'
 import type { PhenotypeAnswer } from '../../stores/phenotype-answer.store'
+import type { CoronaryPhaseAnswer } from '../../stores/coronary-phase.store'
 import type { VisitAction } from '../../types'
 
 export type VisitPhysicianInput = NonNullable<VisitAction['physicianInput']>
@@ -91,6 +92,34 @@ export function afAnswersForInput(
     { id: 'atrialFibrillation', value: has[0] },
     { id: 'atrialFlutter', value: has[1] },
   ]
+}
+
+const CORONARY_PHASES = new Set(['acs-recent', 'pci-recent', 'chronic-mi', 'chronic-stable', 'unsure'])
+
+/**
+ * The input a CAD DP-01 press writes: the class, and — from the 「知道年月？」
+ * field beside the table — the month or year the clinician knew, carried in the
+ * option id as `phase@YYYY-MM` so it travels the same path the class does.
+ */
+export function coronaryPhaseInput(phase: CoronaryPhaseAnswer['phase'], eventMonth?: string): VisitPhysicianInput {
+  return { request: 'cad-phase', optionId: eventMonth ? `${phase}@${eventMonth}` : phase }
+}
+
+/**
+ * The CAD DP-01 answer a press writes — the class and the day it was given,
+ * which the pack reads its 「1 年內」 back from — or undefined for any other
+ * input. 「還不確定」 is an answer too: it says the question was seen.
+ */
+export function coronaryPhaseForInput(input: VisitPhysicianInput, now: Date): CoronaryPhaseAnswer | undefined {
+  if (input.request !== 'cad-phase') return undefined
+  const [phase, eventMonth] = (input.optionId ?? '').split('@')
+  if (!CORONARY_PHASES.has(phase)) return undefined
+  const month = eventMonth && /^\d{4}(?:-(?:0[1-9]|1[0-2]))?$/.test(eventMonth) ? eventMonth : undefined
+  return {
+    phase: phase as CoronaryPhaseAnswer['phase'],
+    answeredOn: todayIsoDate(now),
+    ...(month && (phase === 'acs-recent' || phase === 'pci-recent') ? { eventMonth: month } : {}),
+  }
 }
 
 /**

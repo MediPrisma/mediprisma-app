@@ -8,6 +8,7 @@ import { usePhysicianDecisionsStore } from '../stores/physician-decisions.store'
 import { useHfpefInputsStore } from '../stores/hfpef-inputs.store'
 import { useEvidenceOverridesStore } from '../stores/evidence-overrides.store'
 import { useAfAnswersStore } from '../stores/af-answers.store'
+import { useCoronaryPhaseStore } from '../stores/coronary-phase.store'
 import { useNhiLipidReviewStore } from '../stores/nhi-lipid-review.store'
 import { usePreventStore } from '../stores/prevent-inputs.store'
 import { DECISION_REASONS } from '../renderers/heart-failure-visit-flow'
@@ -142,6 +143,12 @@ export function useCdssGateway(input: {
           if (!safeTarget(id)) continue
           changed(changes, 'af-answer', previous.answers[id], next.answers[id], id)
         }
+        sendChanges(patientId, packId, changes)
+      }),
+      useCoronaryPhaseStore.subscribe((next, previous) => {
+        if (next.patientId !== patientId || previous.patientId !== patientId || next.answer === previous.answer) return
+        const changes: CdssAssessmentChange[] = []
+        changed(changes, 'cad-phase', previous.answer?.phase, next.answer?.phase)
         sendChanges(patientId, packId, changes)
       }),
       useNhiLipidReviewStore.subscribe((next, previous) => {

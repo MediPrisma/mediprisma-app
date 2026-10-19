@@ -1261,6 +1261,19 @@ export const LocalBundleService = {
     const patient = PatientMapper.toDomain(patientRaw)
     if (!patient) return null
 
+    // Keep the report -> outpatient order edge useful after domain mapping.
+    // The complete ServiceRequest and Provenance remain in the imported Bundle.
+    const orderLabels = new Map(byType('ServiceRequest').map((order: any) => [
+      `ServiceRequest/${order.id}`, order.code?.text || order.code?.coding?.find((coding: any) => coding.display)?.display,
+    ]))
+    for (const result of [...byType('Observation'), ...byType('DiagnosticReport')]) {
+      if (!Array.isArray(result.basedOn)) continue
+      result.basedOn = result.basedOn.map((reference: any) => {
+        const display = orderLabels.get(reference.reference)
+        return !reference.display && typeof display === 'string' ? { ...reference, display } : reference
+      })
+    }
+
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }
     // VGH data has one encounter per day per department; use first match if multiple same-day.
     const encounters = byType('Encounter')

@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures/test'
+import { quietGuidedTours } from '../fixtures/guided-tour'
 import { type Locator, type Page } from '@playwright/test'
 
 declare global {
@@ -106,6 +107,7 @@ test.describe('clinical workspace performance contract', () => {
         }
       }
     })
+    await quietGuidedTours(page)
 
     await page.goto('/')
     await page.getByTestId('welcome-demo-card').click()

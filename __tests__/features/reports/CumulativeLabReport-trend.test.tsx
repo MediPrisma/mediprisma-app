@@ -55,6 +55,25 @@ function Providers({ children, detailHost = false }: { children: ReactNode; deta
 }
 
 describe('CumulativeLabReport trend entry', () => {
+  it('opens eGFR despite a formula in the unit field and explains the retained excluded result', async () => {
+    const renal = ['mL/min/1.73m2', 'mL/min/1.73m²', 'eGFR(MDRD)'].map((unit, index) => ({
+      id: `egfr-${index}`, status: 'final', code: { text: 'eGFR' },
+      effectiveDateTime: `2026-01-0${index + 1}`,
+      valueQuantity: { value: 70 - index * 5, unit },
+    }))
+    render(<Providers detailHost><CumulativeLabReport observations={renal} activeCategoryId="chem" /></Providers>)
+    fireEvent.click(screen.getByRole('button', { name: /查看 eGFR 趨勢/ }))
+    const detail = await screen.findByTestId('cumulative-trend-detail')
+    expect(detail).toHaveTextContent('其餘單位或血氣檢體分組顯示')
+    expect(detail).toHaveTextContent('eGFR(MDRD)')
+    expect(detail).toHaveTextContent('另有較新結果')
+    expect(detail).toHaveTextContent('其他單位／檢體組，未納入目前曲線')
+    expect(detail).toHaveTextContent('較前次')
+    const picker = screen.getByRole('combobox', { name: '繪圖單位／檢體' })
+    fireEvent.change(picker, { target: { value: JSON.stringify(['eGFR(MDRD)', '']) } })
+    expect(detail).not.toHaveTextContent('較前次')
+    expect(detail).toHaveTextContent('至少需要兩筆')
+  })
   beforeEach(() => {
     mockBuildLabTrendSeries.mockClear()
   })

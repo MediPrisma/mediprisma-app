@@ -614,6 +614,7 @@ function VitalReportMetadata({
         {row.institution && (
           <ReportInstitutionLabel
             institution={row.institution}
+            hospitalSource={row.hospitalSource}
             locale={locale}
             className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none @min-[800px]:w-full @min-[800px]:max-w-full"
           />
@@ -821,7 +822,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
         {!hideMeta && (row.sourceProvenance === 'nhi-medicloud' ? (
           <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
         ) : row.institution ? (
-          <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
+          <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
         ) : null)}
         {!hideMeta && (
           <Tooltip>
@@ -1141,7 +1142,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   {row.sourceProvenance === 'nhi-medicloud' ? (
                     <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
                   ) : row.institution ? (
-                    <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
+                    <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
                   ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1398,7 +1399,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     {row.sourceProvenance === 'nhi-medicloud' ? (
                       <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem]" />
                     ) : row.institution ? (
-                      <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[10rem]" />
+                      <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[10rem]" />
                     ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>

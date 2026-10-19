@@ -3,8 +3,8 @@
 // ("70F with CKD stage 3a, hyperkalemia, anemia" for a heart-failure patient
 // with a normal eGFR and potassium), and headlines carry medicines and lab
 // values the rules leave out. The app compares the headline with the problem
-// list and labels what does not match 待核對 — it never rewrites or hides it
-// (owner, 2026-10-05).
+// list and exposes wording differences under 摘要核對. A mismatch does not
+// establish a clinical error; the original headline remains intact.
 
 export interface HeadlineReview {
   /** Headline items no problem in the list names. */

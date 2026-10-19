@@ -1,45 +1,29 @@
 import {
   LEFT_BROWSER_TOUR_STORAGE_KEY,
   hasSeenLeftBrowserTour,
-  markLeftBrowserTourSeen,
   useLeftBrowserTourStore,
 } from '@/features/left-browser-tour/left-browser-tour.store'
 
-describe('left browser tour store', () => {
+describe('left panel tour channel', () => {
   beforeEach(() => {
     localStorage.clear()
-    useLeftBrowserTourStore.setState({ active: false, stepId: null, session: 0 })
+    useLeftBrowserTourStore.setState({ active: false, stepId: null })
   })
 
-  it('starts, advances, and stops a replayable session', () => {
-    useLeftBrowserTourStore.getState().start()
+  it('shows a scene and gives the panel back on stop', () => {
+    useLeftBrowserTourStore.getState().showScene('patient-overview')
+    expect(useLeftBrowserTourStore.getState()).toMatchObject({ active: true, stepId: 'patient-overview' })
 
-    expect(useLeftBrowserTourStore.getState()).toMatchObject({
-      active: true,
-      stepId: 'overview',
-      session: 1,
-    })
-
-    useLeftBrowserTourStore.getState().setStep('documents')
+    useLeftBrowserTourStore.getState().showScene('documents')
     expect(useLeftBrowserTourStore.getState().stepId).toBe('documents')
 
     useLeftBrowserTourStore.getState().stop()
-    expect(useLeftBrowserTourStore.getState()).toMatchObject({
-      active: false,
-      stepId: null,
-      session: 1,
-    })
-
-    useLeftBrowserTourStore.getState().start()
-    expect(useLeftBrowserTourStore.getState().session).toBe(2)
+    expect(useLeftBrowserTourStore.getState()).toMatchObject({ active: false, stepId: null })
   })
 
-  it('persists that the automatic offer has been handled', () => {
+  it('still reads whether this browser ran the previous left tour', () => {
     expect(hasSeenLeftBrowserTour()).toBe(false)
-
-    markLeftBrowserTourSeen()
-
-    expect(localStorage.getItem(LEFT_BROWSER_TOUR_STORAGE_KEY)).toBe('1')
+    localStorage.setItem(LEFT_BROWSER_TOUR_STORAGE_KEY, '1')
     expect(hasSeenLeftBrowserTour()).toBe(true)
   })
 })
