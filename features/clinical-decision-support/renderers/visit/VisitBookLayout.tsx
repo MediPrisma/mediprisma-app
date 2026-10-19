@@ -876,6 +876,27 @@ function MoreQuestions({ more, isEnglish, onAnswer }: {
 }
 
 /** Every option at this patient's dose, as the prototype's 「多少」 table: 藥｜標準｜減量條件（本病人）｜本病人劑量. */
+/**
+ * A locale layer's lines under a point (CAD core §7.2): the payer's coverage
+ * — 「健保給付」 on a Taiwan deployment — tagged with its source, never in the
+ * point's own words. A deployment without the layer draws nothing here.
+ */
+function CoverageLines({ point, isEnglish }: { point: DecisionPointView; isEnglish: boolean }) {
+  const lines = point.coverage ?? []
+  if (!lines.length) return null
+  return (
+    <div className={styles.coverage} data-book-coverage="">
+      {lines.map((line) => (
+        <p key={`${line.source}|${line.text}`} className={styles.coverageLine} data-coverage-status={line.status}>
+          <span className={styles.coverageTag}>{line.source}</span>
+          <span>{line.text}</span>
+          {line.remindAt ? <span className="sr-only">{isEnglish ? `Reminder ${line.remindAt}` : `提醒點 ${line.remindAt}`}</span> : null}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function DoseTable({ table, isEnglish }: { table: { title: string; rows: OptionRowView[] }; isEnglish: boolean }) {
   const mark = (met: boolean | undefined) => (met === true ? '✓' : met === false ? '✗' : '？')
   return (
@@ -1324,6 +1345,7 @@ export function VisitBookLayout({
         </div>
         {classificationOf(point) ? <div className={styles.rowExtras}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.rowExtras)}
+        {point.coverage?.length ? <div className={styles.rowExtras}><CoverageLines point={point} isEnglish={isEnglish} /></div> : null}
         {reasoning(point, shown)}
       </div>
     )
@@ -1378,6 +1400,7 @@ export function VisitBookLayout({
             </>
           )}
         </div>
+        {point.coverage?.length ? <div className={styles.rowExtras}><CoverageLines point={point} isEnglish={isEnglish} /></div> : null}
         {reasoning(point, point)}
       </div>
     )
@@ -1458,6 +1481,7 @@ export function VisitBookLayout({
         </span>
         {classificationOf(point) ? <div className={styles.lineWide}>{classTable(point)}</div> : null}
         {pointQuestions(point, styles.lineWide)}
+        {point.coverage?.length ? <div className={styles.lineWide}><CoverageLines point={point} isEnglish={isEnglish} /></div> : null}
         {panel ? <div className={styles.lineWide}>{panel}</div> : null}
       </div>
     )

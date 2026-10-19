@@ -24,7 +24,7 @@ import {
 } from '@/src/application/stores/beta-features.store'
 
 /** What the host lists, in switcher order. */
-const HOST_PACK_IDS = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss']
+const HOST_PACK_IDS = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss', 'chronic-coronary-disease-cdss']
 const RELEASED_PACK_IDS = ['heart-failure-cdss']
 /** Names the package has carried at one time or another, none of them listed here. */
 const UNLISTED_PACK_IDS = [
@@ -53,7 +53,7 @@ describe('care pack visibility', () => {
     useBetaFeaturesStore.setState({ enabledByUser: {} })
   })
 
-  it('lists heart failure, dyslipidemia and AF', () => {
+  it('lists heart failure, dyslipidemia, AF and coronary disease', () => {
     expect(HOST_CARE_PACKS.map((pack) => pack.id)).toEqual(HOST_PACK_IDS)
   })
 
@@ -62,7 +62,7 @@ describe('care pack visibility', () => {
     expect(getClinicalGuidelinePack('heart-failure-cdss')?.id).toBe('heart-failure-cdss')
   })
 
-  it('reveals dyslipidemia and AF when Beta features go on', () => {
+  it('reveals dyslipidemia, AF and coronary disease when Beta features go on', () => {
     enableBeta()
 
     expect(visibleIds()).toEqual(HOST_PACK_IDS)
