@@ -204,14 +204,20 @@ test('a custom summary request names its template (v9); other features never car
   expect(fourth.schema_version).toBe(5)
 })
 
-test('template titles drop every control character and unpaired surrogate before sending', async () => {
+test('template titles drop control, bidi and unpaired surrogate characters; an unusable ID is not rewritten', async () => {
   const { collectorEventV9Schema } = await import('@/src/shared/contracts/collector-event')
   beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
-    template: { id: 'id\u0085x\uDC00', title: '甲\u0085乙\uD800丙😀' } }).finish({ outcome: 'ok' })
+    template: { id: 'changes', title: '甲\u0085乙\uD800丙‮😀' } }).finish({ outcome: 'ok' })
   await settle()
-  const [sent] = payloads()
-  expect(sent.diagnostics.template).toEqual({ id: 'id x', title: '甲 乙丙😀' })
-  expect(collectorEventV9Schema.safeParse(sent).success).toBe(true)
+  beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+    template: { id: 'id\u0085x', title: '重要變化' } }).finish({ outcome: 'ok' })
+  await settle()
+  const [cleaned, badId] = payloads()
+  expect(cleaned.diagnostics.template).toEqual({ id: 'changes', title: '甲 乙丙😀' })
+  expect(collectorEventV9Schema.safeParse(cleaned).success).toBe(true)
+  // The ID is how a template is found: one that would need rewriting is left out, never altered.
+  expect(badId.schema_version).toBe(5)
+  expect(badId.diagnostics).not.toHaveProperty('template')
 })
 
 test('custom summary requests (v9) use at most half the retry queue and give way to operation events', async () => {

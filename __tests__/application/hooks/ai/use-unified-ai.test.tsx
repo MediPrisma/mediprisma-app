@@ -420,3 +420,26 @@ describe('useUnifiedAi cancellation', () => {
     expect(result.current.isLoading).toBe(false)
   })
 })
+
+describe('useUnifiedAi collector template', () => {
+  it('a custom summary query reaches the collector as v9 with its template', async () => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
+    mockQuery.mockResolvedValueOnce({ text: 'SYNTHETIC-ANSWER', metadata: {} })
+    const { result } = renderHook(() => useUnifiedAi())
+    try {
+      await act(async () => {
+        await result.current.query([{ role: 'user', content: 'SYNTHETIC-PROMPT' }], {
+          modelId: 'gpt-5.4-nano', diagnosticFeature: 'clinical-insights', operationKey: 'PRIVATE-PATIENT',
+          collectorContext: { template: { id: 'changes', title: '重要變化' } },
+        })
+      })
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+      const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
+      expect(wire).toMatchObject({ schema_version: 9, feature: 'insights', sample_kind: 'request',
+        diagnostics: { template: { id: 'changes', title: '重要變化' } } })
+      expect(JSON.stringify(wire)).not.toMatch(/SYNTHETIC-PROMPT|SYNTHETIC-ANSWER|PRIVATE-PATIENT/)
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
+})

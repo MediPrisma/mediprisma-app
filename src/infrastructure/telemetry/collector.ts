@@ -128,23 +128,25 @@ export const INSTITUTION_ENDPOINT_MODELS: Readonly<Record<string, CollectorModel
   [customOpenAiModelIdForProfile('vghtpe-tvghbrain')]: 'tvghbrain3.5',
 })
 // Control characters dropped, whitespace collapsed, lengths bounded to the contract (id 128, title 200).
+// Unpaired surrogates, control characters (Cc) and bidi controls never leave the browser.
+const UNPAIRED_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
+const BIDI_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
 function templateLabel(input: CollectorContext['template']): { id: string; title: string } | undefined {
-  if (!input) return undefined
-  // The contract bounds UTF-16 length; cut on whole characters so no surrogate half is sent.
-  const clean = (value: unknown, max: number) => {
-    if (typeof value !== 'string') return ''
-    let out = ''
-    // Every Unicode control character and any unpaired surrogate is dropped before cutting.
-    const text = value.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
-      .replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim()
-    for (const char of text) {
-      if (out.length + char.length > max) break
-      out += char
-    }
-    return out.trim()
+  if (!input || typeof input.id !== 'string' || typeof input.title !== 'string') return undefined
+  // The ID is how a template is found, so it is sent exactly or not at all.
+  const id = input.id.trim()
+  if (!id || id.length > 128 || /\p{Cc}/u.test(id) || new RegExp(BIDI_CONTROL.source).test(id) ||
+      new RegExp(UNPAIRED_SURROGATE.source).test(id)) return undefined
+  // The title is cleaned, then cut on whole characters to the contract's UTF-16 bound.
+  const text = input.title.replace(UNPAIRED_SURROGATE, '').replace(BIDI_CONTROL, '')
+    .replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim()
+  let title = ''
+  for (const char of text) {
+    if (title.length + char.length > 200) break
+    title += char
   }
-  const id = clean(input.id, 128), title = clean(input.title, 200)
-  return id && title ? { id, title } : undefined
+  title = title.trim()
+  return title ? { id, title } : undefined
 }
 function modelInfo(id: string, provider?: Start['provider']) {
   if (isCustomOpenAiModelId(id) || id === 'custom')
