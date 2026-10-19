@@ -55,6 +55,9 @@ const PROFILE: CdssPatientProfile = {
     age: fact('62 歲', 62),
     chronicCoronarySyndromeDiagnosis: fact('慢性冠心病診斷：I25.10', undefined, '2026-07-18'),
     acuteCoronarySyndromeAdmission: fact('365 天內有以急性冠心症為就診原因的住院紀錄（2026-01-20）', undefined, '2026-01-20'),
+    // NHI coverage reads the inpatient stay itself, not an emergency visit.
+    acuteCoronarySyndromeHospitalization: fact('以急性冠心症為就診原因的住院紀錄（2026-01-20）', undefined, '2026-01-20'),
+    acuteCoronarySyndromeDischarge: fact('出院 2026-01-24', undefined, '2026-01-24'),
     LDL: fact('68 mg/dL', 68),
     eGFR: fact('78 mL/min/1.73m²', 78),
     LVEF: fact('52%', 52, '2026-01-22'),
