@@ -34,6 +34,7 @@ export type PatientAnswerKind =
   | 'visit-answers'
   | 'clinic-vitals'
   | 'af-answers'
+  | 'coronary-phase'
   | 'phenotype-answer'
   | 'hfpef-inputs'
   | 'physician-decisions'
@@ -52,6 +53,7 @@ const STORAGE_PREFIXES: Readonly<Record<PatientAnswerKind, string>> = {
   'visit-answers': 'cdss-visit-answers:',
   'clinic-vitals': 'cdss-clinic-vitals:',
   'af-answers': 'cdss-af-answers:',
+  'coronary-phase': 'cdss-coronary-phase:',
   'phenotype-answer': 'cdss-phenotype-answer:',
   'hfpef-inputs': 'cdss-hfpef-inputs:',
   'physician-decisions': 'cdss-physician-decisions:',
