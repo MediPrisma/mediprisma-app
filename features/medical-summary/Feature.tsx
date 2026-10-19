@@ -460,9 +460,8 @@ export default function MedicalSummaryFeature() {
     },
     [resolveSafetySource, currentAnticholinergics, problemList, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle, ms.safetyAnticholinergicUnnamed],
   )
-  // 待核對 under a clinician headline that does not match the problem list —
-  // problems the list does not hold, medicines, lab values. Judged only once
-  // both requests have answered; labels, never rewrites.
+  // Compare clinician headline wording once both requests settle. Ordinary
+  // differences are disclosed on demand; a failed comparison stays inline.
   const problemListState = headlineProblemListState(result ?? undefined)
   const headlineReviewLabel = useMemo(() => {
     if (isPatient || !headline) return undefined
@@ -977,6 +976,9 @@ export default function MedicalSummaryFeature() {
                 copiedLabel={t.common.copied}
                 copyFailedLabel={t.common.copyFailed}
                 reviewLabel={headlineReviewLabel}
+                reviewButtonLabel={ms.headlineReviewTitle}
+                reviewDescription={ms.headlineReviewDescription}
+                reviewUnavailable={problemListState === "failed"}
               />
             ) : null,
           )}
