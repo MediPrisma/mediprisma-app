@@ -30,9 +30,17 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type M
 import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
-import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/features/left-browser-tour"
+import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
 import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
-import { TourMenuItems } from "@/features/left-browser-tour/TourMenuItems"
+import {
+  FirstRunTourOffer,
+  GuidedTourOverlay,
+  TourHub,
+  TourHubButton,
+  TourHubMenuItem,
+  WhatsNewHint,
+  useGuidedTourStore,
+} from "@/features/guided-tour"
 import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-route"
 import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/guideline-packs/pilot-gate"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
@@ -144,6 +152,8 @@ function PageContent() {
   const leftTourActive = useLeftBrowserTourStore((state) => state.active)
   const rightTourActive = useRightFeatureTourStore((state) => state.active)
   const tourLauncherOpen = useRightFeatureTourStore((state) => state.launcherOpen)
+  const guidedTourActive = useGuidedTourStore((state) => state.tourId !== null)
+  const tourHubOpen = useGuidedTourStore((state) => state.hubOpen)
   const anyTourActive = leftTourActive || rightTourActive
   const tourWasActiveRef = useRef(false)
   const preTourLayoutRef = useRef<{
@@ -226,6 +236,8 @@ function PageContent() {
   // browser had completed onboarding on an earlier visit.
   const tourEligible = dataLoaded
     && !anyTourActive
+    && !guidedTourActive
+    && !tourHubOpen
     && !tourLauncherOpen
     && onboardingReady
     && onboardingCompleted
@@ -603,10 +615,10 @@ function PageContent() {
               <AudienceSwitcher />
               <LanguageSwitcher />
             </div>
-            <TourHelpButton disabled={!dataLoaded} />
+            <TourHubButton disabled={!dataLoaded} />
             <HeaderAuthButton />
             <HeaderOverflowMenu
-              tourMenu={<TourMenuItems disabled={!dataLoaded} />}
+              tourMenu={<TourHubMenuItem disabled={!dataLoaded} />}
             />
           </div>
         </div>
@@ -786,7 +798,10 @@ function PageContent() {
       )}
 
       <FirstRunOnboardingDialog />
-      <LeftBrowserTour eligible={tourEligible} />
+      <FirstRunTourOffer eligible={tourEligible} />
+      <WhatsNewHint eligible={tourEligible} />
+      <GuidedTourOverlay />
+      <TourHub />
       <RightFeatureTour />
     </ClinicalWorkspaceRoot>
   )

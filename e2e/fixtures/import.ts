@@ -1,5 +1,6 @@
 import { type Page, expect } from '@playwright/test'
 import path from 'node:path'
+import { quietGuidedTours } from './guided-tour'
 
 /** The committed, fully-fictional bundle used by CI and the default flow. */
 export const SYNTHETIC_BUNDLE = path.join(__dirname, 'synthetic-bundle.json')
@@ -35,6 +36,7 @@ export async function importBundle(
     localStorage.setItem('medical-note-onboarding-v1', '1')
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   }, options.locale ?? 'zh-TW')
+  await quietGuidedTours(page)
   await page.goto('/')
   // The header file input exists in the server-rendered loading shell, before
   // its change handler is ready. A clean page resolves to Welcome, while a

@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/test'
+import { quietGuidedTours } from '../fixtures/guided-tour'
 import { type Page } from '@playwright/test'
 import { importBundle } from '../fixtures/import'
 
@@ -238,6 +239,7 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
       localStorage.setItem('medical-note-onboarding-v1', '1')
       localStorage.setItem('medical-note-left-browser-tour-v1', '1')
     })
+    await quietGuidedTours(page)
     await page.goto('/')
     await page.getByTestId('welcome-demo-card').click()
     await expect(page.getByText('陳大明').first()).toBeAttached({ timeout: 30_000 })
