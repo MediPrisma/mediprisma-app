@@ -41,8 +41,14 @@ type MedFilter = 'current' | 'changed' | 'all'
 /** Single-line row: 24px of content, the row's 2px border, the 3px stack gap. */
 
 function ChangeBadge({ item, compact }: { item: OverviewMedItem; compact: boolean }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const strings = t.overview.meds
+  const sourceState = ({ cancelled: locale === 'en' ? 'Cancelled' : '已取消',
+    'entered-in-error': locale === 'en' ? 'Entered in error' : '誤植紀錄',
+    stopped: locale === 'en' ? 'Stopped' : '已停用',
+    'on-hold': locale === 'en' ? 'On hold' : '暫停', draft: locale === 'en' ? 'Draft' : '草稿',
+  } as Record<string, string>)[item.row.status]
+  if (sourceState) return <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-xs">{sourceState}</Badge>
   if (!item.change) return null
   const size = compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]'
   if (item.change.kind === 'added') {
@@ -220,6 +226,11 @@ export function OverviewMedsSection({
           {strings.meds.chronicBadge}
         </Badge>
       )
+      const sourceBadge = (item.row.selfPurchased || item.row.sourceComparison?.status === 'candidate') && (
+        <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-medium">
+          {item.row.selfPurchased ? (locale === 'en' ? 'Self-pay' : '自費／自購') : (locale === 'en' ? 'Compare sources' : '跨來源待核對')}
+        </span>
+      )
       const daysBadge = daysLeft !== undefined && (
         <Badge
           variant="outline"
@@ -264,6 +275,7 @@ export function OverviewMedsSection({
             >
             <ChangeBadge item={item} compact />
             <span className={nameClass}>{item.title}</span>
+            {sourceBadge}
             {dose && (
               <span className="shrink-0 whitespace-nowrap text-[0.6875rem] text-muted-foreground">
                 {dose}
@@ -299,6 +311,7 @@ export function OverviewMedsSection({
           <div className="flex min-w-0 items-center gap-1.5">
             <ChangeBadge item={item} compact={false} />
             <span className={nameClass}>{item.title}</span>
+            {sourceBadge}
             {dose && (
               <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                 {dose}

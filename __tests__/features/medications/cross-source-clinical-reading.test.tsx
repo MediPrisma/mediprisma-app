@@ -6,6 +6,11 @@ import { groupMedications } from '@/features/clinical-summary/medications/hooks/
 import { MedicationItem } from '@/features/clinical-summary/medications/components/MedicationItem'
 import { useDiagnosisRows } from '@/features/clinical-summary/diagnosis/hooks/useDiagnosisRows'
 import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
+import { useOverviewMeds } from '@/features/clinical-summary/overview/hooks/useOverviewMeds'
+import { buildOverviewWindow } from '@/features/clinical-summary/overview/utils/overview-selectors'
+import { useVisitHistory } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
+import { useEncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
+import { mapMedications } from '@/features/ips-export/utils/ips-fhir-mappers'
 
 jest.mock('@/src/shared/hooks/use-now.hook', () => ({ useNow: () => Date.parse('2026-10-20T04:00:00+08:00') }))
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
@@ -13,16 +18,20 @@ jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage:
 jest.mock('@/src/application/hooks/use-resource-anchor.hook', () => ({ useResourceAnchor: () => null }))
 jest.mock('@/src/shared/components/TapTooltip', () => ({ TapTooltip: ({ children, content }: any) => <>{children}<div>{content}</div></> }))
 
-it('integrates a known cross-source order while retaining two real identical orders, self-pay and cancellation', () => {
+it('compares possible source copies without deleting either, retaining two real identical orders, self-pay and cancellation', () => {
   const before = JSON.stringify(fixture)
   const collection = LocalBundleService.parse(fixture)!.collection
-  expect(collection.encounters).toHaveLength(1)
-  expect(collection.medications).toHaveLength(5)
+  expect(collection.encounters).toHaveLength(2)
+  expect(collection.medications).toHaveLength(6)
   const { result } = renderHook(() => useMedicationRows(collection.medications))
   const rows = result.current
   const integrated = rows.find(row => row.id === 'synthetic-order-a')!
-  expect(integrated).toMatchObject({ dataOrigin: 'integrated', nhiDrugCode: 'BC23097100', isChronic: true,
-    totalQuantity: 28, durationDays: 28, route: 'PO', sourceOrderIdentifiers: ['SYNTHETIC-ORDER-A'] })
+  expect(integrated).toMatchObject({ dataOrigin: 'hospital', nhiDrugCode: undefined, isChronic: true,
+    totalQuantity: undefined, durationDays: 28, route: 'PO', sourceOrderIdentifiers: ['SYNTHETIC-ORDER-A'] })
+  expect(integrated.sourceComparison).toMatchObject({ status: 'candidate', records: [
+    { dataOrigin: 'hospital' }, { dataOrigin: 'medcloud', nhiDrugCode: 'BC23097100' },
+  ] })
+  expect(integrated.endDateIso).toBe('2026-11-15')
   expect(integrated.reconciledOrderIds).toContain('synthetic-cloud-order-a')
   expect(rows.filter(row => row.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
   expect(rows.find(row => row.id === 'synthetic-self-pay')).toMatchObject({ selfPurchased: true, dataOrigin: 'hospital', nhiDrugCode: undefined })
@@ -31,12 +40,11 @@ it('integrates a known cross-source order while retaining two real identical ord
   expect(grouped.activeMedications).toHaveLength(4)
   expect(grouped.activeMedications.filter(row => row.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
   render(<>{rows.map(row => <MedicationItem key={row.id} medication={row} />)}</>)
-  expect(screen.getByText('院內＋雲端')).toBeInTheDocument()
+  expect(screen.getByText('跨來源待核對')).toBeInTheDocument()
   expect(screen.getByText('自費／自購')).toBeInTheDocument()
   expect(screen.getByText('已取消')).toBeInTheDocument()
-  expect(screen.getByText('雲端紀錄健保藥碼')).toBeInTheDocument()
-  expect(screen.getByText('BC23097100')).toBeInTheDocument()
-  expect(screen.getByText('Aromasin SC tab 25 mg')).toBeInTheDocument()
+  expect(screen.getAllByText(/BC23097100/).length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Aromasin SC tab 25 mg').length).toBeGreaterThan(0)
   expect(JSON.stringify(fixture)).toBe(before)
 })
 
@@ -54,4 +62,31 @@ it('does not transfer a chronic flag from another prescription of the same produ
   const { result } = renderHook(() => useMedicationRows([base], 'medical', 'zh-TW', [base, chronic]))
   expect(result.current[0].isChronic).toBe(false)
   expect(result.current[0].refillCount).toBe(2)
+})
+
+it('keeps overview, visit detail and IPS consistent without presenting cancellation as current use', () => {
+  const collection = LocalBundleService.parse(fixture)!.collection
+  const { result } = renderHook(() => {
+    const overview = useOverviewMeds(collection.medications, buildOverviewWindow(12, Date.parse('2026-10-20T04:00:00+08:00')), 'medical', 'zh-TW')
+    const visits = useVisitHistory(collection.encounters)
+    const details = useEncounterDetails(collection.medications, [], [], [], [], collection.conditions,
+      'zh-TW', 'medical', overview.medicationRows, undefined, collection.encounters)
+    return { overview, visits, details }
+  })
+  expect(result.current.overview.meds.items.filter(item => item.isCurrent)).toHaveLength(4)
+  const cancelled = result.current.overview.meds.items.find(item => item.id === 'synthetic-cancelled')!
+  expect(cancelled).toMatchObject({ isCurrent: false, daysRemaining: undefined })
+  expect(result.current.visits).toHaveLength(1)
+  expect(result.current.visits[0]).toMatchObject({ sourceComparisonStatus: 'candidate', sourceIds: [
+    'synthetic-hospital-visit', 'synthetic-cloud-visit',
+  ] })
+  expect(result.current.visits[0].sourceRecords).toHaveLength(2)
+  const detail = result.current.details.get(result.current.visits[0].id)!
+  expect(detail.medications).toHaveLength(5)
+  expect(detail.medications.filter(medication => medication.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
+  const exported = mapMedications(collection.medications, 'Patient/synthetic-export').entries.map(entry => entry.resource)
+  expect(exported).toHaveLength(6)
+  expect(exported.filter(resource => JSON.stringify(resource.note).includes('Possible cross-source copy'))).toHaveLength(2)
+  expect(exported.filter(resource => JSON.stringify(resource.note).includes('self-pay'))).toHaveLength(1)
+  expect(exported.some(resource => JSON.stringify(resource.note).includes('status: cancelled'))).toBe(true)
 })

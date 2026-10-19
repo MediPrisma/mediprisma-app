@@ -40,6 +40,7 @@ export interface MedicationRow {
   encounterReference?: string
   /** Original cross-source order ids represented by this row. */
   reconciledOrderIds?: string[]
+  sourceComparison?: { status: 'candidate' | 'confirmed'; records: MedicationRow[] }
   /** An actually recorded NHI product code, including an explicit cloud code
    *  retained in a confirmed cross-source order. Never guessed from names. */
   nhiDrugCode?: string
@@ -88,8 +89,6 @@ export interface MedicationRow {
   isChronic: boolean
   /** The source explicitly marks this outpatient order as self-purchased. */
   selfPurchased?: boolean
-  /** True for orders emitted by the North VGH outpatient bridge. */
-  hospitalOutpatient?: boolean
   /** Audience-aware drug-category label (e.g. "降血壓藥" or "HYPOTENSIVE AGENTS").
    *  MediCloud ATC3 takes precedence; other sources fall back to FHIR
    *  MedicationRequest.category[0]. Empty when neither is available. */

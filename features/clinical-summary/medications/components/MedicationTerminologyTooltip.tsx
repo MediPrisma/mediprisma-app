@@ -6,6 +6,7 @@ import { clinicalTooltipSurfaceClass } from '@/features/clinical-summary/compone
 import { useLanguage } from '@/src/application/providers/language.provider'
 import type { MedicationRow } from '../types'
 import type { HospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
+import { SourcePrescriptionComparison } from './SourcePrescriptionComparison'
 
 /** Same provenance in list, overview, timeline label, and timeline fill detail. */
 export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicationName }) {
@@ -46,7 +47,7 @@ export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicati
 }
 
 interface MedicationTerminologyTooltipProps {
-  medication: Pick<MedicationRow, 'drugTerminology' | 'hospitalMedicationName' | 'nhiDrugCode' | 'reconciledOrderIds' | 'sourceOrderIdentifiers'>
+  medication: Pick<MedicationRow, 'drugTerminology' | 'hospitalMedicationName' | 'nhiDrugCode' | 'reconciledOrderIds' | 'sourceOrderIdentifiers' | 'sourceComparison'>
   enabled: boolean
   /** Facts about THIS prescription — dose, frequency, days supplied — shown
    *  under the drug-master rows. The card above describes the drug; this
@@ -66,13 +67,14 @@ export function MedicationTerminologyTooltip({
   const { t, locale } = useLanguage()
   const mt = (t.medications as any)
   const terminology = medication.drugTerminology
-  const integrated = (medication.reconciledOrderIds?.length ?? 0) > 1
+  const integrated = medication.sourceComparison?.status === 'confirmed'
+    || (!medication.sourceComparison && (medication.reconciledOrderIds?.length ?? 0) > 1)
   const hospitalName = !terminology || integrated ? medication.hospitalMedicationName : undefined
 
   // `extra` alone is worth a card: a drug missing from the NHI master still
   // has a dose and a supply, and dropping the tooltip would make those rows
   // silently behave differently from their neighbours.
-  if (!enabled || (!terminology && !hospitalName && !extra && !medication.nhiDrugCode && !integrated)) return children
+  if (!enabled || (!terminology && !hospitalName && !extra && !medication.nhiDrugCode && !integrated && !medication.sourceComparison && !medication.sourceOrderIdentifiers?.length)) return children
 
   const atcNames = [
     terminology?.atcNameEn,
@@ -133,7 +135,8 @@ export function MedicationTerminologyTooltip({
             ))}
           </dl>
           {hospitalName && <HospitalMedicationNameDetails name={hospitalName} />}
-          {integrated && (
+          {medication.sourceComparison && <SourcePrescriptionComparison comparison={medication.sourceComparison} />}
+          {integrated && !medication.sourceComparison && (
             <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1.5">
               {locale === 'en' ? 'The hospital and MediCloud records were matched to this prescription. Original records are retained.' : '這筆藥囑已整合院內與健保雲端紀錄，原始來源均保留。'}
             </div>

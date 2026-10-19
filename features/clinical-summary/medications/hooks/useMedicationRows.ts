@@ -15,9 +15,10 @@ import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
+import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
 import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
-import { isNhiDrugCodeSystem } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
-import { isVghtpeSource, isMedcloudSource } from '@/src/infrastructure/fhir/services/clinical-source-identity'
+import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
+import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
 import {
   resolveSinglePrescriptionRemainingDisplay,
@@ -32,12 +33,6 @@ import {
  *  timezone conversion — same contract as formatDate). */
 function isoCalendarDay(value?: string): string | undefined {
   return value?.trim().match(/^(\d{4}-\d{2}-\d{2})(?=$|T)/)?.[1]
-}
-
-/** Local calendar day of a Date as YYYY-MM-DD. */
-function localIsoDay(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 function isHospitalOutpatientMedication(medication: any): boolean {
@@ -142,7 +137,7 @@ export function useMedicationRows(
     // filter was wrong because therapeutic vaccine prescriptions ARE
     // medications and belong with the rest of the patient's drug list.
 
-    const inactiveStatuses = new Set(["stopped", "completed", "cancelled", "entered-in-error"])
+    const inactiveStatuses = new Set(["stopped", "completed", "cancelled", "entered-in-error", "draft", "on-hold"])
 
     // Refill-history aggregates (per drug). Used to surface "Refills: 11 次
     // since 2023-12" on each row without forcing the user to expand the
@@ -164,7 +159,7 @@ export function useMedicationRows(
       }
     }
 
-    const enriched = visibleMedications.map((med: any, idx: number) => {
+    const buildRow = (med: any, idx: number): MedicationRow & { _startSortValue: number } => {
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const drugTerminology = med.drugTerminology
       const hospitalMedicationName = !drugTerminology || med._reconciledSourceReferences?.length
@@ -265,23 +260,21 @@ export function useMedicationRows(
         if (!Number.isNaN(end.getTime())) {
           endDate = explicitEndDateRaw
           endDateIso = isoCalendarDay(explicitEndDateRaw)
-          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+          daysRemaining = medicationSupplyDaysRemaining(explicitEndDateRaw, nowMs)
         }
       } else if (startDateRaw && durationDays && hasDurationEvidence) {
         const start = new Date(startDateRaw)
         if (!Number.isNaN(start.getTime())) {
-          const end = new Date(start)
-          end.setDate(end.getDate() + durationDays)
-          endDate = end.toISOString()
-          endDateIso = localIsoDay(end)
-          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+          endDate = medicationSupplyEndDay(startDateRaw, durationDays)
+          endDateIso = endDate
+          daysRemaining = endDate ? medicationSupplyDaysRemaining(endDate, nowMs) : undefined
         }
       } else if (stopDateRaw) {
         const end = new Date(stopDateRaw)
         if (!Number.isNaN(end.getTime())) {
           endDate = stopDateRaw
           endDateIso = isoCalendarDay(stopDateRaw)
-          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+          daysRemaining = medicationSupplyDaysRemaining(stopDateRaw, nowMs)
         }
       }
 
@@ -406,7 +399,6 @@ export function useMedicationRows(
         isInactive,
         isChronic,
         selfPurchased,
-        hospitalOutpatient: isHospitalOutpatientMedication(med),
         category,
         drugTerminology,
         hospitalMedicationName,
@@ -419,9 +411,34 @@ export function useMedicationRows(
         searchHaystack,
         _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
       }
-    })
+    }
+    const enriched = visibleMedications.map(buildRow)
+    const byId = new Map(enriched.map((row) => [row.id, row]))
+    const consumed = new Set<string>()
+    const comparisonRows: typeof enriched = []
+    for (let index = 0; index < enriched.length; index++) {
+      const row = enriched[index], med = visibleMedications[index]
+      if (consumed.has(row.id)) continue
+      if (med._sourcePrescriptionRecords?.length === 2) {
+        row.sourceComparison = { status: 'confirmed', records: med._sourcePrescriptionRecords.map(buildRow) }
+      }
+      const comparison = med._sourceRecordComparison
+      const sourceRows = comparison?.status === 'candidate'
+        ? comparison.references.map((reference: string) => byId.get(reference.split('/').pop()!)) : undefined
+      if (sourceRows?.length === 2 && sourceRows.every(Boolean)) {
+        const [hospital, cloud] = sourceRows as MedicationRow[]
+        // A comparison card avoids counting a presumed copy as another order.
+        // It does not change the canonical source records or claim one Rx.
+        comparisonRows.push({ ...hospital, _startSortValue: enriched[index]._startSortValue,
+          sourceComparison: { status: 'candidate', records: [hospital, cloud] },
+          reconciledOrderIds: [hospital.id, cloud.id],
+          searchHaystack: [hospital.searchHaystack, cloud.searchHaystack].join(' '),
+        })
+        sourceRows.forEach((source: MedicationRow) => consumed.add(source.id))
+      } else comparisonRows.push(row)
+    }
 
-    return enriched
+    return comparisonRows
       .sort((a: any, b: any) => {
         if (a.isInactive !== b.isInactive) {
           return a.isInactive ? 1 : -1

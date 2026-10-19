@@ -30,6 +30,7 @@ import {
   getMedicationStatusBadgeClass,
 } from './medication-chip-styles'
 import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
+import { SourcePrescriptionComparison } from './SourcePrescriptionComparison'
 import { doseUnlessRepeated } from '../utils/dose-helpers'
 
 interface MedicationItemProps {
@@ -142,14 +143,16 @@ export function MedicationItem({
   const showStatementChip =
     showSourceChip && medication.sourceResourceType === 'MedicationStatement'
   const terminology = medication.drugTerminology
-  const integrated = (medication.reconciledOrderIds?.length ?? 0) > 1
-  const sourceLabel = integrated ? (locale === 'en' ? 'Hospital + cloud' : '院內＋雲端')
+  const candidate = medication.sourceComparison?.status === 'candidate'
+  const integrated = !candidate && (medication.reconciledOrderIds?.length ?? 0) > 1
+  const sourceLabel = candidate ? (locale === 'en' ? 'Compare sources' : '跨來源待核對') : integrated ? (locale === 'en' ? 'Hospital + cloud' : '院內＋雲端')
     : medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
       : medication.dataOrigin === 'medcloud' ? (locale === 'en' ? 'MediCloud' : '雲端') : undefined
-  const sourceDescription = integrated
+  const sourceDescription = medication.sourceComparison
+    ? <SourcePrescriptionComparison comparison={medication.sourceComparison} /> : integrated
     ? (locale === 'en' ? 'One matched prescription, with hospital and MediCloud source records retained.' : '同一筆藥囑的院內與健保雲端資料已整合，兩邊原始紀錄均保留。')
-    : (locale === 'en' ? 'This source record has not been matched to an order from the other source.' : '這筆來源紀錄尚未確認與另一來源為同筆藥囑。')
-  const hasMedicationDetails = !!(terminology || medication.hospitalMedicationName || medication.nhiDrugCode || integrated)
+    : (locale === 'en' ? 'The source of this prescription record.' : '此筆用藥紀錄的資料來源。')
+  const hasMedicationDetails = !!(terminology || medication.hospitalMedicationName || medication.nhiDrugCode || integrated || candidate || medication.sourceOrderIdentifiers?.length)
   const billingIcdTitle = medication.icdCode
     ? `${medication.icdCode}${medication.icdText ? ` ${medication.icdText}` : ''}`
     : mt.billingIcdTooltip
@@ -342,18 +345,13 @@ export function MedicationItem({
   const firstRefillDate = shortDate(medication.firstRefillDate)
   const refillSummary = medication.refillCount > 1
     ? (firstRefillDate
-        ? (mt.refillSummarySince
-          ?? (locale.startsWith('zh')
-            ? '累計 {count} 次 · {date} 起'
-            : '{count} refills · since {date}'))
-        : (mt.refillSummary
-          ?? (locale.startsWith('zh') ? '累計 {count} 次' : '{count} refills')))
+        ? (locale.startsWith('zh') ? '{count} 筆紀錄 · {date} 起' : '{count} records · since {date}')
+        : (locale.startsWith('zh') ? '{count} 筆紀錄' : '{count} records'))
       .replace('{count}', String(medication.refillCount))
       .replace('{date}', firstRefillDate)
     : ''
   const refillCompact = medication.refillCount > 1
-    ? (mt.refillSummary
-      ?? (locale.startsWith('zh') ? '累計 {count} 次' : '{count} refills'))
+    ? (locale.startsWith('zh') ? '{count} 筆紀錄' : '{count} records')
       .replace('{count}', String(medication.refillCount))
     : ''
   const rowInstitution = visitContextInHeader ? undefined : medication.pharmacy

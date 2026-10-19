@@ -6,6 +6,7 @@ function fixture() {
   const base: any = {
     resourceType: 'MedicationRequest', subject: { reference: 'Patient/synthetic' },
     encounter: { reference: 'Encounter/one' }, authoredOn: '2026-09-17', intent: 'order',
+    identifier: [{ system: 'https://synthetic.example/order-id', value: 'confirmed-source-order' }],
     medicationCodeableConcept: { text: 'Synthetic product 5 mg', coding: [{ system: NHI, code: 'SYNTHETIC1' }] },
   }
   const cloud: any = { ...base, id: 'cloud-med', meta: { source: 'https://medcloud2.nhi.gov.tw/' }, status: 'unknown',
@@ -16,6 +17,25 @@ function fixture() {
     note: [{ text: 'Synthetic source instruction' }], courseOfTherapyType: { coding: [{ code: 'continuous' }] } }
   return { cloud, hospital }
 }
+
+it('retains two source records without a common order identifier and marks a comparison, not a confirmed merge', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier
+  const result = reconcileMedicationRequests([hospital, cloud])
+  expect(result).toHaveLength(2)
+  expect(result.every(order => order._sourceRecordComparison.status === 'candidate')).toBe(true)
+  expect(hospital._reconciledSourceReferences).toBeUndefined()
+  expect(hospital.dispenseRequest).toBeUndefined()
+})
+
+it('preserves source regimens and fills a missing structured frequency only on a confirmed pair', () => {
+  const { hospital, cloud } = fixture()
+  cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } } }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(1)
+  expect(hospital.dosageInstruction[0].timing.code.text).toBe('QD')
+  expect(hospital._sourcePrescriptionRecords[0].dosageInstruction[0].timing).toBeUndefined()
+  expect(hospital._sourcePrescriptionRecords[1].dosageInstruction[0].timing.code.text).toBe('QD')
+})
 
 it('merges only verified cross-source copies while preserving hospital SIG, notes and cloud facts', () => {
   const { cloud, hospital } = fixture()
@@ -28,10 +48,11 @@ it('merges only verified cross-source copies while preserving hospital SIG, note
   expect(resources.find(resource => resource.id === 'trace')?.target[0].reference).toBe('MedicationRequest/hospital-med')
 })
 
-it.each(['visit', 'date', 'patient', 'product', 'name-only', 'dose', 'status', 'quantity', 'ambiguous', 'same-source', 'self-pay'])(
+it.each(['visit', 'inferred-visit', 'date', 'patient', 'product', 'name-only', 'dose', 'status', 'quantity', 'ambiguous', 'same-source', 'self-pay'])(
   'preserves separate prescriptions for %s', (scenario) => {
     const { cloud, hospital } = fixture()
     if (scenario === 'visit') cloud.encounter = { reference: 'Encounter/another-clinic' }
+    if (scenario === 'inferred-visit') cloud._encounterInferred = true
     if (scenario === 'date') cloud.authoredOn = '2026-09-16'
     if (scenario === 'patient') cloud.subject = { reference: 'Patient/another' }
     if (scenario === 'product') cloud.medicationCodeableConcept = { coding: [{ system: NHI, code: 'ANOTHER001' }] }

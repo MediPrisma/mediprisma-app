@@ -1,10 +1,12 @@
-import { isVghtpeSource, isMedcloudSource } from './clinical-source-identity'
+import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
 import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
 import { hospitalProductMatchesKnowledge } from './hospital-medication-product-match'
+import { sharedSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
 
 type Resource = Record<string, any>
 const SOURCE_MODULE = 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module'
+const cloneSource = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
 
 function conceptKey(concept: any): string | undefined {
   const codes = concept?.coding?.filter((coding: any) => coding?.code)
@@ -123,8 +125,10 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     .map((resource) => [`Medication/${resource.id}`, resource]))
   const knowledge = new Map(resources.filter((resource) => resource.resourceType === 'MedicationKnowledge')
     .map((resource) => [`MedicationKnowledge/${resource.id}`, resource]))
+  const encounters = new Map(resources.filter((resource) => resource.resourceType === 'Encounter')
+    .map((resource) => [`Encounter/${resource.id}`, resource]))
   const identity = (order: Resource) => {
-    if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference || !order.encounter?.reference) return undefined
+    if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference || !order.encounter?.reference || order._encounterInferred) return undefined
     if (order.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0120')) return undefined
     const day = order.authoredOn?.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
     const reference = order.medicationReference?.reference
@@ -133,7 +137,9 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       : medications.get(reference)?.code)
     const codes = [...new Set((concept?.coding ?? []).filter((coding: any) => isNhiDrugCodeSystem(coding.system) && coding.code)
       .map((coding: any) => String(coding.code).trim().toUpperCase()))]
-    return day ? { context: JSON.stringify([order.subject.reference, order.encounter.reference, day]), codes, concept } : undefined
+    const visit = encounters.get(order.encounter.reference)
+    const visitKey = visit?._sourceRecordComparison?.references?.join('|') ?? order.encounter.reference
+    return day ? { context: JSON.stringify([order.subject.reference, visitKey, day]), codes, concept } : undefined
   }
   const keyed = resources.map((order) => ({ order, key: identity(order) })).filter((entry) => entry.key)
   const hospital = keyed.filter(({ order }) => isVghtpeSource(order))
@@ -160,6 +166,18 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   for (const [order, matches] of candidates) {
     if (matches.length !== 1 || reverse.get(matches[0]) !== 1) continue
     const other = matches[0]
+    const confirmed = sharedSourceIdentifier(order, other)
+    const comparison = { status: confirmed ? 'confirmed' : 'candidate',
+      references: [`MedicationRequest/${order.id}`, `MedicationRequest/${other.id}`] }
+    order._sourceRecordComparison = comparison
+    other._sourceRecordComparison = comparison
+    if (!confirmed) continue
+    // Retain both original regimens for source inspection even when fields
+    // are filled from the complementary source on the canonical order.
+    order._sourcePrescriptionRecords = [order, other].map((source) => {
+      const { _sourceRecordComparison, _sourcePrescriptionRecords, ...record } = source
+      return cloneSource(record)
+    })
     // A confirmed source pair can carry the cloud's actually recorded drug
     // code. This is source union, never a code inferred from a hospital name.
     const hospitalConcept = identity(order)?.concept
@@ -186,8 +204,14 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       }
     }
     if (!order.courseOfTherapyType && other.courseOfTherapyType) order.courseOfTherapyType = other.courseOfTherapyType
-    // Clinical dosing remains the hospital order's source SIG. Cloud supply
-    // snapshots and administration arithmetic never become a prescribed SIG.
+    if (!order.dosageInstruction?.length && other.dosageInstruction?.length) {
+      order.dosageInstruction = cloneSource(other.dosageInstruction)
+    } else if (order.dosageInstruction?.length === 1 && other.dosageInstruction?.length === 1) {
+      const preferred = order.dosageInstruction[0], supplement = other.dosageInstruction[0]
+      for (const field of ['route', 'timing', 'doseAndRate', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method']) {
+        if (preferred[field] === undefined && supplement[field] !== undefined) preferred[field] = cloneSource(supplement[field])
+      }
+    }
   }
   if (!removed.size) return resources
   const rewrite = (value: any): void => {

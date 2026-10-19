@@ -48,7 +48,7 @@ export interface OverviewMedsData {
   changeCount: number
 }
 
-const MEDICATION_INACTIVE_STATUSES = new Set(['stopped', 'completed'])
+const MEDICATION_INACTIVE_STATUSES = new Set(['stopped', 'completed', 'cancelled', 'entered-in-error', 'on-hold', 'draft'])
 
 /**
  * Identity used only for medication change detection. A refill can switch NHI
@@ -138,12 +138,12 @@ function medicationWindowDays(
     const date = new Date(start)
     if (days && !Number.isNaN(date.getTime())) {
       // Match the medication tab's source-duration coverage calculation.
-      date.setDate(date.getDate() + days)
+      date.setDate(date.getDate() + days - 1)
       end = date.toISOString()
       const startDay = toDayKey(start)
       if (startDay) {
         const [y, m, d] = startDay.split('-').map(Number)
-        supplyEndDay = new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+        supplyEndDay = new Date(Date.UTC(y, m - 1, d + days - 1)).toISOString().slice(0, 10)
       }
     }
   }
@@ -278,8 +278,9 @@ export function useOverviewMeds(
       // Still running, or finished inside the recent tail (see the constant).
       // An undated record cannot be ruled out, so it counts as current.
       const finishedDay = endDay ?? startDay
-      const isCurrent = !row.isInactive || !finishedDay
-        || daysBetween(finishedDay, window.endDay) <= MEDICATION_RECENTLY_FINISHED_DAYS
+      const excludedFromCurrent = ['cancelled', 'entered-in-error', 'on-hold', 'draft', 'stopped'].includes(row.status)
+      const isCurrent = !excludedFromCurrent && (!row.isInactive || !finishedDay
+        || daysBetween(finishedDay, window.endDay) <= MEDICATION_RECENTLY_FINISHED_DAYS)
       const doseText = [doseUnlessRepeated(row.dose, row.frequency), row.frequency]
         .filter((part) => part && part !== '—')
         .join(' · ')
@@ -300,7 +301,7 @@ export function useOverviewMeds(
         isChronic: row.isChronic,
         isInactive: row.isInactive,
         isCurrent,
-        daysRemaining: row.displayRemainingDays ?? row.daysRemaining,
+        daysRemaining: excludedFromCurrent ? undefined : row.displayRemainingDays ?? row.daysRemaining,
         change,
         row,
       })

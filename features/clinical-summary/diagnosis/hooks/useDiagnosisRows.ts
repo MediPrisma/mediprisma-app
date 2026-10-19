@@ -33,7 +33,8 @@ export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: 
       return {
         id: condition.id || `condition-${index}`,
         title: (icdCodes[0] ? localizedIcdDescription(icdCodes[0], condition.code?.text,
-          condition.code?.coding?.find((coding) => coding.code?.trim() === icdCodes[0])?.display, dictionary, locale) : undefined)
+          condition.code?.coding?.find((coding) => coding.code?.trim() === icdCodes[0])?.display, dictionary, locale,
+          condition.code?.coding?.find((coding) => coding.code?.trim() === icdCodes[0])?.system) : undefined)
           || condition.code?.text || condition.code?.coding?.find((coding) => coding.display)?.display || icdCodes[0] || 'Unknown',
         icdCodes,
         when: formatDate(condition.recordedDate || condition.onsetDateTime),
@@ -53,6 +54,7 @@ export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: 
           .map((coding) => `${coding.system?.toLowerCase().replace(/\/$/, '')}|${coding.code?.trim().toUpperCase().replace(/\./g, '')}`)
           .filter((key, index, values) => values.indexOf(key) === index).sort().join(';'),
         records: [{ id: condition.id || `condition-${index}`,
+          originalText: condition.code?.text || condition.code?.coding?.find((coding) => coding.display)?.display,
           date: condition.recordedDate || condition.onsetDateTime,
           when: formatDate(condition.recordedDate || condition.onsetDateTime) || (locale === 'en' ? 'Date not provided' : '未提供日期'),
           institution: (() => {

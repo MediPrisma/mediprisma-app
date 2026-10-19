@@ -7,6 +7,8 @@
 // never invents level 2-4 labels by slicing a full ingredient code.
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import {
   resolveHospitalMedicationName,
   hospitalMedicationDisplayName,
@@ -29,6 +31,10 @@ export type TimelineAtcLevel = '2' | '4'
 export type TimelinePrescriptionType = 'chronic' | 'non-chronic' | 'unrecorded'
 
 export interface RefillBar {
+  sourceComparison?: string
+  selfPurchased?: boolean
+  sourceStatus?: string
+  supplyDaysUnrecorded?: boolean
   refillId: string
   startMs: number
   endMs: number
@@ -407,6 +413,7 @@ export function useMedicationTimeline(
 
     for (const med of medications) {
       if (!med) continue
+      if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(med.status).toLowerCase())) continue
       const clinicalDrugKey = medicationClinicalIdentityKey(med)
       if (!clinicalDrugKey) continue
 
@@ -415,7 +422,8 @@ export function useMedicationTimeline(
       const startMs = new Date(startIso).getTime()
       if (Number.isNaN(startMs) || startMs < rangeStart) continue
 
-      const supplyDays = Number(med.dispenseRequest?.expectedSupplyDuration?.value) || 30
+      const reportedDays = Number(med.dispenseRequest?.expectedSupplyDuration?.value)
+      const supplyDays = Number.isFinite(reportedDays) && reportedDays > 0 ? reportedDays : 1
       const endMs = startMs + supplyDays * 24 * 60 * 60 * 1000
       const prescriptionType = resolvedPrescriptionType(
         prescriptionTypesByDrug.get(clinicalDrugKey),
@@ -472,6 +480,10 @@ export function useMedicationTimeline(
         : ''
 
       const bar: RefillBar = {
+        sourceComparison: sourceComparisonNarrative(med),
+        selfPurchased: sourceSelfPurchase(med) === true,
+        sourceStatus: med.status,
+        supplyDaysUnrecorded: !(Number.isFinite(reportedDays) && reportedDays > 0),
         refillId: med.id || `${medicationSourceCode(med) || clinicalDrugKey}-${startIso}`,
         startMs,
         endMs,

@@ -870,7 +870,7 @@ function attachEncounterRefsForMeds(
     if (!date || !requester) return m
     const id = encounterByDateProvider.get(`${date}|${requester}`)
     if (!id) return m
-    return { ...m, encounter: { reference: `Encounter/${id}` } }
+    return { ...m, encounter: { reference: `Encounter/${id}` }, _encounterInferred: true }
   })
 }
 
@@ -1286,14 +1286,20 @@ export const LocalBundleService = {
     // disambiguate when multiple same-day encounters exist across providers
     // (e.g. ENT clinic + pharmacy refill on the same day).
     const encounterByDateProvider = new Map<string, string>()
+    const ambiguousDateProviders = new Set<string>()
     for (const enc of encounters) {
       const d = toDateStr(enc.period?.start)
       if (d && !encounterDateMap.has(d)) {
         encounterDateMap.set(d, enc.id)
       }
       const provider = enc.serviceProvider?.display?.trim() || ''
-      if (d && provider && !encounterByDateProvider.has(`${d}|${provider}`)) {
-        encounterByDateProvider.set(`${d}|${provider}`, enc.id)
+      const providerKey = `${d}|${provider}`
+      if (d && provider && !ambiguousDateProviders.has(providerKey)) {
+        const previous = encounterByDateProvider.get(providerKey)
+        if (previous && previous !== enc.id) {
+          ambiguousDateProviders.add(providerKey)
+          encounterByDateProvider.delete(providerKey)
+        } else encounterByDateProvider.set(providerKey, enc.id)
       }
     }
 

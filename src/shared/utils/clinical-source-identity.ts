@@ -1,3 +1,4 @@
+/** Source attribution shared by import and clinical views. */
 type SourceResource = { meta?: { source?: string; tag?: Array<{ system?: string; code?: string }> } }
 
 export function isVghtpeSource(resource: SourceResource): boolean {

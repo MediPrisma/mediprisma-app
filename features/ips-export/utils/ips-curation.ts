@@ -69,18 +69,6 @@ function isCurrentMed(med: MedicationEntity): boolean {
   return !INACTIVE_MED_STATUS.has((med.status || '').toLowerCase())
 }
 
-/** Dedup key for refill collapsing — same drug name = same row. */
-function medName(med: MedicationEntity): string {
-  const cc = med.medicationCodeableConcept
-  return (
-    cc?.text?.trim() ||
-    cc?.coding?.find((c) => c.display)?.display?.trim() ||
-    cc?.coding?.find((c) => c.code)?.code?.trim() ||
-    med.id ||
-    ''
-  )
-}
-
 // --- Time-range filtering (mirrors generate-clinical-context.use-case) ------
 
 function rangeStart(range: TimeRange, now: Date): Date | null {
@@ -301,21 +289,13 @@ function curateMedications(
   // currently-in-use OR are chronic refill prescriptions (which read as
   // "completed" between cycles but are clinically ongoing).
   if (filters.medicationStatus === 'active') {
-    meds = meds.filter((m) => isCurrentMed(m) || isChronicPrescription(m))
+    meds = meds.filter((m) => !['cancelled', 'entered-in-error', 'draft', 'on-hold', 'stopped'].includes(String(m.status).toLowerCase())
+      && (isCurrentMed(m) || isChronicPrescription(m)))
   }
 
-  // Collapse refill cycles of the same drug; keep the most recent authoredOn.
-  const byName = new Map<string, MedicationEntity>()
-  for (const m of meds) {
-    const key = medName(m)
-    const existing = byName.get(key)
-    if (!existing) {
-      byName.set(key, m)
-      continue
-    }
-    if ((m.authoredOn || '') > (existing.authoredOn || '')) byName.set(key, m)
-  }
-  return Array.from(byName.values())
+  // Confirmed copies were reconciled at import. Name-only folding loses
+  // genuine orders and source comparison evidence in exported records.
+  return meds
 }
 
 function curateImmunizations(

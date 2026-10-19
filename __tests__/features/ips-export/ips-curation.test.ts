@@ -302,7 +302,7 @@ describe('curateForIps — imaging reports honor the imagingReports toggle (P2)'
 })
 
 describe('curateForIps — medications (現用藥 / 慢箋為主, deduped)', () => {
-  it('collapses refill cycles of the same drug into one row (latest authoredOn)', () => {
+  it('preserves each real source order even when their drug names are identical', () => {
     const data = emptyCollection()
     data.medications = [
       {
@@ -319,8 +319,7 @@ describe('curateForIps — medications (現用藥 / 慢箋為主, deduped)', () 
       },
     ]
     const out = curateForIps({ data, selection: selection(), filters: filters(), now: NOW })
-    expect(out.medications).toHaveLength(1)
-    expect(out.medications[0].id).toBe('m2')
+    expect(out.medications.map(medication => medication.id)).toEqual(['m1', 'm2'])
   })
 
   it('keeps a chronic prescription even if its latest cycle reads completed', () => {

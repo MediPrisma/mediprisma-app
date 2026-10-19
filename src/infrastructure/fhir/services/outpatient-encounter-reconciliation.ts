@@ -1,5 +1,6 @@
 // Operates on the canonicalised import graph, never on the stored source Bundle.
-import { isVghtpeSource, isMedcloudSource } from './clinical-source-identity'
+import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
+import { sharedSourceIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
 type Resource = Record<string, any>
 
 function isVghFacility(reference: Resource | undefined): boolean {
@@ -19,19 +20,18 @@ function primaryDiagnosis(encounter: Resource, conditions: Map<string, Resource>
   return conditions.get(ranked?.condition?.reference)?.code ?? encounter.reasonCode?.[0]
 }
 
-function icdKey(concept: Resource | undefined, legacyVghCm = false): string | undefined {
+function icdKey(concept: Resource | undefined): string | undefined {
   const coding = concept?.coding?.find((item: Resource) => /(?:^|\/)icd-?10(?:-?cm)?\/?$/i.test(item.system ?? '') && item.code)
   if (!coding) return undefined
-  const family = /icd-?10-?cm\/?$/i.test(coding.system) || legacyVghCm ? 'icd-10-cm' : 'icd-10'
+  const family = /icd-?10-?cm\/?$/i.test(coding.system) ? 'icd-10-cm' : 'icd-10'
   return `${family}|${String(coding.code).trim().toUpperCase().replace(/\./g, '')}`
 }
 
-function isLegacyVghCm(encounter: Resource): boolean {
-  // The legacy bridge's generic "ICD-10" hint labelled Taiwan clinical CM
-  // codes (including C50.912 in actual outpatient exports) with sid/icd-10.
-  // Recognize only that exporter signature for visit comparison. This never
-  // relabels stored source coding or equates WHO/CM from unrelated sources.
-  return encounter.meta?.source === 'ehr-fhir-bridge/scraper' && encounter.meta?.versionId === '1'
+function department(encounter: Resource): string | undefined {
+  const concept = encounter.serviceType?.concept ?? encounter.serviceType
+  return concept?.coding?.filter((coding: Resource) => coding.system && coding.code)
+    .map((coding: Resource) => `${coding.system.toLowerCase().replace(/\/$/, '')}|${coding.code}`).sort().join(';')
+    || concept?.text?.trim()
 }
 
 function union(left: any[] = [], right: any[] = []): any[] {
@@ -69,6 +69,10 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
     .map((resource) => [`Condition/${resource.id}`, resource]))
   const visits = resources.filter(eligible)
   const hospital = visits.filter(isVghtpeSource)
+  for (const visit of hospital) {
+    if (!visit.reasonCode?.length) visit.reasonCode = (visit.diagnosis ?? [])
+      .map((diagnosis: Resource) => conditions.get(diagnosis.condition?.reference)?.code).filter(Boolean)
+  }
   const cloud = visits.filter((visit) => !isVghtpeSource(visit)
     && isMedcloudSource(visit)
     && isVghFacility(visit.serviceProvider))
@@ -78,15 +82,18 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
     // The explicit supplement tag proves this otherwise unnamed facility.
     // Do not override a contradictory, explicitly supplied facility.
     if (visit.serviceProvider && !isVghFacility(visit.serviceProvider)) continue
-    const key = icdKey(primaryDiagnosis(visit, conditions), isLegacyVghCm(visit))
+    const key = icdKey(primaryDiagnosis(visit, conditions))
     if (!key) continue
     const matches = cloud.filter((other) => {
       const leftPhysician = physician(visit)
       const rightPhysician = physician(other)
+      const leftDepartment = department(visit), rightDepartment = department(other)
       return visit.subject.reference === other.subject.reference
         && visit.period.start.slice(0, 10) === other.period.start.slice(0, 10)
         && key === icdKey(primaryDiagnosis(other, conditions))
         && !(leftPhysician && rightPhysician && leftPhysician !== rightPhysician)
+        && !(leftDepartment && rightDepartment && leftDepartment !== rightDepartment)
+        && !conflictingSourceIdentifier(visit, other)
     })
     candidates.set(visit, matches)
     for (const match of matches) reverse.set(match, (reverse.get(match) ?? 0) + 1)
@@ -97,6 +104,17 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
   for (const [visit, matches] of candidates) {
     if (matches.length !== 1 || reverse.get(matches[0]) !== 1) continue
     const target = matches[0]
+    const comparison = { status: sharedSourceIdentifier(visit, target) ? 'confirmed' : 'candidate',
+      references: [`Encounter/${visit.id}`, `Encounter/${target.id}`] }
+    visit._sourceRecordComparison = comparison
+    target._sourceRecordComparison = comparison
+    // Same-day facility/diagnosis agreement is useful for a comparison card,
+    // but cannot establish that two source visits are one clinical event.
+    if (comparison.status !== 'confirmed') continue
+    target._sourceEncounterRecords = [visit, target].map((source) => {
+      const { _sourceRecordComparison, _sourceEncounterRecords, ...record } = source
+      return JSON.parse(JSON.stringify(record))
+    })
     aliases.set(`Encounter/${visit.id}`, `Encounter/${target.id}`)
     removed.add(visit)
     for (const field of ['diagnosis', 'participant', 'location', 'identifier', 'extension', 'reasonReference']) {
@@ -111,7 +129,7 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
     target.reasonCode = [...(target.reasonCode ?? [])]
     const codes = new Set(target.reasonCode.map((reason: Resource) => icdKey(reason)).filter(Boolean))
     for (const reason of reasons) {
-      const key = icdKey(reason, isLegacyVghCm(visit))
+      const key = icdKey(reason)
       if (!key) continue
       if (codes.has(key)) {
         const existing = target.reasonCode.find((item: Resource) => icdKey(item) === key)

@@ -246,6 +246,9 @@ export class FhirMapper implements IDataMapper {
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       _sourceCapturedAt: request._sourceCapturedAt,
       _reconciledSourceReferences: request._reconciledSourceReferences,
+      _encounterInferred: request._encounterInferred,
+      _sourceRecordComparison: request._sourceRecordComparison,
+      _sourcePrescriptionRecords: request._sourcePrescriptionRecords,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -485,6 +488,8 @@ export class FhirMapper implements IDataMapper {
 
   static toEncounter(fhirResource: any): EncounterEntity {
     return {
+      _sourceRecordComparison: fhirResource._sourceRecordComparison,
+      _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
       id: fhirResource.id || '',
       status: fhirResource.status,
       class: fhirResource.class,

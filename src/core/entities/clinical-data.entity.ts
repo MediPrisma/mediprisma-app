@@ -291,6 +291,9 @@ export interface MedicationEntity {
   /** Source capture instant from Bundle.timestamp; not the local import time. */
   _sourceCapturedAt?: string
   _reconciledSourceReferences?: string[]
+  _encounterInferred?: boolean
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourcePrescriptionRecords?: any[]
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
@@ -768,6 +771,8 @@ export interface ProcedureSpecialMaterialEntity {
 }
 
 export interface EncounterEntity {
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourceEncounterRecords?: any[]
   id: string
   status?: string
   class?: {

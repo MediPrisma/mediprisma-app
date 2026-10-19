@@ -1,8 +1,8 @@
 import type { DataFilters, TimeRange } from '@/src/core/entities/clinical-context.entity'
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
 import { floorStartDay } from '@/src/core/utils/first-visit-floors'
+import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
 
-const DAY_MS = 24 * 60 * 60 * 1000
 
 export type MedicationCurrentnessBasis =
   | 'source-status'
@@ -36,14 +36,13 @@ export function durationToDays(duration: any): number | undefined {
 
 export function medicationExpectedEnd(medication: any): string | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+  const explicitEnd = medication?.dispenseRequest?.validityPeriod?.end || dosage?.timing?.repeat?.boundsPeriod?.end
+  if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd)) return explicitEnd.slice(0, 10)
   const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration)
     ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
   const started = medication?.authoredOn || medication?.effectiveDateTime
   if (!started || !days) return undefined
-  const date = new Date(started)
-  if (Number.isNaN(date.getTime())) return undefined
-  date.setDate(date.getDate() + days)
-  return date.toISOString().slice(0, 10)
+  return medicationSupplyEndDay(started, days)
 }
 
 // The newest record is picked by string sort, so only dates written the ISO
@@ -53,8 +52,8 @@ const isParsableDay = (value: string): boolean =>
   /^\d{4}-\d{2}-\d{2}/.test(value) && Number.isFinite(Date.parse(value))
 
 function isMedicationSupplyWindowOpen(end: string, nowMs: number): boolean {
-  const endMs = Date.parse(end)
-  return Number.isFinite(endMs) && endMs >= nowMs - DAY_MS
+  const remaining = medicationSupplyDaysRemaining(end, nowMs)
+  return remaining !== undefined && remaining > 0
 }
 
 /**

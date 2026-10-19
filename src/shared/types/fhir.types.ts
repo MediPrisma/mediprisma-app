@@ -286,6 +286,9 @@ export interface MedicationRequest {
   _sourceCapturedAt?: string
   /** Original order references retained when verified cross-source copies merge. */
   _reconciledSourceReferences?: string[]
+  _encounterInferred?: boolean
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourcePrescriptionRecords?: any[]
 }
 
 export interface MedicationStatement {

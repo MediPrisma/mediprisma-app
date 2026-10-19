@@ -127,7 +127,7 @@ describe('buildEncounterIcdCandidates — real source coding (no invented codes)
         id: 'c1',
         code: {
           text: '本態性高血壓',
-          coding: [{ system: SYSTEM.icd10, code: 'I10', display: 'Essential hypertension' }],
+          coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'I10', display: 'Essential hypertension' }],
         },
       },
     ]

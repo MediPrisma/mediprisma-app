@@ -42,3 +42,24 @@ it('does not borrow Chinese from a different complete ICD code', () => {
   const dict = buildIcdDictionary([hospital], 'zh-TW', [cloud])
   expect(localizedIcdDescription('B02.8', 'Different diagnosis', undefined, dict)).toBe('Different diagnosis')
 })
+
+it('keeps ICD-10-CM, WHO ICD-10 and non-ICD code namespaces separate', () => {
+  const conditions = [
+    { code: { text: 'WHO 原始標籤', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'B02.9' }] } },
+    { code: { text: '院內非 ICD 代碼', coding: [{ system: 'https://synthetic.example/local', code: 'B02.9' }] } },
+    { code: { text: 'CM 中文標籤', coding: [{ system: ICD, code: 'B02.9' }] } },
+  ]
+  const dict = buildIcdDictionary(conditions, 'zh-TW')
+  expect(localizedIcdDescription('B02.9', 'English source', undefined, dict, 'zh-TW', ICD)).toBe('CM 中文標籤')
+  expect(localizedIcdDescription('B02.9', 'English source', undefined, dict, 'zh-TW', 'http://hl7.org/fhir/sid/icd-10')).toBe('WHO 原始標籤')
+  expect(localizedIcdDescription('B02.9', 'English source', undefined, dict, 'zh-TW', 'https://synthetic.example/local')).toBe('English source')
+})
+
+it('keeps clinically richer original SOAP text available behind the Chinese terminology label', () => {
+  const originalText = 'Zoster without complications; clinical note: left thoracic dermatomes'
+  const source = { ...hospital, code: { ...hospital.code, text: originalText } }
+  const dict = buildIcdDictionary([source], 'zh-TW', [cloud])
+  const { result } = renderHook(() => useDiagnosisRows([source], 'zh-TW', dict))
+  expect(result.current[0].title).toBe('帶狀疱疹未伴有併發症')
+  expect(result.current[0].records?.[0].originalText).toBe(originalText)
+})

@@ -12,6 +12,7 @@ const ICD = 'http://hl7.org/fhir/sid/icd-10-cm'
 function fixture() {
   const cloud = {
     resourceType: 'Encounter', id: 'cloud-visit', status: 'finished', class: { code: 'AMB' },
+    identifier: [{ system: 'https://synthetic.example/visit-id', value: 'confirmed-visit' }],
     meta: { source: 'https://medcloud2.nhi.gov.tw/' },
     subject: { reference: 'Patient/synthetic' }, period: { start: '2026-09-17' },
     serviceProvider: { display: '臺北榮總;門診;0601160016' },
@@ -19,6 +20,7 @@ function fixture() {
   }
   const hospital = {
     resourceType: 'Encounter', id: 'hospital-visit', status: 'finished', class: { code: 'AMB' },
+    identifier: [{ system: 'https://synthetic.example/visit-id', value: 'confirmed-visit' }],
     meta: { source: 'https://web9.vghtpe.gov.tw/emr/qemr/',
       tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] },
     subject: { reference: 'Patient/synthetic' }, period: { start: '2026-09-17T00:00:00+08:00' },
@@ -85,11 +87,11 @@ it('matches dotted and undotted codes without comparing the diagnosis wording', 
   expect(reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')).toHaveLength(1)
 })
 
-it('recognizes the documented legacy VGH exporter CM hint without equating unrelated ICD systems', () => {
+it('does not equate WHO ICD-10 and CM merely from the legacy versionId=1 exporter hint', () => {
   const { resources, hospital, condition } = fixture()
   ;(hospital as any).meta = { source: 'ehr-fhir-bridge/scraper', versionId: '1' }
   condition.code.coding[0].system = 'http://hl7.org/fhir/sid/icd-10'
-  expect(reconcileOutpatientEncounters(resources).filter(r => r.resourceType === 'Encounter')).toHaveLength(1)
+  expect(reconcileOutpatientEncounters(resources).filter(r => r.resourceType === 'Encounter')).toHaveLength(2)
   expect(condition.code.coding[0].system).toBe('http://hl7.org/fhir/sid/icd-10')
 })
 
@@ -114,7 +116,7 @@ it('does not replace supplied institutions or label unrelated sources as North V
   expect(second.serviceProvider).toBeUndefined()
 })
 
-it.each(['date', 'facility', 'patient', 'diagnosis', 'non-ICD', 'ICD-system', 'physician', 'two-hospital-visits', 'two-cloud-visits', 'cancelled'])(
+it.each(['date', 'facility', 'patient', 'diagnosis', 'non-ICD', 'ICD-system', 'physician', 'department', 'identifier', 'two-hospital-visits', 'two-cloud-visits', 'cancelled'])(
   'preserves separate encounters when %s makes the match unsafe', (caseName) => {
     const { resources, cloud, hospital, condition } = fixture()
     if (caseName === 'date') cloud.period.start = '2026-09-16'
@@ -124,6 +126,8 @@ it.each(['date', 'facility', 'patient', 'diagnosis', 'non-ICD', 'ICD-system', 'p
     if (caseName === 'non-ICD') condition.code.coding[0].system = 'http://snomed.info/sct'
     if (caseName === 'ICD-system') condition.code.coding[0].system = 'http://hl7.org/fhir/sid/icd-10'
     if (caseName === 'physician') (cloud as any).participant = [{ individual: { display: 'Other physician' } }]
+    if (caseName === 'department') (cloud as any).serviceType = { text: '泌尿科' }
+    if (caseName === 'identifier') cloud.identifier[0].value = 'different-visit'
     if (caseName === 'two-hospital-visits') resources.push({ ...hospital, id: 'another-hospital-visit' })
     if (caseName === 'two-cloud-visits') resources.push({ ...cloud, id: 'another-cloud-visit' })
     if (caseName === 'cancelled') hospital.status = 'cancelled'

@@ -7,12 +7,16 @@ import {
 } from "@/src/shared/utils/encounter-type.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
+import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
 
 export interface VisitRecord {
   id: string
+  sourceIds?: string[]
+  sourceComparisonStatus?: 'candidate' | 'confirmed'
+  sourceRecords?: Array<{ id: string; date?: string; institution?: string; department?: string; physician?: string; diagnoses: string[] }>
   type: VisitType
   /** Medical system, derived from explicit serviceType codings first. AMB only
    *  identifies an ambulatory encounter and is never evidence of western care. */
@@ -100,7 +104,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
   return useMemo<VisitRecord[]>(() => {
     if (!Array.isArray(encounters)) return []
     
-    return encounters
+    return projectEncounterComparisons(encounters)
       .filter((encounter: any) => {
         const status = encounter.status
         // 'unknown' is included: NHI 健保存摺 IC-card inpatient stays have no
@@ -290,6 +294,18 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
 
         return {
           id: encounter.id,
+          sourceIds: encounter._comparisonEncounterIds,
+          sourceComparisonStatus: encounter._sourceRecordComparison?.status,
+          sourceRecords: encounter._sourceRecordComparison?.references.map((reference: string) => {
+            const source = (encounter._sourceEncounterRecords ?? encounters).find((item: any) => `Encounter/${item.id}` === reference)
+            return { id: source?.id ?? reference, date: source?.period?.start?.slice(0, 10),
+              institution: getInstitutionName(source?.serviceProvider?.display, locale),
+              department: source?.serviceType?.text || source?.serviceType?.coding?.find((coding: any) => coding.display)?.display,
+              physician: source?.participant?.find((participant: any) => participant.individual?.display)?.individual?.display,
+              diagnoses: (source?.reasonCode ?? []).map((concept: any) => [concept.coding?.[0]?.code,
+                concept.text || concept.coding?.[0]?.display].filter(Boolean).join(' ')),
+            }
+          }),
           type,
           careDiscipline,
           date: encounter.period?.start || '',

@@ -702,8 +702,11 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
           )}
           <div className="text-muted-foreground">
             {shortYmd(hover.bar.startMs)} → {shortYmd(hover.bar.endMs)}
-            <span className="ml-1">({hover.bar.supplyDays}d)</span>
+            <span className="ml-1">{hover.bar.supplyDaysUnrecorded ? (locale === 'en' ? '(duration not provided; date marker only)' : '（未提供天數，僅標示紀錄日期）') : `(${hover.bar.supplyDays}d)`}</span>
           </div>
+          {hover.bar.selfPurchased && <div>{locale === 'en' ? 'Self-pay' : '自費／自購'}</div>}
+          {hover.bar.sourceComparison && <div className="whitespace-normal break-words">{hover.bar.sourceComparison}</div>}
+          {hover.bar.sourceStatus && <div>{locale === 'en' ? 'Source status: ' : '來源狀態：'}{hover.bar.sourceStatus}</div>}
           {hover.bar.frequency && (
             <div className="min-w-0 whitespace-normal break-words text-muted-foreground [overflow-wrap:anywhere]">
               {mt.dosageInstructionLabel ?? mt.frequencyLabel ?? 'Dosage instructions'}:{' '}

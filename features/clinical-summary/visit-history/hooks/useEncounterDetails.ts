@@ -4,6 +4,7 @@ import { getReferenceId, getCodeText, getMedicationNameLocalized, formatDateTime
 import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel, isReferenceRangeAssessmentUnavailable } from "@voho0000/clinical-lab-normalization/interpretation"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 import { hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
+import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
 import { getAnalyteLabel, getAnalyteCanonicalKey } from "@voho0000/clinical-lab-normalization/canonical"
 import { getAnalyteDisplayForObs, type DisplayLang } from "@voho0000/clinical-lab-normalization/display"
 import {
@@ -75,6 +76,7 @@ function localizeMedicationQuantityDetail(
 export type EncounterDiagnosis = {
   id: string
   title: string
+  originalText?: string
   code?: string
   clinicalStatus?: string
   verificationStatus?: string
@@ -382,17 +384,22 @@ export function useEncounterDetails(
   audience: 'medical' | 'patient' = 'medical',
   standardMedicationRows: MedicationRow[] = [],
   icdDict?: Map<string, string>,
+  encounters: readonly any[] = [],
 ) {
   return useMemo(() => {
     const map = new Map<string, EncounterDetails>()
-    const standardMedicationRowsById = new Map(
-      standardMedicationRows.map((row) => [row.id, row]),
-    )
+    const standardMedicationRowsById = new Map(standardMedicationRows.flatMap((row) =>
+      (row.reconciledOrderIds ?? [row.id]).map((id) => [id, row] as const)))
+    const encounterAliases = new Map<string, string>()
+    for (const visit of projectEncounterComparisons(encounters)) {
+      for (const id of visit._comparisonEncounterIds ?? []) encounterAliases.set(id, visit.id)
+    }
     // getAnalyteDisplayForObs only branches on zh-TW vs en; collapse the
     // incoming locale string to the DisplayLang the helper expects.
     const displayLang: DisplayLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
 
     const ensureEntry = (encounterId: string) => {
+      encounterId = encounterAliases.get(encounterId) ?? encounterId
       if (!map.has(encounterId)) {
         map.set(encounterId, {
           diagnoses: [], medications: [], medSeries: [],
@@ -428,6 +435,7 @@ export function useEncounterDetails(
         const standardRow =
           standardMedicationRowsById.get(medId) ||
           (!med?.id ? standardRowByPosition : undefined)
+        if (standardRow && entry.medications.some((item) => item.id === standardRow.id)) return
         const executionStart =
           med?.dispenseRequest?.validityPeriod?.start ||
           med?.authoredOn ||
@@ -444,7 +452,7 @@ export function useEncounterDetails(
           title: localizedName,
           status,
           detail,
-          isInactive: status === 'stopped' || status === 'completed',
+          isInactive: ['stopped', 'completed', 'cancelled', 'entered-in-error', 'on-hold', 'draft'].includes(status),
           isChronic,
           refillCount: 1,
           searchHaystack: [localizedName, drugKey, detail]
@@ -583,12 +591,14 @@ export function useEncounterDetails(
         entry.diagnoses.push({
           id,
           title: (icdCode ? localizedIcdDescription(icdCode, condition?.code?.text,
-            coding?.find((item: any) => item.code === icdCode)?.display, icdDict, displayLang) : undefined)
+            coding?.find((item: any) => item.code === icdCode)?.display, icdDict, displayLang,
+            coding?.find((item: any) => item.code === icdCode)?.system) : undefined)
             || condition?.code?.text
             || coding?.[0]?.display
             || coding?.[0]?.code
             || 'Unknown diagnosis',
           code: icdCode,
+          originalText: condition?.code?.text,
           clinicalStatus: condition?.clinicalStatus?.coding?.[0]?.code
             || (typeof condition?.clinicalStatus === 'string' ? condition.clinicalStatus : undefined),
           verificationStatus: condition?.verificationStatus?.coding?.[0]?.code
@@ -619,6 +629,7 @@ export function useEncounterDetails(
     locale,
     audience,
     standardMedicationRows,
+    encounters,
     icdDict,
   ])
 }

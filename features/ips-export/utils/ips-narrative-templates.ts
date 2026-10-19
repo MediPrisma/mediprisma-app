@@ -21,6 +21,8 @@ import { conceptLabel, conceptLabelEn, escapeHtml, formatDate, resultLabel } fro
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { medicationDisplayParts } from './medication-display'
 import type { IpsSectionLabels } from './ips-builder'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
 
@@ -127,7 +129,8 @@ export function narrativeMedications(
     return [
       // Prefer the English coding[].display (bridge canonical); fall back to
       // text so non-bridge sources are carried over faithfully.
-      dash(conceptLabelEn(m.medicationCodeableConcept)),
+      dash([conceptLabelEn(m.medicationCodeableConcept), sourceComparisonNarrative(m),
+        sourceSelfPurchase(m) === true ? '自費／自購（self-pay）' : undefined].filter(Boolean).join(' · ')),
       dash(m.status || ''),
       dash(dosage.directions),
       dash(dosage.supply),

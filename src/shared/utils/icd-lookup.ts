@@ -4,7 +4,17 @@
 
 export interface IcdCode {
   code: string
+  system?: string
   description?: string
+}
+
+function icdFamily(system?: string): string | undefined {
+  const normalized = system?.trim().toLowerCase().replace(/\/$/, '')
+  if (!normalized) return undefined
+  if (/(?:^|\/)icd-?10-?cm$/.test(normalized)) return 'icd-10-cm'
+  if (/(?:^|\/)icd-?10$/.test(normalized)) return 'icd-10'
+  if (/(?:^|\/)icd-?9(?:-?cm)?$/.test(normalized)) return 'icd-9'
+  return undefined
 }
 
 function normalizeIcdCodeToken(value: string): string {
@@ -85,18 +95,23 @@ export function buildIcdDictionary(
     const codings = concept?.coding ?? []
     const text = concept?.text
     for (const coding of codings) {
+      const family = icdFamily(coding?.system)
+      if (!family) continue
       const code = coding?.code
       const display = coding?.display
       const picked = preferText ? (text || display) : (display || text)
       if (!code || !picked) continue
       const key = normalizeIcdCodeToken(code)
-      const existing = dict.get(key)
+      const qualifiedKey = `${family}|${key}`
+      const existing = dict.get(qualifiedKey)
       // An English-only SOAP label must not overwrite an exact Chinese label
       // supplied by another record of this same ICD code.
       const value = preferText && /\p{Script=Han}/u.test(existing ?? '')
         && !/\p{Script=Han}/u.test(picked) ? existing! : picked
-      dict.set(code, value)
-      dict.set(key, value)
+      dict.set(qualifiedKey, value)
+      // Legacy code-only callers represent Taiwan ICD-10-CM. Never populate
+      // their namespace with WHO ICD-10, ICD-9, SNOMED or local code labels.
+      if (family === 'icd-10-cm') { dict.set(code, value); dict.set(key, value) }
     }
   }
   return dict
@@ -110,10 +125,14 @@ export function localizedIcdDescription(
   display?: string,
   dict?: Map<string, string>,
   locale: string = 'zh-TW',
+  system?: string,
 ): string | undefined {
   const sourceText = stripLeadingIcdCode(text, code)
   const sourceDisplay = stripLeadingIcdCode(display, code)
-  const exact = stripLeadingIcdCode(dict?.get(code) ?? dict?.get(normalizeIcdCodeToken(code)), code)
+  const family = icdFamily(system)
+  const exact = stripLeadingIcdCode(system
+    ? (family ? dict?.get(`${family}|${normalizeIcdCodeToken(code)}`) : undefined)
+    : dict?.get(code) ?? dict?.get(normalizeIcdCodeToken(code)), code)
   if (locale !== 'en') {
     const chinese = [sourceText, exact, sourceDisplay].find((value) => /\p{Script=Han}/u.test(value ?? ''))
     if (chinese) return chinese
@@ -261,9 +280,10 @@ export function extractEncounterIcds(
 
   const out: IcdCode[] = []
   const seen = new Set<string>()
-  const push = (code: string, description?: string) => {
-    if (!code || seen.has(code)) return
-    seen.add(code)
+  const push = (code: string, description?: string, system?: string) => {
+    const key = `${system ?? ''}|${normalizeIcdCodeToken(code)}`
+    if (!code || seen.has(key)) return
+    seen.add(key)
     const cleanedDescription = stripLeadingIcdCode(description, code)
     out.push({ code, description: cleanedDescription })
   }
@@ -280,8 +300,9 @@ export function extractEncounterIcds(
       // we get just the diagnosis description. NHI text may use either the
       // dotted ICD ("F33.42") or the compact form ("F3342").
       const textNoPrefix = stripLeadingIcdCode(rawText, code)
-      const picked = localizedIcdDescription(code, textNoPrefix, display, dict, locale) || lookupIcd(code, dict)
-      push(code, picked || undefined)
+      const picked = localizedIcdDescription(code, textNoPrefix, display, dict, locale, primaryCoding?.system)
+        || (!primaryCoding?.system || icdFamily(primaryCoding.system) === 'icd-10-cm' ? lookupIcd(code, dict) : undefined)
+      push(code, picked || undefined, primaryCoding?.system)
       continue
     }
 

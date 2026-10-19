@@ -1103,7 +1103,7 @@ describe('createFhirTools (unified)', () => {
           },
           dispenseQuantity: { value: 14, unit: 'tablet' },
           expectedSupplyDuration: { value: 7, unit: 'days', code: 'd' },
-          expectedSupplyEnd: '2026-09-21',
+          expectedSupplyEnd: '2026-09-20',
           current: true,
         })
       } finally {
@@ -1347,13 +1347,13 @@ describe('createFhirTools (unified)', () => {
             medication: 'Status-unknown current medicine',
             status: 'unknown',
             current: true,
-            expectedSupplyEnd: '2026-09-14',
+            expectedSupplyEnd: '2026-09-13',
             currentnessBasis: 'supply-window',
           }),
           expect.objectContaining({
             medication: 'Status-missing current medicine',
             current: true,
-            expectedSupplyEnd: '2026-09-14',
+            expectedSupplyEnd: '2026-09-13',
             currentnessBasis: 'supply-window',
           }),
         ]))
@@ -1409,7 +1409,7 @@ describe('createFhirTools (unified)', () => {
         ])
         expect(r.data[0]).toMatchObject({
           current: true,
-          expectedSupplyEnd: '2026-09-17',
+          expectedSupplyEnd: '2026-09-16',
           currentnessBasis: 'source-status-and-supply-window',
         })
       } finally {

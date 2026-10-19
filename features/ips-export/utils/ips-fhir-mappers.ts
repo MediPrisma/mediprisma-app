@@ -28,6 +28,8 @@ import type {
   SectionMapResult,
 } from './ips-types'
 import { INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
 import { medicationDirectionsForFhir } from './medication-display'
 
@@ -267,6 +269,10 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
   const entries = medications.map((m) => {
     const directions = medicationDirectionsForFhir(m)
     const dosage = directions ? [{ text: directions }] : undefined
+    const notes = [sourceComparisonNarrative(m), sourceSelfPurchase(m) === true ? '來源明列自費／自購（self-pay）' : undefined,
+      `Source ${m._sourceResourceType || 'MedicationRequest'} status: ${m.status || 'unknown'}. An order record does not establish actual medication use.`,
+      ...(m.note ?? []).map(note => note.text)]
+      .filter((text): text is string => Boolean(text)).map((text) => ({ text }))
 
     const resource: FhirResource = {
       resourceType: 'MedicationStatement',
@@ -277,6 +283,7 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
       subject: { reference: patientRef },
       ...requiredDateTime('effectiveDateTime', m.authoredOn),
       ...(dosage ? { dosage } : {}),
+      ...(notes.length ? { note: notes } : {}),
     }
     return makeEntry(resource).entry
   })

@@ -65,7 +65,7 @@ export function MedicationList({
   activeActions,
   unfilteredMedications,
 }: MedicationListProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const mt = (t.medications as any)
   const [showActive, setShowActive] = useState(true)
   const [showInactive, setShowInactive] = useState(true)
@@ -361,7 +361,7 @@ export function MedicationList({
               {showInactive ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               <History className="h-4 w-4" />
               <span className="text-sm font-semibold">
-                {mt.history} ({totalInactive} {mt.historyStopped})
+                {mt.history} ({totalInactive} {locale === 'en' ? 'records' : '筆紀錄'})
               </span>
             </div>
           </Button>
