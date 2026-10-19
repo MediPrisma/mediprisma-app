@@ -74,7 +74,10 @@ describe('tour hub focus', () => {
 describe('custom-summary guide progress', () => {
   function runLastStep() {
     render(<RightFeatureTour />)
-    act(() => useRightFeatureTourStore.getState().startCustomSummary('custom-summary-finish'))
+    act(() => {
+      useRightFeatureTourStore.getState().startCustomSummary()
+      useRightFeatureTourStore.getState().setStep('custom-summary-finish')
+    })
   }
 
   it('ticks the guide in the hub when finished on its last step', () => {
