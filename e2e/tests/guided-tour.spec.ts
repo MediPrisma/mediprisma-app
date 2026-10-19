@@ -11,17 +11,21 @@ const cases = [
   { width: 390, height: 844, locale: 'en' as const },
 ]
 
-async function openTourMenu(page: Page, english = false) {
-  const tourButton = page.getByRole('button', { name: english ? 'Guided tour' : '導覽教學', exact: true })
-  if (await tourButton.isVisible()) await tourButton.click()
-  else await page.getByRole('button', { name: english ? 'More' : '更多', exact: true }).click()
-  await expect(page.getByRole('menu')).toContainText('Quick tour')
-  await expect(page.getByRole('menu')).toContainText(english ? 'Detailed module guides' : '模組詳盡導覽')
+async function openTourHub(page: Page, english = false) {
+  const hubButton = page.getByRole('button', { name: english ? 'Tours' : '導覽中心', exact: true })
+  if (await hubButton.isVisible()) await hubButton.click()
+  else {
+    await page.getByRole('button', { name: english ? 'More' : '更多', exact: true }).click()
+    await page.getByRole('menuitem', { name: english ? 'Tours' : '導覽中心' }).click()
+  }
+  const hub = page.getByTestId('tour-hub')
+  await expect(hub).toBeVisible()
+  return hub
 }
 
 async function startTour(page: Page, english = false) {
-  await openTourMenu(page, english)
-  await page.getByRole('menuitem', { name: english ? 'Custom summaries Edit, share, and explore templates' : '自訂摘要 編輯、分享與範本庫' }).click()
+  const hub = await openTourHub(page, english)
+  await hub.locator('[data-tour-hub-item="custom-summary"]').click()
   await page.getByRole('button', { name: english ? 'Start from the beginning' : '從頭開始', exact: true }).click()
   await expect(page.locator('#right-tour-title')).toHaveText(customSteps[0].title[english ? 1 : 0])
 }
@@ -42,7 +46,7 @@ const customSteps = [
   { title: ['完成！需要時可從章節重新開始', 'Done—revisit any chapter when you need it'], target: 'medical-summary-custom-tab' },
 ]
 
-test.describe('right feature tour', () => {
+test.describe('guided tours', () => {
   for (const width of [768, 1024, 1440]) {
     test(`uses a compact accessible question-mark guide at ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 900 })
@@ -73,43 +77,66 @@ test.describe('right feature tour', () => {
   }
 
   for (const width of [390, 1440]) {
-    test(`keeps Quick tour short and offers the detailed guide on completion at ${width}px`, async ({ page }, testInfo) => {
+    test(`walks getting started from the tour hub and records it at ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 900 })
       await mockAiStream(page)
       await importBundle(page)
       await openFeaturePanel(page)
-      await openTourMenu(page)
-      await page.getByRole('menuitem', { name: '功能工作區', exact: true }).click()
-      const tour = page.locator('section[aria-labelledby="right-tour-title"]')
-      await expect(tour).toContainText('Quick tour')
-      await expect(page.locator('#right-tour-title')).toHaveText('右側是臨床工作區')
-      let customIntroductions = 0
-      for (let index = 0; index < 20; index++) {
-        await expect(page.locator('[data-tour="custom-summary-manager"]')).toBeHidden()
-        const title = await page.locator('#right-tour-title').innerText()
-        if (title === customSteps[0].title[0]) customIntroductions++
-        if (title.startsWith('完成！')) break
-        await page.locator('[data-tour-control="right-next"]').click()
+      const hub = await openTourHub(page)
+      await page.screenshot({ path: testInfo.outputPath('tour-hub.png') })
+      await hub.getByRole('button', { name: '開始', exact: true }).click()
+      await expect(hub).toBeHidden()
+      const card = page.locator('section[aria-labelledby="guided-tour-title"]')
+      const title = page.locator('#guided-tour-title')
+      await expect(title).toHaveText('先看總覽')
+      const seen: string[] = []
+      for (let index = 0; index < 8; index++) {
+        // A step whose control is still being looked for keeps its card
+        // hidden, and one that is not on screen is skipped; read only a
+        // placed card.
+        await expect(card).toHaveAttribute('data-tour-card-state', 'placed')
+        seen.push(await title.innerText())
+        const box = await card.boundingBox()
+        expect(box!.x).toBeGreaterThanOrEqual(0)
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width)
+        const done = card.getByRole('button', { name: '完成', exact: true })
+        if (await done.isVisible()) {
+          await page.screenshot({ path: testInfo.outputPath('getting-started-last.png') })
+          await done.click()
+          break
+        }
+        const previous = seen.at(-1)
+        await page.locator('[data-tour-control="guided-next"]').click()
+        await expect(title).not.toHaveText(previous!)
       }
-      expect(customIntroductions).toBe(1)
-      await expect(tour.getByRole('button', { name: '完成', exact: true })).toBeVisible()
-      await page.screenshot({ path: testInfo.outputPath('quick-tour-complete.png') })
-      await tour.getByRole('button', { name: '接著學自訂摘要' }).click()
-      await expect(tour).toBeHidden()
+      await expect(card).toBeHidden()
+      expect(seen[0]).toBe('先看總覽')
+      expect(seen.at(-1)).toBe('其他功能，到導覽中心挑著學')
+      expect(seen.length).toBeLessThanOrEqual(5)
+      const reopened = await openTourHub(page)
+      await expect(reopened.getByRole('button', { name: '重看', exact: true })).toBeVisible()
+      expect(await getChatCallCount(page)).toBe(0)
+    })
+
+    test(`opens the custom-summary guide from the tour hub at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await mockAiStream(page)
+      await importBundle(page)
+      await openFeaturePanel(page)
+      const hub = await openTourHub(page)
+      await hub.locator('[data-tour-hub-item="custom-summary"]').click()
+      await expect(hub).toBeHidden()
       const launcher = page.getByRole('dialog', { name: '自訂摘要詳盡導覽' })
       await expect(launcher).toBeVisible()
       await launcher.getByRole('button', { name: '逛範本庫', exact: true }).click()
+      const tour = page.locator('section[aria-labelledby="right-tour-title"]')
       await expect(page.locator('#right-tour-title')).toHaveText(customSteps[6].title[0])
       await page.locator('[data-tour-control="right-next"]').click()
       await expect(page.locator('[data-tour="custom-summary-gallery"]')).toBeVisible()
       await tour.getByRole('combobox', { name: '導覽章節' }).selectOption('custom-summary-edit')
       await expect(page.locator('#right-tour-title')).toHaveText(customSteps[1].title[0])
       await expect(page.locator('[data-tour="custom-summary-gallery"]')).toBeHidden()
-      await tour.getByRole('combobox', { name: '導覽章節' }).selectOption('custom-summary-generate')
-      await page.locator('[data-tour-control="right-next"]').click()
-      await expect(page.locator('#right-tour-title')).toHaveText(customSteps[11].title[0])
-      await page.locator('[data-tour-control="right-next"]').click()
-      await tour.getByRole('button', { name: '完成', exact: true }).click()
+      await page.locator('[data-tour-control="right-close"]').click()
       await expect(tour).toBeHidden()
       await expect(page.locator('[data-tour="custom-summary-manager"]')).toBeHidden()
       expect(await getChatCallCount(page)).toBe(0)

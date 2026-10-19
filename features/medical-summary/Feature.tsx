@@ -769,6 +769,7 @@ export default function MedicalSummaryFeature() {
               <Button
                 type="button"
                 size="sm"
+                data-tour="medical-summary-settings"
                 variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "outline"}
                 className="h-[44px] shrink-0 gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7 @max-[36rem]:h-10 @max-[36rem]:w-10 @max-[36rem]:justify-center @max-[36rem]:px-0"
                 title={ms.summaryControls}
@@ -1103,7 +1104,7 @@ export default function MedicalSummaryFeature() {
           </div>
 
           {!hasAnyResult && displayedGenerationErrors.length === 0 ? (
-            <div className="flex min-h-[clamp(18rem,45vh,32rem)] items-center justify-center px-4 py-12">
+            <div data-tour="medical-summary-empty" className="flex min-h-[clamp(18rem,45vh,32rem)] items-center justify-center px-4 py-12">
               <SummaryGenerationButton
                 presentation="empty"
                 isBusy={isBusy}

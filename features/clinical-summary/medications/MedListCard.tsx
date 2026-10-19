@@ -328,7 +328,7 @@ export function MedListCard() {
                   <button
                     key={v}
                     type="button"
-                    data-tour={v === 'timeline' ? 'medication-timeline-switch' : undefined}
+                    data-tour={v === 'timeline' ? 'medication-timeline-switch' : v === 'remaining' ? 'medication-remaining-switch' : undefined}
                     onClick={() => {
                       // Plain buttons: clicking the active view still fires.
                       if (v !== view) markUserTrigger('meds')

@@ -171,6 +171,8 @@ export default function ClinicalSummaryFeature() {
     if (!tourActive || !tourStep) return
 
     const targetTab = (() => {
+      if (tourStep === 'patient-overview') return 'overview'
+      if (tourStep === 'patient-info') return 'patient'
       if (tourStep === 'visits') return 'visits'
       if (['reports', 'trend', 'imaging-ai'].includes(tourStep)) return 'reports'
       if (['medications', 'medication-timeline', 'right-pane'].includes(tourStep)) return 'meds'

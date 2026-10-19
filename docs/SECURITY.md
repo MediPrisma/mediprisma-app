@@ -160,7 +160,7 @@ App 以 Firebase Analytics / GA4 記錄極小量的介面使用統計，用來�
 | `view_open` | `area`（left / right / reports / cumulative / meds / summary）、`id`（該層的頁面 id）、`trigger`（user / auto） |
 | `chat_send` | `source`（typed / chip）、`has_image`、`model_id`、`agent_mode` |
 | `handoff_copy` | `mode`（labs / reports / all） |
-| `tour_start` | `tour`（left / right / custom-summary） |
+| `tour_start` | `tour`（導覽 id，如 getting-started / labs-reports / custom-summary；完整清單見 `ANALYTICS_TOURS`） |
 | `tour_end` | `tour`、`tour_outcome`（finish / abandon）、`step`（導覽關閉時的步驟 id） |
 | `report_interpret` | `host`（report-row / document-card / document-dialog）、`action`（open / regenerate） |
 | `app_launch` | `launch_source`（medcloud2 / smart / demo / import / none）、`site`（vghtpe / unknown）、`workstation`（診間／工作站代碼），每次開啟一次 |

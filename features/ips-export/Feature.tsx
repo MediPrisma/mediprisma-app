@@ -149,7 +149,7 @@ export default function IpsExportFeature() {
         onValueChange={(value) => { if (isExportSubTab(value)) setExportTab(value) }}
         className="space-y-3"
       >
-        <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
+        <TabsList data-tour="ips-export-tabs" className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
           {/* Clinicians open this hub to get data back into the chart far more
               often than to hand it to an AI or download a file, so 帶回紀錄
               leads and opens by default (the provider starts there). 民眾
