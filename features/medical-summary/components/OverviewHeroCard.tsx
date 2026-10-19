@@ -82,7 +82,7 @@ export function OverviewHeroCard({
               <PopoverContent
                 align="start"
                 aria-label={reviewButtonLabel}
-                className="w-[min(22rem,calc(100vw-2rem))] space-y-2 break-words text-sm leading-relaxed"
+                className="w-[min(22rem,calc(100vw-2rem))] space-y-2 break-words text-[length:max(13px,0.8125rem)] leading-relaxed"
               >
                 <p className="font-medium">{reviewLabel}</p>
                 <p className="text-muted-foreground">{reviewDescription}</p>

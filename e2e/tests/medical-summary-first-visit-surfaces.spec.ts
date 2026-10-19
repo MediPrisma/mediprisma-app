@@ -75,4 +75,17 @@ test.describe('first-visit summary surfaces (mocked)', () => {
     await page.keyboard.press('Escape')
     await expect(check).toBeHidden()
   })
+
+  test('summary check preserves its font-size floor on a fresh phone load', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const panel = await generate(page, 'medcloud-no-reports-bundle.json', EMPTY_SCAN)
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('12px')
+    await panel.getByRole('button', { name: '摘要核對', exact: true }).click()
+    const check = page.getByRole('dialog', { name: '摘要核對', exact: true })
+    await expect(check).toBeVisible()
+    const sizes = await check.locator('p').evaluateAll(elements => elements.map(element => parseFloat(getComputedStyle(element).fontSize)))
+    await page.screenshot({ path: testInfo.outputPath('summary-check-phone.png'), animations: 'disabled' })
+    expect(sizes).toHaveLength(2)
+    for (const size of sizes) expect(size).toBeGreaterThanOrEqual(13)
+  })
 })
