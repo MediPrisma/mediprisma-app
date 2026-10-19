@@ -248,7 +248,7 @@ jobs:
 
           Which half it is, is worth checking before assuming:
 
-          - **Yours** — the package contract check, typecheck, lint, the export. Those are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`, so they are yours to change without waiting for anyone.
+          - **Yours** — the package contract check, typecheck, lint, the export. Those are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`: HMC can diagnose them here and propose a PR; workflow changes require owner approval.
           - **The owner's** — the app checkout, \`Install app dependencies\`, or release metadata failing on a 401 or 403. Those use this repository's credentials (the packages token), which expire and are not visible from your branch. Say so rather than digging: nothing on \`pilot/hmc\` can fix them.
           EOF
           elif [ "$PUBLISH_RESULT" = 'success' ]; then
