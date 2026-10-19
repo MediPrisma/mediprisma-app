@@ -156,7 +156,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
+          git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} rules@${PERSONALIZATION_SHA:0:7}"
 
           # `Sync app to mediprisma.tw/app` publishes to this same branch from
           # its own concurrency group, so the two can be in flight together and
@@ -228,7 +228,7 @@ jobs:
           if [ "$PUBLISH_RESULT" = 'success' ] && [ "$TESTS_RESULT" != 'failure' ]; then
             if [ -n "$number" ]; then
               cat > note.md <<EOF
-          Clear. \`/app-hmc\` serves app \`${APP_SHA:0:7}\` with personalization \`${PERSONALIZATION_SHA:0:7}\`, and the Jest run is green.
+          Clear. \`/app-hmc\` serves app \`${APP_SHA:0:7}\` with rules source \`${PERSONALIZATION_SHA:0:7}\`, and the Jest run is green.
 
           ${RUN_URL}
           EOF
@@ -255,7 +255,7 @@ jobs:
             # Published over a red suite. Worth saying out loud, not worth
             # holding a clinic preview for.
             cat > note.md <<EOF
-          @${PILOT_AUTHOR} **The preview published, and the Jest run was red.** https://mediprisma.tw/app-hmc is current — app \`${APP_SHA:0:7}\`, personalization \`${PERSONALIZATION_SHA:0:7}\` — so this does not block reviewing it.
+          @${PILOT_AUTHOR} **The preview published, and the Jest run was red.** https://mediprisma.tw/app-hmc is current — app \`${APP_SHA:0:7}\`, rules source \`${PERSONALIZATION_SHA:0:7}\` — so this does not block reviewing it.
 
           \`\`\`
           ${TEST_SUMMARY:-see the build run}
@@ -272,7 +272,7 @@ jobs:
           | | |
           | --- | --- |
           | pilot app | \`${APP_SHA:-unknown}\` |
-          | published care source | \`${PERSONALIZATION_SHA:-unknown}\` |
+          | rules source | \`${PERSONALIZATION_SHA:-unknown}\` |
           | publish | \`${PUBLISH_RESULT}\` |
 
           Publish run: ${RUN_URL}

@@ -10,7 +10,7 @@ const RULES_SHA = 'b'.repeat(40)
 const versions = { 'personalization-sdk': '1.0.0', 'clinical-lab-normalization': '1.1.1', 'personalized-care': '2.20.0', 'personalized-care-fhir': '1.12.0' }
 const packIds = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss', 'chronic-coronary-disease-cdss']
 
-async function fixture(t, { installedCare = '2.20.0', declaredCare = '2.20.0', listedPacks = packIds, localeExport = true } = {}) {
+async function fixture(t, { installedCare = '2.20.0', declaredCare = '2.20.0', lockedCare = '2.20.0', listedPacks = packIds, localeExport = true, nestedCare = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'hmc-published-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const manifest = { optionalDependencies: {} }
@@ -18,13 +18,19 @@ async function fixture(t, { installedCare = '2.20.0', declaredCare = '2.20.0', l
   for (const [suffix, version] of Object.entries(versions)) {
     const name = `@voho0000/${suffix}`
     manifest.optionalDependencies[name] = suffix === 'personalized-care' ? declaredCare : version
-    lock.packages[`node_modules/${name}`] = { version, integrity: `sha512-${suffix}` }
+    lock.packages[`node_modules/${name}`] = { version: suffix === 'personalized-care' ? lockedCare : version, integrity: `sha512-${suffix}` }
     const dir = join(root, 'node_modules', name)
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'package.json'), JSON.stringify({ name, version: suffix === 'personalized-care' ? installedCare : version, main: 'index.cjs' }))
     await writeFile(join(dir, 'index.cjs'), suffix === 'personalized-care'
       ? `module.exports = { ${localeExport ? 'setLocaleLayer() {},' : ''} CARE_PACKS: ${JSON.stringify(listedPacks.map(id => ({ id })))}, getEnabledKnowledgePacks: () => [{ metadata: () => ({ id: 'taiwan-nhi-lipid-2026' }) }] }`
       : 'module.exports = {}')
+  }
+  if (nestedCare) {
+    const nested = join(root, 'node_modules/@voho0000/personalized-care-fhir/node_modules/@voho0000/personalized-care')
+    await mkdir(nested, { recursive: true })
+    await writeFile(join(nested, 'package.json'), JSON.stringify({ name: '@voho0000/personalized-care', version: '2.20.0', main: 'index.cjs' }))
+    await writeFile(join(nested, 'index.cjs'), 'module.exports = {}')
   }
   await writeFile(join(root, 'package.json'), JSON.stringify(manifest))
   await writeFile(join(root, 'package-lock.json'), JSON.stringify(lock))
@@ -59,6 +65,8 @@ test('records exact installed releases and their source commits for the existing
 for (const [name, options, message] of [
   ['stale installed overlay', { installedCare: '2.18.0' }, /installed version/],
   ['floating latest dependency', { declaredCare: 'latest' }, /exact released version/],
+  ['lockfile drift', { lockedCare: '2.18.0' }, /lockfile does not match/],
+  ['a second nested care instance', { nestedCare: true }, /same care package/],
   ['missing CAD pack', { listedPacks: packIds.slice(0, 3) }, /missing chronic-coronary/],
   ['missing host API', { localeExport: false }, /setLocaleLayer/],
 ]) {

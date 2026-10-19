@@ -12,6 +12,8 @@
 
 ## HMC 預覽使用的規則來源（2026-10-20）
 
+以下模式需部署設定與 HMC 整合更新都合入、並成功重建後才會生效。請以網站 `hmc-build.json` 判斷：缺少 `rulesSource: published-packages` 時仍是舊的 source overlay 流程，不可視為已切換。
+
 HMC app 使用這個 app commit 的 `package.json` 與 `package-lock.json` 鎖定的正式 `@voho0000/*` 套件，和同版本正式 app 一致。這次是 `personalized-care 2.20.0` 與 `personalized-care-fhir 1.12.0`。建置不會跟隨浮動的 `latest`，也不會再用 personalization 的 `pilot/hmc` 原始碼覆蓋套件。更新套件時，版本與相容的 app 接線必須一起經過審查與驗證。
 
 **規則分支上的未發布改動不會直接進入 app-hmc。** 修改臨床判斷、門檻、建議文字、引用或資料轉換時，仍在 `MediPrisma/mediprisma-cdss` 開發；規則經 PR 合入 `main` 並發布後，再透過 app 的套件版本更新帶入 HMC。不要在 app 複製一份臨床規則。
@@ -27,11 +29,15 @@ app 推送 `pilot/hmc` 後會啟動建置。既有 personalization relay 訊號�
 
 **不要改 workflow 的名稱、檔名或 artifact 名稱。** publisher 仍以 `HMC preview build` 與 `hmc-preview` 辨認成果，發布端與權限維持在受保護的 master。失敗時保留上一個可用網站，正式 `/app` 不受影響。
 
-`hmc-build.json` 的 `rulesSource` 為 `published-packages`；`packageVersions` 記錄實際套件版本，`packageRevisions` 記錄 care 與 FHIR 各自的發版來源 SHA。為相容既有 publisher，`personalizationSha` 指 care 套件的來源 SHA；它不代表目前 `pilot/hmc` 規則分支。可在 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對。
+`hmc-build.json` 的 `rulesSource` 為 `published-packages`；`packageVersions` 記錄實際套件版本，`packageRevisions` 記錄 registry 為 care 與 FHIR 各自記載的發版 gitHead，並核對發布檔案 integrity 與鎖檔一致。gitHead 是發版紀錄，不是來源碼與 tarball 的密碼學證明。為相容既有 publisher，`personalizationSha` 指 care 套件的發版 gitHead；它不代表目前 `pilot/hmc` 規則分支。可在 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對。
 
 套件缺失、版本與鎖檔不符、必要 API／pack 不存在、發版來源無法核對，以及 typecheck、lint、static export 失敗，均會停止發布。Jest 維持回報而不擋發布，並恢復執行先前因 source overlay 而略過的套件接線測試。
 
 建置與發布有狀況時，既有 `HMC pilot preview needs attention` issue 會說明狀態。package token 或發布端失敗應交給 owner；不要建立替代憑證或另行部署。preview 本身不發布 npm package。
+
+兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；規則對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
+
+AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。建置成功但 `/app-hmc` 沒更新時，應停下來通知 owner，檢查 master 的發布端；不要自行把檔案補回 master。
 
 ## 第一次設定
 
