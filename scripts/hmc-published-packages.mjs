@@ -64,7 +64,9 @@ export async function hmcPublishedBuildInfo(root, { appSha, token, fetchMetadata
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = process.cwd()
-  const info = await hmcPublishedBuildInfo(root, { appSha: process.env.APP_SHA, token: process.env.NODE_AUTH_TOKEN })
+  const token = process.env.NODE_AUTH_TOKEN
+  delete process.env.NODE_AUTH_TOKEN
+  const info = await hmcPublishedBuildInfo(root, { appSha: process.env.APP_SHA, token })
   await mkdir(join(root, 'public'), { recursive: true })
   await writeFile(join(root, 'public/hmc-build.json'), `${JSON.stringify(info, null, 2)}\n`)
   console.log(JSON.stringify(info, null, 2))
