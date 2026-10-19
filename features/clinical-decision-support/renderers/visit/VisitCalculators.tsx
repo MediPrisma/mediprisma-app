@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { Calculator, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -30,6 +30,8 @@ interface VisitCalculatorEntry {
   source?: DecisionPointView['source']
   calculatorId?: string
   prognosis?: HfPrognosisModelId
+  /** The calculator's name as a line of the page writes it, for its link there. */
+  names: RegExp
   /** Shown only when the page has this point (AF's calculators, behind DP-14). */
   needsPoint?: boolean
   note?: boolean
@@ -41,15 +43,16 @@ interface VisitCalculatorEntry {
  * page — and the map itself stays as it is (「幫我留C就好」).
  */
 export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
-  { id: 'hfa-peff', dp: 'DP-34', calculatorId: 'hfa-peff' },
-  { id: 'h2fpef', dp: 'DP-34', calculatorId: 'h2fpef' },
-  { id: 'cha2ds2-va', dp: 'DP-14', source: 'af', calculatorId: 'cha2ds2-va', needsPoint: true },
-  { id: 'crcl', dp: 'DP-14', source: 'af', calculatorId: 'crcl-cockcroft-gault', needsPoint: true },
-  { id: 'has-bled', dp: 'DP-14', source: 'af', calculatorId: 'has-bled', needsPoint: true },
-  { id: 'maggic', dp: 'DP-19', prognosis: 'maggic', note: true },
-  { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', note: true },
-  { id: 'shfm', dp: 'DP-19', prognosis: 'shfm' },
-  { id: 'gwtg-hf', dp: 'DP-19', prognosis: 'gwtg-hf' },
+  { id: 'hfa-peff', dp: 'DP-34', calculatorId: 'hfa-peff', names: /HFA[-‐–]PEFF/ },
+  { id: 'h2fpef', dp: 'DP-34', calculatorId: 'h2fpef', names: /H[₂2]FPEF/ },
+  // Not the older CHA₂DS₂-VASc, a calculator of its own.
+  { id: 'cha2ds2-va', dp: 'DP-14', source: 'af', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
+  { id: 'crcl', dp: 'DP-14', source: 'af', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },
+  { id: 'has-bled', dp: 'DP-14', source: 'af', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
+  { id: 'maggic', dp: 'DP-19', prognosis: 'maggic', names: /MAGGIC/, note: true },
+  { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', names: /LIFE[-‐–]Preserved/, note: true },
+  { id: 'shfm', dp: 'DP-19', prognosis: 'shfm', names: /SHFM|Seattle Heart Failure Model/ },
+  { id: 'gwtg-hf', dp: 'DP-19', prognosis: 'gwtg-hf', names: /GWTG[-‐–]HF/ },
 ]
 
 type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable'
@@ -74,7 +77,6 @@ interface CalculatorRow {
   name: string
   /** A model with no formula connected: its status does not depend on the record. */
   fixed?: RowStatus
-  chapter: string
 }
 
 /**
@@ -139,16 +141,33 @@ function CalculatorRows({ groups, isEnglish, onChoose }: {
   )
 }
 
-export function VisitCalculators({
+interface VisitCalculatorsValue {
+  isEnglish: boolean
+  /** The page's calculators, in the order of its chapters. */
+  rows: readonly CalculatorRow[]
+  /** Opens a calculator's panel. */
+  open: (id: string) => void
+  /** Where a calculator's name sits in a line of the page, for its link. */
+  pattern?: RegExp
+}
+
+const VisitCalculatorsContext = createContext<VisitCalculatorsValue | null>(null)
+
+/**
+ * The heart-failure page's calculators: which the patient has, and the one
+ * open beside the page. Two ways in read it — the 計算機 list at the head of
+ * the page, and the calculator's name underlined wherever a line of the page
+ * names it (owner request 2026-10-19: 「提到公式的時候，用下底線連結出去的入口」).
+ */
+export function VisitCalculatorsProvider({
   isEnglish,
   points,
   sourceOfPage,
   lvef,
   evidence = {},
-  chapterOf,
-  goTo,
   attached,
   onAttach,
+  children,
 }: {
   isEnglish: boolean
   points: readonly DecisionPointView[]
@@ -157,17 +176,13 @@ export function VisitCalculators({
   lvef?: number
   /** The record's values for a model whose formula is not connected. */
   evidence?: PrognosisEvidence
-  /** The chapter a point sits in, for the list's groups. */
-  chapterOf: (dp: string, source?: DecisionPointView['source']) => string | undefined
-  /** Brings the point into view on the page. */
-  goTo: (dp: string, source?: DecisionPointView['source']) => void
   /** The calculators already attached today. */
   attached: ReadonlySet<string>
   onAttach?: (note: Omit<VisitCalculatorNote, 'at'>) => void
+  children: ReactNode
 }) {
   const locale = isEnglish ? 'en' : 'zh-TW'
   const { isFavorite, toggleFavorite } = useCalcFavorites()
-  const [listOpen, setListOpen] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [result, setResult] = useState<CalcResult | null>(null)
 
@@ -184,64 +199,31 @@ export function VisitCalculators({
     const name = shortName(model?.name ?? (calc ? tr(locale, calc.name) : entry.id))
     // GWTG-HF reads the admission's values, never today's chart.
     const fixed: RowStatus | undefined = calc ? undefined : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
-    return [{ entry, calc, model, name, fixed, chapter: chapterOf(entry.dp, entry.source) ?? (isEnglish ? 'Other' : '其他') }]
-  }), [chapterOf, isEnglish, locale, lvef, pointOf])
-  const groups = useMemo(() => {
-    const byChapter = new Map<string, CalculatorRow[]>()
-    for (const row of rows) byChapter.set(row.chapter, [...(byChapter.get(row.chapter) ?? []), row])
-    return [...byChapter.entries()]
-  }, [rows])
+    return [{ entry, calc, model, name, fixed }]
+  }), [locale, lvef, pointOf])
+  const pattern = useMemo(() => (
+    rows.length ? new RegExp(rows.map((row) => `(${row.entry.names.source})`).join('|'), 'g') : undefined
+  ), [rows])
+  const value = useMemo<VisitCalculatorsValue>(() => ({
+    isEnglish,
+    rows,
+    open: (id: string) => {
+      setResult(null)
+      setSelected(id)
+    },
+    ...(pattern ? { pattern } : {}),
+  }), [isEnglish, pattern, rows])
 
   const open = rows.find((row) => row.entry.id === selected)
-  const choose = (row: CalculatorRow) => {
-    setListOpen(false)
-    setResult(null)
-    goTo(row.entry.dp, row.entry.source)
-    setSelected(row.entry.id)
-  }
   const close = () => {
     setSelected(null)
     setResult(null)
   }
   const dpLabel = (entry: VisitCalculatorEntry) => pointOf(entry.dp, entry.source)?.label
-  if (!rows.length) return null
 
   return (
-    <>
-      <Popover open={listOpen} onOpenChange={setListOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={styles.trigger}
-            aria-label={isEnglish ? `Calculators, ${rows.length} available` : `計算機，${rows.length} 個可用`}
-            data-testid="cdss-book-calculators"
-          >
-            <Calculator aria-hidden="true" className={styles.icon} />
-            {isEnglish ? 'Calculators' : '計算機'}
-            <span className={styles.count}>{rows.length}</span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          // Over the whole window the page is a layer of its own (z-index 60).
-          className="z-[70] w-[min(440px,calc(100vw-2rem))] p-0"
-          // Esc closes the list, not the whole-window page behind it.
-          onEscapeKeyDown={(event) => { event.preventDefault(); setListOpen(false) }}
-          data-testid="cdss-book-calculator-list"
-        >
-          <div className="flex items-baseline justify-between px-4 pt-3 pb-1">
-            <span className="text-sm font-semibold">{isEnglish ? 'Calculators for this patient' : '此病人可用的計算機'}</span>
-            <span className="text-xs text-muted-foreground">{isEnglish ? 'By chapter' : '依章節排列'}</span>
-          </div>
-          <CalculatorRows groups={groups} isEnglish={isEnglish} onChoose={choose} />
-          <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-            {isEnglish
-              ? 'Opens the calculator beside its decision point. Scores never change a recommendation.'
-              : '點一列：跳到該 DP 並開啟計算機。分數不改變指引建議。'}
-          </p>
-        </PopoverContent>
-      </Popover>
-
+    <VisitCalculatorsContext.Provider value={value}>
+      {children}
       <Dialog open={Boolean(open)} onOpenChange={(next) => { if (!next) close() }}>
         {open ? (
           <DialogContent
@@ -297,6 +279,102 @@ export function VisitCalculators({
           </DialogContent>
         ) : null}
       </Dialog>
-    </>
+    </VisitCalculatorsContext.Provider>
   )
+}
+
+/** 計算機 at the head of the page: the patient's calculators by chapter, each opened beside its point. */
+export function VisitCalculatorsButton({ chapterOf, goTo }: {
+  /** The chapter a point sits in, for the list's groups. */
+  chapterOf: (dp: string, source?: DecisionPointView['source']) => string | undefined
+  /** Brings the point into view on the page. */
+  goTo: (dp: string, source?: DecisionPointView['source']) => void
+}) {
+  const calculators = useContext(VisitCalculatorsContext)
+  const [listOpen, setListOpen] = useState(false)
+  if (!calculators?.rows.length) return null
+  const { isEnglish, rows, open } = calculators
+  const byChapter = new Map<string, CalculatorRow[]>()
+  for (const row of rows) {
+    const chapter = chapterOf(row.entry.dp, row.entry.source) ?? (isEnglish ? 'Other' : '其他')
+    byChapter.set(chapter, [...(byChapter.get(chapter) ?? []), row])
+  }
+  const choose = (row: CalculatorRow) => {
+    setListOpen(false)
+    goTo(row.entry.dp, row.entry.source)
+    open(row.entry.id)
+  }
+  return (
+    <Popover open={listOpen} onOpenChange={setListOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={styles.trigger}
+          aria-label={isEnglish ? `Calculators, ${rows.length} available` : `計算機，${rows.length} 個可用`}
+          data-testid="cdss-book-calculators"
+        >
+          <Calculator aria-hidden="true" className={styles.icon} />
+          {isEnglish ? 'Calculators' : '計算機'}
+          <span className={styles.count}>{rows.length}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        // Over the whole window the page is a layer of its own (z-index 60).
+        className="z-[70] w-[min(440px,calc(100vw-2rem))] p-0"
+        // Esc closes the list, not the whole-window page behind it.
+        onEscapeKeyDown={(event) => { event.preventDefault(); setListOpen(false) }}
+        data-testid="cdss-book-calculator-list"
+      >
+        <div className="flex items-baseline justify-between px-4 pt-3 pb-1">
+          <span className="text-sm font-semibold">{isEnglish ? 'Calculators for this patient' : '此病人可用的計算機'}</span>
+          <span className="text-xs text-muted-foreground">{isEnglish ? 'By chapter' : '依章節排列'}</span>
+        </div>
+        <CalculatorRows groups={[...byChapter.entries()]} isEnglish={isEnglish} onChoose={choose} />
+        <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+          {isEnglish
+            ? 'Opens the calculator beside its decision point. Scores never change a recommendation.'
+            : '點一列：跳到該 DP 並開啟計算機。分數不改變指引建議。'}
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/**
+ * A line of the page with each calculator it names underlined, opening that
+ * calculator (「CHA₂DS₂-VA ≥2 建議抗凝」). Plain text where the page has no
+ * calculators (the AF page) or names none.
+ */
+export function FormulaText({ text }: { text: string }) {
+  const calculators = useContext(VisitCalculatorsContext)
+  const pattern = calculators?.pattern
+  if (!calculators || !pattern) return <>{text}</>
+  const parts: ReactNode[] = []
+  const linked = new Set<string>()
+  let last = 0
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0
+    const row = calculators.rows[match.slice(1).findIndex((group) => group !== undefined)]
+    // Each calculator once a line: the first mention is the way in, the rest stay text.
+    if (!row || linked.has(row.entry.id)) continue
+    linked.add(row.entry.id)
+    if (index > last) parts.push(text.slice(last, index))
+    parts.push(
+      <button
+        key={`${index}:${row.entry.id}`}
+        type="button"
+        className={styles.formulaLink}
+        onClick={() => calculators.open(row.entry.id)}
+        aria-label={calculators.isEnglish ? `${match[0]}, open the calculator` : `${match[0]}，開啟計算機`}
+        data-calculator-link={row.entry.id}
+      >
+        {match[0]}
+      </button>,
+    )
+    last = index + match[0].length
+  }
+  if (!parts.length) return <>{text}</>
+  if (last < text.length) parts.push(text.slice(last))
+  return <>{parts}</>
 }

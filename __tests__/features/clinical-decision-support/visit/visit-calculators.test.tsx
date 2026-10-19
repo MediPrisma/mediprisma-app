@@ -11,7 +11,7 @@ import { ClinicalDecisionSupportView } from '@/features/clinical-decision-suppor
 import { usePhysicianDecisions, usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { useVisitCalculatorNotesStore } from '@/features/clinical-decision-support/stores/visit-calculator-notes.store'
-import { calculatorNoteText } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
+import { HF_VISIT_CALCULATORS, calculatorNoteText } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
 import { VisitBookChromeContext } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
 import type { CalcResult } from '@/features/medical-calculator/types'
 import { scenarioRun, type ScenarioId } from './scenario-models'
@@ -161,6 +161,36 @@ describe('決策地圖 v2 · 計算機', () => {
     const panel = screen.getByTestId('cdss-book-calculator-panel')
     expect(within(panel).getByTestId('prognosis-calculator-shfm')).toBeInTheDocument()
     expect(within(panel).queryByTestId('cdss-book-calculator-attach')).toBeNull()
+  })
+})
+
+describe('決策地圖 v2 · a calculator named in a line of the page', () => {
+  it('underlines the name and opens that calculator, without moving the page (P9)', () => {
+    render(<Page id="p9-hfpef-af-dose" page="hf" />)
+    const dp14 = document.querySelector<HTMLElement>('[data-book-dp="DP-14"]')!
+    fireEvent.click(within(dp14).getByRole('button', { name: /看依據/ }))
+    const links = [...document.querySelectorAll<HTMLButtonElement>('[data-calculator-link]')]
+    // Each calculator once a line: 「CrCl <30 或 Cr >2.5」 and 「HF＋AF 用 CHA2DS2-VA」.
+    expect(links.map((link) => link.dataset.calculatorLink)).toEqual(expect.arrayContaining(['crcl', 'cha2ds2-va']))
+    ;(Element.prototype.scrollIntoView as jest.Mock).mockClear()
+    const link = links.find((item) => item.dataset.calculatorLink === 'cha2ds2-va')!
+    expect(link).toHaveAccessibleName(`${link.textContent}，開啟計算機`)
+    fireEvent.click(link)
+    const panel = screen.getByTestId('cdss-book-calculator-panel')
+    expect(within(panel).getByTestId('calculator-detail-cha2ds2-va')).toBeInTheDocument()
+    expect(within(panel).getByText(/AF DP-14/)).toBeInTheDocument()
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('leaves the AF page as text', () => {
+    render(<Page id="p9-hfpef-af-dose" page="af" />)
+    expect(document.querySelector('[data-calculator-link]')).toBeNull()
+  })
+
+  it('names the 2024 CHA₂DS₂-VA, not the older CHA₂DS₂-VASc', () => {
+    const pattern = HF_VISIT_CALCULATORS.find((entry) => entry.id === 'cha2ds2-va')!.names
+    expect(pattern.test('CHA₂DS₂-VA ≥2')).toBe(true)
+    expect(pattern.test('CHA₂DS₂-VASc ≥2')).toBe(false)
   })
 })
 

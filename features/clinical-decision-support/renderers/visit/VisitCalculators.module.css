@@ -25,3 +25,21 @@
 @media (max-width: 767px), (pointer: coarse) {
   .trigger { min-height: 44px; }
 }
+
+/* A calculator named in a line of the page: underlined, opening it (owner
+   request 2026-10-19). Text, not a button's look — the line still reads as
+   the line. */
+.formulaLink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--blue);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.formulaLink:hover { color: var(--blue-hover); text-decoration-thickness: 2px; }
+.formulaLink:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }

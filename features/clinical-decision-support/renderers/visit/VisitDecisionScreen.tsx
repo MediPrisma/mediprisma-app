@@ -39,7 +39,7 @@ import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type Bo
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
 import { displayDate, visitStatusSentence, VisitStatusLine } from './VisitStatusHeader'
-import { VisitCalculators } from './VisitCalculators'
+import { VisitCalculatorsButton, VisitCalculatorsProvider } from './VisitCalculators'
 import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
 import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
 
@@ -309,58 +309,62 @@ export function VisitDecisionScreen({
   )).length
   const status = visitStatusSentence(model, rows, stillToConfirm, isEnglish)
 
+  const book = (
+    <VisitBookLayout
+      points={model.points}
+      isEnglish={isEnglish}
+      sourceOfPage={sourceOfPage}
+      entryOf={entryOf}
+      markOf={markOf}
+      isComplex={isComplex}
+      openKeyOf={visitDecisionKey}
+      openKey={openPoint ? openKey : null}
+      onToggle={toggleOpen}
+      {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction, queued: boolean) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
+      {...(onClearDecision ? { onClear: (step: QueueStep) => clear(step.key) } : {})}
+      basisOf={basisOf}
+      headline={status.text}
+      keyValues={model.keyValues}
+      triggers={model.triggers}
+      now={now}
+      // Only the screen-reader status: the page draws nothing of the three
+      // sections' surfaces — the values editor, the column footers, the
+      // outlook cards, the module cards (owner request 2026-09-30:
+      // 「都照著 CDSS 小麻式版面原型，不要使用任何原本的外觀」).
+      top={<VisitStatusLine model={model} sentence={status.text} />}
+      plan={plan}
+      {...(status.decided ? { decidedLine: status.text } : {})}
+      {...(bookChaptersOf(model) ? { chapters: bookChaptersOf(model)! } : {})}
+      decided={bookDecided}
+      summaryText={summaryText}
+      // A class chosen in DP-01's table is the answer the diagnosis
+      // question's own control wrote, handed back the same way.
+      {...(coronaryPhase ? { coronaryPhase } : {})}
+      {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
+      {...(sourceOfPage === 'hf' ? {
+        headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
+        calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
+        onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
+      } : {})}
+      {...(onPointAnswer ? { onAnswerQuestion: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value, questionRowOf(point, id)?.terms) } : {})}
+    />
+  )
+
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      <VisitBookLayout
-        points={model.points}
-        isEnglish={isEnglish}
-        sourceOfPage={sourceOfPage}
-        entryOf={entryOf}
-        markOf={markOf}
-        isComplex={isComplex}
-        openKeyOf={visitDecisionKey}
-        openKey={openPoint ? openKey : null}
-        onToggle={toggleOpen}
-        {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction, queued: boolean) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
-        {...(onClearDecision ? { onClear: (step: QueueStep) => clear(step.key) } : {})}
-        basisOf={basisOf}
-        headline={status.text}
-        keyValues={model.keyValues}
-        triggers={model.triggers}
-        now={now}
-        // Only the screen-reader status: the page draws nothing of the three
-        // sections' surfaces — the values editor, the column footers, the
-        // outlook cards, the module cards (owner request 2026-09-30:
-        // 「都照著 CDSS 小麻式版面原型，不要使用任何原本的外觀」).
-        top={<VisitStatusLine model={model} sentence={status.text} />}
-        plan={plan}
-        {...(status.decided ? { decidedLine: status.text } : {})}
-        {...(bookChaptersOf(model) ? { chapters: bookChaptersOf(model)! } : {})}
-        decided={bookDecided}
-        summaryText={summaryText}
-        // A class chosen in DP-01's table is the answer the diagnosis
-        // question's own control wrote, handed back the same way.
-        {...(coronaryPhase ? { coronaryPhase } : {})}
-        {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-        {...(sourceOfPage === 'hf' ? {
-          headTools: (page: BookHeadToolsPage) => (
-            <VisitCalculators
-              isEnglish={isEnglish}
-              points={model.points}
-              sourceOfPage={sourceOfPage}
-              {...(lvef !== undefined ? { lvef } : {})}
-              {...(prognosisEvidence ? { evidence: prognosisEvidence } : {})}
-              chapterOf={page.chapterOf}
-              goTo={page.goTo}
-              attached={new Set(calculatorNotes.map((note) => note.calculatorId))}
-              onAttach={(note) => attachCalculatorNote(screenKey, { ...note, at: new Date().toISOString() })}
-            />
-          ),
-          calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
-          onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
-        } : {})}
-        {...(onPointAnswer ? { onAnswerQuestion: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value, questionRowOf(point, id)?.terms) } : {})}
-      />
+      {sourceOfPage === 'hf' ? (
+        <VisitCalculatorsProvider
+          isEnglish={isEnglish}
+          points={model.points}
+          sourceOfPage={sourceOfPage}
+          {...(lvef !== undefined ? { lvef } : {})}
+          {...(prognosisEvidence ? { evidence: prognosisEvidence } : {})}
+          attached={new Set(calculatorNotes.map((note) => note.calculatorId))}
+          onAttach={(note) => attachCalculatorNote(screenKey, { ...note, at: new Date().toISOString() })}
+        >
+          {book}
+        </VisitCalculatorsProvider>
+      ) : book}
     </div>
   )
 }
