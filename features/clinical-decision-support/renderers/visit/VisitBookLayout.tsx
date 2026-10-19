@@ -631,9 +631,14 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase }:
   if (!table) return null
   const current = table.classes.find((item) => item.current)
   const choosable = onChoose && (table.classes.some((item) => item.physicianInput) || table.alternatives.length > 0)
-  // The month field belongs to CAD DP-01's two windowed classes, once chosen.
-  const chosenPhase = table.classes.find((item) => item.chosen && item.physicianInput?.request === 'cad-phase')?.id
-  const monthFor = chosenPhase === 'acs-recent' || chosenPhase === 'pci-recent' ? chosenPhase : undefined
+  // The month field belongs to CAD DP-01's two windowed classes, once given.
+  // The kept answer says which — not the class the pack reads today, which a
+  // month across the window's edge moves on — so that month stays correctable.
+  const phaseTable = table.classes.some((item) => item.physicianInput?.request === 'cad-phase')
+  const givenPhase = phaseTable && coronaryPhase
+    ? coronaryPhase.phase
+    : table.classes.find((item) => item.chosen && item.physicianInput?.request === 'cad-phase')?.id
+  const monthFor = givenPhase === 'acs-recent' || givenPhase === 'pci-recent' ? givenPhase : undefined
   const savedMonth = monthFor && coronaryPhase?.phase === monthFor ? coronaryPhase.eventMonth : undefined
   const choose = (item: ClassChoice) => {
     // The same answer again writes nothing new.

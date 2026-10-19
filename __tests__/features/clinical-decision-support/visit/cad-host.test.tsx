@@ -167,4 +167,25 @@ describe('CAD DP-01 phase classes', () => {
     fireEvent.change(field, { target: { value: '' } })
     expect(answers).toEqual([{ phase: 'pci-recent', answeredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }])
   })
+
+  // A month across the window's edge moves the class the pack reads (asked
+  // again, or chronic); the month given stays in the field to correct or clear.
+  it.each(['2026-04', '2026-03'])('keeps a kept month %s correctable once it crosses the window', (eventMonth) => {
+    const answers: NonNullable<CdssPatientProfile['coronaryPhaseAnswer']>[] = []
+    drawWith({ ...CHRONIC, coronaryPhaseAnswer: { phase: 'pci-recent', answeredOn: '2026-10-17', eventMonth } }, (answer) => answers.push(answer))
+    const field = screen.getByTestId('cdss-book-class-month') as HTMLInputElement
+    expect(field.value).toBe(eventMonth)
+    fireEvent.change(field, { target: { value: '2026-09' } })
+    fireEvent.change(field, { target: { value: '' } })
+    expect(answers).toEqual([
+      { phase: 'pci-recent', answeredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), eventMonth: '2026-09' },
+      { phase: 'pci-recent', answeredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+    ])
+  })
+
+  it('a chronic answer opens no month field', () => {
+    drawWith({ ...CHRONIC, coronaryPhaseAnswer: { phase: 'chronic-mi', answeredOn: '2026-10-17' } }, () => {})
+    expect(screen.queryByTestId('cdss-book-class-month-open')).toBeNull()
+    expect(screen.queryByTestId('cdss-book-class-month')).toBeNull()
+  })
 })
