@@ -21,6 +21,7 @@ import { BookChainDone, BookDecisionControls } from './BookDecisionControls'
 import { VisitBookChromeContext, isVisitBookMode } from './visit-book-chrome'
 import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 import styles from './VisitBookLayout.module.css'
+import { coronaryPhaseInput } from './physician-input'
 
 /**
  * The visit laid out as a pocket-handbook page (owner request 2026-09-30,
@@ -627,6 +628,9 @@ function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: Decis
   if (!table) return null
   const current = table.classes.find((item) => item.current)
   const choosable = onChoose && (table.classes.some((item) => item.physicianInput) || table.alternatives.length > 0)
+  // The month field belongs to CAD DP-01's two windowed classes, once chosen.
+  const chosenPhase = table.classes.find((item) => item.chosen && item.physicianInput?.request === 'cad-phase')?.id
+  const monthFor = chosenPhase === 'acs-recent' || chosenPhase === 'pci-recent' ? chosenPhase : undefined
   const choose = (item: ClassChoice) => {
     // The same answer again writes nothing new.
     if (item.physicianInput && !item.chosen) onChoose?.(item.physicianInput)
@@ -681,9 +685,39 @@ function ClassificationTable({ point, isEnglish, onChoose, tag }: { point: Decis
               </button>
             ))}
           </div>
+          {monthFor ? <EventMonthField key={monthFor} isEnglish={isEnglish} onSet={(month) => onChoose?.(coronaryPhaseInput(monthFor, month))} /> : null}
         </div>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * CAD DP-01's 「知道年月？」 (owner request 2026-10-19: 「除了三個選項也開放
+ * user 知道具體年月想寫上去」): closed until asked for, and never required.
+ * The month rides on the same `cad-phase` answer as the class it dates.
+ */
+function EventMonthField({ isEnglish, onSet }: { isEnglish: boolean; onSet: (month: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  if (!open) {
+    return (
+      <button type="button" className={styles.askNote} onClick={() => setOpen(true)} data-testid="cdss-book-class-month-open">
+        {isEnglish ? 'Know the month?' : '知道年月？'}
+      </button>
+    )
+  }
+  return (
+    <span className={styles.askNote}>
+      <label htmlFor={id}>{isEnglish ? 'Event month ' : '事件年月 '}</label>
+      <input
+        id={id}
+        type="month"
+        max={new Date().toISOString().slice(0, 7)}
+        onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) onSet(event.target.value) }}
+        data-testid="cdss-book-class-month"
+      />
+    </span>
   )
 }
 

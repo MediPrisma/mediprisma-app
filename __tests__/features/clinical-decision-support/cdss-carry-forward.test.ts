@@ -5,6 +5,7 @@ import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores
 import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
+import { useCoronaryPhaseStore } from '@/features/clinical-decision-support/stores/coronary-phase.store'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
 import { useVisitAnswersStore } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import { usePreventStore } from '@/features/clinical-decision-support/stores/prevent-inputs.store'
@@ -37,6 +38,7 @@ beforeEach(() => {
   useEvidenceOverridesStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
   useCarriedAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
   useAfAnswersStore.setState({ patientId: 'p', hydratedPatientId: 'p', answers: {} })
+  useCoronaryPhaseStore.setState({ patientId: 'p', hydratedPatientId: 'p', answer: undefined })
   useNhiLipidReviewStore.setState({ patientId: 'p', answers: {}, provenance: {} })
   usePreventStore.setState({ patientId: 'p', inputs: {} })
 })
@@ -221,4 +223,17 @@ test('the next day, a carried compensation, NYHA grade or sign still held keeps 
   const marks = useCarriedAnswersStore.getState().byPatientId.p
   for (const key of ['compensation', 'nyha', 'sign:orthopnea']) expect(carriedFrom(marks, key, held[key], tomorrow)).toBe('2026-09-01')
   expect(staleCarriedKeys(marks, held, tomorrow)).not.toEqual(expect.arrayContaining(['compensation', 'nyha', 'sign:orthopnea']))
+})
+
+test('carries CAD DP-01\'s class with the day it was given, so the pack ages it; today\'s answer wins', () => {
+  const saved = record()
+  ;(saved.save.physician_inputs as Record<string, unknown>).coronaryPhaseAnswer = { phase: 'acs-recent', answeredOn: '2026-09-01', eventMonth: '2026-04' }
+  const profile = { id: 'p', facts: {} }
+  carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true })
+  expect(useCoronaryPhaseStore.getState().answer).toEqual({ phase: 'acs-recent', answeredOn: '2026-09-01', eventMonth: '2026-04' })
+  expect(carryableAnswers('p', new Date(), 'held')['coronary:phase']).toBe('acs-recent')
+
+  useCoronaryPhaseStore.setState({ answer: { phase: 'chronic-mi', answeredOn: todayIsoDate() } })
+  carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true })
+  expect(useCoronaryPhaseStore.getState().answer?.phase).toBe('chronic-mi')
 })

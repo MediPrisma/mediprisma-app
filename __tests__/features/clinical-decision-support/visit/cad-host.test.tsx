@@ -7,7 +7,7 @@
  * The patient is the review draft's case 13 (NSTEMI admitted 2026-01-20,
  * aspirin with ticagrelor, seen 2026-10-17); every value is invented.
  */
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import {
   CORONARY_DISEASE_GUIDELINE_PACK,
   buildVisitDecisionModel,
@@ -107,5 +107,46 @@ describe('coronary disease on this host', () => {
     draw()
     expect(document.querySelector('[data-book-coverage]')).toBeNull()
     expect(entry('DP-12')).toBeInTheDocument()
+  })
+})
+
+describe('CAD DP-01 phase classes', () => {
+  // A stay coded I25.10 on DAPT: the record holds no ACS, so the class is the clinician's.
+  const CHRONIC: CdssPatientProfile = {
+    ...PROFILE,
+    facts: {
+      age: PROFILE.facts.age,
+      chronicCoronarySyndromeDiagnosis: PROFILE.facts.chronicCoronarySyndromeDiagnosis,
+      LDL: PROFILE.facts.LDL,
+      eGFR: PROFILE.facts.eGFR,
+      LVEF: PROFILE.facts.LVEF,
+    },
+  }
+
+  function drawWith(profile: CdssPatientProfile, onCoronaryPhase: (answer: NonNullable<CdssPatientProfile['coronaryPhaseAnswer']>) => void) {
+    const result = CORONARY_DISEASE_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const visitModel = buildVisitDecisionModel({ packId: PACK_ID, result, profile, locale: 'zh-TW' })
+    return render(<ClinicalDecisionSupportView result={result} locale="zh-TW" layout="map" patientId="cad-host" visitModel={visitModel} onCoronaryPhase={onCoronaryPhase} />)
+  }
+
+  it('draws the four classes with the record\'s marked, and one press writes the answer', () => {
+    const answers: NonNullable<CdssPatientProfile['coronaryPhaseAnswer']>[] = []
+    drawWith(CHRONIC, (answer) => answers.push(answer))
+    const choices = screen.getByTestId('cdss-book-class-choices')
+    expect(within(choices).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'ACS 1 年內', 'PCI 半年內', '慢性・有 MI／ACS', '慢性・無 MI／ACS', '還不確定',
+    ])
+    expect(screen.getByTestId('cdss-book-classification').textContent).toContain('慢性・無 MI／ACS ← 本病人')
+    fireEvent.click(within(choices).getByRole('button', { name: 'ACS 1 年內' }))
+    expect(answers).toEqual([{ phase: 'acs-recent', answeredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }])
+  })
+
+  it('reads the answer back: DP-12 is timed from the class, and the month can be added', () => {
+    const answers: NonNullable<CdssPatientProfile['coronaryPhaseAnswer']>[] = []
+    drawWith({ ...CHRONIC, coronaryPhaseAnswer: { phase: 'acs-recent', answeredOn: '2026-10-17' } }, (answer) => answers.push(answer))
+    expect(entry('DP-12').textContent).toContain('ACS 1 年內（醫師判斷 10-17）')
+    fireEvent.click(screen.getByTestId('cdss-book-class-month-open'))
+    fireEvent.change(screen.getByTestId('cdss-book-class-month'), { target: { value: '2026-04' } })
+    expect(answers.at(-1)).toMatchObject({ phase: 'acs-recent', eventMonth: '2026-04' })
   })
 })
