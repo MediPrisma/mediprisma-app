@@ -1,24 +1,10 @@
 name: HMC preview build
 
-# This file belongs to pilot/hmc, and it is the half of the preview HMC owns.
-#
-# Everything that can decide a build is not fit to show a clinician runs here:
-# the personalization build, the overlay, the overlay's own smoke check,
-# typecheck, lint, Jest, and the static export. When one of them is wrong —
-# the way the overlay check kept demanding the CKD pack on 2026-09-10, days
-# after the release that dropped it — the fix is a commit on this branch, by
-# whoever is blocked, without waiting for the app owner.
-#
-# Publishing is deliberately not here. The key that writes mediprisma.tw is an
-# environment secret restricted to protected branches, so this branch cannot
-# read it however this file is edited. `Publish HMC pilot preview` on master
-# waits for this run to finish, takes the artifact, and copies it into
-# /app-hmc and nowhere else.
-#
-# What this run produces is therefore the whole contract: `out/` as built, and
-# `hmc-build.json` naming the two commits it was built from. A red Jest run is
-# recorded in `test-summary.txt` and does not stop the upload — it is reported
-# on the other side, in the issue, not used as a gate.
+# HMC uses the exact published rules locked by this app revision. No pilot
+# source overlay can replace them after npm ci. The installed versions, required
+# host APIs and release provenance are checked before typecheck and export.
+# Publishing remains on protected master; keep this workflow's name and artifact
+# contract stable. Jest results are reported without gating publication.
 on:
   push:
     branches:
@@ -52,30 +38,17 @@ jobs:
           path: app
           persist-credentials: false
 
-      - name: Checkout HMC personalization source
-        uses: actions/checkout@v7
-        with:
-          repository: voho0000/mediprisma-personalization
-          ref: pilot/hmc
-          ssh-key: ${{ secrets.HMC_PERSONALIZATION_DEPLOY_KEY }}
-          path: personalization
-          persist-credentials: false
-
-      - name: Resolve pilot revisions
+      - name: Resolve app revision
         id: revisions
         shell: bash
-        run: |
-          echo "app_sha=$(git -C app rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "personalization_sha=$(git -C personalization rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "app_sha=$(git -C app rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: |
-            app/package-lock.json
-            personalization/package-lock.json
+          cache-dependency-path: app/package-lock.json
 
       - name: Check owner-set HF gateway variables
         env:
@@ -104,95 +77,6 @@ jobs:
           }
           NODE
 
-      - name: Align personalization source workspace versions
-        working-directory: personalization
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import { readdir, readFile, writeFile } from 'node:fs/promises'
-          import path from 'node:path'
-
-          const packageRoot = path.resolve('packages')
-          const directories = await readdir(packageRoot, { withFileTypes: true })
-          const manifests = []
-          const versions = new Map()
-
-          for (const directory of directories.filter((entry) => entry.isDirectory())) {
-            const manifestPath = path.join(packageRoot, directory.name, 'package.json')
-            const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-            manifests.push({ manifestPath, manifest })
-            versions.set(manifest.name, manifest.version)
-          }
-
-          for (const { manifestPath, manifest } of manifests) {
-            for (const section of ['dependencies', 'devDependencies', 'peerDependencies']) {
-              for (const dependency of Object.keys(manifest[section] ?? {})) {
-                if (versions.has(dependency)) manifest[section][dependency] = versions.get(dependency)
-              }
-            }
-            await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
-          }
-          NODE
-
-      - name: Install personalization dependencies from source workspaces
-        working-directory: personalization
-        shell: bash
-        run: |
-          cleanup_npmrc() {
-            rm -f .npmrc
-          }
-          trap cleanup_npmrc EXIT
-          rm -f .npmrc
-          printf '%s\n' 'registry=https://registry.npmjs.org/' > .npmrc
-          npm install --ignore-scripts --package-lock=false
-
-      - name: Rebuild personalization dependencies
-        working-directory: personalization
-        run: npm rebuild
-
-      - name: Verify and build HMC personalization
-        working-directory: personalization
-        run: npm run verify
-
-      - name: Remove published source packages from app roots
-        working-directory: app
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import { readdir, readFile, writeFile } from 'node:fs/promises'
-          import path from 'node:path'
-
-          const sourcePackageRoot = path.resolve('..', 'personalization', 'packages')
-          const sourceDirectories = await readdir(sourcePackageRoot, { withFileTypes: true })
-          const localPackages = []
-
-          for (const directory of sourceDirectories.filter((entry) => entry.isDirectory())) {
-            const manifestPath = path.join(sourcePackageRoot, directory.name, 'package.json')
-            const sourceManifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-            if (!sourceManifest.name?.startsWith('@voho0000/')) {
-              throw new Error(`Unexpected source package name at ${manifestPath}: ${sourceManifest.name}`)
-            }
-            localPackages.push(sourceManifest.name)
-          }
-          if (localPackages.length === 0) throw new Error('No personalization source packages found')
-
-          const manifest = JSON.parse(await readFile('package.json', 'utf8'))
-          const lockfile = JSON.parse(await readFile('package-lock.json', 'utf8'))
-
-          for (const name of localPackages) {
-            // Retain the published dependency during npm ci; the complete pilot
-            // source package replaces it in the injection step below.
-            if (name === '@voho0000/personalized-care') continue
-            delete manifest.dependencies?.[name]
-            delete manifest.devDependencies?.[name]
-            delete lockfile.packages?.['']?.dependencies?.[name]
-            delete lockfile.packages?.['']?.devDependencies?.[name]
-          }
-
-          await writeFile('package.json', `${JSON.stringify(manifest, null, 2)}\n`)
-          await writeFile('package-lock.json', `${JSON.stringify(lockfile, null, 2)}\n`)
-          NODE
-
       - name: Install app dependencies
         working-directory: app
         env:
@@ -214,94 +98,12 @@ jobs:
         working-directory: app
         run: npm rebuild
 
-      - name: Inject HMC personalization source packages
+      - name: Verify locked HMC rules and record release provenance
+        working-directory: app
         env:
           APP_SHA: ${{ steps.revisions.outputs.app_sha }}
-          PERSONALIZATION_SHA: ${{ steps.revisions.outputs.personalization_sha }}
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import { access, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-          import path from 'node:path'
-
-          const packageRoot = path.resolve('personalization', 'packages')
-          const packageDirs = (await readdir(packageRoot, { withFileTypes: true }))
-            .filter((entry) => entry.isDirectory())
-            .map((entry) => entry.name)
-            .sort()
-          if (packageDirs.length === 0) throw new Error('No personalization source packages found')
-
-          // Use the complete pilot build, including its disease and knowledge
-          // registries. A partial HF overlay would omit the dyslipidemia pack.
-          const packageVersions = {}
-
-          for (const packageDir of packageDirs) {
-            const source = path.join(packageRoot, packageDir)
-            const manifest = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8'))
-            const expectedName = `@voho0000/${packageDir}`
-            if (manifest.name !== expectedName) {
-              throw new Error(`Unexpected package name at ${source}: ${manifest.name}`)
-            }
-            await access(path.join(source, 'dist', 'index.js'))
-
-            const target = path.resolve('app', 'node_modules', '@voho0000', packageDir)
-            await rm(target, { recursive: true, force: true })
-            await mkdir(target, { recursive: true })
-            await cp(path.join(source, 'package.json'), path.join(target, 'package.json'))
-            await cp(path.join(source, 'dist'), path.join(target, 'dist'), { recursive: true })
-            packageVersions[manifest.name] = manifest.version
-          }
-
-          const buildInfo = {
-            preview: 'HMC',
-            appRef: 'pilot/hmc',
-            appSha: process.env.APP_SHA,
-            personalizationRef: 'pilot/hmc',
-            personalizationSha: process.env.PERSONALIZATION_SHA,
-            packageVersions,
-            builtAt: new Date().toISOString(),
-          }
-          await writeFile(
-            path.resolve('app', 'public', 'hmc-build.json'),
-            `${JSON.stringify(buildInfo, null, 2)}\n`,
-          )
-          NODE
-
-      - name: Verify HMC care overlay
-        working-directory: app
-        shell: bash
-        run: |
-          node <<'NODE'
-          const { CARE_PACKS } = require('@voho0000/personalized-care')
-          const { HEART_FAILURE_GUIDELINE_PACK: sourceHeartFailure } = require(
-            '../personalization/packages/personalized-care/dist/guideline-packs/heart-failure-pack.js'
-          )
-
-          const { HYPERLIPIDEMIA_GUIDELINE_PACK: sourceLipid } = require(
-            '../personalization/packages/personalized-care/dist/guideline-packs/hyperlipidemia-pack.js'
-          )
-          const installedLipid = CARE_PACKS.find((pack) => pack.id === 'hyperlipidemia-cdss')
-          if (!installedLipid || installedLipid.version !== sourceLipid.version) {
-            throw new Error('HMC overlay must include the pilot dyslipidemia pack')
-          }
-          const { getEnabledKnowledgePacks } = require('@voho0000/personalized-care')
-          if (!getEnabledKnowledgePacks().some((pack) => pack.metadata('zh-TW').id === 'taiwan-nhi-lipid-2026')) {
-            throw new Error('HMC overlay must include NHI lipid evidence')
-          }
-          const installedHeartFailure = CARE_PACKS.find((pack) => pack.id === 'heart-failure-cdss')
-          if (!installedHeartFailure) {
-            throw new Error('HMC overlay must retain the heart-failure care pack')
-          }
-          for (const field of ['id', 'version', 'enabled']) {
-            if (installedHeartFailure[field] !== sourceHeartFailure[field]) {
-              throw new Error(`HMC heart-failure ${field} does not match pilot source`)
-            }
-          }
-          if (installedHeartFailure.label.zh !== sourceHeartFailure.label.zh
-            || installedHeartFailure.label.en !== sourceHeartFailure.label.en) {
-            throw new Error('HMC heart-failure label does not match pilot source')
-          }
-          NODE
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: node scripts/hmc-published-packages.mjs
 
       - name: Typecheck HMC app
         working-directory: app
@@ -311,23 +113,8 @@ jobs:
         working-directory: app
         run: npm run lint
 
-      # Reported, not gating. What has to be true before a build reaches a
-      # clinician is that the preview runs at all, and the steps around this one
-      # say so: the overlay check, typecheck, lint and the export each fail on
-      # something genuinely broken. A red Jest run means the repository is not
-      # clean, which is worth knowing and is not the same claim — so it travels
-      # to the publisher in `test-summary.txt` and is reported in the issue
-      # while the preview still goes out.
-      #
-      # This distinction cost a day on 2026-09-10, when four cases that could
-      # never pass in a preview build held back the whole HFpEF slice. Both
-      # halves of that are now fixable from this branch: the suite, and this
-      # step.
-      #
-      # The three ignored suites assert the released package's HF title and
-      # pilot gate, which this branch's source intentionally replaces; the
-      # personalization repository's own verify run and the overlay check above
-      # cover that boundary.
+      # Jest reports without gating publication. Package/API verification,
+      # typecheck, lint and static export remain required before handover.
       - name: Test HMC app
         id: tests
         working-directory: app
@@ -336,7 +123,7 @@ jobs:
         run: |
           # `shell: bash` already runs with -eo pipefail, so the tee below does
           # not swallow a failing run.
-          npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees|__tests__/features/clinical-decision-support/(LiveFeature|package-wiring|pilot-pack-registry)[.]test[.]tsx?$" 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+          npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees" 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
 
       - name: Record the test result for the publisher
         if: always()
