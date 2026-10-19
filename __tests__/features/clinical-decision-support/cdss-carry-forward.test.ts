@@ -229,11 +229,11 @@ test('carries CAD DP-01\'s class with the day it was given, so the pack ages it;
   const saved = record()
   ;(saved.save.physician_inputs as Record<string, unknown>).coronaryPhaseAnswer = { phase: 'acs-recent', answeredOn: '2026-09-01', eventMonth: '2026-04' }
   const profile = { id: 'p', facts: {} }
-  carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true })
+  carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: false })
   expect(useCoronaryPhaseStore.getState().answer).toEqual({ phase: 'acs-recent', answeredOn: '2026-09-01', eventMonth: '2026-04' })
   expect(carryableAnswers('p', new Date(), 'held')['coronary:phase']).toBe('acs-recent')
 
   useCoronaryPhaseStore.setState({ answer: { phase: 'chronic-mi', answeredOn: todayIsoDate() } })
-  carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true })
+  carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: false })
   expect(useCoronaryPhaseStore.getState().answer?.phase).toBe('chronic-mi')
 })
