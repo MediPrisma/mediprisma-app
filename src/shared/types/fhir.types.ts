@@ -250,6 +250,7 @@ export interface Duration {
 }
 
 export interface MedicationRequest {
+  identifier?: Identifier[]
   id?: string
   resourceType?: string
   meta?: {
@@ -283,6 +284,8 @@ export interface MedicationRequest {
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
   /** Bundle.timestamp propagated by the local import reader. */
   _sourceCapturedAt?: string
+  /** Original order references retained when verified cross-source copies merge. */
+  _reconciledSourceReferences?: string[]
 }
 
 export interface MedicationStatement {

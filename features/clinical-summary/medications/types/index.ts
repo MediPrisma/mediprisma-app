@@ -35,6 +35,16 @@ export interface MedicationExecutionPeriod {
 
 export interface MedicationRow {
   id: string
+  /** Canonical originating visit. Distinct orders within one visit must remain
+   *  distinct even when their product and regimen are identical. */
+  encounterReference?: string
+  /** Original cross-source order ids represented by this row. */
+  reconciledOrderIds?: string[]
+  /** An actually recorded NHI product code, including an explicit cloud code
+   *  retained in a confirmed cross-source order. Never guessed from names. */
+  nhiDrugCode?: string
+  dataOrigin?: 'hospital' | 'medcloud' | 'integrated'
+  sourceOrderIdentifiers?: string[]
   /** Stable source medication key used for grouping; never infer identity from
    *  the audience-facing title because different products can share an
    *  ingredient name. */
@@ -76,6 +86,10 @@ export interface MedicationRow {
   /** True when FHIR courseOfTherapyType marks the order as 'continuous'
    *  (NHI 慢性處方箋, refillable chronic prescription). */
   isChronic: boolean
+  /** The source explicitly marks this outpatient order as self-purchased. */
+  selfPurchased?: boolean
+  /** True for orders emitted by the North VGH outpatient bridge. */
+  hospitalOutpatient?: boolean
   /** Audience-aware drug-category label (e.g. "降血壓藥" or "HYPOTENSIVE AGENTS").
    *  MediCloud ATC3 takes precedence; other sources fall back to FHIR
    *  MedicationRequest.category[0]. Empty when neither is available. */
@@ -96,11 +110,8 @@ export interface MedicationRow {
   icdText?: string
   /** Total number of refills of this drug across the loaded dataset. */
   refillCount: number
-  /** Number of EARLIER still-active fills of this same drug from the SAME
-   *  institution merged into this row (慢箋 early refill overlap — one
-   *  continuing prescription, not duplicate therapy). Cross-institution
-   *  same-drug rows are never merged: that's a duplicate-therapy signal
-   *  that must stay visible. Set by useGroupedMedications. */
+  /** Retained for existing row renderers; source reconciliation never folds
+   *  independent renewals into an active prescription, so this is zero. */
   overlapCount?: number
   /** First (earliest) refill date for this drug, formatted. */
   firstRefillDate?: string

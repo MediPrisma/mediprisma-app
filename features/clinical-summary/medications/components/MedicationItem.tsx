@@ -71,7 +71,13 @@ interface MedicationItemProps {
   resourceNavigationIds?: string[]
 }
 
-function getStatusBadge(medication: MedicationRow, mt: any) {
+function getStatusBadge(medication: MedicationRow, mt: any, locale: string) {
+  const endedStatus = {
+    cancelled: locale === 'en' ? 'cancelled' : '已取消',
+    'entered-in-error': locale === 'en' ? 'entered in error' : '誤植紀錄',
+    stopped: locale === 'en' ? 'stopped' : '已停用',
+  }[medication.status as 'cancelled' | 'entered-in-error' | 'stopped']
+  if (endedStatus) return { label: endedStatus, variant: 'secondary' as const }
   if (medication.isInactive) {
     return { label: mt.statusEnded ?? 'ended', variant: 'secondary' as const }
   }
@@ -130,15 +136,23 @@ export function MedicationItem({
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const mt = (t.medications as any)
-  const badge = getStatusBadge(medication, mt)
+  const badge = getStatusBadge(medication, mt, locale)
   const chronicLabel = mt.chronic ?? '慢箋'
   const isMedical = audience === 'medical'
   const showStatementChip =
     showSourceChip && medication.sourceResourceType === 'MedicationStatement'
+  const terminology = medication.drugTerminology
+  const integrated = (medication.reconciledOrderIds?.length ?? 0) > 1
+  const sourceLabel = integrated ? (locale === 'en' ? 'Hospital + cloud' : '院內＋雲端')
+    : medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
+      : medication.dataOrigin === 'medcloud' ? (locale === 'en' ? 'MediCloud' : '雲端') : undefined
+  const sourceDescription = integrated
+    ? (locale === 'en' ? 'One matched prescription, with hospital and MediCloud source records retained.' : '同一筆藥囑的院內與健保雲端資料已整合，兩邊原始紀錄均保留。')
+    : (locale === 'en' ? 'This source record has not been matched to an order from the other source.' : '這筆來源紀錄尚未確認與另一來源為同筆藥囑。')
+  const hasMedicationDetails = !!(terminology || medication.hospitalMedicationName || medication.nhiDrugCode || integrated)
   const billingIcdTitle = medication.icdCode
     ? `${medication.icdCode}${medication.icdText ? ` ${medication.icdText}` : ''}`
     : mt.billingIcdTooltip
-  const terminology = medication.drugTerminology
   const fullMedicationTitle = [
     medication.title,
     medication.secondaryTitle,
@@ -353,6 +367,7 @@ export function MedicationItem({
     && !medication.isChronic
     && !((medication.overlapCount ?? 0) > 0)
     && !showStatementChip
+    && !sourceLabel
   // A row under a visit header has nothing left in its middle column at
   // desktop widths, so from a 720px list it folds onto one line:
   // name | dates + regimen | class chips | status + refills. Below that it
@@ -363,7 +378,7 @@ export function MedicationItem({
   // MedicationStatement, so this row answers to both.
   const anchorRef = useResourceAnchor(
     ['MedicationRequest', 'MedicationStatement'],
-    resourceNavigationIds ?? medication.id,
+    [...new Set([medication.id, ...(resourceNavigationIds ?? []), ...(medication.reconciledOrderIds ?? [])])],
     onResourceNavigationMatch,
   )
 
@@ -407,10 +422,10 @@ export function MedicationItem({
             <span
               className={cn(
                 "flex min-w-0 flex-1 items-baseline gap-1",
-                (terminology || medication.hospitalMedicationName) && "cursor-help",
+                hasMedicationDetails && "cursor-help",
               )}
               title={fullMedicationTitle}
-              tabIndex={terminology || medication.hospitalMedicationName ? 0 : undefined}
+              tabIndex={hasMedicationDetails ? 0 : undefined}
             >
               <span
                 className="min-w-0 truncate text-[0.8125rem] font-semibold tracking-[-0.005em]"
@@ -419,6 +434,11 @@ export function MedicationItem({
               </span>
             </span>
           </MedicationTerminologyTooltip>
+          {medication.selfPurchased && (
+            <span className="ml-1 shrink-0 rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80">
+              {locale.startsWith('zh') ? '自費／自購' : 'Self-pay'}
+            </span>
+          )}
           {medication.route && routeTitle ? (
             <span
               data-medication-route
@@ -532,6 +552,17 @@ export function MedicationItem({
               >
                 {chronicLabel}
               </span>
+            )}
+            {sourceLabel && (
+              <TapTooltip
+                asChild
+                content={sourceDescription}
+                contentClassName={`${clinicalTooltipSurfaceClass} max-w-[min(90vw,26rem)] whitespace-normal text-[max(12px,0.75rem)]`}
+              >
+                <span tabIndex={0} className="inline-flex shrink-0 cursor-help items-center rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80">
+                  {sourceLabel}
+                </span>
+              </TapTooltip>
             )}
             {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
                 the SAME institution is still inside its window and was folded

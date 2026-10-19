@@ -1,7 +1,9 @@
 import { useMemo } from "react"
+import { localizedIcdDescription } from '@/src/shared/utils/icd-lookup'
 import { getReferenceId, getCodeText, getMedicationNameLocalized, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
 import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel, isReferenceRangeAssessmentUnavailable } from "@voho0000/clinical-lab-normalization/interpretation"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
+import { hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
 import { getAnalyteLabel, getAnalyteCanonicalKey } from "@voho0000/clinical-lab-normalization/canonical"
 import { getAnalyteDisplayForObs, type DisplayLang } from "@voho0000/clinical-lab-normalization/display"
 import {
@@ -379,6 +381,7 @@ export function useEncounterDetails(
   locale: string = "en-US",
   audience: 'medical' | 'patient' = 'medical',
   standardMedicationRows: MedicationRow[] = [],
+  icdDict?: Map<string, string>,
 ) {
   return useMemo(() => {
     const map = new Map<string, EncounterDetails>()
@@ -402,24 +405,6 @@ export function useEncounterDetails(
     }
 
     if (Array.isArray(medications)) {
-      // Drug-level chronic aggregation: the bridge tags each refill individually,
-      // and a chronic drug may have occasional acute refills. Treat a drug as
-      // chronic for this patient if ANY refill in the whole dataset was tagged.
-      // Mirrors the same aggregation used in features/clinical-summary/medications/
-      // hooks/useMedicationRows.ts so the badge appears consistently across views.
-      const chronicDrugKeys = new Set<string>()
-      for (const m of medications) {
-        if (!m) continue
-        if (!isChronicPrescription(m)) continue
-        const key =
-          m.medicationCodeableConcept?.coding?.[0]?.code ||
-          m.medicationCodeableConcept?.text ||
-          m.medicationReference?.display ||
-          m.code?.text ||
-          ''
-        if (key) chronicDrugKeys.add(key)
-      }
-
       medications.forEach((med: any, medicationIndex: number) => {
         const encounterId = getReferenceId(med?.encounter)
         if (!encounterId) return
@@ -437,7 +422,7 @@ export function useEncounterDetails(
           med?.medicationReference?.display ||
           med?.code?.text ||
           ''
-        const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
+        const isChronic = isChronicPrescription(med) || hasExplicitChronicNote(med)
         const rawDetail =
           med?.dosageInstruction?.[0]?.text || medicationQuantityDetail(med)
         const standardRow =
@@ -597,7 +582,9 @@ export function useEncounterDetails(
 
         entry.diagnoses.push({
           id,
-          title: condition?.code?.text
+          title: (icdCode ? localizedIcdDescription(icdCode, condition?.code?.text,
+            coding?.find((item: any) => item.code === icdCode)?.display, icdDict, displayLang) : undefined)
+            || condition?.code?.text
             || coding?.[0]?.display
             || coding?.[0]?.code
             || 'Unknown diagnosis',
@@ -632,5 +619,6 @@ export function useEncounterDetails(
     locale,
     audience,
     standardMedicationRows,
+    icdDict,
   ])
 }

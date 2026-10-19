@@ -15,6 +15,9 @@ import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
+import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
+import { isNhiDrugCodeSystem } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
+import { isVghtpeSource, isMedcloudSource } from '@/src/infrastructure/fhir/services/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
 import {
   resolveSinglePrescriptionRemainingDisplay,
@@ -35,6 +38,12 @@ function isoCalendarDay(value?: string): string | undefined {
 function localIsoDay(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function isHospitalOutpatientMedication(medication: any): boolean {
+  return medication?.medicationCodeableConcept?.coding?.some((coding: any) =>
+    String(coding?.system ?? '').startsWith('urn:oid:vgh.medication.'),
+  ) === true
 }
 
 /** Keep descriptive drug classes aligned with the UI language. Some bridge
@@ -111,11 +120,8 @@ export function useMedicationRows(
   medications: any[],
   audience: 'medical' | 'patient' = 'medical',
   locale: string = 'zh-TW',
-  /** Every prescription on the chart, when `medications` is only a subset
-   *  (the overview builds rows for its window alone). 慢箋 is decided per
-   *  drug across ALL its refills, so a subset must not decide it: a window
-   *  that happens to hold only the non-chronic refills would otherwise
-   *  un-mark a drug the 用藥 tab shows as 慢箋. */
+  /** Full chart when the view only supplies a subset. Used for refill counts;
+   *  prescription type is always taken from this individual order. */
   chronicHistory?: readonly any[],
 ) {
   // Re-run when the calendar day rolls over (tab left open) so "days left" /
@@ -124,6 +130,11 @@ export function useMedicationRows(
   return useMemo<MedicationRow[]>(() => {
     if (!Array.isArray(medications)) return []
 
+    // Cross-source duplicate reconciliation belongs to the import graph so
+    // lists, timelines and AI receive the same records. A name/day match in
+    // this view alone cannot prove a duplicate prescription.
+    const visibleMedications = medications
+
     // NOTE: vaccine-categorized MedicationRequests (e.g. a tetanus shot
     // ordered as treatment for a wound) STAY in the medication list. Only
     // FHIR R4 Immunization resources — from 疾病管制署 preventive-care
@@ -131,28 +142,13 @@ export function useMedicationRows(
     // filter was wrong because therapeutic vaccine prescriptions ARE
     // medications and belong with the rest of the patient's drug list.
 
-    const inactiveStatuses = new Set(["stopped", "completed"])
-
-    // The bridge emits one MedicationRequest per refill. The chronic
-    // (courseOfTherapyType.continuous) flag is set per refill, so a single
-    // drug may appear as a mix of "chronic" and "acute" refills depending on
-    // which NHI billing code each pharmacy used that month. Aggregate to the
-    // drug level — if ANY refill of this medication was chronic, treat every
-    // row of that drug as chronic. This matches the bridge's recommended
-    // detection logic ("若想顯示哪些是慢性用藥…group by 藥品名").
-    const chronicDrugKeys = new Set<string>()
-    for (const m of chronicHistory ?? medications) {
-      if (!m) continue
-      if (!isChronicPrescription(m)) continue
-      const key = medicationClinicalIdentityKey(m)
-      if (key) chronicDrugKeys.add(key)
-    }
+    const inactiveStatuses = new Set(["stopped", "completed", "cancelled", "entered-in-error"])
 
     // Refill-history aggregates (per drug). Used to surface "Refills: 11 次
     // since 2023-12" on each row without forcing the user to expand the
     // per-drug accordion in the Medication History section.
     const refillsByDrug = new Map<string, { count: number; firstDate?: string }>()
-    for (const m of medications) {
+    for (const m of chronicHistory ?? visibleMedications) {
       if (!m) continue
       const key = medicationClinicalIdentityKey(m)
       if (!key) continue
@@ -168,12 +164,11 @@ export function useMedicationRows(
       }
     }
 
-    const enriched = medications.map((med: any, idx: number) => {
+    const enriched = visibleMedications.map((med: any, idx: number) => {
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const drugTerminology = med.drugTerminology
-      const hospitalMedicationName = !drugTerminology
-        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code)
-        : undefined
+      const hospitalMedicationName = !drugTerminology || med._reconciledSourceReferences?.length
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code) : undefined
 
       // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
       // localized (zh-TW) name in `.text` and the English name in
@@ -297,9 +292,10 @@ export function useMedicationRows(
         daysRemaining,
         nowMs,
       )
-      // Drug-level chronic: true if any refill of this drug was chronic
+      // A prior chronic fill does not make a different order a chronic Rx.
       const drugKey = medicationClinicalIdentityKey(med)
-      const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
+      const isChronic = isChronicPrescription(med) || hasExplicitChronicNote(med)
+      const selfPurchased = sourceSelfPurchase(med) === true
 
       const refillAgg = drugKey ? refillsByDrug.get(drugKey) : undefined
       const refillCount = refillAgg?.count ?? 1
@@ -378,6 +374,14 @@ export function useMedicationRows(
         // stable across the now-more-frequent memo recomputes — a random id
         // would remount id-less rows on every focus/day tick.
         id: med.id || `med-${idx}`,
+        encounterReference: med.encounter?.reference,
+        reconciledOrderIds: med._reconciledSourceReferences?.map((reference: string) => reference.split('/').pop()).filter(Boolean),
+        nhiDrugCode: (med.medicationCodeableConcept || med.code)?.coding?.find((coding: any) => isNhiDrugCodeSystem(coding.system))?.code,
+        sourceOrderIdentifiers: med.identifier?.filter((identifier: any) => identifier.system === 'urn:oid:vgh.medication.order' && identifier.value)
+          .map((identifier: any) => identifier.value),
+        dataOrigin: med._reconciledSourceReferences?.length > 1 ? 'integrated'
+          : isVghtpeSource(med) || isHospitalOutpatientMedication(med) ? 'hospital'
+            : isMedcloudSource(med) ? 'medcloud' : undefined,
         drugKey,
         title: medicationName,
         secondaryTitle,
@@ -401,6 +405,8 @@ export function useMedicationRows(
         singlePrescriptionRemainingIsCurrent: remainingDisplay.isCurrent,
         isInactive,
         isChronic,
+        selfPurchased,
+        hospitalOutpatient: isHospitalOutpatientMedication(med),
         category,
         drugTerminology,
         hospitalMedicationName,

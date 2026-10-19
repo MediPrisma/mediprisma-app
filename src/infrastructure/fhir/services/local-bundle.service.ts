@@ -30,6 +30,8 @@ import {
 import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
+import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
+import { reconcileMedicationRequests } from './medication-reconciliation'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
@@ -1230,7 +1232,7 @@ export const LocalBundleService = {
     // every downstream step (patient-id gate, report-member linking, the inline
     // split('/').pop() resolvers) works regardless of the bundle's reference
     // style. See canonicalizeBundleResources.
-    const entries: any[] = canonicalizeBundleResources(bundle)
+    let entries: any[] = canonicalizeBundleResources(bundle)
     if (!entries.length) return null
 
     // TW-PAS support: unpack any Claim (事前審查申請) into the standard
@@ -1249,6 +1251,8 @@ export const LocalBundleService = {
     // references to human-readable display strings (attending physician,
     // institution) so the UI's `.display`-only renderers can show them.
     attachReferenceDisplays(entries)
+    entries = reconcileOutpatientEncounters(entries)
+    entries = reconcileMedicationRequests(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
     const sourceCapturedAt = typeof bundle.timestamp === 'string'

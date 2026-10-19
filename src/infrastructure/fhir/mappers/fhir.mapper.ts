@@ -221,6 +221,7 @@ export class FhirMapper implements IDataMapper {
     return {
       id: fhirResource.id || '',
       meta: request.meta,
+      identifier: request.identifier,
       medicationCodeableConcept: fhirResource.medicationCodeableConcept,
       medicationReference: fhirResource.medicationReference,
       status: fhirResource.status,
@@ -244,6 +245,7 @@ export class FhirMapper implements IDataMapper {
       ...(atcClassification ? { atcClassification } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       _sourceCapturedAt: request._sourceCapturedAt,
+      _reconciledSourceReferences: request._reconciledSourceReferences,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }

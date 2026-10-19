@@ -124,12 +124,12 @@ export function MedicationList({
   useEffect(() => {
     if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
     const targetInActive = activeMedications.some((medication) =>
-      medication.id === pending.resourceId,
+      medication.id === pending.resourceId || medication.reconciledOrderIds?.includes(pending.resourceId),
     )
     // Every earlier fill has its own row in 用藥歷史, under its visit, so a
     // citation of one opens the history section and lands on that row.
     const targetInHistory = historyGroups.some((group) =>
-      group.medications.some((medication) => medication.id === pending.resourceId),
+      group.medications.some((medication) => medication.id === pending.resourceId || medication.reconciledOrderIds?.includes(pending.resourceId)),
     )
     if (!targetInActive && !targetInHistory) return
     const timer = window.setTimeout(() => {

@@ -119,6 +119,7 @@ export interface ClinicalFhirExtension {
 }
 
 export interface MedicationEntity {
+  identifier?: Array<{ system?: string; value?: string }>
   id: string
   meta?: {
     source?: string
@@ -289,6 +290,7 @@ export interface MedicationEntity {
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
   /** Source capture instant from Bundle.timestamp; not the local import time. */
   _sourceCapturedAt?: string
+  _reconciledSourceReferences?: string[]
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
