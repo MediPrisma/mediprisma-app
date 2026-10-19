@@ -74,3 +74,6 @@ docs/TVGHBRAIN-*.md
 
 # Generated for installed optional feature packages
 /tsconfig.optional.generated.json
+
+# HMC build records the installed published packages during export.
+/public/hmc-build.json
