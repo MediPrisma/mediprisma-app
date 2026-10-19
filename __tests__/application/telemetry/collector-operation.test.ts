@@ -212,7 +212,14 @@ test('template titles drop control, bidi and unpaired surrogate characters; an u
   beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
     template: { id: 'id\u0085x', title: '重要變化' } }).finish({ outcome: 'ok' })
   await settle()
-  const [cleaned, badId] = payloads()
+  for (const id of [' changes ', '\nchanges', 'changes‮']) {
+    beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
+      template: { id, title: '重要變化' } }).finish({ outcome: 'ok' })
+    await settle()
+  }
+  const [cleaned, badId, ...edgeIds] = payloads()
+  for (const sent of edgeIds) expect(sent.diagnostics).not.toHaveProperty('template')
+  expect(edgeIds).toHaveLength(3)
   expect(cleaned.diagnostics.template).toEqual({ id: 'changes', title: '甲 乙丙😀' })
   expect(collectorEventV9Schema.safeParse(cleaned).success).toBe(true)
   // The ID is how a template is found: one that would need rewriting is left out, never altered.

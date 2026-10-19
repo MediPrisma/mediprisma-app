@@ -134,8 +134,9 @@ const BIDI_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
 function templateLabel(input: CollectorContext['template']): { id: string; title: string } | undefined {
   if (!input || typeof input.id !== 'string' || typeof input.title !== 'string') return undefined
   // The ID is how a template is found, so it is sent exactly or not at all.
-  const id = input.id.trim()
-  if (!id || id.length > 128 || /\p{Cc}/u.test(id) || new RegExp(BIDI_CONTROL.source).test(id) ||
+  // Checked as given, never trimmed: surrounding whitespace also leaves the template out.
+  const id = input.id
+  if (!id || id !== id.trim() || id.length > 128 || /\p{Cc}/u.test(id) || new RegExp(BIDI_CONTROL.source).test(id) ||
       new RegExp(UNPAIRED_SURROGATE.source).test(id)) return undefined
   // The title is cleaned, then cut on whole characters to the contract's UTF-16 bound.
   const text = input.title.replace(UNPAIRED_SURROGATE, '').replace(BIDI_CONTROL, '')
