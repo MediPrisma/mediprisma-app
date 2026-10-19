@@ -2401,6 +2401,7 @@ export function ClinicalDecisionSupportView({
           now={now}
           packVersion={result.packVersion}
           screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
+          prognosisEvidence={hfPrognosisEvidence(profileFacts, isEnglish)}
           decisions={physicianDecisions}
           onRecordDecision={onRecordDecision}
           onClearDecision={onClearDecision}

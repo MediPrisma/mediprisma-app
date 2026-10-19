@@ -2,7 +2,7 @@
 
 import { ScoreInterpretation } from './ScoreInterpretation'
 import { HpaRiskResults } from './HpaRiskResults'
-import { useMemo, useState, useCallback, useRef } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import type { CalculatorDef, CalcValues, Severity } from "../types"
+import type { CalculatorDef, CalcResult, CalcValues, Severity } from "../types"
 import { tr, trAlt } from "../types"
 import { useLabAutofill, type Autofill } from "../hooks/use-lab-autofill.hook"
 import { getCalcInfo, getCalcScoring } from "../calculators"
@@ -96,6 +96,8 @@ export function CalculatorDetail({
   onBack,
   isFavorite,
   onToggleFavorite,
+  onResult,
+  selectContentClassName,
 }: {
   calc: CalculatorDef
   onBack: () => void
@@ -105,6 +107,10 @@ export function CalculatorDetail({
    *  other on change. */
   isFavorite: boolean
   onToggleFavorite: () => void
+  /** The result as the clinician's inputs stand, for a host that keeps it (the decision map's 附註). */
+  onResult?: (result: CalcResult | null) => void
+  /** For a host that stacks the calculator above another fixed layer: its option lists must open above it too. */
+  selectContentClassName?: string
 }) {
   const { locale } = useLanguage()
   const {
@@ -163,6 +169,9 @@ export function CalculatorDetail({
   }, [calc, autofill])
 
   const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, values), [calc, values])
+  useEffect(() => {
+    onResult?.(computeCrashed ? null : result)
+  }, [computeCrashed, onResult, result])
   const hasAnyAutofill = Object.keys(filled).length > 0
   const info = getCalcInfo(calc.id)
   const scoring = getCalcScoring(calc.id)
@@ -430,7 +439,7 @@ export function CalculatorDetail({
                   <SelectTrigger id={`calc-${input.key}`} className={isHpa ? 'min-h-11 w-full sm:min-h-9' : 'h-9'}>
                     <SelectValue placeholder={zh ? "請選擇…" : "Select…"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={selectContentClassName}>
                     {input.options.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {tr(locale, opt.label)}

@@ -19,6 +19,7 @@ import { displayDate } from './VisitStatusHeader'
 import type { DecisionPointView, VisitAction, VisitBlock, VisitDecisionModel } from '../../types'
 import { BookChainDone, BookDecisionControls } from './BookDecisionControls'
 import { VisitBookChromeContext, isVisitBookMode } from './visit-book-chrome'
+import { FormulaText } from './VisitCalculators'
 import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 import styles from './VisitBookLayout.module.css'
 import { coronaryPhaseInput } from './physician-input'
@@ -119,6 +120,23 @@ export interface VisitBookLayoutProps {
    * questions are read-only.
    */
   onAnswerQuestion?: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => void
+  /**
+   * Tools drawn at the head of the page beside 全螢幕 (the heart-failure
+   * page's 計算機), handed the page's way to a point and the chapter a point
+   * sits in.
+   */
+  headTools?: (page: BookHeadToolsPage) => ReactNode
+  /** Notes attached to points from a calculator, listed in 今天的計畫. */
+  calculatorNotes?: readonly { key: string; dp: string; source: string; text: string }[]
+  onRemoveCalculatorNote?: (key: string) => void
+}
+
+/** What the page hands its head tools. */
+export interface BookHeadToolsPage {
+  /** Brings a point into view (DP-34 at DP-01's table, where it is drawn); this page's unless `source` names another. */
+  goTo: (dp: string, source?: DecisionPointView['source']) => void
+  /** The title of the chapter a point sits in. */
+  chapterOf: (dp: string, source?: DecisionPointView['source']) => string | undefined
 }
 
 /** A chapter as the model carries it (`VisitBookChapter`), read defensively. */
@@ -1008,7 +1026,7 @@ function Criteria({ point, basis, isEnglish, dated }: { point: DecisionPointView
     <div data-visit-criteria="">
       {groups.map((group) => (
         <div key={group.title} className={styles.critGroup} data-visit-criteria-group={group.title}>
-          <p className={dated ? styles.panelLabel : styles.critTitle}>{group.title}</p>
+          <p className={dated ? styles.panelLabel : styles.critTitle}><FormulaText text={group.title} /></p>
           <ul className={dated ? styles.panelPlain : styles.critList}>
             {group.items.map((item) => {
               const state = item.met === true ? 'met' : item.met === false ? 'unmet' : 'unknown'
@@ -1017,7 +1035,7 @@ function Criteria({ point, basis, isEnglish, dated }: { point: DecisionPointView
                 <li key={item.label} className={state === 'unmet' ? styles.unmet : state === 'unknown' ? styles.unknown : undefined}>
                   <span className={`${styles.critSymbol} ${styles[state]}`} aria-hidden="true">{state === 'met' ? '✓' : state === 'unmet' ? '✗' : '？'}</span>
                   <span className="sr-only">{state === 'met' ? (isEnglish ? 'met: ' : '符合：') : state === 'unmet' ? (isEnglish ? 'not met: ' : '不符合：') : (isEnglish ? 'unknown: ' : '未知：')}</span>
-                  {item.label}
+                  <FormulaText text={item.label} />
                   {item.value ? <>　<b>{item.value}</b></> : state === 'unknown' ? <>　{isEnglish ? 'not in the record, please confirm' : '紀錄未見，請確認'}</> : null}
                   {date ? <> <span className={styles.date}>{date}</span></> : null}
                 </li>
@@ -1056,6 +1074,9 @@ export function VisitBookLayout({
   onChooseClass,
   coronaryPhase,
   onAnswerQuestion,
+  headTools,
+  calculatorNotes,
+  onRemoveCalculatorNote,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const onSaveTarget = chrome?.onSaveTarget
@@ -1149,6 +1170,17 @@ export function VisitBookLayout({
     const entry = entryOf(point)
     scrollTo(bookAnchor(entry.kind === 'skip' ? entry.anchorOf : point))
   }
+  const pagePointOf = (dp: string, source?: DecisionPointView['source']) => points.find((point) => point.dp === dp && point.source === (source ?? sourceOfPage))
+  const headToolsPage: BookHeadToolsPage = {
+    goTo: (dp, source) => {
+      const point = pagePointOf(dp, source)
+      if (point) goTo(point)
+    },
+    chapterOf: (dp, source) => {
+      const point = pagePointOf(dp, source)
+      return point ? sections.find((section) => section.points.includes(point))?.title : undefined
+    },
+  }
   const marks = new Map(points.map((point) => [point, markOf(point)] as const))
   const pending = points.filter((point) => ['act', 'safety'].includes(marks.get(point)!))
   const asking = points.filter((point) => marks.get(point) === 'ask')
@@ -1198,7 +1230,7 @@ export function VisitBookLayout({
             <span className={styles.panelLabel}>{isEnglish ? 'This patient (record)' : '本病人（紀錄）'}</span>
             <ul className={styles.panelPlain}>
               {basis.map((item) => (
-                <li key={`${item.label}|${item.value}`}>{item.label}　<b>{item.value}</b>{item.date ? <> <span className={styles.date}>{item.date}</span></> : null}</li>
+                <li key={`${item.label}|${item.value}`}><FormulaText text={item.label} />　<b>{item.value}</b>{item.date ? <> <span className={styles.date}>{item.date}</span></> : null}</li>
               ))}
             </ul>
           </div>
@@ -1288,7 +1320,7 @@ export function VisitBookLayout({
           <div data-testid="cdss-book-changes-if">
             <span className={styles.panelLabel}>{isEnglish ? 'What would change the answer' : '什麼會改變答案'}</span>
             <ul className={styles.panelList}>
-              {changes.map((change) => <li key={change.when}>{change.when} → {change.then}</li>)}
+              {changes.map((change) => <li key={change.when}><FormulaText text={change.when} /> → <FormulaText text={change.then} /></li>)}
             </ul>
           </div>
         ) : null}
@@ -1296,7 +1328,7 @@ export function VisitBookLayout({
           <div data-testid="cdss-book-guideline-points">
             <span className={styles.panelLabel}>{isEnglish ? 'Guideline points' : '指引重點'}</span>
             <ul className={styles.panelList}>
-              {guideline.points.map((item) => <li key={item}>{item}</li>)}
+              {guideline.points.map((item) => <li key={item}><FormulaText text={item} /></li>)}
             </ul>
           </div>
         ) : null}
@@ -1333,7 +1365,8 @@ export function VisitBookLayout({
     const decided = row.steps.filter((step) => step.decision)
     const criteria = inlineCriteriaOf(shown)
     const basis = basisOf(shown)
-    const guide = point.guideline?.points[0]
+    const guideText = point.guideline?.points[0]
+    const guide = guideText ? <FormulaText text={guideText} /> : undefined
     const cite = citationOf(point)
     // 本病人現在: the values the row reads, and what the record lacks (「缺 ferritin、TSAT」);
     // beside criteria, or with neither, the reason line.
@@ -1345,13 +1378,13 @@ export function VisitBookLayout({
       <>
         <ul className={styles.basisList}>
           {basis.map((item) => (
-            <li key={`${item.label}|${item.value}`}>{item.label} <b>{item.value}</b>{item.date ? <span className={styles.date}>（{item.date}）</span> : null}</li>
+            <li key={`${item.label}|${item.value}`}><FormulaText text={item.label} /> <b>{item.value}</b>{item.date ? <span className={styles.date}>（{item.date}）</span> : null}</li>
           ))}
         </ul>
         {missing}
       </>
     ) : !criteria.length && missing ? missing
-      : shown.why ? <span>{shown.why}</span> : <span className={styles.cellMuted}>—</span>
+      : shown.why ? <span><FormulaText text={shown.why} /></span> : <span className={styles.cellMuted}>—</span>
     const tone = current && (mark === 'act' || mark === 'safety') ? (row.safety ? 'safety' : 'act') : undefined
     return (
       <div
@@ -1383,8 +1416,8 @@ export function VisitBookLayout({
             {current ? (
               <>
                 <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
-                <p className={styles.question} data-visit-headline="">{shown.headline ?? shown.label}</p>
-                {!(criteria.length || !basis.length) && shown.why ? <p className={styles.why} data-visit-why="">{shown.why}</p> : null}
+                <p className={styles.question} data-visit-headline=""><FormulaText text={shown.headline ?? shown.label} /></p>
+                {!(criteria.length || !basis.length) && shown.why ? <p className={styles.why} data-visit-why=""><FormulaText text={shown.why} /></p> : null}
                 <BookDecisionControls
                   point={shown}
                   isEnglish={isEnglish}
@@ -1425,9 +1458,10 @@ export function VisitBookLayout({
     const absentHere = ABSENT_STATES.has(point.state)
     const basis = basisOf(point)
     const criteria = inlineCriteriaOf(point)
-    const guide = point.guideline?.points[0]
+    const guideText = point.guideline?.points[0]
+    const guide = guideText ? <FormulaText text={guideText} /> : undefined
     const cite = citationOf(point)
-    const line = <>{point.headline ?? point.label}{point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null}</>
+    const line = <><FormulaText text={point.headline ?? point.label} />{point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}<FormulaText text={point.why} /></span> : null}</>
     return (
       <div
         key={`${point.source}:${point.dp}`}
@@ -1445,7 +1479,7 @@ export function VisitBookLayout({
             {!absentHere && !criteria.length && basis.length && basis.length <= 3 ? (
               <ul className={styles.basisList}>
                 {basis.map((item) => (
-                  <li key={`${item.label}|${item.value}`}>{item.label} <b>{item.value}</b>{item.date ? <span className={styles.date}>（{item.date}）</span> : null}</li>
+                  <li key={`${item.label}|${item.value}`}><FormulaText text={item.label} /> <b>{item.value}</b>{item.date ? <span className={styles.date}>（{item.date}）</span> : null}</li>
                 ))}
               </ul>
             ) : <span className={styles.cellMuted}>—</span>}
@@ -1479,7 +1513,7 @@ export function VisitBookLayout({
   const renderLine = (point: DecisionPointView, by?: DecisionPointView, row?: QueueRow) => {
     const mark = marks.get(point)!
     const panel = reasoning(point, point)
-    const why = !by && point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}{point.why}</span> : null
+    const why = !by && point.why ? <span className={styles.lineWhy}>{isEnglish ? '; ' : '；'}<FormulaText text={point.why} /></span> : null
     // Today's triage (HF DP-24, AF DP-00) is the red-flag strip at the head of its chapter.
     if (!by && /-triage$/.test(point.semanticId) && !panel) {
       return (
@@ -1611,7 +1645,7 @@ export function VisitBookLayout({
       >
         <div className={styles.blockHead}>
           <span className={styles.dpTag}>{point.dp}</span>
-          <b className={styles.blockTitle}>{`${part}${isEnglish ? ': ' : '：'}${title}`}</b>
+          <b className={styles.blockTitle}><FormulaText text={`${part}${isEnglish ? ': ' : '：'}${title}`} /></b>
           <span className="sr-only">{isEnglish ? MARK_WORDS[mark].en : MARK_WORDS[mark].zh}</span>
           {questionsLead && questions?.bulkNone ? <BulkNone questions={questions} isEnglish={isEnglish} {...(answer ? { onAnswer: answer } : {})} /> : null}
           {entry.kind === 'row' ? null : reasoningButton(point)}
@@ -1663,7 +1697,7 @@ export function VisitBookLayout({
           <>
             <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
             {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} /></div> : null}
-            <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}{shown.headline ?? shown.label}</p>
+            <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}<FormulaText text={shown.headline ?? shown.label} /></p>
             <BookDecisionControls
               point={shown}
               isEnglish={isEnglish}
@@ -1691,7 +1725,7 @@ export function VisitBookLayout({
       </p>
     ) : point.state !== 'done' && point.headline ? (
       // Settled, the table says it (「≥2 建議抗凝 · 已在用」); otherwise the point's line.
-      <p className={styles.blockNote}>{point.headline}{point.why ? ` · ${point.why}` : ''}</p>
+      <p className={styles.blockNote}>{point.headline}{point.why ? <> · <FormulaText text={point.why} /></> : null}</p>
     ) : null
     return (
       <>
@@ -1748,7 +1782,8 @@ export function VisitBookLayout({
   /** A row for a point whose home is another chapter: what it is here, and a way to it. */
   const renderRefRow = (ref: BookTableRef, point: DecisionPointView) => {
     const home = numbered.find(({ section }) => section.key === ref.chapter)
-    const guide = point.guideline?.points[0]
+    const guideText = point.guideline?.points[0]
+    const guide = guideText ? <FormulaText text={guideText} /> : undefined
     // Once decided in its own chapter, the row says what was recorded there.
     const entry = entryOf(point)
     const decided = entry.kind === 'row' ? entry.row.steps.filter((step) => step.decision) : []
@@ -2006,6 +2041,7 @@ export function VisitBookLayout({
                   ? MARK_WORDS.wait[isEnglish ? 'en' : 'zh']
                   : (isEnglish ? 'Every decision recorded' : '今天的決定都記下了')}
           </button>
+          {headTools ? headTools(headToolsPage) : null}
           {chrome?.onSaveTarget ? <div ref={attachSaveTarget} className={styles.saveRecord} data-testid="cdss-book-save-target" /> : null}
           {/* One button either way (the shared key): pressed from the keyboard,
               focus stays on it as the page moves between panel and window. */}
@@ -2124,6 +2160,21 @@ export function VisitBookLayout({
                 {isEnglish ? 'No decision recorded yet.' : '還沒有記錄任何決定。'}
               </p>
             )}
+            {calculatorNotes?.length ? (
+              <ul className={styles.planList} data-testid="cdss-visit-plan-calculator-notes">
+                {calculatorNotes.map((note) => (
+                  <li key={note.key} data-dp={note.dp}>
+                    <span className={styles.dpTag}>{note.source !== sourceOfPage ? `${note.source.toUpperCase()} ` : ''}{note.dp}</span>
+                    {isEnglish ? '　Note: ' : '　附註：'}{note.text}
+                    {onRemoveCalculatorNote ? (
+                      <button type="button" className={styles.change} onClick={() => onRemoveCalculatorNote(note.key)} aria-label={isEnglish ? `Remove the note on ${note.dp}` : `移除 ${note.dp} 的附註`}>
+                        {isEnglish ? 'Remove' : '移除'}
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {pending.length ? (
               <p className={styles.planPending}>
                 <b>{isEnglish ? 'Not yet decided　' : '尚未決定　'}</b>
