@@ -62,10 +62,23 @@ function shortName(name: string): string {
   return /（([^（）]+)）$/.exec(name)?.[1] ?? name
 }
 
-/** The line a note writes to the plan: the calculator, its result, its first two rows. */
+/**
+ * The line a note writes to the plan: the calculator, its result with what it
+ * is (the event and the period — 「至 90 歲風險：心衰住院或心血管死亡」), and
+ * its first two rows that carry a value. A percentage on its own is not
+ * readable in a chart note (#334 review).
+ */
 export function calculatorNoteText(name: string, result: CalcResult, locale: string): string {
-  const head = `${name} ${result.value}${result.unit ? ` ${result.unit}` : ''}`
-  const rows = (result.extra ?? []).slice(0, 2).map((row) => `${tr(locale, row.label)} ${row.value}`)
+  const zh = locale === 'zh-TW'
+  const value = `${result.value}${result.unit ? ` ${result.unit}` : ''}`
+  const what = result.interpretation ? tr(locale, result.interpretation) : ''
+  const head = `${name} ${value}${what ? (zh ? `（${what}）` : ` (${what})`) : ''}`
+  const rows = (result.extra ?? [])
+    // A row the patient has no value for (LIFE-Preserved's 2-year risk past
+    // 88), or the headline again under its own label, adds nothing.
+    .filter((row) => row.value !== '—' && !(row.value === result.value && what.includes(tr(locale, row.label))))
+    .slice(0, 2)
+    .map((row) => `${tr(locale, row.label)} ${row.value}`)
   const partial = result.completeness?.complete === false ? (locale === 'zh-TW' ? '（部分輸入未填）' : ' (some inputs empty)') : ''
   return [head, ...rows].join(locale === 'zh-TW' ? '・' : ' · ') + partial
 }
@@ -192,7 +205,9 @@ export function VisitCalculatorsProvider({
   const rows = useMemo(() => HF_VISIT_CALCULATORS.flatMap((entry): CalculatorRow[] => {
     const point = pointOf(entry.dp, entry.source)
     if (entry.needsPoint && (!point || ABSENT_STATES.has(point.state))) return []
-    if (entry.prognosis === 'life-preserved' && lvef !== undefined && lvef < 50) return []
+    // LIFE-Preserved is for HFpEF: offered only on an LVEF known to be 50% or
+    // above, never on an unknown one (#334 review).
+    if (entry.prognosis === 'life-preserved' && !(lvef !== undefined && lvef >= 50)) return []
     const model = entry.prognosis ? HF_PROGNOSIS_MODELS.find((item) => item.id === entry.prognosis) : undefined
     const calc: CalculatorDef | undefined = CALCULATORS.find((item) => item.id === (entry.calculatorId ?? model?.calculatorId))
     // A prognosis model by its own name (「MAGGIC」), not the calculator's longer one.

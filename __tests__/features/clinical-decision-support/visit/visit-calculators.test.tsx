@@ -13,7 +13,9 @@ import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/fe
 import { useVisitCalculatorNotesStore } from '@/features/clinical-decision-support/stores/visit-calculator-notes.store'
 import { HF_VISIT_CALCULATORS, calculatorNoteText } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
 import { VisitBookChromeContext } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
+import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalcResult } from '@/features/medical-calculator/types'
+import type { VisitDecisionModel } from '@/features/clinical-decision-support/types'
 import { scenarioRun, type ScenarioId } from './scenario-models'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
@@ -54,7 +56,7 @@ for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as co
 
 const PATIENT = 'calculator-patient'
 
-function Page({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
+function Page({ id, page, patch }: { id: ScenarioId; page: 'hf' | 'af'; patch?: (model: VisitDecisionModel) => VisitDecisionModel }) {
   const decisions = usePhysicianDecisions(PATIENT)
   const record = useVisitAnswerRecord(PATIENT)
   const answers = useMemo(() => visitAnswersOf(record), [record])
@@ -66,7 +68,7 @@ function Page({ id, page }: { id: ScenarioId; page: 'hf' | 'af' }) {
         locale="zh-TW"
         layout="map"
         patientId={PATIENT}
-        visitModel={run.model}
+        visitModel={patch ? patch(run.model) : run.model}
         companionResults={run.companion ? [run.companion] : undefined}
         profileFacts={run.profile.facts}
         physicianDecisions={decisions}
@@ -199,5 +201,51 @@ describe('calculatorNoteText', () => {
     expect(calculatorNoteText('MAGGIC', MAGGIC_RESULT, 'zh-TW')).toBe('MAGGIC 24 分・1 年全因死亡率 15.3%・3 年全因死亡率 36.6%')
     expect(calculatorNoteText('MAGGIC', { ...MAGGIC_RESULT, completeness: { complete: false, upperBound: 30, missingKeys: ['smoking'] } }, 'en'))
       .toBe('MAGGIC 24 分 · 1-year all-cause mortality 15.3% · 3-year all-cause mortality 36.6% (some inputs empty)')
+  })
+
+  // The real formulas, not a hand-made result (#334 review).
+  const compute = (id: string, values: Record<string, string>) => CALCULATORS.find((calc) => calc.id === id)!.compute(values)!
+  const LIFE_INPUTS = {
+    sex: 'female', lvef: '55', priorReducedLvef: 'no', diabetes: 'no', smoker: 'no', hfHospitalization: 'never',
+    copd: 'no', af: 'no', nyha: 'low', ihd: 'no', ntprobnp: '600', bmi: '25', heartRate: '70', hemoglobin: '13', egfr: '60',
+  }
+
+  it('keeps LIFE-Preserved\'s event and period with its headline', () => {
+    const result = compute('life-preserved', { ...LIFE_INPUTS, age: '72' })
+    const text = calculatorNoteText('LIFE-Preserved', result, 'zh-TW')
+    expect(text).toMatch(new RegExp(`^LIFE-Preserved ${result.value.replace('.', '\\.')}（2 年風險：心衰住院或心血管死亡）・10 年風險 `))
+  })
+
+  it('at 89, names the risk through age 90 and drops the periods with no value', () => {
+    const result = compute('life-preserved', { ...LIFE_INPUTS, age: '89' })
+    const text = calculatorNoteText('LIFE-Preserved', result, 'zh-TW')
+    expect(text.startsWith(`LIFE-Preserved ${result.value}（至 90 歲風險：心衰住院或心血管死亡）`)).toBe(true)
+    expect(text).not.toContain('—')
+    expect(text).not.toContain('2 年風險')
+    expect(text).not.toContain('10 年風險')
+  })
+
+  it('keeps MAGGIC\'s 1- and 3-year mortality from the real formula', () => {
+    const result = compute('maggic-hf', {
+      age: '72', sex: 'female', lvef: '35', nyha: '2', creatinine: '1.4', diabetes: 'yes', betaBlocker: 'yes', sbp: '118',
+      bmi: '24', hfDuration: 'yes', smoker: 'no', copd: 'no', aceiArb: 'yes',
+    })
+    expect(calculatorNoteText('MAGGIC', result, 'zh-TW')).toMatch(/^MAGGIC \d+ pts（估計全因死亡率）・1 年全因死亡率 [\d.]+%・3 年全因死亡率 [\d.]+%$/)
+  })
+})
+
+describe('LIFE-Preserved is offered on a known LVEF of 50% or above only', () => {
+  const offered = (lvef?: string) => {
+    const keyValues = (model: VisitDecisionModel) => [
+      ...model.keyValues.filter((item) => item.key !== 'LVEF'),
+      ...(lvef ? [{ ...model.keyValues.find((item) => item.key === 'LVEF')!, value: lvef }] : []),
+    ]
+    render(<Page id="p9-hfpef-af-dose" page="hf" patch={(model) => ({ ...model, keyValues: keyValues(model) })} />)
+    openList()
+    return screen.queryByTestId('cdss-book-calculator-life-preserved') !== null
+  }
+
+  it.each([[undefined, false], ['49%', false], ['50%', true]] as const)('LVEF %s → %s', (lvef, shown) => {
+    expect(offered(lvef)).toBe(shown)
   })
 })
