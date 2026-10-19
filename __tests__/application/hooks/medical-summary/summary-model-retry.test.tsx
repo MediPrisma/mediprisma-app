@@ -13,12 +13,13 @@ let mockSlotOptions: any
 let mockResult: any
 const mockStream = jest.fn()
 const mockMeasureResult = jest.fn()
+const mockIdentifySummaryRun = jest.fn()
 const mockGenerate = async () => {
   mockResult = await mockSlotOptions.run({
     operationKey: 'audit-slot', modelId: 'gemini-3.8-flash', requestedModelId: 'gemini-3.8-flash',
     modelName: 'Gemini 3.8 Flash', locale: 'zh-TW', audience: 'medical',
     clinicalContext: 'synthetic data', catalog: [], piiLiterals: [], contextLimit: 10000,
-    ai: { stream: mockStream }, measureResult: mockMeasureResult,
+    ai: { stream: mockStream }, measureResult: mockMeasureResult, identifySummaryRun: mockIdentifySummaryRun,
   })
 }
 
@@ -61,6 +62,7 @@ jest.mock('@/src/application/hooks/ai-generation/context-window-retry', () => ({
 
 beforeEach(() => {
   mockMeasureResult.mockClear()
+  mockIdentifySummaryRun.mockClear()
   mockResult = undefined
   mockStream.mockReset()
   useMedcloudLaunchStore.getState().clear()
@@ -146,6 +148,27 @@ test('replaces only the retried card provenance instead of retaining an obsolete
   expect(mockResult.problems).toBe('RETAINED_FLASH_CARD')
   expect(mockResult.generation.modelExecution.actualModelIds).toEqual(['gemini-3.8-flash'])
   expect(modelExecutionFallback(mockResult.generation.modelExecution)).toBe(false)
+})
+
+test('a module retry names its operation with the earlier run ID its attempts continue', async () => {
+  const PRIOR = '10000000-0000-4000-8000-0000000000bb'
+  const diagnostics = useAiExecutionDiagnosticsStore.getState()
+  diagnostics.beginSummaryRun('audit-slot', PRIOR)
+  diagnostics.addRecord({ version: 1, id: 'synthetic-record', feature: 'medical-summary', operationKey: 'audit-slot', transport: 'stream',
+    modelName: 'Gemini 3.8 Flash', modelId: 'gemini-3.8-flash', timestamp: new Date().toISOString(), prompt: 'SYNTHETIC', inputData: null,
+    outputData: '', hasError: true, errorMessage: null, status: 'error',
+    technical: { run_id: PRIOR, request_id: '10000000-0000-4000-8000-0000000000cc', attempt: 3, lane: 'full', output_chars: 0, last_chunk_ms: null, parse_state: 'empty' } } as any)
+  medicalSummaryStore.setState({ byKey: { 'audit-slot': {
+    problems: 'RETAINED_PROBLEM_CARD', cardErrors: { overview: 'PARSE_FAILED' }, completedCardIds: ['problems'],
+    generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.8 Flash',
+      generatedAt: 1, modelExecution: createModelExecution('gemini-3.8-flash') },
+  } as any } })
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => result.current.retryFailedModules())
+  expect(mockIdentifySummaryRun.mock.calls).toEqual([[PRIOR]])
+  const sent = mockStream.mock.calls.map(([, options]) => options.summaryDiagnostics)
+  expect(sent.length).toBeGreaterThan(0)
+  expect(sent.every((d) => d.runId === PRIOR && d.attempt > 3)).toBe(true)
 })
 
 test('retrying a failed safety card preserves successful summary cards', async () => {

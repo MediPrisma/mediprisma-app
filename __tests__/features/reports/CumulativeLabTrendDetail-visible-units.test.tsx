@@ -49,8 +49,7 @@ function mixedUnitSeries(testKey = 'FT4'): LabTrendSeries {
     },
     points: chartPoints,
     chartPoints,
-    chartable: false,
-    unavailableReason: 'mixed-units',
+    chartable: true,
     mixedUnits: true,
     mixedSpecimens: false,
     referenceRangesVary: true,
@@ -81,7 +80,7 @@ function RememberedWindowHarness() {
 }
 
 describe('CumulativeLabTrendDetail visible-window unit safety', () => {
-  it('draws a recent trend when incompatible units exist only outside the selected range', () => {
+  it('keeps unit groups separate across time windows and switches the group-specific delta', () => {
     const series = mixedUnitSeries()
 
     render(
@@ -95,7 +94,17 @@ describe('CumulativeLabTrendDetail visible-window unit safety', () => {
     expect(screen.queryByText(/所選時間範圍包含無法安全合併的不同單位/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '全部' }))
-    expect(screen.getByText(/所選時間範圍包含無法安全合併的不同單位/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+    expect(screen.getByText('+0.89', { exact: true })).toBeInTheDocument()
+    const picker = screen.getByRole('combobox', { name: '繪圖單位／檢體' })
+    fireEvent.change(picker, { target: { value: JSON.stringify(['pmol/L', '']) } })
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+    expect(screen.getByText('-0.39', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('+0.89', { exact: true })).not.toBeInTheDocument()
+    fireEvent.change(picker, { target: { value: JSON.stringify(['ng/dL', '']) } })
+
+    fireEvent.click(screen.getByRole('button', { name: '6 個月' }))
+    expect(screen.getByText(/至少需要兩筆/)).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: /檢驗趨勢圖/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '1 年' }))
@@ -111,5 +120,128 @@ describe('CumulativeLabTrendDetail visible-window unit safety', () => {
     fireEvent.click(screen.getByRole('button', { name: '切換檢驗' }))
     expect(screen.getByRole('button', { name: '3 年' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+function admissionSeries(): LabTrendSeries {
+  const base = mixedUnitSeries('CRE')
+  const dates = [
+    '2025-10-05', '2025-12-28',
+    '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06', '2026-03-08',
+    '2026-06-01', '2026-09-20',
+  ]
+  const chartPoints = dates.map((date, index) => point(`cre-${index}`, `${date}T00:00:00.000Z`, 1 + index / 10, 'mg/dL'))
+  return { ...base, points: chartPoints, chartPoints, mixedUnits: false, referenceRangesVary: false }
+}
+
+describe('CumulativeLabTrendDetail zoom', () => {
+  it('zooms into a dense run from its button and clears back to the preset window', () => {
+    const onWindowChange = jest.fn()
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} onWindowChange={onWindowChange} />
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /放大密集區.*6 筆/ }))
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByRole('button', { name: /放大密集區.*6 筆/ })).not.toBeInTheDocument()
+    expect(onWindowChange).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '還原' }))
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1 年' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('leaves the zoom when a preset window is chosen', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /放大密集區.*6 筆/ }))
+    fireEvent.click(screen.getByRole('button', { name: '全部' }))
+    expect(screen.queryByRole('button', { name: '還原' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('CumulativeLabTrendDetail keyboard range picker', () => {
+  it('zooms to a start and end result chosen with form controls, including inside a zoom', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+
+    const toggle = screen.getByRole('button', { name: '自訂範圍' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    const from = screen.getByRole('combobox', { name: '起' })
+    const to = screen.getByRole('combobox', { name: '迄' })
+    const zoom = screen.getByRole('button', { name: '放大' })
+
+    // End before start cannot be applied.
+    fireEvent.change(from, { target: { value: '5' } })
+    fireEvent.change(to, { target: { value: '4' } })
+    expect(zoom).toBeDisabled()
+
+    // Two ordinary results that no dense-run button covers.
+    fireEvent.change(from, { target: { value: '0' } })
+    fireEvent.change(to, { target: { value: '1' } })
+    fireEvent.click(zoom)
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '還原' })).toBeInTheDocument()
+
+    // Narrow an already zoomed dense run further.
+    fireEvent.change(from, { target: { value: '2' } })
+    fireEvent.change(to, { target: { value: '7' } })
+    fireEvent.click(zoom)
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
+    fireEvent.change(from, { target: { value: '3' } })
+    fireEvent.change(to, { target: { value: '4' } })
+    fireEvent.click(zoom)
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 2 筆/ })).toBeInTheDocument()
+  })
+
+  it('shows only the picked results when dense results sit just past the picked end', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '自訂範圍' }))
+    // 2025-10-05 → 2026-03-02; five more results follow within six days.
+    fireEvent.change(screen.getByRole('combobox', { name: '起' }), { target: { value: '0' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '迄' }), { target: { value: '2' } })
+    fireEvent.click(screen.getByRole('button', { name: '放大' }))
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })).toBeInTheDocument()
+    expect(screen.getByText(/已放大 2025\/10\/05–2026\/03\/02/)).toBeInTheDocument()
+    // The run that starts on the picked end is mostly outside the range.
+    expect(screen.queryByRole('button', { name: /放大密集區 03\/02/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps offering the dense-run zoom inside a wide custom range that still squeezes it', () => {
+    render(
+      <LanguageProvider>
+        <CumulativeLabTrendDetail series={admissionSeries()} />
+      </LanguageProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '自訂範圍' }))
+    fireEvent.change(screen.getByRole('combobox', { name: '起' }), { target: { value: '0' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '迄' }), { target: { value: '9' } })
+    fireEvent.click(screen.getByRole('button', { name: '放大' }))
+
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 10 筆/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /放大密集區.*6 筆/ }))
+    expect(screen.getByRole('img', { name: /檢驗趨勢圖，共 6 筆/ })).toBeInTheDocument()
+    // Once the run fills the view there is nothing left to offer.
+    expect(screen.queryByRole('button', { name: /放大密集區.*6 筆/ })).not.toBeInTheDocument()
   })
 })

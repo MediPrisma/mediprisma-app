@@ -10,43 +10,28 @@
 - HMC 是正式 Firebase 的一般使用者，不具 Firebase Console、Google Cloud IAM、Firestore Rules 或 Functions 部署權限。
 - HMC localhost 讀寫的是正式帳號資料。任何模板、聊天、面板設定或公開範本操作，都可能立即反映在正式版。
 
-## 兩個 pilot repository 與 `app-hmc`
+## HMC 預覽使用的規則來源（2026-10-20）
 
-HMC 的 pilot 由兩個 repository 組成：
+HMC app 使用這個 app commit 的 `package.json` 與 `package-lock.json` 鎖定的正式 `@voho0000/*` 套件，和同版本正式 app 一致。這次是 `personalized-care 2.20.0` 與 `personalized-care-fhir 1.12.0`。建置不會跟隨浮動的 `latest`，也不會再用 personalization 的 `pilot/hmc` 原始碼覆蓋套件。更新套件時，版本與相容的 app 接線必須一起經過審查與驗證。
 
-| Repository | Pilot branch | 負責內容 |
-| --- | --- | --- |
-| `medical-note-smart-on-fhir` | `pilot/hmc` | 畫面、互動、CDSS renderer、FHIR host composition |
-| `mediprisma-personalization` | `pilot/hmc` | CDSS facts、clinical modules、guideline packs、evidence indexes、FHIR adapters |
+**規則分支上的未發布改動不會直接進入 app-hmc。** 修改臨床判斷、門檻、建議文字、引用或資料轉換時，仍在 `MediPrisma/mediprisma-cdss` 開發；規則經 PR 合入 `main` 並發布後，再透過 app 的套件版本更新帶入 HMC。不要在 app 複製一份臨床規則。
 
-只修改臨床判斷、門檻、建議文字、引用或資料轉換時，應在 `mediprisma-personalization` 的 `pilot/hmc` 工作，不要在 app 複製一份規則。只有顯示或操作方式也需要改變時，才另外修改 app 的 `pilot/hmc`。
-
-**跨 repository 的 HMC preview 已於 2026-09-08 啟用。** 網址為 <https://mediprisma.tw/app-hmc/>。HMC 完成修改後執行 `git push origin pilot/hmc`；push 到上述任一 repository 的 `pilot/hmc` 都會直接送出無權限訊號，並立即啟動受保護 `master` 上的部署流程。GitHub Actions 通常會在數秒內出現新 run，網站則在完整驗證與 build 通過後更新。
-
-**preview 由兩個 workflow 接力（2026-09-13 起）：**
+這次切換需連同 master 的新版 CDSS host 接線納入 `pilot/hmc`；舊版 host 不保證能單獨搭配新規則套件。
 
 | workflow | 在哪 | 做什麼 |
 | --- | --- | --- |
-| `HMC preview build` | app repo 的 `pilot/hmc` | 驗證並 build personalization packages、把 source build 注入 HMC app，然後跑 overlay 驗證、typecheck、lint、Jest、static export，最後上傳成果 |
-| `Publish HMC pilot preview` | app repo 的 `master` | 等上面跑完，取回成果、複製進 `/app-hmc` |
+| `HMC preview build` | app repo 的 `pilot/hmc` | npm ci 安裝鎖定套件，驗證版本、HF／血脂／AF／CAD 與必要 API，記錄發版來源，再跑 typecheck、lint、Jest、static export 並上傳成果 |
+| `Publish HMC pilot preview` | app repo 的 `master` | 等 build 完成，驗證成果後複製進 `/app-hmc` |
 
-**`HMC preview build` 是 HMC 自己的檔案，可以直接改。**會擋住發布的每一關都在裡面——如果哪一關的判斷過時了（例如 2026-09-10 那次 overlay 檢查還在要求已移除的 CKD pack），在 `pilot/hmc` 上改掉再 push 即可，不需要等 owner。
+app 推送 `pilot/hmc` 後會啟動建置。既有 personalization relay 訊號仍會觸發重建，但不會將該分支尚未發布的規則帶入。手動重跑時，在 app Actions 執行 `HMC preview build`，ref 選 `pilot/hmc`。
 
-發布那一段刻意留在 `master`：寫 mediprisma.tw 的金鑰是 environment secret 且限定受保護分支，`pilot/hmc` 讀不到，所以 preview 的成果一定要經過那一步才會上線。全部成功後才更新網站；失敗時保留上一個可用版本，正式 `/app` 不受影響。
+**不要改 workflow 的名稱、檔名或 artifact 名稱。** publisher 仍以 `HMC preview build` 與 `hmc-preview` 辨認成果，發布端與權限維持在受保護的 master。失敗時保留上一個可用網站，正式 `/app` 不受影響。
 
-**不要改 `HMC preview build` 的 `name:`。** master 那邊是用這個名字來認得該發布哪一個 build 的；名字一改，build 照跑、但**永遠不會有人發布它**，而且不會有任何錯誤訊息。同理，也不要把 `hmc-build.yml` 從 `pilot/hmc` 移走或改檔名。
+`hmc-build.json` 的 `rulesSource` 為 `published-packages`；`packageVersions` 記錄實際套件版本，`packageRevisions` 記錄 care 與 FHIR 各自的發版來源 SHA。為相容既有 publisher，`personalizationSha` 指 care 套件的來源 SHA；它不代表目前 `pilot/hmc` 規則分支。可在 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對。
 
-手動重跑：到 app repository 的 Actions 執行 `HMC preview build`，ref 選 `pilot/hmc`，跑完會自動接上發布。若這個 workflow 沒出現在清單上，那是 `pilot/hmc` 上的檔案出了問題；若跑完了但 `/app-hmc` 沒更新，那是 `master` 上的發布端出了問題（2026-09-12 曾被誤刪兩天）——後者**停下來通知 owner**，不要自己把檔案補回 `master`。
+套件缺失、版本與鎖檔不符、必要 API／pack 不存在、發版來源無法核對，以及 typecheck、lint、static export 失敗，均會停止發布。Jest 維持回報而不擋發布，並恢復執行先前因 source overlay 而略過的套件接線測試。
 
-**push 之後不要只看自己那一個 run。** 兩個 repository 都推的時候，personalization 側的轉送會在數十秒後送出第二個訊號，並依 `concurrency` 取消前一個 run；被取消的那個常常正是 HMC push 觸發的。要看的是清單最上面那一個 run，它抓的是兩邊最新的 `pilot/hmc`，結論才算數。也因為取消與轉送的關係，GitHub 內建的失敗通知寄給的是轉送者而不是 push 的人，所以部署有狀況時 workflow 會自行在 app repository 開一個標題為 `HMC pilot preview needs attention` 的 issue 並 @ HMC；同一個 issue 會持續留言，直到一次「有發布、測試也綠」的部署才自動關閉。issue 內文會寫明是哪一種狀況：**沒發布**（`/app-hmc` 停在舊版本），或**有發布但測試是紅的**（preview 是最新的，可以照常看，但 repo 有測試沒過）。
-
-**測試不擋部署。** `Test HMC app` 是回報用的，紅了 preview 照樣發布，只是在上面那個 issue 裡寫明哪幾支紅。會擋住發布的是另外四關——typecheck、lint、overlay 驗證、build——它們紅代表 preview 根本跑不起來。這個分界是刻意的：HMC 看不到也改不動屬於 app owner 的測試，不應該因為那些測試紅了就一天不能給臨床看。但這不代表可以無視紅字：那是「repo 不乾淨」的訊號，該修還是要修。
-
-**preview 的測試環境和開發機不一樣。** `Test HMC app` 跑的是 published 的 `@voho0000/personalized-care`，只把 pilot source 的 heart-failure 檔案覆蓋上去；`index`、`registry`、`bundled` 一律保留 published 版本。因此 rules branch 上獨有、還沒發布的 pack 或 export，在 preview build 裡並不存在——針對那些東西寫的測試在開發機會綠、在這裡一定紅。要在 preview 驗證的行為，測試必須自備 stub，不能依賴本機 `node_modules` 剛好裝了哪一份 build。
-
-可用 <https://mediprisma.tw/app-hmc/hmc-build.json> 核對目前網站使用的 app 與 personalization commit SHA。preview 流程不發布 npm package；AI agent 不得自行建立 deployment credential、修改正式 package version、改寫 workflow 或碰觸 `mediprisma-site` 來另行部署。
-
-兩個 repository 的成果要分別回正式版：app 對 `master` 開 PR；personalization 對 `main` 開 PR。preview 成功不代表臨床內容已核准或可以發布到正式版。
+建置與發布有狀況時，既有 `HMC pilot preview needs attention` issue 會說明狀態。package token 或發布端失敗應交給 owner；不要建立替代憑證或另行部署。preview 本身不發布 npm package。
 
 ## 第一次設定
 
@@ -111,7 +96,7 @@ HMC 自備的 AI provider key 只能透過產品既有設定介面輸入，不�
 
 ## 完成修改
 
-依變更範圍執行相關 tests，並至少完成 `npm run lint` 與 `npm run build`。確認 `git diff` 沒有 `.env*`、token、病人資料、build output 或無關變更，再執行 `git push origin pilot/hmc`。push 後查看 `HMC preview build` 與接續的 `Publish HMC pilot preview`；成功後用 `hmc-build.json` 確認兩個 SHA，並在 `app-hmc` 檢查實際 CDSS 畫面。
+依變更範圍執行相關 tests，並至少完成 `npm run lint` 與 `npm run build`。確認 `git diff` 沒有 `.env*`、token、病人資料、build output 或無關變更，再執行 `git push origin pilot/hmc`。push 後查看 `HMC preview build` 與接續的 `Publish HMC pilot preview`；成功後用 `hmc-build.json` 確認 app SHA、實際套件版本與 packageRevisions，並在 `app-hmc` 檢查實際 CDSS 畫面。
 
 提交正式版時建立 PR，清楚寫出：改了什麼、使用者會看到什麼、如何驗證，以及是否改變任何資料寫入或外部網路請求。不得自行 merge PR。
 

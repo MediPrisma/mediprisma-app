@@ -17,47 +17,6 @@ export interface TourStep {
 
 const ALL_STEPS: TourStep[] = [
   {
-    id: 'overview',
-    target: '[data-tour="right-tabs"]',
-    title: { 'zh-TW': '右側是臨床工作區', en: 'The right side is your clinical workspace' },
-    body: {
-      'zh-TW': '上方分頁依使用身份集中醫療摘要、臨床對話、計算機、複製與設定；可從設定中自行開啟 Beta 功能，不需登入。取消釘選的功能會收進「更多」選單。',
-      en: 'The tabs bring together the medical summary, clinical chat, calculators, copy tools, and settings. Beta features can be enabled in Settings — no sign-in needed. Unpinned tools move into More.',
-    },
-  },
-  {
-    id: 'summary',
-    target: '[data-tour="medical-summary-overview"]',
-    fallbackTarget: '[data-tour="right-tab-medical-summary"]',
-    fallbackGraceAttempts: 0,
-    lockTargetOnceResolved: true,
-    highlightPadding: 4,
-    title: { 'zh-TW': '先用醫療摘要掌握重點', en: 'Start with the medical summary' },
-    body: {
-      'zh-TW': '初診快覽依序整理：一句話摘要、問題清單與負責院所、影像與病理重點、開藥注意。點來源標籤可打開原始紀錄。內容由 AI 協助整理，仍需由醫療人員核對。',
-      en: 'The first-visit summary gives a one-line overview, the problem list with the managing facility, imaging and pathology highlights, and prescribing cautions. Source tags open the original records. Always clinically verify AI-assisted content.',
-    },
-    fallbackBody: {
-      'zh-TW': '摘要產生後，這裡會依序列出一句話摘要、問題清單、影像與病理重點與開藥注意；點來源標籤可打開原始紀錄。',
-      en: 'Once generated, the summary lists a one-line overview, the problem list, imaging and pathology highlights, and prescribing cautions here; source tags open the original records.',
-    },
-  },
-  {
-    id: 'summary-settings',
-    target: '[data-tour="medical-summary-controls"]',
-    fallbackTarget: '[data-tour="right-tab-medical-summary"]',
-    highlightPadding: 8,
-    title: { 'zh-TW': '摘要模型與資料範圍都在這裡', en: 'Choose the summary model and data scope here' },
-    body: {
-      'zh-TW': '點模型名稱可選擇這份摘要使用的 AI 模型；點右側齒輪「設定」，再選「資料範圍」，即可決定哪些病歷資料要納入摘要。',
-      en: 'Select the model name to choose the AI model for this summary. Open the Settings gear, then Data scope, to decide which records are included.',
-    },
-    fallbackBody: {
-      'zh-TW': '目前尚未顯示摘要控制列；載入病人資料後，可從醫療摘要右上方選擇模型，並在齒輪「設定」中調整資料範圍。',
-      en: 'Summary controls are not available yet. After loading patient data, choose a model at the top right and adjust Data scope from Settings.',
-    },
-  },
-  {
     id: 'custom-summary',
     target: '[data-tour="medical-summary-custom-tab"]',
     fallbackTarget: '[data-tour="right-tab-medical-summary"]',
@@ -235,132 +194,21 @@ const ALL_STEPS: TourStep[] = [
     target: '[data-tour="medical-summary-custom-tab"]',
     title: { 'zh-TW': '完成！需要時可從章節重新開始', en: 'Done—revisit any chapter when you need it' },
     body: {
-      'zh-TW': '你已認識自訂摘要的編輯、啟用、分享與範本庫。之後可從頁首「導覽教學」，或自訂摘要的「使用教學」重新查看。結束會還原原本畫面；導覽沒有修改模板、發布內容或呼叫 AI。',
-      en: 'You have explored editing, activation, sharing, and the library. Reopen this guide from Guided tour in the header or User guide in Custom. Finishing restores your previous view; no templates were changed, published, or generated.',
-    },
-  },
-  {
-    id: 'chat',
-    target: '[data-tour="medical-chat-controls"]',
-    fallbackTarget: '[data-tour="right-tab-medical-chat"]',
-    highlightPadding: 8,
-    title: { 'zh-TW': '先認識臨床對話與上方工具', en: 'Get to know Clinical chat and its controls' },
-    body: {
-      'zh-TW': '可直接詢問目前病人的診斷、用藥、檢驗或照護問題，AI 會依問題查詢已載入的病歷。上方可查看對話紀錄、切換不保留本次內容的無痕模式、選擇 AI 模型，或開始新對話；登入後才能保存與查看歷史對話。回答仍需由醫療人員核對。',
-      en: 'Ask directly about the current patient’s diagnoses, medications, tests, or care; AI queries the loaded record as needed. The controls above open chat history, enable a temporary unsaved chat, switch AI models, or start a new conversation. Sign in to save and revisit past chats, and clinically verify every answer.',
-    },
-    fallbackBody: {
-      'zh-TW': '進入臨床對話後，可直接詢問目前病歷；登入後還能查看對話紀錄、使用無痕模式、切換 AI 模型或開始新對話。',
-      en: 'In Clinical chat, ask about the current record. After signing in, you can also revisit chat history, use temporary mode, switch AI models, or start a new conversation.',
-    },
-  },
-  {
-    id: 'chat-compose',
-    target: '[data-tour="medical-chat-composer"]',
-    fallbackTarget: '[data-tour="right-tab-medical-chat"]',
-    highlightPadding: 8,
-    title: { 'zh-TW': '用文字、圖片、語音或範本開始對話', en: 'Start with text, images, voice, or a template' },
-    body: {
-      'zh-TW': '可在輸入框直接輸入問題，也能貼上或上傳圖片，或點麥克風使用語音輸入。輸入「/」可搜尋快捷範本，也可以直接點上方的範本按鈕帶入內容，再送出問題。',
-      en: 'Type a question, paste or upload an image, or use the microphone for voice input. Type “/” to search shortcut templates, or click a template above the input to insert it before sending.',
-    },
-    fallbackBody: {
-      'zh-TW': '進入臨床對話後，可用文字、圖片、語音或「/」快捷範本輸入問題。',
-      en: 'In Clinical chat, enter questions with text, images, voice, or “/” shortcut templates.',
-    },
-  },
-  {
-    id: 'chat-template',
-    target: '[data-tour="chat-template-tools"]',
-    fallbackTarget: '[data-tour="right-tab-medical-chat"]',
-    highlightPadding: 8,
-    title: { 'zh-TW': '從範本庫挑選，也能建立自己的範本', en: 'Browse the library or create your own templates' },
-    body: {
-      'zh-TW': '點「範本庫」可瀏覽並加入現成範本；點「管理範本」可新增或編輯名稱、內容與快捷指令，也能調整順序並設為預設範本。',
-      en: 'Open the Template library to browse and add ready-made templates. Use Manage templates to add or edit names, content, and shortcuts, reorder items, or choose a default.',
-    },
-    fallbackBody: {
-      'zh-TW': '進入臨床對話後，可從輸入區上方開啟範本庫，或使用「管理範本」建立與編輯自訂範本。',
-      en: 'In Clinical chat, open the Template library above the input area or use Manage templates to create and edit your own.',
-    },
-  },
-  {
-    id: 'calculator',
-    target: '[data-tour="right-tab-medical-calculator"]',
-    highlightPadding: 10,
-    title: { 'zh-TW': '計算機會優先帶入現有資料', en: 'Calculators can use available patient data' },
-    body: {
-      'zh-TW': '可搜尋臨床量表與公式；「此病人」會優先顯示目前資料可協助計算的項目。使用結果前請核對帶入值與資料日期。',
-      en: 'Search clinical scores and formulas. “For this patient” prioritises tools supported by loaded data; verify every value and date before using a result.',
-    },
-  },
-  {
-    id: 'guidance',
-    target: '[data-tour="right-tab-clinical-decision-support"]',
-    highlightPadding: 10,
-    medicalOnly: true,
-    betaOnly: true,
-    title: { 'zh-TW': '個人化指引對照病人狀況', en: 'Guidance connects recommendations to patient context' },
-    body: {
-      'zh-TW': '依病人條件整理符合的臨床指引、建議與依據，協助快速檢查照護缺口；它是決策支援，不會取代醫療人員判斷。',
-      en: 'Match patient context with applicable guidance, recommendations, and evidence to review care gaps. It supports—but never replaces—clinical judgement.',
-    },
-  },
-  {
-    id: 'export',
-    target: '[data-tour="right-tab-ips-export"]',
-    highlightPadding: 10,
-    title: { 'zh-TW': '複製前先預覽並調整範圍', en: 'Preview and adjust scope before copying' },
-    body: {
-      'zh-TW': '可先預覽整理後的病歷內容、調整納入範圍，再複製或下載 Markdown／JSON。需要 AI 推論的項目必須由你主動啟動與確認。',
-      en: 'Preview the organised record, adjust its scope, then copy or download Markdown or JSON. Any AI-inferred item requires your explicit request and confirmation.',
-    },
-  },
-  {
-    id: 'settings',
-    target: '[data-tour="right-tab-settings"]',
-    highlightPadding: 10,
-    title: { 'zh-TW': '設定集中管理模型、金鑰與顯示', en: 'Manage models, keys, and display settings' },
-    body: {
-      'zh-TW': '可設定各功能使用的 AI 模型與連線方式，也能調整主題、字級與查看版本資訊；登入後還可開啟 Beta 功能。敏感金鑰只會在你設定後使用。',
-      en: 'Choose AI models and connections for each feature, adjust theme and text size, and view version information. After signing in, you can also enable Beta features. Sensitive keys are used only after you configure them.',
-    },
-  },
-  {
-    id: 'finish',
-    target: '[data-tour="right-tabs"]',
-    title: { 'zh-TW': '完成！右側工具都能隨時切換', en: 'Done—right-side tools are always within reach' },
-    body: {
-      'zh-TW': '之後可從頁首「導覽教學 → Quick tour」重新播放。若想學編輯、分享模板與範本庫，可以接著看自訂摘要詳盡導覽。所有教學都不會送出對話、產生或匯出內容。',
-      en: 'Replay this from Guided tour in the header. The tour only changes what is visible; it never sends chat, generates content, or exports data.',
+      'zh-TW': '你已認識自訂摘要的編輯、啟用、分享與範本庫。之後可從頁首「導覽」，或自訂摘要的「使用教學」重新查看。結束會還原原本畫面；導覽沒有修改模板、發布內容或呼叫 AI。',
+      en: 'You have explored editing, activation, sharing, and the library. Reopen this guide from Tours in the header or User guide in Custom. Finishing restores your previous view; no templates were changed, published, or generated.',
     },
   },
 ]
 
-export function getRightTourSteps(kind: 'quick' | 'custom-summary', options: {
+export function getRightTourSteps(kind: 'custom-summary', options: {
   medical: boolean
   authenticated: boolean
   betaEnabled: boolean
 }): TourStep[] {
   return ALL_STEPS.filter((step) => (
-    (kind === 'custom-summary'
-      ? step.id.startsWith('custom-summary')
-      : !step.id.startsWith('custom-summary') || step.id === 'custom-summary')
+    step.id.startsWith(kind)
     && (!step.medicalOnly || options.medical)
     && (!step.authenticatedOnly || options.authenticated)
-    // Beta alone, no sign-in: the tab this step points at appears for anyone
-    // who turned the switch on, so the step must follow the same rule or the
-    // tour would skip a tab that is standing right there.
     && (!step.betaOnly || options.betaEnabled)
-  )).map((step) => kind === 'quick' && step.id === 'custom-summary' ? {
-    ...step,
-    body: {
-      'zh-TW': '「自訂」用自己的提示詞整理病歷，與標準摘要分開產生。每個模組右側都有鉛筆「編輯」。想深入學編輯、分享與範本庫，可從頁首「導覽教學」或這裡的「使用教學」開啟專屬導覽。',
-      en: 'Custom summarises the record with your own prompts, separately from the standard summary. The pencil-labelled Edit action sits beside each module. For editing, sharing, and the library, open the detailed guide from Guided tour in the header or User guide here.',
-    },
-    fallbackBody: {
-      'zh-TW': '載入資料後，可從醫療摘要的「自訂」分頁使用自己的模板。編輯、分享與範本庫的操作，可另外開啟自訂摘要詳盡導覽學習。',
-      en: 'After loading a record, use your templates in Custom within Medical summary. Open the separate detailed guide to learn editing, sharing, and the library.',
-    },
-  } : step)
+  ))
 }

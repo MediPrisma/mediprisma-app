@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/test'
+import { quietGuidedTours } from '../fixtures/guided-tour'
 import { openFeaturePanel } from '../fixtures/import'
 
 // The "試用資料 / 示範病人" welcome option loads the committed, de-identified
@@ -16,6 +17,7 @@ test.describe('demo data (試用資料)', () => {
       localStorage.setItem('medical-note-onboarding-v1', '1')
       localStorage.setItem('medical-note-left-browser-tour-v1', '1')
     })
+    await quietGuidedTours(page)
     await page.goto('/')
   })
 

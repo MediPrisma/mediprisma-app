@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures/test'
+import { quietGuidedTours } from '../fixtures/guided-tour'
 import { openFeaturePanel } from '../fixtures/import'
 import type { Page } from '@playwright/test'
 
@@ -13,6 +14,7 @@ async function setStoredLocale(page: Page, locale?: 'en' | 'zh-TW') {
     localStorage.setItem('medical-note-onboarding-v1', '1')
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   }, locale)
+  await quietGuidedTours(page)
 }
 
 async function expectVisiblePageHasNoHanText(page: Page) {

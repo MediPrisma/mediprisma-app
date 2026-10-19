@@ -229,7 +229,7 @@ function RightPanelContentInner() {
   const pinOverrides = useRightPanelTabsStore((s) => s.pinOverrides)
   const setPinned = useRightPanelTabsStore((s) => s.setPinned)
 
-  // Each step opens the feature it explains. Preserve the user's original
+  // Each guided-tour scene opens the feature it explains. Preserve the user's original
   // right-panel tab and restore it when the tour is completed or skipped.
   useEffect(() => {
     if (tourActive && !wasTourActiveRef.current) {
@@ -254,6 +254,7 @@ function RightPanelContentInner() {
       'chat-template': 'medical-chat',
       calculator: 'medical-calculator',
       guidance: CLINICAL_DECISION_SUPPORT_FEATURE_ID,
+      education: PERSONALIZED_EDUCATION_FEATURE_ID,
       export: 'ips-export',
       settings: 'settings',
       finish: 'medical-summary',

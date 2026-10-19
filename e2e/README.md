@@ -37,7 +37,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `list-search.spec.ts` | Medication and visit list search／empty state |
 | `workspace-performance.spec.ts` | Loading + warm tab switching／trend open-close／medication scrolling／retained DOM budgets |
 | `data-selection-preview.spec.ts` | Medical Summary data-scope entry and assembled-context preview |
-| `right-feature-tour.spec.ts` | Custom-summary result reading and detailed guide across the real editor, gallery, responsive layouts, keyboard focus and restored views |
+| `guided-tour.spec.ts` | The tour hub and getting-started tour, plus the custom-summary detailed guide across the real editor, gallery, responsive layouts, keyboard focus and restored views |
 | `medical-summary-model-picker.spec.ts` | Summary picker remains available in patient audience |
 | `safety-alerts.spec.ts` | Unified summary + safety, model sync, auto-run and encrypted cache reuse |
 | `slash-template.spec.ts` | `/` menu, shortcut filtering, Enter insertion and Escape |

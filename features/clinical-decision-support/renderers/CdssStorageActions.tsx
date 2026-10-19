@@ -34,11 +34,11 @@ const subscribeSite = (notify: () => void) => {
   return () => window.removeEventListener('popstate', notify)
 }
 const fieldNames: Record<string, string> = { clinicVitals: '門診量測', hfpefInputs: '心超輸入', phenotypeAnswer: '疾病分型',
-  evidenceOverrides: '證據選擇', afAnswers: 'AF 回答', nhiLipidReview: '血脂回答', nhiLipidReviewProvenance: '血脂資料來源',
+  evidenceOverrides: '證據選擇', afAnswers: 'AF 回答', coronaryPhaseAnswer: '冠心病分期', nhiLipidReview: '血脂回答', nhiLipidReviewProvenance: '血脂資料來源',
   preventInputs: 'PREVENT 回答', visitAnswers: '本次問診回答', decision: '決策', reasons: '理由', note: '備註',
   entries: '量測項目', value: '數值', measuredOn: '日期', updatedAt: '更新時間', source: '來源' }
 const fieldNamesEn: Record<string, string> = { clinicVitals: 'clinic measurements', hfpefInputs: 'echo inputs', phenotypeAnswer: 'phenotype',
-  evidenceOverrides: 'evidence selections', afAnswers: 'AF answers', nhiLipidReview: 'lipid answers', preventInputs: 'PREVENT answers', visitAnswers: 'visit answers' }
+  evidenceOverrides: 'evidence selections', afAnswers: 'AF answers', coronaryPhaseAnswer: 'coronary phase', nhiLipidReview: 'lipid answers', preventInputs: 'PREVENT answers', visitAnswers: 'visit answers' }
 
 type Status = 'actionable' | 'review' | 'needs-data' | 'no-action'
 const statusLabel = (status: string, english: boolean) => ({

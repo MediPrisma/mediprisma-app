@@ -35,6 +35,7 @@ import {
   type AnalyteNameMode,
 } from '@voho0000/clinical-lab-normalization/display'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
+import { labTrendGroupKey } from '@/src/shared/utils/lab-trend-group.utils'
 import { isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
 import {
@@ -229,23 +230,7 @@ function cellContainsNumericValue(cell: LabCell): boolean {
   return cell.allValues?.some((v) => isNumericCellValue(v.replace(/^\s*[<>≤≥]=?/, ''))) ?? false
 }
 
-interface TrendAvailabilityStats {
-  pointCount: number
-  units: Set<string>
-  specimens: Set<string>
-}
-
 const INVALID_TREND_STATUSES = new Set(['entered-in-error', 'cancelled'])
-
-function compactTrendUnit(unit: string | undefined): string {
-  if (!unit) return '__missing__'
-  return unit
-    .normalize('NFKC')
-    .trim()
-    .replace(/\s+/g, '')
-    .replace(/μ/g, 'µ')
-    .toLowerCase() || '__missing__'
-}
 
 // NOTE (2026-07-10): the app-side HARDCODED_REF_RANGES table (TSH / lipids /
 // HbA1c / glucose-AC …) was REMOVED per user directive. Abnormal flagging now
@@ -927,7 +912,7 @@ export function buildLabPivots(
 
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
-    const trendAvailability = new Map<string, TrendAvailabilityStats>()
+    const trendAvailability = new Map<string, Map<string, number>>()
 
     for (const obs of obsList) {
       // Cumulative display preference only. Preserve every original resource;
@@ -1016,19 +1001,10 @@ export function buildLabPivots(
         && !INVALID_TREND_STATUSES.has(normalizedStatus)
         && !obs.valueQuantity?.comparator
       if (hasTrendPoint) {
-        const stats = trendAvailability.get(mapKey) ?? {
-          pointCount: 0,
-          units: new Set<string>(),
-          specimens: new Set<string>(),
-        }
-        stats.pointCount += 1
-        stats.units.add(compactTrendUnit(trendUnit))
-        stats.specimens.add(
-          obs.specimen?.display?.normalize('NFKC').trim().toLowerCase()
-            || obs.specimen?.reference?.normalize('NFKC').trim().toLowerCase()
-            || '__missing__',
-        )
-        trendAvailability.set(mapKey, stats)
+        const groups = trendAvailability.get(mapKey) ?? new Map<string, number>()
+        const key = labTrendGroupKey(trendUnit, obs.specimen?.display || obs.specimen?.reference, cat.id)
+        groups.set(key, (groups.get(key) ?? 0) + 1)
+        trendAvailability.set(mapKey, groups)
       }
 
       const cell: LabCell = {
@@ -1138,11 +1114,8 @@ export function buildLabPivots(
       row.unit = everyCellHasUnit && distinctUnits.size === 1
         ? distinctUnits.values().next().value
         : undefined
-      const trendStats = trendAvailability.get(row.mapKey)
-      row.trendChartable = !!trendStats
-        && trendStats.pointCount >= 2
-        && trendStats.units.size <= 1
-        && (cat.id !== 'bloodgas' || trendStats.specimens.size <= 1)
+      const trendGroups = trendAvailability.get(row.mapKey)
+      row.trendChartable = !!trendGroups && [...trendGroups.values()].some(count => count >= 2)
     }
 
     // Inject stub rows for pinned columns not present in patient data.

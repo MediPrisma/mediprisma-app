@@ -196,6 +196,7 @@ export function useInsightGeneration({
               : {}),
             operationKey: `clinical-insight:${owner}:${panel.id}`,
             diagnosticFeature: 'clinical-insights',
+            collectorContext: { template: { id: panel.id, title: panel.title } },
           })
           if (runIdRef.current !== runId || ownerChanged()) return
           const generatedAt = Date.now()

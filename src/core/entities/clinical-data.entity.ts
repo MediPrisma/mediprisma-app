@@ -386,6 +386,7 @@ export interface AllergyEntity {
 }
 
 export interface ObservationEntity {
+  basedOn?: Array<{ reference?: string; display?: string }>
   extension?: ClinicalFhirExtension[]
   method?: { text?: string; coding?: Array<{ system?: string; code?: string; display?: string }> }
   id?: string
@@ -539,6 +540,7 @@ export interface ObservationEntity {
 }
 
 export interface DiagnosticReportEntity {
+  basedOn?: Array<{ reference?: string; display?: string }>
   id: string
   meta?: {
     source?: string

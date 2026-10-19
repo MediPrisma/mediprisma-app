@@ -185,6 +185,7 @@ export function useNhiLipidAiAssist(input: {
         responseFormat: 'json',
         operationKey,
         diagnosticFeature: 'nhi-lipid-ai-assist',
+        collectorContext: { operation: collector.operation },
         onModelExecution: (execution) => {
           completedModelId = execution.actualModelId ?? execution.routedModelId
           completedModelName = modelExecutionLabel(execution)

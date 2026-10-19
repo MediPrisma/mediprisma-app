@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/test'
+import { quietGuidedTours } from '../fixtures/guided-tour'
 import { type Page } from '@playwright/test'
 import { importBundle } from '../fixtures/import'
 
@@ -37,6 +38,130 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     // Reference-range label + an always-on value label on a point.
     await expect(detailPanel.getByText('共同參考範圍')).toBeVisible()
     await expect(detailPanel.getByText('4.3').first()).toBeVisible()
+  })
+
+  test('dragging a box over the trend zooms in, and a box without two results explains why it did not', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    // The how-to sits in the chart's status row, above the plot.
+    const cue = detailPanel.getByText('在圖上按住滑鼠左右拖曳，框出要放大的時間')
+    await expect(cue).toBeVisible()
+    const box = (await chart.boundingBox())!
+    expect((await cue.boundingBox())!.y + (await cue.boundingBox())!.height).toBeLessThanOrEqual(box.y)
+    const midY = box.y + box.height / 2
+
+    // While dragging, the box follows the pointer, the tooltip stays hidden
+    // and the status row reads out the selection.
+    await page.mouse.move(box.x + 75, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, midY, { steps: 12 })
+    await expect(chart.getByTestId('trend-drag-selection')).toBeVisible()
+    await expect(detailPanel.getByText(/^選取 .* · 3 筆，放開即可放大$/)).toBeVisible()
+    await page.mouse.up()
+    await expect(detailPanel.getByText(/^已放大 2024\/03\/06–2026\/06\/02$/)).toBeVisible()
+    await expect(chart.getByTestId('trend-drag-selection')).toHaveCount(0)
+    await expect(detailPanel.getByRole('button', { name: '全部' })).toHaveAttribute('aria-pressed', 'false')
+    await detailPanel.getByRole('button', { name: '還原' }).click()
+
+    // A short box that holds at most one result does not zoom, and says so.
+    await page.mouse.move(box.x + 75, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 100, midY, { steps: 4 })
+    await page.mouse.up()
+    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toBeVisible()
+    await expect(detailPanel.getByRole('button', { name: '還原' })).toHaveCount(0)
+  })
+
+  test('the chart does not move between idle, dragging, zoomed and reset', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖/ })
+    await expect(chart).toBeVisible()
+    const top = async () => (await chart.boundingBox())!.y
+    const idle = await top()
+    const box = (await chart.boundingBox())!
+    const midY = box.y + box.height / 2
+
+    await page.mouse.move(box.x + 75, midY)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, midY, { steps: 8 })
+    await expect(detailPanel.getByText(/^選取 /)).toBeVisible()
+    expect(await top()).toBe(idle)
+    await page.mouse.up()
+    await expect(detailPanel.getByRole('button', { name: '還原' })).toBeVisible()
+    expect(await top()).toBe(idle)
+    await detailPanel.getByRole('button', { name: '還原' }).click()
+    await expect(detailPanel.getByRole('button', { name: '還原' })).toHaveCount(0)
+    expect(await top()).toBe(idle)
+  })
+
+  test('a release in the same task as the last drag move settles on the release point', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+    const midY = box.y + box.height / 2
+
+    await page.mouse.move(box.x + 75, midY)
+    await page.mouse.down()
+    // Move to the far end and release inside one JS task, as a fast flick
+    // does, then let any deferred work run.
+    await chart.evaluate((element, { x, y }) => {
+      const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, view: window }
+      element.dispatchEvent(new PointerEvent('pointermove', init))
+      element.dispatchEvent(new PointerEvent('pointerup', init))
+      return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    }, { x: box.x + box.width - 20, y: midY })
+    await page.mouse.up()
+
+    await expect(detailPanel.getByText(/^已放大 2024\/03\/06–2026\/06\/02$/)).toBeVisible()
+    await expect(detailPanel.getByText('選取範圍內少於兩筆結果，未放大。')).toHaveCount(0)
+    await expect(chart.getByTestId('trend-drag-selection')).toHaveCount(0)
+  })
+
+  test('releasing a drag over the axis keeps the time under the pointer', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 })
+    await openReportsSubTab(page, '檢驗')
+    await page.getByRole('button', { name: '單項列表' }).click()
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
+    const detailPanel = page.getByRole('region', { name: '功能' })
+    await detailPanel.getByRole('button', { name: '全部' }).click()
+    const chart = detailPanel.getByRole('img', { name: /檢驗趨勢圖，共 3 筆/ })
+    await expect(chart).toBeVisible()
+    const box = (await chart.boundingBox())!
+
+    // Just before the middle result → past the last one, then down onto the
+    // X axis and release there.
+    await page.mouse.move(box.x + box.width * 0.45, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2, { steps: 8 })
+    await page.mouse.move(box.x + box.width - 20, box.y + box.height - 4, { steps: 4 })
+    await page.mouse.up()
+
+    await expect(detailPanel.getByText(/^已放大 2025\/02\/12–2026\/06\/02$/)).toBeVisible()
   })
 
   test('phone cumulative trend uses the same visible close action as other report trends', async ({ page }) => {
@@ -114,6 +239,7 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
       localStorage.setItem('medical-note-onboarding-v1', '1')
       localStorage.setItem('medical-note-left-browser-tour-v1', '1')
     })
+    await quietGuidedTours(page)
     await page.goto('/')
     await page.getByTestId('welcome-demo-card').click()
     await expect(page.getByText('陳大明').first()).toBeAttached({ timeout: 30_000 })

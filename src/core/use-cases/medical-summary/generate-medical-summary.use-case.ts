@@ -350,7 +350,8 @@ const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = [], medi
     : c.supportsNormalityAssessment === false
       ? 'normality/reference not supplied'
       : ''
-  const parts = [c.resourceType, date, c.organization ?? '', c.display, medicationClass ?? '', assessment, ...extra]
+  const orders = c.orderNames?.length ? `ordered tests: ${c.orderNames.join('; ')}` : ''
+  const parts = [c.resourceType, date, c.organization ?? '', c.display, medicationClass ?? '', assessment, orders, ...extra]
   return `[${c.key}] ${parts.filter(Boolean).join(' | ')}`
 }
 
@@ -480,6 +481,7 @@ export function buildSourceCatalog(
         resourceType: 'DiagnosticReport',
         resourceId: r.id,
         display: diagnosticReportText(r, locale),
+        orderNames: r.basedOn?.map(order => order.display?.trim()).filter((name): name is string => !!name),
         date: day(r.effectiveDateTime ?? r.issued),
         organization: r.performer?.[0]?.display,
         supportsNormalityAssessment:
@@ -498,6 +500,7 @@ export function buildSourceCatalog(
         resourceType: 'Observation',
         resourceId: observation.id,
         display: codeText(observation.code, locale) ?? 'Observation',
+        orderNames: observation.basedOn?.map(order => order.display?.trim()).filter((name): name is string => !!name),
         date: day(observation.effectiveDateTime),
         organization: observation.performer?.[0]?.display,
         supportsNormalityAssessment: observationSupportsNormalityAssessment(observation),

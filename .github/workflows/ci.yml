@@ -121,6 +121,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
+      - name: HMC published-package contract
+        run: node --test scripts/__tests__/hmc-published-packages.test.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 

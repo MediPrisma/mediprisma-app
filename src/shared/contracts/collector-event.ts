@@ -1,5 +1,5 @@
-// Wire contracts v2-v5. Kept identical across sender and gateway.
-// Only declared metadata; no arbitrary objects, URLs, messages or clinical text.
+// Canonical wire contracts v2-v9 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
 export const resourceBucketSchema = z.enum(['0', '1-10', '11-50', '51-200', '201-1000', '1000+'])
@@ -22,6 +22,8 @@ export const collectorModelSchema = z.enum([
   'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.1-pro-preview',
   'claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5',
   'custom', 'unknown', 'whisper-1', 'provider-managed',
+  // The hospital-managed endpoint profile names this model; any user-defined endpoint stays 'custom'.
+  'tvghbrain3.5',
 ])
 const elapsed = z.number().int().min(0).max(86_400_000)
 const collectorEventBaseSchema = z.object({
@@ -118,3 +120,133 @@ export const collectorEventV5Schema = collectorEventV4BaseSchema.extend({
   }
 })
 export type CollectorEventV5 = z.infer<typeof collectorEventV5Schema>
+
+// v6: one operation contains bounded, ordered request observations. No bodies or identity.
+export const MAX_COLLECTOR_REQUEST_DETAILS = 64
+const requestBaseSchema = collectorEventBaseSchema.pick({
+  provider: true, model: true, model_source: true, latency_ms: true,
+  error_class: true, response_complete: true,
+}).extend({
+  status: z.enum(['completed', 'error', 'aborted', 'incomplete']),
+  phase: collectorEventBaseSchema.shape.diagnostics.shape.phase,
+  mode: collectorEventBaseSchema.shape.diagnostics.shape.mode,
+  first_chunk_ms: elapsed.optional(),
+  http_status: z.number().int().min(100).max(599).optional(),
+}).strict()
+export const collectorRequestSchema = requestBaseSchema.superRefine((r, ctx) => {
+  if (r.status === 'incomplete') {
+    if (r.error_class !== null || r.response_complete !== null)
+      ctx.addIssue({ code: 'custom', message: 'Incomplete observation has no terminal outcome' })
+  } else {
+    validateOutcome({ ...r, diagnostics: { first_chunk_ms: r.first_chunk_ms } }, ctx)
+  }
+})
+export type CollectorRequest = z.infer<typeof collectorRequestSchema>
+const operationRequestsSchema = z.object({
+  count: resourceCountSchema,
+  omitted: resourceCountSchema,
+  details: z.array(collectorRequestSchema).max(MAX_COLLECTOR_REQUEST_DETAILS),
+}).strict().superRefine((r, ctx) => {
+  if (r.count !== r.details.length + r.omitted)
+    ctx.addIssue({ code: 'custom', message: 'Request count must include every retained and omitted observation' })
+})
+export const collectorEventV6Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(6),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    summary_cards: summaryCardCountsSchema.optional(),
+    requests: operationRequestsSchema.optional(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v5 invariant rather than maintaining another copy.
+  const { requests, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV5Schema.safeParse({ ...e, schema_version: 5, diagnostics })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+  if (requests && e.sample_kind !== 'feature')
+    ctx.addIssue({ code: 'custom', message: 'Only operation events contain request observations' })
+})
+export type CollectorEventV6 = z.infer<typeof collectorEventV6Schema>
+
+// v7: random correlation IDs and measurements only. Never a patient/cache key,
+// prompt, endpoint URL, exception message, model output, or parser excerpt.
+export const summaryAttemptSchema = z.object({
+  run_id: z.string().uuid(), request_id: z.string().uuid(),
+  attempt: z.number().int().min(1).max(10000),
+  lane: z.enum(['fast', 'full', 'batch', 'reports']),
+  output_chars: resourceCountSchema,
+  last_chunk_ms: elapsed.nullable(),
+  parse_state: z.enum(['empty', 'incomplete', 'invalid', 'valid', 'unknown']),
+}).strict()
+export type SummaryAttempt = z.infer<typeof summaryAttemptSchema>
+export const collectorEventV7Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(7),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    summary_attempt: summaryAttemptSchema,
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  validateOutcome(e, ctx)
+  if (e.feature !== 'summary' || e.sample_kind !== 'request' ||
+      (e.diagnostics.summary_attempt.last_chunk_ms ?? 0) > e.latency_ms)
+    ctx.addIssue({ code: 'custom', message: 'Invalid summary attempt' })
+})
+export type CollectorEventV7 = z.infer<typeof collectorEventV7Schema>
+
+// v8: a v6 summary operation that names its run. summary_run_id equals the random
+// summary_attempt.run_id of the same run's v7 requests; never patient or cache derived.
+export const collectorEventV8Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(8),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    summary_cards: summaryCardCountsSchema.optional(),
+    requests: operationRequestsSchema.optional(),
+    summary_run_id: z.string().uuid(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v6 invariant rather than maintaining another copy.
+  const { summary_run_id, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV6Schema.safeParse({ ...e, schema_version: 6, diagnostics })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+  if (e.feature !== 'summary' || e.sample_kind !== 'feature')
+    ctx.addIssue({ code: 'custom', message: 'Only summary operation events name a summary run' })
+})
+export type CollectorEventV8 = z.infer<typeof collectorEventV8Schema>
+
+// v9: a custom summary (insights) request names its template, so the admin page can tell which
+// template failed. The title is user-typed free text, sent as-is by explicit owner decision
+// (D071); control characters are rejected and both fields are length-bounded.
+// Rejects every Unicode control character (C0, DEL and C1), bidi controls and any unpaired surrogate.
+const noControl = (value: string) => !/\p{Cc}/u.test(value) &&
+  !/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/.test(value) &&
+  !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value)
+export const summaryTemplateSchema = z.object({
+  id: z.string().min(1).max(128).refine(noControl, 'Template id contains control characters'),
+  title: z.string().min(1).max(200).refine(noControl, 'Template title contains control characters'),
+}).strict()
+export type SummaryTemplate = z.infer<typeof summaryTemplateSchema>
+export const collectorEventV9Schema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(9),
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    template: summaryTemplateSchema,
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  validateOutcome(e, ctx)
+  if (e.feature !== 'insights' || e.sample_kind !== 'request')
+    ctx.addIssue({ code: 'custom', message: 'Only custom summary requests name a template' })
+})
+export type CollectorEventV9 = z.infer<typeof collectorEventV9Schema>
+
+// Separate, explicitly consented sensitive-content endpoint; never accepted by
+// /events. Prompt includes the clinical context actually sent to the model.
+export const AI_REPORT_MAX_BODY_BYTES = 8 * 1024 * 1024
+export const aiReportSchema = z.object({
+  schema_version: z.literal(1), submission_id: z.string().uuid(),
+  consent: z.literal(true), created_at: z.string().datetime(),
+  executions: z.array(z.object({
+    timestamp: z.string().datetime(), status: z.enum(['completed', 'error', 'aborted']),
+    // Optional for existing v1 records; new senders always populate this.
+    outcome: errorClassSchema.nullable().optional(),
+    technical: summaryAttemptSchema,
+    prompt: z.string().max(2_000_000), output: z.string().max(2_000_000),
+  }).strict()).min(1).max(256),
+}).strict()
+export type AiReport = z.infer<typeof aiReportSchema>

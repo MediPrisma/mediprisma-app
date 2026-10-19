@@ -7,6 +7,7 @@ import type {
   PhysicianDecisionMap,
 } from '../../stores/physician-decisions.store'
 import { useCdssDecisionTimingStore } from '../../stores/cdss-decision-timing.store'
+import type { CoronaryPhaseAnswer } from '../../stores/coronary-phase.store'
 import {
   ABSENT_STATES,
   DECISION_STATES,
@@ -61,6 +62,8 @@ export interface VisitDecisionScreenProps {
    * optional `physicianInput`), handed back so the pack recomputes from it.
    */
   onPhysicianInput?: (input: NonNullable<VisitAction['physicianInput']>) => void
+  /** CAD DP-01's answer as kept, so its month shows back beside the table. */
+  coronaryPhase?: CoronaryPhaseAnswer
   /**
    * Writes an answer to a point's own questions into the answer set the pack
    * names — AF DP-08's valves (`af-clinical`), HF DP-06's triggers (`visit`),
@@ -100,6 +103,7 @@ export function VisitDecisionScreen({
   onAnswer,
   modules,
   onPhysicianInput,
+  coronaryPhase,
   onPointAnswer,
   onGrade,
 }: VisitDecisionScreenProps) {
@@ -317,6 +321,7 @@ export function VisitDecisionScreen({
         summaryText={summaryText}
         // A class chosen in DP-01's table is the answer the diagnosis
         // question's own control wrote, handed back the same way.
+        {...(coronaryPhase ? { coronaryPhase } : {})}
         {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
         {...(onPointAnswer ? { onAnswerQuestion: (point: DecisionPointView, answers: string, id: string, value: boolean | undefined) => onPointAnswer(answers, id, value, questionRowOf(point, id)?.terms) } : {})}
       />

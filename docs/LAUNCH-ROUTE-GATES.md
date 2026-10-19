@@ -62,6 +62,7 @@ production in chat 2026-10-15).
 | 開藥前必看 (overview `mustKnow` grid) | Removed on all routes; the problem list and 開藥注意 carry the content | Owner, in chat 2026-10-02 |
 | 最可能的就診主因 (Focus card) and 最近 90 天 (Recent events card) | Removed on all routes | Owner, in chat 2026-10-02 |
 | Red high-alert banner under the headline | Removed; 開藥注意 is one neutral list ordered by importance, placed under 影像與病理重點 | Owner, in chat 2026-10-02: 「不要有什麼高危的紅色警示…照著重要度排序」 |
+| Headline text-comparison notice in clinician mode | On all routes, ordinary differences from the problem list and mentions of medicines or lab values are available through the neutral 「摘要核對」 button beside 初診快覽, instead of an always-visible warning below the headline. Details explain that a wording mismatch does not establish a clinical error. A failed problem-list generation still shows an inline notice that comparison could not be completed. The comparison logic, summary text, and medication safety alerts are unchanged. | Owner, in chat 2026-10-19: 「好，照你建議修改」 after reviewing the collapsed comparison proposal |
 | 民眾 audience: 最近需要注意的三件事, 就醫歷程 | Not shown (they rode on the removed cards) | Owner, in chat 2026-10-15 |
 | 「雲端無過敏資料，非確認無過敏」 row | Not shown | Owner, in chat 2026-10-15 |
 | AI data scope, every AI surface (醫療摘要, 臨床對話, insights) | Adds, beyond the saved time window, the newest prescribing-relevant lab value and the newest report of each modality class within 730 days, and sends pathology reports with the imaging selection; only the 醫療摘要 data drawer notes it | Owner, in chat 2026-10-15: 「照現狀」 (same as pilot/hmc) |
@@ -181,6 +182,16 @@ HF new-flow clinical information card: owner requested replacing the height tile
 ## AF pilot preview
 
 AF is listed alongside HF and lipid in the HMC host, including production builds for `/app-hmc/`. The existing Beta and unattended launch rules apply; HF remains the default. Owner authorized AF integration and deployment on 2026-09-19.
+
+## CAD (coronary disease) preview
+
+2026-10-18: the owner asked for the app side of the CAD CDSS (「接著做 app 端」). Coronary disease (`chronic-coronary-disease-cdss`) is listed after AF in the HMC host. The package ships it `enabled: false`, so it shows only under the existing Beta switch and pilot ids, and the unattended Medcloud rule applies as for the other unreleased packs; HF remains the default. No existing clinical surface is removed.
+
+| Surface | Behaviour | Owner decision | Tests |
+|---|---|---|---|
+| 冠心病 in the disease switcher | Listed; visible with Beta or the pilot id, as dyslipidemia and AF | Owner, in chat 2026-10-18: 「接著做 app 端」 | `cad-host` |
+| CAD 決策地圖 v2 asks: 「心絞痛比上次」 (更多／一樣／較少／沒有) and 「出血」 | Asked on the CAD page; the bleeding answer is the one the AF page asks, kept once per patient | Same | `cad-host` |
+| 在地層：健保給付 lines under a point (CAD DP-12's P2Y12 reminder) | Drawn on every route of this host, which runs the Taiwan layer (`setLocaleLayer('taiwan')`); a deployment set to `'none'` draws none and nothing else changes | Owner, in chat 2026-10-18, asked that coverage be separable for deployment in other countries | `cad-host` |
 
 ## Optional private integrations (all routes)
 
