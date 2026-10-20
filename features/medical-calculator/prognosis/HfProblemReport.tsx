@@ -1,13 +1,23 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { configuredEndpoint, isCollectorSite, captureCollectorAuth, awaitReportStep } from '@/src/application/telemetry/summary-report'
 import { buildHfProblemReport, type HfReportSnapshot } from '@/src/application/telemetry/hf-report'
-import { hfDiagnosticStage, type HfDiagnosticRecord } from '@/src/core/hf-risk/diagnostics'
+import { hfDiagnosticStage, type HfDiagnosticRecord, type HfRequestDiagnostic } from '@/src/core/hf-risk/diagnostics'
+import type { HfDryRunClaim } from '@/src/core/hf-risk/contract'
+import { aiReportSchema } from '@/src/shared/contracts/collector-event'
 import type { HfRecordSource } from '@/src/core/hf-risk/record-source'
 import { hfHorizon } from './HfPredictionResult'
+
+function JsonDetails({ title, label, value, serialized }: { title: string; label: string; value?: unknown; serialized?: string }) {
+  const [expanded, setExpanded] = useState(false)
+  return <details onToggle={event => setExpanded(event.currentTarget.open)}>
+    <summary className="min-h-8 cursor-pointer py-1">{title}</summary>
+    {expanded && <pre aria-label={label} className="whitespace-pre-wrap break-all text-xs">{serialized ?? JSON.stringify(value, null, 2)}</pre>}
+  </details>
+}
 
 export function HfProblemReport({ runId, records, source, locale, describeError, snapshot, onSnapshotChange }: {
   runId: string; records: HfDiagnosticRecord[]; source: HfRecordSource; locale: string; describeError: (code: string) => string
@@ -21,6 +31,17 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
   const sent = Boolean(snapshot?.receiptId)
   const [message, setMessage] = useState('')
   const active = useRef<AbortController | null>(null)
+  const reportJson = snapshot?.json
+  const preview = useMemo(() => {
+    if (!reportJson) return null
+    try {
+      return aiReportSchema.parse(JSON.parse(reportJson)).executions.map(execution => ({
+        id: execution.technical.request_id,
+        request: JSON.parse(execution.prompt) as { claim: HfDryRunClaim; operation: 'dry-run' | 'predict'; input?: unknown; inputReference?: string; inputOmission?: string },
+        diagnostic: JSON.parse(execution.output) as HfRequestDiagnostic,
+      }))
+    } catch { return null }
+  }, [reportJson])
   useEffect(() => () => { const request = active.current; active.current = null; request?.abort() }, [])
   const prepare = () => {
     if (!snapshot) {
@@ -38,7 +59,7 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
   const submit = async () => {
-    if (!snapshot?.endpoint || !consent || active.current || sent || blocked || !isCollectorSite()) return
+    if (!snapshot?.endpoint || !preview || !consent || active.current || sent || blocked || !isCollectorSite()) return
     const controller = new AbortController(); active.current = controller; setSending(true); setMessage('')
     const timer = setTimeout(() => controller.abort(), 15000)
     try {
@@ -89,16 +110,27 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
     <Dialog open={open} onOpenChange={value => { if (!sending) setOpen(value) }}>
       <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-3xl flex-col overflow-hidden">
         <DialogHeader><DialogTitle>{en ? 'Report HF problem' : '回報 HF 問題'}</DialogTitle>
-          <DialogDescription>{en ? 'Includes this run’s request diagnostics and the validated model input: birth date, sex, visit dates, diagnoses, laboratory values and procedures. It excludes the original chart, names, identity numbers and credentials. The receiver also records your session identity (possibly anonymous) and source computer. Review the complete contents before sending.' : '包含本次請求診斷，以及已通過格式檢查的模型輸入：生日、性別、就診日期、診斷、檢驗數值與處置。不含原始整份病歷、姓名、身分證、病歷號或金鑰。收件端另記錄工作階段識別（可能匿名）與來源電腦；請先確認完整內容。'}</DialogDescription>
+          <DialogDescription>{en ? 'Includes this run’s request diagnostics and the validated model input: birth date, sex, visit dates, diagnoses, laboratory values and procedures. It excludes the original chart, names, identity numbers and credentials. The receiver also records your signed-in account (including email, if available) or anonymous session ID, and source computer. Review the contents before sending.' : '包含本次請求診斷，以及已通過格式檢查的模型輸入：生日、性別、就診日期、診斷、檢驗數值與處置。不含原始整份病歷、姓名、身分證、病歷號或金鑰。收件端另記錄登入帳號（若有，包含信箱）或匿名工作階段識別，以及來源電腦；請先確認內容。'}</DialogDescription>
         </DialogHeader>
         <p className="break-all text-sm">{en ? 'Recipient: ' : '收件位置：'}{snapshot?.endpoint ? new URL(snapshot.endpoint).origin : (en ? 'Upload unavailable on this route; download the report.' : '此入口未啟用院內回報，可下載診斷檔。')}</p>
-        <pre aria-label={en ? 'Complete HF report preview' : '完整 HF 回報預覽'} className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 text-xs">{snapshot?.json}</pre>
+        <div className="min-h-0 flex-1 space-y-3 overflow-auto rounded-md border bg-muted/30 p-3 text-sm">
+          {preview ? preview.map(({ id, request, diagnostic: d }) => <section key={id} className="space-y-2 rounded-md border bg-background p-3">
+            <h3 className="font-medium">{hfHorizon(request.claim, en)} · {request.operation === 'predict' ? (en ? 'Prediction' : '模型預測') : (en ? 'Input check' : '輸入檢查')}</h3>
+            <p>{d.errorCode ? describeError(d.errorCode) : d.verdict === 'refused' ? (en ? 'Assessment refused' : '模型拒絕評估') : (en ? 'Completed' : '已完成')}</p>
+            <p>{hfDiagnosticStage(d.stage, en)} · HTTP {d.httpStatus ?? (en ? 'no response' : '未收到回應')} · {(d.elapsedMs / 1000).toFixed(2)} {en ? 's' : '秒'}</p>
+            <p className="break-all text-xs">{en ? 'Request ID: ' : '請求編號：'}{id}</p>
+            {request.input !== undefined && <JsonDetails title={en ? 'Review included clinical input' : '查看附上的臨床輸入'} label={en ? 'Included clinical input' : '附上的臨床輸入'} value={request.input} />}
+            {request.inputReference && <p className="break-all">{en ? 'Uses the same clinical input as request: ' : '使用與此請求相同的臨床輸入：'}{request.inputReference}</p>}
+            {request.inputOmission && <p role="note">{en ? 'Clinical input is not attached: it was not validated or exceeds the report size limit. Only request diagnostics are included.' : '未附上臨床輸入：資料尚未通過檢查，或超過回報大小限制。這筆僅包含請求診斷。'}</p>}
+          </section>) : <p role="alert">{en ? 'Unable to display the report; sending is disabled.' : '無法顯示回報內容，已停用傳送。'}</p>}
+          <JsonDetails title={en ? 'View exact transmission JSON' : '查看完整傳送內容'} label={en ? 'Complete HF report preview' : '完整 HF 回報預覽'} serialized={snapshot?.json} />
+        </div>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={consent} disabled={sending || sent} onChange={e => setConsent(e.target.checked)} />{en ? 'I reviewed the contents and agree to send these clinical inputs to the hospital receiver.' : '我已確認內容，並同意將這份臨床輸入資料傳送至上述院內收件位置。'}</label>
         <p role="status" className="break-all text-sm">{snapshot?.receiptId ? (en ? 'Report received. ID: ' : '回報已收到，編號：') + snapshot.receiptId : message}</p>
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" className="min-h-11" onClick={download}>{en ? 'Download report' : '下載這份回報'}</Button>
           <Button variant="outline" className="min-h-11" disabled={sending} onClick={() => setOpen(false)}>{en ? 'Close' : '關閉'}</Button>
-          <Button className="min-h-11" disabled={!snapshot?.endpoint || !consent || sending || sent || blocked} onClick={() => void submit()}>{sending ? (en ? 'Sending…' : '傳送中…') : sent ? (en ? 'Sent' : '已送出') : blocked ? (en ? 'Cannot send now' : '暫時無法送出') : (en ? 'Confirm and send' : '確認送出回報')}</Button>
+          <Button className="min-h-11" disabled={!snapshot?.endpoint || !preview || !consent || sending || sent || blocked} onClick={() => void submit()}>{sending ? (en ? 'Sending…' : '傳送中…') : sent ? (en ? 'Sent' : '已送出') : blocked ? (en ? 'Cannot send now' : '暫時無法送出') : (en ? 'Confirm and send' : '確認送出回報')}</Button>
         </div>
       </DialogContent>
     </Dialog>

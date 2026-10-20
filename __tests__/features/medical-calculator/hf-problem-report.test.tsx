@@ -22,6 +22,11 @@ function Harness({ data, show = true }: { data: HfDiagnosticRecord[]; show?: boo
   return show ? <HfProblemReport runId={runId} records={data} source="medcloud" locale="zh-TW" describeError={() => '等候服務超過 15 秒'} snapshot={snapshot} onSnapshotChange={setSnapshot} /> : null
 }
 const view = (data = records()) => <Harness data={data} />
+function expand(title: string) {
+  const details = screen.getByText(title).closest('details')!
+  details.open = true
+  fireEvent(details, new Event('toggle'))
+}
 
 it('sends only the frozen preview, after consent, and keeps its identity on retry', async () => {
   jest.mocked(fetch).mockClear()
@@ -30,6 +35,8 @@ it('sends only the frozen preview, after consent, and keeps its identity on retr
   expect(fetch).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: '回報 HF 問題' }))
   expect(screen.getByRole('button', { name: '確認送出回報' })).toBeDisabled()
+  expect(screen.queryByLabelText('完整 HF 回報預覽')).not.toBeInTheDocument()
+  expand('查看完整傳送內容')
   const preview = screen.getByLabelText('完整 HF 回報預覽').textContent
   expect(fetch).not.toHaveBeenCalled()
   component.rerender(view([]))
@@ -44,6 +51,27 @@ it('sends only the frozen preview, after consent, and keeps its identity on retr
     expect(init?.body).toBe(preview)
   }
   expect(screen.getByRole('button', { name: '已送出' })).toBeDisabled()
+})
+
+it('shows readable request diagnostics and expands one copy of the clinical input only on demand', () => {
+  const first = records()[0]
+  render(view([first, { ...first, diagnostic: { ...first.diagnostic, requestId: randomUUID(), claim: 'P1_CD_mortality_3m' } }]))
+  fireEvent.click(screen.getByRole('button', { name: '回報 HF 問題' }))
+  expect(screen.getByText(/登入帳號（若有，包含信箱）/)).toBeInTheDocument()
+  expect(screen.getAllByText(/使用與此請求相同的臨床輸入/)).toHaveLength(1)
+  expect(screen.queryByLabelText('附上的臨床輸入')).not.toBeInTheDocument()
+  expand('查看附上的臨床輸入')
+  const input = screen.getByLabelText('附上的臨床輸入').textContent!
+  expect(JSON.parse(input)).toEqual(JSON.parse(first.inputJson!))
+  expect(input).toContain('\n')
+})
+
+it('explains in Chinese when no validated clinical input can be attached', () => {
+  const first = records()[0]
+  render(view([{ ...first, inputJson: null }]))
+  fireEvent.click(screen.getByRole('button', { name: '回報 HF 問題' }))
+  expect(screen.getByRole('note')).toHaveTextContent('未附上臨床輸入')
+  expect(screen.queryByText('查看附上的臨床輸入')).not.toBeInTheDocument()
 })
 
 it('aborts an unfinished upload when its source component is removed', async () => {

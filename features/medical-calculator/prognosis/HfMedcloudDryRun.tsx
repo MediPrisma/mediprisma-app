@@ -108,7 +108,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       && next.encounters.every(reference => Number.isInteger(next.ranks[reference]) && next.ranks[reference] >= 1 && next.ranks[reference] <= 50),
   })
   const text = (pair: readonly [string, string]) => pair[en ? 1 : 0]
-  const describeError = (code: string) => code === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(hfFailureMessage(code) ?? ERRORS[code] ?? ['發生未預期錯誤，尚無法確認原因。請回報本次診斷。', 'An unexpected error occurred. Report this run’s diagnostics to identify the cause.'])
+  const describeError = (code: string) => code === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(hfFailureMessage(code) ?? ERRORS[code] ?? ['發生未預期錯誤，尚無法確認原因。請重新整理輸入後再試。', 'An unexpected error occurred. Prepare the input again and retry.'])
   const hospital = current ? current.visits.find(visit => visit.reference === current.selection.encounter)?.providerName ?? current.selection.provider : ''
   const confirmed = current?.input.physicianDiagnosis
   const suggestionDates = (suggestion: HfPhysicianDiagnosisDraft | null) => suggestion ? diagnosisVisits.filter(visit => suggestion.encounters.includes(visit.reference))
