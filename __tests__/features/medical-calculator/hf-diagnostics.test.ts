@@ -50,6 +50,19 @@ it('distinguishes an empty stream from malformed JSON', async () => {
   expect(records[0].diagnostic).toMatchObject({ stage: 'response', responseBytes: 0, errorCode: 'response-empty' })
 })
 
+it('does not blame input data for an unexpected preparation error', async () => {
+  const original = globalThis.Blob
+  const records: HfDiagnosticRecord[] = []
+  const fetch = jest.fn()
+  try {
+    globalThis.Blob = class { constructor() { throw new Error('PRIVATE-INTERNAL-DETAIL') } } as unknown as typeof Blob
+    await expect(requestHfPrediction(input(), options(records, fetch))).rejects.toThrow('internal-error')
+    expect(records[0].diagnostic.errorCode).toBe('internal-error')
+    expect(JSON.stringify(records)).not.toContain('PRIVATE-INTERNAL-DETAIL')
+    expect(fetch).not.toHaveBeenCalled()
+  } finally { globalThis.Blob = original }
+})
+
 it.each(['', '<html>Bad gateway</html>', '{not json'])('classifies a non-contract 502 as upstream unavailability: %s', async body => {
   const records: HfDiagnosticRecord[] = []
   await expect(requestHfPrediction(input(), options(records, async () => new Response(body, { status: 502 })))).rejects.toThrow('gateway-unavailable')

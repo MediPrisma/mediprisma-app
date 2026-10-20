@@ -127,7 +127,7 @@ async function requestHf(input: HfInput, options: HfRequestOptions, operation: '
     const code: HfErrorCode = timedOut ? 'request-timeout' : options.signal.aborted ? 'request-aborted'
       : error instanceof Error && isHfErrorCode(error.message) ? error.message
       : diagnostic.stage === 'connect' ? 'gateway-network' : diagnostic.stage === 'response' ? 'response-interrupted'
-      : diagnostic.stage === 'parse' ? operation === 'predict' ? 'invalid-prediction-response' : 'invalid-dry-run-response' : 'input-invalid'
+      : diagnostic.stage === 'parse' ? operation === 'predict' ? 'invalid-prediction-response' : 'invalid-dry-run-response' : 'internal-error'
     diagnostic.errorCode = code
     throw new Error(code)
   } finally {

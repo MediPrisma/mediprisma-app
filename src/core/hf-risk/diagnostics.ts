@@ -27,6 +27,7 @@ export interface HfDiagnosticRecord {
 }
 
 export const HF_REQUEST_ERRORS = {
+  'internal-error': { message: ['準備請求時發生未預期錯誤，尚無法確認原因。請回報本次診斷。', 'An unexpected error occurred while preparing the request. Report the diagnostics to identify its cause.'], outcome: 'error' },
   'input-invalid': { message: ['輸入資料不符合模型契約，請核對資料', 'Inputs do not match the model contract; review the data'], outcome: 'validation_failed' },
   'input-too-large': { message: ['整理後資料超過 2 MiB，無法送出', 'Prepared data exceeds the 2 MiB limit'], outcome: 'validation_failed' },
   'gateway-config': { message: ['院內 HF 檢查服務尚未設定', 'Intranet HF validation service is not configured'], outcome: 'error' },
