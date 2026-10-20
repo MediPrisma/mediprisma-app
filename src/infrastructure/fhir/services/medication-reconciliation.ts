@@ -313,7 +313,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   const rewrite = (value: any): void => {
     if (!value || typeof value !== 'object') return
     if (typeof value.reference === 'string' && aliases.has(value.reference)) value.reference = aliases.get(value.reference)
-    for (const child of Object.values(value)) rewrite(child)
+    for (const [key, child] of Object.entries(value)) if (!key.startsWith('_')) rewrite(child)
   }
   const result = resources.filter((resource) => !removed.has(resource))
   result.filter(resource => resource.resourceType !== 'Provenance').forEach(rewrite)

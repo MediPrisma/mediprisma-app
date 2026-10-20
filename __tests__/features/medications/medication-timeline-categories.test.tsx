@@ -41,6 +41,15 @@ describe('useMedicationTimeline category grouping', () => {
     expect(bar.supplyEndDay).toBe('2026-11-15')
     expect(new Date(bar.endMs).getDate()).toBe(16)
   })
+  it.each(['weeks', 'period'])('shows days consistent with the chart for source %s', format => {
+    const med = medication({ authoredOn: '2026-10-19',
+      dispenseRequest: format === 'weeks' ? { expectedSupplyDuration: { value: 2, code: 'wk' } } : undefined,
+      dosageInstruction: format === 'period' ? [{ timing: { repeat: { boundsPeriod: { start: '2026-10-19', end: '2026-11-01' } } } }] : undefined,
+    })
+    const { result } = renderHook(() => useMedicationTimeline([med], 'medical', 'all', '其他', 'zh-TW', zhAtcCategories))
+    const bar = result.current.categories[0].drugs[0].bars[0]
+    expect(bar).toMatchObject({ supplyDays: 14, supplyEndDay: '2026-11-01', supplyDaysUnrecorded: false })
+  })
   it('separates SDK medications by governed ATC level two', () => {
     const medications = [
       medication(),

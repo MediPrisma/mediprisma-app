@@ -49,6 +49,7 @@ it('merges only verified cross-source copies while preserving hospital SIG, note
     dispenseRequest: { expectedSupplyDuration: { value: 28 } },
     _reconciledSourceReferences: ['MedicationRequest/hospital-med', 'MedicationRequest/cloud-med'] })
   expect(resources.find(resource => resource.id === 'trace')?.target[0].reference).toBe('MedicationRequest/cloud-med')
+  expect(hospital._sourceRecordComparison.sourceStatuses.map((source: any) => source.reference)).toEqual(['MedicationRequest/hospital-med', 'MedicationRequest/cloud-med'])
 })
 
 it.each(['visit', 'inferred-visit', 'date', 'patient', 'product', 'name-only', 'dose', 'status', 'quantity', 'ambiguous', 'same-source', 'self-pay'])(
