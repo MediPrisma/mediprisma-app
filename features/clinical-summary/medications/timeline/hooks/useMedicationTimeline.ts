@@ -8,6 +8,7 @@
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { medicationExpectedEnd } from '@/src/core/utils/clinical-context-selection.utils'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import {
   resolveHospitalMedicationName,
@@ -33,6 +34,7 @@ export type TimelinePrescriptionType = 'chronic' | 'non-chronic' | 'unrecorded'
 export interface RefillBar {
   sourceComparison?: string
   sourceComparisonUnconfirmed?: boolean
+  supplyEndDay?: string
   selfPurchased?: boolean
   sourceStatus?: string
   supplyDaysUnrecorded?: boolean
@@ -425,7 +427,10 @@ export function useMedicationTimeline(
 
       const reportedDays = Number(med.dispenseRequest?.expectedSupplyDuration?.value)
       const supplyDays = Number.isFinite(reportedDays) && reportedDays > 0 ? reportedDays : 1
-      const endMs = startMs + supplyDays * 24 * 60 * 60 * 1000
+      const supplyEndDay = medicationExpectedEnd(med)
+      const endBoundary = supplyEndDay ? new Date(`${supplyEndDay}T00:00:00`) : undefined
+      if (endBoundary) endBoundary.setDate(endBoundary.getDate() + 1)
+      const endMs = endBoundary && Number.isFinite(endBoundary.getTime()) ? endBoundary.getTime() : startMs + supplyDays * 24 * 60 * 60 * 1000
       const prescriptionType = resolvedPrescriptionType(
         prescriptionTypesByDrug.get(clinicalDrugKey),
       )
@@ -483,6 +488,7 @@ export function useMedicationTimeline(
       const bar: RefillBar = {
         sourceComparison: sourceComparisonNarrative(med),
         sourceComparisonUnconfirmed: !!med._sourceRecordComparison && med._sourceRecordComparison.status !== 'confirmed',
+        supplyEndDay,
         selfPurchased: sourceSelfPurchase(med) === true,
         sourceStatus: med.status,
         supplyDaysUnrecorded: !(Number.isFinite(reportedDays) && reportedDays > 0),

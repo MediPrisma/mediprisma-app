@@ -83,7 +83,7 @@ export function MedicationTerminologyTooltip({
     Boolean(value) && values.indexOf(value) === index,
   )
   const rows = [
-    [locale === 'en' ? 'Hospital order number' : '院內藥囑編號', medication.sourceOrderIdentifiers?.join('、')],
+    [locale === 'en' ? 'Hospital source identifier' : '院內識別碼', medication.sourceOrderIdentifiers?.join('、')],
     [locale === 'en' ? 'Recorded NHI product code' : (integrated ? '雲端紀錄健保藥碼' : '來源紀錄健保藥碼'), medication.nhiDrugCode],
     ...(!terminology ? [] : [
     [mt.terminologyIngredientLabel ?? 'Ingredient / strength', terminology.ingredientText],

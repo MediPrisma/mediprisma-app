@@ -33,6 +33,14 @@ function medication(overrides: Record<string, unknown> = {}) {
 }
 
 describe('useMedicationTimeline category grouping', () => {
+  it('keeps the clinical inclusive supply end separate from the exclusive chart boundary', () => {
+    const { result } = renderHook(() => useMedicationTimeline([
+      medication({ authoredOn: '2026-10-19', dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } } }),
+    ], 'medical', 'all', '其他', 'zh-TW', zhAtcCategories))
+    const bar = result.current.categories[0].drugs[0].bars[0]
+    expect(bar.supplyEndDay).toBe('2026-11-15')
+    expect(new Date(bar.endMs).getDate()).toBe(16)
+  })
   it('separates SDK medications by governed ATC level two', () => {
     const medications = [
       medication(),

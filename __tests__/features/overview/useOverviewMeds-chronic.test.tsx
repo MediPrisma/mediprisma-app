@@ -44,6 +44,7 @@ it('writes the until-date from the source end day, not the rounded-up count', ()
   const { zhTW } = require('@/src/shared/i18n/locales/zh-TW')
   const medication = {
     ...refill('m1', '2026-09-12T09:00:00+08:00', false),
+    dosageInstruction: [{ timing: { repeat: { boundsPeriod: { start: '2026-09-12T09:00:00+08:00', end: '2026-10-10T18:00:00+08:00' } } } }],
     dispenseRequest: { validityPeriod: { start: '2026-09-12T09:00:00+08:00', end: '2026-10-10T18:00:00+08:00' } },
   }
   const { result } = renderHook(() => useOverviewMeds([medication], buildOverviewWindow(3, NOW), 'medical', 'zh-TW'))

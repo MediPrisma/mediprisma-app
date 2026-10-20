@@ -1,6 +1,6 @@
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
-import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
+import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
 import { sharedPrescriptionIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
@@ -123,6 +123,10 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     // dose. Keep both sources instead of adding e.g. "2 TAB" to "1 TAB PO QD".
     if (sig(left) && !aDose && (bDose?.doseQuantity || bDose?.doseRange)
       || sig(right) && !bDose && (aDose?.doseQuantity || aDose?.doseRange)) return true
+    for (const field of ['route', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method']) {
+      if (sig(left) && left[field] === undefined && right[field] !== undefined
+        || sig(right) && right[field] === undefined && left[field] !== undefined) return true
+    }
   }
   return false
 }
@@ -251,9 +255,13 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     const visitCodingConflict = group.some(member => identity(member)?.visitCodingConflict)
     const factsConflict = [...hospitalGroup].some(member => [...cloudGroup].some(partner => conflictingPairs.get(member)?.has(partner)))
     const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedPrescriptionIdentifier(order, other) && !contextInferred && !visitCodingConflict && !factsConflict
-    const warnings = [...(contextInferred ? ['encounter-link-unconfirmed'] : []), ...(factsConflict ? ['source-facts-differ'] : [])]
+    const statusConflict = [...hospitalGroup].some(member => ['cancelled', 'stopped', 'entered-in-error', 'on-hold'].includes(member.status))
+      && [...cloudGroup].some(member => hasCloudCoverageDerivedStatus(member) && member.status === 'active')
+    const warnings = [...(contextInferred ? ['encounter-link-unconfirmed'] : []), ...(factsConflict ? ['source-facts-differ'] : []), ...(statusConflict ? ['source-status-conflict'] : [])]
     const comparison = { status: confirmed ? 'confirmed' : unique ? 'candidate' : 'ambiguous',
       references: group.map(member => `MedicationRequest/${member.id}`),
+      sourceStatuses: group.map(member => ({ reference: `MedicationRequest/${member.id}`, origin: isVghtpeSource(member) ? 'hospital' : 'medcloud',
+        status: member.status || 'unknown', basis: hasCloudCoverageDerivedStatus(member) ? 'coverage-estimate' : 'source-status' })),
       ...(warnings.length ? { warnings } : {}),
     }
     group.forEach(member => { member._sourceRecordComparison = comparison })

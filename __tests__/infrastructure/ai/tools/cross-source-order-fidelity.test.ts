@@ -19,3 +19,24 @@ it('retains real identical orders and explicitly identifies possible source copi
       .every((record: any) => record.sourceComparisonInstruction.includes('Preserve distinct orders within each source'))).toBe(true)
   } finally { jest.useRealTimers() }
 })
+
+it('reports a cancelled hospital versus date-derived active cloud record as uncertain with both source statuses', async () => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-10-20T08:00:00+08:00'))
+  try {
+    const input: any = JSON.parse(JSON.stringify(fixture))
+    input.entry.find((entry: any) => entry.resource.id === 'synthetic-order-a').resource.status = 'cancelled'
+    const cloud = input.entry.find((entry: any) => entry.resource.id === 'synthetic-cloud-order-a').resource
+    cloud.meta.tag = [{ system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module', code: 'imue0008' }]
+    const parsed = LocalBundleService.parse(input)!
+    const tools = createFhirTools(() => parsed)
+    const result = await (tools.getActiveMedicationList as any).execute({})
+    expect(result.data.some((record: any) => record.sourceComparison?.warnings?.includes('source-status-conflict'))).toBe(false)
+    expect(result.uncertainData).toEqual(expect.arrayContaining([expect.objectContaining({
+      sourceComparison: expect.objectContaining({ sourceStatuses: expect.arrayContaining([
+        expect.objectContaining({ origin: 'hospital', status: 'cancelled', basis: 'source-status' }),
+        expect.objectContaining({ origin: 'medcloud', status: 'active', basis: 'coverage-estimate' }),
+      ]) }),
+    })]))
+    expect(result.canConcludeAbsence).toBe(false)
+  } finally { jest.useRealTimers() }
+})

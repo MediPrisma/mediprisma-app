@@ -31,6 +31,17 @@ it('does not confirm two visits from a shared patient or untyped case identifier
   expect((hospital as any)._sourceRecordComparison.status).toBe('candidate')
   expect(graph.find(resource => resource.id === 'med')?.encounter.reference).toBe('Encounter/hospital-visit')
 })
+
+it('marks ambiguous same-day visit sources without mixing their individual detail links', () => {
+  const { resources, hospital } = fixture()
+  resources.push({ ...hospital, id: 'hospital-second-visit' })
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect(visits).toHaveLength(3)
+  expect(visits.every(visit => visit._sourceRecordComparison?.status === 'ambiguous')).toBe(true)
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(3)
+  expect(result.current.every(visit => visit.sourceIds?.length === 1 && visit.sourceIds[0] === visit.id)).toBe(true)
+})
 function fixture() {
   const cloud = {
     resourceType: 'Encounter', id: 'cloud-visit', status: 'finished', class: { code: 'AMB' },

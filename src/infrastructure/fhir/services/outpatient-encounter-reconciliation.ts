@@ -103,8 +103,22 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
 
   const aliases = new Map<string, string>()
   const removed = new Set<Resource>()
+  const ambiguousHandled = new Set<Resource>()
   for (const [visit, matches] of candidates) {
-    if (matches.length !== 1 || reverse.get(matches[0]) !== 1) continue
+    if (matches.length !== 1 || reverse.get(matches[0]) !== 1) {
+      if (!matches.length || ambiguousHandled.has(visit)) continue
+      const hospitals = new Set<Resource>([visit]), clouds = new Set<Resource>(), queue = [visit]
+      for (let index = 0; index < queue.length; index++) for (const possible of candidates.get(queue[index]) ?? []) {
+        clouds.add(possible)
+        for (const [other, otherMatches] of candidates) if (!hospitals.has(other) && otherMatches.includes(possible)) {
+          hospitals.add(other); queue.push(other)
+        }
+      }
+      const sources = [...hospitals, ...clouds]
+      const comparison = { status: 'ambiguous', references: sources.map(source => `Encounter/${source.id}`) }
+      sources.forEach(source => { source._sourceRecordComparison = comparison; ambiguousHandled.add(source) })
+      continue
+    }
     const target = matches[0]
     const codingSystemsDiffer = icdKey(primaryDiagnosis(visit, conditions)) !== icdKey(primaryDiagnosis(target, conditions))
     const comparison = { status: codingSystemsDiffer ? 'ambiguous' : sharedEncounterIdentifier(visit, target) ? 'confirmed' : 'candidate',

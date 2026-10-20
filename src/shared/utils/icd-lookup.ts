@@ -320,7 +320,7 @@ export function extractEncounterIcds(
     if (rawText) {
       const codes = parseIcdCodes(rawText)
       if (codes.length > 0) {
-        for (const c of codes) push(c, lookupIcd(c, dict))
+        for (const c of codes) push(c, localizedIcdDescription(c, undefined, undefined, dict, locale))
       } else {
         // No parsable codes — keep the raw text as-is.
         push(rawText, undefined)

@@ -214,6 +214,9 @@ export function MedicationList({
 
   return (
     <div className="space-y-4">
+      {medications.some(medication => medication.currentnessUncertain || medication.sourceComparison?.warnings?.includes('source-status-conflict')) && (
+        <p className="text-xs text-muted-foreground">{locale === 'en' ? 'Some medication status is unconfirmed. These records remain below with an uncertainty or conflict label; neither current use nor stopping is established.' : '有用藥狀態待確認；下方仍保留原始紀錄及狀態差異標示，尚不能直接判定仍在服用或已停用。'}</p>
+      )}
       {medications.some(medication => medication.sourceComparison && medication.sourceComparison.status !== 'confirmed') && (
         <p className="text-xs text-muted-foreground">{locale === 'en' ? 'Includes source comparison groups. Item counts are not confirmed prescription counts; inspect the source records.' : '含跨來源比較組；項數不是已確認藥囑筆數，請展開核對原始紀錄。'}</p>
       )}

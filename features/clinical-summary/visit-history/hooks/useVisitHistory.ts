@@ -8,6 +8,7 @@ import {
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
@@ -17,7 +18,7 @@ export interface VisitRecord {
   sourceIds?: string[]
   sourceComparisonStatus?: 'candidate' | 'ambiguous' | 'confirmed'
   sourceComparisonWarnings?: string[]
-  sourceRecords?: Array<{ id: string; date?: string; institution?: string; department?: string; physician?: string; diagnoses: string[] }>
+  sourceRecords?: Array<{ id: string; origin?: 'hospital' | 'medcloud'; date?: string; institution?: string; department?: string; physician?: string; diagnoses: string[] }>
   type: VisitType
   /** Medical system, derived from explicit serviceType codings first. AMB only
    *  identifies an ambulatory encounter and is never evidence of western care. */
@@ -301,6 +302,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           sourceRecords: encounter._sourceRecordComparison?.references.map((reference: string) => {
             const source = (encounter._sourceEncounterRecords ?? encounters).find((item: any) => `Encounter/${item.id}` === reference)
             return { id: source?.id ?? reference, date: source?.period?.start?.slice(0, 10),
+              origin: isVghtpeSource(source) ? 'hospital' : 'medcloud',
               institution: getInstitutionName(source?.serviceProvider?.display, locale),
               department: source?.serviceType?.text || source?.serviceType?.coding?.find((coding: any) => coding.display)?.display,
               physician: source?.participant?.find((participant: any) => participant.individual?.display)?.individual?.display,

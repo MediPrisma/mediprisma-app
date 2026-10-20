@@ -380,7 +380,7 @@ export function useMedicationRows(
         title: medicationName,
         secondaryTitle,
         status,
-        statusEstimated: status === 'completed' && hasCloudCoverageDerivedStatus(med),
+        statusEstimated: hasCloudCoverageDerivedStatus(med),
         detail: detail || undefined,
         dose: doseSummary || undefined,
         route: routeSummary && routeSummary !== "—" ? routeSummary : undefined,
@@ -438,16 +438,18 @@ export function useMedicationRows(
         const representative = (sourceRows as MedicationRow[]).find(source => !source.isInactive && !source.currentnessUncertain) ?? hospital
         const mixedCurrentness = !representative.isInactive && (sourceRows as MedicationRow[]).some(source => source.isInactive || source.currentnessUncertain)
         const hospitalRows = (sourceRows as MedicationRow[]).filter(source => source.dataOrigin === 'hospital')
-        // Preserve a visible row for each genuine hospital order. Cloud copies
-        // have no assigned partner until the correspondence is confirmed.
-        const displayRows = hospitalRows.length > 1 ? [...hospitalRows] : [representative]
-        if (hospitalRows.length > 1 && hospitalRows.every(source => source.isInactive) && !representative.isInactive) displayRows.unshift(representative)
+        const cloudRows = (sourceRows as MedicationRow[]).filter(source => source.dataOrigin === 'medcloud')
+        // Preserve multiplicity in either source. Surplus cloud rows have no
+        // assigned hospital partner; they must remain individually visible.
+        const moreNumerousSource = cloudRows.length > hospitalRows.length ? cloudRows : hospitalRows
+        const displayRows = moreNumerousSource.length > 1 ? [...moreNumerousSource] : [representative]
+        if (moreNumerousSource.length > 1 && displayRows.every(source => source.isInactive) && !representative.isInactive) displayRows.unshift(representative)
         displayRows.forEach((display, displayIndex) => comparisonRows.push({ ...display, _startSortValue: enriched[index]._startSortValue,
           sourceComparison: { status: comparison.status, records: sourceRows as MedicationRow[],
             detailsInitiallyOpen: displayIndex === 0,
             warnings: [...(comparison.warnings ?? []), ...(mixedCurrentness ? ['source-currentness-differs'] : [])] },
           reconciledOrderIds: displayRows.length === 1 ? sourceRows.map((source: MedicationRow) => source.id)
-            : [display.id, ...(displayIndex === 0 ? (sourceRows as MedicationRow[]).filter(source => source.dataOrigin !== 'hospital').map(source => source.id) : [])],
+            : [display.id, ...(displayIndex === 0 ? (sourceRows as MedicationRow[]).filter(source => !displayRows.some(display => display.id === source.id)).map(source => source.id) : [])],
           searchHaystack: sourceRows.map((source: MedicationRow) => source.searchHaystack).join(' '),
         }))
         sourceRows.forEach((source: MedicationRow) => consumed.add(source.id))

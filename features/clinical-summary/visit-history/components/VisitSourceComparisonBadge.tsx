@@ -14,7 +14,7 @@ export function VisitSourceComparisonBadge({ visit }: { visit: VisitRecord }) {
         : (en ? 'Matched by a shared visit identifier.' : '已依共同就診識別資料確認。')}</p>
       {visit.sourceComparisonWarnings?.includes('diagnosis-coding-systems-differ') && <p>{en ? 'The sources declare different ICD coding systems. Both original codes and descriptions are retained; no WHO/CM conversion is assumed.' : '兩邊宣告的 ICD 編碼系統不同；已保留各自原碼與名稱，未將 WHO 與 CM 直接互換。'}</p>}
       {visit.sourceRecords?.map((record, index) => <div key={record.id} className="border-t border-current/15 pt-1">
-        <strong>{index === 0 ? (en ? 'Hospital' : '院內') : (en ? 'MediCloud' : '雲端')}</strong>
+        <strong>{record.origin === 'hospital' || !record.origin && index === 0 ? (en ? 'Hospital' : '院內') : (en ? 'MediCloud' : '雲端')}</strong>
         <div>{[record.date, record.institution, record.department, record.physician].filter(Boolean).join(' · ')}</div>
         {record.diagnoses.map((text, index) => <div key={index} className="break-words">{text}</div>)}
       </div>)}

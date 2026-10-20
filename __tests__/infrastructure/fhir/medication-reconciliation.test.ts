@@ -9,7 +9,7 @@ function fixture() {
   const base: any = {
     resourceType: 'MedicationRequest', subject: { reference: 'Patient/synthetic' },
     encounter: { reference: 'Encounter/one' }, authoredOn: '2026-09-17', intent: 'order',
-    identifier: [{ system: 'urn:oid:vgh.medication.order', value: 'confirmed-source-order' }],
+    identifier: [{ system: 'urn:oid:vgh.medication.order', value: 'confirmed-source-order', type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'PLAC' }] } }],
     medicationCodeableConcept: { text: 'Synthetic product 5 mg', coding: [{ system: NHI, code: 'SYNTHETIC1' }] },
   }
   const cloud: any = { ...base, id: 'cloud-med', meta: { source: 'https://medcloud2.nhi.gov.tw/' }, status: 'unknown',
@@ -90,7 +90,7 @@ it('retains two real orders when each has a uniquely corresponding source order 
   for (const [index, pair] of [first, second].entries()) {
     pair.hospital.id += `-${index}`
     pair.cloud.id += `-${index}`
-    pair.hospital.identifier = pair.cloud.identifier = [{ system: 'urn:oid:vgh.medication.order', value: `order-${index}` }]
+    pair.hospital.identifier = pair.cloud.identifier = [{ ...pair.hospital.identifier[0], value: `order-${index}` }]
   }
   const graph = reconcileMedicationRequests([first.hospital, first.cloud, second.hospital, second.cloud])
   expect(graph).toHaveLength(2)
@@ -261,11 +261,23 @@ it('keeps conflicting source statuses explicitly related without merging or chan
   expect(hospital._sourceRecordComparison).toMatchObject({ status: 'candidate', warnings: ['source-facts-differ'] })
 })
 
-it.each(['urn:oid:vgh.case', 'https://synthetic.example/patient-id', 'https://synthetic.example/untyped-id'])('never confirms a prescription using only shared %s', system => {
+it.each(['urn:oid:vgh.case', 'urn:oid:vgh.medication.order', 'https://synthetic.example/patient-id', 'https://synthetic.example/untyped-id'])('never confirms a prescription using only shared untyped %s', system => {
   const { hospital, cloud } = fixture()
   hospital.identifier = cloud.identifier = [{ system, value: 'shared-context' }]
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
   expect(hospital._sourceRecordComparison.status).toBe('candidate')
+})
+
+it('keeps both cloud rows individually visible when one hospital row cannot be uniquely paired', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier
+  hospital.status = cloud.status = 'completed'
+  const secondCloud = { ...cloud, id: 'cloud-second-real-order' }
+  const orders = reconcileMedicationRequests([hospital, cloud, secondCloud])
+  expect(orders).toHaveLength(3)
+  const { result } = renderHook(() => useMedicationRows(orders))
+  expect(result.current.map(row => row.id)).toEqual(['cloud-med', 'cloud-second-real-order'])
+  expect(result.current.every(row => row.sourceComparison?.records.length === 3)).toBe(true)
 })
 
 it('keeps a cloud dispensing authorization end from becoming a hospital treatment end after a confirmed merge', () => {
@@ -277,4 +289,12 @@ it('keeps a cloud dispensing authorization end from becoming a hospital treatmen
   expect(hospital._sourcePrescriptionRecords[1].dispenseRequest.validityPeriod.end).toBe('2026-12-31')
   const { result } = renderHook(() => useMedicationRows([hospital]))
   expect(result.current[0].endDateIso).toBe('2026-10-25')
+})
+
+it('does not add an unpaired structured IV route to a hospital full SIG recording PO', () => {
+  const { hospital, cloud } = fixture()
+  cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } }, route: { text: 'IV' } }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital.dosageInstruction[0].route).toBeUndefined()
+  expect(hospital._sourceRecordComparison.warnings).toContain('source-facts-differ')
 })

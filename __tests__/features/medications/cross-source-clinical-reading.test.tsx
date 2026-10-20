@@ -118,6 +118,19 @@ it('labels cloud date-derived completion as an estimate rather than a source-rep
   expect(screen.queryByText('已完成')).not.toBeInTheDocument()
 })
 
+it('never promotes a cancelled hospital order into current use from a cloud supply-date estimate', () => {
+  const input: any = JSON.parse(JSON.stringify(fixture))
+  input.entry.find((entry: any) => entry.resource.id === 'synthetic-order-a').resource.status = 'cancelled'
+  const cloud = input.entry.find((entry: any) => entry.resource.id === 'synthetic-cloud-order-a').resource
+  cloud.meta.tag = [{ system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module', code: 'imue0008' }]
+  const collection = LocalBundleService.parse(input)!.collection
+  const { result } = renderHook(() => useOverviewMeds(collection.medications, buildOverviewWindow(12, Date.parse('2026-10-20T04:00:00+08:00')), 'medical', 'zh-TW'))
+  const row = result.current.medicationRows.find(row => row.id === 'synthetic-order-a')!
+  expect(row.isInactive).toBe(true)
+  expect(row.sourceComparison?.warnings).toContain('source-status-conflict')
+  expect(result.current.meds.items.find(item => item.row.sourceComparison)?.isCurrent).toBe(false)
+})
+
 it('keeps overview, visit detail and IPS consistent without presenting cancellation as current use', () => {
   const collection = LocalBundleService.parse(fixture)!.collection
   const { result } = renderHook(() => {

@@ -7,6 +7,8 @@ const ICD = 'http://hl7.org/fhir/sid/icd-10-cm'
 it('does not present a broad ICD category as the exact wording of a more specific recorded code', () => {
   expect(extractEncounterIcds({ reasonCode: [{ coding: [{ system: ICD, code: 'C50.912' }] }] }, new Map(), 'zh-TW'))
     .toEqual([{ code: 'C50.912', description: undefined }])
+  expect(extractEncounterIcds({ reasonCode: [{ text: 'C50.912,N95.1' }] }, new Map(), 'zh-TW'))
+    .toEqual([{ code: 'C50.912', description: undefined }, { code: 'N95.1', description: undefined }])
 })
 const hospital = { id: 'synthetic-soap', code: { text: 'Zoster without complications',
   coding: [{ system: ICD, code: 'B02.9', display: 'Zoster without complications' }] } }

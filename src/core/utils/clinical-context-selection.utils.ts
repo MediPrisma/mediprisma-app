@@ -10,6 +10,7 @@ export type MedicationCurrentnessBasis =
   | 'source-status-and-supply-window'
   | 'supply-window'
   | 'insufficient-status-and-supply'
+  | 'conflicting-source-status'
 
 export interface MedicationCurrentnessAssessment {
   current: boolean
@@ -83,6 +84,11 @@ export function assessMedicationCurrentness(
   const end = medicationExpectedEnd(medication)
   if (status === 'completed' && (medication?._sourceResourceType === 'MedicationStatement' || medication?.resourceType === 'MedicationStatement')) {
     return { current: false, uncertain: false, basis: 'source-status' }
+  }
+  if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict')
+    && !['draft', 'on-hold', 'stopped', 'cancelled', 'entered-in-error', 'ended', 'not-taken'].includes(status)
+    && (!end || isMedicationSupplyWindowOpen(end, nowMs))) {
+    return { current: false, uncertain: true, basis: 'conflicting-source-status' }
   }
 
   if (!status || status === 'unknown') {
