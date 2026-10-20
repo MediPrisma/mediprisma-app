@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { CdssRecommendation } from '../../types'
 import type {
   PhysicianDecisionInput,
@@ -86,6 +86,7 @@ export interface VisitDecisionScreenProps {
    * opens one.
    */
   prognosisEvidence?: PrognosisEvidence
+  doseRecovery?: ReactNode
 }
 
 /**
@@ -116,6 +117,7 @@ export function VisitDecisionScreen({
   onPointAnswer,
   onGrade,
   prognosisEvidence,
+  doseRecovery,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -337,6 +339,7 @@ export function VisitDecisionScreen({
       {...(bookChaptersOf(model) ? { chapters: bookChaptersOf(model)! } : {})}
       decided={bookDecided}
       summaryText={summaryText}
+      doseRecovery={doseRecovery}
       // A class chosen in DP-01's table is the answer the diagnosis
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
