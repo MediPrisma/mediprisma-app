@@ -52,7 +52,7 @@ describe('AF missing-weight recovery', () => {
     Element.prototype.scrollIntoView = jest.fn()
   })
 
-  it('applies a dated measurement through the real profile/calculator and replaces missing doses', () => {
+  it.each(['2026-10-01', '2026-01-01'])('applies a measurement dated %s through the real profile/calculator', measuredOn => {
     render(<Reading />)
     const table = screen.getByTestId('cdss-book-dose-table')
     expect(table).toHaveTextContent('缺 CrCl')
@@ -60,9 +60,9 @@ describe('AF missing-weight recovery', () => {
     const input = screen.getByLabelText('體重（kg）')
     expect(input).toHaveFocus()
     fireEvent.change(input, { target: { value: '68' } })
-    fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: '2026-10-01' } })
+    fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: measuredOn } })
     fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
-    expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-01' })
+    expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn })
     expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
     expect(screen.getByText('已套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
     expect(table).toHaveAttribute('aria-label', expect.stringContaining('CrCl 41'))
@@ -107,6 +107,21 @@ describe('AF missing-weight recovery', () => {
     render(<Reading layout="flow" />)
     fireEvent.click(within(screen.getByTestId('cdss-af-diagnosis')).getByRole('button'))
     expect(screen.getByRole('button', { name: '補登體重' })).toBeInTheDocument()
+  })
+
+  it('preserves a backdated AF weight when the clinic form later saves blood pressure', () => {
+    render(<Reading layout="flow" />)
+    fireEvent.click(within(screen.getByTestId('cdss-af-diagnosis')).getByRole('button'))
+    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
+    fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
+    fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: '2026-10-01' } })
+    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    fireEvent.click(screen.getByRole('button', { name: '門診量測' }))
+    fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-systolic'), { target: { value: '130' } })
+    fireEvent.change(screen.getByTestId('cdss-hf-clinic-vitals-diastolic'), { target: { value: '80' } })
+    fireEvent.click(screen.getByTestId('cdss-hf-clinic-vitals-save'))
+    expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-01' })
+    expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.systolic?.value).toBe(130)
   })
 
   it('supports the English dose table', () => {
