@@ -17,6 +17,7 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
   const [open, setOpen] = useState(false)
   const [consent, setConsent] = useState(false)
   const [sending, setSending] = useState(false)
+  const [blocked, setBlocked] = useState(false)
   const sent = Boolean(snapshot?.receiptId)
   const [message, setMessage] = useState('')
   const active = useRef<AbortController | null>(null)
@@ -28,7 +29,7 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
           endpoint: isCollectorSite() ? configuredEndpoint()?.replace(/\/events$/, '/ai-reports') ?? null : null })
       } catch { setMessage(en ? 'Unable to prepare the report. No data was sent.' : '無法準備回報，沒有傳送任何資料。'); return }
     }
-    setConsent(false); setOpen(true)
+    setConsent(false); setBlocked(false); setOpen(true)
   }
   const download = () => {
     if (!snapshot) return
@@ -37,7 +38,7 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
   const submit = async () => {
-    if (!snapshot?.endpoint || !consent || active.current || sent || !isCollectorSite()) return
+    if (!snapshot?.endpoint || !consent || active.current || sent || blocked || !isCollectorSite()) return
     const controller = new AbortController(); active.current = controller; setSending(true); setMessage('')
     const timer = setTimeout(() => controller.abort(), 15000)
     try {
@@ -48,19 +49,28 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: snapshot.json,
         signal: controller.signal, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer' })
       if (response.status !== 200 && response.status !== 201) {
+        if (response.status === 503) {
+          let unconfigured = false
+          try { unconfigured = (await response.json()).reason === 'unconfigured' } catch { /* No raw response is shown. */ }
+          if (unconfigured) throw new Error('unconfigured')
+        }
         void response.body?.cancel().catch(() => {})
-        throw new Error([401, 403].includes(response.status) ? 'auth' : response.status === 413 ? 'size' : response.status === 429 ? 'quota' : 'unavailable')
+        throw new Error([401, 403].includes(response.status) ? 'auth' : response.status === 413 ? 'size' : response.status === 429 ? 'quota'
+          : response.status >= 400 && response.status < 500 ? 'rejected' : 'unavailable')
       }
       const receipt = await response.json()
       if (receipt.success !== true || typeof receipt.reportId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(receipt.reportId)) throw new Error('receipt')
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted) throw new Error('unavailable')
       onSnapshotChange({ ...snapshot, receiptId: receipt.reportId }); setMessage('')
     } catch (error) {
       if (controller.signal.aborted && active.current !== controller) return
       const code = error instanceof Error ? error.message : ''
+      if (['auth', 'size', 'quota', 'rejected', 'unconfigured'].includes(code)) setBlocked(true)
       setMessage(code === 'auth' ? (en ? 'Report authorization failed. Sign in again or download this report.' : '無法驗證回報權限，請重新登入或下載這份回報。')
         : code === 'size' ? (en ? 'The receiver rejected the report size. Download this report.' : '回報超過收件大小限制，請下載這份回報。')
         : code === 'quota' ? (en ? 'The report quota has been reached. Download it or retry later.' : '已達回報收件限制，請下載或稍後再試。')
+        : code === 'rejected' ? (en ? 'The receiver rejected this report. Download it for investigation.' : '收件端拒絕這份回報，請下載供後續處理。')
+        : code === 'unconfigured' ? (en ? 'Report reception is not configured. Download this report and contact the administrator.' : '收件功能尚未設定，請下載這份回報並聯絡管理者。')
         : (en ? 'Receipt is not confirmed. Retry uses the same report ID; you can also download it.' : '尚未確認收件成功。可重試或下載；重試會使用同一份回報編號。'))
     } finally { clearTimeout(timer); if (active.current === controller) { active.current = null; setSending(false) } }
   }
@@ -88,7 +98,7 @@ export function HfProblemReport({ runId, records, source, locale, describeError,
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" className="min-h-11" onClick={download}>{en ? 'Download report' : '下載這份回報'}</Button>
           <Button variant="outline" className="min-h-11" disabled={sending} onClick={() => setOpen(false)}>{en ? 'Close' : '關閉'}</Button>
-          <Button className="min-h-11" disabled={!snapshot?.endpoint || !consent || sending || sent} onClick={() => void submit()}>{sending ? (en ? 'Sending…' : '傳送中…') : sent ? (en ? 'Sent' : '已送出') : (en ? 'Confirm and send' : '確認送出回報')}</Button>
+          <Button className="min-h-11" disabled={!snapshot?.endpoint || !consent || sending || sent || blocked} onClick={() => void submit()}>{sending ? (en ? 'Sending…' : '傳送中…') : sent ? (en ? 'Sent' : '已送出') : blocked ? (en ? 'Cannot send now' : '暫時無法送出') : (en ? 'Confirm and send' : '確認送出回報')}</Button>
         </div>
       </DialogContent>
     </Dialog>

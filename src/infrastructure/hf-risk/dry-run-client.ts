@@ -104,9 +104,7 @@ async function requestHf(input: HfInput, options: HfRequestOptions, operation: '
     const content = new TextDecoder().decode(bytes)
     if (response.status === 502) {
       let failure: { resourceType?: string; issue?: { code?: string }[] } | null = null
-      if (diagnostic.responseType === 'json' || diagnostic.responseType === 'fhir+json') {
-        try { failure = JSON.parse(content) } catch { /* An ingress error page is an upstream failure. */ }
-      }
+      try { failure = JSON.parse(content) } catch { /* An ingress error page is an upstream failure. */ }
       if (failure?.resourceType === 'OperationOutcome' && Array.isArray(failure.issue) && failure.issue.length === 1 && failure.issue[0]?.code === 'invalid') {
         diagnostic.stage = 'parse'
         throw new Error('invalid-prediction-response')

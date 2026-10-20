@@ -79,3 +79,15 @@ it('retains the same submission after returning to the list and reopening the ru
   await screen.findByText(/回報已收到，編號/)
   expect(jest.mocked(fetch).mock.calls[1][1]?.body).toBe(first)
 })
+
+it.each([400, 409, 413, 429, 503])('explains deterministic receiver rejection %s and offers download', async status => {
+  jest.mocked(fetch).mockClear()
+  jest.mocked(fetch).mockResolvedValue({ status, json: async () => ({ reason: 'unconfigured' }) } as Response)
+  render(view())
+  fireEvent.click(screen.getByRole('button', { name: '回報 HF 問題' }))
+  fireEvent.click(screen.getByRole('checkbox'))
+  fireEvent.click(screen.getByRole('button', { name: '確認送出回報' }))
+  expect(await screen.findByRole('button', { name: '暫時無法送出' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '下載這份回報' })).toBeEnabled()
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
