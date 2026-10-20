@@ -17,7 +17,7 @@ import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
 import { assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
-import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
+import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
@@ -383,6 +383,7 @@ export function useMedicationRows(
         title: medicationName,
         secondaryTitle,
         status,
+        statusEstimated: status === 'completed' && hasCloudCoverageDerivedStatus(med),
         detail: detail || undefined,
         dose: doseSummary || undefined,
         route: routeSummary && routeSummary !== "—" ? routeSummary : undefined,
@@ -431,19 +432,27 @@ export function useMedicationRows(
       const comparison = med._sourceRecordComparison
       const sourceRows = comparison && comparison.status !== 'confirmed'
         ? comparison.references.map((reference: string) => byId.get(reference.split('/').pop()!)) : undefined
+      if (sourceRows && !sourceRows.every(Boolean)) row.sourceComparison = {
+        status: comparison.status, records: sourceRows.filter(Boolean) as MedicationRow[],
+        warnings: [...(comparison.warnings ?? []), 'source-partners-not-in-view'],
+      }
       if (sourceRows && sourceRows.length >= 2 && sourceRows.every(Boolean)) {
         const hospital = sourceRows[0] as MedicationRow
         const representative = (sourceRows as MedicationRow[]).find(source => !source.isInactive && !source.currentnessUncertain) ?? hospital
-        const mixedCurrentness = (sourceRows as MedicationRow[]).some(source => source.isInactive !== representative.isInactive
-          || source.currentnessUncertain !== representative.currentnessUncertain)
-        // A comparison card avoids counting a presumed copy as another order.
-        // It does not change the canonical source records or claim one Rx.
-        comparisonRows.push({ ...representative, _startSortValue: enriched[index]._startSortValue,
+        const mixedCurrentness = !representative.isInactive && (sourceRows as MedicationRow[]).some(source => source.isInactive || source.currentnessUncertain)
+        const hospitalRows = (sourceRows as MedicationRow[]).filter(source => source.dataOrigin === 'hospital')
+        // Preserve a visible row for each genuine hospital order. Cloud copies
+        // have no assigned partner until the correspondence is confirmed.
+        const displayRows = hospitalRows.length > 1 ? [...hospitalRows] : [representative]
+        if (hospitalRows.length > 1 && hospitalRows.every(source => source.isInactive) && !representative.isInactive) displayRows.unshift(representative)
+        displayRows.forEach((display, displayIndex) => comparisonRows.push({ ...display, _startSortValue: enriched[index]._startSortValue,
           sourceComparison: { status: comparison.status, records: sourceRows as MedicationRow[],
+            detailsInitiallyOpen: displayIndex === 0,
             warnings: [...(comparison.warnings ?? []), ...(mixedCurrentness ? ['source-currentness-differs'] : [])] },
-          reconciledOrderIds: sourceRows.map((source: MedicationRow) => source.id),
+          reconciledOrderIds: displayRows.length === 1 ? sourceRows.map((source: MedicationRow) => source.id)
+            : [display.id, ...(displayIndex === 0 ? (sourceRows as MedicationRow[]).filter(source => source.dataOrigin !== 'hospital').map(source => source.id) : [])],
           searchHaystack: sourceRows.map((source: MedicationRow) => source.searchHaystack).join(' '),
-        })
+        }))
         sourceRows.forEach((source: MedicationRow) => consumed.add(source.id))
       } else comparisonRows.push(row)
     }

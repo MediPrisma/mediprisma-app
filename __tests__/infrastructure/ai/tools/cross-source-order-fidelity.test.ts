@@ -16,6 +16,6 @@ it('retains real identical orders and explicitly identifies possible source copi
     expect(result.data.filter((record: any) => record.selfPurchased)).toHaveLength(1)
     expect(result.data.some((record: any) => record.status === 'cancelled')).toBe(false)
     expect(result.data.filter((record: any) => record.sourceComparison?.status === 'candidate')
-      .every((record: any) => record.sourceComparisonInstruction.includes('Do not count them as two prescriptions'))).toBe(true)
+      .every((record: any) => record.sourceComparisonInstruction.includes('Preserve distinct orders within each source'))).toBe(true)
   } finally { jest.useRealTimers() }
 })

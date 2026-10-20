@@ -32,6 +32,7 @@ export type TimelinePrescriptionType = 'chronic' | 'non-chronic' | 'unrecorded'
 
 export interface RefillBar {
   sourceComparison?: string
+  sourceComparisonUnconfirmed?: boolean
   selfPurchased?: boolean
   sourceStatus?: string
   supplyDaysUnrecorded?: boolean
@@ -481,6 +482,7 @@ export function useMedicationTimeline(
 
       const bar: RefillBar = {
         sourceComparison: sourceComparisonNarrative(med),
+        sourceComparisonUnconfirmed: !!med._sourceRecordComparison && med._sourceRecordComparison.status !== 'confirmed',
         selfPurchased: sourceSelfPurchase(med) === true,
         sourceStatus: med.status,
         supplyDaysUnrecorded: !(Number.isFinite(reportedDays) && reportedDays > 0),

@@ -460,7 +460,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                       fontWeight: drug.prescriptionType === 'chronic' ? 600 : 500,
                     }}
                   >
-                    {drug.drugName}
+                    {drug.bars.some(bar => bar.sourceComparisonUnconfirmed) && <span className="font-semibold">{locale === 'en' ? 'Compare · ' : '待核對 · '}</span>}{drug.drugName}
                   </div>
                 </MedicationTerminologyTooltip>
               </foreignObject>

@@ -259,10 +259,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         // Extract every ICD diagnosis on the visit (primary + secondaries).
         // Falls back to reasonReference / type[].text only when no ICD codes
         // are present.
-        const extractedIcds = extractEncounterIcds(encounter, icdDict, locale)
-        const icdCodes = encounter._comparisonEncounterIds
-          ? extractedIcds.filter((entry, index, all) => all.findIndex(other => other.code.toUpperCase().replace(/\./g, '') === entry.code.toUpperCase().replace(/\./g, '')) === index)
-          : extractedIcds
+        const icdCodes = extractEncounterIcds(encounter, icdDict, locale)
         const reason = icdCodes.length > 0
           ? icdCodes.map((c) => c.description ? `${c.code} - ${c.description}` : c.code).join(', ')
           : (encounter.reasonReference?.[0]?.display || encounter.type?.[0]?.text)

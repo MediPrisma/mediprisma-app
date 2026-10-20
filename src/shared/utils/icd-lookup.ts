@@ -311,7 +311,6 @@ export function extractEncounterIcds(
       // dotted ICD ("F33.42") or the compact form ("F3342").
       const textNoPrefix = stripLeadingIcdCode(rawText, code)
       const picked = localizedIcdDescription(code, textNoPrefix, display, dict, locale, primaryCoding?.system)
-        || (!primaryCoding?.system || icdFamily(primaryCoding.system) === 'icd-10-cm' ? lookupIcd(code, dict) : undefined)
       push(code, picked || undefined, primaryCoding?.system)
       continue
     }

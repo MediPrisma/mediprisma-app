@@ -8,6 +8,7 @@
 // patient ID, DOB, or provider names.
 import { tool } from 'ai'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { summarizeSourceComparisons } from '@/src/shared/utils/source-record-comparison'
 import type { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
@@ -1038,7 +1039,7 @@ function medicationToolFields(
     ...(sourceSelfPurchase(medication) === true ? { selfPurchased: true } : {}),
     ...(medication._encounterInferred ? { encounterLinkBasis: 'date-and-facility-inferred; not source-confirmed' } : {}),
     ...(medication._sourceRecordComparison ? { sourceComparison: medication._sourceRecordComparison,
-      sourceComparisonInstruction: 'Candidate pairs may be copies of the same prescription. Do not count them as two prescriptions or sum quantities; retain both source facts until identity is confirmed.' } : {}),
+      sourceComparisonInstruction: sourceComparisonNarrative(medication) } : {}),
     authoredOn: medication.authoredOn,
     ...(dosage ? { [dosageField]: dosage } : {}),
     ...(hasStructuredDosage ? { dosageDetails: structuredDosage } : {}),

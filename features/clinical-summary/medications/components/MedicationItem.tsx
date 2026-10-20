@@ -84,7 +84,8 @@ function getStatusBadge(medication: MedicationRow, mt: any, locale: string) {
   }[medication.status as 'cancelled' | 'entered-in-error' | 'stopped' | 'on-hold' | 'draft' | 'not-taken']
   if (endedStatus) return { label: endedStatus, variant: 'secondary' as const }
   if (medication.isInactive) {
-    return { label: medication.status === 'completed' ? (locale === 'en' ? 'completed' : '已完成')
+    return { label: medication.statusEstimated ? (locale === 'en' ? 'Estimated supply ended' : '供藥估計到期')
+      : medication.status === 'completed' ? (locale === 'en' ? 'completed' : '已完成')
       : medication.endDateSource === 'estimated' ? (locale === 'en' ? 'Estimated supply ended' : '供藥估計到期')
         : mt.statusEnded ?? 'ended', variant: 'secondary' as const }
   }
@@ -410,10 +411,10 @@ export function MedicationItem({
           && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
     >
-      {(medication.sourceComparison?.status === 'ambiguous' || medication.sourceComparison?.warnings?.includes('source-currentness-differs')) && (
-        <details open className="col-span-full row-start-4 min-w-0 border-t border-border/60 pt-1 text-xs">
+      {(medication.sourceComparison?.status === 'ambiguous' || medication.sourceComparison?.warnings?.some(warning => ['source-currentness-differs', 'source-facts-differ'].includes(warning))) && (
+        <details open={medication.sourceComparison.detailsInitiallyOpen !== false} className="col-span-full row-start-4 min-w-0 border-t border-border/60 pt-1 text-xs">
           <summary className="min-h-11 cursor-pointer font-medium sm:min-h-8" onClick={event => event.stopPropagation()}>
-            {locale === 'en' ? 'Source correspondence unconfirmed' : '來源對應未確認'} · {medication.sourceComparison.records.filter(record => record.dataOrigin === 'hospital').length} {locale === 'en' ? 'hospital' : '筆院內'} / {medication.sourceComparison.records.filter(record => record.dataOrigin === 'medcloud').length} {locale === 'en' ? 'cloud records' : '筆雲端紀錄'}
+            {locale === 'en' ? 'Source correspondence unconfirmed' : '來源對應未確認'} · {medication.sourceComparison.records.filter(record => record.dataOrigin === 'hospital').length} {locale === 'en' ? 'hospital orders' : '筆院內藥囑'} / {medication.sourceComparison.records.filter(record => record.dataOrigin === 'medcloud').length} {locale === 'en' ? 'cloud records' : '筆雲端紀錄'}
           </summary>
           <SourcePrescriptionComparison comparison={medication.sourceComparison} />
         </details>

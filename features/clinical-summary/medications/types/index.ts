@@ -40,7 +40,7 @@ export interface MedicationRow {
   encounterReference?: string
   /** Original cross-source order ids represented by this row. */
   reconciledOrderIds?: string[]
-  sourceComparison?: { status: 'candidate' | 'ambiguous' | 'confirmed'; records: MedicationRow[]; warnings?: string[] }
+  sourceComparison?: { status: 'candidate' | 'ambiguous' | 'confirmed'; records: MedicationRow[]; warnings?: string[]; detailsInitiallyOpen?: boolean }
   endDateSource?: 'reported' | 'estimated'
   /** An actually recorded NHI product code, including an explicit cloud code
    *  retained in a confirmed cross-source order. Never guessed from names. */
@@ -86,6 +86,7 @@ export interface MedicationRow {
   /** True if status is stopped/completed OR computed endDate has passed */
   isInactive: boolean
   currentnessUncertain?: boolean
+  statusEstimated?: boolean
   /** True when FHIR courseOfTherapyType marks the order as 'continuous'
    *  (NHI 慢性處方箋, refillable chronic prescription). */
   isChronic: boolean

@@ -100,6 +100,24 @@ it('keeps a current cloud source visible when its hospital comparison has unknow
   expect(screen.getAllByText(/來源狀態或供藥期間不同/).length).toBeGreaterThan(0)
 })
 
+it('retains the comparison warning when only one source is in the current view', () => {
+  const collection = LocalBundleService.parse(fixture)!.collection
+  const hospital = collection.medications.find(order => order.id === 'synthetic-order-a')!
+  const { result } = renderHook(() => useMedicationRows([hospital]))
+  expect(result.current[0].sourceComparison).toMatchObject({ status: 'candidate', warnings: expect.arrayContaining(['source-partners-not-in-view']) })
+})
+
+it('labels cloud date-derived completion as an estimate rather than a source-reported completion', () => {
+  const medication = { id: 'synthetic-expired-cloud', status: 'completed', authoredOn: '2025-01-01',
+    meta: { source: 'https://medcloud2.nhi.gov.tw/', tag: [{ system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module', code: 'imue0008' }] },
+    medicationCodeableConcept: { text: 'Synthetic product' }, dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } } }
+  const { result } = renderHook(() => useMedicationRows([medication]))
+  expect(result.current[0]).toMatchObject({ statusEstimated: true, isInactive: true })
+  render(<MedicationItem medication={result.current[0]} />)
+  expect(screen.getByText('供藥估計到期')).toBeInTheDocument()
+  expect(screen.queryByText('已完成')).not.toBeInTheDocument()
+})
+
 it('keeps overview, visit detail and IPS consistent without presenting cancellation as current use', () => {
   const collection = LocalBundleService.parse(fixture)!.collection
   const { result } = renderHook(() => {

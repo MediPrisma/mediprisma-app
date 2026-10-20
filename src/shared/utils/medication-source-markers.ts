@@ -1,5 +1,10 @@
 type NotedMedication = { note?: Array<{ text?: string }> }
 
+export function hasCloudCoverageDerivedStatus(medication: { meta?: { tag?: Array<{ system?: string; code?: string }> } }): boolean {
+  return !!medication.meta?.tag?.some(tag => tag.system === 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module'
+    && String(tag.code).toUpperCase() === 'IMUE0008')
+}
+
 /** Interpret only explicit source fields, never a mention of self-pay in prose. */
 export function sourceSelfPurchase(medication: NotedMedication): boolean | undefined {
   const notes = Array.isArray(medication.note) ? medication.note : []

@@ -2,7 +2,7 @@ import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-so
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
 import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
 import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
-import { sharedSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
+import { sharedSourceIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 
 type Resource = Record<string, any>
@@ -196,9 +196,15 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   const cloud = keyed.filter(({ order }) => isMedcloudSource(order) && !isVghtpeSource(order))
   const candidates = new Map<Resource, Resource[]>()
   const verifiedPairs = new Map<Resource, Set<Resource>>()
+  const conflictingPairs = new Map<Resource, Set<Resource>>()
   for (const { order, key } of hospital) {
     const matches = cloud.filter((other) => {
-      if (!key || !other.key || other.key.context !== key.context || hasConflict(order, other.order)) return false
+      if (!key || !other.key || other.key.context !== key.context
+        || sourceSelfPurchase(order) === true || conflictingSourceIdentifier(order, other.order)) return false
+      if (hasConflict(order, other.order)) {
+        const conflicts = conflictingPairs.get(order) ?? new Set<Resource>()
+        conflicts.add(other.order); conflictingPairs.set(order, conflicts)
+      }
       if (key.codes.length === 1 && other.key.codes.length === 1) {
         if (key.codes[0] !== other.key.codes[0]) return false
         const verified = verifiedPairs.get(order) ?? new Set<Resource>()
@@ -243,10 +249,12 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     const unique = hospitalGroup.size === 1 && cloudGroup.size === 1
     const contextInferred = group.some(member => identity(member)?.inferred || identity(member)?.visitUnconfirmed)
     const visitCodingConflict = group.some(member => identity(member)?.visitCodingConflict)
-    const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedSourceIdentifier(order, other) && !contextInferred && !visitCodingConflict
+    const factsConflict = [...hospitalGroup].some(member => [...cloudGroup].some(partner => conflictingPairs.get(member)?.has(partner)))
+    const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedSourceIdentifier(order, other) && !contextInferred && !visitCodingConflict && !factsConflict
+    const warnings = [...(contextInferred ? ['encounter-link-unconfirmed'] : []), ...(factsConflict ? ['source-facts-differ'] : [])]
     const comparison = { status: confirmed ? 'confirmed' : unique ? 'candidate' : 'ambiguous',
       references: group.map(member => `MedicationRequest/${member.id}`),
-      ...(contextInferred ? { warnings: ['encounter-link-unconfirmed'] } : {}),
+      ...(warnings.length ? { warnings } : {}),
     }
     group.forEach(member => { member._sourceRecordComparison = comparison })
     if (!confirmed) continue

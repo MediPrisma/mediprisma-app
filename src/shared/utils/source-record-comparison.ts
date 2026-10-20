@@ -9,7 +9,7 @@ export function sourceComparisonNarrative(record: { _sourceRecordComparison?: So
   const comparison = record._sourceRecordComparison
   if (!comparison) return undefined
   return comparison.status !== 'confirmed'
-    ? `Possible cross-source copies (${comparison.references.length} source records); prescription count and source correspondence are unconfirmed. Do not add quantities or interpret source records as separate prescriptions.`
+    ? `Possible cross-source copies (${comparison.references.length} source records); source correspondence is unconfirmed. Preserve distinct orders within each source. Do not infer additional prescriptions or add quantities from possible copies in another source. Verify any conflicting facts separately.`
     : 'Hospital and MediCloud copies confirmed by a shared prescription identifier; original source records retained.'
 }
 

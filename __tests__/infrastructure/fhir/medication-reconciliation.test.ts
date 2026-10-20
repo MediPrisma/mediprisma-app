@@ -129,7 +129,8 @@ it('flags all four source records for two genuine identical orders and two unide
   expect(records.every(record => record._sourceRecordComparison.status === 'ambiguous')).toBe(true)
   expect(records[0]._sourceRecordComparison.references).toEqual(['MedicationRequest/h1', 'MedicationRequest/h2', 'MedicationRequest/c1', 'MedicationRequest/c2'])
   const { result } = renderHook(() => useMedicationRows(records))
-  expect(result.current).toHaveLength(1)
+  expect(result.current).toHaveLength(2)
+  expect(result.current.map(row => row.id)).toEqual(['h1', 'h2'])
   expect(result.current[0].sourceComparison?.records).toHaveLength(4)
   expect(result.current[0].sourceComparison?.records.filter(record => record.dataOrigin === 'hospital').map(record => record.id)).toEqual(['h1', 'h2'])
 })
@@ -249,4 +250,12 @@ it.each([1, 2])('does not add an unpaired structured %s TAB dose to a full text-
   cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } }, doseAndRate: [{ doseQuantity: { value, unit: 'TAB' } }] }]
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
   expect(hospital.dosageInstruction[0].doseAndRate).toBeUndefined()
+})
+
+it('keeps conflicting source statuses explicitly related without merging or changing either status', () => {
+  const { hospital, cloud } = fixture()
+  hospital.status = 'stopped'; cloud.status = 'active'
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital.status).toBe('stopped'); expect(cloud.status).toBe('active')
+  expect(hospital._sourceRecordComparison).toMatchObject({ status: 'candidate', warnings: ['source-facts-differ'] })
 })

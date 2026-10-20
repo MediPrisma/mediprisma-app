@@ -3,6 +3,11 @@ import { buildIcdDictionary, extractEncounterIcds, localizedIcdDescription } fro
 import { useDiagnosisRows } from '@/features/clinical-summary/diagnosis/hooks/useDiagnosisRows'
 
 const ICD = 'http://hl7.org/fhir/sid/icd-10-cm'
+
+it('does not present a broad ICD category as the exact wording of a more specific recorded code', () => {
+  expect(extractEncounterIcds({ reasonCode: [{ coding: [{ system: ICD, code: 'C50.912' }] }] }, new Map(), 'zh-TW'))
+    .toEqual([{ code: 'C50.912', description: undefined }])
+})
 const hospital = { id: 'synthetic-soap', code: { text: 'Zoster without complications',
   coding: [{ system: ICD, code: 'B02.9', display: 'Zoster without complications' }] } }
 const cloud = { meta: { source: 'https://medcloud2.nhi.gov.tw/' }, reasonCode: [{ text: 'B029 帶狀疱疹未伴有併發症',
