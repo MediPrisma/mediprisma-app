@@ -21,10 +21,20 @@ it('never promotes an added hospital SOAP diagnosis narrative into a cloud termi
   const dict = buildIcdDictionary([], 'zh-TW', visits)
   expect(localizedIcdDescription('C50.912', 'Confirmed prior malignancy', undefined, dict, 'zh-TW', ICD)).toBe('Confirmed prior malignancy')
 })
+
+it('does not confirm two visits from a shared patient or untyped case identifier', () => {
+  const { resources, hospital, cloud } = fixture()
+  const identifier = [{ system: 'urn:oid:vgh.case', value: 'synthetic-shared-case' }]
+  ;(hospital as any).identifier = identifier; (cloud as any).identifier = identifier
+  const graph = reconcileOutpatientEncounters(resources)
+  expect(graph.filter(resource => resource.resourceType === 'Encounter')).toHaveLength(2)
+  expect((hospital as any)._sourceRecordComparison.status).toBe('candidate')
+  expect(graph.find(resource => resource.id === 'med')?.encounter.reference).toBe('Encounter/hospital-visit')
+})
 function fixture() {
   const cloud = {
     resourceType: 'Encounter', id: 'cloud-visit', status: 'finished', class: { code: 'AMB' },
-    identifier: [{ system: 'https://synthetic.example/visit-id', value: 'confirmed-visit' }],
+    identifier: [{ system: 'https://synthetic.example/visit-id', value: 'confirmed-visit', type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'VN' }] } }],
     meta: { source: 'https://medcloud2.nhi.gov.tw/' },
     subject: { reference: 'Patient/synthetic' }, period: { start: '2026-09-17' },
     serviceProvider: { display: '臺北榮總;門診;0601160016' },
@@ -32,7 +42,7 @@ function fixture() {
   }
   const hospital = {
     resourceType: 'Encounter', id: 'hospital-visit', status: 'finished', class: { code: 'AMB' },
-    identifier: [{ system: 'https://synthetic.example/visit-id', value: 'confirmed-visit' }],
+    identifier: [{ system: 'https://synthetic.example/visit-id', value: 'confirmed-visit', type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'VN' }] } }],
     meta: { source: 'https://web9.vghtpe.gov.tw/emr/qemr/',
       tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] },
     subject: { reference: 'Patient/synthetic' }, period: { start: '2026-09-17T00:00:00+08:00' },

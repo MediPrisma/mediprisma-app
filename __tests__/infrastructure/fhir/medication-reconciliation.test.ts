@@ -2,6 +2,7 @@ import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bun
 import { reconcileMedicationRequests } from '@/src/infrastructure/fhir/services/medication-reconciliation'
 import { renderHook } from '@testing-library/react'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
+import { medicationExpectedEnd } from '@/src/core/utils/clinical-context-selection.utils'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
 function fixture() {
@@ -265,4 +266,15 @@ it.each(['urn:oid:vgh.case', 'https://synthetic.example/patient-id', 'https://sy
   hospital.identifier = cloud.identifier = [{ system, value: 'shared-context' }]
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
   expect(hospital._sourceRecordComparison.status).toBe('candidate')
+})
+
+it('keeps a cloud dispensing authorization end from becoming a hospital treatment end after a confirmed merge', () => {
+  const { hospital, cloud } = fixture()
+  hospital.authoredOn = cloud.authoredOn = '2026-10-19'
+  cloud.dispenseRequest = { expectedSupplyDuration: { value: 7, code: 'd' }, validityPeriod: { end: '2026-12-31' } }
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(1)
+  expect(medicationExpectedEnd(hospital)).toBe('2026-10-25')
+  expect(hospital._sourcePrescriptionRecords[1].dispenseRequest.validityPeriod.end).toBe('2026-12-31')
+  const { result } = renderHook(() => useMedicationRows([hospital]))
+  expect(result.current[0].endDateIso).toBe('2026-10-25')
 })

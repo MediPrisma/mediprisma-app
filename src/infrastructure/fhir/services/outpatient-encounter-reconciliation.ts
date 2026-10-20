@@ -1,6 +1,6 @@
 // Operates on the canonicalised import graph, never on the stored source Bundle.
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
-import { sharedSourceIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
+import { sharedEncounterIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
 type Resource = Record<string, any>
 
 function isVghFacility(reference: Resource | undefined): boolean {
@@ -107,7 +107,7 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
     if (matches.length !== 1 || reverse.get(matches[0]) !== 1) continue
     const target = matches[0]
     const codingSystemsDiffer = icdKey(primaryDiagnosis(visit, conditions)) !== icdKey(primaryDiagnosis(target, conditions))
-    const comparison = { status: codingSystemsDiffer ? 'ambiguous' : sharedSourceIdentifier(visit, target) ? 'confirmed' : 'candidate',
+    const comparison = { status: codingSystemsDiffer ? 'ambiguous' : sharedEncounterIdentifier(visit, target) ? 'confirmed' : 'candidate',
       references: [`Encounter/${visit.id}`, `Encounter/${target.id}`],
       ...(codingSystemsDiffer ? { warnings: ['diagnosis-coding-systems-differ'] } : {}),
     }

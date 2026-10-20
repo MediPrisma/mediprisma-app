@@ -239,11 +239,10 @@ export function useMedicationRows(
 
       const durationDays = computeDurationDays({
         start: startDateRaw,
-        stop: stopDateRaw,
+        stop: medicationRecordedTreatmentEnd(med),
         expectedDuration: med.dispenseRequest?.expectedSupplyDuration,
         boundsDuration: dosage?.timing?.repeat?.boundsDuration,
         boundsPeriod: dosage?.timing?.repeat?.boundsPeriod,
-        validityPeriod: isVghtpeSource(med) ? med.dispenseRequest?.validityPeriod : undefined,
       })
 
       // A source Period already contains the exact final calendar date. Do not

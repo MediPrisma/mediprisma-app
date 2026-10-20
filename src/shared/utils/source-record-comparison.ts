@@ -24,9 +24,11 @@ export function summarizeSourceComparisons(records: readonly { id: string; _sour
   return { sourceRecordCount: records.length, comparisonGroupCount: groups.size, unconfirmedGroupCount: unconfirmed.size }
 }
 
-export function sharedSourceIdentifier(left: any, right: any): boolean {
-  return (left.identifier ?? []).some((identifier: any) => identifier.system && identifier.value
-    && (right.identifier ?? []).some((other: any) => other.system === identifier.system && other.value === identifier.value))
+export function sharedEncounterIdentifier(left: any, right: any): boolean {
+  const isVisit = (identifier: any) => identifier.type?.coding?.some((coding: any) =>
+    coding.system === 'http://terminology.hl7.org/CodeSystem/v2-0203' && coding.code === 'VN')
+  return (left.identifier ?? []).some((identifier: any) => identifier.system && identifier.value && isVisit(identifier)
+    && (right.identifier ?? []).some((other: any) => other.system === identifier.system && other.value === identifier.value && isVisit(other)))
 }
 
 /** Only identifiers whose contract identifies a prescription, never a case,

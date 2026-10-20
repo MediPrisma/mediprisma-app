@@ -37,10 +37,11 @@ export function durationToDays(duration: any): number | undefined {
 
 export function medicationRecordedTreatmentEnd(medication: any): string | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+  const originalHospital = medication?._sourcePrescriptionRecords?.find(isVghtpeSource) ?? medication
   // Standard validityPeriod is dispensing authorization, not treatment time.
   // North VGH's legacy adapter uses it for the recorded execution interval.
   return dosage?.timing?.repeat?.boundsPeriod?.end
-    || (isVghtpeSource(medication) ? medication?.dispenseRequest?.validityPeriod?.end : undefined)
+    || (isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined)
 }
 
 export function medicationExpectedEnd(medication: any): string | undefined {
