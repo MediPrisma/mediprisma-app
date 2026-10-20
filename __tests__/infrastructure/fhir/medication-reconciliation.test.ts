@@ -8,7 +8,7 @@ function fixture() {
   const base: any = {
     resourceType: 'MedicationRequest', subject: { reference: 'Patient/synthetic' },
     encounter: { reference: 'Encounter/one' }, authoredOn: '2026-09-17', intent: 'order',
-    identifier: [{ system: 'https://synthetic.example/order-id', value: 'confirmed-source-order' }],
+    identifier: [{ system: 'urn:oid:vgh.medication.order', value: 'confirmed-source-order' }],
     medicationCodeableConcept: { text: 'Synthetic product 5 mg', coding: [{ system: NHI, code: 'SYNTHETIC1' }] },
   }
   const cloud: any = { ...base, id: 'cloud-med', meta: { source: 'https://medcloud2.nhi.gov.tw/' }, status: 'unknown',
@@ -89,7 +89,7 @@ it('retains two real orders when each has a uniquely corresponding source order 
   for (const [index, pair] of [first, second].entries()) {
     pair.hospital.id += `-${index}`
     pair.cloud.id += `-${index}`
-    pair.hospital.identifier = pair.cloud.identifier = [{ system: 'https://synthetic.example/order-id', value: `order-${index}` }]
+    pair.hospital.identifier = pair.cloud.identifier = [{ system: 'urn:oid:vgh.medication.order', value: `order-${index}` }]
   }
   const graph = reconcileMedicationRequests([first.hospital, first.cloud, second.hospital, second.cloud])
   expect(graph).toHaveLength(2)
@@ -258,4 +258,11 @@ it('keeps conflicting source statuses explicitly related without merging or chan
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
   expect(hospital.status).toBe('stopped'); expect(cloud.status).toBe('active')
   expect(hospital._sourceRecordComparison).toMatchObject({ status: 'candidate', warnings: ['source-facts-differ'] })
+})
+
+it.each(['urn:oid:vgh.case', 'https://synthetic.example/patient-id', 'https://synthetic.example/untyped-id'])('never confirms a prescription using only shared %s', system => {
+  const { hospital, cloud } = fixture()
+  hospital.identifier = cloud.identifier = [{ system, value: 'shared-context' }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital._sourceRecordComparison.status).toBe('candidate')
 })

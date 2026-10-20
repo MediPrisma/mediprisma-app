@@ -89,7 +89,8 @@ export function buildIcdDictionary(
   const dict = new Map<string, string>()
   const preferText = locale !== 'en'
   const concepts = [
-    ...encounters.flatMap((encounter) => (encounter?.reasonCode ?? []).map((concept: any) => ({ concept, trustedClaimLabel: isMedcloudSource(encounter), borrowDisplay: !isVghtpeSource(encounter) }))),
+    ...encounters.flatMap((encounter) => encounter?._sourceEncounterRecords?.length ? encounter._sourceEncounterRecords : [encounter])
+      .flatMap((encounter: any) => (encounter?.reasonCode ?? []).map((concept: any) => ({ concept, trustedClaimLabel: isMedcloudSource(encounter), borrowDisplay: !isVghtpeSource(encounter) }))),
     ...(Array.isArray(conditions) ? conditions : []).map((condition) => ({ concept: condition?.code, trustedClaimLabel: false, borrowDisplay: !isVghtpeSource(condition) })),
   ]
   for (const { concept, trustedClaimLabel, borrowDisplay } of concepts) {

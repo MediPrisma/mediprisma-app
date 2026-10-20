@@ -1,6 +1,6 @@
 import { LocalBundleService, canonicalizeBundleResources } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { reconcileOutpatientEncounters } from '@/src/infrastructure/fhir/services/outpatient-encounter-reconciliation'
-import { extractEncounterIcds } from '@/src/shared/utils/icd-lookup'
+import { extractEncounterIcds, buildIcdDictionary, localizedIcdDescription } from '@/src/shared/utils/icd-lookup'
 import { renderHook } from '@testing-library/react'
 import { useVisitHistory } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
 
@@ -9,6 +9,18 @@ jest.mock('@/src/application/providers/language.provider', () => ({
 }))
 
 const ICD = 'http://hl7.org/fhir/sid/icd-10-cm'
+
+it('never promotes an added hospital SOAP diagnosis narrative into a cloud terminology label after a confirmed visit merge', () => {
+  const { resources, hospital } = fixture()
+  const text = '疑似左乳癌，待病理確認'
+  const secondary = { text, coding: [{ system: ICD, code: 'C50.912', display: text }] }
+  ;(hospital as any).reasonCode = [secondary]
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect(visits).toHaveLength(1)
+  expect(visits[0].reasonCode.some((concept: any) => concept.text === text)).toBe(true)
+  const dict = buildIcdDictionary([], 'zh-TW', visits)
+  expect(localizedIcdDescription('C50.912', 'Confirmed prior malignancy', undefined, dict, 'zh-TW', ICD)).toBe('Confirmed prior malignancy')
+})
 function fixture() {
   const cloud = {
     resourceType: 'Encounter', id: 'cloud-visit', status: 'finished', class: { code: 'AMB' },

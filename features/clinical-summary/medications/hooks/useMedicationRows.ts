@@ -16,7 +16,7 @@ import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
-import { assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
+import { assessMedicationCurrentness, medicationRecordedTreatmentEnd } from '@/src/core/utils/clinical-context-selection.utils'
 import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
@@ -234,7 +234,7 @@ export function useMedicationRows(
 
       const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start
       const stopDateRaw = statusInactive
-        ? med.dispenseRequest?.validityPeriod?.end || dosage?.timing?.repeat?.boundsPeriod?.end
+        ? medicationRecordedTreatmentEnd(med)
         : undefined
 
       const durationDays = computeDurationDays({
@@ -243,15 +243,13 @@ export function useMedicationRows(
         expectedDuration: med.dispenseRequest?.expectedSupplyDuration,
         boundsDuration: dosage?.timing?.repeat?.boundsDuration,
         boundsPeriod: dosage?.timing?.repeat?.boundsPeriod,
-        validityPeriod: med.dispenseRequest?.validityPeriod,
+        validityPeriod: isVghtpeSource(med) ? med.dispenseRequest?.validityPeriod : undefined,
       })
 
       // A source Period already contains the exact final calendar date. Do not
       // reconstruct it from the inclusive day count: start 5/20, end 5/21 is
       // two source days, but start + 2 would incorrectly display 5/22.
-      const explicitEndDateRaw =
-        med.dispenseRequest?.validityPeriod?.end ||
-        dosage?.timing?.repeat?.boundsPeriod?.end
+      const explicitEndDateRaw = medicationRecordedTreatmentEnd(med)
       const hasDurationEvidence =
         !!med.dispenseRequest?.expectedSupplyDuration ||
         !!dosage?.timing?.repeat?.boundsDuration

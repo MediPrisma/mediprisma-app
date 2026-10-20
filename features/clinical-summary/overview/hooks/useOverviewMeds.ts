@@ -12,6 +12,7 @@ import { humanDoseAmount, displayDosageInstruction, doseUnlessRepeated } from '@
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { useGroupedMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
+import { medicationRecordedTreatmentEnd } from '@/src/core/utils/clinical-context-selection.utils'
 import {
   classifyMedicationChanges,
   overlapsOverviewWindow,
@@ -124,8 +125,7 @@ function medicationWindowDays(
   const start = medication?.authoredOn
     ?? medication?.effectiveDateTime
     ?? medication?.dispenseRequest?.validityPeriod?.start
-  let end = medication?.dispenseRequest?.validityPeriod?.end
-    ?? dosage?.timing?.repeat?.boundsPeriod?.end
+  let end = medicationRecordedTreatmentEnd(medication)
   // The day the supply runs to, as a calendar day: the source's own end when
   // it has one, else the start day plus the supplied days. Never from the
   // rounded-up remaining-day count, which can land a day late.

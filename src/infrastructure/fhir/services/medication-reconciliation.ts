@@ -2,7 +2,7 @@ import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-so
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
 import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
 import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
-import { sharedSourceIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
+import { sharedPrescriptionIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 
 type Resource = Record<string, any>
@@ -67,7 +67,7 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     && cloud.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0008')
   if (hospital.status !== cloud.status && !cloudCoverageStatus
     && [hospital.status, cloud.status].some(status => ['stopped', 'cancelled', 'entered-in-error', 'on-hold', 'draft', 'completed'].includes(status))
-    && (known(hospital.status) && known(cloud.status) || !sharedSourceIdentifier(hospital, cloud))) return true
+    && (known(hospital.status) && known(cloud.status) || !sharedPrescriptionIdentifier(hospital, cloud))) return true
   if (known(hospital.status) && known(cloud.status) && hospital.status !== cloud.status && !cloudCoverageStatus) return true
   if (hospital.intent && cloud.intent && hospital.intent !== cloud.intent) return true
   for (const field of ['quantity', 'expectedSupplyDuration']) {
@@ -250,7 +250,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     const contextInferred = group.some(member => identity(member)?.inferred || identity(member)?.visitUnconfirmed)
     const visitCodingConflict = group.some(member => identity(member)?.visitCodingConflict)
     const factsConflict = [...hospitalGroup].some(member => [...cloudGroup].some(partner => conflictingPairs.get(member)?.has(partner)))
-    const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedSourceIdentifier(order, other) && !contextInferred && !visitCodingConflict && !factsConflict
+    const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedPrescriptionIdentifier(order, other) && !contextInferred && !visitCodingConflict && !factsConflict
     const warnings = [...(contextInferred ? ['encounter-link-unconfirmed'] : []), ...(factsConflict ? ['source-facts-differ'] : [])]
     const comparison = { status: confirmed ? 'confirmed' : unique ? 'candidate' : 'ambiguous',
       references: group.map(member => `MedicationRequest/${member.id}`),

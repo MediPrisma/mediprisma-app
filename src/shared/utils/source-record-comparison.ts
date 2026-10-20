@@ -29,6 +29,16 @@ export function sharedSourceIdentifier(left: any, right: any): boolean {
     && (right.identifier ?? []).some((other: any) => other.system === identifier.system && other.value === identifier.value))
 }
 
+/** Only identifiers whose contract identifies a prescription, never a case,
+ * patient or encounter identifier carried on a MedicationRequest. */
+export function sharedPrescriptionIdentifier(left: any, right: any): boolean {
+  const isPrescription = (identifier: any) => identifier.system === 'urn:oid:vgh.medication.order'
+    || identifier.type?.coding?.some((coding: any) => coding.system === 'http://terminology.hl7.org/CodeSystem/v2-0203'
+      && ['PLAC', 'FILL'].includes(coding.code))
+  return (left.identifier ?? []).some((identifier: any) => identifier.system && identifier.value && isPrescription(identifier)
+    && (right.identifier ?? []).some((other: any) => other.system === identifier.system && other.value === identifier.value && isPrescription(other)))
+}
+
 export function conflictingSourceIdentifier(left: any, right: any): boolean {
   return (left.identifier ?? []).some((identifier: any) => identifier.system && identifier.value
     && (right.identifier ?? []).some((other: any) => other.system === identifier.system && other.value)

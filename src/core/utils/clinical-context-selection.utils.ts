@@ -2,6 +2,7 @@ import type { DataFilters, TimeRange } from '@/src/core/entities/clinical-contex
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
 import { floorStartDay } from '@/src/core/utils/first-visit-floors'
 import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 
 
 export type MedicationCurrentnessBasis =
@@ -34,9 +35,17 @@ export function durationToDays(duration: any): number | undefined {
   return Math.round(value * factor)
 }
 
+export function medicationRecordedTreatmentEnd(medication: any): string | undefined {
+  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+  // Standard validityPeriod is dispensing authorization, not treatment time.
+  // North VGH's legacy adapter uses it for the recorded execution interval.
+  return dosage?.timing?.repeat?.boundsPeriod?.end
+    || (isVghtpeSource(medication) ? medication?.dispenseRequest?.validityPeriod?.end : undefined)
+}
+
 export function medicationExpectedEnd(medication: any): string | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
-  const explicitEnd = medication?.dispenseRequest?.validityPeriod?.end || dosage?.timing?.repeat?.boundsPeriod?.end
+  const explicitEnd = medicationRecordedTreatmentEnd(medication)
   if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd)) return explicitEnd.slice(0, 10)
   const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration)
     ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
