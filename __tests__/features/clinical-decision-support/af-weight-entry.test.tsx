@@ -64,6 +64,7 @@ describe('AF missing-weight recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
     expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-01' })
     expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
+    expect(screen.getByText('已套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
     expect(table).toHaveAttribute('aria-label', expect.stringContaining('CrCl 41'))
     expect(table).not.toHaveTextContent('缺 CrCl')
     expect(within(table).getByText('15 mg qd')).toBeInTheDocument()
@@ -76,6 +77,7 @@ describe('AF missing-weight recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 Cr（mg/dL）')
+    expect(screen.getByText('已套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
   })
 
   it('keeps saved weights and unsaved drafts with their patient', () => {

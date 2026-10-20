@@ -981,7 +981,7 @@ function DoseTable({ table, isEnglish, recovery }: { table: { title: string; row
   const mark = (met: boolean | undefined) => (met === true ? '✓' : met === false ? '✗' : '？')
   return (
     <>
-    {table.rows.some(row => row.status === 'missing') ? recovery : null}
+    {recovery}
     <div className={styles.optScroll}>
       <table className={styles.doseTable} aria-label={table.title} data-testid="cdss-book-dose-table">
         <thead>

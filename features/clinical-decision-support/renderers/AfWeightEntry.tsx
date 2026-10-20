@@ -15,9 +15,19 @@ interface Props {
 
 /** A missing dose input goes through the same per-patient measurement store as clinic vitals. */
 export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
-  if (!onSave || (weight?.numericValue !== undefined && Number.isFinite(weight.numericValue)
-    && weight.numericValue > 0 && weight.unit?.toLowerCase() === 'kg')) return null
-  return <WeightForm isEnglish={isEnglish} now={now} onSave={onSave} />
+  const [applied, setApplied] = useState(false)
+  const confirmation = useRef<HTMLParagraphElement>(null)
+  const hasWeight = weight?.numericValue !== undefined && Number.isFinite(weight.numericValue)
+    && weight.numericValue > 0 && weight.unit?.toLowerCase() === 'kg'
+  useEffect(() => { if (applied && hasWeight) confirmation.current?.focus() }, [applied, hasWeight])
+
+  if (!onSave) return null
+  if (hasWeight) return applied ? (
+    <p ref={confirmation} role="status" tabIndex={-1} className="px-3 py-3 text-sm focus-visible:outline-2 focus-visible:outline-ring">
+      {isEnglish ? 'Weight applied. Review the updated dose assessment below.' : '已套用體重，請查看下方更新的劑量評估。'}
+    </p>
+  ) : null
+  return <WeightForm isEnglish={isEnglish} now={now} onSave={patch => { setApplied(true); onSave(patch) }} />
 }
 
 function WeightForm({ isEnglish, now, onSave }: Required<Pick<Props, 'isEnglish' | 'now' | 'onSave'>>) {
