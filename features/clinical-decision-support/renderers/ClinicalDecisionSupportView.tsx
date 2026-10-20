@@ -2404,7 +2404,7 @@ export function ClinicalDecisionSupportView({
           screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
           prognosisEvidence={hfPrognosisEvidence(profileFacts, isEnglish)}
           doseRecovery={result.packId === AF_BOARD_CONFIG.packId || companionResults?.some(companion => companion.packId === AF_BOARD_CONFIG.packId)
-            ? <AfWeightEntry weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} /> : undefined}
+            ? <AfWeightEntry key={patientId} weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} /> : undefined}
           decisions={physicianDecisions}
           onRecordDecision={onRecordDecision}
           onClearDecision={onClearDecision}
@@ -2594,7 +2594,7 @@ export function ClinicalDecisionSupportView({
         expandedId={expandedId} onToggle={id => setRequestedExpandedId(expandedId === id ? null : id)}
         answers={afAnswers} onAnswer={onAfAnswer} clinicVitals={clinicVitals}
         onSaveClinicVitals={onSaveClinicVitals} onClearClinicVitals={onClearClinicVitals}
-        doseRecovery={<AfWeightEntry weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} />}
+        doseRecovery={<AfWeightEntry key={patientId} weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} />}
         decisions={physicianDecisions} onRecordDecision={onRecordDecision} onClearDecision={onClearDecision}
         renderDetail={recommendation => <RecommendationDetail recommendation={recommendation} isEnglish={isEnglish}
           onNavigate={navigateToResource} label={label} patientId={patientId} copyProvenance={copyProvenance} />}

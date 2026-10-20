@@ -39,7 +39,7 @@ function Reading({ patientId = 'weight-a', hasCr = true, weight, layout = 'map',
   const result = ATRIAL_FIBRILLATION_GUIDELINE_PACK.build({ profile, locale })
   const model = buildVisitDecisionModel({ packId: result.packId, profile, result, locale })
   return <VisitBookChromeContext.Provider value={{ inline: true }}>
-    <ClinicalDecisionSupportView key={patientId} patientId={patientId} result={result} visitModel={model}
+    <ClinicalDecisionSupportView patientId={patientId} result={result} visitModel={model}
       locale={locale} layout={layout} profileFacts={profile.facts} clinicVitals={vitals}
       onSaveClinicVitals={patch => useClinicVitalsStore.getState().setVitals(patientId, patch, NOW)} />
   </VisitBookChromeContext.Provider>
