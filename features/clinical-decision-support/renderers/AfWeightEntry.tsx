@@ -27,7 +27,7 @@ export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
       {isEnglish ? 'Weight applied. Review the updated dose assessment below.' : '已套用體重，請查看下方更新的劑量評估。'}
     </p>
   ) : null
-  return <WeightForm isEnglish={isEnglish} now={now} onSave={patch => { setApplied(true); onSave(patch) }} />
+  return <WeightForm isEnglish={isEnglish} now={now} onSave={patch => { onSave(patch); setApplied(true) }} />
 }
 
 function WeightForm({ isEnglish, now, onSave }: Required<Pick<Props, 'isEnglish' | 'now' | 'onSave'>>) {
@@ -35,9 +35,10 @@ function WeightForm({ isEnglish, now, onSave }: Required<Pick<Props, 'isEnglish'
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
   const today = todayIsoDate(now)
-  const [measuredOn, setMeasuredOn] = useState(today)
-  const [error, setError] = useState<string>()
+  const [measuredOn, setMeasuredOn] = useState('')
+  const [error, setError] = useState<{ field: 'weight' | 'date'; message: string }>()
   const input = useRef<HTMLInputElement>(null)
+  const dateInput = useRef<HTMLInputElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
 
   useEffect(() => { if (open) input.current?.focus() }, [open])
@@ -56,14 +57,15 @@ function WeightForm({ isEnglish, now, onSave }: Required<Pick<Props, 'isEnglish'
           event.preventDefault()
           const number = value.trim() ? Number(value) : NaN
           if (!Number.isFinite(number) || number <= 0) {
-            setError(isEnglish ? 'Enter an actual weight greater than 0 kg.' : '請輸入大於 0 kg 的實際體重。')
+            setError({ field: 'weight', message: isEnglish ? 'Enter an actual weight greater than 0 kg.' : '請輸入大於 0 kg 的實際體重。' })
             input.current?.focus()
             return
           }
           const date = new Date(measuredOn)
           if (!/^\d{4}-\d{2}-\d{2}$/.test(measuredOn) || !Number.isFinite(date.getTime())
             || date.toISOString().slice(0, 10) !== measuredOn || measuredOn > today) {
-            setError(isEnglish ? 'Enter a valid measurement date, no later than today.' : '請填寫有效的量測日期，不能晚於今天。')
+            setError({ field: 'date', message: isEnglish ? 'Enter a valid measurement date, no later than today.' : '請填寫有效的量測日期，不能晚於今天。' })
+            dateInput.current?.focus()
             return
           }
           onSave({ entries: { bodyWeight: { value: number, measuredOn } } })
@@ -77,11 +79,13 @@ function WeightForm({ isEnglish, now, onSave }: Required<Pick<Props, 'isEnglish'
               {isEnglish ? 'Weight (kg)' : '體重（kg）'}
               <Input ref={input} id={`${id}-weight`} type="number" inputMode="decimal" min="0" step="any"
                 className="h-11 w-32" value={value} onChange={event => { setValue(event.target.value); setError(undefined) }}
-                aria-describedby={`${id}-hint${error ? ` ${id}-error` : ''}`} />
+                aria-invalid={error?.field === 'weight' || undefined}
+                aria-describedby={`${id}-hint${error?.field === 'weight' ? ` ${id}-error` : ''}`} />
             </label>
             <label className="flex flex-col gap-1" htmlFor={`${id}-date`}>
               {isEnglish ? 'Measurement date' : '量測日期'}
-              <Input id={`${id}-date`} type="date" max={today} className="h-11 w-44" value={measuredOn}
+              <Input ref={dateInput} id={`${id}-date`} type="date" max={today} className="h-11 w-44" value={measuredOn}
+                aria-invalid={error?.field === 'date' || undefined} aria-describedby={`${id}-hint${error?.field === 'date' ? ` ${id}-error` : ''}`}
                 onChange={event => { setMeasuredOn(event.target.value); setError(undefined) }} />
             </label>
             <Button type="submit" className="min-h-11">{isEnglish ? 'Apply weight' : '套用體重'}</Button>
@@ -89,7 +93,7 @@ function WeightForm({ isEnglish, now, onSave }: Required<Pick<Props, 'isEnglish'
               setOpen(false); setError(undefined); trigger.current?.focus()
             }}>{isEnglish ? 'Cancel' : '取消'}</Button>
           </div>
-          {error ? <p id={`${id}-error`} role="alert" className="text-destructive">{error}</p> : null}
+          {error ? <p id={`${id}-error`} role="alert" className="text-destructive">{error.message}</p> : null}
         </form>
       ) : null}
     </div>
