@@ -10,10 +10,11 @@ import { hfMedcloudFixture } from './hf-medcloud-fixture'
 const input = () => buildMedcloudHfInput(hfMedcloudFixture(), { provider: 'SYNTHETIC-HOSPITAL', encounter: 'Encounter/synthetic-visit', claim: 'P1_CD_mortality_1m' }, { today: '2026-10-04', uuid: randomUUID })
 const options = (records: HfDiagnosticRecord[], fetch: typeof globalThis.fetch) => ({ origin: 'https://hf.test', authPolicy: 'intranet' as const, signal: new AbortController().signal, onDiagnostic: (r: HfDiagnosticRecord) => records.push(r), fetch })
 
-it.each([[400, 'gateway-input-rejected'], [404, 'gateway-not-found'], [413, 'input-too-large'], [415, 'gateway-content-type'], [429, 'gateway-rate-limited'], [503, 'gateway-unavailable'], [504, 'gateway-upstream-timeout']])('identifies HTTP %s without retaining an arbitrary response', async (status, code) => {
+it.each([[400, 'gateway-input-rejected'], [404, 'gateway-not-found'], [413, 'gateway-payload-too-large'], [415, 'gateway-content-type'], [429, 'gateway-rate-limited'], [503, 'gateway-unavailable'], [504, 'gateway-upstream-timeout']])('identifies HTTP %s without retaining an arbitrary response', async (status, code) => {
   const records: HfDiagnosticRecord[] = []
   await expect(requestHfPrediction(input(), options(records, async () => new Response('PRIVATE-RESPONSE Bearer SECRET', { status: status as number })))).rejects.toThrow(code as string)
   expect(records[0].diagnostic).toMatchObject({ httpStatus: status, errorCode: code, stage: 'response', operation: 'predict' })
+  expect(records[0].diagnostic.responseIdMatched).toBeNull()
   expect(JSON.stringify(records)).not.toMatch(/PRIVATE-RESPONSE|SECRET|FAKE-ID|synthetic-patient/)
 })
 
@@ -41,6 +42,12 @@ it('identifies its own deadline separately from cancellation', async () => {
     await result
     expect(records[0].diagnostic).toMatchObject({ errorCode: 'request-timeout', httpStatus: null, elapsedMs: 15000 })
   } finally { jest.useRealTimers() }
+})
+
+it('distinguishes an empty stream from malformed JSON', async () => {
+  const records: HfDiagnosticRecord[] = []
+  await expect(requestHfPrediction(input(), options(records, async () => new Response('')))).rejects.toThrow('response-empty')
+  expect(records[0].diagnostic).toMatchObject({ stage: 'response', responseBytes: 0, errorCode: 'response-empty' })
 })
 
 it('uses a frozen validated projection and receiver-compatible envelope for diagnosis', async () => {
@@ -72,4 +79,18 @@ it('withholds invalid projections and unexpected fields from the report', async 
   const report = JSON.parse(buildHfProblemReport(randomUUID(), records, 'medcloud', null))
   expect(JSON.parse(report.executions[0].prompt)).toMatchObject({ inputOmission: expect.any(String) })
   expect(JSON.stringify(report)).not.toMatch(/PRIVATE-ID|rawError|token|SECRET/)
+})
+
+it.each([
+  ['request-timeout', 'connect', null, 'timeout'],
+  ['gateway-network', 'connect', null, 'network'],
+  ['invalid-json-response', 'parse', null, 'parse_failed'],
+  [null, 'parse', 'refused', 'validation_failed'],
+  [null, 'parse', 'scored', null],
+] as const)('reports %s / %s / %s through the actual receiver schema', async (errorCode, stage, verdict, outcome) => {
+  const records: HfDiagnosticRecord[] = []
+  await expect(requestHfPrediction(input(), options(records, async () => new Response('{}', { status: 400 })))).rejects.toThrow()
+  Object.assign(records[0].diagnostic, { errorCode, stage, verdict })
+  const report = aiReportSchema.parse(JSON.parse(buildHfProblemReport(randomUUID(), records, 'medcloud', '0.51.0')))
+  expect(report.executions[0].outcome).toBe(outcome)
 })

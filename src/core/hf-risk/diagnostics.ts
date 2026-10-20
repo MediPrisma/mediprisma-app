@@ -32,6 +32,7 @@ export const HF_FAILURE_MESSAGES: Record<string, [string, string]> = {
   'gateway-input-rejected': ['院內服務拒絕輸入格式（HTTP 400）。請回報本次診斷，核對整理後資料與服務契約。', 'The service rejected the input format (HTTP 400). Report the diagnostics to compare the prepared data with the service contract.'],
   'gateway-not-found': ['找不到 HF 服務路由（HTTP 404）。請回報本次診斷，由管理者確認部署版本。', 'The HF service route was not found (HTTP 404). Report the diagnostics so the deployment can be checked.'],
   'gateway-content-type': ['服務不接受本次資料格式（HTTP 415）。請回報本次診斷。', 'The service rejected the request content type (HTTP 415). Report the diagnostics.'],
+  'gateway-payload-too-large': ['院內入口拒絕接收這份資料（HTTP 413），可能是入口大小限制。請回報本次診斷；不代表資料超過前端的 2 MiB 上限。', 'The gateway rejected the payload (HTTP 413), possibly because of its own size limit. Report the diagnostics; the frontend 2 MiB limit was not exceeded.'],
   'gateway-rate-limited': ['服務暫時限制請求量（HTTP 429）。請稍後重試。', 'The service is rate limiting requests (HTTP 429). Retry later.'],
   'gateway-upstream-timeout': ['院內入口等候上游模型逾時（HTTP 504）。請稍後重試或回報本次診斷。', 'The gateway timed out waiting for the model (HTTP 504). Retry later or report the diagnostics.'],
   'gateway-unavailable': ['院內服務或上游模型未能完成請求。這不等同於資料不符合評分條件；請查看 HTTP 狀態並回報本次診斷。', 'The service or upstream model could not complete the request. This is not an eligibility refusal; check the HTTP status and report the diagnostics.'],

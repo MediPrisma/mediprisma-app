@@ -74,12 +74,13 @@ async function requestHf(input: HfInput, options: HfRequestOptions, operation: '
     diagnostic.httpStatus = response.status
     const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
     diagnostic.responseType = !contentType ? 'missing' : contentType === 'application/json' ? 'json' : contentType === 'application/fhir+json' ? 'fhir+json' : 'other'
-    diagnostic.responseIdMatched = response.headers.get('x-request-id') === sentRequestId
+    const echoedRequestId = response.headers.get('x-request-id')
+    diagnostic.responseIdMatched = echoedRequestId ? echoedRequestId === sentRequestId : null
     const adapter = response.headers.get('x-samd-adapter-version')
     if (adapter && /^[0-9a-z.-]{1,40}$/i.test(adapter)) diagnostic.adapterVersion = adapter
     if (![200, 422].includes(response.status) && !(operation === 'predict' && response.status === 502)) {
       void response.body?.cancel().catch(() => {})
-      const code = ({ 400: 'gateway-input-rejected', 401: 'gateway-unauthorized', 403: 'gateway-unauthorized', 404: 'gateway-not-found', 413: 'input-too-large', 415: 'gateway-content-type', 429: 'gateway-rate-limited', 504: 'gateway-upstream-timeout' } as Record<number, string>)[response.status] ?? 'gateway-unavailable'
+      const code = ({ 400: 'gateway-input-rejected', 401: 'gateway-unauthorized', 403: 'gateway-unauthorized', 404: 'gateway-not-found', 413: 'gateway-payload-too-large', 415: 'gateway-content-type', 429: 'gateway-rate-limited', 504: 'gateway-upstream-timeout' } as Record<number, string>)[response.status] ?? 'gateway-unavailable'
       throw new Error(code)
     }
     if (!response.body) throw new Error('response-empty')
@@ -96,6 +97,7 @@ async function requestHf(input: HfInput, options: HfRequestOptions, operation: '
         chunks.push(value)
       }
     } finally { reader.releaseLock() }
+    if (size === 0) throw new Error('response-empty')
     const bytes = new Uint8Array(size)
     let offset = 0
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
@@ -118,7 +120,7 @@ async function requestHf(input: HfInput, options: HfRequestOptions, operation: '
 
   } catch (error) {
     // Never show/store arbitrary exception text: fetch and parser errors can contain URLs or content.
-    const known = new Set(['input-invalid', 'input-too-large', 'gateway-config', 'preview-fixture-required', 'response-too-large', 'gateway-unauthorized', 'gateway-input-rejected', 'gateway-not-found', 'gateway-content-type', 'gateway-rate-limited', 'gateway-upstream-timeout', 'gateway-unavailable', 'response-empty', 'invalid-json-response', 'invalid-prediction-response', 'invalid-dry-run-response', 'request-aborted'])
+    const known = new Set(['input-invalid', 'input-too-large', 'gateway-config', 'preview-fixture-required', 'response-too-large', 'gateway-unauthorized', 'gateway-input-rejected', 'gateway-not-found', 'gateway-content-type', 'gateway-payload-too-large', 'gateway-rate-limited', 'gateway-upstream-timeout', 'gateway-unavailable', 'response-empty', 'invalid-json-response', 'invalid-prediction-response', 'invalid-dry-run-response', 'request-aborted'])
     const code = timedOut ? 'request-timeout' : options.signal.aborted ? 'request-aborted'
       : error instanceof Error && known.has(error.message) ? error.message
       : diagnostic.stage === 'connect' ? 'gateway-network' : diagnostic.stage === 'response' ? 'response-interrupted'

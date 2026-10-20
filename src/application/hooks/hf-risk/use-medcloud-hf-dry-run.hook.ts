@@ -14,6 +14,7 @@ import type { HfPredictionResult } from '@/src/core/hf-risk/prediction-result'
 import { hfAuthPolicy, hfGatewayUrl, requestHfDryRun, requestHfPrediction, type HfRequestOptions } from '@/src/infrastructure/hf-risk/dry-run-client'
 import type { HfDiagnosticRecord } from '@/src/core/hf-risk/diagnostics'
 import { diagnosticUuid } from '@/src/shared/utils/summary-diagnostics'
+import type { HfReportSnapshot } from '@/src/application/telemetry/hf-report'
 
 function subscribeToRecordChange(onChange: () => void) {
   window.addEventListener(BUNDLE_CHANGED_EVENT, onChange)
@@ -49,7 +50,7 @@ export function useMedcloudHfDryRun() {
   const [localMode, activeImportId] = JSON.parse(snapshot) as [boolean, string | null]
   const [context, setContext] = useState<Context | null>(null)
   const [run, setRun] = useState<{ importId: string; input: HfInput; claims: HfClaimRuns } | null>(null)
-  const [diagnostics, setDiagnostics] = useState<{ importId: string; input: HfInput; runId: string; records: HfDiagnosticRecord[] } | null>(null)
+  const [diagnostics, setDiagnostics] = useState<{ importId: string; input: HfInput; runId: string; records: HfDiagnosticRecord[]; report?: HfReportSnapshot } | null>(null)
   const [message, setMessage] = useState<{ importId: string | null; code: string } | null>(null)
   const [busyImportId, setBusyImportId] = useState<string | null>(null)
   const busy = busyImportId !== null && busyImportId === activeImportId
@@ -69,6 +70,10 @@ export function useMedcloudHfDryRun() {
   const current = localMode && context?.importId === activeImportId ? context : null
   const visibleRuns = run?.importId === activeImportId && run.input === current?.input ? run.claims : null
   const visibleDiagnostics = diagnostics?.importId === activeImportId && diagnostics.input === current?.input ? diagnostics : null
+  const setReportSnapshot = (report: HfReportSnapshot) => {
+    const owner = visibleDiagnostics?.runId
+    if (owner) setDiagnostics(previous => previous?.runId === owner ? { ...previous, report } : previous)
+  }
   const visibleMessage = (localMode || message?.code === 'source-unsupported') && message && message.importId === activeImportId ? message.code : null
   useEffect(() => () => { controller.current?.abort(); controller.current = null; unsubscribeAuth.current?.(); unsubscribeAuth.current = null }, [activeImportId, localMode])
 
@@ -191,6 +196,7 @@ export function useMedcloudHfDryRun() {
         abort.abort()
         setBusyImportId(null)
         setRun(null)
+        setDiagnostics(null)
         setMessage({ importId: snapshot.importId, code: 'gateway-unauthorized' })
       })
       const options = { origin, token, signal: abort.signal, onDiagnostic }
@@ -210,7 +216,7 @@ export function useMedcloudHfDryRun() {
     }
   }
   return {
-    current, configured, intranet: policySetting === 'intranet', busy, runs: visibleRuns, message: visibleMessage, diagnostics: visibleDiagnostics,
+    current, configured, intranet: policySetting === 'intranet', busy, runs: visibleRuns, message: visibleMessage, diagnostics: visibleDiagnostics, setReportSnapshot,
     /** Changes whenever the active record or its source mode changes. */
     recordKey: snapshot,
     prepare, select, supplementDiagnosis, validate: () => submit('dry-run'), predict: () => submit('predict'),

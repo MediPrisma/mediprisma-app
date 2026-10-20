@@ -4,6 +4,9 @@ import { validateHfTransportBundle } from '@/src/core/hf-risk/transport-bundle'
 import type { HfDiagnosticRecord } from '@/src/core/hf-risk/diagnostics'
 import type { HfRecordSource } from '@/src/core/hf-risk/record-source'
 
+/** Lives with the HF run, so returning to the list cannot change submission identity. */
+export interface HfReportSnapshot { json: string; endpoint: string | null; receiptId?: string }
+
 /** Use the existing consented /ai-reports envelope, never the automatic /events endpoint.
  * Its prompt/output fields carry structured HF input/diagnostics, labeled by kind. */
 export function buildHfProblemReport(runId: string, records: HfDiagnosticRecord[], source: HfRecordSource, appVersion: string | null,

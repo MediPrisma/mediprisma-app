@@ -91,7 +91,7 @@ function Step({ number, done, active, title, status, children, label }: { number
 
 export function HfMedcloudDetail({ locale, state }: { locale: string; state: ReturnType<typeof useMedcloudHfDryRun> }) {
   const en = locale === 'en'
-  const { current, configured, intranet, busy, runs, message: visibleMessage, diagnostics, recordKey, prepare, select, supplementDiagnosis, predict } = state
+  const { current, configured, intranet, busy, runs, message: visibleMessage, diagnostics, setReportSnapshot, recordKey, prepare, select, supplementDiagnosis, predict } = state
   const [guideOpen, setGuideOpen] = useState(true)
   const [diagnosisOpen, setDiagnosisOpen] = useState(!current?.input.physicianDiagnosis)
   const { copied, copy } = useCopyToClipboard()
@@ -264,7 +264,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       </section>}
     </div>
 
-    {current && diagnostics && diagnostics.records.length > 0 && !busy && <HfProblemReport key={diagnostics.runId} runId={diagnostics.runId} records={diagnostics.records} source={current.source} locale={locale} describeError={describeError} />}
+    {current && diagnostics && diagnostics.records.length > 0 && !busy && <HfProblemReport key={diagnostics.runId} runId={diagnostics.runId} records={diagnostics.records} source={current.source} locale={locale} describeError={describeError} snapshot={diagnostics.report ?? null} onSnapshotChange={setReportSnapshot} />}
 
     {current && <details className="group rounded-lg border border-border bg-background">
       <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 px-3 py-2 [&::-webkit-details-marker]:hidden">{chevron}<span className="text-sm font-semibold">{en ? 'Data used' : '本次使用的資料'}</span>
