@@ -13,7 +13,7 @@ function isVghFacility(reference: Resource | undefined): boolean {
 function eligible(encounter: Resource): boolean {
   return encounter.resourceType === 'Encounter' && encounter.class?.code === 'AMB'
     && ['finished', 'in-progress', 'arrived', 'unknown'].includes(encounter.status)
-    && !!encounter.subject?.reference && !!encounter.period?.start?.match(/^\d{4}-\d{2}-\d{2}/)
+    && !!encounter.subject?.reference && typeof encounter.period?.start === 'string' && !!medicationClinicalDay(encounter.period.start)
 }
 
 function primaryDiagnosis(encounter: Resource, conditions: Map<string, Resource>): Resource | undefined {

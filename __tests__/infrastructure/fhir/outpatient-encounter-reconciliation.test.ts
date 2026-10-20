@@ -56,7 +56,17 @@ it('keeps a subset of visit comparison sources usable and marks the missing part
 it('recognises the same Taiwan visit date when one source serializes midnight in UTC', () => {
   const { resources, cloud } = fixture()
   cloud.period.start = '2026-09-16T16:00:00Z'
-  expect(reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')).toHaveLength(1)
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect(visits).toHaveLength(1)
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current[0].sourceRecords?.every(source => source.date === '2026-09-17')).toBe(true)
+})
+
+it('never treats two unparseable source dates as evidence of the same visit', () => {
+  const { resources, hospital, cloud } = fixture()
+  hospital.period.start = '2026-13-01'; cloud.period.start = '2026-14-01'
+  expect(reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')).toHaveLength(2)
+  expect((hospital as any)._sourceRecordComparison).toBeUndefined()
 })
 function fixture() {
   const cloud = {

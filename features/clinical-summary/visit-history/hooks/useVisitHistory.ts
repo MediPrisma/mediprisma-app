@@ -9,6 +9,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
@@ -303,7 +304,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           sourceComparisonStatus: encounter._sourceRecordComparison?.status,
           sourceComparisonWarnings: comparison ? [...(comparison.warnings ?? []), ...(availableSources.length < comparison.references.length ? ['source-partners-not-in-view'] : [])] : undefined,
           sourceRecords: availableSources?.map((source: any) => {
-            return { id: source.id, date: source?.period?.start?.slice(0, 10),
+            return { id: source.id, date: medicationClinicalDay(source?.period?.start),
               origin: isVghtpeSource(source) ? 'hospital' : 'medcloud',
               institution: getInstitutionName(source?.serviceProvider?.display, locale),
               department: source?.serviceType?.text || source?.serviceType?.coding?.find((coding: any) => coding.display)?.display,

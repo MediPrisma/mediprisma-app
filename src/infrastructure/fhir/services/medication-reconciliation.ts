@@ -78,7 +78,7 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     const left = hospital.dispenseRequest?.validityPeriod?.[edge]
     const right = cloud.dispenseRequest?.validityPeriod?.[edge]
     if (left && right && left !== right
-      && !(left.length === 10 || right.length === 10 ? medicationClinicalDay(left) === medicationClinicalDay(right) : Date.parse(left) === Date.parse(right))) return true
+      && !(left.length === 10 || right.length === 10 ? medicationClinicalDay(left) !== undefined && medicationClinicalDay(left) === medicationClinicalDay(right) : Date.parse(left) === Date.parse(right))) return true
   }
   const hospitalTherapy = conceptKey(hospital.courseOfTherapyType)
   const cloudTherapy = conceptKey(cloud.courseOfTherapyType)
@@ -169,7 +169,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   const identity = (order: Resource) => {
     if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference) return undefined
     if (order.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0120')) return undefined
-    const day = medicationClinicalDay(order.authoredOn)
+    const day = typeof order.authoredOn === 'string' ? medicationClinicalDay(order.authoredOn) : undefined
     const reference = order.medicationReference?.reference
     const concept = order.medicationCodeableConcept ?? (reference?.startsWith('#')
       ? order.contained?.find((resource: Resource) => resource.resourceType === 'Medication' && resource.id === reference.slice(1))?.code

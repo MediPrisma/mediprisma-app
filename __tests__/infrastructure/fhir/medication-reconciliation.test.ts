@@ -319,3 +319,11 @@ it('recognises equivalent Taiwan prescription dates represented in UTC and UTC+0
   hospital.authoredOn = '2026-09-17T00:00:00+08:00'; cloud.authoredOn = '2026-09-16T16:00:00Z'
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(1)
 })
+
+it('preserves both records when two different supply-end strings are unparseable', () => {
+  const { hospital, cloud } = fixture()
+  hospital.dispenseRequest = { validityPeriod: { end: '2026-13-01' } }
+  cloud.dispenseRequest.validityPeriod = { end: '2026-13-02' }
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital._sourceRecordComparison.warnings).toContain('source-facts-differ')
+})
