@@ -702,7 +702,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
           )}
           <div className="text-muted-foreground">
             {shortYmd(hover.bar.startMs)} → {hover.bar.supplyEndDay?.replace(/-/g, '/') || shortYmd(hover.bar.supplyDaysUnrecorded ? hover.bar.startMs : hover.bar.endMs - 1)}
-            <span className="ml-1">{hover.bar.supplyDaysUnrecorded ? (locale === 'en' ? '(duration not provided; date marker only)' : '（未提供天數，僅標示紀錄日期）')
+            <span className="ml-1">{hover.bar.supplyDaysUnrecorded ? (locale === 'en' ? '(no usable period; date marker only)' : '（未提供可用期間，僅標示紀錄日期）')
               : hover.bar.supplyDays < 1 ? `(${Number((hover.bar.supplyDays * 24).toFixed(2))}h)` : `(${Number(hover.bar.supplyDays.toFixed(3))}d)`}</span>
           </div>
           {hover.bar.selfPurchased && <div>{locale === 'en' ? 'Self-pay' : '自費／自購'}</div>}

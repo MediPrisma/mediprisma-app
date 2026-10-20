@@ -1,6 +1,7 @@
 // Operates on the canonicalised import graph, never on the stored source Bundle.
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { sharedEncounterIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 type Resource = Record<string, any>
 
 function isVghFacility(reference: Resource | undefined): boolean {
@@ -89,7 +90,7 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
       const rightPhysician = physician(other)
       const leftDepartment = department(visit), rightDepartment = department(other)
       return visit.subject.reference === other.subject.reference
-        && visit.period.start.slice(0, 10) === other.period.start.slice(0, 10)
+        && medicationClinicalDay(visit.period.start) === medicationClinicalDay(other.period.start)
         // An exact token in WHO/CM can suggest a source comparison only.
         // It is never evidence that the two coding systems mean the same thing.
         && key.split('|')[1] === icdKey(primaryDiagnosis(other, conditions))?.split('|')[1]

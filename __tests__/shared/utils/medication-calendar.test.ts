@@ -1,4 +1,4 @@
-import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
+import { medicationSupplyEndDay, medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import { medicationExpectedEnd, medicationExpectedEndTimestamp, assessMedicationCurrentness, isLapsedDispensing } from '@/src/core/utils/clinical-context-selection.utils'
 
 it('uses inclusive source calendar dates across month and timezone boundaries', () => {
@@ -59,4 +59,16 @@ it.each([23, 24, 48])('keeps %s hours as elapsed time even when it converts to w
 it('marks unrecognised supply units uncertain instead of keeping a stale active record current indefinitely', () => {
   expect(assessMedicationCurrentness({ status: 'active', authoredOn: '2026-10-01', dispenseRequest: { expectedSupplyDuration: { value: 7, unit: 'unrecognised' } } }, Date.parse('2026-10-20')))
     .toMatchObject({ current: false, uncertain: true })
+})
+
+it('takes the amount and unit from the same valid fallback duration', () => {
+  const medication = { authoredOn: '2026-10-19T15:00:00+08:00', dispenseRequest: { expectedSupplyDuration: { code: 'h' } }, dosageInstruction: [{ timing: { repeat: { boundsDuration: { value: 2, code: 'd' } } } }] }
+  expect(medicationExpectedEndTimestamp(medication)).toBe(Date.parse('2026-10-20T23:59:59.999+08:00'))
+  expect(medicationSupplyDaysRemaining('2026-10-20T16:00:00Z', Date.parse('2026-10-21T00:00:00+08:00'))).toBe(1)
+})
+
+it('does not throw on an out-of-range duration or timestamp', () => {
+  expect(medicationClinicalDay(1e20)).toBeUndefined()
+  expect(medicationSupplyEndDay('2026-10-19', 1e20)).toBeUndefined()
+  expect(medicationExpectedEnd({ authoredOn: '2026-10-19', dispenseRequest: { expectedSupplyDuration: { value: 1e12, code: 'h' } } })).toBeUndefined()
 })

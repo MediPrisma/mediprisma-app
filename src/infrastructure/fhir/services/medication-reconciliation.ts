@@ -4,6 +4,7 @@ import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStat
 import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
 import { sharedPrescriptionIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 
 type Resource = Record<string, any>
 const SOURCE_MODULE = 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module'
@@ -77,7 +78,7 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     const left = hospital.dispenseRequest?.validityPeriod?.[edge]
     const right = cloud.dispenseRequest?.validityPeriod?.[edge]
     if (left && right && left !== right
-      && !(left.length === 10 || right.length === 10 ? left.slice(0, 10) === right.slice(0, 10) : Date.parse(left) === Date.parse(right))) return true
+      && !(left.length === 10 || right.length === 10 ? medicationClinicalDay(left) === medicationClinicalDay(right) : Date.parse(left) === Date.parse(right))) return true
   }
   const hospitalTherapy = conceptKey(hospital.courseOfTherapyType)
   const cloudTherapy = conceptKey(cloud.courseOfTherapyType)
@@ -168,7 +169,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   const identity = (order: Resource) => {
     if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference) return undefined
     if (order.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0120')) return undefined
-    const day = order.authoredOn?.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+    const day = medicationClinicalDay(order.authoredOn)
     const reference = order.medicationReference?.reference
     const concept = order.medicationCodeableConcept ?? (reference?.startsWith('#')
       ? order.contained?.find((resource: Resource) => resource.resourceType === 'Medication' && resource.id === reference.slice(1))?.code
@@ -185,7 +186,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       if (!vghDisplay(order.requester?.display) && !(isVghtpeSource(order) && !order.requester?.display)) return undefined
       const possible = new Set([...encounters.values()].filter(candidate => candidate.class?.code === 'AMB'
         && candidate.subject?.reference === order.subject.reference
-        && candidate.period?.start?.slice(0, 10) === day
+        && medicationClinicalDay(candidate.period?.start) === day
         && vghDisplay(candidate.serviceProvider?.display)
         && !['cancelled', 'entered-in-error', 'planned'].includes(candidate.status)).map(visitKey))
       if (possible.size !== 1) return undefined

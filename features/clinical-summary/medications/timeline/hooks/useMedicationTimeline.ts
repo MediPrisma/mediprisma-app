@@ -11,6 +11,7 @@ import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comp
 import { medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { periodToDays } from '../../utils/duration-helpers'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { medicationClinicalDay, medicationClinicalTimestamp } from '@/src/shared/utils/medication-calendar'
 import {
   resolveHospitalMedicationName,
   hospitalMedicationDisplayName,
@@ -423,7 +424,7 @@ export function useMedicationTimeline(
 
       const startIso = med.authoredOn || med.effectiveDateTime
       if (!startIso) continue
-      const startMs = new Date(startIso.length === 10 ? `${startIso}T00:00:00+08:00` : startIso).getTime()
+      const startMs = medicationClinicalTimestamp(startIso)
       if (Number.isNaN(startMs) || startMs < rangeStart) continue
 
       const supplyEndDay = medicationExpectedEnd(med)
@@ -431,10 +432,10 @@ export function useMedicationTimeline(
       const reportedDays = durationToDays(med.dispenseRequest?.expectedSupplyDuration, false)
         ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
         ?? periodToDays(dosage?.timing?.repeat?.boundsPeriod)
-        ?? periodToDays(supplyEndDay ? { start: startIso.slice(0, 10), end: supplyEndDay } : undefined)
+        ?? periodToDays(supplyEndDay ? { start: medicationClinicalDay(startIso), end: supplyEndDay } : undefined)
       const supplyDays = reportedDays ?? 1
       const exactEnd = medicationExpectedEndTimestamp(med)
-      const endMs = exactEnd === undefined ? startMs + supplyDays * 86400000 : exactEnd + 1
+      const endMs = exactEnd === undefined ? startMs + 86400000 : exactEnd + 1
       const prescriptionType = resolvedPrescriptionType(
         prescriptionTypesByDrug.get(clinicalDrugKey),
       )
@@ -494,7 +495,7 @@ export function useMedicationTimeline(
         supplyEndDay,
         selfPurchased: sourceSelfPurchase(med) === true,
         sourceStatus: med.status,
-        supplyDaysUnrecorded: reportedDays === undefined,
+        supplyDaysUnrecorded: reportedDays === undefined || exactEnd === undefined,
         refillId: med.id || `${medicationSourceCode(med) || clinicalDrugKey}-${startIso}`,
         startMs,
         endMs,

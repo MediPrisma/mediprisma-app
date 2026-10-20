@@ -28,9 +28,9 @@ export function durationToDays(duration: any, round = true): number | undefined 
   const unit = String(duration?.code || duration?.unit || '').toLowerCase()
   const factor =
     unit.startsWith('d') || unit === '天' || unit === '日' ? 1 :
-    unit.startsWith('w') ? 7 :
-    unit.startsWith('mo') || unit === 'month' || unit === 'months' ? 30 :
-    unit.startsWith('y') || unit === 'a' ? 365 :
+    unit.startsWith('w') || unit === '週' || unit === '周' ? 7 :
+    unit.startsWith('mo') || unit === 'month' || unit === 'months' || unit === '月' || unit === '個月' ? 30 :
+    unit.startsWith('y') || unit === 'a' || unit === '年' ? 365 :
     unit === 'h' || unit === 'hr' || unit.startsWith('hour') || unit === '小時' ? 1 / 24 :
     unit === 'min' || unit.startsWith('minute') || unit === '分鐘' || unit === '分' ? 1 / 1440 :
     unit === 's' || unit === 'sec' || unit.startsWith('second') || unit === '秒' ? 1 / 86400 :
@@ -60,10 +60,10 @@ export function medicationExpectedEndTimestamp(medication: any): number | undefi
   if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd) && Number.isFinite(Date.parse(explicitEnd))) {
     return explicitEnd.length === 10 ? calendarEnd(explicitEnd) : medicationClinicalTimestamp(explicitEnd)
   }
-  const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration, false)
-    ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
+  const duration = [medication?.dispenseRequest?.expectedSupplyDuration, dosage?.timing?.repeat?.boundsDuration]
+    .find(value => durationToDays(value, false) !== undefined)
+  const days = durationToDays(duration, false)
   if (!started || !days) return undefined
-  const duration = medication?.dispenseRequest?.expectedSupplyDuration ?? dosage?.timing?.repeat?.boundsDuration
   const unit = String(duration?.code || duration?.unit || '').toLowerCase()
   const elapsedTimeUnit = /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(unit)
   if (Number.isInteger(days) && !elapsedTimeUnit) {
@@ -71,7 +71,8 @@ export function medicationExpectedEndTimestamp(medication: any): number | undefi
     return endDay ? calendarEnd(endDay) : undefined
   }
   const startMs = medicationClinicalTimestamp(started)
-  return Number.isFinite(startMs) ? startMs + days * 86400000 - 1 : undefined
+  const endMs = Number.isFinite(startMs) ? startMs + days * 86400000 - 1 : undefined
+  return medicationClinicalDay(endMs) ? endMs : undefined
 }
 
 export function medicationExpectedEnd(medication: any): string | undefined {

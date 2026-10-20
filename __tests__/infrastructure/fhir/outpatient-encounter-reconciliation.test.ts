@@ -52,6 +52,12 @@ it('keeps a subset of visit comparison sources usable and marks the missing part
   expect(result.current[0].sourceRecords?.[0].origin).toBe('hospital')
   expect(result.current[0].sourceComparisonWarnings).toContain('source-partners-not-in-view')
 })
+
+it('recognises the same Taiwan visit date when one source serializes midnight in UTC', () => {
+  const { resources, cloud } = fixture()
+  cloud.period.start = '2026-09-16T16:00:00Z'
+  expect(reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')).toHaveLength(1)
+})
 function fixture() {
   const cloud = {
     resourceType: 'Encounter', id: 'cloud-visit', status: 'finished', class: { code: 'AMB' },

@@ -313,3 +313,9 @@ it('does not let one stopped hospital order invalidate a separate active hospita
   expect(assessMedicationCurrentness(activeHospital, now).current).toBe(true)
   expect(assessMedicationCurrentness(cloud, now)).toMatchObject({ current: false, uncertain: true })
 })
+
+it('recognises equivalent Taiwan prescription dates represented in UTC and UTC+08', () => {
+  const { hospital, cloud } = fixture()
+  hospital.authoredOn = '2026-09-17T00:00:00+08:00'; cloud.authoredOn = '2026-09-16T16:00:00Z'
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(1)
+})
