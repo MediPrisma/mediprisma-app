@@ -39,7 +39,7 @@ describe('useMedicationTimeline category grouping', () => {
     ], 'medical', 'all', '其他', 'zh-TW', zhAtcCategories))
     const bar = result.current.categories[0].drugs[0].bars[0]
     expect(bar.supplyEndDay).toBe('2026-11-15')
-    expect(new Date(bar.endMs).getDate()).toBe(16)
+    expect(bar.endMs).toBe(Date.parse('2026-11-16T00:00:00+08:00'))
   })
   it.each(['weeks', 'period'])('shows days consistent with the chart for source %s', format => {
     const med = medication({ authoredOn: '2026-10-19',
@@ -798,7 +798,7 @@ describe('useMedicationTimeline category grouping', () => {
     const nowSpy = jest
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-08-28T12:00:00+08:00').getTime())
-    const earliest = new Date('2026-07-12T00:00:00').getTime()
+    const earliest = new Date('2026-07-12T00:00:00+08:00').getTime()
 
     const { result } = renderHook(() =>
       useMedicationTimeline(

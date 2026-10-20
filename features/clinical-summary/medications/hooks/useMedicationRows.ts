@@ -21,6 +21,11 @@ import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStat
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
+
+function sourceCalendarDate(value?: string): string {
+  const day = value?.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])).toLocaleDateString() : formatDate(value)
+}
 import {
   resolveSinglePrescriptionRemainingDisplay,
 } from '../utils/remaining-supply'
@@ -387,10 +392,10 @@ export function useMedicationRows(
         route: routeSummary && routeSummary !== "—" ? routeSummary : undefined,
         frequency: frequencySummary || undefined,
         totalQuantity,
-        startedOn: formatDate(startDateRaw),
-        stoppedOn: stopDateRaw ? formatDate(stopDateRaw) : undefined,
+        startedOn: sourceCalendarDate(startDateRaw),
+        stoppedOn: stopDateRaw ? sourceCalendarDate(stopDateRaw) : undefined,
         durationDays,
-        endDate: endDate ? formatDate(endDate) : undefined,
+        endDate: endDate ? sourceCalendarDate(endDate) : undefined,
         startedOnIso: isoCalendarDay(startDateRaw),
         endDateIso,
         endDateSource: explicitEndDateRaw ? 'reported' : endDate ? 'estimated' : undefined,

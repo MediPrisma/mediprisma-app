@@ -40,3 +40,20 @@ it('does not call a source-status-conflicted cloud record a previously dispensed
   expect(isLapsedDispensing({ status: 'active', authoredOn: '2026-10-01', dispenseRequest: { expectedSupplyDuration: { value: 7, code: 'd' } },
     _sourceRecordComparison: { warnings: ['source-status-conflict'] } }, Date.parse('2026-10-20'))).toBe(false)
 })
+
+it('keeps a midnight Taiwan source date while evaluating the exact ending instant', () => {
+  const medication = { status: 'active', dosageInstruction: [{ timing: { repeat: { boundsPeriod: { end: '2026-10-21T00:00:00+08:00' } } } }] }
+  expect(medicationExpectedEnd(medication)).toBe('2026-10-21')
+  expect(medicationExpectedEndTimestamp(medication)).toBe(Date.parse('2026-10-20T16:00:00Z'))
+  expect(assessMedicationCurrentness(medication, Date.parse('2026-10-20T16:00:01Z')).current).toBe(false)
+})
+
+it.each([23, 24, 48])('keeps %s hours as elapsed time even when it converts to whole days', hours => {
+  const medication = { status: 'active', authoredOn: '2026-10-19T15:00:00+08:00', dispenseRequest: { expectedSupplyDuration: { value: hours, code: 'h' } } }
+  expect(medicationExpectedEndTimestamp(medication)).toBe(Date.parse(medication.authoredOn) + hours * 3600000 - 1)
+})
+
+it('marks unrecognised supply units uncertain instead of keeping a stale active record current indefinitely', () => {
+  expect(assessMedicationCurrentness({ status: 'active', authoredOn: '2026-10-01', dispenseRequest: { expectedSupplyDuration: { value: 7, unit: 'unrecognised' } } }, Date.parse('2026-10-20')))
+    .toMatchObject({ current: false, uncertain: true })
+})

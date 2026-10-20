@@ -423,7 +423,7 @@ export function useMedicationTimeline(
 
       const startIso = med.authoredOn || med.effectiveDateTime
       if (!startIso) continue
-      const startMs = new Date(startIso.length === 10 ? `${startIso}T00:00:00` : startIso).getTime()
+      const startMs = new Date(startIso.length === 10 ? `${startIso}T00:00:00+08:00` : startIso).getTime()
       if (Number.isNaN(startMs) || startMs < rangeStart) continue
 
       const supplyEndDay = medicationExpectedEnd(med)

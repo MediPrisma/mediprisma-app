@@ -255,8 +255,8 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     const visitCodingConflict = group.some(member => identity(member)?.visitCodingConflict)
     const factsConflict = [...hospitalGroup].some(member => [...cloudGroup].some(partner => conflictingPairs.get(member)?.has(partner)))
     const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedPrescriptionIdentifier(order, other) && !contextInferred && !visitCodingConflict && !factsConflict
-    const statusConflict = [...hospitalGroup].some(member => ['cancelled', 'stopped', 'entered-in-error', 'on-hold'].includes(member.status))
-      && [...cloudGroup].some(member => member.status === 'active')
+    const statusConflict = !confirmed && [...hospitalGroup].some(member => ['cancelled', 'stopped', 'entered-in-error', 'on-hold'].includes(member.status))
+      && [...cloudGroup].some(member => ['active', 'unknown'].includes(member.status || 'unknown'))
     const warnings = [...(contextInferred ? ['encounter-link-unconfirmed'] : []), ...(factsConflict ? ['source-facts-differ'] : []), ...(statusConflict ? ['source-status-conflict'] : [])]
     const comparison = { status: confirmed ? 'confirmed' : unique ? 'candidate' : 'ambiguous',
       references: group.map(member => `MedicationRequest/${member.id}`),

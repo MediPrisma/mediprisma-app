@@ -27,13 +27,13 @@ export function durationToDays(duration: any, round = true): number | undefined 
   if (!Number.isFinite(value) || value <= 0) return undefined
   const unit = String(duration?.code || duration?.unit || '').toLowerCase()
   const factor =
-    unit.startsWith('d') ? 1 :
+    unit.startsWith('d') || unit === '天' || unit === '日' ? 1 :
     unit.startsWith('w') ? 7 :
     unit.startsWith('mo') || unit === 'month' || unit === 'months' ? 30 :
     unit.startsWith('y') || unit === 'a' ? 365 :
-    unit === 'h' || unit === 'hr' || unit.startsWith('hour') ? 1 / 24 :
-    unit === 'min' || unit.startsWith('minute') ? 1 / 1440 :
-    unit === 's' || unit === 'sec' || unit.startsWith('second') ? 1 / 86400 :
+    unit === 'h' || unit === 'hr' || unit.startsWith('hour') || unit === '小時' ? 1 / 24 :
+    unit === 'min' || unit.startsWith('minute') || unit === '分鐘' || unit === '分' ? 1 / 1440 :
+    unit === 's' || unit === 'sec' || unit.startsWith('second') || unit === '秒' ? 1 / 86400 :
     unit === '' || unit === '24h' ? 1 : undefined
   if (factor === undefined) return undefined
   return round ? Math.round(value * factor) : value * factor
@@ -48,35 +48,48 @@ export function medicationRecordedTreatmentEnd(medication: any): string | undefi
     || (isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined)
 }
 
+// Imported Taiwan date-only records have no offset. Preserve their clinical
+// calendar in Taipei; explicit FHIR offsets remain authoritative.
+const sourceOffset = (value?: string): string => value?.match(/(?:Z|[+-]\d{2}:\d{2})$/)?.[0] ?? '+08:00'
+const sourceInstant = (value: string, offset: string): number => Date.parse(value.length === 10
+  ? `${value}T00:00:00${offset}` : /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : value + offset)
+
 /** End of the inclusive coverage interval; fractional durations keep their
  * exact elapsed time, while whole-day supplies cover their final calendar day. */
 export function medicationExpectedEndTimestamp(medication: any): number | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const explicitEnd = medicationRecordedTreatmentEnd(medication)
+  const started = medication?.authoredOn || medication?.effectiveDateTime
+  const offset = sourceOffset(started)
   const calendarEnd = (day: string) => {
-    const [year, month, date] = day.slice(0, 10).split('-').map(Number)
-    return new Date(year, month - 1, date + 1).getTime() - 1
+    return sourceInstant(day.slice(0, 10), offset) + 86400000 - 1
   }
   if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd) && Number.isFinite(Date.parse(explicitEnd))) {
-    return explicitEnd.length === 10 ? calendarEnd(explicitEnd) : Date.parse(explicitEnd)
+    return explicitEnd.length === 10 ? calendarEnd(explicitEnd) : sourceInstant(explicitEnd, offset)
   }
   const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration, false)
     ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
-  const started = medication?.authoredOn || medication?.effectiveDateTime
   if (!started || !days) return undefined
-  if (Number.isInteger(days)) {
+  const duration = medication?.dispenseRequest?.expectedSupplyDuration ?? dosage?.timing?.repeat?.boundsDuration
+  const unit = String(duration?.code || duration?.unit || '').toLowerCase()
+  const elapsedTimeUnit = /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(unit)
+  if (Number.isInteger(days) && !elapsedTimeUnit) {
     const endDay = medicationSupplyEndDay(started, days)
     return endDay ? calendarEnd(endDay) : undefined
   }
-  const startMs = Date.parse(started.length === 10 ? `${started}T00:00:00` : started)
+  const startMs = sourceInstant(started, offset)
   return Number.isFinite(startMs) ? startMs + days * 86400000 - 1 : undefined
 }
 
 export function medicationExpectedEnd(medication: any): string | undefined {
+  const explicitEnd = medicationRecordedTreatmentEnd(medication)
+  if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd) && Number.isFinite(Date.parse(explicitEnd))) return explicitEnd.slice(0, 10)
   const endMs = medicationExpectedEndTimestamp(medication)
   if (endMs === undefined) return undefined
-  const end = new Date(endMs)
-  return [end.getFullYear(), String(end.getMonth() + 1).padStart(2, '0'), String(end.getDate()).padStart(2, '0')].join('-')
+  const offset = sourceOffset(medication?.authoredOn || medication?.effectiveDateTime)
+  const parts = offset.match(/^([+-])(\d{2}):(\d{2})$/)
+  const minutes = parts ? (Number(parts[2]) * 60 + Number(parts[3])) * (parts[1] === '-' ? -1 : 1) : 0
+  return new Date(endMs + minutes * 60000).toISOString().slice(0, 10)
 }
 
 // The newest record is picked by string sort, so only dates written the ISO
@@ -106,6 +119,7 @@ export function assessMedicationCurrentness(
     return { current: false, uncertain: false, basis: 'source-status' }
   }
   if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict')
+    && !isVghtpeSource(medication)
     && !['draft', 'on-hold', 'stopped', 'cancelled', 'entered-in-error', 'ended', 'not-taken'].includes(status)
     && (!end || supplyWindowOpen)) {
     return { current: false, uncertain: true, basis: 'conflicting-source-status' }
@@ -134,6 +148,10 @@ export function assessMedicationCurrentness(
   }
 
   if (!end) {
+    const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+    if (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration) {
+      return { current: false, uncertain: true, basis: 'insufficient-status-and-supply' }
+    }
     return {
       current: status === 'active',
       uncertain: false,
@@ -255,7 +273,7 @@ const NEVER_DISPENSED_STATUSES = new Set(['draft', 'on-hold', 'cancelled', 'ente
  */
 export function isLapsedDispensing(medication: any, nowMs: number): boolean {
   if (NEVER_DISPENSED_STATUSES.has(normalizeClinicalStatus(medication?.status))) return false
-  if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict')) return false
+  if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict') && !isVghtpeSource(medication)) return false
   const end = medicationExpectedEndTimestamp(medication)
   return end !== undefined && nowMs > end
 }

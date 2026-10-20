@@ -2,7 +2,7 @@ import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bun
 import { reconcileMedicationRequests } from '@/src/infrastructure/fhir/services/medication-reconciliation'
 import { renderHook } from '@testing-library/react'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
-import { medicationExpectedEnd } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationExpectedEnd, assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
 function fixture() {
@@ -262,7 +262,7 @@ it('keeps conflicting source statuses explicitly related without merging or chan
   hospital.status = 'stopped'; cloud.status = 'active'
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
   expect(hospital.status).toBe('stopped'); expect(cloud.status).toBe('active')
-  expect(hospital._sourceRecordComparison).toMatchObject({ status: 'candidate', warnings: ['source-facts-differ'] })
+  expect(hospital._sourceRecordComparison).toMatchObject({ status: 'candidate', warnings: expect.arrayContaining(['source-facts-differ']) })
 })
 
 it.each(['urn:oid:vgh.case', 'urn:oid:vgh.medication.order', 'https://synthetic.example/patient-id', 'https://synthetic.example/untyped-id'])('never confirms a prescription using only shared untyped %s', system => {
@@ -301,4 +301,15 @@ it('does not add an unpaired structured IV route to a hospital full SIG recordin
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
   expect(hospital.dosageInstruction[0].route).toBeUndefined()
   expect(hospital._sourceRecordComparison.warnings).toContain('source-facts-differ')
+})
+
+it('does not let one stopped hospital order invalidate a separate active hospital order in an ambiguous group', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier
+  hospital.authoredOn = cloud.authoredOn = '2026-10-19'; hospital.status = 'stopped'
+  const activeHospital = { ...hospital, id: 'second-real-hospital-order', status: 'active', dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } } }
+  reconcileMedicationRequests([hospital, activeHospital, cloud])
+  const now = Date.parse('2026-10-20T08:00:00+08:00')
+  expect(assessMedicationCurrentness(activeHospital, now).current).toBe(true)
+  expect(assessMedicationCurrentness(cloud, now)).toMatchObject({ current: false, uncertain: true })
 })
