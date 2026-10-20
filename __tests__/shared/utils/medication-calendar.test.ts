@@ -1,5 +1,5 @@
 import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
-import { medicationExpectedEnd, assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationExpectedEnd, medicationExpectedEndTimestamp, assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
 
 it('uses inclusive source calendar dates across month and timezone boundaries', () => {
   expect(medicationSupplyEndDay('2026-10-19T00:00:00+08:00', 28)).toBe('2026-11-15')
@@ -25,4 +25,13 @@ it('does not extend seven days of medication supply to the prescription dispensi
   expect(medicationExpectedEnd(medication)).toBe('2026-10-25')
   expect(assessMedicationCurrentness(medication, new Date(2026, 9, 26).getTime()).current).toBe(false)
   expect(medicationExpectedEnd({ ...medication, dispenseRequest: { validityPeriod: { end: '2026-12-31' } } })).toBeUndefined()
+})
+
+it.each([{ value: 6, code: 'h', hours: 6, end: '2026-10-19' }, { value: 2.4, code: 'd', hours: 57.6, end: '2026-10-21' }, { value: 30, code: 'min', hours: 0.5, end: '2026-10-19' }])('shares exact coverage for $value $code across dates and currentness', ({ value, code, hours, end }) => {
+  const medication = { status: 'unknown', authoredOn: '2026-10-19T00:00:00+08:00', dispenseRequest: { expectedSupplyDuration: { value, code } } }
+  const expectedEnd = Date.parse(medication.authoredOn) + hours * 3600000 - 1
+  expect(medicationExpectedEndTimestamp(medication)).toBeCloseTo(expectedEnd, 0)
+  expect(medicationExpectedEnd(medication)).toBe(end)
+  expect(assessMedicationCurrentness(medication, expectedEnd - 1).current).toBe(true)
+  expect(assessMedicationCurrentness(medication, expectedEnd + 1)).toMatchObject({ current: false, uncertain: false })
 })

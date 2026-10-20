@@ -42,6 +42,16 @@ it('marks ambiguous same-day visit sources without mixing their individual detai
   expect(result.current).toHaveLength(3)
   expect(result.current.every(visit => visit.sourceIds?.length === 1 && visit.sourceIds[0] === visit.id)).toBe(true)
 })
+
+it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  reconcileOutpatientEncounters(resources)
+  const { result } = renderHook(() => useVisitHistory([hospital]))
+  expect(result.current[0].sourceRecords).toHaveLength(1)
+  expect(result.current[0].sourceRecords?.[0].origin).toBe('hospital')
+  expect(result.current[0].sourceComparisonWarnings).toContain('source-partners-not-in-view')
+})
 function fixture() {
   const cloud = {
     resourceType: 'Encounter', id: 'cloud-visit', status: 'finished', class: { code: 'AMB' },

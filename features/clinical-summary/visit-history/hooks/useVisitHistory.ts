@@ -293,15 +293,17 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           p?.individual?.display || p?.actor?.display
         )
         const physician = participant?.individual?.display || participant?.actor?.display || ''
+        const comparison = encounter._sourceRecordComparison
+        const originalSources = encounter._sourceEncounterRecords ?? encounters
+        const availableSources = comparison?.references.map((reference: string) => originalSources.find((item: any) => `Encounter/${item.id}` === reference)).filter(Boolean)
 
         return {
           id: encounter.id,
           sourceIds: encounter._comparisonEncounterIds,
           sourceComparisonStatus: encounter._sourceRecordComparison?.status,
-          sourceComparisonWarnings: encounter._sourceRecordComparison?.warnings,
-          sourceRecords: encounter._sourceRecordComparison?.references.map((reference: string) => {
-            const source = (encounter._sourceEncounterRecords ?? encounters).find((item: any) => `Encounter/${item.id}` === reference)
-            return { id: source?.id ?? reference, date: source?.period?.start?.slice(0, 10),
+          sourceComparisonWarnings: comparison ? [...(comparison.warnings ?? []), ...(availableSources.length < comparison.references.length ? ['source-partners-not-in-view'] : [])] : undefined,
+          sourceRecords: availableSources?.map((source: any) => {
+            return { id: source.id, date: source?.period?.start?.slice(0, 10),
               origin: isVghtpeSource(source) ? 'hospital' : 'medcloud',
               institution: getInstitutionName(source?.serviceProvider?.display, locale),
               department: source?.serviceType?.text || source?.serviceType?.coding?.find((coding: any) => coding.display)?.display,

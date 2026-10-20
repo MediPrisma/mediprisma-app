@@ -50,12 +50,13 @@ describe('useMedicationTimeline category grouping', () => {
     const bar = result.current.categories[0].drugs[0].bars[0]
     expect(bar).toMatchObject({ supplyDays: 14, supplyEndDay: '2026-11-01', supplyDaysUnrecorded: false })
   })
-  it.each([{ value: 6, code: 'h', days: 0.25 }, { value: 1.5, code: 'd', days: 1.5 }])('preserves a positive subday duration $value $code', ({ value, code, days }) => {
+  it.each([{ value: 6, code: 'h', days: 0.25, end: '2026-10-19' }, { value: 1.5, code: 'd', days: 1.5, end: '2026-10-20' }, { value: 1.25, code: 'd', days: 1.25, end: '2026-10-20' }])('preserves a positive subday duration $value $code', ({ value, code, days, end }) => {
     const { result } = renderHook(() => useMedicationTimeline([medication({ authoredOn: '2026-10-19T00:00:00+08:00', dispenseRequest: { expectedSupplyDuration: { value, code } } })], 'medical', 'all', '其他', 'zh-TW', zhAtcCategories))
     const bar = result.current.categories[0].drugs[0].bars[0]
     expect(bar.supplyDays).toBe(days)
     expect(bar.endMs - bar.startMs).toBe(days * 86400000)
     expect(bar.supplyDaysUnrecorded).toBe(false)
+    expect(bar.supplyEndDay).toBe(end)
   })
   it('separates SDK medications by governed ATC level two', () => {
     const medications = [
@@ -797,7 +798,7 @@ describe('useMedicationTimeline category grouping', () => {
     const nowSpy = jest
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-08-28T12:00:00+08:00').getTime())
-    const earliest = new Date('2026-07-12').getTime()
+    const earliest = new Date('2026-07-12T00:00:00').getTime()
 
     const { result } = renderHook(() =>
       useMedicationTimeline(

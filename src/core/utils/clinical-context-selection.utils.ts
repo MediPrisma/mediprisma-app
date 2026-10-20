@@ -1,7 +1,7 @@
 import type { DataFilters, TimeRange } from '@/src/core/entities/clinical-context.entity'
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
 import { floorStartDay } from '@/src/core/utils/first-visit-floors'
-import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
+import { medicationSupplyEndDay } from '@/src/shared/utils/medication-calendar'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 
 
@@ -25,14 +25,17 @@ export function normalizeClinicalStatus(status: unknown): string {
 export function durationToDays(duration: any, round = true): number | undefined {
   const value = Number(duration?.value)
   if (!Number.isFinite(value) || value <= 0) return undefined
-  const unit = String(duration?.unit || duration?.code || '').toLowerCase()
+  const unit = String(duration?.code || duration?.unit || '').toLowerCase()
   const factor =
     unit.startsWith('d') ? 1 :
     unit.startsWith('w') ? 7 :
     unit.startsWith('mo') || unit === 'month' || unit === 'months' ? 30 :
     unit.startsWith('y') || unit === 'a' ? 365 :
-    unit === 'h' || unit.startsWith('hour') ? 1 / 24 :
-    1
+    unit === 'h' || unit === 'hr' || unit.startsWith('hour') ? 1 / 24 :
+    unit === 'min' || unit.startsWith('minute') ? 1 / 1440 :
+    unit === 's' || unit === 'sec' || unit.startsWith('second') ? 1 / 86400 :
+    unit === '' || unit === '24h' ? 1 : undefined
+  if (factor === undefined) return undefined
   return round ? Math.round(value * factor) : value * factor
 }
 
@@ -45,15 +48,35 @@ export function medicationRecordedTreatmentEnd(medication: any): string | undefi
     || (isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined)
 }
 
-export function medicationExpectedEnd(medication: any): string | undefined {
+/** End of the inclusive coverage interval; fractional durations keep their
+ * exact elapsed time, while whole-day supplies cover their final calendar day. */
+export function medicationExpectedEndTimestamp(medication: any): number | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const explicitEnd = medicationRecordedTreatmentEnd(medication)
-  if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd)) return explicitEnd.slice(0, 10)
-  const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration)
-    ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
+  const calendarEnd = (day: string) => {
+    const [year, month, date] = day.slice(0, 10).split('-').map(Number)
+    return new Date(year, month - 1, date + 1).getTime() - 1
+  }
+  if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd) && Number.isFinite(Date.parse(explicitEnd))) {
+    return explicitEnd.length === 10 ? calendarEnd(explicitEnd) : Date.parse(explicitEnd)
+  }
+  const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration, false)
+    ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
   const started = medication?.authoredOn || medication?.effectiveDateTime
   if (!started || !days) return undefined
-  return medicationSupplyEndDay(started, days)
+  if (Number.isInteger(days)) {
+    const endDay = medicationSupplyEndDay(started, days)
+    return endDay ? calendarEnd(endDay) : undefined
+  }
+  const startMs = Date.parse(started.length === 10 ? `${started}T00:00:00` : started)
+  return Number.isFinite(startMs) ? startMs + days * 86400000 - 1 : undefined
+}
+
+export function medicationExpectedEnd(medication: any): string | undefined {
+  const endMs = medicationExpectedEndTimestamp(medication)
+  if (endMs === undefined) return undefined
+  const end = new Date(endMs)
+  return [end.getFullYear(), String(end.getMonth() + 1).padStart(2, '0'), String(end.getDate()).padStart(2, '0')].join('-')
 }
 
 // The newest record is picked by string sort, so only dates written the ISO
@@ -61,11 +84,6 @@ export function medicationExpectedEnd(medication: any): string | undefined {
 // malformed date must not break building the context every AI feature reads.
 const isParsableDay = (value: string): boolean =>
   /^\d{4}-\d{2}-\d{2}/.test(value) && Number.isFinite(Date.parse(value))
-
-function isMedicationSupplyWindowOpen(end: string, nowMs: number): boolean {
-  const remaining = medicationSupplyDaysRemaining(end, nowMs)
-  return remaining !== undefined && remaining > 0
-}
 
 /**
  * Resolve currentness from source-authored fields without rewriting status.
@@ -82,12 +100,14 @@ export function assessMedicationCurrentness(
 ): MedicationCurrentnessAssessment {
   const status = normalizeClinicalStatus(medication?.status)
   const end = medicationExpectedEnd(medication)
+  const endMs = medicationExpectedEndTimestamp(medication)
+  const supplyWindowOpen = endMs !== undefined && nowMs <= endMs
   if (status === 'completed' && (medication?._sourceResourceType === 'MedicationStatement' || medication?.resourceType === 'MedicationStatement')) {
     return { current: false, uncertain: false, basis: 'source-status' }
   }
   if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict')
     && !['draft', 'on-hold', 'stopped', 'cancelled', 'entered-in-error', 'ended', 'not-taken'].includes(status)
-    && (!end || isMedicationSupplyWindowOpen(end, nowMs))) {
+    && (!end || supplyWindowOpen)) {
     return { current: false, uncertain: true, basis: 'conflicting-source-status' }
   }
 
@@ -100,7 +120,7 @@ export function assessMedicationCurrentness(
       }
     }
     return {
-      current: isMedicationSupplyWindowOpen(end, nowMs),
+      current: supplyWindowOpen,
       uncertain: false,
       basis: 'supply-window',
     }
@@ -122,7 +142,7 @@ export function assessMedicationCurrentness(
   }
 
   return {
-    current: isMedicationSupplyWindowOpen(end, nowMs),
+    current: supplyWindowOpen,
     uncertain: false,
     basis: 'source-status-and-supply-window',
   }
@@ -235,8 +255,8 @@ const NEVER_DISPENSED_STATUSES = new Set(['draft', 'on-hold', 'cancelled', 'ente
  */
 export function isLapsedDispensing(medication: any, nowMs: number): boolean {
   if (NEVER_DISPENSED_STATUSES.has(normalizeClinicalStatus(medication?.status))) return false
-  const end = medicationExpectedEnd(medication)
-  return Boolean(end) && !isMedicationSupplyWindowOpen(end!, nowMs)
+  const end = medicationExpectedEndTimestamp(medication)
+  return end !== undefined && nowMs > end
 }
 
 /** Below this many current medicines the recent-medicine floor engages. */

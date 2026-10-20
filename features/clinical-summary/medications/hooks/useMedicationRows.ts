@@ -15,8 +15,8 @@ import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
-import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
-import { assessMedicationCurrentness, medicationRecordedTreatmentEnd } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
+import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
@@ -237,7 +237,8 @@ export function useMedicationRows(
         ? medicationRecordedTreatmentEnd(med)
         : undefined
 
-      const durationDays = computeDurationDays({
+      const durationDays = durationToDays(med.dispenseRequest?.expectedSupplyDuration, false)
+        ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false) ?? computeDurationDays({
         start: startDateRaw,
         stop: medicationRecordedTreatmentEnd(med),
         expectedDuration: med.dispenseRequest?.expectedSupplyDuration,
@@ -265,7 +266,7 @@ export function useMedicationRows(
       } else if (startDateRaw && durationDays && hasDurationEvidence) {
         const start = new Date(startDateRaw)
         if (!Number.isNaN(start.getTime())) {
-          endDate = medicationSupplyEndDay(startDateRaw, durationDays)
+          endDate = medicationExpectedEnd(med)
           endDateIso = endDate
           daysRemaining = endDate ? medicationSupplyDaysRemaining(endDate, nowMs) : undefined
         }

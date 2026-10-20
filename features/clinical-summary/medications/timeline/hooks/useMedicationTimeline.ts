@@ -8,7 +8,7 @@
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
-import { medicationExpectedEnd, medicationRecordedTreatmentEnd, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { periodToDays } from '../../utils/duration-helpers'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import {
@@ -423,19 +423,18 @@ export function useMedicationTimeline(
 
       const startIso = med.authoredOn || med.effectiveDateTime
       if (!startIso) continue
-      const startMs = new Date(startIso).getTime()
+      const startMs = new Date(startIso.length === 10 ? `${startIso}T00:00:00` : startIso).getTime()
       if (Number.isNaN(startMs) || startMs < rangeStart) continue
 
       const supplyEndDay = medicationExpectedEnd(med)
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const reportedDays = durationToDays(med.dispenseRequest?.expectedSupplyDuration, false)
         ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
+        ?? periodToDays(dosage?.timing?.repeat?.boundsPeriod)
         ?? periodToDays(supplyEndDay ? { start: startIso.slice(0, 10), end: supplyEndDay } : undefined)
       const supplyDays = reportedDays ?? 1
-      const useCalendarBoundary = !reportedDays || Number.isInteger(reportedDays) || !!medicationRecordedTreatmentEnd(med)
-      const endBoundary = supplyEndDay && useCalendarBoundary ? new Date(`${supplyEndDay}T00:00:00`) : undefined
-      if (endBoundary) endBoundary.setDate(endBoundary.getDate() + 1)
-      const endMs = endBoundary && Number.isFinite(endBoundary.getTime()) ? endBoundary.getTime() : startMs + supplyDays * 24 * 60 * 60 * 1000
+      const exactEnd = medicationExpectedEndTimestamp(med)
+      const endMs = exactEnd === undefined ? startMs + supplyDays * 86400000 : exactEnd + 1
       const prescriptionType = resolvedPrescriptionType(
         prescriptionTypesByDrug.get(clinicalDrugKey),
       )
@@ -495,7 +494,7 @@ export function useMedicationTimeline(
         supplyEndDay,
         selfPurchased: sourceSelfPurchase(med) === true,
         sourceStatus: med.status,
-        supplyDaysUnrecorded: reportedDays === undefined && !supplyEndDay,
+        supplyDaysUnrecorded: reportedDays === undefined,
         refillId: med.id || `${medicationSourceCode(med) || clinicalDrugKey}-${startIso}`,
         startMs,
         endMs,
