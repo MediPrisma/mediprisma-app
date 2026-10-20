@@ -8,6 +8,8 @@ import { hasHfDiagnosis, summarizeHfInput } from '@/src/core/hf-risk/input-summa
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { HfProvenance, HfResultsView, hfResultText } from './HfPredictionResult'
 import { HfExcludedLabs } from './HfExcludedLabs'
+import { HfProblemReport } from './HfProblemReport'
+import { HF_FAILURE_MESSAGES } from '@/src/core/hf-risk/diagnostics'
 
 const GAP: Record<string, [string, string]> = {
   'lab-subject-unlinked': ['檢驗無法核對為本病人，僅計數、不顯示內容或送出', 'Observations not linked to this patient are counted only; details are withheld and not sent'],
@@ -89,7 +91,7 @@ function Step({ number, done, active, title, status, children, label }: { number
 
 export function HfMedcloudDetail({ locale, state }: { locale: string; state: ReturnType<typeof useMedcloudHfDryRun> }) {
   const en = locale === 'en'
-  const { current, configured, intranet, busy, runs, message: visibleMessage, recordKey, prepare, select, supplementDiagnosis, predict } = state
+  const { current, configured, intranet, busy, runs, message: visibleMessage, diagnostics, recordKey, prepare, select, supplementDiagnosis, predict } = state
   const [guideOpen, setGuideOpen] = useState(true)
   const [diagnosisOpen, setDiagnosisOpen] = useState(!current?.input.physicianDiagnosis)
   const { copied, copy } = useCopyToClipboard()
@@ -114,7 +116,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       && next.encounters.every(reference => Number.isInteger(next.ranks[reference]) && next.ranks[reference] >= 1 && next.ranks[reference] <= 50),
   })
   const text = (pair: [string, string]) => pair[en ? 1 : 0]
-  const describeError = (code: string) => code === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(ERRORS[code] ?? ['無法完成檢查，請確認院內連線後重試', 'Unable to validate; check the intranet connection and retry'])
+  const describeError = (code: string) => code === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(HF_FAILURE_MESSAGES[code] ?? ERRORS[code] ?? ['發生未預期錯誤，尚無法確認原因。請回報本次診斷。', 'An unexpected error occurred. Report this run’s diagnostics to identify the cause.'])
   const hospital = current ? current.visits.find(visit => visit.reference === current.selection.encounter)?.providerName ?? current.selection.provider : ''
   const confirmed = current?.input.physicianDiagnosis
   const suggestionDates = (suggestion: HfPhysicianDiagnosisDraft | null) => suggestion ? diagnosisVisits.filter(visit => suggestion.encounters.includes(visit.reference))
@@ -261,6 +263,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
         </div>}
       </section>}
     </div>
+
+    {current && diagnostics && diagnostics.records.length > 0 && !busy && <HfProblemReport key={diagnostics.runId} runId={diagnostics.runId} records={diagnostics.records} source={current.source} locale={locale} describeError={describeError} />}
 
     {current && <details className="group rounded-lg border border-border bg-background">
       <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 px-3 py-2 [&::-webkit-details-marker]:hidden">{chevron}<span className="text-sm font-semibold">{en ? 'Data used' : '本次使用的資料'}</span>
