@@ -186,6 +186,7 @@ export class FhirMapper implements IDataMapper {
   // Static methods for backward compatibility
   static toCondition(fhirResource: Condition): ConditionEntity {
     return {
+      meta: fhirResource.meta,
       id: fhirResource.id || '',
       code: fhirResource.code,
       category: fhirResource.category,
@@ -488,6 +489,7 @@ export class FhirMapper implements IDataMapper {
 
   static toEncounter(fhirResource: any): EncounterEntity {
     return {
+      meta: fhirResource.meta,
       _sourceRecordComparison: fhirResource._sourceRecordComparison,
       _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
       id: fhirResource.id || '',

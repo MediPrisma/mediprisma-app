@@ -1,8 +1,9 @@
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
 import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
-import { hospitalProductMatchesKnowledge } from './hospital-medication-product-match'
+import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
 import { sharedSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
+import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 
 type Resource = Record<string, any>
 const SOURCE_MODULE = 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module'
@@ -22,14 +23,31 @@ function quantityConflicts(left: any, right: any): boolean {
   return !!leftUnit && !!rightUnit && leftUnit !== rightUnit
 }
 
+function frequencyConflicts(left: string, right: string): boolean {
+  const parts = (value: string) => {
+    const meal = value.match(/^(QD|BID|TID|QID)(AC|PC|CC)$/)
+    return meal ? [meal[1], meal[2]] : [value, undefined]
+  }
+  const a = parts(left), b = parts(right)
+  return a[0] !== b[0] || !!a[1] && !!b[1] && a[1] !== b[1]
+}
+
 function frequencyKey(dosage: any): string | undefined {
   const knownFrequency = (value: unknown) => typeof value === 'string'
-    && /^(?:QD|BID|TID|QID)(?:AC|PC|CC)?$|^(?:Q\d+H|QOD|QW|HS|PRN|STAT|ASORDER)$/i.test(value.trim())
+    && /^(?:QD|BID|TID|QID)(?:AC|PC|CC)?$|^(?:Q\d+H|QOD|QW|QHS|HS|PRN|STAT|ASORDER)$/i.test(value.trim())
     ? value.trim().toUpperCase() : undefined
   const codes = [...new Set((dosage?.timing?.code?.coding ?? [])
     .map((coding: any) => knownFrequency(coding.code)).filter(Boolean))]
-  if (codes.length === 1) return String(codes[0])
-  return knownFrequency(dosage?.timing?.code?.text) ?? knownFrequency(dosage?.text)
+  const repeat = dosage?.timing?.repeat
+  let repeatCode: string | undefined
+  if (repeat?.period === 1 && repeat.periodUnit === 'd') repeatCode = ({ 1: 'QD', 2: 'BID', 3: 'TID', 4: 'QID' } as Record<number, string>)[repeat.frequency]
+  if (repeat?.frequency === 1 && repeat.periodUnit === 'h' && repeat.period > 0) repeatCode = `Q${repeat.period}H`
+  if (!repeatCode && repeat?.frequency > 0 && repeat?.period > 0 && repeat.periodUnit) repeatCode = `repeat:${repeat.frequency}/${repeat.period}${repeat.periodUnit}`
+  if (repeatCode && repeat.when?.length === 1 && ['AC', 'PC'].includes(repeat.when[0])) repeatCode += repeat.when[0]
+  const values = [...new Set([...codes, repeatCode, knownFrequency(dosage?.timing?.code?.text),
+    knownFrequency(dosage?.text), knownFrequency(extractFrequencyFromText(dosage?.text))].filter(Boolean))] as string[]
+  return values.some(left => values.some(right => frequencyConflicts(left, right)))
+    ? '!conflicting-source-frequency!' : values.find(value => /(?:AC|PC|CC)$/.test(value)) ?? values[0]
 }
 
 function hasConflict(hospital: Resource, cloud: Resource): boolean {
@@ -47,6 +65,9 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
   // status while allowing two snapshots of the same order to be paired.
   const cloudCoverageStatus = [hospital.status, cloud.status].every((status) => ['active', 'completed'].includes(status))
     && cloud.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0008')
+  if (hospital.status !== cloud.status && !cloudCoverageStatus
+    && [hospital.status, cloud.status].some(status => ['stopped', 'cancelled', 'entered-in-error', 'on-hold', 'draft', 'completed'].includes(status))
+    && (known(hospital.status) && known(cloud.status) || !sharedSourceIdentifier(hospital, cloud))) return true
   if (known(hospital.status) && known(cloud.status) && hospital.status !== cloud.status && !cloudCoverageStatus) return true
   if (hospital.intent && cloud.intent && hospital.intent !== cloud.intent) return true
   for (const field of ['quantity', 'expectedSupplyDuration']) {
@@ -71,26 +92,33 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     if (left.doseAndRate?.length && right.doseAndRate?.length
       && (left.doseAndRate.length > 1 || right.doseAndRate.length > 1)) return true
     if (quantityConflicts(left.doseAndRate?.[0]?.doseQuantity, right.doseAndRate?.[0]?.doseQuantity)) return true
+    const aDose = left.doseAndRate?.[0], bDose = right.doseAndRate?.[0]
+    if ((aDose?.doseRange && bDose?.doseQuantity) || (aDose?.doseQuantity && bDose?.doseRange)) return true
+    for (const edge of ['low', 'high']) {
+      if (quantityConflicts(aDose?.doseRange?.[edge], bDose?.doseRange?.[edge])) return true
+    }
     const leftFrequency = frequencyKey(left)
     const rightFrequency = frequencyKey(right)
-    if (leftFrequency && rightFrequency && leftFrequency !== rightFrequency) return true
+    if ([leftFrequency, rightFrequency].includes('!conflicting-source-frequency!')) return true
+    if (leftFrequency && rightFrequency && frequencyConflicts(leftFrequency, rightFrequency)) return true
     if (left.asNeededBoolean !== undefined && right.asNeededBoolean !== undefined && left.asNeededBoolean !== right.asNeededBoolean) return true
     for (const field of ['asNeededCodeableConcept', 'site', 'method']) {
       const a = conceptKey(left[field]), b = conceptKey(right[field])
       if (a && b && a !== b) return true
     }
     for (const [a, b] of [[conceptKey(left.route), conceptKey(right.route)],
-      [leftFrequency || conceptKey(left.timing?.code), rightFrequency || conceptKey(right.timing?.code)],
+      [leftFrequency && rightFrequency ? undefined : conceptKey(left.timing?.code), leftFrequency && rightFrequency ? undefined : conceptKey(right.timing?.code)],
       [left.timing?.repeat && JSON.stringify(left.timing.repeat), right.timing?.repeat && JSON.stringify(right.timing.repeat)]]) {
       if (a && b && a !== b) return true
     }
     // MediCloud may record only "QDPC" where the hospital records
     // "1 TAB PO QDPC". Compare that frequency with the structured frequency,
     // rather than treating the short frequency as a contradictory full SIG.
-    const sig = (dose: any) => typeof dose.text === 'string' && !frequencyKey({ text: dose.text })
+    const sig = (dose: any) => typeof dose.text === 'string' && !/^(?:QD|BID|TID|QID)(?:AC|PC|CC)?$|^(?:Q\d+H|QOD|QW|QHS|HS|PRN|STAT|ASORDER)$/i.test(dose.text.trim())
       && !/^\s*(?:給藥總量|給藥日數|平均每日)/.test(dose.text)
       ? dose.text.trim() : undefined
     if (sig(left) && sig(right) && sig(left) !== sig(right)) return true
+    if ((sig(left) && rightFrequency && !leftFrequency) || (sig(right) && leftFrequency && !rightFrequency)) return true
   }
   return false
 }
@@ -127,8 +155,10 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     .map((resource) => [`MedicationKnowledge/${resource.id}`, resource]))
   const encounters = new Map(resources.filter((resource) => resource.resourceType === 'Encounter')
     .map((resource) => [`Encounter/${resource.id}`, resource]))
+  const vghDisplay = (display: unknown) => /^(?:臺|台)北榮(?:總|民總醫院)(?:[;；\s]|$)/.test(String(display ?? '').trim())
+  const visitKey = (visit: Resource) => visit._sourceRecordComparison?.references?.join('|') ?? `Encounter/${visit.id}`
   const identity = (order: Resource) => {
-    if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference || !order.encounter?.reference || order._encounterInferred) return undefined
+    if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference) return undefined
     if (order.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0120')) return undefined
     const day = order.authoredOn?.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
     const reference = order.medicationReference?.reference
@@ -137,47 +167,92 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       : medications.get(reference)?.code)
     const codes = [...new Set((concept?.coding ?? []).filter((coding: any) => isNhiDrugCodeSystem(coding.system) && coding.code)
       .map((coding: any) => String(coding.code).trim().toUpperCase()))]
-    const visit = encounters.get(order.encounter.reference)
-    const visitKey = visit?._sourceRecordComparison?.references?.join('|') ?? order.encounter.reference
-    return day ? { context: JSON.stringify([order.subject.reference, visitKey, day]), codes, concept } : undefined
+    const visit = encounters.get(order.encounter?.reference)
+    if (visit?.class?.code && visit.class.code !== 'AMB') return undefined
+    let contextVisit = visit ? visitKey(visit) : order.encounter?.reference
+    const inferred = !order.encounter?.reference || !!order._encounterInferred
+    if (inferred) {
+      // A unique day/facility context may suggest comparison, but is never
+      // written as a source Encounter reference or used for confirmed removal.
+      if (!vghDisplay(order.requester?.display) && !(isVghtpeSource(order) && !order.requester?.display)) return undefined
+      const possible = new Set([...encounters.values()].filter(candidate => candidate.class?.code === 'AMB'
+        && candidate.subject?.reference === order.subject.reference
+        && candidate.period?.start?.slice(0, 10) === day
+        && vghDisplay(candidate.serviceProvider?.display)
+        && !['cancelled', 'entered-in-error', 'planned'].includes(candidate.status)).map(visitKey))
+      if (possible.size !== 1) return undefined
+      contextVisit = [...possible][0]
+    }
+    return day && contextVisit ? { context: JSON.stringify([order.subject.reference, contextVisit, day]), codes, concept, inferred,
+      visitCodingConflict: visit?._sourceRecordComparison?.warnings?.includes('diagnosis-coding-systems-differ') } : undefined
   }
   const keyed = resources.map((order) => ({ order, key: identity(order) })).filter((entry) => entry.key)
   const hospital = keyed.filter(({ order }) => isVghtpeSource(order))
   const cloud = keyed.filter(({ order }) => isMedcloudSource(order) && !isVghtpeSource(order))
   const candidates = new Map<Resource, Resource[]>()
-  const reverse = new Map<Resource, number>()
+  const verifiedPairs = new Map<Resource, Set<Resource>>()
   for (const { order, key } of hospital) {
     const matches = cloud.filter((other) => {
       if (!key || !other.key || other.key.context !== key.context || hasConflict(order, other.order)) return false
-      if (key.codes.length === 1 && other.key.codes.length === 1) return key.codes[0] === other.key.codes[0]
+      if (key.codes.length === 1 && other.key.codes.length === 1) {
+        if (key.codes[0] !== other.key.codes[0]) return false
+        const verified = verifiedPairs.get(order) ?? new Set<Resource>()
+        verified.add(other.order); verifiedPairs.set(order, verified)
+        return true
+      }
       // Only a genuinely uncoded hospital product may use the name path. A
       // conflicting/ambiguous source code must never be bypassed by its name.
       if (key.codes.length || other.key.codes.length !== 1) return false
       const linked = (other.order.supportingInformation ?? []).map((reference: any) => knowledge.get(reference.reference))
         .filter(Boolean) as Resource[]
-      return linked.length === 1
-        && hospitalProductMatchesKnowledge(key.concept, String(other.key.codes[0]), linked[0])
+      if (linked.length !== 1) return false
+      if (hospitalProductMatchesKnowledge(key.concept, String(other.key.codes[0]), linked[0])) {
+        const verified = verifiedPairs.get(order) ?? new Set<Resource>()
+        verified.add(other.order); verifiedPairs.set(order, verified)
+        return true
+      }
+      return hospitalProductMayMatchKnowledge(key.concept, String(other.key.codes[0]), linked[0])
     }).map((other) => other.order)
     candidates.set(order, matches)
-    for (const match of matches) reverse.set(match, (reverse.get(match) ?? 0) + 1)
   }
   const aliases = new Map<string, string>()
   const removed = new Set<Resource>()
+  const handled = new Set<Resource>()
   for (const [order, matches] of candidates) {
-    if (matches.length !== 1 || reverse.get(matches[0]) !== 1) continue
+    if (!matches.length || handled.has(order)) continue
+    const hospitalGroup = new Set<Resource>([order]), cloudGroup = new Set<Resource>()
+    const queue = [order]
+    for (let index = 0; index < queue.length; index++) {
+      for (const possible of candidates.get(queue[index]) ?? []) {
+        cloudGroup.add(possible)
+        for (const [otherHospital, otherMatches] of candidates) {
+          if (!hospitalGroup.has(otherHospital) && otherMatches.includes(possible)) {
+            hospitalGroup.add(otherHospital); queue.push(otherHospital)
+          }
+        }
+      }
+    }
+    const group = [...hospitalGroup, ...cloudGroup]
+    group.forEach(member => handled.add(member))
     const other = matches[0]
-    const confirmed = sharedSourceIdentifier(order, other)
-    const comparison = { status: confirmed ? 'confirmed' : 'candidate',
-      references: [`MedicationRequest/${order.id}`, `MedicationRequest/${other.id}`] }
-    order._sourceRecordComparison = comparison
-    other._sourceRecordComparison = comparison
+    const unique = hospitalGroup.size === 1 && cloudGroup.size === 1
+    const contextInferred = group.some(member => identity(member)?.inferred)
+    const visitCodingConflict = group.some(member => identity(member)?.visitCodingConflict)
+    const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedSourceIdentifier(order, other) && !contextInferred && !visitCodingConflict
+    const comparison = { status: confirmed ? 'confirmed' : unique ? 'candidate' : 'ambiguous',
+      references: group.map(member => `MedicationRequest/${member.id}`),
+      ...(contextInferred ? { warnings: ['encounter-link-unconfirmed'] } : {}),
+    }
+    group.forEach(member => { member._sourceRecordComparison = comparison })
     if (!confirmed) continue
     // Retain both original regimens for source inspection even when fields
     // are filled from the complementary source on the canonical order.
     order._sourcePrescriptionRecords = [order, other].map((source) => {
       const { _sourceRecordComparison, _sourcePrescriptionRecords, ...record } = source
-      return cloneSource(record)
+      return cloneSource({ ...record, _resolvedMedicationCodeableConcept: identity(source)?.concept })
     })
+    if ((!order.status || order.status === 'unknown') && other.status && other.status !== 'unknown') order.status = other.status
+    if (!order.intent && other.intent) order.intent = other.intent
     // A confirmed source pair can carry the cloud's actually recorded drug
     // code. This is source union, never a code inferred from a hospital name.
     const hospitalConcept = identity(order)?.concept
@@ -220,6 +295,6 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     for (const child of Object.values(value)) rewrite(child)
   }
   const result = resources.filter((resource) => !removed.has(resource))
-  result.forEach(rewrite)
+  result.filter(resource => resource.resourceType !== 'Provenance').forEach(rewrite)
   return result
 }

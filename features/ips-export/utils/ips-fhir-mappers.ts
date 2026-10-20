@@ -270,7 +270,7 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
     const directions = medicationDirectionsForFhir(m)
     const dosage = directions ? [{ text: directions }] : undefined
     const notes = [sourceComparisonNarrative(m), sourceSelfPurchase(m) === true ? '來源明列自費／自購（self-pay）' : undefined,
-      `Source ${m._sourceResourceType || 'MedicationRequest'} status: ${m.status || 'unknown'}. An order record does not establish actual medication use.`,
+      `Original source order status: ${m.status || 'unknown'}; actual medication use has not been verified.`,
       ...(m.note ?? []).map(note => note.text)]
       .filter((text): text is string => Boolean(text)).map((text) => ({ text }))
 

@@ -1,15 +1,27 @@
 /** App-only provenance. A contextual candidate is not proof of one event. */
 export interface SourceRecordComparison {
-  status: 'candidate' | 'confirmed'
+  status: 'candidate' | 'ambiguous' | 'confirmed'
   references: string[]
+  warnings?: string[]
 }
 
 export function sourceComparisonNarrative(record: { _sourceRecordComparison?: SourceRecordComparison }): string | undefined {
   const comparison = record._sourceRecordComparison
   if (!comparison) return undefined
-  return `${comparison.status === 'candidate'
-    ? 'Possible cross-source copy; order identity unconfirmed. Do not sum quantities or infer two prescriptions.'
-    : 'Cross-source copies confirmed by a shared order identifier.'} Source group: ${comparison.references.join(', ')}`
+  return comparison.status !== 'confirmed'
+    ? `Possible cross-source copies (${comparison.references.length} source records); prescription count and source correspondence are unconfirmed. Do not add quantities or interpret source records as separate prescriptions.`
+    : 'Hospital and MediCloud copies confirmed by a shared prescription identifier; original source records retained.'
+}
+
+export function summarizeSourceComparisons(records: readonly { id: string; _sourceRecordComparison?: SourceRecordComparison }[]) {
+  const groups = new Set<string>(), unconfirmed = new Set<string>()
+  for (const [index, record] of records.entries()) {
+    const comparison = record._sourceRecordComparison
+    const key = comparison ? [...comparison.references].sort().join('|') : `record:${record.id || index}`
+    groups.add(key)
+    if (comparison && comparison.status !== 'confirmed') unconfirmed.add(key)
+  }
+  return { sourceRecordCount: records.length, comparisonGroupCount: groups.size, unconfirmedGroupCount: unconfirmed.size }
 }
 
 export function sharedSourceIdentifier(left: any, right: any): boolean {
@@ -41,7 +53,7 @@ export function projectEncounterComparisons<T extends Record<string, any>>(encou
     const union = (field: string) => [...(hospital[field] ?? []), ...(cloud[field] ?? [])]
       .filter((item, index, all) => all.findIndex((other) => JSON.stringify(item) === JSON.stringify(other)) === index)
     result.push({ ...cloud, ...hospital,
-      reasonCode: union('reasonCode'), diagnosis: union('diagnosis'), participant: union('participant'),
+      reasonCode: [...(cloud.reasonCode ?? []), ...(hospital.reasonCode ?? [])], diagnosis: union('diagnosis'), participant: union('participant'),
       _comparisonEncounterIds: sources.map((source) => source.id),
     })
     sources.forEach((source) => consumed.add(source.id))

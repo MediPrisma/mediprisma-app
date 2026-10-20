@@ -10,6 +10,7 @@ it('retains real identical orders and explicitly identifies possible source copi
     const tools = createFhirTools(() => parsed)
     const result = await (tools.getActiveMedicationList as any).execute({})
     expect(result.count).toBe(5) // source records, including two unconfirmed copies
+    expect(result.sourceComparisonCounts).toEqual({ sourceRecordCount: 5, comparisonGroupCount: 4, unconfirmedGroupCount: 1 })
     expect(result.data.filter((record: any) => /Metformin/i.test(record.medication))).toHaveLength(2)
     expect(result.data.filter((record: any) => record.sourceComparison?.status === 'candidate')).toHaveLength(2)
     expect(result.data.filter((record: any) => record.selfPurchased)).toHaveLength(1)

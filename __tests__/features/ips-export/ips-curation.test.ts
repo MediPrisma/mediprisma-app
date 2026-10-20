@@ -322,13 +322,14 @@ describe('curateForIps — medications (現用藥 / 慢箋為主, deduped)', () 
     expect(out.medications.map(medication => medication.id)).toEqual(['m1', 'm2'])
   })
 
-  it('keeps a chronic prescription even if its latest cycle reads completed', () => {
+  it('keeps a completed chronic fill only while its own recorded supply window is open', () => {
     const data = emptyCollection()
     data.medications = [
       {
         id: 'chronic',
         status: 'completed',
         authoredOn: isoDaysAgo(10),
+        dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } },
         medicationCodeableConcept: { text: 'Metformin 500mg' },
         courseOfTherapyType: { coding: [{ code: 'continuous' }] },
       },

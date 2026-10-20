@@ -1,6 +1,7 @@
 // Core Domain Entities: Clinical Data
 
 export interface ConditionEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   code?: {
     text?: string
@@ -771,6 +772,7 @@ export interface ProcedureSpecialMaterialEntity {
 }
 
 export interface EncounterEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
   _sourceEncounterRecords?: any[]
   id: string

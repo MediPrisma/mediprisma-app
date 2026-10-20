@@ -64,6 +64,20 @@ it('does not transfer a chronic flag from another prescription of the same produ
   expect(result.current[0].refillCount).toBe(2)
 })
 
+it('shares currentness semantics with AI/IPS and does not invent a stop date or one-day supply from completed status', () => {
+  const source = { id: 'source-completed', status: 'completed', authoredOn: '2026-10-19', medicationCodeableConcept: { text: 'Synthetic medicine' } }
+  const { result } = renderHook(() => useMedicationRows([
+    source,
+    { ...source, id: 'open-prescription', dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } } },
+    { ...source, id: 'ended-reported-use', _sourceResourceType: 'MedicationStatement', dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } } },
+    { ...source, id: 'uncertain-status', status: 'unknown' },
+  ]))
+  expect(result.current.find(row => row.id === source.id)).toMatchObject({ isInactive: true, durationDays: undefined, stoppedOn: undefined })
+  expect(result.current.find(row => row.id === 'open-prescription')?.isInactive).toBe(false)
+  expect(result.current.find(row => row.id === 'ended-reported-use')?.isInactive).toBe(true)
+  expect(result.current.find(row => row.id === 'uncertain-status')).toMatchObject({ isInactive: true, currentnessUncertain: true })
+})
+
 it('keeps overview, visit detail and IPS consistent without presenting cancellation as current use', () => {
   const collection = LocalBundleService.parse(fixture)!.collection
   const { result } = renderHook(() => {
@@ -86,7 +100,7 @@ it('keeps overview, visit detail and IPS consistent without presenting cancellat
   expect(detail.medications.filter(medication => medication.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
   const exported = mapMedications(collection.medications, 'Patient/synthetic-export').entries.map(entry => entry.resource)
   expect(exported).toHaveLength(6)
-  expect(exported.filter(resource => JSON.stringify(resource.note).includes('Possible cross-source copy'))).toHaveLength(2)
+  expect(exported.filter(resource => JSON.stringify(resource.note).includes('Possible cross-source copies'))).toHaveLength(2)
   expect(exported.filter(resource => JSON.stringify(resource.note).includes('self-pay'))).toHaveLength(1)
   expect(exported.some(resource => JSON.stringify(resource.note).includes('status: cancelled'))).toBe(true)
 })

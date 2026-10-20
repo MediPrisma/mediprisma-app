@@ -73,3 +73,34 @@ export function hospitalProductMatchesKnowledge(
     && (officialName.includes(officialForm)
       || /\b(?:tablets?|capsules?|injection|solution|cream|ointment|suspension|gel|drops|patch(?:es)?|inhalation|aerosol|suppositor(?:y|ies)|granules|powder)\b/i.test(String(codes[0].display)))
 }
+
+/** Non-destructive comparison only. Complete literal product labels may
+ * differ in bridge typography/form abbreviations. Never use ingredient-only
+ * similarity, a bare brand, or this predicate to confirm an order merge. */
+export function hospitalProductMayMatchKnowledge(concept: any, cloudCode: string, knowledge: Resource): boolean {
+  if (hospitalProductMatchesKnowledge(concept, cloudCode, knowledge)) return true
+  if (knowledge.meta?.source !== 'https://data.gov.tw/dataset/23715'
+    || !knowledge.meta?.tag?.some((tag: any) => tag.system === SNAPSHOT_TAG && tag.code)) return false
+  const coding = knowledge.code?.coding?.filter((item: any) => isNhiDrugCodeSystem(item.system)) ?? []
+  if (coding.length !== 1 || String(coding[0].code).toUpperCase() !== cloudCode) return false
+  const source = (concept?.coding ?? []).filter((item: any) => [NAME_SYSTEM, PRODUCT_SYSTEM].includes(item.system))
+  if (!source.length || concept.coding.some((item: any) => item.system === GENERIC_SYSTEM)) return false
+  const names = [...new Set(source.flatMap((item: any) => [item.display, item.code]).filter(Boolean))]
+  if (names.length !== 1) return false
+  const separate = (name: string) => name.replace(/([a-z])(?=\d)/gi, '$1 ')
+  const complete = (name: string) => /\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iu|%)(?:\b|$)/i.test(name)
+    && /\b(?:tab(?:let)?s?|cap(?:sule)?s?|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i.test(separate(name))
+  const normalize = (name: string) => name.normalize('NFKC').toLowerCase()
+    // The bridge explicitly writes Generic (Product) in this name shape.
+    .replace(/^[a-z][a-z\s-]*\(([a-z][a-z\s-]*)\)(?=[#*\s]*(?:tab|cap))/i, '$1 ')
+    .replace(/[#*@]/g, ' ').replace(/([a-z])(?=\d)/gi, '$1 ').replace(/\btablets?\b|\btabs?\b/g, 'tablet')
+    .replace(/\bcapsules?\b|\bcaps?\b/g, 'capsule').replace(/\s+/g, '')
+  const hospitalName = String(names[0]), officialName = String(coding[0].display ?? '')
+  const form = String(knowledge.doseForm?.text ?? '')
+  if (!form) return false
+  if (/錠|tablet/i.test(form) && !/tab/i.test(hospitalName)) return false
+  if (/膠囊|capsule/i.test(form) && !/cap/i.test(hospitalName)) return false
+  if (/注射|injection/i.test(form) && !/inj/i.test(hospitalName)) return false
+  return complete(hospitalName.replace(/[#*@]/g, ' ')) && complete(officialName)
+    && normalize(hospitalName) === normalize(officialName)
+}

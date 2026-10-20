@@ -5,7 +5,7 @@ import { useDiagnosisRows } from '@/features/clinical-summary/diagnosis/hooks/us
 const ICD = 'http://hl7.org/fhir/sid/icd-10-cm'
 const hospital = { id: 'synthetic-soap', code: { text: 'Zoster without complications',
   coding: [{ system: ICD, code: 'B02.9', display: 'Zoster without complications' }] } }
-const cloud = { reasonCode: [{ text: 'B029 帶狀疱疹未伴有併發症',
+const cloud = { meta: { source: 'https://medcloud2.nhi.gov.tw/' }, reasonCode: [{ text: 'B029 帶狀疱疹未伴有併發症',
   coding: [{ system: ICD, code: 'B029', display: 'Zoster without complications' }] }] }
 
 it('uses an exact cloud Chinese label for the English SOAP diagnosis in the recorded-condition UI', () => {
@@ -26,7 +26,7 @@ it('prefers exact Chinese wording in visit rows even when their source text is E
 })
 
 it('does not let a later English-only condition overwrite Chinese from the same code', () => {
-  const chinese = { code: { text: '帶狀疱疹未伴有併發症', coding: [{ system: ICD, code: 'B02.9' }] } }
+  const chinese = { code: { text: '帶狀疱疹未伴有併發症', coding: [{ system: ICD, code: 'B02.9', display: '帶狀疱疹未伴有併發症' }] } }
   for (const conditions of [[chinese, hospital], [hospital, chinese]]) {
     const dict = buildIcdDictionary(conditions, 'zh-TW')
     expect(localizedIcdDescription('B029', hospital.code.text, undefined, dict)).toBe('帶狀疱疹未伴有併發症')
@@ -45,9 +45,9 @@ it('does not borrow Chinese from a different complete ICD code', () => {
 
 it('keeps ICD-10-CM, WHO ICD-10 and non-ICD code namespaces separate', () => {
   const conditions = [
-    { code: { text: 'WHO 原始標籤', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'B02.9' }] } },
+    { code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'B02.9', display: 'WHO 原始標籤' }] } },
     { code: { text: '院內非 ICD 代碼', coding: [{ system: 'https://synthetic.example/local', code: 'B02.9' }] } },
-    { code: { text: 'CM 中文標籤', coding: [{ system: ICD, code: 'B02.9' }] } },
+    { code: { coding: [{ system: ICD, code: 'B02.9', display: 'CM 中文標籤' }] } },
   ]
   const dict = buildIcdDictionary(conditions, 'zh-TW')
   expect(localizedIcdDescription('B02.9', 'English source', undefined, dict, 'zh-TW', ICD)).toBe('CM 中文標籤')
@@ -62,4 +62,18 @@ it('keeps clinically richer original SOAP text available behind the Chinese term
   const { result } = renderHook(() => useDiagnosisRows([source], 'zh-TW', dict))
   expect(result.current[0].title).toBe('帶狀疱疹未伴有併發症')
   expect(result.current[0].records?.[0].originalText).toBe(originalText)
+})
+
+it('never borrows patient-specific Chinese narrative as another diagnosis record’s translation', () => {
+  const clinicalText = { code: { text: '帶狀疱疹，左胸皮節，仍有水泡', coding: [{ system: ICD, code: 'B02.9', display: 'Zoster without complications' }] } }
+  const dict = buildIcdDictionary([clinicalText], 'zh-TW')
+  expect(localizedIcdDescription('B02.9', 'Zoster; right lumbar dermatomes', undefined, dict, 'zh-TW', ICD))
+    .toBe('Zoster; right lumbar dermatomes')
+})
+
+it('does not borrow the North VGH SOAP narrative even when its mapper placed it in coding.display', () => {
+  const text = '疑似左乳癌，待病理確認'
+  const soap = { meta: { source: 'ehr-fhir-bridge/scraper' }, code: { text, coding: [{ system: ICD, code: 'C50.912', display: text }] } }
+  const dict = buildIcdDictionary([soap], 'zh-TW')
+  expect(localizedIcdDescription('C50.912', 'Confirmed prior malignancy', undefined, dict, 'zh-TW', ICD)).toBe('Confirmed prior malignancy')
 })

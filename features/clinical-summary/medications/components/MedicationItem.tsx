@@ -73,14 +73,20 @@ interface MedicationItemProps {
 }
 
 function getStatusBadge(medication: MedicationRow, mt: any, locale: string) {
+  if (medication.currentnessUncertain) return { label: locale === 'en' ? 'Status uncertain' : '狀態未確認', variant: 'secondary' as const }
   const endedStatus = {
     cancelled: locale === 'en' ? 'cancelled' : '已取消',
     'entered-in-error': locale === 'en' ? 'entered in error' : '誤植紀錄',
     stopped: locale === 'en' ? 'stopped' : '已停用',
-  }[medication.status as 'cancelled' | 'entered-in-error' | 'stopped']
+    'on-hold': locale === 'en' ? 'on hold' : '暫停',
+    draft: locale === 'en' ? 'draft' : '草稿',
+    'not-taken': locale === 'en' ? 'not taken' : '未服用',
+  }[medication.status as 'cancelled' | 'entered-in-error' | 'stopped' | 'on-hold' | 'draft' | 'not-taken']
   if (endedStatus) return { label: endedStatus, variant: 'secondary' as const }
   if (medication.isInactive) {
-    return { label: mt.statusEnded ?? 'ended', variant: 'secondary' as const }
+    return { label: medication.status === 'completed' ? (locale === 'en' ? 'completed' : '已完成')
+      : medication.endDateSource === 'estimated' ? (locale === 'en' ? 'Estimated supply ended' : '供藥估計到期')
+        : mt.statusEnded ?? 'ended', variant: 'secondary' as const }
   }
   const remainingDays = medication.displayRemainingDays ?? medication.daysRemaining
   if (remainingDays !== undefined) {
@@ -143,7 +149,7 @@ export function MedicationItem({
   const showStatementChip =
     showSourceChip && medication.sourceResourceType === 'MedicationStatement'
   const terminology = medication.drugTerminology
-  const candidate = medication.sourceComparison?.status === 'candidate'
+  const candidate = !!medication.sourceComparison && medication.sourceComparison.status !== 'confirmed'
   const integrated = !candidate && (medication.reconciledOrderIds?.length ?? 0) > 1
   const sourceLabel = candidate ? (locale === 'en' ? 'Compare sources' : '跨來源待核對') : integrated ? (locale === 'en' ? 'Hospital + cloud' : '院內＋雲端')
     : medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
@@ -404,6 +410,14 @@ export function MedicationItem({
           && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
     >
+      {medication.sourceComparison?.status === 'ambiguous' && (
+        <details open className="col-span-full row-start-4 min-w-0 border-t border-border/60 pt-1 text-xs">
+          <summary className="min-h-11 cursor-pointer font-medium sm:min-h-8" onClick={event => event.stopPropagation()}>
+            {locale === 'en' ? 'Source correspondence unconfirmed' : '來源對應未確認'} · {medication.sourceComparison.records.filter(record => record.dataOrigin === 'hospital').length} {locale === 'en' ? 'hospital' : '筆院內'} / {medication.sourceComparison.records.filter(record => record.dataOrigin === 'medcloud').length} {locale === 'en' ? 'cloud records' : '筆雲端紀錄'}
+          </summary>
+          <SourcePrescriptionComparison comparison={medication.sourceComparison} />
+        </details>
+      )}
       {leadingControl && (
         <div className="absolute inset-y-0 left-0 flex w-9 items-stretch">
           {leadingControl}

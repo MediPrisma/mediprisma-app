@@ -1235,6 +1235,13 @@ export const LocalBundleService = {
     let entries: any[] = canonicalizeBundleResources(bundle)
     if (!entries.length) return null
 
+    // Comparison projections belong to this import, never to the source FHIR.
+    // Recompute them so re-imported exports cannot hide genuine source orders.
+    for (const resource of entries) {
+      for (const key of ['_sourceRecordComparison', '_sourcePrescriptionRecords', '_sourceEncounterRecords',
+        '_reconciledSourceReferences', '_resolvedMedicationCodeableConcept']) delete resource[key]
+    }
+
     // TW-PAS support: unpack any Claim (事前審查申請) into the standard
     // Condition / Procedure / Observation / DocumentReference resources the rest
     // of the pipeline already renders. No-op for non-PAS bundles. Runs before the

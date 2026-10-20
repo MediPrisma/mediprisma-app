@@ -3,7 +3,7 @@
 // Explicit lifecycle status is respected; MediCloud unknown/missing status uses
 // a computable source supply window, if present, to resolve currentness.
 import { useMemo, useState } from "react"
-import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { sourceComparisonNarrative, summarizeSourceComparisons } from '@/src/shared/utils/source-record-comparison'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
@@ -50,8 +50,6 @@ interface MedSummary {
    * up one another's ingredient or ATC classification. */
   drugCode?: string
   drugTerminology?: MedicationEntity['drugTerminology']
-  /** Number of refill cycles collapsed into this row (>=1, only set when >1) */
-  refillCount?: number
   /** Prescribing / dispensing facility (MedicationRequest.requester.display).
    *  A 藥局/藥房 here is a pharmacy that DISPENSED a script, not a prescriber —
    *  formatLine marks it so the AI never counts it as a duplicate source. */
@@ -189,9 +187,6 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other' | 'lapsed
     if (m.startedOn) parts.push(`— recorded ${m.startedOn}`)
     if (m.endDate) parts.push(`(calculated supply end ${m.endDate})`)
   }
-  if (m.refillCount && m.refillCount > 1) {
-    parts.push(`(${m.refillCount} refills)`)
-  }
   const terminology = formatNhiTerminology(m)
   if (terminology) parts.push(terminology)
   const statusSemantics = m.status === 'entered-in-error'
@@ -287,7 +282,10 @@ export function useMedicationsContext(
     const items: string[] = []
 
     if (active.length > 0) {
-      items.push(`Currently in use (${active.length}):`)
+      const comparisonCounts = summarizeSourceComparisons(meds.filter(medication => isMedicationCurrentlyInUse(medication, nowMs)))
+      items.push(comparisonCounts.unconfirmedGroupCount
+        ? `Current medication source records (${active.length} records in ${comparisonCounts.comparisonGroupCount} comparison groups; prescription count unconfirmed):`
+        : `Currently in use (${active.length}):`)
       active.sort((a, b) => (a.daysRemaining ?? Infinity) - (b.daysRemaining ?? Infinity))
       active.forEach((m) => items.push(`  • ${formatLine(m, 'active', neutral)}`))
     }

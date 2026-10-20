@@ -214,6 +214,9 @@ export function MedicationList({
 
   return (
     <div className="space-y-4">
+      {medications.some(medication => medication.sourceComparison && medication.sourceComparison.status !== 'confirmed') && (
+        <p className="text-xs text-muted-foreground">{locale === 'en' ? 'Includes source comparison groups. Item counts are not confirmed prescription counts; inspect the source records.' : '含跨來源比較組；項數不是已確認藥囑筆數，請展開核對原始紀錄。'}</p>
+      )}
       {/* Nothing running, but the actions still apply — a long-term script
           that just ran out is still 現在用藥 to the copy. */}
       {activeMedications.length === 0 && (nameModeSwitch || activeActions) && (

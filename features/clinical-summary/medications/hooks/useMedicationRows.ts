@@ -16,6 +16,7 @@ import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
+import { assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
 import { sourceSelfPurchase, hasExplicitChronicNote } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
@@ -159,7 +160,9 @@ export function useMedicationRows(
       }
     }
 
-    const buildRow = (med: any, idx: number): MedicationRow & { _startSortValue: number } => {
+    const buildRow = (source: any, idx: number): MedicationRow & { _startSortValue: number } => {
+      const med = source._resolvedMedicationCodeableConcept
+        ? { ...source, medicationCodeableConcept: source._resolvedMedicationCodeableConcept } : source
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const drugTerminology = med.drugTerminology
       const hospitalMedicationName = !drugTerminology || med._reconciledSourceReferences?.length
@@ -231,7 +234,7 @@ export function useMedicationRows(
 
       const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start
       const stopDateRaw = statusInactive
-        ? med.dispenseRequest?.validityPeriod?.end || med.effectiveDateTime || med.authoredOn
+        ? med.dispenseRequest?.validityPeriod?.end || dosage?.timing?.repeat?.boundsPeriod?.end
         : undefined
 
       const durationDays = computeDurationDays({
@@ -279,7 +282,8 @@ export function useMedicationRows(
       }
 
       // Inactive = explicitly stopped/completed OR computed endDate has passed
-      const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
+      const currentness = assessMedicationCurrentness(med, nowMs)
+      const isInactive = !currentness.current
       const remainingDisplay = resolveSinglePrescriptionRemainingDisplay(
         med,
         daysRemaining,
@@ -390,6 +394,7 @@ export function useMedicationRows(
         endDate: endDate ? formatDate(endDate) : undefined,
         startedOnIso: isoCalendarDay(startDateRaw),
         endDateIso,
+        endDateSource: explicitEndDateRaw ? 'reported' : endDate ? 'estimated' : undefined,
         daysRemaining,
         displayRemainingDays: remainingDisplay.displayDays,
         displayRemainingSource: remainingDisplay.displaySource,
@@ -397,6 +402,7 @@ export function useMedicationRows(
         singlePrescriptionRemainingCapturedAt: remainingDisplay.capturedAt,
         singlePrescriptionRemainingIsCurrent: remainingDisplay.isCurrent,
         isInactive,
+        currentnessUncertain: currentness.uncertain,
         isChronic,
         selfPurchased,
         category,
@@ -423,16 +429,16 @@ export function useMedicationRows(
         row.sourceComparison = { status: 'confirmed', records: med._sourcePrescriptionRecords.map(buildRow) }
       }
       const comparison = med._sourceRecordComparison
-      const sourceRows = comparison?.status === 'candidate'
+      const sourceRows = comparison && comparison.status !== 'confirmed'
         ? comparison.references.map((reference: string) => byId.get(reference.split('/').pop()!)) : undefined
-      if (sourceRows?.length === 2 && sourceRows.every(Boolean)) {
-        const [hospital, cloud] = sourceRows as MedicationRow[]
+      if (sourceRows && sourceRows.length >= 2 && sourceRows.every(Boolean)) {
+        const hospital = sourceRows[0] as MedicationRow
         // A comparison card avoids counting a presumed copy as another order.
         // It does not change the canonical source records or claim one Rx.
         comparisonRows.push({ ...hospital, _startSortValue: enriched[index]._startSortValue,
-          sourceComparison: { status: 'candidate', records: [hospital, cloud] },
-          reconciledOrderIds: [hospital.id, cloud.id],
-          searchHaystack: [hospital.searchHaystack, cloud.searchHaystack].join(' '),
+          sourceComparison: { status: comparison.status, records: sourceRows as MedicationRow[], warnings: comparison.warnings },
+          reconciledOrderIds: sourceRows.map((source: MedicationRow) => source.id),
+          searchHaystack: sourceRows.map((source: MedicationRow) => source.searchHaystack).join(' '),
         })
         sourceRows.forEach((source: MedicationRow) => consumed.add(source.id))
       } else comparisonRows.push(row)

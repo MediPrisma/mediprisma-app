@@ -71,6 +71,9 @@ export function assessMedicationCurrentness(
 ): MedicationCurrentnessAssessment {
   const status = normalizeClinicalStatus(medication?.status)
   const end = medicationExpectedEnd(medication)
+  if (status === 'completed' && (medication?._sourceResourceType === 'MedicationStatement' || medication?.resourceType === 'MedicationStatement')) {
+    return { current: false, uncertain: false, basis: 'source-status' }
+  }
 
   if (!status || status === 'unknown') {
     if (!end) {

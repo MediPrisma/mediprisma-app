@@ -90,7 +90,9 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
       const leftDepartment = department(visit), rightDepartment = department(other)
       return visit.subject.reference === other.subject.reference
         && visit.period.start.slice(0, 10) === other.period.start.slice(0, 10)
-        && key === icdKey(primaryDiagnosis(other, conditions))
+        // An exact token in WHO/CM can suggest a source comparison only.
+        // It is never evidence that the two coding systems mean the same thing.
+        && key.split('|')[1] === icdKey(primaryDiagnosis(other, conditions))?.split('|')[1]
         && !(leftPhysician && rightPhysician && leftPhysician !== rightPhysician)
         && !(leftDepartment && rightDepartment && leftDepartment !== rightDepartment)
         && !conflictingSourceIdentifier(visit, other)
@@ -104,8 +106,11 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
   for (const [visit, matches] of candidates) {
     if (matches.length !== 1 || reverse.get(matches[0]) !== 1) continue
     const target = matches[0]
-    const comparison = { status: sharedSourceIdentifier(visit, target) ? 'confirmed' : 'candidate',
-      references: [`Encounter/${visit.id}`, `Encounter/${target.id}`] }
+    const codingSystemsDiffer = icdKey(primaryDiagnosis(visit, conditions)) !== icdKey(primaryDiagnosis(target, conditions))
+    const comparison = { status: codingSystemsDiffer ? 'ambiguous' : sharedSourceIdentifier(visit, target) ? 'confirmed' : 'candidate',
+      references: [`Encounter/${visit.id}`, `Encounter/${target.id}`],
+      ...(codingSystemsDiffer ? { warnings: ['diagnosis-coding-systems-differ'] } : {}),
+    }
     visit._sourceRecordComparison = comparison
     target._sourceRecordComparison = comparison
     // Same-day facility/diagnosis agreement is useful for a comparison card,
@@ -155,6 +160,6 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
     for (const child of Object.values(value)) rewrite(child)
   }
   const result = resources.filter((resource) => !removed.has(resource))
-  result.forEach(rewrite)
+  result.filter(resource => resource.resourceType !== 'Provenance').forEach(rewrite)
   return result
 }

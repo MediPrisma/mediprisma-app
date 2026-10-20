@@ -322,6 +322,7 @@ export interface Medication {
 
 // Condition (Diagnosis) Types
 export interface Condition {
+  meta?: { source?: string; tag?: Coding[] }
   id?: string
   resourceType?: string
   clinicalStatus?: CodeableConcept | string

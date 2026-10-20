@@ -1,4 +1,4 @@
-import { hospitalProductMatchesKnowledge } from '@/src/infrastructure/fhir/services/hospital-medication-product-match'
+import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from '@/src/infrastructure/fhir/services/hospital-medication-product-match'
 
 const NHI = 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
 function fixture() {
@@ -32,3 +32,20 @@ it.each(['strength', 'form', 'licence', 'source', 'snapshot', 'code', 'generic',
     expect(hospitalProductMatchesKnowledge(concept, 'BC23097100', knowledge)).toBe(false)
   },
 )
+
+it('can suggest a name-only complete product comparison without assigning its cloud code or confirming a merge', () => {
+  // A fictional knowledge entry exercises literal name matching, not a claim
+  // that this synthetic NHI code is a real product.
+  const { knowledge } = fixture()
+  knowledge.code.coding[0] = { system: NHI, code: 'SYNTH00001', display: 'GLUCOPHAGE TABLETS 500MG' }
+  knowledge.doseForm.text = '錠劑'
+  const name = 'Metformin (Glucophage)#tab 500mg'
+  const concept = { coding: [{ system: 'urn:oid:vgh.medication.name', code: name, display: name }] }
+  const before = JSON.stringify(concept)
+  expect(hospitalProductMatchesKnowledge(concept, 'SYNTH00001', knowledge)).toBe(false)
+  expect(hospitalProductMayMatchKnowledge(concept, 'SYNTH00001', knowledge)).toBe(true)
+  expect(JSON.stringify(concept)).toBe(before)
+  for (const different of ['Metformin', 'Glucophage', 'Metformin (Otherbrand) tab 500mg', 'Metformin (Glucophage) tab 850mg', 'Metformin (Glucophage) capsule 500mg']) {
+    expect(hospitalProductMayMatchKnowledge({ coding: [{ system: 'urn:oid:vgh.medication.name', code: different }] }, 'SYNTH00001', knowledge)).toBe(false)
+  }
+})

@@ -127,11 +127,14 @@ describe('buildEncounterIcdCandidates — real source coding (no invented codes)
         id: 'c1',
         code: {
           text: '本態性高血壓',
-          coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'I10', display: 'Essential hypertension' }],
+          coding: [
+            { system: SYSTEM.icd10, code: 'I10', display: '本態性高血壓' },
+            { system: SYSTEM.icd10, code: 'I10', display: 'Essential hypertension' },
+          ],
         },
       },
     ]
-    const encounters = [enc('e1', '2026-06-01', 'I10')]
+    const encounters = [enc('e1', '2026-06-01', 'I10', { system: SYSTEM.icd10 })]
     const out = buildEncounterIcdCandidates(encounters, conditions, { now: NOW })
     expect(out[0].labelZh).toBe('本態性高血壓')
     expect(out[0].labelEn).toBe('Essential hypertension')

@@ -8,6 +8,7 @@
 // patient ID, DOB, or provider names.
 import { tool } from 'ai'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { summarizeSourceComparisons } from '@/src/shared/utils/source-record-comparison'
 import type { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -886,17 +887,17 @@ function countsAsRefillRecord(medication: MedicationEntity): boolean {
 function annotateMedicationRecordCounts(
   meds: MedicationEntity[],
   refillPool: MedicationEntity[] = meds,
-): Array<MedicationEntity & { refillCount: number }> {
-  const refillCounts = new Map<string, number>()
+): Array<MedicationEntity & { sourceRecordCount: number }> {
+  const sourceRecordCounts = new Map<string, number>()
   for (const medication of refillPool) {
     if (!countsAsRefillRecord(medication)) continue
     const key = medicationRegimenKey(medication)
-    refillCounts.set(key, (refillCounts.get(key) ?? 0) + 1)
+    sourceRecordCounts.set(key, (sourceRecordCounts.get(key) ?? 0) + 1)
   }
 
   // Product/regimen similarity does not prove prescription identity. The
   // import graph has already reconciled confirmed copies; retain real orders.
-  return meds.map((m) => ({ ...m, refillCount: refillCounts.get(medicationRegimenKey(m)) ?? 1 }))
+  return meds.map((m) => ({ ...m, sourceRecordCount: sourceRecordCounts.get(medicationRegimenKey(m)) ?? 1 }))
 }
 
 function medicationNameFields(medication: any): {
@@ -1320,7 +1321,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           return {
             name,
             ...rest,
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           }
         })
         const medicationsWithUncertainStatus = allUncertainMedications
@@ -1332,7 +1333,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
               name,
               ...rest,
               currentness: 'uncertain-source-status',
-              refillCount: medication.refillCount,
+              sourceRecordCount: medication.sourceRecordCount,
             }
           })
         const medicationRules = medicationGroundingRules([
@@ -2384,10 +2385,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         return scrub({
           success: true,
-          summary: uncertainDeduped.length > 0
-            ? `${deduped.length} current medication record(s); ${uncertainDeduped.length} medication record(s) lack both usable lifecycle status and a computable supply window`
-            : `${deduped.length} current medication(s)`,
+          summary: `${deduped.length} current medication source records in ${summarizeSourceComparisons(active).comparisonGroupCount} display groups; ${summarizeSourceComparisons(active).unconfirmedGroupCount} groups have unconfirmed cross-source correspondence.${uncertainDeduped.length ? ` ${uncertainDeduped.length} additional records have unresolved currentness.` : ''} Source record count is not a confirmed prescription count.`,
           count: deduped.length,
+          sourceComparisonCounts: summarizeSourceComparisons(active),
           ...paginationMeta(deduped.length, currentPage.length),
           incomplete,
           canConcludeAbsence,
@@ -2398,12 +2398,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: medicationGroundingRules([...currentPage, ...uncertainPage]),
           data: currentPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
           uncertainData: uncertainPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
             currentness: 'uncertain-source-status',
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
         })
       },

@@ -1,6 +1,7 @@
 // ICD-10 code lookup utility
 // Resolves ICD-10 codes (e.g., "C50.912") to human-readable descriptions.
 // Lookup order: bundle Condition resources → built-in common Taiwan dictionary → undefined
+import { isMedcloudSource, isVghtpeSource } from './clinical-source-identity'
 
 export interface IcdCode {
   code: string
@@ -88,10 +89,10 @@ export function buildIcdDictionary(
   const dict = new Map<string, string>()
   const preferText = locale !== 'en'
   const concepts = [
-    ...encounters.flatMap((encounter) => encounter?.reasonCode ?? []),
-    ...(Array.isArray(conditions) ? conditions : []).map((condition) => condition?.code),
+    ...encounters.flatMap((encounter) => (encounter?.reasonCode ?? []).map((concept: any) => ({ concept, trustedClaimLabel: isMedcloudSource(encounter), borrowDisplay: !isVghtpeSource(encounter) }))),
+    ...(Array.isArray(conditions) ? conditions : []).map((condition) => ({ concept: condition?.code, trustedClaimLabel: false, borrowDisplay: !isVghtpeSource(condition) })),
   ]
-  for (const concept of concepts) {
+  for (const { concept, trustedClaimLabel, borrowDisplay } of concepts) {
     const codings = concept?.coding ?? []
     const text = concept?.text
     for (const coding of codings) {
@@ -99,7 +100,16 @@ export function buildIcdDictionary(
       if (!family) continue
       const code = coding?.code
       const display = coding?.display
-      const picked = preferText ? (text || display) : (display || text)
+      // Coding.display is a code label. Arbitrary CodeableConcept.text may
+      // contain this patient's findings and must not become another visit's
+      // translation. Only the explicit MediCloud claim adapter's CODE+label
+      // text has the governed diagnosis-label contract.
+      const claimLabel = trustedClaimLabel && text && stripLeadingIcdCode(text, coding?.code ?? '') !== text
+        ? stripLeadingIcdCode(text, coding?.code ?? '') : undefined
+      // North VGH's mapper also puts the clinician's complete SOAP diagnosis
+      // into coding.display; for that source it is not a terminology label.
+      const label = borrowDisplay ? display : undefined
+      const picked = preferText ? (claimLabel || label) : (label || claimLabel)
       if (!code || !picked) continue
       const key = normalizeIcdCodeToken(code)
       const qualifiedKey = `${family}|${key}`

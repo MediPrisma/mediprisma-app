@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import type { Condition, DiagnosisRow, Category, Coding } from '../types'
 import { formatDate } from '../utils/fhir-helpers'
-import { buildIcdDictionary, localizedIcdDescription } from '@/src/shared/utils/icd-lookup'
+import { buildIcdDictionary, localizedIcdDescription, stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
 
 export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: Map<string, string>, encounters: readonly any[] = []) {
@@ -30,14 +30,18 @@ export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: 
         })
       }
 
+      const primaryCoding = condition.code?.coding?.find(coding => coding.code?.trim() === icdCodes[0])
+      const title = (icdCodes[0] ? localizedIcdDescription(icdCodes[0], condition.code?.text,
+        primaryCoding?.display, dictionary, locale, primaryCoding?.system) : undefined)
+        || condition.code?.text || condition.code?.coding?.find(coding => coding.display)?.display || icdCodes[0] || 'Unknown'
+      const original = stripLeadingIcdCode(condition.code?.text, icdCodes[0] ?? '')
       return {
         id: condition.id || `condition-${index}`,
-        title: (icdCodes[0] ? localizedIcdDescription(icdCodes[0], condition.code?.text,
-          condition.code?.coding?.find((coding) => coding.code?.trim() === icdCodes[0])?.display, dictionary, locale,
-          condition.code?.coding?.find((coding) => coding.code?.trim() === icdCodes[0])?.system) : undefined)
-          || condition.code?.text || condition.code?.coding?.find((coding) => coding.display)?.display || icdCodes[0] || 'Unknown',
+        title,
+        originalNarrative: original && original !== title ? original : undefined,
+        originalNarrativeLabel: locale === 'en' ? 'Original diagnosis' : '來源診斷原文',
         icdCodes,
-        when: formatDate(condition.recordedDate || condition.onsetDateTime),
+        when: formatDate(condition.onsetDateTime || condition.recordedDate),
         clinical: typeof condition.clinicalStatus === 'string' 
           ? condition.clinicalStatus 
           : (condition.clinicalStatus?.coding?.[0]?.display || condition.clinicalStatus?.coding?.[0]?.code || ''),
@@ -57,6 +61,8 @@ export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: 
           originalText: condition.code?.text || condition.code?.coding?.find((coding) => coding.display)?.display,
           date: condition.recordedDate || condition.onsetDateTime,
           when: formatDate(condition.recordedDate || condition.onsetDateTime) || (locale === 'en' ? 'Date not provided' : '未提供日期'),
+          onsetWhen: condition.onsetDateTime && condition.onsetDateTime !== condition.recordedDate
+            ? `${locale === 'en' ? 'Onset' : '起始日期'} ${formatDate(condition.onsetDateTime)}` : undefined,
           institution: (() => {
             const encounter = encounterMap.get(condition.encounter?.reference?.split('/').pop())
             const name = encounter?.serviceProvider?.display

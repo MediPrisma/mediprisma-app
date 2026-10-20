@@ -1260,10 +1260,10 @@ describe('createFhirTools (unified)', () => {
       expect(r.data.every((m: any) => m.chronic === true)).toBe(true)
     })
 
-    it('tracks refillCount when same drug appears multiple times', async () => {
+    it('tracks sourceRecordCount when same drug appears multiple times', async () => {
       const r = await call('getActiveMedicationList')
       const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
-      expect(sotalol?.refillCount).toBe(2)
+      expect(sotalol?.sourceRecordCount).toBe(2)
       expect(sotalol?.recordedName).toBe('通舒錠')
       expect(sotalol?.status).toBe('active')
     })
@@ -1283,7 +1283,7 @@ describe('createFhirTools (unified)', () => {
       expect(sotalol).toMatchObject({
         status: 'active',
         authoredOn: '2026-04-27T00:00:00+08:00',
-        refillCount: 2,
+        sourceRecordCount: 2,
       })
     })
 

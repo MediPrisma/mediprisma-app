@@ -53,7 +53,10 @@ export function DiagnosisItem({ diagnosis }: DiagnosisItemProps) {
       {diagnosis.when && (
         <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground tabular-nums">{diagnosis.when}</span>
       )}
-      {diagnosis.records && (diagnosis.records.length > 1 || diagnosis.records.some((record) => record.originalText && record.originalText !== diagnosis.title)) && (
+      {diagnosis.originalNarrative && <div className="basis-full break-words text-xs text-foreground/85">
+        <span className="mr-1 text-muted-foreground">{diagnosis.originalNarrativeLabel}：</span>{diagnosis.originalNarrative}
+      </div>}
+      {diagnosis.records && (diagnosis.records.length > 1 || diagnosis.records.some((record) => record.onsetWhen || record.originalText && record.originalText !== diagnosis.title)) && (
         <details ref={historyRef} className="basis-full text-[max(12px,0.75rem)] text-muted-foreground">
           <summary className="min-h-[44px] cursor-pointer py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-7 sm:py-1">
             {diagnosis.historyLabel}
@@ -63,6 +66,7 @@ export function DiagnosisItem({ diagnosis }: DiagnosisItemProps) {
               <li key={record.id} className="flex flex-wrap gap-x-2">
                 <span className="tabular-nums">{record.when}</span>
                 {record.institution && <span className="break-words">{record.institution}</span>}
+                {record.onsetWhen && <span>{record.onsetWhen}</span>}
                 {record.originalText && <span className="basis-full break-words text-foreground/85">{record.originalText}</span>}
               </li>
             ))}

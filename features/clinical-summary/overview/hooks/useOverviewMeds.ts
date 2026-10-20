@@ -278,7 +278,7 @@ export function useOverviewMeds(
       // Still running, or finished inside the recent tail (see the constant).
       // An undated record cannot be ruled out, so it counts as current.
       const finishedDay = endDay ?? startDay
-      const excludedFromCurrent = ['cancelled', 'entered-in-error', 'on-hold', 'draft', 'stopped'].includes(row.status)
+      const excludedFromCurrent = row.currentnessUncertain || ['cancelled', 'entered-in-error', 'on-hold', 'draft', 'stopped', 'not-taken'].includes(row.status)
       const isCurrent = !excludedFromCurrent && (!row.isInactive || !finishedDay
         || daysBetween(finishedDay, window.endDay) <= MEDICATION_RECENTLY_FINISHED_DAYS)
       const doseText = [doseUnlessRepeated(row.dose, row.frequency), row.frequency]

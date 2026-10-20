@@ -76,7 +76,7 @@ it('rewrites provenance and nested order references, retaining secondary SOAP di
   resources.push({ resourceType: 'Condition', id: 'secondary', code: { coding: [{ system: ICD, code: 'I10' }] } },
     { resourceType: 'ServiceRequest', id: 'order', encounter: { reference: 'Encounter/hospital-visit' } })
   const graph = reconcileOutpatientEncounters(canonicalizeBundleResources({ entry: resources.map(resource => ({ resource })) }))
-  expect(graph.find(resource => resource.id === 'import')?.target[0].reference).toBe('Encounter/cloud-visit')
+  expect(graph.find(resource => resource.id === 'import')?.target[0].reference).toBe('Encounter/hospital-visit')
   expect(graph.find(resource => resource.id === 'order')?.encounter.reference).toBe('Encounter/cloud-visit')
   expect(graph.find(resource => resource.id === 'cloud-visit')?.reasonCode).toHaveLength(2)
 })
@@ -92,6 +92,7 @@ it('does not equate WHO ICD-10 and CM merely from the legacy versionId=1 exporte
   ;(hospital as any).meta = { source: 'ehr-fhir-bridge/scraper', versionId: '1' }
   condition.code.coding[0].system = 'http://hl7.org/fhir/sid/icd-10'
   expect(reconcileOutpatientEncounters(resources).filter(r => r.resourceType === 'Encounter')).toHaveLength(2)
+  expect((hospital as any)._sourceRecordComparison).toMatchObject({ status: 'ambiguous', warnings: ['diagnosis-coding-systems-differ'] })
   expect(condition.code.coding[0].system).toBe('http://hl7.org/fhir/sid/icd-10')
 })
 

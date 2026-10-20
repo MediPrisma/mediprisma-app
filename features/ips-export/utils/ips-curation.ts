@@ -32,6 +32,7 @@ import type {
 import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { orphanResultObservations } from './ips-helpers'
+import { isMedicationCurrentlyInUse } from '@/src/core/utils/clinical-context-selection.utils'
 
 export interface CurateForIpsInput {
   data: ClinicalDataCollection
@@ -53,20 +54,6 @@ function isActiveCondition(cond: ConditionEntity): boolean {
   const s = (cond.clinicalStatus || '').toLowerCase()
   if (!s) return true // no status recorded ⇒ treat as active (matches app)
   return s === 'active' || s === 'recurrence' || s === 'relapse'
-}
-
-// Statuses that mean a medication order is no longer being taken. Chronic
-// (慢箋) refills are still surfaced even when an individual cycle is completed.
-const INACTIVE_MED_STATUS = new Set([
-  'stopped',
-  'completed',
-  'cancelled',
-  'entered-in-error',
-  'on-hold',
-])
-
-function isCurrentMed(med: MedicationEntity): boolean {
-  return !INACTIVE_MED_STATUS.has((med.status || '').toLowerCase())
 }
 
 // --- Time-range filtering (mirrors generate-clinical-context.use-case) ------
@@ -285,12 +272,10 @@ function curateMedications(
   // Time-range filter on authoredOn.
   meds = withinRange(meds, filters.medicationTimeRange, now, (m) => m.authoredOn)
 
-  // 現用藥 / 慢箋為主: when restricted to "active", keep meds that are
-  // currently-in-use OR are chronic refill prescriptions (which read as
-  // "completed" between cycles but are clinically ongoing).
+  // Chronic is a property of an individual prescription, not evidence that
+  // every historical fill is still current. Use its own supply/status facts.
   if (filters.medicationStatus === 'active') {
-    meds = meds.filter((m) => !['cancelled', 'entered-in-error', 'draft', 'on-hold', 'stopped'].includes(String(m.status).toLowerCase())
-      && (isCurrentMed(m) || isChronicPrescription(m)))
+    meds = meds.filter((m) => isMedicationCurrentlyInUse(m, now.getTime()))
   }
 
   // Confirmed copies were reconciled at import. Name-only folding loses

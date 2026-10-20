@@ -1,5 +1,7 @@
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { reconcileMedicationRequests } from '@/src/infrastructure/fhir/services/medication-reconciliation'
+import { renderHook } from '@testing-library/react'
+import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
 function fixture() {
@@ -45,7 +47,7 @@ it('merges only verified cross-source copies while preserving hospital SIG, note
   expect(hospital).toMatchObject({ dosageInstruction: [{ text: '1 TAB PO QD' }], note: [{ text: 'Synthetic source instruction' }],
     dispenseRequest: { expectedSupplyDuration: { value: 28 } },
     _reconciledSourceReferences: ['MedicationRequest/hospital-med', 'MedicationRequest/cloud-med'] })
-  expect(resources.find(resource => resource.id === 'trace')?.target[0].reference).toBe('MedicationRequest/hospital-med')
+  expect(resources.find(resource => resource.id === 'trace')?.target[0].reference).toBe('MedicationRequest/cloud-med')
 })
 
 it.each(['visit', 'inferred-visit', 'date', 'patient', 'product', 'name-only', 'dose', 'status', 'quantity', 'ambiguous', 'same-source', 'self-pay'])(
@@ -95,10 +97,63 @@ it('retains two real orders when each has a uniquely corresponding source order 
   expect(graph.map(order => order.identifier[0].value)).toEqual(['order-0', 'order-1'])
 })
 
+it('recomputes imported comparison metadata without hiding two same-source real orders or changing the raw Bundle', () => {
+  const { hospital } = fixture()
+  const second = { ...hospital, id: 'hospital-second-order' }
+  const stale = { status: 'confirmed', references: ['MedicationRequest/hospital-med', 'MedicationRequest/hospital-second-order'] }
+  hospital._sourceRecordComparison = stale; second._sourceRecordComparison = stale
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { resource: { resourceType: 'Patient', id: 'synthetic', name: [{ text: 'Synthetic Patient' }] } },
+    { resource: hospital }, { resource: second },
+  ] }
+  const original = JSON.stringify(bundle)
+  const parsed = LocalBundleService.parse(bundle)!.collection
+  expect(parsed.medications).toHaveLength(2)
+  expect(parsed.medications.every((order: any) => !order._sourceRecordComparison)).toBe(true)
+  expect(JSON.stringify(bundle)).toBe(original)
+})
+
 it('retains every source order when otherwise identical copies cannot be uniquely paired', () => {
   const { cloud, hospital } = fixture()
   const orders = [hospital, cloud, { ...hospital, id: 'real-second-order' }]
   expect(reconcileMedicationRequests(orders)).toHaveLength(3)
+  expect(orders.every(order => order._sourceRecordComparison.status === 'ambiguous')).toBe(true)
+})
+
+it('flags all four source records for two genuine identical orders and two unidentifiable cloud copies', () => {
+  const first = fixture(), second = fixture()
+  first.hospital.id = 'h1'; second.hospital.id = 'h2'; first.cloud.id = 'c1'; second.cloud.id = 'c2'
+  for (const order of [first.hospital, first.cloud, second.hospital, second.cloud]) delete order.identifier
+  const records = reconcileMedicationRequests([first.hospital, first.cloud, second.hospital, second.cloud])
+  expect(records).toHaveLength(4)
+  expect(records.every(record => record._sourceRecordComparison.status === 'ambiguous')).toBe(true)
+  expect(records[0]._sourceRecordComparison.references).toEqual(['MedicationRequest/h1', 'MedicationRequest/h2', 'MedicationRequest/c1', 'MedicationRequest/c2'])
+  const { result } = renderHook(() => useMedicationRows(records))
+  expect(result.current).toHaveLength(1)
+  expect(result.current[0].sourceComparison?.records).toHaveLength(4)
+  expect(result.current[0].sourceComparison?.records.filter(record => record.dataOrigin === 'hospital').map(record => record.id)).toEqual(['h1', 'h2'])
+})
+
+it('flags a possible copy with a missing source visit link without fabricating an Encounter reference', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.encounter
+  hospital.requester = { display: '臺北榮總' }
+  const visit = { resourceType: 'Encounter', id: 'one', class: { code: 'AMB' }, subject: hospital.subject,
+    period: { start: '2026-09-17' }, serviceProvider: { display: '臺北榮總' }, status: 'finished' }
+  expect(reconcileMedicationRequests([hospital, cloud, visit])).toHaveLength(3)
+  expect(hospital.encounter).toBeUndefined()
+  expect(hospital._sourceRecordComparison).toMatchObject({ status: 'candidate', warnings: ['encounter-link-unconfirmed'] })
+  expect(hospital._reconciledSourceReferences).toBeUndefined()
+})
+
+it('does not use a date/facility fallback when two distinct same-day visits remain possible', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.encounter; hospital.requester = { display: '臺北榮總' }
+  const visit = { resourceType: 'Encounter', id: 'one', class: { code: 'AMB' }, subject: hospital.subject,
+    period: { start: '2026-09-17' }, serviceProvider: { display: '臺北榮總' }, status: 'finished' }
+  reconcileMedicationRequests([hospital, cloud, visit, { ...visit, id: 'another' }])
+  expect(hospital._sourceRecordComparison).toBeUndefined()
+  expect(hospital.encounter).toBeUndefined()
 })
 
 it('compares a cloud frequency-only instruction with the hospital frequency and preserves the full SIG', () => {
@@ -144,4 +199,36 @@ it('never interprets lower-case IMUE0120 remaining-supply snapshots as a prescri
   const { cloud, hospital } = fixture()
   cloud.meta.tag = [{ system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module', code: 'imue0120' }]
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+})
+
+it.each(['stopped', 'cancelled', 'entered-in-error', 'on-hold', 'completed'])('never lets unknown hospital status hide a cloud %s status', status => {
+  const { hospital, cloud } = fixture()
+  hospital.status = 'unknown'; cloud.status = status
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(1)
+  expect(cloud.status).toBe(status)
+  expect(hospital.status).toBe(status)
+  expect(hospital._sourcePrescriptionRecords.map((record: any) => record.status)).toEqual(['unknown', status])
+})
+
+it.each(['text', 'code', 'repeat'])('rejects a hospital text-only QD versus cloud BID expressed as %s', format => {
+  const { hospital, cloud } = fixture()
+  cloud.dosageInstruction = [format === 'text' ? { text: 'BID' } : format === 'code'
+    ? { timing: { code: { text: 'BID' } } } : { timing: { repeat: { frequency: 2, period: 1, periodUnit: 'd' } } }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital.dosageInstruction[0].text).toBe('1 TAB PO QD')
+})
+
+it('preserves names and actual source codes in source details when both orders reference Medication resources', () => {
+  const { hospital, cloud } = fixture()
+  const code = hospital.medicationCodeableConcept
+  delete hospital.medicationCodeableConcept; delete cloud.medicationCodeableConcept
+  hospital.medicationReference = { reference: 'Medication/h-product' }
+  cloud.medicationReference = { reference: 'Medication/c-product' }
+  const graph = reconcileMedicationRequests([hospital, cloud,
+    { resourceType: 'Medication', id: 'h-product', code }, { resourceType: 'Medication', id: 'c-product', code }])
+  expect(graph.filter(resource => resource.resourceType === 'MedicationRequest')).toHaveLength(1)
+  expect(hospital._sourcePrescriptionRecords[0].medicationReference.reference).toBe('Medication/h-product')
+  const { result } = renderHook(() => useMedicationRows([hospital]))
+  expect(result.current[0].sourceComparison?.records.map(record => record.title)).toEqual(['Synthetic product 5 mg', 'Synthetic product 5 mg'])
+  expect(result.current[0].sourceComparison?.records.map(record => record.nhiDrugCode)).toEqual(['SYNTHETIC1', 'SYNTHETIC1'])
 })

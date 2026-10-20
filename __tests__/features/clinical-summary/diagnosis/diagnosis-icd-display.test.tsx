@@ -43,6 +43,11 @@ describe('recorded diagnosis ICD display', () => {
 })
 
 describe('repeated diagnosis display groups', () => {
+  it('retains the clinical onset date separately from the source recording date', () => {
+    const { result } = renderHook(() => useDiagnosisRows([{ id: 'onset', onsetDateTime: '2019-02-03', recordedDate: '2026-10-19', code: { text: 'Source diagnosis' } }]))
+    expect(result.current[0].when).toBe('2019/2/3')
+    expect(result.current[0].records?.[0]).toMatchObject({ when: '2026/10/19', onsetWhen: '起始日期 2019/2/3' })
+  })
   const condition = (id: string, code: string, date: string, extra = {}) => ({
     id, recordedDate: date, encounter: { reference: `Encounter/${id}-visit` },
     code: { text: 'Synthetic diagnosis', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code }] },

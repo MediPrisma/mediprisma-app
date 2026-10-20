@@ -15,7 +15,8 @@ export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
 export interface VisitRecord {
   id: string
   sourceIds?: string[]
-  sourceComparisonStatus?: 'candidate' | 'confirmed'
+  sourceComparisonStatus?: 'candidate' | 'ambiguous' | 'confirmed'
+  sourceComparisonWarnings?: string[]
   sourceRecords?: Array<{ id: string; date?: string; institution?: string; department?: string; physician?: string; diagnoses: string[] }>
   type: VisitType
   /** Medical system, derived from explicit serviceType codings first. AMB only
@@ -258,7 +259,10 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         // Extract every ICD diagnosis on the visit (primary + secondaries).
         // Falls back to reasonReference / type[].text only when no ICD codes
         // are present.
-        const icdCodes = extractEncounterIcds(encounter, icdDict, locale)
+        const extractedIcds = extractEncounterIcds(encounter, icdDict, locale)
+        const icdCodes = encounter._comparisonEncounterIds
+          ? extractedIcds.filter((entry, index, all) => all.findIndex(other => other.code.toUpperCase().replace(/\./g, '') === entry.code.toUpperCase().replace(/\./g, '')) === index)
+          : extractedIcds
         const reason = icdCodes.length > 0
           ? icdCodes.map((c) => c.description ? `${c.code} - ${c.description}` : c.code).join(', ')
           : (encounter.reasonReference?.[0]?.display || encounter.type?.[0]?.text)
@@ -296,13 +300,14 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           id: encounter.id,
           sourceIds: encounter._comparisonEncounterIds,
           sourceComparisonStatus: encounter._sourceRecordComparison?.status,
+          sourceComparisonWarnings: encounter._sourceRecordComparison?.warnings,
           sourceRecords: encounter._sourceRecordComparison?.references.map((reference: string) => {
             const source = (encounter._sourceEncounterRecords ?? encounters).find((item: any) => `Encounter/${item.id}` === reference)
             return { id: source?.id ?? reference, date: source?.period?.start?.slice(0, 10),
               institution: getInstitutionName(source?.serviceProvider?.display, locale),
               department: source?.serviceType?.text || source?.serviceType?.coding?.find((coding: any) => coding.display)?.display,
               physician: source?.participant?.find((participant: any) => participant.individual?.display)?.individual?.display,
-              diagnoses: (source?.reasonCode ?? []).map((concept: any) => [concept.coding?.[0]?.code,
+              diagnoses: (source?.reasonCode ?? []).map((concept: any) => [concept.coding?.[0]?.system?.split('/').pop(), concept.coding?.[0]?.code,
                 concept.text || concept.coding?.[0]?.display].filter(Boolean).join(' ')),
             }
           }),
