@@ -104,7 +104,7 @@ export function ClinicVitalsForm({
           }
           if (value === undefined) continue
           const previous = initial?.entries[key]
-          entries[key] = { value, measuredOn: !edited.has(key) && previous?.value === value ? previous.measuredOn : measuredOn }
+          entries[key] = { value, measuredOn: key === 'bodyWeight' && !edited.has(key) && previous?.value === value ? previous.measuredOn : measuredOn }
         }
         onSave({ entries })
         onClose()
@@ -112,8 +112,8 @@ export function ClinicVitalsForm({
     >
       <span className="w-full text-xs text-muted-foreground @min-[40rem]:w-auto @min-[40rem]:self-center">
         {isEnglish
-          ? 'Edited values are measured today; unchanged values keep their original date. Encrypted and kept for this tab session; every module recomputes from it.'
-          : '本次編輯的數值記為今日量測，未編輯者保留原量測日期。加密保存於本分頁的工作階段；各模組會依此重新判定。'}
+          ? 'Measured in clinic today. An unchanged weight keeps its original date. Encrypted and kept for this tab session; every module recomputes from it.'
+          : '今日門診量測；未編輯的體重保留原量測日期。加密保存於本分頁的工作階段；各模組會依此重新判定。'}
       </span>
       {fields.map((field) => (
         <label key={field.key} className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
