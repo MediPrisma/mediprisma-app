@@ -1,5 +1,5 @@
 import { medicationSupplyEndDay, medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
-import { medicationExpectedEnd, medicationExpectedEndTimestamp, assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationExpectedEnd, medicationExpectedEndTimestamp, assessMedicationCurrentness, isLapsedDispensing } from '@/src/core/utils/clinical-context-selection.utils'
 
 it('uses inclusive source calendar dates across month and timezone boundaries', () => {
   expect(medicationSupplyEndDay('2026-10-19T00:00:00+08:00', 28)).toBe('2026-11-15')
@@ -34,4 +34,9 @@ it.each([{ value: 6, code: 'h', hours: 6, end: '2026-10-19' }, { value: 2.4, cod
   expect(medicationExpectedEnd(medication)).toBe(end)
   expect(assessMedicationCurrentness(medication, expectedEnd - 1).current).toBe(true)
   expect(assessMedicationCurrentness(medication, expectedEnd + 1)).toMatchObject({ current: false, uncertain: false })
+})
+
+it('does not call a source-status-conflicted cloud record a previously dispensed medicine after its estimated window ends', () => {
+  expect(isLapsedDispensing({ status: 'active', authoredOn: '2026-10-01', dispenseRequest: { expectedSupplyDuration: { value: 7, code: 'd' } },
+    _sourceRecordComparison: { warnings: ['source-status-conflict'] } }, Date.parse('2026-10-20'))).toBe(false)
 })

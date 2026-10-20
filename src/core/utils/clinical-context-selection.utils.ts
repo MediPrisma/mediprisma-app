@@ -255,6 +255,7 @@ const NEVER_DISPENSED_STATUSES = new Set(['draft', 'on-hold', 'cancelled', 'ente
  */
 export function isLapsedDispensing(medication: any, nowMs: number): boolean {
   if (NEVER_DISPENSED_STATUSES.has(normalizeClinicalStatus(medication?.status))) return false
+  if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict')) return false
   const end = medicationExpectedEndTimestamp(medication)
   return end !== undefined && nowMs > end
 }
