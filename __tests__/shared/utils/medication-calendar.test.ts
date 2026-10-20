@@ -5,9 +5,9 @@ it('uses inclusive source calendar dates across month and timezone boundaries', 
   expect(medicationSupplyEndDay('2026-10-19T00:00:00+08:00', 28)).toBe('2026-11-15')
   expect(medicationSupplyEndDay('2028-02-28', 3)).toBe('2028-03-01')
   expect(medicationSupplyEndDay('2026-10-19', 1)).toBe('2026-10-19')
-  expect(medicationSupplyDaysRemaining('2026-11-15', new Date(2026, 9, 20, 23, 59).getTime())).toBe(27)
-  expect(medicationSupplyDaysRemaining('2026-11-15', new Date(2026, 10, 15, 23, 59).getTime())).toBe(1)
-  expect(medicationSupplyDaysRemaining('2026-11-15', new Date(2026, 10, 16, 0, 1).getTime())).toBe(-1)
+  expect(medicationSupplyDaysRemaining('2026-11-15', Date.parse('2026-10-20T23:59:00+08:00'))).toBe(27)
+  expect(medicationSupplyDaysRemaining('2026-11-15', Date.parse('2026-11-15T23:59:00+08:00'))).toBe(1)
+  expect(medicationSupplyDaysRemaining('2026-11-15', Date.parse('2026-11-16T00:01:00+08:00'))).toBe(-1)
 })
 
 it('prefers the recorded final date over a derived supply estimate', () => {
@@ -46,6 +46,9 @@ it('keeps a midnight Taiwan source date while evaluating the exact ending instan
   expect(medicationExpectedEnd(medication)).toBe('2026-10-21')
   expect(medicationExpectedEndTimestamp(medication)).toBe(Date.parse('2026-10-20T16:00:00Z'))
   expect(assessMedicationCurrentness(medication, Date.parse('2026-10-20T16:00:01Z')).current).toBe(false)
+  const utcRepresentation = { ...medication, dosageInstruction: [{ timing: { repeat: { boundsPeriod: { end: '2026-10-20T16:00:00Z' } } } }] }
+  expect(medicationExpectedEnd(utcRepresentation)).toBe('2026-10-21')
+  expect(medicationExpectedEndTimestamp(utcRepresentation)).toBe(medicationExpectedEndTimestamp(medication))
 })
 
 it.each([23, 24, 48])('keeps %s hours as elapsed time even when it converts to whole days', hours => {

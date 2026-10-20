@@ -1,7 +1,7 @@
 import type { DataFilters, TimeRange } from '@/src/core/entities/clinical-context.entity'
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
 import { floorStartDay } from '@/src/core/utils/first-visit-floors'
-import { medicationSupplyEndDay } from '@/src/shared/utils/medication-calendar'
+import { medicationSupplyEndDay, medicationClinicalTimestamp, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 
 
@@ -48,24 +48,17 @@ export function medicationRecordedTreatmentEnd(medication: any): string | undefi
     || (isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined)
 }
 
-// Imported Taiwan date-only records have no offset. Preserve their clinical
-// calendar in Taipei; explicit FHIR offsets remain authoritative.
-const sourceOffset = (value?: string): string => value?.match(/(?:Z|[+-]\d{2}:\d{2})$/)?.[0] ?? '+08:00'
-const sourceInstant = (value: string, offset: string): number => Date.parse(value.length === 10
-  ? `${value}T00:00:00${offset}` : /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : value + offset)
-
 /** End of the inclusive coverage interval; fractional durations keep their
  * exact elapsed time, while whole-day supplies cover their final calendar day. */
 export function medicationExpectedEndTimestamp(medication: any): number | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const explicitEnd = medicationRecordedTreatmentEnd(medication)
   const started = medication?.authoredOn || medication?.effectiveDateTime
-  const offset = sourceOffset(started)
   const calendarEnd = (day: string) => {
-    return sourceInstant(day.slice(0, 10), offset) + 86400000 - 1
+    return medicationClinicalTimestamp(day.slice(0, 10)) + 86400000 - 1
   }
   if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd) && Number.isFinite(Date.parse(explicitEnd))) {
-    return explicitEnd.length === 10 ? calendarEnd(explicitEnd) : sourceInstant(explicitEnd, offset)
+    return explicitEnd.length === 10 ? calendarEnd(explicitEnd) : medicationClinicalTimestamp(explicitEnd)
   }
   const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration, false)
     ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
@@ -74,22 +67,15 @@ export function medicationExpectedEndTimestamp(medication: any): number | undefi
   const unit = String(duration?.code || duration?.unit || '').toLowerCase()
   const elapsedTimeUnit = /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(unit)
   if (Number.isInteger(days) && !elapsedTimeUnit) {
-    const endDay = medicationSupplyEndDay(started, days)
+    const endDay = medicationSupplyEndDay(medicationClinicalDay(started), days)
     return endDay ? calendarEnd(endDay) : undefined
   }
-  const startMs = sourceInstant(started, offset)
+  const startMs = medicationClinicalTimestamp(started)
   return Number.isFinite(startMs) ? startMs + days * 86400000 - 1 : undefined
 }
 
 export function medicationExpectedEnd(medication: any): string | undefined {
-  const explicitEnd = medicationRecordedTreatmentEnd(medication)
-  if (explicitEnd && /^\d{4}-\d{2}-\d{2}/.test(explicitEnd) && Number.isFinite(Date.parse(explicitEnd))) return explicitEnd.slice(0, 10)
-  const endMs = medicationExpectedEndTimestamp(medication)
-  if (endMs === undefined) return undefined
-  const offset = sourceOffset(medication?.authoredOn || medication?.effectiveDateTime)
-  const parts = offset.match(/^([+-])(\d{2}):(\d{2})$/)
-  const minutes = parts ? (Number(parts[2]) * 60 + Number(parts[3])) * (parts[1] === '-' ? -1 : 1) : 0
-  return new Date(endMs + minutes * 60000).toISOString().slice(0, 10)
+  return medicationClinicalDay(medicationExpectedEndTimestamp(medication))
 }
 
 // The newest record is picked by string sort, so only dates written the ISO

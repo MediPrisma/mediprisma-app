@@ -131,10 +131,10 @@ it('never promotes a cancelled hospital order into current use from a cloud supp
   expect(result.current.meds.items.find(item => item.row.sourceComparison)?.isCurrent).toBe(false)
 })
 
-it('uses the same fractional supply end in the list as clinical currentness and the timeline', () => {
-  const medication = { id: 'synthetic-fractional-course', status: 'active', authoredOn: '2026-10-19T00:00:00+08:00', medicationCodeableConcept: { text: 'Synthetic product' }, dispenseRequest: { expectedSupplyDuration: { value: 2.4, code: 'd' } } }
+it.each(['2026-10-19T00:00:00+08:00', '2026-10-18T16:00:00Z'])('uses the same Taiwan clinical dates for equivalent source instant %s', authoredOn => {
+  const medication = { id: 'synthetic-fractional-course', status: 'active', authoredOn, medicationCodeableConcept: { text: 'Synthetic product' }, dispenseRequest: { expectedSupplyDuration: { value: 2.4, code: 'd' } } }
   const { result } = renderHook(() => useMedicationRows([medication]))
-  expect(result.current[0]).toMatchObject({ durationDays: 2.4, endDateIso: '2026-10-21' })
+  expect(result.current[0]).toMatchObject({ durationDays: 2.4, startedOnIso: '2026-10-19', endDateIso: '2026-10-21' })
 })
 
 it('keeps overview, visit detail and IPS consistent without presenting cancellation as current use', () => {

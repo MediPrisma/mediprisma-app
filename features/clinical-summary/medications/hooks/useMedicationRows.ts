@@ -15,7 +15,7 @@ import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
-import { medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
+import { medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
@@ -23,7 +23,7 @@ import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-so
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
 
 function sourceCalendarDate(value?: string): string {
-  const day = value?.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const day = medicationClinicalDay(value)?.match(/^(\d{4})-(\d{2})-(\d{2})/)
   return day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])).toLocaleDateString() : formatDate(value)
 }
 import {
@@ -35,10 +35,9 @@ import {
   MEDCLOUD_SOURCE_SETTING_URL,
 } from '@/src/shared/constants/medcloud.constants'
 
-/** Leading YYYY-MM-DD of a FHIR date/dateTime, as the source wrote it (no
- *  timezone conversion — same contract as formatDate). */
+/** Taipei clinical date, shared by the list, timeline and copied text. */
 function isoCalendarDay(value?: string): string | undefined {
-  return value?.trim().match(/^(\d{4}-\d{2}-\d{2})(?=$|T)/)?.[1]
+  return medicationClinicalDay(value)
 }
 
 function isHospitalOutpatientMedication(medication: any): boolean {
