@@ -42,6 +42,7 @@ it('preserves source regimens and fills a missing structured frequency only on a
 
 it('merges only verified cross-source copies while preserving hospital SIG, notes and cloud facts', () => {
   const { cloud, hospital } = fixture()
+  hospital._authoredOn = { extension: [{ url: 'https://synthetic.example/source-ref', valueReference: { reference: 'MedicationRequest/cloud-med' } }] }
   const resources = reconcileMedicationRequests([cloud, hospital,
     { resourceType: 'Provenance', id: 'trace', target: [{ reference: 'MedicationRequest/cloud-med' }] }])
   expect(resources.filter(resource => resource.resourceType === 'MedicationRequest')).toHaveLength(1)
@@ -50,6 +51,8 @@ it('merges only verified cross-source copies while preserving hospital SIG, note
     _reconciledSourceReferences: ['MedicationRequest/hospital-med', 'MedicationRequest/cloud-med'] })
   expect(resources.find(resource => resource.id === 'trace')?.target[0].reference).toBe('MedicationRequest/cloud-med')
   expect(hospital._sourceRecordComparison.sourceStatuses.map((source: any) => source.reference)).toEqual(['MedicationRequest/hospital-med', 'MedicationRequest/cloud-med'])
+  expect(hospital._authoredOn.extension[0].valueReference.reference).toBe('MedicationRequest/hospital-med')
+  expect(hospital._sourcePrescriptionRecords[0]._authoredOn.extension[0].valueReference.reference).toBe('MedicationRequest/cloud-med')
 })
 
 it.each(['visit', 'inferred-visit', 'date', 'patient', 'product', 'name-only', 'dose', 'status', 'quantity', 'ambiguous', 'same-source', 'self-pay'])(

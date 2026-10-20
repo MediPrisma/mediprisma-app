@@ -2,7 +2,7 @@ import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-so
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
 import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
-import { sharedPrescriptionIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
+import { sharedPrescriptionIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 
 type Resource = Record<string, any>
@@ -313,7 +313,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   const rewrite = (value: any): void => {
     if (!value || typeof value !== 'object') return
     if (typeof value.reference === 'string' && aliases.has(value.reference)) value.reference = aliases.get(value.reference)
-    for (const [key, child] of Object.entries(value)) if (!key.startsWith('_')) rewrite(child)
+    for (const [key, child] of Object.entries(value)) if (!SOURCE_EVIDENCE_FIELDS.has(key)) rewrite(child)
   }
   const result = resources.filter((resource) => !removed.has(resource))
   result.filter(resource => resource.resourceType !== 'Provenance').forEach(rewrite)

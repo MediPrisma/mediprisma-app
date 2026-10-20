@@ -1,4 +1,6 @@
 /** App-only provenance. A contextual candidate is not proof of one event. */
+export const SOURCE_EVIDENCE_FIELDS = new Set(['_sourceRecordComparison', '_sourcePrescriptionRecords', '_sourceEncounterRecords', '_reconciledSourceReferences', '_resolvedMedicationCodeableConcept'])
+
 export interface SourceRecordComparison {
   status: 'candidate' | 'ambiguous' | 'confirmed'
   references: string[]

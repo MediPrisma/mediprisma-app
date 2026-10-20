@@ -8,7 +8,7 @@
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
-import { medicationExpectedEnd, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationExpectedEnd, medicationRecordedTreatmentEnd, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { periodToDays } from '../../utils/duration-helpers'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import {
@@ -428,11 +428,12 @@ export function useMedicationTimeline(
 
       const supplyEndDay = medicationExpectedEnd(med)
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
-      const reportedDays = durationToDays(med.dispenseRequest?.expectedSupplyDuration)
-        ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
+      const reportedDays = durationToDays(med.dispenseRequest?.expectedSupplyDuration, false)
+        ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
         ?? periodToDays(supplyEndDay ? { start: startIso.slice(0, 10), end: supplyEndDay } : undefined)
       const supplyDays = reportedDays ?? 1
-      const endBoundary = supplyEndDay ? new Date(`${supplyEndDay}T00:00:00`) : undefined
+      const useCalendarBoundary = !reportedDays || Number.isInteger(reportedDays) || !!medicationRecordedTreatmentEnd(med)
+      const endBoundary = supplyEndDay && useCalendarBoundary ? new Date(`${supplyEndDay}T00:00:00`) : undefined
       if (endBoundary) endBoundary.setDate(endBoundary.getDate() + 1)
       const endMs = endBoundary && Number.isFinite(endBoundary.getTime()) ? endBoundary.getTime() : startMs + supplyDays * 24 * 60 * 60 * 1000
       const prescriptionType = resolvedPrescriptionType(

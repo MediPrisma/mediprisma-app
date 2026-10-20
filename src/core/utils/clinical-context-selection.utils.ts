@@ -22,7 +22,7 @@ export function normalizeClinicalStatus(status: unknown): string {
   return typeof status === 'string' ? status.trim().toLowerCase() : ''
 }
 
-export function durationToDays(duration: any): number | undefined {
+export function durationToDays(duration: any, round = true): number | undefined {
   const value = Number(duration?.value)
   if (!Number.isFinite(value) || value <= 0) return undefined
   const unit = String(duration?.unit || duration?.code || '').toLowerCase()
@@ -33,7 +33,7 @@ export function durationToDays(duration: any): number | undefined {
     unit.startsWith('y') || unit === 'a' ? 365 :
     unit === 'h' || unit.startsWith('hour') ? 1 / 24 :
     1
-  return Math.round(value * factor)
+  return round ? Math.round(value * factor) : value * factor
 }
 
 export function medicationRecordedTreatmentEnd(medication: any): string | undefined {

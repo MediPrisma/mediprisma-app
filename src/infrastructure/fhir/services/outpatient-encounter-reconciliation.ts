@@ -1,6 +1,6 @@
 // Operates on the canonicalised import graph, never on the stored source Bundle.
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
-import { sharedEncounterIdentifier, conflictingSourceIdentifier } from '@/src/shared/utils/source-record-comparison'
+import { sharedEncounterIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 type Resource = Record<string, any>
 
 function isVghFacility(reference: Resource | undefined): boolean {
@@ -171,7 +171,7 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
     if (typeof value.reference === 'string' && aliases.has(value.reference)) {
       value.reference = aliases.get(value.reference)
     }
-    for (const [key, child] of Object.entries(value)) if (!key.startsWith('_')) rewrite(child)
+    for (const [key, child] of Object.entries(value)) if (!SOURCE_EVIDENCE_FIELDS.has(key)) rewrite(child)
   }
   const result = resources.filter((resource) => !removed.has(resource))
   result.filter(resource => resource.resourceType !== 'Provenance').forEach(rewrite)
