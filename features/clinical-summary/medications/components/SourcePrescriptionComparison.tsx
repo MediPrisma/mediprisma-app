@@ -9,7 +9,8 @@ export function SourcePrescriptionComparison({ comparison }: { comparison: NonNu
       <p>{comparison.status !== 'confirmed'
         ? (en ? 'Possible copies across sources. Prescription count and source correspondence are unconfirmed; do not count source records as separate prescriptions or combine their quantities.' : '兩個來源可能重複，藥囑筆數與來源對應尚未確認。請勿將來源筆數當成開藥次數，或將兩邊數量相加。')
         : (en ? 'Matched by a shared source order identifier. Both original records are shown below.' : '已依共同藥囑識別資料確認，以下保留兩邊原始紀錄。')}</p>
-      {comparison.warnings?.includes('encounter-link-unconfirmed') && <p>{en ? 'A source lacks a confirmed visit link; the date/facility suggests comparison only.' : '有來源未提供明確就診連結；同日同院僅作為核對線索，未補成已確認的就診關聯。'}</p>}
+      {comparison.warnings?.includes('encounter-link-unconfirmed') && <p>{en ? 'The corresponding visit links are unconfirmed; the date/facility suggests comparison only.' : '來源的就診對應尚未確認；同日同院僅作為核對線索，未補成已確認的就診關聯。'}</p>}
+      {comparison.warnings?.includes('source-currentness-differs') && <p>{en ? 'Source status or supply periods differ. This group is shown with current records because at least one source remains current; verify each original record.' : '來源狀態或供藥期間不同。因至少一筆來源仍有效，此組列於現用藥區；請逐筆核對原始紀錄。'}</p>}
       {comparison.records.map((record, index) => (
         <div key={record.id} className="border-t border-current/15 pt-1">
           <strong>{record.dataOrigin === 'hospital' ? (en ? 'Hospital' : '院內') : (en ? 'MediCloud' : '雲端')}{comparison.records.filter(other => other.dataOrigin === record.dataOrigin).length > 1 ? ` ${comparison.records.slice(0, index + 1).filter(other => other.dataOrigin === record.dataOrigin).length}` : ''}</strong>

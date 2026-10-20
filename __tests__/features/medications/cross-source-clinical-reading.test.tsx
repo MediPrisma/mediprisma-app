@@ -78,6 +78,28 @@ it('shares currentness semantics with AI/IPS and does not invent a stop date or 
   expect(result.current.find(row => row.id === 'uncertain-status')).toMatchObject({ isInactive: true, currentnessUncertain: true })
 })
 
+it('keeps a current cloud source visible when its hospital comparison has unknown status and no supply period', () => {
+  const source: any = JSON.parse(JSON.stringify(fixture))
+  const hospital = source.entry.find((entry: any) => entry.resource.id === 'synthetic-order-a').resource
+  hospital.status = 'unknown'; delete hospital.dispenseRequest
+  const collection = LocalBundleService.parse(source)!.collection
+  const { result } = renderHook(() => {
+    const rows = useMedicationRows(collection.medications)
+    const overview = useOverviewMeds(collection.medications, buildOverviewWindow(12, Date.parse('2026-10-20T04:00:00+08:00')), 'medical', 'zh-TW')
+    return { rows, overview }
+  })
+  const comparison = result.current.rows.find(row => row.sourceComparison)!
+  expect(comparison).toMatchObject({ id: 'synthetic-cloud-order-a', isInactive: false, currentnessUncertain: false })
+  expect(comparison.sourceComparison?.warnings).toContain('source-currentness-differs')
+  expect(comparison.sourceComparison?.records).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'synthetic-order-a', status: 'unknown', isInactive: true }),
+    expect.objectContaining({ id: 'synthetic-cloud-order-a', status: 'active', isInactive: false }),
+  ]))
+  expect(result.current.overview.meds.items.find(item => item.row.sourceComparison)?.isCurrent).toBe(true)
+  render(<MedicationItem medication={comparison} />)
+  expect(screen.getAllByText(/來源狀態或供藥期間不同/).length).toBeGreaterThan(0)
+})
+
 it('keeps overview, visit detail and IPS consistent without presenting cancellation as current use', () => {
   const collection = LocalBundleService.parse(fixture)!.collection
   const { result } = renderHook(() => {

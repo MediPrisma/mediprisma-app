@@ -67,7 +67,7 @@ export function DiagnosisItem({ diagnosis }: DiagnosisItemProps) {
                 <span className="tabular-nums">{record.when}</span>
                 {record.institution && <span className="break-words">{record.institution}</span>}
                 {record.onsetWhen && <span>{record.onsetWhen}</span>}
-                {record.originalText && <span className="basis-full break-words text-foreground/85">{record.originalText}</span>}
+                {record.originalText && record.originalText !== diagnosis.title && <span className="basis-full break-words text-foreground/85">{record.originalText}</span>}
               </li>
             ))}
           </ul>

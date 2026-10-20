@@ -410,7 +410,7 @@ export function MedicationItem({
           && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
     >
-      {medication.sourceComparison?.status === 'ambiguous' && (
+      {(medication.sourceComparison?.status === 'ambiguous' || medication.sourceComparison?.warnings?.includes('source-currentness-differs')) && (
         <details open className="col-span-full row-start-4 min-w-0 border-t border-border/60 pt-1 text-xs">
           <summary className="min-h-11 cursor-pointer font-medium sm:min-h-8" onClick={event => event.stopPropagation()}>
             {locale === 'en' ? 'Source correspondence unconfirmed' : '來源對應未確認'} · {medication.sourceComparison.records.filter(record => record.dataOrigin === 'hospital').length} {locale === 'en' ? 'hospital' : '筆院內'} / {medication.sourceComparison.records.filter(record => record.dataOrigin === 'medcloud').length} {locale === 'en' ? 'cloud records' : '筆雲端紀錄'}

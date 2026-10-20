@@ -119,6 +119,10 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
       ? dose.text.trim() : undefined
     if (sig(left) && sig(right) && sig(left) !== sig(right)) return true
     if ((sig(left) && rightFrequency && !leftFrequency) || (sig(right) && leftFrequency && !rightFrequency)) return true
+    // A full text SIG cannot be proven compatible with an unpaired structured
+    // dose. Keep both sources instead of adding e.g. "2 TAB" to "1 TAB PO QD".
+    if (sig(left) && !aDose && (bDose?.doseQuantity || bDose?.doseRange)
+      || sig(right) && !bDose && (aDose?.doseQuantity || aDose?.doseRange)) return true
   }
   return false
 }
@@ -184,6 +188,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       contextVisit = [...possible][0]
     }
     return day && contextVisit ? { context: JSON.stringify([order.subject.reference, contextVisit, day]), codes, concept, inferred,
+      visitUnconfirmed: !!visit?._sourceRecordComparison && visit._sourceRecordComparison.status !== 'confirmed',
       visitCodingConflict: visit?._sourceRecordComparison?.warnings?.includes('diagnosis-coding-systems-differ') } : undefined
   }
   const keyed = resources.map((order) => ({ order, key: identity(order) })).filter((entry) => entry.key)
@@ -236,7 +241,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     group.forEach(member => handled.add(member))
     const other = matches[0]
     const unique = hospitalGroup.size === 1 && cloudGroup.size === 1
-    const contextInferred = group.some(member => identity(member)?.inferred)
+    const contextInferred = group.some(member => identity(member)?.inferred || identity(member)?.visitUnconfirmed)
     const visitCodingConflict = group.some(member => identity(member)?.visitCodingConflict)
     const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedSourceIdentifier(order, other) && !contextInferred && !visitCodingConflict
     const comparison = { status: confirmed ? 'confirmed' : unique ? 'candidate' : 'ambiguous',

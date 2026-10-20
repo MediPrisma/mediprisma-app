@@ -61,7 +61,7 @@ export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: 
           originalText: condition.code?.text || condition.code?.coding?.find((coding) => coding.display)?.display,
           date: condition.recordedDate || condition.onsetDateTime,
           when: formatDate(condition.recordedDate || condition.onsetDateTime) || (locale === 'en' ? 'Date not provided' : '未提供日期'),
-          onsetWhen: condition.onsetDateTime && condition.onsetDateTime !== condition.recordedDate
+          onsetWhen: condition.onsetDateTime && condition.recordedDate && condition.onsetDateTime !== condition.recordedDate
             ? `${locale === 'en' ? 'Onset' : '起始日期'} ${formatDate(condition.onsetDateTime)}` : undefined,
           institution: (() => {
             const encounter = encounterMap.get(condition.encounter?.reference?.split('/').pop())

@@ -232,3 +232,21 @@ it('preserves names and actual source codes in source details when both orders r
   expect(result.current[0].sourceComparison?.records.map(record => record.title)).toEqual(['Synthetic product 5 mg', 'Synthetic product 5 mg'])
   expect(result.current[0].sourceComparison?.records.map(record => record.nhiDrugCode)).toEqual(['SYNTHETIC1', 'SYNTHETIC1'])
 })
+
+it('never confirms medication copies through an unconfirmed visit comparison even with a shared order identifier', () => {
+  const { hospital, cloud } = fixture()
+  hospital.encounter = { reference: 'Encounter/h-visit' }; cloud.encounter = { reference: 'Encounter/c-visit' }
+  const visits = ['h-visit', 'c-visit'].map(id => ({ resourceType: 'Encounter', id, class: { code: 'AMB' },
+    _sourceRecordComparison: { status: 'candidate', references: ['Encounter/h-visit', 'Encounter/c-visit'] } }))
+  const orders = reconcileMedicationRequests([hospital, cloud, ...visits]).filter(resource => resource.resourceType === 'MedicationRequest')
+  expect(orders).toHaveLength(2)
+  expect(hospital._sourceRecordComparison).toMatchObject({ status: 'candidate', warnings: ['encounter-link-unconfirmed'] })
+})
+
+it.each([1, 2])('does not add an unpaired structured %s TAB dose to a full text-only source SIG', value => {
+  const { hospital, cloud } = fixture()
+  hospital.dosageInstruction = [{ text: '1 TAB PO QD' }]
+  cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } }, doseAndRate: [{ doseQuantity: { value, unit: 'TAB' } }] }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital.dosageInstruction[0].doseAndRate).toBeUndefined()
+})

@@ -433,10 +433,14 @@ export function useMedicationRows(
         ? comparison.references.map((reference: string) => byId.get(reference.split('/').pop()!)) : undefined
       if (sourceRows && sourceRows.length >= 2 && sourceRows.every(Boolean)) {
         const hospital = sourceRows[0] as MedicationRow
+        const representative = (sourceRows as MedicationRow[]).find(source => !source.isInactive && !source.currentnessUncertain) ?? hospital
+        const mixedCurrentness = (sourceRows as MedicationRow[]).some(source => source.isInactive !== representative.isInactive
+          || source.currentnessUncertain !== representative.currentnessUncertain)
         // A comparison card avoids counting a presumed copy as another order.
         // It does not change the canonical source records or claim one Rx.
-        comparisonRows.push({ ...hospital, _startSortValue: enriched[index]._startSortValue,
-          sourceComparison: { status: comparison.status, records: sourceRows as MedicationRow[], warnings: comparison.warnings },
+        comparisonRows.push({ ...representative, _startSortValue: enriched[index]._startSortValue,
+          sourceComparison: { status: comparison.status, records: sourceRows as MedicationRow[],
+            warnings: [...(comparison.warnings ?? []), ...(mixedCurrentness ? ['source-currentness-differs'] : [])] },
           reconciledOrderIds: sourceRows.map((source: MedicationRow) => source.id),
           searchHaystack: sourceRows.map((source: MedicationRow) => source.searchHaystack).join(' '),
         })
