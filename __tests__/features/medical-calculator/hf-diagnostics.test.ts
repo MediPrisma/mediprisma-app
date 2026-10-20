@@ -50,6 +50,12 @@ it('distinguishes an empty stream from malformed JSON', async () => {
   expect(records[0].diagnostic).toMatchObject({ stage: 'response', responseBytes: 0, errorCode: 'response-empty' })
 })
 
+it.each(['', '<html>Bad gateway</html>', '{not json'])('classifies a non-contract 502 as upstream unavailability: %s', async body => {
+  const records: HfDiagnosticRecord[] = []
+  await expect(requestHfPrediction(input(), options(records, async () => new Response(body, { status: 502 })))).rejects.toThrow('gateway-unavailable')
+  expect(records[0].diagnostic).toMatchObject({ stage: 'response', httpStatus: 502, errorCode: 'gateway-unavailable' })
+})
+
 it('uses a frozen validated projection and receiver-compatible envelope for diagnosis', async () => {
   const records: HfDiagnosticRecord[] = []
   const prepared = input()
@@ -85,6 +91,10 @@ it.each([
   ['request-timeout', 'connect', null, 'timeout'],
   ['gateway-network', 'connect', null, 'network'],
   ['invalid-json-response', 'parse', null, 'parse_failed'],
+  ['gateway-unauthorized', 'response', null, 'authentication'],
+  ['gateway-rate-limited', 'response', null, 'rate_limited'],
+  ['gateway-unavailable', 'response', null, 'upstream'],
+  ['request-aborted', 'connect', null, 'aborted'],
   [null, 'parse', 'refused', 'validation_failed'],
   [null, 'parse', 'scored', null],
 ] as const)('reports %s / %s / %s through the actual receiver schema', async (errorCode, stage, verdict, outcome) => {
@@ -93,4 +103,5 @@ it.each([
   Object.assign(records[0].diagnostic, { errorCode, stage, verdict })
   const report = aiReportSchema.parse(JSON.parse(buildHfProblemReport(randomUUID(), records, 'medcloud', '0.51.0')))
   expect(report.executions[0].outcome).toBe(outcome)
+  if (errorCode === 'request-aborted') expect(report.executions[0].status).toBe('aborted')
 })

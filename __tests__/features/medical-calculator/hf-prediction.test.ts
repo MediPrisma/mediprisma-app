@@ -44,7 +44,7 @@ it('preserves the observed two-member 3-month model hashes without accepting the
 })
 
 it.each([['invalid','invalid-prediction-response'],['transient','gateway-unavailable']])('distinguishes service parser failure %s from transport outage', async (code,message) => {
-  const fetchFn=jest.fn(async () => new Response(JSON.stringify({resourceType:'OperationOutcome',issue:[{severity:'error',code}]}),{status:502}))
+  const fetchFn=jest.fn(async () => new Response(JSON.stringify({resourceType:'OperationOutcome',issue:[{severity:'error',code}]}),{status:502,headers:{'Content-Type':'application/fhir+json'}}))
   await expect(requestHfPrediction(input(),{origin:'https://hf.test',authPolicy:'intranet',signal:new AbortController().signal,fetch:fetchFn})).rejects.toThrow(message)
 })
 

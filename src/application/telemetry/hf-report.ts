@@ -1,7 +1,7 @@
 import { aiReportSchema, AI_REPORT_MAX_BODY_BYTES } from '@/src/shared/contracts/collector-event'
 import { diagnosticUuid } from '@/src/shared/utils/summary-diagnostics'
 import { validateHfTransportBundle } from '@/src/core/hf-risk/transport-bundle'
-import type { HfDiagnosticRecord } from '@/src/core/hf-risk/diagnostics'
+import { HF_REQUEST_ERRORS, type HfDiagnosticRecord } from '@/src/core/hf-risk/diagnostics'
 import type { HfRecordSource } from '@/src/core/hf-risk/record-source'
 
 /** Lives with the HF run, so returning to the list cannot change submission identity. */
@@ -43,10 +43,8 @@ export function buildHfProblemReport(runId: string, records: HfDiagnosticRecord[
       stage: d.stage, httpStatus: d.httpStatus, errorCode: d.errorCode, verdict: d.verdict, elapsedMs: d.elapsedMs,
       requestBytes: d.requestBytes, responseBytes: d.responseBytes, responseType: d.responseType,
       responseIdMatched: d.responseIdMatched, adapterVersion: d.adapterVersion })
-    const outcome = !d.errorCode ? (d.verdict === 'refused' ? 'validation_failed' : null)
-      : d.errorCode.includes('timeout') ? 'timeout' : d.errorCode === 'gateway-network' || d.errorCode === 'response-interrupted' ? 'network'
-      : d.stage === 'parse' ? 'parse_failed' : 'error'
-    return { timestamp: d.startedAt, status: d.errorCode ? 'error' as const : 'completed' as const, outcome,
+    const outcome = d.errorCode ? HF_REQUEST_ERRORS[d.errorCode].outcome : d.verdict === 'refused' ? 'validation_failed' : null
+    return { timestamp: d.startedAt, status: d.errorCode === 'request-aborted' ? 'aborted' as const : d.errorCode ? 'error' as const : 'completed' as const, outcome,
       technical: { run_id: runId, request_id: d.requestId, attempt: index + 1, lane: 'batch' as const,
         output_chars: output.length, last_chunk_ms: null,
         parse_state: d.stage === 'parse' ? d.errorCode ? 'invalid' as const : 'valid' as const : 'unknown' as const },
