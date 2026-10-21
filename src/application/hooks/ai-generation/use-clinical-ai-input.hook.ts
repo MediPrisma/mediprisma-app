@@ -333,6 +333,7 @@ export function useClinicalAiInput(
     profile: fitCandidate.profile,
     clinicalDataOverride: (prioritizedResult?.data
       ?? (consumer === 'nhiLipid' ? activeClinicalData : undefined)) as ClinicalData | undefined,
+    preScopedVariantExclusions: prioritizedResult?.data.clinicalRecordVariantExclusions,
     documentTokenBudget:
       prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
     contextVariant: options.contextVariant,
