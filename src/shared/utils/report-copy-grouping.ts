@@ -1,6 +1,7 @@
 import type { DiagnosticReport } from '../types/fhir.types'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
 import { getCodeableConceptText } from './fhir-helpers'
+import { getReportInstitution } from './report-institution'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
 import {
@@ -113,7 +114,7 @@ function naturalGroupKey(report: Report): string {
   return JSON.stringify([sourceOf(report), report.subject?.reference,
     (report.effectiveDateTime ?? report.issued ?? '').slice(0, 10),
     getCodeableConceptText(report.code).trim(),
-    report._observations?.[0]?.performer?.[0]?.display ?? report.performer?.[0]?.display])
+    getReportInstitution(report)])
 }
 
 /** Shared grouping projection for rows, tab counts and AI context. Returned

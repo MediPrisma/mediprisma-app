@@ -1,6 +1,7 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
 import { getVghtpeSource } from '../adapters/vghtpe-source-display'
+import { getReportInstitution as getDrInstitution } from '@/src/shared/utils/report-institution'
 import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
@@ -37,9 +38,7 @@ import {
   isTrustedLegacyNhiViewerAttachment,
 } from '../utils/nhi-viewer-request'
 import {
-  getNhiMedicloudOriginalInstitution,
   isAdultPreventiveHealthExamResource,
-  isNhiAuthorityDisplay,
   isNhiMedicloudObservation,
 } from '@/src/shared/utils/observation-provenance.utils'
 import {
@@ -78,25 +77,6 @@ function deriveGroupTitle(text: string): string {
 // Lab DRs carry performer on the linked Observations (bridge convention);
 // imaging DRs typically have no linked Observations and put performer on the
 // DiagnosticReport itself. Fall through both before giving up.
-function getDrInstitution(dr: any): string | undefined {
-  const observations = Array.isArray(dr?._observations) ? dr._observations : []
-  const hasCloudObservation = observations.some(isNhiMedicloudObservation)
-  const cloudInstitution = observations
-    .map(getNhiMedicloudOriginalInstitution)
-    .find((institution: string | undefined): institution is string => !!institution)
-  const ordinaryInstitution = observations
-    .filter((observation: any) => !isNhiMedicloudObservation(observation))
-    .flatMap((observation: any) => observation?.performer ?? [])
-    .map((performer: any) => performer?.display?.trim())
-    .find((institution: unknown): institution is string => typeof institution === 'string' && !!institution)
-  const reportInstitution = (dr?.performer ?? [])
-    .map((performer: any) => performer?.display?.trim())
-    .find((institution: unknown): institution is string =>
-      typeof institution === 'string' && !!institution && !isNhiAuthorityDisplay(institution))
-  if (hasCloudObservation) return cloudInstitution || ordinaryInstitution || reportInstitution
-  return ordinaryInstitution || reportInstitution
-}
-
 function isNhiMedicloudReport(dr: any): boolean {
   const observations = Array.isArray(dr?._observations) ? dr._observations : []
   return observations.length > 0 && observations.every(isNhiMedicloudObservation)

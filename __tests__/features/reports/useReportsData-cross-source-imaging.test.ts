@@ -108,6 +108,17 @@ describe('cross-source imaging reports', () => {
     expect(rows.find(row => row.diagnosticReportIds?.includes('truncated'))?.bridgeDupCount).toBe(1)
   })
 
+  it('uses the same institution projection when a truncated copy lists the NHI authority first', () => {
+    const reports = pair()
+    const truncated = { ...reports[1], id: 'truncated', conclusion: reports[1].conclusion.slice(0, 115),
+      performer: [{ display: '衛生福利部中央健康保險署' }, { display: '臺北榮總' }],
+    }
+    expect(reportDisplayGroupingKeys([...reports, truncated]).size).toBe(0)
+    const rows = buildReportsData([...reports, truncated]).reportRows
+    expect(rows).toHaveLength(2)
+    expect(rows.find(row => row.diagnosticReportIds?.includes('truncated'))?.bridgeDupCount).toBe(1)
+  })
+
   it('retains a trusted legacy NHI viewer while grouping matching reports', () => {
     const reports = pair()
     const url = 'https://medvpnimg.nhi.gov.tw/ZFP?synthetic=1'

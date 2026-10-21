@@ -1,3 +1,4 @@
+import { getReportInstitution as reportInstitution } from '@/src/shared/utils/report-institution'
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import { collectAdultPreventiveObservationIds } from './adult-preventive-source'
 import { collectReportMemberIds, referenceId } from '@/src/core/utils/observation-selectors'
@@ -47,12 +48,6 @@ const GLUCOSE_KEEP_SEPARATE = new Set(['C-PEPTIDE'])
 
 function reportDate(report: any): string | undefined {
   return report?.effectiveDateTime || report?.effectivePeriod?.start || report?.issued
-}
-
-function reportInstitution(report: any): string | undefined {
-  return report?._observations?.[0]?.performer?.[0]?.display
-    || report?.performer?.[0]?.display
-    || undefined
 }
 
 function reportObservations(reports: any[]): any[] {
