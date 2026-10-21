@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
-import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { useClinicalData, useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { getClinicalDataRepository } from '@/src/application/composition'
 
 jest.mock('@/src/application/composition')
@@ -218,3 +218,18 @@ describe('useClinicalData', () => {
     expect(result.current.observations).toBe(settled.observations)
   })
 })
+
+ it('shares the same reconciliation result and row arrays across UI and whole-collection AI/CDSS reads', async () => {
+  const clinicalSource = { policyVersion: 'synthetic-v1', graph: { nodes: [], references: [] }, policies: {}, evidence: {} }
+  const repository = fakeSmartRepository({ getClinicalSource: () => clinicalSource })
+  mockGetClinicalDataRepository.mockResolvedValue(repository as any)
+  mockUsePatientQuery.mockReturnValue({ data: { id: 'patient-1' }, isLoading: false, isFetching: false })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  const { result } = renderHook(() => ({ ui: useClinicalData(), ai: useClinicalDataQuery() }), { wrapper })
+  await waitFor(() => expect(result.current.ai.data).toBeDefined())
+  expect(result.current.ui.clinicalSource).toBe(clinicalSource)
+  expect(result.current.ai.data!.clinicalSource).toBe(result.current.ui.clinicalSource)
+  expect(result.current.ai.data!.observations).toBe(result.current.ui.observations)
+  expect(result.current.ai.data!.medications).toBe(result.current.ui.medications)
+ })

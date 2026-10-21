@@ -1,3 +1,5 @@
+import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+
 // Core Domain Entities: Clinical Data
 
 export interface ConditionEntity {
@@ -1205,6 +1207,8 @@ export interface ClinicalSourceMetadata {
 }
 
 export interface ClinicalDataCollection {
+  /** Complete immutable pre-mapper source graph and shared reconciliation evidence. */
+  clinicalSource?: ClinicalReconciliationResult
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
   /** IMUE0120 Basic summaries; never counted as prescriptions or reports. */

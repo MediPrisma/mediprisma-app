@@ -1,3 +1,4 @@
+import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 /**
  * Clinical Data Query Hook (React Query)
  *
@@ -80,7 +81,11 @@ function attachReportObservations(
 ): DiagnosticReportEntity[] {
   if (reports.length === 0 || observations.length === 0) return reports
 
-  const byId = new Map(observations.map((observation) => [observation.id, observation]))
+  const byId = new Map<string, ObservationEntity[]>()
+  for (const observation of observations) {
+    const key = 'Observation/' + observation.id
+    byId.set(key, [...(byId.get(key) ?? []), observation])
+  }
   let enrichedAny = false
 
   const next = reports.map((report) => {
@@ -89,7 +94,10 @@ function attachReportObservations(
     if (!Array.isArray(report.result) || report.result.length === 0) return report
 
     const members = (report.result as any[])
-      .map((reference: any) => byId.get(reference.reference?.split('/').pop()))
+      .map((reference: any) => {
+        const matches = byId.get(reference.reference)
+        return matches?.length === 1 ? matches[0] : undefined
+      })
       .filter((observation): observation is ObservationEntity => observation !== undefined)
 
     if (members.length === 0) return report
@@ -108,6 +116,7 @@ interface ClinicalResourceAggregate {
   entities: ClinicalEntityMap
   vitalSigns: ObservationEntity[]
   sourceMetadata?: ClinicalSourceMetadata
+  clinicalSource?: ClinicalReconciliationResult
   resourceQueryStatus: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>>
   /** Per type: its own query has settled (or is disabled, matching the
    * all-types behaviour when there is no patient to query for). */
@@ -128,7 +137,7 @@ interface ClinicalResourceAggregate {
  * what keeps this hook's return value referentially stable across unrelated
  * parent renders — AI/context consumers use it as a memo key.
  */
-function combineClinicalResults(
+function buildClinicalResults(
   results: Array<{
     data?: ClinicalResourceResult
     error: unknown
@@ -145,6 +154,7 @@ function combineClinicalResults(
   const resourceQueryStatus: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}
   let vitalSigns: ObservationEntity[] = EMPTY_ARRAY
   let sourceMetadata: ClinicalSourceMetadata | undefined
+  let clinicalSource: ClinicalReconciliationResult | undefined
   let error: Error | null = null
   let anyLoading = false
   let anyFetching = false
@@ -157,6 +167,7 @@ function combineClinicalResults(
     resourceReady[unit.id] = !result?.isLoading
     if (result?.data?.status) Object.assign(resourceQueryStatus, result.data.status)
     if (result?.data?.vitalSigns) vitalSigns = result.data.vitalSigns
+    clinicalSource ??= result?.data?.getClinicalSource?.()
     if (!sourceMetadata && result?.data?.sourceMetadata) {
       sourceMetadata = result.data.sourceMetadata
     }
@@ -179,6 +190,7 @@ function combineClinicalResults(
     entities,
     vitalSigns,
     sourceMetadata,
+    clinicalSource,
     resourceQueryStatus,
     resourceReady,
     anyLoading,
@@ -186,6 +198,26 @@ function combineClinicalResults(
     allSettled,
     error,
   }
+}
+
+// Multiple UI/AI/CDSS subscribers read one projection for the same query snapshot.
+// A WeakMap bounds lifetime to React Query's data objects, including patient/import changes.
+class ClinicalSnapshot {
+  constructor(readonly aggregate: ClinicalResourceAggregate) {}
+}
+const sharedAggregates = new WeakMap<object, {
+  signature: unknown[]
+  snapshot: ClinicalSnapshot
+}>()
+function combineClinicalResults(results: Parameters<typeof buildClinicalResults>[0]): ClinicalSnapshot {
+  const key = results.find(result => result.data)?.data
+  const signature = results.flatMap(result => [result.data, result.error, result.isLoading, result.isFetching, result.isPending])
+  const cached = key ? sharedAggregates.get(key) : undefined
+  if (cached && cached.signature.every((value, index) => value === signature[index])) return cached.snapshot
+  const aggregate = buildClinicalResults(results)
+  const snapshot = new ClinicalSnapshot(aggregate)
+  if (key) sharedAggregates.set(key, { signature, snapshot })
+  return snapshot
 }
 
 function useClinicalResourceAggregate() {
@@ -209,7 +241,7 @@ function useClinicalResourceAggregate() {
     [queryClient],
   )
 
-  const aggregate = useQueries({
+  const snapshot = useQueries({
     queries: CLINICAL_RESOURCE_UNITS.map((unit) => ({
       queryKey: clinicalResourceQueryKey(patientId, unit.id),
       queryFn: () => {
@@ -240,7 +272,7 @@ function useClinicalResourceAggregate() {
     })
   }, [patientId, queryClient])
 
-  return { aggregate, patientLoading, refetch }
+  return { aggregate: snapshot.aggregate, patientLoading, refetch }
 }
 
 /**
@@ -277,6 +309,7 @@ export function useClinicalDataQuery() {
         devices: entities.devices,
         carePlans: entities.carePlans,
         ...(aggregate.sourceMetadata ? { sourceMetadata: aggregate.sourceMetadata } : {}),
+        clinicalSource: aggregate.clinicalSource,
         resourceQueryStatus: aggregate.resourceQueryStatus,
       }
       : undefined
@@ -329,6 +362,7 @@ export function useClinicalData() {
       devices: entities.devices,
       carePlans: entities.carePlans,
       sourceMetadata: aggregate.sourceMetadata,
+      clinicalSource: aggregate.clinicalSource,
       resourceQueryStatus,
       queryIssues,
       hasBlockingQueryIssues,

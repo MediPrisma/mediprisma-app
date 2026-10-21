@@ -1,3 +1,4 @@
+import { reconcileClinicalSources, selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -1330,13 +1331,26 @@ export const LocalBundleService = {
   parse(
     bundle: any,
     sourceMetadata?: ClinicalSourceMetadata,
+    captureGeneration?: string,
   ): LocalBundleData | null {
+    // Preserve every source before identity rewriting, expansion or mapping.
+    const rawEntries = Array.isArray(bundle?.entry) ? bundle.entry : []
+    const originalPatient = rawEntries.find((entry: any) => entry?.resource?.resourceType === 'Patient')
+    const generation = captureGeneration ?? (typeof bundle?.timestamp === 'string' ? bundle.timestamp : 'in-memory')
+    const clinicalSource = reconcileClinicalSources([{
+      sourceId: 'local-bundle:' + (captureGeneration ?? 'import'),
+      patientScope: String(originalPatient?.fullUrl ?? originalPatient?.resource?.id ?? 'unknown-patient'),
+      generation,
+      resources: rawEntries.filter((entry: any) => typeof entry?.resource?.resourceType === 'string'),
+    }])
     // Canonicalise identity FIRST: stamp ids onto id-less resources and rewrite
     // urn:uuid / absolute references to the relative ResourceType/id form, so
     // every downstream step (patient-id gate, report-member linking, the inline
     // split('/').pop() resolvers) works regardless of the bundle's reference
     // style. See canonicalizeBundleResources.
-    const entries: any[] = canonicalizeBundleResources(bundle)
+    const entries: any[] = canonicalizeBundleResources({
+      entry: selectClinicalSourceNodes(clinicalSource).map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
+    })
     if (!entries.length) return null
 
     // TW-PAS support: unpack any Claim (事前審查申請) into the standard
@@ -1530,6 +1544,7 @@ export const LocalBundleService = {
     })
 
     const collection: ClinicalDataCollection = {
+      clinicalSource,
       conditions:       conds.map((r: any) => FhirMapper.toCondition(r)),
       medications:      meds.map((r: any) => FhirMapper.toMedication(r)),
       medicationRemainingSummaries,
@@ -1596,7 +1611,7 @@ export const LocalBundleService = {
     const cached = parsedStoredDataByBundle.get(bundle)
     const parsed = cached?.sourceMetadata === sourceMetadata
       ? cached.data
-      : this.parse(bundle, sourceMetadata ?? undefined)
+      : this.parse(bundle, sourceMetadata ?? undefined, memBundleImportId ?? undefined)
     if (!parsed) return null
     if (cached?.sourceMetadata !== sourceMetadata) {
       parsedStoredDataByBundle.set(bundle, { sourceMetadata, data: parsed })
