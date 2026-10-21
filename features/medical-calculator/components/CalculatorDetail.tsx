@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { CalculatorDef, CalcResult, CalcValues, Severity } from "../types"
-import { tr, trAlt } from "../types"
+import { tr, trAlt, inputVisible, visibleValues } from "../types"
 import { useLabAutofill, type Autofill } from "../hooks/use-lab-autofill.hook"
 import { getCalcInfo, getCalcScoring } from "../calculators"
 import type { CalcScoring, ScoringGrid, GridColor } from "../calculators"
@@ -170,7 +170,9 @@ export function CalculatorDetail({
     setDisplayUnits(s.units)
   }, [calc, autofill])
 
-  const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, values), [calc, values])
+  // What the rules read: an input that does not apply right now is blank.
+  const effective = useMemo(() => visibleValues(calc.inputs, values), [calc, values])
+  const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, effective), [calc, effective])
   useEffect(() => {
     onResult?.(computeCrashed ? null : result)
   }, [computeCrashed, onResult, result])
@@ -200,6 +202,7 @@ export function CalculatorDetail({
         key: group.key,
         title: tr(locale, group.title),
         hint: group.hint ? tr(locale, group.hint) : '',
+        summary: group.summary,
         inputs: group.keys.flatMap((key) => calc.inputs.filter((input) => input.key === key)),
       })),
       // An input no group names still shows, last.
@@ -224,7 +227,7 @@ export function CalculatorDetail({
   // auto-filled) its source date + report name — for an auditable note.
   const buildFullCopy = useCallback((): string => {
     if (!result) return ""
-    const rows: ClipboardInputRow[] = calc.inputs.map((inp) => {
+    const rows: ClipboardInputRow[] = calc.inputs.filter((inp) => inputVisible(inp, values)).map((inp) => {
       const raw = values[inp.key] ?? ""
       let value = raw
       if (inp.type === "select" && raw !== "") {
@@ -337,12 +340,12 @@ export function CalculatorDetail({
       {/* Result — compact so it doesn't dominate the panel. */}
       {isHpa ? (
         <div ref={hpaResultRef} tabIndex={-1}>
-          <HpaRiskResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
+          <HpaRiskResults values={effective} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
         </div>
       ) : calc.id === 'doac-dose-nvaf' ? (
-        <DoacDoseResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
+        <DoacDoseResults values={effective} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
       ) : calc.id === 'doac-periop' ? (
-        <DoacPeriopResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
+        <DoacPeriopResults values={effective} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
       ) : (
       <div className={`relative rounded-lg border border-border px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : ""}`}>
         {result && (
@@ -405,11 +408,11 @@ export function CalculatorDetail({
 
       {/* Inputs */}
       <div className="space-y-3">
-        {inputGroups.map((group) => (
-        <fieldset key={group.key} className="min-w-0 space-y-3">
-          {group.title && <legend className="mb-1 pt-2 text-sm font-semibold">{group.title}</legend>}
-          {group.hint && <p className="text-xs leading-relaxed text-muted-foreground">{group.hint}</p>}
-        {group.inputs.map((input) => {
+        {inputGroups.map((group) => {
+          const inputs = group.inputs.filter((input) => inputVisible(input, values))
+          if (!inputs.length) return null
+          const folded = 'summary' in group && group.summary ? group.summary(effective, inputs.map((input) => input.key)) : undefined
+          const fields = inputs.map((input) => {
           const fill = filled[input.key]
           const expectedUnit = input.type === "number" ? input.unit : undefined
           const unit = input.type === "number" ? (displayUnits[input.key] || input.unit) : undefined
@@ -452,7 +455,7 @@ export function CalculatorDetail({
               </div>
               {input.type === "select" ? (
                 <Select value={values[input.key] ?? ""} onValueChange={(v) => setValue(input.key, v)}>
-                  <SelectTrigger id={`calc-${input.key}`} className={isHpa ? 'min-h-11 w-full sm:min-h-9' : 'h-9'}>
+                  <SelectTrigger id={`calc-${input.key}`} className={isHpa ? 'min-h-11 w-full sm:min-h-9' : 'h-9 max-w-full *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate'}>
                     <SelectValue placeholder={zh ? "請選擇…" : "Select…"} />
                   </SelectTrigger>
                   <SelectContent className={selectContentClassName}>
@@ -516,9 +519,28 @@ export function CalculatorDetail({
               )}
             </div>
           )
+        })
+          return folded ? (
+            // Remounted when `open` flips, so a group that now needs the reader opens itself.
+            <details key={`${group.key}:${folded.open}`} open={folded.open} className="group/fold min-w-0 rounded-md border" data-testid={`calc-group-${group.key}`}>
+              <summary className="flex cursor-pointer list-none items-baseline gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                <span className="shrink-0 text-sm font-semibold">{group.title}</span>
+                <span className="min-w-0 flex-1 text-xs text-muted-foreground">{tr(locale, folded.text)}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform group-open/fold:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="space-y-3 border-t px-3 py-2.5">
+                {group.hint && <p className="text-xs leading-relaxed text-muted-foreground">{group.hint}</p>}
+                {fields}
+              </div>
+            </details>
+          ) : (
+            <fieldset key={group.key} className="min-w-0 space-y-3">
+              {group.title && <legend className="mb-1 pt-2 text-sm font-semibold">{group.title}</legend>}
+              {group.hint && <p className="text-xs leading-relaxed text-muted-foreground">{group.hint}</p>}
+              {fields}
+            </fieldset>
+          )
         })}
-        </fieldset>
-        ))}
       </div>
 
       {isHpa && (

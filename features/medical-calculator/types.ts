@@ -152,7 +152,24 @@ export interface DateTimeInput {
   unit?: undefined
 }
 
-export type CalcInput = NumberInput | SelectInput | DateTimeInput
+/**
+ * Shown only while it applies (one indication's question, one procedure's
+ * time). A hidden input reads as blank to `compute` and to the results, so an
+ * answer left in it from another case never changes this one.
+ */
+export type CalcInput = (NumberInput | SelectInput | DateTimeInput) & { visibleWhen?: (values: CalcValues) => boolean }
+
+/** True while the input applies to the values as they stand. */
+export function inputVisible(input: CalcInput, values: CalcValues): boolean {
+  return !input.visibleWhen || input.visibleWhen(values)
+}
+
+/** The values with every hidden input blank: what the rules and the results read. */
+export function visibleValues(inputs: CalcInput[], values: CalcValues): CalcValues {
+  const hidden = inputs.filter((input) => !inputVisible(input, values))
+  if (!hidden.length) return values
+  return { ...values, ...Object.fromEntries(hidden.map((input) => [input.key, ''])) }
+}
 
 export type Severity = 'normal' | 'low' | 'moderate' | 'high'
 
@@ -198,7 +215,14 @@ export interface CalculatorDef {
    *  different reports (e.g. FENa mixing today's urine with last month's serum). */
   coherence?: { keys: string[]; windowDays: number }
   /** Inputs shown under headings, in this order; inputs not named go last. */
-  inputGroups?: { key: string; title: L; hint?: L; keys: string[] }[]
+  inputGroups?: {
+    key: string
+    title: L
+    hint?: L
+    keys: string[]
+    /** Folds the group to one line while nothing in it needs the reader; `open` while something does. */
+    summary?: (values: CalcValues, shownKeys: string[]) => { text: L; open: boolean }
+  }[]
 }
 
 export const CATEGORY_LABELS: Record<CalcCategory, L> = {

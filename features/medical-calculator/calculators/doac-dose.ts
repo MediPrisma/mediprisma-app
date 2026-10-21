@@ -1,7 +1,7 @@
-import type { CalcInput, CalculatorDef, L } from '../types'
+import type { CalcInput, CalcValues, CalculatorDef, L } from '../types'
 import { AGE_INPUT, SEX_INPUT, WEIGHT_LOINC } from './_shared'
 import { DOAC_REGIMEN_OPTIONS, type DoacSelectKey } from '../doac-clinical-autofill'
-import { DOAC_RULES_VERSION, calculateDoacDoses, checkRegimen, crclLabel, regimenDay } from '../doac-dose-model'
+import { DOAC_FIELD_LABELS, DOAC_RULES_VERSION, calculateDoacDoses, checkRegimen, crclLabel, parseRegimen, regimenDay } from '../doac-dose-model'
 import { calculatePeriop, formatLocal, hoursText } from '../doac-periop-model'
 
 const YES_NO = [
@@ -17,6 +17,25 @@ const ddi = (key: DoacSelectKey, label: L): CalcInput => ({
   source: { kind: 'hfpefClinical', key: key as DoacSelectKey },
   defaultValue: '',
 })
+
+// Each indication's own questions, shown only for it; a hidden one reads as blank.
+const acuteVte = (values: CalcValues) => values.indication === 'vte-acute'
+const hipKnee = (values: CalcValues) => values.indication === 'vtep-hip' || values.indication === 'vtep-knee'
+
+/**
+ * The co-medications folded to one line: those on the current prescriptions
+ * named, the blanks counted, and the group open while any is blank.
+ */
+const ddiSummary = (values: CalcValues, keys: string[]): { text: L; open: boolean } => {
+  const name = (key: string) => DOAC_FIELD_LABELS[key]?.zh ?? key
+  const nameEn = (key: string) => DOAC_FIELD_LABELS[key]?.en ?? key
+  const yes = keys.filter((key) => values[key] === 'yes')
+  const blank = keys.filter((key) => (values[key] ?? '') === '')
+  const no = keys.length - yes.length - blank.length
+  const zh = [yes.length ? `有 ${yes.map(name).join('、')}` : '', blank.length ? `${blank.length} 項未填` : '', no ? `${yes.length || blank.length ? '其餘 ' : ''}${no} 項無` : ''].filter(Boolean).join('；')
+  const en = [yes.length ? `On ${yes.map(nameEn).join(', ')}` : '', blank.length ? `${blank.length} unanswered` : '', no ? `${yes.length || blank.length ? 'the other ' : ''}${no} none` : ''].filter(Boolean).join('; ')
+  return { text: { zh, en }, open: blank.length > 0 }
+}
 
 const regimenLabel = (value: string): L => {
   const [agent, mg, perDay] = value.split(':')
@@ -68,7 +87,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       ],
     },
     {
-      key: 'parenteral_lead_in', type: 'select', label: { en: 'Parenteral anticoagulation (acute VTE)', zh: '注射抗凝（急性 VTE）' }, defaultValue: '', optional: true,
+      key: 'parenteral_lead_in', type: 'select', label: { en: 'Parenteral anticoagulation', zh: '注射抗凝' }, defaultValue: '', optional: true, visibleWhen: acuteVte,
       options: [
         { value: 'done', label: { en: '≥5 days completed', zh: '已完成 ≥5 天' } },
         { value: 'ongoing', label: { en: 'Under way, <5 days', zh: '進行中，未滿 5 天' } },
@@ -76,12 +95,12 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       ],
     },
     {
-      key: 'anticoagulant_switch', type: 'select', label: { en: 'The other anticoagulant is only the acute-VTE parenteral agent, stopped as the oral one starts', zh: '其他抗凝血劑只有急性 VTE 的注射劑，開始口服時停用' }, defaultValue: '', optional: true,
+      key: 'anticoagulant_switch', type: 'select', label: { en: 'The other anticoagulant is only the parenteral agent, stopped as the oral one starts', zh: '其他抗凝血劑只有注射劑，開始口服時停用' }, defaultValue: '', optional: true, visibleWhen: acuteVte,
       options: [{ value: 'no', label: { en: 'No (warfarin, another DOAC, or kept on)', zh: '否（warfarin、另一種 DOAC，或會繼續用）' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
     },
-    { key: 'pe_unstable', type: 'select', label: { en: 'Haemodynamically unstable PE, or thrombolysis/embolectomy possible (acute VTE)', zh: '血行動力學不穩定 PE，或可能溶栓／取栓（急性 VTE）' }, options: YES_NO, defaultValue: '', optional: true },
-    { key: 'vte_day', type: 'number', label: { en: 'Day of oral treatment (acute VTE, optional)', zh: '口服治療第幾天（急性 VTE，選填）' }, unit: 'day', optional: true },
-    { key: 'postop_day', type: 'number', label: { en: 'Day after surgery, 0 = day of surgery (hip/knee, optional)', zh: '術後第幾天，手術當天為 0（髖膝預防，選填）' }, unit: 'day', optional: true },
+    { key: 'pe_unstable', type: 'select', label: { en: 'Haemodynamically unstable PE, or thrombolysis/embolectomy possible', zh: '血行動力學不穩定 PE，或可能溶栓／取栓' }, options: YES_NO, defaultValue: '', optional: true, visibleWhen: acuteVte },
+    { key: 'vte_day', type: 'number', label: { en: 'Day of oral treatment (optional)', zh: '口服治療第幾天（選填）' }, unit: 'day', optional: true, visibleWhen: acuteVte },
+    { key: 'postop_day', type: 'number', label: { en: 'Day after surgery, 0 = day of surgery (optional)', zh: '術後第幾天，手術當天為 0（選填）' }, unit: 'day', optional: true, visibleWhen: hipKnee },
     ...RENAL_INPUTS,
     {
       key: 'liver', type: 'select', label: { en: 'Liver', zh: '肝功能' }, defaultValue: '',
@@ -106,8 +125,8 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     ddi('ddi_tacrolimus', { en: 'Tacrolimus', zh: 'Tacrolimus' }),
     ddi('ddi_dronedarone', { en: 'Dronedarone', zh: 'Dronedarone' }),
     ddi('ddi_verapamil', { en: 'Verapamil', zh: 'Verapamil' }),
-    { ...ddi('ddi_amiodarone', { en: 'Amiodarone (dabigatran hip/knee prophylaxis)', zh: 'Amiodarone（dabigatran 髖膝預防用）' }), optional: true } as CalcInput,
-    { ...ddi('ddi_quinidine', { en: 'Quinidine (dabigatran hip/knee prophylaxis)', zh: 'Quinidine（dabigatran 髖膝預防用）' }), optional: true } as CalcInput,
+    { ...ddi('ddi_amiodarone', { en: 'Amiodarone', zh: 'Amiodarone' }), optional: true, visibleWhen: hipKnee } as CalcInput,
+    { ...ddi('ddi_quinidine', { en: 'Quinidine', zh: 'Quinidine' }), optional: true, visibleWhen: hipKnee } as CalcInput,
     ddi('ddi_erythromycin', { en: 'Erythromycin', zh: 'Erythromycin' }),
     ddi('ddi_clarithromycin', { en: 'Clarithromycin', zh: 'Clarithromycin' }),
     ddi('ddi_glecaprevir', { en: 'Glecaprevir/pibrentasvir', zh: 'Glecaprevir/pibrentasvir' }),
@@ -115,11 +134,11 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     ddi('ddi_anticoagulant', { en: 'Another anticoagulant (warfarin, heparin, another DOAC)', zh: '其他抗凝血劑（warfarin、heparin、另一種 DOAC）' }),
   ],
   inputGroups: [
-    { key: 'indication', title: { zh: '適應症', en: 'Indication' }, hint: { zh: 'VTE 與髖膝預防各有劑量規則，不套用 NVAF 的減量條件。注射抗凝、注射劑轉換、不穩定 PE、口服第幾天只在急性 VTE 判讀；術後第幾天只在髖膝預防判讀。', en: 'VTE and hip/knee prophylaxis have their own dose rules, not NVAF’s reductions. Parenteral anticoagulation, the parenteral switch, unstable PE and the day of oral treatment are read for acute VTE only; the day after surgery for hip/knee prophylaxis only.' }, keys: ['indication', 'parenteral_lead_in', 'anticoagulant_switch', 'pe_unstable', 'vte_day', 'postop_day'] },
+    { key: 'indication', title: { zh: '適應症', en: 'Indication' }, keys: ['indication', 'parenteral_lead_in', 'anticoagulant_switch', 'pe_unstable', 'vte_day', 'postop_day'] },
     { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
-    { key: 'patient', title: { zh: '肝功能與其他', en: 'Liver and other' }, hint: { zh: 'Child-Pugh 可用 Child-Pugh 計算機；未填視為未知，不當作「無」。', en: 'Use the Child-Pugh calculator if needed; a blank is unknown, not 「no」.' }, keys: ['liver', 'liver_enzymes', 'bilirubin_high', 'pregnancy', 'gi_risk'] },
+    { key: 'patient', title: { zh: '肝功能與其他', en: 'Liver and other' }, keys: ['liver', 'liver_enzymes', 'bilirubin_high', 'pregnancy', 'gi_risk'] },
     { key: 'regimen', title: { zh: '目前處方', en: 'Current prescription' }, keys: ['regimen'] },
-    { key: 'ddi', title: { zh: '併用藥', en: 'Co-medications' }, hint: { zh: '依目前有效處方帶入，請核對實際服用與給藥途徑（僅全身性用藥）。', en: 'Filled from current prescriptions; check what is actually taken and the route (systemic only).' }, keys: ['ddi_ketoconazole', 'ddi_itraconazole', 'ddi_vori_posaconazole', 'ddi_hiv_pi', 'ddi_ciclosporin', 'ddi_tacrolimus', 'ddi_dronedarone', 'ddi_verapamil', 'ddi_amiodarone', 'ddi_quinidine', 'ddi_erythromycin', 'ddi_clarithromycin', 'ddi_glecaprevir', 'ddi_inducer', 'ddi_anticoagulant'] },
+    { key: 'ddi', title: { zh: '併用藥', en: 'Co-medications' }, hint: { zh: '依目前有效處方帶入（僅全身性用藥），請核對實際服用。', en: 'Filled from current prescriptions (systemic only); check what is actually taken.' }, summary: ddiSummary, keys: ['ddi_ketoconazole', 'ddi_itraconazole', 'ddi_vori_posaconazole', 'ddi_hiv_pi', 'ddi_ciclosporin', 'ddi_tacrolimus', 'ddi_dronedarone', 'ddi_verapamil', 'ddi_amiodarone', 'ddi_quinidine', 'ddi_erythromycin', 'ddi_clarithromycin', 'ddi_glecaprevir', 'ddi_inducer', 'ddi_anticoagulant'] },
   ],
   // The headline the list and a note carry: the prescription against its
   // label, or the CrCl the four doses were read at. The four agents
@@ -137,7 +156,6 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       interpretation: check?.text ?? { zh: `${crclText}：四藥劑量見下表`, en: `${crclText}: four agents below` },
     }
   },
-  reference: 'EU SmPC (EMA product information) of Eliquis, Xarelto, Lixiana and Pradaxa — NVAF, DVT/PE and hip/knee prophylaxis posology, sections 4.1–4.6. Taiwan labels pending pharmacy review; see the notes under the result.',
 }, {
   id: 'doac-periop',
   version: DOAC_RULES_VERSION,
@@ -148,21 +166,23 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     REGIMEN_INPUT,
     {
       key: 'dose_intent', type: 'select', label: { en: 'Apixaban 2.5 mg bid is for', zh: 'apixaban 2.5 mg bid 的用途' }, defaultValue: '', optional: true,
+      visibleWhen: (values) => values.regimen === 'apixaban:2.5:2',
       options: [
         { value: 'high', label: { en: 'NVAF (reduced therapeutic dose)', zh: 'NVAF（減量的治療劑量）' } },
         { value: 'low', label: { en: 'Extended VTE prevention or post-op prophylaxis', zh: 'VTE 延長期或術後預防' } },
       ],
     },
-    { key: 'dose_time_1', type: 'time', label: { en: 'Actual dose time (first, or the only one)', zh: '實際服藥時刻（第一劑或 qd 那一劑）' } },
-    { key: 'dose_time_2', type: 'time', label: { en: 'Actual dose time (second, bid)', zh: '實際服藥時刻（bid 的第二劑）' }, optional: true },
+    { key: 'dose_time_1', type: 'time', label: { en: 'Time the patient actually takes it (first, or the only one)', zh: '病人實際服藥時刻（第一劑或 qd）' } },
+    { key: 'dose_time_2', type: 'time', label: { en: 'Time the patient actually takes it (second)', zh: '病人實際服藥時刻（第二劑）' }, optional: true, visibleWhen: (values) => parseRegimen(values.regimen)?.perDay !== 1 },
     ...RENAL_INPUTS,
     {
       key: 'procedure_kind', type: 'select', label: { en: 'Procedure', zh: '處置' }, defaultValue: '',
       options: [
         { value: 'af-ablation', label: { en: 'AF catheter ablation', zh: 'AF 導管消融' } },
-        { value: 'minimal', label: { en: 'Minor bleeding risk', zh: '極低出血風險' } },
-        { value: 'low', label: { en: 'Low bleeding risk', zh: '低出血風險' } },
-        { value: 'high', label: { en: 'High bleeding risk', zh: '高出血風險' } },
+        // EHRA 2021 Table 12's examples, so the tier is picked from them.
+        { value: 'minimal', label: { en: 'Minor risk: ≤3 teeth, cataract/glaucoma, endoscopy without biopsy, superficial surgery, pacemaker/ICD, EP study', zh: '極低出血風險：拔牙 ≤3 顆、白內障／青光眼、內視鏡不切片、表淺手術、PM／ICD、電生理檢查' } },
+        { value: 'low', label: { en: 'Low risk: complex dental, endoscopy with simple biopsy, small orthopaedic surgery', zh: '低出血風險：複雜牙科、內視鏡簡單切片、小型骨科手術' } },
+        { value: 'high', label: { en: 'High risk: cardiac, vascular, neuro, abdominal, thoracic, major urologic/orthopaedic, liver/kidney biopsy, complex endoscopy, ESWL', zh: '高出血風險：心臟、周邊血管、神經、腹部、胸腔、大型泌尿／骨科、肝腎切片、複雜內視鏡、ESWL' } },
         { value: 'emergency', label: { en: 'Emergency or urgent (cannot be planned)', zh: '緊急／急迫（無法計畫）' } },
       ],
     },
@@ -179,15 +199,16 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     { key: 'surgery_at', type: 'datetime', label: { en: 'Start: anaesthesia or procedure (the neuraxial puncture, if any)', zh: '開始時刻：麻醉或處置（有脊髓／硬膜外時為穿刺時刻）' } },
     { key: 'surgery_end_at', type: 'datetime', label: { en: 'End of the procedure (restart is counted from it)', zh: '手術結束時刻（術後恢復由此起算）' }, optional: true },
     { key: 'haemostasis', type: 'select', label: { en: 'Haemostasis after the procedure', zh: '術後止血' }, options: [{ value: 'no', label: { en: 'Not yet established', zh: '尚未止血' } }, { value: 'yes', label: { en: 'Confirmed', zh: '已確認' } }], defaultValue: '', optional: true },
-    { key: 'catheter_removed_at', type: 'datetime', label: { en: 'Catheter removed at', zh: '導管拔除時刻' }, optional: true },
-    { key: 'sheath_removed_at', type: 'datetime', label: { en: 'Sheath removed at (AF ablation)', zh: '拔 sheath 時刻（AF 消融）' }, optional: true },
-    { key: 'traumatic_puncture', type: 'select', label: { en: 'Traumatic (bloody) neuraxial puncture', zh: '脊髓／硬膜外穿刺出血' }, options: YES_NO, defaultValue: '', optional: true },
+    { key: 'catheter_removed_at', type: 'datetime', label: { en: 'Catheter removed at', zh: '導管拔除時刻' }, optional: true, visibleWhen: (values) => values.neuraxial === 'catheter' || values.neuraxial === 'plexus-catheter' },
+    { key: 'sheath_removed_at', type: 'datetime', label: { en: 'Sheath removed at', zh: '拔 sheath 時刻' }, optional: true, visibleWhen: (values) => values.procedure_kind === 'af-ablation' },
+    // An emergency with the block unanswered still reads it (「if the puncture was traumatic」).
+    { key: 'traumatic_puncture', type: 'select', label: { en: 'Traumatic (bloody) neuraxial puncture', zh: '脊髓／硬膜外穿刺出血' }, options: YES_NO, defaultValue: '', optional: true, visibleWhen: (values) => values.neuraxial === 'single' || values.neuraxial === 'catheter' || (values.procedure_kind === 'emergency' && (values.neuraxial ?? '') === '') },
   ],
   inputGroups: [
-    { key: 'regimen', title: { zh: '目前處方與服藥時刻', en: 'Prescription and dose times' }, hint: { zh: '跳過幾劑要用病人實際服藥的時刻，不用處方預設時間。ASRA 依劑量分高（治療）與低（預防）劑量；只有 apixaban 2.5 mg bid 需要回答用途。', en: 'Skipped doses need the times the patient actually takes them. ASRA reads high (therapeutic) and low (prophylactic) doses; only apixaban 2.5 mg bid needs its use answered.' }, keys: ['regimen', 'dose_intent', 'dose_time_1', 'dose_time_2'] },
+    { key: 'regimen', title: { zh: '目前處方與服藥時刻', en: 'Prescription and dose times' }, keys: ['regimen', 'dose_intent', 'dose_time_1', 'dose_time_2'] },
     { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
-    { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, hint: { zh: '分級依 EHRA 2021 Table 12。極低：拔牙 ≤3 顆、白內障／青光眼、內視鏡不切片、表淺手術、心律調節器／ICD、電生理檢查。低：複雜牙科、內視鏡簡單切片、小型骨科手術。高：心臟、周邊血管、神經、腹部、胸腔、大型泌尿或骨科手術、肝腎切片、複雜內視鏡、體外震波碎石。有脊髓／硬膜外麻醉或深部神經叢／周邊阻斷時，一律另依 ASRA 2025，不論分級。未填視為未知。', en: 'Tiers follow EHRA 2021 Table 12. Minor: ≤3 teeth extracted, cataract/glaucoma, endoscopy without biopsy, superficial surgery, pacemaker/ICD, EP study. Low: complex dental, endoscopy with simple biopsy, small orthopaedic surgery. High: cardiac, vascular, neuro, abdominal, thoracic, major urologic or orthopaedic surgery, liver/kidney biopsy, complex endoscopy, ESWL. Spinal/epidural anaesthesia or a deep plexus/peripheral block always adds ASRA 2025 whatever the tier. A blank is unknown.' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at'] },
-    { key: 'after', title: { zh: '術後', en: 'After the procedure' }, hint: { zh: '術前停藥算到開始時刻，術後恢復從結束時刻起算（AF 消融從拔 sheath 起算）。', en: 'The interval before runs to the start; the restart is counted from the end (after AF ablation, from sheath removal).' }, keys: ['surgery_end_at', 'haemostasis', 'catheter_removed_at', 'sheath_removed_at', 'traumatic_puncture'] },
+    { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at'] },
+    { key: 'after', title: { zh: '術後', en: 'After the procedure' }, keys: ['surgery_end_at', 'haemostasis', 'catheter_removed_at', 'sheath_removed_at', 'traumatic_puncture'] },
   ],
   compute: (values) => {
     const plan = calculatePeriop(values)
@@ -217,5 +238,4 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       interpretation,
     }
   },
-  reference: 'EHRA 2021 Practical Guide on NOACs (Steffel et al., Europace 2021;23:1612–1676), Table 12 and Figures 12, 14–16; ASRA 2025, 5th edition (Kopp et al., Reg Anesth Pain Med 2025, doi:10.1136/rapm-2024-105766), direct oral anticoagulants, pp.6–10; EU SmPC section 4.4 of each agent.',
 }]
