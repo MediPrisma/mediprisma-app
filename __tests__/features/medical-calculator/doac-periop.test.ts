@@ -181,6 +181,19 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(result.resume.firstDose!)).toBe('11-03 20:00')
     expect(allText(result)).toContain('不服用、不補服')
   })
+  it('qd: a restart past midnight, or more than one dose in between, is not made up — never two doses in one day (#review final Opus 2)', () => {
+    const late = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T18:00' })
+    expect(formatLocal(late.resume.earliest!)).toBe('11-04 00:00')
+    expect(late.resume.delayed).toBeUndefined()
+    expect(times(late.resume.skippedAfter)).toEqual(['11-03 09:00'])
+    expect(formatLocal(late.resume.firstDose!)).toBe('11-04 09:00')
+    expect(allCites(late)).toContain(CITES.rivaroxabanMissed)
+    // An evening dose after a morning procedure is simply taken at its time.
+    const evening = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'edoxaban:60:1', dose_time_1: '20:00', dose_time_2: '', surgery_end_at: '2026-11-03T09:00' })
+    expect(evening.resume.delayed).toBeUndefined()
+    expect(evening.resume.skippedAfter).toEqual([])
+    expect(formatLocal(evening.resume.firstDose!)).toBe('11-03 20:00')
+  })
   it('qd: the day’s dose is taken at the restart instead, the same day (EHRA Figure 15; #review final Opus)', () => {
     // qd 09:00, minor risk 08:00–09:00: the 09:00 dose moves to 15:00, then 09:00 the next day — not a 48 h gap.
     const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T09:00' })
@@ -188,7 +201,7 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(result.resume.delayed!)).toBe('11-03 09:00')
     expect(formatLocal(result.resume.firstDose!)).toBe('11-03 15:00')
     expect(result.resume.skippedAfter).toEqual([])
-    expect(allText(result)).toContain('處置當天那一劑延到恢復時')
+    expect(allText(result)).toContain('恢復仍在同一天就延到恢復時服用')
   })
   it('a trough already reached needs no prompt: bid 08:00/20:00, procedure at 08:00 is 12 h after the 20:00 dose', () => {
     const result = plan({ procedure_kind: 'minimal' })

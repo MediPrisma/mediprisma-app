@@ -518,10 +518,11 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       // With a deep block, ASRA's interval replaces the trough: no 「不提前停藥」 beside it.
       result.basis.push(blockUsed
         ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不提前停藥」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, not stopped early”.'), G.ehraFig14)
-        : line(regimen.perDay === 1
-          ? t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置當天那一劑延到恢復時（術後 ≥6 小時）服用，之後照原時間。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. The day’s dose is taken at the restart (≥6 h after), then the usual times.`)
-          : t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置當下到恢復前的劑量不服用、不補服，恢復後從下一個排定時間繼續。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. Doses from the procedure to the restart are not taken nor made up; resume at the next scheduled time.`),
-          G.ehraFig14, G.ehraFig15))
+        : regimen.perDay === 1
+          ? line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。若當天那一劑落在處置到恢復之間：恢復仍在同一天就延到恢復時服用；已跨日則不補服，隔天照原時間（同仿單漏服原則，不在同一天服兩劑）。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. If the day’s dose falls between the procedure and the restart: taken at the restart when that is the same day; past midnight it is not made up and the usual time follows (as the label’s missed-dose rule: never two doses in one day).`),
+            G.ehraFig14, G.ehraFig15, ...(agent === 'rivaroxaban' ? [CITES.rivaroxabanMissed] : agent === 'edoxaban' ? [CITES.edoxabanMissed] : []))
+          : line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置當下到恢復前的劑量不服用、不補服，恢復後從下一個排定時間繼續。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. Doses from the procedure to the restart are not taken nor made up; resume at the next scheduled time.`),
+            G.ehraFig14, G.ehraFig15))
     } else {
       const pair = ehraHours(agent, crclValue)!
       hours = tier === 'high' ? pair[1] : pair[0]
@@ -694,8 +695,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       const first = after.find((at) => at.getTime() >= earliest.getTime())
       // With nothing skipped before, a dose due at the start itself is not lost between the two lists.
       const between = after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime()))
-      if (troughOnly && regimen.perDay === 1 && between.length) {
-        // EHRA Figure 15, minor risk, once daily: the day's dose is taken after the restart, the same day.
+      const sameDay = (x: Date, y: Date) => x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate()
+      if (troughOnly && regimen.perDay === 1 && between.length === 1 && sameDay(between[0]!, earliest)) {
+        // EHRA Figure 15, minor risk, once daily: the day's dose is taken after the restart — the same day only, as
+        // the label's missed-dose rule; past midnight it is not made up (the else branch).
         result.resume.delayed = between[0]
         result.resume.firstDose = earliest
       } else {

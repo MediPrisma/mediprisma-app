@@ -167,6 +167,7 @@ export const CITES = {
   apixabanVtepEsrd: cite('apixaban', '4.2', 5, 'In patients with creatinine clearance < 15 mL/min, or in patients undergoing dialysis, there is no clinical experience therefore apixaban is not recommended', 'Eliquis 2.5 mg'),
   apixabanVtepInducer: cite('apixaban', '4.4', 10, 'for the prevention of VTE in elective hip or knee replacement surgery, for the prevention of stroke and systemic embolism in patients with NVAF and for the prevention of recurrent DVT and PE, apixaban should be used with caution;', 'Eliquis 2.5 mg'),
 
+  rivaroxabanMissed: cite('rivaroxaban', '4.2', 86, 'If a dose is missed the patient should take Xarelto immediately and continue on the following day with the once daily intake as recommended.'),
   rivaroxabanVteAcute: cite('rivaroxaban', '4.2', 86, 'The recommended dose for the initial treatment of acute DVT or PE is 15 mg twice daily for the first three weeks followed by 20 mg once daily for the continued treatment and prevention of recurrent DVT and PE.'),
   rivaroxabanVteExtended: cite('rivaroxaban', '4.2', 87, 'When extended prevention of recurrent DVT and PE is indicated (following completion of at least 6 months therapy for DVT or PE), the recommended dose is 10 mg once daily.'),
   rivaroxabanVteExtendedHigh: cite('rivaroxaban', '4.2', 87, 'a dose of Xarelto 20 mg once daily should be considered.'),
@@ -181,6 +182,7 @@ export const CITES = {
   rivaroxabanVtepKnee: cite('rivaroxaban', '4.2', 29, 'For patients undergoing major knee surgery, a treatment duration of 2 weeks is recommended.', 'Xarelto 10 mg'),
   rivaroxabanVtepRenal: cite('rivaroxaban', '4.2', 31, 'Therefore, Xarelto is to be used with caution in these patients. Use is not recommended in patients with creatinine clearance < 15 ml/min', 'Xarelto 10 mg'),
 
+  edoxabanMissed: cite('edoxaban', '4.2', 3, 'If a dose of edoxaban is missed, the dose should be taken immediately and then be continued the following day with the once-daily intake as recommended.'),
   edoxabanVte: cite('edoxaban', '4.2', 3, 'The recommended dose is 60 mg edoxaban once daily following initial use of parenteral anticoagulant for at least 5 days'),
   edoxabanVteNoOverlap: cite('edoxaban', '4.2', 3, 'Edoxaban and initial parenteral anticoagulant should not be administered simultaneously.'),
   edoxabanSwitchSc: cite('edoxaban', '4.2 Table 2', 4, 'Discontinue subcutaneous anticoagulant and start edoxaban at the time of the next scheduled subcutaneous anticoagulant dose.'),
