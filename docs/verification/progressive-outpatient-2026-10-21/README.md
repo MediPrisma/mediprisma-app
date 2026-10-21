@@ -1,7 +1,7 @@
 # Progressive outpatient import verification
 
 - Base: 03442294087e623a113d9c4750cf5d16eacbb881 (0.51.0).
-- Implementation reviewed and built: 89def08ce93a80c2d921c1e953da116de1846a7e (0.51.1). The evidence-only commit adds these files without runtime changes.
+- Implementation reviewed and built: 89def08ce93a80c2d921c1e953da116de1846a7e (0.51.1). Subsequent commits add this evidence and summary-refresh assertions without runtime changes.
 - All screenshots use the same synthetic patient, snapshot sequence, and 1440 × 960 viewport. Local production webpack export, isolated headless Chrome contexts, external requests blocked. Public synthetic Firebase values are used for QA only; this build must never be deployed.
 - Before uses the base commit. It receives the same synthetic file inputs as manual imports because it does not advertise the progressive protocol. This is a UI comparison, not a claim that the old App supports three-stage extension negotiation.
 
@@ -21,7 +21,7 @@
 
 ## Validation
 
-The 149-test AI/provider/storage regression and 33 progressive importer/status tests cover terminal launch retirement, late credentials, generic recoverable failures, active automatic cancellation, completed-artifact retention, provisional preview rollback, and Bundle epoch isolation. The retained model-selection fallback only records settled artifacts; it does not preserve in-flight previews after cancellation.
+The final 186-test AI/provider/storage/progressive-import regression covers terminal launch retirement, late credentials, generic recoverable failures, active automatic cancellation, completed-artifact retention, provisional preview rollback, and Bundle epoch isolation. The retained model-selection fallback only records settled artifacts; it does not preserve in-flight previews after cancellation.
 
 The production-browser suite verifies cloud → SOAP → reports, stale replay rejection, different-patient rejection, raw FHIR graph uniqueness and download, images, cloned-tab source survival, quota rollback, and terminal warning persistence across reload. It also checks that replacing a same-patient snapshot closes an already-open stale report detail pane.
 
@@ -38,3 +38,5 @@ The compiled-injector simulation extracts startMediPrismaImport from the actual 
 - Production is deployed through the existing master CI → site synchronization workflow with production configuration, never from the local QA export.
 
 Initial capture aborted before publication: the empty workspace displays a specific stop notice and no chart pointer is committed (initial-stop.json / after-initial-stop.png).
+
+Summary-refresh tests verify visits/final receipts bind the new import, repeated receipts are ignored, and cloud/stopped receipts do not requeue.

@@ -20,7 +20,7 @@ import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
-import { useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { PROGRESSIVE_IMPORT_EVENT, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 const launchHref = 'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
@@ -134,6 +134,34 @@ describe('MedcloudLaunchProvider', () => {
     act(() => useProgressiveImportStore.setState({ pendingRunId: 'run-a', stoppedRuns: { 'run-a': 'failed' } }))
     settleImportedBundle()
     expect(useMedcloudLaunchStore.getState().pendingSummary).not.toBeNull()
+  })
+
+  it.each(['hospital-visits', 'hospital'] as const)('refreshes automatic summaries once for an accepted %s replacement', stage => {
+    const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
+    render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+    settleImportedBundle()
+    const first = useMedcloudLaunchStore.getState().pendingSummary!
+    useMedcloudLaunchStore.getState().claimSummary(first.messageId)
+    active.mockReturnValue('updated-import')
+    act(() => useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'updated-import', phase: 'loaded' } }))
+    const receipt = { version: 1, ok: true, stage, runId: 'run-a', requestId: 'updated-request', importId: 'updated-import', stopped: false }
+    act(() => window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: receipt })))
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toMatchObject({ messageId: 'updated-request', progressiveRunId: 'run-a', progressiveImportId: 'updated-import' })
+    useMedcloudLaunchStore.getState().claimSummary('updated-request')
+    act(() => window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: receipt })))
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    active.mockRestore()
+  })
+
+  it.each([{ stage: 'cloud', stopped: false }, { stage: 'hospital-visits', stopped: true }])('does not requeue a $stage receipt with stopped=$stopped', receipt => {
+    const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
+    render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+    settleImportedBundle()
+    useMedcloudLaunchStore.getState().claimSummary(useMedcloudLaunchStore.getState().pendingSummary!.messageId)
+    act(() => window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: { version: 1, ok: true, runId: 'run-a', requestId: 'ignored', importId: 'cloud-import', ...receipt } })))
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    active.mockRestore()
   })
 
   it('activates the runtime-only profile, selects it everywhere, and acknowledges', async () => {
