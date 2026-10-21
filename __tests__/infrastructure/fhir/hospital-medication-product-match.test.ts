@@ -49,3 +49,12 @@ it('can suggest a name-only complete product comparison without assigning its cl
     expect(hospitalProductMayMatchKnowledge({ coding: [{ system: 'urn:oid:vgh.medication.name', code: different }] }, 'SYNTH00001', knowledge)).toBe(false)
   }
 })
+
+it.each(['1 g', '100 g', '1 ml', '100 ml'])('preserves complete topical knowledge comparisons with a numeric denominator: %s', (denominator) => {
+  const { knowledge } = fixture()
+  const product = `Synthetic ointment 20 mg/${denominator}`
+  knowledge.code.coding[0] = { system: NHI, code: 'SYNTH00001', display: product }
+  knowledge.doseForm.text = '軟膏劑'
+  const concept = { coding: [{ system: 'urn:oid:vgh.medication.name', code: product, display: product }] }
+  expect(hospitalProductMayMatchKnowledge(concept, 'SYNTH00001', knowledge)).toBe(true)
+})

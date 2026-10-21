@@ -20,6 +20,11 @@ it('separates a mass-ratio concentration from its optional tube size',()=>{
  expect(hospitalProductMayMatchConcept(name('Synthetic ointment 20 mg/g 5 g'),cloud('SYNTHETIC OINTMENT 20 mg/g'))).toBe(true)
  expect(hospitalProductMayMatchConcept(name('Synthetic ointment 20 mg/g 5 g'),cloud('SYNTHETIC OINTMENT 20 mg/g 15 g'))).toBe(false)
 })
+it.each(['1 g','100 g','1 ml','100 ml'])('retains a numeric concentration denominator and separates its package: %s',(denominator)=>{
+ const product=`Synthetic ointment 20 mg/${denominator}`
+ expect(hospitalProductMayMatchConcept(name(`${product} 5 g`),cloud(product))).toBe(true)
+ expect(hospitalProductMayMatchConcept(name(`${product} 5 g`),cloud(`${product} 15 g`))).toBe(false)
+})
 it.each(['Synthetic solution 2%', 'Synthetic injection 10 mg/2 ml', 'Synthetic injection 10 mg'])('accepts a liquid product with an explicit strength: %s',(product)=>{
  expect(hospitalProductMayMatchConcept(name(product),cloud(product))).toBe(true)
 })
@@ -34,7 +39,7 @@ it.each(['Synthetic solution 100 ml','Synthetic drops 5 ml','Synthetic injection
  expect(rows).toHaveLength(2)
  expect(rows.every(row=>!row.sourceComparison)).toBe(true)
 })
-it.each([['Conlifu * oint 2% 5 g','CONLIFU OINTMENT 2%'],['Synthetic ointment 20 mg/g 5 g','SYNTHETIC OINTMENT 20 mg/g']])('retains both raw orders and uses one hospital row for a matching topical comparison: %s',(hospitalProduct,cloudProduct)=>{
+it.each([['Conlifu * oint 2% 5 g','CONLIFU OINTMENT 2%'],['Synthetic ointment 20 mg/g 5 g','SYNTHETIC OINTMENT 20 mg/g'],['Synthetic ointment 20 mg/1 g 5 g','SYNTHETIC OINTMENT 20 mg/1 g']])('retains both raw orders and uses one hospital row for a matching topical comparison: %s',(hospitalProduct,cloudProduct)=>{
  const base={resourceType:'MedicationRequest',subject:{reference:'Patient/synthetic'},encounter:{reference:'Encounter/synthetic'},authoredOn:'2026-05-07',status:'active',dispenseRequest:{expectedSupplyDuration:{value:7,code:'d'}}}
  const hospital:any={...base,id:'synthetic-ointment-hospital',meta:{source:'ehr-fhir-bridge/scraper'},medicationCodeableConcept:name(hospitalProduct),dosageInstruction:[{text:'X1 TUB T BID',timing:{code:{text:'BID'}}}]}
  const other:any={...base,id:'synthetic-ointment-cloud',meta:{source:'https://medcloud2.nhi.gov.tw/'},medicationCodeableConcept:cloud(cloudProduct),dosageInstruction:[{text:'BID'}]}
