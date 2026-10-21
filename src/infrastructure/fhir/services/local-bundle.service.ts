@@ -586,6 +586,12 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
   const rawEntries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
   const entries = rawEntries.filter((e) => e?.resource)
   const sourceNodes = source ? selectClinicalSourceNodes(source) : []
+  if (source && (entries.length !== sourceNodes.length || entries.some((entry, index) =>
+    (entry.fullUrl ?? null) !== (sourceNodes[index].fullUrl ?? null)
+    || !clinicalSourceResourcesEqual(entry.resource, sourceNodes[index].resource),
+  ))) {
+    throw new Error('Clinical source projection input does not match its selected source records')
+  }
   const projectionIds = source ? createClinicalSourceProjectionIds(source) : new Map<string, string>()
 
   // Pass 1 — assign ids; index every resolvable key to its canonical target.

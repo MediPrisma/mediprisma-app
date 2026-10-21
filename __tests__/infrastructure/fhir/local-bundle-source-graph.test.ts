@@ -33,6 +33,13 @@ it('preserves the capture generation in the shared result', () => {
   expect(first.graph.nodes[0].key).not.toBe(second.graph.nodes[0].key)
 })
 
+it('rejects a mismatched source graph instead of assigning another record identity by position', () => {
+  const bundle = fixture()
+  const source = LocalBundleService.parse(bundle)!.collection.clinicalSource!
+  expect(() => canonicalizeBundleResources({ ...bundle, entry: [...bundle.entry].reverse() }, source)).toThrow('does not match')
+  expect(() => canonicalizeBundleResources({ ...bundle, entry: bundle.entry.slice(1) }, source)).toThrow('does not match')
+})
+
 it('keeps anonymous generated ids separate from explicit ids and preserves source joins through encounter enrichment', () => {
   const observation = { resourceType: 'Observation', status: 'final', code: { text: 'Synthetic lab' }, effectiveDateTime: '2026-10-21', valueQuantity: { value: 7 } }
   const bundle = { resourceType: 'Bundle', type: 'collection', entry: [

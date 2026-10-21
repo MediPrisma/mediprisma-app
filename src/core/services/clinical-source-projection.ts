@@ -33,6 +33,8 @@ function digest(value: string): string {
  * query and _include copies share one row ID. Anonymous records use the graph
  * key because equal payloads alone do not prove retransmission. FHIR's original
  * id remains in sourceId.
+ * Stability is scoped to one source/session/import. A different login or import
+ * deliberately has a different source scope; IDs are not cross-session cache keys.
  */
 export function createClinicalSourceProjectionIds(
   source: ClinicalReconciliationResult,
