@@ -1,7 +1,7 @@
 import { buildReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
 import { calculateReportTabCounts } from '@/features/clinical-summary/reports/utils/report-tab-counts'
 import { imagingReportsCategory } from '@/src/core/categories/imaging-reports.category'
-import { normalizeImagingReportCopy, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { normalizeImagingClinicalText, normalizeImagingReportCopy, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
 import { getReportDate } from '@/src/shared/utils/report-identity'
 import { NHI_MEDICLOUD_SOURCE_EXTENSION_URL } from '@/src/shared/utils/observation-provenance.utils'
@@ -23,6 +23,19 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it('suppresses a mixed-channel synthetic summary only when the retained report represents all its metadata', () => {
+    const reports = [0, 1].map(index => ({ ...pair()[0], id: `mixed-${index}`, conclusion: index ? BODY : undefined,
+      _observations: index ? [] : [{ resourceType: 'Observation', id: 'mixed-summary', status: 'final', code: { text: 'Report Summary' }, valueString: BODY.slice(0, 110) }],
+    }))
+    let row = buildReportsData(reports).reportRows[0]
+    expect(row.bridgeDupCount).toBe(1)
+    expect(row.obs.filter(obs => obs.valueString)).toHaveLength(1)
+    Object.assign(reports[0]._observations[0], { interpretation: [{ text: 'Additional source assessment' }] })
+    row = buildReportsData(reports).reportRows[0]
+    expect(row.obs.filter(obs => obs.valueString)).toHaveLength(2)
+    expect(JSON.stringify(row.obs)).toContain('Additional source assessment')
+  })
+
   it('collapses only redundant narrative observations and identical image descriptors, retaining distinct metadata', () => {
     const reports = [0, 1].map(index => ({ ...pair()[0], id: `native-${index}`, conclusion: undefined,
       _observations: [{ id: `text-${index}`, status: 'final', code: { text: 'Report text' }, valueString: index ? BODY : BODY.slice(0, 110) }],
@@ -322,6 +335,8 @@ describe('cross-source imaging reports', () => {
     reports[1].conclusion = text.replaceAll(' ', '  \n ')
     expect(buildReportsData(reports).reportRows).toHaveLength(1)
     expect(normalizeImagingReportCopy('no table')).not.toBe(normalizeImagingReportCopy('notable'))
+    expect(normalizeImagingClinicalText('1.e5 mm')).not.toBe(normalizeImagingClinicalText('1. e5 mm'))
+    expect(normalizeImagingClinicalText('4 mM')).not.toBe(normalizeImagingClinicalText('4 mm'))
     expect(normalizeImagingReportCopy('Impressionistic lesion description')).toBe('Impressionistic lesion description')
   })
 

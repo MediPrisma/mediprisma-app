@@ -452,9 +452,22 @@ export function buildReportsData(
           // has the same metadata and a complete copy of that narrative.
           if (!clinicalReports.has(dr) && isNarrativeOnlyObservation) {
             const metadata = (value: Observation) => JSON.stringify({ ...value, id: undefined, valueString: undefined })
-            const duplicate = grp.some(report => (Array.isArray(report._observations) ? report._observations : []).some(kept =>
-              typeof kept?.valueString === 'string' && metadata(kept) === metadata(o)
-                && normalizeImagingClinicalText(kept.valueString).startsWith(normalizeImagingClinicalText(o.valueString ?? ''))))
+            const duplicate = grp.some(report => {
+              const matchingObservation = (Array.isArray(report._observations) ? report._observations : []).some(kept =>
+                typeof kept?.valueString === 'string' && metadata(kept) === metadata(o)
+                  && normalizeImagingClinicalText(kept.valueString).startsWith(normalizeImagingClinicalText(o.valueString ?? '')))
+              // Synthetic whole-report observations may use a different text
+              // channel. Every remaining metadata field must also be present
+              // unchanged on the retained report; unknown assessments survive.
+              const wholeReportCode = JSON.stringify(o.code) === JSON.stringify({ text: 'Report Summary' })
+                || JSON.stringify(o.code) === JSON.stringify(report.code)
+              const representedMetadata = Object.entries(o).every(([field, value]) =>
+                ['id', 'resourceType', 'code', 'valueString'].includes(field)
+                  || JSON.stringify(value) === JSON.stringify(Reflect.get(report, field)))
+              return matchingObservation || ((o.resourceType == null || o.resourceType === 'Observation')
+                && wholeReportCode && representedMetadata
+                && normalizedReportNarrative(report).startsWith(normalizeImagingClinicalText(o.valueString ?? '')))
+            })
             if (duplicate) continue
           }
           if (perTitle) {

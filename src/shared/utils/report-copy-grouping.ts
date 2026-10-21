@@ -23,7 +23,15 @@ function foldFullWidthAscii(value: string): string {
 
 /** Safe typography comparison without discarding source signatures/addenda. */
 export function normalizeImagingClinicalText(value: string): string {
-  return foldFullWidthAscii(value).replace(/\s+/g, ' ').trim()
+  // Preserve legacy dictation joins at explicit capitalized-word boundaries
+  // and punctuation. Never erase whitespace or case: that would equate
+  // numeric tokens, scientific notation, units, or "no table"/"notable".
+  return foldFullWidthAscii(value)
+    .replace(/([a-z]{2})(?=[A-Z][a-z]{2})/g, '$1 ')
+    .replace(/([A-Z]{2})(?=[A-Z][a-z])/g, '$1 ')
+    .replace(/([:;])(?=[A-Za-z])/g, '$1 ')
+    .replace(/([A-Za-z])\.(?=[A-Za-z])/g, '$1. ')
+    .replace(/\s+/g, ' ').trim()
 }
 
 /** Compare complete clinical text, never a similarity score or a prefix.
