@@ -4,6 +4,7 @@ import { useOriginalFhirDownload } from '@/src/application/hooks/use-original-fh
 let mockImportId = 'first'
 const mockHasOriginal = jest.fn()
 const mockLoadOriginal = jest.fn()
+const mockLoadBundle = jest.fn()
 const mockSerialize = jest.fn()
 const mockCreateObjectURL = jest.fn()
 
@@ -15,6 +16,7 @@ jest.mock('@/src/infrastructure/fhir/services/local-bundle.service', () => ({
     getActiveImportId: () => mockImportId,
     hasOriginalFhir: () => mockHasOriginal(),
     loadOriginalFhir: () => mockLoadOriginal(),
+    load: () => mockLoadBundle(),
   },
 }))
 jest.mock('@/src/infrastructure/fhir/services/local-bundle-mutation-queue', () => ({
@@ -25,9 +27,33 @@ beforeEach(() => {
   mockImportId = 'first'
   mockHasOriginal.mockReset().mockResolvedValue(true)
   mockLoadOriginal.mockReset()
+  mockLoadBundle.mockReset().mockResolvedValue(null)
   mockSerialize.mockReset().mockImplementation((callback: () => Promise<unknown>) => callback())
   mockCreateObjectURL.mockReset()
   URL.createObjectURL = mockCreateObjectURL
+})
+
+it('labels the unchanged original Blob with its own source patient and national ID', async () => {
+  const original = new Blob(['unchanged original FHIR'])
+  mockLoadOriginal.mockResolvedValue(original)
+  mockLoadBundle.mockResolvedValue({ resourceType: 'Bundle', entry: [{ resource: {
+    resourceType: 'Patient', id: 'source-patient', name: [{ text: '王小明' }],
+    identifier: [
+      { type: { coding: [{ code: 'MR' }] }, value: 'chart-123' },
+      { type: { coding: [{ code: 'NI' }] }, value: 'A123456789' },
+    ],
+  } }] })
+  mockCreateObjectURL.mockReturnValue('blob:original')
+  let downloadedName = ''
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    downloadedName = this.download
+  })
+  const { result } = renderHook(() => useOriginalFhirDownload())
+  await waitFor(() => expect(result.current.available).toBe(true))
+  await act(() => result.current.download())
+  expect(downloadedName).toMatch(/^FHIR_original_王小明_A123456789_\d{8}\.json$/)
+  expect(mockCreateObjectURL).toHaveBeenCalledWith(original)
+  click.mockRestore()
 })
 
 it('does not download a replacement patient when an import wins the mutation queue', async () => {

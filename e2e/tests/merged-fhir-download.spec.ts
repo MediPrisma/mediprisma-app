@@ -78,7 +78,8 @@ test('merged cloud and hospital originals and every embedded image survive downl
     const pending = target.waitForEvent('download')
     await button.click()
     const download = await pending
-    expect(download.suggestedFilename()).toMatch(/^FHIR_original_\d{8}\.json$/)
+    await info.attach(`${stage}-filename`, { contentType: 'text/plain', body: download.suggestedFilename() })
+    expect(download.suggestedFilename()).toMatch(/^FHIR_original_整併測試病人_A123456789_\d{8}\.json$/)
     const path = info.outputPath(`${stage}.json`)
     await download.saveAs(path)
     const bytes = await fs.readFile(path)
