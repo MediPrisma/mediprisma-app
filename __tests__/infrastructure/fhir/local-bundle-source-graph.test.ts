@@ -40,6 +40,45 @@ it('rejects a mismatched source graph instead of assigning another record identi
   expect(() => canonicalizeBundleResources({ ...bundle, entry: bundle.entry.slice(1) }, source)).toThrow('does not match')
 })
 
+it.each(['Observation', 'MedicationRequest', 'ServiceRequest'])('rejects explicit foreign patient subjects on %s', resourceType => {
+  const bundle = { resourceType: 'Bundle', entry: [
+    { fullUrl: 'https://one.invalid/fhir/Patient/a', resource: { resourceType: 'Patient', id: 'a' } },
+    { resource: { resourceType, id: 'foreign', status: 'final', subject: { reference: 'Patient/b' } } },
+  ] }
+  expect(() => LocalBundleService.parse(bundle)).toThrow('病人引用與目前病人不一致')
+  bundle.entry[1].resource.subject = { reference: 'https://other.invalid/fhir/Patient/a' }
+  expect(() => LocalBundleService.parse(bundle)).toThrow('病人引用與目前病人不一致')
+})
+
+it('keeps missing or unresolved patient context when there is no explicit identity contradiction', () => {
+  const bundle = { resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'a' } },
+    { resource: { resourceType: 'Observation', id: 'no-subject', status: 'final', code: { text: 'No subject' } } },
+    { resource: { resourceType: 'Observation', id: 'unknown-base', status: 'final', code: { text: 'Unknown base' }, subject: { reference: 'https://unknown.invalid/fhir/Patient/a' } } },
+    { resource: { resourceType: 'Observation', id: 'unknown-urn', status: 'final', code: { text: 'Unknown urn' }, subject: { reference: 'urn:uuid:unresolved' } } },
+  ] }
+  expect(LocalBundleService.parse(bundle)!.collection.observations).toHaveLength(3)
+})
+
+it('keeps unhoisted contained references local even when a top-level resource shares the id', () => {
+  const bundle = { resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'p' } },
+    { resource: { resourceType: 'Medication', id: 'drug', code: { text: 'Top-level drug' } } },
+    { resource: { resourceType: 'Observation', id: 'result', status: 'final', code: { text: 'Top-level result' }, valueString: 'top-level' } },
+    { resource: { resourceType: 'MedicationRequest', id: 'rx', medicationReference: { reference: '#drug' }, contained: [{ resourceType: 'Medication', id: 'drug', code: { text: 'Contained drug' } }] } },
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: '#result' }], contained: [{ resourceType: 'Observation', id: 'result', status: 'final', code: { text: 'Contained result' }, valueString: 'contained' }] } },
+  ] }
+  const collection = LocalBundleService.parse(bundle)!.collection
+  const canonical = canonicalizeBundleResources(bundle, collection.clinicalSource)
+  const request = canonical.find(row => row.resourceType === 'MedicationRequest')
+  const report = canonical.find(row => row.resourceType === 'DiagnosticReport')
+  expect(request.medicationReference.reference).toBe('#' + request.contained[0].id)
+  expect(report.result[0].reference).toBe('#' + report.contained[0].id)
+  expect(collection.medications[0].medicationCodeableConcept?.text).toBe('Contained drug')
+  expect(collection.observations.map(row => row.valueString)).toEqual(['top-level'])
+  expect(collection.diagnosticReports[0]._observations ?? []).toEqual([])
+})
+
 it('keeps anonymous generated ids separate from explicit ids and preserves source joins through encounter enrichment', () => {
   const observation = { resourceType: 'Observation', status: 'final', code: { text: 'Synthetic lab' }, effectiveDateTime: '2026-10-21', valueQuantity: { value: 7 } }
   const bundle = { resourceType: 'Bundle', type: 'collection', entry: [

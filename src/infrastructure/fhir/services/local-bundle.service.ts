@@ -543,6 +543,29 @@ function cloneResource<T>(resource: T): T {
   return JSON.parse(JSON.stringify(resource))
 }
 
+/** Reject explicit patient identity contradictions, not absent/unresolved context. */
+function assertPatientReferences(resources: any[], patient: { resource: { id?: string }; fullUrl?: string }): void {
+  const patientUrl = patient.fullUrl && /^https?:\/\//i.test(patient.fullUrl)
+    ? patient.fullUrl.replace(/\/_history\/[^/]+\/?$/, '').replace(/\/$/, '') : undefined
+  const knownId = patient.resource.id || (patientUrl ? idFromFullUrl(patientUrl) : undefined)
+  for (const resource of resources) {
+    for (const field of ['subject', 'patient']) {
+      const reference = resource?.[field]?.reference
+      if (typeof reference !== 'string') continue
+      const relative = /^Patient\/([^/]+)(?:\/_history\/[^/]+)?$/.exec(reference)
+      const absolute = /^https?:\/\/.+\/Patient\/([^/]+)(?:\/_history\/[^/]+)?$/i.exec(reference)
+      const id = relative?.[1] ?? absolute?.[1]
+      if (!id) continue
+      const differentId = knownId && id !== knownId
+      const differentUrl = absolute && patientUrl
+        && new URL(reference.replace(/\/_history\/[^/]+$/, '')).href !== new URL(patientUrl).href
+      if (differentId || differentUrl) {
+        throw new Error('此資料的病人引用與目前病人不一致，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+      }
+    }
+  }
+}
+
 /** Rewrite every internal `reference` string in-place to `ResourceType/id`. */
 function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void {
   if (Array.isArray(node)) {
@@ -647,6 +670,7 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
   // Pass 2 — rewrite internal references to the relative ResourceType/id form.
   if (source) {
     const nodes = selectClinicalSourceNodes(source)
+    const nodesByKey = new Map(source.graph.nodes.map(node => [node.key, node]))
     const mappedByKey = new Map(nodes.map((node, index) => [node.key, resources[index]]))
     const childrenByParent = new Map<string, typeof source.graph.nodes[number][]>()
     for (const node of source.graph.nodes) {
@@ -672,7 +696,12 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
       const path = edge.path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
       let reference = origin
       for (const part of path) reference = reference?.[part]
-      if (reference?.reference === edge.reference) reference.reference = target.resourceType + '/' + target.id
+      if (reference?.reference === edge.reference) {
+        const targetNode = nodesByKey.get(edge.targetKeys[0])
+        // Contained resources remain local to their owning resource. A domain
+        // expander may later hoist them and rewrite the fragment explicitly.
+        reference.reference = targetNode?.isContained ? '#' + target.id : target.resourceType + '/' + target.id
+      }
     }
   } else {
     for (const res of resources) rewriteReferences(res, targets)
@@ -1464,6 +1493,8 @@ export const LocalBundleService = {
       const key = sourceKeyByResource.get(observation)
       if (originKey && key) derivedMembers.set(originKey, [...(derivedMembers.get(originKey) ?? []), key])
     })
+    const primaryPatient = projectedNodes.find(node => node.resource.resourceType === 'Patient')
+    if (primaryPatient) assertPatientReferences(entries, primaryPatient)
 
     // Display canonicalisation: resolve Practitioner / Organization / Location
     // references to human-readable display strings (attending physician,

@@ -1,5 +1,6 @@
 import type { DiagnosticReportEntity, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
+import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 
 /** Attach only graph-resolved members across progressive query snapshots. */
 export function attachReportObservations(
@@ -37,7 +38,7 @@ export function attachReportObservations(
           const targetKey = edge.targetKeys.find(key => byNodeKey.has(key))
             ?? (!observationAliases ? edge.targetKeys.find(key => existingByKey.has(key)) : undefined)
           const member = targetKey ? byNodeKey.get(targetKey) ?? existingByKey.get(targetKey) : undefined
-          const identity = member?.id ?? targetKey!
+          const identity = (member ? clinicalRecordKey(member) : undefined) ?? targetKey!
           if (!member || visited.has(identity)) continue
           visited.add(identity)
           members.push(member)
@@ -46,7 +47,7 @@ export function attachReportObservations(
         if (kind === 'hasMember') {
           for (const key of byNodeKey.get(origin)?.clinicalSourceDerivedMemberKeys ?? []) {
             const member = byNodeKey.get(key)
-            const identity = member?.id ?? key
+            const identity = (member ? clinicalRecordKey(member) : undefined) ?? key
             if (!member || visited.has(identity)) continue
             visited.add(identity)
             members.push(member)
@@ -57,7 +58,7 @@ export function attachReportObservations(
       walk(report.clinicalSourceNodeKey, 'result')
       for (const key of report.clinicalSourceDerivedMemberKeys ?? []) {
         const member = byNodeKey.get(key)
-        const identity = member?.id ?? key
+        const identity = (member ? clinicalRecordKey(member) : undefined) ?? key
         if (!member || visited.has(identity)) continue
         visited.add(identity)
         members.push(member)
