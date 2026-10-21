@@ -1,3 +1,4 @@
+import { selectCdssClinicalInputs, type ExcludedClinicalRecordVariant } from './clinical-record-inputs'
 import {
   classifyCurrentMedications,
   createFhirCdssPatientProfile,
@@ -37,6 +38,7 @@ export interface HospitalUnconfirmedAnticoagulation {
 }
 
 export type HospitalAwareCdssProfile = CdssPatientProfile & {
+  excludedClinicalRecordVariants?: readonly ExcludedClinicalRecordVariant[]
   hospitalMedicationEvidence?: readonly HospitalMedicationEvidence[]
   hospitalMedicationPolicyVersion?: string
   /** Classes with an unconfirmed prescription: eligible for safety exposure checks. */
@@ -183,7 +185,9 @@ export function createHospitalAwareCdssPatientProfile(
       name, useState, ingredientName, classIds, factKey: `hospitalMedication:${source._sourceResourceType ?? 'MedicationRequest'}:${source.id}` })
     return normalized
   })
-  const profile = createFhirCdssPatientProfile({ ...input, medications, now })
+  const selected = selectCdssClinicalInputs(input)
+  const profile: HospitalAwareCdssProfile = { ...createFhirCdssPatientProfile({ ...selected.input, medications, now }),
+    ...(selected.excluded.length ? { excludedClinicalRecordVariants: selected.excluded } : {}) }
   if (!evidence.length) return profile
 
   const facts = { ...profile.facts }

@@ -351,7 +351,8 @@ const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = [], medi
       ? 'normality/reference not supplied'
       : ''
   const orders = c.orderNames?.length ? `ordered tests: ${c.orderNames.join('; ')}` : ''
-  const parts = [c.resourceType, date, c.organization ?? '', c.display, medicationClass ?? '', assessment, orders, ...extra]
+  const variant = c.clinicalRecordVariant ? `SAME-RECORD ${c.clinicalRecordVariant.classification} group=${c.clinicalRecordVariant.groupId}; ${c.clinicalRecordVariant.variantCount} variants; chronology unresolved; do not treat as separate events or trend points; ${c.clinicalRecordVariant.reason}` : ''
+  const parts = [variant, c.resourceType, date, c.organization ?? '', c.display, medicationClass ?? '', assessment, orders, ...extra]
   return `[${c.key}] ${parts.filter(Boolean).join(' | ')}`
 }
 
@@ -480,6 +481,7 @@ export function buildSourceCatalog(
         key: `L${i + 1}`,
         resourceType: 'DiagnosticReport',
         resourceId: r.id,
+        clinicalRecordVariant: r.clinicalRecordVariant,
         display: diagnosticReportText(r, locale),
         orderNames: r.basedOn?.map(order => order.display?.trim()).filter((name): name is string => !!name),
         date: day(r.effectiveDateTime ?? r.issued),
@@ -503,6 +505,7 @@ export function buildSourceCatalog(
         key: `O${index + 1}`,
         resourceType: 'Observation',
         resourceId: observation.id,
+        clinicalRecordVariant: observation.clinicalRecordVariant,
         display: codeText(observation.code, locale) ?? 'Observation',
         orderNames: observation.basedOn?.map(order => order.display?.trim()).filter((name): name is string => !!name),
         date: day(observation.effectiveDateTime),
@@ -859,11 +862,12 @@ function collectLongitudinalLabPoints(
   const byObservationId = reportObservationMap(input.observations)
   const points: LongitudinalLabPoint[] = []
   for (const report of input.diagnosticReports ?? []) {
-    if (inferGroupFromCategory(report.category) !== 'lab') continue
+    if (report.clinicalRecordVariant || inferGroupFromCategory(report.category) !== 'lab') continue
     const reportKey = report.id ? sourceByResourceId.get(report.id)?.key : undefined
     const reportDate = day(report.effectiveDateTime ?? report.issued)
     const observations = observationsForReport(report, byObservationId)
     for (const obs of observations) {
+      if (obs.clinicalRecordVariant) continue
       const value = obsValue(obs)
       const date = obsDate(obs) ?? reportDate
       const observationKey = obs.id ? sourceByResourceId.get(obs.id)?.key : undefined
@@ -892,7 +896,7 @@ function collectLongitudinalImagingPoints(
 ): LongitudinalImagingPoint[] {
   const points: LongitudinalImagingPoint[] = []
   const imagingReports = (input.diagnosticReports ?? [])
-    .filter((report) => inferGroupFromDiagnosticReport(report) === 'imaging')
+    .filter((report) => !report.clinicalRecordVariant && inferGroupFromDiagnosticReport(report) === 'imaging')
   const qualifyingKeys = qualifyingSharedReportKeys(imagingReports)
   const sharedGroups = new Map<string, DiagnosticReportEntity[]>()
   for (const report of imagingReports) {
@@ -1623,7 +1627,7 @@ function composeLabMetric(
   const observationOrder = new Map((clinicalData.observations ?? []).map((observation, index) => [observation.id, index]))
   for (const key of keys) {
     const entry = byKey.get(key)
-    if (!entry) return undefined
+    if (!entry || entry.clinicalRecordVariant) return undefined
     const observations = entry.resourceType === 'Observation'
       ? [observationById.get(entry.resourceId)].filter((obs): obs is ObservationEntity => Boolean(obs))
       : entry.resourceType === 'DiagnosticReport' && reportById.get(entry.resourceId)
@@ -1633,7 +1637,7 @@ function composeLabMetric(
     // result (a culture report's body) is not one test's value: writing it
     // out would put the whole panel or report into the row. The model's own
     // line stays for those.
-    if (observations.length > 1) return undefined
+    if (observations.length > 1 || observations.some(observation => observation.clinicalRecordVariant)) return undefined
     const labValues = observations.flatMap((observation) => {
       // eGFR is always mL/min/1.73m²; in a dense row the unit only takes room,
       // and sources spell it differently ("ml/min/1.7"), which would split

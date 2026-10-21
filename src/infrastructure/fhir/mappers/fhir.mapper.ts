@@ -327,6 +327,7 @@ export class FhirMapper implements IDataMapper {
 
   static toObservation(fhirResource: Observation): ObservationEntity {
     return {
+      hasMember: fhirResource.hasMember,
       basedOn: fhirResource.basedOn,
       extension: fhirResource.extension,
       method: fhirResource.method,

@@ -32,3 +32,31 @@ it('drops every source-bound cached resource when the same patient moves to a ne
   const empty = projectClinicalAggregate(input as any, reconcileClinicalSources([]))
   for (const field of fields) expect(empty[field]).toEqual([])
 })
+
+it('projects identical panels in different capture contexts to their own leaf and shared collection members', () => {
+  const source = reconcileClinicalSources([...([7, 9].map((value, index) => ({ sourceId: 'same-source', patientScope: 'patient', generation: String(index), resources: [
+    { resourceType: 'Observation', id: 'leaf', status: 'final', code: { text: 'Leaf' }, valueQuantity: { value } },
+    { resourceType: 'Observation', id: 'panel', status: 'final', code: { text: 'Panel' }, hasMember: [{ reference: 'Observation/leaf' }] },
+    { resourceType: 'DiagnosticReport', id: 'same-report', status: 'final', code: { text: 'Report' }, result: [{ reference: 'Observation/panel' }] },
+  ] }))), { sourceId: 'same-source', patientScope: 'patient', generation: 'third', resources: [{ resourceType: 'DiagnosticReport', id: 'outside-report', status: 'final', code: { text: 'Outside' }, result: [{ reference: 'Observation/panel' }] }] }])
+  const ids = createClinicalSourceProjectionIds(source)
+  const reports = source.graph.nodes.filter(node => node.resource.resourceType === 'DiagnosticReport').map(node => ({ id: ids.get(node.key)!, clinicalSourceNodeKey: node.key, result: [{ reference: 'Observation/panel' }] }))
+  const projected = projectClinicalAggregate({ observations: [], diagnosticReports: reports } as any, source)
+  const panels = projected.observations.filter((row: any) => row.sourceId === 'panel')
+  expect(panels).toHaveLength(2)
+  expect(new Set(panels.map((row: any) => row.id)).size).toBe(2)
+  const contextReports = projected.diagnosticReports.filter((row: any) => row.clinicalSourceNodeKey !== source.graph.nodes.find(node => node.resource.id === 'outside-report')!.key)
+  const outside = projected.diagnosticReports.find((row: any) => row.clinicalSourceNodeKey === source.graph.nodes.find(node => node.resource.id === 'outside-report')!.key)
+  expect(outside._observations).toEqual([])
+  expect(outside.result[0].reference).toBe('Observation/panel')
+  for (const report of contextReports) {
+    const panel = report._observations.find((row: any) => row.sourceId === 'panel')
+    const leaf = report._observations.find((row: any) => row.sourceId === 'leaf')
+    expect(panel.hasMember[0].reference).toBe('Observation/' + leaf.id)
+    expect(report.result[0].reference).toBe('Observation/' + panel.id)
+    for (const member of report._observations) expect(projected.observations).toContain(member)
+    expect(projected.observations.find((row: any) => row.id === panel.id)).toBe(panel)
+    expect(projected.observations.find((row: any) => row.id === leaf.id)).toBe(leaf)
+  }
+  expect(contextReports.map((report: any) => report._observations.find((row: any) => row.sourceId === 'leaf').valueQuantity.value)).toEqual([7, 9])
+})

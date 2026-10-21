@@ -1,4 +1,6 @@
 "use client"
+import { ClinicalRecordVariantsNotice } from './renderers/ClinicalRecordVariantsNotice'
+
 import { usePreventInputs, usePreventStore } from './stores/prevent-inputs.store'
 import { buildPreventReading, applyPreventReading } from './utils/prevent-reading'
 import { PreventReadingContext } from './renderers/PreventRiskSummary'
@@ -732,6 +734,7 @@ export default function LiveClinicalDecisionSupportFeature({
           selectedPackId={selectedPack.id}
           onSelect={setRequestedPackId}
         />
+        <ClinicalRecordVariantsNotice excluded={recordProfile?.excludedClinicalRecordVariants} locale={cdssLocale} />
         <StateMessage
           locale={cdssLocale}
           title={notApplicable.title}
@@ -866,6 +869,7 @@ export default function LiveClinicalDecisionSupportFeature({
       </header>
 
 
+      <ClinicalRecordVariantsNotice excluded={recordProfile?.excludedClinicalRecordVariants} locale={cdssLocale} />
       <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
 
       {/*

@@ -1,3 +1,4 @@
+import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
 import type { ClinicalDataCollection, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
@@ -72,6 +73,13 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
 ): T {
   if (!source?.graph) return input
   const context = createClinicalProjectionContext(source)
+  const variants = createClinicalRecordVariants(source)
+  const annotate = <R extends { clinicalSourceNodeKey?: string; clinicalRecordVariant?: unknown }>(row: R): R => {
+    const variant = row.clinicalSourceNodeKey ? variants.get(row.clinicalSourceNodeKey) : undefined
+    if (JSON.stringify(row.clinicalRecordVariant) === JSON.stringify(variant)) return row
+    const { clinicalRecordVariant: _previous, ...rest } = row
+    return { ...rest, ...(variant ? { clinicalRecordVariant: variant } : {}) } as R
+  }
   const eligible = selectClinicalSourceNodes(source).filter(node => node.resource.resourceType === 'Observation')
   const eligibleById = new Map(eligible.map(node => [context.ids.get(node.key)!, node]))
   const observationsById = new Map<string, ObservationEntity>()
@@ -99,10 +107,15 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     const id = context.ids.get(node.key)!
     if (!observationsById.has(id)) observationsById.set(id, mapProjectedObservation(node.resource, node.key, { ...context, edges: new Map() }))
   }
-  const activeReports = (input.diagnosticReports ?? []).filter(row => !row.clinicalSourceNodeKey || context.nodes.has(row.clinicalSourceNodeKey))
+  const alignReportId = <R extends { id?: string; clinicalSourceNodeKey?: string }>(row: R): R => {
+    const key = row.clinicalSourceNodeKey
+    const id = key && context.nodes.get(key)?.resource.resourceType === 'DiagnosticReport' ? context.ids.get(key) : undefined
+    return id && id !== row.id ? { ...row, id } : row
+  }
+  const activeReports = (input.diagnosticReports ?? []).filter(row => !row.clinicalSourceNodeKey || context.nodes.has(row.clinicalSourceNodeKey)).map(alignReportId)
   const reportIds = new Set(activeReports.map(row => row.id))
   const activeContext: ClinicalProjectionContext = { ...context, ids: new Map([...context.ids].filter(([key, id]) => context.nodes.get(key)?.resource.resourceType === 'Observation' ? observationsById.has(id) : reportIds.has(id))) }
-  for (const [id, row] of observationsById) observationsById.set(id, projectClinicalReferences(row, row.clinicalSourceNodeKey!, activeContext))
+  for (const [id, row] of observationsById) observationsById.set(id, annotate(projectClinicalReferences(row, row.clinicalSourceNodeKey!, activeContext)))
   const canonicalRows = [...observationsById.values()]
   const legacySeen = new Set<ObservationEntity>()
   for (const row of legacyRows) {
@@ -125,7 +138,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
       return active
     }).map((row: any) => {
       if (!row?.clinicalSourceNodeKey) return row
-      const result = projectClinicalReferences(row, row.clinicalSourceNodeKey, activeContext)
+      const result = annotate(projectClinicalReferences(alignReportId(row), row.clinicalSourceNodeKey, activeContext))
       if (result !== row) changed = true
       return result
     })

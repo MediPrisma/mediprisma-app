@@ -38,6 +38,18 @@ import { medicationExportUnit, sourceSupplyText, type ExportMedication } from '.
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+/** App-defined FHIR extension: ambiguity is retained without inventing a preferred revision. */
+export const CLINICAL_RECORD_VARIANT_EXTENSION = 'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant'
+function recordVariantExtension(row: { clinicalRecordVariant?: import('@/src/core/entities/clinical-data.entity').ClinicalRecordVariant }): Record<string, unknown> {
+  const variant = row.clinicalRecordVariant
+  return variant ? { extension: [{ url: CLINICAL_RECORD_VARIANT_EXTENSION, extension: [
+    { url: 'groupId', valueString: variant.groupId },
+    { url: 'classification', valueCode: variant.classification },
+    { url: 'variantCount', valuePositiveInt: variant.variantCount },
+    { url: 'reason', valueString: variant.reason },
+  ] }] } : {}
+}
+
 const DATA_ABSENT_REASON_URL = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason'
 const DATA_ABSENT_CC: FhirCodeableConcept = {
   coding: [{ system: 'http://terminology.hl7.org/CodeSystem/data-absent-reason', code: 'unknown' }],
@@ -453,6 +465,7 @@ export function mapVitalSigns(vitalSigns: ObservationEntity[], patientRef: strin
 
     const resource: FhirResource = {
       resourceType: 'Observation',
+      ...recordVariantExtension(o),
       meta: { profile: [VITAL_SIGNS_PROFILE] },
       status: pickStatus(o.status, ['registered', 'preliminary', 'final', 'amended', 'corrected', 'cancelled', 'entered-in-error', 'unknown'], 'final'),
       category: [{ coding: [{ system: SYSTEM.observationCategory, code: 'vital-signs' }] }],
@@ -480,6 +493,7 @@ function buildResultObservation(
 ): IpsBundleEntry {
   const resource: FhirResource = {
     resourceType: 'Observation',
+    ...recordVariantExtension(o),
     meta: { profile: [profile] },
     status: pickStatus(o.status, ['registered', 'preliminary', 'final', 'amended', 'corrected', 'cancelled', 'entered-in-error', 'unknown'], 'final'),
     category: [{ coding: [{ system: SYSTEM.observationCategory, code: categoryCode }] }],
@@ -557,6 +571,7 @@ export function mapResults(
 
     const resource: FhirResource = {
       resourceType: 'DiagnosticReport',
+      ...recordVariantExtension(dr),
       meta: { profile: [IPS_PROFILES.diagnosticReport] },
       status: pickStatus(dr.status, ['registered', 'partial', 'preliminary', 'final', 'amended', 'corrected', 'appended', 'cancelled', 'entered-in-error', 'unknown'], 'final'),
       code: toCodeableConcept(dr.code, 'Diagnostic report') ?? { text: 'Diagnostic report' },
