@@ -1,3 +1,4 @@
+import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useMedicalSummaryOrchestrator } from '@/src/application/hooks/medical-summary/use-medical-summary-orchestrator.hook'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
@@ -230,6 +231,20 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(summaryGenerate).toHaveBeenCalledTimes(2)
     expect(summaryCancel).not.toHaveBeenCalled()
     expect(safetyCancel).not.toHaveBeenCalled()
+  })
+
+  it('ends a coordinated automatic batch when a safety stop arrives before its sibling starts', async () => {
+    useProgressiveImportStore.setState({ current: { runId: 'auto-stop', importId: 'cloud', phase: 'waiting' }, pendingRunId: null, stoppedRuns: {} })
+    arrange({ summaryResult: null, safetyResult: null, summaryGenerating: true, safetyGenerating: false })
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+    expect(result.current.isGenerating).toBe(true)
+    act(() => stopProgressiveImport('auto-stop', 'privacy-stale'))
+    expect(summaryCancel).toHaveBeenCalled()
+    expect(safetyCancel).toHaveBeenCalled()
+    arrange({ summaryResult: null, safetyResult: null, summaryGenerating: false, safetyGenerating: false })
+    rerender()
+    await waitFor(() => expect(result.current.isGenerating).toBe(false))
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
   })
 
   it('does not start an automatic launch cancelled while awaiting demographics', async () => {

@@ -2,6 +2,7 @@
 // share one generation lifecycle, result artifact, model slot, and cache.
 'use client'
 
+import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
@@ -437,6 +438,17 @@ export function useMedicalSummaryOrchestrator() {
     cancelSafety,
     cancelSummary,
   ])
+
+  useEffect(() => {
+    const stopAutomaticBatch = () => {
+      const batch = activeBatchRef.current
+      if (isProgressiveAutoSummaryBlocked() && batch?.coordinatedAuto && !batch.cancelled) {
+        cancelTrackedBatch(batch)
+      }
+    }
+    stopAutomaticBatch()
+    return useProgressiveImportStore.subscribe(stopAutomaticBatch)
+  }, [cancelTrackedBatch])
 
   const runManualBatch = useCallback(async (jobs: GenerationPipeline[], signal?: AbortSignal) => {
     if (signal?.aborted) return

@@ -254,3 +254,24 @@ test.each(['enriched', 'unavailable', 'not-applicable'])(
   expect(await parsing).toBeNull()
   expect(local.hasData()).toBe(false)
 })
+
+
+test('original chunk quota rejects a durable replacement and preserves the previous chart after reload', async () => {
+  const local = await service(), previous = chart(), source = new Blob(['previous raw source'])
+  await local.save(previous, { importId: 'source-before', originalFhir: source, signal: new AbortController().signal })
+  const marker = sessionStorage.getItem('fhir_bundle_override'), key = sessionStorage.getItem('__bundle_session_key__')
+  const put = FakeObjectStore.prototype.put
+  jest.spyOn(FakeObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, recordKey) {
+    if (String((value as { id?: string })?.id ?? recordKey).startsWith('original-fhir:source-after:')) {
+      throw new DOMException('synthetic original chunk quota', 'QuotaExceededError')
+    }
+    return put.call(this, value, recordKey)
+  })
+  await expect(local.save({ ...chart(), id: 'newer-chart' }, { importId: 'source-after', originalFhir: new Blob(['new source']), signal: new AbortController().signal })).rejects.toThrow('已保留先前病歷')
+  expect(sessionStorage.getItem('fhir_bundle_override')).toBe(marker)
+  expect(sessionStorage.getItem('__bundle_session_key__')).toBe(key)
+  expect(local.getActiveImportId()).toBe('source-before')
+  const reloaded = await service()
+  expect(await reloaded.load()).toEqual(previous)
+  expect(await (await reloaded.loadOriginalFhir())!.text()).toBe('previous raw source')
+})

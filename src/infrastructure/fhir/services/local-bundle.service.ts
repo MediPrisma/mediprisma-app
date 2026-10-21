@@ -1112,11 +1112,13 @@ export const LocalBundleService = {
               try {
                 await storeOriginalFhir(importId, options.originalFhir, preparedKey.key)
                 originalPersisted = true
-              } catch {
+              } catch (error) {
                 try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
+                throw error
               }
             }
           } catch {
+            envelopePersisted = false
             signal.throwIfAborted()
             restoreInlineImages()
             try {
