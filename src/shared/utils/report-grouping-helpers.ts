@@ -103,25 +103,36 @@ const NHI_IMAGING_OR_PATHOLOGY_ORDER_CODES = new Set([
 // explicit Pathology category: the wider 32xxx/33xxx range also holds
 // image-guided biopsies (e.g. 33103B CT-guided biopsy) whose report can be
 // pathology. 19007C (ultrasound-guided biopsy) is excluded for the same reason.
+type NhiImagingModality = 'XR' | 'CT' | 'MR' | 'US'
+const NHI_IMAGING_MODALITY_CODES: Record<NhiImagingModality, readonly string[]> = {
+  XR: ['32001C', '32002C', '32006C', '32007C', '32008C', '32009C', '32010C',
+    '32011C', '32012C', '32013C', '32014C', '32015C', '32016C', '32017C',
+    '32018C', '32022C', '32023C', '33005B', '33012B'],
+  CT: ['33070B', '33071B', '33072B'],
+  MR: ['33084B', '33085B'],
+  US: ['18008C', '18010C', '18041B', '20013C', '20026B',
+    '18005C', '18006C', '18007C', '18033B', '19010C',
+    '19001C', '19002B', '19003C', '19005C', '19009C', '19012C', '19014C',
+    '19015C', '19016C', '19017C', '19018C', '21008C', '23504C'],
+}
+
+/** Exact reviewed report-order codes only; never infer from a numeric range. */
+export function getNhiReportModality(code: unknown): NhiImagingModality | undefined {
+  if (typeof code !== 'string') return undefined
+  const normalized = code.trim().toUpperCase()
+  return (Object.keys(NHI_IMAGING_MODALITY_CODES) as NhiImagingModality[])
+    .find(modality => NHI_IMAGING_MODALITY_CODES[modality].includes(normalized))
+}
+
 const NHI_NON_PATHOLOGY_REPORT_ORDER_CODES = new Set([
-  // X-ray
-  '32001C', '32002C', '32006C', '32007C', '32008C', '32009C', '32010C',
-  '32011C', '32012C', '32013C', '32014C', '32015C', '32016C', '32017C',
-  '32018C', '32022C', '32023C', '33005B', '33012B',
-  '33070B', '33071B', '33072B', // CT
-  '33084B', '33085B', // MRI
+  ...Object.values(NHI_IMAGING_MODALITY_CODES).flat(),
   '33074B', '33075B', // Vascular interventions
   '28002C', '28016C', '28017C', '28023C', // Endoscopy
   '17008B', '20001C', '20019B', '20023B', // Electroneurodiagnostic
   '18001C', '18015B', '18019C', // Electrocardiac
-  '18008C', '18010C', '18041B', '20013C', '20026B', // Vascular ultrasound
   '18020B', '18022B', '33076B', '33077B', // Cardiac catheterization
   '26025B', '26029B', '26072B', // Nuclear medicine
   '17003C', '17004C', '17006C', '17019C', // Pulmonary function
-  '18005C', '18006C', '18007C', '18033B', // Cardiac ultrasound
-  '19010C', // Obstetric ultrasound
-  '19001C', '19002B', '19003C', '19005C', '19009C', '19012C', '19014C',
-  '19015C', '19016C', '19017C', '19018C', '21008C', '23504C', // Ultrasound
 ])
 const NHI_PATHOLOGY_ORDER_CODES = new Set([
   '15001C', // Cytopathology

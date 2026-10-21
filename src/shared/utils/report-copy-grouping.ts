@@ -1,5 +1,5 @@
 import type { DiagnosticReport as Report } from '../types/fhir.types'
-import { inferReportDisplayGroup } from './report-grouping-helpers'
+import { getNhiReportModality, inferReportDisplayGroup } from './report-grouping-helpers'
 import { getImagingCopySource as sourceOf, reportNaturalGroupingKey } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
@@ -32,7 +32,7 @@ export function normalizeImagingReportCopy(value: string): string {
     // body explicitly contains the same grade. Never discard a conflicting one.
     if (!birads || new RegExp(String.raw`^(?:Impression\s*:?\s*)?BI-RADS\s+(?:category\s+)?${birads}\b`, 'i').test(body)) text = body
   }
-  text = text.replace(/^Impression\s*:?\s*/i, '')
+  text = text.replace(/^Impression\b\s*:?\s*/i, '')
   // Keep token boundaries: list item "1. 2 cm" must never equal "1.2 cm".
   // Missing spaces within words are uncertain content, not an automatic match.
   return text.toLowerCase().replace(/\s+/g, ' ').trim()
@@ -101,8 +101,13 @@ function modality(report: Report): string | undefined {
     ['US', /sono|ultrason|超音波/i],
     ['XR', /x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i],
   ] as const
-  const found = methods.filter(([, pattern]) => pattern.test(title))
-  return found.length === 1 ? found[0][0] : undefined
+  const found = new Set<string>(methods.filter(([, pattern]) => pattern.test(title)).map(([method]) => method))
+  for (const coding of report.code?.coding ?? []) {
+    const codedMethod = getNhiReportModality(coding?.code)
+    if (codedMethod) found.add(codedMethod)
+    else if (typeof coding?.code === 'string' && /^\d{5}[A-Z]$/i.test(coding.code.trim())) return undefined
+  }
+  return found.size === 1 ? [...found][0] : undefined
 }
 
 export function compareImagingCopies(a: Report, b: Report): number {

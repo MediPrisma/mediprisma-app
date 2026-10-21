@@ -205,6 +205,7 @@ describe('cross-source imaging reports', () => {
     reports[1].conclusion = text.replaceAll(' ', '  \n ')
     expect(buildReportsData(reports).reportRows).toHaveLength(1)
     expect(normalizeImagingReportCopy('no table')).not.toBe(normalizeImagingReportCopy('notable'))
+    expect(normalizeImagingReportCopy('Impressionistic lesion description')).toBe('impressionistic lesion description')
   })
 
   it.each([
@@ -228,6 +229,12 @@ describe('cross-source imaging reports', () => {
     reports[0].code = { text: 'C.T. CHEST', coding: [{ display: 'MRI CHEST' }] }
     reports[1].code = { text: 'MRI CHEST' }
     reports[0].conclusion = BODY
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it.each(['33084B', '33085B', '32001C', '19005C', '18001C', '15001C', '99999C'])('rejects a CT label with a conflicting or unsupported NHI order code %s', code => {
+    const reports = pair()
+    reports[1].code.coding[0].code = code
     expect(buildReportsData(reports).reportRows).toHaveLength(2)
   })
 
