@@ -20,7 +20,7 @@ test('MediCloud documents keep source chapters without adding a separate screeni
   const hepatitis = page.locator('[data-cumulative-section="hep"]')
   await expect(hepatitis).toBeVisible()
   await expect(hepatitis).toContainText('陰性')
-  await expect(hepatitis.getByLabel('含成人健檢結果').first()).toHaveText('成健')
+  await expect(hepatitis.getByLabel('含成人預防保健結果').first()).toHaveText('健')
   await expect(hepatitis.locator('[data-lab-test-key="HBSAG"]').first()).toBeVisible()
   await expect(hepatitis.locator('[data-lab-test-key="ANTI-HCV"]').first()).toBeVisible()
 

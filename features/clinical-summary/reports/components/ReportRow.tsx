@@ -56,7 +56,7 @@ import { formatReportTextForClipboard } from '@/src/shared/utils/report-text-for
  *  a ⚠ "duplicate copies" flag (it only worries them). The dedup itself always
  *  happens; only this badge is audience-gated. The visible label drops the
  *  "bridge" jargon; the file-a-report hint stays in the tooltip. */
-function BridgeDupBadge({ count }: { count: number }) {
+export function BridgeDupBadge({ count }: { count: number }) {
   const { t } = useLanguage()
   const { audience } = useAudience()
   if (audience === 'patient') return null
@@ -195,7 +195,7 @@ function CopyReportTitleAction({
   )
 }
 
-function CopyableRightDetailTitle({
+export function CopyableRightDetailTitle({
   title,
   dateLabel,
   trailing,
@@ -523,7 +523,7 @@ function ReportImagingDetail({
  *  rows (the very same ObservationBlocks the accordion expands to inline), in a
  *  scroll region with a persistent scrollbar so a long panel reads beside the
  *  list. */
-function ReportPanelDetail({
+export function ReportPanelDetail({
   observations,
   interpretation,
   sharedReportSources,
@@ -573,7 +573,7 @@ interface ReportRowProps {
 // a different day (or hour) because of where the reader happens to be. Time is
 // appended only when the source string actually carries one — never fabricated
 // from a date-only value.
-function formatDisplayDate(date?: string, showTime?: boolean): string {
+export function formatDisplayDate(date?: string, showTime?: boolean): string {
   if (!date) return ''
   const datePart = formatDate(date)
   if (!showTime) return datePart
@@ -589,7 +589,7 @@ function formatDisplayDate(date?: string, showTime?: boolean): string {
 // The card groups by the SOURCE's collection day, so the badge must read the
 // source's clock too, or a 08:30 draw would show as the previous evening to a
 // reader west of the hospital and contradict the card it sits in.
-function formatTimeOnly(date?: string): string {
+export function formatTimeOnly(date?: string): string {
   return formatSourceTime(date)
 }
 
@@ -655,7 +655,7 @@ function compactBlankLines(s: string): string {
   return (s || '').replace(/(\r?\n)[ \t]*(?:\r?\n)+/g, '\n').trim()
 }
 
-function countAbnormal(obs: Observation[]): number {
+export function countAbnormal(obs: Observation[]): number {
   let count = 0
   for (const o of obs) {
     if (isObservationAbnormal(o)) {
