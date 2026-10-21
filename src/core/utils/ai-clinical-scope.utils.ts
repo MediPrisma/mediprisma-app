@@ -12,6 +12,7 @@ import {
   normalizeClinicalStatus,
 } from '@/src/core/utils/clinical-context-selection.utils'
 import {
+  clinicalRecordKey,
   selectLabOrphanObservations,
   selectOtherObservations,
 } from '@/src/core/utils/observation-selectors'
@@ -84,13 +85,15 @@ function reportObservations(report: any, observationsById: Map<string, any>): an
   const found = new Map<string, any>()
   const withoutId: any[] = []
   for (const observation of report?._observations ?? []) {
-    if (observation?.id) found.set(observation.id, observation)
+    const key = clinicalRecordKey(observation)
+    if (key) found.set(key, observation)
     else withoutId.push(observation)
   }
+  if (report?.clinicalSourceNodeKey) return [...found.values(), ...withoutId]
   for (const reference of report?.result ?? []) {
-    const id = reference?.reference?.split('/').pop()
+    const id = reference?.reference?.match(/^Observation\/([^/]+)$/)?.[1]
     const observation = id ? observationsById.get(id) : undefined
-    if (observation) found.set(observation.id || id, observation)
+    if (observation) found.set(clinicalRecordKey(observation) ?? 'id:' + id, observation)
   }
   return [...found.values(), ...withoutId]
 }
@@ -145,8 +148,11 @@ function selectLabScope(
   filters: DataFilters,
 ): SelectedLabScope {
   const observationsById = new Map<string, any>()
+  const ambiguousIds = new Set<string>()
   for (const observation of input.observations ?? []) {
-    if (observation.id) observationsById.set(observation.id, observation)
+    if (!observation.id || ambiguousIds.has(observation.id)) continue
+    if (observationsById.has(observation.id)) { observationsById.delete(observation.id); ambiguousIds.add(observation.id) }
+    else observationsById.set(observation.id, observation)
   }
   const reportMembers = new Map<any, any[]>()
   const memberIds = new Set<string>()
@@ -155,7 +161,8 @@ function selectLabScope(
       .filter((observation) => normalizeClinicalStatus(observation?.status) !== 'entered-in-error')
     reportMembers.set(report, members)
     members.forEach((observation) => {
-      if (observation?.id) memberIds.add(observation.id)
+      const key = clinicalRecordKey(observation)
+      if (key) memberIds.add(key)
     })
   }
   const orphanObservations = selectLabOrphanObservations(input)
@@ -257,7 +264,7 @@ function selectLabScope(
   return {
     reports: selectedReports,
     observations: [...selectedParents].filter((observation) =>
-      !observation?.id || memberIds.has(observation.id) || orphanObservations.includes(observation),
+      !clinicalRecordKey(observation) || memberIds.has(clinicalRecordKey(observation)!) || orphanObservations.includes(observation),
     ),
   }
 }
@@ -379,7 +386,8 @@ export function scopeClinicalDataForAi(
   const reportById = new Map<string, any>()
   const reportsWithoutId: any[] = []
   for (const report of [...labReports, ...imagingReports]) {
-    if (report.id) reportById.set(report.id, report)
+    const key = clinicalRecordKey(report)
+    if (key) reportById.set(key, report)
     else reportsWithoutId.push(report)
   }
   const linkedImagingStudyIds = new Set(
@@ -418,9 +426,10 @@ export function scopeClinicalDataForAi(
   }
   const observationIds = new Set<string>()
   const observations = selectedObservations.filter((observation) => {
-    if (!observation.id) return true
-    if (observationIds.has(observation.id)) return false
-    observationIds.add(observation.id)
+    const key = clinicalRecordKey(observation)
+    if (!key) return true
+    if (observationIds.has(key)) return false
+    observationIds.add(key)
     return true
   })
 

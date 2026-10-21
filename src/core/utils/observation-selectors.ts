@@ -33,8 +33,9 @@ export type ObservationSource = Partial<
  * satisfy it, so consumers can pass either without casting.
  */
 interface ReportMemberSource {
+  clinicalSourceNodeKey?: string
   result?: Array<{ reference?: string }> | null
-  _observations?: Array<{ id?: string }> | null
+  _observations?: Array<{ id?: string; clinicalSourceNodeKey?: string }> | null
 }
 
 /**
@@ -91,6 +92,31 @@ export function collectReportMemberIds(
   return ids
 }
 
+/** Reconciled source identity takes precedence over a reused logical id. */
+export function clinicalRecordKey(record: { id?: string; clinicalSourceNodeKey?: string }): string | undefined {
+  return record.clinicalSourceNodeKey ? 'source:' + record.clinicalSourceNodeKey : record.id ? 'id:' + record.id : undefined
+}
+
+function reportMemberRecordKeys(reports?: ReadonlyArray<ReportMemberSource> | null): Set<string> {
+  const keys = new Set<string>()
+  for (const report of reports ?? []) {
+    // Source-bound membership was already resolved by the shared graph.
+    if (!report.clinicalSourceNodeKey) for (const reference of report.result ?? []) {
+      const id = reference.reference?.match(/^Observation\/([^/]+)$/)?.[1]
+      if (id) keys.add('id:' + id)
+    }
+    for (const observation of report._observations ?? []) {
+      const key = clinicalRecordKey(observation)
+      if (key) keys.add(key)
+    }
+  }
+  return keys
+}
+
+function vitalRecordKeys(data: ObservationSource): Set<string | undefined> {
+  return new Set((data.vitalSigns ?? []).map(clinicalRecordKey))
+}
+
 /**
  * True when an Observation is a vital sign.
  *
@@ -107,10 +133,6 @@ export function isVitalObservation(
   return inferGroupFromObservation(obs) === 'vitals'
 }
 
-function vitalIdSet(data: ObservationSource): Set<string | undefined> {
-  return new Set((data.vitalSigns ?? []).map((v) => v.id))
-}
-
 /**
  * Broad standalone result selector: not a member of any DiagnosticReport, not
  * a vital sign, and not imaging. Callers should normally use the stricter lab
@@ -120,11 +142,12 @@ export function selectStandaloneResultObservations(
   data?: ObservationSource | null,
 ): ObservationEntity[] {
   if (!data) return []
-  const memberIds = collectReportMemberIds(data.diagnosticReports)
-  const vitals = vitalIdSet(data)
+  const memberIds = reportMemberRecordKeys(data.diagnosticReports)
+  const vitals = vitalRecordKeys(data)
   return (data.observations ?? []).filter((o) => {
-    if (o.id != null && memberIds.has(o.id)) return false
-    if (isVitalObservation(o, vitals)) return false
+    const key = clinicalRecordKey(o)
+    if (key && memberIds.has(key)) return false
+    if ((key && vitals.has(key)) || inferGroupFromObservation(o) === 'vitals') return false
     return inferGroupFromObservation(o) !== 'imaging'
   })
 }
@@ -147,11 +170,12 @@ export function selectOtherObservations(
   data?: ObservationSource | null,
 ): ObservationEntity[] {
   if (!data) return []
-  const vitals = vitalIdSet(data)
-  const memberIds = collectReportMemberIds(data.diagnosticReports)
+  const vitals = vitalRecordKeys(data)
+  const memberIds = reportMemberRecordKeys(data.diagnosticReports)
   return (data.observations ?? []).filter((o) => {
-    if (o.id != null && memberIds.has(o.id)) return false
-    if (isVitalObservation(o, vitals)) return false
+    const key = clinicalRecordKey(o)
+    if (key && memberIds.has(key)) return false
+    if ((key && vitals.has(key)) || inferGroupFromObservation(o) === 'vitals') return false
     const group = inferGroupFromObservation(o)
     return group !== 'lab' && group !== 'imaging'
   })
