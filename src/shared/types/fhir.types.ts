@@ -250,6 +250,7 @@ export interface Duration {
 }
 
 export interface MedicationRequest {
+  identifier?: Identifier[]
   id?: string
   resourceType?: string
   meta?: {
@@ -283,6 +284,11 @@ export interface MedicationRequest {
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
   /** Bundle.timestamp propagated by the local import reader. */
   _sourceCapturedAt?: string
+  /** Original order references retained when verified cross-source copies merge. */
+  _reconciledSourceReferences?: string[]
+  _encounterInferred?: boolean
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourcePrescriptionRecords?: any[]
 }
 
 export interface MedicationStatement {
@@ -316,6 +322,7 @@ export interface Medication {
 
 // Condition (Diagnosis) Types
 export interface Condition {
+  meta?: { source?: string; tag?: Coding[] }
   id?: string
   resourceType?: string
   clinicalStatus?: CodeableConcept | string

@@ -302,7 +302,7 @@ describe('curateForIps — imaging reports honor the imagingReports toggle (P2)'
 })
 
 describe('curateForIps — medications (現用藥 / 慢箋為主, deduped)', () => {
-  it('collapses refill cycles of the same drug into one row (latest authoredOn)', () => {
+  it('preserves each real source order even when their drug names are identical', () => {
     const data = emptyCollection()
     data.medications = [
       {
@@ -319,17 +319,17 @@ describe('curateForIps — medications (現用藥 / 慢箋為主, deduped)', () 
       },
     ]
     const out = curateForIps({ data, selection: selection(), filters: filters(), now: NOW })
-    expect(out.medications).toHaveLength(1)
-    expect(out.medications[0].id).toBe('m2')
+    expect(out.medications.map(medication => medication.id)).toEqual(['m1', 'm2'])
   })
 
-  it('keeps a chronic prescription even if its latest cycle reads completed', () => {
+  it('keeps a completed chronic fill only while its own recorded supply window is open', () => {
     const data = emptyCollection()
     data.medications = [
       {
         id: 'chronic',
         status: 'completed',
         authoredOn: isoDaysAgo(10),
+        dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } },
         medicationCodeableConcept: { text: 'Metformin 500mg' },
         courseOfTherapyType: { coding: [{ code: 'continuous' }] },
       },
@@ -347,6 +347,18 @@ describe('curateForIps — medications (現用藥 / 慢箋為主, deduped)', () 
       now: NOW,
     })
     expect(out.medications.map((m) => m.id)).toEqual(['chronic'])
+  })
+
+  it('retains an uncertain source as unknown when exporting current medications', () => {
+    const data = emptyCollection()
+    data.medications = [{ id: 'uncertain', status: 'active', authoredOn: isoDaysAgo(1),
+      medicationCodeableConcept: { text: 'Synthetic medicine' }, dispenseRequest: { validityPeriod: { end: isoDaysAgo(2) } } }]
+    const out = curateForIps({ data, selection: selection(), filters: filters({ medicationStatus: 'active' }), now: NOW })
+    expect(out.medications).toHaveLength(1)
+    expect(out.medications[0].status).toBe('active')
+    expect(out.medications[0].exportCurrentnessUnconfirmed).toBe(true)
+    expect(out.medications[0].note?.some(note => note.text?.includes('use is unconfirmed'))).toBe(true)
+    expect(data.medications[0].status).toBe('active')
   })
 
   it('honors the acute-only chronic filter', () => {

@@ -15,13 +15,13 @@ export function navigationEncounterId(
 }
 
 export function visibleCountForNavigation(
-  visits: Array<{ id: string; date: string }>,
+  visits: Array<{ id: string; date: string; sourceIds?: string[] }>,
   encounterId: string,
   pageSize: number,
 ): number | undefined {
   const orderedVisits = [...visits].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   )
-  const visitIndex = orderedVisits.findIndex((visit) => visit.id === encounterId)
+  const visitIndex = orderedVisits.findIndex((visit) => visit.id === encounterId || visit.sourceIds?.includes(encounterId))
   return visitIndex < 0 ? undefined : Math.max(pageSize, visitIndex + 1)
 }

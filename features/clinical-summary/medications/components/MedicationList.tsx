@@ -65,7 +65,7 @@ export function MedicationList({
   activeActions,
   unfilteredMedications,
 }: MedicationListProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const mt = (t.medications as any)
   const [showActive, setShowActive] = useState(true)
   const [showInactive, setShowInactive] = useState(true)
@@ -124,12 +124,12 @@ export function MedicationList({
   useEffect(() => {
     if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
     const targetInActive = activeMedications.some((medication) =>
-      medication.id === pending.resourceId,
+      medication.id === pending.resourceId || medication.reconciledOrderIds?.includes(pending.resourceId),
     )
     // Every earlier fill has its own row in 用藥歷史, under its visit, so a
     // citation of one opens the history section and lands on that row.
     const targetInHistory = historyGroups.some((group) =>
-      group.medications.some((medication) => medication.id === pending.resourceId),
+      group.medications.some((medication) => medication.id === pending.resourceId || medication.reconciledOrderIds?.includes(pending.resourceId)),
     )
     if (!targetInActive && !targetInHistory) return
     const timer = window.setTimeout(() => {
@@ -214,6 +214,12 @@ export function MedicationList({
 
   return (
     <div className="space-y-4">
+      {medications.some(medication => medication.currentnessUncertain || medication.sourceComparison?.warnings?.includes('source-status-conflict')) && (
+        <p className="text-xs text-muted-foreground">{locale === 'en' ? 'Some medication status is unconfirmed. These records remain below with an uncertainty or conflict label; neither current use nor stopping is established.' : '有用藥狀態待確認；下方仍保留原始紀錄及狀態差異標示，尚不能直接判定仍在服用或已停用。'}</p>
+      )}
+      {medications.some(medication => medication.sourceComparison && medication.sourceComparison.status !== 'confirmed') && (
+        <p className="text-xs text-muted-foreground">{locale === 'en' ? 'Includes source comparison groups. Item counts are not confirmed prescription counts; inspect the source records.' : '含跨來源比較組；項數不是已確認藥囑筆數，請展開核對原始紀錄。'}</p>
+      )}
       {/* Nothing running, but the actions still apply — a long-term script
           that just ran out is still 現在用藥 to the copy. */}
       {activeMedications.length === 0 && (nameModeSwitch || activeActions) && (
@@ -361,7 +367,7 @@ export function MedicationList({
               {showInactive ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               <History className="h-4 w-4" />
               <span className="text-sm font-semibold">
-                {mt.history} ({totalInactive} {mt.historyStopped})
+                {mt.history} ({totalInactive} {locale === 'en' ? 'records' : '筆紀錄'})
               </span>
             </div>
           </Button>

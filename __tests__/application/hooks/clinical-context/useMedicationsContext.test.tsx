@@ -229,9 +229,9 @@ describe('useMedicationsContext full export', () => {
 
     expect(result.current?.items).toContain('Currently in use (1):')
     expect(result.current?.items.find((item) => item.includes('Unknown status current drug')))
-      .toContain('until 2026-07-13')
+      .toContain('until 2026-07-12')
     expect(result.current?.items.find((item) => item.includes('Unknown status expired drug')))
-      .toContain('last ended 2026-06-06')
+      .toContain('last ended 2026-06-05')
   })
 
   // A chemotherapy patient between cycles has ONE current medicine. The DM
@@ -275,8 +275,8 @@ describe('useMedicationsContext full export', () => {
     expect(items).toContain('Currently in use (1):')
     expect(text).toContain('LETROZOLE TABLETS 2.5MG')
     expect(items).toContain('Recently dispensed, supply ended (last 24 months, 2) — NOT currently in use:')
-    expect(text).toContain('Metformin 500mg Tablets — last dispensed 2026-01-12 (28d supply, ended 2026-02-09)')
-    expect(text).toContain('Insulin glargine pen — last dispensed 2026-01-12 (28d supply, ended 2026-02-09)')
+    expect(text).toContain('Metformin 500mg Tablets — last dispensed 2026-01-12 (28d supply, ended 2026-02-08)')
+    expect(text).toContain('Insulin glargine pen — last dispensed 2026-01-12 (28d supply, ended 2026-02-08)')
     expect(text).toContain('[開立 by 示範診所]')
     // The existing notes are still there.
     expect(text).toContain('Record-fidelity note:')
@@ -305,7 +305,7 @@ describe('useMedicationsContext full export', () => {
     expect(neutral).not.toContain('NOT currently in use')
     expect(neutral).toContain('estimated supply already passed')
     expect(neutral).toContain('current use is not known from these records')
-    expect(neutral).toContain('Metformin 500mg Tablets — last dispensed 2026-01-12 (28d supply, estimated to 2026-02-09)')
+    expect(neutral).toContain('Metformin 500mg Tablets — last dispensed 2026-01-12 (28d supply, estimated to 2026-02-08)')
     expect(neutral).toContain('a long-acting injection')
     // Every other consumer keeps the established wording.
     expect(render()).toContain('NOT currently in use')

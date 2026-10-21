@@ -439,11 +439,11 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
 
   // ── 就診 ────────────────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
-    clinicalNotes, conditions, locale, audience, medicationRows,
+    clinicalNotes, conditions, locale, audience, medicationRows, icdDict, encounters,
   )
-  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
   const visitHistory = useVisitHistory(encounters, icdDict)
   const visitStats = useVisitStats(encounterDetails)
   const docStrings = useDocumentSummaryStrings()
@@ -451,14 +451,15 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   const docsByEncounter = useMemo(() => {
     const map = new Map<string, DocumentEntry[]>()
     for (const entry of documentEntries) {
-      const encounterId = entry.encounterRef?.split('/').pop()
+      const sourceId = entry.encounterRef?.split('/').pop()
+      const encounterId = visitHistory.find((visit) => visit.id === sourceId || visit.sourceIds?.includes(sourceId ?? ''))?.id ?? sourceId
       if (!encounterId) continue
       const bucket = map.get(encounterId) ?? []
       bucket.push(entry)
       map.set(encounterId, bucket)
     }
     return map
-  }, [documentEntries])
+  }, [documentEntries, visitHistory])
 
   const visits = useMemo<OverviewVisitsData>(() => {
     const items: OverviewVisitItem[] = []
