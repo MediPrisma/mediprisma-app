@@ -43,3 +43,33 @@ it('labels incompatible resolved reference contexts as conflicts of one source r
   expect(variants.get(panels[0].key)).toEqual(variants.get(panels[1].key))
   expect(variants.get(panels[0].key)).toMatchObject({ classification: 'conflict', variantCount: 2 })
 })
+
+it.each(['MedicationRequest', 'Condition', 'SyntheticUnknown'])('annotates evidence-backed %s variants without relying on Observation projection ids', (resourceType) => {
+  const make = (generation: string, value: number, version: string) => ({
+    sourceId: 'generic-source', patientScope: 'patient', generation,
+    resources: [{
+      resourceType, id: 'same-record', meta: { versionId: version }, valueInteger: value,
+    }],
+  })
+  const source = reconcileClinicalSources([
+    make('first-copy', 7, '1'), make('exact-repeat', 7, '1'), make('second-version', 9, '2'),
+  ])
+  const group = [...createClinicalRecordVariants(source).values()]
+  expect(group).toHaveLength(3)
+  expect(new Set(group.map(entry => entry.groupId)).size).toBe(1)
+  expect(group.every(entry => entry.variantCount === 2 && entry.classification === 'revision')).toBe(true)
+})
+
+it('does not group generic resource variants from different sources', () => {
+  const source = reconcileClinicalSources([
+    { sourceId: 'source-a', patientScope: 'patient', generation: 'one', resources: [{ resourceType: 'MedicationRequest', id: 'rx', status: 'active', dosageInstruction: [{ text: 'once daily' }] }] },
+    { sourceId: 'source-a', patientScope: 'patient', generation: 'two', resources: [{ resourceType: 'MedicationRequest', id: 'rx', status: 'active', dosageInstruction: [{ text: 'twice daily' }] }] },
+    { sourceId: 'source-b', patientScope: 'patient', generation: 'three', resources: [{ resourceType: 'MedicationRequest', id: 'rx', status: 'active', dosageInstruction: [{ text: 'three times daily' }] }] },
+  ])
+  const variants = createClinicalRecordVariants(source)
+  const sourceA = source.graph.nodes.filter(node => node.sourceId === 'source-a')
+  const sourceB = source.graph.nodes.find(node => node.sourceId === 'source-b')!
+  expect(sourceA.map(node => variants.get(node.key)?.groupId)).toEqual([expect.any(String), expect.any(String)])
+  expect(variants.has(sourceB.key)).toBe(false)
+  expect(variants.get(sourceA[0].key)?.variantCount).toBe(2)
+})
