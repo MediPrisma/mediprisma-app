@@ -32,3 +32,14 @@ it('retains both local clinical rows with the same shared semantic annotation', 
   expect(observations[0].clinicalRecordVariant).toBe(observations[1].clinicalRecordVariant)
   expect(observations[0].clinicalRecordVariant?.variantCount).toBe(2)
 })
+
+it('labels incompatible resolved reference contexts as conflicts of one source record', () => {
+  const panel = { resourceType: 'Observation', id: 'panel', status: 'final', hasMember: [{ reference: 'Observation/lab' }] }
+  const sources = [7, 9].map((value, index) => ({ sourceId: 'source', patientScope: 'patient', generation: String(index), resources: [resource(value), panel] }))
+  const source = reconcileClinicalSources(sources)
+  const variants = createClinicalRecordVariants(source)
+  const panels = source.graph.nodes.filter(node => node.resource.id === 'panel')
+  expect(panels).toHaveLength(2)
+  expect(variants.get(panels[0].key)).toEqual(variants.get(panels[1].key))
+  expect(variants.get(panels[0].key)).toMatchObject({ classification: 'conflict', variantCount: 2 })
+})

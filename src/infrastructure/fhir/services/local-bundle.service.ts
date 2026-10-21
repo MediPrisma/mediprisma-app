@@ -546,8 +546,12 @@ function cloneResource<T>(resource: T): T {
 
 /** Reject explicit patient identity contradictions, not absent/unresolved context. */
 function assertPatientReferences(resources: any[], patient: { resource: { id?: string }; fullUrl?: string }): void {
-  const patientUrl = patient.fullUrl && /^https?:\/\//i.test(patient.fullUrl)
-    ? patient.fullUrl.replace(/\/_history\/[^/]+\/?$/, '').replace(/\/$/, '') : undefined
+  const patientUrlIdentity = (reference?: string): string | undefined => {
+    if (!reference || !/^https?:\/\//i.test(reference)) return undefined
+    try { return new URL(reference.replace(/\/_history\/[^/]+\/?$/, '').replace(/\/$/, '')).href }
+    catch { return undefined }
+  }
+  const patientUrl = patientUrlIdentity(patient.fullUrl)
   const knownId = patient.resource.id || (patientUrl ? idFromFullUrl(patientUrl) : undefined)
   for (const resource of resources) {
     for (const field of ['subject', 'patient']) {
@@ -557,9 +561,10 @@ function assertPatientReferences(resources: any[], patient: { resource: { id?: s
       const absolute = /^https?:\/\/.+\/Patient\/([^/]+)(?:\/_history\/[^/]+)?$/i.exec(reference)
       const id = relative?.[1] ?? absolute?.[1]
       if (!id) continue
+      const referenceUrl = absolute ? patientUrlIdentity(reference) : undefined
+      if (absolute && !referenceUrl) continue
       const differentId = knownId && id !== knownId
-      const differentUrl = absolute && patientUrl
-        && new URL(reference.replace(/\/_history\/[^/]+$/, '')).href !== new URL(patientUrl).href
+      const differentUrl = referenceUrl && patientUrl && referenceUrl !== patientUrl
       if (differentId || differentUrl) {
         throw new Error('此資料的病人引用與目前病人不一致，無法安全匯入。請提供單一病人的 FHIR Bundle。')
       }
