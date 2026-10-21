@@ -17,6 +17,7 @@ export type SourceImage = {
 }
 
 export function createMergedFhirFixture(date = new Date().toISOString()) {
+  if (!Number.isFinite(Date.parse(date))) throw new Error('Merged FHIR fixture requires a valid ISO timestamp')
   const bundle: RawBundle = {
     resourceType: 'Bundle', type: 'collection', entry: [],
     extension: [{ url: 'urn:example:merged-export', valueString: '雲端＋院內原始資料，保留所有來源' }],

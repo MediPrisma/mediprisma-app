@@ -1,13 +1,15 @@
 // Loopback-only server for the exact static /app artifact used in deployment.
 import http from 'node:http'
-import { readFile, stat } from 'node:fs/promises'
+import { open } from 'node:fs/promises'
 import path from 'node:path'
 
 const root = path.resolve(process.env.E2E_STATIC_DIR)
 const basePath = process.env.E2E_APP_PATH.replace(/\/$/, '')
 const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
-  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.woff2': 'font/woff2' }
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.woff2': 'font/woff2',
+  '.txt': 'text/plain', '.ico': 'image/x-icon', '.webp': 'image/webp',
+  '.wasm': 'application/wasm', '.mjs': 'application/javascript' }
 
 http.createServer(async (request, response) => {
   try {
@@ -20,12 +22,18 @@ http.createServer(async (request, response) => {
       response.writeHead(403).end(); return
     }
     for (const candidate of [file, file + '.html', path.join(file, 'index.html')]) {
-      let isFile = false
-      try { isFile = (await stat(candidate)).isFile() } catch { /* next candidate */ }
-      if (!isFile) continue
-      const bytes = await readFile(candidate)
-      response.writeHead(200, { 'Content-Type': types[path.extname(candidate)] || 'application/octet-stream' })
-      response.end(bytes); return
+      let handle
+      try {
+        handle = await open(candidate, 'r')
+        if (!(await handle.stat()).isFile()) continue
+        const bytes = await handle.readFile()
+        response.writeHead(200, { 'Content-Type': types[path.extname(candidate)] || 'application/octet-stream' })
+        response.end(bytes); return
+      } catch (error) {
+        if (!['ENOENT', 'ENOTDIR', 'EISDIR'].includes(error.code)) throw error
+      } finally {
+        await handle?.close()
+      }
     }
     response.writeHead(404).end()
   } catch {

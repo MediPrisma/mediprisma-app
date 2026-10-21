@@ -33,6 +33,15 @@ test('the SDK avoids a bare window probe and loads in a Worker-like global with 
   } } }
   const options = { identifierMode: 'masked' as const, timestamp: '2026-10-21T00:00:00Z' }
   expect(worker.convertSdkJsonToFhir(input, options)).toEqual(browser.convertSdkJsonToFhir(input, options))
+  // Golden IDs computed with the unpatched v0.1.5 artifact at af0bfe42.
+  expect((worker.convertSdkJsonToFhir(input, options).bundle.entry as { resource: { id: string } }[])
+    .map(({ resource }) => resource.id)).toEqual([
+    '3a40bd33f424934b1040cd7281bb8eeb',
+    'f5bd91e1c3d861d017eea09963a6eb19',
+    '967621a68e63c5dfdddaa4a6823064be',
+    'b79633ec9278c5f0594714ca2ecc307f',
+    'sdk-unit-policy-v2', 'sdk-unit-inference',
+  ])
   const original = '\uFEFF{"resourceType":"Bundle","extension":[{"url":"urn:example:raw","valueString":"原始內容"}]}'
   expect(worker.parseJsonBytes(new TextEncoder().encode(original).buffer))
     .toEqual(JSON.parse(original.slice(1)))

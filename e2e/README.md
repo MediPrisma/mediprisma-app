@@ -136,6 +136,10 @@ emulator config above.
 
 ### Production import Worker
 
+The CI `import-worker` job builds the `/app` static export with fake Firebase
+metadata and runs both strict Worker specs on every code PR and master push.
+Its browser evidence and JSON report are uploaded as `import-worker-results`.
+
 For a server build, use the fake Firebase variables from `playwright.config.ts`,
 run `npm run build` without `GITHUB_PAGES` or `DEPLOY_BASE_PATH`, then run
 `npx playwright test -c playwright.import-production.config.ts`. This mode
@@ -154,6 +158,12 @@ To verify the real deployed site instead of starting a server, set
 same command. Only synthetic input is used; Firebase anonymous authentication
 is stubbed by the shared fixture, while app assets, conversion, local storage,
 downloads and image decoding are real.
+These specs do not generate AI summaries or submit data to a server; the
+collector only observes AI requests, which these import/download flows do not
+perform. Worker startup still has the application's existing two-second
+deadline. A slow network can therefore fail this strict profile through the
+supported fallback; use the attached `created`/`ready` timestamps and native
+`error` event to distinguish latency from a module startup exception.
 Set `E2E_IMPORT_FIXTURE_TIMESTAMP` to an ISO timestamp when replaying identical
 merged-FHIR bytes across before/after builds; it defaults to the current time.
 

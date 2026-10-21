@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { test, expect } from '../fixtures/test'
 import { importBundle, openFeaturePanel } from '../fixtures/import'
 import { expectImportWorker } from '../fixtures/import-worker'
@@ -26,9 +27,11 @@ test('SDK JSON converts in the production Worker and its downloaded FHIR can be 
   const bytes = await fs.readFile(path)
   const converted = JSON.parse(bytes.toString('utf8'))
   expect(sdkWorker.originalBytes).toBe(bytes.length)
-  expect(converted).toEqual(convertSdkJsonToFhir(input, {
+  const reference = convertSdkJsonToFhir(input, {
     identifierMode: 'masked', timestamp: converted.timestamp,
-  }).bundle)
+  })
+  expect(reference).toBeDefined()
+  expect(converted).toEqual(reference?.bundle)
   expect(converted.resourceType).toBe('Bundle')
   const resources = converted.entry.map((entry: { resource: Record<string, unknown> }) => entry.resource)
   expect(resources.find((resource: { resourceType: string }) => resource.resourceType === 'Patient').identifier[0].value).toBe('A12345XXXX')
@@ -37,4 +40,18 @@ test('SDK JSON converts in the production Worker and its downloaded FHIR can be 
     .sort((a: number, b: number) => a - b)).toEqual([98, 101])
   await importBundle(page, { bundlePath: path })
   await expectImportWorker(page, info, 'converted-fhir-reimport', bytes.length)
+  await openFeaturePanel(page)
+  await page.getByRole('tab', { name: '複製', exact: true }).click()
+  await page.getByRole('tab', { name: '下載檔案', exact: true }).click()
+  const reimportDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下載原始 FHIR', exact: true }).click()
+  const reimportPath = info.outputPath('sdk-reimported-fhir.json')
+  await (await reimportDownload).saveAs(reimportPath)
+  const reimportedBytes = await fs.readFile(reimportPath)
+  expect(reimportedBytes.equals(bytes)).toBe(true)
+  await info.attach('sdk-roundtrip-evidence', { contentType: 'application/json', body: JSON.stringify({
+    bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'),
+    reimportedBytes: reimportedBytes.length, reimportedSha256: createHash('sha256').update(reimportedBytes).digest('hex'),
+    observations: [98, 101], fullReferenceBundleMatches: true,
+  }, null, 2) })
 })

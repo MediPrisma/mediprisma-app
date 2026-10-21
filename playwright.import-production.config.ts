@@ -14,12 +14,12 @@ export default defineConfig<{ requireImportWorker: boolean }>({
   reporter: [['list'], ['json', { outputFile: 'test-results/import-production.json' }]],
   use: {
     ...devices['Desktop Chrome'],
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3022',
+    baseURL: process.env.E2E_BASE_URL || 'http://127.0.0.1:3022',
     locale: 'zh-TW', viewport: { width: 1440, height: 1000 },
     requireImportWorker: true, trace: 'retain-on-failure',
   },
   webServer: process.env.E2E_BASE_URL ? undefined : {
     command: staticDirectory ? 'node e2e/fixtures/static-export-server.mjs' : 'node node_modules/next/dist/bin/next start -p 3022',
-    url: `http://localhost:3022${process.env.E2E_APP_PATH || '/'}`, reuseExistingServer: false, timeout: 60_000,
+    url: `http://127.0.0.1:3022${process.env.E2E_APP_PATH || '/'}`, reuseExistingServer: false, timeout: 60_000,
   },
 })
