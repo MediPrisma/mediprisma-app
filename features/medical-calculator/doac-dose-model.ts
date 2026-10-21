@@ -371,10 +371,14 @@ export function doacCrcl(values: CalcValues): DoacCrcl | null {
 
 /** A CrCl as compared: the raw value, printed to one decimal where that keeps it on the same side of 15, 30 and 50. */
 export function crclLabel(value: number): string {
-  const shown = Math.round(value * 10) / 10
   const bands = [15, 30, 50, 80]
-  const same = bands.every((band) => (shown < band) === (value < band) && (shown <= band) === (value <= band))
-  return same ? shown.toFixed(1) : value.toFixed(2)
+  // Enough decimals that the printed value stays on its own side of every band (79.999 is not 80.00).
+  for (let digits = 1; digits <= 6; digits++) {
+    const factor = 10 ** digits
+    const printed = Math.round(value * factor) / factor
+    if (bands.every((band) => (printed < band) === (value < band) && (printed <= band) === (value <= band))) return printed.toFixed(digits)
+  }
+  return String(value)
 }
 
 /**

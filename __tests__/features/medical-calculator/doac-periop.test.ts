@@ -200,15 +200,16 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(result.hoursFromLastDose).toBe(11.5)
     expect(result.skippedBefore).toEqual([])
   })
-  it('bid: the dose due at the start waits for a same-day restart, by the label (#review final Astra 2, Opus; coordinator 3rd)', () => {
-    // bid 08:00/20:00, minor risk 08:00–10:00: 20:00 the day before is last; 08:00 is taken at the 16:00 restart.
+  it('bid, minor risk: the procedure day’s morning dose is not taken, as EHRA Figure 15’s minor-risk row draws it (#review re7 Opus 1)', () => {
+    // bid 08:00/20:00, minor risk 08:00–10:00: 20:00 the day before is last; 08:00 is not taken; 20:00 resumes.
     const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes' })
     expect(result.skippedBefore).toEqual([])
     expect(formatLocal(result.resume.earliest!)).toBe('11-03 16:00')
-    expect(result.resume.skippedAfter).toEqual([])
-    expect(formatLocal(result.resume.delayed!)).toBe('11-03 08:00')
-    expect(formatLocal(result.resume.firstDose!)).toBe('11-03 16:00')
-    expect(allText(result)).toContain('由團隊決定')
+    expect(times(result.resume.skippedAfter)).toEqual(['11-03 08:00'])
+    expect(result.resume.delayed).toBeUndefined()
+    expect(formatLocal(result.resume.firstDose!)).toBe('11-03 20:00')
+    expect(allText(result)).toContain('EHRA Fig 15 的極低風險列')
+    expect(allCites(result)).toContain(GUIDELINE_CITES.ehraFig15)
   })
   it('qd: a restart past midnight, or more than one dose in between, is not made up — never two doses in one day (#review final Opus 2)', () => {
     const late = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T18:00' })
@@ -247,7 +248,7 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(result.resume.delayed!)).toBe('11-03 20:00')
     expect(formatLocal(result.resume.firstDose!)).toBe('11-03 21:00')
     expect(allCites(result)).toContain(CITES.apixabanMissed)
-    expect(allText(result)).toContain('早上那一劑可與晚上那一劑一起服；晚上那一劑只能當晚補')
+    expect(allText(result)).toContain('apixaban 仿單另允許早上漏服的那一劑與晚上那一劑一起服；計算機只把恢復前最後一劑列為在恢復時服用，不加倍補服更早的劑量；由團隊決定')
     // Past midnight the evening dose is not made up.
     const late = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_end_at: '2026-11-03T19:00' })
     expect(late.resume.delayed).toBeUndefined()
@@ -283,11 +284,11 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(bid.heldBefore!)).toBe('11-03 08:00')
     expect(formatLocal(bid.lastDose!)).toBe('11-02 20:00')
     expect(bid.hoursFromLastDose).toBe(14)
-    expect(bid.skippedBefore).toEqual([])
-    // By the apixaban label the held morning dose is taken at the 17:00 restart, listed once.
-    expect(formatLocal(bid.resume.delayed!)).toBe('11-03 08:00')
+    expect(times(bid.skippedBefore)).toEqual(['11-03 08:00'])
+    // The procedure day’s morning dose is not taken (EHRA Figure 15, minor risk), listed once; 20:00 resumes.
+    expect(bid.resume.delayed).toBeUndefined()
     expect(bid.resume.skippedAfter).toEqual([])
-    expect(formatLocal(bid.resume.firstDose!)).toBe('11-03 17:00')
+    expect(formatLocal(bid.resume.firstDose!)).toBe('11-03 20:00')
     expect(bid.cautions.map((c) => c.text.zh).join()).toContain('11-03 08:00 那一劑距開始只有 2 小時，未到谷底：處置前不服')
     const headline = CALCULATORS.find((c) => c.id === 'doac-periop')!.compute({ ...base, procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T10:00', surgery_end_at: '2026-11-03T11:00' })!
     expect(headline.interpretation!.zh).toContain('11-03 08:00 那一劑距開始太近，處置前不服；處置前最後服用 11-02 20:00，距開始 14 小時')
@@ -362,6 +363,8 @@ describe('third review by the coordinator', () => {
   })
   it('CrCl 79.96 is not printed as 80.0', () => {
     expect(crclLabel(79.96)).toBe('79.96')
+    expect(crclLabel(79.999)).toBe('79.999')
+    expect(crclLabel(29.9999)).toBe('29.9999')
     expect(crclLabel(62)).toBe('62.0')
   })
 })

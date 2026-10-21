@@ -223,7 +223,7 @@ export interface PeriopResult {
 export type PeriopInputKey =
   | 'regimen' | 'dose_intent' | 'age' | 'sex' | 'weight' | 'scr' | 'crcl_manual' | 'dialysis'
   | 'procedure_kind' | 'neuraxial' | 'surgery_at' | 'surgery_end_at' | 'dose_time_1' | 'dose_time_2'
-  | 'haemostasis' | 'catheter_removed_at' | 'traumatic_puncture'
+  | 'haemostasis' | 'catheter_removed_at' | 'sheath_removed_at' | 'traumatic_puncture'
 
 /** 「2026-11-03T08:00」 as local time; undefined for anything else. */
 export function parseLocalDateTime(value: string | undefined): Date | undefined {
@@ -332,42 +332,49 @@ function traumaticDelay(agent: DoacAgent): number | undefined {
 const sameDay = (x: Date, y: Date) => x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate()
 
 /**
- * What happens to a dose that falls between the procedure and the restart:
- * each label's own missed-dose rule decides whether the last one can still be
- * taken at the restart; every other is not made up. Twice daily, the morning
- * dose is not taken — EHRA Figure 15 draws it so for minor risk — although the
- * apixaban and rivaroxaban 15 mg bid labels would allow it late: the line says
- * so and the team decides.
+ * What happens to a dose that falls between the procedure and the restart.
+ * EHRA Figure 15 draws it dose by dose only on a minor procedure's day: twice
+ * daily, no morning dose (the star) and an optional evening one. Elsewhere
+ * (the restart days of low and high risk, an ablation) the figure draws the
+ * restart, not each missed dose, and the label's missed-dose rule decides
+ * whether the last dose before the restart is taken at it. The calculator
+ * never doubles up an earlier one, though two labels would allow it the same
+ * day: the line says so and the team decides.
  */
-function missedDoseRule(agent: DoacAgent, regimen: { agent: DoacAgent; mg: number; perDay: number }): { takeAtRestart: (dose: Date, restart: Date, next?: Date) => boolean; line: PeriopLine } {
-  // EHRA Figure 15 draws the restart days, not a rule for each dose missed while waiting: that is each
-  // label's missed-dose rule, and only the last dose before the restart can still be taken at it.
-  const team = t('EHRA Fig 15 未逐劑規定恢復前漏掉的劑量：計算機依仿單，由團隊決定。', 'EHRA Figure 15 sets no rule for each dose missed before the restart: the calculator follows the label; the team decides.')
+function missedDoseRule(agent: DoacAgent, regimen: { agent: DoacAgent; mg: number; perDay: number }, minutes: number[], surgery: Date, minorRisk: boolean): { takeAtRestart: (dose: Date, restart: Date, next?: Date) => boolean; line: PeriopLine } {
+  const team = t('計算機只把恢復前最後一劑列為在恢復時服用，不加倍補服更早的劑量；由團隊決定。', 'The calculator moves only the last dose before the restart to it and never doubles up an earlier one; the team decides.')
   if (regimen.perDay === 1) {
     if (agent === 'dabigatran') {
-      return { takeAtRestart: () => false, line: line(t(`處置到恢復之間的那一劑不補服，隔天同一時間繼續（dabigatran 仿單的漏服規則）。${team.zh}`, `A dose between the procedure and the restart is not made up; continue at the same time the next day (the dabigatran label’s missed-dose rule). ${team.en}`), CITES.dabigatranMissed) }
+      return { takeAtRestart: () => false, line: line(t('處置到恢復之間的那一劑不補服，隔天同一時間繼續（dabigatran 仿單的漏服規則）。', 'A dose between the procedure and the restart is not made up; continue at the same time the next day (the dabigatran label’s missed-dose rule).'), CITES.dabigatranMissed) }
     }
     return {
       takeAtRestart: (dose, restart) => sameDay(dose, restart),
       line: line(
-        t(`處置到恢復之間的那一劑：恢復仍在同一天就延到恢復時服用；已跨日則不補服，隔天照原時間（${agent} 仿單的漏服規則：不在同一天服兩劑）。${team.zh}`, `A dose between the procedure and the restart: taken at the restart when that is the same day; past midnight it is not made up and the usual time follows (the ${agent} label’s missed-dose rule: never two doses in one day). ${team.en}`),
-        agent === 'edoxaban' ? CITES.edoxabanMissed : regimen.mg === 10 ? CITES.rivaroxabanMissed10 : CITES.rivaroxabanMissed,
+        t(`處置到恢復之間的那一劑：恢復仍在同一天就延到恢復時服用；已跨日則不補服，隔天照原時間（${agent} 仿單的漏服規則：不在同一天服兩劑）。`, `A dose between the procedure and the restart: taken at the restart when that is the same day; past midnight it is not made up and the usual time follows (the ${agent} label’s missed-dose rule: never two doses in one day).`),
+        ...(minorRisk ? [G.ehraFig15] : []), agent === 'edoxaban' ? CITES.edoxabanMissed : regimen.mg === 10 ? CITES.rivaroxabanMissed10 : CITES.rivaroxabanMissed,
       ),
     }
   }
+  const morning = Math.min(...minutes)
+  const minuteOf = (d: Date) => d.getHours() * 60 + d.getMinutes()
+  // EHRA Figure 15, minor risk: the procedure day's morning dose is not drawn.
+  const procedureMorning = (dose: Date) => minorRisk && minuteOf(dose) === morning && sameDay(dose, surgery)
+  const minor = minorRisk
+    ? t('極低風險處置當天：早上那一劑不服用、不補服，晚上那一劑可選（EHRA Fig 15 的極低風險列）。其他：', 'On a minor procedure’s day the morning dose is not taken nor made up and the evening dose is optional (EHRA Figure 15, minor-risk row). Otherwise: ')
+    : t('', '')
   if (agent === 'dabigatran') {
     return {
-      takeAtRestart: (_dose, restart, next) => !!next && (next.getTime() - restart.getTime()) / HOUR >= 6,
-      line: line(t(`處置到恢復之間：恢復前最後一劑若恢復時距下一劑仍 ≥6 小時，可在恢復時服用，否則不補服；更早的劑量不補服（dabigatran 仿單的漏服規則）。${team.zh}`, `Between the procedure and the restart: the last dose before the restart may be taken at it if the next dose is still ≥6 h away, otherwise it is omitted; earlier doses are not made up (the dabigatran label’s missed-dose rule). ${team.en}`), CITES.dabigatranMissedBid),
+      takeAtRestart: (dose, restart, next) => !procedureMorning(dose) && !!next && (next.getTime() - restart.getTime()) / HOUR >= 6,
+      line: line(t(`${minor.zh}處置到恢復之間：恢復前最後一劑若恢復時距下一劑仍 ≥6 小時，可在恢復時服用，否則不補服（dabigatran 仿單的漏服規則，不服雙倍劑量）。`, `${minor.en}between the procedure and the restart, the last dose before the restart may be taken at it if the next dose is still ≥6 h away, otherwise it is omitted (the dabigatran label’s missed-dose rule; no double dose).`), ...(minorRisk ? [G.ehraFig15] : []), CITES.dabigatranMissedBid),
     }
   }
   return {
-    takeAtRestart: (dose, restart) => sameDay(dose, restart),
+    takeAtRestart: (dose, restart) => !procedureMorning(dose) && sameDay(dose, restart),
     line: line(
       agent === 'apixaban'
-        ? t(`處置到恢復之間：恢復前最後一劑若恢復仍在同一天，可在恢復時服用（早上那一劑可與晚上那一劑一起服；晚上那一劑只能當晚補），否則不補服；更早的劑量不補服（apixaban 仿單的漏服規則）。${team.zh}`, `Between the procedure and the restart: the last dose before the restart may be taken at it when that is the same day (a morning dose may go with the evening one; an evening dose only that evening), otherwise it is not made up; earlier doses are not made up (the apixaban label’s missed-dose rule). ${team.en}`)
-        : t(`處置到恢復之間：恢復前最後一劑若恢復仍在同一天，可在恢復時服用，以達每天 30 mg，否則不補服；更早的劑量不補服（rivaroxaban 仿單 15 mg bid 期的漏服規則）。${team.zh}`, `Between the procedure and the restart: the last dose before the restart may be taken at it when that is the same day, to reach 30 mg that day, otherwise it is not made up; earlier doses are not made up (the rivaroxaban label’s rule for the 15 mg bid phase). ${team.en}`),
-      agent === 'apixaban' ? CITES.apixabanMissed : CITES.rivaroxabanMissed15bid,
+        ? t(`${minor.zh}處置到恢復之間：恢復前最後一劑若恢復仍在同一天，可在恢復時服用，否則不補服。apixaban 仿單另允許早上漏服的那一劑與晚上那一劑一起服；${team.zh}`, `${minor.en}between the procedure and the restart, the last dose before the restart may be taken at it when that is the same day, otherwise it is not made up. The apixaban label also allows a missed morning dose together with the evening one; ${team.en}`)
+        : t(`${minor.zh}處置到恢復之間：恢復前最後一劑若恢復仍在同一天，可在恢復時服用，否則不補服。rivaroxaban 仿單另允許 15 mg bid 期一次服兩顆以補足每天 30 mg；${team.zh}`, `${minor.en}between the procedure and the restart, the last dose before the restart may be taken at it when that is the same day, otherwise it is not made up. The rivaroxaban label also allows two 15 mg tablets at once in the bid phase to reach 30 mg a day; ${team.en}`),
+      ...(minorRisk ? [G.ehraFig15] : []), agent === 'apixaban' ? CITES.apixabanMissed : CITES.rivaroxabanMissed15bid,
     ),
   }
 }
@@ -701,7 +708,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     if (sheathBeforeStart) restart.push({ line: line(t('拔 sheath 時刻早於開始時刻：請更正', 'Sheath removal is before the start: correct it')), key: 'sheath_removed_at' })
     restart.push({
       at: sheath ? addHours(sheath, 3) : undefined,
-      line: line(t('拔除 sheath 後 3–5 小時恢復（最早 3 小時），恢復前排除心包填塞與其他大出血；未填拔 sheath 時刻就不算恢復時間。', 'Resume 3–5 h after sheath removal (3 h at the earliest), once tamponade and other major bleeding are ruled out; no restart time until the removal time is entered.'), G.ehraFig16),
+      line: line(t(sheath ? '拔除 sheath 後 3–5 小時恢復（最早 3 小時），恢復前排除心包填塞與其他大出血。' : '拔除 sheath 後 3–5 小時恢復，恢復前排除心包填塞與其他大出血；填入拔 sheath 時刻才算恢復時間。', sheath ? 'Resume 3–5 h after sheath removal (3 h at the earliest), once tamponade and other major bleeding are ruled out.' : 'Resume 3–5 h after sheath removal, once tamponade and other major bleeding are ruled out; enter the removal time for a restart time.'), G.ehraFig16),
       key: sheath ? undefined : 'sheath_removed_at',
     })
   } else {
@@ -787,7 +794,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
         ...(result.heldBefore ? [result.heldBefore] : []),
         ...after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime())),
       ]
-      const rule = missedDoseRule(agent, regimen)
+      const rule = missedDoseRule(agent, regimen, minutes as number[], surgery, troughOnly && result.state !== 'ablation')
       // Only the last dose before the restart can still be taken at it; every earlier one is not made up.
       const candidate = between[between.length - 1]
       if (candidate && rule.takeAtRestart(candidate, earliest, first)) {
@@ -811,7 +818,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     if (next || result.heldBefore) {
       const from = result.heldBefore ?? next!
       result.resume.lines.push(line(t(`恢復時間未定：${formatLocal(from)} 起的劑量先不服，恢復時間確定後依漏服規則處理。`, `Restart not yet known: doses from ${formatLocal(from)} wait, then follow the missed-dose rule once the restart is set.`)))
-      result.resume.lines.push(missedDoseRule(agent, regimen).line)
+      result.resume.lines.push(missedDoseRule(agent, regimen, minutes as number[], surgery, troughOnly && result.state !== 'ablation').line)
     }
   }
   result.pending = [...new Set(result.pending)]
