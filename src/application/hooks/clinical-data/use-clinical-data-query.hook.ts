@@ -1,4 +1,4 @@
-import { attachReportObservations } from '@/src/core/services/clinical-report-membership'
+import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 /**
  * Clinical Data Query Hook (React Query)
@@ -139,11 +139,9 @@ function buildClinicalResults(
   // search, so their readiness is that query's readiness.
   resourceReady.vitalSigns = resourceReady.observations
 
-  entities.diagnosticReports = attachReportObservations(
-    entities.diagnosticReports,
-    entities.observations,
-    clinicalSource,
-  )
+  const projected = projectClinicalAggregate({ ...entities, vitalSigns, clinicalSource })
+  for (const unit of CLINICAL_RESOURCE_UNITS) writeEntities[unit.id] = projected[unit.id]
+  vitalSigns = projected.vitalSigns
 
   return {
     entities,
@@ -237,7 +235,10 @@ function useClinicalResourceAggregate() {
   const clinicalSource = snapshot.aggregate.readClinicalSource?.() ?? snapshot.aggregate.clinicalSource
   const aggregate = useMemo(() => clinicalSource === snapshot.aggregate.clinicalSource
     ? snapshot.aggregate
-    : { ...snapshot.aggregate, clinicalSource }, [snapshot, clinicalSource])
+    : (() => {
+      const projected = projectClinicalAggregate({ ...snapshot.aggregate.entities, vitalSigns: snapshot.aggregate.vitalSigns, clinicalSource })
+      return { ...snapshot.aggregate, entities: projected, vitalSigns: projected.vitalSigns, clinicalSource }
+    })(), [snapshot, clinicalSource])
   return { aggregate, patientLoading, refetch }
 }
 

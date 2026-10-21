@@ -420,7 +420,7 @@ describe('FhirClinicalDataRepository', () => {
 
       const result = await repository.fetchImagingStudies('patient-123')
 
-      expect(result).toEqual([{ id: 'study-1', description: 'Chest CT' }])
+      expect(result).toMatchObject([{ id: 'study-1', description: 'Chest CT' }])
       expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
         expect.stringContaining('ImagingStudy?patient=patient-123'),
       )
@@ -478,7 +478,7 @@ describe('FhirClinicalDataRepository', () => {
 
       const result = await repository.fetchEncounters('patient-123')
 
-      expect(result).toEqual([{ id: 'enc-1', status: 'finished' }])
+      expect(result).toMatchObject([{ id: 'enc-1', status: 'finished' }])
       expect(mockMapper.toEncounter).toHaveBeenCalledTimes(1)
     })
   })
@@ -609,7 +609,7 @@ it('shares one active logical slot across optional-query fallback and later prim
   request.mockReset()
   ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
   request.mockRejectedValueOnce(new Error('Sort not supported')).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'old-fallback' } }] })
-  expect(await repo.fetchConditions('logical-slot')).toEqual([{ id: 'old-fallback' }])
+  expect(await repo.fetchConditions('logical-slot')).toMatchObject([{ id: 'old-fallback' }])
   expect(repo.getClinicalSource('logical-slot').graph.nodes).toHaveLength(1)
   request.mockResolvedValueOnce({ entry: [] })
   expect(await repo.fetchConditions('logical-slot')).toEqual([])
@@ -628,7 +628,7 @@ it('still retries an unsupported optional query after a previous success', async
   request.mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'old' } }] })
   await repo.fetchConditions('optional-refresh')
   request.mockRejectedValueOnce(new Error('Sort not supported')).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'updated' } }] })
-  expect(await repo.fetchConditions('optional-refresh')).toEqual([{ id: 'updated' }])
+  expect(await repo.fetchConditions('optional-refresh')).toMatchObject([{ id: 'updated' }])
   expect(request).toHaveBeenCalledTimes(3)
   expect(repo.getQueryStatus('Condition')?.state).toBe('ok')
 })

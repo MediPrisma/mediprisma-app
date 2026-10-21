@@ -35,7 +35,7 @@ it('keeps stable distinct record IDs across exact include/query copies and refre
   expect(collection.observations.map(row => row.sourceId)).toEqual(['same-fhir-id', 'same-fhir-id'])
   for (const report of collection.diagnosticReports) {
     const member = report._observations![0]
-    expect(member.id).toBe(collection.observations.find(row => row.valueQuantity?.value === member.valueQuantity?.value)?.id)
+    expect(member).toBe(collection.observations.find(row => row.valueQuantity?.value === member.valueQuantity?.value))
     expect(report.result![0].reference).toBe('Observation/' + member.id)
   }
   const refreshed = await repository.fetchObservations('synthetic-patient')
@@ -93,4 +93,35 @@ it('unifies fullUrl-only exact copies in scope even when the FHIR source id is a
   expect(scoped.observations).toHaveLength(2)
   expect(new Set(scoped.observations?.map(row => row.id)).size).toBe(2)
   expect(collection.observations.map(row => row.sourceId)).toEqual([undefined, undefined])
+})
+
+it('unifies old included and new query observations, then keeps valid includes when Observation refresh is empty', async () => {
+  const old = { ...obsEntries[0].resource, valueQuantity: { value: 7, unit: 'mg/dL' } }
+  const latest = { ...obsEntries[1].resource, effectiveDateTime: old.effectiveDateTime, valueQuantity: { value: 9, unit: 'mg/dL' } }
+  const report = { ...reportEntries[0].resource, id: 'report-row', result: [{ reference: 'Observation/same-fhir-id' }] }
+  let empty = false
+  ;(fhirClient.requestAllPages as jest.Mock).mockImplementation(async (url: string) => ({ entry: url.startsWith('Observation?') ? empty ? [] : [{ resource: latest }] : url.startsWith('DiagnosticReport?') ? [{ resource: report }, { resource: old }] : [] }))
+  const repository = new FhirClinicalDataRepository()
+  const first = await repository.fetchAllClinicalData('synthetic-patient')
+  expect(first.observations.map(row => row.valueQuantity?.value).sort()).toEqual([7, 9])
+  expect(first.diagnosticReports[0]._observations![0]).toBe(first.observations.find(row => row.valueQuantity?.value === 7))
+  empty = true
+  const refreshed = await repository.fetchAllClinicalData('synthetic-patient')
+  expect(refreshed.observations.map(row => row.valueQuantity?.value)).toEqual([7])
+  expect(refreshed.diagnosticReports[0]._observations![0]).toBe(refreshed.observations[0])
+})
+
+it('projects cross-query Composition and report references using only resolved aggregate graph targets', async () => {
+  const observation = obsEntries[0].resource
+  const report = { ...reportEntries[0].resource, id: 'cross-report', result: [{ reference: 'Observation/same-fhir-id/_history/1' }] }
+  const references = ['Observation/same-fhir-id/_history/1', 'DiagnosticReport/cross-report', 'https://foreign.example/fhir/Observation/same-fhir-id', 'Observation/same-fhir-id/_history/wrong-version']
+  const composition = { resourceType: 'Composition', id: 'composition', status: 'final', type: { text: 'Synthetic' }, section: [{ entry: references.map(reference => ({ reference })) }] }
+  ;(fhirClient.requestAllPages as jest.Mock).mockImplementation(async (url: string) => ({ entry: url.startsWith('Observation?') ? [{ resource: observation }] : url.startsWith('DiagnosticReport?') ? [{ resource: report }] : url.startsWith('Composition?') ? [{ resource: composition }] : [] }))
+  const collection = await new FhirClinicalDataRepository().fetchAllClinicalData('synthetic-patient')
+  expect(collection.compositions[0].section?.[0].entry?.map(entry => entry.reference)).toEqual([
+    'Observation/' + collection.observations[0].id, 'DiagnosticReport/' + collection.diagnosticReports[0].id, references[2], references[3],
+  ])
+  expect(collection.diagnosticReports[0].result?.[0].reference).toBe('Observation/' + collection.observations[0].id)
+  const raw: any = collection.clinicalSource!.graph.nodes.find(node => node.resource.resourceType === 'Composition')!.resource
+  expect(raw.section[0].entry.map((entry: any) => entry.reference)).toEqual(references)
 })
