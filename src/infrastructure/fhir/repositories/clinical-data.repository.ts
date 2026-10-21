@@ -4,6 +4,7 @@ import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } 
 import { createClinicalProjectionContext, projectClinicalReferences, mapProjectedObservation as mapSourceObservation, projectClinicalAggregate } from '../mappers/clinical-aggregate-projection'
 import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
+import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { captureClinicalSource, invalidateClinicalSource, mutableClinicalProjection, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
 // FHIR Clinical Data Repository Implementation
 import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories/clinical-data.repository.interface'
@@ -174,6 +175,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       if (node.isContained || node.embeddedIn || !(node.resource.resourceType === queryType || (queryType === 'DiagnosticReport' && node.resource.resourceType === 'Observation'))) continue
       const reason = getClinicalSourceNodePatientExclusionReason(node, source.graph.nodes)
       if (reason) exclusionCounts[reason] = (exclusionCounts[reason] ?? 0) + node.occurrences
+    }
+    for (const { node, reason, resourceTypes } of clinicalContainedPatientExclusions(source)) {
+      if (resourceTypes.includes(queryType as 'Observation' | 'DiagnosticReport')) exclusionCounts[reason] = (exclusionCounts[reason] ?? 0) + node.occurrences
     }
     const excludedCount = Object.values(exclusionCounts).reduce((sum, count) => sum + count, 0)
     const invalidModifiers = malformedClinicalProjectionNodes(source)
