@@ -1,9 +1,22 @@
 import { clinicalSourceResourcesEqual } from './clinical-source-graph'
 import { clinicalSourceContextIdentity, clinicalSourceNodesEqualWithContext } from './clinical-source-context'
-import type { ClinicalSourceNode } from './clinical-source-graph'
+import type { ClinicalSourceGraph, ClinicalSourceNode } from './clinical-source-graph'
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 
 const projectedResourceTypes = new Set(['Observation', 'DiagnosticReport'])
+const membershipGraphs = new WeakMap<ClinicalSourceGraph, ClinicalSourceGraph>()
+
+function projectionMembershipGraph(graph: ClinicalSourceGraph): ClinicalSourceGraph {
+  const cached = membershipGraphs.get(graph)
+  if (cached) return cached
+  // Patient, encounter and performer captures may settle or refresh separately.
+  // They must not change a clinical row's navigation identity. Membership still
+  // distinguishes identical panels/reports that resolve to different values.
+  // Reconciliation continues to use the complete graph for transmission equality.
+  const membership = { ...graph, references: graph.references.filter(edge => /^(?:result|hasMember)(?:\[|$)/.test(edge.path)) }
+  membershipGraphs.set(graph, membership)
+  return membership
+}
 
 function stableMetadata(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableMetadata).join(',')}]`
@@ -40,6 +53,7 @@ export function clinicalSourceIdentityDigest(value: string): string {
 export function createClinicalSourceProjectionIds(
   source: ClinicalReconciliationResult,
 ): ReadonlyMap<string, string> {
+  const membershipGraph = projectionMembershipGraph(source.graph)
   const nodesByKey = new Map(source.graph.nodes.map((node) => [node.key, node]))
   const stableIdentityCache = new Map<string, string>()
   const resourcesByParentIdentity = new Map<string, ClinicalSourceNode['resource']>()
@@ -111,7 +125,7 @@ export function createClinicalSourceProjectionIds(
       node.resource.id ?? null,
       versionId,
       node.contentHash,
-      clinicalSourceContextIdentity(source.graph, node),
+      clinicalSourceContextIdentity(membershipGraph, node),
       parentIdentity ?? null,
       occurrence ?? null,
       // Without an id or fullUrl, equal payloads in independent query captures
@@ -126,7 +140,7 @@ export function createClinicalSourceProjectionIds(
     const bucket = buckets.get(record.digest) ?? []
     const existing = bucket.find((candidate) => candidate.identity === record.identity)
     if (existing) {
-      if (!clinicalSourceNodesEqualWithContext(source.graph, existing.node, record.node)) {
+      if (!clinicalSourceNodesEqualWithContext(membershipGraph, existing.node, record.node)) {
         throw new Error('Clinical source projection ID hash collision: matching identity metadata has different resources')
       }
       existing.nodeKeys.push(record.node.key)

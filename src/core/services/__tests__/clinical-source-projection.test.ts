@@ -6,6 +6,25 @@ import type { ClinicalReconciliationResult } from '../clinical-reconciliation'
 const scope = { sourceId: 'ehr-source', patientScope: 'patient-1', restBase: 'https://ehr.example/fhir' }
 
 describe('createClinicalSourceProjectionIds', () => {
+  it('keeps row identity while patient and encounter captures progressively resolve administrative references', () => {
+    const clinical = { ...scope, generation: 'clinical', resources: [
+      { resourceType: 'Observation', id: 'value', subject: { reference: 'Patient/patient-1' }, encounter: { reference: 'Encounter/visit' }, valueInteger: 7 },
+      { resourceType: 'DiagnosticReport', id: 'report', subject: { reference: 'Patient/patient-1' }, result: [{ reference: 'Observation/value' }] },
+    ] }
+    const patient = (version: string) => ({ ...scope, generation: `patient-${version}`, resources: [{ resourceType: 'Patient', id: 'patient-1', meta: { versionId: version } }] })
+    const encounter = { ...scope, generation: 'visit', resources: [{ resourceType: 'Encounter', id: 'visit', subject: { reference: 'Patient/patient-1' } }] }
+    const rowIds = (source: ClinicalReconciliationResult) => {
+      const ids = createClinicalSourceProjectionIds(source)
+      return source.graph.nodes.filter(node => ['Observation', 'DiagnosticReport'].includes(node.resource.resourceType)).map(node => ids.get(node.key))
+    }
+    const initial = reconcileClinicalSources([clinical])
+    const complete = reconcileClinicalSources([clinical, patient('1'), encounter])
+    expect(initial.graph.references.some(edge => edge.path === 'subject' && edge.status === 'unresolved')).toBe(true)
+    expect(complete.graph.references.some(edge => edge.path === 'subject' && edge.status === 'resolved')).toBe(true)
+    expect(rowIds(complete)).toEqual(rowIds(initial))
+    expect(rowIds(reconcileClinicalSources([clinical, encounter, patient('2')]))).toEqual(rowIds(initial))
+  })
+
   it('assigns the same ID to exact copies across query generations without putting generation in the ID', () => {
     const resource = { resourceType: 'Observation', id: 'o-1', meta: { versionId: '3' }, valueQuantity: { value: 7 } }
     const source = reconcileClinicalSources([
