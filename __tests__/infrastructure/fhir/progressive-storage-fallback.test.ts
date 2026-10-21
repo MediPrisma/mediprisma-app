@@ -52,6 +52,10 @@ test.each(['read', 'key', 'marker'] as const)('guarded import stays usable in me
   expect(await local.load()).toEqual(bundle)
   expect((bundle.entry[1].resource as any).presentedForm[0].data).toBe('AQID')
   expect(await local.loadOriginalFhir()).toBe(source)
+  mockEnrich.mockResolvedValueOnce({ bundle: { ...bundle, id: 'enriched-cloud' }, report: { status: 'enriched', linkedRequestCount: 1 } })
+  expect(await local.parseStored()).not.toBeNull()
+  const queue = await import('@/src/infrastructure/fhir/services/local-bundle-mutation-queue')
+  await queue.serializeLocalBundleMutation(async () => {})
   for (const importId of ['visits-a', 'final-a']) {
     const updated = { ...chart(), id: importId }, updatedSource = new Blob([JSON.stringify(updated)])
     await local.save(updated, { importId, originalFhir: updatedSource, signal: new AbortController().signal })
@@ -129,7 +133,8 @@ test('abort during real encryption leaves the previous key, source and images re
   expect(Array.from(new Uint8Array(await (await reloaded.getImage(ref))!.arrayBuffer()))).toEqual([1, 2, 3])
 })
 
-test('a late terminology refresh cannot overwrite the newer hospital chart or its original source', async () => {
+test.each(['enriched', 'unavailable', 'not-applicable'])(
+  'a late %s terminology refresh cannot overwrite the newer hospital chart or its original source', async status => {
   const local = await service(), queue = await import('@/src/infrastructure/fhir/services/local-bundle-mutation-queue')
   const old = chart(), newer = { ...chart(), id: 'hospital-snapshot' }, original = new Blob([JSON.stringify(newer)])
   await local.save(old, { importId: 'cloud', signal: new AbortController().signal })
@@ -138,7 +143,7 @@ test('a late terminology refresh cannot overwrite the newer hospital chart or it
   const parsing = local.parseStored()
   while (!finish) await Promise.resolve()
   await queue.serializeLocalBundleMutation(() => local.save(newer, { importId: 'hospital', originalFhir: original, signal: new AbortController().signal }))
-  finish({ bundle: { ...old, id: 'late-old-enrichment' }, report: { status: 'enriched', linkedRequestCount: 1 } })
+  finish({ bundle: { ...old, id: 'late-old-enrichment' }, report: { status, linkedRequestCount: status === 'enriched' ? 1 : 0 } })
   const parsed = await parsing
   await queue.serializeLocalBundleMutation(async () => {})
   expect(local.getActiveImportId()).toBe('hospital')
@@ -157,7 +162,8 @@ test('terminology persistence is queued without deadlocking the importing query 
   expect(await local.load()).toBe(enriched)
 })
 
-test('a terminology refresh resolving after clear does not resurrect the old patient', async () => {
+test.each(['enriched', 'unavailable', 'not-applicable'])(
+  'a %s terminology refresh resolving after clear does not resurrect the old patient', async status => {
   const local = await service(), queue = await import('@/src/infrastructure/fhir/services/local-bundle-mutation-queue')
   const previous = chart()
   await local.save(previous, { importId: 'cleared', signal: new AbortController().signal })
@@ -166,7 +172,7 @@ test('a terminology refresh resolving after clear does not resurrect the old pat
   const parsing = local.parseStored()
   while (!finish) await Promise.resolve()
   await queue.serializeLocalBundleMutation(() => local.clear())
-  finish({ bundle: previous, report: { status: 'enriched', linkedRequestCount: 1 } })
+  finish({ bundle: previous, report: { status, linkedRequestCount: status === 'enriched' ? 1 : 0 } })
   expect(await parsing).toBeNull()
   expect(local.hasData()).toBe(false)
 })

@@ -1728,16 +1728,19 @@ export const LocalBundleService = {
           const result = await enrichBundleWithNhiDrugTerminologyOffMainThread(
             bundle as Record<string, unknown>,
           )
+          if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return memBundle
           if (
             result.report.status === 'enriched'
             && result.report.linkedRequestCount > 0
           ) {
-            if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return memBundle
             // Query refresh may itself be awaited by an import holding this
             // queue. Return the derived view now; persist it behind that writer
             // only if its original chart still owns the scope.
             void serializeLocalBundleMutation(async () => {
               if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return
+              // Optional enrichment must not turn a memory-only chart into a
+              // purported durable predecessor for the next progressive stage.
+              if (memBundleUsesMemoryOnlySession) return
               await this.save(result.bundle, {
                 ...(owner.importId ? { importId: owner.importId } : {}),
                 demo: memBundleIsDemo,
