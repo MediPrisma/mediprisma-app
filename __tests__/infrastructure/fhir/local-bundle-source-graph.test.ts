@@ -208,6 +208,44 @@ it('canonicalizes contained references and retains graph and explicit Roche deri
   expect(JSON.stringify(bundle)).toBe(before)
 })
 
+it.each(['urn:uuid:stage-group', '#stage-group'])('keeps Roche stage resolution through cross-List contained reference %s', reference => {
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { fullUrl: 'urn:uuid:patient', resource: { resourceType: 'Patient', id: 'patient' } },
+    { resource: { resourceType: 'List', id: 'conditions', code: { text: 'Conditions' }, extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }], contained: [
+      { resourceType: 'Condition', id: 'diagnosis', code: { text: 'Synthetic cancer' }, stage: [{ assessment: [{ reference }] }] },
+    ] } },
+    { resource: { resourceType: 'List', id: 'staging', code: { text: 'Observations' }, extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }], contained: [
+      { resourceType: 'Observation', id: 'stage-group', valueCodeableConcept: { text: 'II' } },
+    ] } },
+  ] }
+
+  const parsed = LocalBundleService.parse(bundle)!
+
+  expect(parsed.collection.conditions.find(condition => condition.sourceId === 'diagnosis')?._cancerStage).toBe('Stage II')
+  expect(parsed.collection.observations.some(observation => observation.sourceId === 'stage-group')).toBe(false)
+})
+
+it('does not resolve a Roche raw contained-id alias when distinct resources collide', () => {
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { fullUrl: 'urn:uuid:patient', resource: { resourceType: 'Patient', id: 'patient' } },
+    { resource: { resourceType: 'List', id: 'conditions', code: { text: 'Conditions' }, extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }], contained: [
+      { resourceType: 'Condition', id: 'diagnosis', code: { text: 'Synthetic cancer' }, stage: [{ assessment: [{ reference: 'urn:uuid:stage-group' }] }] },
+    ] } },
+    { resource: { resourceType: 'List', id: 'staging-one', code: { text: 'Observations' }, extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }], contained: [
+      { resourceType: 'Observation', id: 'stage-group', valueCodeableConcept: { text: 'II' } },
+    ] } },
+    { resource: { resourceType: 'List', id: 'staging-two', code: { text: 'Observations' }, extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }], contained: [
+      { resourceType: 'Observation', id: 'stage-group', valueCodeableConcept: { text: 'III' } },
+    ] } },
+  ] }
+  const before = JSON.stringify(bundle)
+
+  const parsed = LocalBundleService.parse(bundle)!
+
+  expect(parsed.collection.conditions.find(condition => condition.sourceId === 'diagnosis')?._cancerStage).toBeUndefined()
+  expect(JSON.stringify(bundle)).toBe(before)
+})
+
 it('maps revisions of contained diagnoses across versions of the same Roche List', () => {
   const listVersion = (version: string, diagnosis: string) => ({
     resourceType: 'List', id: 'conditions', meta: { versionId: version }, code: { text: 'Conditions' },

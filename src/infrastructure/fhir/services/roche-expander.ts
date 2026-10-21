@@ -88,7 +88,11 @@ function resolveRefsDeep(
  * untouched (isRocheBundle returns false). Runs AFTER canonicalizeBundleResources
  * (so top-level ids are already stamped) and BEFORE the byType() split.
  */
-export function expandRocheResources(entries: any[], onDerivedMember?: (report: any, observation: any) => void): void {
+export function expandRocheResources(
+  entries: any[],
+  onDerivedMember?: (report: any, observation: any) => void,
+  sourceIdFor?: (resource: any) => string | undefined,
+): void {
   if (!Array.isArray(entries) || entries.length === 0) return
   if (!isRocheBundle(entries)) return
 
@@ -124,11 +128,24 @@ export function expandRocheResources(entries: any[], onDerivedMember?: (report: 
 
   // (2) Index every top-level resource by id and by each identifier value.
   const byId = new Map<string, string>()
+  const ambiguousIds = new Set<string>()
+  const indexId = (id: string, reference: string) => {
+    if (ambiguousIds.has(id)) return
+    const existing = byId.get(id)
+    if (existing && existing !== reference) {
+      byId.delete(id)
+      ambiguousIds.add(id)
+      return
+    }
+    byId.set(id, reference)
+  }
   const byIdentifier = new Map<string, any[]>()
   for (const res of entries) {
     if (!res?.resourceType || res.id == null) continue
     const ref = `${res.resourceType}/${res.id}`
-    byId.set(String(res.id), ref)
+    indexId(String(res.id), ref)
+    const sourceId = sourceIdFor?.(res)
+    if (sourceId != null && sourceId !== '' && String(sourceId) !== String(res.id)) indexId(String(sourceId), ref)
     const ids = Array.isArray(res.identifier) ? res.identifier : []
     for (const ident of ids) {
       if (ident?.value != null) {

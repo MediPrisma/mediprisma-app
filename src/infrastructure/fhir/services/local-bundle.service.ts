@@ -1504,6 +1504,13 @@ export const LocalBundleService = {
         ...(variant ? { clinicalRecordVariant: variant } : {}) }
     }
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
+    const containedIdScopes = new Map<string, Set<string>>()
+    for (const node of clinicalSource.graph.nodes) {
+      if (!node.isContained || typeof node.resource.id !== 'string') continue
+      const scopes = containedIdScopes.get(node.resource.id) ?? new Set<string>()
+      scopes.add(JSON.stringify([node.sourceId, node.patientScope]))
+      containedIdScopes.set(node.resource.id, scopes)
+    }
     if (!entries.length) return null
 
     // Comparison projections belong to this import, never to the source FHIR.
@@ -1528,6 +1535,12 @@ export const LocalBundleService = {
       const originKey = sourceKeyByResource.get(origin)
       const key = sourceKeyByResource.get(observation)
       if (originKey && key) derivedMembers.set(originKey, [...(derivedMembers.get(originKey) ?? []), key])
+    }, resource => {
+      const key = sourceKeyByResource.get(resource)
+      const sourceNode = key ? sourceNodesByKey.get(key) : undefined
+      const sourceId = sourceNode?.resource.id
+      if (!sourceNode?.isContained || typeof sourceId !== 'string') return undefined
+      return containedIdScopes.get(sourceId)?.size === 1 ? sourceId : undefined
     })
     assertPatientOwnership(entries.flatMap(resource => {
       const node = sourceNodesByKey.get(sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey)
