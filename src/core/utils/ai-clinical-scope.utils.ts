@@ -33,6 +33,10 @@ export function stripClinicalCaptureMetadata<T>(value: T): T {
   }
   const next: Record<string, unknown> = {}
   let changed = false
+  if ('clinicalSourceNodeKey' in value && '_observations' in value) {
+    next.resolvedReportMembership = true
+    changed = true
+  }
   for (const [key, child] of Object.entries(value)) {
     if (key === 'clinicalRecordVariantExclusions' && Array.isArray(child)) { next[key] = outboundClinicalVariantExclusions(child); changed = true; continue }
     if (key === 'clinicalSourceNodeKey' || key === 'clinicalSourceDerivedMemberKeys' || key === 'clinicalSource') { changed = true; continue }
@@ -284,18 +288,27 @@ export function scopeClinicalDataForAi(
   includedDocumentIds: string[],
   nowMs = Date.now(),
 ): Partial<ClinicalDataCollection> {
+  return scopeClinicalDataView(input, selection, filters, includedDocumentIds, nowMs, true)
+}
+
+function scopeClinicalDataView(
+  input: Partial<ClinicalDataCollection>, selection: DataSelection, filters: DataFilters,
+  includedDocumentIds: string[], nowMs: number, decisionBoundary: boolean,
+): Partial<ClinicalDataCollection> {
+  const original = input
   // Apply the product-level domain exclusions before any time-window or
   // category scoping. This also keeps excluded records out of citations and
   // structured source catalogs, not only the human-readable prompt text.
   const selectedObservationDomain = selection.labReports || selection.vitalSigns || selection.observations
   const selectedReportDomain = selection.labReports || selection.imagingReports
-  input = excludeUnresolvedDecisionVariants({
+  const selectedInput = {
     ...filterAiExcludedClinicalDomains(input),
     // Apply the same decision boundary before latest/window selection, so a
     // version cannot win a date tie and become an apparently settled fact.
     ...(!selectedObservationDomain ? { observations: [], vitalSigns: [] } : {}),
     ...(!selectedReportDomain ? { diagnosticReports: [] } : {}),
-  }, selection)
+  }
+  input = decisionBoundary ? excludeUnresolvedDecisionVariants(selectedInput, selection) : selectedInput
 
   const encounters = selection.encounters
     ? filterEncounterRecords(input.encounters ?? [], filters.encounterTimeRange, input)
@@ -446,7 +459,7 @@ export function scopeClinicalDataForAi(
   const immunizationWindow = makeTimeRangeTest(filters.immunizationTimeRange, input)
   const documentIds = new Set(includedDocumentIds)
 
-  return stripClinicalCaptureMetadata({
+  const scoped: Partial<ClinicalDataCollection> = {
     encounters,
     medications,
     procedures,
@@ -472,6 +485,32 @@ export function scopeClinicalDataForAi(
     compositions: selection.documents ? (input.compositions ?? []).filter((document) => documentIds.has(document.id)) : [],
     documentReferences: selection.documents ? (input.documentReferences ?? []).filter((document) => documentIds.has(document.id)) : [],
     resourceQueryStatus: input.resourceQueryStatus,
-    clinicalRecordVariantExclusions: input.clinicalRecordVariantExclusions,
-  })
+  }
+  if (!decisionBoundary) return scoped
+  if (input.clinicalRecordVariantExclusions?.length) {
+    // Reuse the exact switches, windows, panel and document selectors on the
+    // source rows solely to decide which value-free uncertainty details may
+    // leave the app. These candidate rows never become decision facts.
+    const candidates = scopeClinicalDataView(original, selection, filters, includedDocumentIds, nowMs, false)
+    const evidence = new Set<string>()
+    const key = (row: any) => row.clinicalSourceNodeKey ?? JSON.stringify([row.clinicalRecordVariant?.groupId, row.sourceId ?? row.id, row.sourceVersionId ?? row.meta?.versionId])
+    const visit = (row: any) => {
+      if (row.clinicalRecordVariant) evidence.add(key(row))
+      for (const member of row._observations ?? []) visit(member)
+    }
+    for (const rows of Object.values(candidates)) if (Array.isArray(rows)) rows.forEach(visit)
+    const selectedTypes = new Set([
+      ...(selectedObservationDomain ? ['Observation'] : []), ...(selectedReportDomain ? ['DiagnosticReport'] : []),
+      ...(selection.medications ? ['MedicationRequest', 'MedicationStatement', 'Basic'] : []),
+      ...Object.entries({ Condition: selection.problemList, Encounter: selection.encounters, AllergyIntolerance: selection.allergies, Procedure: selection.procedures, Immunization: selection.immunizations, ImagingStudy: selection.imagingReports, Composition: selection.documents, DocumentReference: selection.documents, Consent: selection.advanceDirectives, Device: selection.medicalDevices, CarePlan: selection.carePlans }).filter(([, selected]) => selected).map(([type]) => type),
+    ])
+    scoped.clinicalRecordVariantExclusions = input.clinicalRecordVariantExclusions.filter(item => selectedTypes.has(item.resourceType)).map(item => {
+      const identity = item.evidenceIdentity ?? JSON.stringify([item.groupId, item.sourceId, item.versionId])
+      if (evidence.has(identity)) return item
+      // Preserve only domain uncertainty outside selected evidence, never its
+      // code, date, identifiers or version details through a metadata side path.
+      return { resourceType: item.resourceType, groupId: item.groupId, classification: item.classification, variantCount: item.variantCount, reason: 'Unresolved source records outside the selected evidence; do not infer absence.' }
+    })
+  }
+  return stripClinicalCaptureMetadata(scoped)
 }

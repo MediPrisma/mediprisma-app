@@ -608,6 +608,8 @@ export interface DiagnosticReportEntity extends ClinicalSourceRecord {
     end?: string
   }
   _observations?: ObservationEntity[]
+  /** Keeps authoritative graph membership semantics after outbound capture IDs are stripped. */
+  resolvedReportMembership?: boolean
   status?: string
   issued?: string
   category?: any

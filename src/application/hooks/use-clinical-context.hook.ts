@@ -2,6 +2,7 @@
 "use client"
 
 import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
 import { useCallback, useMemo } from "react"
 import {
   useDataSelection,
@@ -263,8 +264,8 @@ export function useClinicalContext(
 
   const getFormattedClinicalContext = useMemo(() => {
     let formatted: string | undefined
-    return () => (formatted ??= [formatClinicalContext(getClinicalContext()), formatClinicalVariantExclusions(clinicalData as any ?? {})].filter(Boolean).join("\n\n"))
-  }, [getClinicalContext, clinicalData])
+    return () => (formatted ??= [formatClinicalContext(getClinicalContext()), formatClinicalVariantExclusions(scopeClinicalDataForAi(sourceClinicalData as any ?? {}, selectedData, filters, includedDocumentIds, nowMs))].filter(Boolean).join("\n\n"))
+  }, [getClinicalContext, sourceClinicalData, selectedData, filters, includedDocumentIds, nowMs])
 
   const getFullClinicalContext = useMemo(() => {
     let masked: string | undefined

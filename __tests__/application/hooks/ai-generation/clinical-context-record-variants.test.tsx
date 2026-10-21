@@ -29,3 +29,17 @@ it('keeps unresolved report and observation payloads out of actual registry-gene
   expect(mockData.observations).toHaveLength(2)
 })
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
+
+it('uses the same selected uncertainty scope in the rendered AI context', () => {
+  ensureCategoriesInitialized()
+  mockProfile.filters = { ...ALL_DATA_FILTERS, labReportTimeRange: '3m' }
+  const resources: any[] = [{ resourceType: 'Patient', id: 'synthetic' }, { resourceType: 'Observation', id: 'recent', status: 'final', category: [{ coding: [{ code: 'laboratory' }] }], code: { text: 'Sodium', coding: [{ system: 'http://loinc.org', code: '2951-2' }] }, effectiveDateTime: '2026-10-01', valueQuantity: { value: 140 } }]
+  for (const version of ['1', '2']) resources.push({ resourceType: 'Observation', id: 'old', meta: { versionId: version }, status: 'final', category: [{ coding: [{ code: 'laboratory' }] }], code: { text: 'Excluded historical measurement', coding: [{ system: 'http://loinc.org', code: '2823-3' }] }, effectiveDateTime: '2021-10-01', valueQuantity: { value: Number(version) } })
+  mockData = { ...LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!.collection, isLoading: false, isFetching: false, error: null }
+  try {
+    const { result } = renderHook(() => useClinicalContext('insights'))
+    const text = result.current.getFullClinicalContext()
+    expect(text).toContain('Unresolved source records outside the selected evidence')
+    expect(text).not.toMatch(/Excluded historical measurement|2021-10-01|2823-3/)
+  } finally { mockProfile.filters = ALL_DATA_FILTERS }
+})

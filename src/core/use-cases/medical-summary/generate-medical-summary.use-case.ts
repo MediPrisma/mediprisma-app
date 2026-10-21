@@ -832,8 +832,9 @@ function observationsForReport(
     out.push(obs)
   }
   for (const obs of report._observations ?? []) add(obs)
+  if (report.clinicalSourceNodeKey || report.resolvedReportMembership) return out
   for (const ref of report.result ?? []) {
-    const id = referenceId(ref.reference)
+    const id = ref.reference?.match(/^Observation\/([^/]+)$/)?.[1]
     if (id) add(byObservationId.get(id))
   }
   return out
