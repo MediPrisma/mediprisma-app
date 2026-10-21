@@ -6,6 +6,8 @@ import IpsExportFeature from '@/features/ips-export/Feature'
 import { RightPanelProvider, useRightPanel } from '@/src/application/providers/right-panel.provider'
 
 let mockAudience: 'medical' | 'patient' = 'medical'
+let mockLoading = false
+let mockError: Error | null = null
 jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: mockAudience }),
 }))
@@ -19,8 +21,8 @@ jest.mock('@/features/ips-export/hooks/useIpsBundle', () => ({
     patient: null,
     labels: {},
     validation: null,
-    isLoading: false,
-    error: null,
+    isLoading: mockLoading,
+    error: mockError,
     refetch: jest.fn(),
     hasPatient: true,
     resourceCount: 0,
@@ -50,6 +52,9 @@ jest.mock('@/features/ips-export/components/IpsExportPreview', () => ({
   IpsExportPreview: () => <p>下載檔案內容</p>,
 }))
 jest.mock('@/features/ips-export/components/IpsDataScopePanel', () => ({ IpsDataScopePanel: () => null }))
+jest.mock('@/features/import-bundle/components/OriginalFhirDownload', () => ({
+  OriginalFhirDownload: () => <p>原始 FHIR 下載</p>,
+}))
 jest.mock('@/features/ips-export/components/InferredProblemsReview', () => ({ InferredProblemsReview: () => null }))
 
 /** Stands in for 總覽's 「帶回病歷」 and for the tab bar. */
@@ -68,6 +73,8 @@ const selected = () => screen.getByRole('tab', { selected: true })
 
 beforeEach(() => {
   mockAudience = 'medical'
+  mockLoading = false
+  mockError = null
 })
 
 it('opens 帶回紀錄 from 總覽 even when 複製 was last left on 貼給 AI', () => {
@@ -96,4 +103,12 @@ it('lands a 民眾 reader on 貼給 AI — there is no 帶回紀錄 for them', (
   render(<RightPanelProvider><Harness /></RightPanelProvider>)
   expect(screen.queryByRole('tab', { name: '帶回紀錄' })).toBeNull()
   expect(selected()).toHaveTextContent('貼給 AI')
+})
+
+it.each(['loading', 'error'])('keeps original downloads reachable when IPS is %s', (state) => {
+  mockLoading = state === 'loading'
+  mockError = state === 'error' ? new Error('Synthetic IPS failure') : null
+  render(<RightPanelProvider><Harness /></RightPanelProvider>)
+  fireEvent.mouseDown(screen.getByRole('tab', { name: '下載檔案' }))
+  expect(screen.getByText('原始 FHIR 下載')).toBeVisible()
 })

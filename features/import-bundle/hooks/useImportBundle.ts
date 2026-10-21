@@ -96,6 +96,7 @@ export function useImportBundle(): UseImportBundleReturn {
   const persistBundle = useCallback(async (
     bundle: any,
     demo: boolean,
+    originalFhir: Blob,
     sourceMetadata?: ClinicalSourceMetadata,
   ) => {
     if (bundle?.resourceType !== 'Bundle') {
@@ -119,6 +120,7 @@ export function useImportBundle(): UseImportBundleReturn {
       importId: localImportId,
       demo,
       sourceMetadata,
+      originalFhir,
     })
     // Importing NEW data must not leave the PREVIOUS bundle's derived results
     // around, or the render goes inconsistent (old AI summary / safety scan /
@@ -145,7 +147,7 @@ export function useImportBundle(): UseImportBundleReturn {
     try {
       await serializeLocalBundleMutation(async () => {
         const prepared = await prepareLocalImportFile(file)
-        await persistBundle(prepared.bundle, false, prepared.sourceMetadata)
+        await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'
@@ -181,7 +183,8 @@ export function useImportBundle(): UseImportBundleReturn {
           clearTimeout(timeoutId)
         }
         if (!res.ok) throw new Error(`Failed to load demo data (${res.status})`)
-        await persistBundle(await res.json(), true)
+        const originalFhir = await res.blob()
+        await persistBundle(JSON.parse(await originalFhir.text()), true, originalFhir)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load demo data'
