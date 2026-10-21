@@ -22,7 +22,11 @@ describe('buildClinicalSourceGraph', () => {
       { resourceType: 'Observation', id: 'o', subject: { reference: 'urn:uuid:p' }, performer: { reference: 'Patient/p/_history/2' }, focus: { reference: 'https://ehr.example/fhir/Patient/p' } },
     ])])
     const edges = graph.references.filter((edge) => edge.origin.resource.id === 'o')
-    expect(edges.map((edge) => edge.status)).toEqual(['resolved', 'resolved', 'resolved'])
+    expect(edges.map((edge) => [edge.path, edge.status, edge.reference, edge.targetKeys])).toEqual([
+      ['focus', 'resolved', 'https://ehr.example/fhir/Patient/p', expect.any(Array)],
+      ['performer', 'resolved', 'Patient/p/_history/2', expect.any(Array)],
+      ['subject', 'resolved', 'urn:uuid:p', expect.any(Array)],
+    ])
     const patientKey = graph.nodes.find((node) => node.resource.resourceType === 'Patient')!.key
     expect(edges.every((edge) => edge.targetKeys[0] === patientKey)).toBe(true)
   })
@@ -128,6 +132,49 @@ describe('buildClinicalSourceGraph', () => {
     ])])
     expect(graph.nodes.map((n) => n.resource.id)).toEqual(expect.arrayContaining(['audit', 'o', 'c']))
     expect(graph.nodes.some((n) => n.resource.id === 'embedded-snapshot')).toBe(false)
+  })
+
+  it('keeps nested Bundle history resources graph-only and links each to its containing Bundle', () => {
+    const graph = buildClinicalSourceGraph([capture([{
+      resourceType: 'Bundle', id: 'outer', type: 'collection', entry: [{ resource: {
+        resourceType: 'Bundle', id: 'history', type: 'history', entry: [{ resource: { resourceType: 'Patient', id: 'p' } }],
+      } }],
+    }])])
+    const outer = graph.nodes.find((node) => node.resource.id === 'outer')!
+    const history = graph.nodes.find((node) => node.resource.id === 'history')!
+    const patient = graph.nodes.find((node) => node.resource.id === 'p')!
+    expect(history.embeddedIn).toBe(outer.key)
+    expect(patient.embeddedIn).toBe(history.key)
+    expect(graph.nodes.filter((node) => !node.embeddedIn).map((node) => node.resource.resourceType)).toEqual(['Bundle'])
+  })
+
+  it('keeps Bundle reference resolution inside the nearest Bundle context', () => {
+    const graph = buildClinicalSourceGraph([capture([
+      { resourceType: 'Observation', id: 'same', valueString: 'current' },
+      { resourceType: 'ServiceRequest', id: 'outside', subject: { reference: 'Observation/same' } },
+      { resourceType: 'Bundle', id: 'outer', entry: [{ resource: { resourceType: 'Observation', id: 'outer-sibling', subject: { reference: 'Observation/same' } } }, { resource: {
+        resourceType: 'Bundle', id: 'history', entry: [
+          { resource: { resourceType: 'Observation', id: 'same', valueString: 'historical' } },
+          { resource: { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'Observation/same' }] } },
+        ],
+      } }] },
+    ])])
+    expect(graph.nodes.find((node) => node.resource.id === 'outer-sibling')?.embeddedIn).toBe(graph.nodes.find((node) => node.resource.id === 'outer')?.key)
+    const outside = graph.references.find((edge) => edge.origin.resource.id === 'outside')!
+    expect(outside.status).toBe('resolved')
+    expect(outside.targetKeys).toEqual([graph.nodes.find((node) => node.resource.id === 'same' && !node.embeddedIn)!.key])
+    const historyReport = graph.references.find((edge) => edge.origin.resource.id === 'report')!
+    expect(historyReport.status).toBe('resolved')
+    expect(historyReport.targetKeys).toEqual([graph.nodes.find((node) => node.resource.id === 'same' && node.embeddedIn === graph.nodes.find((item) => item.resource.id === 'history')?.key)!.key])
+    expect(graph.references.find((edge) => edge.origin.resource.id === 'outer-sibling')?.status).toBe('unresolved')
+  })
+
+  it('indexes a large synthetic capture and resolves repeated references', () => {
+    const resources = [{ resourceType: 'Patient', id: 'p' }, ...Array.from({ length: 1000 }, (_, index) => ({ resourceType: 'Observation', id: `o-${index}`, subject: { reference: 'Patient/p' }, valueInteger: index }))]
+    const graph = buildClinicalSourceGraph([capture(resources)])
+    expect(graph.nodes).toHaveLength(1001)
+    expect(graph.references).toHaveLength(1000)
+    expect(graph.references.every((edge) => edge.status === 'resolved')).toBe(true)
   })
 
   it('is deterministic, idempotent for repeated captures, and distinguishes generations', () => {
