@@ -80,3 +80,15 @@ it('uses a compact signature that includes empty-capture generations', () => {
   expect(first).not.toEqual(second)
   expect(first.length).toBeLessThan(120)
 })
+
+it('freezes all shared policy and evidence structures', () => {
+  const resource = { resourceType: 'Observation', id: 'immutable' }
+  const model = reconcileClinicalSources([capture('1', [resource]), capture('2', [resource])])
+  expect(Object.isFrozen(model)).toBe(true)
+  expect(Object.isFrozen(model.policies)).toBe(true)
+  expect(Object.isFrozen(model.policies.Observation)).toBe(true)
+  expect(Object.isFrozen(model.evidence)).toBe(true)
+  expect(Object.isFrozen(model.evidence.sameRecord)).toBe(true)
+  expect(Object.isFrozen(model.evidence.sameRecord[0])).toBe(true)
+  expect(Object.isFrozen(model.evidence.sameRecord[0].nodeKeys)).toBe(true)
+})

@@ -56,7 +56,17 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
   }
   const fingerprint = first.toString(16).padStart(8, '0') + second.toString(16).padStart(8, '0')
   Object.defineProperty(result, 'toJSON', { enumerable: false, value: () => ({ policyVersion: result.policyVersion, fingerprint }) })
-  return result
+  Object.values(policies).forEach(Object.freeze)
+  Object.freeze(policies)
+  Object.values(evidence).forEach(entries => {
+    entries.forEach(entry => {
+      Object.freeze(entry.nodeKeys)
+      Object.freeze(entry)
+    })
+    Object.freeze(entries)
+  })
+  Object.freeze(evidence)
+  return Object.freeze(result)
 }
 
 /** Exact transmission equality only; never merge by clinical similarity. */
