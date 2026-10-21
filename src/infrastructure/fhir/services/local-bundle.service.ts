@@ -1,4 +1,5 @@
-import { recordClinicalProjectionDisposition } from '../mappers/clinical-projection-disposition'
+import { readClinicalRecordVariantModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
 import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
@@ -1502,8 +1503,10 @@ export const LocalBundleService = {
     const bindMappedResource = <T extends object>(mapped: T, resource: any): T => {
       const key = sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey
       const variant = key ? recordVariants.get(key) : undefined
+      const imported = key ? readClinicalRecordVariantModifier(sourceNodesByKey.get(key)!.resource) : undefined
       return { ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
-        ...(variant ? { clinicalRecordVariant: variant } : {}) }
+        ...(variant ? { clinicalRecordVariant: variant } : {}), ...(imported?.sourceId ? { sourceId: imported.sourceId } : {}), ...(imported?.sourceVersionId ? { sourceVersionId: imported.sourceVersionId } : {}),
+        ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }
     }
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     const containedIdScopes = new Map<string, Set<string>>()
@@ -1558,6 +1561,17 @@ export const LocalBundleService = {
     // institution) so the UI's `.display`-only renderers can show them.
     attachReferenceDisplays(entries)
     entries = reconcileOutpatientEncounters(entries)
+    const confirmedEncounterAliases = new Map<string, string>()
+    for (const encounter of entries) {
+      if (encounter.resourceType !== 'Encounter' || encounter._sourceRecordComparison?.status !== 'confirmed') continue
+      const retainedKey = sourceKeyByResource.get(encounter) ?? encounter.clinicalSourceNodeKey
+      if (!retainedKey || !sourceNodesByKey.has(retainedKey)) continue
+      for (const original of encounter._sourceEncounterRecords ?? []) {
+        const originalKey = original.clinicalSourceNodeKey
+        if (originalKey && sourceNodesByKey.has(originalKey)) confirmedEncounterAliases.set(originalKey, retainedKey)
+      }
+    }
+    recordClinicalEncounterAliases(clinicalSource, confirmedEncounterAliases)
     entries = reconcileMedicationRequests(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
@@ -1731,17 +1745,17 @@ export const LocalBundleService = {
     const specialMaterialsByProcedure = groupSpecialMaterialsByProcedure(byType('Basic'))
 
     // Build observation map for DiagnosticReport expansion
-    const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r),
+    const allObs = obs.map((r: any) => ({ ...bindMappedResource(FhirMapper.toObservation(r), r),
       ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
-      sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
+      sourceId: (sourceKeyByResource.has(r) ? readClinicalRecordVariantModifier(sourceNodesByKey.get(sourceKeyByResource.get(r)!)!.resource)?.sourceId ?? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id),
       ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}),
       clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
     const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any) =>
-      ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByResource.get(r),
+      ({ ...bindMappedResource(FhirMapper.toDiagnosticReport(r, allObs), r), clinicalSourceNodeKey: sourceKeyByResource.get(r),
         ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
-        sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
+        sourceId: (sourceKeyByResource.has(r) ? readClinicalRecordVariantModifier(sourceNodesByKey.get(sourceKeyByResource.get(r)!)!.resource)?.sourceId ?? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id),
         ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}) })
     )
 

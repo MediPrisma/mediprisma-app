@@ -27,7 +27,7 @@ import type {
   IpsBundleEntry,
   SectionMapResult,
 } from './ips-types'
-import { CLINICAL_RECORD_VARIANT_EXTENSION, INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
+import { CLINICAL_MEDICATION_CONTENT_EXTENSION, CLINICAL_RECORD_VARIANT_EXTENSION, INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
@@ -291,13 +291,14 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
       ...(m.note ?? []).map(note => note.text)]
       .filter((text): text is string => Boolean(text)).map((text) => ({ text }))
 
+    const modifiers = [...((recordVariantExtension(m).modifierExtension as unknown[]) ?? []), ...(m.clinicalMedicationContentUncertainty ? [{ url: CLINICAL_MEDICATION_CONTENT_EXTENSION, extension: [{ url: 'reason', valueCode: m.clinicalMedicationContentUncertainty.reason }] }] : [])]
     const resource: FhirResource = {
       resourceType: 'MedicationStatement',
-      ...recordVariantExtension(m),
+      ...(modifiers.length ? { modifierExtension: modifiers } : {}),
       meta: { profile: [IPS_PROFILES.medicationStatement] },
       status: m.exportCurrentnessUnconfirmed ? 'unknown' : pickStatus(m.status, VALID_MED_STATEMENT_STATUS, 'unknown'),
       medicationCodeableConcept:
-        toCodeableConcept(m.medicationCodeableConcept, 'Unknown medication') ?? { text: 'Unknown medication' },
+        m.clinicalMedicationContentUncertainty ? { extension: [{ url: DATA_ABSENT_REASON_URL, valueCode: 'unknown' }] } : toCodeableConcept(m.medicationCodeableConcept, 'Unknown medication') ?? { text: 'Unknown medication' },
       subject: { reference: patientRef },
       ...(m.identifier?.length ? { identifier: m.identifier } : {}),
       ...requiredDateTime('effectiveDateTime', m.authoredOn),

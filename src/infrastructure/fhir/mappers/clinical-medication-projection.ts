@@ -1,3 +1,4 @@
+import { readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import type { MedicationEntity, ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
@@ -14,12 +15,13 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
     const origin = row.clinicalSourceNodeKey ? nodes.get(row.clinicalSourceNodeKey) : undefined
     if (!origin || !['MedicationRequest', 'MedicationStatement'].includes(origin.resource.resourceType)) return row
     const raw = origin.resource
-    if (!raw.medicationReference && !raw.medicationCodeableConcept) return row
+    const importedUncertainty = readClinicalMedicationContentModifier(raw)
+    if (!raw.medicationReference && !raw.medicationCodeableConcept && !importedUncertainty) return row
     let uncertainty: MedicationEntity['clinicalMedicationContentUncertainty']
-    const mapped = row.clinicalMedicationCodeProvenance === 'mapped-policy' || !!raw.medicationCodeableConcept
+    const mapped = !importedUncertainty && (row.clinicalMedicationCodeProvenance === 'mapped-policy' || !!raw.medicationCodeableConcept)
     let code = (mapped ? row.medicationCodeableConcept ?? raw.medicationCodeableConcept : undefined) as MedicationEntity['medicationCodeableConcept']
     let provenance: MedicationEntity['clinicalMedicationCodeProvenance'] = code ? 'mapped-policy' : undefined
-    if (!code) {
+    if (!code && !importedUncertainty) {
       const edge = edges.get(origin.key)
       uncertainty = { reason: edge?.status === 'ambiguous' ? 'ambiguous-reference' : edge?.status === 'resolved' ? 'missing-medication-code' : 'unresolved-reference' }
       const targets = edge?.status === 'resolved' ? edge.targetKeys.map(key => nodes.get(key)) : []
@@ -30,10 +32,11 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
         code = first.resource.code as MedicationEntity['medicationCodeableConcept']
       }
     }
+    if (importedUncertainty) uncertainty = importedUncertainty
     if (code) { uncertainty = undefined; provenance ??= 'graph-reference' }
     // A code without provenance is unverified, not proof of a drug identity.
     // Only a known graph promotion may be revoked when its edge disappears.
-    if (!code && row.medicationCodeableConcept && !row.clinicalMedicationCodeProvenance) code = row.medicationCodeableConcept
+    if (!importedUncertainty && !code && row.medicationCodeableConcept && !row.clinicalMedicationCodeProvenance) code = row.medicationCodeableConcept
     if ((clinicalSourceResourcesEqual(row.medicationCodeableConcept, code) || row.medicationCodeableConcept === code)
       && row.clinicalMedicationContentUncertainty?.reason === uncertainty?.reason
       && row.clinicalMedicationCodeProvenance === provenance) return row
@@ -56,15 +59,19 @@ export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], i
       if (!previous?.medicationContentUncertaintyCount) continue
       const { medicationContentUncertaintyCount: _previousCount, ...rest } = previous
       const rowCount = rows.filter(row => (row._sourceResourceType ?? 'MedicationRequest') === type).length
-      const recovered: ClinicalDataQueryStatus = previous.message === CONTENT_UNCERTAINTY_MESSAGE
+      const recovered: ClinicalDataQueryStatus = previous.state === 'incomplete' && previous.message === CONTENT_UNCERTAINTY_MESSAGE
         ? { ...rest, count: rowCount, state: rowCount ? 'ok' : 'empty', message: undefined } : rest
       if (result === input) result = { ...input }
       result[type] = recovered
       continue
     }
-    const status: ClinicalDataQueryStatus = { ...previous, resourceType: type, state: 'error', medicationContentUncertaintyCount: count,
-      message: previous?.state === 'error' && previous.message !== CONTENT_UNCERTAINTY_MESSAGE
-        ? previous.message ?? 'Medication query is incomplete and referenced drug content is unresolved.' : CONTENT_UNCERTAINTY_MESSAGE }
+    // Content completeness is independent of transport success. Preserve a
+    // real failure or refresh state, including authorization diagnostics.
+    const preserveQueryState = previous && previous.state !== 'ok' && previous.state !== 'empty'
+      && previous.message !== CONTENT_UNCERTAINTY_MESSAGE
+    const status: ClinicalDataQueryStatus = { ...previous, resourceType: type,
+      state: preserveQueryState ? previous.state : 'incomplete', medicationContentUncertaintyCount: count,
+      message: preserveQueryState ? previous.message ?? CONTENT_UNCERTAINTY_MESSAGE : CONTENT_UNCERTAINTY_MESSAGE }
     if (JSON.stringify(previous) === JSON.stringify(status)) continue
     if (result === input) result = { ...input }
     result[type] = status

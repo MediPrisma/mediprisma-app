@@ -1,3 +1,4 @@
+import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from './clinical-record-variant-modifier'
 import type { ClinicalRecordVariant } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 import { logicalRestFullUrl } from './clinical-reconciliation'
@@ -61,6 +62,16 @@ export function createClinicalRecordVariants(source: ClinicalReconciliationResul
         : 'Conflicting content or resolved reference context exists for the same source record.',
     }
     for (const key of keys) result.set(key, annotation)
+  }
+  for (const node of source.graph.nodes) {
+    readClinicalMedicationContentModifier(node.resource)
+    const imported = readClinicalRecordVariantModifier(node.resource)
+    if (!imported) continue
+    const current = result.get(node.key)
+    // Imported source ids are audit metadata, never evidence of equivalence.
+    const groupId = current?.groupId ?? 'cr' + clinicalSourceIdentityDigest(JSON.stringify([node.sourceId, node.patientScope, imported.variant.groupId]))
+    result.set(node.key, Object.freeze({ ...imported.variant, groupId,
+      ...(current ? { classification: current.classification === 'conflict' ? 'conflict' : imported.variant.classification, variantCount: Math.max(current.variantCount, imported.variant.variantCount) } : {}) }))
   }
   return result
 }

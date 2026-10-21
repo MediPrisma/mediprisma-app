@@ -84,5 +84,7 @@ it('clears content-only incompleteness after resolution while preserving indepen
   const independent = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state, message: 'Independent status' } })
   expect(independent.MedicationRequest).toMatchObject({ state, message: 'Independent status', medicationContentUncertaintyCount: 1 })
   expect(projectClinicalMedicationQueryStatus(resolved, independent).MedicationRequest).toMatchObject({ state, message: 'Independent status' })
+  const withoutMessage = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state } })
+  expect(projectClinicalMedicationQueryStatus(resolved, withoutMessage).MedicationRequest?.state).toBe(state)
  }
 })
