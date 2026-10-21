@@ -38,6 +38,7 @@ describe('cross-source imaging reports', () => {
     const report = { ...pair()[0], code: { text: 'CT CHEST', coding: [coding] } }
     expect(() => buildReportsData([report])).not.toThrow()
     expect(getReportDate(report)).toBe('2026-06-24')
+    expect(() => buildReportsData([{ ...report, category: undefined }])).not.toThrow()
   })
 
   it('restores a same-source shared-procedure group when the cloud source is filtered out', () => {
@@ -560,6 +561,8 @@ describe('cross-source imaging reports', () => {
     const text = section && !Array.isArray(section) ? section.items.join('\n') : ''
     expect(text).toContain('[id: hospital]')
     expect(text).toContain('[id: cloud]')
+    expect(text).toContain('Source copy (alternate name)')
+    expect(text).not.toContain('CT/SCAN- CHEST +')
     expect(text.match(/\[shared narrative; count once\]/g)).toHaveLength(1)
   })
 })

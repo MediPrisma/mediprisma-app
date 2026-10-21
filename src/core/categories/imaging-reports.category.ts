@@ -301,14 +301,14 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         renderedSharedKeys.add(groupingKey)
 
         const groupedReports = sharedGroups.get(groupingKey) ?? [report]
-        const representative = groupingKey.startsWith('cross-source|')
+        const isCrossSource = groupingKey.startsWith('cross-source|')
+        const representative = isCrossSource
           ? [...groupedReports].sort(compareImagingCopies)[0] : report
         const sources = groupedReports.map(reportSource)
-        const groupTitle = sharedReportTitle(sources, 'en')
-          ?? sources.map((source) => source.title).join(' + ')
+        const groupTitle = isCrossSource ? reportSource(representative).title
+          : sharedReportTitle(sources, 'en') ?? sources.map((source) => source.title).join(' + ')
         // Existing shared pathology reports already use the examination period.
         // Preserve that contract independently of the ordinary row date fallback.
-        const isCrossSource = groupingKey.startsWith('cross-source|')
         const reportDate = isCrossSource ? getReportDate(representative)
           : representative.effectiveDateTime || representative.effectivePeriod?.start
         const datePart = reportDate
@@ -321,7 +321,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           const source = reportSource(sourceReport)
           const codes = source.codes.length > 0 ? ` [codes: ${source.codes.join(', ')}]` : ''
           const id = source.reportId ? ` [id: ${source.reportId}]` : ''
-          items.push(`  • Source report: ${source.title}${codes}${id}`)
+          items.push(`  • ${isCrossSource ? 'Source copy (alternate name)' : 'Source report'}: ${source.title}${codes}${id}`)
           appendObservations(sourceReport, '    ')
           reportSupplementalText(sourceReport)
             .forEach((text) => items.push(`    • ${text}`))

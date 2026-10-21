@@ -372,7 +372,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
 
   const codings = report.code?.coding ?? []
   const orderCodes = codings
-    .map((coding) => coding.code?.trim().toUpperCase())
+    .map((coding) => typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : undefined)
     .filter((code): code is string => !!code)
   if (orderCodes.some((code) =>
     NHI_IMAGING_ORDER_CODE.test(code) || NHI_IMAGING_OR_PATHOLOGY_ORDER_CODES.has(code),
@@ -382,7 +382,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
 
   const orderTitle = [
     report.code?.text,
-    ...codings.map((coding) => coding.display),
+    ...codings.map((coding) => coding?.display),
   ].filter((value): value is string => !!value).join(' ')
   if (IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
     return 'imaging'
@@ -416,7 +416,7 @@ export function inferReportDisplayGroup(
 
   const codings = report.code?.coding ?? []
   const orderCodes = codings
-    .map((coding) => coding.code?.trim().toUpperCase())
+    .map((coding) => typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : undefined)
     .filter((code): code is string => !!code)
   if (orderCodes.some((code) => NHI_PATHOLOGY_ORDER_CODES.has(code))) {
     return 'pathology'
@@ -424,7 +424,7 @@ export function inferReportDisplayGroup(
 
   const orderTitle = [
     report.code?.text,
-    ...codings.map((coding) => coding.display),
+    ...codings.map((coding) => coding?.display),
   ].filter((value): value is string => !!value).join(' ')
   if (PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
     return 'pathology'
