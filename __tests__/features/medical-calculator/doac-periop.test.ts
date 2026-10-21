@@ -288,6 +288,15 @@ describe('emergency', () => {
     expect(allCites(result)).toEqual(expect.arrayContaining([GUIDELINE_CITES.ehraFig12, GUIDELINE_CITES.ehraAndexanet, GUIDELINE_CITES.ehraAnnexa]))
     expect(allText(result)).toContain('andexanet 不作為術前通用逆轉')
   })
+  it('with a catheter, the emergency plan keeps the block’s restart rule beside idarucizumab’s 24 h (#review Astra 6)', () => {
+    for (const neuraxial of ['catheter', 'plexus-catheter']) {
+      const result = plan({ procedure_kind: 'emergency', regimen: 'dabigatran:150:2', neuraxial })
+      expect(allText(result)).toContain('導管未拔前不恢復')
+      expect(allText(result)).toContain('這只是條件之一')
+      expect(allCites(result)).toContain(GUIDELINE_CITES.asraDabigatranHighRestart)
+    }
+    expect(allText(plan({ procedure_kind: 'emergency', neuraxial: 'none' }))).not.toContain('ASRA 2025')
+  })
   it('dabigatran: idarucizumab, haemodialysis removes it, and it may restart 24 h after idarucizumab', () => {
     expect(allCites(plan({ procedure_kind: 'emergency', regimen: 'dabigatran:150:2' }))).toEqual(expect.arrayContaining([CITES.dabigatranIdarucizumab, CITES.dabigatranDialysable, CITES.dabigatranIdarucizumabRestart]))
   })

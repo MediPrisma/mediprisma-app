@@ -423,11 +423,23 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     result.notes.push(line(t('抽完整凝血檢查（PT、aPTT、anti-FXa、dTT…）。可安全延後 12–24 小時就延後並重抽；不能延後才考慮逆轉（若必要、可取得、已核准）。', 'Draw a full coagulation panel (PT, aPTT, anti-FXa, dTT…). If 12–24 h of delay is safe, delay and repeat it; reversal only if surgery cannot wait (if necessary, available and approved).'), G.ehraFig12))
     if (agent === 'dabigatran') {
       result.notes.push(line(t('需要快速逆轉時：idarucizumab；血液透析也可移除 dabigatran。', 'When rapid reversal is needed: idarucizumab; haemodialysis also removes dabigatran.'), CITES.dabigatranIdarucizumab, CITES.dabigatranDialysable))
-      result.notes.push(line(t('給 idarucizumab 後 24 小時，若臨床穩定且已止血，可再開始 dabigatran。', 'Dabigatran may be restarted 24 h after idarucizumab once the patient is stable and haemostasis is achieved.'), CITES.dabigatranIdarucizumabRestart))
+      result.notes.push(line(t('恢復 dabigatran 最早在給 idarucizumab 後 24 小時，且需臨床穩定、已止血；這只是條件之一，仍要同時符合手術本身與麻醉阻斷的恢復時間。', 'Dabigatran restarts no earlier than 24 h after idarucizumab, once stable with haemostasis — one condition among others: the procedure’s and any block’s restart times still apply.'), CITES.dabigatranIdarucizumabRestart))
     } else {
       result.notes.push(line(
         t('Xa 抑制劑：andexanet 不作為術前通用逆轉——EU 只核准用於危及生命或無法控制的出血，ANNEXA-4 也未納入緊急手術病人。是否給止血製劑依院內流程。', 'FXa inhibitors: andexanet is not a general pre-operative reversal — EU approval covers life-threatening or uncontrolled bleeding only, and ANNEXA-4 enrolled no emergency surgery. Haemostatic agents per hospital protocol.'),
         G.ehraAndexanet, G.ehraAnnexa,
+      ))
+    }
+    // A block's restart rule holds after an emergency too: never resume past a catheter.
+    const emergencyBlock = (values.neuraxial ?? '') as BlockKind | ''
+    if (emergencyBlock !== 'none') {
+      const rule = asraRule(agent, doseClass, c ?? 60)
+      const removal = emergencyBlock === 'catheter' || emergencyBlock === 'plexus-catheter'
+      result.notes.push(line(
+        emergencyBlock === ''
+          ? t(`若有脊髓／硬膜外或深部阻斷：第一劑需在穿刺或拔管後 ≥${rule.restartHours} 小時（ASRA 2025，${doseClass === 'high' ? '高' : '低'}劑量），導管未拔前不恢復。`, `If there is a spinal/epidural or deep block: the first dose waits ≥${rule.restartHours} h after the puncture or catheter removal (ASRA 2025, ${doseClass} dose); no restart with a catheter in place.`)
+          : t(`有${removal ? '留置導管' : '阻斷'}：第一劑需在穿刺${removal ? '與拔管' : ''}後 ≥${rule.restartHours} 小時（ASRA 2025，${doseClass === 'high' ? '高' : '低'}劑量）${removal ? '，導管未拔前不恢復' : ''}。`, `With a ${removal ? 'catheter' : 'block'}: the first dose waits ≥${rule.restartHours} h after the puncture${removal ? ' and the catheter removal' : ''} (ASRA 2025, ${doseClass} dose)${removal ? '; no restart with the catheter in place' : ''}.`),
+        rule.restart,
       ))
     }
     result.notes.push(levelNote(agent, false, doseClass, c))
