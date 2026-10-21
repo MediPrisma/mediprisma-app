@@ -60,6 +60,16 @@ describe('buildClinicalSourceGraph', () => {
     expect(graph.references[0].status).toBe('unresolved')
   })
 
+  it('resolves versioned absolute fullUrls without a capture REST base', () => {
+    const graph = buildClinicalSourceGraph([{
+      sourceId: 'ehr-a', patientScope: 'patient-1', generation: 'import-1', resources: [
+        { resourceType: 'Observation', id: 'origin', subject: { reference: 'https://ehr.example/fhir/Patient/p/_history/2' } },
+        { resource: { resourceType: 'Patient', id: 'p', meta: { versionId: '2' } }, fullUrl: 'https://ehr.example/fhir/Patient/p' },
+      ],
+    }])
+    expect(graph.references[0].status).toBe('resolved')
+  })
+
   it('keeps unknown audit resource types but does not promote nested provenance snapshots', () => {
     const graph = buildClinicalSourceGraph([capture([
       { resourceType: 'Provenance', id: 'audit' },
@@ -75,12 +85,31 @@ describe('buildClinicalSourceGraph', () => {
     const graph = buildClinicalSourceGraph([capture(resources), capture(resources), capture(resources, { generation: 'import-2' })])
     expect(graph.nodes).toHaveLength(2)
     expect(graph.nodes.map((n) => n.key).sort()).toEqual(buildClinicalSourceGraph([capture(resources, { generation: 'import-2' }), capture(resources)]).nodes.map((n) => n.key).sort())
-    expect(graph.nodes[0].occurrences).toBe(2)
+    expect(graph.nodes[0].occurrences).toBe(1)
+  })
+
+  it('preserves identical anonymous events by position while making a replayed capture idempotent', () => {
+    const resources = [
+      { resourceType: 'Procedure', status: 'completed', code: { text: 'same event' } },
+      { resourceType: 'Procedure', status: 'completed', code: { text: 'same event' } },
+    ]
+    const graph = buildClinicalSourceGraph([capture(resources), capture(resources)])
+    expect(graph.nodes).toHaveLength(2)
+    expect(graph.nodes[0].key).not.toBe(graph.nodes[1].key)
+  })
+
+  it('scopes resource identity by REST base and exposes that base on nodes', () => {
+    const graph = buildClinicalSourceGraph([
+      capture([{ resourceType: 'Patient', id: 'p' }]),
+      capture([{ resourceType: 'Patient', id: 'p' }], { restBase: 'https://ehr.example/other-fhir' }),
+    ])
+    expect(graph.nodes).toHaveLength(2)
+    expect(graph.nodes.map((node) => node.restBase)).toEqual(['https://ehr.example/fhir', 'https://ehr.example/other-fhir'])
   })
 
   it('records display-only and unresolved references without inventing targets', () => {
-    const graph = buildClinicalSourceGraph([capture([{ resourceType: 'Observation', id: 'o', subject: { display: 'Unknown patient' }, basedOn: { reference: 'ServiceRequest/missing' } }])])
-    expect(graph.references.map((e) => e.status).sort()).toEqual(['display-only', 'unresolved'])
+    const graph = buildClinicalSourceGraph([capture([{ resourceType: 'Observation', id: 'o', subject: { display: 'Unknown patient' }, basedOn: { reference: 'ServiceRequest/missing' }, focus: { identifier: { value: 'unknown' } }, code: { coding: [{ display: 'a code, not a reference' }] } }])])
+    expect(graph.references.map((e) => e.status).sort()).toEqual(['display-only', 'unresolved', 'unresolved'])
     expect(graph.references.every((e) => e.targetKeys.length === 0)).toBe(true)
   })
 })

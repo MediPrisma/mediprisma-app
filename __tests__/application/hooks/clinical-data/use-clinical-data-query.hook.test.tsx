@@ -1,3 +1,4 @@
+import { clinicalResourceQueryKey, clinicalDataSourceQueryKey } from '@/src/application/hooks/clinical-data/clinical-data-fetch-plan'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
@@ -233,3 +234,18 @@ describe('useClinicalData', () => {
   expect(result.current.ai.data!.observations).toBe(result.current.ui.observations)
   expect(result.current.ai.data!.medications).toBe(result.current.ui.medications)
  })
+
+it('isolates the same patient id across import generations in source and resource caches', () => {
+  const old = sessionStorage.getItem('fhir_bundle_override')
+  try {
+    sessionStorage.setItem('fhir_bundle_override', 'import:synthetic-one')
+    const firstSource = clinicalDataSourceQueryKey('same-patient')
+    const firstRows = clinicalResourceQueryKey('same-patient', 'observations')
+    sessionStorage.setItem('fhir_bundle_override', 'import:synthetic-two')
+    expect(clinicalDataSourceQueryKey('same-patient')).not.toEqual(firstSource)
+    expect(clinicalResourceQueryKey('same-patient', 'observations')).not.toEqual(firstRows)
+  } finally {
+    if (old === null) sessionStorage.removeItem('fhir_bundle_override')
+    else sessionStorage.setItem('fhir_bundle_override', old)
+  }
+})
