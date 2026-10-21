@@ -18,11 +18,13 @@ type SourceNode = ClinicalReconciliationResult['graph']['nodes'][number]
 type SourceEdge = ClinicalReconciliationResult['graph']['references'][number]
 export interface ClinicalProjectionContext {
   ids: ReadonlyMap<string, string>
+  /** IDs from actual mapped rows, used when a generic resource has no collision ID. */
+  visibleRowIds: ReadonlyMap<string, string>
   nodes: Map<string, SourceNode>
   edges: Map<string, SourceEdge[]>
 }
 export function createClinicalProjectionContext(source: ClinicalReconciliationResult, genericNodeKeys?: ReadonlySet<string>): ClinicalProjectionContext {
-  const context: ClinicalProjectionContext = { ids: createClinicalSourceProjectionIds(source, genericNodeKeys), nodes: new Map(source.graph.nodes.map(node => [node.key, node])), edges: new Map() }
+  const context: ClinicalProjectionContext = { ids: createClinicalSourceProjectionIds(source, genericNodeKeys), visibleRowIds: new Map(), nodes: new Map(source.graph.nodes.map(node => [node.key, node])), edges: new Map() }
   for (const edge of source.graph.references) {
     const edges = context.edges.get(edge.origin.key) ?? []
     edges.push(edge)
@@ -33,12 +35,13 @@ export function createClinicalProjectionContext(source: ClinicalReconciliationRe
 
 /** Copy only a changed reference path; never mutate a cached entity or raw graph. */
 export function projectClinicalReferences<T>(resource: T, nodeKey: string, context: ClinicalProjectionContext): T {
+  const rowId = (key: string) => context.ids.get(key) ?? context.visibleRowIds.get(key)
   let projected = resource
   for (const edge of context.edges.get(nodeKey) ?? []) {
     if (edge.status !== 'resolved') continue
-    const targetIds = [...new Set(edge.targetKeys.map(key => context.ids.get(key)).filter((id): id is string => Boolean(id)))]
-    if (targetIds.length > 1) continue
-    const target = edge.targetKeys.map(key => context.nodes.get(key)).find(node => node && context.ids.has(node.key))
+    const targetIds = [...new Set(edge.targetKeys.map(rowId).filter((id): id is string => Boolean(id)))]
+    if (targetIds.length !== 1) continue
+    const target = edge.targetKeys.map(key => context.nodes.get(key)).find(node => node && rowId(node.key) === targetIds[0])
     if (!target) continue
     const parts = edge.path.replace(/\[(\d+)\]/g, '.$1').split('.')
     let current: any = projected
@@ -46,6 +49,10 @@ export function projectClinicalReferences<T>(resource: T, nodeKey: string, conte
     const reference = targetIds.length === 1 ? target.resource.resourceType + '/' + targetIds[0] : edge.reference
     if (!reference) continue
     if (!current || typeof current.reference !== 'string' || current.reference === reference) continue
+    // Domain mapping can reconcile or reorder references after the raw graph
+    // was captured. Only rewrite the mapped value when it still corresponds to
+    // the exact raw edge at this path; otherwise preserve the domain decision.
+    if (current.reference !== edge.reference) continue
     const copy = (value: any): any => Array.isArray(value) ? [...value] : { ...value }
     const root: any = copy(projected)
     let original: any = projected
@@ -83,6 +90,20 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   const mappedNodeKeys = new Set(Object.values(input).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
   const context = createClinicalProjectionContext(source, mappedNodeKeys)
   for (const [key, node] of context.nodes) if (isClinicalSourceRepresentedElsewhere(source, key) || !isClinicalSourceNodePatientEligible(node, source.graph.nodes)) context.nodes.delete(key)
+  const visibleRowIds = new Map<string, string>()
+  for (const rows of Object.values(input)) {
+    if (!Array.isArray(rows)) continue
+    for (const row of rows as Array<{ id?: string; clinicalSourceNodeKey?: string }>) {
+      const key = row.clinicalSourceNodeKey
+      if (!key || !context.nodes.has(key)) continue
+      const id = context.ids.get(key) ?? row.id
+      if (!id) continue
+      const previous = visibleRowIds.get(key)
+      if (previous && previous !== id) throw new Error(`Clinical source node ${key} is mapped to conflicting visible row IDs`)
+      visibleRowIds.set(key, id)
+    }
+  }
+  context.visibleRowIds = visibleRowIds
   const variants = createClinicalRecordVariants(source)
   const annotate = <R extends { clinicalSourceNodeKey?: string; clinicalRecordVariant?: unknown }>(row: R): R => {
     const variant = row.clinicalSourceNodeKey ? variants.get(row.clinicalSourceNodeKey) : undefined
@@ -157,11 +178,15 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   }
   const activeReports = (input.diagnosticReports ?? []).filter(row => !row.clinicalSourceNodeKey || context.nodes.has(row.clinicalSourceNodeKey)).map(alignRecordId)
   const reportIds = new Set(activeReports.map(row => row.id))
-  const visibleGenericIds = new Set(Object.entries(input).filter(([key, rows]) => Array.isArray(rows) && !['observations', 'vitalSigns', 'diagnosticReports'].includes(key)).flatMap(([, rows]) => (rows as Array<{ clinicalSourceNodeKey?: string }>).flatMap(row => row.clinicalSourceNodeKey && context.nodes.has(row.clinicalSourceNodeKey) ? [context.ids.get(row.clinicalSourceNodeKey)] : [])))
+  const visibleGenericIds = new Set(Object.entries(input).filter(([key, rows]) => Array.isArray(rows) && !['observations', 'vitalSigns', 'diagnosticReports'].includes(key)).flatMap(([, rows]) => (rows as Array<{ id?: string; clinicalSourceNodeKey?: string }>).flatMap(row => row.clinicalSourceNodeKey && context.nodes.has(row.clinicalSourceNodeKey) ? [context.ids.get(row.clinicalSourceNodeKey) ?? visibleRowIds.get(row.clinicalSourceNodeKey) ?? row.id] : [])))
+  const isVisibleRowId = (key: string, id: string) => {
+    const type = context.nodes.get(key)?.resource.resourceType
+    return type === 'Observation' ? observationsById.has(id) : type === 'DiagnosticReport' ? reportIds.has(id) : visibleGenericIds.has(id)
+  }
   const activeContext: ClinicalProjectionContext = { ...context, ids: new Map([...context.ids].filter(([key, id]) => {
     const type = context.nodes.get(key)?.resource.resourceType
     return type === 'Observation' ? observationsById.has(id) : type === 'DiagnosticReport' ? reportIds.has(id) : Boolean(type && visibleGenericIds.has(id))
-  })) }
+  })), visibleRowIds: new Map([...visibleRowIds].filter(([key, id]) => isVisibleRowId(key, id))) }
   for (const [id, row] of observationsById) observationsById.set(id, annotate(projectClinicalReferences(row, row.clinicalSourceNodeKey!, activeContext)))
   const canonicalRows = [...observationsById.values()]
   const legacySeen = new Set<ObservationEntity>()
