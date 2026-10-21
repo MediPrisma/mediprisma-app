@@ -58,6 +58,7 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
     return { ...EMPTY, value: input.defaultValue ?? input.options[0]?.value ?? '' }
   }
+  if (input.type !== 'number') return { ...EMPTY, value: input.defaultValue ?? '' }
   const expected = input.unit ?? ''
   const hit = autofill.resolve(input.source)
   if (!hit) return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }

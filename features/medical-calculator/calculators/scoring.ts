@@ -209,12 +209,22 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
   },
   'doac-dose-nvaf': {
     formula: {
-      en: 'CrCl by Cockcroft–Gault (actual weight), compared unrounded. Apixaban 2.5 mg bid if ≥2 of age ≥80, weight ≤60 kg, Cr ≥1.5, or CrCl 15–29; rivaroxaban 15 mg qd at CrCl 15–49; edoxaban 30 mg qd if any of CrCl 15–50, weight ≤60 kg, ciclosporin/dronedarone/erythromycin/ketoconazole; dabigatran 110 mg bid at age ≥80 or with verapamil, 150 or 110 mg bid at age 75–80, CrCl 30–50 or GI risk.',
-      zh: 'CrCl 以 Cockcroft–Gault（實際體重）計算，以未四捨五入值比較。Apixaban：年齡 ≥80、體重 ≤60 kg、Cr ≥1.5 中 ≥2 項，或 CrCl 15–29 → 2.5 mg bid；rivaroxaban：CrCl 15–49 → 15 mg qd；edoxaban：CrCl 15–50、體重 ≤60 kg、併用 ciclosporin／dronedarone／erythromycin／ketoconazole 任一 → 30 mg qd；dabigatran：年齡 ≥80 或併用 verapamil → 110 mg bid，75–80 歲、CrCl 30–50 或胃腸出血風險 → 150 或 110 mg bid。',
+      en: 'CrCl by Cockcroft–Gault (actual weight), compared unrounded. NVAF: apixaban 2.5 mg bid if ≥2 of age ≥80, weight ≤60 kg, Cr ≥1.5, or CrCl 15–29; rivaroxaban 15 mg qd at CrCl 15–49; edoxaban 30 mg qd if any of CrCl 15–50, weight ≤60 kg, ciclosporin/dronedarone/erythromycin/ketoconazole; dabigatran 110 mg bid at age ≥80 or with verapamil, 150 or 110 mg bid at age 75–80, CrCl 30–50 or GI risk. Acute VTE: apixaban 10 mg bid ×7 d then 5 mg bid; rivaroxaban 15 mg bid ×21 d then 20 mg qd; edoxaban and dabigatran after ≥5 d parenteral, with the same reductions as NVAF. Extended: apixaban 2.5 mg bid; rivaroxaban 10 (or 20) mg qd. Hip/knee: apixaban 2.5 mg bid; rivaroxaban 10 mg qd; dabigatran 220 mg qd (150 mg qd at CrCl 30–50, age ≥75, or verapamil/amiodarone/quinidine).',
+      zh: 'CrCl 以 Cockcroft–Gault（實際體重）計算，以未四捨五入值比較。NVAF：apixaban 年齡 ≥80、體重 ≤60 kg、Cr ≥1.5 中 ≥2 項，或 CrCl 15–29 → 2.5 mg bid；rivaroxaban CrCl 15–49 → 15 mg qd；edoxaban CrCl 15–50、體重 ≤60 kg、併用 ciclosporin／dronedarone／erythromycin／ketoconazole 任一 → 30 mg qd；dabigatran 年齡 ≥80 或併用 verapamil → 110 mg bid，75–80 歲、CrCl 30–50 或胃腸出血風險 → 150 或 110 mg bid。急性 VTE：apixaban 10 mg bid ×7 天 → 5 mg bid；rivaroxaban 15 mg bid ×21 天 → 20 mg qd；edoxaban、dabigatran 先注射抗凝 ≥5 天，減量條件同 NVAF。延長治療：apixaban 2.5 mg bid；rivaroxaban 10（或 20）mg qd。髖膝預防：apixaban 2.5 mg bid；rivaroxaban 10 mg qd；dabigatran 220 mg qd（CrCl 30–50、≥75 歲、併用 verapamil／amiodarone／quinidine → 150 mg qd）。',
     },
     note: {
-      en: 'Contraindication, not-recommended and avoid rules (renal, dialysis, liver, interactions, pregnancy) take precedence and quote the EU SmPC section and page. Taiwan labels pending pharmacy review.',
-      zh: '禁忌、不建議與應避免（腎、透析、肝、交互作用、懷孕）優先於劑量，各附 EU SmPC 章節與頁碼。臺灣仿單待藥學部核對。',
+      en: 'Contraindication, not-recommended and avoid rules (renal, dialysis, liver, interactions, pregnancy, unstable PE) take precedence and quote the EU SmPC section and page. Taiwan labels pending pharmacy review.',
+      zh: '禁忌、不建議與應避免（腎、透析、肝、交互作用、懷孕、不穩定 PE）優先於劑量，各附 EU SmPC 章節與頁碼。臺灣仿單待藥學部核對。',
+    },
+  },
+  'doac-periop': {
+    formula: {
+      en: 'Last dose before an elective procedure (EHRA 2021 Fig 14): dabigatran CrCl ≥80 24/48 h, 50–79 36/72 h, 30–49 48/96 h (low/high risk); apixaban, edoxaban, rivaroxaban CrCl ≥30 24/48 h, 15–29 36/48 h; minor risk at trough (12 h bid, 24 h qd). Neuraxial (ASRA 2018): FXa inhibitors 72 h; dabigatran 120 h, graded 72/96/120 h only with reliable renal function and no bleeding risk factor; the longer applies. AF ablation: last dose 12 (–24) h before. Restart: the latest of 6 h (minor) / 24 h (low) / 48 (–72) h (high), catheter removal + 6 h, traumatic puncture + 24 h; haemostasis first.',
+      zh: '擇期手術最後一劑（EHRA 2021 Fig 14）：dabigatran CrCl ≥80 24／48 h、50–79 36／72 h、30–49 48／96 h（低／高風險）；apixaban、edoxaban、rivaroxaban CrCl ≥30 24／48 h、15–29 36／48 h；極低風險在谷底做（bid 12 h、qd 24 h）。神經軸（ASRA 2018）：Xa 抑制劑 72 h；dabigatran 120 h，腎功能可靠且無出血風險因子才分級為 72／96／120 h；取較長者。AF 消融：術前 12（–24）h。恢復：取極低 6 h／低 24 h／高 48（–72）h、拔管 +6 h、穿刺出血 +24 h 中最晚者，並先確認止血。',
+    },
+    note: {
+      en: 'No interval for CrCl <15, dialysis, or dabigatran below 30. Skipped doses use the patient’s actual dose times. No bridging; anti-Xa never clears a patient; andexanet is not a pre-operative reversal.',
+      zh: 'CrCl <15、透析、dabigatran CrCl <30 不給時數。跳過劑數用病人實際服藥時刻。不橋接；anti-Xa 不據以判定可否手術；andexanet 不作為術前逆轉。',
     },
   },
   'crcl-cockcroft-gault': {

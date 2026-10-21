@@ -3,6 +3,7 @@
 import { ScoreInterpretation } from './ScoreInterpretation'
 import { HpaRiskResults } from './HpaRiskResults'
 import { DoacDoseResults } from './DoacDoseResults'
+import { DoacPeriopResults } from './DoacPeriopResults'
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -340,6 +341,8 @@ export function CalculatorDetail({
         </div>
       ) : calc.id === 'doac-dose-nvaf' ? (
         <DoacDoseResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
+      ) : calc.id === 'doac-periop' ? (
+        <DoacPeriopResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
       ) : (
       <div className={`relative rounded-lg border border-border px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : ""}`}>
         {result && (
@@ -460,6 +463,14 @@ export function CalculatorDetail({
                     ))}
                   </SelectContent>
                 </Select>
+              ) : input.type === "datetime" || input.type === "time" ? (
+                <Input
+                  id={`calc-${input.key}`}
+                  type={input.type === "datetime" ? "datetime-local" : "time"}
+                  value={values[input.key] ?? ""}
+                  onChange={(e) => setValue(input.key, e.target.value)}
+                  className={isHpa ? 'h-11 sm:h-9' : 'h-9'}
+                />
               ) : (
                 <>
                   <Input
