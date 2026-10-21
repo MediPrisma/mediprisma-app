@@ -8,7 +8,7 @@ export function attachReportObservations(
   source?: ClinicalReconciliationResult,
   observationAliases?: ReadonlyMap<string, ObservationEntity>,
 ): DiagnosticReportEntity[] {
-  if (reports.length === 0 || observations.length === 0) return reports
+  if (reports.length === 0 || (observations.length === 0 && !(source && observationAliases))) return reports
 
   const byId = new Map<string, ObservationEntity[]>()
   for (const observation of observations) {
