@@ -30,6 +30,7 @@ it('clearClient immediately purges Patient and clinical captures, caches and rep
   expect(session.successfulResponses.size).toBe(0)
   expect(session.results.size).toBe(0)
   expect(repository.getClinicalSource('synthetic').graph.nodes).toEqual([])
+  expect(repository.getClinicalSource('synthetic')).toBe(repository.getClinicalSource('synthetic'))
   expect(new FhirClinicalDataRepository().getClinicalSource('synthetic').graph.nodes).toEqual([])
   expect(() => captureClinicalSource(session, 'late', 'synthetic', [patient])).toThrow('FHIR session changed')
 })
@@ -83,4 +84,15 @@ it('does not restore a SMART client when OAuth initialization completes after cl
   finish({ state: { serverUrl: 'https://logout.example/fhir' } })
   await expect(pending).rejects.toThrow('local-bundle mode')
   expect((fhirClient as any).client).toBeNull()
+})
+
+it('shares one cold-start OAuth client across parallel callers', async () => {
+  fhirClient.clearClient()
+  window.history.replaceState({}, '', '/?state=synthetic-singleflight')
+  const { default: FHIR } = jest.requireMock('fhirclient')
+  FHIR.oauth2.ready.mockClear()
+  FHIR.oauth2.ready.mockImplementation(async () => ({ state: { serverUrl: 'https://singleflight.example/fhir' } }))
+  const clients = await Promise.all(Array.from({ length: 20 }, () => fhirClient.getClient()))
+  expect(FHIR.oauth2.ready).toHaveBeenCalledTimes(1)
+  expect(clients.every(client => client === clients[0])).toBe(true)
 })

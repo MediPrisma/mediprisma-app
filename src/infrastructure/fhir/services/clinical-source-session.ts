@@ -14,6 +14,7 @@ const sessions = new WeakMap<object, Map<string, ClinicalSourceSession>>()
 const bindings = new WeakMap<object, ClinicalSourceSession>()
 const ownerClients = new WeakMap<object, object>()
 let sequence = 0
+const revokedClinicalSource = reconcileClinicalSources([])
 
 /** Sessions are keyed by the actual authenticated client, then its server base.
  * Weak keys release all captures when an old authenticated client is discarded. */
@@ -56,7 +57,7 @@ export function captureClinicalSource(session: ClinicalSourceSession, queryKey: 
   return reconcileClinicalSources([capture])
 }
 export function readClinicalSource(session: ClinicalSourceSession, patientScope: string): ClinicalReconciliationResult {
-  if (session.revoked) return reconcileClinicalSources([])
+  if (session.revoked) return revokedClinicalSource
   const cached = session.results.get(patientScope)
   if (cached?.generation === session.generation) return cached.result
   const result = reconcileClinicalSources([...session.captures.values()].filter(capture => capture.patientScope === patientScope))

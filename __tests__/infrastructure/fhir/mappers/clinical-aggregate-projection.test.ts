@@ -22,3 +22,13 @@ it('retains an explicit existing local contained projection as the one shared me
   expect(projected.diagnosticReports[0]._observations[0]).toBe(projected.observations[0])
   expect(projected.diagnosticReports[0].result[0].reference).toBe('Observation/' + snapshot.id)
 })
+
+it('drops every source-bound cached resource when the same patient moves to a new authenticated source', () => {
+  const fields = ['conditions', 'medications', 'medicationRemainingSummaries', 'allergies', 'observations', 'diagnosticReports', 'imagingStudies', 'procedures', 'encounters', 'documentReferences', 'compositions', 'immunizations', 'consents', 'devices', 'carePlans', 'vitalSigns']
+  const input = Object.fromEntries(fields.map(field => [field, [{ id: 'old', clinicalSourceNodeKey: reportNode.key }]]))
+  const nextSource = reconcileClinicalSources([{ sourceId: 'new-authenticated-client', patientScope: 'synthetic', generation: '1', resources: [{ resourceType: 'Patient', id: 'synthetic' }] }])
+  const projected = projectClinicalAggregate(input as any, nextSource)
+  for (const field of fields) expect(projected[field]).toEqual([])
+  const empty = projectClinicalAggregate(input as any, reconcileClinicalSources([]))
+  for (const field of fields) expect(empty[field]).toEqual([])
+})

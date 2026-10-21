@@ -99,7 +99,8 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     const id = context.ids.get(node.key)!
     if (!observationsById.has(id)) observationsById.set(id, mapProjectedObservation(node.resource, node.key, { ...context, edges: new Map() }))
   }
-  const reportIds = new Set((input.diagnosticReports ?? []).map(row => row.id))
+  const activeReports = (input.diagnosticReports ?? []).filter(row => !row.clinicalSourceNodeKey || context.nodes.has(row.clinicalSourceNodeKey))
+  const reportIds = new Set(activeReports.map(row => row.id))
   const activeContext: ClinicalProjectionContext = { ...context, ids: new Map([...context.ids].filter(([key, id]) => context.nodes.get(key)?.resource.resourceType === 'Observation' ? observationsById.has(id) : reportIds.has(id))) }
   for (const [id, row] of observationsById) observationsById.set(id, projectClinicalReferences(row, row.clinicalSourceNodeKey!, activeContext))
   const canonicalRows = [...observationsById.values()]
@@ -118,8 +119,12 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   for (const [key, rows] of Object.entries(input)) {
     if (!Array.isArray(rows) || key === 'observations' || key === 'vitalSigns') continue
     let changed = false
-    const projected = rows.map((row: any) => {
-      if (!row?.clinicalSourceNodeKey || !context.nodes.has(row.clinicalSourceNodeKey)) return row
+    const projected = rows.filter((row: any) => {
+      const active = !row?.clinicalSourceNodeKey || context.nodes.has(row.clinicalSourceNodeKey)
+      if (!active) changed = true
+      return active
+    }).map((row: any) => {
+      if (!row?.clinicalSourceNodeKey) return row
       const result = projectClinicalReferences(row, row.clinicalSourceNodeKey, activeContext)
       if (result !== row) changed = true
       return result

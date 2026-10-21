@@ -49,3 +49,33 @@ it.each(['composition-first', 'observation-first'])('shares every active Observa
   unmount()
   queryClient.clear()
 })
+
+it('filters cached rows of every type on a same-patient authenticated-source switch without a query refetch', async () => {
+  jest.resetAllMocks()
+  const { CLINICAL_RESOURCE_UNITS } = await import('@/src/application/hooks/clinical-data/clinical-data-fetch-plan')
+  const { reconcileClinicalSources } = await import('@/src/core/services/clinical-reconciliation')
+  let source = reconcileClinicalSources([{ sourceId: 'old-client', patientScope: 'synthetic', generation: '1', resources: [{ resourceType: 'Condition', id: 'old' }] }])
+  const oldKey = source.graph.nodes[0].key
+  const repository: any = { getClinicalSource: () => source }
+  for (const unit of CLINICAL_RESOURCE_UNITS) repository[unit.method] = jest.fn(async () => [{ id: 'old', clinicalSourceNodeKey: oldKey }])
+  jest.mocked(getClinicalDataRepository).mockResolvedValue(repository)
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  const { result, rerender, unmount } = renderHook(() => ({ progressive: useClinicalData(), complete: useClinicalDataQuery() }), { wrapper })
+  await waitFor(() => expect(result.current.complete.data).toBeDefined())
+  expect(result.current.complete.data!.conditions).toHaveLength(1)
+  source = reconcileClinicalSources([{ sourceId: 'new-client', patientScope: 'synthetic', generation: '1', resources: [{ resourceType: 'Patient', id: 'synthetic' }] }])
+  rerender()
+  await waitFor(() => {
+    for (const unit of CLINICAL_RESOURCE_UNITS) {
+      expect(result.current.complete.data![unit.id]).toEqual([])
+      expect(result.current.progressive[unit.id]).toEqual([])
+      expect(repository[unit.method]).toHaveBeenCalledTimes(1)
+    }
+  })
+  source = reconcileClinicalSources([])
+  rerender()
+  expect(result.current.complete.data!.conditions).toEqual([])
+  unmount()
+  queryClient.clear()
+})

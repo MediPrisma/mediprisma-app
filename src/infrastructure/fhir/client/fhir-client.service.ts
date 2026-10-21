@@ -120,6 +120,7 @@ export class FhirClientService {
   private static instance: FhirClientService
   private client: FHIRClient | null = null
   private sessionGeneration = 0
+  private initializing: Promise<FHIRClient> | null = null
 
   private constructor() {}
 
@@ -134,6 +135,8 @@ export class FhirClientService {
     if (this.client) {
       return this.client
     }
+
+    if (this.initializing) return this.initializing
 
     // Local-bundle mode: SMART takes precedence whenever there's any sign of
     // an OAuth flow (URL params or sessionStorage state). Fall back to the
@@ -153,18 +156,23 @@ export class FhirClientService {
       throw new LocalBundleModeError()
     }
 
-    try {
-      const generation = this.sessionGeneration
-      const FHIR = (await import('fhirclient')).default
-      const client = await FHIR.oauth2.ready()
-      if (generation !== this.sessionGeneration) throw new LocalBundleModeError()
-      this.client = client
-      return client
-    } catch (error) {
-      if (error instanceof LocalBundleModeError) throw error
-      console.error('Failed to initialize FHIR client:', error)
-      throw new Error('Failed to initialize FHIR client')
-    }
+    const generation = this.sessionGeneration
+    const pending = (async () => {
+      try {
+        const FHIR = (await import('fhirclient')).default
+        const client = await FHIR.oauth2.ready()
+        if (generation !== this.sessionGeneration) throw new LocalBundleModeError()
+        this.client = client
+        return client
+      } catch (error) {
+        if (error instanceof LocalBundleModeError) throw error
+        console.error('Failed to initialize FHIR client:', error)
+        throw new Error('Failed to initialize FHIR client')
+      }
+    })()
+    this.initializing = pending
+    try { return await pending }
+    finally { if (this.initializing === pending) this.initializing = null }
   }
 
   async request<T = any>(query: string): Promise<T> {
@@ -205,6 +213,7 @@ export class FhirClientService {
 
   clearClient(): void {
     this.sessionGeneration++
+    this.initializing = null
     purgeClinicalSourceSession(this)
     this.client = null
   }
