@@ -1,3 +1,4 @@
+import type { ClinicalRecordVariant } from '@/src/core/entities/clinical-data.entity'
 // claim-expander.ts
 // TW-PAS (事前審查申請) support — a pure preprocessor that "unpacks" a Claim
 // resource into the standard FHIR resources the rest of the app already
@@ -32,6 +33,23 @@ import { encodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 // Standard vital-sign LOINC codes — kept in sync with the app's own vitals
 // matcher (features/clinical-summary/vitals/types → LOINC.WEIGHT / .HEIGHT).
 // Hardcoded rather than imported to avoid an infrastructure→feature dependency.
+const claimDerivedResources = new WeakMap<object, { claim: any; path: string }>()
+export function getClaimDerivedSource(row: unknown): { originNodeKey: string; path: string } | undefined {
+  return row && typeof row === 'object' ? (row as any).clinicalClaimDerivedSource : undefined
+}
+export function copyClaimDerivedSource(from: object, to: object): void {
+  const origin = claimDerivedResources.get(from)
+  if (origin) claimDerivedResources.set(to, origin)
+}
+export function bindClaimDerivedSource<T extends object>(mapped: T, resource: object, sourceKeys: WeakMap<object, string>, variants: ReadonlyMap<string, ClinicalRecordVariant>): T {
+  const origin = claimDerivedResources.get(resource)
+  const key = origin && sourceKeys.get(origin.claim)
+  if (!key) return mapped
+  const variant = variants.get(key)
+  return Object.assign(mapped, { clinicalClaimDerivedSource: { originNodeKey: key, path: origin.path },
+    ...(variant ? { clinicalRecordVariant: variant } : {}), ...(origin.claim.meta?.versionId ? { sourceVersionId: origin.claim.meta.versionId } : {}) })
+}
+
 const unresolvedClaimEncounters = new WeakSet<object>()
 const unresolvedClaimEncounter = Symbol('unresolved-claim-encounter')
 export function hasUnresolvedClaimEncounter(resource: unknown): boolean {
@@ -74,15 +92,26 @@ function findExtension(node: any, url: string): any | undefined {
  * Expand every Claim in `entries` into standard FHIR resources, appended to
  * `entries` in place. Non-Claim bundles are untouched (the loop finds nothing).
  */
-export function expandClaimResources(entries: any[], resolveClaimTarget: (claim: object, path: string, resourceType: string) => any | undefined = () => undefined): void {
+export function expandClaimResources(entries: any[], resolveClaimTarget: (claim: object, path: string, resourceType: string) => any | undefined = () => undefined, isUnresolvedClaim: (claim: object) => boolean = () => false): void {
   const claims = entries.filter((r) => r?.resourceType === 'Claim')
   if (!claims.length) return
 
   const synthesised: any[] = []
+  const derivedIds = new Set(entries.map(resource => resource.resourceType + '/' + resource.id))
   const medicationClaims = new Map<any, { dates: Set<string>; encounters: Set<string>; unresolvedEncounter: boolean }>()
 
   for (const claim of claims) {
     const synthesisedStart = synthesised.length
+    const uncertainClaim = isUnresolvedClaim(claim)
+    const addDerived = (resource: any, path: string) => {
+      if (derivedIds.has(resource.resourceType + '/' + resource.id)) {
+        resource.id += '-claim-slot-' + path.replace(/[^A-Za-z0-9-]/g, '-')
+        while (derivedIds.has(resource.resourceType + '/' + resource.id)) resource.id += '-copy'
+      }
+      derivedIds.add(resource.resourceType + '/' + resource.id)
+      claimDerivedResources.set(resource, { claim, path })
+      synthesised.push(resource)
+    }
     const claimId: string = claim.id || 'claim'
     const patientRef: string | undefined = claim.patient?.reference
     const created: string | undefined = claim.created
@@ -94,7 +123,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
 
     const encounterIndex = claim.extension?.findIndex((extension: any) => extension.url === EXT_CLAIM_ENCOUNTER)
     const resolvedEncounter = resolveClaimTarget(claim, `extension[${encounterIndex}].valueReference`, 'Encounter')
-    const canLinkEncounter = Boolean(resolvedEncounter && encounterRef === 'Encounter/' + resolvedEncounter.id)
+    const canLinkEncounter = Boolean(!uncertainClaim && resolvedEncounter && encounterRef === 'Encounter/' + resolvedEncounter.id)
     const encounter = canLinkEncounter && encounterRef ? { reference: encounterRef } : undefined
 
     // --- Backfill the PAS Encounter (usually has no period.start / subject) ---
@@ -115,7 +144,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
         ?.valueDate
       const code = dx?.diagnosisCodeableConcept
       if (code) {
-        synthesised.push({
+        addDerived({
           resourceType: 'Condition',
           id: `claim-${claimId}-condition-${seq}`,
           clinicalStatus: {
@@ -149,7 +178,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
           encounter,
           recordedDate: recordedDate ?? created,
           onsetDateTime: recordedDate,
-        })
+        }, `diagnosis[${i}]`)
       }
       // The申請理由/病摘 narrative rides in diagnosis.type[].text.
       const dxLabel =
@@ -168,7 +197,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
     // --- narrative → an inline text/html DocumentReference (readable + AI) ---
     if (narrativeParts.length) {
       const html = narrativeParts.join('')
-      synthesised.push({
+      addDerived({
         resourceType: 'DocumentReference',
         id: `claim-${claimId}-narrative`,
         status: 'current',
@@ -189,7 +218,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
           ...(encounter ? { encounter: [encounter] } : {}),
           ...(created ? { period: { start: created } } : {}),
         },
-      })
+      }, 'diagnosis:narrative')
     }
 
     // --- procedure[] → Procedure ---
@@ -198,7 +227,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
       const seq = proc?.sequence ?? i + 1
       const code = proc?.procedureCodeableConcept
       if (!code) return
-      synthesised.push({
+      addDerived({
         resourceType: 'Procedure',
         id: `claim-${claimId}-procedure-${seq}`,
         status: 'completed',
@@ -206,17 +235,17 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
         subject,
         encounter,
         performedDateTime: proc?.date ?? created,
-      })
+      }, `procedure[${i}]`)
     })
 
     // --- supportingInfo weight/height → vital-sign Observations ---
     const supporting: any[] = Array.isArray(claim.supportingInfo) ? claim.supportingInfo : []
-    for (const si of supporting) {
+    for (const [index, si] of supporting.entries()) {
       const cat: string | undefined = si?.category?.coding?.[0]?.code
       const q = si?.valueQuantity
       if (!q || (cat !== 'weight' && cat !== 'height')) continue
       const isWeight = cat === 'weight'
-      synthesised.push({
+      addDerived({
         resourceType: 'Observation',
         id: `claim-${claimId}-${cat}`,
         status: 'final',
@@ -247,7 +276,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
         // Source omits `unit`; mirror the UCUM `code` so the value renders with
         // its unit (kg / cm) instead of a bare number.
         valueQuantity: { ...q, unit: q.unit ?? q.code },
-      })
+      }, `supportingInfo[${index}]`)
     }
 
     // --- item[] → backfill the requested MedicationRequest's date/visit ---
@@ -263,13 +292,13 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
       const mr = resolveClaimTarget(claim, `item[${itemIndex}].extension[${extensionIndex}].valueReference`, 'MedicationRequest')
       if (!mr) continue
       const candidates = medicationClaims.get(mr) ?? { dates: new Set<string>(), encounters: new Set<string>(), unresolvedEncounter: false }
-      if (created) candidates.dates.add(created)
+      if (created && !uncertainClaim) candidates.dates.add(created)
       if (encounter && canLinkEncounter) candidates.encounters.add(encounter.reference)
-      if (encounterRef && !canLinkEncounter) candidates.unresolvedEncounter = true
+      if (uncertainClaim || (encounterRef && !canLinkEncounter)) candidates.unresolvedEncounter = true
       medicationClaims.set(mr, candidates)
     }
     for (const resource of synthesised.slice(synthesisedStart)) {
-      if (encounterRef && !canLinkEncounter) unresolvedClaimEncounters.add(resource)
+      if (uncertainClaim || (encounterRef && !canLinkEncounter)) unresolvedClaimEncounters.add(resource)
       const reference = resource.encounter?.reference
       if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference) && canLinkEncounter) claimEncounterLinks.set(resource, reference)
     }

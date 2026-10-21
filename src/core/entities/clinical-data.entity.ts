@@ -3,6 +3,8 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
 // Core Domain Entities: Clinical Data
 
 export interface ClinicalSourceRecord {
+  /** Trusted Local Claim projection identity; never a raw FHIR field or AI payload. */
+  clinicalClaimDerivedSource?: { originNodeKey: string; path: string }
   sourceVersionId?: string
   clinicalSourceNodeKey?: string
   clinicalRecordVariant?: ClinicalRecordVariant

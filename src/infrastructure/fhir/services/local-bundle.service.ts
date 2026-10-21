@@ -37,7 +37,7 @@ import {
   isMedicationRemainingSummaryBasic,
 } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
-import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncounter } from './claim-expander'
+import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncounter, bindClaimDerivedSource, copyClaimDerivedSource } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
@@ -1035,6 +1035,7 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
         }
         const sourceKey = sourceKeys?.get(r)
         if (sourceKey) sourceKeys?.set(attached, sourceKey)
+        copyClaimDerivedSource(r, attached)
         return attached
       }
     }
@@ -1657,9 +1658,9 @@ export const LocalBundleService = {
       const imported = key ? readClinicalRecordVariantModifier(sourceNodesByKey.get(key)!.resource) : undefined
       if (key && imported && !variant) { variant = scopedImportedClinicalRecordVariant(sourceNodesByKey.get(key)!, imported.variant); recordVariants.set(key, variant) }
       if (key) readClinicalMedicationContentModifier(sourceNodesByKey.get(key)!.resource)
-      return bindClaimEncounterLink({ ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
+      return bindClaimDerivedSource(bindClaimEncounterLink({ ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
         ...(variant ? { clinicalRecordVariant: variant } : {}), ...(imported?.sourceId ? { sourceId: imported.sourceId } : {}), ...(imported?.sourceVersionId ? { sourceVersionId: imported.sourceVersionId } : {}),
-        ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }, (key && claimEncounterResourcesByKey.get(key)) || resource)
+        ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }, (key && claimEncounterResourcesByKey.get(key)) || resource), resource, sourceKeyByResource, recordVariants)
     }
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     const containedIdScopes = new Map<string, Set<string>>()
@@ -1689,7 +1690,7 @@ export const LocalBundleService = {
       if (edge?.status !== 'resolved' || edge.targetKeys.length !== 1) return undefined
       const targets = entries.filter(resource => resource.resourceType === resourceType && sourceKeyByResource.get(resource) === edge.targetKeys[0])
       return targets.length === 1 ? targets[0] : undefined
-    })
+    }, claim => recordVariants.has(sourceKeyByResource.get(claim) ?? ''))
     for (const resource of entries) {
       const key = sourceKeyByResource.get(resource)
       if (key) claimEncounterResourcesByKey.set(key, resource)

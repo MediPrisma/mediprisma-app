@@ -1,3 +1,4 @@
+import { getClaimDerivedSource } from '../services/claim-expander'
 import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } from './clinical-modifier-projection'
 import { isClinicalSourceRepresentedElsewhere } from './clinical-projection-disposition'
 import { includeCapturedClinicalRows } from './clinical-graph-intake'
@@ -155,7 +156,8 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   context.visibleRowIds = visibleRowIds
   const variants = createClinicalRecordVariants(source, { additionalNodeKeys: mappedNodeKeys, quarantineMalformed: true })
   const annotate = <R extends { clinicalSourceNodeKey?: string; clinicalRecordVariant?: unknown }>(row: R): R => {
-    const variant = row.clinicalSourceNodeKey ? variants.get(row.clinicalSourceNodeKey) : undefined
+    const originKey = row.clinicalSourceNodeKey ?? getClaimDerivedSource(row)?.originNodeKey
+    const variant = originKey ? variants.get(originKey) : undefined
     if (JSON.stringify(row.clinicalRecordVariant) === JSON.stringify(variant)) return row
     const { clinicalRecordVariant: _previous, ...rest } = row
     return { ...rest, ...(variant ? { clinicalRecordVariant: variant } : {}) } as R
@@ -198,7 +200,11 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   const legacyRows: ObservationEntity[] = []
   const accept = (row: ObservationEntity, requireActive: boolean) => {
     const originalKey = row.clinicalSourceNodeKey
-    if (!originalKey) { if (!requireActive) legacyRows.push(row); return }
+    if (!originalKey) {
+      const derived = getClaimDerivedSource(row)
+      if (!requireActive && (!derived || context.nodes.has(derived.originNodeKey))) legacyRows.push(derived ? annotate(row) : row)
+      return
+    }
     let node = context.nodes.get(originalKey)
     if (!node && !requireActive) node = eligibleById.get(row.id ?? '')
     if (!node || node.resource.resourceType !== 'Observation' || node.embeddedIn) return
@@ -239,7 +245,12 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   for (const [id, row] of observationsById) observationsById.set(id, annotate(projectClinicalReferences(row, row.clinicalSourceNodeKey!, activeContext)))
   const canonicalRows = [...observationsById.values()]
   const legacySeen = new Set<ObservationEntity>()
+  const derivedPositions = new Set<string>()
   for (const row of legacyRows) {
+    const derived = getClaimDerivedSource(row)
+    const position = derived && JSON.stringify([derived.originNodeKey, derived.path])
+    if (position && derivedPositions.has(position)) continue
+    if (position) derivedPositions.add(position)
     if (!legacySeen.has(row)) { legacySeen.add(row); canonicalRows.push(row) }
   }
   const observations = canonicalRows.length === input.observations?.length && canonicalRows.every((row, index) => row === input.observations![index]) ? input.observations! : canonicalRows
@@ -255,7 +266,8 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     let changed = false
     const retainedSources = new Map<string, SourceNode[]>()
     const projected = rows.filter((row: any) => {
-      const active = !row?.clinicalSourceNodeKey || context.nodes.has(row.clinicalSourceNodeKey)
+      const originKey = row?.clinicalSourceNodeKey ?? getClaimDerivedSource(row)?.originNodeKey
+      const active = !originKey || context.nodes.has(originKey)
       if (!active) changed = true
       if (!active) return false
       const node = row?.clinicalSourceNodeKey ? context.nodes.get(row.clinicalSourceNodeKey) : undefined
@@ -270,7 +282,11 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
       retainedSources.set(identity, candidates)
       return true
     }).map((row: any) => {
-      if (!row?.clinicalSourceNodeKey) return row
+      if (!row?.clinicalSourceNodeKey) {
+        const result = getClaimDerivedSource(row) ? annotate(row) : row
+        if (result !== row) changed = true
+        return result
+      }
       const result = annotate(projectClinicalReferences(alignRecordId(row), row.clinicalSourceNodeKey, activeContext))
       if (result !== row) changed = true
       return result
