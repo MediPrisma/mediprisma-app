@@ -6,11 +6,14 @@ import { FeatureCard } from "@/src/shared/components"
 import { useDiagnosis } from './hooks/useDiagnosis'
 import { useDiagnosisRows } from './hooks/useDiagnosisRows'
 import { DiagnosisList } from './components/DiagnosisList'
+import { useMemo } from 'react'
+import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
 
 export function DiagnosesCard() {
-  const { t } = useLanguage()
-  const { conditions, isLoading, error } = useDiagnosis()
-  const rows = useDiagnosisRows(conditions)
+  const { t, locale } = useLanguage()
+  const { conditions, encounters, isLoading, error } = useDiagnosis()
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
+  const rows = useDiagnosisRows(conditions, locale, icdDict, encounters)
 
   return (
     <FeatureCard 

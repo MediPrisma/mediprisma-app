@@ -231,6 +231,7 @@ describe('useMedicationRows — official NHI terminology view model', () => {
   it('uses the exact source period end instead of adding the inclusive day count again', () => {
     const inpatientOrder = {
       ...medication,
+      meta: { source: 'ehr-fhir-bridge/scraper' },
       status: 'completed',
       authoredOn: '2025-05-20T00:00:00+08:00',
       dispenseRequest: {
@@ -246,9 +247,7 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     )
 
     expect(result.current[0].durationDays).toBe(2)
-    expect(result.current[0].endDate).toBe(
-      new Date(inpatientOrder.dispenseRequest.validityPeriod.end).toLocaleDateString(),
-    )
+    expect(result.current[0].endDate).toBe('2025/5/21')
   })
 
   it('preserves a composite hospital frequency code from the dosage text', () => {

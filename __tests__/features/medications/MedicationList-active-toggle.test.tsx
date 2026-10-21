@@ -195,7 +195,7 @@ describe('MedicationList active section toggle', () => {
     expect(screen.queryByText('historical-medication-1')).not.toBeInTheDocument()
     // The earlier fill is also listed under its own visit in 用藥歷史
     // (owner, 2026-10-13), so the section is there with it.
-    expect(screen.getByRole('button', { name: '用藥歷史 (1 已停用)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '用藥歷史 (1 筆紀錄)' })).toBeInTheDocument()
 
     fireEvent.click(toggle)
 
@@ -297,7 +297,7 @@ describe('MedicationList active section toggle', () => {
     )
 
     // 110 stopped fills plus the current drug's one earlier fill.
-    const toggle = screen.getByRole('button', { name: '用藥歷史 (111 已停用)' })
+    const toggle = screen.getByRole('button', { name: '用藥歷史 (111 筆紀錄)' })
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(toggle).toHaveAttribute('aria-controls')
     expect(screen.getByTestId('medication-history-list')).toBeInTheDocument()

@@ -26,7 +26,8 @@ export function createMergedFhirFixture(date = new Date().toISOString()) {
     fullUrl: `urn:uuid:${resource.id}`, resource,
   })
   add({ resourceType: 'Patient', id: 'merged-patient',
-    name: [{ text: '整併測試病人' }], gender: 'female', birthDate: '1970-01-01' })
+    name: [{ text: '整併測試病人' }], gender: 'female', birthDate: '1970-01-01',
+    identifier: [{ type: { coding: [{ code: 'NI' }] }, value: 'A123456789' }] })
   const subject = { reference: 'urn:uuid:merged-patient' }
   const images: SourceImage[] = []
   for (const source of ['cloud', 'hospital'] as const) {

@@ -32,6 +32,7 @@ import type {
 import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { orphanResultObservations } from './ips-helpers'
+import { assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
 
 export interface CurateForIpsInput {
   data: ClinicalDataCollection
@@ -53,32 +54,6 @@ function isActiveCondition(cond: ConditionEntity): boolean {
   const s = (cond.clinicalStatus || '').toLowerCase()
   if (!s) return true // no status recorded ⇒ treat as active (matches app)
   return s === 'active' || s === 'recurrence' || s === 'relapse'
-}
-
-// Statuses that mean a medication order is no longer being taken. Chronic
-// (慢箋) refills are still surfaced even when an individual cycle is completed.
-const INACTIVE_MED_STATUS = new Set([
-  'stopped',
-  'completed',
-  'cancelled',
-  'entered-in-error',
-  'on-hold',
-])
-
-function isCurrentMed(med: MedicationEntity): boolean {
-  return !INACTIVE_MED_STATUS.has((med.status || '').toLowerCase())
-}
-
-/** Dedup key for refill collapsing — same drug name = same row. */
-function medName(med: MedicationEntity): string {
-  const cc = med.medicationCodeableConcept
-  return (
-    cc?.text?.trim() ||
-    cc?.coding?.find((c) => c.display)?.display?.trim() ||
-    cc?.coding?.find((c) => c.code)?.code?.trim() ||
-    med.id ||
-    ''
-  )
 }
 
 // --- Time-range filtering (mirrors generate-clinical-context.use-case) ------
@@ -297,25 +272,21 @@ function curateMedications(
   // Time-range filter on authoredOn.
   meds = withinRange(meds, filters.medicationTimeRange, now, (m) => m.authoredOn)
 
-  // 現用藥 / 慢箋為主: when restricted to "active", keep meds that are
-  // currently-in-use OR are chronic refill prescriptions (which read as
-  // "completed" between cycles but are clinically ongoing).
+  // Chronic is a property of an individual prescription, not evidence that
+  // every historical fill is still current. Use its own supply/status facts.
   if (filters.medicationStatus === 'active') {
-    meds = meds.filter((m) => isCurrentMed(m) || isChronicPrescription(m))
+    meds = meds.flatMap((m) => {
+      const assessment = assessMedicationCurrentness(m, now.getTime())
+      if (assessment.current) return [m]
+      return assessment.uncertain ? [{ ...m, exportCurrentnessUnconfirmed: true, note: [...(m.note ?? []), {
+        text: `Current medication use is unconfirmed; original source status: ${m.status || 'unknown'}. Verify source records before prescribing.`,
+      }] }] : []
+    })
   }
 
-  // Collapse refill cycles of the same drug; keep the most recent authoredOn.
-  const byName = new Map<string, MedicationEntity>()
-  for (const m of meds) {
-    const key = medName(m)
-    const existing = byName.get(key)
-    if (!existing) {
-      byName.set(key, m)
-      continue
-    }
-    if ((m.authoredOn || '') > (existing.authoredOn || '')) byName.set(key, m)
-  }
-  return Array.from(byName.values())
+  // Confirmed copies were reconciled at import. Name-only folding loses
+  // genuine orders and source comparison evidence in exported records.
+  return meds
 }
 
 function curateImmunizations(
