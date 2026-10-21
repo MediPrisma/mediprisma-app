@@ -34,6 +34,17 @@ it('uses the same authenticated REST identity for generic clinical retransmissio
   expect(data.conditions[0].id).toBe('condition')
   expect(data.conditions[0].clinicalRecordVariant).toBeUndefined()
 })
+it('resolves a third query report against equivalent include/search copies instead of making membership ambiguous', async () => {
+  jest.mocked(fhirClient.requestAllPages).mockImplementation(async (url: string) => ({ resourceType: 'Bundle', entry: url.startsWith('Condition?')
+    ? [{ fullUrl: base + '/Observation/result', resource: observation() }]
+    : url.startsWith('Observation?') ? [{ resource: observation() }]
+    : url.startsWith('DiagnosticReport?') ? [{ resource: { resourceType: 'DiagnosticReport', id: 'report', status: 'final', result: [{ reference: 'Observation/result' }] } }] : [] }) as any)
+  const data = await new FhirClinicalDataRepository().fetchAllClinicalData('p')
+  expect(data.clinicalSource!.graph.references.find(edge => edge.path === 'result[0]')?.status).toBe('resolved')
+  expect(data.observations).toHaveLength(1)
+  expect(data.diagnosticReports[0]._observations).toHaveLength(1)
+  expect(data.diagnosticReports[0]._observations![0]).toBe(data.observations[0])
+})
 it.each(['https://other.example/fhir/Observation/result', 'urn:uuid:separate-source'])('does not infer equivalence to an explicit unrelated fullUrl %s', async fullUrl => {
   const data = await load(fullUrl)
   expect(data.observations).toHaveLength(2)

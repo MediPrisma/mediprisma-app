@@ -1,4 +1,5 @@
 import { clinicalSourceNodesEqualWithContext } from './clinical-source-context'
+import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 
 export interface FhirSourceResource {
   resourceType: string
@@ -94,7 +95,7 @@ const equivalenceKey = (node: ClinicalSourceNode, base: string | undefined, cont
     node.patientScope,
     base ?? '',
     node.restBase ?? null,
-    node.fullUrl ?? null,
+    clinicalSourceRestIdentity(node),
     node.parentKey ?? null,
     node.embeddedIn ?? null,
     node.resource.resourceType,
