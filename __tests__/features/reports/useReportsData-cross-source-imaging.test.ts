@@ -185,6 +185,18 @@ describe('cross-source imaging reports', () => {
     }))).reportRows).toHaveLength(2)
   })
 
+  it('does not hide interpretation or status metadata on long narrative observations', () => {
+    const reports = pair().map((report, index) => ({ ...report,
+      _observations: [{ id: `interpretation-${index}`, valueString: BODY,
+        status: index ? 'preliminary' : 'final', interpretation: [{ coding: [{ code: index ? 'A' : 'N' }] }],
+      }],
+    }))
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    expect(reportDisplayGroupingKeys(pair().map((report, index) => ({ ...report,
+      conclusionCode: [{ coding: [{ code: index ? 'A' : 'N', display: 'Finding' }] }],
+    })))).toHaveProperty('size', 0)
+  })
+
   it('compares explicit timestamps as instants including their UTC offsets', () => {
     const reports = pair()
     reports[0].effectiveDateTime = '2026-06-24T11:30:00+08:00'

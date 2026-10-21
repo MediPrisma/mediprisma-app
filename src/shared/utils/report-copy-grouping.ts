@@ -1,4 +1,4 @@
-import type { DiagnosticReport } from '../types/fhir.types'
+import type { DiagnosticReport as Report } from '../types/fhir.types'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
 import { reportNaturalGroupingKey } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
@@ -9,11 +9,6 @@ import {
   sharedReportNarrative,
 } from './shared-report-grouping'
 
-type Report = DiagnosticReport & { _observations?: Array<{
-  meta?: DiagnosticReport['meta']
-  performer?: Array<{ reference?: string; display?: string }>
-  valueString?: string; valueQuantity?: unknown; valueCodeableConcept?: unknown; component?: unknown[]
-}> }
 type Source = 'hospital' | 'cloud'
 const VGH_NAMES = new Set(['臺北榮總', '台北榮總', '臺北榮民總醫院', '台北榮民總醫院'])
 const DATE = String.raw`\d{4}[/-]\d{2}[/-]\d{2}`
@@ -138,10 +133,10 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     // Echo/Doppler and their viewer-only companions have a separate established
     // shared-study path. Do not re-key just part of that family here.
     if (report.code?.coding?.some(coding => ['18005C', '18007C'].includes(coding.code?.trim().toUpperCase() ?? ''))) continue
-    // A text match cannot establish equality of independent structured results.
-    // Leave those reports separate, including unresolved result references.
-    if (report.result?.length
-      || report._observations?.some(obs => !obs.valueString || obs.valueString.trim().length <= 30 || obs.valueQuantity || obs.valueCodeableConcept || obs.component?.length)) continue
+    // Compare plain report narratives only. Even a long valueString Observation
+    // may carry an interpretation, status or reference range not represented in
+    // that string. Keep all such reports separate rather than hiding metadata.
+    if (report.result?.length || report._observations?.length || report.conclusionCode?.length) continue
     // Only text we actually compare and images may accompany this match.
     // HTML, PDFs and unresolved URL-backed reports may contain extra findings.
     if (report.presentedForm?.some(form => {
