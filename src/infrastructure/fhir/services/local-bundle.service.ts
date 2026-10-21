@@ -1,4 +1,4 @@
-import { reconcileClinicalSources, selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
+import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -580,7 +580,7 @@ function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void
  *      equivalent `ResourceType/id`) is rewritten to the relative form.
  * References to other servers / unknown targets are left untouched.
  */
-export function canonicalizeBundleResources(bundle: any): any[] {
+export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconciliationResult): any[] {
   const rawEntries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
   const entries = rawEntries.filter((e) => e?.resource)
 
@@ -631,7 +631,22 @@ export function canonicalizeBundleResources(bundle: any): any[] {
   })
 
   // Pass 2 — rewrite internal references to the relative ResourceType/id form.
-  for (const res of resources) rewriteReferences(res, targets)
+  if (source) {
+    const nodes = selectClinicalSourceNodes(source)
+    const mappedByKey = new Map(nodes.map((node, index) => [node.key, resources[index]]))
+    for (const edge of source.graph.references) {
+      if (edge.status !== 'resolved' || !edge.reference) continue
+      const origin = mappedByKey.get(edge.origin.key)
+      const target = mappedByKey.get(edge.targetKeys[0])
+      if (!origin || !target) continue
+      const path = edge.path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
+      let reference = origin
+      for (const part of path) reference = reference?.[part]
+      if (reference?.reference === edge.reference) reference.reference = target.resourceType + '/' + target.id
+    }
+  } else {
+    for (const res of resources) rewriteReferences(res, targets)
+  }
   return resources
 }
 
@@ -1381,9 +1396,12 @@ export const LocalBundleService = {
     // every downstream step (patient-id gate, report-member linking, the inline
     // split('/').pop() resolvers) works regardless of the bundle's reference
     // style. See canonicalizeBundleResources.
+    const projectedNodes = selectClinicalSourceNodes(clinicalSource)
     const entries: any[] = canonicalizeBundleResources({
-      entry: selectClinicalSourceNodes(clinicalSource).map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
-    })
+      entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
+    }, clinicalSource)
+    const sourceKeyByResource = new WeakMap<object, string>(entries.map((resource, index) => [resource, projectedNodes[index].key]))
+    const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
     if (!entries.length) return null
 
     // TW-PAS support: unpack any Claim (事前審查申請) into the standard
@@ -1460,14 +1478,20 @@ export const LocalBundleService = {
 
     // Promote a referenced Medication.code into medicationCodeableConcept so the
     // display helpers (which only look at medicationCodeableConcept) find a drug
-    // name. References are already relative post-canonicalisation; referenceId
-    // also tolerates urn-form as a second line of defence.
+    // name. Original records use only graph-confirmed references, including
+    // contained and versioned resources. Derived records use unique relative ids.
     const resolveMedicationCode = <T extends {
       medicationCodeableConcept?: unknown
       medicationReference?: { reference?: string }
     }>(m: T): T => {
       if (m.medicationCodeableConcept || !m.medicationReference?.reference) return m
-      const refId = referenceId(m.medicationReference.reference)
+      const sourceKey = sourceKeyByResource.get(m)
+      if (sourceKey) {
+        const edge = clinicalSource.graph.references.find(reference => reference.origin.key === sourceKey && reference.path === 'medicationReference')
+        const target = edge?.status === 'resolved' ? sourceNodesByKey.get(edge.targetKeys[0])?.resource : undefined
+        return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: target.code } : m
+      }
+      const refId = /^Medication\/([^/]+)$/.exec(m.medicationReference.reference)?.[1]
       const medResource = refId ? medicationMap.get(refId) : null
       return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code } : m
     }

@@ -61,3 +61,26 @@ it('preserves distinct fullUrl identities in mapped rows and does not attach an 
   expect((collection.diagnosticReports.find(row => row.id === 'ambiguous-report') as any)?._observations ?? []).toHaveLength(0)
   expect((collection.diagnosticReports.find(row => row.id === 'exact-report') as any)?._observations[0].valueQuantity.value).toBe(7)
 })
+
+it('uses the report origin base to preserve a legal relative member across colliding server ids', () => {
+  const bundle: any = fixture()
+  bundle.entry[2].fullUrl = 'https://one.invalid/Observation/result'
+  bundle.entry.push({ fullUrl: 'https://two.invalid/Observation/result', resource: { ...bundle.entry[2].resource, valueQuantity: { value: 99, unit: 'mg' } } })
+  bundle.entry.push({ fullUrl: 'https://one.invalid/DiagnosticReport/report', resource: { resourceType: 'DiagnosticReport', id: 'report', status: 'final', code: { text: 'synthetic' }, result: [{ reference: 'Observation/result' }] } })
+  const report: any = LocalBundleService.parse(bundle)!.collection.diagnosticReports[0]
+  expect(report._observations).toHaveLength(1)
+  expect(report._observations[0].valueQuantity.value).toBe(7)
+})
+
+it.each([
+  ['https://foreign.invalid/Medication/drug', false],
+  ['https://one.invalid/Medication/drug/_history/2', false],
+  ['https://one.invalid/Medication/drug/_history/1', true],
+  ['https://one.invalid/Medication/drug', true],
+])('promotes local medication only when its graph reference resolves: %s', (reference, resolved) => {
+  const bundle: any = fixture()
+  bundle.entry.push({ fullUrl: 'https://one.invalid/Medication/drug', resource: { resourceType: 'Medication', id: 'drug', meta: { versionId: '1' }, code: { text: 'Correct synthetic medication' } } })
+  bundle.entry.push({ fullUrl: 'https://one.invalid/MedicationRequest/rx', resource: { resourceType: 'MedicationRequest', id: 'rx', status: 'active', intent: 'order', medicationReference: { reference }, subject: { reference: 'urn:uuid:patient' } } })
+  const medication: any = LocalBundleService.parse(bundle)!.collection.medications[0]
+  expect(medication.medicationCodeableConcept?.text).toBe(resolved ? 'Correct synthetic medication' : undefined)
+})
