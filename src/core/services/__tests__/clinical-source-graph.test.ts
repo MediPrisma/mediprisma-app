@@ -96,6 +96,30 @@ describe('buildClinicalSourceGraph', () => {
     expect(edge.targetKeys).toEqual([graph.nodes.find((node) => node.fullUrl === 'https://b.example/fhir/Observation/x')!.key])
   })
 
+  it('resolves byte-identical records repeated across capture generations and retains both nodes', () => {
+    const graph = buildClinicalSourceGraph([
+      capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }, { resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 42 } }]),
+      capture([{ resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 42 } }], { generation: 'import-2' }),
+    ])
+    const edge = graph.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')!
+    expect(graph.nodes.filter((node) => node.resource.resourceType === 'Observation')).toHaveLength(2)
+    expect(edge.status).toBe('resolved')
+    expect(edge.targetKeys).toHaveLength(2)
+  })
+
+  it('keeps same-id records ambiguous when payload or version differs across generations', () => {
+    const payloadMismatch = buildClinicalSourceGraph([
+      capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }, { resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 42 } }]),
+      capture([{ resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 43 } }], { generation: 'import-2' }),
+    ])
+    const versionMismatch = buildClinicalSourceGraph([
+      capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }, { resourceType: 'Observation', id: 'x', meta: { versionId: '1' }, valueQuantity: { value: 42 } }]),
+      capture([{ resourceType: 'Observation', id: 'x', meta: { versionId: '2' }, valueQuantity: { value: 42 } }], { generation: 'import-2' }),
+    ])
+    expect(payloadMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')?.status).toBe('ambiguous')
+    expect(versionMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')?.status).toBe('ambiguous')
+  })
+
   it('keeps unknown audit resource types but does not promote nested provenance snapshots', () => {
     const graph = buildClinicalSourceGraph([capture([
       { resourceType: 'Provenance', id: 'audit' },

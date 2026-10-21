@@ -70,6 +70,14 @@ const deriveRestBase = (fullUrl?: string): string | undefined => {
 
 const withoutVersion = (url: string): string => url.replace(/\/_history\/[^/]+\/?$/, '')
 
+const equivalenceKey = (node: ClinicalSourceNode, base?: string): string => {
+  const version = (node.resource.meta as Record<string, unknown> | undefined)?.versionId ?? ''
+  const logicalIdentity = node.resource.id
+    ? [node.resource.resourceType, node.resource.id]
+    : [node.fullUrl ?? '', node.resource.resourceType]
+  return stable([node.sourceId, node.patientScope, base ?? '', logicalIdentity, version, node.resource])
+}
+
 const referencesIn = (value: unknown, path = ''): Array<{ path: string; reference?: string; display?: string; identifierOnly?: boolean }> => {
   if (!value || typeof value !== 'object') return []
   const found: Array<{ path: string; reference?: string; display?: string; identifierOnly?: boolean }> = []
@@ -199,7 +207,8 @@ export function buildClinicalSourceGraph(captures: readonly ClinicalSourceCaptur
         })
       }
       const distinct = [...new Map(candidates.map((n) => [n.key, n])).values()].sort((a, b) => a.key.localeCompare(b.key))
-      const status: ClinicalSourceReferenceStatus = distinct.length === 1 ? 'resolved' : distinct.length > 1 ? 'ambiguous' : 'unresolved'
+      const equivalenceClasses = new Set(distinct.map((node) => equivalenceKey(node, baseByKey.get(node.key) ?? node.restBase ?? deriveRestBase(node.fullUrl))))
+      const status: ClinicalSourceReferenceStatus = equivalenceClasses.size === 1 && distinct.length > 0 ? 'resolved' : distinct.length > 0 ? 'ambiguous' : 'unresolved'
       refs.push(Object.freeze({ origin, path: ref.path, reference: raw, ...(ref.display ? { display: ref.display } : {}), status, targetKeys: Object.freeze(distinct.map((n) => n.key)) }))
     }
   }
