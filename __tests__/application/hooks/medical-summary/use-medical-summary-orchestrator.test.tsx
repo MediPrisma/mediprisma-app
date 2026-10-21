@@ -212,6 +212,39 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
+  it('stops only the automatic launch batch when its signal is aborted', async () => {
+    let finish!: () => void
+    summaryGenerate.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+    const controller = new AbortController()
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    let generation!: Promise<void>
+    act(() => { generation = result.current.generateForLaunch(controller.signal) })
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
+    act(() => controller.abort())
+    expect(summaryCancel).toHaveBeenCalledWith(expect.stringContaining('summary-model'))
+    expect(safetyCancel).toHaveBeenCalledWith(expect.stringContaining('safety-model'))
+    await act(async () => { finish(); await generation })
+    summaryCancel.mockClear()
+    safetyCancel.mockClear()
+    await act(async () => result.current.generate())
+    expect(summaryGenerate).toHaveBeenCalledTimes(2)
+    expect(summaryCancel).not.toHaveBeenCalled()
+    expect(safetyCancel).not.toHaveBeenCalled()
+  })
+
+  it('does not start an automatic launch cancelled while awaiting demographics', async () => {
+    let accept!: (value: boolean) => void
+    mockRequestDemographicsForAi.mockImplementationOnce(() => new Promise<boolean>(resolve => { accept = resolve }))
+    const controller = new AbortController()
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    let generation!: Promise<void>
+    act(() => { generation = result.current.generateForLaunch(controller.signal) })
+    act(() => controller.abort())
+    await act(async () => { accept(true); await generation })
+    expect(summaryGenerate).not.toHaveBeenCalled()
+    expect(safetyGenerate).not.toHaveBeenCalled()
+  })
+
   it('does not start manual generation when required demographics are cancelled', async () => {
     mockRequestDemographicsForAi.mockResolvedValueOnce(false)
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())

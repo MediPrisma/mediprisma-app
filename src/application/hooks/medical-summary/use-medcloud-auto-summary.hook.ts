@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
-import { isProgressiveSummaryRequestCurrent } from '@/src/application/stores/progressive-import.store'
+import { isProgressiveSummaryRequestCurrent, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 interface UseMedcloudAutoSummaryOptions {
@@ -14,7 +14,7 @@ interface UseMedcloudAutoSummaryOptions {
   isRestoring: boolean
   generationSlotKey: string
   modelId: string
-  generate: () => Promise<void>
+  generate: (signal?: AbortSignal) => Promise<void>
 }
 
 /** Claim and run each successfully received Extension launch exactly once.
@@ -33,6 +33,11 @@ export function useMedcloudAutoSummary({
 }: UseMedcloudAutoSummaryOptions): void {
   const request = useMedcloudLaunchStore((state) => state.pendingSummary)
   const claimSummary = useMedcloudLaunchStore((state) => state.claimSummary)
+  const activeLaunches = useRef(new Set<() => void>())
+  useEffect(() => {
+    const launches = activeLaunches.current
+    return () => { for (const dispose of launches) dispose() }
+  }, [])
 
   useEffect(() => {
     if (
@@ -63,7 +68,20 @@ export function useMedcloudAutoSummary({
       }
       if (isGenerating) return
       if (!claimSummary(request.messageId)) return
-      void generate().catch(() => undefined)
+      if (!request.progressiveRunId) {
+        void generate().catch(() => undefined)
+        return
+      }
+      const controller = new AbortController()
+      const unsubscribe = useProgressiveImportStore.subscribe(() => {
+        if (!isProgressiveSummaryRequestCurrent(request, LocalBundleService.getActiveImportId())) controller.abort()
+      })
+      const dispose = () => { unsubscribe(); controller.abort(); activeLaunches.current.delete(dispose) }
+      activeLaunches.current.add(dispose)
+      void generate(controller.signal).catch(() => undefined).finally(() => {
+        unsubscribe()
+        activeLaunches.current.delete(dispose)
+      })
     }, 0)
 
     return () => window.clearTimeout(timer)

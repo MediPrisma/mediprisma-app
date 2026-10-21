@@ -13,6 +13,23 @@ describe('useMedcloudAutoSummary', () => {
   })
   afterEach(() => jest.restoreAllMocks())
 
+  it.each(['patient-changed', 'privacy-stale', 'cancelled', 'source-unavailable'] as const)('aborts an already claimed automatic launch on %s', async phase => {
+    let finish!: () => void
+    const generate = jest.fn((_signal?: AbortSignal) => new Promise<void>(resolve => { finish = resolve }))
+    jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
+    useMedcloudLaunchStore.getState().queueSummary({ messageId: 'active-cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'cloud-import' })
+    renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+      dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
+    const signal = generate.mock.calls[0][0]!
+    act(() => stopProgressiveImport('other-run', phase))
+    expect(signal.aborted).toBe(false)
+    act(() => stopProgressiveImport('run-a', phase))
+    expect(signal.aborted).toBe(true)
+    await act(async () => finish())
+  })
+
   it.each(['patient-changed', 'privacy-stale', 'cancelled', 'source-unavailable'] as const)('revokes a queued progressive summary on %s before data becomes ready', async phase => {
     const generate = jest.fn(async () => undefined)
     jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')

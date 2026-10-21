@@ -413,59 +413,6 @@ export function useMedicalSummaryOrchestrator() {
     setActiveBatch(next)
   }, [])
 
-  const runManualBatch = useCallback(async (jobs: GenerationPipeline[]) => {
-    const batchScopeKey = scopeKey
-    const batchId = beginBatch({
-      summary: jobs.some((job) => job.kind === 'summary'),
-      safety: jobs.some((job) => job.kind === 'safety' || job.includesSafety),
-    })
-    manualBatchIdsRef.current.add(batchId)
-    setManualBatchCounts((current) => ({
-      ...current,
-      [batchScopeKey]: (current[batchScopeKey] ?? 0) + 1,
-    }))
-    try {
-      await runPipelines(
-        jobs.map((job) => ({
-          ...job,
-          run: async () => {
-            // The local path is intentionally sequential, so an expected safety
-            // slot may contain stale state for a long time before its new job
-            // really begins. Mark ownership at the exact invocation boundary.
-            markManualPipelineStarted(batchId, job)
-            await job.run()
-          },
-        })),
-        () => cancelledBatchIdsRef.current.has(batchId),
-      )
-    } finally {
-      manualBatchIdsRef.current.delete(batchId)
-      cancelledBatchIdsRef.current.delete(batchId)
-      cancelledScopeKeysRef.current.delete(batchScopeKey)
-      setCancellingScopeKey((current) => (
-        current === batchScopeKey ? null : current
-      ))
-      setManualBatchCounts((current) => {
-        const remaining = Math.max(0, (current[batchScopeKey] ?? 0) - 1)
-        if (remaining > 0) return { ...current, [batchScopeKey]: remaining }
-        const next = { ...current }
-        delete next[batchScopeKey]
-        return next
-      })
-    }
-  }, [beginBatch, markManualPipelineStarted, runPipelines, scopeKey])
-
-  const generate = useCallback(async () => {
-    if (!await requestDemographicsForAi()) return
-    await runManualBatch([
-      { kind: 'summary', includesSafety: true, run: generateSummary },
-    ])
-  }, [
-    generateSummary,
-    requestDemographicsForAi,
-    runManualBatch,
-  ])
-
   const cancelTrackedBatch = useCallback((current: ActiveGenerationBatch) => {
     cancelledScopeKeysRef.current.add(current.scopeKey)
     setCancellingScopeKey(current.scopeKey)
@@ -490,6 +437,69 @@ export function useMedicalSummaryOrchestrator() {
     cancelSafety,
     cancelSummary,
   ])
+
+  const runManualBatch = useCallback(async (jobs: GenerationPipeline[], signal?: AbortSignal) => {
+    if (signal?.aborted) return
+    const batchScopeKey = scopeKey
+    const batchId = beginBatch({
+      summary: jobs.some((job) => job.kind === 'summary'),
+      safety: jobs.some((job) => job.kind === 'safety' || job.includesSafety),
+    })
+    const ownedBatch = activeBatchRef.current!
+    const cancelOwnedBatch = () => {
+      cancelledBatchIdsRef.current.add(batchId)
+      if (activeBatchRef.current?.id === batchId) cancelTrackedBatch(ownedBatch)
+    }
+    signal?.addEventListener('abort', cancelOwnedBatch, { once: true })
+    manualBatchIdsRef.current.add(batchId)
+    setManualBatchCounts((current) => ({
+      ...current,
+      [batchScopeKey]: (current[batchScopeKey] ?? 0) + 1,
+    }))
+    try {
+      await runPipelines(
+        jobs.map((job) => ({
+          ...job,
+          run: async () => {
+            // The local path is intentionally sequential, so an expected safety
+            // slot may contain stale state for a long time before its new job
+            // really begins. Mark ownership at the exact invocation boundary.
+            markManualPipelineStarted(batchId, job)
+            await job.run()
+          },
+        })),
+        () => cancelledBatchIdsRef.current.has(batchId),
+      )
+    } finally {
+      signal?.removeEventListener('abort', cancelOwnedBatch)
+      manualBatchIdsRef.current.delete(batchId)
+      cancelledBatchIdsRef.current.delete(batchId)
+      cancelledScopeKeysRef.current.delete(batchScopeKey)
+      setCancellingScopeKey((current) => (
+        current === batchScopeKey ? null : current
+      ))
+      setManualBatchCounts((current) => {
+        const remaining = Math.max(0, (current[batchScopeKey] ?? 0) - 1)
+        if (remaining > 0) return { ...current, [batchScopeKey]: remaining }
+        const next = { ...current }
+        delete next[batchScopeKey]
+        return next
+      })
+    }
+  }, [beginBatch, cancelTrackedBatch, markManualPipelineStarted, runPipelines, scopeKey])
+
+  const generateForLaunch = useCallback(async (signal?: AbortSignal) => {
+    if (signal?.aborted || !await requestDemographicsForAi() || signal?.aborted) return
+    await runManualBatch([
+      { kind: 'summary', includesSafety: true, run: generateSummary },
+    ], signal)
+  }, [
+    generateSummary,
+    requestDemographicsForAi,
+    runManualBatch,
+  ])
+
+  const generate = useCallback(() => generateForLaunch(), [generateForLaunch])
 
   const cancelGeneration = useCallback(() => {
     if (!scopeKey) return
@@ -1074,6 +1084,7 @@ export function useMedicalSummaryOrchestrator() {
     setAutoGenerate,
     generate,
     cancelGeneration,
+    generateForLaunch,
     retryFailed,
     isGenerating,
     isStopping: cancellingScopeKey === scopeKey,
