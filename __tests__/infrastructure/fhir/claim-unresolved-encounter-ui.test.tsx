@@ -40,10 +40,11 @@ it.each([false, true])('keeps Claim-derived visit relations only when source-res
  expect((claim.resource.extension as any[])[0].valueReference.reference).toBe('Encounter/visit')
  expect(collection.clinicalSource!.graph.references.find(edge => edge.origin.key === claim.key && edge.path === 'extension[0].valueReference')?.status).toBe(valid ? 'resolved' : 'unresolved')
 })
-it.each(['unresolved-and-valid', 'two-valid-targets', 'conflicting-dates', 'original-explicit'])('projects multiple Claim enrichments as an order-independent set: %s', async scenario => {
+it.each(['unresolved-and-valid', 'two-valid-targets', 'conflicting-dates', 'original-explicit', 'original-identifier', 'original-display'])('projects multiple Claim enrichments as an order-independent set: %s', async scenario => {
  const actual: unknown[] = []
  for (const reverse of [false, true]) {
-  const original = scenario === 'original-explicit'
+  const original = scenario.startsWith('original-')
+  const originalEncounter = scenario === 'original-identifier' ? { identifier: { system: 'https://synthetic.example/visits', value: 'unknown-visit' } } : scenario === 'original-display' ? { display: 'Unresolved visit' } : { reference: 'Encounter/a' }
   const claims = [
    { id: 'one', reference: scenario === 'unresolved-and-valid' ? 'https://foreign.example/fhir/Encounter/a' : 'Encounter/a', date: '2025-01-01' },
    { id: 'two', reference: scenario === 'two-valid-targets' || original ? 'Encounter/b' : 'Encounter/a', date: scenario === 'conflicting-dates' ? '2025-01-02' : '2025-01-01' },
@@ -52,7 +53,7 @@ it.each(['unresolved-and-valid', 'two-valid-targets', 'conflicting-dates', 'orig
   const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
    { resourceType: 'Patient', id: 'p' },
    ...['a', 'b'].map(id => ({ resourceType: 'Encounter', id, status: 'finished', class: { code: 'AMB' }, period: { start: '2025-01-01' }, serviceProvider: { display: 'Same provider' } })),
-   { resourceType: 'MedicationRequest', id: 'med', status: 'active', intent: 'order', medicationCodeableConcept: { text: 'Synthetic medication' }, requester: { display: 'Same provider' }, ...(original ? { encounter: { reference: 'Encounter/a' }, authoredOn: '2024-01-01' } : {}) },
+   { resourceType: 'MedicationRequest', id: 'med', status: 'active', intent: 'order', medicationCodeableConcept: { text: 'Synthetic medication' }, requester: { display: 'Same provider' }, ...(original ? { encounter: originalEncounter, authoredOn: '2024-01-01' } : {}) },
    ...claims.map(claim => ({ resourceType: 'Claim', id: claim.id, patient: { reference: 'Patient/p' }, created: claim.date, extension: [{ url: 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter', valueReference: { reference: claim.reference } }], item: [{ extension: [{ url: 'requestedService', valueReference: { reference: 'MedicationRequest/med' } }] }], procedure: [{ procedureCodeableConcept: { text: 'Procedure ' + claim.id } }] })),
   ].map(resource => ({ resource })) } as any)!
   const collection = projectClinicalAggregate(parsed.collection)
@@ -61,11 +62,12 @@ it.each(['unresolved-and-valid', 'two-valid-targets', 'conflicting-dates', 'orig
   const counts = []
   for (const id of ['a', 'b']) {
    const output: any = await tools.getEncounterDetails.execute!({ encounterId: id }, { toolCallId: 'synthetic', messages: [] })
-   if (scenario === 'two-valid-targets') { expect(output.incomplete).toBe(true); expect(output.canConcludeAbsence).toBe(false) }
+   if (['two-valid-targets', 'unresolved-and-valid', 'original-identifier', 'original-display'].includes(scenario)) { expect(output.incomplete).toBe(true); expect(output.canConcludeAbsence).toBe(false) }
    counts.push({ id, ui: result.current.get(id)?.medications.length ?? 0, tool: output.data.medications.length })
   }
   const medication = collection.medications[0]
-  const expectedReference = scenario === 'two-valid-targets' ? undefined : 'Encounter/a'
+  const expectedReference = ['two-valid-targets', 'unresolved-and-valid', 'original-identifier', 'original-display'].includes(scenario) ? undefined : 'Encounter/a'
+  if (original) expect(medication.encounter).toEqual(originalEncounter)
   expect(medication.encounter?.reference).toBe(expectedReference)
   expect(medication.authoredOn).toBe(original ? '2024-01-01' : scenario === 'conflicting-dates' ? undefined : '2025-01-01')
   expect(counts).toEqual([{ id: 'a', ui: expectedReference ? 1 : 0, tool: expectedReference ? 1 : 0 }, { id: 'b', ui: 0, tool: 0 }])

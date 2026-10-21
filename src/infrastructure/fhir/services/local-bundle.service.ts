@@ -1050,7 +1050,7 @@ function attachEncounterRefsForMeds(
   originalResources?: ReadonlyMap<string, object>,
 ): any[] {
   return meds.map((m) => {
-    if (m.encounter?.reference || hasUnresolvedClaimEncounter(m) || hasUnresolvedClaimEncounter(originalResources?.get(m.clinicalSourceNodeKey))) return m
+    if (m.encounter || hasUnresolvedClaimEncounter(m) || hasUnresolvedClaimEncounter(originalResources?.get(m.clinicalSourceNodeKey))) return m
     const date = toDateStr(m.authoredOn || m.effectiveDateTime)
     const requester = m.requester?.display?.trim() || ''
     if (!date || !requester) return m

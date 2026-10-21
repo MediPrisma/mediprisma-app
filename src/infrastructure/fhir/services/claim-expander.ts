@@ -277,8 +277,8 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
   // Apply the set once: Claim order never chooses a visit or date for an order.
   for (const [medication, candidates] of medicationClaims) {
     if (!medication.authoredOn && candidates.dates.size === 1) medication.authoredOn = [...candidates.dates][0]
-    if (medication.encounter?.reference) continue
-    if (candidates.encounters.size === 1) {
+    if (medication.encounter) continue
+    if (candidates.encounters.size === 1 && !candidates.unresolvedEncounter) {
       const reference = [...candidates.encounters][0]
       medication.encounter = { reference }
       unresolvedClaimEncounters.delete(medication)
