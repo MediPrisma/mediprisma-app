@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { assessMedicationCurrentness, medicationExpectedStartTimestamp, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
@@ -405,8 +406,13 @@ export function useMedicationTimeline(
     }
     if (!Array.isArray(medications) || medications.length === 0) return empty
 
+    const projected = projectMedicationComparisons(medications.map(hospitalMedicationDisplayRecord), med => med._sourceRecordComparison, med => {
+      const assessment = assessMedicationCurrentness(med, now)
+      return { dataOrigin: isVghtpeSource(med) ? 'hospital' : isMedcloudSource(med) ? 'medcloud' : undefined,
+        isInactive: !assessment.current, currentnessUncertain: assessment.uncertain }
+    })
     const prescriptionTypesByDrug = new Map<string, Set<TimelinePrescriptionType>>()
-    for (const medication of medications) {
+    for (const { record: medication } of projected) {
       if (!medication) continue
       const key = medicationClinicalIdentityKey(medication)
       if (!key) continue
@@ -430,24 +436,9 @@ export function useMedicationTimeline(
     let domainMin = Infinity
     let domainMax = -Infinity
 
-    const projected = projectMedicationComparisons(medications, med => med._sourceRecordComparison, med => {
-      const assessment = assessMedicationCurrentness(med, now)
-      return { dataOrigin: isVghtpeSource(med) ? 'hospital' : isMedcloudSource(med) ? 'medcloud' : undefined,
-        isInactive: !assessment.current, currentnessUncertain: assessment.uncertain }
-    })
-    const intervals = projected.flatMap(item => {
-      if (!item.sources || !item.collapsed) return [{ ...item, periodSource: item.record }]
-      // Collapse identical intervals only. A missing interval and a documented
-      // supply are separate evidence, drawn on the same comparison row.
-      const distinct = new Map<string, any>()
-      for (const source of item.sources) {
-        const assessment = assessMedicationCurrentness(source, now)
-        const key = JSON.stringify([medicationExpectedStartTimestamp(source),
-          medicationExpectedEndTimestamp(source), assessment.current, assessment.uncertain])
-        if (!distinct.has(key)) distinct.set(key, source)
-      }
-      return [...distinct.values()].map(periodSource => ({ ...item, periodSource }))
-    })
+    // Use the same hospital-owned interval and currentness as the list.
+    // Cloud intervals remain in sourceIntervalDescription for inspection.
+    const intervals = projected.map(item => ({ ...item, periodSource: item.record }))
     for (const { record: med, sources, periodSource, collapsed, comparison } of intervals) {
       if (!med) continue
       if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(periodSource.status).toLowerCase())) continue

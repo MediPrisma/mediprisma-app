@@ -1,0 +1,279 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "identifier": {
+    "value": "SYNTHETIC-CLINICAL-READING-NOT-A-REAL-PATIENT"
+  },
+  "timestamp": "2026-10-20T00:00:00Z",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-clinical-reading",
+        "name": [
+          {
+            "text": "整合檢視範例（合成資料）"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1960-01-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "synthetic-cloud-visit",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "status": "finished",
+        "class": {
+          "code": "AMB"
+        },
+        "period": {
+          "start": "2026-05-07T08:00:00+08:00"
+        },
+        "serviceProvider": {
+          "display": "臺北榮總;門診;0601160016"
+        },
+        "reasonCode": [
+          {
+            "text": "左側女性乳房未明示部位惡性腫瘤",
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "C50.912",
+                "display": "左側女性乳房未明示部位惡性腫瘤"
+              }
+            ]
+          },
+          {
+            "text": "第二型糖尿病，未伴有併發症",
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "E11.9",
+                "display": "第二型糖尿病，未伴有併發症"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "synthetic-hospital-visit",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "status": "finished",
+        "class": {
+          "code": "AMB"
+        },
+        "period": {
+          "start": "2026-05-07T08:00:00+08:00"
+        },
+        "serviceType": {
+          "text": "合成範例門診"
+        },
+        "diagnosis": [
+          {
+            "rank": 1,
+            "condition": {
+              "reference": "Condition/synthetic-cancer"
+            }
+          },
+          {
+            "rank": 2,
+            "condition": {
+              "reference": "Condition/synthetic-diabetes"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-cancer",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-hospital-visit"
+        },
+        "recordedDate": "2026-10-19",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "encounter-diagnosis"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Malignant neoplasm of unspecified site of left female breast",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "C50.912",
+              "display": "Malignant neoplasm of unspecified site of left female breast"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-diabetes",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-hospital-visit"
+        },
+        "recordedDate": "2026-10-19",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "encounter-diagnosis"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Type 2 diabetes mellitus without complications",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "E11.9",
+              "display": "Type 2 diabetes mellitus without complications"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "synthetic-topical-hospital",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-hospital-visit"
+        },
+        "authoredOn": "2026-05-07",
+        "status": "active",
+        "intent": "order",
+        "requester": {
+          "display": "臺北榮總"
+        },
+        "medicationCodeableConcept": {
+          "text": "Conlifu * oint 2% 5 g",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.name",
+              "code": "Conlifu * oint 2% 5 g",
+              "display": "Conlifu * oint 2% 5 g"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "X1 TUB T BID",
+            "timing": {
+              "code": {
+                "text": "BID"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 7,
+            "code": "d"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "synthetic-topical-cloud",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-cloud-visit"
+        },
+        "authoredOn": "2026-05-07",
+        "status": "completed",
+        "intent": "order",
+        "requester": {
+          "display": "臺北榮總;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "CONLIFU OINTMENT 2%",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "AC46101321",
+              "display": "CONLIFU OINTMENT 2%"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "BID"
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 7,
+            "code": "d"
+          },
+          "quantity": {
+            "value": 1
+          }
+        }
+      }
+    }
+  ]
+}

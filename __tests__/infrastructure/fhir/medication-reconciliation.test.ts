@@ -328,7 +328,8 @@ it('keeps a cloud dispensing authorization end from becoming a hospital treatmen
   expect(medicationExpectedEnd(hospital)).toBe('2026-10-25')
   expect(hospital._sourcePrescriptionRecords[1].dispenseRequest.validityPeriod.end).toBe('2026-12-31')
   const { result } = renderHook(() => useMedicationRows([hospital]))
-  expect(result.current[0].endDateIso).toBe('2026-10-25')
+  expect(result.current[0].endDateIso).toBeUndefined()
+  expect(result.current[0].sourceComparison?.records[1].endDateIso).toBe('2026-10-25')
 })
 
 it('does not add an unpaired structured IV route to a hospital full SIG recording PO', () => {

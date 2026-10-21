@@ -23,6 +23,53 @@ const VERIFIED_PRODUCTS = [
   { sourceName: 'Femara FC tab 2.5 mg', officialName: 'FEMARA FILM-COATED TABLETS 2.5MG', licence: '02022462', form: '膜衣錠' },
 ] as const
 
+/** A complete literal product descriptor for non-destructive comparison.
+ * A topical product's pack size is separate from its concentration: 2% 5 g
+ * can be compared with 2% when the other source omits its tube size. Two
+ * explicitly different pack sizes remain distinct. */
+function productDescriptor(value: unknown): { name: string; pack?: string } | undefined {
+  if (typeof value !== 'string') return undefined
+  let name = value.normalize('NFKC').toLowerCase()
+    .replace(/^[a-z][a-z\s-]*\(([a-z][a-z\s-]*)\)(?=[#*\s]*(?:tab|cap))/i, '$1 ')
+    .replace(/[#*@]/g, ' ').replace(/([a-z])(?=\d)/gi, '$1 ')
+    .replace(/\btablets?\b|\btabs?\b/g, 'tablet')
+    .replace(/\bcapsules?\b|\bcaps?\b/g, 'capsule')
+    .replace(/\boint\b/g, 'ointment').replace(/\s+/g, ' ').trim()
+  const strength = name.match(/\d+(?:\.\d+)?\s*(?:(?:mg|mcg|g|iu)\b|%)/i)
+  const form = name.match(/\b(?:tablet|capsule|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i)
+  if (!strength || !form) return undefined
+  const productName = name.slice(0, form.index!)
+    .replace(/\d+(?:\.\d+)?/g, ' ')
+    .replace(/\b(?:mg|mcg|g|ml|iu|sugar|film|coated|extended|sustained|modified|controlled|enteric|delayed|release|sc|fc|xr|sr|mr|cr|ec|oral|topical|oph|ophthalmic|sterile|dry|powder|for|use|intravenous|intramuscular|subcutaneous)\b/g, '')
+  if (!/\p{L}/u.test(productName)) return undefined
+  const topical = /\b(?:cream|ointment|gel)\b/.test(name)
+  if (topical && !/\d\s*%|\d\s*(?:mg|mcg|g|iu)\s*\/\s*(?:\d+(?:\.\d+)?\s*)?(?:g|ml)\b/.test(name)) return undefined
+  // A liquid's bottle/ampoule volume does not establish its drug strength.
+  // Preserve explicit drug amounts (including injectable powder strengths),
+  // percentages and mass/volume concentrations, but reject volume-only labels.
+  const liquid = /\b(?:injection|inj|solution|drops)\b/.test(name)
+  if (liquid && !/\d\s*(?:mg|mcg|iu)\b|\d\s*%|\d\s*g\s*\/\s*(?:\d+(?:\.\d+)?\s*)?(?:g|ml)\b/.test(name)) return undefined
+  const topicalPack = topical
+    ? name.match(/^(.*\d\s*(?:%|(?:mg|mcg|g|iu)\s*\/\s*(?:\d+(?:\.\d+)?\s*)?(?:g|ml)))\s+(\d+(?:\.\d+)?\s*(?:g|ml))(?:\s*\/?\s*(?:tub|tube|bottle))?$/) : undefined
+  if (topicalPack) name = topicalPack[1]
+  return { name: name.replace(/\s+/g, ''), ...(topicalPack ? { pack: topicalPack[2].replace(/\s+/g, '') } : {}) }
+}
+
+/** Suggest a comparison from complete recorded product names when raw FHIR
+ * has no MedicationKnowledge. This never verifies a product code, confirms
+ * prescription identity, or removes a source record. */
+export function hospitalProductMayMatchConcept(concept: any, cloudConcept: any): boolean {
+  const codings = concept?.coding ?? []
+  if (codings.some((coding: any) => coding.system === GENERIC_SYSTEM)) return false
+  const source = codings.filter((coding: any) => [NAME_SYSTEM, PRODUCT_SYSTEM].includes(coding.system))
+  const names = [...new Set(source.flatMap((coding: any) => [coding.code, coding.display]).filter(Boolean))]
+  const cloud = cloudConcept?.coding?.filter((coding: any) => isNhiDrugCodeSystem(coding.system) && coding.code) ?? []
+  if (names.length !== 1 || cloud.length !== 1) return false
+  const hospital = productDescriptor(names[0]), other = productDescriptor(cloud[0].display)
+  return !!hospital && !!other && hospital.name === other.name
+    && (!hospital.pack || !other.pack || hospital.pack === other.pack)
+}
+
 /** Compare a recorded hospital product with the official knowledge already
  * linked to this cloud prescription. Never creates an NHI code. Name-only
  * outpatient rows need a reviewed complete product alias; an explicitly
@@ -83,24 +130,12 @@ export function hospitalProductMayMatchKnowledge(concept: any, cloudCode: string
     || !knowledge.meta?.tag?.some((tag: any) => tag.system === SNAPSHOT_TAG && tag.code)) return false
   const coding = knowledge.code?.coding?.filter((item: any) => isNhiDrugCodeSystem(item.system)) ?? []
   if (coding.length !== 1 || String(coding[0].code).toUpperCase() !== cloudCode) return false
-  const source = (concept?.coding ?? []).filter((item: any) => [NAME_SYSTEM, PRODUCT_SYSTEM].includes(item.system))
-  if (!source.length || concept.coding.some((item: any) => item.system === GENERIC_SYSTEM)) return false
-  const names = [...new Set(source.flatMap((item: any) => [item.display, item.code]).filter(Boolean))]
-  if (names.length !== 1) return false
-  const separate = (name: string) => name.replace(/([a-z])(?=\d)/gi, '$1 ')
-  const complete = (name: string) => /\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iu|%)(?:\b|$)/i.test(name)
-    && /\b(?:tab(?:let)?s?|cap(?:sule)?s?|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i.test(separate(name))
-  const normalize = (name: string) => name.normalize('NFKC').toLowerCase()
-    // The bridge explicitly writes Generic (Product) in this name shape.
-    .replace(/^[a-z][a-z\s-]*\(([a-z][a-z\s-]*)\)(?=[#*\s]*(?:tab|cap))/i, '$1 ')
-    .replace(/[#*@]/g, ' ').replace(/([a-z])(?=\d)/gi, '$1 ').replace(/\btablets?\b|\btabs?\b/g, 'tablet')
-    .replace(/\bcapsules?\b|\bcaps?\b/g, 'capsule').replace(/\s+/g, '')
-  const hospitalName = String(names[0]), officialName = String(coding[0].display ?? '')
+  const sourceCoding = concept?.coding?.find((item: any) => [NAME_SYSTEM, PRODUCT_SYSTEM].includes(item.system))
+  const hospitalName = String(sourceCoding?.display || sourceCoding?.code || '')
   const form = String(knowledge.doseForm?.text ?? '')
   if (!form) return false
   if (/錠|tablet/i.test(form) && !/tab/i.test(hospitalName)) return false
   if (/膠囊|capsule/i.test(form) && !/cap/i.test(hospitalName)) return false
   if (/注射|injection/i.test(form) && !/inj/i.test(hospitalName)) return false
-  return complete(hospitalName.replace(/[#*@]/g, ' ')) && complete(officialName)
-    && normalize(hospitalName) === normalize(officialName)
+  return hospitalProductMayMatchConcept(concept, knowledge.code)
 }

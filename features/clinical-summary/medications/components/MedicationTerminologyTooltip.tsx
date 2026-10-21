@@ -47,7 +47,7 @@ export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicati
 }
 
 interface MedicationTerminologyTooltipProps {
-  medication: Pick<MedicationRow, 'drugTerminology' | 'hospitalMedicationName' | 'nhiDrugCode' | 'reconciledOrderIds' | 'sourceOrderIdentifiers' | 'sourceComparison'>
+  medication: Pick<MedicationRow, 'drugTerminology' | 'hospitalMedicationName' | 'nhiDrugCode' | 'reconciledOrderIds' | 'sourceOrderIdentifiers' | 'sourceComparison' | 'dataOrigin'>
   enabled: boolean
   /** Facts about THIS prescription — dose, frequency, days supplied — shown
    *  under the drug-master rows. The card above describes the drug; this
@@ -135,7 +135,7 @@ export function MedicationTerminologyTooltip({
             ))}
           </dl>
           {hospitalName && <HospitalMedicationNameDetails name={hospitalName} />}
-          {medication.sourceComparison && <SourcePrescriptionComparison comparison={medication.sourceComparison} />}
+          {medication.sourceComparison && <SourcePrescriptionComparison comparison={medication.sourceComparison} displayOrigin={medication.dataOrigin} />}
           {integrated && !medication.sourceComparison && (
             <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1.5">
               {locale === 'en' ? 'The hospital and MediCloud records were matched to this prescription. Original records are retained.' : '這筆藥囑已整合院內與健保雲端紀錄，原始來源均保留。'}
