@@ -46,6 +46,13 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
     id: 'cloud-breast-history', effectiveDateTime: '2026-05-24', extension: [],
     conclusion: 'Synthetic prior breast report for source-specific history. No suspicious mass. The prior examination is preserved under the original NHI title.',
   } })
+  if (process.env.IMAGING_TEXT_ATTACHMENTS === '1') {
+    for (const entry of bundle.entry) {
+      if (!['hospital-imaging-0', 'cloud-imaging-0', 'cloud-breast-history'].includes(entry.resource?.id)) continue
+      entry.resource.presentedForm = [{ contentType: 'text/plain; charset=utf-8', data: Buffer.from(entry.resource.conclusion).toString('base64') }]
+      delete entry.resource.conclusion
+    }
+  }
   const fixture = testInfo.outputPath('synthetic-imaging.json')
   await fs.mkdir(testInfo.outputDir, { recursive: true })
   await fs.writeFile(fixture, JSON.stringify(bundle))

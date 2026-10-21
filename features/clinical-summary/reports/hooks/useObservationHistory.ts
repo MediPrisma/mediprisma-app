@@ -3,6 +3,9 @@ import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clini
 import { canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 import { getCodeableConceptText } from '../utils/fhir-helpers'
+import { sharedReportNarrative } from '@/src/shared/utils/shared-report-grouping'
+import { getReportDate } from '@/src/shared/utils/report-identity'
+import { inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
 
 export interface ObservationHistoryItem {
   id: string
@@ -44,6 +47,8 @@ export interface CompositeHistoryItem {
 export interface ReportHistoryItem {
   id: string
   date: string
+  /** Imaging examination day, already projected by the source date policy. */
+  calendarDate?: string
   conclusion?: string
   notes: string[]
   status?: string
@@ -344,11 +349,17 @@ export function useReportHistory(reportCode?: string) {
       const notes = Array.isArray(dr.note)
         ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
         : []
+      // The source history must retain text supplied only as an attachment,
+      // just as the report row and shared-source narrative do. Leave binary
+      // and HTML attachments to their existing viewers.
+      const attachmentText = sharedReportNarrative({ presentedForm: dr.presentedForm })
+      if (attachmentText) notes.push(attachmentText)
       if (!conclusion && notes.length === 0) return
 
       items.push({
         id: dr.id || `dr-${dr.issued || dr.effectiveDateTime || index}`,
-        date: dr.effectiveDateTime || dr.issued || '',
+        date: getReportDate(dr) || '',
+        calendarDate: inferReportDisplayGroup(dr) === 'imaging' ? getReportDate(dr)?.slice(0, 10) : undefined,
         conclusion,
         notes,
         status: dr.status,
