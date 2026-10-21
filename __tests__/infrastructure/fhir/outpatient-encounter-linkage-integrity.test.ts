@@ -1,4 +1,5 @@
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
+import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { reconcileOutpatientEncounters } from '@/src/infrastructure/fhir/services/outpatient-encounter-reconciliation'
 
@@ -26,7 +27,7 @@ it('retargets hospital-linked medication, lab, procedure, and imaging rows after
   ]
   const original = JSON.stringify(resources)
   const imported = LocalBundleService.parse({ resourceType: 'Bundle', type: 'collection', entry: resources.map(resource => ({ resource })) } as any)!
-  const collection = imported.collection
+  const collection = projectClinicalAggregate(imported.collection)
 
   expect(collection.encounters).toHaveLength(1)
   expect(collection.encounters[0].id).toBe('cloud-visit')
