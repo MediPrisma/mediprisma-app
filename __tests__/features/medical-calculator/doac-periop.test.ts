@@ -369,6 +369,13 @@ describe('third review by the coordinator', () => {
     expect(formatLocal(night.resume.firstDose!)).toBe('11-03 08:00')
     expect(allText(night)).not.toContain('早上那一劑（')
     expect(allText(plan({ procedure_kind: 'minimal', haemostasis: 'yes' }))).toContain('極低風險處置當天早上那一劑（11-03 08:00）不服用')
+    // Restart past midnight: the evening dose is not called optional (#review re9 Opus 1).
+    const lateEnd = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T13:00', surgery_end_at: '2026-11-03T18:30' })
+    expect(times(lateEnd.resume.skippedAfter)).toEqual(['11-03 20:00'])
+    expect(allText(lateEnd)).toContain('本例恢復時間未到，11-03 20:00 那一劑也不服')
+    expect(allText(lateEnd)).not.toContain('當晚那一劑可選（')
+    // Restart not yet known, procedure at midnight: the morning dose is named ahead (#review re9 Opus 3).
+    expect(allText(plan({ procedure_kind: 'minimal', surgery_at: '2026-11-03T00:00', surgery_end_at: '' }))).toContain('極低風險處置當天早上那一劑（11-03 08:00）不服用')
     // Low risk names Figure 15’s optional evening dose it leaves out.
     expect(allText(plan({ procedure_kind: 'low' }))).toContain('低風險列另把處置當晚一劑畫為可選')
   })
