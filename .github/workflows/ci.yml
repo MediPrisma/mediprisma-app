@@ -95,6 +95,39 @@ jobs:
         with:
           name: gallery-regression-results
           path: test-results/
+  import-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: e2e-fake-api-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: e2e-mediprisma.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: e2e-mediprisma
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: e2e-mediprisma.appspot.com
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1234567890"
+      NEXT_PUBLIC_FIREBASE_APP_ID: "1:1234567890:web:e2e000000000000000000"
+      TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      - run: npx playwright install --with-deps chromium
+      - name: Build the production /app static artifact
+        run: npm run build:mediprisma
+      - name: Native Worker and original FHIR/image roundtrip
+        run: npx playwright test -c playwright.import-production.config.ts
+        env:
+          E2E_STATIC_DIR: out
+          E2E_APP_PATH: /app
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: import-worker-results
+          path: test-results/
   ci:
     runs-on: ubuntu-latest
     steps:

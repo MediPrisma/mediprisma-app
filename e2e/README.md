@@ -30,6 +30,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `smoke.spec.ts` | Import Bundle and render patient |
 | `original-fhir-download.spec.ts` | Original FHIR download preserves all source data and attachments across reload and repeated import; a new tab cannot download another tab's data |
 | `merged-fhir-download.spec.ts` | Cloud + hospital source resources, provenance, unknown fields and four distinct embedded images remain byte-identical through download, reload and repeated reimport in a clean browser context |
+| `sdk-import-worker.spec.ts` | Production Worker converts SDK JSON with distinct results; the downloaded FHIR is importable again |
 | `medcloud-handoff.spec.ts` | Cloud Wildcatch observes the first stable import target, immediately transfers a Bundle with `DataTransfer`, receives the settled event, and renders the patient |
 | `demo-data.spec.ts` | Load／identify／exit built-in demo |
 | `medical-summary-cumulative-navigation.spec.ts` | AI summary → cumulative report navigation from every non-report clinical tab after Reports background pre-mount |
@@ -132,6 +133,39 @@ emulator config above.
 8. Update the coverage table above when adding a new spec.
 
 ## CI
+
+### Production import Worker
+
+The CI `import-worker` job builds the `/app` static export with fake Firebase
+metadata and runs both strict Worker specs on every code PR and master push.
+Its browser evidence and JSON report are uploaded as `import-worker-results`.
+
+For a server build, use the fake Firebase variables from `playwright.config.ts`,
+run `npm run build` without `GITHUB_PAGES` or `DEPLOY_BASE_PATH`, then run
+`npx playwright test -c playwright.import-production.config.ts`. This mode
+starts `next start` on port 3022 and requires native conversion Worker success,
+including the transferred original-FHIR Blob, on every import. A successful
+main-thread fallback cannot pass it. The default development profile still
+tests the supported fallback path.
+
+For deployment parity, run `npm run build:mediprisma` with the same fake Firebase
+variables, set `E2E_STATIC_DIR=out` and `E2E_APP_PATH=/app`, then run the same
+Playwright command. It serves the static artifact under `/app` on loopback;
+it does not try to use `next start` for an `output: 'export'` build.
+
+To verify the real deployed site instead of starting a server, set
+`E2E_BASE_URL=https://mediprisma.tw` and `E2E_APP_PATH=/app` before running the
+same command. Only synthetic input is used; Firebase anonymous authentication
+is stubbed by the shared fixture, while app assets, conversion, local storage,
+downloads and image decoding are real.
+These specs do not generate AI summaries or submit data to a server; the
+collector only observes AI requests, which these import/download flows do not
+perform. Worker startup still has the application's existing two-second
+deadline. A slow network can therefore fail this strict profile through the
+supported fallback; use the attached `created`/`ready` timestamps and native
+`error` event to distinguish latency from a module startup exception.
+Set `E2E_IMPORT_FIXTURE_TIMESTAMP` to an ISO timestamp when replaying identical
+merged-FHIR bytes across before/after builds; it defaults to the current time.
 
 `.github/workflows/e2e.yml` runs the main suite on pushes to `master`, installs Chromium with system dependencies, and uploads `playwright-report/` for seven days. It is currently independent of the GitHub Pages deploy gate.
 
