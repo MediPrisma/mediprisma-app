@@ -32,7 +32,9 @@ export function normalizeImagingReportCopy(value: string): string {
     if (!birads || new RegExp(String.raw`^(?:Impression\s*:?\s*)?BI-RADS\s+(?:category\s+)?${birads}\b`, 'i').test(body)) text = body
   }
   text = text.replace(/^Impression\s*:?\s*/i, '')
-  return text.toLowerCase().replace(/\s+/g, '')
+  // Keep token boundaries: list item "1. 2 cm" must never equal "1.2 cm".
+  // Missing spaces within words are uncertain content, not an automatic match.
+  return text.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
 function sourceOf(report: Report): Source | undefined {

@@ -52,6 +52,17 @@ describe('cross-source imaging reports', () => {
     expect(buildReportsData(copies).reportRows).toHaveLength(2)
   })
 
+  it('preserves numeric and word boundaries when normalizing whitespace', () => {
+    const reports = pair()
+    const text = 'Findings: 1. 2 cm pulmonary nodule in the left upper lobe. No pleural effusion. Follow-up imaging is recommended.'
+    reports[0].conclusion = text
+    reports[1].conclusion = text.replace('1. 2', '1.2')
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    reports[1].conclusion = text.replaceAll(' ', '  \n ')
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+    expect(normalizeImagingReportCopy('no table')).not.toBe(normalizeImagingReportCopy('notable'))
+  })
+
   it.each([
     ['another patient', { subject: { reference: 'Patient/other' } }],
     ['another day', { effectiveDateTime: '2026-06-23' }],
