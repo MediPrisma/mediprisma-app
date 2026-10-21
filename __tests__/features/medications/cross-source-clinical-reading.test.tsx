@@ -1,5 +1,6 @@
-import { render, renderHook, screen } from '@testing-library/react'
+import { render, renderHook, screen, within } from '@testing-library/react'
 import fixture from '@/e2e/fixtures/cross-source-prescriptions.json'
+import copiesFixture from '@/e2e/fixtures/cross-source-prescription-copies.json'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { groupMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
@@ -17,6 +18,27 @@ jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience:
 jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage: () => ({ locale: 'zh-TW', t: { medications: {} } }) }))
 jest.mock('@/src/application/hooks/use-resource-anchor.hook', () => ({ useResourceAnchor: () => null }))
 jest.mock('@/src/shared/components/TapTooltip', () => ({ TapTooltip: ({ children, content }: any) => <>{children}<div>{content}</div></> }))
+
+it('projects one hospital and two cloud copies as one comparison while preserving all source facts', () => {
+  const original = JSON.stringify(copiesFixture)
+  const collection = LocalBundleService.parse(copiesFixture)!.collection
+  const { result } = renderHook(() => useMedicationRows(collection.medications))
+  expect(collection.medications).toHaveLength(3)
+  expect(result.current).toHaveLength(1)
+  const row = result.current[0]
+  expect(row).toMatchObject({ id: 'synthetic-order-a', dataOrigin: 'hospital', isInactive: true,
+    totalQuantity: undefined, durationDays: 28, endDateIso: '2026-06-03' })
+  expect(row.sourceComparison?.status).toBe('ambiguous')
+  expect(row.sourceComparison?.records).toHaveLength(3)
+  expect(row.reconciledOrderIds).toHaveLength(3)
+  expect(JSON.stringify(copiesFixture)).toBe(original)
+  const exported = mapMedications(collection.medications, 'Patient/synthetic-export').entries
+  expect(exported).toHaveLength(3)
+  const { container } = render(<MedicationItem medication={row} />)
+  const details = within(container.querySelector('details')!)
+  expect(details.getByText(/1 筆院內藥囑 \/ 2 筆雲端紀錄/)).toBeInTheDocument()
+  expect(details.getAllByText(/總量 28/)).toHaveLength(2)
+})
 
 it('compares possible source copies without deleting either, retaining two real identical orders, self-pay and cancellation', () => {
   const before = JSON.stringify(fixture)

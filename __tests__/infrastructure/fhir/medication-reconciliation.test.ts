@@ -134,7 +134,7 @@ it('flags all four source records for two genuine identical orders and two unide
   expect(records.every(record => record._sourceRecordComparison.status === 'ambiguous')).toBe(true)
   expect(records[0]._sourceRecordComparison.references).toEqual(['MedicationRequest/h1', 'MedicationRequest/h2', 'MedicationRequest/c1', 'MedicationRequest/c2'])
   const { result } = renderHook(() => useMedicationRows(records))
-  expect(result.current).toHaveLength(2)
+  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['cloud-med', 'cloud-bid-order']))
   expect(result.current.map(row => row.id)).toEqual(['h1', 'h2'])
   expect(result.current[0].sourceComparison?.records).toHaveLength(4)
   expect(result.current[0].sourceComparison?.records.filter(record => record.dataOrigin === 'hospital').map(record => record.id)).toEqual(['h1', 'h2'])
@@ -272,7 +272,7 @@ it.each(['urn:oid:vgh.case', 'urn:oid:vgh.medication.order', 'https://synthetic.
   expect(hospital._sourceRecordComparison.status).toBe('candidate')
 })
 
-it('keeps both cloud rows individually visible when one hospital row cannot be uniquely paired', () => {
+it('shows compatible cloud copies in one comparison without deleting or confirming any source order', () => {
   const { hospital, cloud } = fixture()
   delete hospital.identifier; delete cloud.identifier
   hospital.status = cloud.status = 'completed'
@@ -280,8 +280,42 @@ it('keeps both cloud rows individually visible when one hospital row cannot be u
   const orders = reconcileMedicationRequests([hospital, cloud, secondCloud])
   expect(orders).toHaveLength(3)
   const { result } = renderHook(() => useMedicationRows(orders))
-  expect(result.current.map(row => row.id)).toEqual(['cloud-med', 'cloud-second-real-order'])
+  expect(result.current.map(row => row.id)).toEqual(['hospital-med'])
+  expect(result.current[0].sourceComparison?.status).toBe('ambiguous')
+  expect(result.current[0].sourceComparison?.records.map(record => record.id)).toEqual([
+    'hospital-med', 'cloud-med', 'cloud-second-real-order',
+  ])
+  expect(result.current[0].reconciledOrderIds).toHaveLength(3)
+  expect(orders.every(order => !order._reconciledSourceReferences)).toBe(true)
+  expect(hospital.dispenseRequest).toBeUndefined()
+})
+
+it.each(['quantity', 'frequency', 'status'])('keeps surplus cloud rows visible when %s differs', field => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier
+  const secondCloud = JSON.parse(JSON.stringify(cloud))
+  secondCloud.id = 'cloud-conflicting-order'
+  if (field === 'quantity') {
+    hospital.dispenseRequest = { quantity: { value: 28 } }
+    secondCloud.dispenseRequest.quantity = { value: 56 }
+  }
+  if (field === 'frequency') secondCloud.dosageInstruction = [{ text: 'BID' }]
+  if (field === 'status') secondCloud.status = 'stopped'
+  const orders = reconcileMedicationRequests([hospital, cloud, secondCloud])
+  const { result } = renderHook(() => useMedicationRows(orders))
+  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['cloud-med', 'cloud-conflicting-order']))
   expect(result.current.every(row => row.sourceComparison?.records.length === 3)).toBe(true)
+})
+
+it('does not fold contradictory cloud regimens through an incomplete hospital record', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier; delete hospital.dosageInstruction
+  cloud.dosageInstruction = [{ text: 'QD' }]
+  const secondCloud = { ...cloud, id: 'cloud-bid-order', dosageInstruction: [{ text: 'BID' }] }
+  const orders = reconcileMedicationRequests([hospital, cloud, secondCloud])
+  const { result } = renderHook(() => useMedicationRows(orders))
+  expect(result.current).toHaveLength(2)
+  expect(result.current[0].sourceComparison?.warnings).toContain('source-facts-differ')
 })
 
 it('keeps a cloud dispensing authorization end from becoming a hospital treatment end after a confirmed merge', () => {

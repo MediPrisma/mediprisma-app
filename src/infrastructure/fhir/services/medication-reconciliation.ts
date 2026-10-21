@@ -254,7 +254,11 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     const unique = hospitalGroup.size === 1 && cloudGroup.size === 1
     const contextInferred = group.some(member => identity(member)?.inferred || identity(member)?.visitUnconfirmed)
     const visitCodingConflict = group.some(member => identity(member)?.visitCodingConflict)
-    const factsConflict = [...hospitalGroup].some(member => [...cloudGroup].some(partner => conflictingPairs.get(member)?.has(partner)))
+    const cloudMembers = [...cloudGroup]
+    const factsConflict = [...hospitalGroup].some(member => cloudMembers.some(partner => conflictingPairs.get(member)?.has(partner)))
+      // An incomplete hospital record must not make two contradictory cloud
+      // regimens look like compatible copies of each other.
+      || cloudMembers.some((member, index) => cloudMembers.slice(index + 1).some(partner => hasConflict(member, partner)))
     const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedPrescriptionIdentifier(order, other) && !contextInferred && !visitCodingConflict && !factsConflict
     const statusConflict = !confirmed && [...hospitalGroup].some(member => ['cancelled', 'stopped', 'entered-in-error', 'on-hold'].includes(member.status))
       && [...cloudGroup].some(member => ['active', 'unknown'].includes(member.status || 'unknown'))
