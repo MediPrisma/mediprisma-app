@@ -277,3 +277,13 @@ it('keeps overview, visit detail and IPS consistent without presenting cancellat
   expect(exported.filter(resource => JSON.stringify(resource.note).includes('self-pay'))).toHaveLength(1)
   expect(exported.some(resource => JSON.stringify(resource.note).includes('status: cancelled'))).toBe(true)
 })
+
+it('signals source fact conflicts in the existing row button without adding a disclosure row',()=>{
+ const collection=LocalBundleService.parse(copiesFixture)!.collection
+ const row=renderHook(()=>useMedicationRows(collection.medications)).result.current[0]
+ row.sourceComparison={...row.sourceComparison!,warnings:['source-facts-differ']}
+ const {container}=render(<MedicationItem medication={row}/>)
+ expect(screen.getByRole('button',{name:'差異 (院內)：查看來源紀錄'})).toBeInTheDocument()
+ expect(screen.getByText('差異',{exact:true})).toBeInTheDocument()
+ expect(container.querySelector('details')).toBeNull()
+})

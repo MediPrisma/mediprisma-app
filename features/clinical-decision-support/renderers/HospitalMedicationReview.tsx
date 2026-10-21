@@ -17,7 +17,7 @@ export function HospitalMedicationReview({ evidence, locale }: {
     <Popover>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs shadow-none" data-testid="cdss-hospital-medication-review"
-          aria-label={english ? `Medication review: ${pending.length} hospital prescriptions` : `用藥核對：${pending.length} 筆院內處方`}>
+          aria-label={english ? `Medication review ${pending.length} hospital prescriptions` : `用藥核對 ${pending.length} 筆院內處方`}>
           {english ? 'Medication review' : '用藥核對'} <span className="tabular-nums">{pending.length}</span>
         </Button>
       </PopoverTrigger>

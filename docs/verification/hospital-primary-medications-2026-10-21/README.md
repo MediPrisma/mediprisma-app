@@ -1,5 +1,7 @@
 # 院內為主的緊湊用藥列
 
+本頁截圖範圍為清單來源列。後續 CDSS 工具列與藥膏去重的操作驗證見 [hospital-medication-cdss.spec.ts](../../../e2e/tests/hospital-medication-cdss.spec.ts)。
+
 以同一份 `e2e/fixtures/cross-source-prescription-copies.json` 合成資料驗證，固定時間 2026-10-21，1440 × 1100 視窗、相同清單位置。沒有真實病人資料。
 
 - Before：`cb25ef88e`，來源說明及三筆明細預設佔用清單空間。

@@ -156,8 +156,10 @@ export function MedicationItem({
   const sourceLabel = candidate ? (locale === 'en' ? 'Compare sources' : '跨來源待核對') : integrated ? (locale === 'en' ? 'Hospital + cloud' : '院內＋雲端')
     : medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
       : medication.dataOrigin === 'medcloud' ? (locale === 'en' ? 'MediCloud' : '雲端') : undefined
-  const sourceButtonLabel = medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
+  const sourceOriginLabel = medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
     : medication.dataOrigin === 'medcloud' ? (locale === 'en' ? 'MediCloud' : '雲端') : (locale === 'en' ? 'Sources' : '來源')
+  const sourceFactsDiffer = medication.sourceComparison?.warnings?.some(warning => ['source-facts-differ', 'source-status-conflict'].includes(warning))
+  const sourceButtonLabel = sourceFactsDiffer ? (locale === 'en' ? 'Diff.' : '差異') : sourceOriginLabel
   const sourceDescription = medication.sourceComparison
     ? <SourcePrescriptionComparison comparison={medication.sourceComparison} /> : integrated
     ? (locale === 'en' ? 'One matched prescription, with hospital and MediCloud source records retained.' : '同一筆藥囑的院內與健保雲端資料已整合，兩邊原始紀錄均保留。')
@@ -569,7 +571,7 @@ export function MedicationItem({
                   <button
                     type="button"
                     data-medication-source-trigger
-                    aria-label={`${sourceButtonLabel}${locale === 'en' ? ': View source records' : '：查看來源紀錄'}`}
+                    aria-label={`${sourceButtonLabel}${sourceFactsDiffer ? ` (${sourceOriginLabel})` : ''}${locale === 'en' ? ': View source records' : '：查看來源紀錄'}`}
                     onClick={event => event.stopPropagation()}
                     className="inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80 underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >

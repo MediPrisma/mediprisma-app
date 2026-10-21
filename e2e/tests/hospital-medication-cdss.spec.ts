@@ -55,7 +55,7 @@ test('a confirmed medication statement activates the existing ingredient rule af
   delete resource.dispenseRequest
   delete resource.authoredOn
   await page.getByTestId('import-bundle-input').first().setInputFiles({ name: 'fictional-confirmed-medication.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) })
-  await expect(page.getByRole('button', { name: '用藥核對：2 筆院內處方' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '用藥核對 2 筆院內處方' })).toBeVisible()
   await openMedicationSafety(page)
   await expect(page.getByTestId('cdss-evidence-row-hf-harm:nsaid')).toContainText('Diclofenac sodium')
   await expect(page.getByTestId('cdss-evidence-row-hf-harm:nsaid')).not.toContainText('目前使用待確認')
@@ -119,7 +119,7 @@ test('an unconfirmed hospital MRA prescription retains the severe-hyperkalemia s
   await page.getByTestId('import-bundle-input').first().setInputFiles({
     name: 'fictional-mra-review.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(reviewScenario('mra'))),
   })
-  await expect(page.getByRole('button', { name: '用藥核對：1 筆院內處方' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '用藥核對 1 筆院內處方' })).toBeVisible()
   await page.locator('summary').filter({ has: page.getByRole('heading', { name: /^治療/ }) }).click()
   const safety = page.getByTestId('cdss-section-module-heart-failure-mra-safety')
   await expect(safety).toContainText('優先安全處理')
@@ -143,7 +143,7 @@ test('a recent hospital apixaban order reaches AF reconciliation without an abse
   await page.getByTestId('import-bundle-input').first().setInputFiles({
     name: 'fictional-af-review.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(reviewScenario('oac'))),
   })
-  await expect(page.getByRole('button', { name: '用藥核對：1 筆院內處方' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '用藥核對 1 筆院內處方' })).toBeVisible()
   await page.getByTestId('cdss-disease-switch-atrial-fibrillation-cdss').click()
   await expect(page.getByTestId('cdss-af-visit-flow')).toBeVisible()
   await page.getByTestId('cdss-af-treatment').getByRole('button').first().click()
@@ -171,7 +171,7 @@ test('Conlifu copies without medication knowledge use a hospital row and a toolb
   await page.keyboard.press('Escape')
   await openCdss(page)
   const feature=page.getByTestId('live-clinical-decision-support')
-  const trigger=feature.locator('header').getByRole('button',{name:'用藥核對：1 筆院內處方'})
+  const trigger=feature.locator('header').getByRole('button',{name:'用藥核對 1 筆院內處方'})
   await expect(trigger).toBeVisible()
   await expect(page.getByRole('dialog',{name:'院內用藥核對'})).not.toBeVisible()
   await trigger.click()
@@ -181,3 +181,4 @@ test('Conlifu copies without medication knowledge use a hospital row and a toolb
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
 })
+
