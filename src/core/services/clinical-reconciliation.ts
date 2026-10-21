@@ -90,4 +90,3 @@ export function selectClinicalSourceNodes(result: ClinicalReconciliationResult) 
 export function selectClinicalSourceResources(result: ClinicalReconciliationResult) {
   return selectClinicalSourceNodes(result).map(node => node.resource)
 }
-

@@ -312,4 +312,3 @@ export function buildClinicalSourceGraph(captures: readonly ClinicalSourceCaptur
   refs.sort((a, b) => a.origin.key.localeCompare(b.origin.key) || a.path.localeCompare(b.path) || (a.reference ?? '').localeCompare(b.reference ?? ''))
   return Object.freeze({ nodes: Object.freeze(nodes), references: Object.freeze(refs) })
 }
-
