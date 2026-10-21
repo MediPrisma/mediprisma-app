@@ -407,6 +407,13 @@ it.each([
   expect(hospital.dosageInstruction[0].doseAndRate).toBeUndefined()
 })
 
+it('does not treat a recorded rate as structured evidence for a text-only dose', () => {
+  const { hospital, cloud } = fixture()
+  hospital.dosageInstruction = [{ text: '1 TAB PO QD', doseAndRate: [{ rateQuantity: { value: 1, unit: 'mL/h' } }] }]
+  cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } }, doseAndRate: [{ doseQuantity: { value: 2, unit: 'TAB' } }] }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+})
+
 it.each([
   [{ rateQuantity: { value: 1, unit: 'mL/h' } }, { rateQuantity: { value: 2, unit: 'mL/h' } }],
   [{ rateRatio: { numerator: { value: 1, unit: 'mg' }, denominator: { value: 1, unit: 'h' } } },

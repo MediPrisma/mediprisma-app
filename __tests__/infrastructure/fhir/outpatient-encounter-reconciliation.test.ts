@@ -3,6 +3,15 @@ import { reconcileOutpatientEncounters } from '@/src/infrastructure/fhir/service
 import { extractEncounterIcds, buildIcdDictionary, localizedIcdDescription } from '@/src/shared/utils/icd-lookup'
 import { renderHook } from '@testing-library/react'
 import { useVisitHistory } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
+import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
+
+it('keeps two hospital visits separate when the cloud member of a three-source comparison is outside the view', () => {
+  const comparison = { status: 'ambiguous', references: ['Encounter/h1', 'Encounter/h2', 'Encounter/c1'] }
+  const visits = ['h1', 'h2'].map(id => ({ id, _sourceRecordComparison: comparison }))
+  const projected = projectEncounterComparisons(visits)
+  expect(projected).toHaveLength(2)
+  expect(projected.map(visit => (visit as any)._comparisonEncounterIds)).toEqual([['h1'], ['h2']])
+})
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW' }),
