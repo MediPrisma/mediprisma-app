@@ -349,6 +349,17 @@ describe('curateForIps — medications (現用藥 / 慢箋為主, deduped)', () 
     expect(out.medications.map((m) => m.id)).toEqual(['chronic'])
   })
 
+  it('retains an uncertain source as unknown when exporting current medications', () => {
+    const data = emptyCollection()
+    data.medications = [{ id: 'uncertain', status: 'active', authoredOn: isoDaysAgo(1),
+      medicationCodeableConcept: { text: 'Synthetic medicine' }, dispenseRequest: { validityPeriod: { end: isoDaysAgo(2) } } }]
+    const out = curateForIps({ data, selection: selection(), filters: filters({ medicationStatus: 'active' }), now: NOW })
+    expect(out.medications).toHaveLength(1)
+    expect(out.medications[0].status).toBe('unknown')
+    expect(out.medications[0].note?.some(note => note.text?.includes('use is unconfirmed'))).toBe(true)
+    expect(data.medications[0].status).toBe('active')
+  })
+
   it('honors the acute-only chronic filter', () => {
     const data = emptyCollection()
     data.medications = [

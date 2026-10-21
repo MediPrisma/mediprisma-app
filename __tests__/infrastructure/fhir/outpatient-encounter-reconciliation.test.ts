@@ -13,6 +13,15 @@ it('keeps two hospital visits separate when the cloud member of a three-source c
   expect(projected.map(visit => (visit as any)._comparisonEncounterIds)).toEqual([['h1'], ['h2']])
 })
 
+it('uses an exact Chinese MediCloud Condition label without borrowing hospital narrative', () => {
+  const condition = { meta: { source: 'https://medcloud2.nhi.gov.tw/' }, code: {
+    text: 'I10 原發性高血壓', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'I10', display: 'Essential hypertension' }],
+  } }
+  const dict = buildIcdDictionary([condition], 'zh-TW')
+  expect(localizedIcdDescription('I10', undefined, undefined, dict, 'zh-TW', 'http://hl7.org/fhir/sid/icd-10-cm')).toBe('原發性高血壓')
+  expect(extractEncounterIcds({ reasonCode: [{ text: 'I10' }] }, undefined, 'zh-TW')[0].description).toBeTruthy()
+})
+
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW' }),
 }))

@@ -136,7 +136,8 @@ export function assessMedicationCurrentness(
 
   if (!end) {
     const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
-    if (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration) {
+    if (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration
+      || medication?.dispenseRequest?.validityPeriod?.end) {
       return { current: false, uncertain: true, basis: 'insufficient-status-and-supply' }
     }
     return {

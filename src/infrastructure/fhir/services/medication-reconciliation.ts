@@ -94,6 +94,8 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
       && (left.doseAndRate.length > 1 || right.doseAndRate.length > 1)) return true
     if (quantityConflicts(left.doseAndRate?.[0]?.doseQuantity, right.doseAndRate?.[0]?.doseQuantity)) return true
     const aDose = left.doseAndRate?.[0], bDose = right.doseAndRate?.[0]
+    const aType = conceptKey(aDose?.type), bType = conceptKey(bDose?.type)
+    if (aType && bType && aType !== bType) return true
     if ((aDose?.doseRange && bDose?.doseQuantity) || (aDose?.doseQuantity && bDose?.doseRange)) return true
     const rateType = (dose: any) => ['rateQuantity', 'rateRatio', 'rateRange'].find(field => dose?.[field])
     const aRate = rateType(aDose), bRate = rateType(bDose)
@@ -115,6 +117,18 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
       const a = conceptKey(left[field]), b = conceptKey(right[field])
       if (a && b && a !== b) return true
     }
+    const instructions = (dose: any) => dose.additionalInstruction?.length
+      ? JSON.stringify(dose.additionalInstruction.map(conceptKey).sort()) : undefined
+    if (instructions(left) && instructions(right) && instructions(left) !== instructions(right)) return true
+    if (left.patientInstruction && right.patientInstruction && left.patientInstruction.trim() !== right.patientInstruction.trim()) return true
+    for (const field of ['maxDosePerAdministration', 'maxDosePerLifetime']) {
+      if (quantityConflicts(left[field], right[field])) return true
+    }
+    for (const part of ['numerator', 'denominator']) {
+      if (quantityConflicts(left.maxDosePerPeriod?.[part], right.maxDosePerPeriod?.[part])) return true
+    }
+    if (left.timing?.event?.length && right.timing?.event?.length
+      && JSON.stringify([...left.timing.event].sort()) !== JSON.stringify([...right.timing.event].sort())) return true
     for (const [a, b] of [[conceptKey(left.route), conceptKey(right.route)],
       [leftFrequency && rightFrequency ? undefined : conceptKey(left.timing?.code), leftFrequency && rightFrequency ? undefined : conceptKey(right.timing?.code)],
       [left.timing?.repeat && JSON.stringify(left.timing.repeat), right.timing?.repeat && JSON.stringify(right.timing.repeat)]]) {
@@ -319,7 +333,8 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       order.dosageInstruction = cloneSource(other.dosageInstruction)
     } else if (order.dosageInstruction?.length === 1 && other.dosageInstruction?.length === 1) {
       const preferred = order.dosageInstruction[0], supplement = other.dosageInstruction[0]
-      for (const field of ['route', 'timing', 'doseAndRate', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method']) {
+      for (const field of ['route', 'timing', 'doseAndRate', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method',
+        'additionalInstruction', 'patientInstruction', 'maxDosePerAdministration', 'maxDosePerLifetime', 'maxDosePerPeriod']) {
         if (preferred[field] === undefined && supplement[field] !== undefined) preferred[field] = cloneSource(supplement[field])
       }
     }

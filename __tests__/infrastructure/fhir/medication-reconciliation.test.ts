@@ -414,6 +414,17 @@ it('does not treat a recorded rate as structured evidence for a text-only dose',
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
 })
 
+it.each(['additionalInstruction', 'patientInstruction', 'maxDosePerAdministration', 'maxDosePerLifetime', 'maxDosePerPeriod'])('keeps contradictory %s separate', field => {
+  const { hospital, cloud } = fixture()
+  const left: any = { text: 'QD' }, right: any = { text: 'QD' }
+  if (field === 'additionalInstruction') { left[field] = [{ text: 'with food' }]; right[field] = [{ text: 'empty stomach' }] }
+  else if (field === 'patientInstruction') { left[field] = 'Instruction A'; right[field] = 'Instruction B' }
+  else if (field === 'maxDosePerPeriod') { left[field] = { numerator: { value: 1 } }; right[field] = { numerator: { value: 2 } } }
+  else { left[field] = { value: 1 }; right[field] = { value: 2 } }
+  hospital.dosageInstruction = [left]; cloud.dosageInstruction = [right]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+})
+
 it.each([
   [{ rateQuantity: { value: 1, unit: 'mL/h' } }, { rateQuantity: { value: 2, unit: 'mL/h' } }],
   [{ rateRatio: { numerator: { value: 1, unit: 'mg' }, denominator: { value: 1, unit: 'h' } } },
@@ -435,7 +446,10 @@ it('exports both original records of a confirmed pair with their source quantiti
   cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } } }]
   const orders = reconcileMedicationRequests([hospital, cloud])
   expect(orders).toHaveLength(1)
-  const exported = mapMedications(orders as any, 'Patient/export').entries.map(entry => entry.resource)
+  const result = mapMedications(orders as any, 'Patient/export')
+  expect(result.entries).toHaveLength(1)
+  expect(result.entries[0].resource.derivedFrom).toEqual([{ reference: '#source-1' }, { reference: '#source-2' }])
+  const exported = result.entries[0].resource.contained as any[]
   expect(exported).toHaveLength(2)
   expect(exported[0].identifier).toEqual(hospital.identifier)
   expect(exported[1].identifier).toEqual(cloud.identifier)

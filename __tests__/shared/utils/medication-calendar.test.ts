@@ -72,3 +72,13 @@ it('does not throw on an out-of-range duration or timestamp', () => {
   expect(medicationSupplyEndDay('2026-10-19', 1e20)).toBeUndefined()
   expect(medicationExpectedEnd({ authoredOn: '2026-10-19', dispenseRequest: { expectedSupplyDuration: { value: 1e12, code: 'h' } } })).toBeUndefined()
 })
+
+it('does not infer ongoing use from dispensing authorization alone', () => {
+  expect(assessMedicationCurrentness({ status: 'active', dispenseRequest: { validityPeriod: { end: '2026-01-01' } } }, Date.parse('2026-10-21')))
+    .toMatchObject({ current: false, uncertain: true })
+})
+
+it('shows zero remaining days after an exact ending instant, even on the same clinical day', () => {
+  expect(medicationSupplyDaysRemaining('2026-10-21T00:00:00+08:00', Date.parse('2026-10-21T10:00:00+08:00'))).toBe(0)
+  expect(medicationSupplyDaysRemaining('2026-10-21T23:59:59+08:00', Date.parse('2026-10-21T10:00:00+08:00'))).toBe(1)
+})

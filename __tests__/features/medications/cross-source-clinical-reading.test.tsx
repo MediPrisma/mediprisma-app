@@ -12,6 +12,7 @@ import { buildOverviewWindow } from '@/features/clinical-summary/overview/utils/
 import { useVisitHistory } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
 import { useEncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
 import { mapMedications } from '@/features/ips-export/utils/ips-fhir-mappers'
+import { useMedicationTimeline } from '@/features/clinical-summary/medications/timeline/hooks/useMedicationTimeline'
 
 jest.mock('@/src/shared/hooks/use-now.hook', () => ({ useNow: () => Date.parse('2026-10-20T04:00:00+08:00') }))
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
@@ -38,10 +39,30 @@ it('projects one hospital and two cloud copies as one comparison while preservin
   expect(exportNotes.filter(note => note.includes('Hospital record: MedicationRequest/synthetic-order-a'))).toHaveLength(1)
   expect(exportNotes.filter(note => note.includes('MediCloud record: MedicationRequest/synthetic-cloud-order-a'))).toHaveLength(2)
   expect(exportNotes.some(note => note.includes('MediCloud record: MedicationRequest/synthetic-cloud-order-a-copy'))).toBe(true)
+  const exportedGroup = mapMedications(collection.medications, 'Patient/synthetic-export').referencedOnly
+  expect(exportedGroup).toHaveLength(1)
+  expect(exportedGroup[0].resource.activity).toMatchObject({ coding: [{ code: 'ambiguous' }] })
   const { container } = render(<MedicationItem medication={row} />)
   const details = within(container.querySelector('details')!)
   expect(details.getByText(/1 筆院內藥囑 \/ 2 筆雲端紀錄/)).toBeInTheDocument()
   expect(details.getAllByText(/總量 28/)).toHaveLength(2)
+})
+
+it('uses the same one-group projection for the medication timeline', () => {
+  const collection = LocalBundleService.parse(copiesFixture)!.collection
+  const { result } = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW'))
+  expect(result.current.drugs).toHaveLength(1)
+  expect(result.current.drugs[0].bars).toHaveLength(1)
+  expect(result.current.drugs[0].bars[0].sourceComparisonUnconfirmed).toBe(true)
+})
+
+it('keeps overview and list dates aligned for UTC midnight equivalents and fractional supply', () => {
+  const medication = { id: 'fractional-utc', authoredOn: '2026-10-18T16:00:00Z', status: 'active',
+    medicationCodeableConcept: { text: 'Synthetic product' }, dispenseRequest: { expectedSupplyDuration: { value: 2.4, code: 'd' } } }
+  const { result } = renderHook(() => useOverviewMeds([medication], buildOverviewWindow(12, Date.parse('2026-10-20T04:00:00+08:00')), 'medical', 'zh-TW'))
+  expect(result.current.medicationRows[0].startedOn).toBe('2026/10/19')
+  expect(result.current.medicationRows[0].endDateIso).toBe('2026-10-21')
+  expect(result.current.meds.items[0].supplyEndDay).toBe('2026-10-21')
 })
 
 it('compares possible source copies without deleting either, retaining two real identical orders, self-pay and cancellation', () => {

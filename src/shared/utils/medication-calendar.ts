@@ -28,5 +28,6 @@ export function medicationSupplyDaysRemaining(end: string, nowMs: number): numbe
   if (!day) return undefined
   const today = Date.parse(`${medicationClinicalDay(nowMs)}T00:00:00Z`)
   const difference = Math.round((Date.parse(`${day}T00:00:00Z`) - today) / DAY_MS)
+  if (end.length > 10 && medicationClinicalTimestamp(end) < nowMs && difference >= 0) return 0
   return difference >= 0 ? difference + 1 : difference
 }

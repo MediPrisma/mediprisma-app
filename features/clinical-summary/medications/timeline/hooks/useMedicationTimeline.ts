@@ -8,7 +8,9 @@
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
-import { medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { assessMedicationCurrentness, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { medicationClinicalDay, medicationClinicalTimestamp } from '@/src/shared/utils/medication-calendar'
@@ -416,7 +418,12 @@ export function useMedicationTimeline(
     let domainMin = Infinity
     let domainMax = -Infinity
 
-    for (const med of medications) {
+    const projected = projectMedicationComparisons(medications, med => med._sourceRecordComparison, med => {
+      const assessment = assessMedicationCurrentness(med, now)
+      return { dataOrigin: isVghtpeSource(med) ? 'hospital' : isMedcloudSource(med) ? 'medcloud' : undefined,
+        isInactive: !assessment.current, currentnessUncertain: assessment.uncertain }
+    })
+    for (const { record: med } of projected) {
       if (!med) continue
       if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(med.status).toLowerCase())) continue
       const clinicalDrugKey = medicationClinicalIdentityKey(med)

@@ -7,12 +7,12 @@
 // apart it can be tested on its own.
 import { useMemo } from 'react'
 import { medicationClinicalIdentityKey } from '@/src/shared/utils/fhir-display-helpers'
-import { computeDurationDays } from '@/features/clinical-summary/medications/utils/duration-helpers'
 import { humanDoseAmount, displayDosageInstruction, doseUnlessRepeated } from '@/features/clinical-summary/medications/utils/dose-helpers'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { useGroupedMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
-import { medicationRecordedTreatmentEnd } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationExpectedEnd } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import {
   classifyMedicationChanges,
   overlapsOverviewWindow,
@@ -118,41 +118,19 @@ function medicationWindowDays(
   medication: any,
   knownStatus?: string,
 ): { startDay?: string; endDay?: string; supplyEndDay?: string } {
-  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const status = knownStatus ?? (typeof medication?.status === 'string'
     ? medication.status.toLowerCase()
     : '')
   const start = medication?.authoredOn
     ?? medication?.effectiveDateTime
     ?? medication?.dispenseRequest?.validityPeriod?.start
-  let end = medicationRecordedTreatmentEnd(medication)
-  // The day the supply runs to, as a calendar day: the source's own end when
-  // it has one, else the start day plus the supplied days. Never from the
-  // rounded-up remaining-day count, which can land a day late.
-  let supplyEndDay = toDayKey(end)
-  if (!end && start && (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration)) {
-    const days = computeDurationDays({
-      expectedDuration: medication?.dispenseRequest?.expectedSupplyDuration,
-      boundsDuration: dosage?.timing?.repeat?.boundsDuration,
-    })
-    const date = new Date(start)
-    if (days && !Number.isNaN(date.getTime())) {
-      // Match the medication tab's source-duration coverage calculation.
-      date.setDate(date.getDate() + days - 1)
-      end = date.toISOString()
-      const startDay = toDayKey(start)
-      if (startDay) {
-        const [y, m, d] = startDay.split('-').map(Number)
-        supplyEndDay = new Date(Date.UTC(y, m - 1, d + days - 1)).toISOString().slice(0, 10)
-      }
-    }
-  }
+  const end = medicationExpectedEnd(medication)
   return {
-    startDay: toDayKey(start),
-    endDay: toDayKey(end ?? (MEDICATION_INACTIVE_STATUSES.has(status)
+    startDay: medicationClinicalDay(start),
+    endDay: medicationClinicalDay(end ?? (MEDICATION_INACTIVE_STATUSES.has(status)
       ? medication?.effectiveDateTime ?? medication?.authoredOn
       : undefined)),
-    supplyEndDay,
+    supplyEndDay: end,
   }
 }
 

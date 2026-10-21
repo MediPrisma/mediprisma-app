@@ -91,7 +91,7 @@ export function buildIcdDictionary(
   const concepts = [
     ...encounters.flatMap((encounter) => encounter?._sourceEncounterRecords?.length ? encounter._sourceEncounterRecords : [encounter])
       .flatMap((encounter: any) => (encounter?.reasonCode ?? []).map((concept: any) => ({ concept, trustedClaimLabel: isMedcloudSource(encounter), borrowDisplay: !isVghtpeSource(encounter) }))),
-    ...(Array.isArray(conditions) ? conditions : []).map((condition) => ({ concept: condition?.code, trustedClaimLabel: false, borrowDisplay: !isVghtpeSource(condition) })),
+    ...(Array.isArray(conditions) ? conditions : []).map((condition) => ({ concept: condition?.code, trustedClaimLabel: isMedcloudSource(condition), borrowDisplay: !isVghtpeSource(condition) })),
   ]
   for (const { concept, trustedClaimLabel, borrowDisplay } of concepts) {
     const codings = concept?.coding ?? []
@@ -144,6 +144,7 @@ export function localizedIcdDescription(
   const exact = stripLeadingIcdCode(system
     ? (family ? dict?.get(`${family}|${normalizeIcdCodeToken(code)}`) : undefined)
     : dict?.get(code) ?? dict?.get(normalizeIcdCodeToken(code)), code)
+    || ((!system || family === 'icd-10-cm') ? BUILTIN_ICD[code] : undefined)
   if (locale !== 'en') {
     const chinese = [sourceText, exact, sourceDisplay].find((value) => /\p{Script=Han}/u.test(value ?? ''))
     if (chinese) return chinese

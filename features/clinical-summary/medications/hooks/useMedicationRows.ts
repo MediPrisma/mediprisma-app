@@ -16,15 +16,16 @@ import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
-import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
+import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 
 function sourceCalendarDate(value?: string): string {
   const day = medicationClinicalDay(value)?.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  return day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])).toLocaleDateString() : formatDate(value)
+  return day ? `${day[1]}/${Number(day[2])}/${Number(day[3])}` : formatDate(value)
 }
 import {
   resolveSinglePrescriptionRemainingDisplay,
@@ -272,7 +273,8 @@ export function useMedicationRows(
         if (!Number.isNaN(start.getTime())) {
           endDate = medicationExpectedEnd(med)
           endDateIso = endDate
-          daysRemaining = endDate ? medicationSupplyDaysRemaining(endDate, nowMs) : undefined
+          const endTimestamp = medicationExpectedEndTimestamp(med)
+          daysRemaining = endTimestamp === undefined ? undefined : medicationSupplyDaysRemaining(new Date(endTimestamp).toISOString(), nowMs)
         }
       } else if (stopDateRaw) {
         const end = new Date(stopDateRaw)
@@ -422,53 +424,21 @@ export function useMedicationRows(
       }
     }
     const enriched = visibleMedications.map(buildRow)
-    const byId = new Map(enriched.map((row) => [row.id, row]))
-    const consumed = new Set<string>()
-    const comparisonRows: typeof enriched = []
-    for (let index = 0; index < enriched.length; index++) {
-      const row = enriched[index], med = visibleMedications[index]
-      if (consumed.has(row.id)) continue
-      if (med._sourcePrescriptionRecords?.length === 2) {
+    const sourceById = new Map(visibleMedications.map((med: any) => [med.id, med]))
+    for (const row of enriched) {
+      const med = sourceById.get(row.id) as any
+      if (med?._sourcePrescriptionRecords?.length) {
         row.sourceComparison = { status: 'confirmed', records: med._sourcePrescriptionRecords.map(buildRow) }
       }
-      const comparison = med._sourceRecordComparison
-      const sourceRows = comparison && comparison.status !== 'confirmed'
-        ? comparison.references.map((reference: string) => byId.get(reference.split('/').pop()!)) : undefined
-      if (sourceRows && !sourceRows.every(Boolean)) row.sourceComparison = {
-        status: comparison.status, records: sourceRows.filter(Boolean) as MedicationRow[],
-        warnings: [...(comparison.warnings ?? []), 'source-partners-not-in-view'],
-      }
-      if (sourceRows && sourceRows.length >= 2 && sourceRows.every(Boolean)) {
-        const hospital = sourceRows[0] as MedicationRow
-        const representative = (sourceRows as MedicationRow[]).find(source => !source.isInactive && !source.currentnessUncertain) ?? hospital
-        const mixedCurrentness = !representative.isInactive && (sourceRows as MedicationRow[]).some(source => source.isInactive || source.currentnessUncertain)
-        const hospitalRows = (sourceRows as MedicationRow[]).filter(source => source.dataOrigin === 'hospital')
-        const cloudRows = (sourceRows as MedicationRow[]).filter(source => source.dataOrigin === 'medcloud')
-        // A comparison is a display group, not a confirmed prescription merge.
-        // Repeated compatible cloud records belong in that group's source
-        // details instead of repeating the same hospital prescription row.
-        // Keep distinct hospital orders and any conflicting source facts as
-        // separate rows; every original remains in sourceComparison.records.
-        const factsConflict = comparison.warnings?.some((warning: string) =>
-          ['source-facts-differ', 'source-status-conflict'].includes(warning))
-        const displayRows = factsConflict
-          ? [...sourceRows as MedicationRow[]]
-          : hospitalRows.length > 1
-            ? [...hospitalRows, ...(cloudRows.length > hospitalRows.length ? cloudRows : [])]
-            : [representative]
-        if (displayRows.length > 1 && displayRows.every(source => source.isInactive) && !representative.isInactive) displayRows.unshift(representative)
-        displayRows.forEach((display, displayIndex) => comparisonRows.push({ ...display, _startSortValue: enriched[index]._startSortValue,
-          sourceComparison: { status: comparison.status, records: sourceRows as MedicationRow[],
-            detailsInitiallyOpen: displayIndex === 0,
-            warnings: [...(comparison.warnings ?? []), ...(mixedCurrentness ? ['source-currentness-differs'] : [])] },
-          reconciledOrderIds: displayRows.length === 1 ? sourceRows.map((source: MedicationRow) => source.id)
-            : [display.id, ...(displayIndex === 0 ? (sourceRows as MedicationRow[]).filter(source => !displayRows.some(display => display.id === source.id)).map(source => source.id) : [])],
-          searchHaystack: sourceRows.map((source: MedicationRow) => source.searchHaystack).join(' '),
-        }))
-        sourceRows.forEach((source: MedicationRow) => consumed.add(source.id))
-      } else comparisonRows.push(row)
     }
-
+    const comparisonRows = projectMedicationComparisons(enriched,
+      row => (sourceById.get(row.id) as any)?._sourceRecordComparison, row => row,
+    ).map(({ record, sources, comparison, ownedIds, warnings, detailsInitiallyOpen }) => comparison ? {
+      ...record,
+      sourceComparison: { status: comparison.status, records: sources ?? [], warnings, detailsInitiallyOpen },
+      reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
+      searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
+    } : record)
     return comparisonRows
       .sort((a: any, b: any) => {
         if (a.isInactive !== b.isInactive) {
@@ -482,3 +452,4 @@ export function useMedicationRows(
     // list immediately instead of requiring a page reload.
   }, [medications, audience, locale, nowMs, chronicHistory])
 }
+

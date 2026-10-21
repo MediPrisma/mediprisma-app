@@ -32,7 +32,7 @@ import type {
 import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { orphanResultObservations } from './ips-helpers'
-import { isMedicationCurrentlyInUse } from '@/src/core/utils/clinical-context-selection.utils'
+import { assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
 
 export interface CurateForIpsInput {
   data: ClinicalDataCollection
@@ -275,7 +275,13 @@ function curateMedications(
   // Chronic is a property of an individual prescription, not evidence that
   // every historical fill is still current. Use its own supply/status facts.
   if (filters.medicationStatus === 'active') {
-    meds = meds.filter((m) => isMedicationCurrentlyInUse(m, now.getTime()))
+    meds = meds.flatMap((m) => {
+      const assessment = assessMedicationCurrentness(m, now.getTime())
+      if (assessment.current) return [m]
+      return assessment.uncertain ? [{ ...m, status: 'unknown', note: [...(m.note ?? []), {
+        text: `Current medication use is unconfirmed; original source status: ${m.status || 'unknown'}. Verify source records before prescribing.`,
+      }] }] : []
+    })
   }
 
   // Confirmed copies were reconciled at import. Name-only folding loses
