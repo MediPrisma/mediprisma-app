@@ -1,6 +1,6 @@
 {
   "name": "medical-note-smart-on-fhir",
-  "version": "0.51.0",
+  "version": "0.51.1",
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
@@ -97,6 +97,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.3.6",
+    "fake-indexeddb": "6.2.5",
     "gh-pages": "^6.3.0",
     "jest": "^30.5.2",
     "jest-environment-jsdom": "^30.5.2",
@@ -110,8 +111,8 @@
   "optionalDependencies": {
     "@voho0000/clinical-lab-normalization": "1.1.1",
     "@voho0000/personalization-sdk": "1.0.0",
-    "@voho0000/personalized-care": "2.20.2",
-    "@voho0000/personalized-care-fhir": "1.12.2",
+    "@voho0000/personalized-care": "2.20.3",
+    "@voho0000/personalized-care-fhir": "1.12.3",
     "@voho0000/personalized-education": "1.4.1"
   }
 }

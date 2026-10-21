@@ -27,14 +27,22 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
 import { prepareLocalImportFile } from '../services/local-import-file.service'
+import { ProgressiveImportError } from '../services/progressive-import-transaction'
 
 /** Ceiling for pulling the bundled demo chart (~1.7MB) over hospital Wi-Fi. */
 const DEMO_FETCH_TIMEOUT_MS = 30_000
 
+export interface ImportBundleOptions {
+  signal?: AbortSignal
+  expectedImportId?: string
+  requireEmpty?: boolean
+  onCommitted?: (importId: string) => void
+}
+
 export interface UseImportBundleReturn {
   /** Parse + persist a FHIR Bundle file. Throws on validation error;
    *  errors are also captured into the `error` state for UI use. */
-  importFile: (file: File) => Promise<void>
+  importFile: (file: File, options?: ImportBundleOptions) => Promise<void>
   /** Fetch + load the bundled demo patient ("試用資料 / 示範病人"). Goes through
    *  the exact same parse/save/cache-invalidate path as a real import. */
   loadDemo: () => Promise<void>
@@ -98,6 +106,10 @@ export function useImportBundle(): UseImportBundleReturn {
     demo: boolean,
     originalFhir: Blob,
     sourceMetadata?: ClinicalSourceMetadata,
+    patientProfile?: ReturnType<typeof LocalBundleService.getUserEnteredPatientProfile>,
+    signal?: AbortSignal,
+    beforeCommit?: () => void,
+    onCommitted?: (importId: string) => void,
   ) => {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
@@ -116,12 +128,20 @@ export function useImportBundle(): UseImportBundleReturn {
     // clearing earlier would briefly expose the old real patient under demo's
     // automatic-snapshot policy.
     const localImportId = generateId()
+    // The storage layer checks again after preparing encrypted data, before
+    // publishing the new pointer and key.
+    signal?.throwIfAborted()
     await LocalBundleService.save(bundle, {
       importId: localImportId,
       demo,
       sourceMetadata,
       originalFhir,
+      ...(signal ? { signal, beforeCommit } : {}),
+      ...(patientProfile ? { patientProfile } : {}),
     })
+    // Publish progressive ownership before query refresh can yield to another
+    // browser task, so a terminal safety notice is visible immediately.
+    onCommitted?.(localImportId)
     // Importing NEW data must not leave the PREVIOUS bundle's derived results
     // around, or the render goes inconsistent (old AI summary / safety scan /
     // report interpretation shown against new clinical data — worst when the two
@@ -139,19 +159,40 @@ export function useImportBundle(): UseImportBundleReturn {
     } finally {
       notifyBundleChangeSettled()
     }
+    return localImportId
   }, [queryClient])
 
-  const importFile = useCallback(async (file: File) => {
+  const importFile = useCallback(async (file: File, options?: ImportBundleOptions) => {
     setLoading(true)
     setError(null)
     try {
       await serializeLocalBundleMutation(async () => {
+        const assertExpectedImport = () => {
+          options?.signal?.throwIfAborted()
+          if (options?.requireEmpty && LocalBundleService.hasData()) throw new ProgressiveImportError('IMPORT_STALE', '目前已載入其他資料，已停止自動匯入。')
+          if (options?.expectedImportId && LocalBundleService.getActiveImportId() !== options.expectedImportId) {
+            throw new ProgressiveImportError('IMPORT_STALE', '目前資料已變更，已停止院內門診補載。')
+          }
+        }
+        assertExpectedImport()
         const prepared = await prepareLocalImportFile(file)
-        await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata)
+        assertExpectedImport()
+        if (options?.expectedImportId) {
+          const previous = await LocalBundleService.load()
+          const patientId = (bundle: any) => bundle?.entry?.filter((entry: any) => entry?.resource?.resourceType === 'Patient').map((entry: any) => entry.resource.id)
+          const previousIds = patientId(previous), nextIds = patientId(prepared.bundle)
+          if (previousIds?.length !== 1 || nextIds?.length !== 1 || !previousIds[0] || previousIds[0] !== nextIds[0]) {
+            throw new ProgressiveImportError('PATIENT_HIS_MISMATCH', '病人資料不符，已停止院內門診補載。')
+          }
+        }
+        const patientProfile = options?.expectedImportId ? LocalBundleService.getUserEnteredPatientProfile() : undefined
+        assertExpectedImport()
+        await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
+          options?.signal, assertExpectedImport, options?.onCommitted)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'
-      setError(msg)
+      setError(options?.signal?.aborted ? null : msg)
       throw err instanceof Error ? err : new Error(msg)
     } finally {
       setLoading(false)
