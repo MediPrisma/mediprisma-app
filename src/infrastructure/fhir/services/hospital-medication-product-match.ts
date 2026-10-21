@@ -37,7 +37,9 @@ function productDescriptor(value: unknown): { name: string; pack?: string } | un
     .replace(/\boint\b/g, 'ointment').replace(/\s+/g, ' ').trim()
   if (!/\d+(?:\.\d+)?\s*(?:(?:mg|mcg|g|ml|iu)\b|%)/i.test(name)
     || !/\b(?:tablet|capsule|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i.test(name)) return undefined
-  const topicalPack = /\b(?:cream|ointment|gel)\b/.test(name)
+  const topical = /\b(?:cream|ointment|gel)\b/.test(name)
+  if (topical && !/\d\s*%|\d\s*(?:mg|mcg|g)\s*\/\s*(?:g|ml)\b/.test(name)) return undefined
+  const topicalPack = topical
     ? name.match(/^(.*\d\s*%)\s+(\d+(?:\.\d+)?\s*(?:g|ml))(?:\s*\/?\s*(?:tub|tube|bottle))?$/) : undefined
   if (topicalPack) name = topicalPack[1]
   return { name: name.replace(/\s+/g, ''), ...(topicalPack ? { pack: topicalPack[2].replace(/\s+/g, '') } : {}) }

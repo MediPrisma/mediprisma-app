@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { assessMedicationCurrentness, medicationExpectedStartTimestamp, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
@@ -405,7 +406,7 @@ export function useMedicationTimeline(
     }
     if (!Array.isArray(medications) || medications.length === 0) return empty
 
-    const projected = projectMedicationComparisons(medications, med => med._sourceRecordComparison, med => {
+    const projected = projectMedicationComparisons(medications.map(hospitalMedicationDisplayRecord), med => med._sourceRecordComparison, med => {
       const assessment = assessMedicationCurrentness(med, now)
       return { dataOrigin: isVghtpeSource(med) ? 'hospital' : isMedcloudSource(med) ? 'medcloud' : undefined,
         isInactive: !assessment.current, currentnessUncertain: assessment.uncertain }

@@ -13,6 +13,9 @@ it('compares a complete ointment product with an omitted tube size without knowl
 it.each(['CONLIFU','CONLIFU OINTMENT','CONLIFU OINTMENT 5%','CONLIFU CREAM 2%','CONLIFU OINTMENT 2% 15g','OTHER OINTMENT 2%'])('keeps a missing or conflicting product descriptor separate: %s',(value)=>{
  expect(hospitalProductMayMatchConcept(name('Conlifu * oint 2% 5 g'),cloud(value))).toBe(false)
 })
+it.each([['Conlifu oint 5 g','CONLIFU OINTMENT 5 G'],['Synthetic gel 10 ml','SYNTHETIC GEL 10 ML']])('does not use package quantity as topical concentration: %s',(hospital,other)=>{
+ expect(hospitalProductMayMatchConcept(name(hospital),cloud(other))).toBe(false)
+})
 it('retains both raw orders and uses one hospital row for a matching topical comparison',()=>{
  const base={resourceType:'MedicationRequest',subject:{reference:'Patient/synthetic'},encounter:{reference:'Encounter/synthetic'},authoredOn:'2026-05-07',status:'active',dispenseRequest:{expectedSupplyDuration:{value:7,code:'d'}}}
  const hospital:any={...base,id:'synthetic-ointment-hospital',meta:{source:'ehr-fhir-bridge/scraper'},medicationCodeableConcept:name('Conlifu * oint 2% 5 g'),dosageInstruction:[{text:'X1 TUB T BID',timing:{code:{text:'BID'}}}]}
