@@ -604,15 +604,20 @@ export function canonicalizeBundleResources(bundle: any): any[] {
       identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1)
     }
   }
+  const reservedIds = new Set(identityCounts.keys())
   const resources = entries.map((e, index) => {
     const res = cloneResource(e.resource)
     const resourceType: string = res.resourceType ?? 'Resource'
     const originalId = String(res.id || idFromFullUrl(e.fullUrl) || `${resourceType}-${index}`)
     // Colliding logical ids from distinct fullUrls/versions must not become
     // one UI key or let a relative reference select an arbitrary source.
-    const id = (identityCounts.get(`${resourceType}/${originalId}`) ?? 0) > 1
+    let id = (identityCounts.get(`${resourceType}/${originalId}`) ?? 0) > 1
       ? `${originalId}-source-${index}`
       : originalId
+    if (id !== originalId) {
+      while (reservedIds.has(`${resourceType}/${id}`)) id += '-source'
+      reservedIds.add(`${resourceType}/${id}`)
+    }
     res.id = id
     const target: RefTarget = { resourceType, id }
     if (e.fullUrl) indexTarget(e.fullUrl, target)
