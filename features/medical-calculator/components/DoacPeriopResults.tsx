@@ -145,7 +145,8 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
             <ul className="mt-1 space-y-1">{plan.resume.lines.map((item, index) => <Line key={index} item={item} zh={zh} />)}</ul>
             {plan.resume.firstDose && (
               <div className="mt-1 space-y-0.5 rounded border border-border bg-muted/30 px-2 py-1">
-                <Times label={plan.troughOnly ? (zh ? `處置當下到恢復前延後 ${plan.resume.skippedAfter.length} 劑：` : `Held from the procedure to the restart, ${plan.resume.skippedAfter.length}: `) : (zh ? `術後再跳過 ${plan.resume.skippedAfter.length} 劑：` : `Skip ${plan.resume.skippedAfter.length} more after: `)} dates={plan.resume.skippedAfter} />
+                <Times label={plan.troughOnly ? (zh ? `處置當下到恢復前不服用、不補服 ${plan.resume.skippedAfter.length} 劑：` : `Not taken nor made up from the procedure to the restart, ${plan.resume.skippedAfter.length}: `) : (zh ? `術後再跳過 ${plan.resume.skippedAfter.length} 劑：` : `Skip ${plan.resume.skippedAfter.length} more after: `)} dates={plan.resume.skippedAfter} />
+                {plan.resume.delayed && <p className="text-xs leading-snug">{zh ? `${formatLocal(plan.resume.delayed)} 那一劑延到恢復時服用，之後照原時間。` : `The ${formatLocal(plan.resume.delayed)} dose is taken at the restart instead, then the usual times.`}</p>}
                 <p className="text-xs leading-snug">{zh ? '恢復的第一劑：' : 'First dose back: '}<span className="font-medium tabular-nums">{formatLocal(plan.resume.firstDose)}</span>{plan.resume.dose ? (zh ? `（${plan.resume.dose.zh}；需確認止血）` : ` (${plan.resume.dose.en}; once haemostasis is confirmed)`) : null}</p>
               </div>
             )}

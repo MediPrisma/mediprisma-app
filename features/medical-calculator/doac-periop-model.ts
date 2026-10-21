@@ -204,6 +204,8 @@ export interface PeriopResult {
     firstDose?: Date
     /** Scheduled doses after the start (from the start itself when nothing is skipped before) and before `firstDose`. */
     skippedAfter: Date[]
+    /** Minor risk, once daily: the dose due at the procedure, taken instead at `firstDose` (the restart). */
+    delayed?: Date
     /** What is restarted, by the prescription: the loading phase's own decision, prophylaxis, or the same therapeutic dose. */
     dose?: L
   }
@@ -516,7 +518,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       // With a deep block, ASRA's interval replaces the trough: no 「不提前停藥」 beside it.
       result.basis.push(blockUsed
         ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不提前停藥」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, not stopped early”.'), G.ehraFig14)
-        : line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時），當天或最晚隔天恢復；處置前的劑量照常，不提前停藥，處置當下到恢復前的劑量延後。`, `Minor risk: at trough (about ${hours} h after the last dose), resume the same or next day; doses before the procedure as usual, none stopped early, those from the procedure to the restart held.`), G.ehraFig14))
+        : line(regimen.perDay === 1
+          ? t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置當天那一劑延到恢復時（術後 ≥6 小時）服用，之後照原時間。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. The day’s dose is taken at the restart (≥6 h after), then the usual times.`)
+          : t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置當下到恢復前的劑量不服用、不補服，恢復後從下一個排定時間繼續。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. Doses from the procedure to the restart are not taken nor made up; resume at the next scheduled time.`),
+          G.ehraFig14, G.ehraFig15))
     } else {
       const pair = ehraHours(agent, crclValue)!
       hours = tier === 'high' ? pair[1] : pair[0]
@@ -531,9 +536,8 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   if (rule) {
     const what = neuraxialUsed ? t('脊髓／硬膜外麻醉或腰椎穿刺', 'spinal/epidural or lumbar puncture') : t('深部神經叢／周邊神經阻斷', 'deep plexus/peripheral block')
     const dose = doseClass === 'high' ? t('高劑量（治療）', 'high (therapeutic) dose') : t('低劑量（預防）', 'low (prophylactic) dose')
-    if (rule.hours === undefined) {
-      result.basis.push(line(t(`ASRA 2025：${what.zh}在 CrCl <30 時建議不做，除非已測 dabigatran 濃度且 <30 ng/mL。`, `ASRA 2025: no ${what.en} at CrCl <30 unless a dabigatran level is obtained and <30 ng/mL.`), rule.hold))
-    } else {
+    // Dabigatran below 30, the only case ASRA gives no hours, has already returned as 「no-hours」.
+    if (rule.hours !== undefined) {
       result.basis.push(line(t(`ASRA 2025，${dose.zh}：${what.zh}前停 ≥${rule.hours} 小時`, `ASRA 2025, ${dose.en}: ≥${rule.hours} h before the ${what.en}`), rule.hold, ...(agent === 'edoxaban' && doseClass === 'low' ? [G.asraEdoxabanNoLow] : [])))
       if (rule.hours > hours) {
         result.basis.push(line(t(`取較長者：${rule.hours} 小時（ASRA）`, `The longer applies: ${rule.hours} h (ASRA)`)))
@@ -688,9 +692,16 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     if (known && surgery) {
       const after = scheduledDoses(minutes as number[], surgery, addHours(earliest, 24))
       const first = after.find((at) => at.getTime() >= earliest.getTime())
-      if (first) result.resume.firstDose = first
-      // With nothing skipped before, a dose due at the start itself is held here, not lost between the two lists.
-      result.resume.skippedAfter = after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime()))
+      // With nothing skipped before, a dose due at the start itself is not lost between the two lists.
+      const between = after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime()))
+      if (troughOnly && regimen.perDay === 1 && between.length) {
+        // EHRA Figure 15, minor risk, once daily: the day's dose is taken after the restart, the same day.
+        result.resume.delayed = between[0]
+        result.resume.firstDose = earliest
+      } else {
+        if (first) result.resume.firstDose = first
+        result.resume.skippedAfter = between
+      }
     }
   }
   result.pending = [...new Set(result.pending)]

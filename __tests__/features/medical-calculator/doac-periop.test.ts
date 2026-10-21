@@ -171,13 +171,24 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(result.hoursFromLastDose).toBe(11.5)
     expect(result.skippedBefore).toEqual([])
   })
-  it('a dose due at the start itself is held until the restart, not lost (#review final Astra 2)', () => {
-    // bid 08:00/20:00, minor risk 08:00–10:00: 20:00 the day before is last; the 08:00 dose waits for the 16:00 restart.
+  it('bid: the dose due at the start is not taken nor made up; the next scheduled one resumes (#review final Astra 2, Opus)', () => {
+    // bid 08:00/20:00, minor risk 08:00–10:00: 20:00 the day before is last; 08:00 is not taken; 20:00 resumes (EHRA Figure 15).
     const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes' })
     expect(result.skippedBefore).toEqual([])
     expect(formatLocal(result.resume.earliest!)).toBe('11-03 16:00')
     expect(times(result.resume.skippedAfter)).toEqual(['11-03 08:00'])
+    expect(result.resume.delayed).toBeUndefined()
     expect(formatLocal(result.resume.firstDose!)).toBe('11-03 20:00')
+    expect(allText(result)).toContain('不服用、不補服')
+  })
+  it('qd: the day’s dose is taken at the restart instead, the same day (EHRA Figure 15; #review final Opus)', () => {
+    // qd 09:00, minor risk 08:00–09:00: the 09:00 dose moves to 15:00, then 09:00 the next day — not a 48 h gap.
+    const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T09:00' })
+    expect(formatLocal(result.resume.earliest!)).toBe('11-03 15:00')
+    expect(formatLocal(result.resume.delayed!)).toBe('11-03 09:00')
+    expect(formatLocal(result.resume.firstDose!)).toBe('11-03 15:00')
+    expect(result.resume.skippedAfter).toEqual([])
+    expect(allText(result)).toContain('處置當天那一劑延到恢復時')
   })
   it('a trough already reached needs no prompt: bid 08:00/20:00, procedure at 08:00 is 12 h after the 20:00 dose', () => {
     const result = plan({ procedure_kind: 'minimal' })
@@ -382,5 +393,7 @@ describe('sources', () => {
     const minor = calc[0]!.compute({ ...base, regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', procedure_kind: 'minimal' })!
     expect(minor.interpretation?.zh).toContain('最後一劑 11-02 09:00，距開始 23.0 小時')
     expect(minor.interpretation?.zh).not.toContain('≥')
+    expect(minor).toMatchObject({ value: '—' })
+    expect(minor.unit).toBeUndefined()
   })
 })

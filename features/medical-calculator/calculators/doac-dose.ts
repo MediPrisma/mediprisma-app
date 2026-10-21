@@ -209,8 +209,9 @@ export const DOAC_DOSE: CalculatorDef[] = [{
           ? { zh: `${plan.agent}：緊急手術，依 EHRA Figure 12`, en: `${plan.agent}: emergency, EHRA Figure 12` }
           : { zh: `${plan.agent}：尚待補資料`, en: `${plan.agent}: inputs needed` }
     return {
-      value: plan.holdHours !== undefined ? String(plan.holdHours) : '—',
-      unit: plan.holdHours !== undefined ? 'h' : undefined,
+      // A trough to check is not an interval to stop for: no bare 「N h」 for it.
+      value: plan.holdHours !== undefined && !plan.troughOnly ? String(plan.holdHours) : '—',
+      unit: plan.holdHours !== undefined && !plan.troughOnly ? 'h' : undefined,
       severity: plan.state === 'timed' || plan.state === 'ablation' ? undefined : 'moderate',
       interpretation,
     }
