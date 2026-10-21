@@ -1,3 +1,4 @@
+import { excludeUnresolvedGenericVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 // Unified FHIR Tools for AI Agent
 //
@@ -1084,13 +1085,22 @@ function medicationGroundingRules(medications: MedicationEntity[]) {
 
 // ── factory ────────────────────────────────────────────────────────────────
 
-export function createFhirTools(getData: () => AgentDataSource) {
+export function createFhirTools(getRawData: () => AgentDataSource) {
+  const getData = (): AgentDataSource => {
+    const raw = getRawData()
+    return { ...raw, collection: raw.collection ? excludeUnresolvedGenericVariants(raw.collection) : raw.collection }
+  }
   // Structured scrub (ids / birthDate / provider display) + free-text scrub:
   // discharge summaries and report conclusions carry the patient's name /
   // chart number / 身分證字號 INSIDE the text, so every string is also masked
   // against those patterns and the loaded patient's own name/id literals.
-  const scrub = <T,>(payload: T): T =>
-    scrubPii(payload, buildPatientTextLiterals(getData().patient))
+  const scrub = <T,>(payload: T): T => {
+    const data = getData()
+    const exclusions = data.collection?.clinicalRecordVariantExclusions
+    const annotated = exclusions?.length && payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? { ...payload, clinicalRecordVariantExclusions: exclusions, sourceRecordUncertainty: formatClinicalVariantExclusions(data.collection!) } : payload
+    return scrubPii(annotated, buildPatientTextLiterals(data.patient)) as T
+  }
 
   // A failed name/category/date match is not an empty chart. Give the model
   // actual values within the requested date/abnormality scope to discover the source's names without another

@@ -60,3 +60,23 @@ it('projects identical panels in different capture contexts to their own leaf an
   }
   expect(contextReports.map((report: any) => report._observations.find((row: any) => row.sourceId === 'leaf').valueQuantity.value)).toEqual([7, 9])
 })
+
+it('does not restore source-present foreign-patient cached rows or report members', () => {
+  const source = reconcileClinicalSources([{ sourceId: 'scope', patientScope: 'a', generation: '1', resources: [
+    { resourceType: 'Observation', id: 'foreign', subject: { reference: 'Patient/b' }, valueQuantity: { value: 7 } },
+    { resourceType: 'Condition', id: 'foreign-condition', subject: { reference: 'Patient/b' } },
+    { resourceType: 'MedicationRequest', id: 'foreign-medication', subject: { reference: 'Patient/b' } },
+    { resourceType: 'DiagnosticReport', id: 'foreign-report', subject: { reference: 'Patient/b' } },
+    { resourceType: 'DiagnosticReport', id: 'own-report', subject: { reference: 'Patient/a' }, result: [{ reference: 'Observation/foreign' }] },
+  ] }])
+  const row = (id: string) => ({ id, clinicalSourceNodeKey: source.graph.nodes.find(node => node.resource.id === id)!.key })
+  const foreign = row('foreign')
+  const input: any = { observations: [foreign], conditions: [row('foreign-condition')], medications: [row('foreign-medication')], diagnosticReports: [row('foreign-report'), { ...row('own-report'), result: [{ reference: 'Observation/foreign' }], _observations: [foreign] }] }
+  const projected = projectClinicalAggregate(input, source)
+  expect(projected.conditions).toEqual([])
+  expect(projected.medications).toEqual([])
+  expect(projected.observations).toEqual([])
+  expect(projected.diagnosticReports).toHaveLength(1)
+  expect(projected.diagnosticReports[0]._observations).toEqual([])
+  expect(source.graph.nodes).toHaveLength(5)
+})

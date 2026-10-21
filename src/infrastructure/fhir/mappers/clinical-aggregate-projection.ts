@@ -1,3 +1,4 @@
+import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
 import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
 import type { ClinicalDataCollection, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
@@ -73,6 +74,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
 ): T {
   if (!source?.graph) return input
   const context = createClinicalProjectionContext(source)
+  for (const [key, node] of context.nodes) if (!isClinicalSourceNodePatientEligible(node, source.graph.nodes)) context.nodes.delete(key)
   const variants = createClinicalRecordVariants(source)
   const annotate = <R extends { clinicalSourceNodeKey?: string; clinicalRecordVariant?: unknown }>(row: R): R => {
     const variant = row.clinicalSourceNodeKey ? variants.get(row.clinicalSourceNodeKey) : undefined
@@ -124,7 +126,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   const observations = canonicalRows.length === input.observations?.length && canonicalRows.every((row, index) => row === input.observations![index]) ? input.observations! : canonicalRows
   const aliases = new Map<string, ObservationEntity>()
   for (const node of source.graph.nodes) {
-    if (node.resource.resourceType !== 'Observation' || node.embeddedIn) continue
+    if (node.resource.resourceType !== 'Observation' || node.embeddedIn || !context.nodes.has(node.key)) continue
     const row = observationsById.get(context.ids.get(node.key)!)
     if (row) aliases.set(node.key, row)
   }

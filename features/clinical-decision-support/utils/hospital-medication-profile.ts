@@ -151,11 +151,12 @@ export function hospitalMedicationUseLabel(state: HospitalMedicationUseState, en
 export function createHospitalAwareCdssPatientProfile(
   input: Omit<FhirCdssProfileInput, 'medications'> & { medications: MedicationEntity[] },
 ): HospitalAwareCdssProfile {
+  const selected = selectCdssClinicalInputs(input)
   const now = input.now ?? new Date()
   const evidence: HospitalMedicationEvidence[] = []
   const internalStatuses = new Map<string, string | undefined>()
   const internalUseStates = new Map<string, HospitalMedicationUseState>()
-  const medications = input.medications.map((source, index): HostMedication => {
+  const medications = selected.input.medications.map((source, index): HostMedication => {
     const name = resolveHospitalMedicationName(source.medicationCodeableConcept)
     if (!name) return source
     const useState = hospitalUseState(source, now)
@@ -185,7 +186,6 @@ export function createHospitalAwareCdssPatientProfile(
       name, useState, ingredientName, classIds, factKey: `hospitalMedication:${source._sourceResourceType ?? 'MedicationRequest'}:${source.id}` })
     return normalized
   })
-  const selected = selectCdssClinicalInputs(input)
   const profile: HospitalAwareCdssProfile = { ...createFhirCdssPatientProfile({ ...selected.input, medications, now }),
     ...(selected.excluded.length ? { excludedClinicalRecordVariants: selected.excluded } : {}) }
   if (!evidence.length) return profile

@@ -1474,6 +1474,17 @@ export const LocalBundleService = {
     }, clinicalSource, sourceKeyByResource)
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
     const recordVariants = createClinicalRecordVariants(clinicalSource)
+    // Metadata belongs to mutable mapper inputs, never the captured FHIR graph.
+    for (const resource of entries) {
+      const key = sourceKeyByResource.get(resource)
+      if (key) resource.clinicalSourceNodeKey = key
+    }
+    const bindMappedResource = <T extends object>(mapped: T, resource: any): T => {
+      const key = sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey
+      const variant = key ? recordVariants.get(key) : undefined
+      return { ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
+        ...(variant ? { clinicalRecordVariant: variant } : {}) }
+    }
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     if (!entries.length) return null
 
@@ -1674,7 +1685,7 @@ export const LocalBundleService = {
             resource,
             sourceCapturedAt,
           )
-          return [summary.id, summary] as const
+          return [recordVariants.has(sourceKeyByResource.get(resource)!) ? sourceKeyByResource.get(resource)! : summary.id, bindMappedResource(summary, resource)] as const
         }),
     ).values()]
 
@@ -1704,22 +1715,22 @@ export const LocalBundleService = {
 
     const collection: ClinicalDataCollection = {
       clinicalSource,
-      conditions:       conds.map((r: any) => FhirMapper.toCondition(r)),
-      medications:      meds.map((r: any) => FhirMapper.toMedication(r)),
+      conditions:       conds.map((r: any) => bindMappedResource(FhirMapper.toCondition(r), r)),
+      medications:      meds.map((r: any) => bindMappedResource(FhirMapper.toMedication(r), r)),
       medicationRemainingSummaries,
-      allergies:        allerg.map((r: any) => FhirMapper.toAllergy(r)),
+      allergies:        allerg.map((r: any) => bindMappedResource(FhirMapper.toAllergy(r), r)),
       observations,
       vitalSigns,
       diagnosticReports: processedReports,
-      imagingStudies:    imagingStudies.map((r: any) => FhirMapper.toImagingStudy(r)),
-      procedures:       procs.map((r: any) => FhirMapper.toProcedure(r, specialMaterialsByProcedure)),
-      encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
-      documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
-      compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
-      immunizations:    imms.map((r: any) => FhirMapper.toImmunization(r)),
-      consents:         consents.map((r: any) => FhirMapper.toConsent(r)),
-      devices:          devices.map((r: any) => FhirMapper.toDevice(r)),
-      carePlans:        carePlans.map((r: any) => FhirMapper.toCarePlan(r)),
+      imagingStudies:    imagingStudies.map((r: any) => bindMappedResource(FhirMapper.toImagingStudy(r), r)),
+      procedures:       procs.map((r: any) => bindMappedResource(FhirMapper.toProcedure(r, specialMaterialsByProcedure), r)),
+      encounters:       encounters.map((r: any) => bindMappedResource(FhirMapper.toEncounter(r), r)),
+      documentReferences: docRefs.map((r: any) => bindMappedResource(FhirMapper.toDocumentReference(r), r)),
+      compositions:     comps.map((r: any) => bindMappedResource(FhirMapper.toComposition(r), r)),
+      immunizations:    imms.map((r: any) => bindMappedResource(FhirMapper.toImmunization(r), r)),
+      consents:         consents.map((r: any) => bindMappedResource(FhirMapper.toConsent(r), r)),
+      devices:          devices.map((r: any) => bindMappedResource(FhirMapper.toDevice(r), r)),
+      carePlans:        carePlans.map((r: any) => bindMappedResource(FhirMapper.toCarePlan(r), r)),
       ...(sourceMetadata ? { sourceMetadata } : {}),
     }
 

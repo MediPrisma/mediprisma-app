@@ -1,6 +1,7 @@
 // Refactored Clinical Context Hook
 "use client"
 
+import { excludeUnresolvedGenericVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { useCallback, useMemo } from "react"
 import {
   useDataSelection,
@@ -78,9 +79,9 @@ export function useClinicalContext(
     : options.clinicalDataOverride
   const clinicalData = useMemo(
     () => sourceClinicalData
-      ? filterAiExcludedClinicalDomains(sourceClinicalData as any) as ClinicalData
+      ? excludeUnresolvedGenericVariants(filterAiExcludedClinicalDomains(sourceClinicalData as any), selectedData) as ClinicalData
       : null,
-    [sourceClinicalData],
+    [sourceClinicalData, selectedData],
   )
 
   // Hook-driven sections (richer formatting than registry can provide)
@@ -262,8 +263,8 @@ export function useClinicalContext(
 
   const getFormattedClinicalContext = useMemo(() => {
     let formatted: string | undefined
-    return () => (formatted ??= formatClinicalContext(getClinicalContext()))
-  }, [getClinicalContext])
+    return () => (formatted ??= [formatClinicalContext(getClinicalContext()), formatClinicalVariantExclusions(clinicalData as any ?? {})].filter(Boolean).join("\n\n"))
+  }, [getClinicalContext, clinicalData])
 
   const getFullClinicalContext = useMemo(() => {
     let masked: string | undefined

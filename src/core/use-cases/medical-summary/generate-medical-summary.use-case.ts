@@ -1,3 +1,4 @@
+import { excludeUnresolvedGenericVariants } from '@/src/core/utils/clinical-variant-inputs'
 // Use Case: Generate the Medical Summary (醫療摘要) — pure AI narrative +
 // decisions + timeline curation, constrained to a fixed schema and to citing
 // ONLY app-issued source-catalog keys. No state, no framework — unit-testable.
@@ -404,6 +405,7 @@ export function buildSourceCatalog(
   input: SummaryCatalogInput,
   locale: SummaryLocale = 'zh-TW',
 ): SummarySourceCatalogEntry[] {
+  input = excludeUnresolvedGenericVariants(input)
   const entries: SummarySourceCatalogEntry[] = []
   const observationsById = reportObservationMap(input.observations)
   const encounterOrganizationById = new Map(

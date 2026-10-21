@@ -56,7 +56,7 @@ function domainClinicalResource(resource: any, nodeKey: string, context: Clinica
   return projectClinicalReferences(mutableClinicalProjection(resource), nodeKey, context)
 }
 function bindSourceNode<T>(row: T, entry: any): T {
-  return entry._clinicalSourceNodeKey ? { ...row, clinicalSourceNodeKey: entry._clinicalSourceNodeKey } : row
+  return entry._clinicalSourceNodeKey ? { ...row, clinicalSourceNodeKey: entry._clinicalSourceNodeKey, sourceVersionId: entry.resource?.meta?.versionId } : row
 }
 
 type MedicationSourceType = 'MedicationRequest' | 'MedicationStatement'

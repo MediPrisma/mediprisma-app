@@ -2,7 +2,13 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
 
 // Core Domain Entities: Clinical Data
 
-export interface ConditionEntity {
+export interface ClinicalSourceRecord {
+  sourceVersionId?: string
+  clinicalSourceNodeKey?: string
+  clinicalRecordVariant?: ClinicalRecordVariant
+}
+
+export interface ConditionEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   code?: {
@@ -121,7 +127,7 @@ export interface ClinicalFhirExtension {
   valueInstant?: string
 }
 
-export interface MedicationEntity {
+export interface MedicationEntity extends ClinicalSourceRecord {
   identifier?: Array<{ system?: string; value?: string }>
   id: string
   meta?: {
@@ -309,7 +315,7 @@ export interface MedicationEntity {
  * resource and one same-ingredient/same-dosage-form group; it is deliberately
  * not a MedicationEntity because it is not a prescription.
  */
-export interface MedicationRemainingSummaryEntity {
+export interface MedicationRemainingSummaryEntity extends ClinicalSourceRecord {
   id: string
   groupIdentifier?: string
   groupName?: string
@@ -329,7 +335,7 @@ export interface MedicationRemainingSummaryEntity {
   sourceId?: string
 }
 
-export interface AllergyEntity {
+export interface AllergyEntity extends ClinicalSourceRecord {
   id: string
   code?: {
     text?: string
@@ -402,7 +408,7 @@ export interface ClinicalRecordVariant {
   reason: string
 }
 
-export interface ObservationEntity {
+export interface ObservationEntity extends ClinicalSourceRecord {
   /** Unresolved variants of one source record, not independent measurements. */
   clinicalRecordVariant?: ClinicalRecordVariant
   /** Opaque identity in the shared source graph; survives query structural sharing. */
@@ -562,7 +568,7 @@ export interface ObservationEntity {
   sourceId?: string
 }
 
-export interface DiagnosticReportEntity {
+export interface DiagnosticReportEntity extends ClinicalSourceRecord {
   /** Unresolved variants of one source record; chronology is not inferred. */
   clinicalRecordVariant?: ClinicalRecordVariant
   /** Opaque identity in the shared source graph; survives query structural sharing. */
@@ -647,7 +653,7 @@ export interface DiagnosticReportEntity {
  * readable study/series/instance fields and references only; the app does not
  * fetch DICOM bytes or act as a PACS viewer.
  */
-export interface ImagingStudyEntity {
+export interface ImagingStudyEntity extends ClinicalSourceRecord {
   id: string
   identifier?: Array<{
     system?: string
@@ -711,7 +717,7 @@ export interface ImagingStudyEntity {
   sourceId?: string
 }
 
-export interface ProcedureEntity {
+export interface ProcedureEntity extends ClinicalSourceRecord {
   id: string
   /** Source-derived procedure class from FHIR Procedure.category. */
   category?: {
@@ -794,7 +800,7 @@ export interface ProcedureSpecialMaterialEntity {
   relationshipBasis?: string
 }
 
-export interface EncounterEntity {
+export interface EncounterEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
   _sourceEncounterRecords?: any[]
@@ -843,7 +849,7 @@ export interface EncounterEntity {
   sourceId?: string
 }
 
-export interface DocumentReferenceEntity {
+export interface DocumentReferenceEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   status?: string
@@ -895,7 +901,7 @@ export interface DocumentReferenceEntity {
   sourceId?: string
 }
 
-export interface CompositionEntity {
+export interface CompositionEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   status?: string
@@ -963,7 +969,7 @@ export interface CompositionEntity {
  * stay in the medication list, while genuine preventive-care vaccinations
  * from 疾病管制署 (CDC) surface here.
  */
-export interface ImmunizationEntity {
+export interface ImmunizationEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   vaccineCode?: {
@@ -1000,7 +1006,7 @@ export interface ImmunizationEntity {
  * these is in progress — these fields follow the standard R4 shape and will
  * be locked against real bridge samples once they land.
  */
-export interface ConsentEntity {
+export interface ConsentEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   scope?: {
@@ -1054,7 +1060,7 @@ export interface ConsentEntity {
  * Procedure rather than the Device itself, so the card joins on date when
  * available. Field shape follows standard R4 pending bridge samples.
  */
-export interface DeviceEntity {
+export interface DeviceEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   type?: {
@@ -1097,7 +1103,7 @@ export interface DeviceEntity {
  * conditions the plan targets. Field shape follows standard R4 pending bridge
  * samples.
  */
-export interface CarePlanEntity {
+export interface CarePlanEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   intent?: string
@@ -1236,7 +1242,14 @@ export interface ClinicalSourceMetadata {
   }>
 }
 
+export interface ClinicalRecordVariantExclusion extends ClinicalRecordVariant {
+  resourceType: string
+  sourceId?: string
+  versionId?: string
+}
+
 export interface ClinicalDataCollection {
+  clinicalRecordVariantExclusions?: readonly ClinicalRecordVariantExclusion[]
   /** Complete immutable pre-mapper source graph and shared reconciliation evidence. */
   clinicalSource?: ClinicalReconciliationResult
   conditions: ConditionEntity[]

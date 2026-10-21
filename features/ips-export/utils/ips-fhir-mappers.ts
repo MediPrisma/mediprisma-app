@@ -40,13 +40,16 @@ import { medicationExportUnit, sourceSupplyText, type ExportMedication } from '.
 
 /** App-defined FHIR extension: ambiguity is retained without inventing a preferred revision. */
 export const CLINICAL_RECORD_VARIANT_EXTENSION = 'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant'
-function recordVariantExtension(row: { clinicalRecordVariant?: import('@/src/core/entities/clinical-data.entity').ClinicalRecordVariant }): Record<string, unknown> {
+function recordVariantExtension(row: { sourceId?: string; sourceVersionId?: string; _sourceResourceType?: string; clinicalRecordVariant?: import('@/src/core/entities/clinical-data.entity').ClinicalRecordVariant }): Record<string, unknown> {
   const variant = row.clinicalRecordVariant
   return variant ? { extension: [{ url: CLINICAL_RECORD_VARIANT_EXTENSION, extension: [
     { url: 'groupId', valueString: variant.groupId },
     { url: 'classification', valueCode: variant.classification },
     { url: 'variantCount', valuePositiveInt: variant.variantCount },
     { url: 'reason', valueString: variant.reason },
+    ...(row.sourceId ? [{ url: 'sourceId', valueString: row.sourceId }] : []),
+    ...(row.sourceVersionId ? [{ url: 'versionId', valueString: row.sourceVersionId }] : []),
+    ...(row._sourceResourceType ? [{ url: 'sourceResourceType', valueCode: row._sourceResourceType }] : []),
   ] }] } : {}
 }
 
@@ -243,6 +246,7 @@ export function mapAllergies(allergies: AllergyEntity[], patientRef: string): Se
 
     const resource: FhirResource = {
       resourceType: 'AllergyIntolerance',
+      ...recordVariantExtension(a),
       meta: { profile: [IPS_PROFILES.allergyIntolerance] },
       clinicalStatus: allergyClinicalStatus(a.clinicalStatus),
       ...(a.verificationStatus
@@ -289,6 +293,7 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
 
     const resource: FhirResource = {
       resourceType: 'MedicationStatement',
+      ...recordVariantExtension(m),
       meta: { profile: [IPS_PROFILES.medicationStatement] },
       status: m.exportCurrentnessUnconfirmed ? 'unknown' : pickStatus(m.status, VALID_MED_STATEMENT_STATUS, 'unknown'),
       medicationCodeableConcept:
@@ -350,6 +355,7 @@ export function mapProblemList(conditions: ConditionEntity[], patientRef: string
     const conditionLabel = c.code?.text || c.code?.coding?.[0]?.display || c.code?.coding?.[0]?.code || 'Unknown problem'
     const resource: FhirResource = {
       resourceType: 'Condition',
+      ...recordVariantExtension(c),
       meta: {
         profile: [IPS_PROFILES.condition],
         // Phase 2.2 — flag a confirmed AI-inferred problem for downstream audit.
@@ -390,6 +396,7 @@ export function mapImmunizations(immunizations: ImmunizationEntity[], patientRef
   const entries = immunizations.map((im) => {
     const resource: FhirResource = {
       resourceType: 'Immunization',
+      ...recordVariantExtension(im),
       meta: { profile: [IPS_PROFILES.immunization] },
       status: pickStatus(im.status, ['completed', 'entered-in-error', 'not-done'], 'completed'),
       vaccineCode: toCodeableConcept(im.vaccineCode, 'Unknown vaccine') ?? { text: 'Unknown vaccine' },
@@ -431,6 +438,7 @@ export function mapProcedures(procedures: ProcedureEntity[], patientRef: string)
 
     const resource: FhirResource = {
       resourceType: 'Procedure',
+      ...recordVariantExtension(p),
       meta: { profile: [IPS_PROFILES.procedure] },
       status: pickStatus(
         p.status,
@@ -600,6 +608,7 @@ export function mapDevices(devices: DeviceEntity[], patientRef: string): Section
     const deviceName = d.deviceName?.find((n) => n.name)?.name
     const deviceResource: FhirResource = {
       resourceType: 'Device',
+      ...recordVariantExtension(d),
       meta: { profile: [IPS_PROFILES.device] },
       ...(d.type ? { type: toCodeableConcept(d.type, deviceName || 'Device') } : deviceName ? { type: { text: deviceName } } : { type: { text: 'Device' } }),
       ...(d.manufacturer ? { manufacturer: d.manufacturer } : {}),
@@ -614,6 +623,7 @@ export function mapDevices(devices: DeviceEntity[], patientRef: string): Section
 
     const useResource: FhirResource = {
       resourceType: 'DeviceUseStatement',
+      ...recordVariantExtension(d),
       meta: { profile: [IPS_PROFILES.deviceUseStatement] },
       status: pickStatus(d.status, ['active', 'completed', 'entered-in-error', 'intended', 'stopped', 'on-hold'], 'active'),
       subject: { reference: patientRef },
@@ -635,6 +645,7 @@ export function mapCarePlans(carePlans: CarePlanEntity[], patientRef: string): S
   const entries = carePlans.map((cp) => {
     const resource: FhirResource = {
       resourceType: 'CarePlan',
+      ...recordVariantExtension(cp),
       meta: { profile: [IPS_PROFILES.carePlan] },
       status: pickStatus(cp.status, ['draft', 'active', 'on-hold', 'revoked', 'completed', 'entered-in-error', 'unknown'], 'active'),
       intent: pickStatus(cp.intent, ['proposal', 'plan', 'order', 'option'], 'plan'),
@@ -665,6 +676,7 @@ export function mapAdvanceDirectives(consents: ConsentEntity[], patientRef: stri
   const entries = consents.map((c) => {
     const resource: FhirResource = {
       resourceType: 'Consent',
+      ...recordVariantExtension(c),
       meta: { profile: [IPS_PROFILES.consent] },
       status: pickStatus(c.status, ['draft', 'proposed', 'active', 'rejected', 'inactive', 'entered-in-error'], 'active'),
       scope: toCodeableConcept(c.scope) ?? {
