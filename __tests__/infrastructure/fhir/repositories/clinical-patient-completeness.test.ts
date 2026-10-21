@@ -26,7 +26,7 @@ it('reports excluded clinical rows as domain incompleteness without blocking dom
   expect(collection.resourceQueryStatus?.Observation).toMatchObject({ state: 'error', count: 1, excludedCount: 1 })
   expect(collection.resourceQueryStatus?.AllergyIntolerance).toMatchObject({ state: 'empty', count: 0 })
   expect(collection.clinicalSource!.graph.nodes.some(node => node.resource.id === 'foreign-condition')).toBe(true)
-  const tools = createFhirTools(() => ({ collection }))
+  const tools = createFhirTools(() => ({ patient: null, collection }))
   const overview = await (tools.getDataOverview as any).execute({})
   expect(overview).toMatchObject({ incomplete: true, canConcludeAbsence: false })
   expect(overview.data.conditions).toMatchObject({ count: 0, incomplete: true, canConcludeAbsence: false })
