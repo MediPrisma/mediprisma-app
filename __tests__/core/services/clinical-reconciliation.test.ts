@@ -1,4 +1,5 @@
 import { reconcileClinicalSources, selectClinicalSourceResources } from '@/src/core/services/clinical-reconciliation'
+import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
 
 const capture = (generation: string, resources: any[], sourceId = 'hospital-a', patientScope = 'synthetic') => ({ sourceId, patientScope, generation, resources })
 
@@ -111,6 +112,47 @@ it('does not let a same-id Patient from another host expand an authenticated RES
   }])
   expect(source.graph.nodes.map(node => node.resource.id)).toEqual(['a', 'foreign-host', 'a', 'legal'])
   expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual(['a', 'legal'])
+})
+
+it('quarantines uniquely resolved contained Patient references without treating local ids as global', () => {
+  const source = reconcileClinicalSources([{
+    sourceId: 'ehr', patientScope: 'a', generation: 'contained-patients', restBase: 'https://ehr.example/fhir', resources: [
+      { resourceType: 'Observation', id: 'contained-foreign', subject: { reference: '#foreign' }, contained: [{ resourceType: 'Patient', id: 'foreign' }] },
+      { resourceType: 'Observation', id: 'contained-local-match', subject: { reference: '#local' }, contained: [{ resourceType: 'Patient', id: 'local' }] },
+      { resourceType: 'Observation', id: 'ambiguous', subject: { reference: '#duplicate' }, contained: [
+        { resourceType: 'Patient', id: 'duplicate', name: [{ text: 'candidate one' }] },
+        { resourceType: 'Patient', id: 'duplicate', name: [{ text: 'candidate two' }] },
+      ] },
+      { resourceType: 'Observation', id: 'unknown', subject: { reference: '#missing' } },
+    ],
+  }])
+  const graph = source.graph
+  const byId = (id: string) => graph.nodes.find(node => node.resource.id === id && node.resource.resourceType === 'Observation')!
+  const edgeFor = (id: string) => graph.references.find(edge => edge.origin.key === byId(id).key && edge.path === 'subject')
+
+  expect(edgeFor('contained-foreign')?.status).toBe('resolved')
+  expect(edgeFor('contained-local-match')?.status).toBe('resolved')
+  expect(edgeFor('ambiguous')?.status).toBe('ambiguous')
+  expect(edgeFor('unknown')?.status).toBe('unresolved')
+  expect(getClinicalSourceNodePatientExclusionReason(byId('contained-foreign'), graph.nodes)).toBe('unresolved-patient-reference')
+  expect(getClinicalSourceNodePatientExclusionReason(byId('contained-local-match'), graph.nodes)).toBe('unresolved-patient-reference')
+  expect(getClinicalSourceNodePatientExclusionReason(byId('ambiguous'), graph.nodes)).toBeUndefined()
+  expect(getClinicalSourceNodePatientExclusionReason(byId('unknown'), graph.nodes)).toBeUndefined()
+  expect(graph.nodes.some(node => node.resource.id === 'foreign' && node.isContained)).toBe(true)
+  expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual(['ambiguous', 'unknown'])
+})
+
+it('marks logical Patient references unresolved when a URN scope has no verified Patient id', () => {
+  const source = reconcileClinicalSources([{
+    sourceId: 'ehr', patientScope: 'urn:uuid:active-patient', generation: 'urn-scope-without-id', restBase: 'https://ehr.example/fhir', resources: [
+      { resource: { resourceType: 'Patient' }, fullUrl: 'urn:uuid:active-patient' },
+      { resourceType: 'Observation', id: 'unverified-logical-patient', subject: { reference: 'Patient/other' } },
+      { resourceType: 'Observation', id: 'unknown-urn-patient', subject: { reference: 'urn:uuid:not-in-graph' } },
+    ],
+  }])
+  const logical = source.graph.nodes.find(node => node.resource.id === 'unverified-logical-patient')!
+  expect(getClinicalSourceNodePatientExclusionReason(logical, source.graph.nodes)).toBe('unresolved-patient-reference')
+  expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual([undefined, 'unknown-urn-patient'])
 })
 
 it('uses a compact signature that includes empty-capture generations', () => {

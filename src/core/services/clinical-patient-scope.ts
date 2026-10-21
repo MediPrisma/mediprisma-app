@@ -28,6 +28,7 @@ function absoluteBase(value: string): string | undefined {
 }
 
 const patientIndexByGraph = new WeakMap<readonly ClinicalSourceNode[], Map<string, readonly ClinicalSourceNode[]>>()
+const containedPatientIndexByGraph = new WeakMap<readonly ClinicalSourceNode[], Map<string, Map<string, readonly ClinicalSourceNode[]>>>()
 
 function patientsBySource(graphNodes: readonly ClinicalSourceNode[], sourceId: string): readonly ClinicalSourceNode[] {
   let index = patientIndexByGraph.get(graphNodes)
@@ -45,20 +46,59 @@ function patientsBySource(graphNodes: readonly ClinicalSourceNode[], sourceId: s
   return index.get(sourceId) ?? []
 }
 
-/**
- * Return false only for an explicit patient contradiction. Unknown URNs,
- * missing references, and absolute references whose base cannot be established
- * stay eligible so this helper never invents a cross-base reference.
- */
-export function isClinicalSourceNodePatientEligible(
+function containedPatientsByParentAndId(
+  graphNodes: readonly ClinicalSourceNode[],
+  parentKey: string,
+  id: string,
+): readonly ClinicalSourceNode[] {
+  let index = containedPatientIndexByGraph.get(graphNodes)
+  if (!index) {
+    const building = new Map<string, Map<string, ClinicalSourceNode[]>>()
+    for (const candidate of graphNodes) {
+      if (!candidate.isContained || !candidate.parentKey || candidate.resource.resourceType !== 'Patient' || !candidate.resource.id) continue
+      let byId = building.get(candidate.parentKey)
+      if (!byId) {
+        byId = new Map<string, ClinicalSourceNode[]>()
+        building.set(candidate.parentKey, byId)
+      }
+      const patients = byId.get(candidate.resource.id) ?? []
+      patients.push(candidate)
+      byId.set(candidate.resource.id, patients)
+    }
+    index = building
+    containedPatientIndexByGraph.set(graphNodes, index)
+  }
+  return index.get(parentKey)?.get(id) ?? []
+}
+
+/** Classify patient-scope exclusions without treating local or opaque ids as global identities. */
+export type ClinicalSourceNodePatientExclusionReason = 'foreign-patient-reference' | 'unresolved-patient-reference'
+
+export function getClinicalSourceNodePatientExclusionReason(
   node: ClinicalSourceNode,
   graphNodes: readonly ClinicalSourceNode[],
-): boolean {
+): ClinicalSourceNodePatientExclusionReason | undefined {
   const resource = node.resource as Record<string, unknown>
-  const references = [resource.subject, resource.patient]
-    .map((value) => value && typeof value === 'object' ? (value as Record<string, unknown>).reference : undefined)
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-  if (references.length === 0 && node.resource.resourceType !== 'Patient') return true
+  const referenceFields = ['subject', 'patient'] as const
+  const references = referenceFields.flatMap(field => {
+    const value = resource[field]
+    const reference = value && typeof value === 'object' ? (value as Record<string, unknown>).reference : undefined
+    return typeof reference === 'string' && reference.length > 0 ? [{ field, reference }] : []
+  })
+  if (references.length === 0 && node.resource.resourceType !== 'Patient') return undefined
+
+  // A contained Patient's id is local to its parent resource. A uniquely
+  // resolved #id therefore proves that the reference points to a Patient,
+  // but does not prove that Patient is the authenticated SMART patient.
+  // Quarantine it as scope-unresolved rather than guessing from the local id.
+  const containedParentKey = node.isContained ? node.parentKey : node.key
+  if (containedParentKey) {
+    for (const { reference } of references) {
+      if (!reference.startsWith('#')) continue
+      const candidates = containedPatientsByParentAndId(graphNodes, containedParentKey, reference.slice(1))
+      if (candidates.length === 1) return 'unresolved-patient-reference'
+    }
+  }
 
   const sameSourcePatients = patientsBySource(graphNodes, node.sourceId)
   const expectedIds = new Set<string>()
@@ -90,11 +130,11 @@ export function isClinicalSourceNodePatientEligible(
   if (node.resource.resourceType === 'Patient') {
     if (node.fullUrl && authenticatedBase) {
       const base = absoluteBase(node.fullUrl)
-      if (base && base !== authenticatedBase) return false
+      if (base && base !== authenticatedBase) return 'foreign-patient-reference'
     }
-    if (node.resource.id && expectedIds.size > 0 && !expectedIds.has(node.resource.id)) return false
+    if (node.resource.id && expectedIds.size > 0 && !expectedIds.has(node.resource.id)) return 'foreign-patient-reference'
     if (node.fullUrl && expectedUrls.size > 0 && !expectedUrls.has(node.fullUrl)
-      && !(node.resource.id && expectedIds.has(node.resource.id))) return false
+      && !(node.resource.id && expectedIds.has(node.resource.id))) return 'foreign-patient-reference'
   }
 
   const knownBases = new Set<string>()
@@ -108,25 +148,36 @@ export function isClinicalSourceNodePatientEligible(
       if (base) knownBases.add(base)
     }
   }
-  for (const reference of references) {
+  for (const { reference } of references) {
     if (/^urn:/i.test(reference)) {
       if (expectedUrls.has(reference)) continue
       const knownPatient = sameSourcePatients.find(patient => patient.fullUrl === reference)
       if (knownPatient && !expectedUrls.has(reference)
         && (!patientUrlIsTrusted(knownPatient)
-          || !(knownPatient.resource.id && expectedIds.has(knownPatient.resource.id)))) return false
+          || !(knownPatient.resource.id && expectedIds.has(knownPatient.resource.id)))) return 'foreign-patient-reference'
       continue
     }
     const id = patientIdFrom(reference)
     if (!id) continue
     if (/^https?:\/\//i.test(reference)) {
       const base = absoluteBase(reference)
-      if (!base || knownBases.size === 0) continue
+      if (!base || knownBases.size === 0) {
+        if (expectedIds.size === 0) return 'unresolved-patient-reference'
+        continue
+      }
       // With a known server base, an absolute reference to a different base is
       // an explicit boundary crossing even when the Patient id happens to match.
-      if (![...knownBases].includes(base)) return false
+      if (![...knownBases].includes(base)) return 'foreign-patient-reference'
     }
-    if (expectedIds.size > 0 && !expectedIds.has(id)) return false
+    if (expectedIds.size === 0) return 'unresolved-patient-reference'
+    if (expectedIds.size > 0 && !expectedIds.has(id)) return 'foreign-patient-reference'
   }
-  return true
+  return undefined
+}
+
+export function isClinicalSourceNodePatientEligible(
+  node: ClinicalSourceNode,
+  graphNodes: readonly ClinicalSourceNode[],
+): boolean {
+  return getClinicalSourceNodePatientExclusionReason(node, graphNodes) === undefined
 }
