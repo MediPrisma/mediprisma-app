@@ -1,3 +1,4 @@
+import { recordClinicalProjectionDisposition } from '../mappers/clinical-projection-disposition'
 import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
@@ -1531,6 +1532,7 @@ export const LocalBundleService = {
     // inside List.contained and relink its identifier-based references, so the
     // Condition / cancer-staging Observations / treatment Procedures surface and
     // the DiagnosticReports link to the patient. No-op for non-Roche bundles.
+    const observationsBeforeExpansion = new Map(entries.filter(resource => resource.resourceType === 'Observation').map(resource => [resource, sourceKeyByResource.get(resource)]))
     const derivedMembers = new Map<string, string[]>()
     expandRocheResources(entries, (origin, observation) => {
       const originKey = sourceKeyByResource.get(origin)
@@ -1543,6 +1545,7 @@ export const LocalBundleService = {
       if (!sourceNode?.isContained || typeof sourceId !== 'string') return undefined
       return containedIdScopes.get(sourceId)?.size === 1 ? sourceId : undefined
     })
+    recordClinicalProjectionDisposition(clinicalSource, [...observationsBeforeExpansion].flatMap(([resource, key]) => key && !entries.includes(resource) ? [key] : []))
     assertPatientOwnership(entries.flatMap(resource => {
       const node = sourceNodesByKey.get(sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey)
       return node ? [node] : []
@@ -1631,11 +1634,11 @@ export const LocalBundleService = {
       if (sourceKey) {
         const edge = sourceReferencesByPath.get(sourceKey + '|medicationReference')
         const target = edge?.status === 'resolved' ? sourceNodesByKey.get(edge.targetKeys[0])?.resource : undefined
-        return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: cloneResource(target.code) } : m
+        return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: cloneResource(target.code), _clinicalMedicationCodeProvenance: 'graph-reference' } : m
       }
       const refId = /^Medication\/([^/]+)$/.exec(m.medicationReference.reference)?.[1]
       const medResource = refId ? medicationMap.get(refId) : null
-      return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code } : m
+      return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code, _clinicalMedicationCodeProvenance: 'mapped-policy' } : m
     }
 
     // Normalize MedicationStatements to a MedicationRequest-compatible shape so
@@ -1752,7 +1755,7 @@ export const LocalBundleService = {
     const collection: ClinicalDataCollection = {
       clinicalSource,
       conditions:       conds.map((r: any) => bindMappedResource(FhirMapper.toCondition(r), r)),
-      medications:      meds.map((r: any) => bindMappedResource(FhirMapper.toMedication(r), r)),
+      medications:      meds.map((r: any) => ({ ...bindMappedResource(FhirMapper.toMedication(r), r), ...(r.medicationCodeableConcept ? { clinicalMedicationCodeProvenance: r._clinicalMedicationCodeProvenance ?? 'mapped-policy' } : {}) })),
       medicationRemainingSummaries,
       allergies:        allerg.map((r: any) => bindMappedResource(FhirMapper.toAllergy(r), r)),
       observations,
