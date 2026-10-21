@@ -1657,9 +1657,9 @@ export const LocalBundleService = {
     }))
     if (identityConflict) {
       const selected = primaryPatients.find(node => resolution.includes(node.key))
-      const updated = Date.parse(String(selected?.resource.meta?.lastUpdated ?? ''))
+      const updated = Date.parse(String((selected?.resource.meta as { lastUpdated?: unknown } | undefined)?.lastUpdated ?? ''))
       const ordered = Number.isFinite(updated) && primaryPatients.every(node => node.key === selected?.key
-        || Date.parse(String(node.resource.meta?.lastUpdated ?? '')) < updated)
+        || Date.parse(String((node.resource.meta as { lastUpdated?: unknown } | undefined)?.lastUpdated ?? '')) < updated)
       if (!ordered) throw new Error('此資料包含互相矛盾且無更新順序的病人身分資料，無法安全匯入。請提供單一病人的 FHIR Bundle。')
     }
     if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
