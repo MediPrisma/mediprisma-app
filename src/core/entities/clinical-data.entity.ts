@@ -409,6 +409,8 @@ export interface ClinicalRecordVariant {
 }
 
 export interface ObservationEntity extends ClinicalSourceRecord {
+  /** Local convenience association by date; not an explicit FHIR encounter link. */
+  _encounterInferred?: boolean
   /** Unresolved variants of one source record, not independent measurements. */
   clinicalRecordVariant?: ClinicalRecordVariant
   /** Opaque identity in the shared source graph; survives query structural sharing. */

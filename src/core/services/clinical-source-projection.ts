@@ -4,6 +4,22 @@ import type { ClinicalSourceGraph, ClinicalSourceNode } from './clinical-source-
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 
 const projectedResourceTypes = new Set(['Observation', 'DiagnosticReport'])
+const collisionProjectedNamespaces = new Map([
+  ['Condition', 'Condition'],
+  ['MedicationRequest', 'medication'],
+  ['MedicationStatement', 'medication'],
+  ['AllergyIntolerance', 'AllergyIntolerance'],
+  ['ImagingStudy', 'ImagingStudy'],
+  ['Procedure', 'Procedure'],
+  ['Encounter', 'Encounter'],
+  ['DocumentReference', 'DocumentReference'],
+  ['Composition', 'Composition'],
+  ['Immunization', 'Immunization'],
+  ['Consent', 'Consent'],
+  ['Device', 'Device'],
+  ['CarePlan', 'CarePlan'],
+  ['Basic', 'Basic'],
+])
 const membershipGraphs = new WeakMap<ClinicalSourceGraph, ClinicalSourceGraph>()
 
 function projectionMembershipGraph(graph: ClinicalSourceGraph): ClinicalSourceGraph {
@@ -52,6 +68,7 @@ export function clinicalSourceIdentityDigest(value: string): string {
  */
 export function createClinicalSourceProjectionIds(
   source: ClinicalReconciliationResult,
+  genericNodeKeys?: ReadonlySet<string>,
 ): ReadonlyMap<string, string> {
   const membershipGraph = projectionMembershipGraph(source.graph)
   const nodesByKey = new Map(source.graph.nodes.map((node) => [node.key, node]))
@@ -175,6 +192,72 @@ export function createClinicalSourceProjectionIds(
         throw new Error('Clinical source projection produced an invalid FHIR row ID')
       }
       for (const key of group.keys) idsByNodeKey.set(key, rowId)
+    }
+  }
+
+  // Generic mapped rows keep their legacy FHIR id unless the shared graph has
+  // a distinct record in the same UI namespace with that id. This preserves
+  // existing navigation IDs while giving only real collisions unique IDs.
+  const genericGroups = new Map<string, Array<{ node: ClinicalSourceNode; namespace: string }>>()
+  for (const node of source.graph.nodes) {
+    const namespace = collisionProjectedNamespaces.get(node.resource.resourceType)
+    const legacyId = node.resource.id
+    if (genericNodeKeys ? !genericNodeKeys.has(node.key) : node.isContained || node.embeddedIn) continue
+    if (!namespace || typeof legacyId !== 'string' || !legacyId) continue
+    const groupKey = stableMetadata([namespace, legacyId])
+    const group = genericGroups.get(groupKey) ?? []
+    group.push({ node, namespace })
+    genericGroups.set(groupKey, group)
+  }
+  const collisionDigests = new Map<string, string>()
+  for (const group of genericGroups.values()) {
+    if (group.length < 2) continue
+    const distinct = new Map<string, { node: ClinicalSourceNode; keys: string[]; baseIdentity: string; context: string }>()
+    const contextsByBase = new Map<string, Set<string>>()
+    for (const { node, namespace } of group) {
+      const baseIdentity = stableMetadata([
+        namespace,
+        node.sourceId,
+        node.patientScope,
+        node.restBase ?? null,
+        node.resource.resourceType,
+        node.resource.id,
+        node.fullUrl ?? null,
+        (node.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null,
+        node.contentHash,
+        stableParentIdentity(node) ?? null,
+      ])
+      const context = clinicalSourceContextIdentity(source.graph, node)
+      const identity = stableMetadata([baseIdentity, context])
+      const contexts = contextsByBase.get(baseIdentity) ?? new Set<string>()
+      contexts.add(context)
+      contextsByBase.set(baseIdentity, contexts)
+      const previous = distinct.get(identity)
+      if (previous) {
+        if (!clinicalSourceNodesEqualWithContext(source.graph, previous.node, node)) {
+          throw new Error('Clinical source projection ID hash collision: matching generic identity metadata has different resources')
+        }
+        previous.keys.push(node.key)
+      } else distinct.set(identity, { node, keys: [node.key], baseIdentity, context })
+    }
+    if (distinct.size < 2) continue
+    for (const record of distinct.values()) {
+      // Supporting-query resolution does not rename a raw-distinct record.
+      // Context discriminates only otherwise identical retained records.
+      const identity = contextsByBase.get(record.baseIdentity)!.size > 1
+        ? stableMetadata([record.baseIdentity, record.context])
+        : record.baseIdentity
+      const digest = clinicalSourceIdentityDigest(identity)
+      const previousIdentity = collisionDigests.get(digest)
+      if (previousIdentity && previousIdentity !== identity) {
+        throw new Error('Clinical source projection ID hash collision: distinct generic records share a row ID digest')
+      }
+      collisionDigests.set(digest, identity)
+      const rowId = `cs${digest}`
+      if (rowId.length > 64 || !/^[A-Za-z0-9.-]+$/.test(rowId)) {
+        throw new Error('Clinical source projection produced an invalid FHIR row ID')
+      }
+      for (const key of record.keys) idsByNodeKey.set(key, rowId)
     }
   }
   return idsByNodeKey

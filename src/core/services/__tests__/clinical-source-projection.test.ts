@@ -6,6 +6,28 @@ import type { ClinicalReconciliationResult } from '../clinical-reconciliation'
 const scope = { sourceId: 'ehr-source', patientScope: 'patient-1', restBase: 'https://ehr.example/fhir' }
 
 describe('createClinicalSourceProjectionIds', () => {
+  it('limits generic IDs to real collisions while preserving retransmission and source-only boundaries', () => {
+    const condition = { resourceType: 'Condition', id: 'collision', code: { text: 'One' } }
+    const first = { ...scope, generation: 'one', resources: [
+      { fullUrl: 'urn:uuid:one', resource: condition },
+      { resourceType: 'Patient', id: 'same' }, { resourceType: 'Patient', id: 'same', active: false },
+      { resourceType: 'FutureResource', id: 'same' }, { resourceType: 'FutureResource', id: 'same', note: 'Other' },
+      { resourceType: 'Condition', id: 'unique' },
+    ] }
+    const second = { ...scope, generation: 'two', resources: [
+      { fullUrl: 'urn:uuid:one', resource: condition },
+      { fullUrl: 'urn:uuid:two', resource: { ...condition, code: { text: 'Two' } } },
+    ] }
+    const source = reconcileClinicalSources([first, second])
+    const ids = createClinicalSourceProjectionIds(source)
+    const copies = source.graph.nodes.filter(node => node.fullUrl === 'urn:uuid:one')
+    expect(ids.get(copies[0].key)).toBe(ids.get(copies[1].key))
+    expect(ids.get(copies[0].key)).not.toBe(ids.get(source.graph.nodes.find(node => node.fullUrl === 'urn:uuid:two')!.key))
+    expect(ids.size).toBe(3)
+    const oneVisible = createClinicalSourceProjectionIds(source, new Set([copies[0].key]))
+    expect(oneVisible.size).toBe(0)
+  })
+
   it('keeps row identity while patient and encounter captures progressively resolve administrative references', () => {
     const clinical = { ...scope, generation: 'clinical', resources: [
       { resourceType: 'Observation', id: 'value', subject: { reference: 'Patient/patient-1' }, encounter: { reference: 'Encounter/visit' }, valueInteger: 7 },

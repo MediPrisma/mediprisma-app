@@ -20,7 +20,7 @@ function canonical(value: unknown): string {
 }
 /** Remove only the explicit FHIR history suffix from an absolute REST URL for
  * logical record grouping. The graph keeps the original versioned fullUrl. */
-function logicalRestFullUrl(fullUrl: string | undefined): string | null {
+export function logicalRestFullUrl(fullUrl: string | undefined): string | null {
   if (!fullUrl) return null
   try {
     const url = new URL(fullUrl)

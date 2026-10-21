@@ -1573,7 +1573,8 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: null })
 
-        const candidates = collection.encounters.filter((e: any) => e.id === encounterId)
+        const exactCandidates = collection.encounters.filter((e: any) => e.id === encounterId)
+        const candidates = exactCandidates.length ? exactCandidates : collection.encounters.filter((e: any) => e.sourceId === encounterId)
         if (candidates.length > 1) return scrub({ success: false, code: 'ambiguous-encounter-identity', incomplete: true, canConcludeAbsence: false, summary: 'Multiple source encounters have this identifier; a unique visit cannot be selected.', data: null })
         const enc = candidates[0]
         if (!enc) {

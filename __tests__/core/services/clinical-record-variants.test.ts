@@ -5,6 +5,14 @@ import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bun
 const resource = (value: number, versionId?: string) => ({ resourceType: 'Observation', id: 'lab', status: 'final', code: { text: 'Synthetic lab' }, valueQuantity: { value }, ...(versionId ? { meta: { versionId } } : {}) })
 const capture = (generation: string, value: number, version?: string) => ({ sourceId: 'source', patientScope: 'patient', generation, resources: [{ fullUrl: 'https://one.invalid/Observation/lab', resource: resource(value, version) }] })
 
+it('keeps the same variant group when versioned REST fullUrls arrive in reverse order', () => {
+  const captures = ['1', '2'].map(version => ({ ...capture(version, Number(version), version), resources: [{ fullUrl: `https://one.invalid/Observation/lab/_history/${version}`, resource: resource(Number(version), version) }] }))
+  const forward = [...createClinicalRecordVariants(reconcileClinicalSources(captures)).values()]
+  const reverse = [...createClinicalRecordVariants(reconcileClinicalSources([...captures].reverse())).values()]
+  expect(forward).toHaveLength(2)
+  expect(new Set([...forward, ...reverse].map(item => item.groupId)).size).toBe(1)
+})
+
 it('carries one unresolved revision group without inventing chronological order', () => {
   const first = reconcileClinicalSources([capture('a', 7, '10'), capture('b', 9, '2'), capture('duplicate', 7, '10')])
   const annotations = [...createClinicalRecordVariants(first).values()]

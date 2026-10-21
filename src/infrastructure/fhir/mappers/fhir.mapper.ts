@@ -354,6 +354,7 @@ export class FhirMapper implements IDataMapper {
       // (`+`, `Negative`) to mis-route to the urinalysis tab.
       specimen: fhirResource.specimen,
       encounter: fhirResource.encounter,
+      _encounterInferred: (fhirResource as Observation & { _encounterInferred?: boolean })._encounterInferred,
       performer: fhirResource.performer,
       note: fhirResource.note,
       referenceRange: fhirResource.referenceRange,
