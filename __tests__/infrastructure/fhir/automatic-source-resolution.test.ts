@@ -246,6 +246,6 @@ it.each([{excludedCount:1,exclusionReason:'foreign-patient-reference'},{invalidM
  const status={resourceType:'MedicationRequest',state:'incomplete',medicationContentOnlyIncomplete:true,...extra} as any
  expect(isMedicationContentOnlyIncomplete(status)).toBe(false)
  const projected=projectClinicalMedicationQueryStatus([{id:'missing',clinicalMedicationContentUncertainty:{reason:'unresolved-reference'}}] as any,{MedicationRequest:status})
- expect(projected.MedicationRequest?.medicationContentOnlyIncomplete).not.toBe(true)
+ if('excludedCount' in extra)expect(projected.MedicationRequest?.medicationContentOnlyIncomplete).not.toBe(true)
  expect(isMedicationContentOnlyIncomplete(projected.MedicationRequest)).toBe(false)
 })

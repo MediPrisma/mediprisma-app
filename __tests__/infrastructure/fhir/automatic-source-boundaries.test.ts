@@ -1,3 +1,4 @@
+import { isMedicationContentOnlyIncomplete } from '@/src/core/utils/clinical-query-status'
 import { createClinicalRecordResolution } from '@/src/core/services/clinical-record-resolution'
 import { graphEncounterReferenceOrganization } from '@/src/core/services/clinical-source-catalog-evidence'
 import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
@@ -103,3 +104,17 @@ it('upgrades a content-only gap to a real ownership error when a later source gr
  expect(after.resourceQueryStatus.MedicationRequest).toMatchObject({state:'error',excludedCount:1,exclusionReason:'foreign-patient-reference'})
  expect(after.resourceQueryStatus.MedicationRequest.medicationContentOnlyIncomplete).not.toBe(true)
 })
+
+it.each([false,true])('clears a repaired modifier without making the remaining medication content gap permanently blocking (content resolved=%s)',resolved=>{
+ const unknown={resourceType:'MedicationRequest',id:'unknown',status:'active',medicationReference:{reference:'Medication/missing'}}
+ const invalid={resourceType:'MedicationRequest',id:'invalid',status:'active',medicationCodeableConcept:{text:'Synthetic invalid source'},modifierExtension:[{url:'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant',extension:[]}]}
+ const initial=reconcileClinicalSources([capture('snapshot',[patient,unknown,invalid])])
+ const before=projectClinicalAggregate({clinicalSource:initial,medications:initial.graph.nodes.filter(node=>node.resource.resourceType==='MedicationRequest').map(node=>({...node.resource,clinicalSourceNodeKey:node.key})),resourceQueryStatus:{MedicationRequest:{resourceType:'MedicationRequest',state:'ok',count:2}}} as any)
+ expect(before.resourceQueryStatus.MedicationRequest).toMatchObject({state:'incomplete',medicationContentOnlyIncomplete:true,invalidModifierCount:1})
+ const source=reconcileClinicalSources([capture('snapshot',[patient,unknown,...(resolved?[{resourceType:'Medication',id:'missing',code:{text:'Synthetic resolved medicine'}}]:[])])])
+ const after=projectClinicalAggregate(before,source)
+ expect(after.resourceQueryStatus.MedicationRequest.invalidModifierCount).toBeUndefined()
+ if(resolved){expect(after.resourceQueryStatus.MedicationRequest.state).toBe('ok');expect(after.medications[0].clinicalMedicationContentUncertainty).toBeUndefined()}
+ else{expect(isMedicationContentOnlyIncomplete(after.resourceQueryStatus.MedicationRequest)).toBe(true)}
+})
+
