@@ -49,3 +49,15 @@ it('does not merge anonymous identical events or records with different fullUrls
   const collection = LocalBundleService.parse(bundle)!.collection
   expect(collection.observations).toHaveLength(4)
 })
+
+it('preserves distinct fullUrl identities in mapped rows and does not attach an ambiguous relative member', () => {
+  const bundle: any = fixture()
+  bundle.entry[2].fullUrl = 'https://one.invalid/Observation/result'
+  bundle.entry.push({ fullUrl: 'https://two.invalid/Observation/result', resource: { ...bundle.entry[2].resource, valueQuantity: { value: 99, unit: 'mg' } } })
+  bundle.entry.push({ resource: { resourceType: 'DiagnosticReport', id: 'ambiguous-report', status: 'final', code: { text: 'synthetic' }, result: [{ reference: 'Observation/result' }] } })
+  bundle.entry.push({ resource: { resourceType: 'DiagnosticReport', id: 'exact-report', status: 'final', code: { text: 'synthetic' }, result: [{ reference: 'https://one.invalid/Observation/result' }] } })
+  const collection = LocalBundleService.parse(bundle)!.collection
+  expect(new Set(collection.observations.map(row => row.id)).size).toBe(2)
+  expect((collection.diagnosticReports.find(row => row.id === 'ambiguous-report') as any)?._observations ?? []).toHaveLength(0)
+  expect((collection.diagnosticReports.find(row => row.id === 'exact-report') as any)?._observations[0].valueQuantity.value).toBe(7)
+})

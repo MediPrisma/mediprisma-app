@@ -586,14 +586,42 @@ export function canonicalizeBundleResources(bundle: any): any[] {
 
   // Pass 1 — assign ids; index every resolvable key to its canonical target.
   const targets = new Map<string, RefTarget>()
+  const ambiguous = new Set<string>()
+  const indexTarget = (alias: string, target: RefTarget) => {
+    if (ambiguous.has(alias)) return
+    const existing = targets.get(alias)
+    if (existing?.resourceType === target.resourceType && existing.id === target.id) return
+    if (existing) {
+      targets.delete(alias)
+      ambiguous.add(alias)
+    } else targets.set(alias, target)
+  }
+  const identityCounts = new Map<string, number>()
+  for (const entry of entries) {
+    const id = entry.resource.id || idFromFullUrl(entry.fullUrl)
+    if (id) {
+      const identity = String(entry.resource.resourceType) + '/' + String(id)
+      identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1)
+    }
+  }
   const resources = entries.map((e, index) => {
     const res = cloneResource(e.resource)
     const resourceType: string = res.resourceType ?? 'Resource'
-    const id = String(res.id || idFromFullUrl(e.fullUrl) || `${resourceType}-${index}`)
+    const originalId = String(res.id || idFromFullUrl(e.fullUrl) || `${resourceType}-${index}`)
+    // Colliding logical ids from distinct fullUrls/versions must not become
+    // one UI key or let a relative reference select an arbitrary source.
+    const id = (identityCounts.get(`${resourceType}/${originalId}`) ?? 0) > 1
+      ? `${originalId}-source-${index}`
+      : originalId
     res.id = id
     const target: RefTarget = { resourceType, id }
-    if (e.fullUrl) targets.set(e.fullUrl, target)
-    targets.set(`${resourceType}/${id}`, target)
+    if (e.fullUrl) indexTarget(e.fullUrl, target)
+    const relative = `${resourceType}/${originalId}`
+    indexTarget(relative, target)
+    if (res.meta?.versionId) {
+      indexTarget(`${relative}/_history/${res.meta.versionId}`, target)
+      if (e.fullUrl) indexTarget(`${e.fullUrl}/_history/${res.meta.versionId}`, target)
+    }
     return res
   })
 
