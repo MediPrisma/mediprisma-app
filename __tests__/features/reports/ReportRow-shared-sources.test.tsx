@@ -20,7 +20,7 @@ jest.mock('sonner', () => ({
 
 function RightDetailTitleProbe() {
   const { detail } = useRightDetail()
-  return detail ? <div data-testid="right-detail-title">{detail.title}</div> : null
+  return detail ? <><div data-testid="right-detail-title">{detail.title}</div><div data-testid="right-detail-node">{detail.node}</div></> : null
 }
 
 function renderRow(row: Row) {
@@ -75,6 +75,23 @@ function sharedRow(structured = false): Row {
 }
 
 describe('ReportRow shared report source disclosure', () => {
+  it('keeps different observations sharing an id visible without reusing React keys', () => {
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const row = sharedRow(true)
+      row.obs.push({ ...row.obs[1], valueQuantity: { value: 69, unit: '%' } })
+      renderRow(row)
+      fireEvent.click(screen.getByText(row.title))
+      fireEvent.click(screen.getByRole('button', { name: '在右側面板展開細項' }))
+      const detail = screen.getByTestId('right-detail-node')
+      expect(detail).toHaveTextContent('72.6')
+      expect(detail).toHaveTextContent('69')
+      expect(errors.mock.calls.filter(args => String(args[0]).includes('same key'))).toHaveLength(0)
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
     Object.defineProperty(navigator, 'clipboard', {

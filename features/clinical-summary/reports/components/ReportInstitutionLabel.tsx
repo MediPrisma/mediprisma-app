@@ -47,7 +47,7 @@ export function ReportInstitutionLabel({
     >
       <Building2 className="h-3 w-3 shrink-0" aria-hidden />
       <span className="truncate">{institutionName}</span>
-      {sourceSuffix && <span className="shrink-0">{sourceSuffix}</span>}
+      {sourceSuffix && <span className="min-w-0 truncate">{sourceSuffix}</span>}
     </TapTooltip>
   )
 }
