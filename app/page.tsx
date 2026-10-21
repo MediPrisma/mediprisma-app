@@ -30,16 +30,12 @@ import { AiDemographicsGateDialog } from "@/features/medical-summary/components/
 import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
 import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
 import {
-  FirstRunTourOffer,
   GuidedTourOverlay,
   TourHub,
   TourHubMenuItem,
-  useGuidedTourStore,
 } from "@/features/guided-tour"
 import { useUnseenNews } from "@/features/guided-tour/use-unseen-news"
-import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-route"
 import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/guideline-packs/pilot-gate"
-import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
 import { ProgressiveImportStatus } from "@/features/import-bundle/components/ProgressiveImportStatus"
 import { BUNDLE_CHANGED_EVENT } from "@/src/shared/utils/reset-on-bundle-change"
@@ -149,9 +145,6 @@ function PageContent() {
   const acknowledgeSummary = useSummaryActivityStore((state) => state.acknowledge)
   const leftTourActive = useLeftBrowserTourStore((state) => state.active)
   const rightTourActive = useRightFeatureTourStore((state) => state.active)
-  const tourLauncherOpen = useRightFeatureTourStore((state) => state.launcherOpen)
-  const guidedTourActive = useGuidedTourStore((state) => state.tourId !== null)
-  const tourHubOpen = useGuidedTourStore((state) => state.hubOpen)
   const anyTourActive = leftTourActive || rightTourActive
   const tourWasActiveRef = useRef(false)
   const preTourLayoutRef = useRef<{
@@ -223,19 +216,9 @@ function PageContent() {
   // screen instead of empty / failing panels.
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const showOnboarding = !patientLoading && !patient && !patientError
-  const { ready: onboardingReady, completed: onboardingCompleted } = useOnboarding()
   const dataLoaded = !!patient && !patientLoading && !patientError
-  // The Medcloud launch is an unattended hand-off: no onboarding, and no
-  // guided-tour offer either. Without this it still popped up for anyone whose
-  // browser had completed onboarding on an earlier visit.
-  const tourEligible = dataLoaded
-    && !anyTourActive
-    && !guidedTourActive
-    && !tourHubOpen
-    && !tourLauncherOpen
-    && onboardingReady
-    && onboardingCompleted
-    && !isMedcloudLaunchRoute()
+  // Tours never offer themselves over the chart: they wait in 更多 → 導覽中心
+  // until the clinician asks for one.
 
   // Right-pane detail: a left-panel card can push its expanded detail here
   // instead of expanding downward (see RightDetailProvider). When set, the right
@@ -756,7 +739,6 @@ function PageContent() {
       )}
 
       <FirstRunOnboardingDialog />
-      <FirstRunTourOffer eligible={tourEligible} />
       <GuidedTourOverlay />
       <TourHub />
       <RightFeatureTour />
