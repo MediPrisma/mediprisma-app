@@ -29,6 +29,8 @@ describe('cross-source imaging reports', () => {
     expect(row.obs.some(obs => obs.valueString?.includes('Positive Rate Evaluation 2'))).toBe(true)
     const changed = { ...reports[1], conclusion: `${BODY}${FOOTER.replace('Evaluation 2', 'Evaluation 3')}` }
     expect(buildReportsData([reports[0], changed]).reportRows).toHaveLength(2)
+    changed.conclusion = changed.conclusion.replace('Evaluation 3', 'Evaluation ３')
+    expect(buildReportsData([reports[0], changed]).reportRows).toHaveLength(2)
   })
 
   it.each([null, { code: 123 }])('keeps malformed order codes from breaking the row projection: %j', coding => {

@@ -113,7 +113,7 @@ export function compareImagingCopies(a: Report, b: Report): number {
 }
 
 function footerEvaluation(report: Report): string | undefined {
-  return /Positive\s+Rate\s+Evaluation\s+(\d+)\s*$/i.exec(sharedReportNarrative(report))?.[1]
+  return /Positive\s+Rate\s+Evaluation\s+(\d+)\s*$/i.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1]
 }
 
 /** Findings may be templated. Explicit exam labels still constrain a match,
