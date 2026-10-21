@@ -18,6 +18,19 @@ function canonical(value: unknown): string {
   if (value && typeof value === 'object') return '{' + Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => JSON.stringify(key) + ':' + canonical(item)).join(',') + '}'
   return JSON.stringify(value) ?? 'null'
 }
+/** Remove only the explicit FHIR history suffix from an absolute REST URL for
+ * logical record grouping. The graph keeps the original versioned fullUrl. */
+function logicalRestFullUrl(fullUrl: string | undefined): string | null {
+  if (!fullUrl) return null
+  try {
+    const url = new URL(fullUrl)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return fullUrl
+  } catch {
+    return fullUrl
+  }
+  const history = fullUrl.match(/^(https?:\/\/[^/?#]+(?:\/[^/?#]+)*\/[A-Z][A-Za-z0-9]*\/[A-Za-z0-9.-]{1,64})\/_history\/[A-Za-z0-9.-]{1,64}([?#].*)?$/i)
+  return history ? history[1] + (history[2] ?? '') : fullUrl
+}
 function parentSourceIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<string, ClinicalSourceNode>, seen = new Set<string>()): unknown {
   const parentKey = node.parentKey ?? node.embeddedIn
   if (!parentKey) return null
@@ -28,11 +41,7 @@ function parentSourceIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<strin
   if (!parent.resource.id && !parent.fullUrl) return ['anonymous-parent', parent.key]
   if (seen.has(parent.key)) return ['parent-cycle', parent.resource.resourceType, parent.resource.id ?? parent.fullUrl]
   seen.add(parent.key)
-  const fullUrl = parent.fullUrl
-    ? (/^https?:\/\//i.test(parent.fullUrl)
-      ? parent.fullUrl.replace(/\/_history\/[^/?#]+(?=[?#]|$)/i, '')
-      : parent.fullUrl)
-    : null
+  const fullUrl = logicalRestFullUrl(parent.fullUrl)
   return [
     parent.sourceId,
     parent.patientScope,
@@ -50,7 +59,7 @@ function parentSourceIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<strin
 // isolated. The existing resolved-context comparison still distinguishes
 // children whose references land in different parent-version contexts.
 function recordScopeIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<string, ClinicalSourceNode>): string {
-  return JSON.stringify([node.sourceId, node.patientScope, node.restBase ?? null, node.fullUrl ?? null,
+  return JSON.stringify([node.sourceId, node.patientScope, node.restBase ?? null, logicalRestFullUrl(node.fullUrl),
     node.parentKey ? 'contained' : node.embeddedIn ? 'embedded' : null,
     parentSourceIdentity(node, nodes), node.resource.resourceType, node.resource.id ?? null])
 }

@@ -109,6 +109,42 @@ it('does not treat records from distinct REST bases as the same source identity'
   expect(model.evidence.sameRecord).toEqual([])
 })
 
+it('correlates top-level versioned REST fullUrls without merging their retained versions', () => {
+  const source = reconcileClinicalSources([
+    { sourceId: 'ehr', patientScope: 'a', generation: 'v1', restBase: 'https://ehr.example/fhir', resources: [
+      { resource: { resourceType: 'Condition', id: 'x', meta: { versionId: '1' }, code: { text: 'first' } }, fullUrl: 'https://ehr.example/fhir/Condition/x/_history/1' },
+    ] },
+    { sourceId: 'ehr', patientScope: 'a', generation: 'v2', restBase: 'https://ehr.example/fhir', resources: [
+      { resource: { resourceType: 'Condition', id: 'x', meta: { versionId: '2' }, code: { text: 'second' } }, fullUrl: 'https://ehr.example/fhir/Condition/x/_history/2' },
+    ] },
+  ])
+  expect(source.graph.nodes.map(node => node.fullUrl)).toEqual([
+    'https://ehr.example/fhir/Condition/x/_history/1',
+    'https://ehr.example/fhir/Condition/x/_history/2',
+  ])
+  expect(source.evidence.revision.some(item => item.nodeKeys.length === 2)).toBe(true)
+  expect(selectClinicalSourceResources(source)).toHaveLength(2)
+  const variants = createClinicalRecordVariants(source)
+  expect([...variants.values()][0]).toMatchObject({ classification: 'revision', variantCount: 2 })
+})
+
+it('does not normalize URN or distinct-base fullUrls into the same source identity', () => {
+  const makeCapture = (generation: string, fullUrl: string, version: string) => ({
+    sourceId: 'ehr', patientScope: 'a', generation, restBase: 'https://ehr.example/fhir',
+    resources: [{ resource: { resourceType: 'Condition', id: 'x', meta: { versionId: version }, code: { text: version } }, fullUrl }],
+  })
+  const urns = reconcileClinicalSources([
+    makeCapture('u1', 'urn:uuid:condition-one', '1'),
+    makeCapture('u2', 'urn:uuid:condition-two', '2'),
+  ])
+  expect(urns.evidence.revision).toEqual([])
+  const bases = reconcileClinicalSources([
+    makeCapture('b1', 'https://one.example/fhir/Condition/x/_history/1', '1'),
+    makeCapture('b2', 'https://two.example/fhir/Condition/x/_history/2', '2'),
+  ])
+  expect(bases.evidence.revision).toEqual([])
+})
+
 it('excludes only explicit subject contradictions and retains foreign nodes in the source graph', () => {
   const source = reconcileClinicalSources([{
     sourceId: 'ehr', patientScope: 'a', generation: 'query', restBase: 'https://ehr.example/fhir', resources: [
