@@ -22,7 +22,10 @@ export class FhirPatientRepository implements IPatientRepository {
     const resources = response.resourceType === 'Patient' ? [response] : (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string')
     const unassignedScope = 'unassigned:' + session.sourceId + ':patient-search'
     const preview = reconcileClinicalSources([{ sourceId: session.sourceId, restBase: session.restBase, patientScope: unassignedScope, generation: 'preview', resources }])
-    const nodes = selectClinicalSourceNodes(preview)
+    // Partition the original top-level search nodes before projection filters
+    // foreign Patient rows. Unassigned rows still belong in the source graph;
+    // projection eligibility is applied when that graph is consumed.
+    const nodes = preview.graph.nodes.filter(node => !node.isContained && !node.embeddedIn)
     const selected = nodes.find(node => node.resource.resourceType === 'Patient' && node.resource.id === selectedId)
     const selectedResources: Array<{ resource: any; fullUrl?: string }> = []
     const unassigned: Array<{ resource: any; fullUrl?: string }> = []

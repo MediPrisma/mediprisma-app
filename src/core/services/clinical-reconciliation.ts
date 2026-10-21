@@ -18,15 +18,48 @@ function canonical(value: unknown): string {
   if (value && typeof value === 'object') return '{' + Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => JSON.stringify(key) + ':' + canonical(item)).join(',') + '}'
   return JSON.stringify(value) ?? 'null'
 }
+function parentSourceIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<string, ClinicalSourceNode>, seen = new Set<string>()): unknown {
+  const parentKey = node.parentKey ?? node.embeddedIn
+  if (!parentKey) return null
+  const parent = nodes.get(parentKey)
+  if (!parent) return ['missing-parent', parentKey]
+  // Anonymous parent identity is not strong enough to correlate contained
+  // records across captures. Keep it capture-local by retaining the node key.
+  if (!parent.resource.id && !parent.fullUrl) return ['anonymous-parent', parent.key]
+  if (seen.has(parent.key)) return ['parent-cycle', parent.resource.resourceType, parent.resource.id ?? parent.fullUrl]
+  seen.add(parent.key)
+  const fullUrl = parent.fullUrl
+    ? (/^https?:\/\//i.test(parent.fullUrl)
+      ? parent.fullUrl.replace(/\/_history\/[^/?#]+(?=[?#]|$)/i, '')
+      : parent.fullUrl)
+    : null
+  return [
+    parent.sourceId,
+    parent.patientScope,
+    parent.restBase ?? null,
+    parent.resource.resourceType,
+    parent.resource.id ?? null,
+    fullUrl,
+    parentSourceIdentity(parent, nodes, seen),
+  ]
+}
+
 // Only bounded identity metadata enters map keys; payloads remain in the graph.
-function recordScopeIdentity(node: ClinicalSourceNode): string {
-  return JSON.stringify([node.sourceId, node.patientScope, node.restBase ?? null, node.fullUrl ?? null, node.parentKey ?? null, node.embeddedIn ?? null, node.resource.resourceType, node.resource.id ?? null])
+// A contained record follows its parent's logical source identity across
+// parent revisions, while anonymous or differently identified parents remain
+// isolated. The existing resolved-context comparison still distinguishes
+// children whose references land in different parent-version contexts.
+function recordScopeIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<string, ClinicalSourceNode>): string {
+  return JSON.stringify([node.sourceId, node.patientScope, node.restBase ?? null, node.fullUrl ?? null,
+    node.parentKey ? 'contained' : node.embeddedIn ? 'embedded' : null,
+    parentSourceIdentity(node, nodes), node.resource.resourceType, node.resource.id ?? null])
 }
 /** Evidence is deliberately separate from the clinical projection. Repeated audit
  * snapshots, identifiers, similar values and graph connectivity cannot create or
  * collapse clinical events. Unknown resource types remain available in the graph. */
 export function reconcileClinicalSources(captures: readonly ClinicalSourceCapture[]): ClinicalReconciliationResult {
   const graph = buildClinicalSourceGraph(captures)
+  const graphNodesByKey = new Map(graph.nodes.map(node => [node.key, node]))
   const policies: Record<string, ClinicalResourcePolicy> = { ...CLINICAL_RESOURCE_POLICIES }
   const evidence: ClinicalReconciliationResult['evidence'] = { sameRecord: [], revision: [], candidate: [], conflict: [] }
   const identities = new Map<string, typeof graph.nodes[number][]>()
@@ -34,7 +67,7 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
     policies[node.resource.resourceType] ??= { assessment: 'not-assessed', strategy: 'retain-source-only' }
     if ((node.occurrences ?? 1) > 1) evidence.sameRecord.push({ nodeKeys: [node.key], reason: 'Exact duplicate transmissions retained in node occurrences' })
     if (!node.resource.id && !node.fullUrl) continue
-    const identity = recordScopeIdentity(node)
+    const identity = recordScopeIdentity(node, graphNodesByKey)
     const existing = identities.get(identity) ?? []
     for (const prior of existing) {
       const pair = { nodeKeys: [prior.key, node.key], reason: 'Same source, patient, resource type and logical id' }
@@ -80,11 +113,12 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
 /** Exact transmission equality only; never merge by clinical similarity. */
 export function selectClinicalSourceNodes(result: ClinicalReconciliationResult) {
   const seen = new Map<string, ClinicalSourceNode[]>()
+  const graphNodesByKey = new Map(result.graph.nodes.map(node => [node.key, node]))
   return result.graph.nodes.filter(node => {
     if (node.isContained || node.embeddedIn) return false
     if (!isClinicalSourceNodePatientEligible(node, result.graph.nodes)) return false
     if (!node.resource.id && !node.fullUrl) return true
-    const identity = recordScopeIdentity(node) + '|' + node.contentHash + '|' + clinicalSourceContextIdentity(result.graph, node)
+    const identity = recordScopeIdentity(node, graphNodesByKey) + '|' + node.contentHash + '|' + clinicalSourceContextIdentity(result.graph, node)
     const bucket = seen.get(identity) ?? []
     if (bucket.some(prior => clinicalSourceNodesEqualWithContext(result.graph, prior, node))) return false
     bucket.push(node)

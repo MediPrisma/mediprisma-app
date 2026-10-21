@@ -207,3 +207,49 @@ it('canonicalizes contained references and retains graph and explicit Roche deri
   expect(reports[0]._observations?.every(row => collection.observations.includes(row))).toBe(true)
   expect(JSON.stringify(bundle)).toBe(before)
 })
+
+it('maps revisions of contained diagnoses across versions of the same Roche List', () => {
+  const listVersion = (version: string, diagnosis: string) => ({
+    resourceType: 'List', id: 'conditions', meta: { versionId: version }, code: { text: 'Conditions' },
+    extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }],
+    contained: [{ resourceType: 'Condition', id: 'diagnosis', meta: { versionId: version },
+      subject: { reference: 'urn:uuid:patient' }, code: { text: diagnosis }, clinicalStatus: { text: 'active' } }],
+  })
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { fullUrl: 'urn:uuid:patient', resource: { resourceType: 'Patient', id: 'patient' } },
+    { fullUrl: 'https://ehr.example/fhir/List/conditions/_history/1', resource: listVersion('1', 'first diagnosis') },
+    { fullUrl: 'https://ehr.example/fhir/List/conditions/_history/2', resource: listVersion('2', 'second diagnosis') },
+  ] }
+
+  const parsed = LocalBundleService.parse(bundle)!
+  const diagnoses = parsed.collection.conditions.filter(condition => condition.sourceId === 'diagnosis')
+
+  expect(diagnoses).toHaveLength(2)
+  expect(diagnoses.map(condition => condition.clinicalRecordVariant)).toEqual([
+    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
+    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
+  ])
+})
+
+it('carries variants from contained records across versions of the same Roche List', () => {
+  const listVersion = (version: string, diagnosis: string) => ({
+    resourceType: 'List', id: 'conditions', meta: { versionId: version }, code: { text: 'Conditions' },
+    extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }],
+    contained: [{ resourceType: 'Condition', id: 'diagnosis', meta: { versionId: version },
+      subject: { reference: 'urn:uuid:patient' }, code: { text: diagnosis }, clinicalStatus: { text: 'active' } }],
+  })
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { fullUrl: 'urn:uuid:patient', resource: { resourceType: 'Patient', id: 'patient' } },
+    { fullUrl: 'https://ehr.example/fhir/List/conditions/_history/1', resource: listVersion('1', 'first diagnosis') },
+    { fullUrl: 'https://ehr.example/fhir/List/conditions/_history/2', resource: listVersion('2', 'second diagnosis') },
+  ] }
+
+  const parsed = LocalBundleService.parse(bundle)!
+  const diagnoses = parsed.collection.conditions.filter(condition => condition.sourceId === 'diagnosis')
+
+  expect(diagnoses).toHaveLength(2)
+  expect(diagnoses.map(condition => condition.clinicalRecordVariant)).toEqual([
+    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
+    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
+  ])
+})

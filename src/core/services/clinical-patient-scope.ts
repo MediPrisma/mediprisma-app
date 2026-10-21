@@ -115,9 +115,13 @@ export function getClinicalSourceNodePatientExclusionReason(
     return !base || base === authenticatedBase
   }
   for (const patient of sameSourcePatients) {
+    // Only top-level Patients can establish identity aliases for the active
+    // patient. Nested history/audit Patients remain available below to mark a
+    // reference as unresolved, but never authorize it.
+    if (patient.isContained || patient.embeddedIn) continue
     const inScope = patient.patientScope === node.patientScope
     if (inScope && patient.fullUrl && patientUrlIsTrusted(patient)
-      && (patient.fullUrl === node.patientScope || !scopeId || patient.resource.id === scopeId)) {
+      && (patient.fullUrl === node.patientScope || (!!scopeId && patient.resource.id === scopeId))) {
       expectedUrls.add(patient.fullUrl)
       if (patient.resource.id) expectedIds.add(patient.resource.id)
     }
@@ -151,10 +155,17 @@ export function getClinicalSourceNodePatientExclusionReason(
   for (const { reference } of references) {
     if (/^urn:/i.test(reference)) {
       if (expectedUrls.has(reference)) continue
-      const knownPatient = sameSourcePatients.find(patient => patient.fullUrl === reference)
-      if (knownPatient && !expectedUrls.has(reference)
-        && (!patientUrlIsTrusted(knownPatient)
-          || !(knownPatient.resource.id && expectedIds.has(knownPatient.resource.id)))) return 'foreign-patient-reference'
+      const knownPatients = sameSourcePatients.filter(patient => patient.fullUrl === reference)
+      if (knownPatients.length > 0) {
+        const auditPatient = knownPatients.some(patient => patient.isContained || patient.embeddedIn)
+        if (auditPatient) return 'unresolved-patient-reference'
+        const knownPatient = knownPatients.find(patient => !patient.isContained && !patient.embeddedIn)
+        if (knownPatient && !expectedUrls.has(reference)) {
+          if (!patientUrlIsTrusted(knownPatient)) return 'foreign-patient-reference'
+          if (knownPatient.resource.id && expectedIds.size > 0 && !expectedIds.has(knownPatient.resource.id)) return 'foreign-patient-reference'
+          return 'unresolved-patient-reference'
+        }
+      }
       continue
     }
     const id = patientIdFrom(reference)
@@ -165,9 +176,15 @@ export function getClinicalSourceNodePatientExclusionReason(
         if (expectedIds.size === 0) return 'unresolved-patient-reference'
         continue
       }
-      // With a known server base, an absolute reference to a different base is
-      // an explicit boundary crossing even when the Patient id happens to match.
-      if (![...knownBases].includes(base)) return 'foreign-patient-reference'
+      // A base mismatch does not prove that the Patient id belongs to someone
+      // else (reverse proxies commonly expose internal and public bases). Only
+      // a conflicting known Patient id is foreign; otherwise quarantine it as
+      // unresolved until the server identity can be established.
+      if (![...knownBases].includes(base)) {
+        return expectedIds.size > 0 && !expectedIds.has(id)
+          ? 'foreign-patient-reference'
+          : 'unresolved-patient-reference'
+      }
     }
     if (expectedIds.size === 0) return 'unresolved-patient-reference'
     if (expectedIds.size > 0 && !expectedIds.has(id)) return 'foreign-patient-reference'
