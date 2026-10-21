@@ -127,8 +127,8 @@ function examQualifiers(report: Report): string[] | null {
   const right = /\b(?:right|rt)\b|右側|右乳|右肺/i.test(label)
   const side = /\bbilateral\b|雙側|雙乳/i.test(label) || (left && right) ? 'bilateral' : left ? 'left' : right ? 'right' : ''
   const sites = [
-    ['breast', /\bbreast\b|乳房|左乳|右乳|雙乳/i],
-    ['chest', /\b(?:chest|thorax|lung)\b|胸|肺/i],
+    ['breast', /\bbreasts?\b|乳房|左乳|右乳|雙乳/i],
+    ['chest', /\b(?:chest|thorax|lungs?)\b|胸|肺/i],
     ['head', /\b(?:head|brain|cranial)\b|頭部|頭顱|腦部/i],
     ['neck', /\bneck\b|頸/i],
     ['abdomen', /\b(?:abdomen|abdominal|hepatobiliary|liver|gallbladder)\b|腹|肝|膽/i],
@@ -136,9 +136,9 @@ function examQualifiers(report: Report): string[] | null {
     ['spine', /\b(?:spine|spinal)\b|脊椎/i],
   ] as const
   const site = sites.filter(([, pattern]) => pattern.test(label)).map(([name]) => name).join(',')
-  const withContrast = /\bwith\s+contrast\b|有造影劑/i.test(label)
-  const withoutContrast = /\bwithout\s+contrast\b|無造影劑/i.test(label)
-  const contrast = withContrast === withoutContrast ? '' : withContrast ? 'with' : 'without'
+  const withContrast = (/\bcontrast\b/i.test(label) && /\bwith\b/i.test(label)) || /有造影劑/.test(label)
+  const withoutContrast = (/\bcontrast\b/i.test(label) && /\bwithout\b/i.test(label)) || /無造影劑/.test(label)
+  const contrast = [withContrast && 'with', withoutContrast && 'without'].filter(Boolean).join(',')
   const view = ['ap', 'pa', 'lateral', 'oblique'].filter(value => new RegExp(`\\b${value}\\b`, 'i').test(label)).join(',')
   return [header, side, site, contrast, view]
 }
@@ -160,7 +160,9 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
   for (const report of reports) {
     if (!report) continue
     const key = reportNaturalGroupingKey(report)
-    naturalGroups.set(key, [...(naturalGroups.get(key) ?? []), report])
+    const group = naturalGroups.get(key)
+    if (group) group.push(report)
+    else naturalGroups.set(key, [report])
   }
   const buckets = new Map<string, { report: Report; source: Source; qualifiers: string[] }[]>()
   for (const report of reports) {

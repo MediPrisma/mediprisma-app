@@ -1,4 +1,4 @@
-import { getReportInstitution as reportInstitution, getReportDate as reportDate, reportNaturalGroupingKey as reportNaturalKey } from '@/src/shared/utils/report-identity'
+import { getReportInstitution, getReportDate as reportDate, reportNaturalGroupingKey } from '@/src/shared/utils/report-identity'
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import { collectAdultPreventiveObservationIds } from './adult-preventive-source'
 import { collectReportMemberIds, referenceId } from '@/src/core/utils/observation-selectors'
@@ -45,6 +45,23 @@ interface CountRow {
 }
 
 const GLUCOSE_KEEP_SEPARATE = new Set(['C-PEPTIDE'])
+
+// Restrict the new identity projection to imaging. Laboratory/pathology count
+// reconciliation is separate work; preserve their pre-existing count keys.
+function reportInstitution(report: any): string | undefined {
+  if (inferReportDisplayGroup(report) === 'imaging') return getReportInstitution(report)
+  return report?._observations?.[0]?.performer?.[0]?.display
+    || report?.performer?.[0]?.display
+    || undefined
+}
+
+function reportNaturalKey(report: any): string {
+  if (inferReportDisplayGroup(report) === 'imaging') return reportNaturalGroupingKey(report)
+  const title = (getCodeableConceptText(report?.code) || '').trim()
+  const date = (reportDate(report) || '').slice(0, 10)
+  const institution = (reportInstitution(report) || '').trim()
+  return `${title}|${date}|${institution}|${isAdultReport(report) ? 'adult-preventive' : ''}`
+}
 
 function reportObservations(reports: any[]): any[] {
   return reports.flatMap((report) => (

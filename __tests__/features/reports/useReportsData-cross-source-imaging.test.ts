@@ -4,6 +4,7 @@ import { imagingReportsCategory } from '@/src/core/categories/imaging-reports.ca
 import { normalizeImagingReportCopy, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
 import { getReportDate } from '@/src/shared/utils/report-identity'
+import { NHI_MEDICLOUD_SOURCE_EXTENSION_URL } from '@/src/shared/utils/observation-provenance.utils'
 
 const BODY = 'Synthetic imaging finding: a 4 mm nodule in the left upper lobe is unchanged. No pleural effusion. Follow-up imaging in twelve months is recommended.'
 const FOOTER = ' Reported By Example Radiologist(LicenseRD#:0000) On:2026/06/25(10:30:00),(by Example Radiologist)At:TEST01Positive Rate Evaluation 2'
@@ -19,6 +20,22 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it.each([
+    [['健保署', '臺北榮總'], 2],
+    [['臺北榮總'], 1],
+  ])('preserves existing laboratory count boundaries for performers %j', (names, expected) => {
+    const reports = pair().map(report => ({ ...report,
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'LAB' }] }],
+      code: { text: 'CBC' }, performer: [{ display: '臺北榮總' }],
+      _observations: [{ id: `${report.id}-wbc`, code: { text: 'WBC' }, valueQuantity: { value: 5 }, performer: [{ display: '臺北榮總' }] }],
+    }))
+    Object.assign(reports[1]._observations[0], {
+      performer: (names as string[]).map(display => ({ display })),
+      extension: [{ url: NHI_MEDICLOUD_SOURCE_EXTENSION_URL, valueCodeableConcept: { coding: [{ code: 'nhi-medicloud' }] } }],
+    })
+    expect(calculateReportTabCounts(reports).all).toBe(expected)
+  })
+
   it('groups different titles and wrappers without changing resources', () => {
     const reports = pair()
     const before = JSON.stringify(reports)
@@ -80,6 +97,10 @@ describe('cross-source imaging reports', () => {
     ['Left knee MRI', 'Left ankle MRI'],
     ['Shoulder ultrasound', 'Ultrasonography, other'],
     ['Chest CT with contrast', 'Chest CT without contrast'],
+    ['Breasts ultrasound', 'Liver ultrasound'],
+    ['Lungs CT', 'Liver CT'],
+    ['Chest CT with contrast and without contrast', 'Chest CT without contrast'],
+    ['Chest CT with and without contrast', 'Chest CT without contrast'],
     ['CHEST AP VIEW', 'CHEST PA VIEW'],
   ])('uses explicit title qualifiers as a conflict check: %s / %s', (left, right) => {
     const reports = pair().map((report, index) => ({ ...report, code: { text: index ? right : left }, conclusion: BODY }))
