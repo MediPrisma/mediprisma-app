@@ -546,6 +546,8 @@ export interface ObservationEntity {
 export interface DiagnosticReportEntity {
   /** Opaque identity in the shared source graph; survives query structural sharing. */
   clinicalSourceNodeKey?: string
+  /** Explicit membership added by a local domain projection, using source node keys. */
+  clinicalSourceDerivedMemberKeys?: string[]
   basedOn?: Array<{ reference?: string; display?: string }>
   id: string
   meta?: {

@@ -1,5 +1,6 @@
-import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { LocalBundleService, canonicalizeBundleResources } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { ClinicalDataCollectionService } from '@/src/core/services/clinical-data-collection.service'
+import { attachReportObservations } from '@/src/core/services/clinical-report-membership'
 
 const fixture = () => ({ resourceType: 'Bundle', type: 'collection', timestamp: '2026-10-21T01:00:00Z', entry: [
   { fullUrl: 'urn:uuid:patient', resource: { resourceType: 'Patient', id: 'patient', gender: 'female' } },
@@ -122,4 +123,41 @@ it('retains nested history Bundle resources in the graph without adding current 
   expect(parsed.patient.id).toBe('patient')
   expect(parsed.collection.observations.map(row => row.id)).toEqual(['result'])
   expect(parsed.collection.clinicalSource!.graph.nodes.some(node => node.resource.id === 'historical-result')).toBe(true)
+})
+
+it('promotes mutable local medication code without mutating its immutable source', () => {
+  const bundle: any = fixture()
+  bundle.entry.push({ resource: { resourceType: 'Medication', id: 'drug', code: { coding: [{ system: 'synthetic', code: 'original' }] } } })
+  bundle.entry.push({ resource: { resourceType: 'MedicationRequest', id: 'rx', status: 'active', intent: 'order', medicationReference: { reference: 'Medication/drug' } } })
+  const collection = LocalBundleService.parse(bundle)!.collection
+  const code = collection.medications[0].medicationCodeableConcept!
+  expect(() => code.coding!.push({ system: 'synthetic', code: 'enrichment' })).not.toThrow()
+  const source = collection.clinicalSource!.graph.nodes.find(node => node.resource.id === 'drug')!
+  expect((source.resource.code as any).coding).toHaveLength(1)
+  expect(Object.isFrozen((source.resource.code as any).coding)).toBe(true)
+})
+
+it('canonicalizes contained references and retains graph and explicit Roche derived members through the common read model', () => {
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { fullUrl: 'urn:uuid:patient-alias', resource: { resourceType: 'Patient', id: 'patient' } },
+    { fullUrl: 'https://synthetic.invalid/fhir/Observation/member', resource: { resourceType: 'Observation', id: 'member', status: 'final', code: { text: 'member' }, valueString: 'member value' } },
+    { resource: { resourceType: 'List', id: 'biomarkers', code: { text: 'Biomarkers' }, extension: [{ url: 'https://dip.roche.com/synthetic', valueBoolean: true }], contained: [
+      { resourceType: 'Observation', id: 'biomarker', status: 'final', code: { text: 'marker' }, valueString: 'marker value', subject: { reference: 'urn:uuid:patient-alias' }, hasMember: [{ reference: 'https://synthetic.invalid/fhir/Observation/member' }] },
+    ] } },
+    { resource: { resourceType: 'DiagnosticReport', id: 'pathology', status: 'final', code: { text: 'Pathology' }, result: [{ reference: '#histology' }], contained: [
+      { resourceType: 'Observation', id: 'histology', status: 'final', code: { text: 'histology' }, valueString: 'histology value', subject: { reference: 'urn:uuid:patient-alias' } },
+    ] } },
+  ] }
+  const before = JSON.stringify(bundle)
+  const collection = LocalBundleService.parse(bundle)!.collection
+  const biomarker = collection.observations.find(row => row.id === 'biomarker')!
+  const canonical = canonicalizeBundleResources(bundle, collection.clinicalSource)
+  const contained = canonical.find(resource => resource.id === 'biomarkers').contained[0]
+  expect(contained.subject.reference).toBe('Patient/patient')
+  expect(contained.hasMember).toEqual([{ reference: 'Observation/member' }])
+  expect(biomarker.clinicalSourceNodeKey).toBeDefined()
+  const reports = attachReportObservations(collection.diagnosticReports, collection.observations, collection.clinicalSource)
+  expect(reports[0]._observations?.map(row => row.valueString)).toEqual(['histology value', 'marker value', 'member value'])
+  expect(reports[0]._observations?.every(row => collection.observations.includes(row))).toBe(true)
+  expect(JSON.stringify(bundle)).toBe(before)
 })

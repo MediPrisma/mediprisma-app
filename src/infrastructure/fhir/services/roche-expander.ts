@@ -78,7 +78,7 @@ function resolveRefsDeep(
  * untouched (isRocheBundle returns false). Runs AFTER canonicalizeBundleResources
  * (so top-level ids are already stamped) and BEFORE the byType() split.
  */
-export function expandRocheResources(entries: any[]): void {
+export function expandRocheResources(entries: any[], onDerivedMember?: (report: any, observation: any) => void): void {
   if (!Array.isArray(entries) || entries.length === 0) return
   if (!isRocheBundle(entries)) return
 
@@ -195,6 +195,8 @@ export function expandRocheResources(entries: any[]): void {
       if (!Array.isArray(pathologyDr.result)) pathologyDr.result = []
       for (const id of biomarkerIds) {
         pathologyDr.result.push({ type: 'Observation', reference: `Observation/${id}` })
+        const matches = hoisted.filter(resource => resource.resourceType === 'Observation' && String(resource.id) === id)
+        if (matches.length === 1) onDerivedMember?.(pathologyDr, matches[0])
       }
     }
   }

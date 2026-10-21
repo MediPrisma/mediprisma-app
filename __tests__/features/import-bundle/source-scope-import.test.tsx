@@ -8,6 +8,24 @@ import { prepareLocalImportFile } from '@/features/import-bundle/services/local-
 jest.mock('@/features/import-bundle/services/local-import-file.service', () => ({ prepareLocalImportFile: jest.fn() }))
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ purgeAiResultCaches: jest.fn(), purgeExpiredAiResultCaches: jest.fn() }))
 
+it('rejects an ambiguous legacy stored chart while retaining its original downloadable source', async () => {
+  const bundle = { resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'first' } },
+    { resource: { resourceType: 'Patient', id: 'second' } },
+  ] }
+  const originalFhir = new Blob([JSON.stringify(bundle)], { type: 'application/fhir+json' })
+  try {
+    await LocalBundleService.save(bundle, { originalFhir })
+    const importId = LocalBundleService.getActiveImportId()
+    await expect(LocalBundleService.parseStored()).rejects.toThrow('單一病人的 FHIR Bundle')
+    expect(await LocalBundleService.load()).toEqual(bundle)
+    expect(await LocalBundleService.loadOriginalFhir()).toBe(originalFhir)
+    expect(LocalBundleService.getActiveImportId()).toBe(importId)
+  } finally {
+    await LocalBundleService.clear()
+  }
+})
+
 it('keeps the loaded patient and original bytes when a later multi-patient import is rejected', async () => {
   const single = { resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id: 'patient-a' } }] }
   const source = JSON.stringify(single)

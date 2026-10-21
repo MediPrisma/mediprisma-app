@@ -1,4 +1,5 @@
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -580,7 +581,7 @@ function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void
  *      equivalent `ResourceType/id`) is rewritten to the relative form.
  * References to other servers / unknown targets are left untouched.
  */
-export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconciliationResult): any[] {
+export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconciliationResult, sourceKeys?: WeakMap<object, string>): any[] {
   const rawEntries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
   const entries = rawEntries.filter((e) => e?.resource)
 
@@ -635,6 +636,21 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
   if (source) {
     const nodes = selectClinicalSourceNodes(source)
     const mappedByKey = new Map(nodes.map((node, index) => [node.key, resources[index]]))
+    const childrenByParent = new Map<string, typeof source.graph.nodes[number][]>()
+    for (const node of source.graph.nodes) {
+      if (node.parentKey) childrenByParent.set(node.parentKey, [...(childrenByParent.get(node.parentKey) ?? []), node])
+    }
+    const indexClone = (key: string, resource: any) => {
+      sourceKeys?.set(resource, key)
+      const children = childrenByParent.get(key) ?? []
+      for (const child of resource.contained ?? []) {
+        const node = children.find(candidate => clinicalSourceResourcesEqual(candidate.resource, child))
+        if (!node) continue
+        mappedByKey.set(node.key, child)
+        indexClone(node.key, child)
+      }
+    }
+    for (const node of nodes) indexClone(node.key, mappedByKey.get(node.key))
     for (const edge of source.graph.references) {
       if (edge.status !== 'resolved' || !edge.reference) continue
       const origin = mappedByKey.get(edge.origin.key)
@@ -1404,10 +1420,10 @@ export const LocalBundleService = {
     if (projectedNodes.filter(node => node.resource.resourceType === 'Patient').length > 1) {
       throw new Error('此資料包含多個不同的病人或病人版本，無法安全匯入。請提供單一病人的 FHIR Bundle。')
     }
+    const sourceKeyByResource = new WeakMap<object, string>()
     const entries: any[] = canonicalizeBundleResources({
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
-    }, clinicalSource)
-    const sourceKeyByResource = new WeakMap<object, string>(entries.map((resource, index) => [resource, projectedNodes[index].key]))
+    }, clinicalSource, sourceKeyByResource)
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     if (!entries.length) return null
@@ -1422,7 +1438,11 @@ export const LocalBundleService = {
     // inside List.contained and relink its identifier-based references, so the
     // Condition / cancer-staging Observations / treatment Procedures surface and
     // the DiagnosticReports link to the patient. No-op for non-Roche bundles.
-    expandRocheResources(entries)
+    const derivedReportMembers = new WeakMap<object, string[]>()
+    expandRocheResources(entries, (report, observation) => {
+      const key = sourceKeyByResource.get(observation)
+      if (key) derivedReportMembers.set(report, [...(derivedReportMembers.get(report) ?? []), key])
+    })
 
     // Display canonicalisation: resolve Practitioner / Organization / Location
     // references to human-readable display strings (attending physician,
@@ -1497,7 +1517,7 @@ export const LocalBundleService = {
       if (sourceKey) {
         const edge = sourceReferencesByPath.get(sourceKey + '|medicationReference')
         const target = edge?.status === 'resolved' ? sourceNodesByKey.get(edge.targetKeys[0])?.resource : undefined
-        return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: target.code } : m
+        return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: cloneResource(target.code) } : m
       }
       const refId = /^Medication\/([^/]+)$/.exec(m.medicationReference.reference)?.[1]
       const medResource = refId ? medicationMap.get(refId) : null
@@ -1597,8 +1617,9 @@ export const LocalBundleService = {
     const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r), clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
-    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any) =>
-      ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByResource.get(r) })
+    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any, index: number) =>
+      ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByResource.get(r),
+        ...(derivedReportMembers.has(reports[index]) ? { clinicalSourceDerivedMemberKeys: derivedReportMembers.get(reports[index]) } : {}) })
     )
 
     // Separate vital signs from other observations
