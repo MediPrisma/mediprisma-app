@@ -35,8 +35,12 @@ function productDescriptor(value: unknown): { name: string; pack?: string } | un
     .replace(/\btablets?\b|\btabs?\b/g, 'tablet')
     .replace(/\bcapsules?\b|\bcaps?\b/g, 'capsule')
     .replace(/\boint\b/g, 'ointment').replace(/\s+/g, ' ').trim()
-  if (!/\d+(?:\.\d+)?\s*(?:(?:mg|mcg|g|ml|iu)\b|%)/i.test(name)
-    || !/\b(?:tablet|capsule|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i.test(name)) return undefined
+  const strength = name.match(/\d+(?:\.\d+)?\s*(?:(?:mg|mcg|g|iu)\b|%)/i)
+  const form = name.match(/\b(?:tablet|capsule|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i)
+  if (!strength || !form) return undefined
+  const productName = name.slice(0, Math.min(strength.index!, form.index!))
+    .replace(/\b(?:sugar|film|coated|extended|sustained|modified|controlled|enteric|delayed|release|sc|fc|xr|sr|mr|cr|ec)\b/g, '')
+  if (!/\p{L}/u.test(productName)) return undefined
   const topical = /\b(?:cream|ointment|gel)\b/.test(name)
   if (topical && !/\d\s*%|\d\s*(?:mg|mcg|g)\s*\/\s*(?:g|ml)\b/.test(name)) return undefined
   // A liquid's bottle/ampoule volume does not establish its drug strength.
