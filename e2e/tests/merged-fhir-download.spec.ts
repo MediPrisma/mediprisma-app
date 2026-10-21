@@ -11,6 +11,67 @@ const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex
 const parse = (bytes: Buffer): RawBundle => JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/, ''))
 const activeImport = (page: Page) => page.evaluate(() => sessionStorage.getItem('fhir_bundle_override'))
 
+test('progressive snapshots replace one patient chart and preserve late terminal warnings', async ({ page }, info) => {
+  test.setTimeout(120_000)
+  await page.addInitScript(() => {
+    localStorage.setItem('medical-note-locale', 'zh-TW')
+    localStorage.setItem('medical-note-audience', 'medical')
+    localStorage.setItem('medical-note-audience-selected', '1')
+    localStorage.setItem('medical-note-onboarding-v1', '1')
+    const host = window as Window & { progressiveReceipts?: Record<string, unknown>[] }
+    host.progressiveReceipts = []
+    window.addEventListener('mediprisma:progressive-import-settled', event => {
+      host.progressiveReceipts!.push((event as CustomEvent).detail)
+    })
+  })
+  await page.goto(process.env.E2E_APP_PATH || '/')
+  await expect(page.getByTestId('welcome-demo-card')).toBeVisible()
+  const input = page.getByTestId('import-bundle-input').first()
+  await expect(input).toHaveAttribute('data-medcloud-progressive', '1')
+  const patient = { resourceType: 'Patient', id: 'progressive-patient', name: [{ text: '合成分階段病人' }] }
+  const visit = { resourceType: 'Encounter', id: 'progressive-visit', status: 'finished', class: { code: 'AMB' }, subject: { reference: 'Patient/progressive-patient' } }
+  const soap = { resourceType: 'DocumentReference', id: 'progressive-soap', status: 'current', subject: { reference: 'Patient/progressive-patient' },
+    content: [{ attachment: { contentType: 'text/plain', data: Buffer.from('S: synthetic progressive SOAP').toString('base64') } }] }
+  const result = { resourceType: 'Observation', id: 'progressive-result', status: 'final', code: { text: '合成檢驗' }, subject: { reference: 'Patient/progressive-patient' }, valueQuantity: { value: 100, unit: 'mg/dL' } }
+  let revision = 0
+  const send = async (stage: string, resources: Record<string, unknown>[], expectedImportId?: string) => {
+    const requestId = `progressive-request-${++revision}`
+    await input.evaluate((element, request) => element.setAttribute('data-medcloud-progressive-request', JSON.stringify(request)), {
+      version: 1, requestId, runId: 'progressive-run', stage, ...(expectedImportId ? { expectedImportId } : {}),
+    })
+    await input.setInputFiles({ name: 'synthetic-progressive.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ resourceType: 'Bundle', type: 'collection', entry: resources.map(resource => ({ resource })) })) })
+    await page.waitForFunction(id => (window as Window & { progressiveReceipts?: Record<string, unknown>[] }).progressiveReceipts?.some(receipt => receipt.requestId === id), requestId)
+    return page.evaluate(id => (window as Window & { progressiveReceipts?: Record<string, unknown>[] }).progressiveReceipts!.find(receipt => receipt.requestId === id)!, requestId)
+  }
+  const cloud = await send('cloud', [patient])
+  expect(cloud.ok).toBe(true)
+  await expect(page.getByRole('status').filter({ hasText: '雲端資料已載入' })).toBeVisible()
+  const visits = await send('hospital-visits', [patient, visit, soap], cloud.importId as string)
+  expect(visits.ok).toBe(true)
+  await expect(page.getByRole('status').filter({ hasText: '檢查驗報告擷取中' })).toBeVisible()
+  await openLeftTab(page, /^文件$/)
+  await expect(page.getByText('S: synthetic progressive SOAP', { exact: true }).first()).toBeVisible()
+  await info.attach('soap-visible-before-reports', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
+  const finalResources = [patient, visit, soap, result]
+  const final = await send('hospital', finalResources, visits.importId as string)
+  expect(final.ok).toBe(true)
+  await expect(page.getByRole('status').filter({ hasText: '已載入院內門診資料' })).toBeVisible()
+  expect((await send('hospital', finalResources, visits.importId as string)).ok).toBe(false)
+  expect((await send('hospital', [{ ...patient, id: 'other-patient' }], final.importId as string)).ok).toBe(false)
+  await openDownloads(page)
+  const pending = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下載原始 FHIR', exact: true }).click()
+  const filename = info.outputPath('progressive-final.json')
+  await (await pending).saveAs(filename)
+  const exported = parse(await fs.readFile(filename))
+  expect(exported.entry.map(entry => entry.resource)).toEqual(finalResources)
+  expect(new Set(exported.entry.map(entry => `${entry.resource.resourceType}/${entry.resource.id}`)).size).toBe(finalResources.length)
+  await page.evaluate(importId => window.postMessage({ source: 'medcloud2-extension', type: 'medcloud:outpatient-status', version: 1,
+    runId: 'progressive-run', importId, phase: 'patient-changed' }, location.origin), visits.importId)
+  await expect(page.getByRole('alert').filter({ hasText: '畫面仍為先前病人資料' })).toBeVisible()
+  await info.attach('late-patient-change-warning', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
+})
+
 async function openDownloads(page: Page) {
   await openFeaturePanel(page)
   await page.getByRole('tab', { name: '複製', exact: true }).click()

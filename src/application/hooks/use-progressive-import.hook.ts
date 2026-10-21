@@ -20,8 +20,10 @@ export function useProgressiveImportStatus() {
       if (event.source !== window || event.origin !== location.origin
         || data?.source !== 'medcloud2-extension' || data.type !== PROGRESSIVE_STATUS_MESSAGE
         || data.version !== 1 || !isProgressiveFailureReason(data.phase)) return
-      if (active && active.runId === data.runId && ((data.importId && active.importId !== data.importId)
-        || LocalBundleService.getActiveImportId() !== active.importId)) return
+      // A terminal message may name the previous snapshot if the App committed
+      // before its receipt reached the extension. The run is the stable owner.
+      if (active && active.runId === data.runId
+        && LocalBundleService.getActiveImportId() !== active.importId) return
       stopProgressiveImport(data.runId, data.phase)
     }
     window.addEventListener(BUNDLE_CHANGED_EVENT, clearChanged)

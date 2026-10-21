@@ -11,6 +11,7 @@ export function ProgressiveImportStatus() {
   const english = locale === 'en'
   const waiting = ['waiting', 'reports-pending', 'reports-pending-partial'].includes(current.phase)
   const warning = ['partial', 'failed', 'reports-failed', 'update-failed', 'reports-pending-partial', 'cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'].includes(current.phase)
+  const alert = ['patient-changed', 'source-unavailable'].includes(current.phase)
   const Icon = waiting ? LoaderCircle : warning ? AlertTriangle : CheckCircle2
   const text = {
     waiting: english ? 'Cloud records loaded. Hospital outpatient records are still loading…' : '雲端資料已載入，院內門診資料擷取中…',
@@ -27,7 +28,7 @@ export function ProgressiveImportStatus() {
     partial: english ? 'Some hospital outpatient records loaded. Check HIS for missing records.' : '已載入部分院內門診資料，請核對 HIS。',
     failed: english ? 'Cloud records are available. Hospital outpatient records were not loaded.' : '雲端資料可繼續使用；院內門診資料未載入。',
   }[current.phase]
-  return <div role="status" aria-live="polite" className={`flex shrink-0 items-center gap-2 border-b px-3 py-2 text-sm ${warning ? 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100' : waiting ? 'bg-muted/50 text-muted-foreground' : 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'}`}>
+  return <div role={alert ? 'alert' : 'status'} aria-live={alert ? 'assertive' : 'polite'} className={`flex shrink-0 items-center gap-2 border-b px-3 py-2 text-sm ${warning ? 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100' : waiting ? 'bg-muted/50 text-muted-foreground' : 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'}`}>
     <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${waiting ? 'animate-spin motion-reduce:animate-none' : ''}`} />
     <span>{text}</span>
   </div>

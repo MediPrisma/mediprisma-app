@@ -54,6 +54,7 @@ import {
   getSessionBundleKey,
   rotateSessionBundleKey,
   prepareSessionBundleKey,
+  BundleSessionStorageError,
   clearSessionBundleKey,
   isEncryptedRecord,
   encryptBytes,
@@ -1051,12 +1052,6 @@ export const LocalBundleService = {
       const signal = options.signal
       signal.throwIfAborted()
       if (!isNewImport || !importId) throw new Error('guarded import requires a fresh scope')
-      const preparedKey = await prepareSessionBundleKey()
-      const previousMarker = sessionStorage.getItem(STORAGE_KEY)
-      const previousDemo = sessionStorage.getItem(DEMO_FLAG_KEY)
-      let published = false
-      let keyCommitted = false
-      let originalPersisted = false
       // Keep attachment metadata, sharing the existing base64 strings rather
       // than cloning the full chart. Failed image persistence can restore inline
       // bytes before falling back to the ordinary memory-only import behaviour.
@@ -1072,75 +1067,104 @@ export const LocalBundleService = {
         }
       }
       try {
+        const preparedKey = await prepareSessionBundleKey()
+        let previousMarker: string | null, previousDemo: string | null
         try {
-          signal.throwIfAborted()
-          await idbSweepExpiredRecords()
-          signal.throwIfAborted()
+          previousMarker = sessionStorage.getItem(STORAGE_KEY)
+          previousDemo = sessionStorage.getItem(DEMO_FLAG_KEY)
+        } catch { throw new BundleSessionStorageError('bundle session storage unavailable') }
+        let published = false
+        let keyCommitted = false
+        let originalPersisted = false
+        try {
           try {
-            await extractAndStoreImages(bundle, importId, preparedKey.key)
-          } catch {
-            restoreInlineImages()
-            try { await idbDeleteImagesForImport(importId) } catch { /* best effort */ }
-          }
-          signal.throwIfAborted()
-          const persisted: PersistedBundleEnvelope = {
-            __mediprismaBundle: 1, importId, demo, bundle,
-            ...(sourceMetadata ? { sourceMetadata } : {}),
-            ...(patientProfile ? { patientProfile } : {}),
-          }
-          await idbPut(await encryptJson(preparedKey.key, persisted), bundleRecordKey(importId))
-          signal.throwIfAborted()
-          if (options.originalFhir) {
+            signal.throwIfAborted()
+            await idbSweepExpiredRecords()
+            signal.throwIfAborted()
             try {
-              await storeOriginalFhir(importId, options.originalFhir, preparedKey.key)
-              originalPersisted = true
+              await extractAndStoreImages(bundle, importId, preparedKey.key)
             } catch {
-              try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
+              restoreInlineImages()
+              try { await idbDeleteImagesForImport(importId) } catch { /* best effort */ }
             }
+            signal.throwIfAborted()
+            const persisted: PersistedBundleEnvelope = {
+              __mediprismaBundle: 1, importId, demo, bundle,
+              ...(sourceMetadata ? { sourceMetadata } : {}),
+              ...(patientProfile ? { patientProfile } : {}),
+            }
+            await idbPut(await encryptJson(preparedKey.key, persisted), bundleRecordKey(importId))
+            signal.throwIfAborted()
+            if (options.originalFhir) {
+              try {
+                await storeOriginalFhir(importId, options.originalFhir, preparedKey.key)
+                originalPersisted = true
+              } catch {
+                try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
+              }
+            }
+          } catch {
+            signal.throwIfAborted()
+            restoreInlineImages()
+            try {
+              await idbDelete(bundleRecordKey(importId))
+              await idbDeleteImagesForImport(importId, true)
+            } catch { /* memory-only fallback, never plaintext at rest */ }
           }
-        } catch {
           signal.throwIfAborted()
-          restoreInlineImages()
-          try {
-            await idbDelete(bundleRecordKey(importId))
-            await idbDeleteImagesForImport(importId, true)
-          } catch { /* memory-only fallback, never plaintext at rest */ }
+          options.beforeCommit?.()
+          signal.throwIfAborted()
+          preparedKey.commit()
+          keyCommitted = true
+          try { writeTabBundleScope(importId, demo) }
+          catch { throw new BundleSessionStorageError('bundle session marker unavailable') }
+          // No asynchronous work between the final guard and publication.
+          memBundle = bundle
+          memBundleImportId = importId
+          memBundleIsDemo = demo
+          memBundleSourceMetadata = sourceMetadata ?? null
+          memUserEnteredPatientProfile = patientProfile
+          memOriginalFhir = originalPersisted ? null : options.originalFhir ?? null
+          published = true
+        } finally {
+          if (!published) {
+            try { preparedKey.rollback() } catch { /* storage is unavailable; cleanup the unpublished scope */ }
+            if (keyCommitted) {
+              try {
+                if (previousMarker === null) sessionStorage.removeItem(STORAGE_KEY)
+                else sessionStorage.setItem(STORAGE_KEY, previousMarker)
+                if (previousDemo === null) sessionStorage.removeItem(DEMO_FLAG_KEY)
+                else sessionStorage.setItem(DEMO_FLAG_KEY, previousDemo)
+              } catch { /* browser may block all storage; the in-memory chart remains isolated */ }
+            }
+            try {
+              await idbDelete(bundleRecordKey(importId))
+              await idbDeleteImagesForImport(importId, true)
+            } catch { /* best-effort cleanup of the unpublished scope */ }
+          }
         }
+        // Only the exact scope replaced by this transaction can be retired.
+        // Another tab's imports and ordinary manual imports are never swept here.
+        if (options.replaceImportId && options.replaceImportId === activeImportId) {
+          try {
+            await idbDelete(bundleRecordKey(activeImportId))
+            await idbDeleteImagesForImport(options.replaceImportId, true)
+          } catch { /* expiry sweep will retry cleanup */ }
+        }
+      } catch (error) {
+        if (!(error instanceof BundleSessionStorageError)) throw error
+        restoreInlineImages()
         signal.throwIfAborted()
         options.beforeCommit?.()
-        preparedKey.commit()
-        keyCommitted = true
-        writeTabBundleScope(importId, demo)
-        // No asynchronous work between the final guard and publication.
+        signal.throwIfAborted()
+        // Persistence is optional; cancellation and ownership checks are not.
+        // No plaintext is persisted, and source/images remain usable in this tab.
         memBundle = bundle
         memBundleImportId = importId
         memBundleIsDemo = demo
         memBundleSourceMetadata = sourceMetadata ?? null
         memUserEnteredPatientProfile = patientProfile
-        memOriginalFhir = originalPersisted ? null : options.originalFhir ?? null
-        published = true
-      } finally {
-        if (!published) {
-          preparedKey.rollback()
-          if (keyCommitted) {
-            if (previousMarker === null) sessionStorage.removeItem(STORAGE_KEY)
-            else sessionStorage.setItem(STORAGE_KEY, previousMarker)
-            if (previousDemo === null) sessionStorage.removeItem(DEMO_FLAG_KEY)
-            else sessionStorage.setItem(DEMO_FLAG_KEY, previousDemo)
-          }
-          try {
-            await idbDelete(bundleRecordKey(importId))
-            await idbDeleteImagesForImport(importId, true)
-          } catch { /* best-effort cleanup of the unpublished scope */ }
-        }
-      }
-      // Only the exact scope replaced by this transaction can be retired.
-      // Another tab's imports and ordinary manual imports are never swept here.
-      if (options.replaceImportId && options.replaceImportId === activeImportId) {
-        try {
-          await idbDelete(bundleRecordKey(activeImportId))
-          await idbDeleteImagesForImport(options.replaceImportId, true)
-        } catch { /* expiry sweep will retry cleanup */ }
+        memOriginalFhir = options.originalFhir ?? null
       }
       return
     }

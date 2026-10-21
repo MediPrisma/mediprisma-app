@@ -191,7 +191,26 @@ test.each([
     mockImportId = 'accepted-cloud'
     completeProgressiveImport({ version: 1, requestId: 'early-receipt', runId: 'early-stop', stage: 'cloud' }, 'accepted-cloud')
   })
-  expect(screen.getByRole('status')).toHaveTextContent(text)
-  expect(screen.getByRole('status')).not.toHaveTextContent('可繼續使用')
+  const banner = screen.getByRole(phase === 'patient-changed' ? 'alert' : 'status')
+  expect(banner).toHaveTextContent(text)
+  expect(banner).not.toHaveTextContent('可繼續使用')
   expect(isProgressiveAutoSummaryBlocked()).toBe(true)
+})
+
+test.each(['failed', 'cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'] as const)('a terminal %s for the same run is accepted after commit but before the extension receives its new import id', phase => {
+  useProgressiveImportStore.setState({ current: { runId: 'same-run', importId: 'original-import', phase: 'loaded' } })
+  render(<ProgressiveImportStatus />)
+  act(() => window.dispatchEvent(new MessageEvent('message', { source: window, origin: location.origin,
+    data: { source: 'medcloud2-extension', type: PROGRESSIVE_STATUS_MESSAGE, version: 1, runId: 'same-run', importId: 'older-snapshot', phase } })))
+  expect(useProgressiveImportStore.getState().current?.phase).toBe(phase === 'failed' ? 'update-failed' : phase)
+  expect(mockImportId).toBe('original-import')
+})
+
+test('a late terminal message cannot change the status of a manually replaced chart', () => {
+  useProgressiveImportStore.setState({ current: { runId: 'same-run', importId: 'original-import', phase: 'loaded' } })
+  render(<ProgressiveImportStatus />)
+  mockImportId = 'manual-import'
+  act(() => window.dispatchEvent(new MessageEvent('message', { source: window, origin: location.origin,
+    data: { source: 'medcloud2-extension', type: PROGRESSIVE_STATUS_MESSAGE, version: 1, runId: 'same-run', importId: 'older-snapshot', phase: 'patient-changed' } })))
+  expect(useProgressiveImportStore.getState().current?.phase).toBe('loaded')
 })
