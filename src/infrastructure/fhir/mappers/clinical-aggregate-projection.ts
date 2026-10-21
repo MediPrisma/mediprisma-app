@@ -7,6 +7,7 @@ import { getClinicalSourceNodePatientExclusionReason, isClinicalSourceNodePatien
 import { createClinicalRecordResolution, selectAutomaticClinicalRecordRows } from '@/src/core/services/clinical-record-resolution'
 import type { ClinicalDataCollection, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { isMedicationContentOnlyIncomplete } from '@/src/core/utils/clinical-query-status'
 import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
@@ -351,7 +352,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
         continue
       }
       // Retain real transport/auth failures rather than replacing them with success.
-      if (!status.exclusionReason && status.state !== 'ok' && status.state !== 'empty') continue
+      if (!status.exclusionReason && status.state !== 'ok' && status.state !== 'empty' && !isMedicationContentOnlyIncomplete(status)) continue
       const rows = key === 'Observation:vital-signs' ? next.vitalSigns : next[arrayByType[type]]
       const count = Array.isArray(rows) ? rows.filter((row: any) => !row.clinicalSourceNodeKey || context.nodes.get(row.clinicalSourceNodeKey)?.resource.resourceType === type).length : status.count
       const { excludedCount: _oldCount, exclusionReason: _oldReason, exclusionCounts: _oldCounts, message: _oldMessage, ...rest } = status

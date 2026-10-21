@@ -1,3 +1,5 @@
+import { isMedicationContentOnlyIncomplete } from '@/src/core/utils/clinical-query-status'
+import { projectClinicalMedicationQueryStatus } from '@/src/infrastructure/fhir/mappers/clinical-medication-projection'
 import { applyHospitalMedicationVisitReview } from '@/features/clinical-decision-support/utils/hospital-medication-visit'
 import { QueryClient } from '@tanstack/react-query'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
@@ -238,4 +240,12 @@ it('does not replace a native AF not-indicated conclusion when medication conten
  const point={semanticId:'af-oac-whether',state:'not-applicable',headline:'Native not indicated',why:'Native clinical evidence',actions:[]}
  const model={source:'af',headline:'Synthetic AF',points:[point]}
  expect(applyHospitalMedicationVisitReview(model as any,profile,'en').points[0]).toBe(point)
+})
+
+it.each([{excludedCount:1,exclusionReason:'foreign-patient-reference'},{invalidModifierCount:1}])('never hides another error behind a stale content-only marker: %j',extra=>{
+ const status={resourceType:'MedicationRequest',state:'incomplete',medicationContentOnlyIncomplete:true,...extra} as any
+ expect(isMedicationContentOnlyIncomplete(status)).toBe(false)
+ const projected=projectClinicalMedicationQueryStatus([{id:'missing',clinicalMedicationContentUncertainty:{reason:'unresolved-reference'}}] as any,{MedicationRequest:status})
+ expect(projected.MedicationRequest?.medicationContentOnlyIncomplete).not.toBe(true)
+ expect(isMedicationContentOnlyIncomplete(projected.MedicationRequest)).toBe(false)
 })

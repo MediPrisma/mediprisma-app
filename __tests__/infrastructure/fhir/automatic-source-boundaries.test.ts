@@ -90,3 +90,16 @@ it.each([false,true])('accepts an ordered Patient correction when its winning ve
  const parsed=LocalBundleService.parse({resourceType:'Bundle',entry:reverse?entries.reverse():entries})!
  expect(parsed.patient.birthDate).toBe('1980-01-01')
 })
+
+it('upgrades a content-only gap to a real ownership error when a later source graph excludes prescriptions',()=>{
+ const request={resourceType:'MedicationRequest',id:'unknown',status:'active',subject:{reference:'Patient/synthetic'},medicationReference:{reference:'Medication/missing'}}
+ const first=capture('first',[patient,request])
+ const before=reconcileClinicalSources([first])
+ const node=before.graph.nodes.find(node=>node.resource.resourceType==='MedicationRequest')!
+ const input=projectClinicalAggregate({clinicalSource:before,medications:[{...request,clinicalSourceNodeKey:node.key}],resourceQueryStatus:{MedicationRequest:{resourceType:'MedicationRequest',state:'ok',count:1}}} as any)
+ expect(input.resourceQueryStatus.MedicationRequest.medicationContentOnlyIncomplete).toBe(true)
+ const source=reconcileClinicalSources([first,capture('later',[{...request,id:'foreign',subject:{reference:'Patient/another'}}])])
+ const after=projectClinicalAggregate(input,source)
+ expect(after.resourceQueryStatus.MedicationRequest).toMatchObject({state:'error',excludedCount:1,exclusionReason:'foreign-patient-reference'})
+ expect(after.resourceQueryStatus.MedicationRequest.medicationContentOnlyIncomplete).not.toBe(true)
+})

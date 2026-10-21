@@ -60,7 +60,9 @@ function summarize(
   med: any,
   nowMs: number,
 ): MedSummary {
-  const name = pickAiMedicationName(
+  const name = med.clinicalMedicationContentUncertainty
+    ? 'Medication content unavailable; prescription recorded, drug identity, dose and medication absence are not inferred'
+    : pickAiMedicationName(
     med.medicationCodeableConcept,
     med.medicationReference?.display,
   )

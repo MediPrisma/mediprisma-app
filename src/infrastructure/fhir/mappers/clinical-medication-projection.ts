@@ -2,6 +2,7 @@ import { readClinicalMedicationContentModifier, hasMalformedClinicalModifier } f
 import { createClinicalRecordResolution } from '@/src/core/services/clinical-record-resolution'
 import type { MedicationEntity, ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { isMedicationContentOnlyIncomplete } from '@/src/core/utils/clinical-query-status'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
 import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
 import { mutableClinicalProjection } from '../services/clinical-source-session'
@@ -62,7 +63,7 @@ export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], i
       if (!previous?.medicationContentUncertaintyCount) continue
       const { medicationContentUncertaintyCount: _previousCount, medicationContentOnlyIncomplete: _previousOwnership, ...rest } = previous
       const rowCount = rows.filter(row => (row._sourceResourceType ?? 'MedicationRequest') === type).length
-      const recovered: ClinicalDataQueryStatus = previous.state === 'incomplete' && previous.medicationContentOnlyIncomplete === true
+      const recovered: ClinicalDataQueryStatus = isMedicationContentOnlyIncomplete(previous)
         ? { ...rest, count: rowCount, state: rowCount ? 'ok' : 'empty', message: undefined } : rest
       if (result === input) result = { ...input }
       result[type] = recovered
@@ -70,7 +71,7 @@ export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], i
     }
     // Content completeness is independent of transport success. Preserve a
     // real failure or refresh state, including authorization diagnostics.
-    const ownsContentState = previous?.state === 'incomplete' && previous.medicationContentOnlyIncomplete === true
+    const ownsContentState = isMedicationContentOnlyIncomplete(previous)
     const preserveQueryState = previous && previous.state !== 'ok' && previous.state !== 'empty' && !ownsContentState
     const status: ClinicalDataQueryStatus = { ...previous, resourceType: type,
       state: preserveQueryState ? previous.state : 'incomplete', medicationContentUncertaintyCount: count,

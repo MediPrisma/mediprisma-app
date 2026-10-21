@@ -67,3 +67,16 @@ it('retains selected pending measurements after actual token prioritization with
     expect(text).not.toMatch(/Excluded historical measurement|2021-10-01|14749-6|pending-potassium/)
   } finally { mockProfile.filters = ALL_DATA_FILTERS }
 })
+
+it('makes actual AI input ready with an explicit unavailable-drug record and retains the missing-input semantics',()=>{
+ ensureCategoriesInitialized()
+ const resources=[{resourceType:'Patient',id:'synthetic'},{resourceType:'MedicationRequest',id:'unknown-drug',status:'active',authoredOn:'2026-10-01',medicationReference:{reference:'Medication/missing'}}]
+ mockData={...LocalBundleService.parse({resourceType:'Bundle',entry:resources.map(resource=>({resource}))})!.collection,isLoading:false,isFetching:false,error:null,hasBlockingQueryIssues:false}
+ const{result}=renderHook(()=>useClinicalAiInput(128000,'insights'))
+ expect(result.current.dataReady).toBe(true)
+ expect(result.current.clinicalContext).toContain('Medication content unavailable')
+ expect(result.current.clinicalContext).toContain('medication absence are not inferred')
+ expect(result.current.clinicalData?.medications?.[0].clinicalMedicationContentUncertainty).toBeDefined()
+ expect((result.current.clinicalData as any)?.resourceQueryStatus?.MedicationRequest?.state).toBe('incomplete')
+ expect(result.current.clinicalContext).not.toMatch(/reconcil|核對/i)
+})

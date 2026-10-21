@@ -286,3 +286,20 @@ describe('決策地圖 v2 with an unconfirmed hospital apixaban order', () => {
     expect(within(bookEntry()).getByTestId('cdss-book-score')).toHaveTextContent('≥2 建議抗凝 · 已在用')
   })
 })
+
+it.each(['zh-TW','en'] as const)('retains missing-input safety in the native AF decision flow without a source reconciliation task (%s)',locale=>{
+ const bundle=bundleWith([])
+ const id=bundle.entry.find(entry=>entry.resource.resourceType==='Patient')!.resource.id
+ bundle.entry.push({resource:{resourceType:'MedicationRequest',id:'synthetic-unknown-drug',status:'active',subject:{reference:'Patient/'+id},authoredOn:'2026-09-25',medicationReference:{reference:'Medication/missing'}}})
+ const{patient,collection}=LocalBundleService.parse(bundle)!
+ const profile=applyAfCalculatorResults(createHospitalAwareCdssPatientProfile({...collection,patient,now:NOW})) as HospitalAwareCdssProfile
+ expect(profile.hospitalMedicationInventoryUnresolved).toBeDefined()
+ expect(profile.facts.currentOralAnticoagulant).toBeUndefined()
+ const result=buildHospitalAwareCdssResult(ATRIAL_FIBRILLATION_GUIDELINE_PACK,profile,locale)
+ const model=buildVisitModel({packId:result.packId,result,profile,locale})!
+ const point=dp07(model)
+ expect(point.state).toBe('info')
+ expect(point.actions).toEqual([])
+ expect(point.next).toBeUndefined()
+ expect(JSON.stringify(point)).not.toMatch(/reconcil|核對|未決|釐清/i)
+})

@@ -1,4 +1,5 @@
 import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
+import { isMedicationContentOnlyIncomplete } from '@/src/core/utils/clinical-query-status'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 /**
  * Clinical Data Query Hook (React Query)
@@ -354,7 +355,7 @@ export function useClinicalData() {
     const resourceQueryStatus = aggregate.resourceQueryStatus
     const queryIssues = Object.entries(resourceQueryStatus)
       .filter(([, status]) => status && status.state !== 'ok' && status.state !== 'empty' && status.state !== 'pending')
-      .filter(([, status]) => status?.state !== 'incomplete' || status.medicationContentOnlyIncomplete !== true)
+      .filter(([, status]) => !isMedicationContentOnlyIncomplete(status))
     const hasBlockingQueryIssues = queryIssues.some(([key, status]) => BLOCKING_FHIR_QUERY_KEYS.has(key) || (status.invalidModifierCount ?? 0) > 0)
 
     return {
