@@ -74,3 +74,36 @@ it('does not expose unresolved Observation or DiagnosticReport variants as tool 
     expect(JSON.stringify(result.data)).not.toMatch(/70|140|EF/)
   }
 })
+
+it('does not infer an empty condition result when the patient-scoped query excluded records and failed', async () => {
+  const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'selected' } },
+  ] } as any)!
+  expect(parsed.collection.conditions).toHaveLength(0)
+  // This is the collection shape emitted by the SMART repository when it
+  // withheld one explicitly foreign-patient row from the clinical projection.
+  const tools = createFhirTools(() => ({ patient: parsed.patient, collection: {
+    ...parsed.collection,
+    resourceQueryStatus: { Condition: { resourceType: 'Condition', state: 'error', excludedCount: 1 } },
+  } }))
+  const result = await (tools.queryConditions as any).execute({})
+  expect(result).toMatchObject({ success: false, count: 0, incomplete: true, canConcludeAbsence: false })
+  expect(result.queryIssues).toMatchObject([{ resourceType: 'Condition', state: 'error' }])
+})
+
+it.each([
+  ['queryAllergies', 'AllergyIntolerance'],
+  ['queryProcedures', 'Procedure'],
+  ['queryImmunizations', 'Immunization'],
+] as const)('does not infer absence from an incomplete %s query', async (toolName, resourceType) => {
+  const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'selected' } },
+  ] } as any)!
+  const tools = createFhirTools(() => ({ patient: parsed.patient, collection: {
+    ...parsed.collection,
+    resourceQueryStatus: { [resourceType]: { resourceType, state: 'unsupported', excludedCount: 1 } },
+  } }))
+  const result = await (tools[toolName] as any).execute({})
+  expect(result).toMatchObject({ success: false, count: 0, incomplete: true, canConcludeAbsence: false })
+  expect(result.queryIssues).toMatchObject([{ resourceType, state: 'unsupported' }])
+})

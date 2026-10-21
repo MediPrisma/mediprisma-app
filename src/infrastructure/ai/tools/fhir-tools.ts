@@ -1139,6 +1139,23 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
     return scrubPii(annotated, buildPatientTextLiterals(data.patient)) as T
   }
   const scrubForDomains = (resourceTypes: readonly string[]) => <T,>(payload: T): T => scrub(payload, resourceTypes)
+  const scrubForQueries = (resourceTypes: readonly string[], keys: ClinicalDataQueryKey[], noun: string) => <T,>(payload: T): T => {
+    const collection = getData().collection
+    const unavailable = unavailableQueryResult(collection ?? null, keys, noun)
+    if (!unavailable) return scrub(payload, resourceTypes)
+
+    const result = payload as any
+    if (typeof result?.count === 'number' && result.count > 0) {
+      return scrub({
+        ...result,
+        incomplete: true,
+        canConcludeAbsence: false,
+        queryIssues: unavailable.queryIssues,
+        summary: `${result.summary || ''}（相關 FHIR 查詢不完整）`.trim(),
+      }, resourceTypes) as T
+    }
+    return scrub(unavailable, resourceTypes) as T
+  }
 
   // A failed name/category/date match is not an empty chart. Give the model
   // actual values within the requested date/abnormality scope to discover the source's names without another
@@ -1469,7 +1486,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       inputSchema: encountersSchema,
       execute: async ({ class: encounterClass, department, institution, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof encountersSchema>) => {
-        const scrub = scrubForDomains(["Encounter","Condition"])
+        const scrub = scrubForQueries(["Encounter","Condition"], ['Encounter'], '就診紀錄')
         const list = getData().collection?.encounters ?? []
         let filtered = list.filter((e: any) =>
           matchEncounterClass(e.class, encounterClass) &&
@@ -1742,7 +1759,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query patient conditions/diagnoses (cross-visit). Use this for confirmed clinical conditions, not visit-level billing ICDs.',
       inputSchema: conditionsSchema,
       execute: async ({ category, clinicalStatus, limit }: z.infer<typeof conditionsSchema>) => {
-        const scrub = scrubForDomains(["Condition"])
+        const scrub = scrubForQueries(["Condition"], ['Condition'], '診斷或健康問題')
         const list = getData().collection?.conditions ?? []
         const filtered = list.filter((c: any) =>
           matchCategoryCoding(c.category, category) &&
@@ -2281,7 +2298,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query patient procedures (surgeries, interventions).',
       inputSchema: proceduresSchema,
       execute: async ({ status, dateFrom, dateTo, limit }: z.infer<typeof proceduresSchema>) => {
-        const scrub = scrubForDomains(["Procedure"])
+        const scrub = scrubForQueries(["Procedure"], ['Procedure'], '處置或手術紀錄')
         const list = getData().collection?.procedures ?? []
         let filtered = list.filter((p: any) => matchStatus(p.status, status))
         if (dateFrom || dateTo) {
@@ -2483,7 +2500,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query patient allergies and intolerances. Filter by `severity` (high/moderate/low) to narrow to clinically significant ones.',
       inputSchema: allergiesSchema,
       execute: async ({ type, severity }: z.infer<typeof allergiesSchema>) => {
-        const scrub = scrubForDomains(["AllergyIntolerance"])
+        const scrub = scrubForQueries(["AllergyIntolerance"], ['AllergyIntolerance'], '過敏或不耐受紀錄')
         const list = getData().collection?.allergies ?? []
         const filtered = list.filter((a: any) =>
           matchAllergyType(a.type, type) &&
@@ -2507,7 +2524,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query preventive vaccinations (FHIR Immunization). Supports date range.',
       inputSchema: immunizationsSchema,
       execute: async ({ dateFrom, dateTo, limit }: z.infer<typeof immunizationsSchema>) => {
-        const scrub = scrubForDomains(["Immunization"])
+        const scrub = scrubForQueries(["Immunization"], ['Immunization'], '疫苗接種紀錄')
         const list = getData().collection?.immunizations ?? []
         let filtered = list
         if (dateFrom || dateTo) {
