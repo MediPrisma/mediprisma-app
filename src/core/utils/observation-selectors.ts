@@ -93,7 +93,11 @@ export function collectReportMemberIds(
 }
 
 /** Reconciled source identity takes precedence over a reused logical id. */
-export function clinicalRecordKey(record: { id?: string; clinicalSourceNodeKey?: string }): string | undefined {
+export function clinicalRecordKey(record: { id?: string; sourceId?: string; clinicalSourceNodeKey?: string }): string | undefined {
+  // Common projection IDs already unify proven exact include/query copies;
+  // sourceId retains the original FHIR id. Older unmigrated rows still use
+  // their capture key so conflicting logical ids cannot collapse.
+  if (record.clinicalSourceNodeKey && record.id && record.id !== record.sourceId && (record.sourceId !== undefined || /^cs[0-9a-f]{16}$/.test(record.id))) return 'id:' + record.id
   return record.clinicalSourceNodeKey ? 'source:' + record.clinicalSourceNodeKey : record.id ? 'id:' + record.id : undefined
 }
 

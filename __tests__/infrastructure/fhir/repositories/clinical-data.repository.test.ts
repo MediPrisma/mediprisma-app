@@ -372,7 +372,7 @@ describe('FhirClinicalDataRepository', () => {
 
       const result = await repository.fetchVitalSigns('patient-123')
 
-      expect(result).toEqual([expect.objectContaining({ id: 'vital-1' })])
+      expect(result).toEqual([expect.objectContaining({ sourceId: 'vital-1' })])
       expect(mockFhirClient.requestAllPages).not.toHaveBeenCalledWith(
         expect.stringContaining('category=vital-signs')
       )
@@ -493,7 +493,7 @@ describe('repository source intake', () => {
       { resource: { resourceType: 'Observation', id: 'obs' } },
     ] })
     ;(FhirMapper.toObservation as jest.Mock).mockReturnValue({ id: 'obs' })
-    expect(await repo.fetchObservations('synthetic')).toMatchObject([{ id: 'obs' }])
+    expect(await repo.fetchObservations('synthetic')).toMatchObject([{ sourceId: 'obs' }])
     const source = repo.getClinicalSource('synthetic')
     expect(source.graph.nodes).toHaveLength(2)
     expect(source.graph.nodes.find(node => node.resource.id === 'unknown')?.resource.extension).toEqual([{ url: 'synthetic', valueString: 'preserved' }])
@@ -513,7 +513,7 @@ it('maps only the current successful refresh while replacing its active source c
   request.mockResolvedValueOnce({ entry: [observation('a'), observation('b')] })
   expect(await repo.fetchObservations('refresh')).toHaveLength(2)
   request.mockResolvedValueOnce({ entry: [observation('a', 'revised')] })
-  expect(await repo.fetchObservations('refresh')).toMatchObject([{ id: 'a', valueString: 'revised' }])
+  expect(await repo.fetchObservations('refresh')).toMatchObject([{ sourceId: 'a', valueString: 'revised' }])
   request.mockResolvedValueOnce({ entry: [] })
   expect(await repo.fetchObservations('refresh')).toEqual([])
   expect(repo.getClinicalSource('refresh').graph.nodes).toHaveLength(0)
@@ -525,9 +525,9 @@ it('retains prior successful rows on a failed refresh while reporting the failur
   request.mockReset()
   ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
   request.mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Observation', id: 'retained' } }] })
-  expect(await repo.fetchObservations('retention')).toMatchObject([{ id: 'retained' }])
+  expect(await repo.fetchObservations('retention')).toMatchObject([{ sourceId: 'retained' }])
   request.mockRejectedValueOnce(new Error('network unavailable'))
-  expect(await repo.fetchObservations('retention')).toMatchObject([{ id: 'retained' }])
+  expect(await repo.fetchObservations('retention')).toMatchObject([{ sourceId: 'retained' }])
   expect(repo.getQueryStatus('Observation')?.state).toBe('error')
   request.mockRejectedValueOnce(new Error('network unavailable'))
   expect(await repo.fetchObservations('different-patient')).toEqual([])
@@ -588,7 +588,7 @@ it.each([
   ] })
   ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
   ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
-  expect((await repo.fetchDiagnosticReports('report-synthetic'))[0]._observations?.map(observation => observation.id)).toEqual(['panel', 'member'])
+  expect((await repo.fetchDiagnosticReports('report-synthetic'))[0]._observations?.map(observation => observation.sourceId)).toEqual(['panel', 'member'])
 })
 
 it('does not attach a foreign report reference through a colliding observation id', async () => {
@@ -691,7 +691,7 @@ it('keeps enumerable source-node keys on mapped observations and reports', async
   const reports = await repo.fetchDiagnosticReports('node-keys')
   const graph = repo.getClinicalSource('node-keys').graph
   for (const row of [...observations, ...reports]) {
-    expect(JSON.parse(JSON.stringify(row)).clinicalSourceNodeKey).toBe(graph.nodes.find(node => node.resource.id === row.id)?.key)
+    expect(JSON.parse(JSON.stringify(row)).clinicalSourceNodeKey).toBe(graph.nodes.find(node => node.resource.id === row.sourceId)?.key)
   }
 })
 
@@ -709,5 +709,5 @@ it.each(['absolute', 'urn', 'version'])('assembles graph-resolved report members
   ;(FhirMapper.toObservation as jest.Mock).mockImplementation(realMapper.toObservation)
   ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation(realMapper.toDiagnosticReport)
   const collection = await repo.fetchAllClinicalData('cross-query-patient')
-  expect(collection.diagnosticReports[0]._observations?.map(observation => observation.id)).toEqual(['cross-query'])
+  expect(collection.diagnosticReports[0]._observations?.map(observation => observation.sourceId)).toEqual(['cross-query'])
 })

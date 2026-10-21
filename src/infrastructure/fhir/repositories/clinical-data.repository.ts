@@ -1,3 +1,4 @@
+import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 import { attachReportObservations } from '@/src/core/services/clinical-report-membership'
 import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { captureClinicalSource, invalidateClinicalSource, mutableClinicalProjection, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
@@ -50,6 +51,33 @@ function logFhirError(label: string, error: unknown) {
 function warnFhirError(label: string, error: unknown) {
   if (error instanceof LocalBundleModeError) return
   console.warn(label, error)
+}
+
+type SourceNode = ClinicalReconciliationResult['graph']['nodes'][number]
+type SourceEdge = ClinicalReconciliationResult['graph']['references'][number]
+interface ClinicalProjectionContext {
+  ids: ReadonlyMap<string, string>
+  nodes: Map<string, SourceNode>
+  edges: Map<string, SourceEdge[]>
+}
+
+function domainClinicalResource(resource: any, nodeKey: string, context: ClinicalProjectionContext): any {
+  const projected = mutableClinicalProjection(resource)
+  for (const edge of context.edges.get(nodeKey) ?? []) {
+    if (edge.status !== 'resolved') continue
+    const targetIds = [...new Set(edge.targetKeys.map(key => context.ids.get(key)).filter((id): id is string => Boolean(id)))]
+    if (targetIds.length !== 1) continue
+    const target = edge.targetKeys.map(key => context.nodes.get(key)).find(node => node && context.ids.has(node.key))
+    if (!target) continue
+    let reference: any = projected
+    for (const part of edge.path.replace(/\[(\d+)\]/g, '.$1').split('.')) reference = reference?.[part]
+    if (reference && typeof reference.reference === 'string') reference.reference = target.resource.resourceType + '/' + targetIds[0]
+  }
+  return projected
+}
+
+function mapSourceObservation(resource: any, nodeKey: string, context: ClinicalProjectionContext): ObservationEntity {
+  return { ...FhirMapper.toObservation(domainClinicalResource(resource, nodeKey, context)), id: context.ids.get(nodeKey) ?? resource.id, sourceId: resource.id, clinicalSourceNodeKey: nodeKey }
 }
 
 type MedicationSourceType = 'MedicationRequest' | 'MedicationStatement'
@@ -153,7 +181,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         invalidateClinicalSource(session, cacheKey, patientScope)
         throw error
       }
-      return { ...previous, _clinicalSource: previous._clinicalSource, _retainedFailure: error }
+      return { ...previous, _clinicalSource: previous._clinicalSource, _clinicalProjection: previous._clinicalProjection, _retainedFailure: error }
     }
     if (session.revoked) throw new LocalBundleModeError()
     if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl?.replace(/\/+$/, '') !== session.restBase)) throw new Error('FHIR session changed during query')
@@ -165,6 +193,13 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       .filter(node => node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType))
       .map(node => ({ resource: node.resource, fullUrl: node.fullUrl, _clinicalSourceNodeKey: node.key })) }
     Object.defineProperty(projected, '_clinicalSource', { value: source, enumerable: false })
+    const projection: ClinicalProjectionContext = { ids: createClinicalSourceProjectionIds(source), nodes: new Map(source.graph.nodes.map(node => [node.key, node])), edges: new Map() }
+    for (const edge of source.graph.references) {
+      const edges = projection.edges.get(edge.origin.key) ?? []
+      edges.push(edge)
+      projection.edges.set(edge.origin.key, edges)
+    }
+    Object.defineProperty(projected, '_clinicalProjection', { value: projection, enumerable: false })
     session.successfulResponses.set(cacheKey, projected)
     return projected
   }
@@ -451,7 +486,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Observation?patient=${patientId}&_count=500`,
       )
 
-      const result = response.entry?.map((e: any) => ({ ...FhirMapper.toObservation(mutableClinicalProjection(e.resource)), clinicalSourceNodeKey: e._clinicalSourceNodeKey })) || []
+      const result = response.entry?.map((e: any) => mapSourceObservation(e.resource, e._clinicalSourceNodeKey, response._clinicalProjection)) || []
       this.markQuerySuccess('Observation', 'Observation', result.length, response)
       this.markDerivedVitalSignsStatus(result)
       return result
@@ -514,10 +549,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .filter(edge => edge.origin.resource === origin && path.test(edge.path) && edge.status === 'resolved')
         .flatMap(edge => edge.targetKeys.map(key => observationNodes.get(key)).filter((node): node is NonNullable<typeof node> => Boolean(node)))
       const result = reports.map((report: any) => {
-        const mapped = { ...FhirMapper.toDiagnosticReport(mutableClinicalProjection(report), []), clinicalSourceNodeKey: reportNodeKeys.get(report) as string | undefined }
+        const nodeKey = reportNodeKeys.get(report) as string
+        const mapped = { ...FhirMapper.toDiagnosticReport(domainClinicalResource(report, nodeKey, response._clinicalProjection), []), id: response._clinicalProjection.ids.get(nodeKey) ?? report.id, sourceId: report.id, clinicalSourceNodeKey: nodeKey }
         const members = resolvedObservations(report, /^result\[\d+\]$/).flatMap(node => [node, ...resolvedObservations(node.resource, /^hasMember\[\d+\]$/)])
         const unique = [...new Map(members.map(node => [node.key, node])).values()]
-        return unique.length ? { ...mapped, _observations: unique.map(node => ({ ...FhirMapper.toObservation(mutableClinicalProjection(node.resource) as any), clinicalSourceNodeKey: node.key })) } : mapped
+        return unique.length ? { ...mapped, _observations: unique.map(node => mapSourceObservation(node.resource, node.key, response._clinicalProjection)) } : mapped
       })
       this.markQuerySuccess('DiagnosticReport', 'DiagnosticReport', result.length, response)
       return result
