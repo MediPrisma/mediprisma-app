@@ -106,8 +106,14 @@ function modality(report: Report): string | undefined {
 }
 
 export function compareImagingCopies(a: Report, b: Report): number {
-  return sharedReportNarrative(b).length - sharedReportNarrative(a).length
+  return Number(!!footerEvaluation(b)) - Number(!!footerEvaluation(a))
+    || Number(sourceOf(b) === 'hospital') - Number(sourceOf(a) === 'hospital')
+    || sharedReportNarrative(b).replace(/\s+/g, ' ').length - sharedReportNarrative(a).replace(/\s+/g, ' ').length
     || (a.id ?? '').localeCompare(b.id ?? '')
+}
+
+function footerEvaluation(report: Report): string | undefined {
+  return /Positive\s+Rate\s+Evaluation\s+(\d+)\s*$/i.exec(sharedReportNarrative(report))?.[1]
 }
 
 /** Findings may be templated. Explicit exam labels still constrain a match,
@@ -161,7 +167,7 @@ function examQualifiers(report: Report): string[] | null {
     if (explicit.size > 1) return null
     qualifiers.push([...explicit][0] ?? '')
   }
-  return [header, ...qualifiers]
+  return [header, ...qualifiers, footerEvaluation(report) ?? '']
 }
 
 /** Shared grouping projection for rows, tab counts and AI context. Returned
@@ -278,16 +284,32 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
 /** Preserve full-set ambiguity decisions, but never describe a lone source or
  * repeated copies of one procedure as a visible shared-procedure group. */
 export function visibleReportGroupingKeys(reports: readonly Report[], sourceKeys: ReadonlyMap<Report, string>): Map<Report, string> {
-  const visible = new Map<string, { count: number; identities: Set<string> }>()
+  const visible = new Map<string, Report[]>()
   for (const report of reports) {
     const key = sourceKeys.get(report)
     if (!key) continue
-    const members = visible.get(key) ?? { count: 0, identities: new Set<string>() }
-    members.count++
-    members.identities.add(sharedReportSourceIdentity(report))
+    const members = visible.get(key) ?? []
+    members.push(report)
     visible.set(key, members)
   }
-  return new Map([...sourceKeys].filter(([, key]) => key.startsWith('cross-source|')
-    ? (visible.get(key)?.count ?? 0) > 1
-    : (visible.get(key)?.identities.size ?? 0) > 1))
+  const keys = new Map<Report, string>()
+  for (const [key, members] of visible) {
+    if (key.startsWith('cross-source|')) {
+      const sources = new Set(members.map(sourceOf))
+      if (sources.has('hospital') && sources.has('cloud')) {
+        for (const report of members) keys.set(report, key)
+      } else {
+        // A filtered view may retain only the hospital's billed procedures.
+        // Restore their established same-source group, never a cross-source label.
+        const sharedKeys = qualifyingSharedReportKeys(members)
+        for (const report of members) {
+          const originalKey = sharedReportGroupingKey(report)
+          if (originalKey && sharedKeys.has(originalKey)) keys.set(report, originalKey)
+        }
+      }
+    } else if (new Set(members.map(sharedReportSourceIdentity)).size > 1) {
+      for (const report of members) keys.set(report, key)
+    }
+  }
+  return keys
 }

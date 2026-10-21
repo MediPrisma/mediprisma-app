@@ -190,7 +190,7 @@ const IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS = [
  */
 export function hasNhiNonPathologyReportOrderCode(report?: Pick<DiagnosticReportLike, 'code'> | null): boolean {
   return (report?.code?.coding ?? []).some((coding) => {
-    const code = coding.code?.trim().toUpperCase()
+    const code = typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : undefined
     return !!code && NHI_NON_PATHOLOGY_REPORT_ORDER_CODES.has(code)
   })
 }

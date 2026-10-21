@@ -1,7 +1,7 @@
 import { buildReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
 import { calculateReportTabCounts } from '@/features/clinical-summary/reports/utils/report-tab-counts'
 import { imagingReportsCategory } from '@/src/core/categories/imaging-reports.category'
-import { normalizeImagingReportCopy, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { normalizeImagingReportCopy, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
 import { getReportDate } from '@/src/shared/utils/report-identity'
 import { NHI_MEDICLOUD_SOURCE_EXTENSION_URL } from '@/src/shared/utils/observation-provenance.utils'
@@ -22,6 +22,32 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it('retains the evaluation footer even when the cloud copy has more whitespace', () => {
+    const reports = pair()
+    reports[1].conclusion = BODY.replaceAll(' ', '  \n  ')
+    const row = buildReportsData(reports).reportRows[0]
+    expect(row.obs.some(obs => obs.valueString?.includes('Positive Rate Evaluation 2'))).toBe(true)
+    const changed = { ...reports[1], conclusion: `${BODY}${FOOTER.replace('Evaluation 2', 'Evaluation 3')}` }
+    expect(buildReportsData([reports[0], changed]).reportRows).toHaveLength(2)
+  })
+
+  it.each([null, { code: 123 }])('keeps malformed order codes from breaking the row projection: %j', coding => {
+    const report = { ...pair()[0], code: { text: 'CT CHEST', coding: [coding] } }
+    expect(() => buildReportsData([report])).not.toThrow()
+    expect(getReportDate(report)).toBe('2026-06-24')
+  })
+
+  it('restores a same-source shared-procedure group when the cloud source is filtered out', () => {
+    const reports = pair().map(report => ({ ...report, encounter: { reference: 'Encounter/a' } }))
+    const second = { ...reports[0], id: 'hospital-procedure-two', code: { text: 'CT CHEST' } }
+    const full = [...reports, second]
+    const keys = reportDisplayGroupingKeys(full)
+    expect(keys.get(reports[0])).toMatch(/^cross-source\|/)
+    const visibleKeys = visibleReportGroupingKeys([reports[0], second], keys)
+    expect(visibleKeys.get(reports[0])).toBe(visibleKeys.get(second))
+    expect(visibleKeys.get(reports[0])).not.toMatch(/^cross-source\|/)
+  })
+
   it.each([
     { code: { text: 'CT CHEST', coding: [null] } },
     { code: { text: 'CT CHEST', coding: [{ code: 123 }] } },

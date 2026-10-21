@@ -60,6 +60,16 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
   for (const width of [1440, 1024, 768, 430, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 })
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+    if (!before) {
+      const source = rows.first().locator('[aria-label^="臺北榮總"]').first()
+      const date = await rows.first().getByText('2026/6/24', { exact: true }).first().boundingBox()
+      const textRight = await source.locator('span').evaluateAll(spans => Math.max(...spans.map(span => {
+        const rect = span.getBoundingClientRect()
+        return rect.width ? rect.right : 0
+      })))
+      expect(date).not.toBeNull()
+      expect(textRight).toBeLessThanOrEqual(date!.x + 1)
+    }
     await page.screenshot({ path: path.join(output, `${before ? 'before' : 'after'}-${width}.png`), fullPage: true })
   }
   await page.setViewportSize({ width: 1440, height: 1000 })
