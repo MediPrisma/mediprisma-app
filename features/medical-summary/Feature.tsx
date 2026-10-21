@@ -775,7 +775,6 @@ export default function MedicalSummaryFeature() {
               <Button
                 type="button"
                 size="sm"
-                data-tour="medical-summary-settings"
                 variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "outline"}
                 className="h-[44px] shrink-0 gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7 @max-[36rem]:h-10 @max-[36rem]:w-10 @max-[36rem]:justify-center @max-[36rem]:px-0"
                 title={ms.summaryControls}

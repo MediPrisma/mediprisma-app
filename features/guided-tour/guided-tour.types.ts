@@ -70,7 +70,6 @@ export type GuidedTourId =
   | 'education'
   | 'settings'
   | 'news-lab-trend-zoom'
-  | 'news-summary-diagnostics'
 
 export interface GuidedTourDefinition {
   id: GuidedTourId

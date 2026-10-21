@@ -65,7 +65,6 @@ export const ANALYTICS_TOURS = [
   'education',
   'settings',
   'news-lab-trend-zoom',
-  'news-summary-diagnostics',
 ] as const
 export type AnalyticsTour = typeof ANALYTICS_TOURS[number]
 
