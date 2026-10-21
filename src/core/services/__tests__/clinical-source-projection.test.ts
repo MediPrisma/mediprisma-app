@@ -66,6 +66,38 @@ describe('createClinicalSourceProjectionIds', () => {
     expect(nodes.map((node) => first.get(node.key))).toEqual(nodes.map((node) => second.get(node.key)))
   })
 
+  it('keeps anonymous events from independent captures distinct in separate and combined projections', () => {
+    const event = { resourceType: 'Observation', status: 'final', valueInteger: 4 }
+    const firstCapture = { ...scope, generation: 'query-capture', resources: [event] }
+    const secondCapture = { ...scope, generation: 'include-capture', resources: [event] }
+    const firstSource = reconcileClinicalSources([firstCapture])
+    const secondSource = reconcileClinicalSources([secondCapture])
+    const firstNode = firstSource.graph.nodes.find((node) => node.resource.resourceType === 'Observation')!
+    const secondNode = secondSource.graph.nodes.find((node) => node.resource.resourceType === 'Observation')!
+    const firstId = createClinicalSourceProjectionIds(firstSource).get(firstNode.key)
+    const secondId = createClinicalSourceProjectionIds(secondSource).get(secondNode.key)
+    expect(firstId).not.toBe(secondId)
+
+    const combined = reconcileClinicalSources([firstCapture, secondCapture])
+    const combinedIds = createClinicalSourceProjectionIds(combined)
+    const combinedNodes = combined.graph.nodes.filter((node) => node.resource.resourceType === 'Observation')
+    expect(combinedNodes).toHaveLength(2)
+    expect(combinedIds.get(combinedNodes[0].key)).not.toBe(combinedIds.get(combinedNodes[1].key))
+  })
+
+  it('keeps contained children under anonymous parents capture-scoped', () => {
+    const capture = (generation: string) => ({
+      ...scope,
+      generation,
+      resources: [{ resourceType: 'List', contained: [{ resourceType: 'Observation', id: 'member', valueInteger: 1 }] }],
+    })
+    const source = reconcileClinicalSources([capture('one'), capture('two')])
+    const ids = createClinicalSourceProjectionIds(source)
+    const children = source.graph.nodes.filter((node) => node.isContained && node.resource.resourceType === 'Observation')
+    expect(children).toHaveLength(2)
+    expect(ids.get(children[0].key)).not.toBe(ids.get(children[1].key))
+  })
+
   it('throws instead of silently reusing an ID when content hashes collide', () => {
     const source = reconcileClinicalSources([{
       ...scope,
@@ -83,6 +115,27 @@ describe('createClinicalSourceProjectionIds', () => {
       },
     } as unknown as ClinicalReconciliationResult
     expect(() => createClinicalSourceProjectionIds(collided)).toThrow(/hash collision/i)
+  })
+
+  it('checks parent payload equality when parent content hashes collide', () => {
+    const source = reconcileClinicalSources([{
+      ...scope,
+      generation: 'query',
+      resources: [
+        { resourceType: 'List', id: 'list', note: [{ text: 'first' }], contained: [{ resourceType: 'Observation', id: 'member', valueInteger: 1 }] },
+        { resourceType: 'List', id: 'list', note: [{ text: 'second' }], contained: [{ resourceType: 'Observation', id: 'member', valueInteger: 1 }] },
+      ],
+    }])
+    const collided = {
+      ...source,
+      graph: {
+        ...source.graph,
+        nodes: source.graph.nodes.map((node) => node.resource.resourceType === 'List'
+          ? { ...node, contentHash: 'forced-parent-collision' }
+          : node),
+      },
+    } as unknown as ClinicalReconciliationResult
+    expect(() => createClinicalSourceProjectionIds(collided)).toThrow(/parent identity metadata has different resources/i)
   })
 
   it('returns only Observation and DiagnosticReport node keys', () => {

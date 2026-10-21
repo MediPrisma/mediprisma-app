@@ -29,14 +29,17 @@ function digest(value: string): string {
 
 /**
  * Build UI/AI projection IDs for source-backed observations and reports.
- * Generation and graph node keys are deliberately excluded so exact query and
- * _include copies share one row ID. FHIR's original id remains in sourceId.
+ * Generation and graph node keys are excluded for identified records so exact
+ * query and _include copies share one row ID. Anonymous records use the graph
+ * key because equal payloads alone do not prove retransmission. FHIR's original
+ * id remains in sourceId.
  */
 export function createClinicalSourceProjectionIds(
   source: ClinicalReconciliationResult,
 ): ReadonlyMap<string, string> {
   const nodesByKey = new Map(source.graph.nodes.map((node) => [node.key, node]))
   const stableIdentityCache = new Map<string, string>()
+  const resourcesByParentIdentity = new Map<string, ClinicalSourceNode['resource']>()
 
   const stableParentIdentity = (node: ClinicalSourceNode, visiting = new Set<string>()): string | undefined => {
     const relationship = node.parentKey ? 'contained' : node.embeddedIn ? 'embedded' : undefined
@@ -58,8 +61,16 @@ export function createClinicalSourceProjectionIds(
       (parent.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null,
       parent.contentHash,
       stableParentIdentity(parent, visiting) ?? null,
+      // Anonymous parents have no reliable cross-capture identity. Keep their
+      // descendants separate by the graph's stable capture slot.
+      (!parent.resource.id && !parent.fullUrl) ? parent.key : null,
     ])
     visiting.delete(parentKey)
+    const priorResource = resourcesByParentIdentity.get(identity)
+    if (priorResource && !clinicalSourceResourcesEqual(priorResource, parent.resource)) {
+      throw new Error('Clinical source projection ID hash collision: matching parent identity metadata has different resources')
+    }
+    if (!priorResource) resourcesByParentIdentity.set(identity, parent.resource)
     stableIdentityCache.set(parentKey, identity)
     return `${relationship}:${identity}`
   }
@@ -99,6 +110,9 @@ export function createClinicalSourceProjectionIds(
       node.contentHash,
       parentIdentity ?? null,
       occurrence ?? null,
+      // Without an id or fullUrl, equal payloads in independent query captures
+      // are not proven retransmissions. Keep each graph capture slot distinct.
+      hasReliableIdentity ? null : node.key,
     ])
     records.push({ node, identity, digest: digest(identity) })
   }
