@@ -1,6 +1,7 @@
 import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { ALL_DATA_FILTERS, ALL_DATA_SELECTION } from '@/src/shared/constants/data-selection.constants'
+import { GenerateClinicalContextUseCase } from '@/src/core/use-cases/clinical-context/generate-clinical-context.use-case'
 
 function input() {
   const resources: any[] = [{ resourceType: 'Patient', id: 'synthetic' }, { resourceType: 'Observation', id: 'recent', status: 'final', category: [{ coding: [{ code: 'laboratory' }] }], code: { coding: [{ system: 'http://loinc.org', code: '2951-2' }] }, effectiveDateTime: '2026-10-01', valueQuantity: { value: 140 } }]
@@ -23,4 +24,13 @@ it('retains selected value-free uncertainty but removes disabled domains entirel
   expect(all.clinicalRecordVariantExclusions?.some(item => item.code?.coding?.some(code => code.code === '2823-3'))).toBe(true)
   const off = scopeClinicalDataForAi(input(), { ...ALL_DATA_SELECTION, labReports: false, vitalSigns: false, observations: false, documents: false }, ALL_DATA_FILTERS, [], Date.parse('2026-10-02'))
   expect(off.clinicalRecordVariantExclusions ?? []).toEqual([])
+})
+
+it('applies the same uncertainty selection to the direct context use case', () => {
+  const useCase = new GenerateClinicalContextUseCase()
+  const text = JSON.stringify(useCase.execute(null, input(), { selection: ALL_DATA_SELECTION, filters: { ...ALL_DATA_FILTERS, labReportTimeRange: '3m' } }))
+  expect(text).toContain('outside the selected evidence')
+  expect(text).not.toMatch(/Excluded historical measurement|2021-10-01|2823-3/)
+  const disabled = useCase.execute(null, input(), { selection: { ...ALL_DATA_SELECTION, labReports: false, vitalSigns: false, observations: false, documents: false }, filters: ALL_DATA_FILTERS })
+  expect(disabled.some(section => section.title === 'Unresolved source-record variants')).toBe(false)
 })

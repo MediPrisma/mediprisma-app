@@ -1,4 +1,5 @@
 import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
 // Use Case: Generate Clinical Context
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -19,8 +20,9 @@ export class GenerateClinicalContextUseCase {
     clinicalData: ClinicalDataCollection,
     options: ClinicalContextOptions
   ): ClinicalContextSection[] {
-    clinicalData = excludeUnresolvedDecisionVariants(clinicalData, options.selection)
     const { selection, filters } = options
+    const uncertainty = scopeClinicalDataForAi(clinicalData, selection, filters, [])
+    clinicalData = excludeUnresolvedDecisionVariants(clinicalData, selection)
     const context: ClinicalContextSection[] = []
 
     // Patient Information
@@ -148,7 +150,7 @@ export class GenerateClinicalContextUseCase {
       context.push(...vitalItems)
     }
 
-    const exclusions = formatClinicalVariantExclusions(clinicalData)
+    const exclusions = formatClinicalVariantExclusions(uncertainty)
     if (exclusions) context.push({ title: 'Unresolved source-record variants', items: exclusions.split('\n') })
     return context
   }
