@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { test, expect } from '../fixtures/test'
-import { importBundle, SYNTHETIC_BUNDLE } from '../fixtures/import'
+import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/import'
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '../../features/clinical-summary/reports/utils/nhi-viewer-request'
 
 const before = process.env.IMAGING_BEFORE === '1'
@@ -94,8 +94,9 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
     // Keep history entry points for each original title rather than broadening
     // a generic NHI title into an inferred cross-anatomy history alias.
     const cloudSource = sources.locator('li').filter({ hasText: 'cloud-imaging-0' })
+    await openFeaturePanel(page)
     await cloudSource.getByRole('button', { name: '查看歷史紀錄' }).click()
-    await expect(page.getByText('Synthetic prior breast report for source-specific history.', { exact: false })).toBeVisible()
+    await expect(page.getByRole('region', { name: '功能', exact: true }).getByText('Synthetic prior breast report for source-specific history.', { exact: false }).filter({ visible: true })).toBeVisible()
     const popupPromise = context.waitForEvent('page')
     await first.getByRole('button', { name: /開啟.*健保影像|DICOM Viewer/ }).first().click()
     const popup = await popupPromise
