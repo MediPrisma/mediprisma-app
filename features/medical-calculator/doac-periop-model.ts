@@ -202,8 +202,10 @@ export interface PeriopResult {
     earliest?: Date
     /** The first scheduled dose at or after `earliest`. */
     firstDose?: Date
-    /** Scheduled doses after the start and before `firstDose`. */
+    /** Scheduled doses after the start (from the start itself when nothing is skipped before) and before `firstDose`. */
     skippedAfter: Date[]
+    /** What is restarted, by the prescription: the loading phase's own decision, prophylaxis, or the same therapeutic dose. */
+    dose?: L
   }
   notes: PeriopLine[]
   /** Inputs the hours still need. */
@@ -313,6 +315,11 @@ function labelInterval(agent: DoacAgent, tier: Exclude<Tier, 'minimal'>, crcl: n
     t(`仿單 Table 7：高出血風險或大手術 ${band[0]}，一般風險 ${band[1]}`, `Label Table 7: high bleeding risk or major surgery ${band[2]}, standard risk ${band[3]}`),
     CITES.dabigatranSurgeryTable,
   )
+}
+
+/** After a traumatic neuraxial puncture (ASRA 2025, from the labels): apixaban 48 h, rivaroxaban 24 h; none stated for the other two. */
+function traumaticDelay(agent: DoacAgent): number | undefined {
+  return agent === 'apixaban' ? 48 : agent === 'rivaroxaban' ? 24 : undefined
 }
 
 interface AsraRule {
@@ -443,7 +450,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       ))
       // A traumatic neuraxial puncture delays the restart further, here as anywhere.
       if (emergencyBlock === '' || emergencyBlock === 'single' || emergencyBlock === 'catheter') {
-        const delay = agent === 'apixaban' ? 48 : agent === 'rivaroxaban' ? 24 : undefined
+        const delay = traumaticDelay(agent)
         const traumatic = values.traumatic_puncture ?? ''
         if (traumatic === 'yes') {
           result.notes.push(delay === undefined
@@ -506,10 +513,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     }
     if (tier === 'minimal') {
       hours = regimen.perDay === 2 ? 12 : 24
-      // With a deep block, ASRA's interval replaces the trough: no 「不跳過劑量」 beside it.
+      // With a deep block, ASRA's interval replaces the trough: no 「不提前停藥」 beside it.
       result.basis.push(blockUsed
-        ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不跳過劑量」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, no dose skipped”.'), G.ehraFig14)
-        : line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時），當天或最晚隔天恢復；不跳過劑量。`, `Minor risk: at trough (about ${hours} h after the last dose), resume the same or next day; no dose skipped.`), G.ehraFig14))
+        ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不提前停藥」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, not stopped early”.'), G.ehraFig14)
+        : line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時），當天或最晚隔天恢復；處置前的劑量照常，不提前停藥，處置當下到恢復前的劑量延後。`, `Minor risk: at trough (about ${hours} h after the last dose), resume the same or next day; doses before the procedure as usual, none stopped early, those from the procedure to the restart held.`), G.ehraFig14))
     } else {
       const pair = ehraHours(agent, crclValue)!
       hours = tier === 'high' ? pair[1] : pair[0]
@@ -644,7 +651,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   }
   if (neuraxialUsed) {
     const traumatic = values.traumatic_puncture ?? ''
-    const delay = agent === 'apixaban' ? 48 : agent === 'rivaroxaban' ? 24 : undefined
+    const delay = traumaticDelay(agent)
     if (traumatic === '') {
       restart.push({ line: line(t('穿刺是否出血未填：若出血，apixaban 延後 48 小時、rivaroxaban 延後 24 小時', 'Traumatic puncture unanswered: if so, apixaban waits 48 h and rivaroxaban 24 h'), G.asraTraumatic), key: 'traumatic_puncture' })
     } else if (traumatic === 'yes') {
@@ -665,14 +672,13 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     ),
     key: haemostasis === 'no' ? 'haemostasis' : undefined,
   })
-  // What is restarted depends on the prescription.
-  restart.push({
-    line: loading
-      ? line(t('恢復的劑量依 VTE 治療進度決定（起始期是否已完成），不自動接回起始劑量。', 'The dose restarted depends on where VTE treatment stands (whether the loading phase is complete); the loading dose is not resumed automatically.'))
-      : doseClass === 'low'
-        ? line(t('恢復時給回預防劑量；療程依原本的預防計畫。', 'Restart the prophylactic dose; the course follows the original prophylaxis plan.'))
-        : line(t('恢復時給回術前的治療劑量，不需起始負荷。', 'Restart the pre-procedure therapeutic dose; no loading dose.')),
-  })
+  // What is restarted depends on the prescription; the results show this one wording.
+  result.resume.dose = loading
+    ? t('劑量依 VTE 治療進度確認（起始期是否已完成），不自動接回起始劑量', 'dose per where VTE treatment stands (whether the loading phase is complete); the loading dose is not resumed automatically')
+    : doseClass === 'low'
+      ? t('給回預防劑量，療程依原本的預防計畫', 'the prophylactic dose; the course follows the original prophylaxis plan')
+      : t('給回術前的治療劑量，不需起始負荷', 'the pre-procedure therapeutic dose; no loading dose')
+  restart.push({ line: line(t(`恢復時：${result.resume.dose.zh}。`, `On restart: ${result.resume.dose.en}.`)) })
   result.resume.lines = restart.map((item) => item.line)
   const open = restart.filter((item) => item.key).map((item) => item.key!)
   result.pending.push(...open.filter((key) => key !== 'sheath'))
@@ -683,7 +689,8 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       const after = scheduledDoses(minutes as number[], surgery, addHours(earliest, 24))
       const first = after.find((at) => at.getTime() >= earliest.getTime())
       if (first) result.resume.firstDose = first
-      result.resume.skippedAfter = after.filter((at) => at.getTime() > surgery.getTime() && (!first || at.getTime() < first.getTime()))
+      // With nothing skipped before, a dose due at the start itself is held here, not lost between the two lists.
+      result.resume.skippedAfter = after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime()))
     }
   }
   result.pending = [...new Set(result.pending)]

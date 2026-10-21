@@ -116,7 +116,7 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
             {plan.holdHours !== undefined && (
               <span className="text-base font-semibold tabular-nums">
                 {plan.troughOnly
-                  ? (zh ? `不跳過劑量・谷底約 ${plan.holdHours} 小時` : `No dose skipped · trough about ${plan.holdHours} h`)
+                  ? (zh ? `不提前停藥・谷底約 ${plan.holdHours} 小時` : `Not stopped early · trough about ${plan.holdHours} h`)
                   : (zh ? `最後一劑距手術 ≥${plan.holdHours} 小時` : `Last dose ≥${plan.holdHours} h before`)}
               </span>
             )}
@@ -145,8 +145,8 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
             <ul className="mt-1 space-y-1">{plan.resume.lines.map((item, index) => <Line key={index} item={item} zh={zh} />)}</ul>
             {plan.resume.firstDose && (
               <div className="mt-1 space-y-0.5 rounded border border-border bg-muted/30 px-2 py-1">
-                <Times label={zh ? `術後再跳過 ${plan.resume.skippedAfter.length} 劑：` : `Skip ${plan.resume.skippedAfter.length} more after: `} dates={plan.resume.skippedAfter} />
-                <p className="text-xs leading-snug">{zh ? '恢復的第一劑：' : 'First dose back: '}<span className="font-medium tabular-nums">{formatLocal(plan.resume.firstDose)}</span>{zh ? '（術前的治療劑量，需確認止血）' : ' (the pre-procedure dose, once haemostasis is confirmed)'}</p>
+                <Times label={plan.troughOnly ? (zh ? `處置當下到恢復前延後 ${plan.resume.skippedAfter.length} 劑：` : `Held from the procedure to the restart, ${plan.resume.skippedAfter.length}: `) : (zh ? `術後再跳過 ${plan.resume.skippedAfter.length} 劑：` : `Skip ${plan.resume.skippedAfter.length} more after: `)} dates={plan.resume.skippedAfter} />
+                <p className="text-xs leading-snug">{zh ? '恢復的第一劑：' : 'First dose back: '}<span className="font-medium tabular-nums">{formatLocal(plan.resume.firstDose)}</span>{plan.resume.dose ? (zh ? `（${plan.resume.dose.zh}；需確認止血）` : ` (${plan.resume.dose.en}; once haemostasis is confirmed)`) : null}</p>
               </div>
             )}
           </div>

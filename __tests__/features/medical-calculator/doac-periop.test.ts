@@ -1,6 +1,6 @@
 /**
- * Stopping and restarting a DOAC around a procedure (EHRA 2021, ASRA 2018,
- * EU SmPC). Run under TZ=Asia/Taipei: clock times are the app's local time.
+ * Stopping and restarting a DOAC around a procedure (EHRA 2021, ASRA 2025
+ * fifth edition, EU SmPC). Run under TZ=Asia/Taipei: clock times are the app's local time.
  * The specification's own example (2026-10-20) is the first case; the rest
  * are the corrections its review asked for.
  */
@@ -117,14 +117,14 @@ describe('neuraxial and deep blocks (ASRA 2025, fifth edition)', () => {
     expect(result).toMatchObject({ tier: 'low', holdHours: 72 })
     expect(allCites(result)).toContain(GUIDELINE_CITES.asraApixabanHigh)
   })
-  it('minor risk with a deep block: ASRA’s 72 h replaces the trough, and nothing says 「不跳過劑量」 (#review Astra 4)', () => {
+  it('minor risk with a deep block: ASRA’s 72 h replaces the trough, and nothing says 「不提前停藥」 (#review Astra 4)', () => {
     for (const neuraxial of ['plexus', 'plexus-catheter']) {
       const result = plan({ procedure_kind: 'minimal', neuraxial })
       expect(result).toMatchObject({ holdHours: 72 })
       expect(result.troughOnly).toBeUndefined()
       expect(result.skippedBefore).toHaveLength(6)
-      expect(allText(result)).not.toContain('不跳過劑量。')
-      expect(allText(result)).toContain('不適用「在谷底做、不跳過劑量」')
+      expect(allText(result)).not.toContain('不提前停藥，')
+      expect(allText(result)).toContain('不適用「在谷底做、不提前停藥」')
     }
   })
   it('AF ablation with any block: ASRA’s 72 h replaces “uninterrupted”, never both (#review Astra 5)', () => {
@@ -170,6 +170,14 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(result.lastDose!)).toBe('11-02 20:00')
     expect(result.hoursFromLastDose).toBe(11.5)
     expect(result.skippedBefore).toEqual([])
+  })
+  it('a dose due at the start itself is held until the restart, not lost (#review final Astra 2)', () => {
+    // bid 08:00/20:00, minor risk 08:00–10:00: 20:00 the day before is last; the 08:00 dose waits for the 16:00 restart.
+    const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes' })
+    expect(result.skippedBefore).toEqual([])
+    expect(formatLocal(result.resume.earliest!)).toBe('11-03 16:00')
+    expect(times(result.resume.skippedAfter)).toEqual(['11-03 08:00'])
+    expect(formatLocal(result.resume.firstDose!)).toBe('11-03 20:00')
   })
   it('a trough already reached needs no prompt: bid 08:00/20:00, procedure at 08:00 is 12 h after the 20:00 dose', () => {
     const result = plan({ procedure_kind: 'minimal' })
@@ -321,12 +329,12 @@ describe('what the prescription is (#review 4)', () => {
     const result = plan({ regimen: 'rivaroxaban:10:1', dose_time_2: '' })
     expect(result.doseClass).toBe('low')
     expect(result.cautions.map((c) => c.text.zh).join()).toContain('預防劑量')
-    expect(allText(result)).toContain('恢復時給回預防劑量')
+    expect(allText(result)).toContain('恢復時：給回預防劑量')
   })
   it('a therapeutic dose: restarted at the same dose, no caution', () => {
     const result = plan({})
     expect(result.cautions).toEqual([])
-    expect(allText(result)).toContain('恢復時給回術前的治療劑量')
+    expect(allText(result)).toContain('恢復時：給回術前的治療劑量')
   })
 })
 
@@ -367,5 +375,12 @@ describe('sources', () => {
     expect(calc).toHaveLength(1)
     expect(calc[0]!.compute({ ...base, neuraxial: 'single' })!.interpretation?.zh).toBe('apixaban：最後一劑距手術 ≥72 小時（10-31 08:00 以前）；最早 11-05 10:00 恢復，需確認止血')
     expect(calc[0]!.compute({ ...base, regimen: '' })).toBeNull()
+    // AF ablation and minor risk: the headline never asks for a gap to be made up by skipping a dose (#review final Opus 1).
+    const ablation = calc[0]!.compute({ ...base, regimen: 'rivaroxaban:20:1', dose_time_1: '08:00', dose_time_2: '', procedure_kind: 'af-ablation', surgery_at: '2026-11-03T19:00' })!
+    expect(ablation.interpretation?.zh).toContain('不提前停藥，照常服用處置前最後一劑（谷底約 12 小時）；最後一劑 11-03 08:00，距開始 11.0 小時')
+    expect(ablation.interpretation?.zh).not.toContain('≥')
+    const minor = calc[0]!.compute({ ...base, regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', procedure_kind: 'minimal' })!
+    expect(minor.interpretation?.zh).toContain('最後一劑 11-02 09:00，距開始 23.0 小時')
+    expect(minor.interpretation?.zh).not.toContain('≥')
   })
 })

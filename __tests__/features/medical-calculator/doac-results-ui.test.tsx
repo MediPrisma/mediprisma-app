@@ -42,6 +42,21 @@ describe('DOAC peri-procedural results', () => {
     expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('最早 11-05 10:00')
     expect(screen.getAllByText('ASRA 2025 Apixaban, high dose · p.8').length).toBeGreaterThan(0)
   })
+  it('the first dose back carries the model’s own dose wording, never a fixed 「術前的治療劑量」 (#review final Astra 1)', () => {
+    const { unmount } = render(<DoacPeriopResults values={{ ...spec, regimen: 'apixaban:10:2', neuraxial: 'none' }} locale="zh-TW" />)
+    const resume = screen.getByTestId('doac-periop-resume')
+    expect(resume).toHaveTextContent('恢復的第一劑')
+    expect(resume).toHaveTextContent('不自動接回起始劑量；需確認止血')
+    expect(resume).not.toHaveTextContent('術前的治療劑量；需確認止血')
+    unmount()
+    render(<DoacPeriopResults values={{ ...spec, neuraxial: 'none' }} locale="zh-TW" />)
+    expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('給回術前的治療劑量，不需起始負荷；需確認止血')
+  })
+  it('minor risk: “not stopped early”, and the dose at the start is listed as held', () => {
+    render(<DoacPeriopResults values={{ ...spec, neuraxial: 'none', procedure_kind: 'minimal', haemostasis: 'yes' }} locale="zh-TW" />)
+    expect(screen.getByTestId('doac-periop-hold')).toHaveTextContent('不提前停藥・谷底約 12 小時')
+    expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('處置當下到恢復前延後 1 劑：11-03 08:00')
+  })
   it('CrCl 12: no interval, asked to assess individually', () => {
     render(<DoacPeriopResults values={{ ...spec, crcl_manual: '12' }} locale="zh-TW" />)
     expect(screen.getByTestId('doac-periop-results')).toHaveAttribute('data-state', 'no-hours')

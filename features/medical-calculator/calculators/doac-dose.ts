@@ -192,7 +192,13 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     const plan = calculatePeriop(values)
     if (!plan.agent) return null
     const lastBy = plan.lastDoseBy ? formatLocal(plan.lastDoseBy) : undefined
-    const interpretation: L = plan.state === 'timed' || plan.state === 'ablation'
+    const interpretation: L = plan.troughOnly
+      // AF ablation or minor risk: the last scheduled dose is kept, so no 「≥N 小時」 headline that would invite skipping one.
+      ? {
+        zh: `${plan.agent}：不提前停藥，照常服用處置前最後一劑（谷底約 ${plan.holdHours} 小時）${plan.lastDose ? `；最後一劑 ${formatLocal(plan.lastDose)}，距開始 ${plan.hoursFromLastDose?.toFixed(1)} 小時` : ''}${plan.resume.earliest ? `；最早 ${formatLocal(plan.resume.earliest)} 恢復，需確認止血` : ''}`,
+        en: `${plan.agent}: not stopped early; the last scheduled dose before the procedure is taken (trough about ${plan.holdHours} h)${plan.lastDose ? `; last dose ${formatLocal(plan.lastDose)}, ${plan.hoursFromLastDose?.toFixed(1)} h before the start` : ''}${plan.resume.earliest ? `; restart from ${formatLocal(plan.resume.earliest)} once haemostasis is confirmed` : ''}`,
+      }
+      : plan.state === 'timed' || plan.state === 'ablation'
       ? {
         zh: `${plan.agent}：最後一劑距手術 ≥${plan.holdHours} 小時${lastBy ? `（${lastBy} 以前）` : ''}${plan.resume.earliest ? `；最早 ${formatLocal(plan.resume.earliest)} 恢復，需確認止血` : ''}`,
         en: `${plan.agent}: last dose ≥${plan.holdHours} h before${lastBy ? ` (by ${lastBy})` : ''}${plan.resume.earliest ? `; restart from ${formatLocal(plan.resume.earliest)} once haemostasis is confirmed` : ''}`,
