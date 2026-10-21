@@ -1,4 +1,5 @@
 import type { ImportBundleOptions } from '../hooks/useImportBundle'
+import { canClaimProgressiveImportWorkspace } from '@/src/application/services/progressive-import-ownership.service'
 import { completeProgressiveImport, PROGRESSIVE_IMPORT_EVENT, isProgressiveFailureReason, stopProgressiveImport, useProgressiveImportStore, type ProgressiveImportRequest } from '@/src/application/stores/progressive-import.store'
 
 export class ProgressiveImportError extends Error {
@@ -8,6 +9,14 @@ export class ProgressiveImportError extends Error {
 /** One native handoff transaction; manual file selection does not enter here. */
 export async function runProgressiveImport(request: ProgressiveImportRequest, file: File,
   importFile: (file: File, options?: ImportBundleOptions) => Promise<void>): Promise<void> {
+  // Refuse an obsolete workspace before claiming pending-run ownership, which
+  // also scopes automatic AI cancellation. The queued writer checks again.
+  if (!canClaimProgressiveImportWorkspace(request)) {
+    window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: {
+      version: 1, requestId: request.requestId, runId: request.runId, ok: false, errorCode: 'IMPORT_STALE',
+    } }))
+    return
+  }
   const cancellation = new AbortController()
   const applyStop = () => {
     const reason = useProgressiveImportStore.getState().stoppedRuns[request.runId]

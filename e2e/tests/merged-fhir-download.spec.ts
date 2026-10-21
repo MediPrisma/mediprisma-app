@@ -32,6 +32,7 @@ test('progressive snapshots replace one patient chart and preserve late terminal
   await expect(input).toHaveAttribute('data-medcloud-progressive', '1')
   const patient = { resourceType: 'Patient', id: 'progressive-patient', name: [{ text: '合成分階段病人' }] }
   const image = { resourceType: 'DiagnosticReport', id: 'progressive-image', status: 'final', code: { text: '合成影像' },
+    conclusion: 'cloud snapshot report',
     effectiveDateTime: '2026-10-01',
     category: [{ coding: [{ code: 'RAD', system: 'http://terminology.hl7.org/CodeSystem/v2-0074' }] }], subject: { reference: 'Patient/progressive-patient' },
     presentedForm: [{ contentType: 'image/png', title: '合成影像', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' }] }
@@ -52,21 +53,39 @@ test('progressive snapshots replace one patient chart and preserve late terminal
   const cloud = await send('cloud', [patient, image])
   expect(cloud.ok).toBe(true)
   await expect(page.getByRole('status').filter({ hasText: '雲端資料已載入' })).toBeVisible()
+  const pane = page.locator('[data-tour="right-detail-pane"]')
+  const openImageDetail = async (text: string) => {
+    await openLeftTab(page, /^報告$/)
+    await page.getByRole('tab').filter({ hasText: /^影像/ }).first().click()
+    await page.locator('[data-tour="report-open-right"]').first().click()
+    await expect(pane).toContainText(text)
+    await expect.poll(() => pane.getByRole('img').first().evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1)
+  }
+  await openImageDetail('cloud snapshot report')
   const openedClone = page.waitForEvent('popup')
   await page.evaluate(() => { window.open(location.href, '_blank') })
   const clone = await openedClone
   await expect(clone.getByText('合成分階段病人', { exact: true }).first()).toBeAttached()
-  const visits = await send('hospital-visits', [patient, image, visit, soap], cloud.importId as string)
+  const visitsImage = { ...image, conclusion: 'visits snapshot report' }
+  const visits = await send('hospital-visits', [patient, visitsImage, visit, soap], cloud.importId as string)
   expect(visits.ok).toBe(true)
+  const detailEvidence = info.outputPath('right-detail-after-visits.png')
+  await page.screenshot({ path: detailEvidence, fullPage: true })
+  await info.attach('right-detail-after-visits', { path: detailEvidence, contentType: 'image/png' })
+  await expect(pane).not.toBeVisible()
+  await openImageDetail('visits snapshot report')
   await expect(page.getByRole('status').filter({ hasText: '檢查驗報告擷取中' })).toBeVisible()
   await openLeftTab(page, /^文件$/)
   await expect(page.getByText('S: synthetic progressive SOAP', { exact: true }).first()).toBeVisible()
   await info.attach('soap-visible-before-reports', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
-  const finalResources = [patient, image, visit, soap, result]
+  const finalResources = [patient, { ...image, conclusion: 'final snapshot report' }, visit, soap, result]
   const final = await send('hospital', finalResources, visits.importId as string)
   expect(final.ok).toBe(true)
+  await expect(pane).not.toBeVisible()
+  await openImageDetail('final snapshot report')
   await expect(page.getByRole('status').filter({ hasText: '已載入院內門診資料' })).toBeVisible()
   expect((await send('hospital', finalResources, visits.importId as string)).ok).toBe(false)
+  await pane.getByRole('button').first().click()
   await openDownloads(page)
   const pending = page.waitForEvent('download')
   await page.getByRole('button', { name: '下載原始 FHIR', exact: true }).click()

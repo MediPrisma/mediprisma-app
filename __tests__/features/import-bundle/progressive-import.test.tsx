@@ -50,6 +50,29 @@ test('a different patient is rejected even if the import token matches', async (
   expect(mockSave).not.toHaveBeenCalled()
 })
 
+test('a late old-run stop and obsolete delivery cannot label or block a manually replaced patient chart', async () => {
+  mockBundle = bundle('manual-patient-b')
+  mockImportId = 'manual-import-b'
+  function Workspace() { const { importFile } = useImportBundle(); return <><BundleFileInput importFile={importFile} /><ProgressiveImportStatus /></> }
+  render(<Workspace />)
+  act(() => window.dispatchEvent(new MessageEvent('message', { source: window, origin: location.origin,
+    data: { source: 'medcloud2-extension', type: PROGRESSIVE_STATUS_MESSAGE, version: 1, runId: 'old-run-a', importId: 'old-import-a', phase: 'patient-changed' } })))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(useProgressiveImportStore.getState().current).toBeNull()
+  expect(isProgressiveAutoSummaryBlocked()).toBe(false)
+  useProgressiveImportStore.setState({ stoppedRuns: { 'old-run-a': 'patient-changed' } })
+  const observedBlocking: boolean[] = []
+  const unsubscribe = useProgressiveImportStore.subscribe(() => observedBlocking.push(isProgressiveAutoSummaryBlocked()))
+  const input = document.querySelector('input')!
+  input.setAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE, JSON.stringify({ version: 1, requestId: 'late-delivery', runId: 'old-run-a', stage: 'hospital', expectedImportId: 'old-import-a' }))
+  await act(async () => fireEvent.change(input, { target: { files: [new File(['{}'], 'obsolete.json')] } }))
+  unsubscribe()
+  expect(observedBlocking).not.toContain(true)
+  expect(mockPrepare).not.toHaveBeenCalled()
+  expect(mockBundle.entry[0].resource.id).toBe('manual-patient-b')
+  expect(mockSave).not.toHaveBeenCalled()
+})
+
 test('manual import while the supplement is parsing prevents the later write', async () => {
   let release!: (value: any) => void
   mockPrepare.mockImplementation(() => new Promise(resolve => { release = resolve }))
