@@ -128,10 +128,10 @@ export function DoacDoseResults({ values, locale, onReviewField }: {
               </ul>
             )}
             {result.duration && (
-              <p className="mt-1 text-xs leading-snug">
+              <div className="mt-1 text-xs leading-snug">
                 {zh ? `療程：${result.duration.text.zh}` : `Duration: ${result.duration.text.en}`}
                 <Cite cite={result.duration.cite} />
-              </p>
+              </div>
             )}
             {result.hits.length > 0 && <ul className="mt-1 space-y-1">{result.hits.map((hit, index) => <Hit key={index} hit={hit} zh={zh} />)}</ul>}
             {result.missing.length > 0 && (

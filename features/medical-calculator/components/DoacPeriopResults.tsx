@@ -6,6 +6,7 @@ import {
   PERIOP_FIELD_LABELS,
   calculatePeriop,
   formatLocal,
+  hoursText,
   isLabelCite,
   type AnyCite,
   type GuidelineCite,
@@ -124,7 +125,8 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
           {plan.basis.length > 0 && <ul className="mt-1 space-y-1">{plan.basis.map((item, index) => <Line key={index} item={item} zh={zh} />)}</ul>}
           {plan.troughOnly && plan.lastDose && (
             <div className="mt-1 space-y-0.5 rounded border border-border bg-muted/30 px-2 py-1" data-testid="doac-periop-clock">
-              <p className="text-xs leading-snug">{zh ? '最後一劑（照常服用）：' : 'Last dose (taken as usual): '}<span className="font-medium tabular-nums">{formatLocal(plan.lastDose)}</span>{zh ? `，距開始 ${plan.hoursFromLastDose?.toFixed(1)} 小時` : `, ${plan.hoursFromLastDose?.toFixed(1)} h before the start`}</p>
+              <p className="text-xs leading-snug">{zh ? '最後一劑（照常服用）：' : 'Last dose (taken as usual): '}<span className="font-medium tabular-nums">{formatLocal(plan.lastDose)}</span>{zh ? `，距開始 ${hoursText(plan.hoursFromLastDose!)} 小時` : `, ${hoursText(plan.hoursFromLastDose!)} h before the start`}</p>
+              {plan.skippedBefore.length > 0 && <Times label={zh ? '處置前不服（距開始太近）：' : 'Not taken before (too close to the start): '} dates={plan.skippedBefore} />}
             </div>
           )}
           {plan.lastDoseBy && (

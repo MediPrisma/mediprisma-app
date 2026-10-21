@@ -198,6 +198,8 @@ export interface PeriopResult {
   hoursFromLastDose?: number
   /** Scheduled doses after `lastDose`, up to and including the start. */
   skippedBefore: Date[]
+  /** Minor risk: the scheduled dose too close before the start to reach trough, not taken before; the restart's missed-dose rule decides it. */
+  heldBefore?: Date
   resume: {
     lines: PeriopLine[]
     /** The latest of every timed condition; absent while any is unknown. */
@@ -272,7 +274,8 @@ export function ehraHours(agent: DoacAgent, crcl: number): [number, number] | un
 const G = GUIDELINE_CITES
 const t = (zh: string, en: string): L => ({ zh, en })
 const line = (text: L, ...cites: AnyCite[]): PeriopLine => ({ text, cites })
-const hoursText = (hours: number) => (Number.isInteger(hours) ? String(hours) : hours.toFixed(1))
+/** 「12」 or 「11.5」: hours as the plan writes them. */
+export const hoursText = (hours: number) => (Number.isInteger(hours) ? String(hours) : hours.toFixed(1))
 
 const ANTI_XA_LABEL: Record<Exclude<DoacAgent, 'dabigatran'>, LabelCite> = {
   apixaban: CITES.apixabanAntiXa,
@@ -336,7 +339,7 @@ const sameDay = (x: Date, y: Date) => x.getFullYear() === y.getFullYear() && x.g
  * apixaban and rivaroxaban 15 mg bid labels would allow it late: the line says
  * so and the team decides.
  */
-function missedDoseRule(agent: DoacAgent, regimen: { agent: DoacAgent; mg: number; perDay: number }, minutes: number[]): { takeAtRestart: (dose: Date, restart: Date, next?: Date) => boolean; line: PeriopLine } {
+function missedDoseRule(agent: DoacAgent, regimen: { agent: DoacAgent; mg: number; perDay: number }, minutes: number[], surgery: Date, troughOnly: boolean): { takeAtRestart: (dose: Date, restart: Date, next?: Date) => boolean; line: PeriopLine } {
   const minuteOf = (d: Date) => d.getHours() * 60 + d.getMinutes()
   if (regimen.perDay === 1) {
     if (agent === 'dabigatran') {
@@ -351,17 +354,22 @@ function missedDoseRule(agent: DoacAgent, regimen: { agent: DoacAgent; mg: numbe
     }
   }
   const morning = Math.min(...minutes)
+  const [morningZh, morningEn, otherZh, otherEn] = troughOnly
+    ? ['處置當天早上那一劑', 'the procedure day’s morning dose', '其他劑量', 'any other dose']
+    : ['早上那一劑', 'the morning dose', '晚上那一劑', 'the evening dose']
   const labelCite = agent === 'apixaban' ? CITES.apixabanMissed : agent === 'rivaroxaban' ? CITES.rivaroxabanMissed15bid : CITES.dabigatranMissedBid
   return {
     takeAtRestart: (dose, restart, next) => {
-      if (minuteOf(dose) === morning) return false
+      // EHRA Figure 15 omits the morning dose around a planned interruption; after a minor procedure only
+      // the procedure day's is omitted, and a later morning dose missed while waiting follows the label.
+      if (minuteOf(dose) === morning && (!troughOnly || sameDay(dose, surgery))) return false
       if (agent === 'dabigatran') return !!next && (next.getTime() - restart.getTime()) / HOUR >= 6
       return sameDay(dose, restart)
     },
     line: line(
       agent === 'dabigatran'
-        ? t('處置到恢復之間：早上那一劑不服用、不補服（EHRA Fig 15）；晚上那一劑若恢復時距下一劑仍 ≥6 小時，可在恢復時服用，否則不補服（dabigatran 仿單的漏服規則）。', 'Between the procedure and the restart: the morning dose is not taken nor made up (EHRA Figure 15); the evening dose may be taken at the restart if the next dose is still ≥6 h away, otherwise it is omitted (the dabigatran label’s missed-dose rule).')
-        : t(`處置到恢復之間：早上那一劑不服用、不補服（EHRA Fig 15）；晚上那一劑若恢復仍在當晚，可在恢復時服用，否則不補服。${agent} 仿單允許早上漏服時立即補服（見引文），與 EHRA 不同：計算機依 EHRA，請團隊確認。`, `Between the procedure and the restart: the morning dose is not taken nor made up (EHRA Figure 15); the evening dose may be taken at the restart when that is the same evening, otherwise it is not made up. The ${agent} label allows a missed morning dose late (quoted), unlike EHRA: the calculator follows EHRA; the team confirms.`),
+        ? t(`處置到恢復之間：${morningZh}不服用、不補服（EHRA Fig 15）；${otherZh}若恢復時距下一劑仍 ≥6 小時，可在恢復時服用，否則不補服（dabigatran 仿單的漏服規則）。`, `Between the procedure and the restart: ${morningEn} is not taken nor made up (EHRA Figure 15); ${otherEn} may be taken at the restart if the next dose is still ≥6 h away, otherwise it is omitted (the dabigatran label’s missed-dose rule).`)
+        : t(`處置到恢復之間：${morningZh}不服用、不補服（EHRA Fig 15）；${otherZh}若恢復仍在同一天，可在恢復時服用，否則不補服。${agent} 仿單允許早上漏服時立即補服（見引文），與 EHRA 的做法不同：計算機依 EHRA，請團隊確認。`, `Between the procedure and the restart: ${morningEn} is not taken nor made up (EHRA Figure 15); ${otherEn} may be taken at the restart when that is the same day, otherwise it is not made up. The ${agent} label allows a missed morning dose late (quoted), unlike EHRA: the calculator follows EHRA; the team confirms.`),
       G.ehraFig15, labelCite,
     ),
   }
@@ -562,8 +570,8 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       result.basis.push(blockUsed
         ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不提前停藥」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, not stopped early”.'), G.ehraFig14)
         : line(regimen.perDay === 1
-          ? t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置到恢復之間的那一劑，依下方恢復段落的漏服規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. A dose falling between the procedure and the restart follows the missed-dose rule in the restart section below.`)
-          : t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置到恢復之間的劑量，依下方恢復段落的規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. Doses between the procedure and the restart follow the rule in the restart section below.`),
+          ? t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；不提前停藥；距開始不到谷底一半間隔的那一劑不在處置前服用。處置前未服及處置到恢復之間的那一劑，依下方恢復段落的漏服規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); nothing stopped early, but a dose due too close before the start is not taken before it. That dose, and a dose falling between the procedure and the restart follows the missed-dose rule in the restart section below.`)
+          : t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；不提前停藥；距開始不到谷底一半間隔的那一劑不在處置前服用。處置前未服及處置到恢復之間的劑量，依下方恢復段落的規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); nothing stopped early, but a dose due too close before the start is not taken before it. That dose, and doses between the procedure and the restart follow the rule in the restart section below.`),
           G.ehraFig14, G.ehraFig15))
     } else {
       const pair = ehraHours(agent, crclValue)!
@@ -623,18 +631,31 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   if (!known) result.pending.push(...timeKeys.filter((_, index) => minutes[index] === undefined))
   if (surgery && troughOnly) {
     if (known) {
-      // The last scheduled dose before the start, whatever the interval.
-      const before = scheduledDoses(minutes, addHours(surgery, -48), surgery).filter((at) => at.getTime() < surgery.getTime())
-      const last = before[before.length - 1]
+      // The last scheduled dose before the start; one so close that the start is nearer its peak than
+      // its trough (more than half a dosing interval short) is not taken before the procedure.
+      const interval = 24 / regimen.perDay
+      const before = scheduledDoses(minutes, addHours(surgery, -72), surgery).filter((at) => at.getTime() < surgery.getTime())
+      let last = before[before.length - 1]
+      const gapOf = (at: Date) => (surgery.getTime() - at.getTime()) / HOUR
+      if (last && result.state !== 'ablation' && hours - gapOf(last) > interval / 2) {
+        result.heldBefore = last
+        result.skippedBefore = [last]
+        last = before[before.length - 2]
+      }
       if (last) {
         result.lastDose = last
-        const gap = (surgery.getTime() - last.getTime()) / HOUR
+        const gap = gapOf(last)
         result.hoursFromLastDose = gap
-        if (gap < hours) {
+        if (result.heldBefore) {
+          result.cautions.push(line(
+            t(`${formatLocal(result.heldBefore)} 那一劑距開始只有 ${hoursText(gapOf(result.heldBefore))} 小時，未到谷底：處置前不服，改依恢復段落的漏服規則；上一劑 ${formatLocal(last)} 距開始 ${hoursText(gap)} 小時。也可把處置排到該劑後約 ${hours} 小時，由團隊決定。`, `The ${formatLocal(result.heldBefore)} dose is only ${hoursText(gapOf(result.heldBefore))} h before the start, short of trough: not taken before the procedure, but per the restart section’s missed-dose rule; the dose before, at ${formatLocal(last)}, is ${hoursText(gap)} h before the start. Or schedule the procedure about ${hours} h after that dose; the team decides.`),
+            G.ehraFig14, G.ehraFig15,
+          ))
+        } else if (gap < hours) {
           result.cautions.push(line(
             result.state === 'ablation'
               ? t(`最後一劑 ${formatLocal(last)} 距消融 ${hoursText(gap)} 小時，短於 EHRA 預設的 12 小時：可與團隊確認是否照常（EHRA 也接受不中斷），或調整服藥或消融時間；計算機不替你跳過這一劑。`, `The last dose at ${formatLocal(last)} is ${hoursText(gap)} h before the ablation, under EHRA’s default 12 h: confirm with the team whether to keep it (EHRA also accepts no interruption), or move the dose or the procedure; the calculator does not skip it for you.`)
-              : t(`最後一劑 ${formatLocal(last)} 距處置 ${hoursText(gap)} 小時，略短於谷底的 ${hours} 小時：可將處置延後 ${hoursText(hours - gap)} 小時，或調整服藥時間；計算機不替你跳過這一劑。`, `The last dose at ${formatLocal(last)} is ${hoursText(gap)} h before the procedure, short of the ${hours} h trough: move the procedure ${hoursText(hours - gap)} h later, or the dose time; the calculator does not skip it for you.`),
+              : t(`最後一劑 ${formatLocal(last)} 距處置 ${hoursText(gap)} 小時，短於谷底的 ${hours} 小時（差距不到半個給藥間隔，照常服用）：可將處置延後 ${hoursText(hours - gap)} 小時，由團隊決定。`, `The last dose at ${formatLocal(last)} is ${hoursText(gap)} h before the procedure, short of the ${hours} h trough (by less than half a dosing interval, so it is taken): the procedure may move ${hoursText(hours - gap)} h later; the team decides.`),
             result.state === 'ablation' ? G.ehraFig16 : G.ehraFig14,
           ))
         }
@@ -655,10 +676,11 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       const firstSkipped = result.skippedBefore[0]
       const interval = 24 / regimen.perDay
       if (last && firstSkipped && result.hoursFromLastDose! - hours >= interval / 2) {
+        // Only a later procedure keeps that dose: taking it early would crowd the dose before it.
         const short = hours - (surgery.getTime() - firstSkipped.getTime()) / HOUR
         result.cautions.push(line(
-          t(`依實際服藥時刻，最後一劑是 ${formatLocal(last)}，停藥 ${hoursText(result.hoursFromLastDose!)} 小時，比所需 ${hours} 小時多約一次給藥間隔：可把 ${formatLocal(firstSkipped)} 那一劑提前 ${hoursText(short)} 小時服用，或處置延後 ${hoursText(short)} 小時，就不必多停一劑；由團隊決定。`, `By the actual dose times the last dose is ${formatLocal(last)}, ${hoursText(result.hoursFromLastDose!)} h off against the ${hours} h needed — about one dosing interval more: take the ${formatLocal(firstSkipped)} dose ${hoursText(short)} h earlier, or move the procedure ${hoursText(short)} h later, and no extra dose is lost; the team decides.`),
-          G.ehraFig15,
+          t(`依實際服藥時刻，最後一劑是 ${formatLocal(last)}，停藥 ${hoursText(result.hoursFromLastDose!)} 小時，比所需 ${hours} 小時多約一次給藥間隔：若處置延後 ${hoursText(short)} 小時，${formatLocal(firstSkipped)} 那一劑就可照常服用；不建議提前服藥。由團隊決定。`, `By the actual dose times the last dose is ${formatLocal(last)}, ${hoursText(result.hoursFromLastDose!)} h off against the ${hours} h needed — about one dosing interval more: moving the procedure ${hoursText(short)} h later keeps the ${formatLocal(firstSkipped)} dose; taking a dose early is not advised. The team decides.`),
+          G.ehraFig14,
         ))
       }
     }
@@ -747,8 +769,11 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       const after = scheduledDoses(minutes as number[], surgery, addHours(earliest, 24))
       const first = after.find((at) => at.getTime() >= earliest.getTime())
       // With nothing skipped before, a dose due at the start itself is not lost between the two lists.
-      const between = after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime()))
-      const rule = missedDoseRule(agent, regimen, minutes as number[])
+      const between = [
+        ...(result.heldBefore ? [result.heldBefore] : []),
+        ...after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime())),
+      ]
+      const rule = missedDoseRule(agent, regimen, minutes as number[], surgery, troughOnly)
       // Only the last dose before the restart can still be taken at it; every earlier one is not made up.
       const candidate = between[between.length - 1]
       if (candidate && rule.takeAtRestart(candidate, earliest, first)) {
@@ -760,6 +785,19 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
         result.resume.skippedAfter = between
       }
       if (between.length) result.resume.lines.push(rule.line)
+      // The held dose is listed once: where it is skipped before, or as the dose taken at the restart.
+      if (result.heldBefore) {
+        result.resume.skippedAfter = result.resume.skippedAfter.filter((at) => at !== result.heldBefore)
+        if (result.resume.delayed === result.heldBefore) result.skippedBefore = []
+      }
+    }
+  } else if (known && surgery && result.state === 'timed') {
+    // No restart time yet: still say which doses wait for it, so none is taken at the procedure by habit.
+    const next = scheduledDoses(minutes as number[], surgery, addHours(surgery, 24)).find((at) => troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime())
+    if (next || result.heldBefore) {
+      const from = result.heldBefore ?? next!
+      result.resume.lines.push(line(t(`恢復時間未定：${formatLocal(from)} 起的劑量先不服，恢復時間確定後依漏服規則處理。`, `Restart not yet known: doses from ${formatLocal(from)} wait, then follow the missed-dose rule once the restart is set.`)))
+      result.resume.lines.push(missedDoseRule(agent, regimen, minutes as number[], surgery, troughOnly).line)
     }
   }
   result.pending = [...new Set(result.pending)]

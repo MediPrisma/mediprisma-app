@@ -2,7 +2,7 @@ import type { CalcInput, CalculatorDef, L } from '../types'
 import { AGE_INPUT, SEX_INPUT, WEIGHT_LOINC } from './_shared'
 import { DOAC_REGIMEN_OPTIONS, type DoacSelectKey } from '../doac-clinical-autofill'
 import { DOAC_RULES_VERSION, calculateDoacDoses, checkRegimen, crclLabel, regimenDay } from '../doac-dose-model'
-import { calculatePeriop, formatLocal } from '../doac-periop-model'
+import { calculatePeriop, formatLocal, hoursText } from '../doac-periop-model'
 
 const YES_NO = [
   { value: 'no', label: { en: 'No', zh: '無' } },
@@ -195,8 +195,8 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     const interpretation: L = plan.troughOnly
       // AF ablation or minor risk: the last scheduled dose is kept, so no 「≥N 小時」 headline that would invite skipping one.
       ? {
-        zh: `${plan.agent}：不提前停藥，照常服用處置前最後一劑（谷底約 ${plan.holdHours} 小時）${plan.lastDose ? `；最後一劑 ${formatLocal(plan.lastDose)}，距開始 ${plan.hoursFromLastDose?.toFixed(1)} 小時` : ''}${plan.resume.earliest ? `；最早 ${formatLocal(plan.resume.earliest)} 恢復，需確認止血` : ''}`,
-        en: `${plan.agent}: not stopped early; the last scheduled dose before the procedure is taken (trough about ${plan.holdHours} h)${plan.lastDose ? `; last dose ${formatLocal(plan.lastDose)}, ${plan.hoursFromLastDose?.toFixed(1)} h before the start` : ''}${plan.resume.earliest ? `; restart from ${formatLocal(plan.resume.earliest)} once haemostasis is confirmed` : ''}`,
+        zh: `${plan.agent}：不提前停藥（谷底約 ${plan.holdHours} 小時）${plan.heldBefore ? `；${formatLocal(plan.heldBefore)} 那一劑距開始太近，處置前不服` : ''}${plan.lastDose ? `；${plan.heldBefore ? '處置前最後服用' : '照常服用最後一劑'} ${formatLocal(plan.lastDose)}，距開始 ${hoursText(plan.hoursFromLastDose!)} 小時` : ''}${plan.resume.earliest ? `；最早 ${formatLocal(plan.resume.earliest)} 恢復，需確認止血` : ''}`,
+        en: `${plan.agent}: not stopped early (trough about ${plan.holdHours} h)${plan.heldBefore ? `; the ${formatLocal(plan.heldBefore)} dose is too close to the start and not taken before it` : ''}${plan.lastDose ? `; ${plan.heldBefore ? 'last taken' : 'last dose taken as usual'} ${formatLocal(plan.lastDose)}, ${hoursText(plan.hoursFromLastDose!)} h before the start` : ''}${plan.resume.earliest ? `; restart from ${formatLocal(plan.resume.earliest)} once haemostasis is confirmed` : ''}`,
       }
       : plan.state === 'timed' || plan.state === 'ablation'
       ? {
