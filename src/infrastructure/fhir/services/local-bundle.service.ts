@@ -1,5 +1,6 @@
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
+import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
 // LocalBundleService
@@ -1464,8 +1465,13 @@ export const LocalBundleService = {
     // every downstream step (patient-id gate, report-member linking, the inline
     // split('/').pop() resolvers) works regardless of the bundle's reference
     // style. See canonicalizeBundleResources.
+    // Validate the import before the shared selector excludes foreign rows.
+    // Rejected imports must preserve the previously loaded patient and raw file.
+    if (originalPatient?.resource) assertPatientReferences(rawEntries.map((entry: any) => entry?.resource).filter(Boolean), originalPatient)
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
-    if (projectedNodes.filter(node => node.resource.resourceType === 'Patient').length > 1) {
+    const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
+    if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
+      || !clinicalSourceNodesEqualWithContext(clinicalSource.graph, primaryPatients[0], node))) {
       throw new Error('此資料包含多個不同的病人或病人版本，無法安全匯入。請提供單一病人的 FHIR Bundle。')
     }
     const sourceKeyByResource = new WeakMap<object, string>()
