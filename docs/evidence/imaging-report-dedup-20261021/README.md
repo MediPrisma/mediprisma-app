@@ -2,8 +2,8 @@
 
 All records, report text, identifiers and viewer responses in these screenshots are synthetic. No patient export or authenticated NHI response is included.
 
-Before: `119d4143be37ff3041d6d358f2c396f58f49721a` (PR base, including the production import Worker fix).
-After application code: `087d8f49cf7ba5c4b360074c144714ec0c38b2a1` (latest master integrated; safe dictation spacing, mixed-channel narratives, interval bounds and all distinct source assets preserved). The following evidence-only commit does not change application code.
+Before: `cb25ef88e40c75548ef2d9c6ef8fe60f3880860b` (PR base, including the import Worker, medication-source and original-download filename changes).
+After application code: `63f303821f2faaca445399c37fa6e48aa50c45a6` (latest master integrated; safe dictation spacing, mixed-channel narratives, interval bounds and all distinct source assets preserved). The following evidence-only commit does not change application code.
 
 Both isolated checkouts ran `e2e/tests/reports-cross-source-imaging.spec.ts` with the same generated bundle, locale, light theme, collapsed report rows, search and viewport. Before uses `IMAGING_BEFORE=1`; assertions expect eight rows before and four groups after. Six widths passed: 320, 390, 430, 768, 1024 and 1440 CSS pixels, height 1000.
 
@@ -29,3 +29,5 @@ Explicit period-end conflicts and reversed/invalid intervals remain separate. Eq
 Every known period end also constrains the other source's examination clock, even when its own start is date-only. Negative-timezone regressions keep untagged imaging period dates aligned between rows and AI context. Redundant natural-group narrative observations are skipped only when their clinical metadata is fully represented by a retained complete observation or report. Unknown assessments remain visible. Exact image descriptors collapse; different bytes, references, content types, titles or sizes remain available.
 
 Additional integration checks: the Worker module regression passes after integrating PR #344. `merged-fhir-download.spec.ts` passed before that upstream merge. `original-fhir-download.spec.ts` timed out at the popup's Copy tab (line 78 → line 31), both on the earlier unmodified base `af0bfe42` and on the PR. This existing popup-layout test limitation is recorded separately from the passing imaging regression.
+
+Shared identifier namespaces require complete value/type sets to match; a shared order never overrides different accession numbers. Identifier and coding array order alone is ignored. The exact same linked Observation object renders once, while different source objects remain visible even when they share an ID. Regression coverage includes the production row, count and AI paths.

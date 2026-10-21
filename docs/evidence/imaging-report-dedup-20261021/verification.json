@@ -1,6 +1,6 @@
 {
-  "base": "119d4143be37ff3041d6d358f2c396f58f49721a",
-  "applicationCode": "087d8f49cf7ba5c4b360074c144714ec0c38b2a1",
+  "base": "cb25ef88e40c75548ef2d9c6ef8fe60f3880860b",
+  "applicationCode": "63f303821f2faaca445399c37fa6e48aa50c45a6",
   "fixtureSHA256": "9a96500d75de65a65fb970ddc9622fea5cfc1895c683730e9b86119541042fb6",
   "identicalFixtures": true,
   "viewports": [
@@ -19,7 +19,6 @@
   "attachmentSourceHistoryTested": true,
   "periodEndAndSourceAssetsTested": true,
   "crossPeriodBoundsTested": true,
-  "negativeTimezoneTests": 134,
   "nhiViewer": {
     "simulatedBridge": true,
     "liveAuthenticatedService": false,
@@ -30,16 +29,16 @@
       "sha256": "63e083207eca81f60760caf44db4dee41ef79142113e3ed7b47a5099eb2cff57"
     },
     "after-1440.png": {
-      "sha256": "eaefbd9288b34ab5e29c085857ee84b0a417f8df109f57918e6c93f74f854b99"
+      "sha256": "351eb6c0f2794351ce0aabd12a5d8995fe17d114b5bf945970affaef9d9dfbe6"
     },
     "before-390.png": {
-      "sha256": "e399a1ee3c64c9aac9a9ebc3c6b5d1ad0a93b6bf8996ba942e3182f16e54813e"
+      "sha256": "f7ddcf76e261c5b2e7643897b5226e53c273bbf2867e34333ad1d3c6175eac58"
     },
     "after-390.png": {
-      "sha256": "49def34d04ed2b83b6a7fbf88d87f5db9e4a3692618e6e37c3a279285428593b"
+      "sha256": "c2ce7dd183e3401ff1b30fdc83acb641b41ae92dbb60a0d4047f68707606a240"
     },
     "after-sources.png": {
-      "sha256": "cdcc00fa80a72cfadf108d86fb7ee5c4acf73e26dff45b7ea4110769d8e6f413"
+      "sha256": "c104d78533a0354cce6f875d69f8fdb27a34121520b971dbe4b58d5e5220da66"
     },
     "after-viewer.png": {
       "sha256": "630b6afa1264bf04564352eda6945d83d985e5df6c4b258aeba94d92e335846d"
@@ -47,11 +46,14 @@
   },
   "localUnitTests": {
     "suites": 85,
-    "passed": 747
+    "passed": 751
   },
   "additionalIntegration": {
     "workerModule": "passed",
     "mergedDownloadReimport": "passed before upstream merge",
     "originalDownloadPopup": "same timeout reproduced on earlier base and PR"
-  }
+  },
+  "relatedTestsInNegativeTimezone": 138,
+  "identifierFullSetsAndTypesTested": true,
+  "sharedObservationIdentityTested": true
 }
