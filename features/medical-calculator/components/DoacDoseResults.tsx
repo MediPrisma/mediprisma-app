@@ -117,6 +117,16 @@ export function DoacDoseResults({ values, locale, onReviewField }: {
                 ))}
               </ol>
             )}
+            {result.options.length > 0 && (
+              <ul className="mt-1 space-y-1" data-testid={`doac-options-${result.agent}`}>
+                {result.options.map((option, index) => (
+                  <li key={index} className="text-xs leading-snug">
+                    <span>{zh ? `可考慮 ${option.regimen.mg} mg ${option.regimen.perDay === 2 ? 'bid' : 'qd'}（需確認：${option.condition.zh}）` : `For consideration: ${option.regimen.mg} mg ${option.regimen.perDay === 2 ? 'bid' : 'qd'} (confirm: ${option.condition.en})`}</span>
+                    <Cite cite={option.cite} />
+                  </li>
+                ))}
+              </ul>
+            )}
             {result.duration && (
               <p className="mt-1 text-xs leading-snug">
                 {zh ? `療程：${result.duration.text.zh}` : `Duration: ${result.duration.text.en}`}

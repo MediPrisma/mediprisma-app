@@ -40,7 +40,7 @@ describe('DOAC peri-procedural results', () => {
     expect(screen.getByTestId('doac-periop-clock')).toHaveTextContent('最晚服藥：10-31 08:00')
     expect(screen.getByTestId('doac-periop-clock')).toHaveTextContent('跳過 6 劑')
     expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('最早 11-05 10:00')
-    expect(screen.getAllByText('ASRA 2018 7.1 · p.279').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('ASRA 2025 Apixaban, high dose · p.8').length).toBeGreaterThan(0)
   })
   it('CrCl 12: no interval, asked to assess individually', () => {
     render(<DoacPeriopResults values={{ ...spec, crcl_manual: '12' }} locale="zh-TW" />)
@@ -52,6 +52,6 @@ describe('DOAC peri-procedural results', () => {
     render(<DoacPeriopResults values={{ ...spec, neuraxial: '', procedure_kind: '' }} locale="zh-TW" />)
     const hold = screen.getByTestId('doac-periop-hold')
     expect(within(hold).getByRole('button', { name: '處置分級' })).toBeInTheDocument()
-    expect(within(hold).getByRole('button', { name: '脊髓／硬膜外麻醉' })).toBeInTheDocument()
+    expect(within(hold).getByRole('button', { name: '脊髓／硬膜外或深部阻斷' })).toBeInTheDocument()
   })
 })

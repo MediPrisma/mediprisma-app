@@ -25,7 +25,7 @@ const STATE: Record<PeriopResult['state'], { zh: string; en: string; style: stri
 const FIELD_KEY: Record<string, string> = { CrCl: 'scr' }
 
 function GuidelineCiteView({ cite, zh }: { cite: GuidelineCite; zh: boolean }) {
-  const source = cite.source === 'ehra' ? 'EHRA 2021' : 'ASRA 2018'
+  const source = cite.source === 'ehra' ? 'EHRA 2021' : 'ASRA 2025'
   return (
     <details className="mt-0.5">
       <summary className="cursor-pointer text-[11px] text-muted-foreground underline-offset-2 hover:underline">{`${source} ${cite.section} · p.${cite.page}`}</summary>
@@ -104,13 +104,29 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
         </h3>
         <span className={`rounded px-1.5 text-xs ${state.style}`}>{zh ? state.zh : state.en}</span>
       </div>
+      {plan.cautions.length > 0 && (
+        <ul className="space-y-1 border-b border-amber-300 bg-amber-50/70 px-3 py-2 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200" data-testid="doac-periop-cautions">
+          {plan.cautions.map((item, index) => <Line key={index} item={item} zh={zh} />)}
+        </ul>
+      )}
       <div className="divide-y divide-border">
         <div className="px-3 py-2" data-testid="doac-periop-hold">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
             <h4 className="text-sm font-medium">{zh ? '術前停藥' : 'Before'}</h4>
-            {plan.holdHours !== undefined && <span className="text-base font-semibold tabular-nums">{zh ? `最後一劑距手術 ≥${plan.holdHours} 小時` : `Last dose ≥${plan.holdHours} h before`}</span>}
+            {plan.holdHours !== undefined && (
+              <span className="text-base font-semibold tabular-nums">
+                {plan.troughOnly
+                  ? (zh ? `不跳過劑量・谷底約 ${plan.holdHours} 小時` : `No dose skipped · trough about ${plan.holdHours} h`)
+                  : (zh ? `最後一劑距手術 ≥${plan.holdHours} 小時` : `Last dose ≥${plan.holdHours} h before`)}
+              </span>
+            )}
           </div>
           {plan.basis.length > 0 && <ul className="mt-1 space-y-1">{plan.basis.map((item, index) => <Line key={index} item={item} zh={zh} />)}</ul>}
+          {plan.troughOnly && plan.lastDose && (
+            <div className="mt-1 space-y-0.5 rounded border border-border bg-muted/30 px-2 py-1" data-testid="doac-periop-clock">
+              <p className="text-xs leading-snug">{zh ? '最後一劑（照常服用）：' : 'Last dose (taken as usual): '}<span className="font-medium tabular-nums">{formatLocal(plan.lastDose)}</span>{zh ? `，距開始 ${plan.hoursFromLastDose?.toFixed(1)} 小時` : `, ${plan.hoursFromLastDose?.toFixed(1)} h before the start`}</p>
+            </div>
+          )}
           {plan.lastDoseBy && (
             <div className="mt-1 space-y-0.5 rounded border border-border bg-muted/30 px-2 py-1" data-testid="doac-periop-clock">
               <p className="text-xs leading-snug">{zh ? '最晚服藥：' : 'Last dose by: '}<span className="font-medium tabular-nums">{formatLocal(plan.lastDoseBy)}</span></p>
@@ -149,8 +165,8 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
       </div>
       <p className="border-t px-3 py-2 text-xs leading-relaxed text-muted-foreground">
         {zh
-          ? `依 EHRA 2021、ASRA 2018 與 EU SmPC · ${DOAC_RULES_VERSION}。時數是最低間隔；最後決定由手術、麻醉團隊依個別出血與栓塞風險判斷，並以書面告知病人與相關醫師。`
-          : `EHRA 2021, ASRA 2018 and the EU SmPC · ${DOAC_RULES_VERSION}. Intervals are minimums; the surgical and anaesthetic team decides by the individual bleeding and thrombotic risk, and writes the plan down for the patient and the physicians involved.`}
+          ? `依 EHRA 2021、ASRA 2025（第 5 版）與 EU SmPC · ${DOAC_RULES_VERSION}。時數是最低間隔；最後決定由手術、麻醉團隊依個別出血與栓塞風險判斷，並以書面告知病人與相關醫師。`
+          : `EHRA 2021, ASRA 2025 (5th edition) and the EU SmPC · ${DOAC_RULES_VERSION}. Intervals are minimums; the surgical and anaesthetic team decides by the individual bleeding and thrombotic risk, and writes the plan down for the patient and the physicians involved.`}
       </p>
       <ul className="border-t px-3 py-2 text-xs">
         {Object.values(GUIDELINE_SOURCES).map((source) => (

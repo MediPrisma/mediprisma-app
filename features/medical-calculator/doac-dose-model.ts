@@ -221,6 +221,7 @@ export const CITES = {
   dabigatranCatheter: cite('dabigatran', '4.4', 43, '2 hours should elapse before the administration of the first dose of dabigatran etexilate.'),
   dabigatranRestart: cite('dabigatran', '4.4', 43, 'Dabigatran etexilate treatment should be resumed / started after the invasive procedure or surgical intervention as soon as possible provided the clinical situation allows and adequate haemostasis has been established.'),
   dabigatranDialysable: cite('dabigatran', '4.4', 42, 'Haemodialysis can remove dabigatran.'),
+  dabigatranIdarucizumabRestart: cite('dabigatran', '4.4', 42, 'Dabigatran etexilate treatment can be re-initiated 24 hours after administration of idarucizumab, if the patient is clinically stable and adequate haemostasis has been achieved.'),
   dabigatranIdarucizumab: cite('dabigatran', '4.4', 42, 'When rapid reversal of the anticoagulation effect is required the specific reversal agent (idarucizumab) to dabigatran is available for adult patients.'),
   dabigatranAblation110: cite('dabigatran', '4.4', 41, 'There are no data available for 110 mg twice daily dabigatran etexilate treatment in patients undergoing catheter ablation for atrial fibrillation'),
 } as const satisfies Record<string, LabelCite>
@@ -282,6 +283,13 @@ export interface DoacStep {
   cite: LabelCite
 }
 
+/** A dose the label offers under a stated condition. */
+export interface DoacOption {
+  regimen: DoacRegimen
+  condition: L
+  cite: LabelCite
+}
+
 export type DoacVerdict =
   /** The label dose (one, or two to choose between). */
   | 'dose'
@@ -305,6 +313,12 @@ export interface DoacAgentResult {
   doses: DoacRegimen[]
   /** The phases, in order, where the label's dose changes with time or waits on a lead-in. */
   schedule: DoacStep[]
+  /**
+   * Doses the label offers only under a condition the calculator cannot
+   * read (a bleeding risk above the recurrence risk, a high recurrence risk):
+   * never the label dose, and a prescription at one is 「可考慮，需確認」.
+   */
+  options: DoacOption[]
   /** How long, where the label says (hip/knee prophylaxis). */
   duration?: { text: L; cite: LabelCite }
   /** Whether the dose given is the agent's reduced one. */
@@ -411,6 +425,7 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
     let doses: DoacRegimen[] = []
     const schedule: DoacStep[] = []
     let duration: DoacAgentResult['duration']
+    const options: DoacOption[] = []
     let reduced = false
     /** An unknown that could change the dose itself: no dose is given. */
     let doseUnknown = false
@@ -418,7 +433,7 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
     if (agent === 'edoxaban' && vtep) {
       // EU SmPC §4.1 lists NVAF and DVT/PE only.
       return {
-        agent, indication, verdict: 'not-indicated', doses: [], schedule: [], reduced: false, missing: [],
+        agent, indication, verdict: 'not-indicated', doses: [], schedule: [], options: [], reduced: false, missing: [],
         hits: [{ level: 'not-recommended', text: t('EU SmPC 未核准髖／膝關節置換後的 VTE 預防', 'The EU SmPC has no hip/knee replacement prophylaxis indication'), cite: CITES.edoxabanIndications }],
       }
     }
@@ -549,14 +564,15 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
         } else {
           if (c < 30) hit('caution', t(`CrCl ${crclText}（15–29）：謹慎使用`, `CrCl ${crclText} (15–29): use with caution`), vtep ? CITES.rivaroxabanVtepRenal : CITES.rivaroxabanSevereRenal)
           if (acute) {
-            doses = c < 50 ? [{ mg: 20, perDay: 1 }, { mg: 15, perDay: 1 }] : [{ mg: 20, perDay: 1 }]
+            doses = [{ mg: 20, perDay: 1 }]
             schedule.push(
               { text: t('第 1–21 天：15 mg bid，隨餐', 'Days 1–21: 15 mg bid with food'), regimen: { mg: 15, perDay: 2 }, fromDay: 1, toDay: 21, cite: CITES.rivaroxabanVteAcute },
               { text: t('第 22 天起：20 mg qd，隨餐', 'Day 22 on: 20 mg qd with food'), regimen: { mg: 20, perDay: 1 }, fromDay: 22, cite: CITES.rivaroxabanVteAcute },
             )
             hit('dose', t('15 mg bid ×21 天，之後 20 mg qd（急性期不依腎功能減量）', '15 mg bid for 21 days, then 20 mg qd (no renal reduction in the initial phase)'), CITES.rivaroxabanVteAcute)
           } else if (extended) {
-            doses = [{ mg: 10, perDay: 1 }, { mg: 20, perDay: 1 }, ...(c < 50 ? [{ mg: 15, perDay: 1 } as const] : [])]
+            doses = [{ mg: 10, perDay: 1 }]
+            options.push({ regimen: { mg: 20, perDay: 1 }, condition: t('復發風險高（合併症複雜，或在 10 mg 期間復發）', 'high recurrence risk (complicated comorbidities, or recurrence on 10 mg)'), cite: CITES.rivaroxabanVteExtendedHigh })
             hit('dose', t('完成 ≥6 個月治療後：10 mg qd', 'After ≥6 months of treatment: 10 mg qd'), CITES.rivaroxabanVteExtended)
             hit('dose', t('復發風險高（合併症複雜，或在 10 mg 期間復發）：考慮 20 mg qd', 'High recurrence risk (complicated comorbidities, or recurrence on 10 mg): consider 20 mg qd'), CITES.rivaroxabanVteExtendedHigh)
             if (c < 50) hit('dose', t('10 mg qd 不因腎功能調整', '10 mg qd: no renal adjustment'), CITES.rivaroxabanVteRenal10)
@@ -566,6 +582,7 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
             duration = hip ? { text: t('髖關節置換：5 週', 'Hip replacement: 5 weeks'), cite: CITES.rivaroxabanVtepHip } : { text: t('膝關節置換：2 週', 'Knee replacement: 2 weeks'), cite: CITES.rivaroxabanVtepKnee }
           }
           if ((acute || extended) && c < 50) {
+            options.push({ regimen: { mg: 15, perDay: 1 }, condition: t(`CrCl ${crclText}（15–49），在 20 mg qd 階段且出血風險高於復發風險`, `CrCl ${crclText} (15–49), in the 20 mg qd phase, with bleeding risk above recurrence risk`), cite: CITES.rivaroxabanVteRenal })
             hit('dose', t(`CrCl ${crclText}（15–49）：20 mg qd 階段，出血風險高於復發風險時可考慮 15 mg qd`, `CrCl ${crclText} (15–49): in the 20 mg qd phase, consider 15 mg qd if bleeding risk outweighs recurrence risk`), CITES.rivaroxabanVteRenal)
             hit('caution', t('15 mg qd 依 PK 模擬推論，未經臨床試驗', '15 mg qd rests on PK modelling, not on a trial'), CITES.rivaroxabanVteRenalUnstudied)
           }
@@ -714,7 +731,7 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
             : levels.has('avoid') ? 'avoid' : levels.has('prerequisite') ? 'prerequisite' : 'dose'
     const shown = verdict === 'dose' || verdict === 'avoid' || verdict === 'prerequisite'
     return {
-      agent, indication, verdict, doses: shown ? doses : [], schedule: shown ? schedule : [], ...(shown && duration ? { duration } : {}),
+      agent, indication, verdict, doses: shown ? doses : [], schedule: shown ? schedule : [], options: shown ? options : [], ...(shown && duration ? { duration } : {}),
       reduced, hits, missing: [...new Set(missing)],
     }
   })
@@ -817,7 +834,7 @@ export function checkRegimen(regimenValue: string | undefined, results: readonly
   if (phased.length) {
     if (!known) {
       const step = phased.find((item) => same(item.regimen))
-      if (step || result.doses.some(same)) {
+      if (step || result.doses.some(same) || result.options.some((option) => same(option.regimen))) {
         const which = firstDay === 0 ? ['術後第幾天', 'the day after surgery'] : ['治療第幾天', 'the treatment day']
         return { state: 'unsettled', text: { zh: `${prescribed}：為${step ? `「${step.text.zh}」` : '維持期'}的劑量，需確認目前是${which[0]}`, en: `${prescribed}: the dose of ${step ? `「${step.text.en}」` : 'the maintenance phase'}; confirm ${which[1]}` } }
       }
@@ -826,6 +843,11 @@ export function checkRegimen(regimenValue: string | undefined, results: readonly
       // In a loading phase only its own dose is the label's; after it, the maintenance choices are.
       if (due && due.toDay !== undefined) labelDoses = [due.regimen]
     }
+  }
+  // A conditional dose: never 「一致」 while its condition is the clinician's.
+  const option = labelDoses === result.doses ? result.options.find((item) => same(item.regimen)) : undefined
+  if (option && !labelDoses.some(same)) {
+    return { state: 'unsettled', text: { zh: `${prescribed}：仿單「可考慮」的劑量，需確認：${option.condition.zh}`, en: `${prescribed}: a dose the label offers for consideration; confirm ${option.condition.en}` } }
   }
   if (labelDoses.some(same)) {
     // The number agrees, but an unanswered rule could still turn it against.

@@ -1,7 +1,7 @@
 # DOAC 劑量計算機與手術前後停藥計算機
 
 - `doac-dose-nvaf`：依 EU SmPC，逐藥核對成人 apixaban、rivaroxaban、edoxaban、dabigatran 的劑量。適應症可選 NVAF（預設）、急性 DVT／PE、VTE 延長治療、髖或膝關節置換術後預防。AF CDSS 的 DP-09（DOAC 劑量）會開啟這個計算機；id 保留原名，DP-09 的連結不變。
-- `doac-periop`：手術前停藥與術後恢復，依 EHRA 2021、ASRA 2018，並列 EU SmPC。也列在 AF 頁的計算機清單（DP-09）。
+- `doac-periop`：手術前停藥與術後恢復，依 EHRA 2021、ASRA 2025（第 5 版），並列 EU SmPC。也列在 AF 頁的計算機清單（DP-09）。
 
 ## 分工（owner decision 2026-10-21）
 
@@ -29,7 +29,7 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 | 藥 | 急性 DVT／PE | 延長治療（完成 ≥6 個月後） | 髖／膝置換後預防 |
 |---|---|---|---|
 | apixaban | 10 mg bid ×7 天 → 5 mg bid；不依年齡、體重、Cr 減量；CrCl 15–29 謹慎 | 2.5 mg bid | 2.5 mg bid，術後 12–24 h；髖 32–38 天、膝 10–14 天 |
-| rivaroxaban | 15 mg bid ×21 天 → 20 mg qd；CrCl 15–49 在 20 mg 階段「可考慮」15 mg qd（PK 推論，不自動套用） | 10 mg qd；高復發風險考慮 20 mg | 10 mg qd，術後 6–10 h 且已止血；髖 5 週、膝 2 週 |
+| rivaroxaban | 15 mg bid ×21 天 → 20 mg qd；CrCl 15–49 在 20 mg 階段，15 mg qd 列為條件式選項（PK 推論） | 10 mg qd；20 mg（高復發風險）列為條件式選項 | 10 mg qd，術後 6–10 h 且已止血；髖 5 週、膝 2 週 |
 | edoxaban | 先注射抗凝 ≥5 天 → 60 mg qd；30 mg 條件同 NVAF（SmPC Table 1 本來就是 NVAF 與 VTE 共用）；不顯示 NVAF 的高 CrCl 提醒 | 同一劑量，療程個別評估 | EU SmPC 無此適應症 |
 | dabigatran | 先注射抗凝 ≥5 天 → 150 mg bid；Table 2 為 SPAF 與 DVT/PE 共用；110 mg 用於 DVT/PE 屬 PK/PD 推論，附引文 | 同急性期 | 術後 1–4 h 110 mg → 220 mg qd；CrCl 30–50、≥75 歲、併用 verapamil／amiodarone／quinidine 時 75 mg → 150 mg qd；CrCl 30–50 加 verapamil 考慮 75 mg qd；髖 28–35 天、膝 10 天 |
 
@@ -44,27 +44,60 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 - 只在部分適應症才問的欄位（注射抗凝、注射劑轉換、不穩定 PE、amiodarone、quinidine、天數）標為 `optional`，計算機清單的「待填」數不計入。規則讀到這些欄位時，空白仍視為未知。
 - **不穩定 PE**（`pe_unstable`）：apixaban、rivaroxaban、edoxaban 判為不建議；dabigatran 的 SmPC 沒有這一條，判為需個別判斷。
 - **apixaban 加強效誘導劑**：急性 DVT／PE 判為不建議（SmPC：should not be used），其他適應症判為謹慎。
+- **條件式劑量**：仿單只在特定條件下才建議的劑量，列為「可考慮」選項，不算仿單劑量；處方是這種劑量時，比對顯示「可考慮，需確認」，不會判為「一致」。例如 rivaroxaban 在 VTE、CrCl 15–49 時的 15 mg qd（出血風險高於復發風險），以及延長期的 20 mg（高復發風險）。
 - **劑量隨時間改變**：處方比對會讀天數。急性 VTE 讀口服治療第幾天（`vte_day`，從 1 起算）；dabigatran 髖膝預防讀術後第幾天（`postop_day`，手術當天為 0），手術當天是 110／75 mg（處方選項 `dabigatran:110:1`、`dabigatran:75:1`），第 1 天起是 220／150 mg qd。沒有填天數時，不會判為「一致」。
 
 ## 手術前後停藥（`doac-periop-model.ts`）
 
-1. **不給時數**：CrCl <15 或透析（EHRA Fig 14：No official indication for use），以及 dabigatran CrCl <30（Not indicated；仿單禁忌；神經軸時依 ASRA 11.1.4 建議不做）。不會借用 15–29 那一列。
-2. **AF 導管消融**：依 EHRA Fig 16 單獨處理，不走一般高風險流程。最後一劑預設術前 12 h（可到 24 h），拔 sheath 後 3–5 h 恢復，恢復前要排除心包填塞。apixaban 另引仿單的「does not need to be interrupted」。
-3. **極低／低／高風險**：分級依 EHRA Table 12，時數依 Fig 14。極低風險在谷底濃度時做（bid 12 h、qd 24 h），術後 ≥6 h 恢復。仿單的時數並列顯示，不參與決定。
-4. **神經軸**（ASRA 2018）：每一級都要檢查，有神經軸時一律視為高風險（Table 12）。Xa 抑制劑停 72 h。dabigatran 預設 120 h，只有在腎功能已可靠評估、年齡 ≤65、無高血壓、無抗血小板藥都明確時，才依 CrCl 分級為 72／96／120 h。最後取 EHRA 與 ASRA 中較長者。
+1. **不給時數**：
+   - CrCl <15 或透析：EHRA Fig 14 寫 No official indication for use。
+   - dabigatran CrCl <30：EHRA 寫 Not indicated，仿單也是禁忌。有阻斷時，依 ASRA 2025 建議不做，除非已測 dabigatran 濃度且 <30 ng/mL。
+   - 以上都不會借用 15–29 那一列。
+2. **AF 導管消融與極低風險不跳過劑量**：
+   - AF 消融依 EHRA Fig 16 單獨處理，不走一般高風險流程；極低風險在谷底濃度時做。
+   - 照常服用處置前最後一個排定劑量。距離短於谷底時數（消融 12 h；極低風險 bid 12 h、qd 24 h）時，提示調整服藥或處置時間，計算機不替使用者跳過該劑。
+   - 例：rivaroxaban 每天 08:00、19:00 消融，最後一劑是當天 08:00（11 h），不是前一天（35 h）。
+   - 消融在拔 sheath 後 3–5 h 恢復，恢復前要排除心包填塞。apixaban 另引仿單的「does not need to be interrupted」。
+3. **低／高風險**：分級依 EHRA Table 12，時數依 Fig 14。仿單的時數並列顯示，不參與決定。
+4. **神經軸與深部神經叢／周邊阻斷**（ASRA 2025，第 5 版；取代 2018 年第 4 版）：
+   - **哪一種處置**：每一級都要檢查。脊髓／硬膜外與腰椎穿刺依 EHRA Table 12 一律視為高風險；深部神經叢／周邊阻斷套 ASRA 的時數，但不改變 EHRA 的分級。
+   - **依劑量分級，不依適應症**（ASRA Table 1）：
+     - 每天一次的 dabigatran、rivaroxaban 10 mg 是低劑量。
+     - apixaban 2.5 mg bid 要問用途：NVAF 減量是高劑量，VTE 延長期或術後預防是低劑量。未填時以高劑量（較長間隔）計，並列為待填。
+     - 其他都是高劑量。
+   - **阻斷前停藥時數**：
+
+     | 藥 | 高劑量 | 低劑量 |
+     |---|---|---|
+     | apixaban | 72 h | 36 h |
+     | edoxaban | 72 h | ASRA 無低劑量，一律以高劑量計 |
+     | rivaroxaban | 72 h | 24 h（CrCl <30 為 30 h） |
+     | dabigatran | CrCl ≥50 為 72 h；30–49 為 120 h | 48 h |
+
+     最後取 EHRA 與 ASRA 中較長者。
+   - **留置導管期間意外給藥**：拔管前停藥時數同上表，或殘餘濃度 <30 ng/mL。
 5. **考慮再延長**（Fig 14／15）：只提示，不自動加時數。
-6. **時刻**：開始時刻（`surgery_at`；有神經軸時填穿刺時刻）與結束時刻（`surgery_end_at`）分開輸入。
+6. **時刻**：開始時刻（`surgery_at`；有阻斷時填穿刺時刻）與結束時刻（`surgery_end_at`）分開輸入。
    - 最晚服藥時刻 = 開始時刻 − 時數。
    - 最後一劑與跳過劑數用病人實際服藥時刻排出；開始時刻當下那一劑也算在跳過內。沒有服藥時刻時不算劑數。
 7. **恢復時間**取下列條件中最晚者：
    - 結束時刻加上分級時數（極低 6 h、低 24 h、高 48（–72）h）。
-   - 拔管 + 6 h（ASRA；仿單 apixaban ≥5 h、rivaroxaban ≥6 h、dabigatran ≥2 h）。
-   - 穿刺出血時，穿刺時刻 + 24 h（rivaroxaban 仿單）。
+   - ASRA 2025：穿刺或拔管後，高劑量 ≥24 h、低劑量 ≥6 h 才給第一劑。仿單另寫 apixaban ≥5 h、rivaroxaban ≥6 h、dabigatran ≥2 h，取較長者。
+   - 脊髓／硬膜外穿刺出血：apixaban 48 h、rivaroxaban 24 h（ASRA 引仿單）。dabigatran、edoxaban 沒有給時數，需與麻醉科確認，因此不輸出最早恢復時刻。
 
    止血確認是每一次都要的條件。結束時刻、拔管時刻或穿刺是否出血未填，或填「尚未止血」時，不輸出最早恢復時刻。結束時刻或拔管時刻早於開始時刻時，視為輸入錯誤，要求更正，也不輸出恢復時間。
-8. **殘餘藥效**：以該藥校正的 anti-Xa（dabigatran 用 dTT／ECT）可估計濃度。ASRA 寫明可接受的殘餘濃度未定，EHRA 寫明依濃度調整沒有前瞻性證據。計算機沒有數值欄位、沒有閾值，也不會輸出「可開刀」。
-9. **緊急手術**：依 EHRA Fig 12。dabigatran 可用 idarucizumab，也可透析移除。Xa 抑制劑不以 andexanet 作為術前通用逆轉：EU 只核准用於危及生命或無法控制的出血，ANNEXA-4 未納入緊急手術病人。
-10. 不橋接。
+8. **殘餘藥效**：
+   - 有阻斷時，照 ASRA 2025 原文列出：殘餘濃度 <30 ng/mL，Xa 抑制劑亦可用 anti-Xa ≤0.1 IU/mL，為「可接受」。同時列出 ASRA 自己註明的「未經臨床驗證」，以及 EHRA 所說「依濃度調整停藥沒有前瞻性證據」。
+   - 沒有阻斷時，只寫 EHRA 的說明。
+   - 兩種情況都不據以判定可否處置：沒有數值欄位，也不會輸出「可開刀」。
+9. **處方本身**：
+   - VTE 起始劑量（apixaban 10 mg bid、rivaroxaban 15 mg bid）：建議延後擇期處置。時數只供參考；近 3 個月內血栓事件屬少數可討論橋接的情況（EHRA）。恢復的劑量依 VTE 治療進度決定。
+   - 預防劑量：提醒 EHRA 時數以治療劑量為準。恢復時給回預防劑量。
+   - 治療劑量：恢復時給回術前劑量。
+10. **緊急手術**：依 EHRA Fig 12。
+    - dabigatran：可用 idarucizumab，也可透析移除；idarucizumab 後 24 h，若臨床穩定且已止血，可再開始（Pradaxa SmPC 4.4，p.42）。
+    - Xa 抑制劑：不以 andexanet 作為術前通用逆轉。EU 只核准用於危及生命或無法控制的出血，ANNEXA-4 未納入緊急手術病人。
+11. 不橋接。
 
 新增的輸入型別 `datetime`／`time`（`types.ts` 的 `DateTimeInput`）由手動輸入，不會自動帶入。
 
@@ -81,7 +114,7 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 
 同一份 PDF 中，其他劑量的 SmPC 會在引文的 `document` 欄位標明，例如 apixaban 髖膝預防的「Eliquis 2.5 mg」（p.2–5、10），以及 rivaroxaban 髖膝預防的「Xarelto 10 mg」（p.29–31）。
 
-每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 122 段：121 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
+每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 123 段：122 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
 
 ### 指引（不是仿單，另列來源與頁碼）
 
@@ -89,8 +122,8 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 
 | 指引 | 文件 | 頁碼依據 |
 |---|---|---|
-| EHRA 2021 | Steffel et al., Europace 2021;23:1612–1676（euab065.pdf，65 頁） | 實體頁 + 1611 = 期刊頁。12 段文字用 pdftotext 逐頁核對，全部相符。Figure 12、14、15、16 是圖片，從渲染後的頁面判讀（p.1641、1643、1647），判讀內容寫在 `figure` 欄位。 |
-| ASRA 2018 | Horlocker et al., Reg Anesth Pain Med 2018;43:263–309 | PDF p.17 = 期刊 p.279，p.19 = p.281。15 段用出版社 PDF 的逐頁文字（pdf.js）核對，全部相符。 |
+| EHRA 2021 | Steffel et al., Europace 2021;23:1612–1676（euab065.pdf，65 頁） | 實體頁 + 1611 = 期刊頁。13 段文字用 pdftotext 逐頁核對，全部相符。Figure 12、14、15、16 是圖片，從渲染後的頁面判讀（p.1641、1643、1647），判讀內容寫在 `figure` 欄位。 |
+| ASRA 2025（第 5 版） | Kopp et al., Reg Anesth Pain Med 2025, doi:10.1136/rapm-2024-105766（2025-01-29 線上） | online first，頁碼 1–29，與 PDF 實體頁相同。32 段用 pdftotext 逐頁核對，全部相符。2018 年第 4 版已被取代，不再引用。 |
 
 ## 與規格書（2026-10-20）不同之處（依 SmPC 原文）
 
@@ -113,10 +146,10 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 
 - **edoxaban 髖膝預防**：EU SmPC 沒有這個適應症（規格書也寫臺灣未核准）。
 - **電生理檢查與非複雜消融**：規格書歸為低風險，EHRA Table 12 歸為 minor。AF 消融另走 Fig 16。
-- **dabigatran 神經軸**：規格書寫 72／96／120 h，ASRA 預設 120 h，有條件才分級。
-- **dabigatran 拔管後時間**：規格書寫 6 h。仿單是 ≥2 h、ASRA 是 6 h，計算機取 6 h 並列兩個來源。
+- **dabigatran 神經軸**：規格書寫 72／96／120 h。ASRA 2025 高劑量是 CrCl ≥50 為 72 h、30–49 為 120 h，低劑量是 48 h。
+- **拔管後時間**：規格書寫 6 h。ASRA 2025 是高劑量 ≥24 h、低劑量 ≥6 h；仿單另寫 ≥2–6 h。計算機取較長者，並列來源。
 - **≥85 歲再延長**：EHRA 原文只寫 older age，沒有年齡切點，因此只提示，不設切點。
-- **anti-Xa <30 ng/mL 可開刀**：不採用。
+- **anti-Xa <30 ng/mL 可開刀**：不採用。ASRA 2025 的「可接受」只照原文列出，不據以放行。
 - **andexanet 作為術前逆轉**：不採用。
 - **極低風險直接不停藥**：會略過神經軸規則，因此不採用。
 - **術後 enoxaparin 40 mg 固定寫法**：改依 Fig 15，寫「依院內流程考慮預防劑量 heparin」。

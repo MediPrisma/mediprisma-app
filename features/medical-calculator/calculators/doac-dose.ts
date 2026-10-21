@@ -143,11 +143,18 @@ export const DOAC_DOSE: CalculatorDef[] = [{
   version: DOAC_RULES_VERSION,
   name: { en: 'DOAC peri-procedural interruption', zh: 'DOAC 手術前後停藥計算機' },
   category: 'cardiac',
-  blurb: { en: 'Last dose before a procedure and restart after it, by EHRA 2021, ASRA 2018 and each label.', zh: '依 EHRA 2021、ASRA 2018 與仿單，算術前最後一劑、跳過劑數與術後恢復時間。' },
+  blurb: { en: 'Last dose before a procedure and restart after it, by EHRA 2021, ASRA 2025 and each label.', zh: '依 EHRA 2021、ASRA 2025 與仿單，算術前最後一劑、跳過劑數與術後恢復時間。' },
   inputs: [
     REGIMEN_INPUT,
+    {
+      key: 'dose_intent', type: 'select', label: { en: 'Apixaban 2.5 mg bid is for', zh: 'apixaban 2.5 mg bid 的用途' }, defaultValue: '', optional: true,
+      options: [
+        { value: 'high', label: { en: 'NVAF (reduced therapeutic dose)', zh: 'NVAF（減量的治療劑量）' } },
+        { value: 'low', label: { en: 'Extended VTE prevention or post-op prophylaxis', zh: 'VTE 延長期或術後預防' } },
+      ],
+    },
     { key: 'dose_time_1', type: 'time', label: { en: 'Actual dose time (first, or the only one)', zh: '實際服藥時刻（第一劑或 qd 那一劑）' } },
-    { key: 'dose_time_2', type: 'time', label: { en: 'Actual dose time (second, bid)', zh: '實際服藥時刻（bid 的第二劑）' } },
+    { key: 'dose_time_2', type: 'time', label: { en: 'Actual dose time (second, bid)', zh: '實際服藥時刻（bid 的第二劑）' }, optional: true },
     ...RENAL_INPUTS,
     {
       key: 'procedure_kind', type: 'select', label: { en: 'Procedure', zh: '處置' }, defaultValue: '',
@@ -160,26 +167,25 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       ],
     },
     {
-      key: 'neuraxial', type: 'select', label: { en: 'Spinal/epidural anaesthesia or lumbar puncture', zh: '脊髓／硬膜外麻醉或腰椎穿刺' }, defaultValue: '',
+      key: 'neuraxial', type: 'select', label: { en: 'Spinal/epidural, lumbar puncture, or deep plexus/peripheral block', zh: '脊髓／硬膜外、腰椎穿刺，或深部神經叢／周邊神經阻斷' }, defaultValue: '',
       options: [
         { value: 'none', label: { en: 'None', zh: '無' } },
-        { value: 'single', label: { en: 'Single shot, no catheter', zh: '單次，無留置導管' } },
-        { value: 'catheter', label: { en: 'Indwelling epidural catheter', zh: '留置硬膜外導管' } },
+        { value: 'single', label: { en: 'Spinal/epidural or LP, single', zh: '脊髓／硬膜外或腰椎穿刺，單次' } },
+        { value: 'catheter', label: { en: 'Epidural catheter', zh: '留置硬膜外導管' } },
+        { value: 'plexus', label: { en: 'Deep plexus/peripheral block', zh: '深部神經叢／周邊阻斷' } },
+        { value: 'plexus-catheter', label: { en: 'Deep plexus/peripheral catheter', zh: '深部神經叢／周邊導管' } },
       ],
     },
     { key: 'surgery_at', type: 'datetime', label: { en: 'Start: anaesthesia or procedure (the neuraxial puncture, if any)', zh: '開始時刻：麻醉或處置（有脊髓／硬膜外時為穿刺時刻）' } },
-    { key: 'surgery_end_at', type: 'datetime', label: { en: 'End of the procedure (restart is counted from it)', zh: '手術結束時刻（術後恢復由此起算）' } },
-    { key: 'renal_reliable', type: 'select', label: { en: 'Renal function reliably determined (dabigatran, neuraxial)', zh: '腎功能已可靠評估（dabigatran、神經軸用）' }, options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }], defaultValue: '' },
-    { key: 'hypertension', type: 'select', label: { en: 'Hypertension (dabigatran, neuraxial)', zh: '高血壓（dabigatran、神經軸用）' }, options: YES_NO, defaultValue: '' },
-    { key: 'antiplatelet', type: 'select', label: { en: 'Antiplatelet drug (dabigatran, neuraxial)', zh: '抗血小板藥（dabigatran、神經軸用）' }, options: YES_NO, defaultValue: '' },
-    { key: 'haemostasis', type: 'select', label: { en: 'Haemostasis after the procedure', zh: '術後止血' }, options: [{ value: 'no', label: { en: 'Not yet established', zh: '尚未止血' } }, { value: 'yes', label: { en: 'Confirmed', zh: '已確認' } }], defaultValue: '' },
-    { key: 'catheter_removed_at', type: 'datetime', label: { en: 'Neuraxial catheter removed at', zh: '神經軸導管拔除時刻' } },
-    { key: 'traumatic_puncture', type: 'select', label: { en: 'Traumatic (bloody) puncture', zh: '穿刺出血' }, options: YES_NO, defaultValue: '' },
+    { key: 'surgery_end_at', type: 'datetime', label: { en: 'End of the procedure (restart is counted from it)', zh: '手術結束時刻（術後恢復由此起算）' }, optional: true },
+    { key: 'haemostasis', type: 'select', label: { en: 'Haemostasis after the procedure', zh: '術後止血' }, options: [{ value: 'no', label: { en: 'Not yet established', zh: '尚未止血' } }, { value: 'yes', label: { en: 'Confirmed', zh: '已確認' } }], defaultValue: '', optional: true },
+    { key: 'catheter_removed_at', type: 'datetime', label: { en: 'Catheter removed at', zh: '導管拔除時刻' }, optional: true },
+    { key: 'traumatic_puncture', type: 'select', label: { en: 'Traumatic (bloody) neuraxial puncture', zh: '脊髓／硬膜外穿刺出血' }, options: YES_NO, defaultValue: '', optional: true },
   ],
   inputGroups: [
-    { key: 'regimen', title: { zh: '目前處方與服藥時刻', en: 'Prescription and dose times' }, hint: { zh: '跳過幾劑要用病人實際服藥的時刻，不用處方預設時間。', en: 'Skipped doses need the times the patient actually takes them.' }, keys: ['regimen', 'dose_time_1', 'dose_time_2'] },
+    { key: 'regimen', title: { zh: '目前處方與服藥時刻', en: 'Prescription and dose times' }, hint: { zh: '跳過幾劑要用病人實際服藥的時刻，不用處方預設時間。ASRA 依劑量分高（治療）與低（預防）劑量；只有 apixaban 2.5 mg bid 需要回答用途。', en: 'Skipped doses need the times the patient actually takes them. ASRA reads high (therapeutic) and low (prophylactic) doses; only apixaban 2.5 mg bid needs its use answered.' }, keys: ['regimen', 'dose_intent', 'dose_time_1', 'dose_time_2'] },
     { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
-    { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, hint: { zh: '分級依 EHRA 2021 Table 12。極低：拔牙 ≤3 顆、白內障／青光眼、內視鏡不切片、表淺手術、心律調節器／ICD、電生理檢查。低：複雜牙科、內視鏡簡單切片、小型骨科手術。高：心臟、周邊血管、神經、腹部、胸腔、大型泌尿或骨科手術、肝腎切片、複雜內視鏡、體外震波碎石。有脊髓／硬膜外麻醉時一律另依 ASRA 2018，不論分級。未填視為未知。', en: 'Tiers follow EHRA 2021 Table 12. Minor: ≤3 teeth extracted, cataract/glaucoma, endoscopy without biopsy, superficial surgery, pacemaker/ICD, EP study. Low: complex dental, endoscopy with simple biopsy, small orthopaedic surgery. High: cardiac, vascular, neuro, abdominal, thoracic, major urologic or orthopaedic surgery, liver/kidney biopsy, complex endoscopy, ESWL. Spinal/epidural anaesthesia always adds ASRA 2018 whatever the tier. A blank is unknown.' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at', 'renal_reliable', 'hypertension', 'antiplatelet'] },
+    { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, hint: { zh: '分級依 EHRA 2021 Table 12。極低：拔牙 ≤3 顆、白內障／青光眼、內視鏡不切片、表淺手術、心律調節器／ICD、電生理檢查。低：複雜牙科、內視鏡簡單切片、小型骨科手術。高：心臟、周邊血管、神經、腹部、胸腔、大型泌尿或骨科手術、肝腎切片、複雜內視鏡、體外震波碎石。有脊髓／硬膜外麻醉或深部神經叢／周邊阻斷時，一律另依 ASRA 2025，不論分級。未填視為未知。', en: 'Tiers follow EHRA 2021 Table 12. Minor: ≤3 teeth extracted, cataract/glaucoma, endoscopy without biopsy, superficial surgery, pacemaker/ICD, EP study. Low: complex dental, endoscopy with simple biopsy, small orthopaedic surgery. High: cardiac, vascular, neuro, abdominal, thoracic, major urologic or orthopaedic surgery, liver/kidney biopsy, complex endoscopy, ESWL. Spinal/epidural anaesthesia or a deep plexus/peripheral block always adds ASRA 2025 whatever the tier. A blank is unknown.' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at'] },
     { key: 'after', title: { zh: '術後', en: 'After the procedure' }, hint: { zh: '術前停藥算到開始時刻，術後恢復從結束時刻起算。', en: 'The interval before runs to the start; the restart is counted from the end.' }, keys: ['surgery_end_at', 'haemostasis', 'catheter_removed_at', 'traumatic_puncture'] },
   ],
   compute: (values) => {
@@ -203,5 +209,5 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       interpretation,
     }
   },
-  reference: 'EHRA 2021 Practical Guide on NOACs (Steffel et al., Europace 2021;23:1612–1676), Table 12 and Figures 12, 14–16; ASRA 2018 (Horlocker et al., Reg Anesth Pain Med 2018;43:263–309), recommendations 6–8 and 11; EU SmPC section 4.4 of each agent.',
+  reference: 'EHRA 2021 Practical Guide on NOACs (Steffel et al., Europace 2021;23:1612–1676), Table 12 and Figures 12, 14–16; ASRA 2025, 5th edition (Kopp et al., Reg Anesth Pain Med 2025, doi:10.1136/rapm-2024-105766), direct oral anticoagulants, pp.6–10; EU SmPC section 4.4 of each agent.',
 }]

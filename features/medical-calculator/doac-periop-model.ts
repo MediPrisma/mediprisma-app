@@ -1,31 +1,39 @@
 /**
  * Stopping a DOAC before a procedure and restarting it after: EHRA 2021 for
- * the hours by bleeding risk and renal function, ASRA 2018 for neuraxial
- * anaesthesia, and each agent's EU SmPC beside them. Neither guideline is a
- * label, so their quotations live in `GUIDELINE_CITES` with their own source
- * and journal page.
+ * the hours by bleeding risk and renal function, ASRA 2025 (fifth edition)
+ * for neuraxial and deep plexus/peripheral blocks, and each agent's EU SmPC
+ * beside them. Neither guideline is a label, so their quotations live in
+ * `GUIDELINE_CITES` with their own source and page.
  *
  * Corrections to the 2026-10-20 specification, each from its source:
  * - AF ablation is not the general high-risk flow (EHRA Table 12 puts
- *   uncomplicated ablation in the minor tier; Figure 16 is its own plan).
+ *   uncomplicated ablation in the minor tier; Figure 16 is its own plan). It
+ *   and a minor-risk procedure keep the last scheduled dose before them: no
+ *   dose is skipped, and a short interval is flagged for the team to adjust.
  * - Neuraxial anaesthesia is checked at every tier, the minimal one included,
- *   and is itself a high-risk intervention (Table 12).
- * - Dabigatran before neuraxial block is 120 h unless renal function is
- *   reliably known and no bleeding risk factor is present (ASRA 11.1).
+ *   and is itself a high-risk intervention (Table 12). Deep plexus/peripheral
+ *   blocks take the same ASRA intervals.
+ * - ASRA reads the dose, not the indication: a high (therapeutic) or low
+ *   (prophylactic) dose has its own interval before the block, and the first
+ *   dose after needle placement or catheter removal waits 24 h after a high
+ *   dose and 6 h after a low one. Dabigatran high dose is 72 h at CrCl ≥50
+ *   and 120 h at 30–49.
  * - CrCl <15, dialysis, and dabigatran below 30 get no hours: Figure 14 gives
  *   none, and the 15–29 row is not borrowed for them.
- * - Restart is the latest of the procedure's own interval, catheter removal
- *   + 6 h and a traumatic puncture's 24 h; haemostasis is always a condition.
- *   The interval before is counted to the start (the neuraxial puncture when
- *   there is one), the interval after from the end: they are separate times.
+ * - Restart is the latest of the procedure's own interval, the block's, and a
+ *   traumatic puncture's delay; haemostasis is always a condition. The
+ *   interval before is counted to the start (the puncture when there is
+ *   one), the procedure's interval after from the end.
  * - Skipped doses need the times the patient actually takes them.
- * - Anti-Xa is a drug-calibrated level with no accepted threshold; nothing
- *   here says a patient may proceed.
+ * - ASRA names a residual level it finds acceptable (<30 ng/mL); it is
+ *   quoted as the guideline says it, beside its own note that it was never
+ *   clinically validated, and nothing here says a patient may proceed.
  * - Andexanet is not a general pre-operative reversal (EU approval is for
  *   life-threatening or uncontrolled bleeding; ANNEXA-4 had no surgery).
  *
  * A blank answer is unknown, never 「no」: an unknown that could change the
- * hours withholds them; one that moves the restart withholds the earliest time.
+ * hours withholds them, or takes the longer of the two; one that moves the
+ * restart withholds the earliest time.
  */
 import type { CalcValues, L } from './types'
 import { CITES, doacCrcl, parseRegimen, type DoacAgent, type DoacCrcl, type LabelCite } from './doac-dose-model'
@@ -43,16 +51,16 @@ export const GUIDELINE_SOURCES = {
     url: 'https://academic.oup.com/europace/article/23/10/1612/6247378',
   },
   asra: {
-    title: 'ASRA Evidence-Based Guidelines (4th ed): regional anesthesia in the patient receiving antithrombotic therapy',
-    citation: 'Horlocker TT, et al. Reg Anesth Pain Med 2018;43:263–309. doi:10.1097/AAP.0000000000000763',
-    url: 'https://rapm.bmj.com/content/43/3/263',
+    title: 'ASRA Pain Medicine Evidence-Based Guidelines (5th ed): regional anesthesia in the patient receiving antithrombotic or thrombolytic therapy',
+    citation: 'Kopp SL, et al. Reg Anesth Pain Med 2025;0:1–29 (online first 29 January 2025). doi:10.1136/rapm-2024-105766',
+    url: 'https://doi.org/10.1136/rapm-2024-105766',
   },
 } as const satisfies Record<string, GuidelineSource>
 
 export interface GuidelineCite {
   source: keyof typeof GUIDELINE_SOURCES
   section: string
-  /** The journal page printed on it. */
+  /** The page printed on it (ASRA's online-first pages run 1–29, as the PDF's). */
   page: number
   /** Physical page of the PDF the quotation was checked on. */
   pdfPage: number
@@ -62,13 +70,14 @@ export interface GuidelineCite {
 }
 
 const ehra = (section: string, pdfPage: number, quote: string, figure?: L): GuidelineCite => ({ source: 'ehra', section, page: 1611 + pdfPage, pdfPage, quote, ...(figure ? { figure } : {}) })
-const asra = (section: string, pdfPage: number, page: number, quote: string): GuidelineCite => ({ source: 'asra', section, page, pdfPage, quote })
+const asra = (section: string, page: number, quote: string): GuidelineCite => ({ source: 'asra', section, page, pdfPage: page, quote })
 
 /**
- * Checked 2026-10-21: EHRA against `pdftotext` of euab065.pdf page by page
- * (physical page + 1611 = journal page); its Figures 12, 14, 15 and 16 are
- * images, read off the rendered page. ASRA against the publisher PDF's text
- * page by page (PDF p.17 = journal p.279, p.19 = p.281).
+ * Checked with `pdftotext` page by page: EHRA 2021 against euab065.pdf
+ * (physical page + 1611 = journal page; Figures 12, 14, 15 and 16 are
+ * images, read off the rendered page) on 2026-10-21, and ASRA 2025 against
+ * the publisher's PDF (online first, pages 1–29) on 2026-10-22. ASRA 2018
+ * (fourth edition) is superseded and no longer quoted.
  */
 export const GUIDELINE_CITES = {
   ehraTable12Minor: ehra('Table 12', 31, 'Electrophysiological study or catheter ablation (except complex procedures)'),
@@ -95,22 +104,44 @@ export const GUIDELINE_CITES = {
   }),
   ehraAndexanet: ehra('Direct reversal of FXa-inhibitors', 29, 'In the EU Andexanet alpha is only approved for the reversal of life-threatening or uncontrollable bleeding in patients taking apixaban or rivaroxaban.'),
   ehraAnnexa: ehra('Direct reversal of FXa-inhibitors', 29, 'the trial did not include patients undergoing emergency surgery.'),
+  ehraRecentEvent: ehra('Bridging', 34, 'the very few very high-risk situations in which bridging may be discussed include urgent surgery with a high bleeding risk in patients with a recent (≤3 months) thromboembolic event'),
 
-  asraRivaroxaban: asra('6.1', 17, 279, 'We suggest that rivaroxaban be discontinued 72 hours prior to neuraxial block.'),
-  asraApixaban: asra('7.1', 17, 279, 'We suggest that apixaban be discontinued 72 hours prior to neuraxial block.'),
-  asraEdoxaban: asra('8.1', 17, 279, 'We suggest that edoxaban be discontinued 72 hours prior to neuraxial block.'),
-  asraRivaroxabanLevel: asra('6.1', 17, 279, 'An acceptable level of residual rivaroxaban activity to proceed with neuraxial block remains undetermined'),
-  asraApixabanLevel: asra('7.1', 17, 279, 'An acceptable level of residual apixaban activity to proceed with neuraxial block remains undetermined'),
-  asraEdoxabanLevel: asra('8.1', 17, 279, 'An acceptable level of residual edoxaban activity to proceed with neuraxial block remains undetermined'),
-  asraXaCatheter: asra('6.2 / 7.2 / 8.2', 17, 279, 'We suggest that neuraxial catheters be removed 6 hours prior to the first (postoperative) dose'),
-  asraDabigatran: asra('11.1', 19, 281, 'We suggest that dabigatran be discontinued 120 hours prior to neuraxial block.'),
-  asraDabigatranGraded: asra('11.1', 19, 281, 'if renal function has been reliably determined, and there are no additional risk factors for bleeding (eg, age >65 years, hypertension, concomitant antiplatelet medications)'),
-  asraDabigatran80: asra('11.1.1', 19, 281, 'We suggest that dabigatran be discontinued 72 hours in patients with a CrCl 80 mL/min or greater.'),
-  asraDabigatran50: asra('11.1.2', 19, 281, 'We suggest that dabigatran be discontinued 96 hours in patients with a CrCl of 50 to 79 mL/min.'),
-  asraDabigatran30: asra('11.1.3', 19, 281, 'We suggest that dabigatran be discontinued 120 hours in patients with a CrCl of 30 to 49 mL/min.'),
-  asraDabigatranBelow30: asra('11.1.4', 19, 281, 'We suggest against the performance of neuraxial blocks in patients with a CrCl of less than 30 mL/min'),
-  asraDabigatranLevel: asra('11.1.1', 19, 281, 'An acceptable level of residual dabigatran activity to proceed with neuraxial block remains undetermined'),
-  asraDabigatranCatheter: asra('11.2', 19, 281, 'We suggest that neuraxial catheters be removed 6 hours prior to the first (postoperative) dose'),
+  asraDoseNotIndication: asra('Direct oral anticoagulants', 6, 'the same ‘high’ dose of a DOAC is considered therapeutic when used in a patient for the treatment of DVT and inversely as prophylactic when used in another patient for the prevention of recurrent DVT'),
+  asraThresholdUnvalidated: asra('Direct oral anticoagulants', 7, 'although never clinically validated'),
+  asraTraumatic: asra('Direct oral anticoagulants', 8, 'in case of a traumatic neuraxial puncture the administration of the next dose of apixaban and rivaroxaban should be delayed for 48 hours and 24 hours, respectively.'),
+  asraTraumaticNone: asra('Direct oral anticoagulants', 8, 'There is no such recommendation for dabigatran and edoxaban.'),
+
+  asraApixabanHigh: asra('Apixaban, high dose', 8, 'We suggest that a high dose of apixaban be discontinued at least 72 hours prior to neuraxial block or deep plexus/peripheral block.'),
+  asraApixabanHighLevel: asra('Apixaban, high dose', 8, 'We suggest that a residual apixaban plasma level <30 ng/mL or a residual aXa activity plasma level ≤0.1 IU/mL is acceptable prior to neuraxial block or deep plexus/peripheral block'),
+  asraApixabanHighRestart: asra('Apixaban, high dose', 8, 'We suggest that needle placement/catheter removal occurs at least 24 hours prior to the first postoperative dose'),
+  asraApixabanHighInSitu: asra('Apixaban, high dose', 8, 'With the unanticipated administration of high dose of apixaban with a neuraxial catheter in situ, we suggest that apixaban dosing be withheld for at least 72 hours'),
+  asraApixabanLow: asra('Apixaban, low dose', 8, 'We suggest that a low dose of apixaban be discontinued for at least 36 hours prior to neuraxial block or deep plexus/peripheral block.'),
+  asraApixabanLowRestart: asra('Apixaban, low dose', 8, 'We suggest that needle placement/catheter removal occurs at least 6 hours prior to the first postoperative dose'),
+  asraApixabanLowInSitu: asra('Apixaban, low dose', 8, 'With the unanticipated administration of low dose of apixaban with a neuraxial catheter in situ, we suggest that apixaban dosing be withheld for at least 36 hours'),
+
+  asraEdoxabanHigh: asra('Edoxaban, high dose', 8, 'We suggest that a high dose of edoxaban be discontinued for at least 72 hours prior to neuraxial block or deep plexus/peripheral block.'),
+  asraEdoxabanHighLevel: asra('Edoxaban, high dose', 8, 'We suggest that a residual edoxaban plasma level <30 ng/mL or a residual aXa activity plasma level ≤0.1 IU/mL is acceptable prior to neuraxial block or deep plexus/peripheral block'),
+  asraEdoxabanHighRestart: asra('Edoxaban, high dose', 8, 'We suggest that needle placement/catheter removal occurs at least 24 hours prior to the first (postoperative) dose'),
+  asraEdoxabanHighInSitu: asra('Edoxaban, high dose', 8, 'With the unanticipated administration of high dose of edoxaban with a neuraxial catheter in situ, we suggest that edoxaban dosing be withheld for at least 72 hours'),
+  asraEdoxabanNoLow: asra('Edoxaban, low dose', 8, 'There is no FDA-approved medical indication for low-dose edoxaban.'),
+
+  asraRivaroxabanHigh: asra('Rivaroxaban, high dose', 8, 'We suggest that a high dose of rivaroxaban be discontinued for at least 72 hours prior to neuraxial block or deep plexus/peripheral block.'),
+  asraRivaroxabanHighLevel: asra('Rivaroxaban, high dose', 9, 'We suggest that a residual rivaroxaban plasma level <30 ng/mL or a residual aXa activity plasma level ≤0.1 IU/mL is acceptable prior to neuraxial block or deep plexus/peripheral block'),
+  asraRivaroxabanHighRestart: asra('Rivaroxaban, high dose', 9, 'We suggest that needle placement/catheter removal occurs at least 24 hours prior to the first postoperative dose'),
+  asraRivaroxabanHighInSitu: asra('Rivaroxaban, high dose', 9, 'With the unanticipated administration of high dose of rivaroxaban with a neuraxial catheter in situ, we suggest that rivaroxaban dosing be withheld for at least 72 hours'),
+  asraRivaroxabanLow: asra('Rivaroxaban, low dose', 9, 'We suggest that a low dose of rivaroxaban be discontinued for at least 24 hours (30 hours if CrCl <30 mL/min) prior to neuraxial block or deep plexus/peripheral block.'),
+  asraRivaroxabanLowRestart: asra('Rivaroxaban, low dose', 9, 'We suggest that needle placement/catheter removal occurs at least 6 hours prior to the first postoperative dose'),
+  asraRivaroxabanLowInSitu: asra('Rivaroxaban, low dose', 9, 'With the unanticipated administration of low dose of rivaroxaban with a neuraxial catheter in situ, we suggest that rivaroxaban dosing be withheld for at least 24 hours (30 hours if CrCl <30 mL/min)'),
+
+  asraDabigatranHigh50: asra('Dabigatran, high dose', 9, 'We suggest that a high dose of dabigatran be discontinued for at least 72 hours in patients with a CrCl ≥50 mL/min prior to neuraxial block or deep plexus/peripheral block.'),
+  asraDabigatranHigh30: asra('Dabigatran, high dose', 9, 'We suggest that a high dose of dabigatran be discontinued for 120 hours in patients with a CrCl 30–49 mL/min prior to neuraxial block or deep plexus/peripheral block.'),
+  asraDabigatranBelow30: asra('Dabigatran, high and low dose', 9, 'We suggest against the performance of neuraxial or deep plexus/peripheral blocks in patients with a CrCl <30 mL/min unless a dabigatran plasma level is obtained and <30 ng/mL'),
+  asraDabigatranLevel: asra('Dabigatran, high and low dose', 9, 'we suggest that a residual dabigatran plasma level <30 ng/mL is acceptable'),
+  asraDabigatranHighRestart: asra('Dabigatran, high dose', 9, 'We suggest that needle placement/catheter removal occurs at least 24 hours prior to the first postoperative dose'),
+  asraDabigatranHighInSitu: asra('Dabigatran, high dose', 9, 'we suggest that dabigatran dosing be withheld for at least 72 hours (120 hours if CrCl 30–49 mL/min)'),
+  asraDabigatranLow: asra('Dabigatran, low dose', 9, 'We suggest that a low dose of dabigatran be discontinued for at least 48 hours prior to neuraxial block or deep plexus/peripheral block.'),
+  asraDabigatranLowRestart: asra('Dabigatran, low dose', 9, 'We suggest that needle placement/catheter removal occurs at least 6 hours prior to the first postoperative dose'),
+  asraDabigatranLowInSitu: asra('Dabigatran, low dose', 10, 'we suggest that dabigatran dosing be withheld for at least 48 hours'),
 } as const satisfies Record<string, GuidelineCite>
 
 export type AnyCite = LabelCite | GuidelineCite
@@ -123,6 +154,10 @@ export interface PeriopLine {
 
 export type ProcedureKind = 'af-ablation' | 'minimal' | 'low' | 'high' | 'emergency'
 export type Tier = 'minimal' | 'low' | 'high'
+/** ASRA's two dose classes: what the dose is, whatever it is prescribed for. */
+export type DoseClass = 'high' | 'low'
+/** Spinal/epidural or lumbar puncture, or a deep plexus/peripheral block; with or without a catheter. */
+export type BlockKind = 'none' | 'single' | 'catheter' | 'plexus' | 'plexus-catheter'
 
 export interface PeriopResult {
   agent?: DoacAgent
@@ -132,21 +167,33 @@ export interface PeriopResult {
    * - `missing`: an input the hours depend on is blank.
    * - `no-hours`: the sources give no interval for this patient (CrCl <15,
    *   dialysis, dabigatran below 30).
-   * - `timed`: hours from the tier (and neuraxial rules).
+   * - `timed`: hours from the tier (and the block's rules).
    * - `ablation`: EHRA Figure 16's own plan.
    * - `emergency`: Figure 12; no interval.
    */
   state: 'missing' | 'no-hours' | 'timed' | 'ablation' | 'emergency'
   /** The tier the hours were read at (neuraxial makes it high). */
   tier?: Tier
-  /** The minimum interval between the last dose and the procedure. */
+  /** ASRA's dose class of the prescription; a blank where it is ambiguous is read as high. */
+  doseClass?: DoseClass
+  /**
+   * The interval between the last dose and the procedure: a minimum to stop
+   * for (`timed`, or any block), or the trough the last scheduled dose is
+   * checked against (AF ablation, minor risk).
+   */
   holdHours?: number
+  /** True where `holdHours` is a trough to check, not a minimum to stop for: no dose is skipped. */
+  troughOnly?: boolean
   /** Where the interval came from, and what the label says beside it. */
   basis: PeriopLine[]
-  /** The start (`surgery_at`, the neuraxial puncture when there is one) less `holdHours`: the latest a last dose may be taken. */
+  /** What the prescription itself calls for first: a VTE loading dose, a prophylactic dose. */
+  cautions: PeriopLine[]
+  /** The start (`surgery_at`, the puncture when there is one) less `holdHours`: the latest a last dose may be taken. */
   lastDoseBy?: Date
   /** The last scheduled dose to take, from the patient's own dose times. */
   lastDose?: Date
+  /** Hours from `lastDose` to the start. */
+  hoursFromLastDose?: number
   /** Scheduled doses after `lastDose`, up to and including the start. */
   skippedBefore: Date[]
   resume: {
@@ -166,9 +213,9 @@ export interface PeriopResult {
 }
 
 export type PeriopInputKey =
-  | 'regimen' | 'age' | 'sex' | 'weight' | 'scr' | 'crcl_manual' | 'dialysis'
+  | 'regimen' | 'dose_intent' | 'age' | 'sex' | 'weight' | 'scr' | 'crcl_manual' | 'dialysis'
   | 'procedure_kind' | 'neuraxial' | 'surgery_at' | 'surgery_end_at' | 'dose_time_1' | 'dose_time_2'
-  | 'haemostasis' | 'catheter_removed_at' | 'traumatic_puncture' | 'renal_reliable' | 'hypertension' | 'antiplatelet'
+  | 'haemostasis' | 'catheter_removed_at' | 'traumatic_puncture'
 
 /** 「2026-11-03T08:00」 as local time; undefined for anything else. */
 export function parseLocalDateTime(value: string | undefined): Date | undefined {
@@ -219,12 +266,8 @@ export function ehraHours(agent: DoacAgent, crcl: number): [number, number] | un
 const G = GUIDELINE_CITES
 const t = (zh: string, en: string): L => ({ zh, en })
 const line = (text: L, ...cites: AnyCite[]): PeriopLine => ({ text, cites })
+const hoursText = (hours: number) => (Number.isInteger(hours) ? String(hours) : hours.toFixed(1))
 
-const ASRA_XA: Record<Exclude<DoacAgent, 'dabigatran'>, { hold: GuidelineCite; level: GuidelineCite }> = {
-  apixaban: { hold: G.asraApixaban, level: G.asraApixabanLevel },
-  rivaroxaban: { hold: G.asraRivaroxaban, level: G.asraRivaroxabanLevel },
-  edoxaban: { hold: G.asraEdoxaban, level: G.asraEdoxabanLevel },
-}
 const ANTI_XA_LABEL: Record<Exclude<DoacAgent, 'dabigatran'>, LabelCite> = {
   apixaban: CITES.apixabanAntiXa,
   rivaroxaban: CITES.rivaroxabanAntiXa,
@@ -235,6 +278,25 @@ const RESTART_LABEL: Record<DoacAgent, LabelCite> = {
   rivaroxaban: CITES.rivaroxabanRestart,
   edoxaban: CITES.edoxabanRestart,
   dabigatran: CITES.dabigatranRestart,
+}
+
+/** The regimens of a VTE loading phase (apixaban 7 days, rivaroxaban 21 days). */
+const LOADING = new Set(['apixaban:10:2', 'rivaroxaban:15:2'])
+
+/**
+ * ASRA's dose class (its Table 1). Every once-daily dabigatran and
+ * rivaroxaban 10 mg are prophylaxis (low); apixaban 2.5 mg bid is low for
+ * prophylaxis or extended VTE prevention but high as NVAF's reduced dose, so
+ * it is asked. Everything else is a therapeutic (high) dose.
+ */
+export function asraDoseClass(regimenValue: string | undefined, intent: string | undefined): { doseClass: DoseClass; ambiguous: boolean } {
+  const regimen = parseRegimen(regimenValue)
+  if (!regimen) return { doseClass: 'high', ambiguous: false }
+  if ((regimen.agent === 'dabigatran' && regimen.perDay === 1) || (regimen.agent === 'rivaroxaban' && regimen.mg === 10)) return { doseClass: 'low', ambiguous: false }
+  if (regimen.agent === 'apixaban' && regimen.mg === 2.5) {
+    return intent === 'low' ? { doseClass: 'low', ambiguous: false } : { doseClass: 'high', ambiguous: intent !== 'high' }
+  }
+  return { doseClass: 'high', ambiguous: false }
 }
 
 /** What each SmPC itself says beside the EHRA hours; shown, never the deciding number. */
@@ -253,47 +315,63 @@ function labelInterval(agent: DoacAgent, tier: Exclude<Tier, 'minimal'>, crcl: n
   )
 }
 
-/** ASRA's neuraxial interval and the reason for it. */
-function asraHours(agent: DoacAgent, crcl: number, values: CalcValues): { hours: number; lines: PeriopLine[] } {
-  if (agent !== 'dabigatran') {
-    return { hours: 72, lines: [line(t('神經軸阻斷前停 72 小時（ASRA）', '72 h before neuraxial block (ASRA)'), ASRA_XA[agent].hold)] }
+interface AsraRule {
+  /** Hours before the block; undefined where ASRA advises against it (dabigatran CrCl <30). */
+  hours?: number
+  hold: GuidelineCite
+  /** Hours from needle placement or catheter removal to the first dose. */
+  restartHours: 6 | 24
+  restart: GuidelineCite
+  level: GuidelineCite
+  inSitu: GuidelineCite
+}
+
+/** ASRA 2025's block rules for one agent at one dose class. */
+function asraRule(agent: DoacAgent, doseClass: DoseClass, crcl: number): AsraRule {
+  if (agent === 'apixaban') {
+    return doseClass === 'high'
+      ? { hours: 72, hold: G.asraApixabanHigh, restartHours: 24, restart: G.asraApixabanHighRestart, level: G.asraApixabanHighLevel, inSitu: G.asraApixabanHighInSitu }
+      : { hours: 36, hold: G.asraApixabanLow, restartHours: 6, restart: G.asraApixabanLowRestart, level: G.asraApixabanHighLevel, inSitu: G.asraApixabanLowInSitu }
   }
-  const age = Number(values.age)
-  const reasons: L[] = []
-  if (values.renal_reliable !== 'yes') reasons.push(values.renal_reliable === 'no' ? t('腎功能未可靠評估', 'renal function not reliably determined') : t('腎功能是否可靠評估未填', 'whether renal function is reliable is unanswered'))
-  if (values.age === undefined || values.age === '' || !Number.isFinite(age)) reasons.push(t('年齡未填', 'age unanswered'))
-  else if (age > 65) reasons.push(t(`年齡 ${age} >65`, `age ${age} >65`))
-  for (const [key, zh, en] of [['hypertension', '高血壓', 'hypertension'], ['antiplatelet', '抗血小板藥', 'antiplatelet drug']] as const) {
-    if (values[key] === 'yes') reasons.push(t(zh, en))
-    else if (values[key] !== 'no') reasons.push(t(`${zh}未填`, `${en} unanswered`))
+  if (agent === 'rivaroxaban') {
+    return doseClass === 'high'
+      ? { hours: 72, hold: G.asraRivaroxabanHigh, restartHours: 24, restart: G.asraRivaroxabanHighRestart, level: G.asraRivaroxabanHighLevel, inSitu: G.asraRivaroxabanHighInSitu }
+      : { hours: crcl < 30 ? 30 : 24, hold: G.asraRivaroxabanLow, restartHours: 6, restart: G.asraRivaroxabanLowRestart, level: G.asraRivaroxabanHighLevel, inSitu: G.asraRivaroxabanLowInSitu }
   }
-  if (reasons.length) {
-    return {
-      hours: 120,
-      lines: [line(
-        t(`dabigatran 神經軸阻斷前停 120 小時（ASRA 預設；不分級，因為：${reasons.map((r) => r.zh).join('、')}）`, `Dabigatran: 120 h before neuraxial block (ASRA default; not graded because ${reasons.map((r) => r.en).join(', ')})`),
-        G.asraDabigatran, G.asraDabigatranGraded,
-      )],
-    }
+  if (agent === 'edoxaban') {
+    // ASRA has no low dose of edoxaban: every dose is read as high.
+    return { hours: 72, hold: G.asraEdoxabanHigh, restartHours: 24, restart: G.asraEdoxabanHighRestart, level: G.asraEdoxabanHighLevel, inSitu: G.asraEdoxabanHighInSitu }
   }
-  const [hours, ref] = crcl >= 80 ? [72, G.asraDabigatran80] : crcl >= 50 ? [96, G.asraDabigatran50] : [120, G.asraDabigatran30]
+  if (doseClass === 'low') {
+    return { hours: crcl < 30 ? undefined : 48, hold: crcl < 30 ? G.asraDabigatranBelow30 : G.asraDabigatranLow, restartHours: 6, restart: G.asraDabigatranLowRestart, level: G.asraDabigatranLevel, inSitu: G.asraDabigatranLowInSitu }
+  }
   return {
-    hours,
-    lines: [line(t(`dabigatran 神經軸阻斷前停 ${hours} 小時（腎功能已可靠評估、無出血風險因子，依 CrCl 分級）`, `Dabigatran: ${hours} h before neuraxial block (renal function reliable, no bleeding risk factor: graded by CrCl)`), G.asraDabigatranGraded, ref)],
+    hours: crcl >= 50 ? 72 : crcl >= 30 ? 120 : undefined,
+    hold: crcl >= 50 ? G.asraDabigatranHigh50 : crcl >= 30 ? G.asraDabigatranHigh30 : G.asraDabigatranBelow30,
+    restartHours: 24, restart: G.asraDabigatranHighRestart, level: G.asraDabigatranLevel, inSitu: G.asraDabigatranHighInSitu,
   }
 }
 
-/** The residual-level line: what a drug-calibrated assay can say, and that no level clears a patient. */
-function levelNote(agent: DoacAgent): PeriopLine {
-  if (agent === 'dabigatran') {
+/**
+ * The residual-level line. ASRA 2025 names <30 ng/mL (or anti-Xa ≤0.1 IU/mL)
+ * as acceptable before a block; it is quoted as written, beside ASRA's own
+ * remark that the threshold was never clinically validated and EHRA's that
+ * timing by level lacks prospective evidence. No result here clears a patient.
+ */
+function levelNote(agent: DoacAgent, block: boolean, doseClass: DoseClass, crcl: number | undefined): PeriopLine {
+  const assay = agent === 'dabigatran' ? t('dTT', 'dTT') : t(`以 ${agent} 校正的 anti-Xa`, `an anti-Xa assay calibrated to ${agent}`)
+  if (!block) {
     return line(
-      t('殘餘藥效：可用 dTT 或 ECT 估計 dabigatran 濃度；可接受的殘餘濃度未定，結果不代表可以手術或麻醉，由手術與麻醉團隊判斷。', 'Residual effect: dTT or ECT estimate the dabigatran level; no acceptable residual level is established, and a result does not clear the procedure or block — the surgical and anaesthetic team decides.'),
-      G.asraDabigatranLevel, G.ehraLevels,
+      t(`殘餘藥效：${assay.zh}可估計藥物濃度。依濃度調整停藥時間沒有前瞻性證據；計算機不據以判定可否處置，由手術與麻醉團隊判斷。`, `Residual effect: ${assay.en} estimates the drug level. Timing by level has no prospective evidence; nothing here clears the procedure — the surgical and anaesthetic team decides.`),
+      ...(agent === 'dabigatran' ? [] : [ANTI_XA_LABEL[agent]]), G.ehraLevels,
     )
   }
+  const level = asraRule(agent, doseClass, crcl ?? 60).level
   return line(
-    t(`殘餘藥效：以 ${agent} 校正的 anti-Xa 可估計藥物濃度（ng/mL，不是 heparin 的 IU/mL）；可接受的殘餘濃度未定，結果不代表可以手術或麻醉，由手術與麻醉團隊判斷。`, `Residual effect: an anti-Xa assay calibrated to ${agent} estimates the drug level (ng/mL, not heparin IU/mL); no acceptable residual level is established, and a result does not clear the procedure or block — the surgical and anaesthetic team decides.`),
-    ANTI_XA_LABEL[agent], ASRA_XA[agent].level, G.ehraLevels,
+    agent === 'dabigatran'
+      ? t('ASRA 2025：阻斷前殘餘 dabigatran 濃度 <30 ng/mL 為「可接受」（原文）。ASRA 註明此閾值未經臨床驗證，EHRA 指出依濃度調整停藥沒有前瞻性證據；計算機只列出原文，不據以判定可否處置，由麻醉與手術團隊判斷。', 'ASRA 2025: a residual dabigatran level <30 ng/mL is “acceptable” before a block (its words). ASRA notes the threshold was never clinically validated, and EHRA that timing by level lacks prospective evidence; this calculator quotes it and clears no one — the anaesthetic and surgical team decides.')
+      : t(`ASRA 2025：阻斷前殘餘 ${agent} 濃度 <30 ng/mL，或 anti-Xa 活性 ≤0.1 IU/mL，為「可接受」（原文）。ASRA 註明此閾值未經臨床驗證，EHRA 指出依濃度調整停藥沒有前瞻性證據；計算機只列出原文，不據以判定可否處置，由麻醉與手術團隊判斷。`, `ASRA 2025: a residual ${agent} level <30 ng/mL, or anti-Xa activity ≤0.1 IU/mL, is “acceptable” before a block (its words). ASRA notes the threshold was never clinically validated, and EHRA that timing by level lacks prospective evidence; this calculator quotes it and clears no one — the anaesthetic and surgical team decides.`),
+    level, G.asraThresholdUnvalidated, G.ehraLevels,
   )
 }
 
@@ -306,9 +384,9 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   const c = crcl?.value
   const regimen = parseRegimen(values.regimen)
   const kind = (values.procedure_kind ?? '') as ProcedureKind | ''
-  const neuraxial = values.neuraxial ?? ''
+  const block = (values.neuraxial ?? '') as BlockKind | ''
   const dialysis = values.dialysis ?? ''
-  const result: PeriopResult = { crcl, state: 'missing', basis: [], skippedBefore: [], resume: { lines: [], skippedAfter: [] }, notes: [], missing: [], pending: [] }
+  const result: PeriopResult = { crcl, state: 'missing', basis: [], cautions: [], skippedBefore: [], resume: { lines: [], skippedAfter: [] }, notes: [], missing: [], pending: [] }
   if (!regimen) result.missing.push('regimen')
   if (kind === '') result.missing.push('procedure_kind')
   if (!regimen) return result
@@ -316,25 +394,52 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   result.agent = agent
   result.perDay = regimen.perDay
 
+  // What the prescription itself calls for first.
+  const { doseClass, ambiguous } = asraDoseClass(values.regimen, values.dose_intent)
+  result.doseClass = doseClass
+  const loading = LOADING.has(values.regimen ?? '')
+  if (loading) {
+    result.cautions.push(line(
+      t('目前是急性 VTE 的起始劑量（apixaban 前 7 天、rivaroxaban 前 21 天）：擇期處置宜延後。EHRA 的停藥時數以 AF 的治療劑量為準；近 3 個月內的血栓事件是少數可討論橋接的情況，需多科討論。以下時數僅供參考。', 'This is an acute-VTE loading dose (apixaban days 1–7, rivaroxaban days 1–21): an elective procedure is better deferred. EHRA’s hours are for AF’s therapeutic dose; a thromboembolic event within 3 months is one of the few situations where bridging may be discussed, by a multidisciplinary team. The hours below are for reference only.'),
+      G.ehraRecentEvent, G.ehraFig14,
+    ))
+  } else if (doseClass === 'low') {
+    result.cautions.push(line(
+      t('目前是預防劑量（ASRA 的低劑量）：EHRA 的停藥時數以治療劑量為準，在此只是保守的上限；脊髓／硬膜外或深部阻斷依 ASRA 低劑量規則。', 'This is a prophylactic (ASRA low) dose: EHRA’s hours are for a therapeutic dose and are only a conservative ceiling here; spinal/epidural or deep blocks follow ASRA’s low-dose rules.'),
+      G.asraDoseNotIndication, G.ehraFig14,
+    ))
+  }
+  if (ambiguous) {
+    result.pending.push('dose_intent')
+    result.cautions.push(line(
+      t('apixaban 2.5 mg bid 在 NVAF 是減量的治療劑量（ASRA 高劑量），在 VTE 延長期或術後預防是低劑量；未填用途，以高劑量（較長間隔）計。', 'Apixaban 2.5 mg bid is NVAF’s reduced therapeutic dose (ASRA high) but a low dose for extended VTE prevention or post-operative prophylaxis; with the use unanswered, the high-dose (longer) intervals apply.'),
+      G.asraDoseNotIndication,
+    ))
+  }
+
   if (kind === 'emergency') {
     result.state = 'emergency'
     result.notes.push(line(t('立即停藥。', 'Stop the DOAC now.'), G.ehraEmergency))
     result.notes.push(line(t('抽完整凝血檢查（PT、aPTT、anti-FXa、dTT…）。可安全延後 12–24 小時就延後並重抽；不能延後才考慮逆轉（若必要、可取得、已核准）。', 'Draw a full coagulation panel (PT, aPTT, anti-FXa, dTT…). If 12–24 h of delay is safe, delay and repeat it; reversal only if surgery cannot wait (if necessary, available and approved).'), G.ehraFig12))
     if (agent === 'dabigatran') {
       result.notes.push(line(t('需要快速逆轉時：idarucizumab；血液透析也可移除 dabigatran。', 'When rapid reversal is needed: idarucizumab; haemodialysis also removes dabigatran.'), CITES.dabigatranIdarucizumab, CITES.dabigatranDialysable))
+      result.notes.push(line(t('給 idarucizumab 後 24 小時，若臨床穩定且已止血，可再開始 dabigatran。', 'Dabigatran may be restarted 24 h after idarucizumab once the patient is stable and haemostasis is achieved.'), CITES.dabigatranIdarucizumabRestart))
     } else {
       result.notes.push(line(
         t('Xa 抑制劑：andexanet 不作為術前通用逆轉——EU 只核准用於危及生命或無法控制的出血，ANNEXA-4 也未納入緊急手術病人。是否給止血製劑依院內流程。', 'FXa inhibitors: andexanet is not a general pre-operative reversal — EU approval covers life-threatening or uncontrolled bleeding only, and ANNEXA-4 enrolled no emergency surgery. Haemostatic agents per hospital protocol.'),
         G.ehraAndexanet, G.ehraAnnexa,
       ))
     }
-    result.notes.push(levelNote(agent))
+    result.notes.push(levelNote(agent, false, doseClass, c))
     return result
   }
 
-  if (neuraxial === '') result.missing.push('neuraxial')
+  if (block === '') result.missing.push('neuraxial')
   if (c === undefined) result.missing.push('CrCl')
   if (dialysis === '') result.missing.push('dialysis')
+  const blockUsed = block !== '' && block !== 'none'
+  const neuraxialUsed = block === 'single' || block === 'catheter'
+  const catheter = block === 'catheter' || block === 'plexus-catheter'
 
   // No interval exists for these; the 15–29 row is not borrowed.
   const noIndication = dialysis === 'yes' || (c !== undefined && c < 15)
@@ -345,18 +450,17 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     result.basis.push(noIndication
       ? line(t(`${dialysis === 'yes' ? '透析' : `CrCl ${c!.toFixed(1)} <15`}：EHRA 無正式停藥時數（No official indication for use），需個別評估，建議會診。`, `${dialysis === 'yes' ? 'Dialysis' : `CrCl ${c!.toFixed(1)} <15`}: EHRA gives no interval (no official indication for use); individual assessment, consult.`), G.ehraFig14)
       : line(t(`dabigatran CrCl ${c!.toFixed(1)} <30：仿單禁忌，EHRA 列為 Not indicated，不給停藥時數。`, `Dabigatran, CrCl ${c!.toFixed(1)} <30: contraindicated in the label, not indicated in EHRA; no interval given.`), CITES.dabigatranRenal, G.ehraFig14))
-    if (agent === 'dabigatran' && c !== undefined && c < 30 && neuraxial !== 'none') {
-      result.basis.push(line(neuraxial === ''
-        ? t('若有脊髓／硬膜外麻醉：ASRA 建議 CrCl <30 不做神經軸阻斷。', 'If spinal/epidural anaesthesia is planned: ASRA advises no neuraxial block at CrCl <30.')
-        : t('ASRA：CrCl <30 建議不做神經軸阻斷。', 'ASRA: no neuraxial block at CrCl <30.'), G.asraDabigatranBelow30))
+    if (agent === 'dabigatran' && c !== undefined && c < 30 && block !== 'none') {
+      result.basis.push(line(block === ''
+        ? t('若有脊髓／硬膜外或深部神經叢／周邊阻斷：ASRA 2025 建議 CrCl <30 不做，除非已測 dabigatran 濃度且 <30 ng/mL。', 'If a spinal/epidural or deep plexus/peripheral block is planned: ASRA 2025 advises against it at CrCl <30 unless a dabigatran level is obtained and <30 ng/mL.')
+        : t('ASRA 2025：CrCl <30 建議不做神經軸或深部阻斷，除非已測 dabigatran 濃度且 <30 ng/mL。', 'ASRA 2025: no neuraxial or deep block at CrCl <30 unless a dabigatran level is obtained and <30 ng/mL.'), G.asraDabigatranBelow30))
     }
-    result.notes.push(levelNote(agent), line(t('不以 LMWH／UFH 橋接。', 'No LMWH/UFH bridging.'), G.ehraBridging))
+    result.notes.push(levelNote(agent, blockUsed, doseClass, c), line(t('不以 LMWH／UFH 橋接。', 'No LMWH/UFH bridging.'), G.ehraBridging))
     return result
   }
   if (result.missing.length) return result
 
   const crclValue = c!
-  const neuraxialUsed = neuraxial !== 'none'
   let hours: number
   let tier: Tier | undefined
   if (kind === 'af-ablation') {
@@ -373,7 +477,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     }
     if (tier === 'minimal') {
       hours = regimen.perDay === 2 ? 12 : 24
-      result.basis.push(line(t(`極低風險：在谷底濃度做，最後一劑後 ${hours} 小時；不停藥超過一次給藥間隔。`, `Minor risk: at trough, ${hours} h after the last dose; no interruption beyond one dosing interval.`), G.ehraFig14))
+      result.basis.push(line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時），當天或最晚隔天恢復；不跳過劑量。`, `Minor risk: at trough (about ${hours} h after the last dose), resume the same or next day; no dose skipped.`), G.ehraFig14))
     } else {
       const pair = ehraHours(agent, crclValue)!
       hours = tier === 'high' ? pair[1] : pair[0]
@@ -382,24 +486,42 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     }
     result.tier = tier
   }
-  if (neuraxialUsed) {
-    const neuro = asraHours(agent, crclValue, values)
-    result.basis.push(...neuro.lines)
-    if (neuro.hours > hours) {
-      result.basis.push(line(t(`取較長者：${neuro.hours} 小時（ASRA）`, `The longer applies: ${neuro.hours} h (ASRA)`)))
-      hours = neuro.hours
+
+  // A block: ASRA 2025 by dose class, the longer of it and the tier's.
+  const rule = blockUsed ? asraRule(agent, doseClass, crclValue) : undefined
+  if (rule) {
+    const what = neuraxialUsed ? t('脊髓／硬膜外麻醉或腰椎穿刺', 'spinal/epidural or lumbar puncture') : t('深部神經叢／周邊神經阻斷', 'deep plexus/peripheral block')
+    const dose = doseClass === 'high' ? t('高劑量（治療）', 'high (therapeutic) dose') : t('低劑量（預防）', 'low (prophylactic) dose')
+    if (rule.hours === undefined) {
+      result.basis.push(line(t(`ASRA 2025：${what.zh}在 CrCl <30 時建議不做，除非已測 dabigatran 濃度且 <30 ng/mL。`, `ASRA 2025: no ${what.en} at CrCl <30 unless a dabigatran level is obtained and <30 ng/mL.`), rule.hold))
+    } else {
+      result.basis.push(line(t(`ASRA 2025，${dose.zh}：${what.zh}前停 ≥${rule.hours} 小時`, `ASRA 2025, ${dose.en}: ≥${rule.hours} h before the ${what.en}`), rule.hold, ...(agent === 'edoxaban' && doseClass === 'low' ? [G.asraEdoxabanNoLow] : [])))
+      if (rule.hours > hours) {
+        result.basis.push(line(t(`取較長者：${rule.hours} 小時（ASRA）`, `The longer applies: ${rule.hours} h (ASRA)`)))
+        hours = rule.hours
+      }
     }
   }
   result.holdHours = hours
+  // AF ablation and a minor-risk procedure keep the last scheduled dose: the
+  // hours are the trough it is checked against, not a minimum to stop for.
+  const troughOnly = !blockUsed && (result.state === 'ablation' || tier === 'minimal')
+  if (troughOnly) result.troughOnly = true
 
-  if (result.state === 'timed') {
+  if (result.state === 'timed' && !troughOnly) {
     const weight = Number(values.weight)
     result.notes.push(line(
       t(`考慮再延長（不自動加入）：有累積風險（腎功能不全、高齡、併用藥）時可提早 12–24 小時停藥；體重 <50 kg 或顯著交互作用時考慮多停 24 小時${values.weight && weight < 50 ? `。本例體重 ${weight} kg <50。` : '。'}`, `Consider longer (not added automatically): with a risk of accumulation (renal insufficiency, older age, co-medication) stop 12–24 h earlier; with body weight <50 kg or significant interactions consider +24 h${values.weight && weight < 50 ? `. Weight here ${weight} kg <50.` : '.'}`),
       G.ehraFig14, G.ehraFig15,
     ))
   }
-  result.notes.push(levelNote(agent), line(t('不以 LMWH／UFH 橋接。', 'No LMWH/UFH bridging.'), G.ehraBridging))
+  if (rule && catheter && rule.hours !== undefined) {
+    result.notes.push(line(
+      t(`留置導管期間若意外給了藥：拔管前需停藥 ≥${rule.hours} 小時，或殘餘濃度 <30 ng/mL${agent === 'dabigatran' ? '' : '（或 anti-Xa ≤0.1 IU/mL）'}（ASRA 2025 原文）。`, `If a dose is given unexpectedly with the catheter in place: withhold ≥${rule.hours} h before removing it, or a residual level <30 ng/mL${agent === 'dabigatran' ? '' : ' (or anti-Xa ≤0.1 IU/mL)'} (ASRA 2025).`),
+      rule.inSitu,
+    ))
+  }
+  result.notes.push(levelNote(agent, blockUsed, doseClass, crclValue), line(t('不以 LMWH／UFH 橋接。', 'No LMWH/UFH bridging.'), G.ehraBridging))
 
   // Clock times: the start (the puncture, if any) for the interval before, the
   // end for the interval after, and the patient's own dose times.
@@ -413,12 +535,34 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   const minutes = timeKeys.map((key) => parseClock(values[key]))
   const known = minutes.every((m): m is number => m !== undefined)
   if (!known) result.pending.push(...timeKeys.filter((_, index) => minutes[index] === undefined))
-  if (surgery) {
+  if (surgery && troughOnly) {
+    if (known) {
+      // The last scheduled dose before the start, whatever the interval.
+      const before = scheduledDoses(minutes, addHours(surgery, -48), surgery).filter((at) => at.getTime() < surgery.getTime())
+      const last = before[before.length - 1]
+      if (last) {
+        result.lastDose = last
+        const gap = (surgery.getTime() - last.getTime()) / HOUR
+        result.hoursFromLastDose = gap
+        if (gap < hours) {
+          result.cautions.push(line(
+            result.state === 'ablation'
+              ? t(`最後一劑 ${formatLocal(last)} 距消融 ${hoursText(gap)} 小時，短於 EHRA 預設的 12 小時：可與團隊確認是否照常（EHRA 也接受不中斷），或調整服藥或消融時間；計算機不替你跳過這一劑。`, `The last dose at ${formatLocal(last)} is ${hoursText(gap)} h before the ablation, under EHRA’s default 12 h: confirm with the team whether to keep it (EHRA also accepts no interruption), or move the dose or the procedure; the calculator does not skip it for you.`)
+              : t(`最後一劑 ${formatLocal(last)} 距處置 ${hoursText(gap)} 小時，略短於谷底的 ${hours} 小時：可將處置延後 ${hoursText(hours - gap)} 小時，或調整服藥時間；計算機不替你跳過這一劑。`, `The last dose at ${formatLocal(last)} is ${hoursText(gap)} h before the procedure, short of the ${hours} h trough: move the procedure ${hoursText(hours - gap)} h later, or the dose time; the calculator does not skip it for you.`),
+            result.state === 'ablation' ? G.ehraFig16 : G.ehraFig14,
+          ))
+        }
+      }
+    }
+  } else if (surgery) {
     result.lastDoseBy = addHours(surgery, -hours)
     if (known) {
       const before = scheduledDoses(minutes, addHours(result.lastDoseBy, -48), surgery)
       const last = [...before].reverse().find((at) => at.getTime() <= result.lastDoseBy!.getTime())
-      if (last) result.lastDose = last
+      if (last) {
+        result.lastDose = last
+        result.hoursFromLastDose = (surgery.getTime() - last.getTime()) / HOUR
+      }
       result.skippedBefore = before.filter((at) => at.getTime() > (last ?? result.lastDoseBy!).getTime())
     }
   }
@@ -432,43 +576,53 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     restart.push({
       at: ended ? addHours(ended, after) : undefined,
       line: line(t(
-        tier === 'minimal' ? '極低風險：手術結束後 ≥6 小時恢復' : tier === 'low' ? '低風險：手術結束後 24 小時恢復全劑量' : '高風險：手術結束後 48（–72）小時恢復全劑量；其間依院內流程考慮預防劑量 heparin',
-        tier === 'minimal' ? 'Minor risk: restart ≥6 h after the end' : tier === 'low' ? 'Low risk: full dose 24 h after the end' : 'High risk: full dose 48 (–72) h after the end; prophylactic-dose heparin per hospital protocol meanwhile',
+        tier === 'minimal' ? '極低風險：手術結束後 ≥6 小時恢復' : tier === 'low' ? '低風險：手術結束後 24 小時恢復' : '高風險：手術結束後 48（–72）小時恢復；其間依院內流程考慮預防劑量 heparin',
+        tier === 'minimal' ? 'Minor risk: restart ≥6 h after the end' : tier === 'low' ? 'Low risk: restart 24 h after the end' : 'High risk: restart 48 (–72) h after the end; prophylactic-dose heparin per hospital protocol meanwhile',
       ), G.ehraFig14, G.ehraFig15),
       key: ended ? undefined : 'surgery_end_at',
     })
     if (endBeforeStart) restart.push({ line: line(t('結束時刻早於開始時刻：請更正，未更正前不算恢復時間', 'The end is before the start: correct it; no restart time until then')), key: 'surgery_end_at' })
   }
-  if (neuraxial === 'catheter') {
-    const removedAt = parseLocalDateTime(values.catheter_removed_at)
-    const removedBeforeStart = !!(removedAt && surgery && removedAt.getTime() < surgery.getTime())
-    const removed = removedBeforeStart ? undefined : removedAt
-    if (removedBeforeStart) restart.push({ line: line(t('拔管時刻早於開始時刻：請更正', 'Catheter removal is before the start: correct it')), key: 'catheter_removed_at' })
-    const labelCatheter = agent === 'apixaban' ? [t('仿單 ≥5 小時', 'label ≥5 h'), CITES.apixabanCatheter] as const
-      : agent === 'rivaroxaban' ? [t('仿單 ≥6 小時', 'label ≥6 h'), CITES.rivaroxabanCatheter] as const
-        : agent === 'dabigatran' ? [t('仿單 ≥2 小時', 'label ≥2 h'), CITES.dabigatranCatheter] as const
-          : [t('仿單未述', 'label silent'), undefined] as const
+  if (rule) {
+    // ASRA: the first dose waits after needle placement (the start) and after catheter removal.
+    const dose = doseClass === 'high' ? t('高劑量', 'high dose') : t('低劑量', 'low dose')
     restart.push({
-      at: removed ? addHours(removed, 6) : undefined,
-      line: line(
-        t(`拔除神經軸導管後 ≥6 小時才給下一劑（ASRA；${labelCatheter[0].zh}，取 6 小時）`, `Next dose ≥6 h after neuraxial catheter removal (ASRA; ${labelCatheter[0].en}; 6 h applies)`),
-        agent === 'dabigatran' ? G.asraDabigatranCatheter : G.asraXaCatheter, ...(labelCatheter[1] ? [labelCatheter[1]] : []),
-      ),
-      key: removed ? undefined : 'catheter_removed_at',
+      at: surgery ? addHours(surgery, rule.restartHours) : undefined,
+      line: line(t(`ASRA 2025（${dose.zh}）：穿刺後 ≥${rule.restartHours} 小時才給第一劑`, `ASRA 2025 (${dose.en}): first dose ≥${rule.restartHours} h after needle placement`), rule.restart),
+      key: surgery ? undefined : 'surgery_at',
     })
+    if (catheter) {
+      const removedAt = parseLocalDateTime(values.catheter_removed_at)
+      const removedBeforeStart = !!(removedAt && surgery && removedAt.getTime() < surgery.getTime())
+      const removed = removedBeforeStart ? undefined : removedAt
+      if (removedBeforeStart) restart.push({ line: line(t('拔管時刻早於開始時刻：請更正', 'Catheter removal is before the start: correct it')), key: 'catheter_removed_at' })
+      const labelCatheter = agent === 'apixaban' ? [t('仿單 ≥5 小時', 'label ≥5 h'), CITES.apixabanCatheter] as const
+        : agent === 'rivaroxaban' ? [t('仿單 ≥6 小時', 'label ≥6 h'), CITES.rivaroxabanCatheter] as const
+          : agent === 'dabigatran' ? [t('仿單 ≥2 小時', 'label ≥2 h'), CITES.dabigatranCatheter] as const
+            : [t('仿單未述', 'label silent'), undefined] as const
+      restart.push({
+        at: removed ? addHours(removed, rule.restartHours) : undefined,
+        line: line(
+          t(`拔管後 ≥${rule.restartHours} 小時才給下一劑（ASRA 2025，${dose.zh}；${labelCatheter[0].zh}，取較長的 ${rule.restartHours} 小時）`, `Next dose ≥${rule.restartHours} h after catheter removal (ASRA 2025, ${dose.en}; ${labelCatheter[0].en}; the longer ${rule.restartHours} h applies)`),
+          rule.restart, ...(labelCatheter[1] ? [labelCatheter[1]] : []),
+        ),
+        key: removed ? undefined : 'catheter_removed_at',
+      })
+    }
   }
   if (neuraxialUsed) {
     const traumatic = values.traumatic_puncture ?? ''
-    if (traumatic === '') restart.push({ line: line(t('穿刺是否出血未填：若出血，延後 24 小時', 'Traumatic puncture unanswered: if so, delay 24 h'), CITES.rivaroxabanTraumatic), key: 'traumatic_puncture' })
-    else if (traumatic === 'yes') {
-      restart.push({
-        at: surgery ? addHours(surgery, 24) : undefined,
-        line: line(t(
-          agent === 'rivaroxaban' ? '穿刺出血：自穿刺起延後 24 小時' : '穿刺出血：自穿刺起延後 24 小時（rivaroxaban 仿單；本藥仿單未述，請與麻醉科確認）',
-          agent === 'rivaroxaban' ? 'Traumatic puncture: delay 24 h from the puncture' : 'Traumatic puncture: delay 24 h from the puncture (rivaroxaban label; this agent’s label is silent — confirm with anaesthesia)',
-        ), CITES.rivaroxabanTraumatic),
-        key: surgery ? undefined : 'surgery_at',
-      })
+    const delay = agent === 'apixaban' ? 48 : agent === 'rivaroxaban' ? 24 : undefined
+    if (traumatic === '') {
+      restart.push({ line: line(t('穿刺是否出血未填：若出血，apixaban 延後 48 小時、rivaroxaban 延後 24 小時', 'Traumatic puncture unanswered: if so, apixaban waits 48 h and rivaroxaban 24 h'), G.asraTraumatic), key: 'traumatic_puncture' })
+    } else if (traumatic === 'yes') {
+      restart.push(delay === undefined
+        ? { line: line(t(`穿刺出血：${agent} 的仿單與 ASRA 都沒有給延後時數，請與麻醉科確認後再定恢復時間`, `Traumatic puncture: neither the ${agent} label nor ASRA gives a delay; agree the restart with anaesthesia`), G.asraTraumaticNone), key: 'traumatic_puncture' }
+        : {
+          at: surgery ? addHours(surgery, delay) : undefined,
+          line: line(t(`穿刺出血：自穿刺起延後 ${delay} 小時`, `Traumatic puncture: delay ${delay} h from the puncture`), G.asraTraumatic, ...(agent === 'rivaroxaban' ? [CITES.rivaroxabanTraumatic] : [])),
+          key: surgery ? undefined : 'surgery_at',
+        })
     }
   }
   const haemostasis = values.haemostasis ?? ''
@@ -478,6 +632,14 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       RESTART_LABEL[agent],
     ),
     key: haemostasis === 'no' ? 'haemostasis' : undefined,
+  })
+  // What is restarted depends on the prescription.
+  restart.push({
+    line: loading
+      ? line(t('恢復的劑量依 VTE 治療進度決定（起始期是否已完成），不自動接回起始劑量。', 'The dose restarted depends on where VTE treatment stands (whether the loading phase is complete); the loading dose is not resumed automatically.'))
+      : doseClass === 'low'
+        ? line(t('恢復時給回預防劑量；療程依原本的預防計畫。', 'Restart the prophylactic dose; the course follows the original prophylaxis plan.'))
+        : line(t('恢復時給回術前的治療劑量，不需起始負荷。', 'Restart the pre-procedure therapeutic dose; no loading dose.')),
   })
   result.resume.lines = restart.map((item) => item.line)
   const open = restart.filter((item) => item.key).map((item) => item.key!)
@@ -499,8 +661,9 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
 /** How an input the plan still needs is named where it is asked for. */
 export const PERIOP_FIELD_LABELS: Record<string, L> = {
   regimen: { zh: '目前 DOAC 處方', en: 'current DOAC' },
+  dose_intent: { zh: '劑量用途（治療或預防）', en: 'dose use (therapeutic or prophylactic)' },
   procedure_kind: { zh: '處置分級', en: 'procedure tier' },
-  neuraxial: { zh: '脊髓／硬膜外麻醉', en: 'neuraxial anaesthesia' },
+  neuraxial: { zh: '脊髓／硬膜外或深部阻斷', en: 'neuraxial or deep block' },
   CrCl: { zh: 'CrCl（年齡、性別、體重、Cr）', en: 'CrCl (age, sex, weight, creatinine)' },
   dialysis: { zh: '透析', en: 'dialysis' },
   surgery_at: { zh: '開始時刻（穿刺）', en: 'start (puncture) time' },

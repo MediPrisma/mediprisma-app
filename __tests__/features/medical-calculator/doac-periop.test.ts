@@ -18,14 +18,14 @@ const base: CalcValues = {
 }
 const plan = (values: CalcValues = {}) => calculatePeriop({ ...base, ...values })
 const times = (dates: Date[]) => dates.map(formatLocal)
-const allCites = (result: PeriopResult) => [...result.basis, ...result.resume.lines, ...result.notes].flatMap((line) => line.cites)
-const allText = (result: PeriopResult) => [...result.basis, ...result.resume.lines, ...result.notes].map((line) => `${line.text.zh} ${line.text.en}`).join('\n')
+const allCites = (result: PeriopResult) => [...result.cautions, ...result.basis, ...result.resume.lines, ...result.notes].flatMap((line) => line.cites)
+const allText = (result: PeriopResult) => [...result.cautions, ...result.basis, ...result.resume.lines, ...result.notes].map((line) => `${line.text.zh} ${line.text.en}`).join('\n')
 
 describe('the specification’s example: apixaban 5 mg bid, CrCl 62, total knee replacement, spinal anaesthesia at 2026-11-03 08:00, ending 10:00', () => {
   const result = plan({ neuraxial: 'single' })
   it('72 h — ASRA’s neuraxial interval outranks EHRA’s 48 h', () => {
     expect(result).toMatchObject({ state: 'timed', tier: 'high', holdHours: 72 })
-    expect(allCites(result)).toEqual(expect.arrayContaining([GUIDELINE_CITES.ehraFig14, GUIDELINE_CITES.asraApixaban]))
+    expect(allCites(result)).toEqual(expect.arrayContaining([GUIDELINE_CITES.ehraFig14, GUIDELINE_CITES.asraApixabanHigh]))
   })
   it('last dose 10-31 08:00; six doses skipped, from 10-31 20:00 to the 11-03 08:00 dose at the procedure time', () => {
     expect(formatLocal(result.lastDoseBy!)).toBe('10-31 08:00')
@@ -90,30 +90,72 @@ describe('no interval where the sources give none', () => {
   })
 })
 
-describe('neuraxial (ASRA 2018)', () => {
-  const dabigatran = { regimen: 'dabigatran:150:2', crcl_manual: '85', neuraxial: 'single' }
-  it('dabigatran defaults to 120 h while any risk factor is unanswered', () => {
-    const result = plan(dabigatran)
-    expect(result.holdHours).toBe(120)
-    expect(allText(result)).toContain('ASRA 預設')
+describe('neuraxial and deep blocks (ASRA 2025, fifth edition)', () => {
+  it('dabigatran high dose: 72 h at CrCl ≥50, 120 h at 30–49 — by CrCl alone', () => {
+    const dabigatran = { regimen: 'dabigatran:150:2', neuraxial: 'single' }
+    expect(plan({ ...dabigatran, crcl_manual: '85' }).holdHours).toBe(72)
+    expect(plan({ ...dabigatran, crcl_manual: '50' }).holdHours).toBe(72)
+    expect(plan({ ...dabigatran, crcl_manual: '49.9' }).holdHours).toBe(120)
+    expect(allCites(plan({ ...dabigatran, crcl_manual: '40' }))).toContain(GUIDELINE_CITES.asraDabigatranHigh30)
   })
-  it('graded only with reliable renal function and no risk factor: 64 y → 72 h; 66 y → 120 h', () => {
-    const graded = { ...dabigatran, renal_reliable: 'yes', hypertension: 'no', antiplatelet: 'no' }
-    expect(plan({ ...graded, age: '64' }).holdHours).toBe(72)
-    expect(plan({ ...graded, age: '66' }).holdHours).toBe(120)
-    expect(plan({ ...graded, age: '64', hypertension: 'yes' }).holdHours).toBe(120)
-    expect(plan({ ...graded, age: '64', crcl_manual: '60' }).holdHours).toBe(96)
+  it('low doses: apixaban 36 h, rivaroxaban 24 h (30 h at CrCl <30), dabigatran 48 h — the longer of it and EHRA’s', () => {
+    // A low-risk procedure under a deep plexus block: EHRA 24 h, ASRA low dose decides.
+    const plexus = { procedure_kind: 'low', neuraxial: 'plexus' }
+    expect(plan({ ...plexus, regimen: 'apixaban:2.5:2', dose_intent: 'low' }).holdHours).toBe(36)
+    expect(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '' }).holdHours).toBe(24)
+    expect(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '', crcl_manual: '25' }).holdHours).toBe(36)
+    expect(allCites(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '', crcl_manual: '25' }))).toContain(GUIDELINE_CITES.asraRivaroxabanLow)
+    expect(plan({ ...plexus, regimen: 'dabigatran:220:1', dose_time_2: '', crcl_manual: '85' }).holdHours).toBe(48)
+  })
+  it('apixaban 2.5 mg bid: its use unanswered reads as the high dose (72 h) and is asked', () => {
+    const result = plan({ regimen: 'apixaban:2.5:2', neuraxial: 'plexus', procedure_kind: 'low' })
+    expect(result).toMatchObject({ doseClass: 'high', holdHours: 72 })
+    expect(result.pending).toContain('dose_intent')
+  })
+  it('a deep plexus/peripheral block takes ASRA’s interval but not EHRA’s neuraxial tier', () => {
+    const result = plan({ procedure_kind: 'low', neuraxial: 'plexus' })
+    expect(result).toMatchObject({ tier: 'low', holdHours: 72 })
+    expect(allCites(result)).toContain(GUIDELINE_CITES.asraApixabanHigh)
   })
   it('a minor-risk procedure does not skip the neuraxial rules: high tier, 72 h', () => {
     const result = plan({ procedure_kind: 'minimal', neuraxial: 'single' })
     expect(result).toMatchObject({ tier: 'high', holdHours: 72 })
     expect(allCites(result)).toContain(GUIDELINE_CITES.ehraTable12Neuraxial)
   })
-  it('minor risk without neuraxial: one dosing interval — 12 h bid, 24 h qd; restart ≥6 h', () => {
-    expect(plan({ procedure_kind: 'minimal' }).holdHours).toBe(12)
-    const qd = plan({ procedure_kind: 'minimal', regimen: 'edoxaban:60:1', dose_time_2: '' })
-    expect(qd.holdHours).toBe(24)
-    expect(formatLocal(qd.resume.earliest!)).toBe('11-03 16:00')
+  it('a catheter in place: the rule for a dose given unexpectedly is listed', () => {
+    expect(allCites(plan({ neuraxial: 'catheter' }))).toContain(GUIDELINE_CITES.asraApixabanHighInSitu)
+    expect(allText(plan({ neuraxial: 'catheter' }))).toContain('拔管前需停藥 ≥72 小時')
+  })
+})
+
+describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', () => {
+  it('rivaroxaban daily at 08:00, ablation at 19:00: the 08:00 dose is kept (11 h), not one more skipped (35 h)', () => {
+    const result = plan({ regimen: 'rivaroxaban:20:1', dose_time_1: '08:00', dose_time_2: '', procedure_kind: 'af-ablation', surgery_at: '2026-11-03T19:00' })
+    expect(result).toMatchObject({ state: 'ablation', troughOnly: true })
+    expect(formatLocal(result.lastDose!)).toBe('11-03 08:00')
+    expect(result.hoursFromLastDose).toBe(11)
+    expect(result.skippedBefore).toEqual([])
+    expect(result.lastDoseBy).toBeUndefined()
+    expect(result.cautions.map((c) => c.text.zh).join()).toContain('短於 EHRA 預設的 12 小時')
+  })
+  it('daily at 09:00, minor-risk procedure at 08:00: the day before’s 09:00 dose is last (23 h), not 47 h', () => {
+    const result = plan({ regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', procedure_kind: 'minimal' })
+    expect(formatLocal(result.lastDose!)).toBe('11-02 09:00')
+    expect(result.hoursFromLastDose).toBe(23)
+    expect(result.skippedBefore).toEqual([])
+    expect(result.cautions.map((c) => c.text.zh).join()).toContain('延後 1 小時')
+  })
+  it('bid 08:00/20:00, procedure at 07:30: the 20:00 dose is last (11.5 h)', () => {
+    const result = plan({ procedure_kind: 'minimal', surgery_at: '2026-11-03T07:30' })
+    expect(formatLocal(result.lastDose!)).toBe('11-02 20:00')
+    expect(result.hoursFromLastDose).toBe(11.5)
+    expect(result.skippedBefore).toEqual([])
+  })
+  it('a trough already reached needs no prompt: bid 08:00/20:00, procedure at 08:00 is 12 h after the 20:00 dose', () => {
+    const result = plan({ procedure_kind: 'minimal' })
+    expect(formatLocal(result.lastDose!)).toBe('11-02 20:00')
+    expect(result.hoursFromLastDose).toBe(12)
+    expect(result.cautions).toEqual([])
   })
 })
 
@@ -124,18 +166,32 @@ describe('restart: the latest condition', () => {
     expect(result.resume.earliest).toBeUndefined()
     expect(result.pending).toContain('catheter_removed_at')
   })
-  it('removed 11-04 10:00: high-risk 48 h is later (11-05 10:00); removed 11-05 06:00: removal + 6 h is (11-05 12:00)', () => {
+  it('a high dose waits 24 h after catheter removal (ASRA 2025): removed 11-04 10:00 → 11-05 10:00; removed 11-06 06:00 → 11-07 06:00 (#review 1)', () => {
     expect(formatLocal(plan({ ...catheter, catheter_removed_at: '2026-11-04T10:00' }).resume.earliest!)).toBe('11-05 10:00')
-    const late = plan({ ...catheter, catheter_removed_at: '2026-11-05T06:00' })
-    expect(formatLocal(late.resume.earliest!)).toBe('11-05 12:00')
-    expect(formatLocal(late.resume.firstDose!)).toBe('11-05 20:00')
-    expect(allCites(late)).toEqual(expect.arrayContaining([GUIDELINE_CITES.asraXaCatheter, CITES.apixabanCatheter]))
+    const late = plan({ ...catheter, catheter_removed_at: '2026-11-06T06:00' })
+    expect(formatLocal(late.resume.earliest!)).toBe('11-07 06:00')
+    expect(formatLocal(late.resume.firstDose!)).toBe('11-07 08:00')
+    expect(allCites(late)).toEqual(expect.arrayContaining([GUIDELINE_CITES.asraApixabanHighRestart, CITES.apixabanCatheter]))
   })
-  it('a traumatic puncture unanswered withholds the earliest time; answered yes, its 24 h is listed', () => {
+  it('a low dose waits 6 h after removal', () => {
+    const low = plan({ ...catheter, regimen: 'rivaroxaban:10:1', dose_time_1: '20:00', dose_time_2: '', catheter_removed_at: '2026-11-06T06:00' })
+    expect(formatLocal(low.resume.earliest!)).toBe('11-06 12:00')
+    expect(allCites(low)).toContain(GUIDELINE_CITES.asraRivaroxabanLowRestart)
+  })
+  it('a single shot: the first high dose waits 24 h after the puncture, beside the tier’s own interval', () => {
+    const quick = plan({ neuraxial: 'plexus', procedure_kind: 'minimal', surgery_end_at: '2026-11-03T08:30' })
+    // Minor risk restarts 6 h after the end (11-03 14:30); the block's 24 h from the puncture (11-04 08:00) is later.
+    expect(formatLocal(quick.resume.earliest!)).toBe('11-04 08:00')
+    expect(allCites(quick)).toContain(GUIDELINE_CITES.asraApixabanHighRestart)
+  })
+  it('a traumatic puncture: unanswered withholds the earliest time; apixaban waits 48 h, rivaroxaban 24 h, the others are agreed with anaesthesia', () => {
     expect(plan({ neuraxial: 'single', traumatic_puncture: '' }).resume.earliest).toBeUndefined()
-    const bloody = plan({ neuraxial: 'single', traumatic_puncture: 'yes' })
-    expect(allCites(bloody)).toContain(CITES.rivaroxabanTraumatic)
-    expect(formatLocal(bloody.resume.earliest!)).toBe('11-05 10:00')
+    const bloody = plan({ neuraxial: 'single', traumatic_puncture: 'yes', surgery_end_at: '2026-11-03T08:30', procedure_kind: 'low' })
+    expect(allCites(bloody)).toContain(GUIDELINE_CITES.asraTraumatic)
+    expect(formatLocal(bloody.resume.earliest!)).toBe('11-05 08:30')
+    const edo = plan({ neuraxial: 'single', traumatic_puncture: 'yes', regimen: 'edoxaban:60:1', dose_time_2: '' })
+    expect(edo.resume.earliest).toBeUndefined()
+    expect(allCites(edo)).toContain(GUIDELINE_CITES.asraTraumaticNone)
   })
   it('the interval before runs to the start, the restart from the end (#review Astra 2)', () => {
     // A puncture at 07:30 is the start: 72 h before it, not before 08:00.
@@ -212,18 +268,43 @@ describe('emergency', () => {
     expect(allCites(result)).toEqual(expect.arrayContaining([GUIDELINE_CITES.ehraFig12, GUIDELINE_CITES.ehraAndexanet, GUIDELINE_CITES.ehraAnnexa]))
     expect(allText(result)).toContain('andexanet 不作為術前通用逆轉')
   })
-  it('dabigatran: idarucizumab, and haemodialysis removes it', () => {
-    expect(allCites(plan({ procedure_kind: 'emergency', regimen: 'dabigatran:150:2' }))).toEqual(expect.arrayContaining([CITES.dabigatranIdarucizumab, CITES.dabigatranDialysable]))
+  it('dabigatran: idarucizumab, haemodialysis removes it, and it may restart 24 h after idarucizumab', () => {
+    expect(allCites(plan({ procedure_kind: 'emergency', regimen: 'dabigatran:150:2' }))).toEqual(expect.arrayContaining([CITES.dabigatranIdarucizumab, CITES.dabigatranDialysable, CITES.dabigatranIdarucizumabRestart]))
+  })
+})
+
+describe('what the prescription is (#review 4)', () => {
+  it('a VTE loading dose: deferral advised, hours for reference, the restart dose left to the VTE course', () => {
+    const result = plan({ regimen: 'apixaban:10:2' })
+    expect(result.cautions.map((c) => c.text.zh).join()).toContain('急性 VTE 的起始劑量')
+    expect(allCites(result)).toContain(GUIDELINE_CITES.ehraRecentEvent)
+    expect(allText(result)).toContain('不自動接回起始劑量')
+  })
+  it('a prophylactic dose: flagged, restarted as prophylaxis', () => {
+    const result = plan({ regimen: 'rivaroxaban:10:1', dose_time_2: '' })
+    expect(result.doseClass).toBe('low')
+    expect(result.cautions.map((c) => c.text.zh).join()).toContain('預防劑量')
+    expect(allText(result)).toContain('恢復時給回預防劑量')
+  })
+  it('a therapeutic dose: restarted at the same dose, no caution', () => {
+    const result = plan({})
+    expect(result.cautions).toEqual([])
+    expect(allText(result)).toContain('恢復時給回術前的治療劑量')
   })
 })
 
 describe('residual levels never clear a patient', () => {
-  it('no plan says 「可開刀」 or 「safe to operate」', () => {
+  it('no plan says 「可開刀」 or 「safe to operate」; each says it clears no one', () => {
     for (const values of [{}, { neuraxial: 'single' }, { procedure_kind: 'emergency' }, { regimen: 'dabigatran:150:2' }, { crcl_manual: '12' }, { procedure_kind: 'af-ablation' }] as CalcValues[]) {
       const text = allText(plan(values))
       expect(text).not.toMatch(/可開刀|safe to operate|may proceed/i)
-      expect(text).toMatch(/可接受的殘餘濃度未定/)
+      expect(text).toMatch(/不據以判定可否處置/)
     }
+  })
+  it('with a block, ASRA’s acceptable level is quoted as the guideline says it, beside its own “never clinically validated” (#review 1)', () => {
+    const result = plan({ neuraxial: 'single' })
+    expect(allText(result)).toContain('<30 ng/mL，或 anti-Xa 活性 ≤0.1 IU/mL，為「可接受」（原文）')
+    expect(allCites(result)).toEqual(expect.arrayContaining([GUIDELINE_CITES.asraApixabanHighLevel, GUIDELINE_CITES.asraThresholdUnvalidated]))
   })
 })
 
@@ -236,8 +317,10 @@ describe('sources', () => {
         expect(cite.page).toBeGreaterThanOrEqual(1612)
         expect(cite.page).toBeLessThanOrEqual(1676)
       } else {
-        expect(cite.page).toBeGreaterThanOrEqual(263)
-        expect(cite.page).toBeLessThanOrEqual(309)
+        // ASRA 2025, online first: pages 1–29, as printed and as the PDF's.
+        expect(cite.page).toBe(cite.pdfPage)
+        expect(cite.page).toBeGreaterThanOrEqual(1)
+        expect(cite.page).toBeLessThanOrEqual(29)
       }
       expect(cite.quote).not.toMatch(/…|\.\.\.|[一-鿿]/)
     }

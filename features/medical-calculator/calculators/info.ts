@@ -43,7 +43,7 @@ export const CALC_INFO: Record<string, CalcInfo> = {
   },
   'doac-periop': {
     useWhen: { en: 'Planning when to stop a DOAC before an elective procedure, spinal/epidural anaesthesia or AF ablation, and when to restart it.', zh: '計畫擇期手術、脊髓／硬膜外麻醉或 AF 消融前何時停 DOAC、術後何時恢復。' },
-    caveats: { en: 'EHRA 2021 and ASRA 2018 are guidelines, not labels; each is quoted with its own page. Intervals are minimums and need the team’s individual judgement. No interval is given for CrCl <15, dialysis or dabigatran below 30. Anti-Xa is a drug-calibrated level with no accepted threshold and never clears a patient. No bridging.', zh: 'EHRA 2021 與 ASRA 2018 是指引，不是仿單，各附頁碼。時數為最低間隔，需由團隊個別判斷。CrCl <15、透析、dabigatran CrCl <30 不給停藥時數。anti-Xa 是藥物校正濃度，沒有公認閾值，不據以判定可否手術。不橋接。' },
+    caveats: { en: 'EHRA 2021 and ASRA 2025 (5th edition) are guidelines, not labels; each is quoted with its own page. Intervals are minimums and need the team’s individual judgement. No interval is given for CrCl <15, dialysis or dabigatran below 30. ASRA’s acceptable residual level (<30 ng/mL) is quoted as written, never used to clear a patient. A VTE loading dose or a prophylactic dose is flagged. No bridging.', zh: 'EHRA 2021 與 ASRA 2025（第 5 版）是指引，不是仿單，各附頁碼。時數為最低間隔，需由團隊個別判斷。CrCl <15、透析、dabigatran CrCl <30 不給停藥時數。ASRA 的可接受殘餘濃度（<30 ng/mL）只照原文列出，不據以判定可否處置。VTE 起始劑量與預防劑量會另外提醒。不橋接。' },
   },
   'crcl-cockcroft-gault': {
     useWhen: { en: 'Renal drug dosing in stable adults (the equation most drug labels use).', zh: '穩定成人之腎臟藥物劑量調整（多數藥品仿單採用此公式）。' },

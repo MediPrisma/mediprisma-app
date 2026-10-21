@@ -71,15 +71,17 @@ describe('apixaban', () => {
 })
 
 describe('rivaroxaban', () => {
-  it('acute VTE, CrCl 40: 15 mg bid ×21 d then 20 mg qd; 15 mg qd only as a considered option, never automatic', () => {
+  it('acute VTE, CrCl 40: 15 mg bid ×21 d then 20 mg qd; 15 mg qd only as a conditional option, never the label dose (#review 3)', () => {
     expect(steps('vte-acute', { crcl_manual: '40' }, 'rivaroxaban')).toBe('15x2 → 20x1')
-    expect(dose('vte-acute', { crcl_manual: '40' }, 'rivaroxaban')).toBe('20x1|15x1')
+    expect(dose('vte-acute', { crcl_manual: '40' }, 'rivaroxaban')).toBe('20x1')
+    expect(agent('vte-acute', { crcl_manual: '40' }, 'rivaroxaban').options.map((o) => `${o.regimen.mg}x${o.regimen.perDay}`)).toEqual(['15x1'])
     expect(agent('vte-acute', { crcl_manual: '40' }, 'rivaroxaban').reduced).toBe(false)
     expect(cites('vte-acute', { crcl_manual: '40' }, 'rivaroxaban')).toEqual(expect.arrayContaining([CITES.rivaroxabanVteRenal, CITES.rivaroxabanVteRenalUnstudied]))
     expect(dose('vte-acute', { crcl_manual: '60' }, 'rivaroxaban')).toBe('20x1')
   })
   it('extended, CrCl 40: 10 mg qd, unadjusted; 20 mg for high recurrence risk, and 15 mg beside it', () => {
-    expect(dose('vte-extended', { crcl_manual: '40' }, 'rivaroxaban')).toBe('10x1|20x1|15x1')
+    expect(dose('vte-extended', { crcl_manual: '40' }, 'rivaroxaban')).toBe('10x1')
+    expect(agent('vte-extended', { crcl_manual: '40' }, 'rivaroxaban').options.map((o) => `${o.regimen.mg}x${o.regimen.perDay}`)).toEqual(['20x1', '15x1'])
     expect(cites('vte-extended', { crcl_manual: '40' }, 'rivaroxaban')).toEqual(expect.arrayContaining([CITES.rivaroxabanVteRenal10, CITES.rivaroxabanVteExtendedHigh]))
   })
   it('knee: 10 mg qd from 6–10 h after surgery, 2 weeks; CrCl <15 not recommended (Xarelto 10 mg SmPC)', () => {
@@ -209,7 +211,10 @@ describe('the prescription against a schedule that changes with time', () => {
     const low = run('vte-acute', { crcl_manual: '40' }).results
     expect(checkRegimen('rivaroxaban:15:1', low, 10)?.state).toBe('differs')
     expect(checkRegimen('rivaroxaban:15:2', low, 10)?.state).toBe('matches')
-    expect(checkRegimen('rivaroxaban:15:1', low, 30)?.state).toBe('matches')
+    // From day 22 it is a conditional option: 「可考慮，需確認」, never 「一致」 (#review 3).
+    expect(checkRegimen('rivaroxaban:15:1', low, 30)).toMatchObject({ state: 'unsettled', text: { zh: expect.stringContaining('需確認') } })
+    expect(checkRegimen('rivaroxaban:20:1', low, 30)?.state).toBe('matches')
+    expect(checkRegimen('rivaroxaban:20:1', run('vte-extended', { crcl_manual: '40' }).results)).toMatchObject({ state: 'unsettled', text: { zh: expect.stringContaining('復發風險高') } })
   })
   it('a dose matching no phase names every phase', () => {
     expect(checkRegimen('apixaban:2.5:2', results)).toMatchObject({ state: 'differs', text: { zh: expect.stringContaining('10 mg bid 或 5 mg bid') } })
