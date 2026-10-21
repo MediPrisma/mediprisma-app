@@ -130,6 +130,20 @@ it('uses a documented later restart instead of always preferring a stopped statu
   expect(collection.medications[0].status).toBe('active')
 })
 
+it('selects the same record for every order of three versions with mixed update metadata',()=>{
+  for(const value of [1,2,3,4,5,6]) {
+    const records=[observation(100,'2026-10-02'),{...observation(120,'2026-10-01'),status:'entered-in-error'},observation(value)]
+    const values=new Set<string>()
+    for(const order of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]]) {
+      const data=parse(order.map(index=>records[index]))
+      expect(data.observations).toHaveLength(1)
+      values.add(JSON.stringify([data.observations[0].status,data.observations[0].valueQuantity]))
+      expect(data.observations[0].status).not.toBe('entered-in-error')
+    }
+    expect(values.size).toBe(1)
+  }
+})
+
 it('selects an explicitly corrected result without mistaking its corrected event date for an older version',()=>{
   const collection=parse([{...observation(100),effectiveDateTime:'2026-10-02'},{...observation(120),status:'corrected',effectiveDateTime:'2026-10-01'}])
   expect(collection.observations[0].status).toBe('corrected')

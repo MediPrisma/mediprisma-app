@@ -44,9 +44,6 @@ function rank(node: ClinicalSourceNode): number[] {
 function preferredNode(left: ClinicalSourceNode, right: ClinicalSourceNode, graph: ClinicalSourceGraph): ClinicalSourceNode {
   const a = rank(left), b = rank(right)
   if (a[0] !== b[0]) return a[0] > b[0] ? left : right
-  const leftTime = timestamp((left.resource.meta as any)?.lastUpdated)
-  const rightTime = timestamp((right.resource.meta as any)?.lastUpdated)
-  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime > rightTime ? left : right
   for (let index = 0; index < a.length; index++) {
     if (a[index] !== b[index]) return a[index] > b[index] ? left : right
   }
@@ -77,7 +74,17 @@ export function createClinicalRecordResolution(source: ClinicalReconciliationRes
   }
   const preferred = new Map<string, string>()
   for (const group of groups.values()) {
-    const winner = group.reduce((left,right)=>preferredNode(left,right,source.graph))
+    const sourceTier=Math.max(...group.map(node=>rank(node)[0]))
+    const trusted=group.filter(node=>rank(node)[0]===sourceTier)
+    const newest=Math.max(...trusted.map(node=>timestamp((node.resource.meta as any)?.lastUpdated)))
+    // Remove known older versions as a group. Pairwise comparisons between
+    // dated and undated records would be non-transitive and arrival-dependent.
+    // Undated records remain eligible, with conservative status precedence.
+    const candidates=trusted.filter(node=>{
+      const updated=timestamp((node.resource.meta as any)?.lastUpdated)
+      return !Number.isFinite(updated) || updated===newest
+    })
+    const winner = candidates.reduce((left,right)=>preferredNode(left,right,source.graph))
     for (const node of group) preferred.set(node.key, winner.key)
   }
   const resolution: ClinicalRecordResolution = {
