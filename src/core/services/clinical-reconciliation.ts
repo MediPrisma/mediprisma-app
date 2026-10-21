@@ -1,6 +1,7 @@
 import { buildClinicalSourceGraph, clinicalSourceResourcesEqual, type ClinicalSourceCapture, type ClinicalSourceGraph, type ClinicalSourceNode } from './clinical-source-graph'
 import { clinicalSourceContextIdentity, clinicalSourceNodesEqualWithContext } from './clinical-source-context'
 import { isClinicalSourceNodePatientEligible } from './clinical-patient-scope'
+import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 
 export const CLINICAL_RECONCILIATION_POLICY_VERSION = 'conservative-source-v1'
 export type ClinicalResourcePolicy = { assessment: 'supported' | 'not-assessed'; strategy: 'preserve-existing-view' | 'retain-source-only' }
@@ -41,7 +42,7 @@ function parentSourceIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<strin
   if (!parent.resource.id && !parent.fullUrl) return ['anonymous-parent', parent.key]
   if (seen.has(parent.key)) return ['parent-cycle', parent.resource.resourceType, parent.resource.id ?? parent.fullUrl]
   seen.add(parent.key)
-  const fullUrl = logicalRestFullUrl(parent.fullUrl)
+  const fullUrl = logicalRestFullUrl(clinicalSourceRestIdentity(parent) ?? undefined)
   return [
     parent.sourceId,
     parent.patientScope,
@@ -59,7 +60,7 @@ function parentSourceIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<strin
 // isolated. The existing resolved-context comparison still distinguishes
 // children whose references land in different parent-version contexts.
 function recordScopeIdentity(node: ClinicalSourceNode, nodes: ReadonlyMap<string, ClinicalSourceNode>): string {
-  return JSON.stringify([node.sourceId, node.patientScope, node.restBase ?? null, logicalRestFullUrl(node.fullUrl),
+  return JSON.stringify([node.sourceId, node.patientScope, node.restBase ?? null, logicalRestFullUrl(clinicalSourceRestIdentity(node) ?? undefined),
     node.parentKey ? 'contained' : node.embeddedIn ? 'embedded' : null,
     parentSourceIdentity(node, nodes), node.resource.resourceType, node.resource.id ?? null])
 }

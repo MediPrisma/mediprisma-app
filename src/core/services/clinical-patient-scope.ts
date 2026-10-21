@@ -103,7 +103,11 @@ export function getClinicalSourceNodePatientExclusionReason(
   const sameSourcePatients = patientsBySource(graphNodes, node.sourceId)
   const expectedIds = new Set<string>()
   const expectedUrls = new Set<string>()
+  // The selected scope is trusted identity, not an arbitrary reference to parse.
+  // Preserve opaque bridge IDs (for example underscores or >64 characters)
+  // without turning an unknown URI/URN into a patient-id alias.
   const scopeId = patientIdFrom(node.patientScope)
+    ?? (node.patientScope && !/[\s/:#?]/.test(node.patientScope) ? node.patientScope : undefined)
   if (scopeId) expectedIds.add(scopeId)
   if (/^(?:https?:\/\/|urn:)/i.test(node.patientScope)) expectedUrls.add(node.patientScope)
   const authenticatedBase = node.restBase ? absoluteBase(node.restBase) ?? trimBase(node.restBase) : undefined

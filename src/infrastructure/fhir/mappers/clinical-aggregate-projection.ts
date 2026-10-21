@@ -6,6 +6,7 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
 import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
+import { clinicalSourceRestIdentity } from '@/src/core/services/clinical-source-rest-identity'
 import { attachReportObservations } from '@/src/core/services/clinical-report-membership'
 import { isVitalObservation } from '@/src/core/utils/observation-selectors'
 import { mutableClinicalProjection } from '../services/clinical-source-session'
@@ -184,7 +185,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
       if (!active) return false
       const node = row?.clinicalSourceNodeKey ? context.nodes.get(row.clinicalSourceNodeKey) : undefined
       if (!node || (!node.resource.id && !node.fullUrl)) return true
-      const identity = JSON.stringify([node.resource.resourceType, node.resource.id ?? null, node.fullUrl ?? null])
+      const identity = JSON.stringify([node.resource.resourceType, node.resource.id ?? null, clinicalSourceRestIdentity(node)])
       const candidates = retainedSources.get(identity) ?? []
       if (candidates.some(prior => clinicalSourceNodesEqualWithContext(source.graph, prior, node))) {
         changed = true

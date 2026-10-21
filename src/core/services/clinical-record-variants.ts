@@ -4,6 +4,7 @@ import { logicalRestFullUrl } from './clinical-reconciliation'
 import type { ClinicalSourceNode } from './clinical-source-graph'
 import { clinicalSourceIdentityDigest } from './clinical-source-projection'
 import { clinicalSourceNodesEqualWithContext } from './clinical-source-context'
+import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 
 /** Carry already-established source-record ambiguity into every clinical view.
  * No chronology, preferred version, or cross-source equivalence is inferred. */
@@ -29,7 +30,7 @@ export function createClinicalRecordVariants(source: ClinicalReconciliationResul
   }
   const recordIdentity = (node: ClinicalSourceNode): unknown[] => {
     const parent = nodes.get(node.parentKey ?? node.embeddedIn ?? '')
-    return [node.sourceId, node.patientScope, node.restBase ?? null, logicalRestFullUrl(node.fullUrl),
+    return [node.sourceId, node.patientScope, node.restBase ?? null, logicalRestFullUrl(clinicalSourceRestIdentity(node) ?? undefined),
       node.resource.resourceType, node.resource.id ?? null,
       parent ? ((parent.resource.id || parent.fullUrl) ? recordIdentity(parent) : parent.key) : null]
   }

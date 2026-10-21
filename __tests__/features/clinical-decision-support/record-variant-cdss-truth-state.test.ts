@@ -37,7 +37,7 @@ it('preserves a verified medication overview alongside unresolved records', () =
   expect(profile.afMedicationRegimens?.length).toBeGreaterThan(0)
 })
 
-it.each(['Condition', 'AllergyIntolerance', 'Encounter', 'Procedure', 'Observation', 'DiagnosticReport'])('keeps non-safety therapy decisions pending while %s records are unresolved', type => {
+it.each(['Condition', 'AllergyIntolerance', 'Encounter', 'Procedure', 'Observation', 'DiagnosticReport', 'DocumentReference', 'Immunization', 'CarePlan'])('keeps non-safety therapy decisions pending while %s records are unresolved', type => {
   const profile = profileFor(type)
   const result = buildHospitalAwareCdssResult(pack('heart-failure-cdss'), profile, 'en')
   const therapy = result.recommendations.filter(item => item.domain !== 'safety' && (item.domain === 'medication' || item.presentationType === 'medication' || item.visitDecision?.actions.some(action => action.decisionKind === 'prescribed' || action.decisionKind === 'dose-adjusted')))

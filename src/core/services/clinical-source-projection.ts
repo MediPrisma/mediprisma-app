@@ -2,6 +2,7 @@ import { clinicalSourceResourcesEqual } from './clinical-source-graph'
 import { clinicalSourceContextIdentity, clinicalSourceNodesEqualWithContext } from './clinical-source-context'
 import type { ClinicalSourceGraph, ClinicalSourceNode } from './clinical-source-graph'
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
+import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 
 const projectedResourceTypes = new Set(['Observation', 'DiagnosticReport'])
 const collisionProjectedNamespaces = new Map([
@@ -89,7 +90,7 @@ export function createClinicalSourceProjectionIds(
       parent.sourceId,
       parent.patientScope,
       parent.restBase ?? null,
-      parent.fullUrl ?? null,
+      clinicalSourceRestIdentity(parent),
       parent.resource.resourceType,
       parent.resource.id ?? null,
       (parent.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null,
@@ -137,7 +138,7 @@ export function createClinicalSourceProjectionIds(
       node.sourceId,
       node.patientScope,
       node.restBase ?? null,
-      node.fullUrl ?? null,
+      clinicalSourceRestIdentity(node),
       node.resource.resourceType,
       node.resource.id ?? null,
       versionId,
@@ -222,7 +223,7 @@ export function createClinicalSourceProjectionIds(
         node.restBase ?? null,
         node.resource.resourceType,
         node.resource.id,
-        node.fullUrl ?? null,
+        clinicalSourceRestIdentity(node),
         (node.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null,
         node.contentHash,
         stableParentIdentity(node) ?? null,

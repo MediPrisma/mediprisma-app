@@ -1,5 +1,6 @@
 import { clinicalSourceResourcesEqual } from './clinical-source-graph'
 import type { ClinicalSourceGraph, ClinicalSourceNode } from './clinical-source-graph'
+import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
@@ -20,11 +21,11 @@ function digest(value: string): string {
 
 function baseIdentity(node: ClinicalSourceNode, nodes?: Map<string, ClinicalSourceNode>): string {
   const parent = nodes?.get(node.parentKey ?? node.embeddedIn ?? '')
-  const stableParent = parent ? [parent.sourceId, parent.patientScope, parent.restBase ?? null, parent.fullUrl ?? null,
+  const stableParent = parent ? [parent.sourceId, parent.patientScope, parent.restBase ?? null, clinicalSourceRestIdentity(parent),
     parent.resource.resourceType, parent.resource.id ?? null,
     (parent.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null, parent.contentHash] : null
   return stable([
-    node.sourceId, node.patientScope, node.restBase ?? null, node.fullUrl ?? null,
+    node.sourceId, node.patientScope, node.restBase ?? null, clinicalSourceRestIdentity(node),
     node.isContained ? 'contained' : node.embeddedIn ? 'embedded' : null, stableParent, node.resource.resourceType,
     node.resource.id ?? null,
     (node.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null,

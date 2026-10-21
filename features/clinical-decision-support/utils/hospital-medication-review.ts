@@ -24,10 +24,11 @@ export function buildHospitalAwareCdssResult(
   return applyUnresolvedRecordTherapyReview(applyHospitalMedicationReview(result, profile, locale), profile, locale)
 }
 
-/** No condition/allergy/visit/procedure version is chosen as a contraindication
- * verdict. Preserve verified safety results; defer non-safety treatment actions. */
+/** Every quarantined non-medication decision input can affect eligibility or
+ * contraindications, including document narratives and care plans. Medication
+ * uncertainty has its own review below. Preserve verified safety results. */
 export function applyUnresolvedRecordTherapyReview(result: CdssResult, profile: HospitalAwareCdssProfile, locale: CdssLocale): CdssResult {
-  const unresolved = profile.excludedClinicalRecordVariants?.filter(item => ['Condition', 'AllergyIntolerance', 'Encounter', 'Procedure', 'Observation', 'DiagnosticReport'].includes(item.resourceType)) ?? []
+  const unresolved = profile.excludedClinicalRecordVariants?.filter(item => !['MedicationRequest', 'MedicationStatement'].includes(item.resourceType)) ?? []
   if (!unresolved.length) return result
   const label = locale === 'en' ? 'Reconcile unresolved source records' : '核對未決來源紀錄'
   const message = locale === 'en'
