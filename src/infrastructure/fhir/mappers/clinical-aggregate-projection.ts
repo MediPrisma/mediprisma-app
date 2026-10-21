@@ -1,3 +1,4 @@
+import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { getClaimDerivedSource } from '../services/claim-expander'
 import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } from './clinical-modifier-projection'
 import { isClinicalSourceRepresentedElsewhere } from './clinical-projection-disposition'
@@ -311,6 +312,13 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
       if (!reason) continue
       const types = [node.resource.resourceType, ...(node.resource.resourceType === 'Observation' && reportCaptures.has(captureKey(node)) ? ['DiagnosticReport'] : [])]
       for (const type of types) {
+        const counts = exclusions.get(type) ?? {}
+        counts[reason] = (counts[reason] ?? 0) + node.occurrences
+        exclusions.set(type, counts)
+      }
+    }
+    for (const { node, reason, resourceTypes } of clinicalContainedPatientExclusions(source)) {
+      for (const type of resourceTypes) {
         const counts = exclusions.get(type) ?? {}
         counts[reason] = (counts[reason] ?? 0) + node.occurrences
         exclusions.set(type, counts)

@@ -1,3 +1,4 @@
+import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
 import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
@@ -1634,6 +1635,7 @@ export const LocalBundleService = {
       }
     }
     assertPatientOwnership(clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn))
+    assertPatientOwnership(clinicalContainedPatientExclusions(clinicalSource).map(item => item.node))
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
     const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
     if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
