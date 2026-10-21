@@ -87,6 +87,12 @@ describe('cross-source imaging reports', () => {
     const rows = buildReportsData([reports[0], duplicate], [], 'standardized', 'medical', 'en', keys).reportRows
     expect(rows).toHaveLength(1)
     expect(rows[0].sharedReportSources).toBeUndefined()
+    const extracted = imagingReportsCategory.extractData({ diagnosticReports: [...reports, duplicate] } as any)
+      .filter(report => report.id !== reports[1].id)
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    expect(imagingReportsCategory.getCount(extracted, filters, {} as any)).toBe(2)
+    const section = imagingReportsCategory.getContextSection(extracted, filters, {} as any)
+    expect(JSON.stringify(section)).not.toContain('[shared narrative; count once]')
   })
 
   it('keeps a filtered encounter and AI subset ambiguous when another source candidate exists', () => {

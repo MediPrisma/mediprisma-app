@@ -7,6 +7,7 @@ import {
   qualifyingSharedReportKeys,
   sharedReportGroupingKey,
   sharedReportNarrative,
+  sharedReportSourceIdentity,
 } from './shared-report-grouping'
 
 type Source = 'hospital' | 'cloud'
@@ -272,4 +273,21 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     for (const { report } of bucket) keys.set(report, `cross-source|${key}`)
   }
   return keys
+}
+
+/** Preserve full-set ambiguity decisions, but never describe a lone source or
+ * repeated copies of one procedure as a visible shared-procedure group. */
+export function visibleReportGroupingKeys(reports: readonly Report[], sourceKeys: ReadonlyMap<Report, string>): Map<Report, string> {
+  const visible = new Map<string, { count: number; identities: Set<string> }>()
+  for (const report of reports) {
+    const key = sourceKeys.get(report)
+    if (!key) continue
+    const members = visible.get(key) ?? { count: 0, identities: new Set<string>() }
+    members.count++
+    members.identities.add(sharedReportSourceIdentity(report))
+    visible.set(key, members)
+  }
+  return new Map([...sourceKeys].filter(([, key]) => key.startsWith('cross-source|')
+    ? (visible.get(key)?.count ?? 0) > 1
+    : (visible.get(key)?.identities.size ?? 0) > 1))
 }

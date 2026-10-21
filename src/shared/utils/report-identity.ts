@@ -61,4 +61,3 @@ export function getReportInstitution(dr: any): string | undefined {
   if (hasCloudObservation) return cloudInstitution || ordinaryInstitution || reportInstitution
   return ordinaryInstitution || reportInstitution
 }
-

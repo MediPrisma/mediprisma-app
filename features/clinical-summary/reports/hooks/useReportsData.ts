@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { getVghtpeSource } from '../adapters/vghtpe-source-display'
 import { getReportInstitution as getDrInstitution, getReportDate as getDrDate, isNhiMedicloudReport, isAdultPreventiveReport, reportNaturalGroupingKey } from '@/src/shared/utils/report-identity'
-import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferReportDisplayGroup } from '../utils/grouping-helpers'
@@ -42,7 +42,6 @@ import {
   reportSource,
   sharedEchoReportFamilyKey,
   sharedReportNarrative,
-  sharedReportSourceIdentity,
   sharedReportTitle,
   type SharedReportSource,
 } from '@/src/shared/utils/shared-report-grouping'
@@ -224,20 +223,7 @@ export function buildReportsData(
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
     const sourceGroupingKeys = groupingKeys ?? reportDisplayGroupingKeys(diagnosticReports)
-    const visibleMembers = new Map<string, { count: number; identities: Set<string> }>()
-    for (const report of diagnosticReports) {
-      const key = sourceGroupingKeys.get(report)
-      if (key) {
-        const members = visibleMembers.get(key) ?? { count: 0, identities: new Set<string>() }
-        members.count++
-        members.identities.add(sharedReportSourceIdentity(report))
-        visibleMembers.set(key, members)
-      }
-    }
-    const displayGroupingKeys = new Map([...sourceGroupingKeys]
-      .filter(([, key]) => key.startsWith('cross-source|')
-        ? (visibleMembers.get(key)?.count ?? 0) > 1
-        : (visibleMembers.get(key)?.identities.size ?? 0) > 1))
+    const displayGroupingKeys = visibleReportGroupingKeys(diagnosticReports, sourceGroupingKeys)
     const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return

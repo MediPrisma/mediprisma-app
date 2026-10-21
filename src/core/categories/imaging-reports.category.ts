@@ -12,7 +12,7 @@ import {
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
-import { compareImagingCopies, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { compareImagingCopies, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import { getReportDate } from '@/src/shared/utils/report-identity'
 import {
   reportSource,
@@ -223,14 +223,14 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       filtered = getLatestImagingReports(filtered)
     }
 
-    return groupedReportCount(filtered, groupingKeys)
+    return groupedReportCount(filtered, visibleReportGroupingKeys(filtered, groupingKeys))
   },
   
   getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
     if (data.length === 0) return null
     // Establish ambiguity on the complete source set, before latest/time filters
     // can remove an otherwise conflicting copy of an exam.
-    const groupingKeys = displayGroupingKeys(data)
+    let groupingKeys = displayGroupingKeys(data)
     
     let filtered = data.filter((report) => normalizeClinicalStatus(report.status) !== 'entered-in-error')
 
@@ -250,6 +250,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       filtered = getLatestImagingReports(filtered)
     }
 
+    groupingKeys = visibleReportGroupingKeys(filtered, groupingKeys)
     const observations = allClinicalData?.observations || []
     
     const items: string[] = []
