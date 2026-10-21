@@ -93,25 +93,29 @@ it('refetches every type and withholds complete data on a same-patient authentic
   queryClient.clear()
 })
 
-it('shares render-time reprojection after a same-source Patient capture across subscribers', async () => {
+it('subscribes all consumers to a same-source Patient capture without manual rerender', async () => {
   jest.resetAllMocks()
   const { CLINICAL_RESOURCE_UNITS } = await import('@/src/application/hooks/clinical-data/clinical-data-fetch-plan')
-  const { reconcileClinicalSources } = await import('@/src/core/services/clinical-reconciliation')
-  const resources = [observation('1', 7)]
-  let source = reconcileClinicalSources([{ sourceId: 'same-client', patientScope: 'synthetic', generation: '1', resources }])
-  const repository: any = { getClinicalSource: () => source }
+  const { clinicalSourceSession, captureClinicalSource, readClinicalSource, invalidateClinicalSource } = await import('@/src/infrastructure/fhir/services/clinical-source-session')
+  const session = clinicalSourceSession({}, 'https://ehr.test/fhir')
+  captureClinicalSource(session, 'Observation', 'synthetic', [observation('1', 7)])
+  const repository: any = { getClinicalSource: () => readClinicalSource(session, 'synthetic') }
   for (const unit of CLINICAL_RESOURCE_UNITS) repository[unit.method] = jest.fn(async () => [])
   jest.mocked(getClinicalDataRepository).mockResolvedValue(repository)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  const { result, rerender, unmount } = renderHook(() => ({ ui: useClinicalData(), ai: useClinicalDataQuery(), cdss: useClinicalData() }), { wrapper })
+  const { result, unmount } = renderHook(() => ({ ui: useClinicalData(), ai: useClinicalDataQuery(), cdss: useClinicalData() }), { wrapper })
   await waitFor(() => expect(result.current.ai.data).toBeDefined())
-  source = reconcileClinicalSources([{ sourceId: 'same-client', patientScope: 'synthetic', generation: '2', resources: [...resources, { resourceType: 'Patient', id: 'synthetic' }] }])
-  rerender()
+  act(() => { captureClinicalSource(session, 'Patient', 'synthetic', [{ resourceType: 'Patient', id: 'synthetic' }]) })
+  await waitFor(() => expect(result.current.ai.data!.clinicalSource!.graph.nodes.some(node => node.resource.resourceType === 'Patient')).toBe(true))
   expect(result.current.ui.observations).toBe(result.current.ai.data!.observations)
   expect(result.current.cdss.observations).toBe(result.current.ui.observations)
   expect(result.current.cdss.observations[0]).toBe(result.current.ai.data!.observations[0])
   expect(result.current.ui.observations[0].valueQuantity?.value).toBe(7)
+  act(() => { invalidateClinicalSource(session, 'Patient', 'synthetic') })
+  await waitFor(() => expect(result.current.ai.data!.clinicalSource!.graph.nodes.some(node => node.resource.resourceType === 'Patient')).toBe(false))
+  expect(result.current.ui.observations).toBe(result.current.ai.data!.observations)
+  expect(result.current.cdss.observations).toBe(result.current.ui.observations)
   for (const unit of CLINICAL_RESOURCE_UNITS) expect(repository[unit.method]).toHaveBeenCalledTimes(1)
   unmount()
   queryClient.clear()

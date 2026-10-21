@@ -23,7 +23,7 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
 
 import { useQueries, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
-import { getClinicalSourceLifecycleEpoch, subscribeClinicalSourceLifecycle } from '@/src/infrastructure/fhir/services/clinical-source-session'
+import { getClinicalSourceLifecycleEpoch, subscribeClinicalSourceLifecycle, getClinicalSourceCaptureEpoch, subscribeClinicalSourceCaptures } from '@/src/infrastructure/fhir/services/clinical-source-session'
 import type {
   ClinicalDataCollection,
   ClinicalDataQueryKey,
@@ -129,7 +129,7 @@ function buildClinicalResults(
     // rows still belong to the previous result. This is pending, never absence.
     if (result?.data && result.isFetching) {
       for (const key of unit.statusKeys) resourceQueryStatus[key] = {
-        ...resourceQueryStatus[key], resourceType: resourceQueryStatus[key]?.resourceType ?? key.split(':')[0],
+        resourceType: resourceQueryStatus[key]?.resourceType ?? key.split(':')[0],
         state: 'pending', count: undefined,
         message: 'Clinical records are refreshing. The updated result is not complete; absence cannot be concluded.',
       }
@@ -204,6 +204,7 @@ function useClinicalResourceAggregate() {
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
   const queryClient = useQueryClient()
   const patientId = patient?.id
+  const captureEpoch = useSyncExternalStore(subscribeClinicalSourceCaptures, getClinicalSourceCaptureEpoch, getClinicalSourceCaptureEpoch)
   const sourceEpoch = useSyncExternalStore(subscribeClinicalSourceLifecycle, getClinicalSourceLifecycleEpoch, getClinicalSourceLifecycleEpoch)
 
   // One shared, session-stable data source per load generation. fetchQuery both collapses the
@@ -254,8 +255,12 @@ function useClinicalResourceAggregate() {
   }, [patientId, queryClient])
 
   // Patient reads share the capture store but need not refetch clinical queries.
-  // Re-read its immutable generation on render so a same-id patient refresh is visible.
-  const clinicalSource = snapshot.aggregate.readClinicalSource?.() ?? snapshot.aggregate.clinicalSource
+  // The external-store snapshot makes generation changes atomic across subscribers.
+  const clinicalSource = useMemo(() => {
+    void captureEpoch // Read after a published source revision or a refreshed patient query.
+    void patient
+    return snapshot.aggregate.readClinicalSource?.() ?? snapshot.aggregate.clinicalSource
+  }, [snapshot, captureEpoch, patient])
   const aggregate = reprojectClinicalSnapshot(snapshot, clinicalSource)
   return { aggregate, patientLoading, refetch }
 }

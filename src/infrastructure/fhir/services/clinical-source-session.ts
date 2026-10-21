@@ -17,6 +17,17 @@ const bindings = new WeakMap<object, ClinicalSourceSession>()
 const ownerClients = new WeakMap<object, object>()
 let sequence = 0
 let lifecycleEpoch = 0
+let captureEpoch = 0
+const captureListeners = new Set<() => void>()
+export const getClinicalSourceCaptureEpoch = () => captureEpoch
+export function subscribeClinicalSourceCaptures(listener: () => void): () => void {
+  captureListeners.add(listener)
+  return () => { captureListeners.delete(listener) }
+}
+function publishClinicalSourceCapture(): void {
+  captureEpoch++
+  for (const listener of captureListeners) listener()
+}
 const lifecycleListeners = new Set<() => void>()
 export const getClinicalSourceLifecycleEpoch = () => lifecycleEpoch
 export function subscribeClinicalSourceLifecycle(listener: () => void): () => void {
@@ -53,6 +64,7 @@ export function purgeClinicalSourceSession(owner: object): void {
   bindings.delete(owner)
   ownerClients.delete(owner)
   if (client) {
+    publishClinicalSourceCapture()
     lifecycleEpoch++
     for (const listener of lifecycleListeners) listener()
   }
@@ -69,6 +81,7 @@ export function captureClinicalSource(session: ClinicalSourceSession, queryKey: 
   session.captures.set(JSON.stringify([patientScope, queryKey]), capture)
   const result = reconcileClinicalSources([capture])
   smartSources.add(result)
+  publishClinicalSourceCapture()
   return result
 }
 export function readClinicalSource(session: ClinicalSourceSession, patientScope: string): ClinicalReconciliationResult {
@@ -101,4 +114,5 @@ export function invalidateClinicalSource(session: ClinicalSourceSession, queryKe
   session.successfulResponses.delete(queryKey)
   session.captures.delete(JSON.stringify([patientScope, queryKey]))
   session.generation++
+  publishClinicalSourceCapture()
 }

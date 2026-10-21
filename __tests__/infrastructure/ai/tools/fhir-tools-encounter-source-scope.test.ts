@@ -73,3 +73,18 @@ it('uses only the resolved source encounter and reports the other host link as u
   expect(visits).toMatchObject({ incomplete: true, canConcludeAbsence: false })
   expect(visits.data[0].medCount).toBe(1)
 })
+
+it('joins MedicationStatement context by its resolved source edge without tail-ID fallback', async () => {
+  const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'patient' } },
+    { fullUrl: 'https://ehr.example/fhir/Encounter/visit', resource: { resourceType: 'Encounter', id: 'visit', status: 'finished' } },
+    { fullUrl: 'https://ehr.example/fhir/MedicationStatement/known', resource: { resourceType: 'MedicationStatement', id: 'known', status: 'active', context: { reference: 'https://ehr.example/fhir/Encounter/visit' }, medicationCodeableConcept: { text: 'Known medicine' } } },
+    { fullUrl: 'https://ehr.example/fhir/MedicationStatement/foreign', resource: { resourceType: 'MedicationStatement', id: 'foreign', status: 'active', context: { reference: 'https://other.example/fhir/Encounter/visit' }, medicationCodeableConcept: { text: 'Foreign medicine' } } },
+  ] })!
+  const tools = createFhirTools(() => ({ patient: parsed.patient, collection: parsed.collection }))
+  const result = await (tools.getEncounterDetails as any).execute({ encounterId: parsed.collection.encounters[0].id })
+  expect(result.data.medications).toHaveLength(1)
+  expect(JSON.stringify(result.data.medications)).toContain('Known medicine')
+  expect(JSON.stringify(result.data.medications)).not.toContain('Foreign medicine')
+  expect(result).toMatchObject({ incomplete: true, canConcludeAbsence: false })
+})

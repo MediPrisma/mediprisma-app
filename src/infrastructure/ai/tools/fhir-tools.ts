@@ -808,7 +808,10 @@ function encounterLinks(collection: ClinicalDataCollection) {
   const ambiguous = (id: string) => (byId.get(id)?.length ?? 0) > 1
   const byNode = new Map(collection.encounters.filter(row => row.clinicalSourceNodeKey).map(row => [row.clinicalSourceNodeKey!, row]))
   const nodes = new Map(graph?.nodes.map(node => [node.key, node]))
-  const edges = new Map(graph?.references.filter(edge => edge.path === 'encounter').map(edge => [edge.origin.key, edge]))
+  // MedicationStatement.context is the mapper's explicit source for encounter.
+  // Prefer a supplied encounter edge, matching the mapper's choice order.
+  const edges = new Map(graph?.references.filter(edge => edge.path === 'context' && edge.origin.resource.resourceType === 'MedicationStatement').map(edge => [edge.origin.key, edge]))
+  for (const edge of graph?.references ?? []) if (edge.path === 'encounter') edges.set(edge.origin.key, edge)
   let incomplete = false
   const target = (row: { clinicalSourceNodeKey?: string; encounter?: { reference?: string }; _encounterInferred?: boolean }) => {
     const edge = row.clinicalSourceNodeKey ? edges.get(row.clinicalSourceNodeKey) : undefined
