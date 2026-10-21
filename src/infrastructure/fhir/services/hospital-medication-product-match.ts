@@ -45,7 +45,7 @@ function productDescriptor(value: unknown): { name: string; pack?: string } | un
   const liquid = /\b(?:injection|inj|solution|drops)\b/.test(name)
   if (liquid && !/\d\s*(?:mg|mcg|iu)\b|\d\s*%|\d\s*g\s*\/\s*(?:\d+(?:\.\d+)?\s*)?(?:g|ml)\b/.test(name)) return undefined
   const topicalPack = topical
-    ? name.match(/^(.*\d\s*%)\s+(\d+(?:\.\d+)?\s*(?:g|ml))(?:\s*\/?\s*(?:tub|tube|bottle))?$/) : undefined
+    ? name.match(/^(.*\d\s*(?:%|(?:mg|mcg|g)\s*\/\s*(?:g|ml)))\s+(\d+(?:\.\d+)?\s*(?:g|ml))(?:\s*\/?\s*(?:tub|tube|bottle))?$/) : undefined
   if (topicalPack) name = topicalPack[1]
   return { name: name.replace(/\s+/g, ''), ...(topicalPack ? { pack: topicalPack[2].replace(/\s+/g, '') } : {}) }
 }
