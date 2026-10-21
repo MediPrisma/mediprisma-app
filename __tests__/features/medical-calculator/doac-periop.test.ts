@@ -361,23 +361,63 @@ describe('third review by the coordinator', () => {
     expect(result.skippedBefore).toEqual([])
     expect(result.resume.firstDose).toBeUndefined()
   })
-  it('the procedure-day morning line appears only where that dose is actually omitted (#review re8 Astra 1)', () => {
+  it('the minor-risk line names the dose at the procedure, only where it is omitted (#review re8 Astra 1; coordinator 4th 3)', () => {
+    // Afternoon: 08:00 was taken before; the dose at the procedure is 20:00, not the morning one.
     const afternoon = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T16:00', surgery_end_at: '2026-11-03T17:00' })
     expect(formatLocal(afternoon.lastDose!)).toBe('11-03 08:00')
-    expect(allText(afternoon)).not.toContain('早上那一劑（')
+    expect(allText(afternoon)).toContain('極低風險處置時刻那一劑（11-03 20:00）不服用')
+    expect(formatLocal(afternoon.resume.firstDose!)).toBe('11-04 08:00')
+    // Midnight: the 20:00 dose before it is held; 08:00 is the first back.
     const night = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T00:00', surgery_end_at: '2026-11-03T01:00' })
     expect(formatLocal(night.resume.firstDose!)).toBe('11-03 08:00')
-    expect(allText(night)).not.toContain('早上那一劑（')
-    expect(allText(plan({ procedure_kind: 'minimal', haemostasis: 'yes' }))).toContain('極低風險處置當天早上那一劑（11-03 08:00）不服用')
-    // Restart past midnight: the evening dose is not called optional (#review re9 Opus 1).
+    expect(allText(night)).toContain('處置時刻那一劑（11-02 20:00）')
+    expect(allText(plan({ procedure_kind: 'minimal', haemostasis: 'yes' }))).toContain('極低風險處置時刻那一劑（11-03 08:00）不服用')
+    // Doses at 00:00 and 12:00, procedure at 12:00: the 12:00 dose is the one omitted, not 00:00.
+    const noon = plan({ procedure_kind: 'minimal', haemostasis: 'yes', dose_time_1: '00:00', dose_time_2: '12:00', surgery_at: '2026-11-03T12:00', surgery_end_at: '2026-11-03T13:00' })
+    expect(formatLocal(noon.lastDose!)).toBe('11-03 00:00')
+    expect(times(noon.resume.skippedAfter)).toEqual(['11-03 12:00'])
+    expect(noon.resume.delayed).toBeUndefined()
+    expect(formatLocal(noon.resume.firstDose!)).toBe('11-04 00:00')
+    expect(allText(noon)).toContain('處置時刻那一劑（11-03 12:00）')
+    // Restart past midnight: the next dose is not called optional (#review re9 Opus 1).
     const lateEnd = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T13:00', surgery_end_at: '2026-11-03T18:30' })
     expect(times(lateEnd.resume.skippedAfter)).toEqual(['11-03 20:00'])
     expect(allText(lateEnd)).toContain('本例恢復時間未到，11-03 20:00 那一劑也不服')
-    expect(allText(lateEnd)).not.toContain('當晚那一劑可選（')
-    // Restart not yet known, procedure at midnight: the morning dose is named ahead (#review re9 Opus 3).
-    expect(allText(plan({ procedure_kind: 'minimal', surgery_at: '2026-11-03T00:00', surgery_end_at: '' }))).toContain('極低風險處置當天早上那一劑（11-03 08:00）不服用')
+    expect(allText(lateEnd)).not.toContain('下一劑可選（')
+    // Restart not yet known, procedure at midnight: the held dose is named ahead (#review re9 Opus 3).
+    expect(allText(plan({ procedure_kind: 'minimal', surgery_at: '2026-11-03T00:00', surgery_end_at: '' }))).toContain('極低風險處置時刻那一劑（11-02 20:00）不服用')
     // Low risk names Figure 15’s optional evening dose it leaves out.
     expect(allText(plan({ procedure_kind: 'low' }))).toContain('低風險列另把處置當晚一劑畫為可選')
+  })
+  it('a dose moved to the restart is never within 6 h of the next one (#review coordinator 4th 1)', () => {
+    const gapToNext = (result: PeriopResult, next: string) => (parseLocalDateTime(next)!.getTime() - result.resume.firstDose!.getTime()) / 3600000
+    // High risk ending 19:30: restart 11-05 19:30, 30 min before the 20:00 dose — 08:00 is not made up.
+    const high = plan({ haemostasis: 'yes', surgery_at: '2026-11-03T17:00', surgery_end_at: '2026-11-03T19:30' })
+    expect(formatLocal(high.resume.earliest!)).toBe('11-05 19:30')
+    expect(high.resume.delayed).toBeUndefined()
+    expect(formatLocal(high.resume.firstDose!)).toBe('11-05 20:00')
+    // Low risk ending 18:00: restart 11-04 18:00, 2 h before 20:00.
+    const low = plan({ procedure_kind: 'low', haemostasis: 'yes', surgery_at: '2026-11-03T16:00', surgery_end_at: '2026-11-03T18:00' })
+    expect(low.resume.delayed).toBeUndefined()
+    expect(formatLocal(low.resume.firstDose!)).toBe('11-04 20:00')
+    // Ablation 07:00–10:00, sheath out 16:30: restart 19:30, 30 min before 20:00.
+    const ablation = plan({ procedure_kind: 'af-ablation', haemostasis: 'yes', surgery_at: '2026-11-03T07:00', surgery_end_at: '2026-11-03T10:00', sheath_removed_at: '2026-11-03T16:30' })
+    expect(formatLocal(ablation.resume.earliest!)).toBe('11-03 19:30')
+    expect(ablation.resume.delayed).toBeUndefined()
+    expect(formatLocal(ablation.resume.firstDose!)).toBe('11-03 20:00')
+    // Rivaroxaban 15 mg bid the same way; with room (restart 11-05 10:00) the morning dose is still moved, 10 h before 20:00.
+    const riva = plan({ regimen: 'rivaroxaban:15:2', haemostasis: 'yes', surgery_at: '2026-11-03T17:00', surgery_end_at: '2026-11-03T19:30' })
+    expect(riva.resume.delayed).toBeUndefined()
+    const room = plan({ neuraxial: 'single' })
+    expect(formatLocal(room.resume.delayed!)).toBe('11-05 08:00')
+    expect(gapToNext(room, '2026-11-05T20:00')).toBeGreaterThanOrEqual(6)
+    expect(allText(high)).toContain('距下一劑仍 ≥6 小時（半個給藥間隔）')
+  })
+  it('a sheath removed before the end of the ablation asks for a correction (#review coordinator 4th 2)', () => {
+    const result = plan({ procedure_kind: 'af-ablation', haemostasis: 'yes', surgery_at: '2026-11-03T08:00', surgery_end_at: '2026-11-03T15:00', sheath_removed_at: '2026-11-03T08:00' })
+    expect(result.pending).toContain('sheath_removed_at')
+    expect(result.resume.earliest).toBeUndefined()
+    expect(allText(result)).toContain('拔 sheath 時刻早於處置結束時刻：請更正')
   })
   it('CrCl 79.96 is not printed as 80.0', () => {
     expect(crclLabel(79.96)).toBe('79.96')
