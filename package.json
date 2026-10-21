@@ -1,6 +1,6 @@
 {
   "name": "medical-note-smart-on-fhir",
-  "version": "0.51.0",
+  "version": "0.51.1",
   "private": true,
   "license": "Apache-2.0",
   "scripts": {

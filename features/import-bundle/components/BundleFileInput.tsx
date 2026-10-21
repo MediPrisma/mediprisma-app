@@ -11,6 +11,8 @@
 'use client'
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import type { ImportBundleOptions } from '../hooks/useImportBundle'
+import { completeProgressiveImport, parseProgressiveImportRequest, PROGRESSIVE_IMPORT_EVENT, PROGRESSIVE_REQUEST_ATTRIBUTE, isProgressiveFailureReason, stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 
 /** File types the local-import picker offers. FHIR Bundles and Health Bank SDK
  *  exports are JSON; some sources ship the same JSON with a `.txt` extension,
@@ -28,7 +30,7 @@ interface BundleFileInputProps {
   testId?: string
   /** Import callback from the parent hook instance so loading/errors remain in
    * sync with the visible button or welcome screen. */
-  importFile: (file: File) => Promise<void>
+  importFile: (file: File, options?: ImportBundleOptions) => Promise<void>
 }
 
 export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInputProps>(
@@ -57,11 +59,39 @@ export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInput
     const onChange = useCallback(
       async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
+        const rawRequest = e.currentTarget.getAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE)
+        e.currentTarget.removeAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE)
+        const request = parseProgressiveImportRequest(rawRequest)
+        const cancellation = new AbortController()
+        if (request) useProgressiveImportStore.setState({ pendingRunId: request.runId })
+        const onCancel = (event: Event) => {
+          const detail = (event as CustomEvent).detail
+          if (request && detail?.runId === request.runId && detail.requestId === request.requestId) {
+            const phase = isProgressiveFailureReason(detail.phase) ? detail.phase : 'cancelled'
+            stopProgressiveImport(request.runId, phase)
+            cancellation.abort(phase)
+          }
+        }
+        window.addEventListener('medcloud:progressive-import-cancelled', onCancel)
         try {
-          if (file) await importFile(file)
+          if (rawRequest && !request) throw new Error('Invalid progressive import request')
+          if (file && request) {
+            let importId: string | undefined
+            await importFile(file, { signal: cancellation.signal, expectedImportId: request.expectedImportId, requireEmpty: request.stage === 'cloud', onCommitted: id => { importId = id } })
+            if (!importId) throw new Error('Import did not commit')
+            completeProgressiveImport(request, importId)
+            window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: {
+              version: 1, requestId: request.requestId, runId: request.runId, stage: request.stage, ok: true, importId, stopped: cancellation.signal.aborted,
+            } }))
+          } else if (file) await importFile(file)
         } catch {
+          if (request) window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: {
+            version: 1, requestId: request.requestId, runId: request.runId, ok: false,
+          } }))
           // Error surfaces through the parent hook instance.
         } finally {
+          window.removeEventListener('medcloud:progressive-import-cancelled', onCancel)
+          if (request && useProgressiveImportStore.getState().pendingRunId === request.runId) useProgressiveImportStore.setState({ pendingRunId: null })
           // Reset so re-picking the SAME file still fires onChange.
           if (inputRef.current) inputRef.current.value = ''
         }
@@ -75,6 +105,7 @@ export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInput
       <input
         ref={inputRef}
         data-testid={testId}
+        data-medcloud-progressive={testId ? '1' : undefined}
         type="file"
         accept={BUNDLE_FILE_ACCEPT}
         className="hidden"

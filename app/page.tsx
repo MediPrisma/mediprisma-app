@@ -45,6 +45,7 @@ import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-
 import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/guideline-packs/pilot-gate"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
+import { ProgressiveImportStatus } from "@/features/import-bundle/components/ProgressiveImportStatus"
 import {
   ClinicalMobilePanelSwitcher,
   ClinicalPatientContext,
@@ -642,6 +643,7 @@ function PageContent() {
       <div className="px-3 sm:px-6">
         <EmailVerificationBanner />
         <NetworkStatusBanner />
+        <ProgressiveImportStatus />
       </div>
       
       {/* Onboarding state: replace panels with welcome screen */}

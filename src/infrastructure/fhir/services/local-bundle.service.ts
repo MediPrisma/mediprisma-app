@@ -53,6 +53,7 @@ import type {
 import {
   getSessionBundleKey,
   rotateSessionBundleKey,
+  prepareSessionBundleKey,
   clearSessionBundleKey,
   isEncryptedRecord,
   encryptBytes,
@@ -495,9 +496,9 @@ export function prepareImagesForStorage(
 // import's prior images; another open tab's image records are never touched.
 // When no session key is available the bundle is left untouched (images stay
 // inline); the caller will then also skip persisting the bundle itself.
-async function extractAndStoreImages(bundle: any, importId: string | null): Promise<void> {
+async function extractAndStoreImages(bundle: any, importId: string | null, preparedKey?: CryptoKey): Promise<void> {
   if (typeof indexedDB === 'undefined') return
-  const key = await getSessionBundleKey({ create: true })
+  const key = preparedKey ?? await getSessionBundleKey({ create: true })
   if (!key) return
   const toStore = prepareImagesForStorage(bundle, importId)
   const encrypted: Array<{ id: string; record: unknown }> = []
@@ -1028,6 +1029,9 @@ export const LocalBundleService = {
       sourceMetadata?: ClinicalSourceMetadata
       patientProfile?: UserEnteredPatientProfile | null
       originalFhir?: Blob
+      signal?: AbortSignal
+      beforeCommit?: () => void
+      replaceImportId?: string
     } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
@@ -1040,6 +1044,106 @@ export const LocalBundleService = {
       ? (memBundle !== null ? memBundleImportId : readTabLocalImportId())
       : null
     const isNewImport = Boolean(importId && importId !== activeImportId)
+    if (options.signal) {
+      // Progressive replacements prepare ciphertext in a fresh scope. Until the
+      // last synchronous commit, cancellation leaves the old chart, pointer and
+      // decryption key intact, including across a reload.
+      const signal = options.signal
+      signal.throwIfAborted()
+      if (!isNewImport || !importId) throw new Error('guarded import requires a fresh scope')
+      const preparedKey = await prepareSessionBundleKey()
+      const previousMarker = sessionStorage.getItem(STORAGE_KEY)
+      const previousDemo = sessionStorage.getItem(DEMO_FLAG_KEY)
+      let published = false
+      let keyCommitted = false
+      let originalPersisted = false
+      // Keep attachment metadata, sharing the existing base64 strings rather
+      // than cloning the full chart. Failed image persistence can restore inline
+      // bytes before falling back to the ordinary memory-only import behaviour.
+      const imageBackups = ((bundle as any).entry ?? []).flatMap((entry: any) =>
+        entry?.resource?.resourceType === 'DiagnosticReport' && Array.isArray(entry.resource.presentedForm)
+          ? entry.resource.presentedForm.filter((form: any) => typeof form?.data === 'string'
+            && typeof form.contentType === 'string' && form.contentType.startsWith('image/'))
+            .map((form: any) => ({ form, original: { ...form } })) : [])
+      const restoreInlineImages = () => {
+        for (const { form, original } of imageBackups) {
+          for (const field of Object.keys(form)) delete form[field]
+          Object.assign(form, original)
+        }
+      }
+      try {
+        try {
+          signal.throwIfAborted()
+          await idbSweepExpiredRecords()
+          signal.throwIfAborted()
+          try {
+            await extractAndStoreImages(bundle, importId, preparedKey.key)
+          } catch {
+            restoreInlineImages()
+            try { await idbDeleteImagesForImport(importId) } catch { /* best effort */ }
+          }
+          signal.throwIfAborted()
+          const persisted: PersistedBundleEnvelope = {
+            __mediprismaBundle: 1, importId, demo, bundle,
+            ...(sourceMetadata ? { sourceMetadata } : {}),
+            ...(patientProfile ? { patientProfile } : {}),
+          }
+          await idbPut(await encryptJson(preparedKey.key, persisted), bundleRecordKey(importId))
+          signal.throwIfAborted()
+          if (options.originalFhir) {
+            try {
+              await storeOriginalFhir(importId, options.originalFhir, preparedKey.key)
+              originalPersisted = true
+            } catch {
+              try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
+            }
+          }
+        } catch {
+          signal.throwIfAborted()
+          restoreInlineImages()
+          try {
+            await idbDelete(bundleRecordKey(importId))
+            await idbDeleteImagesForImport(importId, true)
+          } catch { /* memory-only fallback, never plaintext at rest */ }
+        }
+        signal.throwIfAborted()
+        options.beforeCommit?.()
+        preparedKey.commit()
+        keyCommitted = true
+        writeTabBundleScope(importId, demo)
+        // No asynchronous work between the final guard and publication.
+        memBundle = bundle
+        memBundleImportId = importId
+        memBundleIsDemo = demo
+        memBundleSourceMetadata = sourceMetadata ?? null
+        memUserEnteredPatientProfile = patientProfile
+        memOriginalFhir = originalPersisted ? null : options.originalFhir ?? null
+        published = true
+      } finally {
+        if (!published) {
+          preparedKey.rollback()
+          if (keyCommitted) {
+            if (previousMarker === null) sessionStorage.removeItem(STORAGE_KEY)
+            else sessionStorage.setItem(STORAGE_KEY, previousMarker)
+            if (previousDemo === null) sessionStorage.removeItem(DEMO_FLAG_KEY)
+            else sessionStorage.setItem(DEMO_FLAG_KEY, previousDemo)
+          }
+          try {
+            await idbDelete(bundleRecordKey(importId))
+            await idbDeleteImagesForImport(importId, true)
+          } catch { /* best-effort cleanup of the unpublished scope */ }
+        }
+      }
+      // Only the exact scope replaced by this transaction can be retired.
+      // Another tab's imports and ordinary manual imports are never swept here.
+      if (options.replaceImportId && options.replaceImportId === activeImportId) {
+        try {
+          await idbDelete(bundleRecordKey(activeImportId))
+          await idbDeleteImagesForImport(options.replaceImportId, true)
+        } catch { /* expiry sweep will retry cleanup */ }
+      }
+      return
+    }
     if (typeof window !== 'undefined') {
       if (isNewImport) {
         // A new import is a new patient-workspace encryption boundary. This is

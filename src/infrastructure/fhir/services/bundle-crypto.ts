@@ -101,6 +101,31 @@ export async function rotateSessionBundleKey(): Promise<CryptoKey | null> {
   return getSessionBundleKey({ create: true })
 }
 
+/** Prepare a replacement key without making the active chart unreadable. */
+export async function prepareSessionBundleKey(): Promise<{
+  key: CryptoKey
+  commit: () => void
+  rollback: () => void
+}> {
+  if (typeof window === 'undefined' || !window.crypto?.subtle) throw new Error('bundle encryption unavailable')
+  const previous = window.sessionStorage.getItem(KEY_STORAGE)
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  const encoded = toBase64(bytes)
+  const key = await crypto.subtle.importKey('raw', bytes, ALGORITHM, false, ['encrypt', 'decrypt'])
+  return {
+    key,
+    commit() {
+      if (window.sessionStorage.getItem(KEY_STORAGE) !== previous) throw new Error('active bundle key changed')
+      window.sessionStorage.setItem(KEY_STORAGE, encoded)
+    },
+    rollback() {
+      if (window.sessionStorage.getItem(KEY_STORAGE) !== encoded) return
+      if (previous === null) window.sessionStorage.removeItem(KEY_STORAGE)
+      else window.sessionStorage.setItem(KEY_STORAGE, previous)
+    },
+  }
+}
+
 export function clearSessionBundleKey(): void {
   try {
     window.sessionStorage.removeItem(KEY_STORAGE)

@@ -20,6 +20,7 @@ import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import { useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 
 const launchHref = 'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
 const ENCRYPTED_RUNTIME_SECRET =
@@ -74,9 +75,17 @@ describe('MedcloudLaunchProvider', () => {
     useSummaryPrefsStore.setState({ modelId: 'gemini-2.5-flash-lite' })
     useSafetyPrefsStore.setState({ modelId: 'gemini-2.5-flash-lite' })
     useMedcloudLaunchStore.getState().clear()
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
   })
 
   afterEach(() => postMessage.mockRestore())
+
+  it.each(['cancelled', 'patient-changed', 'privacy-stale'] as const)('does not queue a summary when a %s import finishes its accepted save', phase => {
+    render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+    act(() => useProgressiveImportStore.setState({ pendingRunId: 'stopped-run', stoppedRuns: { 'stopped-run': phase } }))
+    settleImportedBundle()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  })
 
   it('activates the runtime-only profile, selects it everywhere, and acknowledges', async () => {
     const { unmount } = render(
