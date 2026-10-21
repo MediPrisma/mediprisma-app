@@ -1,6 +1,6 @@
 {
   "base": "119d4143be37ff3041d6d358f2c396f58f49721a",
-  "applicationCode": "1a4fe2f99edb01f944e72f1b543bc10c54359242",
+  "applicationCode": "087d8f49cf7ba5c4b360074c144714ec0c38b2a1",
   "fixtureSHA256": "9a96500d75de65a65fb970ddc9622fea5cfc1895c683730e9b86119541042fb6",
   "identicalFixtures": true,
   "viewports": [
@@ -36,10 +36,10 @@
       "sha256": "e399a1ee3c64c9aac9a9ebc3c6b5d1ad0a93b6bf8996ba942e3182f16e54813e"
     },
     "after-390.png": {
-      "sha256": "bfba9092e69170e48c2fa82b37f4cd9f9b454b15186cb2b2fe5e3a935ef4ce21"
+      "sha256": "49def34d04ed2b83b6a7fbf88d87f5db9e4a3692618e6e37c3a279285428593b"
     },
     "after-sources.png": {
-      "sha256": "2cdb025682dc4ea44c02ea5a777bdac01c0ed17fc559a550d075c7668603bf84"
+      "sha256": "cdcc00fa80a72cfadf108d86fb7ee5c4acf73e26dff45b7ea4110769d8e6f413"
     },
     "after-viewer.png": {
       "sha256": "630b6afa1264bf04564352eda6945d83d985e5df6c4b258aeba94d92e335846d"

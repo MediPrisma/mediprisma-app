@@ -3,11 +3,13 @@
 All records, report text, identifiers and viewer responses in these screenshots are synthetic. No patient export or authenticated NHI response is included.
 
 Before: `119d4143be37ff3041d6d358f2c396f58f49721a` (PR base, including the production import Worker fix).
-After application code: `1a4fe2f99edb01f944e72f1b543bc10c54359242` (latest master integrated; safe dictation spacing, mixed-channel narratives, interval bounds and all distinct source assets preserved). The following evidence-only commit does not change application code.
+After application code: `087d8f49cf7ba5c4b360074c144714ec0c38b2a1` (latest master integrated; safe dictation spacing, mixed-channel narratives, interval bounds and all distinct source assets preserved). The following evidence-only commit does not change application code.
 
 Both isolated checkouts ran `e2e/tests/reports-cross-source-imaging.spec.ts` with the same generated bundle, locale, light theme, collapsed report rows, search and viewport. Before uses `IMAGING_BEFORE=1`; assertions expect eight rows before and four groups after. Six widths passed: 320, 390, 430, 768, 1024 and 1440 CSS pixels, height 1000.
 
 One prior NHI report remains outside the search, so the filtered display is 8/9 before and 4/5 after. Searching the NHI breast-ultrasound title still finds the merged row. Each original title has its own history action; opening the NHI source history displays its prior report without inferring aliases across body parts.
+
+Both source history actions are verified in the browser. In-house history shows the known Taipei VGH institution rather than a legacy DOC physician label; original physician data remains in the imported FHIR resources. The positive and negative assertions target the visible history panel, excluding retained hidden raw-data views.
 
 Both conclusion-based and attachment-only browser variants pass. Set `IMAGING_TEXT_ATTACHMENTS=1` for the latter: breast report bodies and prior history exist only in base64 text/plain attachments. History retains those attachments and uses the source examination day, including effectivePeriod and UTC-to-Taiwan day boundaries (also tested under UTC). Existing conclusions, notes and non-imaging date rendering are preserved.
 
