@@ -33,7 +33,7 @@ export function knownClinicalSourceSession(owner: object): ClinicalSourceSession
 export function captureClinicalSource(session: ClinicalSourceSession, queryKey: string, patientScope: string, resources: ClinicalSourceCapture['resources']): ClinicalReconciliationResult {
   const capture: ClinicalSourceCapture = {
     sourceId: session.sourceId, restBase: session.restBase, patientScope,
-    generation: String(++session.generation), resources: JSON.parse(JSON.stringify(resources)),
+    generation: String(++session.generation), resources: mutableClinicalProjection(resources),
   }
   session.captures.set(JSON.stringify([patientScope, queryKey]), capture)
   return reconcileClinicalSources([capture])
@@ -55,7 +55,11 @@ export function clearClinicalSourceQuery(session: ClinicalSourceSession, queryKe
 
 /** Mapper projections may be mutable; the source graph remains immutable. */
 export function mutableClinicalProjection<T>(value: T): T {
-  return value == null ? value : JSON.parse(JSON.stringify(value))
+  if (Array.isArray(value)) return value.map(item => mutableClinicalProjection(item)) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, mutableClinicalProjection(item)])) as T
+  }
+  return value
 }
 
 export function invalidateClinicalSource(session: ClinicalSourceSession, queryKey: string, patientScope: string): void {

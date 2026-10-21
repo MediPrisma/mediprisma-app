@@ -98,3 +98,15 @@ it('retains nested audit Bundle resources only in the source graph', () => {
   expect(model.graph.nodes.some(node => node.resource.id === 'snapshot')).toBe(true)
   expect(selectClinicalSourceResources(model).map(resource => resource.resourceType)).toEqual(['Bundle'])
 })
+
+it('preserves large source payloads while projecting only proven identical transmissions once', () => {
+  const payload = 'A'.repeat(2 * 1024 * 1024)
+  const original = { resourceType: 'DocumentReference', id: 'large', content: [{ attachment: { contentType: 'application/pdf', data: payload } }] }
+  const different = { ...original, content: [{ attachment: { contentType: 'application/pdf', data: payload.slice(0, -1) + 'B' } }] }
+  const model = reconcileClinicalSources([capture('large-1', [original, original]), capture('large-2', [original]), capture('large-3', [different])])
+  expect(model.graph.nodes.reduce((count, node) => count + node.occurrences, 0)).toBe(4)
+  expect(selectClinicalSourceResources(model)).toHaveLength(2)
+  expect(model.evidence.sameRecord).toHaveLength(2)
+  expect(model.evidence.conflict).toHaveLength(2)
+  expect((selectClinicalSourceResources(model)[0].content as any)[0].attachment.data).toBe(payload)
+})

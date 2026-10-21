@@ -1,3 +1,4 @@
+import { attachReportObservations } from '@/src/core/services/clinical-report-membership'
 import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { captureClinicalSource, invalidateClinicalSource, mutableClinicalProjection, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
 // FHIR Clinical Data Repository Implementation
@@ -160,7 +161,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       : queryType === 'MedicationRequest' || queryType === 'MedicationStatement' ? ['Medication'] : []
     const projected = { ...response, entry: selectClinicalSourceNodes(source)
       .filter(node => node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType))
-      .map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+      .map(node => ({ resource: node.resource, fullUrl: node.fullUrl, _clinicalSourceNodeKey: node.key })) }
     Object.defineProperty(projected, '_clinicalSource', { value: source, enumerable: false })
     session.successfulResponses.set(cacheKey, projected)
     return projected
@@ -241,22 +242,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     // mirrored 'Observation:vital-signs' status.
     const vitalSigns = selectVitalSignObservations(observations)
 
-    // Re-attach observations to DiagnosticReports that _include didn't populate.
-    // The bridge may not support _include; this mirrors what local-bundle.service does.
-    const multiplicity = new Map<string | undefined, number>()
-    observations.forEach(observation => multiplicity.set(observation.id, (multiplicity.get(observation.id) ?? 0) + 1))
-    const obsMap = new Map(observations.filter(observation => multiplicity.get(observation.id) === 1).map(observation => [observation.id, observation]))
-    const enrichedDiagnosticReports = diagnosticReports.map(dr => {
-      if (Array.isArray((dr as any)._observations) && (dr as any)._observations.length > 0) {
-        return dr
-      }
-      if (!Array.isArray(dr.result) || dr.result.length === 0) return dr
-      const resultIds = (dr.result as any[])
-        .map((ref: any) => ref.reference?.match(/^Observation\/([^/]+)$/)?.[1])
-        .filter(Boolean) as string[]
-      const matched = resultIds.map(id => obsMap.get(id)).filter((o): o is ObservationEntity => o !== undefined)
-      return matched.length > 0 ? { ...dr, _observations: matched } : dr
-    })
+    const clinicalSource = this.getClinicalSource(patientId)
+    const enrichedDiagnosticReports = attachReportObservations(diagnosticReports, observations, clinicalSource)
 
     // Pharmacy-only MedicationRequests without an encounter reference are
     // intentionally LEFT ORPHAN — they still surface in the medication list,
@@ -283,7 +270,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       devices,
       carePlans,
       resourceQueryStatus: { ...this.resourceQueryStatus },
-      clinicalSource: this.getClinicalSource(patientId),
+      clinicalSource,
     }
   }
 
@@ -462,7 +449,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Observation?patient=${patientId}&_count=500`,
       )
 
-      const result = response.entry?.map((e: any) => FhirMapper.toObservation(mutableClinicalProjection(e.resource))) || []
+      const result = response.entry?.map((e: any) => ({ ...FhirMapper.toObservation(mutableClinicalProjection(e.resource)), clinicalSourceNodeKey: e._clinicalSourceNodeKey })) || []
       this.markQuerySuccess('Observation', 'Observation', result.length, response)
       this.markDerivedVitalSignsStatus(result)
       return result
@@ -515,6 +502,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.DIAGNOSTIC_REPORT)
         .map((e: any) => e.resource)
 
+      const reportNodeKeys = new Map(entries.map((entry: any) => [entry.resource, entry._clinicalSourceNodeKey]))
       const source: ClinicalReconciliationResult = response._clinicalSource
       const graph = source.graph
       const observationNodes = new Map(graph.nodes
@@ -524,10 +512,10 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .filter(edge => edge.origin.resource === origin && path.test(edge.path) && edge.status === 'resolved')
         .flatMap(edge => edge.targetKeys.map(key => observationNodes.get(key)).filter((node): node is NonNullable<typeof node> => Boolean(node)))
       const result = reports.map((report: any) => {
-        const mapped = FhirMapper.toDiagnosticReport(mutableClinicalProjection(report), [])
+        const mapped = { ...FhirMapper.toDiagnosticReport(mutableClinicalProjection(report), []), clinicalSourceNodeKey: reportNodeKeys.get(report) as string | undefined }
         const members = resolvedObservations(report, /^result\[\d+\]$/).flatMap(node => [node, ...resolvedObservations(node.resource, /^hasMember\[\d+\]$/)])
         const unique = [...new Map(members.map(node => [node.key, node])).values()]
-        return unique.length ? { ...mapped, _observations: unique.map(node => FhirMapper.toObservation(mutableClinicalProjection(node.resource) as any)) } : mapped
+        return unique.length ? { ...mapped, _observations: unique.map(node => ({ ...FhirMapper.toObservation(mutableClinicalProjection(node.resource) as any), clinicalSourceNodeKey: node.key })) } : mapped
       })
       this.markQuerySuccess('DiagnosticReport', 'DiagnosticReport', result.length, response)
       return result
