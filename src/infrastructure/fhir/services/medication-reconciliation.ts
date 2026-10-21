@@ -1,7 +1,7 @@
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
 import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
-import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
+import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge, hospitalProductMayMatchConcept } from './hospital-medication-product-match'
 import { sharedPrescriptionIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
@@ -249,6 +249,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       if (key.codes.length || other.key.codes.length !== 1) return false
       const linked = (other.order.supportingInformation ?? []).map((reference: any) => knowledge.get(reference.reference))
         .filter(Boolean) as Resource[]
+      if (!linked.length) return hospitalProductMayMatchConcept(key.concept, other.key.concept)
       if (linked.length !== 1) return false
       if (hospitalProductMatchesKnowledge(key.concept, String(other.key.codes[0]), linked[0])) {
         const verified = verifiedPairs.get(order) ?? new Set<Resource>()
