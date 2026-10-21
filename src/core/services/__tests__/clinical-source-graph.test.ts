@@ -131,6 +131,22 @@ describe('buildClinicalSourceGraph', () => {
     expect(versionMismatch.nodes.find((node) => node.key === versionEdge.targetKeys[0])?.generation).toBe('import-1')
   })
 
+  it('marks cross-capture references ambiguous when equivalent raw targets have different resolved context', () => {
+    const captureWithPanel = (generation: string, value: number) => capture([
+      { resourceType: 'Observation', id: 'panel', hasMember: [{ reference: 'Observation/leaf' }] },
+      { resourceType: 'Observation', id: 'leaf', valueInteger: value },
+    ], { generation })
+    const graph = buildClinicalSourceGraph([
+      captureWithPanel('capture-a', 7),
+      captureWithPanel('capture-b', 9),
+      capture([{ resourceType: 'DiagnosticReport', id: 'report-c', result: [{ reference: 'Observation/panel' }] }], { generation: 'capture-c' }),
+    ])
+    const reportEdge = graph.references.find((edge) => edge.origin.resource.id === 'report-c')!
+    expect(reportEdge.status).toBe('ambiguous')
+    expect(reportEdge.targetKeys).toHaveLength(2)
+    expect(graph.references.filter((edge) => edge.origin.resource.id === 'panel').map((edge) => edge.status)).toEqual(['resolved', 'resolved'])
+  })
+
   it('falls back to a later query capture when the origin capture has no matching resource', () => {
     const graph = buildClinicalSourceGraph([
       capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }]),

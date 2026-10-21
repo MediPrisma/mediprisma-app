@@ -1,3 +1,5 @@
+import { clinicalSourceNodesEqualWithContext } from './clinical-source-context'
+
 export interface FhirSourceResource {
   resourceType: string
   id?: string
@@ -327,5 +329,13 @@ export function buildClinicalSourceGraph(captures: readonly ClinicalSourceCaptur
     }
   }
   refs.sort((a, b) => a.origin.key.localeCompare(b.origin.key) || a.path.localeCompare(b.path) || (a.reference ?? '').localeCompare(b.reference ?? ''))
-  return Object.freeze({ nodes: Object.freeze(nodes), references: Object.freeze(refs) })
+  const provisional = { nodes, references: refs } as ClinicalSourceGraph
+  const validatedReferences = refs.map((edge) => {
+    if (edge.status !== 'resolved' || edge.targetKeys.length < 2) return edge
+    const targets = edge.targetKeys.map((key) => nodeByKey.get(key)).filter((node): node is ClinicalSourceNode => Boolean(node))
+    const representative = targets[0]
+    if (!representative || targets.slice(1).every((target) => clinicalSourceNodesEqualWithContext(provisional, representative, target))) return edge
+    return Object.freeze({ ...edge, status: 'ambiguous' as const })
+  })
+  return Object.freeze({ nodes: Object.freeze(nodes), references: Object.freeze(validatedReferences) })
 }
