@@ -2,12 +2,14 @@
 import { createContext, useContext, useId } from 'react'
 import type { PreventReading } from '../utils/prevent-reading'
 import { usePreventStore } from '../stores/prevent-inputs.store'
+import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 import type { CdssRecommendation } from '../types'
 export const PreventReadingContext = createContext<PreventReading | undefined>(undefined)
 interface Summary { title: string; band?: string; recommendation: string; target: string; caveat: string; personalize: string; sourceUrl: string }
 export function PreventRiskSummary({ recommendation, locale, patientId }: { recommendation: CdssRecommendation; locale: string; patientId?: string }) {
   const reading = useContext(PreventReadingContext)
   const setInput = usePreventStore(s => s.setInput)
+  const carriedFrom = useCarriedLookup()
   const id = useId()
   const en = locale === 'en'
   const summary = (recommendation as CdssRecommendation & { preventSummary?: Summary }).preventSummary
@@ -41,7 +43,7 @@ export function PreventRiskSummary({ recommendation, locale, patientId }: { reco
             <label className="block text-sm" htmlFor={`${id}-${f.input.key}`}>{f.input.label[en ? 'en' : 'zh']}{f.input.unit ? ` · ${f.input.unit}` : ''}</label>
             <input id={`${id}-${f.input.key}`} type="number" step="any" disabled={!patientId} value={f.value} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring" onChange={e => patientId && setInput(patientId, f.input.key, e.target.value)} />
           </>}
-          <p className="text-xs text-muted-foreground">{f.source === 'physician' ? en ? 'Physician entry; document in chart' : '醫師輸入，請病歷註記' : f.source === 'record' ? en ? 'From record; verify date and current status' : '依病歷帶入，請核對日期與現況' : en ? 'Unconfirmed' : '未確認'}{f.date ? ` · ${f.date.slice(0,10)}` : ''}{f.ageDays !== undefined && f.ageDays > 365 ? en ? ` · ${f.ageDays} days old; repeat/reconfirm` : ` · 已 ${f.ageDays} 天，請複驗／重新確認` : ''}{f.unitError ? en ? ' · Unit requires verification' : ' · 單位需核對' : ''}</p>
+          <p className="text-xs text-muted-foreground">{f.source === 'physician' && carriedFrom(`prevent:${f.input.key}`) ? `${carriedLabel(carriedFrom(`prevent:${f.input.key}`) ?? '', en)}${en ? '; confirm it still applies' : '，請確認仍適用'}` : f.source === 'physician' ? en ? 'Physician entry; document in chart' : '醫師輸入，請病歷註記' : f.source === 'record' ? en ? 'From record; verify date and current status' : '依病歷帶入，請核對日期與現況' : en ? 'Unconfirmed' : '未確認'}{f.date ? ` · ${f.date.slice(0,10)}` : ''}{f.ageDays !== undefined && f.ageDays > 365 ? en ? ` · ${f.ageDays} days old; repeat/reconfirm` : ` · 已 ${f.ageDays} 天，請複驗／重新確認` : ''}{f.unitError ? en ? ' · Unit requires verification' : ' · 單位需核對' : ''}</p>
           {f.source === 'physician' && <button type="button" className="min-h-11 text-xs text-primary underline" onClick={() => patientId && setInput(patientId, f.input.key, undefined)}>{en ? 'Restore record value' : '恢復病歷數值'}</button>}
         </div>)}
       </div>

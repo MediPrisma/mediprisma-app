@@ -58,15 +58,15 @@ const json = (body: unknown) => ({
  * Route-level, so it covers every page the context opens — including ones a
  * spec creates itself — and applies before the app's first request.
  */
-export async function stubFirebaseAnonymousAuth(context: BrowserContext) {
+export async function stubFirebaseAnonymousAuth(context: BrowserContext, options: { initializeFirestore?: boolean } = {}) {
   // Run before any app script. Leaving Firestore uninitialized is important:
   // aborting its WebChannel request still makes the SDK retry forever, which
   // floods every tour run with expected-but-noisy transport errors.
-  await context.addInitScript(() => {
+  await context.addInitScript((disableFirestore: boolean) => {
     ;(window as Window & {
       __MEDIPRISMA_E2E_DISABLE_FIRESTORE__?: boolean
-    }).__MEDIPRISMA_E2E_DISABLE_FIRESTORE__ = true
-  })
+    }).__MEDIPRISMA_E2E_DISABLE_FIRESTORE__ = disableFirestore
+  }, !options.initializeFirestore)
 
   await context.route('**/identitytoolkit.googleapis.com/**', async (route) => {
     const url = route.request().url()

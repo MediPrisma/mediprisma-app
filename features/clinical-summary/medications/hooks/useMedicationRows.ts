@@ -1,6 +1,7 @@
 // Custom Hook: Medication Rows Processing
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo } from 'react'
+import { hospitalMedicationDisplayName, resolveHospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
 import type { MedicationRow } from '../types'
 import {
   formatDate,
@@ -14,7 +15,19 @@ import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
+import { medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
+import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
+import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
+import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
+import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
+
+function sourceCalendarDate(value?: string): string {
+  const day = medicationClinicalDay(value)?.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return day ? `${day[1]}/${Number(day[2])}/${Number(day[3])}` : formatDate(value)
+}
 import {
   resolveSinglePrescriptionRemainingDisplay,
 } from '../utils/remaining-supply'
@@ -23,6 +36,17 @@ import {
   MEDCLOUD_SOURCE_DRUG_CLASS_URL,
   MEDCLOUD_SOURCE_SETTING_URL,
 } from '@/src/shared/constants/medcloud.constants'
+
+/** Taipei clinical date, shared by the list, timeline and copied text. */
+function isoCalendarDay(value?: string): string | undefined {
+  return medicationClinicalDay(value)
+}
+
+function isHospitalOutpatientMedication(medication: any): boolean {
+  return medication?.medicationCodeableConcept?.coding?.some((coding: any) =>
+    String(coding?.system ?? '').startsWith('urn:oid:vgh.medication.'),
+  ) === true
+}
 
 /** Keep descriptive drug classes aligned with the UI language. Some bridge
  *  payloads carry a bilingual zh label such as
@@ -98,12 +122,20 @@ export function useMedicationRows(
   medications: any[],
   audience: 'medical' | 'patient' = 'medical',
   locale: string = 'zh-TW',
+  /** Full chart when the view only supplies a subset. Used for refill counts;
+   *  prescription type is always taken from this individual order. */
+  chronicHistory?: readonly any[],
 ) {
   // Re-run when the calendar day rolls over (tab left open) so "days left" /
   // active-vs-inactive don't freeze on the mount-time snapshot.
   const nowMs = useNow()
   return useMemo<MedicationRow[]>(() => {
     if (!Array.isArray(medications)) return []
+
+    // Cross-source duplicate reconciliation belongs to the import graph so
+    // lists, timelines and AI receive the same records. A name/day match in
+    // this view alone cannot prove a duplicate prescription.
+    const visibleMedications = medications.map(hospitalMedicationDisplayRecord)
 
     // NOTE: vaccine-categorized MedicationRequests (e.g. a tetanus shot
     // ordered as treatment for a wound) STAY in the medication list. Only
@@ -112,28 +144,13 @@ export function useMedicationRows(
     // filter was wrong because therapeutic vaccine prescriptions ARE
     // medications and belong with the rest of the patient's drug list.
 
-    const inactiveStatuses = new Set(["stopped", "completed"])
-
-    // The bridge emits one MedicationRequest per refill. The chronic
-    // (courseOfTherapyType.continuous) flag is set per refill, so a single
-    // drug may appear as a mix of "chronic" and "acute" refills depending on
-    // which NHI billing code each pharmacy used that month. Aggregate to the
-    // drug level — if ANY refill of this medication was chronic, treat every
-    // row of that drug as chronic. This matches the bridge's recommended
-    // detection logic ("若想顯示哪些是慢性用藥…group by 藥品名").
-    const chronicDrugKeys = new Set<string>()
-    for (const m of medications) {
-      if (!m) continue
-      if (!isChronicPrescription(m)) continue
-      const key = medicationClinicalIdentityKey(m)
-      if (key) chronicDrugKeys.add(key)
-    }
+    const inactiveStatuses = new Set(["stopped", "completed", "cancelled", "entered-in-error", "draft", "on-hold"])
 
     // Refill-history aggregates (per drug). Used to surface "Refills: 11 次
     // since 2023-12" on each row without forcing the user to expand the
     // per-drug accordion in the Medication History section.
     const refillsByDrug = new Map<string, { count: number; firstDate?: string }>()
-    for (const m of medications) {
+    for (const m of chronicHistory ?? visibleMedications) {
       if (!m) continue
       const key = medicationClinicalIdentityKey(m)
       if (!key) continue
@@ -149,9 +166,13 @@ export function useMedicationRows(
       }
     }
 
-    const enriched = medications.map((med: any, idx: number) => {
+    const buildRow = (source: any, idx: number): MedicationRow & { _startSortValue: number } => {
+      const med = source._resolvedMedicationCodeableConcept
+        ? { ...source, medicationCodeableConcept: source._resolvedMedicationCodeableConcept } : source
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const drugTerminology = med.drugTerminology
+      const hospitalMedicationName = !drugTerminology || med._reconciledSourceReferences?.length
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code) : undefined
 
       // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
       // localized (zh-TW) name in `.text` and the English name in
@@ -174,11 +195,12 @@ export function useMedicationRows(
       }
       const officialProductName = audience === 'medical'
         ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
+          || (hospitalMedicationName?.status === 'normalized' ? hospitalMedicationName.productName : undefined)
         : locale === 'en'
           ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
           : drugTerminology?.officialNameZh
       const ingredientName = audience === 'medical'
-        ? drugTerminology?.ingredientText?.trim()
+        ? drugTerminology?.ingredientText?.trim() || hospitalMedicationDisplayName(hospitalMedicationName)
         : undefined
       let medicationName = ingredientName || officialProductName || sourceMedicationName
       if (!medicationName) medicationName = 'Unknown Medication'
@@ -218,61 +240,64 @@ export function useMedicationRows(
 
       const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start
       const stopDateRaw = statusInactive
-        ? med.dispenseRequest?.validityPeriod?.end || med.effectiveDateTime || med.authoredOn
+        ? medicationRecordedTreatmentEnd(med)
         : undefined
 
-      const durationDays = computeDurationDays({
+      const durationDays = durationToDays(med.dispenseRequest?.expectedSupplyDuration, false)
+        ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false) ?? computeDurationDays({
         start: startDateRaw,
-        stop: stopDateRaw,
+        stop: medicationRecordedTreatmentEnd(med),
         expectedDuration: med.dispenseRequest?.expectedSupplyDuration,
         boundsDuration: dosage?.timing?.repeat?.boundsDuration,
         boundsPeriod: dosage?.timing?.repeat?.boundsPeriod,
-        validityPeriod: med.dispenseRequest?.validityPeriod,
       })
 
       // A source Period already contains the exact final calendar date. Do not
       // reconstruct it from the inclusive day count: start 5/20, end 5/21 is
       // two source days, but start + 2 would incorrectly display 5/22.
-      const explicitEndDateRaw =
-        med.dispenseRequest?.validityPeriod?.end ||
-        dosage?.timing?.repeat?.boundsPeriod?.end
+      const explicitEndDateRaw = medicationRecordedTreatmentEnd(med)
       const hasDurationEvidence =
         !!med.dispenseRequest?.expectedSupplyDuration ||
         !!dosage?.timing?.repeat?.boundsDuration
       let endDate: string | undefined
+      let endDateIso: string | undefined
       let daysRemaining: number | undefined
       if (explicitEndDateRaw) {
         const end = new Date(explicitEndDateRaw)
         if (!Number.isNaN(end.getTime())) {
           endDate = explicitEndDateRaw
-          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+          endDateIso = isoCalendarDay(explicitEndDateRaw)
+          daysRemaining = medicationSupplyDaysRemaining(explicitEndDateRaw, nowMs)
         }
       } else if (startDateRaw && durationDays && hasDurationEvidence) {
         const start = new Date(startDateRaw)
         if (!Number.isNaN(start.getTime())) {
-          const end = new Date(start)
-          end.setDate(end.getDate() + durationDays)
-          endDate = end.toISOString()
-          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+          endDate = medicationExpectedEnd(med)
+          endDateIso = endDate
+          const endTimestamp = medicationExpectedEndTimestamp(med)
+          daysRemaining = endTimestamp === undefined ? undefined : medicationSupplyDaysRemaining(new Date(endTimestamp).toISOString(), nowMs)
         }
       } else if (stopDateRaw) {
         const end = new Date(stopDateRaw)
         if (!Number.isNaN(end.getTime())) {
           endDate = stopDateRaw
-          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+          endDateIso = isoCalendarDay(stopDateRaw)
+          daysRemaining = medicationSupplyDaysRemaining(stopDateRaw, nowMs)
         }
       }
 
       // Inactive = explicitly stopped/completed OR computed endDate has passed
-      const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
+      const currentness = assessMedicationCurrentness(med, nowMs)
+      const isInactive = !currentness.current
       const remainingDisplay = resolveSinglePrescriptionRemainingDisplay(
         med,
         daysRemaining,
         nowMs,
       )
-      // Drug-level chronic: true if any refill of this drug was chronic
+      // A prior chronic fill does not make a different order a chronic Rx.
       const drugKey = medicationClinicalIdentityKey(med)
-      const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
+      const isChronic = isChronicPrescription(med) || hasExplicitChronicNote(med)
+      const selfPurchased = sourceSelfPurchase(med) === true
 
       const refillAgg = drugKey ? refillsByDrug.get(drugKey) : undefined
       const refillCount = refillAgg?.count ?? 1
@@ -325,6 +350,9 @@ export function useMedicationRows(
         drugTerminology?.officialNameZh,             // 官方藥名 中文
         drugTerminology?.officialNameEn,             // 官方藥名 英文
         drugTerminology?.ingredientText,              // 成分
+        hospitalMedicationName?.ingredientName,
+        hospitalMedicationName?.recordedGenericName,
+        hospitalMedicationName?.recordedProductName,
         drugTerminology?.doseForm,                    // 劑型
         drugTerminology?.atcCode,                     // ATC 碼
         drugTerminology?.atcNameZh,                   // ATC 分類 中文
@@ -348,19 +376,32 @@ export function useMedicationRows(
         // stable across the now-more-frequent memo recomputes — a random id
         // would remount id-less rows on every focus/day tick.
         id: med.id || `med-${idx}`,
+        encounterReference: med.encounter?.reference,
+        reconciledOrderIds: med._reconciledSourceReferences?.map((reference: string) => reference.split('/').pop()).filter(Boolean),
+        nhiDrugCode: (med.medicationCodeableConcept || med.code)?.coding?.find((coding: any) => isNhiDrugCodeSystem(coding.system))?.code,
+        sourceOrderIdentifiers: med.identifier?.filter((identifier: any) => identifier.system === 'urn:oid:vgh.medication.order' && identifier.value)
+          .map((identifier: any) => identifier.value),
+        dataOrigin: med._sourcePrescriptionRecords?.some(isVghtpeSource) ? 'hospital'
+          : med._reconciledSourceReferences?.length > 1 ? 'integrated'
+          : isVghtpeSource(med) || isHospitalOutpatientMedication(med) ? 'hospital'
+            : isMedcloudSource(med) ? 'medcloud' : undefined,
         drugKey,
         title: medicationName,
         secondaryTitle,
         status,
+        statusEstimated: hasCloudCoverageDerivedStatus(med),
         detail: detail || undefined,
         dose: doseSummary || undefined,
         route: routeSummary && routeSummary !== "—" ? routeSummary : undefined,
         frequency: frequencySummary || undefined,
         totalQuantity,
-        startedOn: formatDate(startDateRaw),
-        stoppedOn: stopDateRaw ? formatDate(stopDateRaw) : undefined,
+        startedOn: sourceCalendarDate(startDateRaw),
+        stoppedOn: stopDateRaw ? sourceCalendarDate(stopDateRaw) : undefined,
         durationDays,
-        endDate: endDate ? formatDate(endDate) : undefined,
+        endDate: endDate ? sourceCalendarDate(endDate) : undefined,
+        startedOnIso: isoCalendarDay(startDateRaw),
+        endDateIso,
+        endDateSource: explicitEndDateRaw ? 'reported' : endDate ? 'estimated' : undefined,
         daysRemaining,
         displayRemainingDays: remainingDisplay.displayDays,
         displayRemainingSource: remainingDisplay.displaySource,
@@ -368,9 +409,12 @@ export function useMedicationRows(
         singlePrescriptionRemainingCapturedAt: remainingDisplay.capturedAt,
         singlePrescriptionRemainingIsCurrent: remainingDisplay.isCurrent,
         isInactive,
+        currentnessUncertain: currentness.uncertain,
         isChronic,
+        selfPurchased,
         category,
         drugTerminology,
+        hospitalMedicationName,
         pharmacy,
         icdCode,
         icdText,
@@ -380,9 +424,24 @@ export function useMedicationRows(
         searchHaystack,
         _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
       }
-    })
-
-    return enriched
+    }
+    const enriched = visibleMedications.map(buildRow)
+    const sourceById = new Map(visibleMedications.map((med: any) => [med.id, med]))
+    for (const row of enriched) {
+      const med = sourceById.get(row.id) as any
+      if (med?._sourcePrescriptionRecords?.length) {
+        row.sourceComparison = { status: 'confirmed', records: med._sourcePrescriptionRecords.map(buildRow) }
+      }
+    }
+    const comparisonRows = projectMedicationComparisons(enriched,
+      row => (sourceById.get(row.id) as any)?._sourceRecordComparison, row => row,
+    ).map(({ record, sources, comparison, ownedIds, warnings }) => comparison ? {
+      ...record,
+      sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
+      reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
+      searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
+    } : record)
+    return comparisonRows
       .sort((a: any, b: any) => {
         if (a.isInactive !== b.isInactive) {
           return a.isInactive ? 1 : -1
@@ -393,5 +452,6 @@ export function useMedicationRows(
     // `audience` controls drug-name and ICD localisation; `locale` drives
     // category labels. Both must be in deps so flipping either updates the
     // list immediately instead of requiring a page reload.
-  }, [medications, audience, locale, nowMs])
+  }, [medications, audience, locale, nowMs, chronicHistory])
 }
+

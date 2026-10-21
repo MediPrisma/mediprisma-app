@@ -6,6 +6,7 @@ import {
   physicianInputRequestsOf,
 } from '@/features/clinical-decision-support/physician-input-contract'
 import { applyPhenotypeAnswer } from '@/features/clinical-decision-support/utils/apply-phenotype-answer'
+import { diagnosisAnswer } from '@/features/clinical-decision-support/renderers/visit/physician-input'
 import type { PhenotypeAnswer } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import type { CdssPatientProfile, CdssRecommendation } from '@/features/clinical-decision-support/types'
 
@@ -61,23 +62,43 @@ describe('DP-01 phenotype gate, host to pack', () => {
     expect(cardsFor(undefined)).toHaveLength(1)
   })
 
-  it('adds the symptom tick-list and the phenotype question on 「是」', () => {
+  it('adds the symptom tick-list on 「還不確定」; the diagnosis question carries the phenotype', () => {
     const requests = requestsFor(SUSPECTED)
 
     expect(requests.map((request) => request.kind))
-      .toEqual(['hf-suspicion', 'hf-symptoms', 'lvef-phenotype'])
+      .toEqual(['hf-suspicion', 'hf-symptoms'])
+    expect(requests[0].options?.map((option) => option.id)).toEqual(['hfref', 'hfpef', 'suspected'])
+    expect(requests[0].detail).toBe('紀錄中沒有 LVEF')
     const symptoms = requests.find((request) => request.kind === 'hf-symptoms')
     expect(symptoms?.selection).toBe('multiple')
     // The same three groups the congestion card offers, so a tick here is the
     // same examination rather than a second one.
     expect(symptoms?.options?.map((option) => option.id))
       .toEqual(['edema', 'orthopnea-pnd', 'jvp-rales'])
-    // Three choices, worded by the pack; the host renders them and sends back
-    // the id it was given.
-    const lvef = requests.find((request) => request.kind === 'lvef-phenotype')
-    expect(lvef?.options?.map((option) => option.id))
-      .toEqual(['reduced', 'preserved', 'unknown'])
-    expect(lvef?.options?.[0].label).toContain('<50%')
+  })
+
+  // One press on DP-00 is a diagnosis. What the host writes for it must be
+  // what the real pack reads as one — held end to end, not by copying terms.
+  it('reads the host’s 「HFrEF」 as a diagnosed HFrEF: the pathway opens without the no-diagnosis caveat', () => {
+    const answer = diagnosisAnswer('hfref', undefined, new Date('2026-09-09T09:00:00+08:00'))
+    const cards = cardsFor(answer)
+    const gdmt = cards.find((card) => card.id === 'heart-failure-hfref-gdmt')
+    expect(gdmt).toBeDefined()
+    expect(gdmt?.rationale).not.toContain('無心衰竭診斷紀錄')
+    expect(cards.map((card) => card.id)).not.toContain('heart-failure-hfpef-diagnosis')
+  })
+
+  it('reads the host’s 「HFpEF」 as a confirmed HFpEF, and 「還不確定」 afterwards takes it back', () => {
+    const now = new Date('2026-09-09T09:00:00+08:00')
+    const hfpef = diagnosisAnswer('hfpef', undefined, now)
+    const therapy = (cards: readonly CdssRecommendation[]) =>
+      cards.find((card) => card.id === 'heart-failure-hfpef-treatment')?.rationale ?? ''
+    expect(therapy(cardsFor(hfpef))).not.toBe('')
+    expect(therapy(cardsFor(hfpef))).not.toContain('HFpEF 診斷待確認')
+
+    const unsure = diagnosisAnswer('suspected', hfpef, now)
+    expect(unsure).toEqual({ hfSuspicion: 'suspected', answeredOn: '2026-09-09' })
+    expect(cardsFor(unsure)).toHaveLength(1)
   })
 
   it('closes the pathway on 「否」 without concluding anything about the record', () => {
@@ -139,7 +160,18 @@ describe('DP-01 phenotype gate, host to pack', () => {
 })
 
 describe('PhysicianInputRequestPanel', () => {
-  const requests = requestsFor(SUSPECTED).filter((request) => request.kind === 'lvef-phenotype')
+  // The pack now asks the phenotype as DP-01 on every chart; the three-way
+  // LVEF control stays in the panel for any card that still sends it.
+  const requests = [{
+    kind: 'lvef-phenotype' as const,
+    label: '院外、紙本或核醫報告中是否已知 LVEF？',
+    selection: 'single' as const,
+    options: [
+      { id: 'reduced', label: '院外／紙本／核醫已知 LVEF <50%', valueLabel: 'LVEF（%）與檢查日期' },
+      { id: 'preserved', label: '已知 LVEF ≥50% 且未曾 <50%', valueLabel: 'LVEF（%）與檢查日期' },
+      { id: 'unknown', label: '不清楚，建議安排心臟超音波＋NT-proBNP' },
+    ],
+  }]
 
   it('renders the pack’s choices as one radio group and reports the id chosen', () => {
     const onAnswer = jest.fn()
@@ -179,17 +211,19 @@ describe('PhysicianInputRequestPanel', () => {
       />,
     )
 
-    // 是 / 否 is one exclusive answer; the signs are a list, so an already
-    // ticked sign stays ticked while another is added.
+    // The diagnosis is one exclusive answer; the signs are a list, so an
+    // already ticked sign stays ticked while another is added.
     expect(screen.getByTestId('cdss-hf-symptom-edema')).toBeChecked()
     expect(screen.getByTestId('cdss-hf-symptom-jvp-rales')).not.toBeChecked()
 
     fireEvent.click(screen.getByTestId('cdss-hf-symptom-jvp-rales'))
     expect(onToggleSymptom).toHaveBeenCalledWith('jvp-rales', true)
 
-    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-not-suspected'))
+    expect(screen.getByTestId('cdss-hf-suspicion-detail')).toHaveTextContent('紀錄中沒有 LVEF')
+    expect(screen.queryByTestId('cdss-hf-suspicion-option-not-suspected')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('cdss-hf-suspicion-option-hfref'))
     expect(onAnswer).toHaveBeenCalledWith(
-      expect.objectContaining({ hfSuspicion: 'not-suspected' }),
+      expect.objectContaining({ hfSuspicion: 'suspected', diagnosis: 'hfrEF', choice: 'reduced' }),
     )
   })
 

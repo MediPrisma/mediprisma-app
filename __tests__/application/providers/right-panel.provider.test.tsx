@@ -93,3 +93,42 @@ describe('RightPanelProvider settings navigation target', () => {
     expect(screen.getByTestId('settings-target')).toHaveTextContent('none')
   })
 })
+
+function RevealHarness() {
+  const { activeTab, exportTab, revealSeq, revealTab, setExportTab } = useRightPanel()
+  return (
+    <div>
+      <output data-testid="active-tab">{activeTab}</output>
+      <output data-testid="export-tab">{exportTab}</output>
+      <output data-testid="reveal-seq">{revealSeq}</output>
+      <button type="button" onClick={() => setExportTab('ai')}>Leave on AI</button>
+      <button type="button" onClick={() => revealTab('ips-export')}>Reveal export</button>
+      <button type="button" onClick={() => revealTab('ips-export', { exportTab: 'emr' })}>Reveal EMR handoff</button>
+      <button type="button" onClick={() => revealTab('medical-chat', { exportTab: 'institution' })}>Reveal chat</button>
+    </div>
+  )
+}
+
+describe('RightPanelProvider reveal with a 複製 sub-tab', () => {
+  it('starts 複製 on 帶回紀錄 and opens the sub-tab a reveal asks for', () => {
+    render(<RightPanelProvider><RevealHarness /></RightPanelProvider>)
+    expect(screen.getByTestId('export-tab')).toHaveTextContent('emr')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave on AI' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal export' }))
+    expect(screen.getByTestId('active-tab')).toHaveTextContent('ips-export')
+    expect(screen.getByTestId('export-tab')).toHaveTextContent('ai')
+    expect(screen.getByTestId('reveal-seq')).toHaveTextContent('1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal EMR handoff' }))
+    expect(screen.getByTestId('export-tab')).toHaveTextContent('emr')
+    expect(screen.getByTestId('reveal-seq')).toHaveTextContent('2')
+  })
+
+  it('ignores a 複製 sub-tab passed with another tab', () => {
+    render(<RightPanelProvider><RevealHarness /></RightPanelProvider>)
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal chat' }))
+    expect(screen.getByTestId('active-tab')).toHaveTextContent('medical-chat')
+    expect(screen.getByTestId('export-tab')).toHaveTextContent('emr')
+  })
+})

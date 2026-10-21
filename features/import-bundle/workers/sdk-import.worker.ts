@@ -1,3 +1,4 @@
+import { SDK_IMPORT_AVAILABLE } from '@/src/shared/config/optional-capabilities'
 /// <reference lib="webworker" />
 
 declare const self: DedicatedWorkerGlobalScope
@@ -21,7 +22,7 @@ self.onmessage = (event: MessageEvent<{ bytes: ArrayBuffer }>) => {
         const detail = error instanceof Error ? error.message : 'Unknown conversion error'
         self.postMessage({
           type: 'failure',
-          error: `不支援的資料格式；請選擇 FHIR Bundle 或健康存摺 SDK JSON。(${detail})`,
+          error: `${SDK_IMPORT_AVAILABLE ? '不支援的資料格式；請選擇 FHIR Bundle 或健康存摺 SDK JSON。' : '此部署僅支援 FHIR Bundle 匯入。'}(${detail})`,
         })
       }
     })

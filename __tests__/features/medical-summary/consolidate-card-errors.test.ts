@@ -2,21 +2,22 @@ import { consolidateCardErrors } from "@/features/medical-summary/utils/consolid
 import { MEDICAL_SUMMARY_CARD_IDS } from "@/src/core/entities/medical-summary.entity"
 
 const allFailed = MEDICAL_SUMMARY_CARD_IDS.map((label) => ({ label, message: "連線失敗" }))
+const cardCount = MEDICAL_SUMMARY_CARD_IDS.length
 
 describe("consolidateCardErrors", () => {
-  it("shows one summary error when all six cards report the same message", () => {
+  it("shows one summary error when every card reports the same message", () => {
     expect(consolidateCardErrors(allFailed, "醫療摘要")).toEqual([
       { label: "醫療摘要", message: "連線失敗" },
     ])
   })
 
-  it.each([1, 3, 5])("preserves individual labels when only %i cards fail", (count) => {
+  it.each([1, 3, cardCount - 1])("preserves individual labels when only %i cards fail", (count) => {
     const partial = allFailed.slice(0, count)
     expect(consolidateCardErrors(partial, "醫療摘要")).toEqual(partial)
   })
 
   it("preserves all messages if one card has a different displayed error", () => {
-    const mixed = allFailed.map((item, index) => index === 5
+    const mixed = allFailed.map((item, index) => index === cardCount - 1
       ? { ...item, message: "安全警示解析失敗" } : item)
     expect(consolidateCardErrors(mixed, "醫療摘要")).toEqual(mixed)
   })

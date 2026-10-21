@@ -1,13 +1,16 @@
 import type { DataFilters, TimeRange } from '@/src/core/entities/clinical-context.entity'
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
+import { floorStartDay } from '@/src/core/utils/first-visit-floors'
+import { medicationSupplyEndDay, medicationClinicalTimestamp, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 
-const DAY_MS = 24 * 60 * 60 * 1000
 
 export type MedicationCurrentnessBasis =
   | 'source-status'
   | 'source-status-and-supply-window'
   | 'supply-window'
   | 'insufficient-status-and-supply'
+  | 'conflicting-source-status'
 
 export interface MedicationCurrentnessAssessment {
   current: boolean
@@ -19,36 +22,81 @@ export function normalizeClinicalStatus(status: unknown): string {
   return typeof status === 'string' ? status.trim().toLowerCase() : ''
 }
 
-export function durationToDays(duration: any): number | undefined {
+export function durationToDays(duration: any, round = true): number | undefined {
   const value = Number(duration?.value)
   if (!Number.isFinite(value) || value <= 0) return undefined
-  const unit = String(duration?.unit || duration?.code || '').toLowerCase()
+  const unit = String(duration?.code || duration?.unit || '').toLowerCase()
   const factor =
-    unit.startsWith('d') ? 1 :
-    unit.startsWith('w') ? 7 :
-    unit.startsWith('mo') || unit === 'month' || unit === 'months' ? 30 :
-    unit.startsWith('y') || unit === 'a' ? 365 :
-    unit === 'h' || unit.startsWith('hour') ? 1 / 24 :
-    1
-  return Math.round(value * factor)
+    unit.startsWith('d') || unit === '天' || unit === '日' ? 1 :
+    unit.startsWith('w') || unit === '週' || unit === '周' ? 7 :
+    unit.startsWith('mo') || unit === 'month' || unit === 'months' || unit === '月' || unit === '個月' ? 30 :
+    unit.startsWith('y') || unit === 'a' || unit === '年' ? 365 :
+    unit === 'h' || unit === 'hr' || unit.startsWith('hour') || unit === '小時' ? 1 / 24 :
+    unit === 'min' || unit.startsWith('minute') || unit === '分鐘' || unit === '分' ? 1 / 1440 :
+    unit === 's' || unit === 'sec' || unit.startsWith('second') || unit === '秒' ? 1 / 86400 :
+    unit === '' || unit === '24h' ? 1 : undefined
+  if (factor === undefined) return undefined
+  return round ? Math.round(value * factor) : value * factor
+}
+
+export function medicationRecordedTreatmentEnd(medication: any): string | undefined {
+  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+  const originalHospital = medication?._sourcePrescriptionRecords?.find(isVghtpeSource) ?? medication
+  // Standard validityPeriod is dispensing authorization, not treatment time.
+  // North VGH's legacy adapter uses it for the recorded execution interval.
+  return [dosage?.timing?.repeat?.boundsPeriod?.end,
+    isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined]
+    .find(end => typeof end === 'string' && /^\d{4}-\d{2}-\d{2}/.test(end) && Number.isFinite(Date.parse(end)))
+}
+
+const isElapsedDuration = (duration: any) => /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(String(duration?.code || duration?.unit || '').toLowerCase())
+
+export function medicationExpectedStartTimestamp(medication: any): number {
+  const start = medication?.authoredOn || medication?.effectiveDateTime
+  if (!start) return NaN
+  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+  const duration = [medication?.dispenseRequest?.expectedSupplyDuration, dosage?.timing?.repeat?.boundsDuration]
+    .find(value => durationToDays(value, false) !== undefined)
+  const days = durationToDays(duration, false)
+  const day = medicationClinicalDay(start)
+  return day && days && Number.isInteger(days) && !isElapsedDuration(duration) && !medicationRecordedTreatmentEnd(medication)
+    ? medicationClinicalTimestamp(day) : medicationClinicalTimestamp(start)
+}
+
+/** End of the inclusive coverage interval; fractional durations keep their
+ * exact elapsed time, while whole-day supplies cover their final calendar day. */
+export function medicationExpectedEndTimestamp(medication: any): number | undefined {
+  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+  const explicitEnd = medicationRecordedTreatmentEnd(medication)
+  const started = medication?.authoredOn || medication?.effectiveDateTime
+  const calendarEnd = (day: string) => {
+    return medicationClinicalTimestamp(day.slice(0, 10)) + 86400000 - 1
+  }
+  if (explicitEnd) {
+    return explicitEnd.length === 10 ? calendarEnd(explicitEnd) : medicationClinicalTimestamp(explicitEnd)
+  }
+  const duration = [medication?.dispenseRequest?.expectedSupplyDuration, dosage?.timing?.repeat?.boundsDuration]
+    .find(value => durationToDays(value, false) !== undefined)
+  const days = durationToDays(duration, false)
+  if (!started || !days) return undefined
+  if (Number.isInteger(days) && !isElapsedDuration(duration)) {
+    const endDay = medicationSupplyEndDay(medicationClinicalDay(started), days)
+    return endDay ? calendarEnd(endDay) : undefined
+  }
+  const startMs = medicationClinicalTimestamp(started)
+  const endMs = Number.isFinite(startMs) ? startMs + days * 86400000 - 1 : undefined
+  return medicationClinicalDay(endMs) ? endMs : undefined
 }
 
 export function medicationExpectedEnd(medication: any): string | undefined {
-  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
-  const days = durationToDays(medication?.dispenseRequest?.expectedSupplyDuration)
-    ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
-  const started = medication?.authoredOn || medication?.effectiveDateTime
-  if (!started || !days) return undefined
-  const date = new Date(started)
-  if (Number.isNaN(date.getTime())) return undefined
-  date.setDate(date.getDate() + days)
-  return date.toISOString().slice(0, 10)
+  return medicationClinicalDay(medicationExpectedEndTimestamp(medication))
 }
 
-function isMedicationSupplyWindowOpen(end: string, nowMs: number): boolean {
-  const endMs = Date.parse(end)
-  return Number.isFinite(endMs) && endMs >= nowMs - DAY_MS
-}
+// The newest record is picked by string sort, so only dates written the ISO
+// way take part: "20240601" sorts after "2024-06-01" and does not parse. A
+// malformed date must not break building the context every AI feature reads.
+const isParsableDay = (value: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}/.test(value) && Number.isFinite(Date.parse(value))
 
 /**
  * Resolve currentness from source-authored fields without rewriting status.
@@ -65,6 +113,17 @@ export function assessMedicationCurrentness(
 ): MedicationCurrentnessAssessment {
   const status = normalizeClinicalStatus(medication?.status)
   const end = medicationExpectedEnd(medication)
+  const endMs = medicationExpectedEndTimestamp(medication)
+  const supplyWindowOpen = endMs !== undefined && nowMs <= endMs
+  if (status === 'completed' && (medication?._sourceResourceType === 'MedicationStatement' || medication?.resourceType === 'MedicationStatement')) {
+    return { current: false, uncertain: false, basis: 'source-status' }
+  }
+  if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict')
+    && !isVghtpeSource(medication)
+    && !['draft', 'on-hold', 'stopped', 'cancelled', 'entered-in-error', 'ended', 'not-taken'].includes(status)
+    && (!end || supplyWindowOpen)) {
+    return { current: false, uncertain: true, basis: 'conflicting-source-status' }
+  }
 
   if (!status || status === 'unknown') {
     if (!end) {
@@ -75,7 +134,7 @@ export function assessMedicationCurrentness(
       }
     }
     return {
-      current: isMedicationSupplyWindowOpen(end, nowMs),
+      current: supplyWindowOpen,
       uncertain: false,
       basis: 'supply-window',
     }
@@ -89,6 +148,11 @@ export function assessMedicationCurrentness(
   }
 
   if (!end) {
+    const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+    if (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration
+      || medication?.dispenseRequest?.validityPeriod?.end) {
+      return { current: false, uncertain: true, basis: 'insufficient-status-and-supply' }
+    }
     return {
       current: status === 'active',
       uncertain: false,
@@ -97,7 +161,7 @@ export function assessMedicationCurrentness(
   }
 
   return {
-    current: isMedicationSupplyWindowOpen(end, nowMs),
+    current: supplyWindowOpen,
     uncertain: false,
     basis: 'source-status-and-supply-window',
   }
@@ -116,17 +180,28 @@ export function isChronicMedicationRecord(medication: any): boolean {
   return Array.isArray(coding) && coding.some((item: any) => item?.code === 'continuous')
 }
 
-export function filterMedicationRecords(
+/** What the medication scope kept, split into the records the saved filters
+ *  selected and the recently-dispensed ones the latest-known floor added.
+ *  Consumers that must LABEL the two differently (the AI medication section)
+ *  read this; everything else takes the flat list below. */
+export interface MedicationSelection {
+  /** Records the saved filters selected on their own. */
+  selected: any[]
+  /** Lapsed records the floor added because too few medicines are current. */
+  floor: any[]
+}
+
+export function selectMedicationRecords(
   medications: any[],
   filters: Partial<DataFilters> | undefined,
   clinicalData: { encounters?: any[] } | null | undefined,
   nowMs: number,
-): any[] {
+): MedicationSelection {
   const chronic = filters?.medicationChronic ?? 'all'
   const timeRange = filters?.medicationTimeRange ?? 'all'
   const inWindow = makeTimeRangeTest(timeRange, clinicalData)
 
-  return medications.filter((medication) => {
+  const selected = medications.filter((medication) => {
     if (chronic === 'chronic' && !isChronicMedicationRecord(medication)) return false
     if (chronic === 'acute' && isChronicMedicationRecord(medication)) return false
     const date = medication?.authoredOn || medication?.effectiveDateTime
@@ -134,6 +209,87 @@ export function filterMedicationRecords(
     if (filters?.medicationStatus === 'active' && !isMedicationCurrentlyInUse(medication, nowMs)) return false
     return true
   })
+  if (filters?.medicationStatus !== 'active' || selected.length >= MEDICATION_FLOOR_MIN_CURRENT) {
+    return { selected, floor: [] }
+  }
+  // Latest-known floor: when every supply window has lapsed (a chemotherapy
+  // patient between cycles, a quiet half-year) the "使用中" view would hand the
+  // AI an empty medicine list, which reads as "takes nothing". Fill up to the
+  // floor with the most recently dispensed distinct medicines inside the
+  // milestone horizon; both lanes mark them as lapsed.
+  const newest = medications
+    .map((medication) => String(medication?.authoredOn || medication?.effectiveDateTime || '').slice(0, 10))
+    .filter(isParsableDay)
+    .sort()
+    .at(-1)
+  const floorStart = floorStartDay(newest, MILESTONE_ENCOUNTER_FLOOR_DAYS)
+  if (!floorStart) return { selected, floor: [] }
+  const present = new Set(selected)
+  const seenNames = new Set(selected.map(medicationDisplayName))
+  // Only what was dispensed and has run out may be presented as lapsed: a
+  // current medicine the 急慢性 filter left out stays out, and a record with no
+  // supply estimate is unknown, not ended.
+  const lapsed = medications
+    .filter((medication) => !present.has(medication)
+      && !(chronic === 'chronic' && !isChronicMedicationRecord(medication))
+      && !(chronic === 'acute' && isChronicMedicationRecord(medication))
+      && isLapsedDispensing(medication, nowMs)
+      && String(medication?.authoredOn || medication?.effectiveDateTime || '').slice(0, 10) >= floorStart)
+    .sort((a, b) => String(b?.authoredOn || b?.effectiveDateTime || '').localeCompare(String(a?.authoredOn || a?.effectiveDateTime || '')))
+  const floor: any[] = []
+  for (const medication of lapsed) {
+    const name = medicationDisplayName(medication)
+    if (!name || seenNames.has(name)) continue
+    seenNames.add(name)
+    floor.push(medication)
+    if (floor.length >= MEDICATION_FLOOR_RECENT_COUNT) break
+  }
+  return { selected, floor }
+}
+
+export function filterMedicationRecords(
+  medications: any[],
+  filters: Partial<DataFilters> | undefined,
+  clinicalData: { encounters?: any[] } | null | undefined,
+  nowMs: number,
+): any[] {
+  const { selected, floor } = selectMedicationRecords(medications, filters, clinicalData, nowMs)
+  return floor.length > 0 ? [...selected, ...floor] : selected
+}
+
+/**
+ * Statuses that say the order never actually reached the patient. The floor
+ * fills the list with what was most recently DISPENSED, so a draft, a hold, a
+ * cancellation or a retraction can never take one of its slots — it would be
+ * presented as a medicine the patient had been taking until recently.
+ * `stopped`/`completed`/`ended` are absent on purpose: those orders did run.
+ */
+const NEVER_DISPENSED_STATUSES = new Set(['draft', 'on-hold', 'cancelled', 'entered-in-error'])
+
+/**
+ * A record that reached the patient and whose estimated supply has run out —
+ * the only kind a latest-known fill may present as "supply ended". A never-
+ * dispensed order is not one, and neither is a record with no supply estimate
+ * (its state is unknown, not ended).
+ */
+export function isLapsedDispensing(medication: any, nowMs: number): boolean {
+  if (NEVER_DISPENSED_STATUSES.has(normalizeClinicalStatus(medication?.status))) return false
+  if (medication?._sourceRecordComparison?.warnings?.includes('source-status-conflict') && !isVghtpeSource(medication)) return false
+  const end = medicationExpectedEndTimestamp(medication)
+  return end !== undefined && nowMs > end
+}
+
+/** Below this many current medicines the recent-medicine floor engages. */
+export const MEDICATION_FLOOR_MIN_CURRENT = 5
+/** How many recently dispensed (lapsed) medicines the floor adds at most. */
+export const MEDICATION_FLOOR_RECENT_COUNT = 10
+
+function medicationDisplayName(medication: any): string {
+  const text = medication?.medicationCodeableConcept?.text
+    || medication?.medicationCodeableConcept?.coding?.[0]?.display
+    || medication?.medicationReference?.display
+    || ''
+  return String(text).toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
 export function procedureDate(procedure: any): string | undefined {
@@ -161,13 +317,39 @@ export function filterProcedureRecords(
   return filtered
 }
 
+/** Admissions and emergency visits stay citable for this long however narrow
+ *  the saved visit window is. The default 6-month window exists to keep routine
+ *  outpatient/pharmacy rows out of the prompt; it was silently dropping the
+ *  one admission whose claim codes carried the anticoagulant history. */
+export const MILESTONE_ENCOUNTER_FLOOR_DAYS = 730
+
+function isMilestoneEncounter(encounter: any): boolean {
+  const cls = encounter?.class
+  const code = String(cls?.code ?? cls?.coding?.[0]?.code ?? '').trim().toUpperCase()
+  const display = `${cls?.display ?? ''} ${cls?.text ?? ''} ${cls?.coding?.[0]?.display ?? ''}`
+  if (['IMP', 'ACUTE', 'NONAC', 'SS', 'EMER'].includes(code)) return true
+  return /住院|急診|inpatient|emergency/i.test(display)
+}
+
 export function filterEncounterRecords(
   encounters: any[],
   range: TimeRange,
   clinicalData: { encounters?: any[] } | null | undefined,
 ): any[] {
   const inWindow = makeTimeRangeTest(range, clinicalData)
+  const inMilestoneFloor = makeTimeRangeTest('all', clinicalData)
+  const newest = [...(clinicalData?.encounters ?? encounters)]
+    .map((encounter) => String(encounter?.period?.start ?? ''))
+    .filter(isParsableDay)
+    .sort()
+    .at(-1)
+  const floorStart = floorStartDay(newest, MILESTONE_ENCOUNTER_FLOOR_DAYS)
+  const keptByFloor = (encounter: any): boolean => {
+    if (!floorStart || !isMilestoneEncounter(encounter)) return false
+    const start = String(encounter?.period?.start ?? '').slice(0, 10)
+    return Boolean(start) && start >= floorStart && inMilestoneFloor(encounter?.period?.start)
+  }
   return [...encounters]
-    .filter((encounter) => range === 'all' || inWindow(encounter?.period?.start))
+    .filter((encounter) => range === 'all' || inWindow(encounter?.period?.start) || keptByFloor(encounter))
     .sort((a, b) => (b?.period?.start || '').localeCompare(a?.period?.start || ''))
 }

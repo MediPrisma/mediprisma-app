@@ -22,7 +22,7 @@ import { formatReportText } from '@/src/shared/utils/report-text-format'
 import { markdownToPlainText } from '@/src/shared/utils/markdown-to-text'
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
-import type { LabCell, LabPivot } from '@/src/shared/utils/lab-pivot.utils'
+import { cellDisplayValue, type LabCell, type LabPivot } from '@/src/shared/utils/lab-pivot.utils'
 
 /** 'last' / 'last3' count DRAWS (a panel's own most recent collection days);
  *  the rest are calendar windows. Counting draws is what a clinician means by
@@ -91,7 +91,8 @@ function shortDate(iso: string, preset: EmrPreset, currentYear: number): string 
  * rather than pasting a dash into the chart.
  */
 function cellText(cell: LabCell | undefined): string | null {
-  const raw = (cell?.value ?? '').trim()
+  // The comparator is part of the result: "<0.5" pasted as "0.5" is wrong.
+  const raw = (cell ? cellDisplayValue(cell) : '').trim()
   if (!cell || !raw || raw === '—') return null
   if (!cell.isAbnormal) return raw
   const code = cell.interpretationCode && cell.interpretationCode !== 'N' ? cell.interpretationCode : ''
@@ -367,24 +368,53 @@ export function collectEmrReports(diagnosticReports: any[]): EmrReportItem[] {
   for (const dr of diagnosticReports || []) {
     const group = inferReportDisplayGroup(dr)
     if (group === 'lab' || group === 'vitals') continue
-    const raw = reportNarrative(dr)
-    if (!raw) continue
-    const date = (dr?.effectiveDateTime || dr?.issued || '').slice(0, 10)
-    if (!date) continue
-    const name = reportTitle(dr)
-    if (!name) continue
+    const item = toEmrReportItem(dr)
+    if (!item) continue
 
     // Bridge duplicates: the same narrative re-sent for one exam. Identical
     // text on the same day would paste twice into the chart.
-    const key = `${date}|${normalizeForDedup(name)}|${normalizeForDedup(raw)}`
+    const key = emrReportDedupKey(item)
     if (seen.has(key)) continue
     seen.add(key)
 
-    items.push({ id: dr?.id || key, date, name, org: reportOrg(dr), body: formatNarrative(raw), raw })
+    items.push(item)
   }
 
   items.sort((a, b) => b.date.localeCompare(a.date))
   return items
+}
+
+/** Exam day of a report, "YYYY-MM-DD", or '' when the source gave none. */
+export function emrReportDate(dr: any): string {
+  return (dr?.effectiveDateTime || dr?.issued || '').slice(0, 10)
+}
+
+/** Title of a report as the handoff prints it. */
+export function emrReportTitle(dr: any): string {
+  return reportTitle(dr)
+}
+
+/** One report as a pasteable item, or null when it has no narrative text
+ *  (image-only, viewer-only) or no usable date / title. */
+export function toEmrReportItem(dr: any): EmrReportItem | null {
+  const raw = reportNarrative(dr)
+  if (!raw) return null
+  const date = emrReportDate(dr)
+  if (!date) return null
+  const name = reportTitle(dr)
+  if (!name) return null
+  const key = `${date}|${normalizeForDedup(name)}|${normalizeForDedup(raw)}`
+  return { id: dr?.id || key, date, name, org: reportOrg(dr), body: formatNarrative(raw), raw }
+}
+
+function emrReportDedupKey(item: EmrReportItem): string {
+  return `${item.date}|${normalizeForDedup(item.name)}|${normalizeForDedup(item.raw)}`
+}
+
+/** Same narrative, ignoring whitespace — used to fold the separately billed
+ *  2D and Doppler records of one echocardiogram into one paste. */
+export function emrNarrativeKey(item: EmrReportItem): string {
+  return normalizeForDedup(item.raw)
 }
 
 /** The reports a window selects, from an already-collected list. */

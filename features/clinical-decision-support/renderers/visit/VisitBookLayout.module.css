@@ -1,0 +1,885 @@
+/*
+ * The pocket-handbook page (`?visit=book`), drawn to the prototype the owner
+ * chose (「我想要看到跟 prototype 一模一樣的畫面，不用管現在原本 CDSS 的 UI
+ * 顏色設計」, 2026-09-30): paper, one white sheet, serif section heads, table
+ * rows, the map rail with its legend. Its own palette on purpose; the rest of
+ * the app keeps the design tokens. The content drawn inside it by other
+ * components (the decision buttons, the answer toggles, the checklists) is
+ * restyled here, inside `.book` only.
+ */
+
+.book {
+  --paper: #E9E6DF;
+  --sheet: #FFFFFF;
+  --line: #DDD8CC;
+  --line-soft: #E6E2D8;
+  --line-faint: #EEEBE3;
+  --ink: #1C1C1A;
+  --ink-2: #3D3A34;
+  --ink-3: #5F5B53;
+  --ink-4: #6B665C;
+  --ink-5: #8A8476;
+  --ink-6: #A39E92;
+  --thead: #F3F1EB;
+  --row-act: #FFFCF4;
+  --row-safety: #FBF3F1;
+  --blue: #1F5FA8;
+  --blue-hover: #174E8C;
+  --blue-ink: #174A85;
+  --blue-bg: #E6EEF8;
+  --blue-soft: #F2F6FC;
+  --blue-line: #BFD1EA;
+  --btn-line: #CFCABD;
+  --amber: #D98A00;
+  --amber-ink: #7A4700;
+  --amber-bg: #FFF6E3;
+  --amber-pill: #FFF1D6;
+  --warn-ink: #9A5B00;
+  --green: #2E6B3A;
+  --green-bg: #E5F1E7;
+  --red: #B42318;
+  /* Filled buttons: white text on them ≥4.5:1 (WCAG 1.4.3). */
+  --blue-fill: #1F5FA8;
+  --blue-fill-hover: #174E8C;
+  --red-fill: #B42318;
+  --red-fill-hover: #9A1D14;
+  --panel: #FAF8F3;
+  --panel-line: #E8E3D6;
+  --box-line: #E8DFC9;
+  --serif: var(--book-serif), 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
+  --sans: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  container-type: inline-size;
+  /* The whole window, as the prototype's page: over the app's own chrome. */
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-bottom: 96px;
+}
+
+/* 決策地圖 v2: the same page inside the CDSS panel, beside the patient's
+   record — the panel scrolls it, and the panel's header switches it. */
+.book.inline {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+  border-radius: 12px;
+  padding-bottom: 32px;
+}
+
+:global(.dark) .book {
+  --paper: #1B1A18;
+  --sheet: #242320;
+  --line: #3A3833;
+  --line-soft: #34322D;
+  --line-faint: #2E2C28;
+  --ink: #ECE9E2;
+  --ink-2: #D6D2C8;
+  --ink-3: #B5B0A5;
+  --ink-4: #A39E92;
+  --ink-5: #8F897D;
+  --ink-6: #6F6A60;
+  --thead: #2C2A26;
+  --row-act: #2B271D;
+  --row-safety: #33211E;
+  --blue: #3F7CC4;
+  --blue-hover: #4F8BD2;
+  --blue-ink: #A9C8F0;
+  --blue-bg: #1E3350;
+  --blue-soft: #1C2A3D;
+  --blue-line: #34507A;
+  --btn-line: #4A473F;
+  --amber-ink: #F2C26B;
+  --amber-bg: #3A2E14;
+  --amber-pill: #4A3914;
+  --warn-ink: #E3A64B;
+  --green: #7DC08A;
+  --green-bg: #1F3526;
+  --red: #E0776B;
+  /* The text tokens above are too light for white text (#E0776B 2.99:1,
+     #3F7CC4 4.29:1): the fills keep white ≥4.5:1 and the fill ≥3:1 against
+     the sheet, the rows, the boxes and the 看依據 panel (#219 review). */
+  --blue-fill: #3B74BA;
+  --blue-fill-hover: #3D76BD;
+  --red-fill: #C44A3E;
+  --red-fill-hover: #C74E42;
+  --panel: #2A2824;
+  --panel-line: #3A372F;
+  --box-line: #4A3F28;
+}
+
+/* ------------------------------- header ------------------------------- */
+
+/* Record controls move here; their controller remains in the CDSS panel. */
+.saveRecord { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; }
+.saveRecord:empty { display: none; }
+.saveRecord :global(button) {
+  height: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--blue);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--blue-ink);
+  font: 500 12px/1.4 var(--sans);
+  box-shadow: none;
+}
+.saveRecord :global(button:hover:not(:disabled)) { background: var(--blue-soft); }
+.saveRecord :global(button:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+.saveRecord :global(button:disabled) { cursor: wait; }
+@media (max-width: 767px) {
+  .saveRecord :global(button) { height: 44px; min-height: 44px; }
+}
+
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--sheet);
+  border-bottom: 1px solid #D6D1C4;
+}
+:global(.dark) .head { border-bottom-color: var(--line); }
+.headInner {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 12px 32px;
+}
+/* The disease tabs, as the prototype's segmented pair. On a phone in English
+   (「Atrial fibrillation Pilot」) they wrap rather than widen the page. */
+.tabs { min-width: 0; max-width: 100%; }
+.tabs :global([role='group']) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: #F1EEE7;
+}
+:global(.dark) .tabs :global([role='group']) { background: var(--thead); }
+.tabs :global([role='group'] > button) {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 14px;
+  box-shadow: none;
+}
+.tabs :global([role='group'] > button[aria-pressed='true']) {
+  background: var(--sheet);
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.tabs :global([data-applicable='false']) { color: var(--ink-6); }
+.exit { font-size: 13px; color: var(--ink-4); text-decoration: underline; }
+.headText { display: flex; flex-direction: column; min-width: 0; flex: 1 1 22rem; }
+.headLine { font-weight: 700; font-size: 15px; }
+.headValues { font-size: 13px; color: var(--ink-3); }
+.headValues b { font-weight: 500; color: var(--ink-2); }
+.headValues .alert { color: var(--warn-ink); font-weight: 700; }
+.pending, .pendingDone {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  background: var(--amber-pill);
+  color: var(--amber-ink);
+}
+.pendingDone { background: var(--green-bg); color: var(--green); }
+
+/* -------------------------------- body -------------------------------- */
+
+.body {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+  padding: 24px 32px 0;
+  align-items: start;
+  /* One column below 880px, and never wider than the page: no answer, label
+     or table may push the page sideways (#219 review, English at 320px). */
+  grid-template-columns: minmax(0, 1fr);
+}
+@container (min-width: 880px) {
+  .body { grid-template-columns: 260px minmax(0, 1fr); }
+  .body.bodyMapClosed { grid-template-columns: 44px minmax(0, 1fr); }
+  .map, .mapRail { position: sticky; top: 92px; max-height: calc(100vh - 110px); overflow-y: auto; }
+}
+.mapToggle {
+  min-width: 32px;
+  min-height: 32px;
+  margin-left: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mapToggle:hover { background: var(--thead); }
+.mapRail { display: flex; }
+.mapExpand {
+  width: 44px;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.mapExpand:hover { background: var(--thead); }
+.mapExpandArrow { font-size: 18px; color: var(--ink-3); }
+.mapExpandText { writing-mode: vertical-rl; font-size: 14px; font-weight: 700; letter-spacing: 0.1em; }
+@container (max-width: 879px) {
+  .mapExpand { width: 100%; min-height: 44px; flex-direction: row; justify-content: center; }
+  .mapExpandText { writing-mode: horizontal-tb; }
+}
+
+/* --------------------------------- map -------------------------------- */
+
+.map {
+  min-width: 0;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 8px 14px;
+}
+.mapHead { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 0 6px 8px; }
+.mapHead .mapCount { margin-left: auto; }
+.mapTitle { font-size: 14px; font-weight: 700; white-space: nowrap; }
+/* A narrow rail (the CDSS panel) breaks the count at its spaces, never inside 待處理. */
+.mapCount { font-size: 12px; color: var(--ink-4); word-break: keep-all; text-align: right; }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 0 8px 10px;
+  font-size: 11px;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--line-faint);
+}
+.legend > span { display: inline-flex; align-items: center; gap: 4px; }
+.legendMuted { color: var(--ink-6); }
+.mapSection { padding-top: 8px; }
+.mapSectionHead {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mapNum { font-family: var(--serif); font-weight: 700; color: var(--ink-5); font-size: 13px; }
+.mapName { font-family: var(--serif); font-weight: 700; font-size: 14px; }
+.mapPending {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--amber-ink);
+  background: var(--amber-pill);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+.mapLines { list-style: none; margin: 0; padding: 0; }
+.mapLine {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 2px 8px 2px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.mapLine:hover { background: var(--thead); }
+.mapLine[data-book-mark='act'], .mapLine[data-book-mark='safety'] { color: var(--amber-ink); font-weight: 700; background: var(--amber-bg); }
+.mapLine[data-book-mark='ask'] { color: var(--blue-ink); font-weight: 500; }
+.mapLine[data-book-mark='absent'] { color: var(--ink-6); }
+.mapDp { font-family: var(--mono); font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.mapLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mapNote { margin-left: auto; font-size: 11px; flex-shrink: 0; font-weight: 400; }
+
+.markSlot { width: 12px; display: inline-flex; justify-content: center; flex-shrink: 0; }
+.markAct { width: 8px; height: 8px; border-radius: 999px; background: var(--amber); }
+.markSafety { width: 9px; height: 9px; border-radius: 2px; background: var(--red); }
+.markAsk { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--blue); box-sizing: border-box; }
+.markWait { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--amber); box-sizing: border-box; }
+.markInfo { width: 6px; height: 6px; border-radius: 999px; background: var(--ink-6); }
+.markDone { color: var(--green); }
+
+/* -------------------------------- sheet ------------------------------- */
+
+.sheet {
+  min-width: 0;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 36px 36px;
+}
+@container (max-width: 600px) {
+  /* A phone keeps the screen for the page: the header scrolls away with it. */
+  .head { position: static; }
+  .sheet { padding: 8px 16px 24px; }
+  .headInner { padding: 12px 16px; }
+  .body { padding: 16px 12px 0; }
+}
+
+.triggers {
+  margin: 18px 0 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--amber-bg);
+  font-size: 14px;
+}
+.triggers b { color: var(--amber-ink); }
+
+.section {
+  padding: 26px 0 22px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-margin-top: 80px;
+}
+.section:first-of-type { border-top: 0; }
+.sectionHead { display: flex; align-items: baseline; gap: 12px; }
+.sectionNum { font-family: var(--serif); font-size: 15px; font-weight: 700; color: var(--ink-5); }
+.sectionTitle { margin: 0; font-family: var(--serif); font-size: 22px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+.minor .sectionTitle { font-size: 18px; color: var(--ink-2); }
+.sectionAside { margin-left: auto; font-size: 13px; color: var(--ink-3); }
+.sectionSettled { margin-left: auto; font-size: 13px; color: var(--green); font-weight: 700; }
+.redFlag { margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--row-safety); font-size: 14px; scroll-margin-top: 80px; outline: none; }
+.redFlag .lineWhy { color: var(--ink-3); }
+.lines > .redFlag { grid-column: 1 / -1; margin-bottom: 6px; }
+.cite { margin-left: 2px; color: var(--ink-4); font-size: 11px; }
+
+.dpTag { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink-4); }
+.fromTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-4);
+  vertical-align: 1px;
+}
+
+/* A table of decisions: 決策點 | 本病人現在 | 指引怎麼說 | 今天. */
+.table { font-size: 14px; }
+.thead, .rowCells {
+  display: grid;
+  grid-template-columns: 17% 21% 28% minmax(0, 1fr);
+}
+.thead { background: var(--thead); font-weight: 700; }
+.thead > span { padding: 8px 10px; }
+.entry { scroll-margin-top: 80px; outline: none; border-bottom: 1px solid var(--line-soft); }
+.entry:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); }
+.entry[data-tone='act'] { background: var(--row-act); }
+.entry[data-tone='safety'] { background: var(--row-safety); }
+.rowCells > div { padding: 12px 10px; min-width: 0; }
+.cellGuide { color: var(--ink-2); }
+/* A table point with nothing to decide today: muted, as the prototype's DP-07·08 and DP-31 rows. */
+.entry[data-quiet] { color: var(--ink-3); }
+.quietSpan { grid-column: 3 / -1; }
+.quietDone { color: var(--green); font-weight: 500; }
+.cellMuted { color: var(--ink-6); }
+.small { font-size: 13px; color: var(--ink-3); }
+.question { font-weight: 700; margin: 0 0 4px; }
+.why { font-size: 13px; color: var(--ink-3); margin: 0 0 8px; }
+.basisList { margin: 0; padding: 0; list-style: none; }
+.basisList li { font-size: 13px; color: var(--ink-3); }
+.basisList b { font-weight: 500; color: var(--ink); font-size: 14px; }
+.critTitle { margin: 0; }
+.critGroup + .critGroup { margin-top: 8px; }
+.critList { margin: 0; padding: 0; list-style: none; }
+.met { color: var(--green); }
+.unmet { color: var(--ink-4); }
+.unknown { color: var(--warn-ink); }
+.critSymbol { font-weight: 700; display: inline-block; width: 1.1em; }
+.date { color: var(--ink-4); font-size: 12px; }
+
+.rowExtras { padding: 0 10px 12px; }
+
+/* A locale layer's line (CAD core §7.2): dashed off the point, its source as a tag. */
+.coverage { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px dashed var(--box-line); }
+.coverageLine { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 14px; color: var(--ink-2); }
+.coverageLine[data-coverage-status='needs-data'] { color: var(--ink-4); }
+.coverageTag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--box-line);
+  border-radius: 999px;
+  background: var(--sheet);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@container (max-width: 760px) {
+  .thead { display: none; }
+  .rowCells { grid-template-columns: minmax(0, 1fr); }
+  /* One column: a quiet row's span would otherwise open implicit columns 2–4. */
+  .quietSpan { grid-column: auto; }
+  .rowCells > div { padding: 6px 10px; }
+  .rowCells > div:first-child { padding-top: 12px; }
+  .rowCells > div:last-child { padding-bottom: 12px; }
+}
+
+/* Reminders: DP | name | one line. */
+/* A chapter's reminders share one label column, as the prototype's grid does. */
+.lines { display: grid; grid-template-columns: 58px fit-content(9.5em) minmax(0, 1fr); column-gap: 10px; }
+.line {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  gap: 0 10px;
+  padding: 3px 0;
+  font-size: 14px;
+  align-items: baseline;
+  scroll-margin-top: 80px;
+  outline: none;
+}
+.line:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); border-radius: 4px; }
+.line > .lineWide { grid-column: 1 / -1; }
+.lineText { min-width: 0; }
+.lineWhy { color: var(--ink-3); }
+.lineControls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 10px; vertical-align: middle; }
+/* On a reminder line the buttons are the prototype's outline ones, not today's primary. */
+.lineControls.inner :global(button[data-visit-primary]) { background: var(--sheet); border-color: var(--btn-line); color: var(--ink); font-weight: 400; }
+.lineControls.inner :global(button[data-visit-primary]:hover) { background: var(--thead); }
+.askLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: var(--blue);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.askLink:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
+.cellMissing { display: block; font-size: 13px; color: var(--warn-ink); }
+.lineAsk { color: var(--blue-ink); }
+@container (max-width: 600px) {
+  .lines { grid-template-columns: 58px minmax(0, 1fr); }
+  .line > .lineText { grid-column: 2; }
+}
+
+/* A block the page asks in (每次必問, the diagnosis). */
+.slot { display: flex; flex-direction: column; gap: 8px; scroll-margin-top: 80px; outline: none; }
+.slotHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+
+.absent { margin: 0; font-size: 13px; color: var(--ink-5); }
+.absent .dpInline { font-family: var(--mono); }
+
+/* 看依據 and its panel. */
+.whyPill, .whyEnd {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.whyPill { margin-top: 6px; }
+.whyEnd { margin-left: auto; }
+.whyPill:focus-visible, .whyEnd:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.panel {
+  margin: 0 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+}
+.panelHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.panelLabel { display: block; font-size: 13px; font-weight: 700; color: var(--ink-3); }
+.panelList { margin: 4px 0 0; padding-left: 18px; }
+.panelPlain { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.sources { margin: 0; font-size: 12px; color: var(--ink-4); }
+
+/* Every option side by side (其他 DOAC 劑量對照表). */
+.optScroll { overflow-x: auto; }
+.optTable { width: 100%; min-width: 34rem; border-collapse: collapse; margin-top: 4px; font-size: 14px; }
+.optTable th { background: var(--thead); text-align: left; padding: 6px 10px; font-weight: 700; }
+.optTable td { padding: 6px 10px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.optTable tbody tr:last-child td { border-bottom: 1px solid var(--line-soft); }
+.optTable tr[data-current] td { background: var(--blue-soft); }
+.optTable tr[data-proposed] td { background: var(--blue-soft); }
+.optTable tr[data-proposed] .optPatient { color: var(--blue-ink); font-weight: 700; }
+.optTable tr[data-role='optional-start'] .optPatient { font-weight: 500; }
+.panelValues { font-weight: 400; color: var(--ink-4); }
+.optTable tr[data-current] .optPatient { color: var(--blue-ink); font-weight: 700; }
+.optTable tr[data-status='excluded'] .optPatient { color: var(--red); font-weight: 700; }
+.optTable tr[data-status='individual'] .optPatient,
+.optTable tr[data-status='missing'] .optPatient { color: var(--warn-ink); }
+
+/* A classification side by side (HF DP-01's phenotype). */
+.classWrap { display: flex; flex-direction: column; gap: 6px; }
+.classTable { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: 14px; }
+.classTable thead tr { background: var(--thead); text-align: left; }
+.classTable th, .classTable td { padding: 8px 10px; text-align: left; vertical-align: top; }
+.classTable thead th { font-weight: 700; }
+.classTable thead th:first-child { width: 18%; }
+.classTable tbody th { font-weight: 500; color: var(--ink-3); }
+.classTable tbody tr { border-bottom: 1px solid var(--line-soft); }
+.classTable tbody tr:last-child { border-bottom: 0; }
+.classTable thead th[data-current] { background: var(--blue-bg); color: var(--blue-ink); }
+.classTable thead .dpTag { white-space: nowrap; }
+.classTable td[data-current] { background: var(--blue-soft); }
+.classPatient { font-weight: 500; }
+
+/* A point drawn as a block (AF 抗凝): its part of the question, what it decides on, today's box. */
+/* Measured on its own column, so the pair stacks where the page is narrow — a
+   phone, or 決策地圖 v2 inside the CDSS panel — whatever the window. */
+.blocks { display: flex; flex-direction: column; gap: 22px; container-type: inline-size; }
+.blockPair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.block { display: flex; flex-direction: column; gap: 6px; min-width: 0; scroll-margin-top: 80px; outline: none; }
+.block:focus-visible { box-shadow: 0 0 0 2px var(--blue); border-radius: 4px; }
+.blockHead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-bottom: 2px; }
+.blockTitle { font-weight: 700; }
+.blockNote { margin: 0; font-size: 13px; color: var(--ink-3); }
+@container (max-width: 640px) {
+  .blockPair { grid-template-columns: minmax(0, 1fr); }
+}
+
+.scoreTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.scoreTable td { padding: 5px 8px; border-top: 1px solid var(--line-soft); vertical-align: baseline; overflow-wrap: anywhere; }
+/* overflow-wrap: in English at 320px 「Stroke/TIA/thromboembolism」 and the verdict have
+   no break of their own; they wrap in the column rather than push the page. */
+.scoreTable tr:not([data-met]):not(.scoreTotal) { color: var(--ink-4); }
+.scoreMark { width: 22px; }
+.scoreTable tr[data-met] .scoreMark { color: var(--green); }
+.scorePoints { text-align: right; font-variant-numeric: tabular-nums; }
+.scoreEvidence { font-size: 13px; color: var(--ink-3); }
+.scoreTable tr:not([data-met]) .scoreEvidence { color: inherit; }
+.scoreTotal td { padding: 6px 8px; border-top: 2px solid var(--ink); font-weight: 700; }
+.scoreVerdict { font-size: 13px; color: var(--green); }
+.scorePending { font-size: 13px; color: var(--warn-ink); }
+
+.bulkNone {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--btn-line);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.bulkNone:hover { background: var(--thead); }
+.bulkNone:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.bulkNone[aria-pressed='true'] { border-color: var(--blue); background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; }
+@media (pointer: coarse) { .bulkNone { min-height: 44px; } }
+
+.questions { display: flex; flex-direction: column; }
+.questionsHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0 4px; }
+.questionsTitle { font-size: 13px; font-weight: 700; color: var(--ink-3); }
+.questionRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 6px 0; border-top: 1px solid var(--line-faint); font-size: 14px; }
+/* One segmented control; where the answers are longer than the column (English
+   at 320px) they wrap inside it, a line between the rows, rather than run out. */
+.questionGroup, .askGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--sheet);
+}
+.questionGroup > button, .askGroup > button {
+  min-height: 44px;
+  min-width: 52px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid var(--btn-line);
+  /* The line between wrapped rows; the last row's is clipped by the group. */
+  border-bottom: 1px solid var(--btn-line);
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+.questionGroup > button:last-child, .askGroup > button:last-child { border-right: 0; }
+.questionGroup > button:hover, .askGroup > button:hover { background: var(--thead); }
+.questionGroup > button:focus-visible, .askGroup > button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.questionGroup > button[aria-pressed='true'], .askGroup > button[aria-pressed='true'] { background: var(--blue-bg); color: var(--blue-ink); font-weight: 700; }
+.questionGroup > button:disabled, .askGroup > button:disabled { cursor: default; opacity: 0.6; }
+.questionsNote { margin: 6px 0 0; font-size: 13px; color: var(--ink-3); }
+
+.doseTable { width: 100%; min-width: 28rem; border-collapse: collapse; font-size: 14px; }
+.doseTable thead tr { background: var(--thead); text-align: left; }
+.doseTable th { padding: 8px 10px; text-align: left; }
+.doseTable th:first-child, .doseTable th:nth-child(2) { width: 17%; }
+.doseTable th:last-child { width: 20%; }
+.doseTable td { padding: 10px; vertical-align: top; border-bottom: 1px solid var(--line-soft); }
+.doseTable tbody tr:last-child td { border-bottom: 0; }
+.doseTable tr[data-current] { background: var(--row-act); }
+.doseCurrent { font-weight: 700; color: var(--blue-ink); }
+
+/* Today's decision under a block. */
+.box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--box-line);
+  border-radius: 10px;
+  background: var(--row-act);
+}
+.box[data-tone='safety'] { background: var(--row-safety); }
+.box > * { min-width: 0; }
+.boxQuestion { margin: 0; font-weight: 700; }
+.boxWide { flex-basis: 100%; }
+
+/* The every-visit questions (DP-03): one row each, a segmented control. */
+.asks { display: flex; flex-direction: column; gap: 8px; }
+.askRow { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); align-items: center; gap: 4px 12px; }
+.askLabel { min-width: 0; font-size: 14px; font-weight: 700; }
+.askGroup > button[data-prefilled], .questionGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
+.askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
+/* Today's grade beside the asks (HF NYHA, owner decision 2026-10-02): each class with its meaning under it. */
+.askLabelTop { align-self: start; padding-top: 12px; }
+.gradeBody { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gradeBody .askNote { grid-column: auto; }
+.gradeGroup > button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 104px; padding: 6px 10px; line-height: 1.25; }
+.gradeGroup > button b { font-size: 15px; }
+.gradeDetail { font-size: 12px; font-weight: 400; color: var(--ink-3); }
+.gradeGroup > button[aria-pressed='true'] .gradeDetail { color: var(--blue-ink); }
+@container (max-width: 600px) {
+  /* Four equal columns across the panel: the meanings wrap under their class. */
+  .gradeGroup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .gradeGroup > button { min-width: 0; padding: 6px 4px; }
+}
+/* A phone, or the panel at its narrowest: the label above its answers. */
+@container (max-width: 480px) {
+  .askRow { grid-template-columns: minmax(0, 1fr); }
+  .askNote { grid-column: 1; }
+  .askLabelTop { padding-top: 0; }
+}
+
+/* DP-06's other symptoms and signs, folded and optional (owner decision 2026-10-02). */
+.more { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.moreHead {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 2px 10px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.moreHead:hover { background: var(--thead); }
+.moreHead:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.more[data-open] .moreHead { border-bottom: 1px solid var(--line); }
+.moreCaret { flex-shrink: 0; width: 1em; color: var(--ink-4); }
+.moreText { display: flex; flex-direction: column; flex: 1 1 16rem; min-width: 0; }
+.moreBadge { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--ink-4); }
+.moreItems { font-size: 13px; color: var(--ink-3); }
+.moreCount { margin-left: auto; font-size: 13px; color: var(--ink-2); }
+.moreBody { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 14px; }
+.moreGroups { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@container (max-width: 640px) { .moreGroups { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+.moreFoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-top: 10px; border-top: 1px solid var(--line-faint); font-size: 13px; color: var(--ink-3); }
+.questionDetail { display: block; font-size: 12px; color: var(--ink-4); }
+/* An answer brought in from a saved record (owner decision 2026-10-07): its source day, until the clinician changes it. */
+.carriedNote { display: inline-flex; align-items: center; width: fit-content; margin-top: 2px; padding: 1px 6px; border: 1px solid var(--blue-line); border-radius: 4px; background: var(--blue-soft); color: var(--blue-ink); font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.questionRow > span > .carriedNote { display: flex; }
+.askRow > .carriedNote { grid-column: 2; }
+/* In the fold the answers stay right of their row at any width, the label wrapping
+   beside them, so nine rows read as one column rather than alternating. */
+.moreGroups .questionRow { flex-wrap: nowrap; }
+.moreGroups .questionRow > span:first-child { flex: 1 1 auto; min-width: 0; }
+
+/* --------------------------------- plan -------------------------------- */
+
+.plan {
+  margin-top: 8px;
+  padding: 26px 0 8px;
+  border-top: 2px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-margin-top: 80px;
+}
+.planHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.planSub { font-size: 13px; color: var(--ink-3); }
+.copy {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.copy:hover { background: var(--thead); }
+.foot { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-4); display: flex; flex-direction: column; gap: 2px; }
+.planTitle { margin: 0; font-family: var(--serif); font-size: 22px; font-weight: 700; }
+.planList { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.planEmpty { margin: 0; font-size: 14px; color: var(--ink-4); }
+.planPending { margin: 0; font-size: 14px; color: var(--warn-ink); }
+
+/* In the panel the page starts below the app's header and tabs. */
+.inline .headInner { padding: 10px 16px; }
+.inline .body { padding: 16px 16px 0; }
+.inline .mapTitle { white-space: nowrap; }
+/* The panel is narrower than the window: the map keeps its column beside the
+   page from 600px, as the panel's own decision map does. */
+@container (min-width: 600px) {
+  .inline .body { grid-template-columns: 220px minmax(0, 1fr); }
+  .inline .body.bodyMapClosed { grid-template-columns: 44px minmax(0, 1fr); }
+  .inline .map, .inline .mapRail { position: sticky; top: 92px; max-height: calc(100vh - 240px); overflow-y: auto; }
+  .inline .mapExpand { width: 44px; min-height: 180px; flex-direction: column; justify-content: flex-start; }
+  .inline .mapExpandText { writing-mode: vertical-rl; }
+}
+
+/* ---------------- decisions, as the Artifact prototype draws them ---------------- */
+
+.controlsWrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.others { display: flex; flex-wrap: wrap; gap: 6px; }
+.pri, .priSafety, .btn {
+  min-height: 44px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+}
+.pri { padding: 0 16px; border: 1px solid var(--blue-fill); background: var(--blue-fill); color: #FFFFFF; font-weight: 700; }
+.pri:hover { background: var(--blue-fill-hover); border-color: var(--blue-fill-hover); }
+.priSafety { padding: 0 16px; border: 1px solid var(--red-fill); background: var(--red-fill); color: #FFFFFF; font-weight: 700; }
+.priSafety:hover { background: var(--red-fill-hover); border-color: var(--red-fill-hover); }
+.btn { padding: 0 14px; border: 1px solid var(--btn-line); background: var(--sheet); color: var(--ink); }
+.btn:hover { background: var(--thead); }
+.pri:focus-visible, .priSafety:focus-visible, .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.pri:disabled, .priSafety:disabled, .btn:disabled { cursor: default; opacity: 0.6; }
+.decided { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* One line as the prototype's: ✓, the choice, 「改」. Text flow, not flex, so a
+   long pack label wraps after the ✓ instead of pushing it onto a line alone. */
+.decidedLine { margin: 0; font-size: 14px; line-height: 1.5; outline: none; }
+.decidedLine:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
+.tick { color: var(--green); flex-shrink: 0; }
+.decidedLine .tick { display: inline-block; vertical-align: -3px; margin-right: 8px; }
+.change {
+  min-height: 36px;
+  margin-left: 4px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.change:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
+@media (pointer: coarse) { .change { min-height: 44px; } }
+.decidedCheck { margin: 0; font-size: 13px; color: var(--ink-3); }
+.chainDone { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-3); }
+/* A step's 「改」 in the step line's own size, beside what it takes back. */
+.chainDone .change { margin-left: 0; padding: 0 4px; font-size: 13px; }
+
+/* HF DP-06 (owner request 2026-09-30, the prototype's 「現在是乾是濕？」):
+   the signs beside the 2×2 they place the patient in, the triggers under them. */
+.profileSplit { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@container (max-width: 640px) { .profileSplit { grid-template-columns: minmax(0, 1fr); } }
+.profile { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+.profileGrid { width: 100%; border-collapse: separate; border-spacing: 6px; font-size: 13px; }
+.profileGrid thead th, .profileGrid tbody th { font-weight: 400; color: var(--ink-3); text-align: center; }
+.profileGrid tbody th { text-align: left; width: 40px; }
+.profileGrid th[data-current] { color: var(--blue-ink); font-weight: 700; }
+.profileCell { padding: 10px 12px; border-radius: 8px; line-height: 1.5; border: 1px solid var(--line); background: var(--panel); color: var(--ink-4); }
+.profileCell[data-current] { border: 2px solid var(--blue); background: var(--blue-bg); color: var(--blue-ink); }
+.profileReading { margin: 0; font-size: 14px; font-weight: 700; color: var(--blue-ink); }
+.profileNote { margin: 0; font-size: 12px; color: var(--ink-4); }
+.groupBox { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 4px 16px 12px; }
+.panelMissing { margin: 0; font-size: 13px; color: var(--warn-ink); }
+/* 全螢幕／回到面板: the switch between the panel and the whole window. */
+.windowToggle {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.windowToggle:hover { background: var(--thead); }
+.windowToggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

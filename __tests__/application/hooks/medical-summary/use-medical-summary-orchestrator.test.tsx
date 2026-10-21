@@ -1,3 +1,4 @@
+import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { useMedicalSummaryOrchestrator } from '@/src/application/hooks/medical-summary/use-medical-summary-orchestrator.hook'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
@@ -140,6 +141,7 @@ function arrange({
     isCurrentSlotGenerating: summaryCurrentSlotGenerating,
     readGenerationSlot: readSummaryGenerationSlot,
     resolveSource: jest.fn(),
+    sourceCatalog: [],
     isHydrated: summaryHydrated,
     autoGenerate: summaryAuto,
     setAutoGenerate: setSummaryAuto,
@@ -152,6 +154,7 @@ function arrange({
     retryFailedModules: summaryRetryFailedModules,
     cancel: summaryCancel,
     restoreGenerationSlot: restoreSummaryGenerationSlot,
+    reportDigestInput: null,
   })
   mockUseSafetyAlerts.mockReturnValue({
     result: safetyResult as never,
@@ -208,6 +211,84 @@ describe('useMedicalSummaryOrchestrator', () => {
     await act(async () => result.current.generate())
     expect(summaryGenerate).toHaveBeenCalledTimes(1)
     expect(safetyGenerate).not.toHaveBeenCalled()
+  })
+
+  it('stops only the automatic launch batch when its signal is aborted', async () => {
+    let finish!: () => void
+    summaryGenerate.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+    const controller = new AbortController()
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    let generation!: Promise<void>
+    act(() => { generation = result.current.generateForLaunch(controller.signal) })
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
+    act(() => controller.abort())
+    expect(summaryCancel).toHaveBeenCalledWith(expect.stringContaining('summary-model'))
+    expect(safetyCancel).toHaveBeenCalledWith(expect.stringContaining('safety-model'))
+    await act(async () => { finish(); await generation })
+    summaryCancel.mockClear()
+    safetyCancel.mockClear()
+    await act(async () => result.current.generate())
+    expect(summaryGenerate).toHaveBeenCalledTimes(2)
+    expect(summaryCancel).not.toHaveBeenCalled()
+    expect(safetyCancel).not.toHaveBeenCalled()
+  })
+
+  it('ends a coordinated automatic batch when a safety stop arrives before its sibling starts', async () => {
+    useProgressiveImportStore.setState({ current: { runId: 'auto-stop', importId: 'cloud', phase: 'waiting' }, pendingRunId: null, stoppedRuns: {} })
+    arrange({ summaryResult: null, safetyResult: null, summaryGenerating: true, safetyGenerating: false })
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+    expect(result.current.isGenerating).toBe(true)
+    act(() => stopProgressiveImport('auto-stop', 'privacy-stale'))
+    expect(summaryCancel).toHaveBeenCalled()
+    expect(safetyCancel).toHaveBeenCalled()
+    arrange({ summaryResult: null, safetyResult: null, summaryGenerating: false, safetyGenerating: false })
+    rerender()
+    await waitFor(() => expect(result.current.isGenerating).toBe(false))
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
+  })
+
+  it('does not cancel accepted automatic slots while the completion render is pending', () => {
+    useProgressiveImportStore.setState({ current: { runId: 'completed-auto', importId: 'cloud', phase: 'waiting' }, pendingRunId: null, stoppedRuns: {} })
+    arrange({ summaryResult: null, safetyResult: null, summaryGenerating: true })
+    renderHook(() => useMedicalSummaryOrchestrator())
+    // The underlying jobs accepted both results, before React's completion effect.
+    readSummaryGenerationSlot.mockReturnValue({ result: { headline: 'accepted' }, isRunning: false })
+    readSafetyGenerationSlot.mockReturnValue({ result: { alerts: [] }, isRunning: false })
+    act(() => stopProgressiveImport('completed-auto', 'privacy-stale'))
+    expect(summaryCancel).not.toHaveBeenCalled()
+    expect(safetyCancel).not.toHaveBeenCalled()
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
+  })
+
+  it('does not start an automatic launch cancelled while awaiting demographics', async () => {
+    let accept!: (value: boolean) => void
+    mockRequestDemographicsForAi.mockImplementationOnce(() => new Promise<boolean>(resolve => { accept = resolve }))
+    const controller = new AbortController()
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    let generation!: Promise<void>
+    act(() => { generation = result.current.generateForLaunch(controller.signal) })
+    act(() => controller.abort())
+    await act(async () => { accept(true); await generation })
+    expect(summaryGenerate).not.toHaveBeenCalled()
+    expect(safetyGenerate).not.toHaveBeenCalled()
+  })
+
+  it('aborts a background launch by its captured slots after the presentation scope changes', async () => {
+    let finish!: () => void
+    summaryGenerate.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+    const controller = new AbortController()
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+    let generation!: Promise<void>
+    act(() => { generation = result.current.generateForLaunch(controller.signal) })
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
+    arrange({ summaryScopeKey: 'new-scope', summaryGenerationSlotKey: 'new-summary-slot', safetyGenerationSlotKey: 'new-safety-slot' })
+    rerender()
+    act(() => controller.abort())
+    expect(summaryCancel).toHaveBeenCalledWith('patient-1::medical::zh-TW::summary-model::ctx-input-a')
+    expect(safetyCancel).toHaveBeenCalledWith('patient-1::medical::zh-TW::safety-model::ctx-input-a')
+    expect(summaryCancel).not.toHaveBeenCalledWith('new-summary-slot')
+    expect(safetyCancel).not.toHaveBeenCalledWith('new-safety-slot')
+    await act(async () => { finish(); await generation })
   })
 
   it('does not start manual generation when required demographics are cancelled', async () => {

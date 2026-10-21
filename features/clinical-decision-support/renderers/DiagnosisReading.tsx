@@ -18,9 +18,12 @@ export function DiagnosisReading({
   summary,
   isEnglish,
   showScores = true,
+  showBasis = true,
 }: {
   summary: DiagnosticSummary | undefined
   isEnglish: boolean
+  /** The guideline paragraph under the criteria; a compact surface folds it elsewhere. */
+  showBasis?: boolean
   /**
    * The visit flow prints the calculator's own score beside the criteria and
    * turns this off: the pack reads the same numbers off the host's facts, and
@@ -70,9 +73,11 @@ export function DiagnosisReading({
           </li>
         ))}
       </ul>
-      <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
-        {summary.basis}
-      </p>
+      {showBasis ? (
+        <p className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-diagnosis-basis">
+          {summary.basis}
+        </p>
+      ) : null}
       {(showScores ? summary.scores ?? [] : []).map((score) => (
         <div
           key={score.name}

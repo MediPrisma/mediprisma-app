@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { RightPanelProvider } from '@/src/application/providers/right-panel.provider'
-import ReviewClient from './ReviewClient'
+import ReviewClient from '@/app/dev-nhi-table1/ReviewClient'
 
 /**
  * 表一 panel against synthetic profiles, for review without a launch.

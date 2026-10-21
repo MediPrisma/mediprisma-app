@@ -69,6 +69,8 @@ export type Row = {
   obs: Observation[]
   group: ReportGroup
   institution?: string
+  /** Display-only provenance; raw institution remains the grouping identity. */
+  hospitalSource?: import('../adapters/vghtpe-source-display').HospitalSource
   /** Explicit source-program provenance supplied by the source resource.
    *  Never infer this from the analyte name or value. */
   sourceProgram?: ReportSourceProgram
@@ -122,6 +124,9 @@ export type Row = {
    *  "+N 相關處置" hint on the collapsed session header so the user knows
    *  expanding reveals nested sub-procedures. Absent / 0 = standalone. */
   relatedCount?: number
+  /** Procedures only: special materials (特材) linked to this surgery. Drives
+   *  the "使用醫材 N" hint on the collapsed header. Absent / 0 = none. */
+  specialMaterialCount?: number
   /** Source-derived Procedure.category used by the procedure filter badges. */
   procedureCategory?: ProcedureCategoryCode
   /** ImagingStudy resources represented by this row. A linked

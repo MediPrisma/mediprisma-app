@@ -49,6 +49,10 @@ export interface UseClinicalContextOptions {
   clinicalDataOverride?: ClinicalData | null
   /** Shared maximum for selected document bodies in this generated context. */
   documentTokenBudget?: number
+  /** 'first-visit-summary' (初診快覽 only): visits count their medicines
+   *  instead of naming them, check-up vitals say so, and medicine supply is
+   *  worded as an estimate, not a stop. Every other consumer keeps 'default'. */
+  contextVariant?: 'default' | 'first-visit-summary'
 }
 
 export function useClinicalContext(
@@ -62,6 +66,7 @@ export function useClinicalContext(
   const activeConsumer: DataConsumer = consumer ?? 'chat'
   const profile = options.profile ?? ds.getProfile(activeConsumer)
   const selectedData = profile.selection
+  const firstVisitSummary = options.contextVariant === 'first-visit-summary'
   const filters = profile.filters
   const { patient } = usePatient()
   const nowMs = useNow()
@@ -89,6 +94,7 @@ export function useClinicalContext(
       includeProcedures: selectedData.procedures ?? false,
       filters,
       nowMs,
+      visitMedications: firstVisitSummary ? 'count' : 'list',
     },
   )
   const medicationsSection = useMedicationsContext(
@@ -97,13 +103,15 @@ export function useClinicalContext(
     filters,
     selectedData.encounters ?? false,
     nowMs,
+    firstVisitSummary ? 'neutral' : 'default',
   )
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
   const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters, selectedData.encounters ?? false)
   const vitalSignsSections = useVitalSignsContext(
     selectedData.vitalSigns ?? false,
     clinicalData,
-    filters
+    filters,
+    firstVisitSummary,
   )
   const immunizationsSection = useImmunizationsContext(
     selectedData.immunizations ?? false,

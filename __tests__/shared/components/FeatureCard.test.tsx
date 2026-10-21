@@ -45,4 +45,26 @@ describe("FeatureCard", () => {
     expect(help.closest('[data-slot="card-title"]')).toBeInTheDocument()
     expect(help.closest('[data-slot="card-content"]')).toBeNull()
   })
+
+  it("puts title, content and action on one row when inline", () => {
+    const { container } = render(
+      <FeatureCard
+        title="Vital signs"
+        inline
+        headerAction={<button type="button">Edit</button>}
+      >
+        Height 168 cm
+      </FeatureCard>,
+    )
+
+    // No separate header row: title, content and action share one grid.
+    expect(container.querySelector('[data-slot="card-header"]')).toBeNull()
+    const title = container.querySelector('[data-slot="card-title"]')!
+    const content = container.querySelector('[data-slot="card-content"]')!
+    const action = container.querySelector('[data-slot="card-action"]')!
+    expect(title.parentElement).toBe(content.parentElement)
+    expect(action.parentElement).toBe(content.parentElement)
+    expect(content).toHaveTextContent("Height 168 cm")
+    expect(container.querySelector('[data-slot="clinical-section-marker"]')).toBeInTheDocument()
+  })
 })

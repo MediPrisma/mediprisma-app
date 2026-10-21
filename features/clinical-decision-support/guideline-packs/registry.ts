@@ -16,7 +16,7 @@
  *
  * Two host decisions live below, and they are separate questions.
  *
- * WHICH packs: HMC lists heart failure, dyslipidemia, and atrial fibrillation. The preview builds
+ * WHICH packs: HMC lists heart failure, dyslipidemia, atrial fibrillation, and coronary disease. The preview builds
  * both from the personalization pilot branch. Local development may add
  * further branch packs through DEV_EXTRA_PACK_IDS below.
  *
@@ -31,7 +31,7 @@
  */
 import { PersonalizationSdkError } from '@voho0000/personalization-sdk'
 import { registerCarePacks } from '@voho0000/personalized-care/registry'
-import { CARE_PACKS } from '@voho0000/personalized-care'
+import { CARE_PACKS, setLocaleLayer } from '@voho0000/personalized-care'
 import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
 import { isVghtpeUnattendedLaunch } from '@/src/application/launch/medcloud-launch-context'
 import { isBetaFeaturesEnabledInBrowser } from '@/src/application/stores/beta-features.store'
@@ -39,7 +39,7 @@ import { isPilotPack } from './pilot-gate'
 import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 
 /** HMC disease switcher; keep heart failure as the existing default. */
-const HOST_PACK_ORDER = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss'] as const
+const HOST_PACK_ORDER = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss', 'chronic-coronary-disease-cdss'] as const
 
 /**
  * Local development only: the packs a disease-branch start-of-session script
@@ -66,6 +66,15 @@ const DEV_EXTRA_PACK_IDS: readonly string[] = process.env.NODE_ENV === 'developm
  * follows the host order and the visibility rule instead.
  */
 const HOST_DEFAULT_PACK_ID = 'heart-failure-cdss'
+
+/**
+ * The deployment's locale layer (CAD core §7.2): this host serves Taiwanese
+ * hospitals, so the packs carry the Taiwan sources — NHI coverage and the
+ * TSOC guidelines — beside the clinical ones. A deployment elsewhere sets
+ * 'none' here and gets the clinical guidance unchanged, without a coverage
+ * line. Set before any pack builds.
+ */
+setLocaleLayer('taiwan')
 
 // Every pack is registered, not just the listed ones: registration is what
 // validates each pack against the contract, and a pack that fails the contract

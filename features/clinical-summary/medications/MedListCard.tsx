@@ -33,6 +33,8 @@ import { useResourceNavigationStore } from '@/src/application/stores/resource-na
 import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
 import { markUserTrigger, trackEvent, useTrackView } from '@/src/application/telemetry/usage-analytics'
 import { MedicationList } from './components/MedicationList'
+import { MedCopyButtons, MedCopyDialogs, useMedCopyActions } from './components/MedCopyActions'
+import { useCurrentMedCopySources } from '@/features/clinical-summary/overview/hooks/useCurrentMedCopySources'
 import { MedicationRemainingSupplyList } from './components/MedicationRemainingSupplyList'
 import { VaccineList } from './components/VaccineList'
 import { MedicationTimeline } from './timeline/MedicationTimeline'
@@ -76,6 +78,13 @@ export function MedListCard() {
     [medications],
   )
   const rows = useMedicationRows(prescriptionMedications, audience, locale)
+  // 複製現在用藥 — the 總覽 card's 複製｜編輯, here on the 使用中 header, pasting
+  // the same text. Medical only, like the card. It copies the whole current
+  // list whatever the search or 藥理類別 filter shows: it is the chart's
+  // medication section, not a selection.
+  const canCopy = audience === 'medical'
+  const copySources = useCurrentMedCopySources(prescriptionMedications, audience, locale, canCopy)
+  const copyState = useMedCopyActions(copySources, 'meds_tab')
   const sourceMix = useMedicationSourceMix(rows)
   const vaccines = useVaccineRows(immunizations, audience, locale)
   const activeAllergies = useActiveAllergies(allergies)
@@ -306,6 +315,8 @@ export function MedListCard() {
         </TabsList>
 
         <TabsContent value="medications" className="mt-0 space-y-2">
+          {/* Outside the list, which a search with no match unmounts. */}
+          {canCopy && <MedCopyDialogs state={copyState} />}
           <div data-tour="medication-toolbar" className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <div className="inline-flex h-[36px] min-w-0 rounded-md border bg-transparent p-0.5 text-xs md:h-auto md:bg-muted/40">
@@ -317,7 +328,7 @@ export function MedListCard() {
                   <button
                     key={v}
                     type="button"
-                    data-tour={v === 'timeline' ? 'medication-timeline-switch' : undefined}
+                    data-tour={v === 'timeline' ? 'medication-timeline-switch' : v === 'remaining' ? 'medication-remaining-switch' : undefined}
                     onClick={() => {
                       // Plain buttons: clicking the active view still fires.
                       if (v !== view) markUserTrigger('meds')
@@ -436,6 +447,7 @@ export function MedListCard() {
                 filteredRows.length > 0 && (
                   <MedicationList
                     medications={filteredRows}
+                    unfilteredMedications={hasMedicationFilters ? rows : undefined}
                     isLoading={false}
                     error={null}
                     showSourceChip={sourceMix === 'mixed'}
@@ -444,6 +456,7 @@ export function MedListCard() {
                     nameMode={nameMode}
                     showNameModeSwitch={hasProductNames}
                     onNameModeChange={setNameMode}
+                    activeActions={canCopy ? <MedCopyButtons state={copyState} /> : undefined}
                   />
                 )
               ) : view === 'timeline' ? (

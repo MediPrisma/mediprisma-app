@@ -8,6 +8,7 @@ import type { AnalyteNameMode } from '@voho0000/clinical-lab-normalization/displ
 
 export {
   buildLabPivots,
+  cellDisplayValue,
   formatValue,
   type LabCell,
   type LabRow,

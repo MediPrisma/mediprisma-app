@@ -14,6 +14,9 @@ import { InfoHint } from '@/src/shared/components/InfoHint'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { usePatientQuery } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import type { EmrHandoffMode } from '@/src/application/stores/outpatient-prefs.store'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { useReportInterpretation } from '@/src/application/hooks/report-interpretation/use-report-interpretation.hook'
 import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
@@ -31,8 +34,9 @@ import {
   type EmrRange,
   type EmrReportItem,
 } from '../utils/emr-plaintext'
+import { EmrCustomFormatSection } from './EmrCustomFormatSection'
 
-type CopyKey = 'labs' | 'reports' | 'all'
+type CopyKey = 'labs' | 'reports' | 'all' | 'custom'
 type ReportLanguage = 'original' | 'translated'
 
 /** What one report's translation slot looks like to the panel. */
@@ -53,7 +57,12 @@ export function EmrHandoffPanel() {
   const { t } = useLanguage()
   const x = t.ipsExport.emrHandoff
   const { data } = useClinicalDataQuery()
+  const { data: patient } = usePatientQuery()
   const { copy } = useCopyToClipboard()
+  const prefs = useOutpatientPrefs()
+  // 我的格式 opens by default once the clinician has one; until then the
+  // built-in formats stay exactly as they were.
+  const handoffMode: EmrHandoffMode = prefs.handoffMode ?? (prefs.formats.length > 0 ? 'custom' : 'builtin')
 
   // Labs and studies get their own window on purpose. In clinic they are asked
   // for on different timescales — the labs you want as a recent trend, while
@@ -256,24 +265,45 @@ export function EmrHandoffPanel() {
   ]
 
   const hasAnything = hasLabData || allReports.length > 0
+  const isCustom = handoffMode === 'custom'
+
+  const modeOptions: Array<{ id: EmrHandoffMode; label: string }> = [
+    { id: 'custom', label: x.custom.modeCustom },
+    { id: 'builtin', label: x.custom.modeBuiltin },
+  ]
+
+  // The top of this panel is ONE row: the format source and its ⓘ on the
+  // left, the primary action on the right. The page title and the prose that
+  // explains the text rules live in the ⓘ — reference material earns a
+  // tooltip, not permanent lines above the content the clinician copies.
+  const modeControl = (
+    <div className="flex items-center gap-1.5">
+      <SegmentedControl
+        label={x.custom.modeLabel}
+        value={handoffMode}
+        options={modeOptions}
+        onChange={prefs.setHandoffMode}
+        hideLabel
+      />
+      <InfoHint side="bottom" contentClassName="max-w-sm leading-relaxed" aria-label={x.pageTitle}>
+        <span className="block font-semibold">{x.pageTitle}</span>
+        <span className="mt-1 block">{x.pageDescription}</span>
+        <span className="mt-2 block">{x.presetHint}</span>
+        {isCustom && <span className="mt-2 block">{x.custom.patientNote}</span>}
+      </InfoHint>
+    </div>
+  )
 
   return (
-    <div className="space-y-4">
-      {/* The prose that explains the text rules lives in the ⓘ — reference
-          material earns a tooltip, not a permanent line above a dense panel.
-          The primary action sits up here rather than under both cards: this
+    <div className="space-y-3">
+      <h2 className="sr-only">{x.pageTitle}</h2>
+      {/* The primary action sits up here rather than under both cards: this
           panel is taller than the viewport, so a footer button is permanently
           below the fold. The character count rides with it — it is the only
           warning of how much text is about to land in the chart. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="flex items-center gap-1.5">
-          <h2 className="text-lg font-semibold tracking-tight">{x.pageTitle}</h2>
-          <InfoHint side="bottom" contentClassName="max-w-sm leading-relaxed" aria-label={x.pageTitle}>
-            <span className="block">{x.pageDescription}</span>
-            <span className="mt-2 block">{x.presetHint}</span>
-          </InfoHint>
-        </div>
-        {hasAnything && (
+      {hasAnything && !isCustom && (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          {modeControl}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
               {x.footerMeta.replace('{chars}', String(allText.length))}
@@ -283,8 +313,8 @@ export function EmrHandoffPanel() {
               {copiedKey === 'all' ? x.copiedAll : x.copyAll}
             </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {!hasAnything && (
         <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
@@ -292,7 +322,19 @@ export function EmrHandoffPanel() {
         </div>
       )}
 
-      {hasLabData && (
+      {hasAnything && isCustom && (
+        <EmrCustomFormatSection
+          // A new patient starts with fresh per-patient decisions and preview.
+          key={patient?.id ?? 'no-patient'}
+          pivots={pivots}
+          diagnosticReports={data?.diagnosticReports ?? []}
+          copiedKey={copiedKey}
+          onCopy={(text) => void doCopy('custom', text)}
+          toolbarLead={modeControl}
+        />
+      )}
+
+      {hasLabData && !isCustom && (
         <section className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-baseline gap-2">
@@ -377,7 +419,7 @@ export function EmrHandoffPanel() {
         </section>
       )}
 
-      {allReports.length > 0 && (
+      {allReports.length > 0 && !isCustom && (
         <section className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-baseline gap-2">
@@ -562,15 +604,19 @@ function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  hideLabel = false,
 }: {
   label: string
   value: T
   options: ReadonlyArray<{ id: T; label: string }>
   onChange: (value: T) => void
+  /** Keep the label for assistive tech only, where the options speak for
+   *  themselves and the row has no room to spare. */
+  hideLabel?: boolean
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={hideLabel ? 'sr-only' : 'text-xs text-muted-foreground'}>{label}</span>
       <div className={SEGMENT_GROUP} role="group" aria-label={label}>
         {options.map((option) => (
           <button

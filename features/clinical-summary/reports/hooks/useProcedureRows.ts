@@ -3,7 +3,9 @@ import { useMemo } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getConceptText, formatDate } from '../utils/fhir-helpers'
 import { getProcedureCategoryCode } from '../utils/procedure-category'
+import { isNhiOrderCodeSystem } from '@/src/shared/utils/nhi-order-code'
 import { useLanguage } from "@/src/application/providers/language.provider"
+import type { ProcedureSpecialMaterialEntity } from "@/src/core/entities/clinical-data.entity"
 
 export function useProcedureRows(procedures: any[]) {
   const { t, locale } = useLanguage()
@@ -92,7 +94,8 @@ export function useProcedureRows(procedures: any[]) {
         ? procedure.report.map((ref: any) => ref?.display || ref?.reference).filter(Boolean)
         : []
       const coding: any[] = Array.isArray(procedure?.code?.coding) ? procedure.code.coding : []
-      const nhiCoding = coding.find((c: any) => typeof c?.system === 'string' && c.system.includes('nhi-medical-order-code'))
+      // 健保存摺 and MediCloud (TW Core medical-service-payment-tw) NHI 醫令 alike.
+      const nhiCoding = coding.find((c: any) => isNhiOrderCodeSystem(c?.system))
       const pcsCoding = coding.find((c: any) => {
         if (typeof c?.system !== 'string') return false
         const system = c.system.toLowerCase()
@@ -193,6 +196,8 @@ export function useProcedureRows(procedures: any[]) {
       arr.push(p)
       childrenByParent.set(pid, arr)
     }
+    const materialsOf = (p: any): ProcedureSpecialMaterialEntity[] =>
+      Array.isArray(p?.specialMaterials) ? p.specialMaterials : []
     // Mains = standalone procedures + session leads (+ orphan children).
     const mains = procedures.filter((p: any) => !parentIdOf(p))
 
@@ -211,8 +216,28 @@ export function useProcedureRows(procedures: any[]) {
             facts.pcsCoding ? 0 : facts.nhiCoding ? 1 : 2
           return rank(a.facts) - rank(b.facts) || a.index - b.index
         })
-      for (const { facts: cf } of childFacts) {
+      // A material belongs to the Procedure its record names: the lead's sit
+      // under the lead's details, a grouped child's directly under that child,
+      // and the header counts both.
+      let specialMaterialCount = 0
+      const pushMaterials = (source: any, procedureTitle?: string) => {
+        const materials = materialsOf(source)
+        if (materials.length === 0) return
+        specialMaterialCount += materials.length
+        components.push({
+          code: { text: t.procedures.materials.heading },
+          valueString: materials
+            .map((m) => [m.materialCode, m.nameZh, m.nameEn].filter(Boolean).join(' '))
+            .join('; '),
+          _isProcedureMaterials: true,
+          _materials: materials,
+          _materialsProcedureTitle: procedureTitle,
+        })
+      }
+      pushMaterials(procedure)
+      for (const { facts: cf, index } of childFacts) {
         components.push(buildChildComponent(cf))
+        pushMaterials(children[index], cf.originalTitle)
       }
 
       const observation: Observation = {
@@ -247,6 +272,7 @@ export function useProcedureRows(procedures: any[]) {
         procedureCategory: f.procedureCategory,
         // Number of sub-procedures grouped under this session (0 = standalone).
         relatedCount: children.length,
+        specialMaterialCount,
       }
     })
   }, [procedures, t, isZh])

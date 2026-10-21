@@ -189,3 +189,27 @@ it('prefills supported record answers without requiring clinician input', () => 
   const htn = screen.getByRole('group', { name: '高血壓病史', hidden: true })
   expect(within(htn).getByRole('button', { name: '有', hidden: true }).getAttribute('aria-pressed')).toBe('true')
 })
+
+describe('AF three-section carried answers', () => {
+  it('marks an answer carried from a saved record with its day, as the decision map does', async () => {
+    const { AF_CLINICAL_QUESTIONS } = await import('@voho0000/personalized-care')
+    const { CarriedAnswerContext } = await import('@/features/clinical-decision-support/renderers/visit/carried-answer-context')
+    const stroke = AF_CLINICAL_QUESTIONS.find((q) => q.zh === '中風／TIA／動脈栓塞病史')!
+    const year = new Date().getFullYear()
+    const answers = { [stroke.id]: true }
+    const p = applyAfCalculatorResults({ ...profile, afClinicalAnswers: answers })
+    const view = (lookup: (key: string) => string | null) => (
+      <CarriedAnswerContext.Provider value={lookup}>
+        <ClinicalDecisionSupportView result={PACK.build({ profile: p, locale: 'zh-TW' })} locale="zh-TW" layout="flow"
+          patientId={profile.id} afAnswers={answers} onAfAnswer={() => {}} profileFacts={p.facts} />
+      </CarriedAnswerContext.Provider>
+    )
+    const { rerender } = render(view((key) => (key === `af:${stroke.id}` ? `${year}-09-01` : null)))
+    const assessment = screen.getByTestId('cdss-af-prognosis')
+    fireEvent.click(within(assessment).getByRole('button'))
+    fireEvent.click(within(assessment).getByText(/血栓風險病史/))
+    expect(within(assessment).getByText('帶入 · 09/01')).toBeInTheDocument()
+    rerender(view(() => null))
+    expect(within(screen.getByTestId('cdss-af-prognosis')).queryByText(/帶入 ·/)).not.toBeInTheDocument()
+  })
+})

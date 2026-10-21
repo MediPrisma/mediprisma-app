@@ -7,6 +7,9 @@
 // Every tool response goes through `scrubPii()` so cloud LLMs never see
 // patient ID, DOB, or provider names.
 import { tool } from 'ai'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { summarizeSourceComparisons } from '@/src/shared/utils/source-record-comparison'
 import type { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -76,8 +79,23 @@ import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documen
 import {
   LAB_CATEGORIES,
   categorizeObservation,
+  getTestDisplayName,
   compareTestsByPreferred,
+  isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
+import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab-pivot.utils'
+import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
+import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
+import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
+import {
+  foldNumericText,
+  isPercentQuantity,
+  NUMERIC_TEXT_RE,
+  PERCENT_UNIT_PREFIX_RE,
+} from '@/src/shared/utils/lab-value-grammar'
+import { isParaproteinTextKey, PARAPROTEIN_PREFIX } from '@/src/shared/utils/paraprotein-analytes'
+import { isNhiOrderCodeSystem, meaningfulLocalCode } from '@/src/shared/utils/nhi-order-code'
+import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
   getAnalyteLabel,
@@ -476,9 +494,164 @@ function selectDiagnosticReportPage(
 }
 
 function labAnalyteKey(observation: any): string {
-  return getAnalyteCanonicalKey(observation)
+  const named = ownCodingFirst(observation)
+  return getAnalyteCanonicalKey(named)
     ?? loincOf(observation?.code)
-    ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
+    ?? getAnalyteLabel(named).normalize('NFKC').toUpperCase()
+}
+
+/**
+ * The label readers take coding[0] as the row's name, but MediCloud writes
+ * the NHI order coding first: under a panel order (08011C "CBC", 06013C) every
+ * analyte would read as the order. When the row has no code.text and a local
+ * code that names the analyte, read that local coding first instead.
+ */
+function ownCodingFirst(observation: any): any {
+  const codings: any[] = Array.isArray(observation?.code?.coding) ? observation.code.coding : []
+  if (observation?.code?.text || !isNhiOrderCodeSystem(codings[0]?.system)) return observation
+  const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
+  const named = own.some((c: any) => typeof c?.display === 'string' && c.display.trim()) || !!meaningfulLocalCode(codings)
+  if (!named) return observation
+  return { ...observation, code: { ...observation.code, coding: [...own, ...codings.filter((c: any) => isNhiOrderCodeSystem(c?.system))] } }
+}
+
+export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
+
+// "1:160", "< 1:40", "1：80 speckled"; also a FHIR valueRatio.
+const TITER_VALUE_RE = /^\s*(?:[<>≤≥≦≧]=?\s*)?1\s*[:：/]\s*\d+/
+/** Value family of one lab row: a count / concentration, a percentage, a
+ *  titer, an ordinal (presence / grade) or free text. Rows of different
+ *  families never share a group. */
+export function labValueFamily(observation: any): LabValueFamily {
+  const quantity = observation?.valueQuantity
+  if (quantity && typeof quantity.value === 'number') {
+    return isPercentQuantity(quantity) ? 'percent' : 'quantity'
+  }
+  const range = observation?.valueRange
+  if (range && (range.low || range.high)) {
+    return [range.low, range.high].some((bound: any) => bound && isPercentQuantity(bound)) ? 'percent' : 'quantity'
+  }
+  if (typeof observation?.valueInteger === 'number' || typeof observation?.valueDecimal === 'number') return 'quantity'
+  if (observation?.valueRatio) return 'titer'
+  if (observation?.valueCodeableConcept || typeof observation?.valueBoolean === 'boolean') return 'ordinal'
+  const text = typeof observation?.valueString === 'string' ? foldNumericText(observation.valueString) : ''
+  if (TITER_VALUE_RE.test(text)) return 'titer'
+  // One shared vocabulary: "Negative", "NEG", 「陰性」, "(-)", "2+" are one
+  // family — checked before numbers so a grade "2+" is not read as 2 (a sign
+  // followed by a digit is never ordinal, so "-3.2" falls through).
+  if (isOrdinalValue(text)) return 'ordinal'
+  // A number written as text — signed, grouped, full-width, a range, after a
+  // comparator — is a quantity; a percentage when its unit is one ("62%",
+  // "62 ％", "62 percent"), like valueQuantity.
+  const numeric = text.match(NUMERIC_TEXT_RE)
+  if (numeric) return PERCENT_UNIT_PREFIX_RE.test(text.slice(numeric[0].length)) ? 'percent' : 'quantity'
+  return 'text'
+}
+
+/** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;
+ *  undefined when not declared (the value family still separates rows). */
+export function declaredLoincScale(loinc: string): 'Qn' | 'Ord' | 'Titr' | undefined {
+  return IMMUNOLOGY_LOINC_SCALE[loinc] ?? THYROID_LOINC_SCALE[loinc]
+}
+
+/** The analyte an explicit LOINC → key mapping assigns to `loinc` (the
+ *  normalization package's LOINC map, then the app's immunology and thyroid
+ *  maps). LOINCs mapped to one key are declared equivalent; nothing else is. */
+export function declaredLoincAnalyteKey(loinc: string): string | null {
+  return canonicalKeyFromLoinc({ code: { coding: [{ system: 'http://loinc.org', code: loinc }] } })
+    ?? IMMUNOLOGY_LOINC_TO_KEY[loinc]
+    ?? THYROID_LOINC_TO_KEY[loinc]
+    ?? null
+}
+
+/**
+ * Group key and label for one row of queryLabResultsByCategory. Two rows share
+ * a group only when
+ * - they carry the same LOINC, or LOINCs an explicit LOINC → key mapping
+ *   declares equivalent (declaredLoincAnalyteKey) — a shared display name
+ *   never merges different LOINCs (751-8 absolute neutrophils vs 770-8
+ *   neutrophil %, both labelled Neutrophil); or
+ * - neither carries a LOINC and the cumulative report's identity names the
+ *   same recognised analyte (one NHI order split into SS-A / SS-B / Ro52);
+ *   unrecognised LOINC-less rows keep the name-based key;
+ * Rows of ONE LOINC are always one group, however the value is written
+ * (Quantity, Range, Integer, string, coded, "Negative for HBsAg"): the LOINC
+ * already fixes what was measured and on what scale. Different LOINCs share
+ * a group only when declared equivalent AND on one known LOINC scale
+ * (declaredLoincScale) — a titer, a presence and a quantitative result of one
+ * antibody stay apart. Only LOINC-less rows are also split by value family
+ * (labValueFamily), the one signal left to tell a count from a percentage.
+ */
+export function labCategoryAnalyte(observation: any, category: string): {
+  key: string
+  label: string
+  canonicalKey: string
+  loinc?: string
+  family: LabValueFamily
+} {
+  const family = labValueFamily(observation)
+  const loinc = loincOf(observation?.code)
+  const identity = getLabPivotTestIdentity(observation, category)
+  const known = isKnownPivotKey(identity.testKey)
+  const label = known
+    ? getLabRowDisplayParts(identity, 'medical', 'en').name
+    : getAnalyteLabel(ownCodingFirst(observation))
+  if (loinc) {
+    const declared = declaredLoincAnalyteKey(loinc)
+    const scale = declaredLoincScale(loinc)
+    // Merge across LOINCs only on a declared key with a known scale;
+    // otherwise the LOINC alone is the group.
+    if (declared && scale) {
+      return { key: `key:${declared}|${scale}`, label, canonicalKey: declared, loinc, family }
+    }
+    return { key: `loinc:${loinc}`, label, canonicalKey: declared ?? loinc, loinc, family }
+  }
+  // 免疫 電泳／輕鏈 rows keep their specimen-qualified column (a serum and a
+  // urine neutral κ never merge). A report column (IFE / IEP) gathers a
+  // report and its lanes in the cumulative table, but the AI answer gives
+  // each lane its own analyte, so latest-value selection never drops one.
+  if (identity.testKey.startsWith(PARAPROTEIN_PREFIX)) {
+    const columnLabel = getLabRowDisplayParts(identity, 'medical', 'en').name
+    if (isParaproteinTextKey(identity.testKey)) {
+      const own = getTestDisplayName(observation)
+      const lane = own.normalize('NFKC').trim().toUpperCase()
+      const canonicalKey = `${identity.mapKey}:${lane}`
+      return { key: `name:${canonicalKey}|${family}`, label: `${columnLabel} · ${own}`, canonicalKey, family }
+    }
+    return { key: `name:${identity.mapKey}|${family}`, label: columnLabel, canonicalKey: identity.mapKey, family }
+  }
+  const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
+  return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }
+}
+
+/**
+ * A label for one AI lab group that holds for EVERY member. Members of one
+ * LOINC can carry different own labels — 2345-7 headed "Glu-AC" for an older
+ * "AC Sugar" row and "Glucose" for a newer generic one — and naming the group
+ * after its first member would present a non-fasting latest value as fasting.
+ * When the members agree their label is kept; otherwise the group's generic
+ * name: the display of its declared / recognised analyte key, else the LOINC's
+ * own display, else the LOINC code or name key.
+ */
+export function labGroupLabel(members: readonly any[], category: string): string {
+  const analytes = members.map((observation) => labCategoryAnalyte(observation, category))
+  const labels = new Set(analytes.map((analyte) => analyte.label))
+  if (labels.size === 1) return analytes[0].label
+  const { canonicalKey, loinc } = analytes[0]
+  if (isKnownPivotKey(canonicalKey)) {
+    return getLabRowDisplayParts({ testKey: canonicalKey, displayName: canonicalKey }, 'medical', 'en').name
+  }
+  if (loinc) {
+    const loincDisplay = members
+      .flatMap((observation) => observation?.code?.coding ?? [])
+      .find((coding: any) => /loinc/i.test(coding?.system || '') && coding?.code === loinc && coding?.display)?.display
+    return loincDisplay ?? `LOINC ${loinc}`
+  }
+  return canonicalKey
+}
+
+export function labCategoryAnalyteKey(observation: any, category: string): string {
+  return labCategoryAnalyte(observation, category).key
 }
 
 function diagnosticReportOutput(report: any) {
@@ -712,31 +885,20 @@ function countsAsRefillRecord(medication: MedicationEntity): boolean {
 
 // Compact deduper for repeated refill cycles. `refillPool` may include older
 // completed cycles while `meds` contains only the currently-valid rows.
-function dedupMedicationRecords(
+function annotateMedicationRecordCounts(
   meds: MedicationEntity[],
   refillPool: MedicationEntity[] = meds,
-): Array<MedicationEntity & { refillCount: number }> {
-  const refillCounts = new Map<string, number>()
+): Array<MedicationEntity & { sourceRecordCount: number }> {
+  const sourceRecordCounts = new Map<string, number>()
   for (const medication of refillPool) {
     if (!countsAsRefillRecord(medication)) continue
     const key = medicationRegimenKey(medication)
-    refillCounts.set(key, (refillCounts.get(key) ?? 0) + 1)
+    sourceRecordCounts.set(key, (sourceRecordCounts.get(key) ?? 0) + 1)
   }
 
-  const byRegimen = new Map<string, MedicationEntity & { refillCount: number }>()
-  for (const m of meds) {
-    const key = medicationRegimenKey(m)
-    const existing = byRegimen.get(key)
-    if (!existing) {
-      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
-      continue
-    }
-    if (m.authoredOn && (!existing.authoredOn || m.authoredOn > existing.authoredOn)) {
-      // Keep every displayed field from one newest source row.
-      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
-    }
-  }
-  return Array.from(byRegimen.values())
+  // Product/regimen similarity does not prove prescription identity. The
+  // import graph has already reconciled confirmed copies; retain real orders.
+  return meds.map((m) => ({ ...m, sourceRecordCount: sourceRecordCounts.get(medicationRegimenKey(m)) ?? 1 }))
 }
 
 function medicationNameFields(medication: any): {
@@ -874,6 +1036,10 @@ function medicationToolFields(
     ...medicationNameFields(medication),
     ...medicationClassificationFields(medication),
     status: medication.status,
+    ...(sourceSelfPurchase(medication) === true ? { selfPurchased: true } : {}),
+    ...(medication._encounterInferred ? { encounterLinkBasis: 'date-and-facility-inferred; not source-confirmed' } : {}),
+    ...(medication._sourceRecordComparison ? { sourceComparison: medication._sourceRecordComparison,
+      sourceComparisonInstruction: sourceComparisonNarrative(medication) } : {}),
     authoredOn: medication.authoredOn,
     ...(dosage ? { [dosageField]: dosage } : {}),
     ...(hasStructuredDosage ? { dosageDetails: structuredDosage } : {}),
@@ -923,6 +1089,49 @@ export function createFhirTools(getData: () => AgentDataSource) {
   // against those patterns and the loaded patient's own name/id literals.
   const scrub = <T,>(payload: T): T =>
     scrubPii(payload, buildPatientTextLiterals(getData().patient))
+
+  // A failed name/category/date match is not an empty chart. Give the model
+  // actual values within the requested date/abnormality scope to discover the source's names without another
+  // guessed lookup. Keep matches separate from recovery evidence, and bound
+  // the inventory by analyte rather than letting repeated tests crowd it out.
+  const scrubLabResult = <T extends { success: boolean; count?: number }>(
+    payload: T,
+    filters?: { discovery: boolean; dateFrom?: string; dateTo?: string; abnormalOnly?: boolean },
+  ) => {
+    const collection = getData().collection
+    if (!payload.success || payload.count !== 0 || !collection || !filters?.discovery) return scrub(payload)
+    const observations = uniqueObservations(collection)
+      .flatMap(observation => expandObservationValues(observation))
+      .filter(observation => observation.status !== 'entered-in-error'
+        && (!(filters.dateFrom || filters.dateTo)
+          || isWithinDateRange(observationDate(observation), filters.dateFrom, filters.dateTo))
+        && (!filters.abnormalOnly || isAbnormalObservation(observation)))
+      .sort((a, b) => (observationDate(b) || '').localeCompare(observationDate(a) || ''))
+    const latest = new Map<string, (typeof observations)[number]>()
+    for (const observation of observations) {
+      const key = labAnalyteKey(observation)
+      if (!latest.has(key)) latest.set(key, observation)
+    }
+    if (latest.size === 0) return scrub(payload)
+    const data = [...latest.values()].slice(0, 30).map(observationResult)
+    const queryIssues = queryIssuesFor(collection, ['Observation'])
+    return scrub({
+      ...payload,
+      availableObservationRecovery: {
+        scope: 'Latest value per analyte within the requested date and abnormality filters; name/code/category relaxed. NOT matches for the original query.',
+        dateRange: { from: filters.dateFrom, to: filters.dateTo },
+        abnormalOnly: filters.abnormalOnly ?? false,
+        totalAnalytes: latest.size,
+        returnedAnalytes: data.length,
+        truncated: latest.size > data.length,
+        incomplete: queryIssues.length > 0,
+        canConcludeAbsence: false,
+        queryIssues,
+        instruction: 'The chart contains these observations. Zero matches applies ONLY to the original filters. Do not say all observations are missing. Use these names to query details or trends; do not substitute another analyte or date for the requested result. This inventory is not a complete history and cannot establish absence. Use only supplied normalityStatus and referenceRange.',
+        data,
+      },
+    })
+  }
 
   return {
     // ── Patient ────────────────────────────────────────────────────────────
@@ -1098,12 +1307,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const uncertainMedicationRecords = collection.medications.filter((medication) =>
           isMedicationCurrentnessUncertain(medication, nowMs)
         )
-        const allMedications = dedupMedicationRecords(
+        const allMedications = annotateMedicationRecordCounts(
           activeMedicationRecords,
           collection.medications,
         )
           .sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
-        const allUncertainMedications = dedupMedicationRecords(
+        const allUncertainMedications = annotateMedicationRecordCounts(
           uncertainMedicationRecords,
           collection.medications,
         ).sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
@@ -1113,7 +1322,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           return {
             name,
             ...rest,
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           }
         })
         const medicationsWithUncertainStatus = allUncertainMedications
@@ -1125,7 +1334,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
               name,
               ...rest,
               currentness: 'uncertain-source-status',
-              refillCount: medication.refillCount,
+              sourceRecordCount: medication.sourceRecordCount,
             }
           })
         const medicationRules = medicationGroundingRules([
@@ -1239,6 +1448,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           count: filtered.length,
           data: capped.map((e: any) => ({
             encounterId: e.id,
+            ...(e._sourceRecordComparison ? { sourceComparison: e._sourceRecordComparison } : {}),
             class: e.class?.code || e.class?.coding?.[0]?.code,
             type: pickName(e.type?.[0]),
             department: encounterDeptText(e),
@@ -1503,7 +1713,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '檢驗或觀察數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const list = uniqueObservations(collection!)
 
@@ -1540,7 +1750,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗數據', dateFrom, dateTo)
 
         if (summarize) {
-          return scrub({
+          return scrubLabResult({
             success: true,
             summary,
             count: filtered.length,
@@ -1554,10 +1764,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
               effectiveDateTime: o.effectiveDateTime,
               abnormal: isAbnormalObservation(o),
             })),
-          })
+          }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
         }
 
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary,
           count: filtered.length,
@@ -1575,7 +1785,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             status: o.status,
             ...observationComponentFields(o),
           })),
-        })
+        }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1590,7 +1800,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['DiagnosticReport'],
           '檢驗或診斷報告',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
         // Report names/conclusions remain usable if the separate Observation
         // search failed, but component-result coverage may then be incomplete.
         const queryIssues = queryIssuesFor(collection!, ['Observation'])
@@ -1631,7 +1841,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗報告', dateFrom, dateTo)
 
         if (summarize) {
-          return scrub({
+          return scrubLabResult({
             success: filtered.length > 0 || !incomplete,
             summary,
             count: filtered.length,
@@ -1654,10 +1864,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
               imageAttachmentCount: attachmentDetails(r)
                 .filter((attachment: any) => attachment.kind === 'image').length,
             })),
-          })
+          }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
         }
 
-        return scrub({
+        return scrubLabResult({
           success: filtered.length > 0 || !incomplete,
           summary,
           count: filtered.length,
@@ -1670,7 +1880,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           unmatchedQueryTerms,
           dateRange: { from: dateFrom, to: dateTo },
           data: capped.map(diagnosticReportOutput),
-        })
+        }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1685,7 +1895,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '指定分類的檢驗數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const categoryDefinition = LAB_CATEGORIES.find(item => item.id === category)!
         const expanded = collection!.observations
@@ -1697,21 +1907,39 @@ export function createFhirTools(getData: () => AgentDataSource) {
             && (!abnormalOnly || isAbnormalObservation(observation))
           )
 
-        const byAnalyte = new Map<string, any[]>()
+        // See labCategoryAnalyte: same LOINC, declared-equivalent LOINCs, or
+        // (LOINC-less) the same recognised analyte — always one value family.
+        const byAnalyte = new Map<string, ReturnType<typeof labCategoryAnalyte> & { observations: any[] }>()
         for (const observation of expanded) {
-          const key = labAnalyteKey(observation)
-          const series = byAnalyte.get(key)
-          if (series) series.push(observation)
-          else byAnalyte.set(key, [observation])
+          const analyte = labCategoryAnalyte(observation, category)
+          const group = byAnalyte.get(analyte.key)
+          if (group) group.observations.push(observation)
+          else byAnalyte.set(analyte.key, { ...analyte, observations: [observation] })
+        }
+        // A label that holds for every member, not the first member's subtype.
+        for (const group of byAnalyte.values()) group.label = labGroupLabel(group.observations, category)
+
+        // Groups that share a label (751-8 and 770-8 both read "NEU") are told
+        // apart by their LOINC and value family, so none looks like a duplicate.
+        const labelCounts = new Map<string, number>()
+        for (const group of byAnalyte.values()) {
+          labelCounts.set(group.label, (labelCounts.get(group.label) ?? 0) + 1)
+        }
+        const familyText = { quantity: null, percent: '%', titer: 'titer', ordinal: 'qualitative', text: 'text' } as const
+        const distinctLabel = (group: ReturnType<typeof labCategoryAnalyte>) => {
+          if ((labelCounts.get(group.label) ?? 0) < 2) return group.label
+          const qualifiers = [group.loinc ? `LOINC ${group.loinc}` : null, familyText[group.family]].filter(Boolean)
+          return qualifiers.length > 0 ? `${group.label} (${qualifiers.join(', ')})` : `${group.label} (${group.canonicalKey})`
         }
 
-        const groups = [...byAnalyte.entries()].map(([canonicalKey, observations]) => {
-          const series = [...observations].sort((a, b) =>
+        const groups = [...byAnalyte.values()].map((group) => {
+          const series = [...group.observations].sort((a, b) =>
             (observationDate(b) || '').localeCompare(observationDate(a) || '')
           )
           return {
-            analyte: getAnalyteLabel(series[0]),
-            canonicalKey,
+            analyte: distinctLabel(group),
+            canonicalKey: group.canonicalKey,
+            ...(group.loinc ? { loinc: group.loinc } : {}),
             category,
             observationCount: series.length,
             latestDate: observationDate(series[0]),
@@ -1723,7 +1951,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         const capped = applyLimit(groups, limit, 50)
         const page = paginationMeta(groups.length, capped.length)
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary: groups.length > 0
             ? `Found ${groups.length} analyte(s) in lab category "${category}"`
@@ -1735,6 +1963,18 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ...page,
           incomplete: false,
           canConcludeAbsence: true,
+          ...(category === 'immuno' ? {
+            // Specific-allergen IgE (30022C) is kept out of every lab category,
+            // so this answer says nothing about allergen tests.
+            excludedFromCategory: {
+              specificAllergenIgE: collection!.observations.filter((observation: any) =>
+                String(observation?.status ?? '').toLowerCase() !== 'entered-in-error'
+                && isExcludedFromCumulativeReport(observation)
+                && isWithinDateRange(observationDate(observation), dateFrom, dateTo)
+              ).length,
+              instruction: 'Specific-allergen IgE results are not part of any lab category; canConcludeAbsence does not apply to them. Use searchObservationByName (e.g. the allergen name) or queryObservations to find allergen tests.',
+            },
+          } : {}),
           dateRange: { from: dateFrom, to: dateTo },
           availableAnalytes: groups.map(group => group.analyte),
           groundingRules: {
@@ -1744,7 +1984,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             instruction: 'Do not add customary ranges, diagnose a condition, or infer the cause of an abnormal result.',
           },
           data: capped,
-        })
+        }, { discovery: true, dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1893,7 +2133,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '指定名稱的檢驗或觀察數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const unique = uniqueObservations(collection!)
 
@@ -1950,7 +2190,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const capped = applyLimit(flat, limit, 50)
         const page = paginationMeta(flat.length, capped.length)
 
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary: matches.length > 0
             ? `Matched ${matches.length} observation(s) across ${byCode.size} code(s) for "${query}"`
@@ -1968,7 +2208,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             abnormal: isAbnormalObservation(obs),
             ...observationComponentFields(obs),
           })),
-        })
+        }, { discovery: Boolean(query) })
       },
     }),
 
@@ -2109,7 +2349,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     getActiveMedicationList: tool({
-      description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Refill cycles collapse only when governed product identity, regimen, and source agree. Set chronicOnly to filter to 慢箋.',
+      description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Every distinct order remains available; sourceComparison marks unconfirmed source copies. Set chronicOnly to filter to 慢箋.',
       inputSchema: activeMedicationsSchema,
       execute: async ({ chronicOnly }: z.infer<typeof activeMedicationsSchema>) => {
         const { collection } = getData()
@@ -2135,9 +2375,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
           && isMedicationCurrentnessUncertain(m, now)
         )
 
-        const deduped = dedupMedicationRecords(active, list)
+        const deduped = annotateMedicationRecordCounts(active, list)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
-        const uncertainDeduped = dedupMedicationRecords(uncertain, list)
+        const uncertainDeduped = annotateMedicationRecordCounts(uncertain, list)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
         const currentPage = deduped.slice(0, 50)
         const uncertainPage = uncertainDeduped.slice(0, 50)
@@ -2146,10 +2386,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         return scrub({
           success: true,
-          summary: uncertainDeduped.length > 0
-            ? `${deduped.length} current medication(s); ${uncertainDeduped.length} medication group(s) lack both usable lifecycle status and a computable supply window`
-            : `${deduped.length} current medication(s)`,
+          summary: `${deduped.length} current medication source records in ${summarizeSourceComparisons(active).comparisonGroupCount} display groups; ${summarizeSourceComparisons(active).unconfirmedGroupCount} groups have unconfirmed cross-source correspondence.${uncertainDeduped.length ? ` ${uncertainDeduped.length} additional records have unresolved currentness.` : ''} Source record count is not a confirmed prescription count.`,
           count: deduped.length,
+          sourceComparisonCounts: summarizeSourceComparisons(active),
           ...paginationMeta(deduped.length, currentPage.length),
           incomplete,
           canConcludeAbsence,
@@ -2160,12 +2399,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: medicationGroundingRules([...currentPage, ...uncertainPage]),
           data: currentPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
           uncertainData: uncertainPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
             currentness: 'uncertain-source-status',
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
         })
       },

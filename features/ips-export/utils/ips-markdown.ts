@@ -9,6 +9,7 @@ import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
 import {
   buildLabPivots,
+  cellDisplayValue,
   type LabCell,
   type LabPivot,
   type LabRow,
@@ -487,7 +488,8 @@ function renderCompactRows(group: ResultGroupKey, rows: string[][]): string {
 
 function labCellText(cell?: LabCell, includeUnit = false): string {
   if (!cell) return '-'
-  const value = includeUnit && cell.unit ? `${cell.value} ${cell.unit}` : cell.value
+  const shown = cellDisplayValue(cell)
+  const value = includeUnit && cell.unit ? `${shown} ${cell.unit}` : shown
   if (!cell.isAbnormal) return value
   const code = clean(cell.interpretationCode)
   return code ? `${value} ${code}` : `${value} *`

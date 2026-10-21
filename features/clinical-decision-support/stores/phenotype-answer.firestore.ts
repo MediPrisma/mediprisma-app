@@ -3,8 +3,10 @@
  *
  * The seam it plugs into is already there — `setPhenotypeAnswerRepository` in
  * `phenotype-answer.store.ts` swaps the session implementation for this one and
- * nothing above it changes — but what this file would write is patient data, and
- * three decisions that are the owner's have not been made:
+ * nothing above it changes; `setPatientAnswerBacking` in
+ * `patient-answer-backing.ts` does the same for every CDSS store at once — but
+ * what either would write is patient data, and three decisions that are the
+ * owner's have not been made:
  *
  *   1. **The path.** `cdssPhenotypeAnswers/{patientId}` and
  *      `users/{uid}/cdssPhenotypeAnswers/{patientId}` are different clinical

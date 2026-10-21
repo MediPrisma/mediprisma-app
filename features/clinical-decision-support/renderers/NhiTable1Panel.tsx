@@ -1140,7 +1140,7 @@ function NhiTable1PanelContent({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
         <span className="font-medium text-muted-foreground">{isEnglish ? 'Status' : '狀態'}</span>
         <span><span className="font-semibold text-primary">●</span> {isEnglish ? 'Met' : '符合'}</span>
-        <span><span className="font-semibold text-primary">◐</span> {isEnglish ? 'Claims code; confirm clinically' : '申報碼支持，須臨床確認'}</span>
+        <span><span className="font-semibold text-primary">◐</span> {isEnglish ? 'Claims record (diagnosis code or prescription); confirm clinically' : '申報紀錄（診斷碼或處方）支持，須臨床確認'}</span>
         <span className="text-muted-foreground"><span className="font-semibold">○</span> {isEnglish ? 'Not in the record — unknown, not absent' : '紀錄讀不到 — 未知，不等於沒有'}</span>
         <span className="text-muted-foreground"><span className="font-semibold">–</span> {isEnglish ? 'Not met' : '不符合'}</span>
         <span className="h-4 w-px bg-border" aria-hidden="true" />

@@ -17,6 +17,7 @@ import type {
   DeviceEntity,
   CarePlanEntity,
   MedicationRemainingSummaryEntity,
+  ProcedureSpecialMaterialEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import type { IDataMapper } from '@/src/core/interfaces/data-mapper.interface'
 import { dataMapperRegistry } from '@/src/core/interfaces/data-mapper.interface'
@@ -39,6 +40,8 @@ import {
   MEDCLOUD_DRUG_GROUP_IDENTIFIER_SYSTEM,
   MEDCLOUD_REMAINING_SUMMARY_CODE,
   MEDCLOUD_REMAINING_SUMMARY_EXTENSION_URL,
+  MEDCLOUD_SPECIAL_MATERIAL_CODE,
+  MEDCLOUD_SPECIAL_MATERIAL_EXTENSION_URL,
 } from '@/src/shared/constants/medcloud.constants'
 
 // Source system identifier for FHIR data
@@ -57,6 +60,73 @@ export function isMedicationRemainingSummaryBasic(resource: Basic): boolean {
       coding.system === MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM
       && coding.code === MEDCLOUD_REMAINING_SUMMARY_CODE,
     ) === true
+}
+
+export function isSpecialMaterialRecordBasic(resource: Basic): boolean {
+  return resource?.resourceType === 'Basic'
+    && resource.code?.coding?.some((coding) =>
+      coding.system === MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM
+      && coding.code === MEDCLOUD_SPECIAL_MATERIAL_CODE,
+    ) === true
+}
+
+/**
+ * Map one IMUE0200 special-material Basic to the material it records. Returns
+ * undefined when the record names no Procedure: the reports UI shows materials
+ * only under the surgery they belong to.
+ */
+export function toProcedureSpecialMaterial(
+  resource: Basic,
+): ProcedureSpecialMaterialEntity | undefined {
+  const record = resource.extension?.find(
+    (extension) => extension.url === MEDCLOUD_SPECIAL_MATERIAL_EXTENSION_URL,
+  )
+  const procedureReference = extensionChild(record, 'relatedProcedure')
+    ?.valueReference?.reference?.trim()
+  if (!procedureReference) return undefined
+  const text = (url: string) => extensionChild(record, url)?.valueString?.trim() || undefined
+  const quantity = extensionChild(record, 'quantity')?.valueDecimal
+  return {
+    id: resource.id || '',
+    procedureReference,
+    materialCode: text('materialCode'),
+    nameZh: text('nameZh'),
+    nameEn: text('nameEn'),
+    materialType: text('materialType'),
+    quantity: typeof quantity === 'number' && Number.isFinite(quantity) ? quantity : undefined,
+    visitDate: extensionChild(record, 'visitDate')?.valueDate,
+    // The source joins several licences with '+'.
+    licenseNumbers: (text('licenseNumber') ?? '')
+      .split('+')
+      .map((value) => value.trim())
+      .filter(Boolean),
+    dataSource: text('dataSource'),
+    relationshipStatus: extensionChild(record, 'relationshipStatus')?.valueCode,
+    relationshipBasis: text('relationshipBasis'),
+  }
+}
+
+/** Special materials keyed by the id of the Procedure each one points at. */
+export function groupSpecialMaterialsByProcedure(
+  resources: readonly Basic[],
+): Map<string, ProcedureSpecialMaterialEntity[]> {
+  const byProcedure = new Map<string, ProcedureSpecialMaterialEntity[]>()
+  const seen = new Set<string>()
+  for (const resource of resources) {
+    if (!isSpecialMaterialRecordBasic(resource)) continue
+    if (resource.id) {
+      if (seen.has(resource.id)) continue
+      seen.add(resource.id)
+    }
+    const material = toProcedureSpecialMaterial(resource)
+    if (!material) continue
+    const procedureId = material.procedureReference.split('/').pop()
+    if (!procedureId) continue
+    const list = byProcedure.get(procedureId) ?? []
+    list.push(material)
+    byProcedure.set(procedureId, list)
+  }
+  return byProcedure
 }
 
 /**
@@ -116,6 +186,7 @@ export class FhirMapper implements IDataMapper {
   // Static methods for backward compatibility
   static toCondition(fhirResource: Condition): ConditionEntity {
     return {
+      meta: fhirResource.meta,
       id: fhirResource.id || '',
       code: fhirResource.code,
       category: fhirResource.category,
@@ -151,6 +222,7 @@ export class FhirMapper implements IDataMapper {
     return {
       id: fhirResource.id || '',
       meta: request.meta,
+      identifier: request.identifier,
       medicationCodeableConcept: fhirResource.medicationCodeableConcept,
       medicationReference: fhirResource.medicationReference,
       status: fhirResource.status,
@@ -174,6 +246,10 @@ export class FhirMapper implements IDataMapper {
       ...(atcClassification ? { atcClassification } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       _sourceCapturedAt: request._sourceCapturedAt,
+      _reconciledSourceReferences: request._reconciledSourceReferences,
+      _encounterInferred: request._encounterInferred,
+      _sourceRecordComparison: request._sourceRecordComparison,
+      _sourcePrescriptionRecords: request._sourcePrescriptionRecords,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -251,6 +327,7 @@ export class FhirMapper implements IDataMapper {
 
   static toObservation(fhirResource: Observation): ObservationEntity {
     return {
+      basedOn: fhirResource.basedOn,
       extension: fhirResource.extension,
       method: fhirResource.method,
       id: fhirResource.id || '',
@@ -287,6 +364,7 @@ export class FhirMapper implements IDataMapper {
 
   static toDiagnosticReport(fhirResource: DiagnosticReport, observations: ObservationEntity[]): DiagnosticReportEntity {
     const report: DiagnosticReportEntity = {
+      basedOn: fhirResource.basedOn,
       id: fhirResource.id || '',
       meta: fhirResource.meta,
       identifier: fhirResource.identifier,
@@ -373,14 +451,21 @@ export class FhirMapper implements IDataMapper {
     }
   }
 
-  static toProcedure(fhirResource: Procedure): ProcedureEntity {
+  static toProcedure(
+    fhirResource: Procedure,
+    specialMaterialsByProcedure?: ReadonlyMap<string, ProcedureSpecialMaterialEntity[]>,
+  ): ProcedureEntity {
     const src = fhirResource as Procedure & {
       performer?: ProcedureEntity['performer']
       note?: ProcedureEntity['note']
       reasonCode?: ProcedureEntity['reasonCode']
       partOf?: ProcedureEntity['partOf']
     }
+    const specialMaterials = fhirResource.id
+      ? specialMaterialsByProcedure?.get(fhirResource.id)
+      : undefined
     return {
+      ...(specialMaterials?.length ? { specialMaterials } : {}),
       id: fhirResource.id || '',
       category: fhirResource.category,
       code: fhirResource.code,
@@ -404,6 +489,9 @@ export class FhirMapper implements IDataMapper {
 
   static toEncounter(fhirResource: any): EncounterEntity {
     return {
+      meta: fhirResource.meta,
+      _sourceRecordComparison: fhirResource._sourceRecordComparison,
+      _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
       id: fhirResource.id || '',
       status: fhirResource.status,
       class: fhirResource.class,
@@ -423,6 +511,7 @@ export class FhirMapper implements IDataMapper {
 
   static toDocumentReference(fhirResource: any): DocumentReferenceEntity {
     return {
+      meta: fhirResource.meta ? { source: fhirResource.meta.source, tag: fhirResource.meta.tag } : undefined,
       id: fhirResource.id || '',
       status: fhirResource.status,
       type: fhirResource.type,

@@ -4,7 +4,7 @@ name: Publish HMC pilot preview
 # half that holds a credential.
 #
 # `HMC preview build` runs on pilot/hmc and decides whether a build is fit to
-# show a clinician — the overlay, its smoke check, typecheck, lint, Jest, the
+# show a clinician — the published-package contract, typecheck, lint, Jest, the
 # export. All of that is the pilot's to fix, which is the point: a wrong gate
 # there used to stop the preview for days, and nobody downstream could edit it.
 #
@@ -130,7 +130,7 @@ jobs:
       - name: Checkout mediprisma.tw site
         uses: actions/checkout@v7
         with:
-          repository: voho0000/mediprisma-site
+          repository: MediPrisma/mediprisma-site
           ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
           path: docs-site
           ref: main
@@ -156,7 +156,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} personalization@${PERSONALIZATION_SHA:0:7}"
+          git commit -m "chore: deploy /app-hmc app@${APP_SHA:0:7} rules@${PERSONALIZATION_SHA:0:7}"
 
           # `Sync app to mediprisma.tw/app` publishes to this same branch from
           # its own concurrency group, so the two can be in flight together and
@@ -228,7 +228,7 @@ jobs:
           if [ "$PUBLISH_RESULT" = 'success' ] && [ "$TESTS_RESULT" != 'failure' ]; then
             if [ -n "$number" ]; then
               cat > note.md <<EOF
-          Clear. \`/app-hmc\` serves app \`${APP_SHA:0:7}\` with personalization \`${PERSONALIZATION_SHA:0:7}\`, and the Jest run is green.
+          Clear. \`/app-hmc\` serves app \`${APP_SHA:0:7}\` with rules source \`${PERSONALIZATION_SHA:0:7}\`, and the Jest run is green.
 
           ${RUN_URL}
           EOF
@@ -248,14 +248,14 @@ jobs:
 
           Which half it is, is worth checking before assuming:
 
-          - **Yours** — the personalization build, the overlay or its check, typecheck, lint, the export. Those are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`, so they are yours to change without waiting for anyone.
-          - **The owner's** — either checkout step, or \`Install app dependencies\` failing on a 401 or 403. Those use this repository's credentials (the packages token, the personalization deploy key), which expire and are not visible from your branch. Say so rather than digging: nothing on \`pilot/hmc\` can fix them.
+          - **Yours** — the package contract check, typecheck, lint, the export. Those are in \`.github/workflows/hmc-build.yml\` on \`pilot/hmc\`: HMC can diagnose them here and propose a PR; workflow changes require owner approval.
+          - **The owner's** — the app checkout, \`Install app dependencies\`, or release metadata failing on a 401 or 403. Those use this repository's credentials (the packages token), which expire and are not visible from your branch. Say so rather than digging: nothing on \`pilot/hmc\` can fix them.
           EOF
           elif [ "$PUBLISH_RESULT" = 'success' ]; then
             # Published over a red suite. Worth saying out loud, not worth
             # holding a clinic preview for.
             cat > note.md <<EOF
-          @${PILOT_AUTHOR} **The preview published, and the Jest run was red.** https://mediprisma.tw/app-hmc is current — app \`${APP_SHA:0:7}\`, personalization \`${PERSONALIZATION_SHA:0:7}\` — so this does not block reviewing it.
+          @${PILOT_AUTHOR} **The preview published, and the Jest run was red.** https://mediprisma.tw/app-hmc is current — app \`${APP_SHA:0:7}\`, rules source \`${PERSONALIZATION_SHA:0:7}\` — so this does not block reviewing it.
 
           \`\`\`
           ${TEST_SUMMARY:-see the build run}
@@ -263,7 +263,7 @@ jobs:
 
           Build: ${BUILD_URL}
 
-          The Jest run reports; it does not gate. The overlay check, typecheck, lint and the export do — those failing means the preview would not run, and then nothing is published. Both the suite and the step that runs it live on \`pilot/hmc\`, so a red run here is yours to fix or to ignore deliberately.
+          The Jest run reports; it does not gate. The package contract check, typecheck, lint and the export do — those failing means the preview would not run, and then nothing is published. Both the suite and the step that runs it live on \`pilot/hmc\`, so a red run here is yours to fix or to ignore deliberately.
           EOF
           else
             cat > note.md <<EOF
@@ -272,7 +272,7 @@ jobs:
           | | |
           | --- | --- |
           | pilot app | \`${APP_SHA:-unknown}\` |
-          | pilot personalization | \`${PERSONALIZATION_SHA:-unknown}\` |
+          | rules source | \`${PERSONALIZATION_SHA:-unknown}\` |
           | publish | \`${PUBLISH_RESULT}\` |
 
           Publish run: ${RUN_URL}

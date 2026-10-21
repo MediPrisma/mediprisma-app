@@ -4,8 +4,9 @@
  * study whose viewer is only reachable two tabs away is a study they will not
  * open.
  */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { OverviewCard } from '@/features/clinical-summary/overview'
+import { useOverviewData } from '@/features/clinical-summary/overview/hooks/useOverviewData'
 import {
   NHI_VIEWER_REQUEST_EXTENSION_URL,
   requestNhiViewerOpen,
@@ -20,6 +21,14 @@ jest.mock('@/src/application/providers/language.provider', () => {
   const { zhTW: translations } = require('@/src/shared/i18n/locales/zh-TW')
   return { useLanguage: () => ({ t: translations, locale: 'zh-TW' }) }
 })
+
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null, anonymousUid: null }),
+}))
+
+jest.mock('@/src/application/providers/right-panel.provider', () => ({
+  useRightPanel: () => ({ setActiveTab: jest.fn(), revealTab: jest.fn() }),
+}))
 
 jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
@@ -94,6 +103,19 @@ const emptyChart = {
 const reportsCard = () => document.getElementById('overview-section-reports') as HTMLElement
 
 describe('總覽 影像／檢查報告 — 健保影像 actions', () => {
+  it.each([
+    ['2026-06-24', '2026-06-25', 0],
+    ['2026-06-25', '2026-06-24', 1],
+  ])('uses the examination period %s rather than signing date %s for the window', (examDay, issued, count) => {
+    mockUseClinicalData.mockReturnValue({ ...emptyChart, diagnosticReports: [{
+      ...imagingReport({ id: 'period-report', conclusion: 'Synthetic normal chest findings.' }),
+      effectiveDateTime: undefined, effectivePeriod: { start: examDay }, issued,
+    }] })
+    const { result } = renderHook(() => useOverviewData({ months: 3, startDay: '2026-06-25', endDay: '2026-06-25' }))
+    expect(result.current.reports.count).toBe(count)
+    expect(result.current.latestDataDay).toBe(examDay)
+  })
+
   const originalResizeObserver = globalThis.ResizeObserver
   beforeAll(() => {
     globalThis.ResizeObserver = class {

@@ -63,6 +63,8 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         profileCleared: '已清除',
         showMore: '顯示更多資料',
         showLess: '收合詳細資料',
+        moreDetails: '更多資料',
+        ageValue: '{age}歲',
         nationalId: '身分證字號',
         medicalRecordNumber: '病歷號',
         passportNumber: '護照號碼',
@@ -177,5 +179,26 @@ describe('PatientInfoCard SDK local profile', () => {
     // Name, gender, calculated age, and the detailed birth-date row.
     expect(screen.getAllByText('自行填寫')).toHaveLength(4)
     expect(screen.getByRole('button', { name: '編輯資料' })).toBeInTheDocument()
+  })
+
+  it('keeps the extended demographics behind 更多資料 until asked for', () => {
+    mockPatient = {
+      ...mockPatient,
+      name: [{ text: '陳○明' }],
+      gender: 'male',
+      birthDate: '1932-05-20',
+      identifier: [{ system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id', value: 'A123456789' }],
+    }
+    render(<PatientInfoCard />)
+
+    const toggle = screen.getByRole('button', { name: '更多資料' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    const details = document.getElementById(toggle.getAttribute('aria-controls')!)
+    expect(details).not.toBeVisible()
+    expect(details).toHaveTextContent('A123456789')
+
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: '收合詳細資料' })).toHaveAttribute('aria-expanded', 'true')
+    expect(details).toBeVisible()
   })
 })

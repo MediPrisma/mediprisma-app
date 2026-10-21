@@ -9,10 +9,18 @@
 .sectionDisclosure[open] > summary .disclosureOpen { display: block; }
 .sectionDisclosure[open] > summary .disclosureClosed { display: none; }
 
-.section {
+/* `.tone` carries a section's colours without its frame: the decision map's
+   three sections (DecisionMapColumns) wear them too, so 01／02／03 read the
+   same on both layouts. */
+.section,
+.tone {
   --section-surface: #eff6ff;
   --section-heading: #dbeafe;
   --section-ink: #1e3a5f;
+  --section-accent: #60a5fa;
+}
+
+.section {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -20,16 +28,29 @@
   color: var(--foreground);
 }
 
-.section[data-section='treatment'] {
+.section[data-section='treatment'],
+.tone[data-section='treatment'] {
   --section-surface: #eef9f5;
   --section-heading: #d5eee5;
   --section-ink: #164e43;
+  --section-accent: #34d399;
 }
 
-.section[data-section='prognosis'] {
+.section[data-section='prognosis'],
+.tone[data-section='prognosis'] {
   --section-surface: #f5f2fc;
   --section-heading: #e8dff7;
   --section-ink: #503774;
+  --section-accent: #a78bfa;
+}
+
+/* The visit's summary belongs to no section: its step and the button into it
+   wear the page's own colours. */
+.tone[data-section='summary'] {
+  --section-surface: var(--background);
+  --section-heading: var(--background);
+  --section-ink: var(--foreground);
+  --section-accent: var(--border);
 }
 
 .heading {
@@ -97,28 +118,89 @@
   padding: 1rem;
 }
 
+.mapToggle {
+  border-color: var(--border);
+  background: var(--section-heading);
+  color: var(--section-ink);
+}
+
+.mapToggle:hover {
+  background: color-mix(in srgb, var(--section-heading) 90%, var(--section-ink));
+}
+
+.mapToggle[aria-expanded='true'],
+.mapToggle[aria-current='true'],
+.mapToggle[aria-current='step'] {
+  border-color: var(--section-ink);
+  box-shadow: inset 0 0 0 1px var(--section-ink);
+}
+
+/* The open section's panel wears the page's own MediPrisma background, framed
+   in its colour: the boxes inside sit on the page rather than on a green or
+   purple fill (clinician feedback 2026-09-28: 「下面的內容區背景色是綠色紫色
+   怪怪的」, 「維持原本的 mediprisma 背景色」). The tabs above keep their fills.
+
+   The boxes themselves are one step lighter than the page, a blue-white in
+   every section, and the group headings wear the section's ink
+   (「顏色好單調，按鈕顏色跟背景色可以有一點點區隔」). Every `bg-background`
+   inside the panel reads `--background`, so the cells, question boxes and
+   rows lift together without each learning a new class.
+
+   Mixed in sRGB, never OKLCH: the production build writes `--card` as a hex,
+   a hex's hue comes out missing in an OKLCH mix, and the missing hue was
+   drawn as 0 — the boxes turned pale pink on the site while the dev server,
+   which keeps `oklch()`, showed them blue (clinician feedback 2026-09-28:
+   「新版的淡粉我不喜歡」). */
+.mapPanel {
+  border-color: color-mix(in srgb, var(--section-accent) 55%, var(--border));
+  background: transparent;
+  --map-box-tint: #eff6ff;
+  --background: color-mix(in srgb, var(--card) 70%, var(--map-box-tint));
+}
+
+:global(.dark) .mapPanel {
+  --map-box-tint: #152538;
+}
+
+.mapPanel :global([data-map-heading]) {
+  color: color-mix(in srgb, var(--section-ink) 85%, transparent);
+}
+
 .poster :global([data-cdss-action]) {
   color: #b42318;
   font-weight: 600;
   line-height: 1.7;
 }
 
-:global(.dark) .section {
+:global(.dark) .section,
+:global(.dark) .tone {
   --section-surface: #152538;
   --section-heading: #203952;
   --section-ink: #c9e2ff;
+  --section-accent: #3b82f6;
 }
 
-:global(.dark) .section[data-section='treatment'] {
+:global(.dark) .section[data-section='treatment'],
+:global(.dark) .tone[data-section='treatment'] {
   --section-surface: #142b27;
   --section-heading: #204039;
   --section-ink: #c4eee0;
+  --section-accent: #10b981;
 }
 
-:global(.dark) .section[data-section='prognosis'] {
+:global(.dark) .section[data-section='prognosis'],
+:global(.dark) .tone[data-section='prognosis'] {
   --section-surface: #282239;
   --section-heading: #3b3153;
   --section-ink: #e7dbff;
+  --section-accent: #8b5cf6;
+}
+
+:global(.dark) .tone[data-section='summary'] {
+  --section-surface: var(--background);
+  --section-heading: var(--background);
+  --section-ink: var(--foreground);
+  --section-accent: var(--border);
 }
 
 :global(.dark) .poster :global([data-cdss-action]) {

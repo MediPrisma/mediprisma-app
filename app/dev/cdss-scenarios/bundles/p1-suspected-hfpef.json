@@ -1,0 +1,510 @@
+{
+ "resourceType": "Bundle",
+ "id": "sim-p1-suspected-hfpef",
+ "type": "collection",
+ "timestamp": "2026-09-27T09:00:00+08:00",
+ "entry": [
+  {
+   "fullUrl": "urn:uuid:Patient-sim-p1",
+   "resource": {
+    "resourceType": "Patient",
+    "id": "sim-p1",
+    "name": [
+     {
+      "text": "模擬病人 P1"
+     }
+    ],
+    "gender": "female",
+    "birthDate": "1954-01-15"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-I10",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-I10",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "I10"
+      }
+     ]
+    },
+    "onsetDateTime": "2015-03-01",
+    "recordedDate": "2015-03-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-E11.9",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-E11.9",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "E11.9"
+      }
+     ]
+    },
+    "onsetDateTime": "2018-06-01",
+    "recordedDate": "2018-06-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-E66.9",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-E66.9",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "E66.9"
+      }
+     ]
+    },
+    "onsetDateTime": "2019-01-01",
+    "recordedDate": "2019-01-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:DiagnosticReport-p1-echo",
+   "resource": {
+    "resourceType": "DiagnosticReport",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-echo",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "text": "Echocardiography"
+    },
+    "conclusion": "LVEF 62%. Average E/e' 15. LAVI 38 mL/m2. TR velocity 2.9 m/s. Concentric remodeling."
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:DiagnosticReport-p1-ecg",
+   "resource": {
+    "resourceType": "DiagnosticReport",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-ecg",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "text": "ECG"
+    },
+    "conclusion": "Sinus rhythm, 78 bpm."
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-ef",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-ef",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "10230-1"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 62,
+     "unit": "%"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-np",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-np",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "33762-6"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 680,
+     "unit": "pg/mL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-bp",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-bp",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "85354-9"
+      }
+     ]
+    },
+    "component": [
+     {
+      "code": {
+       "coding": [
+        {
+         "system": "http://loinc.org",
+         "code": "8480-6"
+        }
+       ]
+      },
+      "valueQuantity": {
+       "value": 146,
+       "unit": "mmHg"
+      }
+     },
+     {
+      "code": {
+       "coding": [
+        {
+         "system": "http://loinc.org",
+         "code": "8462-4"
+        }
+       ]
+      },
+      "valueQuantity": {
+       "value": 82,
+       "unit": "mmHg"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-hr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-hr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "8867-4"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 78,
+     "unit": "bpm"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-wt",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-wt",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "29463-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 82,
+     "unit": "kg"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-ht",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-ht",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "8302-2"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 158,
+     "unit": "cm"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-egfr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-egfr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "77147-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 62,
+     "unit": "mL/min/1.73m2"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-cr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-cr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "2160-0"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 0.9,
+     "unit": "mg/dL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-k",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-k",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "2823-3"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 4.4,
+     "unit": "mmol/L"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p1-hb",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "id": "p1-hb",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "718-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 12.8,
+     "unit": "g/dL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-amlodipine-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "amlodipine-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "amlodipine"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 5,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 1,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-metformin-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "metformin-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p1"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "metformin"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 500,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 2,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  }
+ ]
+}

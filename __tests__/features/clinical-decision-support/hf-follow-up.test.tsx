@@ -45,3 +45,26 @@ it('carries the complaint but requires fresh status, and saves weight through th
   expect(screen.getByText(/Δ 2.0 kg/)).toBeVisible()
   expect(screen.getByRole('img', { name: /體重趨勢/ })).toBeVisible()
 })
+
+it('on the decision map, leaves 喘 and the weight-change buttons to the questions at the top', () => {
+  const vitals = mergeClinicVitals(undefined, { hfFollowUp: { complaints: [
+    { text: '走路喘', date: '2026-09-10', source: 'clinic' },
+    { text: '胸悶', date: '2026-09-10', source: 'clinic' },
+  ], weights: [{ value: 70, date: '2026-09-10', source: 'clinic' }] } }, now)
+  render(<HfFollowUpPriorities now={now} isEnglish={false} vitals={vitals} onSave={() => {}} onBreathDetails={() => {}} trendAsksElsewhere />)
+  // Not asked twice: no 喘 row, no 增加／不變／減少.
+  expect(screen.queryByText('走路喘')).toBeNull()
+  expect(screen.queryByRole('button', { name: '增加' })).toBeNull()
+  expect(screen.queryByRole('group', { name: '體重變化' })).toBeNull()
+  // Everything else stays: other tracked complaints, adding one, the weight records.
+  expect(screen.getByText('其他主訴')).toBeVisible()
+  expect(screen.getByText('胸悶')).toBeVisible()
+  // In the map's form (「這邊的 UI 設計也跟決策地圖不符合」): 「＋ 新增」 opens a
+  // one-row entry with the map's tinted save; the weight box carries its own.
+  fireEvent.click(screen.getByTestId('cdss-followup-complaint-add'))
+  expect(screen.getByTestId('cdss-followup-complaint-form')).toBeVisible()
+  expect(screen.getByRole('button', { name: '儲存' })).toBeDisabled()
+  expect(screen.getByTestId('cdss-followup-weight-latest')).toHaveTextContent('70.0 kg · 2026-09-10')
+  expect(screen.getByRole('button', { name: '記錄體重' })).toBeInTheDocument()
+  expect(screen.getByTestId('cdss-weight-records')).toBeInTheDocument()
+})

@@ -1,0 +1,33 @@
+MediPrisma (醫析) — SMART on FHIR
+Copyright 2025-2026 MediPrisma Contributors
+
+Project authorship and credits
+
+Original author and maintainer:
+  Yi-Hsin Kuo, MD (郭宜欣; GitHub: voho0000)
+  Project creation, application development, and maintenance.
+
+Project concept and ongoing advisory contributions:
+  ijsun (GitHub)
+  Co-originator; ongoing project consultation and feedback.
+
+Clinical decision-support interface contributions:
+  hmcheng0913 (GitHub)
+
+Additional authors and contributors are recorded in the repository's Git
+history. These credits describe contributions; they do not assign or
+transfer copyright ownership.
+
+Original project:
+  https://github.com/voho0000/medical-note-smart-on-fhir
+Project website:
+  https://mediprisma.tw/app
+
+Third-party components and datasets retain their respective licenses and
+attributions. Relevant notices accompany those components, including
+vendor/nhi-fhir-bridge-nhi-drug-terminology/NOTICE.md and the bundled license
+information in vendor/nhi-fhir-bridge-sdk-json/browser.js.
+
+This NOTICE provides attribution information and does not modify the
+Apache License, Version 2.0. See LICENSE for the license terms, including
+the redistribution requirements in Section 4.

@@ -234,6 +234,9 @@ export function OverviewReportsSection({
               )}
               {item.summary && (
                 <span className="min-w-0 flex-1 truncate text-[0.6875rem] text-foreground/75">
+                  {item.summaryLabel && (
+                    <span className="mr-1 font-semibold text-muted-foreground">{item.summaryLabel}</span>
+                  )}
                   {item.summary}
                 </span>
               )}

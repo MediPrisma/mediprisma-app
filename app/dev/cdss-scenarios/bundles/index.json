@@ -1,0 +1,142 @@
+[
+ {
+  "id": "p1-suspected-hfpef",
+  "title": "疑似 HFpEF 初診",
+  "kind": "initial",
+  "page": "hf",
+  "oneLine": "72 歲女，勞力性喘與腳腫轉介；高血壓、糖尿病、肥胖；NT-proBNP 680、LVEF 62%，沒有 HF 診斷碼",
+  "visit": {
+   "dyspnea": "變差",
+   "weight": "增加"
+  }
+ },
+ {
+  "id": "p2-new-hfref",
+  "title": "新診斷 HFrEF 初評",
+  "kind": "initial",
+  "page": "hf",
+  "oneLine": "58 歲男，兩週前因喘急診，LVEF 28%，只帶 furosemide 出院；竇性心律 96",
+  "visit": {
+   "dyspnea": "進步",
+   "weight": "減少"
+  }
+ },
+ {
+  "id": "p3-new-af",
+  "title": "新發 AF 初評",
+  "kind": "initial",
+  "page": "af",
+  "oneLine": "78 歲女，心悸，ECG 證實 AF；高血壓、糖尿病；沒有抗凝",
+  "visit": {
+   "afSymptoms": "有",
+   "bleeding": "無"
+  }
+ },
+ {
+  "id": "p4-stable-optimised",
+  "title": "HFrEF 穩定、已最適化",
+  "kind": "follow-up",
+  "page": "hf",
+  "oneLine": "66 歲男，HFrEF 兩年，四支柱都在目標劑量，數值穩定",
+  "visit": {
+   "dyspnea": "穩定",
+   "weight": "不變"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p5-titrating-af",
+  "title": "HFrEF 滴定中，併 AF",
+  "kind": "follow-up",
+  "page": "hf",
+  "oneLine": "74 歲男，LVEF 30%，bisoprolol 2.5、ramipril 2.5，沒有 MRA／SGLT2i；AF 用 apixaban",
+  "visit": {
+   "dyspnea": "穩定",
+   "weight": "不變"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p6-hyperkalaemia",
+  "title": "HFrEF 高血鉀",
+  "kind": "follow-up",
+  "page": "hf",
+  "oneLine": "71 歲男，CKD 3b，ARNI＋MRA＋SGLT2i＋carvedilol；K 5.7、eGFR 45→38",
+  "visit": {
+   "dyspnea": "穩定",
+   "weight": "不變"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p7-worsening-congestion",
+  "title": "HFrEF 鬱血惡化",
+  "kind": "follow-up",
+  "page": "hf",
+  "oneLine": "69 歲女，喘變差、體重 65→68 kg，NT-proBNP 1200→2600；GDMT 四種都在用",
+  "visit": {
+   "dyspnea": "變差",
+   "weight": "增加"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p8-post-discharge",
+  "title": "HF 住院後首次回診",
+  "kind": "follow-up-reassess",
+  "page": "hf",
+  "oneLine": "75 歲男，LVEF 25%，9/5–9/12 因急性心衰竭住院；住院中因 AKI 停 MRA，eGFR 32→48",
+  "visit": {
+   "dyspnea": "進步",
+   "weight": "不變"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p9-hfpef-af-dose",
+  "title": "HFpEF＋AF，apixaban 劑量要重開",
+  "kind": "follow-up",
+  "page": "hf",
+  "oneLine": "80 歲女，HFpEF＋持續性 AF；apixaban 5 mg bid；體重 61→58 kg，Cr 1.3",
+  "visit": {
+   "dyspnea": "穩定",
+   "weight": "減少"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p10-improved-ef",
+  "title": "LVEF 改善（HFimpEF）",
+  "kind": "follow-up",
+  "page": "hf",
+  "oneLine": "62 歲男，LVEF 28%→38%→55%，GDMT 全在目標劑量；病人問能不能停藥",
+  "visit": {
+   "dyspnea": "穩定",
+   "weight": "不變"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p11-af-dabigatran-renal",
+  "title": "AF 追蹤：dabigatran 遇腎功能下降",
+  "kind": "follow-up",
+  "page": "af",
+  "oneLine": "76 歲男，陣發性 AF 用 dabigatran 150 mg bid；eGFR 42→27",
+  "visit": {
+   "afSymptoms": "無",
+   "bleeding": "無"
+  },
+  "previousVisit": "2026-06-26"
+ },
+ {
+  "id": "p12-cad-nstemi-dapt",
+  "title": "CAD 追蹤：NSTEMI 後第 9 個月",
+  "kind": "follow-up",
+  "page": "cad",
+  "oneLine": "62 歲男，2026-01-20 NSTEMI 住院同日 LAD DES；aspirin＋ticagrelor；LDL 68、HbA1c 7.4；ticagrelor 健保 9 個月提醒點 10-20",
+  "visit": {
+   "angina": "較少",
+   "bleeding": "無"
+  }
+ }
+]

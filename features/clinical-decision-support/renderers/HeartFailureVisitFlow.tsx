@@ -22,7 +22,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { cn } from '@/src/shared/utils/cn.utils'
 import { GROUP_TONES } from '@/src/shared/constants/group-tones'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
-import type { CdssRecommendation } from '../types'
+import type { CdssRecommendation, DecisionPointState, VisitAnswers, VisitAsk } from '../types'
 import {
   NOT_ASSESSED,
   todayIsoDate,
@@ -52,7 +52,10 @@ import { EchoReportButton } from './EchoReportButton'
 import { RecordMetricEditor } from './RecordMetricEditor'
 import { RecordValuesEditor, type RecordValueChange } from './RecordValuesEditor'
 import { DiagnosisReading } from './DiagnosisReading'
+import { HfpEfCriteriaList } from './HfpEfCriteriaList'
 import { PhysicianInputRequestPanel } from './PhysicianInputRequestPanel'
+import { diagnosisAnswer } from './visit/physician-input'
+import { StatePill, TINTED_PRIMARY } from './visit/visit-presentation'
 import { statusLabel, statusStyle, StatusIcon } from './status-presentation'
 import {
   DECISION_REASONS,
@@ -79,6 +82,7 @@ import { HfDiagnosisConfirmation } from './HfDiagnosisConfirmation'
 import { HfFollowUpPriorities } from './HfFollowUpPriorities'
 import type { HfFollowUpHistory } from '../utils/hf-follow-up'
 import { diagnosisContextOf } from './cdss-sections'
+import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 import type { HeartFailureBoardModel, HeartFailureMetric } from './heart-failure-board'
 
 /** The element a step's 「前往」 button scrolls to. */
@@ -167,6 +171,13 @@ export interface HeartFailureVisitFlowProps {
   sectionRecommendations?: readonly CdssRecommendation[]
   prognosisContent?: ReactNode
   followUpHistory?: HfFollowUpHistory
+  /**
+   * The every-visit answers the decision map asks at its top. The three-section
+   * follow-up reads and writes the same two (喘, 體重), so switching layouts
+   * never asks them again and the pack reads one answer.
+   */
+  visitAnswers?: VisitAnswers
+  onVisitAnswer?: (id: VisitAsk['id'], value: string | null) => void
 }
 
 export function HeartFailureVisitFlow({
@@ -190,6 +201,8 @@ export function HeartFailureVisitFlow({
   sectionRecommendations,
   prognosisContent,
   followUpHistory,
+  visitAnswers,
+  onVisitAnswer,
 }: HeartFailureVisitFlowProps) {
   const [calculatorTab, setCalculatorTab] = useState<HfpefScoreId>('hfa-peff')
   const [calculatorOpen, setCalculatorOpen] = useState(false)
@@ -200,36 +213,15 @@ export function HeartFailureVisitFlow({
   )
   const [editingDecisions, setEditingDecisions] = useState<ReadonlySet<string>>(new Set())
 
-  const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
-  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
-  const allEditableMetrics: HeartFailureMetric[] = [...flow.metrics]
-  if (!allEditableMetrics.some(metric => metric.factKey === 'LVEF')) allEditableMetrics.unshift({ factKey: 'LVEF', label: 'LVEF', unit: '%', kind: 'measure', stale: false, entered: false, evaluated: false })
-  for (const [key, label, unit] of [['oxygenSaturation', 'SpO₂', '%'], ['bodyHeight', isEnglish ? 'Height' : '身高', 'cm']] as const) {
-    if (allEditableMetrics.some(metric => metric.factKey === key)) continue
-    const entry = clinicVitals?.entries[key]
-    allEditableMetrics.push({ factKey: key, label, unit, value: entry ? String(entry.value) : undefined, date: entry?.measuredOn, kind: 'measure', stale: false, entered: Boolean(entry), evaluated: false })
-  }
-  const recordOrder = ['LVEF', 'NTproBNP', 'eGFR', 'potassium', 'sodium', 'hemoglobin', 'bloodPressure', 'heartRate', 'oxygenSaturation', 'bodyWeight', 'bodyHeight']
-  allEditableMetrics.sort((a, b) => recordOrder.indexOf(a.factKey) - recordOrder.indexOf(b.factKey))
-  const saveMetrics = (changes: RecordValueChange[]) => {
-    const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
-    for (const { metric, values, measuredOn } of changes) {
-      if (metric.factKey === 'LVEF') {
-        onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
-      } else if (metric.factKey === 'bloodPressure') {
-        entries.systolic = values ? { value: values[0], measuredOn } : null
-        entries.diastolic = values ? { value: values[1], measuredOn } : null
-      } else {
-        const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
-        if (key) entries[key] = values ? { value: values[0], measuredOn } : null
-        if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
-      }
-    }
-    if (Object.keys(entries).length) onSaveClinicVitals?.({ entries })
-    setEditingMetric(null)
-    setRecordValuesOpen(false)
-  }
-  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
+  const {
+    editingMetric,
+    setEditingMetric,
+    recordValuesOpen,
+    setRecordValuesOpen,
+    allEditableMetrics,
+    saveMetrics,
+    saveMetric,
+  } = useRecordValueEditing({ flow, isEnglish, now, clinicVitals, onSaveClinicVitals, phenotypeAnswer, onAnswerPhenotype, onSaveHfpefInputs })
   const diagnosisContext = sectionRecommendations?.map(diagnosisContextOf).find(Boolean)
   const followUp = Boolean(phenotypeAnswer?.diagnosisConfirmation) || phenotypeAnswer?.hfpEfConfirmed === true || diagnosisContext?.mode === 'follow-up'
   const [selectedMode, setSelectedMode] = useState<{ confirmed: boolean; diagnosis: boolean } | null>(null)
@@ -329,15 +321,15 @@ export function HeartFailureVisitFlow({
           renderDetail={renderDetail}
           followUp={showFollowUp}
           diagnosisModeControl={<div role="group" aria-label={isEnglish ? 'Diagnosis or follow-up' : '診斷或追蹤'} className="mt-3 flex flex-wrap gap-1">
-            <Button variant={!showFollowUp ? 'default' : 'outline'} aria-pressed={!showFollowUp} className="min-h-11" onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: true })}>{isEnglish ? 'Diagnosis' : '診斷'}</Button>
-            <Button variant={showFollowUp ? 'default' : 'outline'} aria-pressed={showFollowUp} className="min-h-11" disabled={!followUp} title={!followUp ? (isEnglish ? 'Confirm diagnosis to enter follow-up' : '確認診斷後進入追蹤') : undefined} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: false })}>{isEnglish ? 'Follow-up' : '追蹤'}</Button>
+            <Button variant="outline" aria-pressed={!showFollowUp} className={cn('min-h-11', !showFollowUp && cn('font-semibold', TINTED_PRIMARY))} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: true })}>{isEnglish ? 'Diagnosis' : '診斷'}</Button>
+            <Button variant="outline" aria-pressed={showFollowUp} className={cn('min-h-11', showFollowUp && cn('font-semibold', TINTED_PRIMARY))} disabled={!followUp} title={!followUp ? (isEnglish ? 'Confirm diagnosis to enter follow-up' : '確認診斷後進入追蹤') : undefined} onClick={() => setSelectedMode({ confirmed: followUp, diagnosis: false })}>{isEnglish ? 'Follow-up' : '追蹤'}</Button>
           </div>}
           sectionSummary={prognosisContent ? { prognosis: isEnglish ? 'Medical calculators · formulas pending' : '醫學計算機・公式待串接' } : undefined}
           sectionContent={{ prognosis: prognosisContent, diagnosis: <>
             <HfDiagnosisConfirmation answer={phenotypeAnswer} onConfirm={flow.readOnly ? undefined : onAnswerPhenotype} now={now} isEnglish={isEnglish} followUp={followUp} basis={diagnosisContext?.basis ?? (isEnglish ? 'Heart failure; phenotype requires review of diagnostic evidence.' : '心衰竭；分型請參照診斷依據。')} />
             {followUp && diagnosisContext?.mode === 'reassessment' ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'New evidence requires review. Open diagnostic evidence; the prior confirmation is retained.' : '新資料需核對，請開啟診斷依據；既有確診紀錄仍保留。'}</p> : null}
             {followUp && flow.questions.some(question => question.id === 'lvef-phenotype' && question.state === 'open') ? <p data-cdss-action="" className="px-4 py-2 text-sm">{isEnglish ? 'HF phenotype pending: review LVEF in diagnostic evidence when available.' : '心衰竭分型待補：取得 LVEF 後可開啟診斷依據補充。'}</p> : null}
-            {showFollowUp ? <HfFollowUpPriorities history={followUpHistory} vitals={clinicVitals} onSave={flow.readOnly ? undefined : onSaveClinicVitals} now={now} isEnglish={isEnglish} onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })} /> : null}
+            {showFollowUp ? <HfFollowUpPriorities history={followUpHistory} vitals={clinicVitals} onSave={flow.readOnly ? undefined : onSaveClinicVitals} now={now} isEnglish={isEnglish} onBreathDetails={() => focusVisitFlowTarget({ kind: 'question', questionId: 'symptoms' })} trendAnswers={visitAnswers} onTrendAnswer={flow.readOnly ? undefined : onVisitAnswer} /> : null}
             <details key={showFollowUp ? 'follow-up' : 'diagnosis'} open={followUp && !showFollowUp} className="border-t border-border" data-testid="cdss-condition-assessment">
               <summary data-cdss-action={assessmentFlow.openQuestionCount > 0 ? '' : undefined} className="min-h-11 cursor-pointer px-4 py-3 text-sm font-medium text-primary focus-visible:ring-2 focus-visible:ring-ring">{showFollowUp ? (isEnglish ? 'Other symptoms, signs and NYHA' : '其他症狀、徵象與 NYHA') : (isEnglish ? 'Diagnostic assessment' : '診斷評估')} · {isEnglish ? `${assessmentFlow.openQuestionCount} questions pending` : `${assessmentFlow.openQuestionCount} 題待補`}</summary>
               {renderQuestions(assessmentFlow)}
@@ -387,6 +379,64 @@ export function HeartFailureVisitFlow({
       ) : null}
     </div>
   )
+}
+
+/**
+ * The clinical values a clinician can complete or correct, and the saving of
+ * them: an LVEF is the phenotype answer, a blood pressure is two entries, the
+ * rest are clinic-vitals entries. Shared by the visit flow, the three sections
+ * and the decision map so the three editors are one editor.
+ */
+function useRecordValueEditing({
+  flow,
+  isEnglish,
+  now,
+  clinicVitals,
+  onSaveClinicVitals,
+  phenotypeAnswer,
+  onAnswerPhenotype,
+  onSaveHfpefInputs,
+}: {
+  flow: VisitFlowModel
+  isEnglish: boolean
+  now: Date
+  clinicVitals?: ClinicVitals
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
+  phenotypeAnswer?: PhenotypeAnswer
+  onAnswerPhenotype?: (answer: PhenotypeAnswer) => void
+  onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
+}) {
+  const [editingMetric, setEditingMetric] = useState<HeartFailureMetric | null>(null)
+  const [recordValuesOpen, setRecordValuesOpen] = useState(false)
+  const allEditableMetrics: HeartFailureMetric[] = [...flow.metrics]
+  if (!allEditableMetrics.some(metric => metric.factKey === 'LVEF')) allEditableMetrics.unshift({ factKey: 'LVEF', label: 'LVEF', unit: '%', kind: 'measure', stale: false, entered: false, evaluated: false })
+  for (const [key, label, unit] of [['oxygenSaturation', 'SpO₂', '%'], ['bodyHeight', isEnglish ? 'Height' : '身高', 'cm']] as const) {
+    if (allEditableMetrics.some(metric => metric.factKey === key)) continue
+    const entry = clinicVitals?.entries[key]
+    allEditableMetrics.push({ factKey: key, label, unit, value: entry ? String(entry.value) : undefined, date: entry?.measuredOn, kind: 'measure', stale: false, entered: Boolean(entry), evaluated: false })
+  }
+  const recordOrder = ['LVEF', 'NTproBNP', 'eGFR', 'potassium', 'sodium', 'hemoglobin', 'bloodPressure', 'heartRate', 'oxygenSaturation', 'bodyWeight', 'bodyHeight']
+  allEditableMetrics.sort((a, b) => recordOrder.indexOf(a.factKey) - recordOrder.indexOf(b.factKey))
+  const saveMetrics = (changes: RecordValueChange[]) => {
+    const entries: NonNullable<ClinicVitalsPatch['entries']> = {}
+    for (const { metric, values, measuredOn } of changes) {
+      if (metric.factKey === 'LVEF') {
+        onAnswerPhenotype?.({ ...phenotypeAnswer, choice: undefined, lvef: values?.[0], measuredOn: values ? measuredOn : undefined, answeredOn: todayIsoDate(now) })
+      } else if (metric.factKey === 'bloodPressure') {
+        entries.systolic = values ? { value: values[0], measuredOn } : null
+        entries.diastolic = values ? { value: values[1], measuredOn } : null
+      } else {
+        const key = METRIC_ENTRY_KEYS[metric.factKey as keyof typeof METRIC_ENTRY_KEYS]
+        if (key) entries[key] = values ? { value: values[0], measuredOn } : null
+        if (metric.factKey === 'NTproBNP') onSaveHfpefInputs?.({ ntprobnp: null })
+      }
+    }
+    if (Object.keys(entries).length) onSaveClinicVitals?.({ entries })
+    setEditingMetric(null)
+    setRecordValuesOpen(false)
+  }
+  const saveMetric = (metric: HeartFailureMetric, values: number[] | null, measuredOn: string) => saveMetrics([{ metric, values, measuredOn }])
+  return { editingMetric, setEditingMetric, recordValuesOpen, setRecordValuesOpen, allEditableMetrics, saveMetrics, saveMetric }
 }
 
 /**
@@ -799,6 +849,14 @@ function SideTallyChip({
  * names them so the reader knows what is behind it rather than having to open
  * it to find out. Each row writes its own term with its own stamp — a visit
  * where only 腳腫 was asked about says exactly that.
+ *
+ * 「全部皆無」 answers 無 for every row of the question in one press, the folded
+ * ones included (the button says how many it covers, and opens them so the
+ * answers are on screen). Once any row is 有 it
+ * reads 「其餘皆無」 and leaves the 有 rows as they are. It is a toggle: while
+ * every row it covers reads 無 it shows pressed, and a second press puts those
+ * rows back as they were before the first — or unanswered, when this block
+ * was closed in between and no longer remembers.
  */
 function SignItemRows({
   questionId,
@@ -806,23 +864,118 @@ function SignItemRows({
   clinicVitals,
   isEnglish,
   showLegend,
+  compact = false,
   onAnswer,
+  onAnswerAll,
 }: {
   questionId: VisitQuestionId
   items: readonly VisitSignItem[]
   clinicVitals?: ClinicVitals
   isEnglish: boolean
   showLegend: boolean
+  /**
+   * The map: 全部皆無／其餘皆無 sits at the foot beside 更多, where the list is
+   * finished — not alone on a row above it.
+   */
+  compact?: boolean
   onAnswer: (term: string, value: SignAnswerValue) => void
+  onAnswerAll?: (answers: Record<string, SignAnswerValue | null>) => void
 }) {
   const [moreOpen, setMoreOpen] = useState(false)
+  const carriedLookup = useCarriedLookup()
+  // What the rows held before 全部皆無 was pressed, so a second press restores it.
+  const [beforeNone, setBeforeNone] = useState<Record<string, SignAnswerValue | null> | null>(null)
   const common = items.filter((item) => item.common)
   const more = items.filter((item) => !item.common)
+  const answerOf = (term: string) => clinicVitals?.signAnswers?.[term]?.value
+  const anyPresent = items.some((item) => answerOf(item.term) === 'present')
+  const noneTargets = items.filter((item) => answerOf(item.term) !== 'present')
+  const allNone = noneTargets.length > 0 && noneTargets.every((item) => answerOf(item.term) === 'absent')
+  const foldedTargets = moreOpen ? 0 : noneTargets.filter((item) => !item.common).length
+  const noneLabel = anyPresent
+    ? (isEnglish ? 'Rest: none' : '其餘皆無')
+    : (isEnglish ? 'None of these' : '全部皆無')
+  const noneTitle = allNone
+    ? (isEnglish ? 'Press again to restore these rows' : '再按一次，恢復成按下前的答案')
+    : isEnglish
+      ? `Mark ${noneTargets.length} finding${noneTargets.length === 1 ? '' : 's'} as absent${foldedTargets ? `, including ${foldedTargets} folded under more` : ''}`
+      : `把 ${noneTargets.length} 項記為「無」${foldedTargets ? `，含收起的 ${foldedTargets} 項` : ''}`
+  const toggleNone = () => {
+    if (!onAnswerAll) return
+    if (allNone) {
+      // Only rows still reading 無 go back; a row changed since keeps its answer.
+      const restore: Record<string, SignAnswerValue | null> = {}
+      for (const item of noneTargets) {
+        if (answerOf(item.term) !== 'absent') continue
+        restore[item.term] = beforeNone ? (beforeNone[item.term] ?? null) : null
+      }
+      setBeforeNone(null)
+      onAnswerAll(restore)
+      return
+    }
+    setBeforeNone(Object.fromEntries(noneTargets.map((item) => [item.term, answerOf(item.term) ?? null])))
+    onAnswerAll(Object.fromEntries(noneTargets.map((item) => [item.term, 'absent' as const])))
+    // The folded rows were answered too: open them so the answer is seen, not assumed.
+    if (foldedTargets > 0) setMoreOpen(true)
+  }
+  const noneButton = onAnswerAll ? (
+            <button
+              type="button"
+              className={cn(
+                'ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60',
+                allNone
+                  ? 'border-primary bg-primary/10 text-primary hover:bg-primary/15'
+                  : 'border-border bg-background text-foreground hover:bg-muted/60',
+              )}
+              disabled={noneTargets.length === 0}
+              aria-pressed={allNone}
+              title={noneTitle}
+              onClick={toggleNone}
+              data-testid={`cdss-hf-sign-none-${questionId}`}
+            >
+              {allNone ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
+              {noneLabel}
+              {allNone ? (
+                <span className="font-normal">{isEnglish ? '· press again to undo' : '· 再按一次復原'}</span>
+              ) : foldedTargets ? (
+                <span className="font-normal text-muted-foreground">
+                  {isEnglish ? `(incl. ${foldedTargets} folded)` : `（含收起 ${foldedTargets} 項）`}
+                </span>
+              ) : null}
+            </button>
+  ) : null
+  const moreButton = (
+    <button
+      type="button"
+      className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-expanded={moreOpen}
+      onClick={() => setMoreOpen((open) => !open)}
+      data-testid={`cdss-hf-sign-more-${questionId}`}
+    >
+      <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', moreOpen && 'rotate-180')} aria-hidden="true" />
+      {isEnglish ? `${more.length} more` : `更多 ${more.length} 項`}
+      {moreOpen ? null : (
+        <span className="min-w-0 truncate font-normal text-muted-foreground">
+          {more
+            .map((item) => `${isEnglish ? item.shortEn : item.shortZh}（${isEnglish ? VISIT_SIDE_LABELS[item.side].tagEn : VISIT_SIDE_LABELS[item.side].tagZh}）`)
+            .join(' · ')}
+        </span>
+      )}
+    </button>
+  )
   const row = (item: VisitSignItem) => {
     const visibleLabel = isEnglish ? item.en : item.zh
+    const carried = carriedLookup(`sign:${item.term}`)
     return <div key={item.term} className="flex flex-wrap items-center gap-2">
       <SideTag side={item.side} isEnglish={isEnglish} />
-      <span className="min-w-0 flex-1 text-xs text-foreground">{visibleLabel}</span>
+      <span className="min-w-0 flex-1 text-xs text-foreground">
+        {visibleLabel}
+        {carried ? (
+          <span className="ml-1.5 inline-flex items-center rounded border border-primary/25 bg-primary/5 px-1 text-[11px] tabular-nums text-primary" data-carried-from={carried}>
+            {carriedLabel(carried, isEnglish)}
+          </span>
+        ) : null}
+      </span>
       <SegmentedControl<SignAnswerValue>
         label={visibleLabel}
         options={[
@@ -838,39 +991,31 @@ function SignItemRows({
   }
   return (
     <div className="space-y-2" data-testid={`cdss-hf-sign-items-${questionId}`}>
-      {showLegend ? (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-muted-foreground">
-          {(['pulmonary', 'systemic', 'both'] as const).map((side) => (
-            <span key={side} className="inline-flex items-center gap-1">
-              <SideTag side={side} isEnglish={isEnglish} />
-              {isEnglish ? VISIT_SIDE_LABELS[side].legendEn : VISIT_SIDE_LABELS[side].legendZh}
-            </span>
-          ))}
-        </p>
+      {showLegend || (onAnswerAll && !compact) ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {showLegend ? (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-4 text-muted-foreground">
+              {(['pulmonary', 'systemic', 'both'] as const).map((side) => (
+                <span key={side} className="inline-flex items-center gap-1">
+                  <SideTag side={side} isEnglish={isEnglish} />
+                  {isEnglish ? VISIT_SIDE_LABELS[side].legendEn : VISIT_SIDE_LABELS[side].legendZh}
+                </span>
+              ))}
+            </p>
+          ) : null}
+          {onAnswerAll && !compact ? noneButton : null}
+        </div>
       ) : null}
       <div className="grid gap-x-6 gap-y-1.5 @min-[44rem]:grid-cols-2">
         {common.map(row)}
         {moreOpen ? more.map(row) : null}
       </div>
-      {more.length > 0 ? (
-        <button
-          type="button"
-          className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-expanded={moreOpen}
-          onClick={() => setMoreOpen((open) => !open)}
-          data-testid={`cdss-hf-sign-more-${questionId}`}
-        >
-          <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', moreOpen && 'rotate-180')} aria-hidden="true" />
-          {isEnglish ? `${more.length} more` : `更多 ${more.length} 項`}
-          {moreOpen ? null : (
-            <span className="min-w-0 truncate font-normal text-muted-foreground">
-              {more
-                .map((item) => `${isEnglish ? item.shortEn : item.shortZh}（${isEnglish ? VISIT_SIDE_LABELS[item.side].tagEn : VISIT_SIDE_LABELS[item.side].tagZh}）`)
-                .join(' · ')}
-            </span>
-          )}
-        </button>
-      ) : null}
+      {compact && (more.length > 0 || noneButton) ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {more.length > 0 ? moreButton : null}
+          {noneButton}
+        </div>
+      ) : more.length > 0 ? moreButton : null}
     </div>
   )
 }
@@ -899,18 +1044,24 @@ function HfpEfScoreLine({
   reading,
   isEnglish,
   onComplete,
+  compact = false,
 }: {
   reading?: HfpefReading
   isEnglish: boolean
   onComplete?: (id?: HfpefScoreId) => void
+  /**
+   * The map's diagnosis card: no box, and the unreported parameters only
+   * where they could still change a score, in the page's muted ink.
+   */
+  compact?: boolean
 }) {
   const scores = [reading?.hfaPeff, reading?.h2fpef]
     .filter((score): score is HfpefScoreReading => Boolean(score))
   const date = scores.map((score) => score.date).filter(Boolean).sort().at(-1)
-  const missing = scores.find((score) => score.missing.length > 0)
+  const missing = scores.find((score) => score.missing.length > 0 && (!compact || score.upper > score.score))
   return (
     <div
-      className="rounded-md border border-border bg-muted/[0.12] px-2.5 py-2"
+      className={compact ? 'pt-0.5' : 'rounded-md border border-border bg-muted/[0.12] px-2.5 py-2'}
       data-testid="cdss-hf-hfpef-scores"
     >
       {scores.length === 0 ? (
@@ -938,21 +1089,24 @@ function HfpEfScoreLine({
               </span>
             </p>
           ))}
+          {/* One line (clinician feedback 2026-09-28): the calculator, the echo it
+              read, and what it could not obtain — a report value or a record
+              reading such as the antihypertensive count, hence 「未取得」. */}
           <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
             {isEnglish
               ? `By calculator ${HFPEF_CALCULATOR_VERSION}${date ? ` · echo ${date}` : ''}`
               : `依計算機 ${HFPEF_CALCULATOR_VERSION}${date ? ` · 心超 ${date}` : ''}`}
+            {missing ? (
+              <span
+                className={cn(compact ? 'text-muted-foreground' : 'text-amber-800 dark:text-amber-300')}
+                data-testid="cdss-hf-hfpef-score-missing"
+              >
+                {isEnglish
+                  ? ` · not obtained: ${missing.missingEn.join(', ')} (at most +${missing.upper - missing.score})`
+                  : ` · 未取得：${missing.missingZh.join('、')}（最多再 +${missing.upper - missing.score}）`}
+              </span>
+            ) : null}
           </p>
-          {missing ? (
-            <p
-              className="mt-0.5 text-[11px] leading-4 text-amber-800 dark:text-amber-300"
-              data-testid="cdss-hf-hfpef-score-missing"
-            >
-              {isEnglish
-                ? `Not reported: ${missing.missingEn.join(', ')} (at most +${missing.upper - missing.score})`
-                : `報告未提供：${missing.missingZh.join('、')}（最多再 +${missing.upper - missing.score}）`}
-            </p>
-          ) : null}
         </>
       )}
 
@@ -968,6 +1122,7 @@ function HfpEfConfirmation({
   onAnswer,
   hfpefReading,
   onOpenCalculator,
+  compact = false,
 }: {
   summary: DiagnosticSummary | undefined
   isEnglish: boolean
@@ -976,18 +1131,20 @@ function HfpEfConfirmation({
   onAnswer: (answer: PhenotypeAnswer) => void
   hfpefReading?: HfpefReading
   onOpenCalculator?: (id?: HfpefScoreId) => void
+  /** The map: the criteria, the score and the buttons; the guideline text and the storage note one press away. */
+  compact?: boolean
 }) {
   const symptomsState = summary?.criteria
     .find((criterion) => criterion.id === 'symptoms-signs')?.state
   const symptomsUndetermined = symptomsState === 'undetermined'
-  const record = (value: true | typeof HFPEF_NOT_CONFIRMED) => onAnswer({
-    ...(answer ?? {}),
-    answeredOn: todayIsoDate(now),
-    hfpEfConfirmed: value,
-  })
+  // 「確認」 is the same diagnosis as question 1's 「HFpEF」, so it is written
+  // the same way and question 1 then carries it.
+  const record = (value: true | typeof HFPEF_NOT_CONFIRMED) => onAnswer(value === true
+    ? diagnosisAnswer('hfpef', answer, now)!
+    : { ...(answer ?? {}), answeredOn: todayIsoDate(now), hfpEfConfirmed: value })
   return (
     <div className="space-y-2" data-testid="cdss-hf-hfpef-confirmation">
-      <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} />
+      <DiagnosisReading summary={summary} isEnglish={isEnglish} showScores={false} showBasis={!compact} />
       <HfpEfScoreLine
         reading={hfpefReading}
         isEnglish={isEnglish}
@@ -1026,16 +1183,26 @@ function HfpEfConfirmation({
           {isEnglish ? 'Not confirming today' : '暫不確認'}
         </Button>
       </div>
-      <p className="text-[11px] leading-4 text-muted-foreground">
-        {isEnglish
-          ? 'Encrypted and kept for this tab session only; carrying it to the next visit is phase 2, and nothing is written to the chart or to any claim. The HFpEF treatment recommendations appear under today’s actions once it is confirmed.'
-          : '加密保存於本分頁的工作階段，跨次就診沿用為第二階段；不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'}
-      </p>
+      {compact ? (
+        <details className="text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-hfpef-basis">
+          <summary className="min-h-8 cursor-pointer py-1 font-medium">{isEnglish ? 'Basis and notes' : '依據與說明'}</summary>
+          {summary?.basis ? <p className="mt-1">{summary.basis}</p> : null}
+          <p className="mt-1">{storageNote(isEnglish)}</p>
+        </details>
+      ) : (
+        <p className="text-[11px] leading-4 text-muted-foreground">{storageNote(isEnglish)}</p>
+      )}
     </div>
   )
 }
 
-function QuestionShell({
+function storageNote(isEnglish: boolean): string {
+  return isEnglish
+    ? 'Encrypted and kept for this tab session only; carrying it to the next visit is phase 2, and nothing is written to the chart or to any claim. The HFpEF treatment recommendations appear under today’s actions once it is confirmed.'
+    : '加密保存於本分頁的工作階段，跨次就診沿用為第二階段；不寫回病歷，也不做健保申報。確認後 HFpEF 治療建議才會出現在今日處置。'
+}
+
+function ListQuestionShell({
   question,
   isEnglish,
   now,
@@ -1049,11 +1216,20 @@ function QuestionShell({
   onEdit?: () => void
   /** Shown beside the folded answer — the side tally on question ④. */
   answerBadge?: ReactNode
+  /** The map's box closes an open, answered question from its header; this layout does it below. */
+  onCollapse?: () => void
   children?: ReactNode
 }) {
   const stamp = formatStamp(question.modifiedAt, now, isEnglish)
   const open = question.state === 'open'
   const answered = question.state === 'answered'
+  // An answer brought in from a saved record says so instead of 「最後修改」 today.
+  const carriedLookup = useCarriedLookup()
+  const carried = !answered ? null
+    : question.id === 'nyha' || question.id === 'compensation' ? carriedLookup(question.id)
+      : question.id === 'symptoms' || question.id === 'signs'
+        ? (question.items ?? []).map((item) => carriedLookup(`sign:${item.term}`)).find(Boolean) ?? null
+        : null
   const sideBySide = ['hf-suspicion', 'lvef-phenotype', 'nyha', 'compensation'].includes(question.id)
   const editingInline = sideBySide && Boolean(children)
   return (
@@ -1096,7 +1272,12 @@ function QuestionShell({
             </span>
           ) : null}
           {answered && answerBadge ? answerBadge : null}
-          {answered && stamp ? (
+          {carried ? (
+            <span className="inline-flex items-center rounded border border-primary/25 bg-primary/5 px-1.5 text-[11px] tabular-nums text-primary"
+              data-carried-from={carried}>
+              {carriedLabel(carried, isEnglish)}
+            </span>
+          ) : answered && stamp ? (
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {isEnglish ? `last changed ${stamp}` : `最後修改 ${stamp}`}
             </span>
@@ -1140,6 +1321,8 @@ function QuestionsCard({
   board,
   hfpefReading,
   onOpenCalculator,
+  compact = false,
+  diagnosisPoint,
 }: {
   flow: VisitFlowModel
   isEnglish: boolean
@@ -1152,6 +1335,17 @@ function QuestionsCard({
   board: HeartFailureBoardModel
   hfpefReading?: HfpefReading
   onOpenCalculator?: (id?: HfpefScoreId) => void
+  /**
+   * The map's one card, numbered in reasoning order: no note explaining why
+   * the HFpEF question comes last, and that question's guideline text folded.
+   */
+  compact?: boolean
+  /**
+   * On the map, the decision point the diagnosis question is (HF: DP-01): the
+   * question is drawn as that point, beside the map's other points, rather
+   * than as a row of this card.
+   */
+  diagnosisPoint?: { dp: string; label: string }
 }) {
   // A question a clinician answered can be reopened; the row is otherwise one
   // line, which is the point — the same question is not asked twice.
@@ -1161,17 +1355,95 @@ function QuestionsCard({
     setReopened(current => new Set(current).add(id))
     setCollapsedItems(current => { const next = new Set(current); next.delete(id); return next })
   }
-  const shows = (question: VisitQuestion) => (
-    question.items ? !collapsedItems.has(question.id) : question.state === 'open' || reopened.has(question.id)
-  )
   const diagnosisCard = board.hfpEfDiagnosis
+  const diagnosisSummary = diagnosisCard ? diagnosticSummaryOf(diagnosisCard) : undefined
+  // 「還不確定」 on the map: question 1 stays open — the verdict is given there
+  // once the evidence is in — and the HFpEF criteria come up right under it,
+  // so what is still missing is read before the symptoms and signs below.
+  const unsure = compact && phenotypeAnswer?.hfSuspicion === 'suspected' && !phenotypeAnswer?.diagnosis
+  // Where the card still carries the HFpEF question, the criteria are drawn
+  // there instead, once.
+  const evidenceUnderDiagnosis = unsure && Boolean(diagnosisSummary)
+    && !flow.questions.some((question) => question.id === 'hfpef-confirmation')
+  const shows = (question: VisitQuestion) => (
+    question.items
+      ? !collapsedItems.has(question.id)
+      : question.state === 'open' || reopened.has(question.id) || (question.id === 'hf-suspicion' && unsure)
+  )
+
+  const answerDiagnosis = (question: VisitQuestion) => (next: PhenotypeAnswer) => {
+    setReopened((current) => { const rest = new Set(current); rest.delete(question.id); return rest })
+    onAnswerPhenotype?.(next)
+  }
+  const pointQuestion = compact && diagnosisPoint
+    ? flow.questions.find((question) => question.id === 'hf-suspicion')
+    : undefined
+  // Once HFpEF is the answer, what it rests on stays one press away under it:
+  // DP-34 「HFpEF 證實」 says its criteria open in 01, and a diagnosis nobody
+  // can re-read is one nobody can audit. Folded — the question is settled.
+  const hfpEfAnswered = phenotypeAnswer?.diagnosis
+    ? phenotypeAnswer.diagnosis === 'hfpEF'
+    : pointQuestion?.request?.recordedOptionId === 'hfpef'
+  const evidenceUnderAnswer = Boolean(pointQuestion && !shows(pointQuestion) && hfpEfAnswered && diagnosisSummary && diagnosisCard)
+  // Drawn as DP-01, the diagnosis leaves the card; what stays numbers from 1.
+  const listed = pointQuestion
+    ? flow.questions.filter((question) => question !== pointQuestion).map((question, index) => ({ ...question, number: String(index + 1) }))
+    : flow.questions
 
   return (
+    <>
+    {pointQuestion && diagnosisPoint ? (
+      <MapDiagnosisPoint
+        question={pointQuestion}
+        point={diagnosisPoint}
+        open={shows(pointQuestion)}
+        isEnglish={isEnglish}
+        now={now}
+        answer={phenotypeAnswer}
+        {...(onAnswerPhenotype && !flow.readOnly ? { onAnswer: answerDiagnosis(pointQuestion), onEdit: () => reopen(pointQuestion.id) } : {})}
+        {...(reopened.has(pointQuestion.id) ? { onCollapse: () => setReopened((current) => { const rest = new Set(current); rest.delete(pointQuestion.id); return rest }) } : {})}
+        evidence={evidenceUnderDiagnosis && diagnosisSummary && diagnosisCard ? (
+          <div className="space-y-1.5" data-testid="cdss-hf-hfpef-evidence">
+            <HfpEfCriteriaList
+              summary={diagnosisSummary}
+              card={diagnosisCard}
+              isEnglish={isEnglish}
+              symptomsHint={isEnglish ? 'tick them in the assessment below' : '在下方勾選'}
+            />
+            <HfpEfScoreLine
+              compact
+              reading={hfpefReading}
+              isEnglish={isEnglish}
+              {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
+            />
+          </div>
+        ) : undefined}
+        record={evidenceUnderAnswer && diagnosisSummary && diagnosisCard ? (
+          <HfpEfEvidenceFold summary={diagnosisSummary} isEnglish={isEnglish}>
+            <HfpEfCriteriaList
+              summary={diagnosisSummary}
+              card={diagnosisCard}
+              isEnglish={isEnglish}
+              symptomsHint={isEnglish ? 'record them under Follow-up' : '可在「追蹤」補記'}
+            />
+            <HfpEfScoreLine
+              compact
+              reading={hfpefReading}
+              isEnglish={isEnglish}
+              {...(onOpenCalculator ? { onComplete: onOpenCalculator } : {})}
+            />
+          </HfpEfEvidenceFold>
+        ) : undefined}
+      />
+    ) : null}
+    {listed.length > 0 ? (
     <section
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      className={compact ? 'space-y-2' : 'overflow-hidden rounded-lg border border-border bg-card'}
       aria-label={isEnglish ? "This visit's assessment" : '本次評估'}
       data-testid="cdss-hf-questions"
     >
+      {/* The map titles the card itself and counts in its section bar. */}
+      {!compact ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-1.5">
         <span className="text-[11px] font-semibold text-violet-700 dark:text-secondary-foreground/80">
           {isEnglish ? 'Your judgement' : '需要你判斷'}
@@ -1188,7 +1460,8 @@ function QuestionsCard({
             : (isEnglish ? 'Assessment complete' : '本次評估完成')}
         </span>
       </div>
-      {flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
+      ) : null}
+      {!compact && flow.questions.some((question) => question.id === 'hfpef-confirmation') ? (
         <p
           className="border-b border-border px-3 py-1.5 text-[11px] leading-4 text-muted-foreground"
           data-testid="cdss-hf-questions-hfpef-note"
@@ -1206,19 +1479,29 @@ function QuestionsCard({
           {isEnglish ? 'Load a patient record to answer.' : '需載入病人才能作答。'}
         </p>
       ) : null}
-      <ul className="divide-y divide-border">
-        {flow.questions.map((question) => {
+      <ul className={compact ? 'space-y-2' : 'divide-y divide-border'}>
+        {listed.map((question) => {
           const editable = !flow.readOnly
           const onEdit = editable ? () => reopen(question.id) : undefined
+          // The map draws each question as it draws a point: a box of its own.
+          const QuestionShell = compact ? MapQuestionBox : ListQuestionShell
+          const onCollapse = !compact || question.state !== 'answered'
+            ? undefined
+            : question.items
+              ? () => setCollapsedItems((current) => new Set(current).add(question.id))
+              : reopened.has(question.id)
+                ? () => setReopened((current) => { const rest = new Set(current); rest.delete(question.id); return rest })
+                : undefined
 
           if (question.id === 'hf-suspicion' || question.id === 'lvef-phenotype') {
-            return (
+            const shell = (
               <QuestionShell
                 key={question.id}
                 question={question}
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && question.request && onAnswerPhenotype && question.recommendationId ? (
                   <PhysicianInputRequestPanel
@@ -1227,12 +1510,13 @@ function QuestionsCard({
                     recommendationId={question.recommendationId}
                     isEnglish={isEnglish}
                     answer={phenotypeAnswer}
-                    onAnswer={onAnswerPhenotype}
+                    onAnswer={answerDiagnosis(question)}
                     now={now}
                   />
                 ) : null}
               </QuestionShell>
             )
+            return shell
           }
 
           if (question.id === 'hfpef-confirmation') {
@@ -1243,16 +1527,18 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && onAnswerPhenotype ? (
                   <HfpEfConfirmation
-                    summary={diagnosisCard ? diagnosticSummaryOf(diagnosisCard) : undefined}
+                    summary={diagnosisSummary}
                     isEnglish={isEnglish}
                     now={now}
                     answer={phenotypeAnswer}
                     onAnswer={onAnswerPhenotype}
                     hfpefReading={hfpefReading}
                     onOpenCalculator={onOpenCalculator}
+                    compact={compact}
                   />
                 ) : null}
               </QuestionShell>
@@ -1268,6 +1554,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && onSaveClinicVitals ? (
                   <SegmentedControl<NyhaAnswerValue>
@@ -1297,6 +1584,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
                 answerBadge={question.sideTally ? (
                   <SideTallyChip tally={question.sideTally} isEnglish={isEnglish} />
                 ) : undefined}
@@ -1309,12 +1597,17 @@ function QuestionsCard({
                     clinicVitals={clinicVitals}
                     isEnglish={isEnglish}
                     showLegend={question.id === 'symptoms'}
+                    compact={compact}
                     onAnswer={(term, next) => {
                       reopen(question.id)
                       onSaveClinicVitals({ signAnswers: { [term]: next } })
                     }}
+                    onAnswerAll={(answers) => {
+                      reopen(question.id)
+                      onSaveClinicVitals({ signAnswers: answers })
+                    }}
                   />
-                  {question.state === 'answered' ? <button type="button" className="mt-2 min-h-8 text-xs font-medium text-primary hover:underline" onClick={() => setCollapsedItems(current => new Set(current).add(question.id))}>{isEnglish ? 'Collapse' : '收合'}</button> : null}
+                  {question.state === 'answered' && !compact ? <button type="button" className="mt-2 min-h-8 text-xs font-medium text-primary hover:underline" onClick={() => setCollapsedItems(current => new Set(current).add(question.id))}>{isEnglish ? 'Collapse' : '收合'}</button> : null}
                   </div>
                 ) : null}
               </QuestionShell>
@@ -1329,6 +1622,7 @@ function QuestionsCard({
                 isEnglish={isEnglish}
                 now={now}
                 onEdit={onEdit}
+                onCollapse={onCollapse}
               >
                 {shows(question) && onSaveClinicVitals ? (
                   <SegmentedControl<CompensationAnswerValue>
@@ -1352,6 +1646,200 @@ function QuestionsCard({
         })}
       </ul>
     </section>
+    ) : null}
+    </>
+  )
+}
+
+/**
+ * A question on the map, drawn as the map draws a point (clinician feedback
+ * 2026-09-28: 「排版醜醜，而且 UI 一樣不太符合決策地圖風格」): a box of its
+ * own, the question's number where a point has its code, its name, and —
+ * folded — the answer in one line with 修改; open, its controls under a
+ * header that carries 收合. No green tick, no stamp, no pill of 「：−」s.
+ *
+ * Answered, the question steps back to a grey label and the answer reads as
+ * the result: bolder, on a rule of its own (clinician feedback 2026-09-28:
+ * 「結果跟標題可以有一點 UI 上的區隔嗎」).
+ */
+function MapQuestionBox({
+  question,
+  isEnglish,
+  onEdit,
+  onCollapse,
+  answerBadge,
+  children,
+}: {
+  question: VisitQuestion
+  isEnglish: boolean
+  now: Date
+  onEdit?: () => void
+  answerBadge?: ReactNode
+  onCollapse?: () => void
+  children?: ReactNode
+}) {
+  const answered = question.state === 'answered'
+  const open = Boolean(children)
+  const settled = answered && !open
+  const action = 'min-h-8 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  return (
+    <li
+      id={visitQuestionElementId(question.id)}
+      className="scroll-mt-2 rounded-md border border-border bg-background px-2.5 py-2"
+      data-testid={`cdss-hf-question-${question.id}`}
+      data-state={question.state}
+      data-number={question.number}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">{question.number}</span>
+        <span className={cn('text-sm font-medium', question.state === 'locked' || settled ? 'text-muted-foreground' : 'text-foreground')}>{question.label}</span>
+        {settled && answerBadge ? answerBadge : null}
+        {open && onCollapse ? (
+          <button type="button" className={cn('ml-auto', action)} onClick={onCollapse} data-testid={`cdss-hf-question-collapse-${question.id}`}>
+            {isEnglish ? 'Collapse' : '收合'}
+          </button>
+        ) : null}
+        {settled && onEdit ? (
+          <button type="button" className={cn('ml-auto', action)} onClick={onEdit} data-testid={`cdss-hf-question-edit-${question.id}`}>
+            {isEnglish ? 'Edit' : '修改'}
+          </button>
+        ) : null}
+      </div>
+      {settled && question.answerText ? (
+        <p className="mt-1.5 border-l-2 border-primary/50 pl-2 text-sm font-semibold leading-snug text-foreground" data-testid={`cdss-hf-question-answer-${question.id}`}>{question.answerText}</p>
+      ) : null}
+      {question.state === 'locked' ? (
+        <p className="mt-1 text-xs text-muted-foreground">{question.lockedReason}</p>
+      ) : open ? (
+        <div className="mt-2 space-y-1.5">
+          {question.hint ? <p className="text-xs text-muted-foreground">{question.hint}</p> : null}
+          {children}
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+/**
+ * The diagnosis question on the map, drawn as the map draws a decision point
+ * (clinician feedback 2026-09-28: 「這個 UI 在決策地圖的畫面中有點不搭」): the
+ * DP code and name, the state in the map's own pill, the answer with the
+ * record's line beside it and 修改 — and, while it is being answered, its
+ * choices and (on 還不確定) the HFpEF criteria in the same box.
+ */
+function MapDiagnosisPoint({
+  question,
+  point,
+  open,
+  isEnglish,
+  now,
+  answer,
+  onAnswer,
+  onEdit,
+  onCollapse,
+  evidence,
+  record,
+}: {
+  question: VisitQuestion
+  point: { dp: string; label: string }
+  open: boolean
+  isEnglish: boolean
+  now: Date
+  answer?: PhenotypeAnswer
+  onAnswer?: (answer: PhenotypeAnswer) => void
+  onEdit?: () => void
+  /** Closes an answer reopened by 修改 without changing it. */
+  onCollapse?: () => void
+  evidence?: ReactNode
+  /** What the answer rests on, folded under it once it is given. */
+  record?: ReactNode
+}) {
+  const ask = question.label.replace(/^診斷：|^Diagnosis:\s*/, '')
+  const state: DecisionPointState = !open ? 'done' : question.state === 'answered' ? 'confirm' : 'act'
+  return (
+    <div
+      id={visitQuestionElementId(question.id)}
+      className={cn('scroll-mt-2 rounded-md border bg-background px-2.5 py-2', open ? 'border-foreground' : 'border-border')}
+      data-testid={`cdss-hf-question-${question.id}`}
+      data-state={question.state}
+      data-dp={point.dp}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">{point.dp}</span>
+        <span className="text-sm font-medium text-foreground">
+          {point.label}
+          {open ? <span className="font-normal">{isEnglish ? `: ${ask}` : `：${ask}`}</span> : null}
+        </span>
+        {open && onCollapse ? (
+          <button
+            type="button"
+            className="ml-auto min-h-8 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onCollapse}
+            data-testid={`cdss-hf-question-collapse-${question.id}`}
+          >
+            {isEnglish ? 'Keep' : '不修改'}
+          </button>
+        ) : null}
+        {!open && onEdit ? (
+          <button
+            type="button"
+            className="ml-auto min-h-8 shrink-0 rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onEdit}
+            data-testid={`cdss-hf-question-edit-${question.id}`}
+          >
+            {isEnglish ? 'Edit' : '修改'}
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <StatePill state={state} isEnglish={isEnglish} />
+        {!open && question.answerText ? (
+          <span className="text-sm font-medium text-foreground" data-testid={`cdss-hf-question-answer-${question.id}`}>{question.answerText}</span>
+        ) : null}
+        {question.hint ? <span className="min-w-0 text-xs text-muted-foreground">{!open && question.answerText ? '· ' : ''}{question.hint}</span> : null}
+      </div>
+      {open && question.request && question.recommendationId && onAnswer ? (
+        <div className="mt-2">
+          <PhysicianInputRequestPanel
+            inline
+            requests={[question.request]}
+            recommendationId={question.recommendationId}
+            isEnglish={isEnglish}
+            answer={answer}
+            onAnswer={onAnswer}
+            now={now}
+          />
+        </div>
+      ) : null}
+      {open && evidence ? <div className="mt-2 border-t border-border/60 pt-2">{evidence}</div> : null}
+      {!open && record ? <div className="mt-1.5">{record}</div> : null}
+    </div>
+  )
+}
+
+/**
+ * The HFpEF criteria and scores under an answered 「HFpEF」, folded: its line
+ * says how many criteria hold, and DP-34 — the confirmation it answers — is
+ * where a press on that point lands and opens it.
+ */
+function HfpEfEvidenceFold({ summary, isEnglish, children }: {
+  summary: DiagnosticSummary
+  isEnglish: boolean
+  children: ReactNode
+}) {
+  const met = summary.criteria.filter((criterion) => criterion.state === 'met').length
+  return (
+    <details className="group rounded-md border border-border/60" data-dp="DP-34" data-testid="cdss-hf-hfpef-evidence-fold">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 px-2 text-xs font-medium text-foreground pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <span className="font-mono text-[11px] font-semibold text-muted-foreground">DP-34</span>
+        <span>{isEnglish ? 'HFpEF criteria' : 'HFpEF 診斷依據'}</span>
+        <span className="tabular-nums text-muted-foreground">
+          {isEnglish ? `${met}/${summary.criteria.length} met` : `${met}/${summary.criteria.length} 成立`}
+        </span>
+        <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="space-y-1.5 border-t border-border/60 px-2 pb-2 pt-1.5">{children}</div>
+    </details>
   )
 }
 

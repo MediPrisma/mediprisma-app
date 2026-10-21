@@ -24,15 +24,18 @@
  * `packVersion` travels with each decision so a reader can tell 「這是對哪一版
  * 規則做的決定」 — a row whose wording changed between releases is not
  * necessarily the row that was decided.
+ *
+ * The visit decision map records here too, one decision per decision point
+ * rather than per module (`visitDecisionKey` in `renderers/visit/visit-decisions`),
+ * and adds the pack's action id and label, its response check and its reopen
+ * condition. The queue row and the map cell for one point write the same key,
+ * so a point is decided once wherever it was decided.
  */
 import { create } from 'zustand'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import { patientAnswerBacking, patientAnswerStorageKey } from './patient-answer-backing'
 
 export type PhysicianDecisionKind =
   | 'prescribed'
@@ -47,8 +50,41 @@ export type PhysicianDecisionKind =
   | 'exercise-cleared'
   | 'supervised-exercise'
   | 'reviewed'
+  | 'held'
+  | 'at-max-tolerated'
 
-export interface PhysicianDecision {
+/**
+ * What the pack asked to be checked after a decision, and within how many days.
+ * Pack wording, stored as it was shown so the plan reads back what was decided.
+ */
+export interface DecisionResponseCheck {
+  text: string
+  /** When, in the guideline's own words (「1–2 週」); absent where ESC gives none. */
+  interval?: string
+  /** Kept only for decisions stored before `interval`. */
+  withinDays?: number
+}
+
+/**
+ * Where a decision was taken on the visit decision map. A decision recorded
+ * there is keyed by its decision point rather than by a module, and carries the
+ * pack's own action, check and reopen condition. Decisions recorded on the
+ * other layouts have none of these, and a record written before they existed
+ * reads back without them.
+ */
+export interface VisitDecisionContext {
+  /** The decision point, e.g. `DP-07`. */
+  dp?: string
+  /** The pack's stable action id. */
+  actionId?: string
+  /** The action's label as the pack printed it (「換 ARNI」). */
+  actionLabel?: string
+  responseCheck?: DecisionResponseCheck
+  /** When the pack says to ask again (「K 回到 <5.0 時重新開始」). */
+  reopenWhen?: string
+}
+
+export interface PhysicianDecision extends VisitDecisionContext {
   decision: PhysicianDecisionKind
   /** Reason ids from `DECISION_REASONS`; free text goes in `note`. */
   reasons: readonly string[]
@@ -61,11 +97,9 @@ export interface PhysicianDecision {
 
 export type PhysicianDecisionMap = Readonly<Record<string, PhysicianDecision>>
 
-const STORAGE_PREFIX = 'cdss-physician-decisions:'
-
 /** The key one patient's encrypted decisions are kept under. */
 export function physicianDecisionsStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('physician-decisions', patientId)
 }
 
 const DECISION_KINDS: readonly PhysicianDecisionKind[] = [
@@ -81,10 +115,31 @@ const DECISION_KINDS: readonly PhysicianDecisionKind[] = [
   'exercise-cleared',
   'supervised-exercise',
   'reviewed',
+  'held',
+  'at-max-tolerated',
 ]
 
 function isDecisionKind(value: unknown): value is PhysicianDecisionKind {
   return DECISION_KINDS.some((kind) => kind === value)
+}
+
+/**
+ * care 2.8 renamed these prescriptions without changing their actions. Keep
+ * decisions from an open tab's older encrypted cache, including any next
+ * step, under the new keys. Dates, labels and rule versions stay untouched;
+ * the visit map still checks whether an action applies today.
+ */
+const LEGACY_VISIT_DECISIONS: Readonly<Record<string, string>> = {
+  'visit:hf-ras': 'visit:ras-inhibition',
+  'visit:hf-sglt2i': 'visit:sglt2i',
+  'visit:hf-lipid': 'visit:lipid-lowering',
+}
+
+function currentDecisionKey(key: string): string {
+  for (const [legacy, current] of Object.entries(LEGACY_VISIT_DECISIONS)) {
+    if (key === legacy || key.startsWith(`${legacy}:`)) return current + key.slice(legacy.length)
+  }
+  return key
 }
 
 /**
@@ -101,7 +156,11 @@ function toDecisions(parsed: unknown): PhysicianDecisionMap {
       if (!value || typeof value !== 'object') continue
       const record = value as Record<string, unknown>
       if (!isDecisionKind(record.decision)) continue
-      decisions[moduleId] = {
+      const key = currentDecisionKey(moduleId)
+      // A valid record already written under the current key wins over its
+      // legacy alias, regardless of the stored object's property order.
+      if (key !== moduleId && decisions[key]) continue
+      decisions[key] = {
         decision: record.decision,
         reasons: Array.isArray(record.reasons)
           ? record.reasons.filter((reason): reason is string => typeof reason === 'string')
@@ -109,6 +168,7 @@ function toDecisions(parsed: unknown): PhysicianDecisionMap {
         ...(typeof record.note === 'string' && record.note ? { note: record.note } : {}),
         recordedAt: typeof record.recordedAt === 'string' ? record.recordedAt : '',
         packVersion: typeof record.packVersion === 'string' ? record.packVersion : '',
+        ...toVisitContext(record),
       }
     }
     return decisions
@@ -117,19 +177,40 @@ function toDecisions(parsed: unknown): PhysicianDecisionMap {
   }
 }
 
+/** The visit-map fields, each kept only when it is the shape it claims to be. */
+function toVisitContext(record: Record<string, unknown>): VisitDecisionContext {
+  const check = record.responseCheck as Record<string, unknown> | undefined
+  const withinDays = check && typeof check === 'object' ? check.withinDays : undefined
+  const interval = check && typeof check === 'object' ? check.interval : undefined
+  return {
+    ...(typeof record.dp === 'string' && record.dp ? { dp: record.dp } : {}),
+    ...(typeof record.actionId === 'string' && record.actionId ? { actionId: record.actionId } : {}),
+    ...(typeof record.actionLabel === 'string' && record.actionLabel ? { actionLabel: record.actionLabel } : {}),
+    ...(check && typeof check === 'object' && typeof check.text === 'string' && check.text
+      ? {
+          responseCheck: {
+            text: check.text,
+            ...(typeof interval === 'string' && interval ? { interval } : {}),
+            ...(typeof withinDays === 'number' && Number.isFinite(withinDays) && withinDays >= 0 ? { withinDays } : {}),
+          },
+        }
+      : {}),
+    ...(typeof record.reopenWhen === 'string' && record.reopenWhen ? { reopenWhen: record.reopenWhen } : {}),
+  }
+}
+
 function writeStoredDecisions(patientId: string, decisions: PhysicianDecisionMap): void {
-  const key = physicianDecisionsStorageKey(patientId)
   if (Object.keys(decisions).length === 0) {
-    discardEncryptedAnswers(key)
+    patientAnswerBacking().discard('physician-decisions', patientId)
     return
   }
-  persistEncryptedAnswers(key, decisions)
+  patientAnswerBacking().save('physician-decisions', patientId, decisions)
 }
 
 const hydration = createHydrationGuard()
 
 /** What a decision is being recorded about, without the clock or the store. */
-export interface PhysicianDecisionInput {
+export interface PhysicianDecisionInput extends VisitDecisionContext {
   decision: PhysicianDecisionKind
   reasons?: readonly string[]
   note?: string
@@ -153,11 +234,28 @@ interface PhysicianDecisionsState {
   ) => void
   clearDecision: (patientId: string, moduleId: string) => void
   clearDecisions: (patientId: string) => void
+  /** Fill unanswered decisions from a confirmed snapshot, retaining the original date. */
+  carryForward: (patientId: string, saved: unknown, packVersion: string) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved, packVersion) => {
+    if (!patientId) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const valid = Object.fromEntries(Object.entries(toDecisions(saved))
+      .filter(([key, decision]) => !['__proto__', 'constructor', 'prototype'].includes(key)
+        && decision.packVersion === packVersion && Number.isFinite(Date.parse(decision.recordedAt))))
+    set(state => {
+      const next = { ...valid, ...state.byPatientId[patientId] }
+      writeStoredDecisions(patientId, next)
+      return { byPatientId: { ...state.byPatientId, [patientId]: next } }
+    })
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return
@@ -169,7 +267,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
     // writes anything.
     if (
       state.byPatientId[patientId]
-      || !hasEncryptedAnswers(physicianDecisionsStorageKey(patientId))
+      || !patientAnswerBacking().has('physician-decisions', patientId)
     ) {
       set((current) => ({
         byPatientId: current.byPatientId[patientId]
@@ -192,7 +290,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
         hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
       }))
     }
-    void loadEncryptedAnswers<unknown>(physicianDecisionsStorageKey(patientId))
+    void patientAnswerBacking().load('physician-decisions', patientId)
       .then((stored) => apply(toDecisions(stored)))
       // A record that cannot be read leaves every row undecided, which is the
       // same state as a chart nobody has decided on.
@@ -211,6 +309,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
           ...(input.note?.trim() ? { note: input.note.trim() } : {}),
           recordedAt: now.toISOString(),
           packVersion: input.packVersion,
+          ...toVisitContext(input as unknown as Record<string, unknown>),
         },
       }
       // In memory first; the encryption runs in the background and cannot
@@ -234,7 +333,7 @@ export const usePhysicianDecisionsStore = create<PhysicianDecisionsState>()((set
 
   clearDecisions: (patientId) => {
     if (!patientId) return
-    discardEncryptedAnswers(physicianDecisionsStorageKey(patientId))
+    patientAnswerBacking().discard('physician-decisions', patientId)
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_DECISIONS },
       hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },

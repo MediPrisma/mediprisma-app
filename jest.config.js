@@ -88,6 +88,13 @@ const customJestConfig = {
 // be re-applied on the resolved config (documented Next.js workaround).
 module.exports = async () => {
   const config = await createJestConfig(customJestConfig)()
+  const { optionalBuildConfig } = await import('./scripts/optional-build-config.mjs')
+  const optional = optionalBuildConfig(__dirname)
+  const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  config.moduleNameMapper = {
+    ...Object.fromEntries(Object.entries(optional.aliases).map(([name, file]) => [`^${escape(name)}$`, `<rootDir>/${file}`])),
+    ...config.moduleNameMapper,
+  }
   config.transformIgnorePatterns = customJestConfig.transformIgnorePatterns
   return config
 }

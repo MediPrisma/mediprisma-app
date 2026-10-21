@@ -40,6 +40,10 @@ describe('ChatMessageList — afterMessages slot (follow-up chips placement)', (
       unobserve() {}
       disconnect() {}
     } })
+    // The list auto-scrolls to its end on a 100 ms debounce. jsdom has no
+    // scrollIntoView, so a test still mounted when that timer fires (a slow
+    // findBy* under a loaded full-suite run) threw from the timer callback.
+    Element.prototype.scrollIntoView = jest.fn()
   })
 
   it('shows the selected model with info until actual metadata arrives, then warns on fallback', async () => {

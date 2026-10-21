@@ -2,8 +2,6 @@
 
 import { create } from 'zustand'
 
-export const RIGHT_FEATURE_TOUR_STORAGE_KEY = 'medical-note-right-feature-tour-v1'
-
 export type RightFeatureTourStepId =
   | 'overview'
   | 'summary'
@@ -27,6 +25,7 @@ export type RightFeatureTourStepId =
   | 'chat-template'
   | 'calculator'
   | 'guidance'
+  | 'education'
   | 'export'
   | 'settings'
   | 'finish'
@@ -62,13 +61,19 @@ export const CUSTOM_SUMMARY_CHAPTERS = [
 
 export type CustomSummaryChapter = typeof CUSTOM_SUMMARY_CHAPTERS[number]['step']
 
+/**
+ * The right panel's tour channel, and the custom-summary guide's own state.
+ * `scene`: the guided-tour engine shows a step id and the right panel opens
+ * the matching feature. `custom-summary`: the chaptered guide is running and
+ * drives the summary editor's preview itself.
+ */
 interface RightFeatureTourState {
   active: boolean
   stepId: RightFeatureTourStepId | null
   session: number
-  kind: 'quick' | 'custom-summary'
+  kind: 'scene' | 'custom-summary'
   launcherOpen: boolean
-  start: () => void
+  showScene: (stepId: RightFeatureTourStepId) => void
   openCustomSummaryGuide: () => void
   closeLauncher: () => void
   startCustomSummary: (chapter?: CustomSummaryChapter) => void
@@ -80,15 +85,9 @@ export const useRightFeatureTourStore = create<RightFeatureTourState>((set) => (
   active: false,
   stepId: null,
   session: 0,
-  kind: 'quick',
+  kind: 'scene',
   launcherOpen: false,
-  start: () => set((state) => ({
-    active: true,
-    stepId: 'overview',
-    kind: 'quick',
-    launcherOpen: false,
-    session: state.session + 1,
-  })),
+  showScene: (stepId) => set({ active: true, kind: 'scene', stepId, launcherOpen: false }),
   openCustomSummaryGuide: () => set({ launcherOpen: true, active: false, stepId: null }),
   closeLauncher: () => set({ launcherOpen: false }),
   startCustomSummary: (chapter = 'custom-summary') => set((state) => ({
@@ -101,12 +100,3 @@ export const useRightFeatureTourStore = create<RightFeatureTourState>((set) => (
   setStep: (stepId) => set({ stepId }),
   stop: () => set({ active: false, stepId: null }),
 }))
-
-export function markRightFeatureTourSeen(): void {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(RIGHT_FEATURE_TOUR_STORAGE_KEY, '1')
-  } catch {
-    // Best effort. The running tour still closes when persistence is blocked.
-  }
-}

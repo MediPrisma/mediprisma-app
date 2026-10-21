@@ -24,6 +24,7 @@ import {
   getClinicVitals,
   useClinicVitalsStore,
 } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { patientAnswerBacking } from '@/features/clinical-decision-support/stores/patient-answer-backing'
 import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
 import {
   expectSealedEnvelope,
@@ -94,6 +95,50 @@ describe('the clinic visit record', () => {
 
     store().setVitals('p1', { nyhaClass: 'III' }, AFTERNOON)
     expect(getClinicVitals('p1').nyhaClass?.modifiedAt).toBe(AFTERNOON.toISOString())
+  })
+
+  it('re-dates a sign examined again without re-dating its answer, and starts each day\'s examination afresh', () => {
+    const NEXT_MORNING = new Date('2026-09-12T09:00:00+08:00')
+    store().setVitals('p1', { signAnswers: { 'pitting-edema': 'absent', rales: 'absent' } }, MORNING)
+    store().setVitals('p1', { signAnswers: { 'pitting-edema': 'absent' } }, NEXT_MORNING)
+
+    expect(getClinicVitals('p1').signAnswers).toEqual({
+      'pitting-edema': { value: 'absent', modifiedAt: MORNING.toISOString(), examinedOn: '2026-09-12' },
+    })
+  })
+
+  it('re-dates a NYHA grade given again on a later day without re-dating its answer; the same day again changes nothing (#233 review)', () => {
+    const NEXT_MORNING = new Date('2026-09-12T09:00:00+08:00')
+    store().setVitals('p1', { nyhaClass: 'III' }, MORNING)
+    const first = getClinicVitals('p1').nyhaClass
+    expect(first).toEqual({ value: 'III', modifiedAt: MORNING.toISOString(), assessedOn: '2026-09-11' })
+
+    store().setVitals('p1', { nyhaClass: 'III' }, AFTERNOON)
+    expect(getClinicVitals('p1').nyhaClass).toBe(first)
+
+    store().setVitals('p1', { nyhaClass: 'III' }, NEXT_MORNING)
+    expect(getClinicVitals('p1').nyhaClass).toEqual({ value: 'III', modifiedAt: MORNING.toISOString(), assessedOn: '2026-09-12' })
+    // Today's grade is the fact, dated the day it was graded.
+    const facts = applyClinicVitals({ ...PROFILE, evaluatedAt: '2026-09-12T09:05:00+08:00' }, getClinicVitals('p1')).facts
+    expect(facts.physicianNyhaClass?.date).toBe('2026-09-12')
+
+    store().setVitals('p1', { nyhaClass: null }, NEXT_MORNING)
+    expect(getClinicVitals('p1').nyhaClass).toBeUndefined()
+  })
+
+  it('dates a NYHA grade kept before grades carried their day by the day it last changed', async () => {
+    const early = '2026-09-10T23:30:00.000Z'
+    patientAnswerBacking().save('clinic-vitals', 'p1', {
+      entries: {},
+      signAnswers: {},
+      nyhaClass: { value: 'II', modifiedAt: early },
+    })
+    await storedCiphertext(clinicVitalsStorageKey('p1'))
+
+    store().hydrate('p1')
+    await until(() => hydrated('p1'), 'p1 to hydrate')
+    expect(getClinicVitals('p1').nyhaClass).toEqual({ value: 'II', modifiedAt: early })
+    expect(applyClinicVitals(PROFILE, getClinicVitals('p1')).facts.physicianNyhaClass?.date).toBe('2026-09-11')
   })
 
   it('dates a measurement by the day it was taken and the moment it was typed', () => {
@@ -179,7 +224,22 @@ describe('the clinic visit record', () => {
     expect(getClinicVitals('p1').nyhaClass).toEqual({
       value: 'II',
       modifiedAt: MORNING.toISOString(),
+      assessedOn: '2026-09-11',
     })
+  })
+
+  it('dates a sign kept before signs carried their examination day by the day it last changed', async () => {
+    // 07:30 in Taipei: the stored UTC timestamp still reads as the day before.
+    const early = '2026-09-10T23:30:00.000Z'
+    patientAnswerBacking().save('clinic-vitals', 'p1', {
+      entries: {},
+      signAnswers: { rales: { value: 'present', modifiedAt: early } },
+    })
+    await storedCiphertext(clinicVitalsStorageKey('p1'))
+
+    store().hydrate('p1')
+    await until(() => hydrated('p1'), 'p1 to hydrate')
+    expect(getClinicVitals('p1').signAnswers.rales).toEqual({ value: 'present', modifiedAt: early, examinedOn: '2026-09-11' })
   })
 
   it('writes nothing while the read is still in flight', async () => {

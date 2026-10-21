@@ -1,6 +1,6 @@
 // FHIR Patient Mapper
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
-import { calculateAge } from '@/src/core/entities/patient.entity'
+import { calculateAge, isDeidentifiedPatient } from '@/src/core/entities/patient.entity'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
 export class PatientMapper {
@@ -15,6 +15,7 @@ export class PatientMapper {
       id: fhirResource.id || '',
       resourceType: FHIR_RESOURCES.PATIENT,
       name: fhirResource.name,
+      ...(isDeidentifiedPatient(fhirResource) ? { deidentified: true } : {}),
       gender: fhirResource.gender,
       birthDate: fhirResource.birthDate,
       age: age ?? undefined,

@@ -26,7 +26,7 @@ const DEMO_TEXT_ENGLISH: Record<string, string> = {
   '流感疫苗': 'Influenza vaccine',
   '23價多醣體肺炎鏈球菌疫苗': '23-valent pneumococcal polysaccharide vaccine',
   '疾病管制署': 'Taiwan CDC',
-  '陳○明': 'Demo Patient',
+  '陳大明': 'Demo Patient',
 }
 
 /**

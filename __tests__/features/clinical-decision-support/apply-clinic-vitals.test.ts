@@ -2,6 +2,8 @@ import { applyClinicVitals } from '@/features/clinical-decision-support/utils/ap
 import {
   buildClinicVitals,
   EMPTY_CLINIC_VITALS,
+  mergeClinicVitals,
+  type ClinicVitals,
 } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
 
@@ -188,5 +190,94 @@ describe('applyClinicVitals', () => {
     expect(
       applyClinicVitals(profile, EMPTY_CLINIC_VITALS).facts.physicianCompensationStatus,
     ).toBeUndefined()
+  })
+})
+
+/**
+ * PR #224 review (2026-10-01): HF DP-06 reads today's examination only, and it
+ * knows the day by the fact's `date`. Dated by the latest sign, one sign
+ * answered today made every earlier negative — perfusion among them — read as
+ * today's; and 全部皆無 pressed again the next day changed no value, so the
+ * examination kept the earlier date and read as never done.
+ */
+describe('applyClinicVitals — one examination, one day', () => {
+  const SEPT_27 = new Date('2026-09-27T10:00:00+08:00')
+  const SEPT_28 = new Date('2026-09-28T10:00:00+08:00')
+  const DP06_TERMS = ['orthopnea', 'paroxysmal-nocturnal-dyspnea', 'jvp', 'rales', 'pitting-edema', 'hypoperfusion'] as const
+  const allAbsent = Object.fromEntries(DP06_TERMS.map((term) => [term, 'absent' as const]))
+  const on = (day: string): CdssPatientProfile => ({ ...profile, evaluatedAt: `${day}T10:30:00+08:00` })
+
+  it('a sign found today does not carry the day before\'s negatives into today\'s examination', () => {
+    const yesterday = buildClinicVitals({ signAnswers: allAbsent }, SEPT_27)
+    const today = mergeClinicVitals(yesterday, { signAnswers: { rales: 'present' } }, SEPT_28)
+
+    expect(applyClinicVitals(on('2026-09-28'), today).facts.clinicCongestionExam).toEqual({
+      zh: '門診理學檢查（2026-09-28 門診輸入）',
+      en: 'Clinic examination (2026-09-28, entered in clinic)',
+      date: '2026-09-28',
+      // Perfusion is not today's 無 — nobody looked today — and neither is any other sign.
+      textEvidence: { direction: 'supports', matchedTerms: ['rales'] },
+    })
+    // The screens read the same record: yesterday's answers are 沒問 today, not 無.
+    expect(Object.keys(today.signAnswers)).toEqual(['rales'])
+  })
+
+  it('全部皆無 pressed again the next day dates the examination today and leaves 最後修改 alone', () => {
+    const yesterday = buildClinicVitals({ signAnswers: allAbsent }, SEPT_27)
+    const today = mergeClinicVitals(yesterday, { signAnswers: allAbsent }, SEPT_28)
+
+    expect(today).not.toBe(yesterday)
+    for (const term of DP06_TERMS) {
+      expect(today.signAnswers[term]).toEqual({ value: 'absent', modifiedAt: SEPT_27.toISOString(), examinedOn: '2026-09-28' })
+    }
+    expect(applyClinicVitals(on('2026-09-28'), today).facts.clinicCongestionExam).toMatchObject({
+      date: '2026-09-28',
+      textEvidence: { direction: 'against', matchedTerms: [], negatedTerms: [...DP06_TERMS] },
+    })
+    // Pressed again the same day, it is the same examination and changes nothing.
+    expect(mergeClinicVitals(today, { signAnswers: allAbsent }, new Date('2026-09-28T11:00:00+08:00'))).toBe(today)
+  })
+
+  it('leaves an earlier day\'s examination whole and dated that day until today\'s begins', () => {
+    const yesterday = buildClinicVitals({ signAnswers: { rales: 'present', hypoperfusion: 'absent' } }, SEPT_27)
+
+    expect(applyClinicVitals(on('2026-09-28'), yesterday).facts.clinicCongestionExam).toMatchObject({
+      date: '2026-09-27',
+      textEvidence: { matchedTerms: ['rales'], negatedTerms: ['hypoperfusion'] },
+    })
+    // Withdrawing an answer is not an examination: nothing is re-dated or cleared.
+    expect(mergeClinicVitals(yesterday, { signAnswers: { rales: null } }, SEPT_28).signAnswers)
+      .toEqual({ hypoperfusion: yesterday.signAnswers.hypoperfusion })
+  })
+
+  it('dates by this browser\'s calendar, not the UTC day of the timestamp', () => {
+    // 07:30 in Taipei is 23:30 the day before in UTC.
+    const early = new Date('2026-09-28T07:30:00+08:00')
+    const next = applyClinicVitals(on('2026-09-28'), buildClinicVitals({
+      signAnswers: { jvp: 'present' },
+      nyhaClass: 'III',
+      compensationStatus: 'decompensated',
+    }, early))
+
+    expect(next.facts.clinicCongestionExam?.date).toBe('2026-09-28')
+    expect(next.facts.physicianNyhaClass?.date).toBe('2026-09-28')
+    expect(next.facts.physicianCompensationStatus?.date).toBe('2026-09-28')
+  })
+
+  it('reads only the latest day when a record holds more than one', () => {
+    // As a record kept before the store started a new examination each day can.
+    const kept: ClinicVitals = {
+      entries: {},
+      signAnswers: {
+        hypoperfusion: { value: 'absent', modifiedAt: SEPT_27.toISOString(), examinedOn: '2026-09-27' },
+        rales: { value: 'present', modifiedAt: SEPT_28.toISOString(), examinedOn: '2026-09-28' },
+      },
+    }
+
+    expect(applyClinicVitals(on('2026-09-28'), kept).facts.clinicCongestionExam).toMatchObject({
+      date: '2026-09-28',
+      textEvidence: { matchedTerms: ['rales'] },
+    })
+    expect(applyClinicVitals(on('2026-09-28'), kept).facts.clinicCongestionExam?.textEvidence?.negatedTerms).toBeUndefined()
   })
 })

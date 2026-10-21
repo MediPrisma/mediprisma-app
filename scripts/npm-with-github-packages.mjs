@@ -8,25 +8,21 @@ if (npmArgs.length === 0) {
   process.exit(2)
 }
 
-let githubToken = ''
-
-try {
-  githubToken = execFileSync('gh', ['auth', 'token'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  }).trim()
-} catch {
-  console.error(
-    'GitHub login is required. Run `gh auth login -h github.com`, then try again.',
-  )
-  process.exit(1)
-}
-
+// An existing environment token also supports CI without GitHub CLI. Private
+// packages are optional: a public checkout must not require a GitHub login.
+let githubToken = process.env.NODE_AUTH_TOKEN || ''
 if (!githubToken) {
-  console.error(
-    'No GitHub token was found. Run `gh auth login -h github.com`, then try again.',
-  )
-  process.exit(1)
+  try {
+    githubToken = execFileSync('gh', ['auth', 'token', '-h', 'github.com'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    // npm skips inaccessible optional packages; the app builds without them.
+  }
+}
+if (!githubToken) {
+  console.log('Installing public dependencies. Unavailable private features will be omitted.')
 }
 
 // Windows cannot exec a .cmd file without a shell. Invoke npm's JS entry
@@ -57,7 +53,8 @@ if (result.error) {
 // rather than rewriting it.
 const REWRITES_LOCKFILE = new Set(['install', 'i', 'add', 'update', 'up', 'uninstall', 'remove', 'rm', 'dedupe', 'ddp'])
 if (result.status === 0 && REWRITES_LOCKFILE.has(npmArgs[0])) {
-  spawnSync(process.execPath, ['scripts/check-lockfile.mjs', '--fix', '--quiet'], { stdio: 'inherit' })
+  const repair = spawnSync(process.execPath, ['scripts/check-lockfile.mjs', '--fix', '--quiet'], { stdio: 'inherit' })
+  if (repair.error || repair.status !== 0) process.exit(1)
 }
 
 process.exit(result.status ?? 1)

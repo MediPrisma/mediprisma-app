@@ -6,15 +6,22 @@
 //     category `encounter-diagnosis` (or have no category at all).
 // A clinicalStatus filter (default: Active) keeps the card focused — general
 // FHIR sources carry lots of `resolved` history that would otherwise flood it.
+//
+// Below the conditions, 就醫主診斷 lists each visit's primary ICD-10 claim code
+// (Encounter.reasonCode[0]), one row per code, labelled as unconfirmed. For
+// 雲端病歷 this is the only section: that bridge emits no Condition at all.
 "use client"
 
 import { useMemo, useState } from 'react'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
-import { cn } from "@/src/shared/utils/cn.utils"
 import { useDiagnosis } from '../diagnosis/hooks/useDiagnosis'
 import { useDiagnosisRows } from '../diagnosis/hooks/useDiagnosisRows'
 import { DiagnosisList } from '../diagnosis/components/DiagnosisList'
+import { useVisitPrimaryDiagnoses } from './hooks/useVisitPrimaryDiagnoses'
+import { VisitPrimaryDiagnosisList } from './components/VisitPrimaryDiagnosisList'
+import { FilterPills } from './components/FilterPills'
+import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
 
 type StatusFilter = 'active' | 'resolved' | 'all'
 
@@ -31,8 +38,9 @@ function matchesFilter(clinicalStatus: string | undefined, filter: StatusFilter)
 }
 
 export function ProblemListCard() {
-  const { t } = useLanguage()
-  const { conditions, isLoading, error } = useDiagnosis()
+  const { t, locale } = useLanguage()
+  const { conditions, encounters, isLoading, error } = useDiagnosis()
+  const visitDiagnoses = useVisitPrimaryDiagnoses(conditions)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
 
   const tt = (t as any).problemList || {}
@@ -44,7 +52,8 @@ export function ProblemListCard() {
         : [],
     [conditions, statusFilter]
   )
-  const rows = useDiagnosisRows(filteredConditions)
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
+  const rows = useDiagnosisRows(filteredConditions, locale, icdDict, encounters)
 
   const filters: { key: StatusFilter; label: string }[] = [
     { key: 'active', label: tt.filterActive || 'Active' },
@@ -52,45 +61,50 @@ export function ProblemListCard() {
     { key: 'all', label: tt.filterAll || 'All' },
   ]
 
+  const hasConditions = Array.isArray(conditions) && conditions.length > 0
+  const hasVisitDiagnoses = visitDiagnoses.rows.length > 0
+  // With no Condition to show, wait for encounters before calling the card empty.
+  const loading = isLoading || (!hasConditions && !visitDiagnoses.isReady)
+
   return (
     <FeatureCard
       title={tt.title || 'Problem List'}
       featureId="problem-list"
-      isLoading={isLoading}
+      isLoading={loading}
       error={error}
-      isEmpty={Array.isArray(conditions) ? conditions.length === 0 : true}
+      isEmpty={!hasConditions && !hasVisitDiagnoses}
       emptyMessage={tt.noData || 'No problem list items.'}
     >
       <div data-testid="problem-list-card">
-        <div className="mb-2 flex items-center gap-1">
-          {filters.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setStatusFilter(f.key)}
-              aria-pressed={statusFilter === f.key}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-                statusFilter === f.key
-                  ? "border-primary bg-primary/10 text-primary font-medium"
-                  : "border-border text-muted-foreground hover:bg-muted"
+        {/* Cap the visible height so a long problem list (e.g. 50+ 重大傷病)
+            scrolls internally instead of pushing every card below it far down
+            the panel's single outer scroll. Matches the AI-summary problem
+            card's max-h + overflow pattern. */}
+        <div className="max-h-[32rem] space-y-4 overflow-y-auto scrollbar-thin-persistent pr-1">
+          {hasConditions && (
+            <section>
+              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                {hasVisitDiagnoses && (
+                  <h3 className="mr-1 font-medium text-foreground">
+                    {tt.recordedTitle || 'Recorded conditions'}
+                  </h3>
+                )}
+                <FilterPills
+                  label={tt.statusFilterLabel || 'Status filter'}
+                  options={filters}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                />
+              </div>
+              {rows.length > 0 ? (
+                <DiagnosisList diagnoses={rows} isLoading={false} error={null} />
+              ) : (
+                <p className="py-2 text-xs text-muted-foreground">{tt.filterNone || 'No items for this filter'}</p>
               )}
-            >
-              {f.label}
-            </button>
-          ))}
+            </section>
+          )}
+          {hasVisitDiagnoses && <VisitPrimaryDiagnosisList diagnoses={visitDiagnoses.rows} />}
         </div>
-        {rows.length > 0 ? (
-          // Cap the visible height so a long problem list (e.g. 50+ 重大傷病)
-          // scrolls internally instead of pushing every card below it far down
-          // the panel's single outer scroll. Matches the AI-summary problem
-          // card's max-h + overflow pattern.
-          <div className="max-h-[32rem] overflow-y-auto scrollbar-thin-persistent pr-1">
-            <DiagnosisList diagnoses={rows} isLoading={false} error={null} />
-          </div>
-        ) : (
-          <p className="py-2 text-xs text-muted-foreground">{tt.filterNone || 'No items for this filter'}</p>
-        )}
       </div>
     </FeatureCard>
   )

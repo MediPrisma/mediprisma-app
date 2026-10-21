@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import * as hospitalProfile from '@/features/clinical-decision-support/utils/hospital-medication-profile'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
 import {
   GUEST_BETA_FEATURES_KEY,
@@ -10,6 +11,13 @@ import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores
 import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
+import { useCdssLayoutStore } from '@/features/clinical-decision-support/stores/layout-preference.store'
+import { afAnswersStorageKey, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
+
+jest.mock('@/features/clinical-decision-support/utils/hospital-medication-profile', () => {
+  const actual = jest.requireActual<typeof import('@/features/clinical-decision-support/utils/hospital-medication-profile')>('@/features/clinical-decision-support/utils/hospital-medication-profile')
+  return { ...actual, createHospitalAwareCdssPatientProfile: jest.fn(actual.createHospitalAwareCdssPatientProfile) }
+})
 
 jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
   useNhiLipidAiAssist: () => ({
@@ -51,6 +59,10 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
   useClinicalData: () => mockUseClinicalData(),
 }))
 
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null }),
+}))
+
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW' }),
 }))
@@ -60,6 +72,8 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
     result,
     layout,
     nhiPageResetKey,
+    visitModel,
+    onSaveClinicVitals,
   }: {
     result: {
       title: string
@@ -67,8 +81,16 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
     }
     layout?: string
     nhiPageResetKey?: number
+    visitModel?: object
+    onSaveClinicVitals?: (patch: import('@/features/clinical-decision-support/stores/clinic-vitals.store').ClinicVitalsPatch) => void
   }) => (
-    <div data-testid="mock-cdss-result" data-layout={layout} data-nhi-reset-key={nhiPageResetKey}>
+    <div data-testid="mock-cdss-result" data-layout={layout} data-nhi-reset-key={nhiPageResetKey} data-visit-model={JSON.stringify(visitModel)}>
+      {visitModel && (() => {
+        const { BookAsks, examAsksOf } = jest.requireActual<typeof import('@/features/clinical-decision-support/renderers/visit/BookAsks')>('@/features/clinical-decision-support/renderers/visit/BookAsks')
+        return <BookAsks asks={[]} answers={{}} isEnglish examAsks={examAsksOf(visitModel)} onGrade={(id, value) => {
+          if (id === 'nyha') onSaveClinicVitals?.({ nyhaClass: value as import('@/features/clinical-decision-support/stores/clinic-vitals.store').NyhaClass | null })
+        }} />
+      })()}
       <span>{result.title}</span>
       <span>{result.knowledgePacks?.map((source) => source.id).join(',')}</span>
     </div>
@@ -76,6 +98,7 @@ jest.mock('@/features/clinical-decision-support/renderers/ClinicalDecisionSuppor
 }))
 
 describe('Live personalized-guidance pathway list', () => {
+  afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks() })
   beforeEach(() => {
     window.localStorage.clear()
     useBetaFeaturesStore.setState({ enabledByUser: {} })
@@ -212,21 +235,116 @@ describe('Live personalized-guidance pathway list', () => {
     })
   })
 
-  it('defaults to three sections and remembers the selected layout', () => {
+  // Clinician decision 2026-09-28: 新版流程 and 原版看板 are retired — 「暫時會只有
+  // 三區塊跟決策地圖」.
+  it('defaults to the decision map, offers only it and 三區塊, and remembers the choice', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-board'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'board')
-    expect(screen.getByTestId('cdss-layout-switch-board')).toHaveAttribute('aria-pressed', 'true')
-    expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
-      .toMatchObject({ state: { layout: 'board' } })
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-flow'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'flow')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
+    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
+    for (const retired of ['flow', 'board', 'classic', 'c']) {
+      expect(screen.queryByTestId(`cdss-layout-switch-${retired}`)).not.toBeInTheDocument()
+    }
     fireEvent.click(screen.getByTestId('cdss-layout-switch-sections'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
-    expect(screen.queryByTestId('cdss-layout-switch-classic')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('cdss-layout-switch-c')).not.toBeInTheDocument()
+    expect(screen.getByTestId('cdss-layout-switch-sections')).toHaveAttribute('aria-pressed', 'true')
+    expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
+      .toMatchObject({ state: { layout: 'sections' } })
+  })
+
+  it('opens a browser that stored a retired layout on the pack default', () => {
+    useCdssLayoutStore.setState({ layout: 'board' })
+    render(<LiveClinicalDecisionSupportFeature />)
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
+  })
+
+
+  it('re-evaluates an unchanged chart after midnight so current-day symptom answers are accepted', () => {
+    jest.useFakeTimers()
+    const beforeMidnight = new Date(2026, 9, 5, 23, 59, 58)
+    const afterMidnight = new Date(2026, 9, 6, 0, 0, 5)
+    jest.setSystemTime(beforeMidnight)
+    const patientId = 'switch-patient'
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { [patientId]: true } })
+    useCdssLayoutStore.setState({ layout: 'map' })
+    usePhenotypeAnswerStore.setState({ byPatientId: { [patientId]: { choice: 'reduced', lvef: 35, answeredOn: '2026-10-05' } }, hydratedPatientIds: { [patientId]: true } })
+    const view = render(<LiveClinicalDecisionSupportFeature />)
+    const findSign = (value: unknown): Record<string, unknown> | undefined => {
+      if (!value || typeof value !== 'object') return undefined
+      const row = value as Record<string, unknown>
+      if (row.id === 'orthopnea-pnd' && Array.isArray(row.terms)) return row
+      return Object.values(row).map(findSign).find(Boolean)
+    }
+    const sign = () => findSign(JSON.parse(screen.getByTestId('mock-cdss-result').getAttribute('data-visit-model') ?? 'null'))
+    try {
+      expect(sign()).toBeDefined()
+      expect(sign()?.answer).toBeUndefined()
+      act(() => {
+        jest.setSystemTime(afterMidnight)
+        window.dispatchEvent(new Event('focus'))
+        useClinicVitalsStore.getState().setVitals(patientId, { signAnswers: { orthopnea: 'present' } })
+      })
+      expect(sign()?.answer).toBe(true)
+    } finally {
+      view.unmount()
+      jest.useRealTimers()
+    }
+  })
+
+  it('selects, switches and withdraws today’s NYHA grade after an open page crosses midnight', () => {
+    jest.useFakeTimers()
+    jest.setSystemTime(new Date(2026, 9, 5, 23, 59, 58))
+    const patientId = 'switch-patient'
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { [patientId]: true } })
+    useCdssLayoutStore.setState({ layout: 'map' })
+    const view = render(<LiveClinicalDecisionSupportFeature />)
+    const nyha = () => within(screen.getByRole('group', { name: 'NYHA 分級' }))
+    try {
+      fireEvent.click(nyha().getByRole('button', { name: 'I 一般活動無症狀' }))
+      expect(nyha().getByRole('button', { name: 'I 一般活動無症狀' })).toHaveAttribute('aria-pressed', 'true')
+      act(() => {
+        jest.setSystemTime(new Date(2026, 9, 6, 0, 0, 5))
+        window.dispatchEvent(new Event('focus'))
+      })
+      // Yesterday’s grade is kept as history, never selected as today’s assessment.
+      expect(nyha().getByRole('button', { name: 'I 一般活動無症狀' })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByText('上次評估 NYHA I（10-05）')).toBeInTheDocument()
+      fireEvent.click(nyha().getByRole('button', { name: 'II 一般活動有症狀' }))
+      expect(nyha().getByRole('button', { name: 'II 一般活動有症狀' })).toHaveAttribute('aria-pressed', 'true')
+      expect(useClinicVitalsStore.getState().byPatientId[patientId]?.nyhaClass).toMatchObject({ value: 'II', assessedOn: '2026-10-06' })
+      fireEvent.click(nyha().getByRole('button', { name: 'III 輕度活動即有症狀' }))
+      expect(nyha().getByRole('button', { name: 'II 一般活動有症狀' })).toHaveAttribute('aria-pressed', 'false')
+      expect(nyha().getByRole('button', { name: 'III 輕度活動即有症狀' })).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(nyha().getByRole('button', { name: 'III 輕度活動即有症狀' }))
+      expect(nyha().getByRole('button', { name: 'III 輕度活動即有症狀' })).toHaveAttribute('aria-pressed', 'false')
+      expect(useClinicVitalsStore.getState().byPatientId[patientId]?.nyhaClass).toBeUndefined()
+    } finally {
+      view.unmount()
+      jest.useRealTimers()
+    }
+  })
+
+  it('uses a fresh evaluation instant for same-day chart refreshes and patient switches', () => {
+    jest.useFakeTimers()
+    const build = jest.mocked(hospitalProfile.createHospitalAwareCdssPatientProfile)
+    build.mockClear()
+    const time = () => build.mock.calls[build.mock.calls.length - 1]?.[0].now?.toISOString()
+    jest.setSystemTime(new Date(2026, 9, 6, 8, 0))
+    const view = render(<LiveClinicalDecisionSupportFeature />)
+    try {
+      expect(time()).toBe(new Date(2026, 9, 6, 8, 0).toISOString())
+      act(() => { jest.setSystemTime(new Date(2026, 9, 6, 15, 0)) })
+      const chart = mockUseClinicalData.mock.results[mockUseClinicalData.mock.results.length - 1].value
+      mockUseClinicalData.mockReturnValue({ ...chart, observations: [...chart.observations] })
+      view.rerender(<LiveClinicalDecisionSupportFeature />)
+      expect(time()).toBe(new Date(2026, 9, 6, 15, 0).toISOString())
+      act(() => { jest.setSystemTime(new Date(2026, 9, 6, 16, 0)) })
+      mockUsePatient.mockReturnValue({ patient: { id: 'next-patient', resourceType: 'Patient', age: 72 }, loading: false, error: null })
+      view.rerender(<LiveClinicalDecisionSupportFeature />)
+      expect(time()).toBe(new Date(2026, 9, 6, 16, 0).toISOString())
+    } finally {
+      view.unmount()
+    }
   })
 
   it('replaces the duplicate lipid visit flow with the dedicated NHI Table 1 view', () => {
@@ -236,7 +354,7 @@ describe('Live personalized-guidance pathway list', () => {
 
     expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
     expect(screen.getByTestId('cdss-layout-switch-nhi')).toHaveTextContent('健保表一')
-    expect(screen.getByTestId('cdss-layout-switch-board')).toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch-board')).not.toBeInTheDocument()
     expect(screen.queryByTestId('cdss-layout-switch-flow')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('cdss-layout-switch-nhi'))
@@ -244,7 +362,7 @@ describe('Live personalized-guidance pathway list', () => {
 
     fireEvent.click(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
-    expect(screen.getByTestId('cdss-layout-switch-flow')).toBeInTheDocument()
+    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
     expect(screen.queryByTestId('cdss-layout-switch-nhi')).not.toBeInTheDocument()
   })
 
@@ -264,6 +382,20 @@ describe('Live personalized-guidance pathway list', () => {
     expect(useHfpefInputsStore.getState().byPatientId[patientId]).toEqual({ entries: {} })
     expect(usePhenotypeAnswerStore.getState().byPatientId[patientId]).toBeUndefined()
     expect(usePhysicianDecisionsStore.getState().byPatientId[patientId]).toEqual({})
+  })
+
+  // #177 review: 「AFL」 on DP-01 outlived the reset — the decision went, the
+  // diagnosis stayed, and its sealed copy brought it back after a reload.
+  it('restores the AF answers too — DP-01\'s diagnosis and its sealed copy', () => {
+    const patientId = 'switch-patient'
+    useAfAnswersStore.setState({ patientId, answers: { diagnosisConfirmed: true, atrialFibrillation: false, atrialFlutter: true }, hydratedPatientId: patientId })
+    window.localStorage.setItem(afAnswersStorageKey(patientId), '{"v":1,"iv":"x","data":"y","t":0}')
+
+    render(<LiveClinicalDecisionSupportFeature />)
+    fireEvent.click(screen.getByTestId('cdss-hf-reset-page-defaults'))
+
+    expect(useAfAnswersStore.getState().answers).toEqual({})
+    expect(window.localStorage.getItem(afAnswersStorageKey(patientId))).toBeNull()
   })
 
   it('restores the NHI page to record-only defaults without clearing HF work', () => {

@@ -14,6 +14,7 @@ import {
 } from '@/features/clinical-decision-support/stores/af-answers.store'
 import {
   useEvidenceOverrides,
+  useEvidenceOverridesHydrated,
   useEvidenceOverridesStore,
 } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
 import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
@@ -154,6 +155,7 @@ export default function Preview() {
     decisions = usePhysicianDecisions(patientId)
   const vitalsHydrated = useClinicVitalsHydrated(patientId)
   const decisionsHydrated = usePhysicianDecisionsHydrated(patientId)
+  const overridesHydrated = useEvidenceOverridesHydrated(patientId)
   useEffect(() => {
     useAfAnswersStore.getState().setPatient(patientId)
     useEvidenceOverridesStore.getState().hydrate(patientId)
@@ -199,7 +201,7 @@ export default function Preview() {
             {en ? '繁體中文' : 'English'}
           </button>
         </header>
-        {!vitalsHydrated || !decisionsHydrated ? (
+        {!vitalsHydrated || !decisionsHydrated || !overridesHydrated ? (
           <p role="status" className="py-4 text-sm text-muted-foreground">
             {en
               ? 'Loading this visit’s measurements and decisions…'

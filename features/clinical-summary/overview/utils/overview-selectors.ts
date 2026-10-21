@@ -5,6 +5,14 @@
 // a FHIR bundle. The React layer (hooks/useOverviewData.ts) only adapts the
 // existing feature hooks into these shapes.
 
+import {
+  findPinnableLab,
+  isPinnedLabReminder,
+  pinnedLabId,
+  pinnedLabReminderLabel,
+} from '@/src/shared/utils/pinned-labs'
+import type { OverviewLabRow } from '../hooks/useOverviewData'
+
 export const OVERVIEW_RANGE_MONTHS = [1, 3, 6, 12] as const
 export type OverviewRangeMonths = (typeof OVERVIEW_RANGE_MONTHS)[number]
 export const DEFAULT_OVERVIEW_RANGE_MONTHS: OverviewRangeMonths = 3
@@ -380,4 +388,62 @@ export const OVERVIEW_PINNED_ANALYTES: Readonly<Record<string, readonly string[]
 
 export function isOverviewPinnedAnalyte(categoryId: string, testKey: string): boolean {
   return OVERVIEW_PINNED_ANALYTES[categoryId]?.includes(testKey) ?? false
+}
+
+/** The system 「常用」 list as individual pins — the starting point the editor
+ *  offers before a clinician has saved a list of their own. */
+export function systemDefaultPinnedLabIds(): string[] {
+  const ids: string[] = []
+  for (const [categoryId, keys] of Object.entries(OVERVIEW_PINNED_ANALYTES)) {
+    for (const key of keys) {
+      const id = pinnedLabId(categoryId, key)
+      if (findPinnableLab(id)) ids.push(id)
+    }
+  }
+  return ids
+}
+
+/**
+ * 「自訂」 rows for the overview pivot: the SAME rows 常用／全部 draw, picked
+ * and ordered by the clinician's pins. A pin with nothing in the window keeps
+ * its row with every cell empty, so "not done in this period" is visible
+ * rather than the analyte silently disappearing. It keeps its testKey so
+ * the name can still open the analyte's whole-chart trend.
+ */
+export function selectPinnedOverviewRows(
+  pinnedIds: readonly string[],
+  rows: readonly OverviewLabRow[],
+  columnCount: number,
+): OverviewLabRow[] {
+  const out: OverviewLabRow[] = []
+  const used = new Set<string>()
+  const placeholder = (id: string, name: string, categoryId = '', testKey = ''): OverviewLabRow => ({
+    mapKey: `pinned-empty:${id}`,
+    categoryId,
+    categoryLabel: '',
+    testKey,
+    name,
+    isPinned: true,
+    hasAbnormal: false,
+    cells: Array.from({ length: columnCount }, () => undefined),
+  })
+  for (const id of pinnedIds) {
+    if (isPinnedLabReminder(id)) {
+      out.push(placeholder(id, pinnedLabReminderLabel(id)))
+      continue
+    }
+    const entry = findPinnableLab(id)
+    const matches = entry
+      ? rows.filter((row) => row.categoryId === entry.categoryId && row.testKey === entry.testKey && !used.has(row.mapKey))
+      : []
+    if (matches.length === 0) {
+      out.push(placeholder(id, entry?.short ?? id.slice(id.indexOf(':') + 1), entry?.categoryId, entry?.testKey))
+      continue
+    }
+    for (const row of matches) {
+      used.add(row.mapKey)
+      out.push(row)
+    }
+  }
+  return out
 }

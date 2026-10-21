@@ -67,3 +67,13 @@ scripts/experiments/*/results/
 *.tgz
 private-packages/
 packages/*/dist/
+
+# Internal hospital-model experiment write-ups (kept local, not published)
+docs/experiments/
+docs/TVGHBRAIN-*.md
+
+# Generated for installed optional feature packages
+/tsconfig.optional.generated.json
+
+# HMC build records the installed published packages during export.
+/public/hmc-build.json

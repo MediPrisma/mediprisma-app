@@ -1,6 +1,7 @@
 // Core Domain Entities: Clinical Data
 
 export interface ConditionEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   code?: {
     text?: string
@@ -119,6 +120,7 @@ export interface ClinicalFhirExtension {
 }
 
 export interface MedicationEntity {
+  identifier?: Array<{ system?: string; value?: string }>
   id: string
   meta?: {
     source?: string
@@ -289,6 +291,12 @@ export interface MedicationEntity {
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
   /** Source capture instant from Bundle.timestamp; not the local import time. */
   _sourceCapturedAt?: string
+  _reconciledSourceReferences?: string[]
+  _encounterInferred?: boolean
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourcePrescriptionRecords?: any[]
+  /** IPS-only presentation flag; the original source status is never rewritten. */
+  exportCurrentnessUnconfirmed?: boolean
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
@@ -386,6 +394,7 @@ export interface AllergyEntity {
 }
 
 export interface ObservationEntity {
+  basedOn?: Array<{ reference?: string; display?: string }>
   extension?: ClinicalFhirExtension[]
   method?: { text?: string; coding?: Array<{ system?: string; code?: string; display?: string }> }
   id?: string
@@ -539,6 +548,7 @@ export interface ObservationEntity {
 }
 
 export interface DiagnosticReportEntity {
+  basedOn?: Array<{ reference?: string; display?: string }>
   id: string
   meta?: {
     source?: string
@@ -558,6 +568,7 @@ export interface DiagnosticReportEntity {
     coding?: Array<{
       code?: string
       display?: string
+      system?: string
     }>
   }
   result?: Array<{
@@ -730,12 +741,42 @@ export interface ProcedureEntity {
    * collapse them under one title with the lead. FHIR Procedure.partOf.
    */
   partOf?: Array<{ reference?: string; display?: string }>
+  /**
+   * MediCloud IMUE0200 special materials (特材) whose record points at this
+   * Procedure through its `relatedProcedure` extension. Re-attached by the
+   * data layer, the way DiagnosticReport carries `_observations`.
+   */
+  specialMaterials?: ProcedureSpecialMaterialEntity[]
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
 }
 
+/**
+ * One MediCloud special-material claim line linked to a surgery. The source
+ * does not record which operation used the material; when
+ * `relationshipStatus` is `inferred`, the bridge matched it by patient,
+ * facility, date and diagnosis, and `relationshipBasis` says how.
+ */
+export interface ProcedureSpecialMaterialEntity {
+  id: string
+  procedureReference: string
+  materialCode?: string
+  nameZh?: string
+  nameEn?: string
+  materialType?: string
+  quantity?: number
+  visitDate?: string
+  licenseNumbers: string[]
+  dataSource?: string
+  relationshipStatus?: string
+  relationshipBasis?: string
+}
+
 export interface EncounterEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourceEncounterRecords?: any[]
   id: string
   status?: string
   class?: {
@@ -746,7 +787,7 @@ export interface EncounterEntity {
     text?: string
     coding?: Array<{ code?: string; display?: string; system?: string }>
   }>
-  serviceType?: { coding?: Array<{ display?: string }> }
+  serviceType?: { text?: string; coding?: Array<{ display?: string }> }
   period?: {
     start?: string
     end?: string
@@ -765,9 +806,10 @@ export interface EncounterEntity {
   reasonReference?: Array<{ display?: string }>
   diagnosis?: Array<{
     rank?: number
-    condition?: { display?: string }
+    condition?: { reference?: string; display?: string }
   }>
   participant?: Array<{
+    type?: Array<{ coding?: Array<{ system?: string; code?: string }> }>
     individual?: { display?: string }
     actor?: { display?: string }
   }>
@@ -781,6 +823,7 @@ export interface EncounterEntity {
 }
 
 export interface DocumentReferenceEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   status?: string
   type?: {

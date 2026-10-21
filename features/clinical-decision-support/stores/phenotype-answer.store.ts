@@ -18,17 +18,20 @@
  * survives a reload of this tab, no other browser session can read it, and it
  * never follows the previous patient into the next chart. Carrying an answer to
  * the next visit is phase 2: the seam for that server-side implementation is
- * `PhenotypeAnswerRepository` — swap the repository, and nothing above it
- * changes.
+ * the patient-answer backing every CDSS store shares (`patient-answer-backing.ts`)
+ * — swap it, and this store follows with the others. `PhenotypeAnswerRepository`
+ * remains for a repository of this answer alone (a test's, say).
  */
 import { create } from 'zustand'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import {
+  ENCRYPTED_TAB_SESSION_BACKING,
+  patientAnswerBacking,
+  patientAnswerStorageKey,
+  type PatientAnswerBacking,
+} from './patient-answer-backing'
 
 /** The three choices the pack offers, by the option ids it publishes. */
 export type PhenotypeAnswerChoice = 'reduced' | 'preserved' | 'unknown'
@@ -38,6 +41,9 @@ export const HFPEF_NOT_CONFIRMED = 'not-assessed' as const
 
 /** The DP-00 answer: whether this clinician is asking about heart failure. */
 export type HeartFailureSuspicionAnswer = 'suspected' | 'not-suspected'
+
+/** The phenotype a clinician chose on DP-00 「診斷：HFrEF 還是 HFpEF？」. */
+export type HeartFailureDiagnosisChoice = 'hfrEF' | 'hfpEF'
 
 /** When each answer was last changed, as ISO timestamps. */
 export interface PhenotypeAnswerTimestamps {
@@ -55,6 +61,13 @@ export interface PhenotypeAnswer {
    * as 「不懷疑」 — it is the difference between a quiet card and a closed one.
    */
   hfSuspicion?: HeartFailureSuspicionAnswer
+  /**
+   * The phenotype chosen on DP-00, where one was. It is the clinician's
+   * diagnosis, and it is what that answer wrote beside it — the `choice`, and
+   * the `diagnosisConfirmation` (HFrEF) or `hfpEfConfirmed` (HFpEF) — so
+   * changing the answer knows exactly what to take back.
+   */
+  diagnosis?: HeartFailureDiagnosisChoice
   /**
    * Absent where the phenotype gate never asked — a patient whose record does
    * hold an LVEF can still reach the HFpEF confirmation below.
@@ -93,7 +106,8 @@ export function stampPhenotypeAnswer(
   const before = previous?.modifiedAt ?? {}
   const modifiedAt: PhenotypeAnswerTimestamps = {}
 
-  const suspicionChanged = previous?.hfSuspicion !== next.hfSuspicion
+  // One question: the phenotype chosen on DP-00 dates with the suspicion.
+  const suspicionChanged = previous?.hfSuspicion !== next.hfSuspicion || previous?.diagnosis !== next.diagnosis
   if (next.hfSuspicion !== undefined) {
     modifiedAt.hfSuspicion = suspicionChanged ? at : before.hfSuspicion ?? at
   }
@@ -117,6 +131,7 @@ export function stampPhenotypeAnswer(
 function sameAnswer(a: PhenotypeAnswer | undefined, b: PhenotypeAnswer): boolean {
   return Boolean(a)
     && a?.hfSuspicion === b.hfSuspicion
+    && a?.diagnosis === b.diagnosis
     && a?.choice === b.choice
     && a?.lvef === b.lvef
     && a?.measuredOn === b.measuredOn
@@ -147,11 +162,9 @@ export interface PhenotypeAnswerRepository {
   has?: (patientId: string) => boolean
 }
 
-const STORAGE_PREFIX = 'cdss-phenotype-answer:'
-
 /** The key one patient's encrypted answer is kept under. */
 export function phenotypeAnswerStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('phenotype-answer', patientId)
 }
 
 function isSuspicion(value: unknown): value is HeartFailureSuspicionAnswer {
@@ -175,6 +188,7 @@ function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
         && typeof confirmation.confirmedAt === 'string' && Number.isFinite(Date.parse(confirmation.confirmedAt))
         && typeof confirmation.basis === 'string' ? { diagnosisConfirmation: confirmation } : {}),
       ...(isSuspicion(record.hfSuspicion) ? { hfSuspicion: record.hfSuspicion } : {}),
+      ...(record.diagnosis === 'hfrEF' || record.diagnosis === 'hfpEF' ? { diagnosis: record.diagnosis } : {}),
       ...(isChoice(record.choice) ? { choice: record.choice } : {}),
       ...(typeof record.lvef === 'number' && Number.isFinite(record.lvef) ? { lvef: record.lvef } : {}),
       ...(typeof record.measuredOn === 'string' ? { measuredOn: record.measuredOn } : {}),
@@ -203,24 +217,31 @@ function parseStoredAnswer(parsed: unknown): PhenotypeAnswer | undefined {
  * answer is what the screen shows, and a write that fails never reaches it.
  */
 export function createEncryptedPhenotypeAnswerRepository(): PhenotypeAnswerRepository {
+  return repositoryOver(() => ENCRYPTED_TAB_SESSION_BACKING)
+}
+
+/**
+ * The phenotype answer on a patient-answer backing: read back through the
+ * same validation whichever backing holds it.
+ */
+function repositoryOver(backing: () => PatientAnswerBacking): PhenotypeAnswerRepository {
   const available = (patientId: string) => typeof window !== 'undefined' && Boolean(patientId)
   return {
     has: (patientId) => (
-      available(patientId) && hasEncryptedAnswers(phenotypeAnswerStorageKey(patientId))
+      available(patientId) && backing().has('phenotype-answer', patientId)
     ),
     load: async (patientId) => {
       if (!available(patientId)) return undefined
-      const key = phenotypeAnswerStorageKey(patientId)
-      if (!hasEncryptedAnswers(key)) return undefined
-      return parseStoredAnswer(await loadEncryptedAnswers<unknown>(key))
+      if (!backing().has('phenotype-answer', patientId)) return undefined
+      return parseStoredAnswer(await backing().load('phenotype-answer', patientId))
     },
     save: async (patientId, answer) => {
       if (!available(patientId)) return
-      persistEncryptedAnswers(phenotypeAnswerStorageKey(patientId), answer)
+      backing().save('phenotype-answer', patientId, answer)
     },
     clear: async (patientId) => {
       if (!available(patientId)) return
-      discardEncryptedAnswers(phenotypeAnswerStorageKey(patientId))
+      backing().discard('phenotype-answer', patientId)
     },
   }
 }
@@ -240,7 +261,8 @@ export function createSessionPhenotypeAnswerRepository(): PhenotypeAnswerReposit
   }
 }
 
-let repository: PhenotypeAnswerRepository = createEncryptedPhenotypeAnswerRepository()
+// The default follows the patient-answer backing every CDSS store shares.
+let repository: PhenotypeAnswerRepository = repositoryOver(patientAnswerBacking)
 
 /** One read in flight at a time, so an answer that decrypts after the chart
  *  moved on is dropped rather than applied to whoever is on screen now. */
@@ -274,11 +296,23 @@ interface PhenotypeAnswerState {
   hydrate: (patientId: string) => void
   setAnswer: (patientId: string, answer: PhenotypeAnswer, now?: Date) => void
   clearAnswer: (patientId: string) => void
+  carryForward: (patientId: string, saved: unknown) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const usePhenotypeAnswerStore = create<PhenotypeAnswerState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved) => {
+    if (!patientId || get().byPatientId[patientId]) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const answer = parseStoredAnswer(saved)
+    if (!answer) return
+    set(state => ({ byPatientId: { ...state.byPatientId, [patientId]: answer } }))
+    void repository.save(patientId, answer).catch(() => {})
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return

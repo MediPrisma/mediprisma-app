@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { PhysicianInputRequest } from '../physician-input-contract'
 import { todayIsoDate } from '../stores/clinic-vitals.store'
+import { diagnosisAnswer, diagnosisOptionOf } from './visit/physician-input'
 import type {
   PhenotypeAnswer,
   PhenotypeAnswerChoice,
@@ -48,19 +49,31 @@ function HfSuspicionRequest({
   answer,
   onAnswer,
   now,
+  showDetail,
 }: {
   request: PhysicianInputRequest
   answer?: PhenotypeAnswer
   onAnswer: (answer: PhenotypeAnswer) => void
   now: Date
+  /** Inline, the question row already prints the record line. */
+  showDetail: boolean
 }) {
   const groupId = useId()
-  const selected = answer?.hfSuspicion
+  // The clinician's own phenotype, else what the record answers, else their
+  // 還不確定.
+  const selected = (answer?.diagnosis ? diagnosisOptionOf(answer) : undefined)
+    ?? request.recordedOptionId
+    ?? answer?.hfSuspicion
+  // A lone choice (HFrEF where the LVEF rules HFpEF out) is a press to
+  // answer, not a radio with nothing beside it: the circle hides, the choice
+  // reads as the button it is and ticks once chosen.
+  const lone = request.options?.length === 1
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="mb-1.5 text-xs font-semibold text-foreground">
         {request.label}
       </legend>
+      {showDetail && request.detail ? <p className="mb-1.5 text-[11px] leading-4 text-muted-foreground" data-testid="cdss-hf-suspicion-detail">{request.detail}</p> : null}
       <div className="flex flex-wrap gap-1.5">
         {(request.options ?? []).map((option) => {
           const inputId = `${groupId}-${option.id}`
@@ -74,23 +87,22 @@ function HfSuspicionRequest({
                 'focus-within:ring-2 focus-within:ring-ring',
                 isSelected
                   ? 'border-primary bg-primary/[0.06] text-foreground'
-                  : 'border-border bg-card text-foreground hover:bg-muted/40',
+                  : lone
+                    ? 'border-primary/60 bg-card text-primary shadow-sm hover:bg-primary/[0.06]'
+                    : 'border-border bg-card text-foreground hover:bg-muted/40',
               )}
             >
+              {lone && isSelected ? <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" /> : null}
               <input
                 id={inputId}
                 type="radio"
                 name={groupId}
                 value={option.id}
                 checked={isSelected}
-                className="h-3.5 w-3.5 shrink-0 accent-primary"
+                className={lone ? 'sr-only' : 'h-3.5 w-3.5 shrink-0 accent-primary'}
                 onChange={() => {
-                  if (option.id !== 'suspected' && option.id !== 'not-suspected') return
-                  onAnswer({
-                    ...(answer ?? {}),
-                    hfSuspicion: option.id,
-                    answeredOn: todayIsoDate(now),
-                  })
+                  const next = diagnosisAnswer(option.id, answer, now)
+                  if (next) onAnswer(next)
                 }}
                 data-testid={`cdss-hf-suspicion-option-${option.id}`}
               />
@@ -349,8 +361,9 @@ function HfpEfConfirmationRequest({
             size="sm"
             variant="ghost"
             className="h-8"
+            // Takes back the phenotype the confirmation wrote with it.
             onClick={() => onAnswer({
-              ...(answer ?? {}),
+              ...(diagnosisAnswer('suspected', answer, now) ?? answer ?? {}),
               answeredOn: todayIsoDate(now),
               hfpEfConfirmed: false,
             })}
@@ -364,11 +377,8 @@ function HfpEfConfirmationRequest({
           type="button"
           size="sm"
           className="h-8"
-          onClick={() => onAnswer({
-            ...(answer ?? {}),
-            answeredOn: todayIsoDate(now),
-            hfpEfConfirmed: true,
-          })}
+          // The same diagnosis as DP-00 「HFpEF」, reached the long way.
+          onClick={() => onAnswer(diagnosisAnswer('hfpef', answer, now)!)}
           data-testid="cdss-hfpef-confirm"
         >
           {request.label}
@@ -411,6 +421,7 @@ export function PhysicianInputRequestPanel({
                 answer={answer}
                 onAnswer={onAnswer}
                 now={now}
+                showDetail={!inline}
               />
             )
           }

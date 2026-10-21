@@ -108,17 +108,36 @@ export function buildPatientTextLiterals(patient: unknown): string[] {
 }
 
 /**
- * Mask identifying free text: TW national/resident IDs, labeled chart
- * numbers, labeled names, and any caller-provided literals (the loaded
- * patient's own name / identifier values).
+ * For outbound CDSS text, mask a source name's unknown character even when
+ * another report contains its actual glyph. Never use these patterns as keys.
  */
-export function scrubFreeText(text: string, literals: string[] = []): string {
+export function buildPatientNamePatterns(patient: unknown): RegExp[] {
+  if (!patient || typeof patient !== 'object') return []
+  const p = patient as Record<string, unknown>
+  const names = Array.isArray(p.name)
+    ? p.name.map(name => name?.text).filter((name): name is string => typeof name === 'string')
+    : typeof p.name === 'string' ? [p.name] : []
+  return names.filter(name => /[*＊]/u.test(name) && (name.match(/\p{L}/gu)?.length ?? 0) >= 2)
+    .map(name => {
+      const body = Array.from(name.trim()).map(char => /[*＊]/u.test(char)
+        ? '[^\\s][\\u{FE00}-\\u{FE0F}\\u{E0100}-\\u{E01EF}]?'
+        : escapeRegExp(char)).join('')
+      const latin = /\p{Script=Latin}/u.test(name) && !/\p{Script=Han}/u.test(name)
+      return new RegExp(latin ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body, 'giu')
+    })
+}
+
+/** Mask identifying free text using labels, literals and optional patient-name patterns. */
+export function scrubFreeText(text: string, literals: string[] = [], namePatterns: RegExp[] = []): string {
   if (!text) return text
   let out = text
   for (const literal of literals) {
     if (!literal) continue
     out = out.replace(new RegExp(escapeRegExp(literal), 'giu'), MASK)
   }
+  // Only patient-name placeholders are wildcards. IDs and other literals
+  // retain exact matching so masked identifiers cannot erase clinical values.
+  for (const pattern of namePatterns) out = out.replace(pattern, MASK)
   out = out.replace(EMAIL, MASK)
   out = out.replace(TW_NATIONAL_ID, MASK)
   out = out.replace(LABELED_PERSON_ID, (_m, label: string) => `${label}${MASK}`)

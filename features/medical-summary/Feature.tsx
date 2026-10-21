@@ -1,7 +1,8 @@
 // Medical Summary (醫療摘要) — one feature with two reading modes:
-// structured standard summary and independently generated custom summaries.
-// Structured AI output (Zod-validated) renders as fixed cards — never a
-// free-text markdown blob. Pluggable via right-panel-registry (enabled flag).
+// 初診快覽 (the fixed first-visit overview) and independently generated custom
+// summaries. Structured AI output (Zod-validated) renders as a single scroll
+// column of fixed sections — never a free-text markdown blob, and no longer a
+// re-orderable card deck. Pluggable via right-panel-registry (enabled flag).
 "use client"
 
 import { Button } from "@/components/ui/button"
@@ -18,12 +19,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { BookOpen, CircleHelp, ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
+import { BookOpen, CircleHelp, ClipboardList, Database, Loader2, Settings2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
-import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useMedicalSummaryOrchestrator } from "@/src/application/hooks/medical-summary/use-medical-summary-orchestrator.hook"
 import {
@@ -31,7 +31,7 @@ import {
   NAV_CLAIM_TIMEOUT_MS,
   type ResourceNavTarget,
 } from "@/src/application/stores/resource-navigation.store"
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import { InfoHint } from "@/src/shared/components/InfoHint"
@@ -51,22 +51,35 @@ import {
 } from "@/src/shared/constants/ai-models.constants"
 import { formatApproxTokenCount, type ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 import { formatClinicalContextAdaptationNotice } from "@/src/core/utils/adaptive-clinical-context.utils"
-import { CurrentPrioritiesCard } from "./components/CurrentPrioritiesCard"
-import { DecisionList } from "./components/DecisionList"
-import { InvestigationTrendsCard } from "./components/InvestigationTrendsCard"
+import { OverviewHeroCard } from "./components/OverviewHeroCard"
+import { ProblemsCard } from "./components/ProblemsCard"
+import { ReportHighlightsCard } from "./components/ReportHighlightsCard"
+import { MedicationSafetySection } from "./components/MedicationSafetySection"
+import type { SafetyAlert } from "@/src/core/entities/safety-alert.entity"
+import { staleEvidenceDate } from "@/src/core/utils/stale-evidence.utils"
+import { keyMentionLanguage, resolveKeyMentions } from "@/src/core/utils/key-mentions.utils"
+import { currentAnticholinergicMedicines, reviewAnticholinergicAlert } from "@/src/core/utils/anticholinergic-burden.utils"
+import { headlineProblemListState, reviewHeadline } from "@/src/core/utils/headline-review.utils"
+import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
+import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
+import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
+import { isAiScopeReport } from "@/src/core/utils/report-narrative.utils"
+import type { DiagnosticReportEntity } from "@/src/core/entities/clinical-data.entity"
 import { MedicationEducationCard } from "./components/MedicationEducationCard"
-import { MedicationReconciliationCard } from "./components/MedicationReconciliationCard"
-import { CareRemindersSafetyCard } from "./components/CareRemindersSafetyCard"
-import { ProblemListCard } from "./components/ProblemListCard"
-import { CrossFacilityTimeline } from "./components/CrossFacilityTimeline"
 import { CoverageCard } from "./components/CoverageCard"
+import { SummaryStatusStrip } from "./components/SummaryStatusStrip"
 import { GenerationErrorBanner } from "./components/GenerationErrorBanner"
+import {
+  SummarySectionPending,
+} from "./components/SummarySectionStatus"
 import {
   getSummaryGenerationActivityState,
   SummaryGenerationButton,
 } from "./components/SummaryGenerationButton"
+import { SummaryProblemReport } from "./components/SummaryProblemReport"
 import { AiDiagnosticsButton } from "./components/AiDiagnosticsButton"
-import { SourceSup } from "./components/SourceSup"
+import { SourceLink } from "./components/SourceLink"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
 import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
 import {
@@ -75,40 +88,18 @@ import {
   useRightFeatureTourStore,
 } from "@/features/right-feature-tour/right-feature-tour.store"
 import { DataSelectionDrawer } from "@/features/data-selection"
-import {
-  MedicalSummaryCardLayoutManager,
-  type MedicalSummaryCardLayoutItem,
-} from "./components/MedicalSummaryCardLayoutManager"
-import {
-  useMedicalSummaryCardLayout,
-  type MedicalSummaryCardId,
-} from "./hooks/useMedicalSummaryCardLayout"
-import {
-  MedicalSummaryCardNav,
-  type MedicalSummaryCardNavItem,
-} from "./components/MedicalSummaryCardNav"
 import { SummaryGenerationMeta } from "./components/SummaryGenerationMeta"
-import {
-  buildInvestigationCumulativeTargets,
-  type InvestigationCumulativeTarget,
-} from "./utils/investigation-cumulative-target"
 import { consolidateCardErrors } from "./utils/consolidate-card-errors"
 import { buildSummaryGenerationInfo } from "./utils/summary-generation-info"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
 import { MEDICAL_SUMMARY_CARD_IDS } from "@/src/core/entities/medical-summary.entity"
 import type {
-  EncounterClass,
-  InvestigationDirection,
-  InvestigationKind,
   MedicalSummaryModuleId,
-  MedicalSummaryCardId as GeneratedCardId,
-  MedicationChangeType,
-  ProblemKind,
+  MedicalSummaryCardId,
   ResolvedSourceRef,
-  SummaryUrgency,
-  TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
+import { SEVERITY_RANK } from "@/src/core/entities/safety-alert.entity"
 import { useAiExecutionDiagnosticsStore } from "@/src/application/stores/ai-execution-diagnostics.store"
 import { useSummaryActivity } from "@/src/application/hooks/medical-summary/use-summary-activity.hook"
 import { downloadAiExecutionDiagnostics } from "@/src/shared/utils/ai-execution-diagnostics"
@@ -117,25 +108,13 @@ import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/
 
 type SummaryView = "standard" | "custom"
 
-const CARD_NAV_ACTIVATION_OFFSET_PX = 48
-
 import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
-function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
-  let parent = element.parentElement
-  while (parent) {
-    const overflowY = window.getComputedStyle(parent).overflowY
-    if (/(auto|scroll|overlay)/.test(overflowY)) return parent
-    parent = parent.parentElement
-  }
-  return null
-}
 
 export default function MedicalSummaryFeature() {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const { loading: authLoading } = useAuth()
   const { activeTab: rightPanelTab, setActiveTab } = useRightPanel()
-  const { diagnosticReports, observations } = useClinicalData()
   const base = t.medicalSummary
   const isPatient = audience === "patient"
   // Patient keys override the clinician base set (same pattern as safety).
@@ -222,6 +201,7 @@ export default function MedicalSummaryFeature() {
     setAutoGenerate,
     generate,
     cancelGeneration,
+    generateForLaunch,
     retryFailed,
     isGenerating: isBusy,
     isStopping,
@@ -234,6 +214,7 @@ export default function MedicalSummaryFeature() {
     contextAdaptation,
     hasAnyResult,
     resolveSafetySource,
+    safetySourceCatalog,
     activeGeneration,
     summaryGenerationSlotKey,
     safetyGenerationSlotKey,
@@ -250,7 +231,7 @@ export default function MedicalSummaryFeature() {
     isRestoring,
     generationSlotKey: summaryGenerationSlotKey,
     modelId: model,
-    generate,
+    generate: generateForLaunch,
   })
   // Mirror the run's start/finish into the workspace-level activity store so a
   // COLLAPSED feature panel can announce a finished summary. Content never
@@ -305,17 +286,17 @@ export default function MedicalSummaryFeature() {
     () => (isPatient ? { ...t.safetyAlerts, ...t.safetyAlerts.patient } : t.safetyAlerts),
     [isPatient, t.safetyAlerts],
   )
-  const cardLabels = useMemo<Record<GeneratedCardId, string>>(() => ({
-    priorities: ms.prioritiesTitle,
+  const cardLabels = useMemo<Record<MedicalSummaryCardId, string>>(() => ({
+    overview: ms.overviewTitle,
     problems: ms.problemsTitle,
-    timeline: ms.timelineTitle,
-    investigations: ms.investigationsTitle,
-    medications: isPatient ? ms.medicationEducationTitle : ms.medicationReviewTitle,
-    safety: ms.careSafetyTitle,
-  }), [isPatient, ms])
+    reports: ms.reportsTitle,
+    safety: ms.otherAlertsSectionLabel,
+  }), [ms])
   const generationErrors = useMemo(() => {
     const failedCards = MEDICAL_SUMMARY_CARD_IDS.flatMap((cardId) => {
-      const error = cardErrors[cardId]
+      // A legacy/restored safety slot can expose its error outside
+      // result.cardErrors; it is the same card, so it is listed once, here.
+      const error = cardId === "safety" ? cardErrors.safety ?? safetyError : cardErrors[cardId]
       return error ? [{
         label: cardLabels[cardId],
         message: error === "PARSE_FAILED"
@@ -325,30 +306,24 @@ export default function MedicalSummaryFeature() {
     })
     const genericSummaryError = summaryError && summaryError !== "MODULES_FAILED"
       ? [{
-          label: modelUnavailable ? t.modelPicker.label : ms.prioritiesTitle,
+          label: modelUnavailable ? t.modelPicker.label : ms.overviewTitle,
           message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
         }]
       : []
-    // A legacy/restored safety slot can still expose its error separately from
-    // result.cardErrors. Surface it in the same banner without duplicating an
-    // integrated safety-card error.
-    const standaloneSafetyError = safetyError && !cardErrors.safety
-      ? [{
-          label: cardLabels.safety,
-          message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
-        }]
-      : []
-    // Consolidation counts against the standard card ids, so the standalone
-    // slot stays outside it. `safety` is one of those ids, so the two are
-    // mutually exclusive anyway: consolidating needs cardErrors.safety set.
     return [
-      ...consolidateCardErrors(failedCards, ms.title),
-      ...standaloneSafetyError,
+      // The patient version never requests 影像與病理重點, so "every card
+      // failed" counts one card fewer there.
+      ...consolidateCardErrors(
+        failedCards,
+        ms.title,
+        MEDICAL_SUMMARY_CARD_IDS.length - (isPatient ? 1 : 0),
+      ),
       ...genericSummaryError,
     ]
   }, [
     cardErrors,
     cardLabels,
+    isPatient,
     ms,
     safetyError,
     modelUnavailable,
@@ -383,24 +358,6 @@ export default function MedicalSummaryFeature() {
     if (!isPatient) return resourceType
     return (base.patient.sourceTypes as Record<string, string>)[resourceType] ?? resourceType
   }, [base.patient.sourceTypes, isPatient])
-  const categoryLabel = (c: TimelineCategory) => ms.categories[c]
-  const encounterClassLabel = (c: EncounterClass) => ms.encounterClasses[c]
-  const problemBadgeLabel = (kind: ProblemKind) =>
-    kind === "careplan"
-      ? ms.problemBadgeCarePlan
-      : kind === "discharge"
-        ? ms.problemBadgeDischarge
-        : ms.problemBadgeInferred
-  const investigationKindLabel = (kind: InvestigationKind) => ms.investigationKinds[kind]
-  const investigationDirectionLabel = (direction: InvestigationDirection) =>
-    ms.investigationDirections[direction]
-  const medicationChangeTypeLabel = (type: MedicationChangeType) =>
-    type === "cross-facility"
-      ? ms.medicationChangeTypes.crossFacility
-      : ms.medicationChangeTypes[type]
-  const urgencyLabel = (urgency: SummaryUrgency) =>
-    urgency === "high" ? ms.urgencyHigh : urgency === "medium" ? ms.urgencyMedium : ms.urgencyLow
-
   // Navigate the LEFT panel to a cited resource. Switching to the right tab
   // always works; the pinpoint scroll is best-effort — if no anchor claims
   // the request in time (virtualised list, pivot view without per-resource
@@ -409,7 +366,7 @@ export default function MedicalSummaryFeature() {
   const navigateToResource = useCallback(
     (target: ResourceNavTarget) => {
       const store = useResourceNavigationStore.getState()
-      // Every citation in this feature (summary cards AND the safety scan)
+      // Every citation in this feature (summary sections AND the safety scan)
       // routes through here; a caller that already knows better wins.
       store.navigate({ ...target, origin: target.origin ?? 'summary' })
       const mySeq = useResourceNavigationStore.getState().seq
@@ -427,64 +384,12 @@ export default function MedicalSummaryFeature() {
     [navFallbackMsg],
   )
 
-  const investigationCumulativeTargets = useMemo(
-    () => result
-      ? buildInvestigationCumulativeTargets(result, diagnosticReports, observations)
-      : [],
-    [diagnosticReports, observations, result],
-  )
-  const [openingCumulativeTarget, setOpeningCumulativeTarget] = useState<InvestigationCumulativeTarget | null>(null)
-  const openingCumulativeNavSeqRef = useRef<number | null>(null)
-  const openingCumulativeTimerRef = useRef<number | null>(null)
-  const consumedNavSeq = useResourceNavigationStore((state) => state.consumedSeq)
-
-  useEffect(() => () => {
-    if (openingCumulativeTimerRef.current !== null) {
-      window.clearTimeout(openingCumulativeTimerRef.current)
-    }
-  }, [])
-
-  useEffect(() => {
-    const openingSeq = openingCumulativeNavSeqRef.current
-    if (openingSeq === null || consumedNavSeq < openingSeq) return
-    openingCumulativeNavSeqRef.current = null
-    setOpeningCumulativeTarget(null)
-  }, [consumedNavSeq])
-
-  const openCumulativeReport = useCallback(
-    (target: InvestigationCumulativeTarget) => {
-      setOpeningCumulativeTarget(target)
-      openingCumulativeNavSeqRef.current = null
-      if (openingCumulativeTimerRef.current !== null) {
-        window.clearTimeout(openingCumulativeTimerRef.current)
-      }
-
-      // Give React one paint to show the spinner before mounting the reports
-      // feature. A local bundle can make that first mount CPU-heavy; starting
-      // it in the same click task makes the button look unresponsive.
-      openingCumulativeTimerRef.current = window.setTimeout(() => {
-        openingCumulativeTimerRef.current = null
-        navigateToResource({
-          resourceType: target.resourceType,
-          resourceId: target.resourceId,
-          display: target.display,
-          date: target.date,
-          reportView: 'cumulative',
-          cumulativeCategoryId: target.categoryId,
-          cumulativeAnalyteKey: target.analyteKey,
-        })
-        openingCumulativeNavSeqRef.current = useResourceNavigationStore.getState().seq
-      }, 50)
-    },
-    [navigateToResource],
-  )
-
-  // Render a safety alert's cited source keys as a navigable citation — the
-  // same SourceSup the narrative/decision cards use. Resolves each key against
-  // the safety catalog; unknown keys show as unverified (never dropped).
+  // A safety alert's title opens its cited records — the same SourceLink the
+  // summary sections use. Resolves each key against the safety catalog;
+  // unknown keys show as unverified (never dropped).
   const renderSafetySources = useCallback(
-    (keys: string[], unsupportedKeys: string[] = []) => {
-      if (!keys?.length) return null
+    (keys: string[], unsupportedKeys: string[] = [], children: ReactNode) => {
+      if (!keys?.length) return children
       const unsupported = new Set(unsupportedKeys)
       const refs: ResolvedSourceRef[] = keys.map((key, i) => {
         const e = resolveSafetySource(key)
@@ -500,29 +405,121 @@ export default function MedicalSummaryFeature() {
         }
       })
       return (
-        <SourceSup
+        <SourceLink
           sources={refs}
           typeLabel={typeLabel}
           unverifiedLabel={ms.unverified}
           onNavigate={navigateToResource}
-        />
+        >
+          {children}
+        </SourceLink>
       )
     },
     [resolveSafetySource, typeLabel, ms.unverified, navigateToResource],
   )
+  // The anticholinergic medicines supplied in the 90 days before the clinical
+  // reference date (the demo's own as-of date for demo data), counted the way
+  // the prompt counted them.
+  const currentAnticholinergics = useMemo(() => {
+    const referenceDay = new Date(clinicalNowMs(isDemoDataActive()) + 8 * 3_600_000).toISOString().slice(0, 10)
+    return currentAnticholinergicMedicines(safetySourceCatalog ?? [], referenceDay).map(({ ingredient }) => ingredient)
+  }, [safetySourceCatalog])
+  // 待核對 beside an alert that calls a medicine anticholinergic against its
+  // listed mechanism, naming the medicine by its ingredient, or that raises an
+  // anticholinergic alert the Beers rules do not support (none supplied, or
+  // one with no related condition in the alert or the problem list). Labels,
+  // never hides.
+  const headline = result?.headline
+  const problemList = result?.problems
+  const alertPropertyReview = useCallback(
+    (alert: SafetyAlert) => {
+      const drugs = [...new Set((alert.propertyReviewKeys ?? []).map((key) => {
+        const source = resolveSafetySource(key)
+        return source?.medicationClass?.split(" · ")[0] || source?.display || key
+      }))]
+      const burden = reviewAnticholinergicAlert(
+        alert,
+        currentAnticholinergics.length,
+        (problemList ?? []).map((problem) => problem.label),
+      )
+      // The medicines the alert cites, by ingredient: named when none of
+      // them was supplied in the window.
+      const cited = [...new Set((alert.sources ?? [])
+        .map((key) => resolveSafetySource(key))
+        .filter((source) => source?.resourceType.startsWith("Medication"))
+        .map((source) => source?.medicationClass?.split(" · ")[0] || source?.display || ""))]
+        .filter(Boolean)
+      const labels = [
+        drugs.length ? ms.safetyPropertyReview.replace("{drugs}", drugs.join("、")) : undefined,
+        burden === "none-supplied"
+          ? ms.safetyAnticholinergicNoneSupplied.replace("{drugs}", cited.length ? cited.join("、") : ms.safetyAnticholinergicUnnamed)
+          : burden === "one-without-condition"
+            ? ms.safetyAnticholinergicSingle.replace("{drug}", currentAnticholinergics[0] ?? "")
+            : undefined,
+      ].filter(Boolean)
+      return labels.length ? labels.join("；") : undefined
+    },
+    [resolveSafetySource, currentAnticholinergics, problemList, ms.safetyPropertyReview, ms.safetyAnticholinergicNoneSupplied, ms.safetyAnticholinergicSingle, ms.safetyAnticholinergicUnnamed],
+  )
+  // Compare clinician headline wording once both requests settle. Ordinary
+  // differences are disclosed on demand; a failed comparison stays inline.
+  const problemListState = headlineProblemListState(result ?? undefined)
+  const headlineReviewLabel = useMemo(() => {
+    if (isPatient || !headline) return undefined
+    // Nothing to compare with: the headline is the claim most prone to
+    // invention, so it is labelled rather than shown as if checked.
+    if (problemListState === "failed") return ms.headlineReviewNoProblems
+    // Still streaming: the list it is compared with has not landed yet.
+    if (problemListState === "pending") return undefined
+    const medicineNames = (safetySourceCatalog ?? [])
+      .filter((entry) => entry.resourceType.startsWith("Medication"))
+      .flatMap((entry) => [entry.medicationClass?.split(" · ")[0] ?? "", /^[A-Za-z][A-Za-z-]+/.exec(entry.display.trim())?.[0] ?? ""])
+    const review = reviewHeadline(headline, (problemList ?? []).map((problem) => problem.label), medicineNames)
+    if (!review) return undefined
+    return [
+      review.unlisted.length ? ms.headlineReviewUnlisted.replace("{items}", review.unlisted.join("、")) : undefined,
+      review.medicines.length || review.values.length ? ms.headlineReviewMedsValues : undefined,
+    ].filter(Boolean).join("；")
+  }, [isPatient, headline, problemList, problemListState, safetySourceCatalog, ms.headlineReviewUnlisted, ms.headlineReviewMedsValues, ms.headlineReviewNoProblems])
+  // Keys the model wrote into an alert's prose ("NSAID use (M8, M11)") read
+  // as the records they name, in the sentence's own language.
+  const resolveSafetyMentions = useCallback(
+    (text: string, citedKeys: string[]) =>
+      resolveKeyMentions(text, citedKeys, resolveSafetySource, keyMentionLanguage(text)),
+    [resolveSafetySource],
+  )
 
-  const generatedByLine = ms.generatedBy
-    .replace("{enc}", String(coverage?.encounters ?? 0))
-    .replace("{med}", String(coverage?.medications ?? 0))
-    .replace("{lab}", String(coverage?.labs ?? 0))
-    .replace("{org}", String(coverage?.organizations ?? 0))
+  // A 雲端病歷 chart holds about a year. When the chart ITSELF holds no
+  // imaging or pathology report, the section says so instead of vanishing
+  // (owner, 2026-10-03). Judged on the loaded chart, never on the summary's
+  // scope: reports the user left out of the summary are not "none".
+  const sourceClinicalData = useClinicalData()
+  const chartSource = useMemo(
+    () => detectClinicalDataSource(
+      sourceClinicalData as unknown as Parameters<typeof detectClinicalDataSource>[0],
+    ),
+    [sourceClinicalData],
+  )
+  const isMedcloudChart = chartSource === "nhi-medcloud"
+  const reportsNoneLabel = useMemo(() => {
+    if (!isMedcloudChart) return undefined
+    const chart = sourceClinicalData as unknown as { diagnosticReports?: DiagnosticReportEntity[] }
+    return (chart.diagnosticReports ?? []).some(isAiScopeReport) ? undefined : ms.reportsNoneMedcloudYear
+  }, [isMedcloudChart, sourceClinicalData, ms.reportsNoneMedcloudYear])
+
+  // 「依據資料已逾 1 年」: judged at render against the clinical reference date
+  // (the demo's own as-of date for demo data), so cached results carry it too.
+  const alertStaleEvidenceDate = useCallback(
+    (alert: SafetyAlert) => staleEvidenceDate(
+      (alert.sources ?? []).map((key) => resolveSafetySource(key)?.date),
+      clinicalNowMs(isDemoDataActive()),
+    ),
+    [resolveSafetySource],
+  )
 
   const [summarySettingsOpen, setSummarySettingsOpen] = useState(false)
   const [summaryModelPickerOpen, setSummaryModelPickerOpen] = useState(false)
-  const [layoutOpen, setLayoutOpen] = useState(false)
-  const [activeCardId, setActiveCardId] = useState<MedicalSummaryCardId | null>(null)
   const summaryModelPickerTriggerRef = useRef<HTMLButtonElement>(null)
-  const cardRefs = useRef<Partial<Record<MedicalSummaryCardId, HTMLDivElement | null>>>({})
 
   const revealSummaryModelPicker = useCallback(() => {
     const trigger = summaryModelPickerTriggerRef.current
@@ -532,104 +529,53 @@ export default function MedicalSummaryFeature() {
     setSummaryModelPickerOpen(true)
   }, [])
 
-  const cardSucceeded = useCallback(
-    (cardId: GeneratedCardId) => Boolean(
+  const moduleReady = useCallback(
+    (moduleId: MedicalSummaryModuleId) => Boolean(
       result &&
-      (!result.completedCardIds || result.completedCardIds.includes(cardId)) &&
-      !result.cardErrors?.[cardId]
+      (!result.completedCardIds || result.completedCardIds.includes(moduleId)) &&
+      !cardErrors[moduleId]
     ),
-    [result],
+    [cardErrors, result],
   )
-  // Errors and their retry action live in the shared generation banner. Keep a
-  // safety card only when it has content, so a failed first scan does not leave
-  // behind an empty card that repeats the same failure.
-  const showSafetyCard = Boolean(safetyResult || cardSucceeded("safety"))
-  const moduleSucceeded = useCallback(
-    (moduleId: MedicalSummaryModuleId) => cardSucceeded(moduleId),
-    [cardSucceeded],
-  )
-  const availableCardIds = useMemo<MedicalSummaryCardId[]>(() => {
-    const ids: MedicalSummaryCardId[] = []
-    if (moduleSucceeded("problems")) ids.push("problems")
-    if (moduleSucceeded("timeline") && result?.timeline.length) ids.push("timeline")
-    if (showSafetyCard) ids.push("safety")
-    if (result?.decisions.length) ids.push("decisions")
-    if (moduleSucceeded("investigations")) ids.push("investigations")
-    if (moduleSucceeded("medications")) ids.push("medications")
-    return ids
-  }, [moduleSucceeded, result, showSafetyCard])
-
-  const cardLayout = useMedicalSummaryCardLayout({ audience, availableIds: availableCardIds })
-
-  const cardMetadata = useMemo<Record<MedicalSummaryCardId, Omit<MedicalSummaryCardLayoutItem, "id">>>(() => ({
-    problems: {
-      label: ms.navProblems,
-      description: ms.problemsTitle,
-    },
-    timeline: {
-      label: ms.navTimeline,
-      description: ms.timelineTitle,
-    },
-    safety: {
-      label: ms.navSafety,
-      description: ms.careSafetyTitle,
-    },
-    decisions: {
-      label: ms.navDecisions,
-      description: ms.decisionsTitle,
-    },
-    investigations: {
-      label: ms.navInvestigations,
-      description: ms.investigationsTitle,
-    },
-    medications: {
-      label: ms.navMedications,
-      description: isPatient ? ms.medicationEducationTitle : ms.medicationReviewTitle,
-    },
-  }), [isPatient, ms])
-
-  const layoutItems = useMemo<MedicalSummaryCardLayoutItem[]>(
-    () => cardLayout.orderedManageIds.map((id) => ({ id, ...cardMetadata[id] })),
-    [cardLayout.orderedManageIds, cardMetadata],
+  // A section that has neither landed nor failed is still streaming — show its
+  // own placeholder rather than a hole in the column.
+  const modulePending = useCallback(
+    (moduleId: MedicalSummaryModuleId) =>
+      isBusy && !cardErrors[moduleId] && !moduleReady(moduleId),
+    [cardErrors, isBusy, moduleReady],
   )
 
-  const cardCounts = useMemo<Partial<Record<MedicalSummaryCardId, number | undefined>>>(() => {
-    if (!result) {
-      return { safety: safetyResult?.alerts.length }
-    }
-    const medicationCount = isPatient
-      ? result.medicationEducation.length
-      : result.medicationReview.regimen.length
-        + result.medicationReview.changes.length
-        + result.medicationReview.reconciliation.length
-    return {
-      problems: result.problems.length,
-      timeline: result.timeline.length,
-      safety: safetyResult?.alerts.length,
-      decisions: result.decisions.length,
-      investigations: result.investigations.length,
-      medications: medicationCount,
-    }
-  }, [isPatient, result, safetyResult])
-
-  const cardNavItems = useMemo<MedicalSummaryCardNavItem[]>(
-    () => cardLayout.orderedVisibleIds.map((id) => ({
-      id,
-      label: cardMetadata[id].label,
-      compactLabel: ms.compactNavLabels[id],
-      description: cardMetadata[id].description,
-      count: cardCounts[id],
-    })),
-    [cardCounts, cardLayout.orderedVisibleIds, cardMetadata, ms.compactNavLabels],
+  // 開藥注意 sits after 影像與病理重點: every alert in one neutral list,
+  // most important first. The safety scan settles independently of the
+  // summary modules, so the section legitimately gains rows mid-stream.
+  const orderedAlerts = useMemo(
+    () => [...(safetyResult?.alerts ?? [])].sort(
+      (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity],
+    ),
+    [safetyResult],
   )
+
+  // Name the bridge only when the chart came through one; a SMART EHR launch,
+  // an IPS import or the demo is not 健保雲端.
+  const heroDataRange = coverage?.end
+    ? (chartSource === "nhi-medcloud"
+        ? ms.overviewDataRange
+        : chartSource === "nhi-health-bank"
+          ? ms.overviewDataRangeHealthBank
+          : ms.overviewDataRangeOther
+      ).replace("{end}", coverage.end)
+    : null
+
   const summaryGenerationInfo = useMemo(() => {
     return buildSummaryGenerationInfo({
       generation: result?.generation,
       locale,
       labelTemplate: ms.summaryGenerationProvenance,
       labelWithDurationTemplate: ms.summaryGenerationProvenanceWithDuration,
+      labelWithFirstCardTemplate: ms.summaryGenerationProvenanceWithFirstCard,
       generatedAtLabel: ms.summaryGenerationDateTimeLabel,
       durationLabel: ms.summaryGenerationDurationLabel,
+      firstCardLabel: ms.summaryGenerationFirstCardLabel,
       preGeneratedLabel: ms.summaryPreGeneratedLabel,
       preGeneratedTemplate: ms.summaryPreGeneratedProvenance,
     })
@@ -637,221 +583,37 @@ export default function MedicalSummaryFeature() {
     locale,
     ms.summaryGenerationDateTimeLabel,
     ms.summaryGenerationDurationLabel,
+    ms.summaryGenerationFirstCardLabel,
     ms.summaryGenerationProvenance,
     ms.summaryGenerationProvenanceWithDuration,
+    ms.summaryGenerationProvenanceWithFirstCard,
     ms.summaryPreGeneratedLabel,
     ms.summaryPreGeneratedProvenance,
     result,
   ])
 
-  const navActiveCardId = activeCardId && cardLayout.orderedVisibleIds.includes(activeCardId)
-    ? activeCardId
-    : cardLayout.orderedVisibleIds[0]
 
-  useEffect(() => {
-    if (activeView !== "standard") return
-
-    const cards = cardLayout.orderedVisibleIds.flatMap((id) => {
-      const element = cardRefs.current[id]
-      return element ? [{ id, element }] : []
-    })
-    if (cards.length === 0) return
-
-    const scrollContainer = findVerticalScrollContainer(cards[0].element)
-    const scrollTarget: HTMLElement | Window = scrollContainer ?? window
-    let animationFrame = 0
-
-    const updateActiveCard = () => {
-      animationFrame = 0
-      const containerRect = scrollContainer?.getBoundingClientRect()
-      const viewportTop = containerRect?.top ?? 0
-      const viewportBottom = containerRect?.bottom ?? window.innerHeight
-      const activationLine = viewportTop + CARD_NAV_ACTIVATION_OFFSET_PX
-      const visibleCards = cards
-        .map(({ id, element }) => ({ id, rect: element.getBoundingClientRect() }))
-        .filter(({ rect }) => rect.bottom > viewportTop && rect.top < viewportBottom)
-
-      if (visibleCards.length === 0) return
-
-      const isAtBottom = scrollContainer
-        ? Math.ceil(scrollContainer.scrollTop + scrollContainer.clientHeight)
-          >= scrollContainer.scrollHeight - 1
-        : Math.ceil(window.scrollY + window.innerHeight)
-          >= document.documentElement.scrollHeight - 1
-      const nextCardId = isAtBottom
-        ? visibleCards[visibleCards.length - 1].id
-        : visibleCards.find(({ rect }) => rect.top <= activationLine && rect.bottom > activationLine)?.id
-          ?? visibleCards.find(({ rect }) => rect.top > activationLine)?.id
-          ?? visibleCards[visibleCards.length - 1].id
-
-      setActiveCardId((current) => current === nextCardId ? current : nextCardId)
+  const renderSection = (
+    moduleId: MedicalSummaryModuleId,
+    title: string,
+    content: React.ReactNode,
+    /** The section's content is app-written and complete without its module
+     *  (影像與病理重點 falls back to each report's own text), so a failed
+     *  module still shows it. The failure itself stays in the banner. */
+    options: { renderOnError?: boolean } = {},
+  ) => {
+    // A failed section is reported once, in the shared generation banner with
+    // its retry and model-switch actions (identical errors consolidated) — a
+    // per-section error box here would repeat the same failure.
+    if (cardErrors[moduleId]) {
+      return options.renderOnError && content
+        ? <div key={moduleId} id={`medical-summary-section-${moduleId}`}>{content}</div>
+        : null
     }
-
-    const scheduleUpdate = () => {
-      if (animationFrame !== 0) return
-      animationFrame = window.requestAnimationFrame(updateActiveCard)
+    if (modulePending(moduleId)) {
+      return <SummarySectionPending key={moduleId} title={title} label={ms.generating} />
     }
-
-    scrollTarget.addEventListener("scroll", scheduleUpdate, { passive: true })
-    window.addEventListener("resize", scheduleUpdate)
-    scheduleUpdate()
-
-    return () => {
-      scrollTarget.removeEventListener("scroll", scheduleUpdate)
-      window.removeEventListener("resize", scheduleUpdate)
-      if (animationFrame !== 0) window.cancelAnimationFrame(animationFrame)
-    }
-  }, [activeView, cardLayout.orderedVisibleIds])
-
-  const jumpToCard = useCallback((id: MedicalSummaryCardId) => {
-    const target = cardRefs.current[id]
-    if (!target) return
-    setActiveCardId(id)
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" })
-  }, [])
-
-  const summaryCards: Partial<Record<MedicalSummaryCardId, ReactNode>> = {
-    problems: result && moduleSucceeded("problems") ? (
-      <div
-        id="medical-summary-card-problems"
-        ref={(node) => { cardRefs.current.problems = node }}
-        className="scroll-mt-12"
-      >
-        <ProblemListCard
-          result={result}
-          title={ms.problemsTitle}
-          basisLabel={ms.problemBasisLabel}
-          badgeLabel={problemBadgeLabel}
-          typeLabel={typeLabel}
-          unverifiedLabel={ms.unverified}
-          sourceTypeMismatchLabel={ms.sourceTypeMismatch}
-          showMoreLabel={ms.showMoreItems}
-          showLessLabel={ms.showLessItems}
-          onNavigate={navigateToResource}
-        />
-      </div>
-    ) : null,
-    timeline: result && moduleSucceeded("timeline") && result.timeline.length ? (
-      <div
-        id="medical-summary-card-timeline"
-        ref={(node) => { cardRefs.current.timeline = node }}
-        className="scroll-mt-12"
-      >
-        <CrossFacilityTimeline
-          result={result}
-          title={ms.timelineTitle}
-          categoryLabel={categoryLabel}
-          encounterClassLabel={encounterClassLabel}
-          onNavigate={navigateToResource}
-          earlierLabel={ms.timelineShowEarlier}
-          collapseLabel={ms.timelineShowLess}
-          droppedNote={
-            result.droppedTimelineCount > 0
-              ? ms.timelineDropped.replace("{count}", String(result.droppedTimelineCount))
-              : null
-          }
-        />
-      </div>
-    ) : null,
-    safety: showSafetyCard ? (
-      <div
-        id="medical-summary-card-safety"
-        ref={(node) => { cardRefs.current.safety = node }}
-        className="scroll-mt-12"
-      >
-        <CareRemindersSafetyCard
-          result={safetyResult}
-          isScanning={isSafetyGenerating}
-          hasPatient={hasPatient}
-          renderSources={renderSafetySources}
-          title={ms.careSafetyTitle}
-        />
-      </div>
-    ) : null,
-    decisions: result?.decisions.length ? (
-      <div
-        id="medical-summary-card-decisions"
-        ref={(node) => { cardRefs.current.decisions = node }}
-        className="scroll-mt-12"
-      >
-        <DecisionList
-          result={result}
-          title={ms.decisionsTitle}
-          urgencyLabel={urgencyLabel}
-          basisLabel={ms.basisLabel}
-          aiInferredLabel={ms.aiInferred}
-          showUrgency={!isPatient}
-          typeLabel={typeLabel}
-          unverifiedLabel={ms.unverified}
-          showMoreLabel={ms.showMoreItems}
-          showLessLabel={ms.showLessItems}
-          onNavigate={navigateToResource}
-        />
-      </div>
-    ) : null,
-    investigations: result && moduleSucceeded("investigations") ? (
-      <div
-        id="medical-summary-card-investigations"
-        ref={(node) => { cardRefs.current.investigations = node }}
-        className="scroll-mt-12"
-      >
-        <InvestigationTrendsCard
-          result={result}
-          title={ms.investigationsTitle}
-          subtitle={ms.investigationsSubtitle}
-          kindLabel={investigationKindLabel}
-          directionLabel={investigationDirectionLabel}
-          typeLabel={typeLabel}
-          unverifiedLabel={ms.unverified}
-          showMoreLabel={ms.showMoreItems}
-          showLessLabel={ms.showLessItems}
-          openCumulativeLabel={ms.openCumulativeReport}
-          openingCumulativeLabel={ms.openingCumulativeReport}
-          cumulativeTargets={investigationCumulativeTargets}
-          openingCumulativeTarget={openingCumulativeTarget}
-          onOpenCumulative={openCumulativeReport}
-          onNavigate={navigateToResource}
-        />
-      </div>
-    ) : null,
-    medications: result && moduleSucceeded("medications") ? (
-      <div
-        id="medical-summary-card-medications"
-        ref={(node) => { cardRefs.current.medications = node }}
-        className="scroll-mt-12"
-      >
-        {isPatient ? (
-          <MedicationEducationCard
-            result={result}
-            title={ms.medicationEducationTitle}
-            benefitLabel={ms.medicationBenefitLabel}
-            attentionLabel={ms.medicationAttentionLabel}
-            disclaimer={ms.medicationEducationDisclaimer}
-            typeLabel={typeLabel}
-            unverifiedLabel={ms.unverified}
-            showMoreLabel={ms.showMoreItems}
-            showLessLabel={ms.showLessItems}
-            onNavigate={navigateToResource}
-          />
-        ) : (
-          <MedicationReconciliationCard
-            result={result}
-            title={ms.medicationReviewTitle}
-            regimenTitle={ms.medicationReviewRegimenTitle}
-            changesTitle={ms.medicationReviewChangesTitle}
-            reconciliationTitle={ms.medicationReviewReconciliationTitle}
-            disclaimer={ms.medicationReviewDisclaimer}
-            changeTypeLabel={medicationChangeTypeLabel}
-            typeLabel={typeLabel}
-            unverifiedLabel={ms.unverified}
-            showMoreLabel={ms.showMoreItems}
-            showLessLabel={ms.showLessItems}
-            onNavigate={navigateToResource}
-          />
-        )}
-      </div>
-    ) : null,
+    return <div key={moduleId} id={`medical-summary-section-${moduleId}`}>{content}</div>
   }
 
   return (
@@ -1002,11 +764,18 @@ export default function MedicalSummaryFeature() {
               <CircleHelp className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
+          <SummaryProblemReport
+            key={summaryGenerationSlotKey}
+            records={visibleAiDiagnostics}
+            busy={isBusy}
+            onOpen={() => setSummarySettingsOpen(false)}
+            renderTrigger={(reportTrigger) => (
           <Popover open={!tourActive && summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
                 size="sm"
+                data-tour="medical-summary-settings"
                 variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "outline"}
                 className="h-[44px] shrink-0 gap-1 px-2 text-xs shadow-none hover:shadow-none lg:h-7 @max-[36rem]:h-10 @max-[36rem]:w-10 @max-[36rem]:justify-center @max-[36rem]:px-0"
                 title={ms.summaryControls}
@@ -1082,21 +851,7 @@ export default function MedicalSummaryFeature() {
                   </Button>
                 </>
               ) : null}
-              {activeView === "standard" && !isPatient && availableCardIds.length > 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-[44px] w-full justify-start gap-2 px-2 text-xs lg:h-8"
-                  onClick={() => {
-                    setSummarySettingsOpen(false)
-                    setLayoutOpen(true)
-                  }}
-                >
-                  <LayoutList className="h-3.5 w-3.5" />
-                  {ms.cardLayoutButton}
-                </Button>
-              ) : null}
+              {reportTrigger ? <div className="border-t pt-1">{reportTrigger}</div> : null}
               <div className="flex justify-end border-t pt-1">
                 <AiDiagnosticsButton
                   hasRecords={visibleAiDiagnostics.length > 0}
@@ -1110,30 +865,10 @@ export default function MedicalSummaryFeature() {
               </div>
             </PopoverContent>
           </Popover>
+            )}
+          />
         </div>
       </div>
-
-      <MedicalSummaryCardLayoutManager
-        open={layoutOpen}
-        onOpenChange={setLayoutOpen}
-        items={layoutItems}
-        hiddenIds={cardLayout.hiddenSet}
-        onMove={cardLayout.moveCard}
-        onReset={cardLayout.resetLayout}
-        onVisibleChange={cardLayout.setCardVisible}
-        labels={{
-          title: ms.cardLayoutTitle,
-          description: ms.cardLayoutDescription,
-          reset: ms.cardLayoutReset,
-          visible: ms.cardVisible,
-          hidden: ms.cardHidden,
-          moveUp: ms.cardMoveUp,
-          moveDown: ms.cardMoveDown,
-          showCard: ms.cardShow,
-          hideCard: ms.cardHide,
-          empty: ms.cardLayoutEmpty,
-        }}
-      />
 
         <TabsContent value="standard" forceMount className="mt-0 space-y-2">
       {!hasPatient ? (
@@ -1216,44 +951,145 @@ export default function MedicalSummaryFeature() {
             />
           ) : null}
 
-          <MedicalSummaryCardNav
-            items={cardNavItems}
-            ariaLabel={ms.cardNavigation}
-            activeId={navActiveCardId}
-            onJump={jumpToCard}
+          <SummaryStatusStrip
+            coverage={coverage}
+            statsVisible={!isPatient}
+            labels={{
+              orgs: ms.coverageOrgs,
+              encounters: ms.coverageEncounters,
+              medications: ms.coverageMeds,
+              labs: ms.coverageLabs,
+            }}
             generationInfo={summaryGenerationInfo}
             activeGeneration={activeGeneration}
             runningLabel={ms.summaryGenerationRunningLabel}
             runningAriaTemplate={ms.summaryGenerationRunningProvenance}
           />
 
-          {result && moduleSucceeded("priorities") ? (
-            <CurrentPrioritiesCard
+          {renderSection(
+            "overview",
+            ms.overviewTitle,
+            result && moduleReady("overview") ? (
+              <OverviewHeroCard
+                result={result}
+                title={ms.overviewTitle}
+                dataRange={heroDataRange}
+                copyLabel={t.common.copy}
+                copiedLabel={t.common.copied}
+                copyFailedLabel={t.common.copyFailed}
+                reviewLabel={headlineReviewLabel}
+                reviewButtonLabel={ms.headlineReviewTitle}
+                reviewDescription={ms.headlineReviewDescription}
+                reviewUnavailable={problemListState === "failed"}
+              />
+            ) : null,
+          )}
+
+          {/* Patients get 用藥說明 under the headline — same module, the
+              patient audience contract (see the overview prompt). */}
+          {isPatient && result && moduleReady("overview") ? (
+            <MedicationEducationCard
               result={result}
-              title={ms.prioritiesTitle}
-              generatedByLine={generatedByLine}
-              expandSummaryLabel={ms.expandSummary}
-              collapseSummaryLabel={ms.collapseSummary}
-              copyLabel={t.common.copy}
-              copiedLabel={t.common.copied}
-              copyFailedLabel={t.common.copyFailed}
+              title={ms.medicationEducationTitle}
+              benefitLabel={ms.medicationBenefitLabel}
+              attentionLabel={ms.medicationAttentionLabel}
+              disclaimer={ms.medicationEducationDisclaimer}
               typeLabel={typeLabel}
               unverifiedLabel={ms.unverified}
+              showMoreLabel={ms.showMoreItems}
+              showLessLabel={ms.showLessItems}
               onNavigate={navigateToResource}
             />
           ) : null}
 
-          {availableCardIds.length > 0 && cardLayout.orderedVisibleIds.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-5 text-center text-xs text-muted-foreground">
-              {ms.allCardsHidden}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {cardLayout.orderedVisibleIds.map((cardId) => (
-                <Fragment key={cardId}>{summaryCards[cardId] ?? null}</Fragment>
-              ))}
-            </div>
+          {renderSection(
+            "problems",
+            ms.problemsTitle,
+            result && moduleReady("problems") ? (
+              <ProblemsCard
+                result={result}
+                title={ms.problemsTitle}
+                subtitle={ms.problemsSubtitle}
+                metaLabel={ms.problemsMeta}
+                columnLabels={ms.problemColumns}
+                metricLabel={ms.problemMetricLabel}
+                medicationsMoreLabel={ms.problemMedicationsMore}
+                abnormalLabels={ms.problemAbnormalLabels}
+                basisLabel={ms.problemBasisLabel}
+                organizationLatestLabel={ms.problemManagedByOrganizationLatest}
+                metricNeedsReviewLabel={ms.problemMetricNeedsReview}
+                inferredLabel={ms.problemManagedByInferred}
+                medicationInferredLabel={ms.problemInferredFromMedication}
+                singleValueLabel={ms.problemSingleUnassessedLab}
+                shortSpanLabel={ms.problemShortSpanChronic}
+                medicationAlsoForLabel={ms.problemMedicationAlsoFor}
+                medicationReviewLabel={ms.problemMedicationReview}
+                verifyLabel={ms.verifyFlag}
+                legendLabel={ms.problemsLegend}
+                showAllLabel={ms.problemsShowAll}
+                showLessLabel={ms.showLessItems}
+                typeLabel={typeLabel}
+                unverifiedLabel={ms.unverified}
+                sourceTypeMismatchLabel={ms.sourceTypeMismatch}
+                onNavigate={navigateToResource}
+              />
+            ) : null,
           )}
+
+          {/* 影像與病理重點 — clinician-facing. Rendered from the digest even when
+              the reports module failed or never ran (legacy cache, demo), so
+              only a run still in flight shows the placeholder. */}
+          {!isPatient ? renderSection(
+            "reports",
+            ms.reportsTitle,
+            result?.reportHighlights ? (
+              <ReportHighlightsCard
+                highlights={result.reportHighlights}
+                labels={{
+                  title: ms.reportsTitle,
+                  kindLabels: ms.reportsKindLabels,
+                  originalTag: ms.reportsOriginalTag,
+                  showQuotes: ms.reportsShowQuotes,
+                  hideQuotes: ms.reportsHideQuotes,
+                  othersSummarized: ms.reportsOthers,
+                  othersAll: ms.reportsAll,
+                  unreviewed: ms.reportsUnreviewed,
+                  unavailable: ms.reportsUnavailable,
+                  hiddenPoints: ms.reportsHiddenPoints,
+                  unverifiedTag: ms.reportsUnverifiedTag,
+                  hiddenPointsNote: ms.reportsHiddenPointsNote,
+                  conclusionTag: ms.reportsConclusionTag,
+                  openingTag: ms.reportsOpeningTag,
+                  moreSources: ms.reportsMoreSources,
+                  noReports: reportsNoneLabel,
+                }}
+                onNavigate={navigateToResource}
+              />
+            ) : null,
+            { renderOnError: true },
+          ) : null}
+
+          {isSafetyGenerating && !safetyResult ? (
+            <SummarySectionPending title={ms.otherAlertsSectionLabel} label={safetyText.scanning} />
+          ) : safetyResult ? (
+            <MedicationSafetySection
+              alerts={orderedAlerts}
+              title={ms.otherAlertsSectionLabel}
+              moreLabel={ms.otherAlerts}
+              lessLabel={ms.showLessItems}
+              disclaimer={safetyText.disclaimer}
+              renderSources={renderSafetySources}
+              resolveMentions={resolveSafetyMentions}
+              staleEvidenceDate={alertStaleEvidenceDate}
+              staleEvidenceLabel={ms.safetyStaleEvidence}
+              propertyReviewLabel={alertPropertyReview}
+              emptyLabel={safetyText.emptyNoRisk}
+              // The run keeps going after 開藥注意 lands (the reports lane);
+              // spin only while this section is the one still being rewritten.
+              updating={isSafetyGenerating && !result?.completedCardIds?.includes("safety")}
+              updatingLabel={safetyText.scanning}
+            />
+          ) : null}
 
           {coverage ? (
             <CoverageCard
@@ -1264,18 +1100,20 @@ export default function MedicalSummaryFeature() {
                 encounters: ms.coverageEncounters,
                 medications: ms.coverageMeds,
                 labs: ms.coverageLabs,
-                boundary: ms.coverageBoundary,
+                boundary: isMedcloudChart ? ms.coverageBoundaryMedcloud : ms.coverageBoundary,
               }}
-              statsVisible={!isPatient}
+              statsVisible={false}
             />
           ) : null}
 
-          <p className="pb-0.5 text-center text-[0.65rem] leading-snug text-muted-foreground/60">
-            {ms.secondLayerNote}
-          </p>
+          <div className="flex flex-col items-center gap-0.5 px-1 pb-0.5">
+            <p className="text-center text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground/60">
+              {ms.secondLayerNote}
+            </p>
+          </div>
 
           {!hasAnyResult && displayedGenerationErrors.length === 0 ? (
-            <div className="flex min-h-[clamp(18rem,45vh,32rem)] items-center justify-center px-4 py-12">
+            <div data-tour="medical-summary-empty" className="flex min-h-[clamp(18rem,45vh,32rem)] items-center justify-center px-4 py-12">
               <SummaryGenerationButton
                 presentation="empty"
                 isBusy={isBusy}
@@ -1310,6 +1148,7 @@ export default function MedicalSummaryFeature() {
         title={ms.dataScopeTitle}
         description={ms.dataScopeDescription}
         applyHint={ms.dataScopeApplyHint}
+        floorNote={ms.dataScopeFloorNote}
         modelId={activeView === "standard" ? model : insightsModel}
         fallbackModelId={activeView === "standard" ? MEDICAL_SUMMARY_MODEL_ID : MODEL_PREF_DEFAULTS.insights}
         overflowIssue={activeView === "standard" ? overflowGuidance : null}

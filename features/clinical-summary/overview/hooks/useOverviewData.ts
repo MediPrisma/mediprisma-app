@@ -13,18 +13,14 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
-import { buildLabPivots, type LabCell } from '@/src/shared/utils/lab-pivot.utils'
+import { buildLabPivots, primaryCellRecord, type LabCell } from '@/src/shared/utils/lab-pivot.utils'
 import { categorizeObservation, LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import type { DisplayLang } from '@voho0000/clinical-lab-normalization/display'
-import { medicationClinicalIdentityKey } from '@/src/shared/utils/fhir-display-helpers'
-import { computeDurationDays } from '@/features/clinical-summary/medications/utils/duration-helpers'
-import { humanDoseAmount, displayDosageInstruction } from '@/features/clinical-summary/medications/utils/dose-helpers'
-import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
-import { useGroupedMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
-import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 import { useReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
+import { getReportDate } from '@/src/shared/utils/report-identity'
 import { groupMultiRegionStudies } from '@/features/clinical-summary/reports/utils/multi-region-grouping'
+import { extractReportPreview } from '@/src/shared/utils/report-preview'
 import { decodeReportEntities, separateGluedOrderCode } from '@/src/shared/utils/report-text-format'
 import type { NhiViewerAction, ReportGroup, Row } from '@/features/clinical-summary/reports/types'
 import { useVisitHistory, type VisitRecord } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
@@ -35,15 +31,15 @@ import { useDocumentSummaries } from '@/features/clinical-summary/document-summa
 import { useDocumentSummaryStrings } from '@/features/clinical-summary/document-summary/utils/strings'
 import type { DocumentEntry } from '@/features/clinical-summary/document-summary/types'
 import {
-  classifyMedicationChanges,
   isOverviewPinnedAnalyte,
   isWithinOverviewWindow,
   overlapsOverviewWindow,
   toDayKey,
-  type OverviewMedChange,
-  type OverviewMedFact,
   type OverviewWindow,
 } from '../utils/overview-selectors'
+import { useOverviewMeds, type OverviewMedsData } from './useOverviewMeds'
+
+export type { OverviewMedItem, OverviewMedsData } from './useOverviewMeds'
 
 export interface OverviewLabColumn {
   day: string
@@ -76,6 +72,9 @@ export interface OverviewLabsData {
   unpivotedCount: number
   /** An Observation id used to jump into the 報告 tab. */
   navResourceId?: string
+  /** Every loaded Observation, not cut to the window: a trend reads the
+   *  whole chart. */
+  allObservations?: readonly any[]
 }
 
 export interface OverviewReportItem {
@@ -99,6 +98,9 @@ export interface OverviewReportItem {
   institution?: string
   day?: string
   summary: string
+  /** Source heading of the section `summary` previews ("Impression"), when it
+   *  is the report's conclusion rather than its opening line. */
+  summaryLabel?: string
   fullText: string
   /** Resource the 報告 tab should scroll-flash. */
   navResourceType: 'DiagnosticReport' | 'Procedure' | 'Observation'
@@ -112,30 +114,6 @@ export interface OverviewReportsData {
   count: number
 }
 
-export interface OverviewMedItem {
-  id: string
-  key: string
-  title: string
-  /** Product name when it differs from the ingredient name (medical audience). */
-  secondaryTitle?: string
-  doseText: string
-  category?: string
-  institution?: string
-  day?: string
-  isChronic: boolean
-  isInactive: boolean
-  /** Still running, or finished within MEDICATION_RECENTLY_FINISHED_DAYS. */
-  isCurrent: boolean
-  daysRemaining?: number
-  change?: OverviewMedChange
-  row: MedicationRow
-}
-
-export interface OverviewMedsData {
-  items: OverviewMedItem[]
-  count: number
-  changeCount: number
-}
 
 export interface OverviewVisitItem {
   visit: VisitRecord
@@ -199,103 +177,6 @@ function reportNarrative(row: Row): string {
   return value
 }
 
-const MEDICATION_INACTIVE_STATUSES = new Set(['stopped', 'completed'])
-
-/**
- * Identity used only for medication change detection. A refill can switch NHI
- * product/package codes while continuing the same ingredient; treating that
- * switch as a new medicine produces a false 新增 badge. Keep the stricter
- * product identity for rendered-row grouping. Prefer the governed ingredient
- * name here, with ATC5 as a fallback when the terminology lacks one.
- */
-function medicationChangeIdentityKey(medication: any): string {
-  const sourceIngredient = medication?.drugTerminology?.ingredientText
-  const ingredient = typeof sourceIngredient === 'string'
-    ? sourceIngredient
-      .normalize('NFKC')
-      .trim()
-      .toLocaleLowerCase('en')
-      .replace(/\s*([+/,])\s*/g, '$1')
-      .replace(/\s+/g, ' ')
-    : ''
-  if (ingredient) return `ingredient|${ingredient}`
-
-  const concept = medication?.medicationCodeableConcept
-    || medication?.code
-    || medication?.resource?.code
-  const atc = Array.isArray(concept?.coding)
-    ? concept.coding.find((coding: any) => (
-      typeof coding?.code === 'string'
-      && /(?:whocc\.no\/atc|atc)/i.test(coding?.system ?? '')
-      && /^[A-Z]\d{2}[A-Z]{2}\d{2}$/i.test(coding.code.trim())
-    ))?.code.trim().toUpperCase()
-    : undefined
-  return atc ? `atc5|${atc}` : medicationClinicalIdentityKey(medication)
-}
-
-/**
- * How long a finished prescription stays on the overview's medication list.
- *
- * The card answers "what is this patient on?", and over a three-month window
- * that question was drowned by every short course an admission or an ER visit
- * dispensed. So the default list is what is still running, plus what ran out
- * recently — because "ran out and has not come back" is itself worth seeing.
- *
- * 14 days rather than 7: a 28-day chronic supply that lapsed ten days ago is
- * exactly the case a summary should surface, while an antibiotic course from a
- * stay three weeks ago is not. 異動 is unaffected — a therapy stopped earlier
- * in the window still shows there, because that is the question that filter
- * asks.
- */
-const MEDICATION_RECENTLY_FINISHED_DAYS = 14
-
-function daysBetween(fromDay: string, toDay: string): number {
-  const from = Date.parse(`${fromDay}T00:00:00Z`)
-  const to = Date.parse(`${toDay}T00:00:00Z`)
-  if (!Number.isFinite(from) || !Number.isFinite(to)) return Number.POSITIVE_INFINITY
-  return Math.round((to - from) / 86400000)
-}
-
-/**
- * The supply span a prescription covers, as raw source days.
- *
- * Shared by the display filter and the change-detection fact list so the two
- * can never disagree about when a prescription ran — a disagreement there
- * would show a drug in the list while classifying it out of the window, or
- * the reverse.
- */
-function medicationWindowDays(
-  medication: any,
-  knownStatus?: string,
-): { startDay?: string; endDay?: string } {
-  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
-  const status = knownStatus ?? (typeof medication?.status === 'string'
-    ? medication.status.toLowerCase()
-    : '')
-  const start = medication?.authoredOn
-    ?? medication?.effectiveDateTime
-    ?? medication?.dispenseRequest?.validityPeriod?.start
-  let end = medication?.dispenseRequest?.validityPeriod?.end
-    ?? dosage?.timing?.repeat?.boundsPeriod?.end
-  if (!end && start && (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration)) {
-    const days = computeDurationDays({
-      expectedDuration: medication?.dispenseRequest?.expectedSupplyDuration,
-      boundsDuration: dosage?.timing?.repeat?.boundsDuration,
-    })
-    const date = new Date(start)
-    if (days && !Number.isNaN(date.getTime())) {
-      // Match the medication tab's source-duration coverage calculation.
-      date.setDate(date.getDate() + days)
-      end = date.toISOString()
-    }
-  }
-  return {
-    startDay: toDayKey(start),
-    endDay: toDayKey(end ?? (MEDICATION_INACTIVE_STATUSES.has(status)
-      ? medication?.effectiveDateTime ?? medication?.authoredOn
-      : undefined)),
-  }
-}
 
 /**
  * What 影像／檢查報告 shows: exactly the 影像 and 病理 sub-tabs of 報告 — the
@@ -348,7 +229,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   )
   const windowedReports = useMemo(
     () => (Array.isArray(diagnosticReports) ? diagnosticReports : []).filter(
-      (report: any) => isWithinOverviewWindow(report?.effectiveDateTime ?? report?.issued, window),
+      (report: any) => isWithinOverviewWindow(getReportDate(report), window),
     ),
     [diagnosticReports, window],
   )
@@ -422,16 +303,24 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       const pivot = pivots[category.id]
       if (!pivot) continue
       for (const row of pivot.rows) {
-        const cells = shownDays.map((day) => row.values.get(day))
+        // A day whose every record is entered-in-error / cancelled has no
+        // result to show, and a cell is abnormal only through a VALID record —
+        // judged per record, never from the same-day merge (primaryCellRecord).
+        const cells = shownDays.map((day) => {
+          const cell = row.values.get(day)
+          return cell && primaryCellRecord(cell) ? cell : undefined
+        })
         // Pinned stub rows (injected so a standard panel always shows its
         // columns) carry no values — the overview only lists analytes the
         // patient actually has inside the window.
         if (!cells.some(Boolean)) continue
-        const hasAbnormal = cells.some((cell) => !!cell?.isAbnormal)
+        const cellAbnormal = (cell: LabCell | undefined) =>
+          !!cell && !!primaryCellRecord(cell)?.valid.some((record) => record.isAbnormal)
+        const hasAbnormal = cells.some(cellAbnormal)
         for (const cell of cells) {
           if (!cell) continue
           resultCount += 1
-          if (cell.isAbnormal) abnormalCount += 1
+          if (cellAbnormal(cell)) abnormalCount += 1
         }
         const isPinned = isOverviewPinnedAnalyte(category.id, row.testKey)
         if (isPinned) pinnedRowCount += 1
@@ -468,11 +357,12 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       abnormalCount,
       unpivotedCount,
       navResourceId,
+      allObservations: Array.isArray(observations) ? observations : [],
     }
-  }, [audience, categoryLabels, displayLang, locale, pivots, windowedObservations])
+  }, [audience, categoryLabels, displayLang, locale, observations, pivots, windowedObservations])
 
   // ── 影像／檢查報告 ───────────────────────────────────────────────────────
-  const { reportRows } = useReportsData(windowedReports, windowedStudies)
+  const { reportRows } = useReportsData(windowedReports, windowedStudies, 'standardized', diagnosticReports)
 
   const reports = useMemo<OverviewReportsData>(() => {
     const items: OverviewReportItem[] = []
@@ -499,13 +389,16 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       const viewerActions = members.length
         ? members.flatMap((member) => member.viewerActions ?? [])
         : (row.viewerActions ?? [])
+      const previewSource = narrative || memberReports[0]?.text || ''
+      const preview = extractReportPreview(previewSource)
       items.push({
         id: `${navResourceType}:${row.id}`,
         title: row.title,
         group: row.group,
         institution: row.institution,
         day: reportRowDay(row),
-        summary: firstLine(narrative || memberReports[0]?.text || ''),
+        summary: preview?.text ?? firstLine(previewSource),
+        summaryLabel: preview?.label,
         fullText: narrative,
         reports: memberReports.length ? memberReports : undefined,
         hasImages: !!row.images?.length || viewerActions.length > 0
@@ -542,167 +435,16 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   }, [reportRows])
 
   // ── 用藥 ────────────────────────────────────────────────────────────────
-  // Every record gets an explicit id FIRST. `useMedicationRows` falls back to
-  // the array position for an id-less record, so the fact list below could
-  // only match rows back to raw prescriptions while both walked the identical
-  // array. Pinning ids here breaks that coupling, which is what lets the row
-  // model be built from a subset without silently repointing every id.
-  const identifiedMedications = useMemo(
-    () => (Array.isArray(medications) ? medications : []).map(
-      (medication: any, index: number) => (
-        medication?.id ? medication : { ...medication, id: `med-${index}` }
-      ),
-    ),
-    [medications],
-  )
-
-  // Rows are a DISPLAY model — NHI drug-master lookup, dose formatting, i18n —
-  // and on a decade-long chart the overview was paying for all of it on every
-  // refill ever dispensed (measured: ~50-450ms for 440 prescriptions) to show
-  // about twenty. Only prescriptions that touch the window can appear, so only
-  // those become rows. An undated record is kept: it cannot be ruled out.
-  const displayMedications = useMemo(
-    () => identifiedMedications.filter((medication: any) => {
-      const { startDay, endDay } = medicationWindowDays(medication)
-      if (!startDay && !endDay) return true
-      return overlapsOverviewWindow(startDay, endDay, window)
-    }),
-    [identifiedMedications, window],
-  )
-
-  const medicationRows = useMedicationRows(displayMedications, audience, locale)
-  const { activeMedications, inactiveMedicationGroups } = useGroupedMedications(medicationRows)
-
-  // Change detection reads the RAW prescriptions (every refill, including those
-  // before the window) so "first ever record" and "dose before the window" are
-  // real answers rather than window artefacts.
-  const { medicationFacts, medicationDaysByRowId, medicationChangeKeyByRowId } = useMemo(() => {
-    const inactiveStatuses = MEDICATION_INACTIVE_STATUSES
-    const activeById = new Map<string, MedicationRow>()
-    for (const row of medicationRows) activeById.set(row.id, row)
-    const days = new Map<string, { startDay?: string; endDay?: string }>()
-    const changeKeys = new Map<string, string>()
-    const facts = identifiedMedications.map((medication: any) => {
-      // Ids are pinned above, so this round-trips whether or not the record
-      // became a row. Dates stay raw ISO (never the locale-formatted display
-      // strings) as the basis for every comparison.
-      const rowId = medication.id
-      const row = activeById.get(rowId)
-      const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
-      const dose = humanDoseAmount(dosage?.doseAndRate, dosage?.text)
-      const frequency = displayDosageInstruction(dosage)
-      const signature = [dose, frequency]
-        .map((part) => (typeof part === 'string' ? part.trim() : ''))
-        .filter((part) => part && part !== '—')
-        .join(' · ')
-      const status = typeof medication?.status === 'string'
-        ? medication.status.toLowerCase()
-        : ''
-      const { startDay, endDay } = medicationWindowDays(medication, status)
-      days.set(rowId, { startDay, endDay })
-      const changeKey = medicationChangeIdentityKey(medication)
-      changeKeys.set(rowId, changeKey)
-      return {
-        key: changeKey
-          || (typeof medication?.medicationCodeableConcept?.text === 'string'
-            ? medication.medicationCodeableConcept.text
-            : rowId),
-        startDay,
-        endDay,
-        // Prefer the row model's verdict — it already folds in an elapsed
-        // supply window — and fall back to the raw status when a raw record
-        // has no matching row (defensive; ids come from the same array).
-        isActive: row ? !row.isInactive : !inactiveStatuses.has(status) && (!endDay || endDay >= window.endDay),
-        dose: dose || undefined,
-        frequency: frequency || undefined,
-        doseSignature: signature || undefined,
-      } satisfies OverviewMedFact
-    })
-    return {
-      medicationFacts: facts,
-      medicationDaysByRowId: days,
-      medicationChangeKeyByRowId: changeKeys,
-    }
-  }, [identifiedMedications, medicationRows, window])
-
-  const medChanges = useMemo(
-    () => classifyMedicationChanges(medicationFacts, window),
-    [medicationFacts, window],
-  )
-
-  const meds = useMemo<OverviewMedsData>(() => {
-    // One row per therapy: the deduplicated active rows the 用藥 tab shows,
-    // plus the newest fill of each drug that is no longer running.
-    const candidates: MedicationRow[] = [...activeMedications]
-    for (const group of inactiveMedicationGroups) {
-      const newest = group.medications[0]
-      if (newest) candidates.push(newest)
-    }
-
-    const items: OverviewMedItem[] = []
-    for (const row of candidates) {
-      const key = row.drugKey || row.title
-      const change = medChanges.get(medicationChangeKeyByRowId.get(row.id) ?? key)
-      const { startDay, endDay } = medicationDaysByRowId.get(row.id) ?? {}
-      // A prescription belongs to this window when it was written inside it or
-      // when its supply period still overlaps it (an ongoing chronic script).
-      if (!overlapsOverviewWindow(startDay, endDay ?? startDay, window)) continue
-      // Still running, or finished inside the recent tail (see the constant).
-      // An undated record cannot be ruled out, so it counts as current.
-      const finishedDay = endDay ?? startDay
-      const isCurrent = !row.isInactive || !finishedDay
-        || daysBetween(finishedDay, window.endDay) <= MEDICATION_RECENTLY_FINISHED_DAYS
-      const doseText = [row.dose, row.frequency]
-        .filter((part) => part && part !== '—')
-        .join(' · ')
-      items.push({
-        id: row.id,
-        key,
-        title: row.title,
-        // 商品名, present only when it differs from the ingredient name. Two
-        // different products can share one ingredient name — "永豐"生理食鹽水
-        // and "濟生"氯化鈉 are both SODIUM CHLORIDE — so the rows are correct
-        // but indistinguishable without it.
-        secondaryTitle: row.secondaryTitle,
-        doseText,
-        category: row.category,
-        institution: row.pharmacy,
-        day: startDay,
-        isChronic: row.isChronic,
-        isInactive: row.isInactive,
-        isCurrent,
-        daysRemaining: row.displayRemainingDays ?? row.daysRemaining,
-        change,
-        row,
-      })
-    }
-
-    // Ongoing therapies precede finished/stopped therapies. Within each group,
-    // show changes first, then the most recent prescription.
-    items.sort((a, b) => {
-      if (a.isInactive !== b.isInactive) return a.isInactive ? 1 : -1
-      const aChanged = a.change ? 0 : 1
-      const bChanged = b.change ? 0 : 1
-      if (aChanged !== bChanged) return aChanged - bChanged
-      return (b.day ?? '').localeCompare(a.day ?? '')
-    })
-
-    return {
-      items,
-      // The header counts what the default list shows, so it can never promise
-      // more rows than the card is willing to render.
-      count: items.filter((item) => item.isCurrent).length,
-      changeCount: items.filter((item) => !!item.change).length,
-    }
-  }, [activeMedications, inactiveMedicationGroups, medChanges, medicationDaysByRowId, medicationChangeKeyByRowId, window])
+  // Self-contained, so it lives in its own hook (useOverviewMeds).
+  const { meds, medicationRows } = useOverviewMeds(medications, window, audience, locale)
 
   // ── 就診 ────────────────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
-    clinicalNotes, conditions, locale, audience, medicationRows,
+    clinicalNotes, conditions, locale, audience, medicationRows, icdDict, encounters,
   )
-  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
   const visitHistory = useVisitHistory(encounters, icdDict)
   const visitStats = useVisitStats(encounterDetails)
   const docStrings = useDocumentSummaryStrings()
@@ -710,14 +452,15 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   const docsByEncounter = useMemo(() => {
     const map = new Map<string, DocumentEntry[]>()
     for (const entry of documentEntries) {
-      const encounterId = entry.encounterRef?.split('/').pop()
+      const sourceId = entry.encounterRef?.split('/').pop()
+      const encounterId = visitHistory.find((visit) => visit.id === sourceId || visit.sourceIds?.includes(sourceId ?? ''))?.id ?? sourceId
       if (!encounterId) continue
       const bucket = map.get(encounterId) ?? []
       bucket.push(entry)
       map.set(encounterId, bucket)
     }
     return map
-  }, [documentEntries])
+  }, [documentEntries, visitHistory])
 
   const visits = useMemo<OverviewVisitsData>(() => {
     const items: OverviewVisitItem[] = []
@@ -757,7 +500,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       if (day && (!latest || day > latest)) latest = day
     }
     for (const observation of observations as any[]) consider(observation?.effectiveDateTime)
-    for (const report of diagnosticReports as any[]) consider(report?.effectiveDateTime ?? report?.issued)
+    for (const report of diagnosticReports as any[]) consider(getReportDate(report))
     for (const medication of medications as any[]) consider(medication?.authoredOn ?? medication?.effectiveDateTime)
     for (const encounter of encounters as any[]) consider(encounter?.period?.start)
     return latest

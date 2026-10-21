@@ -12,8 +12,8 @@
 // which is safe to commit and ship.
 //
 // Anonymisation contract (see also memory: feedback_* privacy rules):
-//   - Patient masked name 孫○貴  → 陳○明 (keeps the NHI middle-char mask)
-//   - national id / 病歷號碼      → fixed fake, valid-format
+//   - Patient name                → fixed fictitious name 陳大明
+//   - national id / 病歷號碼      → masked fake national ID / fixed fake MRN
 //   - physician names 謝○諭       → fake masked names from a fixed pool
 //   - institutions 長庚嘉義 …      → 示範-prefixed realistic fakes (type preserved)
 //   - all resource ids            → regenerated demo-* (drops any hash-of-PII)
@@ -59,10 +59,10 @@ const TARGET = {
 // ---- fixed fake replacements ----------------------------------------------
 const FAKE = {
   patientFamily: '陳',
-  patientGivenLast: '明', // → 陳{mask}明
+  patientGiven: '大明',
   patientFamilyLatin: 'Chen',
-  patientGivenLatin: '○-Ming',
-  nationalId: 'A123456789',
+  patientGivenLatin: 'Da-Ming',
+  nationalId: 'A123XXX789',
   mrn: 'M00000001',
   birthDay: '15',
 }
@@ -402,9 +402,9 @@ for (const doc of byType('DocumentReference')) {
 // ===========================================================================
 const repl = new Map() // exact source string -> fake
 
-// Patient name is always rendered masked (姓○名) — never reuse the source's
-// middle char, so a full unmasked name (if one ever appears) can't leak it.
-const fakePatientName = () => FAKE.patientFamily + '○' + FAKE.patientGivenLast
+// Replace the entire source name with a fixed fictitious name. No source
+// given-name character is reused; CDSS masks the fictitious name on transport.
+const fakePatientName = () => FAKE.patientFamily + FAKE.patientGiven
 for (const tok of patientNameTokens) {
   if (tok === patient.name?.[0]?.family) repl.set(tok, FAKE.patientFamily)
   else if ((patient.name?.[0]?.given || []).includes(tok)) repl.set(tok, fakePatientName().slice(1))
@@ -515,7 +515,7 @@ for (const r of out) {
   walk(r)
   // hard-set patient demographics (don't rely on token replace alone)
   if (r.resourceType === 'Patient') {
-    r.name = [{ use: 'official', text: FAKE.patientFamily + '○' + FAKE.patientGivenLast, family: FAKE.patientFamilyLatin, given: [FAKE.patientGivenLatin] }]
+    r.name = [{ use: 'official', text: FAKE.patientFamily + FAKE.patientGiven, family: FAKE.patientFamilyLatin, given: [FAKE.patientGivenLatin] }]
     ;(r.identifier || []).forEach((i) => { if (i.value) i.value = FAKE.nationalId })
   }
   // discharge HTML: token-scrub the decoded body, re-encode
@@ -609,7 +609,7 @@ if (LATEST_ONLY) {
     if (resource.resourceType !== 'Patient') continue
     resource.name = [{
       use: 'official',
-      text: FAKE.patientFamily + '○' + FAKE.patientGivenLast,
+      text: FAKE.patientFamily + FAKE.patientGiven,
       family: FAKE.patientFamilyLatin,
       given: [FAKE.patientGivenLatin],
     }]
@@ -771,7 +771,7 @@ if (surname && decodedView.includes(surname)) {
   die(`LEAK GATE FAILED — patient surname "${surname}" still present in output`)
 }
 // the demo patient name/id MUST be present (proves replacement ran)
-if (!decodedView.includes(FAKE.patientFamily + '○' + FAKE.patientGivenLast)) {
+if (!decodedView.includes(FAKE.patientFamily + FAKE.patientGiven)) {
   die('sanity check failed — fake patient name not found in output')
 }
 

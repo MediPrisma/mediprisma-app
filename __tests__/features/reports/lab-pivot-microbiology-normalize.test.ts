@@ -368,9 +368,9 @@ describe('buildLabPivots — microbiology name normalization', () => {
     const pivots = buildLabPivots(observations)
 
     expect(pivots.microbio.rows.filter((row) => row.values.size > 0)).toEqual([])
-    expect(pivots.other.rows.map((row) => row.displayName)).toEqual([
-      'Alternaria tenuis 交錯黴菌',
-      'Penicillium 青黴菌',
-    ])
+    // Specific-allergen IgE (30022C) is kept out of the cumulative report
+    // altogether (owner decision 2026-10-08): no panel holds it.
+    const shown = Object.values(pivots).flatMap((pivot) => pivot.rows.filter((row) => row.values.size > 0))
+    expect(shown).toEqual([])
   })
 })

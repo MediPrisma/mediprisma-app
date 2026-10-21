@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures/test'
+import { quietGuidedTours } from '../fixtures/guided-tour'
 import { openFeaturePanel } from '../fixtures/import'
 import type { Page } from '@playwright/test'
 
@@ -13,6 +14,7 @@ async function setStoredLocale(page: Page, locale?: 'en' | 'zh-TW') {
     localStorage.setItem('medical-note-onboarding-v1', '1')
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   }, locale)
+  await quietGuidedTours(page)
 }
 
 async function expectVisiblePageHasNoHanText(page: Page) {
@@ -63,7 +65,7 @@ test('English demo keeps UI and de-identified demo labels in English', async ({ 
 
   await expect(page.getByRole('button', { name: /Exit demo/ })).toBeVisible({ timeout: 90_000 })
   await openFeaturePanel(page)
-  await expect(page.getByText('○-Ming Chen', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Da-Ming Chen', { exact: true }).first()).toBeVisible()
 
   for (const tab of ['Patient Info', 'Visit History', 'Reports', 'Medications', 'Documents']) {
     const tabButton = page.getByRole('tab', { name: tab, exact: true })

@@ -1,0 +1,486 @@
+{
+ "resourceType": "Bundle",
+ "id": "sim-p3-new-af",
+ "type": "collection",
+ "timestamp": "2026-09-27T09:00:00+08:00",
+ "entry": [
+  {
+   "fullUrl": "urn:uuid:Patient-sim-p3",
+   "resource": {
+    "resourceType": "Patient",
+    "id": "sim-p3",
+    "name": [
+     {
+      "text": "模擬病人 P3"
+     }
+    ],
+    "gender": "female",
+    "birthDate": "1948-01-15"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-I48.0",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-I48.0",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "I48.0"
+      }
+     ]
+    },
+    "onsetDateTime": "2026-09-20",
+    "recordedDate": "2026-09-20"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-I10",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-I10",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "I10"
+      }
+     ]
+    },
+    "onsetDateTime": "2012-01-01",
+    "recordedDate": "2012-01-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-E11.9",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-E11.9",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "E11.9"
+      }
+     ]
+    },
+    "onsetDateTime": "2016-01-01",
+    "recordedDate": "2016-01-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:DiagnosticReport-p3-ecg",
+   "resource": {
+    "resourceType": "DiagnosticReport",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-ecg",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "text": "ECG"
+    },
+    "conclusion": "Atrial fibrillation with ventricular rate 88 bpm."
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:DiagnosticReport-p3-echo",
+   "resource": {
+    "resourceType": "DiagnosticReport",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-echo",
+    "status": "final",
+    "effectiveDateTime": "2026-09-24",
+    "code": {
+     "text": "Echocardiography"
+    },
+    "conclusion": "LVEF 58%. LA 4.4 cm. No significant mitral stenosis. No prosthetic valve."
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-ef",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-ef",
+    "status": "final",
+    "effectiveDateTime": "2026-09-24",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "10230-1"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 58,
+     "unit": "%"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-bp",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-bp",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "85354-9"
+      }
+     ]
+    },
+    "component": [
+     {
+      "code": {
+       "coding": [
+        {
+         "system": "http://loinc.org",
+         "code": "8480-6"
+        }
+       ]
+      },
+      "valueQuantity": {
+       "value": 138,
+       "unit": "mmHg"
+      }
+     },
+     {
+      "code": {
+       "coding": [
+        {
+         "system": "http://loinc.org",
+         "code": "8462-4"
+        }
+       ]
+      },
+      "valueQuantity": {
+       "value": 84,
+       "unit": "mmHg"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-hr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-hr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "8867-4"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 88,
+     "unit": "bpm"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-wt",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-wt",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "29463-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 68,
+     "unit": "kg"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-cr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-cr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-24",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "2160-0"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 1.2,
+     "unit": "mg/dL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-egfr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-egfr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-24",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "77147-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 46,
+     "unit": "mL/min/1.73m2"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-hb",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-hb",
+    "status": "final",
+    "effectiveDateTime": "2026-09-24",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "718-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 12.5,
+     "unit": "g/dL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-plt",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-plt",
+    "status": "final",
+    "effectiveDateTime": "2026-09-24",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "777-3"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 180,
+     "unit": "10*3/uL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p3-tsh",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "id": "p3-tsh",
+    "status": "final",
+    "effectiveDateTime": "2026-09-24",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "3016-3"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 1.8,
+     "unit": "mIU/L"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-amlodipine-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "amlodipine-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "amlodipine"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 5,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 1,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-metformin-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "metformin-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p3"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "metformin"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 500,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 2,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  }
+ ]
+}

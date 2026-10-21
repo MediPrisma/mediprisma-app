@@ -27,6 +27,7 @@ import {
   templateRequestsIcd9,
 } from '@/src/core/utils/icd-code-reference.utils'
 import { loadIcdCrosswalk } from '@/src/infrastructure/terminology/icd-crosswalk.loader'
+import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 
 interface Panel {
   id: string
@@ -50,7 +51,7 @@ interface UseInsightGenerationProps {
 
 interface UseInsightGenerationReturn {
   runPanel: (panelId: string, options?: { force?: boolean }) => Promise<void>
-  runPanels: (panelIds: string[], options?: { force?: boolean }) => Promise<void>
+  runPanels: (panelIds: string[], options?: { force?: boolean; automatic?: boolean }) => Promise<void>
   stopPanel: (panelId: string) => void
   stopAll: () => void
   responses: Record<string, ResponseEntry>
@@ -84,7 +85,8 @@ export function useInsightGeneration({
   const runIdRef = useRef(0)
 
   const runPanels = useCallback(
-    async (panelIds: string[], options?: { force?: boolean }) => {
+    async (panelIds: string[], options?: { force?: boolean; automatic?: boolean }) => {
+      if (options?.automatic && isProgressiveAutoSummaryBlocked()) return
       const force = options?.force ?? false
       const uniquePanelIds = [...new Set(panelIds)]
       const selected = uniquePanelIds.flatMap((panelId) => {
@@ -155,122 +157,134 @@ export function useInsightGeneration({
         ),
       }))
 
-      // Local models given an ICD-9 template (HMC SOAP) but only ICD-10 billing
-      // codes enumerate ICD-9 codes from memory until truncation. Translate
-      // the billed codes instead; see icd-code-reference.utils.ts.
-      let icdCodeReference = ''
-      if (
-        isCustomOpenAiModelId(model) &&
-        selected.some(({ input }) => templateRequestsIcd9(input.prompt)) &&
-        extractBilledIcd10Codes(context).size > 0
-      ) {
-        try {
-          icdCodeReference = buildIcdCodeReference(context, await loadIcdCrosswalk())
-        } catch (error) {
-          console.warn('ICD code reference unavailable; generating without it.', error)
-        }
-        // The first use downloads the crosswalk. This run may have been
-        // stopped, superseded or left behind by a patient switch meanwhile.
-        if (isStale()) return
-      }
-      const prepared = selected.map(({ panel, input }) => ({
-        panel,
-        messages: generateInsight.buildMessages(
-          icdCodeReference && templateRequestsIcd9(input.prompt) ? { ...input, icdCodeReference } : input,
-        ),
-      }))
-
       const entries: Record<string, ResponseEntry> = {}
       const errors: Record<string, Error> = {}
 
-      // Keep calls sequential to avoid a burst of simultaneous model requests,
-      // but stage every completed result locally. completeBatch publishes the
-      // whole set through one store update only after the final call settles.
-      for (const { panel, messages } of prepared) {
-        if (isStale()) return
-        const startedAt = Date.now()
-        const activeGenerationId = `${runId}:${panel.id}`
-        setPanelStatus((prev) => ({
-          ...prev,
-          [panel.id]: {
-            isLoading: true,
-            error: null,
-            activeGeneration: {
-              id: activeGenerationId,
-              modelName,
-              startedAt,
-              isLocalModel: isCustomOpenAiModelId(model),
-            },
-          },
-        }))
-        try {
-          const overflow = preflightContextWarning(
-            messages.map((message) => message.content).join('\n\n'),
-            model,
-            locale,
-            { selectedContext: context, contextLimit },
-          )
-          if (overflow) throw new Error(overflow)
-          let modelExecution = createModelExecution(model, model, modelName)
-          let outputTruncated = false
-          const fullText = await ai.query(messages, {
-            onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
-            onOutputTruncated: (truncated) => { outputTruncated = truncated },
-            modelId: model,
-            // Apply the documented local-summary output guard. The 262K
-            // context window is input capacity, not a safe output budget;
-            // frontier-provider defaults remain unchanged.
-            ...(isCustomOpenAiModelId(model)
-              ? {
-                temperature: 0,
-                maxTokens: LOCAL_INSIGHT_MAX_OUTPUT_TOKENS,
-                allowTruncatedOutput: true,
-                reasoningEffort: 'low' as const,
-              }
-              : {}),
-            operationKey: `clinical-insight:${owner}:${panel.id}`,
-            diagnosticFeature: 'clinical-insights',
-          })
-          if (isStale()) return
-          const generatedAt = Date.now()
-          entries[panel.id] = {
-            text: fullText,
-            isEdited: false,
-            metadata: {
-              source: 'live',
-              ...generateInsight.buildMetadata(model),
-              modelName: modelExecutionLabel(modelExecution),
-              modelExecution,
-              ...(outputTruncated ? { outputTruncated: true } : {}),
-              generatedAt,
-              durationMs: Math.max(0, generatedAt - startedAt),
-              outputFormat: panel.outputFormat,
-              languagePolicy: panel.languagePolicy,
-            },
+      // An automatic run stops once progressive import blocks automatic
+      // summaries again — from here on, so the crosswalk download below is
+      // covered too.
+      const unsubscribe = options?.automatic ? useProgressiveImportStore.subscribe(() => {
+        if (!isProgressiveAutoSummaryBlocked() || runIdRef.current !== runId) return
+        runIdRef.current += 1
+        ai.stop()
+        setPanelStatus(prev => ({ ...prev, ...Object.fromEntries(activePanelIds.map(id => [id, { isLoading: false, error: null }])) }))
+      }) : undefined
+      try {
+        // Local models given an ICD-9 template (HMC SOAP) but only ICD-10 billing
+        // codes enumerate ICD-9 codes from memory until truncation. Translate
+        // the billed codes instead; see icd-code-reference.utils.ts.
+        let icdCodeReference = ''
+        if (
+          isCustomOpenAiModelId(model) &&
+          selected.some(({ input }) => templateRequestsIcd9(input.prompt)) &&
+          extractBilledIcd10Codes(context).size > 0
+        ) {
+          try {
+            icdCodeReference = buildIcdCodeReference(context, await loadIcdCrosswalk())
+          } catch (error) {
+            console.warn('ICD code reference unavailable; generating without it.', error)
           }
-        } catch (error) {
+          // The first use downloads the crosswalk. This run may have been
+          // stopped, superseded or left behind by a patient switch meanwhile.
           if (isStale()) return
-          const errorMessage = getUserErrorMessage(error)
-          console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
-          // No text is available for this failure; keep its original type for
-          // the localized error message instead of publishing an empty result.
-          errors[panel.id] = error instanceof Error ? error : new Error(errorMessage)
-        } finally {
-          if (!isStale()) {
-            setPanelStatus((prev) => {
-              const status = prev[panel.id]
-              if (status?.activeGeneration?.id !== activeGenerationId) return prev
-              return {
-                ...prev,
-                [panel.id]: { isLoading: true, error: null },
-              }
+        }
+        const prepared = selected.map(({ panel, input }) => ({
+          panel,
+          messages: generateInsight.buildMessages(
+            icdCodeReference && templateRequestsIcd9(input.prompt) ? { ...input, icdCodeReference } : input,
+          ),
+        }))
+
+        // Keep calls sequential to avoid a burst of simultaneous model requests,
+        // but stage every completed result locally. completeBatch publishes the
+        // whole set through one store update only after the final call settles.
+        for (const { panel, messages } of prepared) {
+          if (isStale()) return
+          const startedAt = Date.now()
+          const activeGenerationId = `${runId}:${panel.id}`
+          setPanelStatus((prev) => ({
+            ...prev,
+            [panel.id]: {
+              isLoading: true,
+              error: null,
+              activeGeneration: {
+                id: activeGenerationId,
+                modelName,
+                startedAt,
+                isLocalModel: isCustomOpenAiModelId(model),
+              },
+            },
+          }))
+          try {
+            const overflow = preflightContextWarning(
+              messages.map((message) => message.content).join('\n\n'),
+              model,
+              locale,
+              { selectedContext: context, contextLimit },
+            )
+            if (overflow) throw new Error(overflow)
+            let modelExecution = createModelExecution(model, model, modelName)
+            let outputTruncated = false
+            const fullText = await ai.query(messages, {
+              onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
+              onOutputTruncated: (truncated) => { outputTruncated = truncated },
+              modelId: model,
+              // Apply the documented local-summary output guard. The 262K
+              // context window is input capacity, not a safe output budget;
+              // frontier-provider defaults remain unchanged.
+              ...(isCustomOpenAiModelId(model)
+                ? {
+                  temperature: 0,
+                  maxTokens: LOCAL_INSIGHT_MAX_OUTPUT_TOKENS,
+                  allowTruncatedOutput: true,
+                  reasoningEffort: 'low' as const,
+                }
+                : {}),
+              operationKey: `clinical-insight:${owner}:${panel.id}`,
+              diagnosticFeature: 'clinical-insights',
+              collectorContext: { template: { id: panel.id, title: panel.title } },
             })
+            if (isStale()) return
+            const generatedAt = Date.now()
+            entries[panel.id] = {
+              text: fullText,
+              isEdited: false,
+              metadata: {
+                source: 'live',
+                ...generateInsight.buildMetadata(model),
+                modelName: modelExecutionLabel(modelExecution),
+                modelExecution,
+                ...(outputTruncated ? { outputTruncated: true } : {}),
+                generatedAt,
+                durationMs: Math.max(0, generatedAt - startedAt),
+                outputFormat: panel.outputFormat,
+                languagePolicy: panel.languagePolicy,
+              },
+            }
+          } catch (error) {
+            if (isStale()) return
+            const errorMessage = getUserErrorMessage(error)
+            console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
+            // No text is available for this failure; keep its original type for
+            // the localized error message instead of publishing an empty result.
+            errors[panel.id] = error instanceof Error ? error : new Error(errorMessage)
+          } finally {
+            if (!isStale()) {
+              setPanelStatus((prev) => {
+                const status = prev[panel.id]
+                if (status?.activeGeneration?.id !== activeGenerationId) return prev
+                return {
+                  ...prev,
+                  [panel.id]: { isLoading: true, error: null },
+                }
+              })
+            }
           }
         }
-      }
 
-      if (isStale()) return
-      completeBatch(activePanelIds, entries, errors)
+        if (isStale()) return
+        completeBatch(activePanelIds, entries, errors)
+      } finally { unsubscribe?.() }
     },
     [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, modelName, panels, piiLiterals, prompts, setPanelStatus],
   )

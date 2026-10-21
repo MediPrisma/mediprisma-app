@@ -97,6 +97,43 @@ const NHI_IMAGING_OR_PATHOLOGY_ORDER_CODES = new Set([
   '30103B', // Pathology
   '30105B', // Pathology
 ])
+// NHI report category-2 (imaging/check) orders from the NHI upload
+// specification effective 2026-01-01, kept identical to the medcloud2 bridge's
+// NHI_NON_PATHOLOGY_REPORT_ORDER_CODES. Only these exact codes may override an
+// explicit Pathology category: the wider 32xxx/33xxx range also holds
+// image-guided biopsies (e.g. 33103B CT-guided biopsy) whose report can be
+// pathology. 19007C (ultrasound-guided biopsy) is excluded for the same reason.
+type NhiImagingModality = 'XR' | 'CT' | 'MR' | 'US'
+const NHI_IMAGING_MODALITY_CODES: Record<NhiImagingModality, readonly string[]> = {
+  XR: ['32001C', '32002C', '32006C', '32007C', '32008C', '32009C', '32010C',
+    '32011C', '32012C', '32013C', '32014C', '32015C', '32016C', '32017C',
+    '32018C', '32022C', '32023C', '33005B', '33012B'],
+  CT: ['33070B', '33071B', '33072B'],
+  MR: ['33084B', '33085B'],
+  US: ['18008C', '18010C', '18041B', '20013C', '20026B',
+    '18005C', '18006C', '18007C', '18033B', '19010C',
+    '19001C', '19002B', '19003C', '19005C', '19009C', '19012C', '19014C',
+    '19015C', '19016C', '19017C', '19018C', '21008C', '23504C'],
+}
+
+/** Exact reviewed report-order codes only; never infer from a numeric range. */
+export function getNhiReportModality(code: unknown): NhiImagingModality | undefined {
+  if (typeof code !== 'string') return undefined
+  const normalized = code.trim().toUpperCase()
+  return (Object.keys(NHI_IMAGING_MODALITY_CODES) as NhiImagingModality[])
+    .find(modality => NHI_IMAGING_MODALITY_CODES[modality].includes(normalized))
+}
+
+const NHI_NON_PATHOLOGY_REPORT_ORDER_CODES = new Set([
+  ...Object.values(NHI_IMAGING_MODALITY_CODES).flat(),
+  '33074B', '33075B', // Vascular interventions
+  '28002C', '28016C', '28017C', '28023C', // Endoscopy
+  '17008B', '20001C', '20019B', '20023B', // Electroneurodiagnostic
+  '18001C', '18015B', '18019C', // Electrocardiac
+  '18020B', '18022B', '33076B', '33077B', // Cardiac catheterization
+  '26025B', '26029B', '26072B', // Nuclear medicine
+  '17003C', '17004C', '17006C', '17019C', // Pulmonary function
+])
 const NHI_PATHOLOGY_ORDER_CODES = new Set([
   '15001C', // Cytopathology
   '15017C', // Cytopathology
@@ -156,6 +193,18 @@ const IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS = [
   /乳房攝影|核子醫學|正子造影/,
   /病理|組織切片|細胞學/,
 ]
+
+/**
+ * True when the report's order is an NHI category-2 (imaging/check) report
+ * code. Such a report is never a pathology report, whatever its category or
+ * narrative says.
+ */
+export function hasNhiNonPathologyReportOrderCode(report?: Pick<DiagnosticReportLike, 'code'> | null): boolean {
+  return (report?.code?.coding ?? []).some((coding) => {
+    const code = typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : undefined
+    return !!code && NHI_NON_PATHOLOGY_REPORT_ORDER_CODES.has(code)
+  })
+}
 
 function collectCategoryTokens(input?: CodeableConcept | CodeableConcept[]): Set<string> {
   const concepts = Array.isArray(input) ? input : input ? [input] : []
@@ -334,7 +383,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
 
   const codings = report.code?.coding ?? []
   const orderCodes = codings
-    .map((coding) => coding.code?.trim().toUpperCase())
+    .map((coding) => typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : undefined)
     .filter((code): code is string => !!code)
   if (orderCodes.some((code) =>
     NHI_IMAGING_ORDER_CODE.test(code) || NHI_IMAGING_OR_PATHOLOGY_ORDER_CODES.has(code),
@@ -344,7 +393,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
 
   const orderTitle = [
     report.code?.text,
-    ...codings.map((coding) => coding.display),
+    ...codings.map((coding) => coding?.display),
   ].filter((value): value is string => !!value).join(' ')
   if (IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
     return 'imaging'
@@ -367,12 +416,18 @@ export function inferReportDisplayGroup(
 
   const categoryGroup = inferGroupFromCategory(report.category)
   if (categoryGroup !== 'other' && categoryGroup !== 'imaging') return categoryGroup
+
+  // An NHI category-2 report order (X-ray/CT/MRI, ultrasound, endoscopy,
+  // cardiac…) names the exam itself. Older MediCloud bundles tagged
+  // such reports Pathology when the narrative quoted the patient's
+  // pathological diagnosis; the order code wins.
+  if (hasNhiNonPathologyReportOrderCode(report)) return 'imaging'
   if (isPathologyCategory(report.category)) return 'pathology'
   if (categoryGroup === 'imaging') return 'imaging'
 
   const codings = report.code?.coding ?? []
   const orderCodes = codings
-    .map((coding) => coding.code?.trim().toUpperCase())
+    .map((coding) => typeof coding?.code === 'string' ? coding.code.trim().toUpperCase() : undefined)
     .filter((code): code is string => !!code)
   if (orderCodes.some((code) => NHI_PATHOLOGY_ORDER_CODES.has(code))) {
     return 'pathology'
@@ -380,7 +435,7 @@ export function inferReportDisplayGroup(
 
   const orderTitle = [
     report.code?.text,
-    ...codings.map((coding) => coding.display),
+    ...codings.map((coding) => coding?.display),
   ].filter((value): value is string => !!value).join(' ')
   if (PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
     return 'pathology'

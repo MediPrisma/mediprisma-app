@@ -8,12 +8,25 @@
 // LabPivot model (buildLabPivots) and reuses the cell tones — no second pivot
 // builder, and no app-side abnormal determiner: `cell.isAbnormal` comes from
 // the source's own interpretation / reference range.
-import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
-import { FlaskConical } from 'lucide-react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
+import { ClipboardCopy, FlaskConical, Pencil, TrendingUp } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAudience } from '@/src/application/providers/audience.provider'
+import { useRightPanel } from '@/src/application/providers/right-panel.provider'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import type { OverviewLabMode } from '@/src/application/stores/outpatient-prefs.store'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
-import type { LabCell } from '@/src/shared/utils/lab-pivot.utils'
+import {
+  buildLabPivots,
+  primaryCellRecord,
+  recordDisplayValue,
+  type LabCell,
+  type LabCellRecord,
+  type LabRow,
+} from '@/src/shared/utils/lab-pivot.utils'
+import { useLabTrendOpener } from '@/features/clinical-summary/reports/hooks/useLabTrendOpener'
+import { preloadCumulativeLabTrendModule } from '@/features/clinical-summary/reports/components/cumulative-lab-trend-loader'
 import type { OverviewLabRow, OverviewLabsData } from '../hooks/useOverviewData'
 import type { OverviewSectionFit } from '../overview.types'
 import { OVERVIEW_SECTION_DOM_ID } from '../overview.types'
@@ -24,9 +37,13 @@ import {
   OverviewFullListDialog,
   OverviewTruncationNote,
 } from './OverviewSectionParts'
-import { overviewChipClass } from './overview-styles'
+import { OVERVIEW_EMPTY_CLASS, overviewChipClass } from './overview-styles'
+import { PinnedLabsEditorDialog } from './PinnedLabsEditorDialog'
+import { selectPinnedOverviewRows, systemDefaultPinnedLabIds } from '../utils/overview-selectors'
 
-type LabMode = 'abnormal' | 'pinned' | 'all'
+type LabMode = OverviewLabMode
+
+const NO_OBSERVATIONS: readonly any[] = []
 
 function shortDayLabel(day: string): string {
   return day.length >= 10 ? `${day.slice(5, 7)}/${day.slice(8, 10)}` : day
@@ -40,16 +57,44 @@ function shortDayLabel(day: string): string {
  * view, but in a ~57px overview column that string is the only thing that
  * truncates, and it truncates into a number nobody can read.
  *
- * The FIRST record is the one shown. For eGFR — where these pairs mostly come
- * from — the second value is the NHI's own automatic calculation alongside the
- * reporting lab's, not a revision of it, so "latest wins" would quietly prefer
- * the derived number over the reported one. The superscript is the total count
- * for that day, and the cell's tooltip still carries every value.
+ * The FIRST valid record is the one shown. For eGFR — where these pairs mostly
+ * come from — the second value is the NHI's own automatic calculation
+ * alongside the reporting lab's, not a revision of it, so "latest wins" would
+ * quietly prefer the derived number over the reported one.
+ *
+ * The shown value carries ITS OWN comparator and flag (primaryCellRecord): the
+ * cell's merged flag belongs to "some record that day", and gluing another
+ * record's ↑ to a normal number is a clinical error. Entered-in-error and
+ * cancelled records never show. When another valid record of the day is
+ * abnormal, the count marker says so in the abnormal colour, and the tooltip
+ * lists every value with its own unit and flag.
  */
-function summariseCellValue(cell: LabCell): { shown: string; total: number } {
-  const all = cell.allValues
-  if (!all || all.length < 2) return { shown: cell.value, total: 1 }
-  return { shown: all[0], total: all.length }
+function flagArrow(record: LabCellRecord): string {
+  if (!record.isAbnormal) return ''
+  if (record.interpretationCode?.startsWith('H')) return ' ↑'
+  if (record.interpretationCode?.startsWith('L')) return ' ↓'
+  return ''
+}
+
+function summariseCell(cell: LabCell): {
+  shown: string
+  record: LabCellRecord
+  total: number
+  otherAbnormal: boolean
+  everyValue: string
+} | null {
+  const primary = primaryCellRecord(cell)
+  if (!primary) return null
+  const { record, valid } = primary
+  return {
+    shown: recordDisplayValue(record),
+    record,
+    total: valid.length,
+    otherAbnormal: valid.some((other) => other !== record && other.isAbnormal),
+    everyValue: valid
+      .map((each) => `${recordDisplayValue(each)}${flagArrow(each)}${each.unit ? ` ${each.unit}` : ''}`)
+      .join(' / '),
+  }
 }
 
 // A cell narrow enough to clip its content is the one place the pivot hides
@@ -121,10 +166,54 @@ export function OverviewLabsSection({
   flash?: boolean
   headingRef?: Ref<HTMLDivElement>
 }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const strings = t.overview
-  const [mode, setMode] = useState<LabMode>('pinned')
+  const { audience } = useAudience()
+  const { revealTab } = useRightPanel()
+  const prefs = useOutpatientPrefs()
+  // The last mode chosen is remembered, so a clinician who reads 「自訂」
+  // opens every next patient on it.
+  const mode: LabMode = prefs.labMode ?? 'pinned'
+  const setMode = prefs.setLabMode
   const [listOpen, setListOpen] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const pinnedIds = useMemo(() => prefs.pinnedLabs ?? [], [prefs.pinnedLabs])
+  const systemDefaultIds = useMemo(() => systemDefaultPinnedLabIds(), [])
+
+  // The whole chart, pivoted once and only after first paint: it only adds
+  // the trend buttons, never the card's own values, so the card must not
+  // wait for it.
+  const allObservations = data.allObservations ?? NO_OBSERVATIONS
+  const deferredObservations = useDeferredValue(allObservations, NO_OBSERVATIONS)
+  const fullPivots = useMemo(
+    () => (deferredObservations.length ? buildLabPivots(deferredObservations as any[]) : null),
+    [deferredObservations],
+  )
+  const { openTrend, activeTrendSourceId, trendDialog } = useLabTrendOpener({ observations: allObservations as any[] })
+  // A row's trend is the cumulative report's trend for the same analyte: same
+  // series, same chartability rule (`trendChartable` from the pivot build).
+  const trendRows = useMemo(() => {
+    const byMapKey = new Map<string, LabRow>()
+    const byTestKey = new Map<string, LabRow>()
+    for (const pivot of Object.values(fullPivots ?? {})) {
+      for (const row of pivot.rows) {
+        if (!row.trendChartable) continue
+        byMapKey.set(`${pivot.category.id}|${row.mapKey}`, row)
+        if (!byTestKey.has(`${pivot.category.id}|${row.testKey}`)) byTestKey.set(`${pivot.category.id}|${row.testKey}`, row)
+      }
+    }
+    return { byMapKey, byTestKey }
+  }, [fullPivots])
+  const trendRowFor = (row: OverviewLabRow): LabRow | undefined => {
+    // 自訂 rows with nothing in the window carry no pivot mapKey.
+    if (row.mapKey.startsWith('pinned-empty:')) {
+      return row.testKey ? trendRows.byTestKey.get(`${row.categoryId}|${row.testKey}`) : undefined
+    }
+    // The overview prefixes the pivot's mapKey with its category.
+    const prefix = `${row.categoryId}:`
+    const pivotMapKey = row.mapKey.startsWith(prefix) ? row.mapKey.slice(prefix.length) : row.mapKey
+    return trendRows.byMapKey.get(`${row.categoryId}|${pivotMapKey}`)
+  }
   const cardRef = useRef<HTMLDivElement>(null)
   const [cardWidth, setCardWidth] = useState(0)
   useEffect(() => {
@@ -141,12 +230,19 @@ export function OverviewLabsSection({
   // range; otherwise the card would look empty for a filter the patient's data
   // cannot satisfy.
   const effectiveMode: LabMode = mode === 'pinned' && data.pinnedRowCount === 0 ? 'all' : mode
+  const isMine = effectiveMode === 'mine'
 
-  const matched = useMemo(() => data.rows.filter((row) => {
-    if (effectiveMode === 'pinned' && !row.isPinned) return false
-    if (effectiveMode === 'abnormal' && !row.hasAbnormal) return false
-    return true
-  }), [data.rows, effectiveMode])
+  // 「自訂」 is the same pivot as the other three filters — the clinician's
+  // own rows, in their order, over the same collection-day columns.
+  const matched = useMemo(() => {
+    if (isMine) return selectPinnedOverviewRows(pinnedIds, data.rows, data.columns.length)
+    return data.rows.filter((row) => {
+      if (effectiveMode === 'pinned' && !row.isPinned) return false
+      if (effectiveMode === 'abnormal' && !row.hasAbnormal) return false
+      return true
+    })
+  }, [data.rows, data.columns.length, effectiveMode, isMine, pinnedIds])
+  const mineHasResults = isMine && matched.some((row) => row.cells.some(Boolean))
 
   // Row budget. Category dividers are charged where they actually occur —
   // reserving one per category up-front would leave most of the card empty,
@@ -179,14 +275,14 @@ export function OverviewLabsSection({
     resourceId: data.navResourceId,
     tabLabel: t.tabs.reports,
     reportView: 'cumulative' as const,
-    cumulativeCategoryId: shown[0]?.categoryId ?? data.rows[0]?.categoryId,
+    cumulativeCategoryId: shown.find((row) => row.categoryId)?.categoryId ?? data.rows[0]?.categoryId,
     seeAllLabel: strings.labs.seeAllCumulative,
   }
 
   // One renderer for the card and the full-length dialog (see
   // OverviewExpandButton): the card draws what fits, the dialog draws every
   // matched analyte, and neither can drift from the other.
-  const showCategories = effectiveMode !== 'pinned'
+  const showCategories = effectiveMode === 'all' || effectiveMode === 'abnormal'
 
   const renderPivot = (rows: OverviewLabRow[], expanded = false) => {
     // Filter before applying the card's date budget so empty pinned days
@@ -241,29 +337,68 @@ export function OverviewLabsSection({
             </div>,
           )
         }
+        // The analyte name opens the same trend the 累積報告 column header
+        // opens, when the whole chart makes one chartable.
+        const trendRow = trendRowFor(row)
+        const sourceId = trendRow ? `cumulative-trend:${row.categoryId}:${trendRow.mapKey}` : undefined
+        const trendLabel = locale.startsWith('zh') ? `查看 ${row.name} 趨勢` : `View ${row.name} trend`
+        const unit = row.unit && (
+          <span className="shrink-0 whitespace-nowrap text-[0.5625rem] text-muted-foreground">
+            {row.unit}
+          </span>
+        )
         nodes.push(
           <div
             key={`${row.mapKey}-name`}
             className={cn(
-              'sticky left-0 z-10 flex max-w-48 flex-wrap items-baseline gap-x-1 border-r border-border px-2 py-0.5 leading-[14px]',
-              'bg-card',
+              'sticky left-0 z-10 border-r border-border',
+              sourceId && sourceId === activeTrendSourceId ? 'bg-primary/10' : 'bg-card',
+              !trendRow && 'flex max-w-48 flex-wrap items-baseline gap-x-1 px-2 py-0.5 leading-[14px]',
             )}
           >
-            <CellText
-              text={row.name}
-              className="truncate text-xs font-medium text-foreground"
-            />
-            {row.unit && (
-              <span className="shrink-0 whitespace-nowrap text-[0.5625rem] text-muted-foreground">
-                {row.unit}
-              </span>
+            {trendRow && sourceId ? (
+              <button
+                type="button"
+                data-detail-source-id={sourceId}
+                onPointerEnter={preloadCumulativeLabTrendModule}
+                onFocus={preloadCumulativeLabTrendModule}
+                onClick={() => {
+                  // The full list is a modal; the trend opens beside it.
+                  if (expanded) setListOpen(false)
+                  openTrend({
+                    categoryId: row.categoryId,
+                    mapKey: trendRow.mapKey,
+                    testKey: trendRow.testKey,
+                    displayName: trendRow.displayName,
+                    nameMode: 'standardized',
+                    sourceId,
+                    title: row.name,
+                  })
+                }}
+                aria-label={trendLabel}
+                title={trendLabel}
+                className="flex h-full w-full min-w-0 flex-wrap items-baseline gap-x-1 px-2 py-0.5 text-left leading-[14px] hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+              >
+                <span className="min-w-0 truncate text-xs font-medium text-foreground">{row.name}</span>
+                {unit}
+                <TrendingUp aria-hidden="true" className="h-3 w-3 shrink-0 self-center text-primary" />
+              </button>
+            ) : (
+              <>
+                <CellText
+                  text={row.name}
+                  className="truncate text-xs font-medium text-foreground"
+                />
+                {unit}
+              </>
             )}
           </div>,
         )
         visibleIndexes.forEach((sourceIndex, index) => {
           const cell = row.cells[sourceIndex]
           const key = `${row.mapKey}-${visibleColumns[index]?.day ?? index}`
-          if (!cell) {
+          const summary = cell ? summariseCell(cell) : null
+          if (!summary) {
             nodes.push(
               <div
                 key={key}
@@ -277,22 +412,22 @@ export function OverviewLabsSection({
             )
             return
           }
-          const { shown, total } = summariseCellValue(cell)
+          const { shown, record, total, otherAbnormal, everyValue } = summary
           // Narrative microbiology results must not size an entire date column.
           // Numeric values keep their intrinsic width and are never truncated.
-          const numeric = /^[<>≤≥]?\s*[+-]?(?:\d+(?:[.,]\d+)?|\.\d+)(?:[eE][+-]?\d+)?\s*%?$/.test(shown.trim())
-          const valueText = `${shown}${cell.isAbnormal && cell.interpretationCode?.startsWith('H') ? ' ↑' : ''}${cell.isAbnormal && cell.interpretationCode?.startsWith('L') ? ' ↓' : ''}`
+          const numeric = /^(?:[<>]=?|[≤≥])?\s*[+-]?(?:\d+(?:[.,]\d+)?|\.\d+)(?:[eE][+-]?\d+)?\s*%?$/.test(shown.trim())
+          const valueText = `${shown}${flagArrow(record)}`
           nodes.push(
             <div
               key={key}
               className={cn(
                 'min-w-0 flex items-center justify-center px-2 py-0.5 text-center text-xs leading-[14px] tabular-nums',
                 index > 0 && 'border-l border-border',
-                cell.isAbnormal
+                record.isAbnormal
                   ? 'bg-clinical-abnormal/[0.06] font-bold text-clinical-abnormal'
                   : cn('text-foreground', zebra),
               )}
-              title={cell.unit ? `${cell.value} ${cell.unit}` : cell.value}
+              title={everyValue}
             >
               {numeric ? (
                 <span className="whitespace-nowrap">{valueText}</span>
@@ -303,8 +438,11 @@ export function OverviewLabsSection({
                 // One character, so the value keeps the column. "+1"
                 // cost twice this and pushed 37.87 into an ellipsis.
                 <sup
-                  aria-label={strings.labs.sameDayCount.replace('{count}', String(total))}
-                  className="shrink-0 text-[0.5rem] font-normal leading-none text-muted-foreground"
+                  aria-label={(otherAbnormal ? strings.labs.sameDayOtherAbnormal : strings.labs.sameDayCount).replace('{count}', String(total))}
+                  className={cn(
+                    'shrink-0 text-[0.5rem] leading-none',
+                    otherAbnormal ? 'font-bold text-clinical-abnormal' : 'font-normal text-muted-foreground',
+                  )}
                 >
                   {total}
                 </sup>
@@ -345,6 +483,14 @@ export function OverviewLabsSection({
       </button>
       <button
         type="button"
+        aria-pressed={isMine}
+        className={overviewChipClass(isMine)}
+        onClick={() => setMode('mine')}
+      >
+        {strings.labs.mine}
+      </button>
+      <button
+        type="button"
         aria-pressed={effectiveMode === 'all'}
         className={overviewChipClass(effectiveMode === 'all')}
         onClick={() => setMode('all')}
@@ -353,6 +499,62 @@ export function OverviewLabsSection({
       </button>
     </>
   )
+
+  // 「自訂」 keeps the card header identical to the other filters; its two
+  // actions sit on the footer line, beside the route to the 累積報告.
+  const mineActions = (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => setEditorOpen(true)}
+        className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      >
+        <Pencil aria-hidden="true" className="h-3 w-3" />
+        {strings.labs.editPinned}
+      </button>
+      {audience === 'medical' && (
+        <button
+          type="button"
+          onClick={() => {
+            // From the clinician's own lab list, straight to their own
+            // formats: 複製 → 帶回紀錄 → 我的格式, whatever was open before.
+            prefs.setHandoffMode('custom')
+            revealTab('ips-export', { exportTab: 'emr' })
+          }}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/50 px-2 text-xs font-medium text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          <ClipboardCopy aria-hidden="true" className="h-3 w-3" />
+          {strings.labs.handoff}
+        </button>
+      )}
+    </span>
+  )
+
+  const mineEmpty = (
+    <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-border px-3 py-4">
+      <p className="text-xs text-muted-foreground">{strings.myLabs.empty}</p>
+      <button
+        type="button"
+        onClick={() => setEditorOpen(true)}
+        className="rounded-md border border-primary/60 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      >
+        {strings.myLabs.emptyAction}
+      </button>
+    </div>
+  )
+
+  const editor = editorOpen ? (
+    <PinnedLabsEditorDialog
+      open
+      onOpenChange={setEditorOpen}
+      initialIds={prefs.pinnedLabs ?? systemDefaultIds}
+      systemDefaultIds={systemDefaultIds}
+      onSave={(ids) => {
+        prefs.setPinnedLabs(ids)
+        setMode('mine')
+      }}
+    />
+  ) : null
 
   return (
     <OverviewSectionCard
@@ -371,12 +573,19 @@ export function OverviewLabsSection({
           <OverviewExpandButton
             label={t.overview.expandList}
             onClick={() => setListOpen(true)}
-            disabled={matched.length === 0 || columns.length === 0}
+            disabled={matched.length === 0 || columns.length === 0 || (isMine && !mineHasResults)}
           />
         </>
       )}
     >
-      {shown.length === 0 || columns.length === 0 ? (
+      {editor}
+      {trendDialog}
+      {isMine && pinnedIds.length === 0 ? mineEmpty : isMine && !mineHasResults ? (
+        <>
+          <div className={OVERVIEW_EMPTY_CLASS}>{strings.myLabs.noneInRange}</div>
+          <div className="flex justify-end">{mineActions}</div>
+        </>
+      ) : shown.length === 0 || columns.length === 0 ? (
         <OverviewEmptyRow hasWindowData={data.rows.length > 0 || data.unpivotedCount > 0} />
       ) : (
         <>
@@ -386,7 +595,14 @@ export function OverviewLabsSection({
           {/* The same footer the other three cards use. 「常用」 is a chosen
               short list rather than a fitting artefact, so the route to the
               full record is offered whether or not anything was cut. */}
-          <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+          {isMine ? (
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+              {mineActions}
+            </div>
+          ) : (
+            <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+          )}
           <OverviewFullListDialog
             open={listOpen}
             onOpenChange={setListOpen}

@@ -1,4 +1,29 @@
-import { scrubFreeText, buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
+import { scrubFreeText, buildPatientTextLiterals, buildPatientNamePatterns } from '@/src/shared/utils/pii-text-scrub'
+
+describe('source name placeholders in outbound CDSS text', () => {
+  it.each(['王小*', '王*明', '*小明'])('matches one Unicode character in %s', name => {
+    const patterns = buildPatientNamePatterns({ name: [{ text: name }] })
+    expect(scrubFreeText('王小明', [], patterns)).toBe('[已遮蔽]')
+    expect(scrubFreeText(name.replaceAll('*', '𠀋'), [], patterns)).toBe('[已遮蔽]')
+    expect(scrubFreeText(name.replaceAll('*', '𠀋\u{E0100}'), [], patterns)).toBe('[已遮蔽]')
+    expect(scrubFreeText(name.replaceAll('*', '明\uFE00'), [], patterns)).toBe('[已遮蔽]')
+    const separated = name.replaceAll('*', '\n')
+    expect(scrubFreeText(separated, [], patterns)).toBe(separated)
+  })
+
+  it('does not match Latin name placeholders inside clinical words', () => {
+    const patterns = buildPatientNamePatterns({ name: [{ text: 'Li*' }] })
+    expect(scrubFreeText('Lin has clinical lipid results', [], patterns))
+      .toBe('[已遮蔽] has clinical lipid results')
+  })
+
+  it('does not turn identifiers or insufficient names into wildcards', () => {
+    const patient = { name: [{ text: '王**' }], identifier: [{ value: 'A123*' }] }
+    expect(buildPatientNamePatterns(patient)).toEqual([])
+    expect(scrubFreeText('A1234 LDL 92', buildPatientTextLiterals(patient), buildPatientNamePatterns(patient)))
+      .toBe('A1234 LDL 92')
+  })
+})
 
 describe('scrubFreeText', () => {
   it('masks TW national IDs (身分證字號)', () => {

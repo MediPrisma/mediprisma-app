@@ -8,7 +8,7 @@
 import type {
   PatientEntity,
 } from '@/src/core/entities/patient.entity'
-import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
+import { getPatientDisplayName, isDeidentifiedPatient } from '@/src/core/entities/patient.entity'
 import type {
   AllergyEntity,
   CarePlanEntity,
@@ -28,8 +28,11 @@ import type {
   SectionMapResult,
 } from './ips-types'
 import { INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
 import { medicationDirectionsForFhir } from './medication-display'
+import { medicationExportUnit, sourceSupplyText, type ExportMedication } from './medication-source-records'
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -162,21 +165,23 @@ export function buildPatient(
   options: { includeIdentifiers?: boolean; maskedLabel?: string } = {},
 ): { entry: IpsBundleEntry; reference: string } {
   const includeIdentifiers = options.includeIdentifiers !== false
+  const deidentified = patient ? isDeidentifiedPatient(patient) : false
   const name = patient?.name?.[0]
   // Carry whatever the source had — text (TW Core/IPS local-script name),
   // family, given — so a round-trip never drops the name. Only when there is
   // no usable name at all do we fall back to the "Unknown Patient" sentinel.
   const nameArray = !includeIdentifiers
-    ? [{ text: options.maskedLabel || 'Identity masked by the exporter' }]
+    ? [{ ...(deidentified ? { use: 'anonymous' } : {}), text: options.maskedLabel || 'Identity masked by the exporter' }]
     : name && (name.text || name.family || name.given?.length)
       ? [
           {
+            ...(deidentified ? { use: 'anonymous' } : {}),
             ...(name.text ? { text: name.text } : {}),
             ...(name.family ? { family: name.family } : {}),
             ...(name.given?.length ? { given: name.given } : {}),
           },
         ]
-      : [{ text: getPatientDisplayName(patient) }]
+      : [{ ...(deidentified ? { use: 'anonymous' } : {}), text: getPatientDisplayName(patient) }]
   const identifiers = includeIdentifiers ? patientIdentifiers(patient) : undefined
 
   const resource: FhirResource = {
@@ -262,23 +267,56 @@ const VALID_MED_STATEMENT_STATUS = [
 ]
 
 export function mapMedications(medications: MedicationEntity[], patientRef: string): SectionMapResult {
-  const entries = medications.map((m) => {
+  const makeStatement = (m: ExportMedication): FhirResource => {
     const directions = medicationDirectionsForFhir(m)
-    const dosage = directions ? [{ text: directions }] : undefined
+    const dosage = m.exportOriginalDosage ? m.dosageInstruction : directions ? [{ text: directions }] : undefined
+    const notes = [m.exportSourceLabel, sourceComparisonNarrative(m), sourceSupplyText(m), sourceSelfPurchase(m) === true ? '來源明列自費／自購（self-pay）' : undefined,
+      `Original source order status: ${m.status || 'unknown'}; actual medication use has not been verified.`,
+      ...(m.note ?? []).map(note => note.text)]
+      .filter((text): text is string => Boolean(text)).map((text) => ({ text }))
 
     const resource: FhirResource = {
       resourceType: 'MedicationStatement',
       meta: { profile: [IPS_PROFILES.medicationStatement] },
-      status: pickStatus(m.status, VALID_MED_STATEMENT_STATUS, 'unknown'),
+      status: m.exportCurrentnessUnconfirmed ? 'unknown' : pickStatus(m.status, VALID_MED_STATEMENT_STATUS, 'unknown'),
       medicationCodeableConcept:
         toCodeableConcept(m.medicationCodeableConcept, 'Unknown medication') ?? { text: 'Unknown medication' },
       subject: { reference: patientRef },
+      ...(m.identifier?.length ? { identifier: m.identifier } : {}),
       ...requiredDateTime('effectiveDateTime', m.authoredOn),
       ...(dosage ? { dosage } : {}),
+      ...(notes.length ? { note: notes } : {}),
+    }
+    return resource
+  }
+  const entries = medications.map(m => {
+    const { canonical, sources } = medicationExportUnit(m)
+    const resource = makeStatement(canonical)
+    if (sources.length) {
+      const contained = sources.map((source, index) => ({ ...makeStatement(source), id: `source-${index + 1}` }))
+      resource.contained = contained
+      resource.derivedFrom = contained.map(source => ({ reference: `#${source.id}` }))
     }
     return makeEntry(resource).entry
   })
-  return { entries, referencedOnly: [] }
+  const groups = new Map<string, { status: string; references: string[] }>()
+  medications.forEach((medication, index) => {
+    const comparison = medication._sourceRecordComparison
+    if (!comparison || comparison.status === 'confirmed') return
+    const key = [...comparison.references].sort().join('|')
+    const group = groups.get(key) ?? { status: comparison.status, references: [] }
+    group.references.push(entries[index].fullUrl)
+    groups.set(key, group)
+  })
+  const referencedOnly = [...groups.values()].filter(group => group.references.length > 1).map(group => makeEntry({
+    resourceType: 'Provenance',
+    target: group.references.map(reference => ({ reference })),
+    recorded: new Date().toISOString(),
+    activity: { coding: [{ system: 'urn:mediprisma:source-comparison-status', code: group.status }],
+      text: 'Unconfirmed cross-source comparison; distinct prescriptions may exist. Do not sum source quantities.' },
+    agent: [{ who: { display: 'MediPrisma' } }],
+  }).entry)
+  return { entries, referencedOnly }
 }
 
 // ---------------------------------------------------------------------------

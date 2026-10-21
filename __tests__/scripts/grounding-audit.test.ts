@@ -28,14 +28,14 @@ describe('auditSummaryGrounding', () => {
   })
 
   it('does NOT flag a decision that RECOMMENDS an echo (arrange, not asserted)', () => {
-    const ai = { decisions: [{ text: '安排心臟超音波評估', rationale: '心電圖顯示陳舊性梗塞', sources: ['L16'] }] }
+    const ai = { problems: [{ label: '心臟', metric: '安排心臟超音波評估；心電圖顯示陳舊性梗塞', sources: ['L16'] }] }
     expect(auditSummaryGrounding(ai, input)).toEqual([])
   })
 
-  it('flags a fabricated finding in a timeline label', () => {
-    const ai = { timeline: [{ label: '因咳血住院與胃鏡檢查（診斷胃炎）', ref: 'L1' }] }
+  it('flags a fabricated finding in the headline', () => {
+    const ai = { headline: '因咳血住院與胃鏡檢查（診斷胃炎）' }
     expect(auditSummaryGrounding(ai, input)).toEqual([
-      expect.stringContaining('fabricated test "胃鏡" in timeline[0]'),
+      expect.stringContaining('fabricated test "胃鏡" in headline'),
     ])
   })
 
@@ -45,36 +45,20 @@ describe('auditSummaryGrounding', () => {
     expect(issues).toEqual([expect.stringContaining('renal claim cites imaging L1')])
   })
 
-  it('audits investigation text and rejects a renal trend citing a chest X-ray', () => {
-    const ai = {
-      investigations: [
-        {
-          label: '腎功能',
-          trend: 'eGFR 35 → 32',
-          interpretation: '數值下降',
-          sources: ['L1'],
-        },
-      ],
-    }
-    expect(auditSummaryGrounding(ai, input)).toEqual([
-      expect.stringContaining('renal investigation cites imaging L1'),
-    ])
-  })
-
   it('flags a polyp problem citing the abdominal ultrasound (which says nothing about polyps)', () => {
     const ai = { problems: [{ label: '胃及十二指腸息肉', basis: '腹部超音波', sources: ['L30'] }] }
     expect(auditSummaryGrounding(ai, input)).toEqual([expect.stringContaining('polyp cites imaging L30')])
   })
 
   it('flags a positional cross-reference', () => {
-    const ai = { decisions: [{ text: '請照上述建議追蹤', rationale: '', sources: [] }] }
+    const ai = { headline: '請照上述建議追蹤' }
     expect(auditSummaryGrounding(ai, input)).toEqual([expect.stringContaining('positional cross-ref')])
   })
 
   it('returns [] for a fully grounded summary', () => {
     const ai = {
+      headline: '胸部X光追蹤中的慢性腎臟病病人',
       problems: [{ label: '慢性腎臟病', basis: '肌酸酐上升', sources: ['L7'] }],
-      timeline: [{ label: '胸部X光追蹤', ref: 'L1' }],
     }
     expect(auditSummaryGrounding(ai, input)).toEqual([])
   })
@@ -102,9 +86,10 @@ describe('auditSummaryGrounding', () => {
       resourceId: 'discharge-1',
     }])
     const ai = {
-      timeline: [{
-        label: '住院期間接受上消化道內視鏡檢查，顯示逆流性食道炎與胃炎',
-        ref: 'D1',
+      problems: [{
+        label: '逆流性食道炎與胃炎',
+        basis: '住院期間接受上消化道內視鏡檢查',
+        sources: ['D1'],
         documentEvidence: [{
           source: 'D1',
           quote: 'PANENDOSCOPY. Impression: Reflux esophagitis and erythematous gastritis.',
@@ -129,12 +114,13 @@ describe('auditSummaryGrounding', () => {
       }],
     }
     const missing = {
-      timeline: [{ label: '接受胃鏡檢查', ref: 'D1' }],
+      problems: [{ label: '胃炎', basis: '接受胃鏡檢查', sources: ['D1'] }],
     }
     const translatedInsteadOfQuoted = {
-      timeline: [{
-        label: '接受胃鏡檢查',
-        ref: 'D1',
+      problems: [{
+        label: '胃炎',
+        basis: '接受胃鏡檢查',
+        sources: ['D1'],
         documentEvidence: [{ source: 'D1', quote: '接受胃鏡檢查' }],
       }],
     }

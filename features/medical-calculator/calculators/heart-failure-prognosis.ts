@@ -322,19 +322,19 @@ export const HEART_FAILURE_PROGNOSIS: CalculatorDef[] = [{
     AGE_INPUT,
     SEX_INPUT,
     { key: 'lvef', type: 'number', label: label('Left ventricular ejection fraction', '左心室射出分率'), unit: '%', source: { kind: 'echo', key: 'lvef' } },
-    { key: 'nyha', type: 'select', label: label('NYHA functional class', 'NYHA 功能分級'), defaultValue: '', options: [
+    { key: 'nyha', type: 'select', source: { kind: 'hfpefClinical', key: 'nyha' }, label: label('NYHA functional class', 'NYHA 功能分級'), defaultValue: '', options: [
       { value: '1', label: label('Class I', '第 I 級') }, { value: '2', label: label('Class II', '第 II 級') },
       { value: '3', label: label('Class III', '第 III 級') }, { value: '4', label: label('Class IV', '第 IV 級') },
     ] },
     { key: 'creatinine', type: 'number', label: label('Serum creatinine', '血清肌酸酐'), unit: 'mg/dL', dimension: 'creatinine', source: { kind: 'lab', keys: ['CREATININE', 'CREA'] } },
-    yesNo('diabetes', 'Diabetes mellitus', '糖尿病'),
-    yesNo('betaBlocker', 'Currently prescribed a beta-blocker', '目前使用 β 阻斷劑'),
+    { ...yesNo('diabetes', 'Diabetes mellitus', '糖尿病'), source: { kind: 'hfpefClinical', key: 'diabetes' } },
+    { ...yesNo('betaBlocker', 'Currently prescribed a beta-blocker', '目前使用 β 阻斷劑'), source: { kind: 'hfpefClinical', key: 'betaBlocker' } },
     { key: 'sbp', type: 'number', label: label('Systolic blood pressure', '收縮壓'), unit: 'mmHg', source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
     { key: 'bmi', type: 'number', label: label('Body mass index', '身體質量指數'), unit: 'kg/m²', source: { kind: 'bmi' } },
     yesNo('hfDuration', 'Heart failure first diagnosed ≥18 months ago', '心衰竭初次診斷已 ≥18 個月'),
     yesNo('smoker', 'Current smoker', '目前吸菸'),
-    yesNo('copd', 'Chronic obstructive pulmonary disease', '慢性阻塞性肺病'),
-    yesNo('aceiArb', 'Currently prescribed an ACEI or ARB', '目前使用 ACEI 或 ARB'),
+    { ...yesNo('copd', 'Chronic obstructive pulmonary disease', '慢性阻塞性肺病'), source: { kind: 'hfpefClinical', key: 'copd' } },
+    { ...yesNo('aceiArb', 'Currently prescribed an ACEI or ARB', '目前使用 ACEI 或 ARB'), source: { kind: 'hfpefClinical', key: 'aceiArb' } },
   ],
   coherence: { keys: ['lvef', 'creatinine', 'sbp', 'bmi'], windowDays: 180 },
   compute(v) {
@@ -366,7 +366,7 @@ export const HEART_FAILURE_PROGNOSIS: CalculatorDef[] = [{
     SEX_INPUT,
     { key: 'lvef', type: 'number', label: label('Current LVEF (eligibility)', '目前 LVEF（適用條件）'), unit: '%', source: { kind: 'echo', key: 'lvef' } },
     yesNo('priorReducedLvef', 'Any previously documented LVEF <50%', '過去是否曾記錄 LVEF <50%'),
-    yesNo('diabetes', 'Diabetes mellitus', '糖尿病'),
+    { ...yesNo('diabetes', 'Diabetes mellitus', '糖尿病'), source: { kind: 'hfpefClinical', key: 'diabetes' } },
     yesNo('smoker', 'Current smoker', '目前吸菸'),
     { key: 'hfHospitalization', type: 'select', label: label('Previous HF hospitalization', '過去心衰竭住院'), defaultValue: '', options: [
       { value: 'never', label: label('Never', '無') },

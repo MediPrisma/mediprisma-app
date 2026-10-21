@@ -23,6 +23,8 @@ import {
   useObservationLongitudinal,
 } from './ObservationLongitudinalAction'
 import { useCompactLayout } from '@/src/shared/hooks/layout/use-compact-layout.hook'
+import type { ProcedureSpecialMaterialEntity } from '@/src/core/entities/clinical-data.entity'
+import { ProcedureMaterialsSection } from './ProcedureMaterialsSection'
 
 interface ObservationBlockProps {
   observation: Observation
@@ -230,6 +232,20 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
                   </span>
                 </div>
               </div>
+            )
+          }
+          const materialSection = component as typeof component & {
+            _isProcedureMaterials?: boolean
+            _materials?: ProcedureSpecialMaterialEntity[]
+            _materialsProcedureTitle?: string
+          }
+          if (materialSection._isProcedureMaterials && materialSection._materials?.length) {
+            return (
+              <ProcedureMaterialsSection
+                key={idx}
+                materials={materialSection._materials}
+                procedureTitle={materialSection._materialsProcedureTitle}
+              />
             )
           }
           if ((component as { _isSubHeader?: boolean })._isSubHeader) {

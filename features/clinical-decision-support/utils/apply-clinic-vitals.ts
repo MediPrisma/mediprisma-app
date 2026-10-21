@@ -15,6 +15,7 @@
  */
 import type { CdssFreshnessContext, CdssPatientProfile } from '../types'
 import {
+  calendarDayOf,
   CONGESTION_SIGN_TERMS,
   NOT_ASSESSED,
   type ClinicVitals,
@@ -238,13 +239,21 @@ export function applyClinicVitals(
   // table both write `signAnswers`, so a sign stated once is stated everywhere.
   // A sign answered 「無」 becomes a negated term, which is how the pack tells
   // 「看了，沒有」 from 「沒問」; 「未評估」 writes nothing at all.
+  //
+  // The fact is one examination, dated by the day it was done. A rule that
+  // wants today's examination reads that date, so a sign looked for on an
+  // earlier day stays out rather than taking the latest sign's date — the
+  // store starts a new examination on a new day, and a record kept from
+  // before that rule is read the same way.
+  const signs = Object.entries(vitals.signAnswers ?? {})
+  const signDate = signs.reduce<string | undefined>(
+    (latest, [, answer]) => (answer.examinedOn && (!latest || answer.examinedOn > latest) ? answer.examinedOn : latest),
+    undefined,
+  )
   const matched = new Set<string>()
   const negated = new Set<string>()
-  let signDate: string | undefined
-  for (const [term, answer] of Object.entries(vitals.signAnswers ?? {})) {
-    if (answer.value === NOT_ASSESSED) continue
-    const day = answer.modifiedAt.slice(0, 10)
-    if (day && (!signDate || day > signDate)) signDate = day
+  for (const [term, answer] of signs) {
+    if (answer.value === NOT_ASSESSED || !signDate || answer.examinedOn !== signDate) continue
     if (answer.value === 'present') {
       negated.delete(term)
       matched.add(term)
@@ -253,12 +262,12 @@ export function applyClinicVitals(
       negated.add(term)
     }
   }
-  if (matched.size > 0 || negated.size > 0) {
-    const date = signDate ?? ''
+  if (signDate && (matched.size > 0 || negated.size > 0)) {
+    const date = signDate
     facts.clinicCongestionExam = {
-      zh: `門診理學檢查${date ? noteZh(date) : ''}`,
-      en: `Clinic examination${date ? noteEn(date) : ''}`,
-      ...(date ? { date } : {}),
+      zh: `門診理學檢查${noteZh(date)}`,
+      en: `Clinic examination${noteEn(date)}`,
+      date,
       textEvidence: {
         // The reading of the examination as a whole: anything seen makes it
         // support, and only negations make it argue against.
@@ -271,7 +280,8 @@ export function applyClinicVitals(
 
   const nyha = vitals.nyhaClass
   if (nyha && nyha.value !== NOT_ASSESSED) {
-    const date = nyha.modifiedAt.slice(0, 10)
+    // The day it was graded; a record from before that day was kept dates it by its last change.
+    const date = nyha.assessedOn ?? calendarDayOf(nyha.modifiedAt)
     facts.physicianNyhaClass = {
       zh: `NYHA ${nyha.value}${date ? noteZh(date) : ''}`,
       en: `NYHA ${nyha.value}${date ? noteEn(date) : ''}`,
@@ -287,7 +297,7 @@ export function applyClinicVitals(
 
   const compensation = vitals.compensationStatus
   if (compensation && compensation.value !== NOT_ASSESSED) {
-    const date = compensation.modifiedAt.slice(0, 10)
+    const date = calendarDayOf(compensation.modifiedAt)
     const decompensated = compensation.value === 'decompensated'
     facts.physicianCompensationStatus = {
       zh: `${decompensated ? '失代償' : '代償'}${date ? noteZh(date) : ''}`,

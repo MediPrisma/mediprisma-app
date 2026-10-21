@@ -1,0 +1,282 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "hospital-name-test",
+        "name": [
+          {
+            "text": "院內藥名測試"
+          }
+        ],
+        "gender": "unknown",
+        "birthDate": "1960-01-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-0",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "Letrozole FC tab 2.5 mg / Femara FC tab 2.5 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "code": "Letrozole FC tab 2.5 mg",
+              "display": "Letrozole FC tab 2.5 mg"
+            },
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Femara FC tab 2.5 mg",
+              "display": "Femara FC tab 2.5 mg"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-1",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "Aromasin SC tab 25 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Aromasin SC tab 25 mg",
+              "display": "Aromasin SC tab 25 mg"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-2",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "Bio-cal plus chewable tab \"pay\"",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "code": "Bio-cal plus chewable tab \"pay\"",
+              "display": "Bio-cal plus chewable tab \"pay\""
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-3",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "Trastuzumab Emtansine##*inj100mg / Kadcyla powder for##* infu 100mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "code": "Trastuzumab Emtansine##*inj100mg",
+              "display": "Trastuzumab Emtansine##*inj100mg"
+            },
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Kadcyla powder for##* infu 100mg",
+              "display": "Kadcyla powder for##* infu 100mg"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-4",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "Trastuzumab Emtansine##*inj160mg / Kadcyla powder for##* infu 160mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "code": "Trastuzumab Emtansine##*inj160mg",
+              "display": "Trastuzumab Emtansine##*inj160mg"
+            },
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Kadcyla powder for##* infu 160mg",
+              "display": "Kadcyla powder for##* infu 160mg"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-5",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "Benazon oint 20 g",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "code": "Benazon oint 20 g",
+              "display": "Benazon oint 20 g"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-6",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "Unlisted product",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Unlisted product",
+              "display": "Unlisted product"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "hospital-med-7",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/hospital-name-test"
+        },
+        "authoredOn": "2026-10-01",
+        "medicationCodeableConcept": {
+          "text": "PAXLOVID tab (eGFR&gt;59,30 tabs)",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "code": "PAXLOVID tab (eGFR&gt;59,30 tabs)",
+              "display": "PAXLOVID tab (eGFR&gt;59,30 tabs)"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 30,
+            "unit": "days"
+          }
+        },
+        "requester": {
+          "display": "測試醫院"
+        }
+      }
+    }
+  ]
+}

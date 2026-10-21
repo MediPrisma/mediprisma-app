@@ -7,6 +7,7 @@ import { Fragment, useMemo, useState, type ReactElement, type Ref } from 'react'
 import { Pill } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAudience } from '@/src/application/providers/audience.provider'
 import { formatDate } from '@/src/shared/utils/date.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
@@ -21,6 +22,8 @@ import type { OverviewMedItem, OverviewMedsData } from '../hooks/useOverviewData
 import type { OverviewSectionFit } from '../overview.types'
 import { OVERVIEW_SECTION_DOM_ID } from '../overview.types'
 import { OverviewSectionCard } from './OverviewSectionCard'
+import { toMedCopySourceItems } from '../utils/overview-med-copy'
+import { MedCopyButtons, MedCopyDialogs, useMedCopyActions } from '@/features/clinical-summary/medications/components/MedCopyActions'
 import {
   OverviewEmptyRow,
   OverviewExpandButton,
@@ -38,8 +41,14 @@ type MedFilter = 'current' | 'changed' | 'all'
 /** Single-line row: 24px of content, the row's 2px border, the 3px stack gap. */
 
 function ChangeBadge({ item, compact }: { item: OverviewMedItem; compact: boolean }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const strings = t.overview.meds
+  const sourceState = ({ cancelled: locale === 'en' ? 'Cancelled' : '已取消',
+    'entered-in-error': locale === 'en' ? 'Entered in error' : '誤植紀錄',
+    stopped: locale === 'en' ? 'Stopped' : '已停用',
+    'on-hold': locale === 'en' ? 'On hold' : '暫停', draft: locale === 'en' ? 'Draft' : '草稿',
+  } as Record<string, string>)[item.row.status]
+  if (sourceState) return <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-xs">{sourceState}</Badge>
   if (!item.change) return null
   const size = compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]'
   if (item.change.kind === 'added') {
@@ -155,7 +164,12 @@ export function OverviewMedsSection({
   headingRef?: Ref<HTMLDivElement>
 }) {
   const { t, locale } = useLanguage()
+  const { audience } = useAudience()
   const strings = t.overview
+  // 複製現在用藥 is a clinician's paste into their own chart — medical only.
+  const canCopy = audience === 'medical'
+  const copySources = useMemo(() => toMedCopySourceItems(data.items), [data.items])
+  const copyState = useMedCopyActions(copySources, 'overview_meds')
   // 使用中 by default: the card answers "what is this patient on", and 全部
   // stays one click away for the times that is not the question.
   const [filter, setFilter] = useState<MedFilter>('current')
@@ -212,6 +226,11 @@ export function OverviewMedsSection({
           {strings.meds.chronicBadge}
         </Badge>
       )
+      const sourceBadge = (item.row.selfPurchased || item.row.sourceComparison && item.row.sourceComparison.status !== 'confirmed') && (
+        <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-medium">
+          {item.row.selfPurchased ? (locale === 'en' ? 'Self-pay' : '自費／自購') : (locale === 'en' ? 'Compare sources' : '跨來源待核對')}
+        </span>
+      )
       const daysBadge = daysLeft !== undefined && (
         <Badge
           variant="outline"
@@ -256,6 +275,7 @@ export function OverviewMedsSection({
             >
             <ChangeBadge item={item} compact />
             <span className={nameClass}>{item.title}</span>
+            {sourceBadge}
             {dose && (
               <span className="shrink-0 whitespace-nowrap text-[0.6875rem] text-muted-foreground">
                 {dose}
@@ -291,6 +311,7 @@ export function OverviewMedsSection({
           <div className="flex min-w-0 items-center gap-1.5">
             <ChangeBadge item={item} compact={false} />
             <span className={nameClass}>{item.title}</span>
+            {sourceBadge}
             {dose && (
               <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                 {dose}
@@ -361,17 +382,35 @@ export function OverviewMedsSection({
         </>
       )}
     >
+      {canCopy && <MedCopyDialogs state={copyState} />}
       {shown.length === 0 ? (
-        <OverviewEmptyRow hasWindowData={data.items.length > 0} />
+        <>
+          <OverviewEmptyRow hasWindowData={data.items.length > 0} />
+          {canCopy && (
+            <div className="flex justify-end">
+              <MedCopyButtons state={copyState} />
+            </div>
+          )}
+        </>
       ) : (
         <>
           <div className={cn('min-w-0', fit.bounded && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>
             {renderRows(shown)}
           </div>
-          {/* Always offered: the default list is deliberately only what the
-              patient is on now, so an empty 「另 N 項」 does not mean the chart
-              holds nothing else. */}
-          <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+          {/* 複製｜編輯 sit on the footer line, beside the route to the 用藥
+              tab — the same place as the 檢驗 card's 自訂 actions — so the
+              header never grows a second line however narrow the card. */}
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            {/* Always offered: the default list is deliberately only what the
+                patient is on now, so an empty 「另 N 項」 does not mean the
+                chart holds nothing else. */}
+            {/* Wrapped: the note's own mt-auto would otherwise pin it to the
+                bottom of this row instead of centring it beside the buttons. */}
+            <div className="min-w-0">
+              <OverviewTruncationNote hiddenCount={hidden} target={target} always />
+            </div>
+            {canCopy && <MedCopyButtons state={copyState} />}
+          </div>
           <OverviewFullListDialog
             open={listOpen}
             onOpenChange={setListOpen}

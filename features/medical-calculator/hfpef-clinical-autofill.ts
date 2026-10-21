@@ -1,7 +1,12 @@
 import { classifyReport, reportNarrative, extractEcgFindings, isMedicationBeingTaken, medicationAtcCode, medicationDisplayName, medicationSupplyEndDate } from '@voho0000/personalized-care-fhir'
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives'
+/**
+ * Yes/no and graded answers the record (or the CDSS visit) can give a
+ * calculator. Named for the HFpEF scores that first used it; MAGGIC and
+ * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
+ */
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha'
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -120,6 +125,82 @@ export function afDiagnosis(conditions: ConditionEntity[], encounters: Encounter
   return undefined
 }
 
+/**
+ * A diagnosis the record carries, by its ICD-10 or ICD-9 code, from conditions
+ * or encounter diagnoses — 「是」 only. The cloud record covers about a year,
+ * so a code it lacks is not a 「否」: that stays the clinician's to answer.
+ */
+function diagnosisSelect(
+  conditions: ConditionEntity[],
+  encounters: EncounterEntity[],
+  now: Date,
+  matches: (code: string) => boolean,
+  name: string,
+): ClinicalSelectValue | undefined {
+  const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
+  for (const condition of conditions) {
+    if (['refuted', 'entered-in-error', 'provisional', 'differential', 'unconfirmed'].includes(condition.verificationStatus ?? '') || condition._inferred) continue
+    if (['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
+    const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
+    if (date && Date.parse(date) > now.getTime()) continue
+    const code = condition.code?.coding?.find((coding) => (!coding.system || /icd/i.test(coding.system)) && matches(normal(coding.code)))
+    if (code) return { value: 'yes', date, testName: `${name}診斷碼：${code.code}（請核對）`, obsId: condition.id, resourceType: 'Condition' }
+  }
+  for (const encounter of encounters) {
+    if (['cancelled', 'entered-in-error'].includes(encounter.status ?? '')) continue
+    const date = encounter.period?.start ?? ''
+    if (date && Date.parse(date) > now.getTime()) continue
+    const codes = (encounter.reasonCode ?? []).flatMap((reason) => reason.coding ?? []).map((coding) => coding.code)
+    // Older bridge rows encode the ICD at the beginning of the diagnosis display.
+    for (const text of [...(encounter.reasonCode ?? []).map((reason) => reason.text), ...(encounter.diagnosis ?? []).map((item) => item.condition?.display)]) {
+      const match = text?.match(/^\s*([A-Z]\d{2}(?:\.?\d{1,4})?|\d{3}(?:\.?\d{1,2})?)\b/i)
+      if (match) codes.push(match[1])
+    }
+    const code = codes.find((candidate) => matches(normal(candidate)))
+    if (code) return { value: 'yes', date, testName: `就醫紀錄${name}診斷碼：${code}（申報診斷，請核對）`, obsId: encounter.id, resourceType: 'Encounter', facility: encounter.serviceProvider?.display }
+  }
+  return undefined
+}
+
+/** ICD-10 E08–E13, ICD-9 250. */
+const isDiabetesCode = (code: string) => /^(?:E0[89]|E1[0-3])/.test(code) || /^250/.test(code)
+/** ICD-10 J43 (emphysema), J44; ICD-9 491, 492, 496. */
+const isCopdCode = (code: string) => /^J4[34]/.test(code) || /^(?:491|492|496)/.test(code)
+
+const BETA_BLOCKERS = ['bisoprolol', 'carvedilol', 'metoprolol', 'atenolol', 'nebivolol', 'propranolol', 'labetalol', 'acebutolol', 'betaxolol', 'nadolol', 'pindolol', 'bucindolol']
+const ACEI_ARB = ['captopril', 'enalapril', 'lisinopril', 'ramipril', 'perindopril', 'benazepril', 'fosinopril', 'imidapril', 'quinapril', 'cilazapril', 'trandolapril', 'losartan', 'valsartan', 'candesartan', 'irbesartan', 'telmisartan', 'olmesartan', 'azilsartan', 'eprosartan']
+
+/**
+ * Whether a current prescription holds a drug of the class — by ingredient
+ * name, else by ATC prefix. 「否」 only when the record lists current
+ * prescriptions and none is of the class; with none at all, nothing is said.
+ * Worded 「依處方推算，請核對實際服用」, as the antihypertensive count is.
+ */
+function drugClassSelect(
+  medications: MedicationEntity[],
+  now: Date,
+  names: readonly string[],
+  atcPrefix: RegExp,
+  className: string,
+): ClinicalSelectValue | undefined {
+  const current = medications.filter((med) => {
+    if (!isMedicationBeingTaken(med, now)) return false
+    if (med.authoredOn && Date.parse(med.authoredOn) > now.getTime()) return false
+    const end = medicationSupplyEndDate(med)
+    return !(end && end < now.toISOString().slice(0, 10))
+  })
+  if (!current.length) return undefined
+  for (const med of current) {
+    const atc = medicationAtcCode(med) ?? med.atcClassification?.atcCode
+    const text = [med.drugTerminology?.ingredientText, medicationDisplayName(med), med.drugTerminology?.officialNameEn].filter(Boolean).join(' ')
+    const name = names.find((candidate) => new RegExp(`\\b${candidate}\\b`, 'i').test(text))
+    if (name || (atc && atcPrefix.test(atc))) {
+      return { value: 'yes', date: med.authoredOn?.slice(0, 10) ?? now.toISOString().slice(0, 10), testName: `目前處方：${name ?? medicationDisplayName(med)}（依處方推算，請核對實際服用）`, obsId: med.id, resourceType: med._sourceResourceType ?? 'MedicationRequest', facility: med.requester?.display ?? med.informationSource?.display }
+    }
+  }
+  return { value: 'no', date: now.toISOString().slice(0, 10), testName: `目前有效處方未見${className}（依處方推算，請核對實際服用）` }
+}
+
 export function buildClinicalSelects(reports: DiagnosticReportEntity[], medications: MedicationEntity[], now = new Date(), conditions: ConditionEntity[] = [], encounters: EncounterEntity[] = []): Partial<Record<ClinicalSelectKey, ClinicalSelectValue>> {
   const ecg = ecgSelects(reports, now)
   const diagnosis = afDiagnosis(conditions, encounters, now)
@@ -127,6 +208,30 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     const text = reportNarrative(r)
     return /atrial\s+fibrillation|心房顫動|\bAF\b/i.test(text) && /possible|suspect|cannot\s+exclude|rule\s*out|\br\/o\b|疑/i.test(text)
   })
-  const afHistory = diagnosis ?? ecg.afHistory ?? (!uncertainAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
-  return { ...ecg, afHistory, antihypertensives: antihypertensiveSelect(medications, now) }
+  // An unclassified source that explicitly records AF cannot prove its absence.
+  // Keep the finding for manual review instead of inferring "no" from an older
+  // recognised tracing. Voided, preliminary and future reports are not evidence.
+  const unclassifiedAf = reports.some(report => {
+    if (['entered-in-error', 'cancelled', 'registered', 'partial', 'preliminary'].includes(report.status ?? '')) return false
+    const date = report.effectiveDateTime ?? report.effectivePeriod?.start ?? report.issued ?? ''
+    if (!Number.isFinite(Date.parse(date)) || Date.parse(date) > now.getTime()) return false
+    const text = reportNarrative(report)
+    return classifyReport(report, text) !== 'ecg' && affirmedAf(text, true)
+  })
+  const blocksNegativeAf = uncertainAf || unclassifiedAf
+  const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
+  const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
+  const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
+  const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
+  const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
+  const aceiArb = drugClassSelect(medications, now, ACEI_ARB, /^C09/, ' ACEI／ARB')
+  return {
+    ...ecg,
+    afHistory,
+    antihypertensives: antihypertensiveSelect(medications, now),
+    ...(diabetes ? { diabetes } : {}),
+    ...(copd ? { copd } : {}),
+    ...(betaBlocker ? { betaBlocker } : {}),
+    ...(aceiArb ? { aceiArb } : {}),
+  }
 }

@@ -14,9 +14,9 @@
  * `measuredOn`. A weight measured today and an NYHA grade carried over from
  * August are two different statements, and a screen that dated them alike made
  * the older one look like today's examination. `measuredOn` is when the value
- * was obtained; `modifiedAt` is when this browser last recorded a change —
- * storing the same value again leaves it alone, so 「最後修改」 means what it
- * says.
+ * was obtained, and a sign's `examinedOn` the day it was looked for;
+ * `modifiedAt` is when this browser last recorded a change — storing the same
+ * value again leaves it alone, so 「最後修改」 means what it says.
  *
  * Kept per patient, encrypted under the tab-session key (see
  * `encrypted-answer-cache.service`), so a value survives a reload of this tab, never
@@ -28,11 +28,8 @@ import { create } from 'zustand'
 import { parseHfHistory, type HfFollowUpHistory } from '../utils/hf-follow-up'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import { patientAnswerBacking, patientAnswerStorageKey } from './patient-answer-backing'
 
 /** The three one-tap groups the congestion question is asked in. */
 export type CongestionSignsAnswer = 'edema' | 'orthopnea-pnd' | 'jvp-rales'
@@ -108,16 +105,43 @@ export interface AnsweredField<T> {
   modifiedAt: string
 }
 
+/**
+ * One sign, with the day it was examined as well as the moment it changed.
+ *
+ * The two differ. Finding no oedema again the next day is a new examination
+ * with an unchanged answer: `examinedOn` moves to the new day, `modifiedAt`
+ * stays on the day the answer last changed. A rule that asks for today's
+ * examination reads the first; 「最後修改」 reads the second.
+ */
+export interface ExaminedSign extends AnsweredField<SignAnswerValue> {
+  /** The day the sign was last looked for, as YYYY-MM-DD in this browser's calendar. */
+  examinedOn: string
+}
+
+/**
+ * The NYHA class, with the day it was graded as well as the moment it changed —
+ * as a sign carries `examinedOn`. Grading III again the next day is a new
+ * assessment with an unchanged answer: `assessedOn` moves to the new day,
+ * `modifiedAt` stays on the day the answer last changed. The decision map
+ * asks for today's grade and reads the first (#233 review).
+ */
+export interface GradedNyha extends AnsweredField<NyhaAnswerValue> {
+  /** The day the class was last graded, as YYYY-MM-DD in this browser's calendar; absent on a record kept before it. */
+  assessedOn?: string
+}
+
 export interface ClinicVitals {
   hfFollowUp?: HfFollowUpHistory
   entries: Readonly<Partial<Record<ClinicVitalsEntryKey, MeasuredEntry>>>
   /** The NYHA class graded in the room; absent means nobody has been asked. */
-  nyhaClass?: AnsweredField<NyhaAnswerValue>
+  nyhaClass?: GradedNyha
   /**
    * One answer per sign, keyed by the canonical term the evidence table's rows
    * are matched on. 「有」, 「無」, 「未評估」 — or absent, which is 「沒問」.
+   * The signs held are one examination: a sign answered on a later day starts
+   * a new one (see `mergeClinicVitals`).
    */
-  signAnswers: Readonly<Record<string, AnsweredField<SignAnswerValue>>>
+  signAnswers: Readonly<Record<string, ExaminedSign>>
   /** The compensation state judged in the room, where one was judged. */
   compensationStatus?: AnsweredField<CompensationAnswerValue>
 }
@@ -148,6 +172,17 @@ export function todayIsoDate(now: Date = new Date()): string {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
   return `${now.getFullYear()}-${month}-${day}`
+}
+
+/**
+ * The browser-calendar day of an ISO timestamp, or '' when it does not parse.
+ *
+ * Not `iso.slice(0, 10)`: a timestamp is stored in UTC, and in Taipei anything
+ * before 08:00 would be dated the day before.
+ */
+export function calendarDayOf(iso: string): string {
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '' : todayIsoDate(at)
 }
 
 function isFinitePositive(value: unknown): value is number {
@@ -188,8 +223,20 @@ export function mergeClinicVitals(
     changed = true
   }
 
-  const signAnswers: Record<string, AnsweredField<SignAnswerValue>> = { ...base.signAnswers }
-  for (const [term, value] of Object.entries(patch.signAnswers ?? {})) {
+  const examinedOn = todayIsoDate(now)
+  const signPatch = Object.entries(patch.signAnswers ?? {})
+  const signAnswers: Record<string, ExaminedSign> = { ...base.signAnswers }
+  // The signs held are one examination. A sign answered on a later day starts
+  // the next one, and what an earlier day found goes back to 「沒問」 rather
+  // than standing beside today's answers as if it had been looked for today.
+  if (signPatch.some(([, value]) => value !== null && value !== undefined)) {
+    for (const [term, answer] of Object.entries(signAnswers)) {
+      if (answer.examinedOn >= examinedOn) continue
+      delete signAnswers[term]
+      changed = true
+    }
+  }
+  for (const [term, value] of signPatch) {
     if (value === null || value === undefined) {
       if (signAnswers[term]) {
         delete signAnswers[term]
@@ -197,8 +244,15 @@ export function mergeClinicVitals(
       }
       continue
     }
-    if (signAnswers[term]?.value === value) continue
-    signAnswers[term] = { value, modifiedAt }
+    const current = signAnswers[term]
+    if (current?.value === value && current.examinedOn === examinedOn) continue
+    // Answering the same again re-dates the examination, not the answer.
+    const previous = base.signAnswers[term]
+    signAnswers[term] = {
+      value,
+      modifiedAt: previous?.value === value ? previous.modifiedAt : modifiedAt,
+      examinedOn,
+    }
     changed = true
   }
 
@@ -223,8 +277,30 @@ export function mergeClinicVitals(
   if (JSON.stringify(hfFollowUp) !== JSON.stringify(base.hfFollowUp)) changed = true
   const next: ClinicVitals = { entries, signAnswers, ...(hfFollowUp ? { hfFollowUp } : {}) }
 
+  // The NYHA class is graded each visit: the same class again on a later day
+  // re-dates the assessment (`assessedOn`), not the answer (`modifiedAt`), so
+  // today's grade can be recorded although it has not changed. Again on the
+  // same day it is a no-op.
+  const assessedOn = todayIsoDate(now)
+  const nyha = patch.nyhaClass
+  const existingNyha = base.nyhaClass
+  if (nyha === undefined) {
+    if (existingNyha) next.nyhaClass = existingNyha
+  } else if (nyha === null) {
+    if (existingNyha) changed = true
+  } else if (existingNyha?.value === nyha) {
+    if (existingNyha.assessedOn === assessedOn) next.nyhaClass = existingNyha
+    else {
+      next.nyhaClass = { ...existingNyha, assessedOn }
+      changed = true
+    }
+  } else {
+    next.nyhaClass = { value: nyha, modifiedAt, assessedOn }
+    changed = true
+  }
+
   const carryAnswer = <T extends string>(
-    key: 'nyhaClass' | 'compensationStatus',
+    key: 'compensationStatus',
     incoming: T | null | undefined,
   ) => {
     const existing = base[key] as AnsweredField<T> | undefined
@@ -243,7 +319,6 @@ export function mergeClinicVitals(
     ;(next[key] as AnsweredField<T>) = { value: incoming, modifiedAt }
     changed = true
   }
-  carryAnswer('nyhaClass', patch.nyhaClass)
   carryAnswer('compensationStatus', patch.compensationStatus)
 
   return changed ? next : base
@@ -288,11 +363,9 @@ export function entryValue(
   return vitals?.entries?.[key]?.value
 }
 
-const STORAGE_PREFIX = 'cdss-clinic-vitals:'
-
 /** The key one patient's encrypted visit record is kept under. */
 export function clinicVitalsStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('clinic-vitals', patientId)
 }
 
 function toAnsweredField<T extends string>(
@@ -333,12 +406,27 @@ function toClinicVitals(parsed: unknown): ClinicVitals {
         modifiedAt: typeof item.modifiedAt === 'string' ? item.modifiedAt : '',
       }
     }
-    const signAnswers: Record<string, AnsweredField<SignAnswerValue>> = {}
+    const signAnswers: Record<string, ExaminedSign> = {}
     for (const [term, value] of Object.entries((record.signAnswers ?? {}) as Record<string, unknown>)) {
       const answer = toAnsweredField(value, ['present', 'absent', NOT_ASSESSED] as const)
-      if (answer) signAnswers[term] = answer
+      if (!answer) continue
+      // A record kept before signs carried their own examination day was
+      // examined when it was last changed; that is the most it can say.
+      const examinedOn = (value as Record<string, unknown>).examinedOn
+      signAnswers[term] = {
+        ...answer,
+        examinedOn: typeof examinedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(examinedOn)
+          ? examinedOn
+          : calendarDayOf(answer.modifiedAt),
+      }
     }
-    const nyhaClass = toAnsweredField(record.nyhaClass, ['I', 'II', 'III', 'IV', NOT_ASSESSED] as const)
+    const nyhaAnswer = toAnsweredField(record.nyhaClass, ['I', 'II', 'III', 'IV', NOT_ASSESSED] as const)
+    // A record kept before the grade carried its own day was graded when it was
+    // last changed; the fact reads `modifiedAt` for it, as it always did.
+    const assessedOn = (record.nyhaClass as Record<string, unknown> | undefined)?.assessedOn
+    const nyhaClass: GradedNyha | undefined = nyhaAnswer
+      ? { ...nyhaAnswer, ...(typeof assessedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(assessedOn) ? { assessedOn } : {}) }
+      : undefined
     const compensationStatus = toAnsweredField(
       record.compensationStatus,
       ['compensated', 'decompensated', NOT_ASSESSED] as const,
@@ -367,12 +455,11 @@ function isEmptyVitals(vitals: ClinicVitals): boolean {
 }
 
 function writeStoredVitals(patientId: string, vitals: ClinicVitals): void {
-  const key = clinicVitalsStorageKey(patientId)
   if (isEmptyVitals(vitals)) {
-    discardEncryptedAnswers(key)
+    patientAnswerBacking().discard('clinic-vitals', patientId)
     return
   }
-  persistEncryptedAnswers(key, vitals)
+  patientAnswerBacking().save('clinic-vitals', patientId, vitals)
 }
 
 const hydration = createHydrationGuard()
@@ -392,11 +479,50 @@ interface ClinicVitalsState {
     now?: Date,
   ) => void
   clearVitals: (patientId: string) => void
+  /**
+   * Fills what is empty today from a saved record: dated measurements keep
+   * their own dates; the NYHA grade, the signs and the compensation judgement,
+   * when `exam` is set, are re-dated to today so the visit counts them as
+   * answered (the screen marks them as carried, see `carried-answers.store`).
+   */
+  carryForward: (patientId: string, saved: unknown, options?: { exam?: boolean; now?: Date }) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved, options = {}) => {
+    if (!patientId) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const old = toClinicVitals(saved)
+    const now = options.now ?? new Date()
+    const today = todayIsoDate(now)
+    const modifiedAt = now.toISOString()
+    set(state => {
+      const current = state.byPatientId[patientId] ?? EMPTY_CLINIC_VITALS
+      const next: ClinicVitals = { ...current, entries: { ...old.entries, ...current.entries } }
+      if (options.exam) {
+        // Today's own examination stands; only what nobody has answered today is filled.
+        const todaysSigns = Object.fromEntries(Object.entries(current.signAnswers).filter(([, sign]) => sign.examinedOn >= today))
+        const carriedSigns = Object.fromEntries(Object.entries(old.signAnswers)
+          .filter(([term]) => !todaysSigns[term])
+          .map(([term, sign]) => [term, { value: sign.value, modifiedAt, examinedOn: today }]))
+        // An earlier day's sign the record does not carry stays as it was (not today's answer, not deleted).
+        next.signAnswers = { ...current.signAnswers, ...carriedSigns, ...todaysSigns }
+        if (old.nyhaClass && !(current.nyhaClass && (current.nyhaClass.assessedOn ?? calendarDayOf(current.nyhaClass.modifiedAt)) >= today)) {
+          next.nyhaClass = { value: old.nyhaClass.value, modifiedAt, assessedOn: today }
+        }
+        if (old.compensationStatus && !current.compensationStatus) {
+          next.compensationStatus = { value: old.compensationStatus.value, modifiedAt }
+        }
+      }
+      writeStoredVitals(patientId, next)
+      return { byPatientId: { ...state.byPatientId, [patientId]: next } }
+    })
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return
@@ -406,7 +532,7 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
     // Two cases need no decryption: an answer already in memory is this
     // session's own and more recent than anything storage holds, and a chart
     // with no stored record is a first visit. Neither writes anything.
-    if (state.byPatientId[patientId] || !hasEncryptedAnswers(clinicVitalsStorageKey(patientId))) {
+    if (state.byPatientId[patientId] || !patientAnswerBacking().has('clinic-vitals', patientId)) {
       set((current) => ({
         byPatientId: current.byPatientId[patientId]
           ? current.byPatientId
@@ -431,7 +557,7 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
         hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
       }))
     }
-    void loadEncryptedAnswers<unknown>(clinicVitalsStorageKey(patientId))
+    void patientAnswerBacking().load('clinic-vitals', patientId)
       .then((stored) => apply(toClinicVitals(stored)))
       // A record that cannot be read leaves the chart asking, which is the
       // same state as a patient who has never been answered for.
@@ -460,7 +586,7 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
 
   clearVitals: (patientId) => {
     if (!patientId) return
-    discardEncryptedAnswers(clinicVitalsStorageKey(patientId))
+    patientAnswerBacking().discard('clinic-vitals', patientId)
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_CLINIC_VITALS },
       hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },

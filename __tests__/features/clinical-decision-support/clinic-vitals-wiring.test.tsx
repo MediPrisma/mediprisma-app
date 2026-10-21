@@ -24,6 +24,10 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
   useClinicalData: () => mockUseClinicalData(),
 }))
 
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null }),
+}))
+
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW' }),
 }))

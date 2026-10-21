@@ -10,8 +10,13 @@
  */
 import { act, render, waitFor } from '@testing-library/react'
 import LiveClinicalDecisionSupportFeature from '@/features/clinical-decision-support/LiveFeature'
-import { useEvidenceOverridesStore } from '@/features/clinical-decision-support/stores/evidence-overrides.store'
+import {
+  evidenceOverridesStorageKey,
+  useEvidenceOverridesStore,
+} from '@/features/clinical-decision-support/stores/evidence-overrides.store'
 import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
+import type { HospitalAwareCdssProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
+import { sealAnswers, useRealWebCrypto } from './encrypted-answers.helper'
 
 const mockUsePatient = jest.fn()
 const mockUseClinicalData = jest.fn()
@@ -24,6 +29,10 @@ jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => mockUseClinicalData(),
+}))
+
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null }),
 }))
 
 jest.mock('@/src/application/providers/language.provider', () => ({
@@ -149,10 +158,12 @@ function lastProfile(): CdssPatientProfile {
 }
 
 describe('LiveFeature profile wiring', () => {
+  useRealWebCrypto()
+
   beforeEach(() => {
     createProfileSpy.mockClear()
     packBuildSpy.mockClear()
-    useEvidenceOverridesStore.setState({ byPatientId: {} })
+    useEvidenceOverridesStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
     window.localStorage.clear()
     mockUsePatient.mockReturnValue({
       patient: { id: PATIENT_ID, resourceType: 'Patient', age: 78 },
@@ -169,6 +180,22 @@ describe('LiveFeature profile wiring', () => {
     const input = createProfileSpy.mock.calls.at(-1)?.[0]
     expect(input.diagnosticReports).toEqual([chestXray])
     expect(input.documentReferences).toEqual([dischargeSummary])
+  })
+
+  it('passes hospital ingredient evidence and unconfirmed use through the real feature to the pack', () => {
+    mockUseClinicalData.mockReturnValue({ ...clinicalData(), medications: [{
+      id: 'fictional-hospital-order', status: 'active', authoredOn: '2024-06-14',
+      medicationCodeableConcept: { coding: [{ system: 'urn:oid:vgh.medication.product', display: 'Meitifen SR FC * tab 75 mg' }] },
+      dispenseRequest: { validityPeriod: { start: '2024-06-14', end: '2024-07-14' } },
+    }] })
+    render(<LiveClinicalDecisionSupportFeature />)
+    const input = createProfileSpy.mock.calls.at(-1)?.[0]
+    expect(input.medications[0].drugTerminology).toEqual({ ingredientText: 'Diclofenac sodium' })
+    expect(lastProfile().medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state)
+      .toBe('confirmed-current') // The pack evaluates possible exposure for safety.
+    expect((lastProfile() as HospitalAwareCdssProfile).hospitalMedicationEvidence?.[0].useState).toBe('historical-record-current-status-unknown')
+    expect(lastProfile().facts.hfHarmfulNsaid.zh).toContain('院內使用待確認')
+    expect(lastProfile().facts['hospitalMedication:MedicationRequest:fictional-hospital-order'].sources?.[0].status).toBe('active')
   })
 
   it('turns a report sentence into a fact the pack receives', () => {
@@ -200,17 +227,48 @@ describe('LiveFeature profile wiring', () => {
     })
   })
 
-  it('reads a stored switch back before the pack runs', async () => {
-    useEvidenceOverridesStore.setState({ byPatientId: {} })
+  it('reads a sealed switch back before the cards are shown', async () => {
+    await sealAnswers(evidenceOverridesStorageKey(PATIENT_ID), { 'congestion:cxr': false })
+
+    const { queryByTestId } = render(<LiveClinicalDecisionSupportFeature />)
+    // Decrypting takes a moment; the cards wait rather than showing the
+    // record's default and flipping when the physician's switch lands.
+    expect(queryByTestId('mock-cdss-result')).toBeNull()
+
+    await waitFor(() => expect(queryByTestId('mock-cdss-result')).not.toBeNull())
+    expect(lastProfile().evidenceOverrides).toEqual({ 'congestion:cxr': false })
+  })
+
+  it('runs the pack only once the stored answers are back, never on the defaults first', async () => {
+    await sealAnswers(evidenceOverridesStorageKey(PATIENT_ID), { 'congestion:cxr': false })
+
+    const { queryByTestId } = render(<LiveClinicalDecisionSupportFeature />)
+    // The record half needs no answer and does not wait; the pack does.
+    expect(createProfileSpy).toHaveBeenCalledTimes(1)
+    expect(packBuildSpy).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(queryByTestId('mock-cdss-result')).not.toBeNull())
+    const overridesSeen = packBuildSpy.mock.calls.map(([profile]) => (profile as CdssPatientProfile).evidenceOverrides)
+    expect(overridesSeen.length).toBeGreaterThan(0)
+    expect(overridesSeen).toEqual(overridesSeen.map(() => ({ 'congestion:cxr': false })))
+    expect(createProfileSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('neither reads nor keeps a plaintext switch an earlier build left', async () => {
     window.localStorage.setItem(
       `cdss-evidence-overrides:${PATIENT_ID}`,
       JSON.stringify({ 'congestion:cxr': false }),
     )
+    window.localStorage.setItem(
+      'cdss-evidence-overrides:another-patient',
+      JSON.stringify({ 'congestion:jvp': true }),
+    )
 
-    render(<LiveClinicalDecisionSupportFeature />)
+    const { getByTestId } = render(<LiveClinicalDecisionSupportFeature />)
 
-    await waitFor(() => {
-      expect(lastProfile().evidenceOverrides).toEqual({ 'congestion:cxr': false })
-    })
+    expect(getByTestId('mock-cdss-result')).toBeInTheDocument()
+    expect(lastProfile().evidenceOverrides).toEqual({})
+    expect(window.localStorage.getItem(`cdss-evidence-overrides:${PATIENT_ID}`)).toBeNull()
+    expect(window.localStorage.getItem('cdss-evidence-overrides:another-patient')).toBeNull()
   })
 })

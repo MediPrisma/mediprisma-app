@@ -1,8 +1,12 @@
 // Refactored PatientInfoCard Component
+//
+// A single-row card: clinicians know who the patient is and read the full
+// record in the HIS, so identity takes one line and the problem list below
+// gets the space. 更多資料 opens the extended demographics under that line.
 "use client"
 
-import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { useId, useState } from 'react'
+import { ChevronDown, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
@@ -14,7 +18,7 @@ import {
   type UserEnteredPatientProfile,
 } from '@/src/core/entities/patient.entity'
 import { usePatientInfo } from './hooks/usePatientInfo'
-import { PatientInfoDisplay } from './components/PatientInfoDisplay'
+import { hasExtendedPatientInfo, PatientInfoDisplay } from './components/PatientInfoDisplay'
 import { PatientDemographicsEditorDialog } from './components/PatientDemographicsEditorDialog'
 
 export function PatientInfoCard() {
@@ -22,6 +26,8 @@ export function PatientInfoCard() {
   const { patient, loading, error } = usePatient()
   const patientInfo = usePatientInfo(patient)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [showMore, setShowMore] = useState(false)
+  const detailsId = useId()
   const localProfile = useLocalPatientProfile()
   const {
     available: canEditLocalProfile,
@@ -31,6 +37,7 @@ export function PatientInfoCard() {
   } = localProfile
 
   const errorObj = error ? new Error(String(error)) : null
+  const hasDetails = !!patientInfo && hasExtendedPatientInfo(patientInfo)
   const initialProfileValues = patientInfo ? {
     name: patientInfo.name === t.patient.unknown
       ? undefined
@@ -61,22 +68,43 @@ export function PatientInfoCard() {
       error={errorObj}
       isEmpty={!patientInfo}
       emptyMessage={t.errors.fetchPatient}
-      headerAction={canEditLocalProfile ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setEditorOpen(true)}
-          aria-label={profile ? t.patient.editLocalProfile : t.patient.addLocalProfile}
-        >
-          <Pencil />
-          <span className="hidden sm:inline">
-            {profile ? t.patient.editLocalProfile : t.patient.addLocalProfile}
-          </span>
-        </Button>
+      inline
+      headerAction={hasDetails || canEditLocalProfile ? (
+        <>
+          {hasDetails && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-primary hover:text-primary"
+              aria-expanded={showMore}
+              aria-controls={detailsId}
+              onClick={() => setShowMore((open) => !open)}
+            >
+              {showMore ? t.patient.showLess : t.patient.moreDetails}
+              <ChevronDown className={showMore ? 'rotate-180' : undefined} />
+            </Button>
+          )}
+          {canEditLocalProfile && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditorOpen(true)}
+              aria-label={profile ? t.patient.editLocalProfile : t.patient.addLocalProfile}
+            >
+              <Pencil />
+              <span className="hidden sm:inline">
+                {profile ? t.patient.editLocalProfile : t.patient.addLocalProfile}
+              </span>
+            </Button>
+          )}
+        </>
       ) : undefined}
     >
-      {patientInfo && <PatientInfoDisplay patientInfo={patientInfo} />}
+      {patientInfo && (
+        <PatientInfoDisplay patientInfo={patientInfo} showMore={showMore} detailsId={detailsId} />
+      )}
       {canEditLocalProfile && editorOpen && (
         <PatientDemographicsEditorDialog
           key={`${importId ?? 'local'}:${profile?.updatedAt ?? 'new'}`}

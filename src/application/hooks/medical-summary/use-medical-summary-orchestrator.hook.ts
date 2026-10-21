@@ -2,12 +2,14 @@
 // share one generation lifecycle, result artifact, model slot, and cache.
 'use client'
 
+import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
+import { ensureReportHighlights } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
@@ -412,12 +414,69 @@ export function useMedicalSummaryOrchestrator() {
     setActiveBatch(next)
   }, [])
 
-  const runManualBatch = useCallback(async (jobs: GenerationPipeline[]) => {
+  const cancelTrackedBatch = useCallback((current: ActiveGenerationBatch, preserveAccepted = false) => {
+    cancelledScopeKeysRef.current.add(current.scopeKey)
+    setCancellingScopeKey(current.scopeKey)
+    if (!current.cancelled) {
+      cancelledBatchIdsRef.current.add(current.id)
+      const cancelledBatch = { ...current, cancelled: true }
+      activeBatchRef.current = cancelledBatch
+      setActiveBatch(cancelledBatch)
+    }
+
+    // Summary and safety own independent useUnifiedAi instances. Stopping the
+    // user-facing batch must abort every expected half, including an auto
+    // pipeline that is still waiting for hydration.
+    const summary = preserveAccepted ? readSummaryGenerationSlot(current.summarySlotKey) : null
+    const safety = preserveAccepted ? readSafetyGenerationSlot(current.safetySlotKey) : null
+    if (current.expectsSummary && (!summary?.result || summary.isRunning)) cancelSummary(current.summarySlotKey)
+    if (current.expectsSafety && (!safety?.result || safety.isRunning)) cancelSafety(current.safetySlotKey)
+
+    // Completed pipelines are intentionally left in their exact cache slots.
+    // The presentation layer publishes each validated half progressively, so
+    // stopping a later sequential safety request must not discard a summary
+    // that already finished successfully.
+  }, [
+    cancelSafety,
+    cancelSummary,
+    readSummaryGenerationSlot,
+    readSafetyGenerationSlot,
+  ])
+
+  useEffect(() => {
+    const stopAutomaticBatch = () => {
+      const batch = activeBatchRef.current
+      if (isProgressiveAutoSummaryBlocked() && batch?.coordinatedAuto && !batch.cancelled) {
+        const summary = readSummaryGenerationSlot(batch.summarySlotKey)
+        const safety = readSafetyGenerationSlot(batch.safetySlotKey)
+        if ((!batch.expectsSummary || (summary.result && !summary.isRunning))
+          && (!batch.expectsSafety || (safety.result && !safety.isRunning))) return
+        cancelTrackedBatch(batch, true)
+      }
+    }
+    stopAutomaticBatch()
+    return useProgressiveImportStore.subscribe(stopAutomaticBatch)
+  }, [cancelTrackedBatch, readSummaryGenerationSlot, readSafetyGenerationSlot])
+
+  const runManualBatch = useCallback(async (jobs: GenerationPipeline[], signal?: AbortSignal) => {
+    if (signal?.aborted) return
     const batchScopeKey = scopeKey
     const batchId = beginBatch({
       summary: jobs.some((job) => job.kind === 'summary'),
       safety: jobs.some((job) => job.kind === 'safety' || job.includesSafety),
     })
+    const ownedBatch = activeBatchRef.current!
+    const cancelOwnedBatch = () => {
+      cancelledBatchIdsRef.current.add(batchId)
+      if (activeBatchRef.current?.id === batchId) cancelTrackedBatch(activeBatchRef.current)
+      else {
+        // A scope switch may hide this batch while its exact slots still run
+        // in the background. Stop them without replacing the new presentation.
+        if (ownedBatch.expectsSummary) pipelineCancellationRef.current.cancelSummary(ownedBatch.summarySlotKey)
+        if (ownedBatch.expectsSafety) pipelineCancellationRef.current.cancelSafety(ownedBatch.safetySlotKey)
+      }
+    }
+    signal?.addEventListener('abort', cancelOwnedBatch, { once: true })
     manualBatchIdsRef.current.add(batchId)
     setManualBatchCounts((current) => ({
       ...current,
@@ -438,6 +497,7 @@ export function useMedicalSummaryOrchestrator() {
         () => cancelledBatchIdsRef.current.has(batchId),
       )
     } finally {
+      signal?.removeEventListener('abort', cancelOwnedBatch)
       manualBatchIdsRef.current.delete(batchId)
       cancelledBatchIdsRef.current.delete(batchId)
       cancelledScopeKeysRef.current.delete(batchScopeKey)
@@ -452,43 +512,20 @@ export function useMedicalSummaryOrchestrator() {
         return next
       })
     }
-  }, [beginBatch, markManualPipelineStarted, runPipelines, scopeKey])
+  }, [beginBatch, cancelTrackedBatch, markManualPipelineStarted, runPipelines, scopeKey])
 
-  const generate = useCallback(async () => {
-    if (!await requestDemographicsForAi()) return
+  const generateForLaunch = useCallback(async (signal?: AbortSignal) => {
+    if (signal?.aborted || !await requestDemographicsForAi() || signal?.aborted) return
     await runManualBatch([
       { kind: 'summary', includesSafety: true, run: generateSummary },
-    ])
+    ], signal)
   }, [
     generateSummary,
     requestDemographicsForAi,
     runManualBatch,
   ])
 
-  const cancelTrackedBatch = useCallback((current: ActiveGenerationBatch) => {
-    cancelledScopeKeysRef.current.add(current.scopeKey)
-    setCancellingScopeKey(current.scopeKey)
-    if (!current.cancelled) {
-      cancelledBatchIdsRef.current.add(current.id)
-      const cancelledBatch = { ...current, cancelled: true }
-      activeBatchRef.current = cancelledBatch
-      setActiveBatch(cancelledBatch)
-    }
-
-    // Summary and safety own independent useUnifiedAi instances. Stopping the
-    // user-facing batch must abort every expected half, including an auto
-    // pipeline that is still waiting for hydration.
-    if (current.expectsSummary) cancelSummary(current.summarySlotKey)
-    if (current.expectsSafety) cancelSafety(current.safetySlotKey)
-
-    // Completed pipelines are intentionally left in their exact cache slots.
-    // The presentation layer publishes each validated half progressively, so
-    // stopping a later sequential safety request must not discard a summary
-    // that already finished successfully.
-  }, [
-    cancelSafety,
-    cancelSummary,
-  ])
+  const generate = useCallback(() => generateForLaunch(), [generateForLaunch])
 
   const cancelGeneration = useCallback(() => {
     if (!scopeKey) return
@@ -1052,8 +1089,16 @@ export function useMedicalSummaryOrchestrator() {
     .filter((issue): issue is NonNullable<typeof issue> => issue?.kind === 'context-overflow')
     .sort((left, right) => right.overBy - left.overBy)[0] ?? null
 
+  // A result restored from before 影像與病理重點 existed gets that section from
+  // the digest's deterministic fallback, so it never renders as missing.
+  const reportDigestInput = summary.reportDigestInput
+  const presentedResultWithReports = useMemo(
+    () => ensureReportHighlights(presentedResult, reportDigestInput),
+    [presentedResult, reportDigestInput],
+  )
+
   return {
-    result: presentedResult,
+    result: presentedResultWithReports,
     safetyResult: presentedSafetyResult,
     coverage,
     hasPatient,
@@ -1065,6 +1110,7 @@ export function useMedicalSummaryOrchestrator() {
     setAutoGenerate,
     generate,
     cancelGeneration,
+    generateForLaunch,
     retryFailed,
     isGenerating,
     isStopping: cancellingScopeKey === scopeKey,
@@ -1089,6 +1135,7 @@ export function useMedicalSummaryOrchestrator() {
       !hasCardErrors(presentedResult)
     ),
     resolveSafetySource,
+    safetySourceCatalog: summary.sourceCatalog,
     activeGeneration: presentedBatch && !presentedBatch.cancelled ? {
       id: presentedBatch.id,
       modelName: presentedBatch.modelName,

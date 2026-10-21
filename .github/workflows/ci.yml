@@ -37,6 +37,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  public-deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # No package token or npm cache: exercise an ordinary public clone.
+      - name: Install without private package access
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ""
+      - name: Verify optional integrations
+        run: |
+          npm run test:optional
+          node --input-type=module -e "import assert from 'node:assert/strict'; import { detectOptionalPackages } from './scripts/optional-package-state.mjs'; assert.deepEqual(detectOptionalPackages(process.cwd()), { labs: false, care: false, education: false, fhir: false })"
+      - name: Public calculator and education regressions
+        env:
+          TEST_OPTIONAL_EDUCATION: "missing"
+        run: npm test -- --ci --runInBand --runTestsByPath __tests__/features/medical-calculator/coded-report-autofill.test.ts __tests__/features/medical-calculator/hfpef-clinical-autofill.test.ts __tests__/features/medical-calculator/echo-paired-velocity.test.ts __tests__/shared/optional-education-content.test.tsx
+      - name: Build without private packages or SDK artifact
+        env:
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+        run: |
+          rm vendor/nhi-fhir-bridge-sdk-json/browser.js
+          npm run typecheck
+          npm run build:gh
   gallery-regression:
     runs-on: ubuntu-latest
     steps:
@@ -54,7 +81,7 @@ jobs:
           java-version: 21
       - uses: actions/checkout@v7
         with:
-          repository: voho0000/firebase-smart-on-fhir
+          repository: MediPrisma/mediprisma-firebase-backend
           ref: e3af56253c816acf3fb704b8d9b25e0f98f4374c
           path: .gallery-backend
       - run: npm ci --prefix .gallery-backend
@@ -67,6 +94,39 @@ jobs:
         if: failure()
         with:
           name: gallery-regression-results
+          path: test-results/
+  import-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: e2e-fake-api-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: e2e-mediprisma.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: e2e-mediprisma
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: e2e-mediprisma.appspot.com
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1234567890"
+      NEXT_PUBLIC_FIREBASE_APP_ID: "1:1234567890:web:e2e000000000000000000"
+      TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      - run: npx playwright install --with-deps chromium
+      - name: Build the production /app static artifact
+        run: npm run build:mediprisma
+      - name: Native Worker and original FHIR/image roundtrip
+        run: npx playwright test -c playwright.import-production.config.ts
+        env:
+          E2E_STATIC_DIR: out
+          E2E_APP_PATH: /app
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: import-worker-results
           path: test-results/
   ci:
     runs-on: ubuntu-latest
@@ -94,6 +154,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
+      - name: HMC published-package contract
+        run: node --test scripts/__tests__/hmc-published-packages.test.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 
@@ -118,7 +181,7 @@ jobs:
         # deploy build would also fail.
         env:
           GITHUB_PAGES: "true"
-          NEXT_PUBLIC_BASE_PATH: "/medical-note-smart-on-fhir"
+          NEXT_PUBLIC_BASE_PATH: "/mediprisma-app"
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
           NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
           NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}

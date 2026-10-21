@@ -4,7 +4,7 @@ name: Sync app to mediprisma.tw/app
 # After CI passes on master, build the static export with basePath /app — using
 # the SAME NEXT_PUBLIC_* secrets as the gh-pages build, so the mirror is feature-
 # identical (AI, Firebase, etc.) — then push it into the docs site repo
-# (voho0000/mediprisma-site) at static/app/. That push triggers Cloudflare Pages
+# (MediPrisma/mediprisma-site) at static/app/. That push triggers Cloudflare Pages
 # to redeploy mediprisma.tw/app automatically.
 # Publishing uses a write-enabled deploy key stored only in the
 # mediprisma-site-publish environment. That environment accepts protected
@@ -52,6 +52,15 @@ jobs:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
           # Public origin only (no secrets); baked into /app, not a runtime switch.
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}
+          NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}
+          NEXT_PUBLIC_HF_AUTH_POLICY: ${{ vars.NEXT_PUBLIC_HF_AUTH_POLICY }}
+          NEXT_PUBLIC_CDSS_ADMISSION: ${{ vars.NEXT_PUBLIC_CDSS_ADMISSION }}
+          NEXT_PUBLIC_CDSS_API_ORIGIN: ${{ vars.NEXT_PUBLIC_CDSS_API_ORIGIN }}
+          NEXT_PUBLIC_FHIR_OAUTH_ISSUER: ${{ vars.NEXT_PUBLIC_FHIR_OAUTH_ISSUER }}
+          NEXT_PUBLIC_FHIR_OAUTH_CLIENT_ID: ${{ vars.NEXT_PUBLIC_FHIR_OAUTH_CLIENT_ID }}
+          # Leave unset until the VM lab-report receiver is deployed and verified.
+          # Public endpoint only; no fallback to the usage-event Collector.
+          NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL: ${{ vars.NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL }}
           NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
           NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
           NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
@@ -72,7 +81,7 @@ jobs:
       - name: Checkout docs site (mediprisma-site)
         uses: actions/checkout@v7
         with:
-          repository: voho0000/mediprisma-site
+          repository: MediPrisma/mediprisma-site
           ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
           path: docs-site
           ref: main
@@ -94,7 +103,7 @@ jobs:
             exit 0
           fi
           SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          git commit -m "chore: sync /app from medical-note-smart-on-fhir@${SHA:0:7}"
+          git commit -m "chore: sync /app from mediprisma-app@${SHA:0:7}"
 
           # The HMC preview publishes to this same branch from its own
           # concurrency group, so the two can be in flight together and this

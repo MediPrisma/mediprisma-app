@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -20,6 +20,7 @@ import {
   SUBTAB_TRIGGER_CLASSES,
 } from '@/src/shared/config/ui-theme.config'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { isExportSubTab, useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useIpsBundle } from './hooks/useIpsBundle'
 import { useIpsExport } from './hooks/useIpsExport'
@@ -31,6 +32,7 @@ import { IpsExportPreview } from './components/IpsExportPreview'
 import { InferredProblemsReview } from './components/InferredProblemsReview'
 import { AiHandoffPanel } from './components/AiHandoffPanel'
 import { EmrHandoffPanel } from './components/EmrHandoffPanel'
+import { OriginalFhirDownload } from '@/features/import-bundle/components/OriginalFhirDownload'
 
 export default function IpsExportFeature() {
   const { t } = useLanguage()
@@ -39,6 +41,22 @@ export default function IpsExportFeature() {
   // destination in the 民眾 experience, so the tab only exists for clinicians.
   const showEmrTab = audience === 'medical'
   const x = t.ipsExport
+  // The open sub-tab lives in the right-panel provider so 總覽's 「帶回病歷」
+  // can open 帶回紀錄 itself. 民眾 have no 帶回紀錄 and land on 貼給 AI.
+  const { exportTab, setExportTab, activeTab, revealSeq } = useRightPanel()
+  const subTab = !showEmrTab && exportTab === 'emr' ? 'ai' : exportTab
+  // The three sub-tabs share one scroll position; a reader sent here from
+  // elsewhere starts at the top of the sub-tab, not wherever 貼給 AI was left.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const seenReveal = useRef(revealSeq)
+  useEffect(() => {
+    if (revealSeq === seenReveal.current) return
+    seenReveal.current = revealSeq
+    if (activeTab !== 'ips-export') return
+    // Next frame: on a phone the panel it sits in is only being shown now.
+    const frame = requestAnimationFrame(() => rootRef.current?.scrollIntoView?.({ block: 'start' }))
+    return () => cancelAnimationFrame(frame)
+  }, [revealSeq, activeTab])
   const [includePatientIdentifiers, setIncludePatientIdentifiers] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const {
@@ -76,9 +94,10 @@ export default function IpsExportFeature() {
     [curatedData, patient, labels, includePatientIdentifiers],
   )
 
-  // Loading clinical data
+  // Keep the download tab available independently of IPS assembly.
+  let exportStatus: ReactNode = null
   if (isLoading) {
-    return (
+    exportStatus = (
       <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
         {x.loading}
@@ -89,8 +108,8 @@ export default function IpsExportFeature() {
   // Clinical data failed to load. A transient FHIR/network failure must not
   // strand the whole export behind a message — offer the retry here instead of
   // making the user leave and re-open the tab.
-  if (error) {
-    return (
+  else if (error) {
+    exportStatus = (
       <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.clinical}`}>
         <CardContent className="text-sm">
           <div className="mb-1 font-medium text-destructive">{x.errorTitle}</div>
@@ -111,8 +130,8 @@ export default function IpsExportFeature() {
   }
 
   // No patient / no data loaded yet
-  if (!hasPatient || !bundle) {
-    return (
+  else if (!hasPatient || !bundle) {
+    exportStatus = (
       <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.clinical}`}>
         <CardContent className="py-4 text-center text-sm text-muted-foreground">
           <FileOutput className="mx-auto mb-2 h-6 w-6 opacity-60" />
@@ -123,14 +142,20 @@ export default function IpsExportFeature() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <h1 className="text-xl font-semibold tracking-tight">{x.hubTitle}</h1>
-      <Tabs defaultValue={showEmrTab ? "emr" : "ai"} className="space-y-5">
-        <TabsList className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
+    <div ref={rootRef} className="mx-auto max-w-5xl space-y-3">
+      {/* The right-panel tab already names this page; a visible title here
+          only pushed the clinician's content down. */}
+      <h1 className="sr-only">{x.hubTitle}</h1>
+      <Tabs
+        value={subTab}
+        onValueChange={(value) => { if (isExportSubTab(value)) setExportTab(value) }}
+        className="space-y-3"
+      >
+        <TabsList data-tour="ips-export-tabs" className={`${SUBTAB_LIST_CLASSES} grid w-full ${showEmrTab ? 'grid-cols-3 sm:max-w-xl' : 'grid-cols-2 sm:max-w-md'}`}>
           {/* Clinicians open this hub to get data back into the chart far more
               often than to hand it to an AI or download a file, so 帶回紀錄
-              leads and opens by default. 民眾 have no such tab and still land
-              on 貼給 AI. */}
+              leads and opens by default (the provider starts there). 民眾
+              have no such tab and still land on 貼給 AI. */}
           {showEmrTab && (
             <TabsTrigger value="emr" className={SUBTAB_TRIGGER_CLASSES}>{x.emrTab}</TabsTrigger>
           )}
@@ -140,16 +165,17 @@ export default function IpsExportFeature() {
 
         {showEmrTab && (
           <TabsContent value="emr">
-            <EmrHandoffPanel />
+            {exportStatus ?? <EmrHandoffPanel />}
           </TabsContent>
         )}
 
         <TabsContent value="ai">
-          <AiHandoffPanel />
+          {exportStatus ?? <AiHandoffPanel />}
         </TabsContent>
 
         <TabsContent value="institution">
-          <IpsExportPreview
+          <OriginalFhirDownload />
+          {exportStatus ?? (bundle && <IpsExportPreview
             bundle={bundle}
             markdown={markdown}
             validation={validation}
@@ -164,11 +190,11 @@ export default function IpsExportFeature() {
             onDownloadMarkdown={() => downloadMarkdown(markdown)}
             onCopyJson={() => copyJson(bundle)}
             onCopyMarkdown={() => copyMarkdown(markdown)}
-          />
+          />)}
         </TabsContent>
       </Tabs>
 
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+      {bundle && <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
         <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
           <SheetHeader className="border-b bg-muted/20 px-4 py-3 pr-10 sm:px-5">
             <SheetTitle className="flex items-center gap-2 text-base">
@@ -248,7 +274,7 @@ export default function IpsExportFeature() {
             </div>
           </ScrollArea>
         </SheetContent>
-      </Sheet>
+      </Sheet>}
     </div>
   )
 }

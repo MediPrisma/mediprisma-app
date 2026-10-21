@@ -8,13 +8,15 @@
 // Blood pressure arrives as a panel (LOINC 85354-9) whose systolic/diastolic
 // values live in `component[]`, so components are indexed too.
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinical-lab-normalization/canonical'
 import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue } from '../hfpef-clinical-autofill'
 import { buildEchoAutofill } from '../echo-autofill'
+import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
+import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import type { AutofillSource, VitalKind } from '../types'
 
@@ -156,7 +158,9 @@ export function buildAutofill(
     const viaLoinc = canonicalKeyFromLoinc(holder) != null
     const { testName, loinc } = readCodeProvenance(holder)
     const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date, viaLoinc, testName, loinc, obsId: meta.obsId, facility: meta.facility }
-    const key = getAnalyteCanonicalKey(holder)
+    // The package keys pediatric eGFR as EGFR(M); keep it out of the adult
+    // keys, as the cumulative report does.
+    const key = isPediatricEgfr(holder) ? 'EGFR(PED)' : getAnalyteCanonicalKey(holder)
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
     const spec = normSpecimen(specimenDisplay)
     if (key && spec) {
@@ -242,7 +246,8 @@ export function buildAutofill(
         const kg = convertToBase(weight.value, weight.unit, 'weight')?.value
         const cm = convertToBase(height.value, height.unit, 'height')?.value
         if (!kg || !cm || kg <= 0 || cm <= 0) return undefined
-        return { ...weight, value: kg / (cm / 100) ** 2, unit: 'kg/m²', testName: 'BMI（同日身高與體重）' }
+        // One decimal, as BMI is reported — not 32.847300112161506.
+        return { ...weight, value: Math.round((kg / (cm / 100) ** 2) * 10) / 10, unit: 'kg/m²', testName: 'BMI（同日身高與體重）' }
       }
       case 'lab':
         // Prefer a blood-specimen match so a serum analyte never picks up a
@@ -306,18 +311,43 @@ export interface LabAutofillState {
   retry: () => Promise<void>
 }
 
+/** The CDSS's NYHA grading as MAGGIC's option values. */
+const NYHA_OPTION = { I: '1', II: '2', III: '3', IV: '4' } as const
+
+/**
+ * Adds the NYHA class the clinician graded in the CDSS to the calculators'
+ * answers, so MAGGIC does not ask it a second time. 「未評估」 adds nothing.
+ */
+export function withCdssNyha(data: Autofill, answer: ClinicVitals['nyhaClass']): Autofill {
+  if (!answer || answer.value === NOT_ASSESSED) return data
+  return {
+    ...data,
+    clinicalSelects: {
+      ...data.clinicalSelects,
+      nyha: { value: NYHA_OPTION[answer.value], date: answer.modifiedAt.slice(0, 10), testName: `CDSS 門診評估：NYHA ${answer.value}` },
+    },
+  }
+}
+
 export function useLabAutofill(): LabAutofillState {
   const { observations, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, refetch } = useClinicalData()
   const { patient } = usePatient()
+  // The NYHA class the clinician graded in the CDSS for this patient: the
+  // calculators take it rather than ask it a second time.
+  const patientId = patient?.id
+  useEffect(() => {
+    if (patientId) useClinicVitalsStore.getState().hydrate(patientId)
+  }, [patientId])
+  const nyhaAnswer = useClinicVitals(patientId)?.nyhaClass
 
   const autofill = useMemo(
     () => {
       const data = buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }, diagnosticReports, medications, new Date(), conditions, encounters)
       // A partially loaded chart must not infer absence before diagnoses arrive.
       if (isLoading || isFetching || error) data.clinicalSelects = undefined
-      return data
+      return withCdssNyha(data, nyhaAnswer)
     },
-    [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error],
+    [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, nyhaAnswer],
   )
 
   return useMemo(

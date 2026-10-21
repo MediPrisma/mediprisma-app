@@ -1,3 +1,5 @@
+jest.mock('@/src/shared/config/optional-capabilities', () => ({ CDSS_AVAILABLE: true, SDK_IMPORT_AVAILABLE: true }))
+
 import { tabPanelClasses } from '@/src/shared/config/right-panel-scroll'
 import { getEnabledRightPanelFeatures } from '@/src/shared/config/right-panel-registry'
 import { groupRightPanelFeatures } from '@/src/application/stores/right-panel-tabs.store'

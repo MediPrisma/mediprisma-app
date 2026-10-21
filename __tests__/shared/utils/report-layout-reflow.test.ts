@@ -70,8 +70,9 @@ describe('upper endoscopy organ sections', () => {
   it('separates organ findings, biopsy, diagnoses and equipment metadata in a flattened report', () => {
     const lines = formatReportText(UPPER_ENDOSCOPY)
     expect(lines.filter(l => l.heading).map(l => l.text)).toEqual([
-      'HP FAST：', 'Chief Complain：', 'Medication：', 'Findings：',
-      'Esophagus:', 'Stomach:', 'Duodenum:', 'Diagnosis：', 'Others：', '技術員：',
+      'HP FAST：', 'Chief Complain： N , ULCER , L\'T 4.25CM',
+      'Medication： Example medication 200mg po , oral spray 10% 1-2 puff', 'Findings：',
+      'Esophagus:', 'Stomach:', 'Duodenum:', 'Diagnosis：', 'Others：', '技術員：TEST',
     ])
     expect(lines.find(l => l.text === '(陰性)')?.marker).toBe('-')
     expect(lines.find(l => l.text.includes('biopsy;0.4CM'))?.marker).toBe('A:')

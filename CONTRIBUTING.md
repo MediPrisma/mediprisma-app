@@ -52,6 +52,12 @@ npm run build:gh
 
 修改介面前閱讀 [DESIGN.md](DESIGN.md) 與[介面 skill](.agents/skills/design-mediprisma-ui/SKILL.md)；疾病 status board 另讀[status board skill](.agents/skills/cdss-status-board/SKILL.md)。重要 UI 修改須包含相關測試、lint、正式建置及真實瀏覽器檢查。
 
+## 作者署名與貢獻紀錄
+
+專案作者與貢獻署名集中記錄於根目錄 [NOTICE](NOTICE)，授權條款見 [LICENSE](LICENSE)。新增或修正具名 credit 時，使用已確認的姓名或公開帳號與具體貢獻；作者所屬機構與著作權歸屬須分別確認。NOTICE 的說明不得新增或改寫 Apache 2.0 的授權條件。
+
+保留第三方程式與資料隨附的授權及署名資訊。再散布來源或建置產物前，確認交付內容依 Apache 2.0 第 4 條包含授權副本、修改聲明及適用的署名；來源封裝保留根目錄 LICENSE 與 NOTICE，其他散布形式可依第 4(d) 條在允許的位置呈現 NOTICE 中適用的署名。
+
 ## PR 與發布
 
 PR 說明先寫具體問題與修改後行為，再寫驗證及限制。文件應同步反映實作；只提交本工作線，不夾帶其他 WIP。推送 `master` 的程式變更通過 CI 後可能觸發正式部署，因此先以分支 PR 供審閱。

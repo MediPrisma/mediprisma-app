@@ -1,6 +1,6 @@
 # MediPrisma 隱私權政策
 
-**生效／最後更新：2026-09-22**
+**生效／最後更新：2026-09-27**
 **適用程式基準：v0.51.0**
 
 本政策說明 MediPrisma 官方公開部署在目前 codebase 下如何處理資料。自行部署者會決定自己的 FHIR、AI、身分、郵件、logging、保留政策與法規角色，應發布自己的政策。本文件不能代替部署者的法律評估。
@@ -15,7 +15,7 @@ MediPrisma 為研究／教學用途，非醫療器材。本 repo 未宣稱已取
 2. **本地匯入**：在瀏覽器選擇 FHIR Bundle JSON。
 3. **示範資料**：載入 app 內建的去識別化 demo Bundle。
 
-完整原始 Bundle 不會因載入畫面而自動上傳到 MediPrisma server。當您主動使用 AI、語音、雲端對話、共享範本或回饋功能時，相關資料會依下列說明送往對應服務。
+完整原始 Bundle 不會因載入畫面而自動上傳到 MediPrisma server。當您主動使用 AI、語音、雲端對話、共享範本、回饋或「回報檢驗資料問題」功能時，相關資料會依下列說明送往對應服務。
 
 ## 2. 我們處理的資料
 
@@ -124,6 +124,22 @@ Hosting、Firebase、AI provider、郵件服務或網路基礎設施通常會在
 
 此資料流不傳 prompt、AI 回覆、病歷內容、音訊、圖片、病人識別碼或其雜湊。不宣稱診斷資料不可識別。Firebase SDK 自動提供／更新憑證，Collector 不另存 token，也不要求使用者額外登入；Gateway 定期向 Google 取得公鑰，不將紀錄傳給 Google。認證、網路失敗或關頁可能漏記，但不影響原本 AI 或臨床功能。實作與限制見 [Collector 試行說明](docs/COLLECTOR-PILOT.md)。程式碼存在不代表正式部署已啟用。
 
+### 2.10 檢驗資料問題回報（醫師主動送出）
+
+累積報告工具列有一個「回報」按鈕，供醫事人員回報檢驗資料轉換錯誤（例如 CBC 項目出現在尿液、同一格出現重複值）。這是本政策中**唯一**把臨床衍生資料寫入 MediPrisma server 的例外，範圍只限於此：
+
+- **只在您按下按鈕並在二次確認視窗按「確定送出」後送出**。有問題的分類（可複選）、問題類型與說明都可不填；送出前可展開逐列預覽與完整傳送內容（JSON）。不會自動送出，也不會跳出提示、通知或導覽邀請您回報；所有啟動路由（含北榮雲端病歷路由 `site=vghtpe`）行為相同。
+- **只含檢驗**：送出這位病人累積報告中所有 FHIR 類別為 laboratory 的 Observation（同一筆結果常同時出現在兩個分類，必須一起看），最多 3,000 筆；超過時您勾選的分類全數保留、其餘由新到舊。不含影像、檢查、病理或其他報告、臨床文件與任何報告文字；判斷只看 FHIR 類別，不看項目名稱：生命徵象、問卷、身體檢查等類別不是 laboratory（或除 laboratory 外還帶有這類類別）的資料，以及沒有類別的 Observation，即使出現在檢驗分類也不送，服務端也會拒收。
+- **每列送出的內容**：醫院（來源標示的檢驗院所名稱；夾帶的 10 位數醫事機構代碼會先移除）、項目名稱與代碼（system／code／display，其中健保醫令的 display 即醫令名稱）、Observation 類別代碼、檢體名稱、狀態、單位、數值的型態（位數、小數位、比較符號、字串長度）、相同結果的群組編號、異常旗標代碼、參考值（上下限、單位、短文字）、白名單內的橋接器來源標記（雲端病歷的檢驗類別、檢體方式、日／月檔標記、合併筆數與來源端點路徑；轉換版本、來源模組、去重方式等 tag），以及 app 的處理結果（放進哪個分類、由哪條規則決定、欄位名稱）。
+- **數值**：「附上檢驗數值」預設勾選；勾選時另送數值本身與短結果文字（例如 Negative、1+）。取消勾選則只送上一點所述的型態資訊。長段結果文字無論是否勾選都不送。
+- **時間**：不送任何日期。每列只送「相對天數」（本次回報中最早一列為第 0 天）與當天時間（時:分:秒）；雲端病歷的來源報告時間也只送與該列相差的天數與時間。
+- **說明**：您可選填有問題的分類、問題類型與一句說明（最多 1000 字）。畫面會提醒不要輸入病人資訊；若說明含疑似身分證號、遮蔽身分證號、Email、電話、日期或 7 位以上數字，app 與服務端都會拒絕送出並顯示原因。
+- **明確不送**：病人姓名、身分證號、生日、病歷號、任何 FHIR resource id 與 reference（列以 1、2、3… 編號）、絕對日期、`nhi-visit-date` 等日期標記、Observation.note、報告敘述，以及橋接器用來比對的來源列雜湊。來源字串若含疑似身分證號、遮蔽身分證號、Email、手機號碼、日期（西元或任何年份的民國日期）或 7 位以上連續數字（例如病歷號），會在瀏覽器端（服務端再檢查一次）整段移除並計數；說明欄與來源字串使用同一套規則。
+- **雲端病歷原始檢驗列（僅限從雲端病歷擴充套件開啟的病人）**：對話框多一個「附上雲端病歷原始檢驗列」（預設勾選）。勾選時，只有在您按「送出」（或在預覽中按「讀取原始列預覽」）之後，app 才向擴充套件讀取同一次取得的原始資料——擴充套件只保留 1 小時、原雲端病歷分頁須仍開著同一位病人，讀取不會延長保留時間，也不會跳出任何提示。app 在瀏覽器內立即只留下檢驗（IMUE0060 明細與歷史）列，其餘原始資料不保留、不送出，讀到的內容在關閉對話框或到期時即丟棄。每列只送白名單欄位：醫令代碼與名稱、項目名稱、數值與短結果文字（「附上檢驗數值」勾選時）、單位、參考值、異常標記、檢驗方法、檢驗類別、檢體方式、日／月檔標記、院所名稱（10 位數醫事機構代碼先移除）、科別代碼、來源列序號；開單、檢驗、處方日期改為與轉換後資料同一軸的相對天數與時間。**不送**遮罩身分證號、醫事機構代碼欄、費用年月、診斷（ICD 與病理診斷）、紀錄時間、長段報告文字（只送長度），以及白名單以外的任何欄位（只送欄位名稱，供察覺來源格式變動）。每個字串同樣經過身分資料樣式檢查，服務端再檢查一次並拒收白名單以外的欄位。讀不到時（過期、分頁已關、換病人等），只送轉換後的結果並記下原因代碼。
+- **其他**：app 版本、資料來源類型（雲端病歷／健康存摺／SMART／示範／匯入）、`site` 院所標記、介面語言、名稱模式；以及驗證用的 Firebase ID token（匿名亦可）與 App Check token（均不保存）。
+
+資料由 `submitLabDataReport` Function 驗證格式、重新檢查身分資料樣式與大小（上限 4 MB）後，寫入 Firestore `labDataReports`（資料列與原始檢驗列分段存於其下的 `labDataReportRows`），連同回報者的 Firebase uid、是否匿名、建立時間與到期時間。Firestore 規則禁止任何人從 client 新增或修改回報，回報者本人也無法讀回；只有開發團隊的管理帳號（Google 登入、已驗證的開發者信箱）能在回報檢視頁讀取，並只用於找出與修正資料轉換錯誤。新回報送達時，開發團隊會收到一封經 Resend 寄出的通知信，只含回報編號、勾選的分類、問題類型、各分類列數與資料來源，不含說明文字、醫院、檢驗項目、代碼或數值。開發團隊處理完該筆回報所指的問題後即刪除該筆回報；尚未處理者最長保存 90 天，到期由 Firestore TTL 自動刪除（TTL 通常在到期後 24 小時內執行）。送出後畫面顯示回報編號，聯絡開發團隊時可提供此編號。為限制濫用，Function 以加鹽雜湊後的 uid 與 IP 記錄每小時送出次數，該紀錄不含回報內容且一小時後到期。為避免逾時後重按「送出」造成重複，瀏覽器會附上整份內容的指紋（SHA-256）；Function 以「加鹽雜湊後的 uid＋指紋」記下對應的回報編號（不含回報內容），1 天後刪除，同內容重送時直接回傳原編號。
+
 ## 3. 瀏覽器端儲存
 
 ### 3.1 完整本地 Bundle 與影像
@@ -167,6 +183,7 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 | 文獻搜尋 | Perplexity | 即時醫學文獻／網路搜尋 |
 | 語音 | Whisper 相容 endpoint／proxy | 音訊轉文字 |
 | 回饋郵件 | Resend 與部署的 feedback function | 傳送問題回報 |
+| 檢驗資料問題回報 | Google Firebase Functions（`submitLabDataReport`）、Firestore；僅 MediPrisma 開發團隊的管理帳號可讀；通知信經 Resend（只含摘要） | 找出並修正檢驗資料轉換錯誤（見 §2.10；去識別、只含檢驗） |
 | Hosting | GitHub Pages；可選 mediprisma.tw host | 提供靜態 app |
 | 使用統計 | Google Analytics 4（Firebase Analytics） | 了解功能使用情形與 AI 可靠性（見 §2.8；不含病人資料） |
 | 自訂 AI | 使用者／醫療機構設定的 OpenAI-compatible endpoint；可選 MediPrisma Firebase Gateway | 依使用者明確選擇直接處理，或經受限 Gateway 轉送 |
@@ -188,6 +205,7 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 | User templates／modules | 登入時可同步至帳號；訪客保留於目前瀏覽器，直到使用者刪除、重設或移除網站資料 |
 | Shared prompts | 直到作者／管理者刪除或依社群政策移除 |
 | Feedback email／附圖附件／service logs | 由部署者、Resend 與服務政策決定 |
+| 檢驗資料問題回報（Firestore `labDataReports`） | 問題處理完即刪除；最長保存 90 天，到期由 Firestore TTL 自動刪除；限流紀錄 1 小時後到期 |
 
 點選「清除本地資料」可刪除 app 管理的 Bundle、影像與 AI result caches。清除瀏覽器網站資料也可移除 local storage；這不會自動刪除 Firestore 或第三方已收到的請求。
 
@@ -200,6 +218,7 @@ LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、on
 - 在 history 刪除個別對話。
 - 清除本地 Bundle／cache／keys。
 - 管理個人 chat templates、custom summary modules 與 shared prompts。
+- 不使用「回報檢驗資料問題」即不會送出任何檢驗資料；使用時可縮小檢驗項目、取消「附上檢驗數值」，並在二次確認前取消。已送出的回報無法由 client 自行查看或刪除，如需提前刪除請提供回報編號聯絡部署者。
 
 關於使用統計（§2.8）：這些資料在使用者開啟 app 時即開始收集，**不會另外跳出詢問視窗，目前也沒有提供關閉的開關**。可用的做法是清除網站資料（會一併重置 `browser_id`），或使用會封鎖 GA 的瀏覽器／擴充套件——後者只影響統計，不影響 app 功能。本段刻意如實描述現況，不主張存在尚未實作的同意機制。
 
@@ -209,7 +228,7 @@ Codebase 尚未提供完整的「刪除 Firebase 帳號及所有子 collection�
 
 ## 7. 資料安全
 
-目前控制包括 SMART PKCE、本地 AES-GCM、session-scoped key、Firebase Auth token／可選 App Check／Firestore Rules（由後端 repo 部署）、PII minimization、DOMPurify、generic error、feedback HTML escaping／origin check／rate limit、CI、CodeQL 與 dependency monitoring。
+目前控制包括 SMART PKCE、本地 AES-GCM、session-scoped key、Firebase Auth token／可選 App Check／Firestore Rules（由後端 repo 部署）、PII minimization、DOMPurify、generic error、feedback HTML escaping／origin check／rate limit、檢驗資料回報的雙端身分資料樣式檢查與 schema 白名單、CI、CodeQL 與 dependency monitoring。
 
 沒有任何系統能保證絕對安全。使用者與部署者應避免在未經授權的裝置、瀏覽器 extension 或網路環境處理真實病人資料，並建立事件應變與通知程序。更多限制見 [Security Guide](./docs/SECURITY.md)。
 

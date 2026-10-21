@@ -1,5 +1,6 @@
 import { buildClinicalSelects, ecgSelects, antihypertensiveSelect } from '@/features/medical-calculator/hfpef-clinical-autofill'
-import { buildAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
+import { buildAutofill, withCdssNyha } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
+import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { resolveInput, isFullyAutofillable } from '@/features/medical-calculator/autofill-compute'
 import { HFPEF } from '@/features/medical-calculator/calculators/hfpef'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
@@ -79,5 +80,50 @@ describe('current antihypertensive ingredients', () => {
     expect(resolveInput(HFPEF[0].inputs.find(i => i.key === 'af')!, af)).toMatchObject({ value: 'yes', filled: true, source: { resourceType: 'DiagnosticReport' } })
     expect(resolveInput(HFPEF[0].inputs.find(i => i.key === 'antihypertensives')!, af)).toMatchObject({ value: 'yes', filled: true })
     expect(isFullyAutofillable(HFPEF[0])).toBe(false)
+  })
+})
+
+// Clinician request 2026-09-28: MAGGIC and LIFE-Preserved read diabetes, COPD,
+// β-blocker and ACEI/ARB from the record rather than asking them again.
+describe('diagnoses and drug classes for the prognosis calculators', () => {
+  test.each([['E11.9', 'diabetes'], ['E10.65', 'diabetes'], ['250.00', 'diabetes'], ['J44.1', 'copd'], ['J43.9', 'copd'], ['496', 'copd']] as const)('code %s answers %s 「是」 with its source', (code, key) => {
+    expect(buildClinicalSelects([], [], now, [dx(code)])[key]).toMatchObject({ value: 'yes', resourceType: 'Condition' })
+  })
+  test('a code the record lacks is never a 「否」', () => {
+    const result = buildClinicalSelects([], [drug('metformin')], now, [dx('I10')])
+    expect(result.diabetes).toBeUndefined()
+    expect(result.copd).toBeUndefined()
+  })
+  test('a resolved or refuted diagnosis answers nothing', () => {
+    expect(buildClinicalSelects([], [], now, [{ ...dx('E11.9'), clinicalStatus: 'resolved' }]).diabetes).toBeUndefined()
+    expect(buildClinicalSelects([], [], now, [{ ...dx('E11.9'), verificationStatus: 'refuted' }]).diabetes).toBeUndefined()
+  })
+  test('a current β-blocker or ACEI/ARB is 「是」; current prescriptions without one are a labelled 「否」; none at all say nothing', () => {
+    const on = buildClinicalSelects([], [drug('bisoprolol 5mg'), drug('sacubitril/valsartan')], now)
+    expect(on.betaBlocker).toMatchObject({ value: 'yes' })
+    expect(on.aceiArb).toMatchObject({ value: 'yes' })
+    const off = buildClinicalSelects([], [drug('amlodipine')], now)
+    expect(off.betaBlocker).toMatchObject({ value: 'no' })
+    expect(off.betaBlocker?.testName).toContain('請核對')
+    expect(buildClinicalSelects([], [], now).betaBlocker).toBeUndefined()
+  })
+  test('a stopped prescription is not current', () => {
+    expect(buildClinicalSelects([], [drug('bisoprolol', 'bb', 'stopped'), drug('amlodipine')], now).betaBlocker?.value).toBe('no')
+  })
+})
+
+describe('NYHA from the CDSS, and BMI as reported', () => {
+  test('the CDSS NYHA grading answers MAGGIC; 「未評估」 answers nothing', () => {
+    const base = buildAutofill([], {}, [], [], now)
+    expect(withCdssNyha(base, { value: 'II', modifiedAt: '2026-09-12T03:00:00Z' }).clinicalSelects?.nyha).toMatchObject({ value: '2', testName: 'CDSS 門診評估：NYHA II' })
+    expect(withCdssNyha(base, { value: 'not-assessed', modifiedAt: '2026-09-12T03:00:00Z' }).clinicalSelects?.nyha).toBeUndefined()
+    const maggic = CALCULATORS.find((calc) => calc.id === 'maggic-hf')!
+    const nyha = maggic.inputs.find((input) => input.key === 'nyha')!
+    expect(resolveInput(nyha, withCdssNyha(base, { value: 'III', modifiedAt: '2026-09-12T03:00:00Z' }))).toMatchObject({ value: '3', filled: true })
+  })
+  test('BMI from same-day height and weight is rounded to one decimal', () => {
+    const obs = (loinc: string, value: number, unit: string) => ({ id: loinc, code: { coding: [{ system: 'http://loinc.org', code: loinc }] }, valueQuantity: { value, unit }, effectiveDateTime: '2026-09-11', status: 'final' })
+    const autofill = buildAutofill([obs('29463-7', 82, 'kg'), obs('8302-2', 158, 'cm')] as never, {}, [], [], now)
+    expect(autofill.resolve({ kind: 'bmi' })?.value).toBe(32.8)
   })
 })

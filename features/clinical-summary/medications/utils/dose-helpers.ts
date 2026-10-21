@@ -42,6 +42,10 @@ export function humanDoseAmount(doseAndRate?: DoseAndRate[], text?: string): str
   }
   
   if (text) {
+    // A decimal-only matcher would read "1/2 tab" as "2 tab". Keep a
+    // fractional free-text dose verbatim in the full SIG instead of inventing
+    // a separate numeric dose. An explicit structured dose still wins above.
+    if (/\d\s*\/\s*\d|[¼½¾⅓⅔]/.test(text)) return ''
     const m = text.match(/(\d+(?:\.\d+)?)\s*(tab(?:let)?s?|cap(?:sule)?s?|mL|ml|mg|mcg|g|drop(?:s)?|puff(?:s)?)/i)
     if (m) {
       const val = m[1]
@@ -51,6 +55,24 @@ export function humanDoseAmount(doseAndRate?: DoseAndRate[], text?: string): str
   }
   
   return ""
+}
+
+/** `dose`, unless the instruction already starts with that same dose. A
+ *  free-text SIG such as "1 tab QD" yields the dose "1 tab" and is also shown
+ *  whole as the instruction (kept verbatim, see displayDosageInstruction), so
+ *  joining the two read "1 tab 1 tab QD". Only an equal dose is dropped; a
+ *  different leading dose ("2 tab QD" against 1 tab) is a discrepancy and both
+ *  stay. The row's `dose` field itself is untouched: dose changes compare it. */
+export function doseUnlessRepeated(dose?: string, instruction?: string): string | undefined {
+  if (!dose) return undefined
+  const match = instruction?.match(
+    // The unit must end there: "5 mg/kg" or "5 mg/mL" is a per-weight dose
+    // or a concentration, not the absolute dose "5 mg".
+    /^\s*(\d+(?:\.\d+)?)\s*(tab(?:let)?s?|cap(?:sule)?s?|mL|ml|mg|mcg|g|drop(?:s)?|puff(?:s)?|錠)(?=$|[\s,;，、])/i,
+  )
+  if (!match) return dose
+  const leading = `${match[1]} ${normalizeFormUnit(match[2])}`.toLowerCase()
+  return leading === dose.trim().toLowerCase() ? undefined : dose
 }
 
 export function humanDoseFreq(rep?: TimingRepeat): string {

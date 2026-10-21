@@ -1,0 +1,677 @@
+{
+ "resourceType": "Bundle",
+ "id": "sim-p5-titrating-af",
+ "type": "collection",
+ "timestamp": "2026-09-27T09:00:00+08:00",
+ "entry": [
+  {
+   "fullUrl": "urn:uuid:Patient-sim-p5",
+   "resource": {
+    "resourceType": "Patient",
+    "id": "sim-p5",
+    "name": [
+     {
+      "text": "模擬病人 P5"
+     }
+    ],
+    "gender": "male",
+    "birthDate": "1952-01-15"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-I50.22",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-I50.22",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "I50.22"
+      }
+     ]
+    },
+    "onsetDateTime": "2026-05-01",
+    "recordedDate": "2026-05-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-I48.0",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-I48.0",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "I48.0"
+      }
+     ]
+    },
+    "onsetDateTime": "2025-11-01",
+    "recordedDate": "2025-11-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-I10",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-I10",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "I10"
+      }
+     ]
+    },
+    "onsetDateTime": "2015-01-01",
+    "recordedDate": "2015-01-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Condition-cond-E11.9",
+   "resource": {
+    "resourceType": "Condition",
+    "id": "cond-E11.9",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "clinicalStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+       "code": "active"
+      }
+     ]
+    },
+    "verificationStatus": {
+     "coding": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+       "code": "confirmed"
+      }
+     ]
+    },
+    "code": {
+     "coding": [
+      {
+       "system": "http://hl7.org/fhir/sid/icd-10-cm",
+       "code": "E11.9"
+      }
+     ]
+    },
+    "onsetDateTime": "2019-01-01",
+    "recordedDate": "2019-01-01"
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:DiagnosticReport-p5-ecg",
+   "resource": {
+    "resourceType": "DiagnosticReport",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-ecg",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "text": "ECG"
+    },
+    "conclusion": "Atrial fibrillation, ventricular rate 82."
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-ef",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-ef",
+    "status": "final",
+    "effectiveDateTime": "2026-06-01",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "10230-1"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 30,
+     "unit": "%"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-np",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-np",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "33762-6"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 2400,
+     "unit": "pg/mL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-bp",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-bp",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "85354-9"
+      }
+     ]
+    },
+    "component": [
+     {
+      "code": {
+       "coding": [
+        {
+         "system": "http://loinc.org",
+         "code": "8480-6"
+        }
+       ]
+      },
+      "valueQuantity": {
+       "value": 112,
+       "unit": "mmHg"
+      }
+     },
+     {
+      "code": {
+       "coding": [
+        {
+         "system": "http://loinc.org",
+         "code": "8462-4"
+        }
+       ]
+      },
+      "valueQuantity": {
+       "value": 68,
+       "unit": "mmHg"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-hr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-hr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "8867-4"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 82,
+     "unit": "bpm"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-wt",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-wt",
+    "status": "final",
+    "effectiveDateTime": "2026-09-27",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "29463-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 70,
+     "unit": "kg"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-egfr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-egfr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "77147-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 48,
+     "unit": "mL/min/1.73m2"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-cr",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-cr",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "2160-0"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 1.4,
+     "unit": "mg/dL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-k",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-k",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "2823-3"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 4.6,
+     "unit": "mmol/L"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-na",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-na",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "2951-2"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 137,
+     "unit": "mmol/L"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-hb",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-hb",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "718-7"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 11.8,
+     "unit": "g/dL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:Observation-p5-plt",
+   "resource": {
+    "resourceType": "Observation",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "id": "p5-plt",
+    "status": "final",
+    "effectiveDateTime": "2026-09-20",
+    "code": {
+     "coding": [
+      {
+       "system": "http://loinc.org",
+       "code": "777-3"
+      }
+     ]
+    },
+    "valueQuantity": {
+     "value": 210,
+     "unit": "10*3/uL"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-bisoprolol-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "bisoprolol-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "bisoprolol"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 2.5,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 1,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-ramipril-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "ramipril-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "ramipril"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 2.5,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 1,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-furosemide-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "furosemide-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "furosemide"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 40,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 1,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-apixaban-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "apixaban-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "apixaban"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 5,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 2,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:uuid:MedicationRequest-metformin-2026-09-01",
+   "resource": {
+    "resourceType": "MedicationRequest",
+    "id": "metformin-2026-09-01",
+    "subject": {
+     "reference": "Patient/sim-p5"
+    },
+    "status": "active",
+    "intent": "order",
+    "medicationCodeableConcept": {
+     "text": "metformin"
+    },
+    "authoredOn": "2026-09-01",
+    "dosageInstruction": [
+     {
+      "doseAndRate": [
+       {
+        "doseQuantity": {
+         "value": 500,
+         "unit": "mg"
+        }
+       }
+      ],
+      "timing": {
+       "repeat": {
+        "frequency": 2,
+        "period": 1,
+        "periodUnit": "d"
+       }
+      }
+     }
+    ],
+    "dispenseRequest": {
+     "expectedSupplyDuration": {
+      "value": 28,
+      "unit": "days"
+     }
+    }
+   }
+  }
+ ]
+}

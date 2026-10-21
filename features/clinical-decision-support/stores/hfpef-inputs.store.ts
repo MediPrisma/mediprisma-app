@@ -20,11 +20,8 @@
 import { create } from 'zustand'
 import {
   createHydrationGuard,
-  discardEncryptedAnswers,
-  hasEncryptedAnswers,
-  loadEncryptedAnswers,
-  persistEncryptedAnswers,
 } from '@/src/application/services/encrypted-answer-cache.service'
+import { patientAnswerBacking, patientAnswerStorageKey } from './patient-answer-backing'
 
 /** One value the clinician typed, with the day it was measured and changed. */
 export interface HfpefInputEntry {
@@ -88,11 +85,9 @@ export function mergeHfpefInputs(
   return changed ? { entries } : base
 }
 
-const STORAGE_PREFIX = 'cdss-hfpef-inputs:'
-
 /** The key one patient's encrypted typed echo values are kept under. */
 export function hfpefInputsStorageKey(patientId: string): string {
-  return `${STORAGE_PREFIX}${patientId}`
+  return patientAnswerStorageKey('hfpef-inputs', patientId)
 }
 
 /**
@@ -124,12 +119,11 @@ function toHfpefInputs(parsed: unknown): HfpefInputs {
 }
 
 function writeStored(patientId: string, inputs: HfpefInputs): void {
-  const key = hfpefInputsStorageKey(patientId)
   if (Object.keys(inputs.entries).length === 0) {
-    discardEncryptedAnswers(key)
+    patientAnswerBacking().discard('hfpef-inputs', patientId)
     return
   }
-  persistEncryptedAnswers(key, inputs)
+  patientAnswerBacking().save('hfpef-inputs', patientId, inputs)
 }
 
 const hydration = createHydrationGuard()
@@ -143,11 +137,25 @@ interface HfpefInputsState {
   hydrate: (patientId: string) => void
   setInputs: (patientId: string, patch: HfpefInputsPatch, now?: Date) => void
   clearInputs: (patientId: string) => void
+  carryForward: (patientId: string, saved: unknown) => void
+  canCarryForward: (patientId: string) => boolean
 }
 
 export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
   byPatientId: {},
   hydratedPatientIds: {},
+  canCarryForward: patientId => Boolean(get().hydratedPatientIds[patientId]) && !hydration.isPending(patientId),
+
+  carryForward: (patientId, saved) => {
+    if (!patientId) return
+    if (!get().canCarryForward(patientId)) throw new Error('cdss_carry_forward_unavailable')
+    const old = toHfpefInputs(saved)
+    set(state => {
+      const next = { entries: { ...old.entries, ...state.byPatientId[patientId]?.entries } }
+      writeStored(patientId, next)
+      return { byPatientId: { ...state.byPatientId, [patientId]: next } }
+    })
+  },
 
   hydrate: (patientId) => {
     if (!patientId) return
@@ -157,7 +165,7 @@ export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
     // Values already in memory are this session's own, and a chart with no
     // stored record is a first visit. Neither needs a decryption, and neither
     // writes anything.
-    if (state.byPatientId[patientId] || !hasEncryptedAnswers(hfpefInputsStorageKey(patientId))) {
+    if (state.byPatientId[patientId] || !patientAnswerBacking().has('hfpef-inputs', patientId)) {
       set((current) => ({
         byPatientId: current.byPatientId[patientId]
           ? current.byPatientId
@@ -179,7 +187,7 @@ export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
         hydratedPatientIds: { ...current.hydratedPatientIds, [patientId]: true },
       }))
     }
-    void loadEncryptedAnswers<unknown>(hfpefInputsStorageKey(patientId))
+    void patientAnswerBacking().load('hfpef-inputs', patientId)
       .then((stored) => apply(toHfpefInputs(stored)))
       // A record that cannot be read leaves every field to the report, which
       // is a first visit's reading.
@@ -204,7 +212,7 @@ export const useHfpefInputsStore = create<HfpefInputsState>()((set, get) => ({
 
   clearInputs: (patientId) => {
     if (!patientId) return
-    discardEncryptedAnswers(hfpefInputsStorageKey(patientId))
+    patientAnswerBacking().discard('hfpef-inputs', patientId)
     set((state) => ({
       byPatientId: { ...state.byPatientId, [patientId]: EMPTY_HFPEF_INPUTS },
       hydratedPatientIds: { ...state.hydratedPatientIds, [patientId]: true },

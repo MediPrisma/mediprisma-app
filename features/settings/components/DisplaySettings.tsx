@@ -185,7 +185,7 @@ export function DisplaySettings() {
           Hidden once Beta features are on, because Beta already shows every
           unreleased pack: leaving per-pack checkboxes standing there would be
           controls that cannot change what the tester sees. */}
-      {pilotPacks.visible && !betaFeaturesEnabled ? (
+      {pilotPacks.visible && !betaFeaturesEnabled && PILOT_CANDIDATE_PACKS.length > 0 ? (
         <div className="space-y-3" data-testid="pilot-packs-settings">
           <Label className="text-xs uppercase text-muted-foreground">
             {t.settings.pilotPacks}

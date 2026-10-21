@@ -21,7 +21,10 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient, LocalBundleModeError } from '../client/fhir-client.service'
 import { FhirMapper } from '../mappers/fhir.mapper'
-import { isMedicationRemainingSummaryBasic } from '../mappers/fhir.mapper'
+import {
+  groupSpecialMaterialsByProcedure,
+  isMedicationRemainingSummaryBasic,
+} from '../mappers/fhir.mapper'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 import {
   classifyFhirQueryError,
@@ -31,6 +34,7 @@ import {
 import {
   MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM,
   MEDCLOUD_REMAINING_SUMMARY_CODE,
+  MEDCLOUD_SPECIAL_MATERIAL_CODE,
 } from '@/src/shared/constants/medcloud.constants'
 
 // Skip console noise for the "no SMART client" sentinel — that's a planned
@@ -514,13 +518,39 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     }
   }
 
+  /**
+   * Special materials linked to surgeries. Optional enrichment of the
+   * procedure rows: a server without these records, or one that refuses the
+   * search, leaves the procedures exactly as they were.
+   */
+  private async fetchSpecialMaterialsByProcedure(patientId: string) {
+    try {
+      const token = encodeURIComponent(
+        `${MEDCLOUD_BASIC_RESOURCE_TYPE_SYSTEM}|${MEDCLOUD_SPECIAL_MATERIAL_CODE}`,
+      )
+      const response = await this.requestWithBasicFallback(
+        `Basic?subject=Patient/${patientId}&code=${token}&_count=100`,
+        `Basic?subject=Patient/${patientId}&_count=100`,
+      )
+      return groupSpecialMaterialsByProcedure(
+        (response.entry ?? []).map((entry: any) => entry.resource),
+      )
+    } catch (error) {
+      warnFhirError('Failed to fetch special-material records:', error)
+      return undefined
+    }
+  }
+
   async fetchProcedures(patientId: string): Promise<ProcedureEntity[]> {
+    const specialMaterials = this.fetchSpecialMaterialsByProcedure(patientId)
     try {
       const response = await this.requestWithBasicFallback(
         `Procedure?patient=${patientId}&_count=100&_sort=-date`,
         `Procedure?patient=${patientId}&_count=100`,
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toProcedure(e.resource)) || []
+      const specialMaterialsByProcedure = await specialMaterials
+      const result = response.entry?.map((e: any) =>
+        FhirMapper.toProcedure(e.resource, specialMaterialsByProcedure)) || []
       this.markQuerySuccess('Procedure', 'Procedure', result.length)
       return result
     } catch (error) {

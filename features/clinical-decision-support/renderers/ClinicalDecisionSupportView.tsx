@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
-import { clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
+import { DIABETES_FACT_KEYS, clinicalModuleLabel, getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
@@ -61,6 +61,7 @@ import { HeartRhythmPanel } from './HeartRhythmPanel'
 import { CdssModuleSections } from './CdssModuleSections'
 import { LipidModuleSections } from './LipidModuleSections'
 import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPrognosisModels'
+import { useTodayNow } from '../hooks/use-local-day.hook'
 import { hfPrognosisEvidence } from '../utils/hf-prognosis-evidence'
 import { AtrialFibrillationVisitFlow } from './AtrialFibrillationVisitFlow'
 import { buildDiseaseBoard, AF_BOARD_CONFIG } from './disease-board'
@@ -88,10 +89,18 @@ import type {
 import type { CdssLayout } from '../stores/layout-preference.store'
 import type { CdssPatientProfile } from '../types'
 import { statusStyle, StatusIcon } from './status-presentation'
+import { VisitDecisionScreen } from './visit/VisitDecisionScreen'
+import type { VisitAnswers, VisitAsk, VisitDecisionModel } from '../types'
+import { afAnswersForInput, coronaryPhaseForInput, phenotypeAnswerForInput } from './visit/physician-input'
+import type { CoronaryPhaseAnswer } from '../stores/coronary-phase.store'
+import type { VisitAnswerProvenance } from './visit/VisitAsks'
 
 interface ClinicalDecisionSupportViewProps {
   afAnswers?: AfAnswers
   onAfAnswer?: (id: string, value: boolean | undefined) => void
+  /** CAD DP-01's class, pressed on the decision map, and the answer as kept. */
+  onCoronaryPhase?: (answer: CoronaryPhaseAnswer) => void
+  coronaryPhaseAnswer?: CoronaryPhaseAnswer
   result: CdssResult
   englishResult?: CdssResult
   locale: CdssLocale
@@ -142,6 +151,24 @@ interface ClinicalDecisionSupportViewProps {
   onSaveHfpefInputs?: (patch: HfpefInputsPatch) => void
   /** Changes when the NHI page returns to its record-only default state. */
   nhiPageResetKey?: number
+  /**
+   * The pack's visit decision model. With `layout="map"` it draws the decision
+   * map; without one the map is not available and the page falls back to the
+   * three sections.
+   */
+  visitModel?: VisitDecisionModel
+  /**
+   * The other packs' results the map reads (the pack's
+   * `VisitMapDefinition.companions` — on the heart-failure page, atrial
+   * fibrillation's), so the cards behind their decision points open from the map.
+   */
+  companionResults?: readonly CdssResult[]
+  visitAnswers?: VisitAnswers
+  /** Where each of today's answers was given, so another page can say so. */
+  visitAnswerSources?: VisitAnswerProvenance
+  onVisitAnswer?: (id: VisitAsk['id'], value: string | null) => void
+  /** The companions' English builds, so their cards' rationale copies in English too. */
+  englishCompanionResults?: readonly CdssResult[]
 }
 
 const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
@@ -149,6 +176,7 @@ const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
   age: ['age'],
   'low-hdl': ['HDL'],
   'met-bp': ['bloodPressure'],
+  'met-glucose': ['diabetesGlucoseLoweringTherapy'],
   'met-tg': ['triglycerides'],
   cad: ['coronaryArteryDiagnosis'],
   'recent-mi': ['myocardialInfarctionEventDate'],
@@ -156,12 +184,14 @@ const NHI_RECORD_FACT_KEYS: Readonly<Record<string, readonly string[]>> = {
   carotid: ['carotidStenosisDiagnosis'],
   acs: ['acuteCoronarySyndromeDiagnosis', 'myocardialInfarctionDiagnosis'],
   'stroke-atherosclerosis': ['ischemicStrokeDiagnosis'],
-  diabetes: ['type1DiabetesDiagnosis', 'type2DiabetesDiagnosis'],
+  // The pack's own list: E10, E11, E08/E09/E13, then current glucose-lowering
+  // therapy, which is often the only trace when a visit was billed as I10.
+  diabetes: DIABETES_FACT_KEYS,
   'predialysis-ckd': ['ckdChronicity', 'ckdDiagnosis'],
   'severe-ldl': ['LDL'],
 }
 
-function buildNhiRecordSources(
+export function buildNhiRecordSources(
   facts: CdssPatientProfile['facts'] | undefined,
 ): Readonly<Record<string, readonly CdssFactSource[]>> | undefined {
   if (!facts) return undefined
@@ -2097,6 +2127,8 @@ function RecommendationDetail({
 export function ClinicalDecisionSupportView({
   afAnswers,
   onAfAnswer,
+  onCoronaryPhase,
+  coronaryPhaseAnswer,
   result,
   englishResult,
   locale,
@@ -2105,7 +2137,7 @@ export function ClinicalDecisionSupportView({
   nhiLipidAnswerProvenance,
   profileFacts,
   followUpHistory,
-  layout = 'flow',
+  layout: requestedLayout = 'flow',
   clinicVitals,
   onSaveClinicVitals,
   onClearClinicVitals,
@@ -2117,8 +2149,21 @@ export function ClinicalDecisionSupportView({
   hfpefReading,
   onSaveHfpefInputs,
   nhiPageResetKey = 0,
+  visitModel,
+  companionResults,
+  visitAnswers,
+  visitAnswerSources,
+  onVisitAnswer,
+  englishCompanionResults,
 }: ClinicalDecisionSupportViewProps) {
+  // The decision map exists only with a model; asked for without one, the page
+  // is the three sections it always was.
+  const layout: CdssLayout = requestedLayout === 'map' && !visitModel ? 'sections' : requestedLayout
   const englishRecommendations = new Map([
+    ...(englishCompanionResults ?? []).flatMap(companion => [
+      ...companion.recommendations,
+      ...(companion.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
+    ]),
     ...(englishResult?.recommendations ?? []),
     ...(englishResult?.automatedChecks ?? []).flatMap(check => check.recommendation ? [check.recommendation] : []),
   ].map(item => [item.id, item]))
@@ -2150,13 +2195,18 @@ export function ClinicalDecisionSupportView({
   } as const
 
   const [requestedExpandedId, setRequestedExpandedId] = useState<string | null>(null)
-  // One clock per mount: the board prints how old each safety input is, and a
-  // clock read on every render would make the same value drift across ticks.
-  const [now] = useState(() => new Date())
+  // One clock per day: the board prints how old each safety input is, and a
+  // clock read on every render would make the same value drift across ticks —
+  // but a page left open past midnight reads it again, so yesterday's answers
+  // and decisions stop counting as today's (#166 review).
+  const now = useTodayNow()
   const board = useMemo(
     () => (layout === 'classic' ? undefined : buildHeartFailureBoard(result, locale, now, profileFacts)),
     [layout, locale, now, profileFacts, result],
   )
+  // The decision map replaces every other face of the page while it is chosen,
+  // and exists only when the pack produced a model for it.
+  const isMap = layout === 'map' && Boolean(visitModel)
   const afBoard = useMemo(() => layout === 'classic' ? undefined : buildDiseaseBoard(result, AF_BOARD_CONFIG, locale, profileFacts), [result, locale, profileFacts, layout])
   // The visit flow is the heart-failure default. Every other pack, and the
   // original board, take the paths they always took — not a line of them moves.
@@ -2183,6 +2233,7 @@ export function ClinicalDecisionSupportView({
         decisions: physicianDecisions ?? {},
         patientId,
         includeAllModules: isSections,
+        trustsPackFollowUp: isSections,
       })
       : undefined
   ), [
@@ -2327,10 +2378,76 @@ export function ClinicalDecisionSupportView({
     : undefined
   // The board answers what the clinical summary consolidates — what to do and
   // what is missing — so the two never show together.
-  const showClinicalSummary = !board && !isSections && !isNhiTable && !afBoard && (
+  const showClinicalSummary = !board && !isSections && !isNhiTable && !afBoard && !isMap && (
     clinicalSummary.missingInputs.length > 0
     || clinicalSummary.actionRecommendations.length > 0
   )
+
+  // Every card a decision point reads: this pack's (completed checks restored,
+  // as the sections show them) and its companions' — on the heart-failure
+  // page, the atrial-fibrillation cards behind DP-14 and DP-28.
+  if (isMap && visitModel) {
+    const companionModules = (companionResults ?? []).flatMap((companion) => restoreCompletedModules(companion).recommendations)
+    const visitModules = new Map<string, CdssRecommendation>([
+      ...companionModules.map((item): [string, CdssRecommendation] => [item.id, item]),
+      ...displayRecommendations.map((item): [string, CdssRecommendation] => [item.id, item]),
+    ])
+    return (
+      <div className="space-y-3" data-testid="clinical-decision-support-view">
+        <VisitDecisionScreen
+          key={`${patientId ?? 'no-patient'}:${result.packId}`}
+          model={visitModel}
+          isEnglish={isEnglish}
+          now={now}
+          packVersion={result.packVersion}
+          screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
+          prognosisEvidence={hfPrognosisEvidence(profileFacts, isEnglish)}
+          decisions={physicianDecisions}
+          onRecordDecision={onRecordDecision}
+          onClearDecision={onClearDecision}
+          answers={visitAnswers ?? {}}
+          {...(visitAnswerSources ? { answerSources: visitAnswerSources } : {})}
+          onAnswer={onVisitAnswer}
+          {...(coronaryPhaseAnswer ? { coronaryPhase: coronaryPhaseAnswer } : {})}
+          onPhysicianInput={onAnswerPhenotype || onAfAnswer || onCoronaryPhase ? (input) => {
+            // CAD DP-01 answers the coronary phase; AF DP-01 the AF diagnosis
+            // and its type; the rest are the heart-failure phenotype gate's.
+            const coronary = coronaryPhaseForInput(input, new Date())
+            if (coronary) {
+              onCoronaryPhase?.(coronary)
+              return
+            }
+            const af = afAnswersForInput(input)
+            if (af) {
+              for (const answer of af) onAfAnswer?.(answer.id, answer.value)
+              return
+            }
+            const next = onAnswerPhenotype ? phenotypeAnswerForInput(input, phenotypeAnswer, new Date()) : undefined
+            if (next) onAnswerPhenotype?.(next)
+          } : undefined}
+          // A point's own questions go back to the answer set the pack names:
+          // AF DP-08's valves are AF answers, HF DP-06's triggers today's
+          // visit answers, its signs the clinic examination (each term of the
+          // row, so the congestion table and the HFpEF criteria read them too).
+          onPointAnswer={(answers: string, id: string, value: boolean | undefined, terms?: readonly string[]) => {
+            if (answers === 'af-clinical') onAfAnswer?.(id, value)
+            else if (answers === 'visit') onVisitAnswer?.(id as VisitAsk['id'], value === undefined ? null : value ? 'yes' : 'no')
+            else if (answers === 'clinic-exam' && terms?.length) {
+              onSaveClinicVitals?.({ signAnswers: Object.fromEntries(terms.map((term) => [term, value === undefined ? null : value ? 'present' : 'absent'])) })
+            }
+          }}
+          // Today's NYHA class, graded beside DP-03's asks, is the clinic
+          // examination's (`nyhaClass`, the physicianNyhaClass fact the pack reads).
+          onGrade={(id: string, value: string | null) => {
+            if (id === 'nyha' && (value === null || value === 'I' || value === 'II' || value === 'III' || value === 'IV')) {
+              onSaveClinicVitals?.({ nyhaClass: value })
+            }
+          }}
+          modules={visitModules}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3" data-testid="clinical-decision-support-view">
@@ -2484,6 +2601,8 @@ export function ClinicalDecisionSupportView({
           key={patientId ?? 'no-patient'}
           sectionRecommendations={isSections ? displayRecommendations : undefined}
           prognosisContent={isSections ? <HfPrognosisModels key={patientId ?? 'no-patient'} locale={locale} evidence={hfPrognosisEvidence(profileFacts, isEnglish)} /> : undefined}
+          visitAnswers={visitAnswers}
+          onVisitAnswer={onVisitAnswer}
           rhythmPanel={<HeartRhythmPanel isEnglish={isEnglish} reading={hfpefReading?.inputs.find(input => input.key === 'rhythm')} onSave={onSaveHfpefInputs} />}
           flow={visitFlow}
           board={board}

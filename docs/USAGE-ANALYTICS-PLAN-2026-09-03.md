@@ -67,6 +67,9 @@
 - `tour_end { tour, tour_outcome: finish | abandon, step }`：`prev.active && !state.active` 視為結束；`tour_outcome` 由 `prev.stepId` 是否為 `finish` / `custom-summary-finish` 判定；參數刻意不叫 `outcome` — GA4 的 custom dimension 以**參數名**註冊，與 `ai_result.outcome`（七個值）同名就會擠進同一個 dimension；`step` 取 `prev.stepId`（`stop()` 會在同一個 set 內把 `stepId` 清掉）。`openCustomSummaryGuide()` 只有在導覽正在跑時才算結束。
 - **尚未區分啟動來源**（首次自動邀請 vs. 說明選單），因為那個資訊只存在導覽元件裡；要區分就在 store 的 `start()` 加參數。
 
+
+> 2026-10-19 更新：導覽改為「導覽中心」＋任務小導覽。`tour` 的值改為導覽 id（`getting-started`、`labs-reports`、`medications`… 與 `custom-summary`，清單在 `src/infrastructure/telemetry/usage-analytics.ts` 的 `ANALYTICS_TOURS`，測試保證與 `features/guided-tour/guided-tour.tours.ts` 一致）；`left` / `right` 不再送出。訂閱改為 `useGuidedTourStore`（`session` 遞增＝開始；`tourId` 轉為 null＝結束，`tour_outcome` 取 store 的 `lastOutcome`，只有在最後一步按「完成」才是 `finish`；導覽進行中改開另一個導覽，前一個記為 `abandon`）。左右兩個 tour store 現在只是畫面切換的通道（`scene`），不再回報；自訂摘要詳盡導覽仍由右側 store 的 `custom-summary` 回報。
+
 ### 2.5 `report_interpret` — 民眾一鍵「AI 翻譯解讀」（2026-09-04 追加）
 
 - `report_interpret { host: report-row | document-card | document-dialog, action: open | regenerate }`

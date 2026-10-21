@@ -15,6 +15,7 @@ import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { LocalBundleRepository } from '@/src/infrastructure/fhir/repositories/local-bundle.repository'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 /**
  * Clinical-data source for the loaded patient.
@@ -29,3 +30,16 @@ export async function getClinicalDataRepository(): Promise<IClinicalDataReposito
     : new FhirClinicalDataRepository()
 }
 
+/**
+ * The original Bundle.id of the imported bundle, as the source wrote it (not
+ * the app's own import id), or null when no bundle is imported. The 雲端病歷
+ * extension pairs its same-run raw capture with this id.
+ */
+export async function getImportedBundleId(): Promise<string | null> {
+  try {
+    const bundle = await LocalBundleService.load() as { id?: unknown } | null
+    return typeof bundle?.id === 'string' ? bundle.id : null
+  } catch {
+    return null
+  }
+}

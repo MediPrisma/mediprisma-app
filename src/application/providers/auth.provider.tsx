@@ -38,6 +38,7 @@ import {
 } from '@/src/application/telemetry/launch-context'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { syncBetaFeaturesForAccount } from '@/src/application/services/beta-features-sync'
+import { syncOutpatientPrefsForAccount } from '@/src/application/services/outpatient-prefs-sync'
 export interface User {
   uid: string
   email: string | null
@@ -116,7 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // uid of the active Firebase session (real OR anonymous) — drives the usage
   // listener. `user.uid` can't be used because it's null for anonymous.
   const [activeUid, setActiveUid] = useState<string | null>(null)
-  const [loading, setLoading] = useState(() => Boolean(auth))
+  // Firebase initializes only in the browser. Use the same pending state on
+  // the server and first client render so auth-dependent text can hydrate.
+  const [loading, setLoading] = useState(true)
   const [dailyUsage, setDailyUsage] = useState(0)
   const [perplexityUsage, setPerplexityUsage] = useState(0)
   const [whisperUsage, setWhisperUsage] = useState(0)
@@ -159,7 +162,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Firebase Auth state listener
   useEffect(() => {
     const firebaseAuth = auth
-    if (!firebaseAuth) return
+    if (!firebaseAuth) {
+      // No configured Auth still needs to finish initialization after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false)
+      return
+    }
 
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       if (firebaseUser && reportedUidRef.current !== firebaseUser.uid) {
@@ -239,6 +247,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!signedInUid) return
     return syncBetaFeaturesForAccount(signedInUid)
+  }, [signedInUid])
+
+  // 門診偏好 (自訂 labs, copy formats) follow the account the same way.
+  // Anonymous and guest settings are never synced: they stay in this browser.
+  useEffect(() => {
+    if (!signedInUid) return
+    return syncOutpatientPrefsForAccount(signedInUid)
   }, [signedInUid])
 
   // Reported separately from the sign-in properties: the version is fetched

@@ -251,12 +251,79 @@ export function createOpenAiCompatibleGatewayFetch(
 
 export function createConfiguredOpenAiCompatibleFetch(
   config: OpenAiCompatibleConfig,
+  options: { hiddenReasoning?: 'off' } = {},
 ): typeof fetch {
   const transportFetch = normalizeOpenAiCompatibleTransport(config.transport) ===
     'mediprisma-gateway'
     ? createOpenAiCompatibleGatewayFetch(config)
     : createOpenAiCompatibleFetch(config.apiKey)
-  return createNvidiaNemotronRequestFetch(config, transportFetch)
+  const nemotronFetch = createNvidiaNemotronRequestFetch(config, transportFetch)
+  return options.hiddenReasoning === 'off'
+    ? createHiddenReasoningOffFetch(config, nemotronFetch)
+    : nemotronFetch
+}
+
+/**
+ * The fields that ask an OpenAI-compatible server to skip hidden reasoning,
+ * resolved for one endpoint. Exported for the transport unit test: the mapping
+ * is dialect-specific and easy to get silently wrong.
+ *
+ * - vLLM/Qwen read `chat_template_kwargs.enable_thinking`; the flag is what the
+ *   template branches on, so it is the only thing that actually removes the
+ *   reasoning turn on the hospital deployment.
+ * - gpt-oss uses `reasoning_effort` to BOUND hidden CoT and cannot disable it,
+ *   so it gets the lowest budget instead. Sending `reasoning_effort` to other
+ *   models on the hospital gateway can suppress their final channel or expose
+ *   raw reasoning, which is why it stays gated on the configured endpoint model
+ *   (not the logical UI profile id).
+ * - OpenRouter reads `reasoning.enabled`. It is added only for that host, so a
+ *   hospital gateway never receives a vendor-specific field it did not ask for.
+ */
+export function hiddenReasoningOffRequestFields(
+  config: Pick<OpenAiCompatibleConfig, 'modelId' | 'baseUrl'>,
+  origin?: string,
+): Record<string, unknown> {
+  const modelId = config.modelId.trim()
+  const fields: Record<string, unknown> = /^gpt-oss(?::|-)/i.test(modelId)
+    ? { reasoning_effort: 'low' }
+    : { chat_template_kwargs: { enable_thinking: false } }
+  let host = ''
+  try {
+    host = new URL(resolveOpenAiCompatibleBaseUrl(config.baseUrl, origin)).hostname.toLowerCase()
+  } catch {
+    host = ''
+  }
+  if (host === 'openrouter.ai' || host.endsWith('.openrouter.ai')) {
+    fields.reasoning = { enabled: false }
+  }
+  return fields
+}
+
+function createHiddenReasoningOffFetch(
+  config: OpenAiCompatibleConfig,
+  fetchImpl: typeof fetch,
+  options: { origin?: string } = {},
+): typeof fetch {
+  const fields = hiddenReasoningOffRequestFields(config, options.origin)
+  return async (input, init) => {
+    if (typeof init?.body !== 'string') return fetchImpl(input, init)
+    try {
+      const body = JSON.parse(init.body) as Record<string, unknown>
+      // Merge rather than replace: the Nemotron injector above may already have
+      // written chat_template_kwargs for the same request.
+      for (const [key, value] of Object.entries(fields)) {
+        const existing = body[key]
+        body[key] = existing && typeof existing === 'object' && !Array.isArray(existing) &&
+          value && typeof value === 'object' && !Array.isArray(value)
+          ? { ...(existing as Record<string, unknown>), ...(value as Record<string, unknown>) }
+          : value
+      }
+      return fetchImpl(input, { ...init, body: JSON.stringify(body) })
+    } catch {
+      // Keep the SDK request intact if a future transport uses a non-JSON body.
+      return fetchImpl(input, init)
+    }
+  }
 }
 export function openAiCompatibleSdkKey(apiKey: string | null | undefined): string {
   return apiKey?.trim() || NO_AUTH_SDK_KEY

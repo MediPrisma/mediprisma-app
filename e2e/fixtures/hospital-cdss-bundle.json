@@ -1,0 +1,328 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "timestamp": "2026-10-01T04:00:00Z",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "fictional-hospital-cdss",
+        "name": [
+          {
+            "text": "院內 CDSS 測試"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1956-01-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "fictional-hf",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "clinicalStatus": {
+          "coding": [
+            {
+              "code": "active"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I50.22"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "fictional-lvef",
+        "status": "final",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "effectiveDateTime": "2026-09-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "10230-1"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 32,
+          "unit": "%"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "fictional-egfr",
+        "status": "final",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "effectiveDateTime": "2026-09-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "77147-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 65,
+          "unit": "mL/min/1.73m2"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "fictional-potassium",
+        "status": "final",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "effectiveDateTime": "2026-09-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2823-3"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 4.3,
+          "unit": "mmol/L"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "fictional-heart-rate",
+        "status": "final",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "effectiveDateTime": "2026-09-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 72,
+          "unit": "/min"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fictional-meitifen",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "authoredOn": "2024-06-14",
+        "medicationCodeableConcept": {
+          "text": "Meitifen SR FC * tab 75 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Meitifen SR FC * tab 75 mg",
+              "display": "Meitifen SR FC * tab 75 mg"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "validityPeriod": {
+            "start": "2024-06-14",
+            "end": "2024-07-14"
+          }
+        },
+        "dosageInstruction": [
+          {
+            "text": "Synthetic prescription only",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "TAB"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fictional-furosemide",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "authoredOn": "2024-06-14",
+        "medicationCodeableConcept": {
+          "text": "Furosemide tab 40 mg VPP",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "code": "Furosemide tab 40 mg VPP",
+              "display": "Furosemide tab 40 mg VPP"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "validityPeriod": {
+            "start": "2024-06-14",
+            "end": "2024-07-14"
+          }
+        },
+        "dosageInstruction": [
+          {
+            "text": "Synthetic prescription only",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "TAB"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fictional-unknown",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "authoredOn": "2024-06-14",
+        "medicationCodeableConcept": {
+          "text": "Unlisted tablet",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Unlisted tablet",
+              "display": "Unlisted tablet"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "validityPeriod": {
+            "start": "2024-06-14",
+            "end": "2024-07-14"
+          }
+        },
+        "dosageInstruction": [
+          {
+            "text": "Synthetic prescription only",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "TAB"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "fictional-cancelled",
+        "status": "cancelled",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/fictional-hospital-cdss"
+        },
+        "authoredOn": "2024-06-14",
+        "medicationCodeableConcept": {
+          "text": "Meitifen SR FC * tab 75 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.product",
+              "code": "Meitifen SR FC * tab 75 mg",
+              "display": "Meitifen SR FC * tab 75 mg"
+            }
+          ]
+        },
+        "dispenseRequest": {
+          "validityPeriod": {
+            "start": "2024-06-14",
+            "end": "2024-07-14"
+          }
+        },
+        "dosageInstruction": [
+          {
+            "text": "Synthetic prescription only",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "TAB"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

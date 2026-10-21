@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { optionalBuildConfig, writeOptionalBuildTsconfig } from "./scripts/optional-build-config.mjs";
 import { execFileSync } from 'node:child_process';
 import { version as appVersion } from './package.json';
 
@@ -27,12 +28,19 @@ const basePath = deployBasePath
 const isWorktree = __dirname.includes('.claude/worktrees/');
 const projectRoot = isWorktree ? path.join(__dirname, '../../..') : __dirname;
 
+const optional = optionalBuildConfig(__dirname);
+const buildTsconfig = writeOptionalBuildTsconfig(__dirname, optional);
+
 const nextConfig: NextConfig = {
   // Allow phones/tablets on the same local network to load Turbopack's
   // development resources. This is development-only; production builds do
   // not use the dev-origin allow-list.
   ...(process.env.NODE_ENV === 'development'
     ? { allowedDevOrigins: ['127.0.0.1', '192.168.1.112'] }
+    : {}),
+  // Explicit synthetic-only loopback relay for the isolated HF calculator preview.
+  ...(process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY === 'synthetic'
+    ? { async rewrites() { return ['dry-run', 'predict'].map(operation => ({ source: '/__hf-local-preview/hf/v1/' + operation, destination: 'http://127.0.0.1:3004/hf/v1/' + operation })); } }
     : {}),
   // Static export is only required for the GitHub Pages deploy. In dev mode
   // (and on Vercel) we want the full Next.js server so dynamic API routes
@@ -45,17 +53,26 @@ const nextConfig: NextConfig = {
   // scripts/build-gh.mjs), so the API-route tests would fail to resolve
   // their imports there. Builds type-check the app only; CI's own
   // `tsc --noEmit` still covers __tests__ with tsconfig.json.
-  typescript: { tsconfigPath: 'tsconfig.build.json' },
+  typescript: { tsconfigPath: buildTsconfig },
   // 避免 Next 往上層亂抓 lockfile（雲端同步/家目錄）
   // worktree mode: point at main project where node_modules lives
   outputFileTracingRoot: projectRoot,
-  ...(isWorktree
-    ? {
-        turbopack: {
-          root: projectRoot,
-        },
-      }
-    : {}),
+  turbopack: {
+    ...(isWorktree ? { root: projectRoot } : {}),
+    resolveAlias: optional.aliases,
+  },
+  webpack(config) {
+    // Optional package installs can change aliases without changing this file.
+    // Invalidate persistent module resolution when switching deployment modes.
+    if (config.cache && typeof config.cache === 'object') {
+      config.cache.version = `${config.cache.version ?? ''}|${JSON.stringify(optional)}`;
+    }
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      ...Object.fromEntries(Object.entries(optional.aliases).map(([name, file]) => [name + '$', path.resolve(__dirname, file)])),
+    };
+    return config;
+  },
   // Static-export targets (GH Pages, mediprisma /app) need basePath / assetPrefix
   ...(isStaticExport
     ? {
@@ -69,6 +86,7 @@ const nextConfig: NextConfig = {
   // 暴露 basePath 給客戶端
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
+    ...optional.env,
     NEXT_PUBLIC_COLLECTOR_APP_VERSION: appVersion,
     NEXT_PUBLIC_COLLECTOR_BUILD_REVISION: collectorRevision,
     // App version is no longer baked in here — useAppVersion fetches it from

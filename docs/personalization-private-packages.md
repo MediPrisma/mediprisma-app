@@ -21,17 +21,19 @@ FHIR 病歷
 
 ## 私有套件拆分
 
-目前由 private repository `voho0000/mediprisma-personalization` 管理三個 npm packages：
+目前由 private repository `voho0000/mediprisma-personalization` 管理五個 npm packages：
 
 ```text
 mediprisma-personalization (private repository)
   packages/
     personalization-sdk/        # @voho0000/personalization-sdk
     personalized-care/          # @voho0000/personalized-care
+    personalized-care-fhir/     # @voho0000/personalized-care-fhir
+    clinical-lab-normalization/ # @voho0000/clinical-lab-normalization
     personalized-education/     # @voho0000/personalized-education
 ```
 
-`personalized-care` 包含 `guideline-packs`、`knowledge-packs`、`risk-stratification` 與規則使用的 clinical modules。`personalized-education` 包含 `disease-packs`。FHIR mapper、React 畫面與共用 UI 留在主 repo。
+`personalized-care` 包含 `guideline-packs`、`knowledge-packs`、`risk-stratification` 與規則使用的 clinical modules。`personalized-education` 包含 `disease-packs`。FHIR adapter 由 `personalized-care-fhir` 提供；React 畫面與共用 UI 留在主 repo。共用檢驗由 `clinical-lab-normalization` 提供，公開部署另保留公開來源的替代實作。
 
 ## 主程式的最終組裝入口
 
@@ -65,10 +67,12 @@ repo 提交的 `.npmrc` 不含憑證；開發者與 CI 由 `NODE_AUTH_TOKEN` 提
 
 ```json
 {
-  "dependencies": {
+  "optionalDependencies": {
+    "@voho0000/clinical-lab-normalization": "1.1.1",
     "@voho0000/personalization-sdk": "1.0.0",
-    "@voho0000/personalized-care": "1.0.2",
-    "@voho0000/personalized-education": "1.0.0"
+    "@voho0000/personalized-care": "2.14.0",
+    "@voho0000/personalized-care-fhir": "1.9.13",
+    "@voho0000/personalized-education": "1.4.1"
   }
 }
 ```
@@ -77,9 +81,30 @@ repo 提交的 `.npmrc` 不含憑證；開發者與 CI 由 `NODE_AUTH_TOKEN` 提
 
 公開主 repo 的 GitHub Actions 應設定 repository secret `PACKAGES_TOKEN`，其內容使用只具 `read:packages` 的 token。工作流程只在 `npm ci` 階段把它映射成 `NODE_AUTH_TOKEN`，不寫入檔案或 log。
 
-## 本機開發
+## 無私有 repo 權限的安裝與部署
 
-第一次安裝或 lockfile 更新時，先確認 GitHub CLI 已登入具有私有套件讀取權限的帳號：
+主 repo 沒有私有 Git submodule，也不在安裝時 clone 另外兩個 repo。
+五個 `@voho0000` 套件均列於 `optionalDependencies`；沒有 token 或沒有套件權限時，`npm ci` 會略過它們。`packages:ci`／`packages:install` 可使用既有 `NODE_AUTH_TOKEN` 或 GitHub CLI 憑證，但不要求登入才能繼續。
+
+- SDK to FHIR：主 repo 已提交 SDK browser artifact，無需 NHI-FHIR-BRIDGE repo 權限。缺少 `vendor/nhi-fhir-bridge-sdk-json/browser.js` 或其宣告時，建置改用只接受 FHIR Bundle 的 parser，SDK JSON 匯入明確回報不可用。
+- CDSS：僅當 SDK 契約、照護規則、FHIR adapter 及檢驗套件的 entrypoints 均可解析時才顯示。其餘環境不顯示照護指引與試辦 pack 控制，不用空白規則假裝完成評估。
+- 共用檢驗：缺少私有套件時使用主 repo 公開歷史 `80c3a767c^` 的名稱／來源異常判讀函式。沒有複製私有 repo 的新規則；報告、累積表、AI 與計算機保持可建置。
+- 個人化衛教：套件未安裝時保留原有 Beta／民眾入口，明示內容尚未安裝；套件可用時保留完整衛教。
+
+Next.js 同時為 Turbopack、webpack 與 TypeScript 選取相同模組，生成的 `tsconfig.optional.generated.json` 不提交。SDK 與 CDSS availability 只取決於建置時 artifact／package 狀態，不以 route、角色或登入替代套件權限。
+
+```bash
+npm ci
+npm run typecheck
+npm run build
+# 或 npm run build:gh / npm run build:mediprisma
+```
+
+私有臨床規則／串接測試須在完整套件環境執行；一般匯入、報告與計算機測試可在公開環境執行。`npm run test:optional` 核對安裝與模組選取；兩個建置模式都應驗證。
+
+## 本機開發（完整私有功能）
+
+若要使用完整私有功能，先確認 GitHub CLI 已登入具有私有套件讀取權限的帳號：
 
 ```bash
 gh auth login -h github.com

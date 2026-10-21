@@ -25,17 +25,28 @@ import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view
 import { useBackDismissibleLayer } from "@/src/shared/hooks/layout/use-back-dismissible-layer.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
+import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type UIEvent } from "react"
 import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
-import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/features/left-browser-tour"
+import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
 import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
-import { TourMenuItems } from "@/features/left-browser-tour/TourMenuItems"
+import {
+  FirstRunTourOffer,
+  GuidedTourOverlay,
+  TourHub,
+  TourHubButton,
+  TourHubMenuItem,
+  WhatsNewHint,
+  useGuidedTourStore,
+} from "@/features/guided-tour"
 import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-route"
 import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/guideline-packs/pilot-gate"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
+import { ProgressiveImportStatus } from "@/features/import-bundle/components/ProgressiveImportStatus"
+import { BUNDLE_CHANGED_EVENT } from "@/src/shared/utils/reset-on-bundle-change"
 import {
   ClinicalMobilePanelSwitcher,
   ClinicalPatientContext,
@@ -143,6 +154,8 @@ function PageContent() {
   const leftTourActive = useLeftBrowserTourStore((state) => state.active)
   const rightTourActive = useRightFeatureTourStore((state) => state.active)
   const tourLauncherOpen = useRightFeatureTourStore((state) => state.launcherOpen)
+  const guidedTourActive = useGuidedTourStore((state) => state.tourId !== null)
+  const tourHubOpen = useGuidedTourStore((state) => state.hubOpen)
   const anyTourActive = leftTourActive || rightTourActive
   const tourWasActiveRef = useRef(false)
   const preTourLayoutRef = useRef<{
@@ -194,6 +207,19 @@ function PageContent() {
     setChosenCollapse((c) => (c === 'left' ? null : c))
   }, [navPending, navSeq, setMobileView])
 
+  // The opposite direction: a control in the clinical summary sent the reader
+  // to a right-panel task (總覽 → 帶回病歷). Flip the phone view to 功能 and
+  // reopen a collapsed right panel — asking for it is the reader choosing it.
+  const { revealSeq } = useRightPanel()
+  useEffect(() => {
+    if (!revealSeq) return
+    setMobileView('right')
+    // A request from an external context must make the panel visible.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChosenCollapse((c) => (c === 'right' ? null : c))
+    setCollapseChosen(true)
+  }, [revealSeq, setMobileView])
+
   // Header collapse: tuck the title/toolbar away into a slim strip so the
   // panels get the full viewport height. In-session only (same hydration
   // reasoning as `collapsed`). The less-used header controls (匯入資料 /
@@ -212,6 +238,8 @@ function PageContent() {
   // browser had completed onboarding on an earlier visit.
   const tourEligible = dataLoaded
     && !anyTourActive
+    && !guidedTourActive
+    && !tourHubOpen
     && !tourLauncherOpen
     && onboardingReady
     && onboardingCompleted
@@ -471,6 +499,15 @@ function PageContent() {
   useEffect(() => {
     clearDetail()
   }, [patient?.id, clearDetail])
+  useEffect(() => {
+    const clearSnapshotDetail = () => {
+      cancelDeferredDetailClear()
+      setClosingDetailSourceId(null)
+      clearDetail()
+    }
+    window.addEventListener(BUNDLE_CHANGED_EVENT, clearSnapshotDetail)
+    return () => window.removeEventListener(BUNDLE_CHANGED_EVENT, clearSnapshotDetail)
+  }, [cancelDeferredDetailClear, clearDetail])
   // A new patient is a new reading task, so the split goes back to the width
   // the landing view wants — even though importing over an open chart never
   // unmounts the workspace. Without this, one visit to 「回到左右各半」 kept
@@ -589,10 +626,10 @@ function PageContent() {
               <AudienceSwitcher />
               <LanguageSwitcher />
             </div>
-            <TourHelpButton disabled={!dataLoaded} />
+            <TourHubButton disabled={!dataLoaded} />
             <HeaderAuthButton />
             <HeaderOverflowMenu
-              tourMenu={<TourMenuItems disabled={!dataLoaded} />}
+              tourMenu={<TourHubMenuItem disabled={!dataLoaded} />}
             />
           </div>
         </div>
@@ -616,6 +653,7 @@ function PageContent() {
       <div className="px-3 sm:px-6">
         <EmailVerificationBanner />
         <NetworkStatusBanner />
+        <ProgressiveImportStatus />
       </div>
       
       {/* Onboarding state: replace panels with welcome screen */}
@@ -772,7 +810,10 @@ function PageContent() {
       )}
 
       <FirstRunOnboardingDialog />
-      <LeftBrowserTour eligible={tourEligible} />
+      <FirstRunTourOffer eligible={tourEligible} />
+      <WhatsNewHint eligible={tourEligible} />
+      <GuidedTourOverlay />
+      <TourHub />
       <RightFeatureTour />
     </ClinicalWorkspaceRoot>
   )

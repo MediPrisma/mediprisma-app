@@ -29,7 +29,7 @@ import {
   medicationUnrecordedFutureTimelineBarClass,
   medicationUnrecordedTimelineBarClass,
 } from '../../components/medication-chip-styles'
-import { MedicationTerminologyTooltip } from '../../components/MedicationTerminologyTooltip'
+import { HospitalMedicationNameDetails, MedicationTerminologyTooltip } from '../../components/MedicationTerminologyTooltip'
 
 interface TimelineSvgProps {
   categories: CategoryGroup[]
@@ -56,6 +56,7 @@ interface HoverState {
   drugName: string
   drugProductName?: string
   drugTerminology?: TimelineDrug['drugTerminology']
+  hospitalMedicationName?: TimelineDrug['hospitalMedicationName']
   xPx: number
   yPx: number
   containerLeftPx: number
@@ -434,7 +435,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                 height={ROW_HEIGHT}
               >
                 <MedicationTerminologyTooltip
-                  medication={{ drugTerminology: drug.drugTerminology }}
+                  medication={{ drugTerminology: drug.drugTerminology, hospitalMedicationName: drug.hospitalMedicationName }}
                   enabled
                 >
                   <div
@@ -445,8 +446,8 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                       drug.drugName,
                       drug.drugProductName,
                     ].filter(Boolean).join(' · ')}
-                    tabIndex={drug.drugTerminology ? 0 : undefined}
-                    className={drug.drugTerminology
+                    tabIndex={drug.drugTerminology || drug.hospitalMedicationName ? 0 : undefined}
+                    className={drug.drugTerminology || drug.hospitalMedicationName
                       ? 'cursor-help outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
                       : undefined}
                     style={{
@@ -459,7 +460,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                       fontWeight: drug.prescriptionType === 'chronic' ? 600 : 500,
                     }}
                   >
-                    {drug.drugName}
+                    {drug.bars.some(bar => bar.sourceComparisonUnconfirmed) && <span className="font-semibold">{locale === 'en' ? 'Compare · ' : '待核對 · '}</span>}{drug.drugName}
                   </div>
                 </MedicationTerminologyTooltip>
               </foreignObject>
@@ -487,6 +488,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                     drugName: drug.drugName,
                     drugProductName: drug.drugProductName,
                     drugTerminology: drug.drugTerminology,
+                    hospitalMedicationName: drug.hospitalMedicationName,
                     xPx: rect.left + rect.width / 2,
                     yPx: rect.top + rect.height / 2,
                     containerLeftPx: containerRect?.left ?? 0,
@@ -588,6 +590,9 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
               <span className="inline-block h-1.5 w-3 rounded-[1px] border border-dashed border-muted-foreground/70 bg-muted/25" />
               {mt.timelineAfterToday ?? 'After today'}
             </div>
+          )}
+          {!hover.drugTerminology && hover.hospitalMedicationName && (
+            <HospitalMedicationNameDetails name={hover.hospitalMedicationName} />
           )}
           {hover.drugTerminology && (
             <dl className="mt-1 grid grid-cols-[minmax(6.5rem,2fr)_minmax(0,3fr)] gap-x-2 gap-y-0.5 border-t pt-1 text-[0.6875rem]">
@@ -696,9 +701,13 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
             </dl>
           )}
           <div className="text-muted-foreground">
-            {shortYmd(hover.bar.startMs)} → {shortYmd(hover.bar.endMs)}
-            <span className="ml-1">({hover.bar.supplyDays}d)</span>
+            {shortYmd(hover.bar.startMs)} → {hover.bar.supplyEndDay?.replace(/-/g, '/') || shortYmd(hover.bar.supplyDaysUnrecorded ? hover.bar.startMs : hover.bar.endMs - 1)}
+            <span className="ml-1">{hover.bar.supplyDaysUnrecorded ? (locale === 'en' ? '(no usable period; date marker only)' : '（未提供可用期間，僅標示紀錄日期）')
+              : hover.bar.supplyDays < 1 ? `(${Number((hover.bar.supplyDays * 24).toFixed(2))}h)` : `(${Number(hover.bar.supplyDays.toFixed(3))}d)`}</span>
           </div>
+          {hover.bar.selfPurchased && <div>{locale === 'en' ? 'Self-pay' : '自費／自購'}</div>}
+          {hover.bar.sourceComparison && <div className="whitespace-normal break-words">{hover.bar.sourceComparison}</div>}
+          {hover.bar.sourceStatus && <div>{locale === 'en' ? 'Source status: ' : '來源狀態：'}{hover.bar.sourceStatus}</div>}
           {hover.bar.frequency && (
             <div className="min-w-0 whitespace-normal break-words text-muted-foreground [overflow-wrap:anywhere]">
               {mt.dosageInstructionLabel ?? mt.frequencyLabel ?? 'Dosage instructions'}:{' '}

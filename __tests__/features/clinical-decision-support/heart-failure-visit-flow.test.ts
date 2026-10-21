@@ -380,7 +380,7 @@ describe('the questions', () => {
     expect(states.compensation).toBe('locked')
     expect(states['clinic-vitals']).toBeUndefined()
     expect(flow.questions.find((item) => item.id === 'nyha')?.lockedReason)
-      .toBe('回答第 1 題後開放')
+      .toBe('先回答「HFrEF 還是 HFpEF？」後開放')
   })
 
   it('folds the rest away and drops the count when the answer is 「否」', () => {
@@ -423,7 +423,7 @@ describe('the questions', () => {
     expect(symptoms?.items?.find((item) => item.term === 'reported-ankle-swelling')?.side)
       .toBe('systemic')
     expect(symptoms?.items?.filter((item) => !item.common).map((item) => item.term))
-      .toEqual(['nocturnal-cough', 'bendopnea', 'reported-weight-gain'])
+      .toEqual(['abdominal-bloating', 'nocturnal-cough', 'bendopnea'])
   })
 
   it('enters HFrEF directly when the record has an HF diagnosis and LVEF is below 50%', () => {
@@ -437,18 +437,30 @@ describe('the questions', () => {
             evidence('心衰竭診斷', 'I50.22 慢性收縮性心衰竭', 'heartFailureDiagnosis', '2026-07-01'),
             ...item.patientEvidence,
           ],
+          // As the pack asks DP-01 on a diagnosed chart: answered from the record.
+          physicianInputRequests: [{
+            kind: 'hf-suspicion' as const,
+            label: '診斷：HFrEF 還是 HFpEF？',
+            detail: '紀錄：I50.22・LVEF 32%（2026-07-01）',
+            recordedOptionId: 'hfref',
+            selection: 'single' as const,
+            options: [{ id: 'hfref', label: 'HFrEF（LVEF <50%）' }],
+          }],
         }
         : item),
     }
 
     const flow = flowFor({ result: diagnosedResult })
 
+    // The same question 1 as every chart, standing on the record's answer.
     expect(flow.questions.map((item) => [item.number, item.id])).toEqual([
-      ['1', 'symptoms'],
-      ['2', 'signs'],
-      ['3', 'nyha'],
-      ['4', 'compensation'],
+      ['1', 'hf-suspicion'],
+      ['2', 'symptoms'],
+      ['3', 'signs'],
+      ['4', 'nyha'],
+      ['5', 'compensation'],
     ])
+    expect(flow.questions[0]).toMatchObject({ state: 'answered', answerText: 'HFrEF（紀錄）', hint: '紀錄：I50.22・LVEF 32%（2026-07-01）' })
     expect(flow.steps[0]).toMatchObject({ state: 'done' })
     expect(flow.steps[0].detail).toContain('HFrEF · LVEF 32')
     expect(flow.questions.find((item) => item.id === 'symptoms')?.hint).toBeUndefined()
@@ -461,10 +473,10 @@ describe('the questions', () => {
     const signs = flow.questions.find((item) => item.id === 'signs')
 
     expect(symptoms?.state).toBe('answered')
-    expect(symptoms?.answerText).toBe(
-      '勞力性喘：有 · 端坐呼吸：無 · PND：未評估 · 疲倦：有 · 腳腫：有 · 腹脹：無 · 更多 3 項未評估',
-    )
-    expect(signs?.answerText).toBe('Rales：− · JVP：− · Pitting edema：+ · 更多 4 項未評估')
+    // Grouped by answer, the findings first, so the one row that matters is
+    // not lost in a list of 「：−」.
+    expect(symptoms?.answerText).toBe('有：勞力性喘、疲倦、腳腫；無：端坐呼吸、腹脹；未評估：PND；2 項未答')
+    expect(signs?.answerText).toBe('有：Pitting edema；無：Rales、JVP；3 項未答')
     // 勞力性喘 and 疲倦 on the pulmonary side, 腳腫 and 凹陷性水腫 on the
     // systemic one; the tally is read across both questions.
     expect(signs?.sideTally).toEqual({ pulmonary: 2, systemic: 2 })
@@ -764,8 +776,8 @@ describe('the record card', () => {
     expect(lines).toHaveLength(4)
     expect(lines[0]).toContain('LVEF 32%')
     expect(lines[1]).toContain('NYHA：NYHA II')
-    expect(lines[1]).toContain('症狀：勞力性喘：有')
-    expect(lines[1]).toContain('徵象：Rales：−')
+    expect(lines[1]).toContain('症狀：有：勞力性喘')
+    expect(lines[1]).toContain('徵象：有：Pitting edema')
     expect(lines[2]).toContain('118/72')
     expect(lines[2]).toContain('SpO₂ 97%')
     expect(lines[3]).toContain('待決定')

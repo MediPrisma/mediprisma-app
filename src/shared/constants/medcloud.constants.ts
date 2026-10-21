@@ -30,3 +30,9 @@ export const MEDCLOUD_REMAINING_SUMMARY_CODE = 'medication-remaining-summary'
 
 export const MEDCLOUD_DRUG_GROUP_IDENTIFIER_SYSTEM =
   `${MEDCLOUD_FHIR_BASE}/IdentifierSystem/medcloud-drug-group`
+
+/** MediCloud IMUE0200 special-material (特材) claim record, kept as a Basic. */
+export const MEDCLOUD_SPECIAL_MATERIAL_CODE = 'special-material-record'
+
+export const MEDCLOUD_SPECIAL_MATERIAL_EXTENSION_URL =
+  `${MEDCLOUD_FHIR_BASE}/StructureDefinition/medcloud-special-material-record`

@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
+import { AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, Package, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -32,6 +32,7 @@ import { useCompactLayout } from '@/src/shared/hooks/layout/use-compact-layout.h
 import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
+import { ReportPreviewLine } from './ReportPreviewLine'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
 import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
@@ -240,7 +241,19 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
             key={`${source.reportId ?? 'source'}-${index}`}
             className="grid gap-0.5 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3"
           >
-            <span className="min-w-0 break-words text-foreground/90">{source.title}</span>
+            <span className="flex min-w-0 items-center gap-1 break-words text-foreground/90">
+              {source.title}
+              {source.narrative && (
+                <ObservationLongitudinalAction
+                  observation={{ code: { text: 'Report Summary' }, valueString: source.narrative }}
+                  title={source.title}
+                  sourceId={`report-source-history-${source.reportId ?? index}`}
+                  reportTitle={source.title}
+                  reportLookupTitle={source.title}
+                  stopPropagation
+                />
+              )}
+            </span>
             {source.codes.length > 0 && (
               <span className="break-all tabular-nums">
                 {labels.orderCode}: {source.codes.join(', ')}
@@ -250,6 +263,11 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
               <span className="break-all sm:col-span-2">
                 {labels.recordId}: {source.reportId}
               </span>
+            )}
+            {source.narrative && (
+              <div className="whitespace-pre-wrap break-words text-foreground/90 sm:col-span-2">
+                {source.narrative}
+              </div>
             )}
           </li>
         ))}
@@ -530,7 +548,7 @@ function ReportPanelDetail({
         />
       )}
       {observations.map((obs, i) => (
-        <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
+        <ObservationBlock key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`} observation={obs} />
       ))}
       <SharedReportSources sources={sharedReportSources} />
     </div>
@@ -613,6 +631,7 @@ function VitalReportMetadata({
         {row.institution && (
           <ReportInstitutionLabel
             institution={row.institution}
+            hospitalSource={row.hospitalSource}
             locale={locale}
             className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none @min-[800px]:w-full @min-[800px]:max-w-full"
           />
@@ -820,7 +839,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
         {!hideMeta && (row.sourceProvenance === 'nhi-medicloud' ? (
           <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
         ) : row.institution ? (
-          <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
+          <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
         ) : null)}
         {!hideMeta && (
           <Tooltip>
@@ -1022,12 +1041,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   <SharedReportSources sources={row.sharedReportSources} />
                 </>
               ) : (
-                <p
-                  className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80 max-sm:hidden"
+                <ReportPreviewLine
+                  text={fullText}
+                  className="cursor-pointer text-xs leading-relaxed text-foreground/80"
                   onClick={() => setTextExpanded(true)}
-                >
-                  {obs.valueString}
-                </p>
+                />
               )
             )}
             {hasText && textExpanded && (
@@ -1141,7 +1159,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   {row.sourceProvenance === 'nhi-medicloud' ? (
                     <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
                   ) : row.institution ? (
-                    <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
+                    <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
                   ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1355,6 +1373,15 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   +{row.relatedCount} 相關處置
                 </span>
               )}
+              {row.group === "procedures" && (row.specialMaterialCount ?? 0) > 0 && (
+                <span
+                  data-testid="procedure-material-count"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs text-foreground"
+                >
+                  <Package className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                  {t.procedures.materials.count.replace('{count}', String(row.specialMaterialCount))}
+                </span>
+              )}
             </div>
             {/* Right cluster mirrors the single-value rows: institution inline +
                 date-only badge. Category/status (accordionMeta) live on the
@@ -1389,7 +1416,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     {row.sourceProvenance === 'nhi-medicloud' ? (
                       <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem]" />
                     ) : row.institution ? (
-                      <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[10rem]" />
+                      <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[10rem]" />
                     ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1464,7 +1491,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (
                 <ObservationBlock
-                  key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
+                  key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`}
                   observation={obs}
                   nested
                 />

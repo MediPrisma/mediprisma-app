@@ -10,8 +10,96 @@
  */
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import { sampleDataSource, samplePatient, sampleCollection } from './fixtures'
+import { processAgentStreamUseCase } from '@/src/core/use-cases/agent/process-agent-stream.use-case'
 
 const tools = createFhirTools(sampleDataSource)
+
+describe('empty lab query recovery', () => {
+  const observation = (id: string, name: string, value: number, date = '2026-06-24') => ({
+    resourceType: 'Observation', id, status: 'final',
+    code: { text: name }, effectiveDateTime: date,
+    valueQuantity: { value, unit: 'mg/dL' },
+  })
+  const collection = {
+    ...sampleCollection, vitalSigns: [], diagnosticReports: [],
+    observations: [
+      observation('old', 'TG', 90, '2025-06-24'),
+      observation('new', 'TG', 103),
+      observation('cr', 'CREA', 0.71),
+    ],
+  } as any
+  const recoveryTools = createFhirTools(() => ({ patient: samplePatient, collection }))
+
+  it.each([
+    ['queryObservations', { codeQuery: 'no-such-test' }],
+    ['searchObservationByName', { query: 'no-such-test' }],
+    ['queryLabResultsByCategory', { category: 'tumor' }],
+    ['queryDiagnosticReports', { query: 'no-such-test' }],
+  ])('supplies real values separately from zero matches: %s', async (name, input) => {
+    const result = await (recoveryTools as any)[name].execute(input)
+    expect(result.count).toBe(0)
+    expect(result.data).toEqual([])
+    const recovery = result.availableObservationRecovery
+    expect(recovery.totalAnalytes).toBe(2)
+    expect(recovery.truncated).toBe(false)
+    expect(recovery.canConcludeAbsence).toBe(false)
+    expect(recovery.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'TG', value: 103, date: '2026-06-24' }),
+      expect.objectContaining({ name: 'CREA', value: 0.71 }),
+    ]))
+    expect(JSON.stringify(recovery)).not.toContain('2025-06-24')
+    expect(JSON.stringify(recovery)).not.toContain(samplePatient.id)
+    const summary = processAgentStreamUseCase.buildToolResultsSummary([{ toolName: name as string, result }], {
+      queryResult: 'result', queryFailed: 'failed', noData: 'empty',
+      noDataFound: 'no matches', foundRecords: '{count}',
+    }).summary
+    expect(summary).toContain('103')
+    expect(summary).toContain('NOT query matches')
+  })
+
+  it.each([
+    { dateFrom: '2099-01-01' },
+    { abnormalOnly: true },
+    { codeQuery: 'no-match', dateFrom: '2099-01-01' },
+    { codeQuery: 'no-match', abnormalOnly: true },
+  ])('never relaxes date or abnormality filters: %j', async (input) => {
+    const result = await (recoveryTools.queryObservations as any).execute(input)
+    expect(result.count).toBe(0)
+    expect(result.availableObservationRecovery).toBeUndefined()
+  })
+
+  it('keeps only in-window observations when relaxing a name filter', async () => {
+    const result = await (recoveryTools.queryObservations as any).execute({
+      codeQuery: 'no-match', dateFrom: '2025-01-01', dateTo: '2025-12-31',
+    })
+    expect(result.availableObservationRecovery.data).toEqual([
+      expect.objectContaining({ name: 'TG', value: 90, date: '2025-06-24' }),
+    ])
+    const summary = processAgentStreamUseCase.buildToolResultsSummary([
+      { toolName: 'queryObservations', result }, { toolName: 'searchObservationByName', result },
+    ], { queryResult: 'result', queryFailed: 'failed', noData: 'empty', noDataFound: 'none', foundRecords: '{count}' }).summary
+    expect(summary.match(/AVAILABLE OBSERVATIONS/g)).toHaveLength(1)
+  })
+
+  it('does not expand a successful lookup or an unloaded chart', async () => {
+    expect((await (recoveryTools.queryObservations as any).execute({})).availableObservationRecovery).toBeUndefined()
+    const unloaded = createFhirTools(() => ({ patient: null, collection: null }))
+    const result = await (unloaded.queryObservations as any).execute({ codeQuery: 'LDL' })
+    expect(result.canConcludeAbsence).toBe(false)
+    expect(result.availableObservationRecovery).toBeUndefined()
+  })
+
+  it('bounds a large inventory and declares truncation', async () => {
+    const large = createFhirTools(() => ({ patient: samplePatient, collection: {
+      ...collection,
+      observations: Array.from({ length: 105 }, (_, i) => observation(`id-${i}`, `Test ${i}`, i)),
+    } }))
+    const result = await (large.queryObservations as any).execute({ codeQuery: 'no-match' })
+    expect(result.availableObservationRecovery).toMatchObject({
+      totalAnalytes: 105, returnedAnalytes: 30, truncated: true, canConcludeAbsence: false,
+    })
+  })
+})
 
 // Tool#execute is typed loosely; cast through any for tests.
 async function call(toolName: keyof typeof tools, args: any = {}): Promise<any> {
@@ -1015,7 +1103,7 @@ describe('createFhirTools (unified)', () => {
           },
           dispenseQuantity: { value: 14, unit: 'tablet' },
           expectedSupplyDuration: { value: 7, unit: 'days', code: 'd' },
-          expectedSupplyEnd: '2026-09-21',
+          expectedSupplyEnd: '2026-09-20',
           current: true,
         })
       } finally {
@@ -1172,10 +1260,10 @@ describe('createFhirTools (unified)', () => {
       expect(r.data.every((m: any) => m.chronic === true)).toBe(true)
     })
 
-    it('tracks refillCount when same drug appears multiple times', async () => {
+    it('tracks sourceRecordCount when same drug appears multiple times', async () => {
       const r = await call('getActiveMedicationList')
       const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
-      expect(sotalol?.refillCount).toBe(2)
+      expect(sotalol?.sourceRecordCount).toBe(2)
       expect(sotalol?.recordedName).toBe('通舒錠')
       expect(sotalol?.status).toBe('active')
     })
@@ -1195,7 +1283,7 @@ describe('createFhirTools (unified)', () => {
       expect(sotalol).toMatchObject({
         status: 'active',
         authoredOn: '2026-04-27T00:00:00+08:00',
-        refillCount: 2,
+        sourceRecordCount: 2,
       })
     })
 
@@ -1259,13 +1347,13 @@ describe('createFhirTools (unified)', () => {
             medication: 'Status-unknown current medicine',
             status: 'unknown',
             current: true,
-            expectedSupplyEnd: '2026-09-14',
+            expectedSupplyEnd: '2026-09-13',
             currentnessBasis: 'supply-window',
           }),
           expect.objectContaining({
             medication: 'Status-missing current medicine',
             current: true,
-            expectedSupplyEnd: '2026-09-14',
+            expectedSupplyEnd: '2026-09-13',
             currentnessBasis: 'supply-window',
           }),
         ]))
@@ -1321,7 +1409,7 @@ describe('createFhirTools (unified)', () => {
         ])
         expect(r.data[0]).toMatchObject({
           current: true,
-          expectedSupplyEnd: '2026-09-17',
+          expectedSupplyEnd: '2026-09-16',
           currentnessBasis: 'source-status-and-supply-window',
         })
       } finally {

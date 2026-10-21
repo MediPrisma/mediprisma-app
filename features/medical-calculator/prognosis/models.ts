@@ -1,6 +1,6 @@
 import type { L } from '../types'
 
-export type HfPrognosisModelId = 'maggic' | 'shfm' | 'gwtg-hf'
+export type HfPrognosisModelId = 'maggic' | 'life-preserved' | 'shfm' | 'gwtg-hf'
 export type PrognosisEndpoint = 'all-cause-mortality' | 'survival' | 'in-hospital-mortality'
 export type PrognosisHorizon = '1-year' | '2-year' | '3-year' | '5-year' | 'index-admission'
 export interface PrognosisInputEvidence {
@@ -21,6 +21,13 @@ export interface PrognosisModel {
   fields: readonly { key: string; label: L }[]
   references: readonly { label: string; url: string }[]
   calculatorUrl: string
+  /**
+   * The medical calculator that already implements the model, where one does
+   * (MAGGIC, LIFE-Preserved): the list opens it — its inputs, autofill and
+   * result — rather than a read-only checklist (clinician feedback
+   * 2026-09-28: 「醫療計算機明明有，直接複用就好」).
+   */
+  calculatorId?: string
 }
 const l = (zh: string, en: string): L => ({ zh, en })
 const fields = {
@@ -49,6 +56,7 @@ export const HF_PROGNOSIS_MODELS: readonly PrognosisModel[] = [
     fields: f('age', 'sex', 'LVEF', 'nyha', 'serumCreatinine', 'bloodPressure', 'bodyMassIndex', 'diabetes', 'copd', 'smoking', 'hfDuration', 'betaBlocker', 'aceArb'),
     references: [{ label: 'Pocock et al. 2013 · doi:10.1093/eurheartj/ehs337', url: 'https://pubmed.ncbi.nlm.nih.gov/23095984/' }],
     calculatorUrl: 'https://www.heartfailurerisk.org/',
+    calculatorId: 'maggic-hf',
   },
   {
     id: 'shfm', name: 'Seattle Heart Failure Model（SHFM）', version: 'UW-updated-model', setting: 'chronic-hf',
@@ -70,6 +78,17 @@ export const HF_PROGNOSIS_MODELS: readonly PrognosisModel[] = [
     fields: f('age', 'bloodPressure', 'BUN', 'heartRate', 'sodium', 'copd', 'race'),
     references: [{ label: 'Peterson et al. 2010 · doi:10.1161/CIRCOUTCOMES.109.854877', url: 'https://pubmed.ncbi.nlm.nih.gov/20123668/' }],
     calculatorUrl: 'https://www.mdcalc.com/calc/3829/gwtg-heart-failure-risk-score',
+  },
+  // HFpEF only; last, so the three general models keep their places.
+  {
+    id: 'life-preserved', name: 'LIFE-Preserved', version: 'calculator', setting: 'chronic-hf',
+    outcome: l('HFpEF 首次心衰住院或心血管死亡之短期與終生風險', 'Short-term and lifetime risk of first HF hospitalization or CV death in HFpEF'),
+    population: l('HFpEF（LVEF ≥50%）。', 'HFpEF (LVEF ≥50%).'),
+    endpoint: 'all-cause-mortality', horizons: ['1-year'],
+    fields: [],
+    references: [],
+    calculatorUrl: '',
+    calculatorId: 'life-preserved',
   },
 ]
 

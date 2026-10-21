@@ -1,5 +1,6 @@
 // Right Panel Feature Registry - Central configuration for right panel features
 // This allows contributors to easily add/remove/replace features in the right panel
+import { CDSS_AVAILABLE } from './optional-capabilities'
 import { CLINICAL_DECISION_SUPPORT_MODULE } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_MODULE } from '@/features/personalized-education/module'
 
@@ -96,7 +97,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     contentClassName: 'overflow-hidden',
   },
   PERSONALIZED_EDUCATION_MODULE.rightPanel,
-  CLINICAL_DECISION_SUPPORT_MODULE.rightPanel,
+  { ...CLINICAL_DECISION_SUPPORT_MODULE.rightPanel, enabled: CDSS_AVAILABLE },
   {
     id: 'ips-export',
     name: 'IPS Export',

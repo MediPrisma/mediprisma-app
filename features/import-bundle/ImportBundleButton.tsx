@@ -1,5 +1,6 @@
 "use client"
 
+import { SDK_IMPORT_AVAILABLE } from '@/src/shared/config/optional-capabilities'
 import { useRef, useState } from "react"
 import { FileUp, Trash2, Database, FlaskConical, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -32,7 +33,7 @@ interface ImportBundleButtonProps {
 
 export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleButtonProps = {}) {
   const fileRef = useRef<BundleFileInputHandle>(null)
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const i18n = t.importBundle
   const { importFile, clear, loading, error, hasBundle, bundleIsActive, isDemo } = useImportBundle()
   // Clearing wipes the whole patient context in one click — confirm first
@@ -97,7 +98,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
           }`}
           onClick={() => fileRef.current?.open()}
           disabled={loading}
-          title={i18n.importTitle}
+          title={SDK_IMPORT_AVAILABLE ? i18n.importTitle : (locale === 'en' ? 'Import a FHIR Bundle' : '匯入 FHIR Bundle')}
           aria-label={i18n.button}
         >
           <FileUp className="h-3.5 w-3.5" />

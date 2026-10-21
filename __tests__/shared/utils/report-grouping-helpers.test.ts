@@ -194,6 +194,72 @@ describe('inferReportDisplayGroup', () => {
     })).toBe('lab')
   })
 
+  it.each([
+    ['33085B', '磁振造影－有造影劑 ;(Magnetic resonance imaging-with contrast)'],
+    ['33072B', 'CT, with/without contrast'],
+    ['32001C', '胸腔檢查 ;(Chest view)'],
+    ['19001C', '腹部超音波 ;(Abdominal ultrasound)'],
+    ['28016C', '上消化道泛內視鏡檢查 ;(Panendoscopy)'],
+  ])('keeps NHI category-2 report order %s in Imaging despite a Pathology category', (code, text) => {
+    expect(inferReportDisplayGroup({
+      category: [{
+        coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+          code: 'PAT',
+          display: 'Pathology',
+        }],
+        text: '特殊造影檢查',
+      }],
+      code: { coding: [{ system: 'https://example.org/local-report-code', code, display: text }], text },
+      conclusion: 'Indications: lung cancer. PATHOLOGICAL DIAGNOSIS: carcinoma.',
+    })).toBe('imaging')
+  })
+
+  it('keeps the bridge-shaped legacy MRI report in Imaging', () => {
+    // Shape of a MediCloud bundle built before the bridge fix: unpromoted
+    // order code under the bridge's local report-code system.
+    expect(inferReportDisplayGroup({
+      category: [{
+        coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+          code: 'PAT',
+          display: 'Pathology',
+        }],
+        text: '特殊造影檢查',
+      }],
+      code: {
+        coding: [{
+          system: 'https://nhi-fhir-bridge.local/CodeSystem/his-local-report',
+          code: '33085B',
+          display: '磁振造影－有造影劑 ;(Magnetic resonance imaging-with contrast)',
+        }],
+        text: '磁振造影－有造影劑 ;(Magnetic resonance imaging-with contrast)',
+      },
+    })).toBe('imaging')
+  })
+
+  it('keeps a Pathology-labelled CT-guided biopsy outside the verified list in Pathology', () => {
+    // 33103B shares the 33xxx range with CT/MRI but is a biopsy procedure.
+    expect(inferReportDisplayGroup({
+      category: [{
+        coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'PAT' }],
+      }],
+      code: {
+        coding: [{ system: 'https://nhi-fhir-bridge.local/CodeSystem/his-local-report', code: '33103B' }],
+        text: 'CT Guide biopsy',
+      },
+    })).toBe('pathology')
+  })
+
+  it('keeps ultrasound-guided biopsy with a Pathology category in Pathology', () => {
+    expect(inferReportDisplayGroup({
+      category: [{
+        coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'PAT' }],
+      }],
+      code: { coding: [{ code: '19007C' }], text: '超音波導引(為組織切片，抽吸、注射等)' },
+    })).toBe('pathology')
+  })
+
   it('does not infer Pathology from conclusion text alone', () => {
     expect(inferReportDisplayGroup({
       code: { text: 'Consultation note' },

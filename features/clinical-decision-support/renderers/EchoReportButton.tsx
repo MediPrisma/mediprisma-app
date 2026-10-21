@@ -40,10 +40,12 @@ function EchoReportDialog({ metric, isEnglish, onClose, ecg = false }: { ecg?: b
   </Dialog>
 }
 
+/** Opens the original echo (or ECG) report. */
 export function EchoReportButton({ metric, isEnglish, ecg = false }: { ecg?: boolean; metric: HeartFailureMetric; isEnglish: boolean }) {
   const [open, setOpen] = useState(false)
+  const label = ecg ? (isEnglish ? 'ECG report' : '心電圖報告') : (isEnglish ? 'Echo report' : '心超報告')
   return <>
-    <Button type="button" aria-label={ecg ? (isEnglish ? 'ECG report' : '心電圖報告') : (isEnglish ? 'Echo report' : '心超報告')} variant="outline" size="sm" className="shrink-0 h-6 gap-1 px-1.5 text-xs shadow-none" onClick={() => setOpen(true)}>
+    <Button type="button" aria-label={label} variant="outline" size="sm" className="shrink-0 h-6 gap-1 px-1.5 text-xs shadow-none" onClick={() => setOpen(true)}>
       <FileText className="size-3" />{isEnglish ? 'Report' : '報告'}
     </Button>
     {open ? <EchoReportDialog ecg={ecg} metric={metric} isEnglish={isEnglish} onClose={() => setOpen(false)} /> : null}

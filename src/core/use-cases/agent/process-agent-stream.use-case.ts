@@ -59,10 +59,18 @@ export class ProcessAgentStreamUseCase {
     }
   ): { summary: string; citations: string[] } {
     const literatureCitations: string[] = []
+    const recoveryInventories = new Set<string>()
 
     const summary = toolResults
       .map((tr) => {
         const r = tr.result as any
+        const inventory = r?.availableObservationRecovery
+          ? JSON.stringify(r.availableObservationRecovery)
+          : undefined
+        const recovery = inventory && !recoveryInventories.has(inventory)
+          ? '\nAVAILABLE OBSERVATIONS (recovery inventory, NOT query matches):\n' + inventory
+          : (r?.observationRecoveryNotice ? '\n' + r.observationRecoveryNotice : '')
+        if (inventory) recoveryInventories.add(inventory)
 
         // Handle literature search results differently from FHIR results
         if (tr.toolName === 'searchMedicalLiterature') {
@@ -133,7 +141,7 @@ export class ProcessAgentStreamUseCase {
         ) {
           return `${tr.toolName} ${translations.queryFailed}: ${
             r?.summary || translations.noData
-          }${queryCoverage}\nIMPORTANT: this result is incomplete and MUST NOT be interpreted as clinical absence.\n${
+          }${queryCoverage}${recovery}\nIMPORTANT: this result is incomplete and MUST NOT be interpreted as clinical absence.\n${
             r?.queryIssues ? JSON.stringify(r.queryIssues, null, 2) : ''
           }`
         }
@@ -158,7 +166,7 @@ export class ProcessAgentStreamUseCase {
             : ''
         return `${tr.toolName} ${translations.queryResult}: ${
           r?.success ? countInfo : translations.queryFailed
-        }${queryCoverage}${truncationWarning}${summaryCapWarning}${completenessWarning}\n${r?.count > 0 ? JSON.stringify(summaryData, null, 2) : translations.noData}`
+        }${queryCoverage}${truncationWarning}${summaryCapWarning}${completenessWarning}\n${r?.count > 0 ? JSON.stringify(summaryData, null, 2) : translations.noData}${recovery}`
       })
       .join('\n\n')
 
@@ -175,9 +183,10 @@ export class ProcessAgentStreamUseCase {
     translations: {
       queriedFhirData: string
       answerQuestion: string
-    }
+    },
+    toolsAvailable = false,
   ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-    const assistantMsg = `${translations.queriedFhirData}\n\n${toolResultsSummary}`
+    const assistantMsg = `${translations.queriedFhirData}\n\n${toolResultsSummary}\n\nOnly the listed tools have been queried. Unqueried resource types are unknown, not empty. A zero result with filters does not mean the entire chart is empty. ${toolsAvailable ? 'Continue using available tools for the remaining requested facts before answering.' : 'Answer only from retrieved evidence; state which requested facts remain unverified. Do not call tools.'}`
     const userMsg = translations.answerQuestion.replace('{question}', originalQuestion)
 
     return [

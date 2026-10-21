@@ -27,7 +27,7 @@ export function DiagnosisList({ diagnoses, isLoading, error }: DiagnosisListProp
   }
 
   return (
-    <ul className="space-y-2">
+    <ul className="divide-y divide-border text-sm">
       {diagnoses.map((diagnosis) => (
         <DiagnosisItem key={diagnosis.id} diagnosis={diagnosis} />
       ))}

@@ -4,6 +4,7 @@
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useWorkspacePanels } from '@/src/application/providers/workspace-panels.provider'
+import { useHydrated } from '@/src/shared/hooks/use-hydrated.hook'
 import { formatDate } from '@/src/shared/utils/date.utils'
 import { overviewChipClass } from './overview-styles'
 import {
@@ -31,6 +32,16 @@ export function OverviewHeader({
   // back — the collapsed rail alone is easy to miss on the far edge.
   const featuresHidden = panels?.collapsed === 'right'
   const showToggle = !!panels && (panels.collapsed === null || featuresHidden)
+  // The window ends on the READER's today, which the server cannot know: it
+  // runs in its own time zone (UTC is a day behind Taipei until 08:00), and a
+  // static export prints the day it was built. So the server HTML carries the
+  // label with every digit masked — identical on both sides for any day, and
+  // the same width under tabular numerals, so the range chips do not jump when
+  // the real dates arrive right after hydration.
+  const hydrated = useHydrated()
+  const rangeText = strings.rangeLabel
+    .replace('{start}', formatDate(window.startDay, locale))
+    .replace('{end}', formatDate(window.endDay, locale))
 
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
@@ -40,10 +51,10 @@ export function OverviewHeader({
             ? strings.yearTitle
             : strings.title.replace('{months}', String(window.months))}
         </span>
-        <span className="truncate text-xs tabular-nums text-muted-foreground">
-          {strings.rangeLabel
-            .replace('{start}', formatDate(window.startDay, locale))
-            .replace('{end}', formatDate(window.endDay, locale))}
+        <span
+          className={`truncate text-xs tabular-nums text-muted-foreground${hydrated ? '' : ' invisible'}`}
+        >
+          {hydrated ? rangeText : rangeText.replace(/\d/g, '0')}
         </span>
       </div>
       <div

@@ -1,9 +1,11 @@
+import { DEFAULT_DOCUMENT_MODE } from '@/src/shared/constants/data-selection.constants'
 import type {
   DataFilters,
   DataSelection,
   TimeRange,
 } from '@/src/core/entities/clinical-context.entity'
 import type { DocumentMode } from '@/src/core/utils/clinical-documents.utils'
+import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import {
   DEFAULT_RESPONSE_RESERVE,
   formatApproxTokenCount,
@@ -29,12 +31,59 @@ export interface ClinicalContextFitCandidate {
   documentTokenBudget?: number
 }
 
+/** Which limit made this request smaller than the saved scope.
+ *  - `context-window`: the model's window (every caller).
+ *  - `local-latency`: a caller-supplied latency budget that is tighter than
+ *    the window — the request would have fit, but its prefill would not finish
+ *    in a usable time on a slow (on-prem) model. */
+export type ClinicalContextAdaptationReason = 'context-window' | 'local-latency'
+
 export interface ClinicalContextAdaptation {
   tier: Exclude<ClinicalContextFitTier, 'full'>
+  reason: ClinicalContextAdaptationReason
   contextLimit: number
   targetTokens: number
   originalTokens: number
   adaptedTokens: number
+}
+
+/**
+ * The token target one fitted request walks the tiers toward, and which limit
+ * set it. A latency budget only ever LOWERS the window-derived target; when it
+ * is absent, invalid, or not tighter than the window, the window decides
+ * exactly as before.
+ */
+export function resolveClinicalContextTarget(
+  windowTargetTokens: number,
+  latencyBudgetTokens?: number,
+): { targetTokens: number; reason: ClinicalContextAdaptationReason } {
+  if (
+    typeof latencyBudgetTokens !== 'number' ||
+    !Number.isFinite(latencyBudgetTokens) ||
+    latencyBudgetTokens <= 0
+  ) {
+    return { targetTokens: windowTargetTokens, reason: 'context-window' }
+  }
+  const budget = Math.max(1, Math.floor(latencyBudgetTokens))
+  return budget < windowTargetTokens
+    ? { targetTokens: budget, reason: 'local-latency' }
+    : { targetTokens: windowTargetTokens, reason: 'context-window' }
+}
+
+/**
+ * The entries of `scopeCatalog` (the saved scope's catalog, whose keys the
+ * result and the UI resolve against) for the records a narrower fitted view
+ * kept. Catalog keys are positional per scope, so the narrower view's own
+ * catalog cannot be shown to the model beside a result that is finalised
+ * against the wider one: a key is never renumbered here, exactly as the
+ * overview snapshot keeps its subset of the caller's keys.
+ */
+export function catalogSubsetForFittedScope(
+  scopeCatalog: readonly SummarySourceCatalogEntry[],
+  fittedCatalog: readonly SummarySourceCatalogEntry[],
+): SummarySourceCatalogEntry[] {
+  const kept = new Set(fittedCatalog.map((entry) => `${entry.resourceType}\u0000${entry.resourceId}`))
+  return scopeCatalog.filter((entry) => kept.has(`${entry.resourceType}\u0000${entry.resourceId}`))
 }
 
 const TIME_RANGE_ORDER: TimeRange[] = [
@@ -106,7 +155,7 @@ export function buildClinicalContextFitCandidate(
     // invalidate unrelated laboratory, encounter and medication calculations.
     selection: base.selection,
     filters: base.filters,
-    documentMode: base.documentMode ?? 'latestAdmission',
+    documentMode: base.documentMode ?? DEFAULT_DOCUMENT_MODE,
     documentIds: base.documentIds ?? [],
   }
   if (tier === 'full' || tier === 'prioritized') {
@@ -262,10 +311,55 @@ export function fitClinicalContextTextToTokenBudget(
   return best
 }
 
+function adaptationScopeDescription(
+  tier: ClinicalContextAdaptation['tier'],
+  zh: boolean,
+): string {
+  if (tier === 'trimmed') {
+    return zh
+      ? '最多最近 1 年的主要病歷、每項最多 8 筆檢驗，以及最近一次出院病摘'
+      : 'up to 1 year of key records, up to 8 results per lab, and the latest discharge summary'
+  }
+  if (tier === 'compact') {
+    return zh
+      ? '最多最近 6 個月的主要病歷、每項最多 3 筆檢驗，以及最近一次出院病摘'
+      : 'up to 6 months of key records, up to 3 results per lab, and the latest discharge summary'
+  }
+  return zh
+    ? '最多最近 3 個月的主要病歷、每項最新檢驗，以及精簡後的最近一次出院病摘'
+    : 'up to 3 months of key records, the latest result per lab, and a condensed latest discharge summary'
+}
+
+/**
+ * Latency wording: the request would have fit the window, so naming the
+ * window would misstate why the scope shrank. The source index is NOT said to
+ * be rebuilt — under a latency budget the result keeps the saved scope's
+ * source list; only this request's clinical text is narrower.
+ */
+function formatLatencyAdaptationNotice(
+  adaptation: ClinicalContextAdaptation,
+  locale: string,
+): string {
+  const zh = locale === 'zh-TW'
+  const adaptedLabel = formatApproxTokenCount(adaptation.adaptedTokens)
+  if (adaptation.tier === 'prioritized') {
+    return zh
+      ? `為了讓模型在合理時間內回覆，本次逐筆保留活動中問題、過敏、目前用藥、異常與最新檢驗及近期重要紀錄，再從最舊且低優先的資料開始暫時縮減（約 ${adaptedLabel} tokens）。你儲存的資料範圍沒有變更。`
+      : `To keep this model's reply time reasonable, this run retained active problems, allergies, current medications, abnormal/latest tests, and recent important records first, then temporarily removed older low-priority records (about ${adaptedLabel} tokens). Your saved data scope was not changed.`
+  }
+  const scope = adaptationScopeDescription(adaptation.tier, zh)
+  return zh
+    ? `為了讓模型在合理時間內回覆，本次暫時使用${scope}（約 ${adaptedLabel} tokens）。你儲存的資料範圍沒有變更。`
+    : `To keep this model's reply time reasonable, this run is temporarily using ${scope} (about ${adaptedLabel} tokens). Your saved data scope was not changed.`
+}
+
 export function formatClinicalContextAdaptationNotice(
   adaptation: ClinicalContextAdaptation,
   locale: string,
 ): string {
+  if (adaptation.reason === 'local-latency') {
+    return formatLatencyAdaptationNotice(adaptation, locale)
+  }
   const contextLabel = formatApproxTokenCount(adaptation.contextLimit)
   if (adaptation.tier === 'prioritized') {
     const adaptedLabel = formatApproxTokenCount(adaptation.adaptedTokens)
@@ -278,13 +372,7 @@ export function formatClinicalContextAdaptationNotice(
       ? `已依模型 ${contextLabel} 內容視窗，暫時使用最多最近 1 年的主要病歷、每項最多 8 筆檢驗，以及最近一次出院病摘。來源索引已依實際保留內容重建；你儲存的資料範圍沒有變更。`
       : `For this model's ${contextLabel}-token context window, this run temporarily uses up to 1 year of key records, up to 8 results per lab, and the latest discharge summary. The source index was rebuilt from retained content, and your saved data scope was not changed.`
   }
-  const scopeDescription = adaptation.tier === 'compact'
-    ? locale === 'zh-TW'
-      ? '最多最近 6 個月的主要病歷、每項最多 3 筆檢驗，以及最近一次出院病摘'
-      : 'up to 6 months of key records, up to 3 results per lab, and the latest discharge summary'
-    : locale === 'zh-TW'
-      ? '最多最近 3 個月的主要病歷、每項最新檢驗，以及精簡後的最近一次出院病摘'
-      : 'up to 3 months of key records, the latest result per lab, and a condensed latest discharge summary'
+  const scopeDescription = adaptationScopeDescription(adaptation.tier, locale === 'zh-TW')
   return locale === 'zh-TW'
     ? `已依模型 ${contextLabel} 內容視窗，暫時使用${scopeDescription}。你儲存的資料範圍沒有變更。`
     : `For this model's ${contextLabel}-token context window, this run is temporarily using ${scopeDescription}. Your saved data scope was not changed.`

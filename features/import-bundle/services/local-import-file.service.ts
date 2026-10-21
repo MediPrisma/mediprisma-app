@@ -1,3 +1,4 @@
+import { SDK_IMPORT_AVAILABLE } from '@/src/shared/config/optional-capabilities'
 import type { PreparedLocalImport } from './sdk-import-converter'
 import { enrichLocalFhirImport } from '@/src/application/services/local-fhir-import-enrichment.service'
 export type { PreparedLocalImport } from './sdk-import-converter'
@@ -45,7 +46,7 @@ async function convertOnMainThread(bytes: ArrayBuffer): Promise<PreparedLocalImp
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Unknown conversion error'
     throw new Error(
-      `不支援的資料格式；請選擇 FHIR Bundle 或健康存摺 SDK JSON。(${detail})`,
+      `${SDK_IMPORT_AVAILABLE ? '不支援的資料格式；請選擇 FHIR Bundle 或健康存摺 SDK JSON。' : '此部署僅支援 FHIR Bundle 匯入。'}(${detail})`,
     )
   }
 }

@@ -17,6 +17,8 @@ export interface PatientEntity {
   gender?: 'male' | 'female' | 'other' | 'unknown'
   birthDate?: string
   age?: number
+  /** Source data was explicitly de-identified; retained through local demographic overlays. */
+  deidentified?: boolean
   // Optional extended demographics (filled in by PatientMapper.toDomain).
   identifier?: {
     use?: string
@@ -56,6 +58,11 @@ export interface PatientEntity {
    * The source FHIR Patient remains unchanged. */
   demographicsSource?: 'user-entered-local-profile'
   userEnteredDemographicFields?: PatientDemographicField[]
+}
+
+/** Cloud export marks de-identified names as anonymous; ID masking alone is not this option. */
+export function isDeidentifiedPatient(patient: PatientEntity): boolean {
+  return patient.deidentified === true || (Array.isArray(patient.name) && patient.name.some(name => name?.use === 'anonymous'))
 }
 
 export type PatientDemographicField = 'name' | 'gender' | 'birthDate'
@@ -173,7 +180,7 @@ export function applyUserEnteredPatientProfile(
   if (!profile) return patient
 
   const fields: PatientDemographicField[] = []
-  const next: PatientEntity = { ...patient }
+  const next: PatientEntity = { ...patient, ...(isDeidentifiedPatient(patient) ? { deidentified: true } : {}) }
   if (profile.name) {
     next.name = [{ use: 'usual', text: profile.name }]
     fields.push('name')

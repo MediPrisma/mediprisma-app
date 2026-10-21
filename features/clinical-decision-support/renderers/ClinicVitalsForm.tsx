@@ -3,6 +3,8 @@
 import { useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/src/shared/utils/cn.utils'
+import { TINTED_PRIMARY } from './visit/visit-presentation'
 import {
   todayIsoDate,
   type ClinicVitals,
@@ -129,7 +131,7 @@ export function ClinicVitalsForm({
         </label>
       ))}
       <div className="flex items-center gap-1.5">
-        <Button type="submit" size="sm" className="h-8" disabled={!canSave} data-testid="cdss-hf-clinic-vitals-save">
+        <Button type="submit" size="sm" variant="outline" className={cn('h-8 font-semibold', TINTED_PRIMARY)} disabled={!canSave} data-testid="cdss-hf-clinic-vitals-save">
           {isEnglish ? 'Apply' : '套用'}
         </Button>
         <Button type="button" size="sm" variant="ghost" className="h-8" onClick={onClose}>
