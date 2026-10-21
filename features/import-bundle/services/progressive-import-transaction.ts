@@ -23,7 +23,8 @@ export async function runProgressiveImport(request: ProgressiveImportRequest, fi
     if (reason && reason !== 'failed') cancellation.abort(reason)
   }
   const stoppedRuns = useProgressiveImportStore.getState().stoppedRuns
-  useProgressiveImportStore.setState({ pendingRunId: request.runId,
+  useProgressiveImportStore.setState({ initialFailure: request.stage === 'cloud' && stoppedRuns[request.runId] && stoppedRuns[request.runId] !== 'failed'
+    ? { runId: request.runId, importId: null, phase: stoppedRuns[request.runId] } : null, pendingRunId: request.runId,
     ...(stoppedRuns[request.runId] === 'failed' ? { stoppedRuns: Object.fromEntries(Object.entries(stoppedRuns).filter(([id]) => id !== request.runId)) } : {}),
   })
   const unsubscribe = useProgressiveImportStore.subscribe(applyStop)

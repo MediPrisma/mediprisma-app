@@ -6,10 +6,11 @@ import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { PROGRESSIVE_STATUS_MESSAGE, useProgressiveImportStore, isProgressiveFailureReason, stopProgressiveImport, restoreProgressiveImportStatus } from '../stores/progressive-import.store'
 
 export function useProgressiveImportStatus() {
-  const current = useProgressiveImportStore(state => state.current)
+  const current = useProgressiveImportStore(state => state.current ?? state.initialFailure)
   useEffect(() => {
     restoreProgressiveImportStatus(LocalBundleService.getActiveImportId())
     const clearChanged = () => {
+      useProgressiveImportStore.setState({ initialFailure: null })
       const active = useProgressiveImportStore.getState().current
       if (active && active.importId !== LocalBundleService.getActiveImportId()) {
         useProgressiveImportStore.setState({ current: null })

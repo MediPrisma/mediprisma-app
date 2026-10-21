@@ -1,3 +1,4 @@
+import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { useImportBundle } from '@/features/import-bundle/hooks/useImportBundle'
 import { BundleFileInput } from '@/features/import-bundle/components/BundleFileInput'
@@ -27,7 +28,7 @@ beforeEach(() => {
   mockGenerateId.mockReturnValue('new-import')
   mockInvalidateQueries.mockImplementation(async () => {})
   mockPrepare.mockImplementation(async () => ({ bundle: mockIncoming, originalFhir: new Blob([JSON.stringify(mockIncoming)]) }))
-  useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
+  useProgressiveImportStore.setState({ current: null, initialFailure: null, pendingRunId: null, stoppedRuns: {} })
 })
 
 test('supplement replaces the same patient snapshot and returns a committed import id', async () => {
@@ -353,4 +354,19 @@ test.each(['patient-changed', 'privacy-stale', 'reports-pending', 'loaded'] as c
   restoreProgressiveImportStatus('another-import')
   expect(useProgressiveImportStore.getState().current).toBeNull()
   expect(sessionStorage.getItem('mediprisma:progressive-status-v1')).toBeNull()
+})
+
+
+test('a stopped initial capture shows an empty-workspace notice without claiming loaded records', () => {
+  mockImportId = null; mockBundle = null
+  render(<ProgressiveImportStatus />)
+  act(() => useProgressiveImportStore.setState({ pendingRunId: 'first-cloud' }))
+  act(() => stopProgressiveImport('first-cloud', 'patient-changed'))
+  act(() => useProgressiveImportStore.setState({ pendingRunId: null }))
+  expect(screen.getByRole('alert')).toHaveTextContent('資料尚未載入，擷取已停止（來源病人已變更）')
+  expect(screen.getByRole('alert')).not.toHaveTextContent('畫面仍為先前病人資料')
+  expect(useProgressiveImportStore.getState().current).toBeNull()
+  mockImportId = 'manual-next'; mockBundle = bundle()
+  act(() => window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT)))
+  expect(screen.queryByRole('alert')).toBeNull()
 })

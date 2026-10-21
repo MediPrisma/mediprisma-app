@@ -42,9 +42,10 @@ export interface ProgressiveImportState {
 
 export const useProgressiveImportStore = create<{
   current: ProgressiveImportState | null
+  initialFailure: { runId: string; importId: null; phase: ProgressiveFailureReason } | null
   pendingRunId: string | null
   stoppedRuns: Record<string, ProgressiveFailureReason>
-}>(() => ({ current: null, pendingRunId: null, stoppedRuns: {} }))
+}>(() => ({ current: null, initialFailure: null, pendingRunId: null, stoppedRuns: {} }))
 
 // Only opaque transaction ids and coverage state survive a tab reload. Never
 // store patient attributes, source data, credentials, or a resumable request.
@@ -80,7 +81,7 @@ export function restoreProgressiveImportStatus(activeImportId: string | null): v
   const phase = stopped === 'failed' ? failedPhase(saved.phase) : stopped
     ?? (['waiting', 'reports-pending', 'reports-pending-partial'].includes(saved.phase)
       ? failedPhase(saved.phase) : saved.phase)
-  useProgressiveImportStore.setState({ current: { ...saved, phase },
+  useProgressiveImportStore.setState({ initialFailure: null, current: { ...saved, phase },
     ...(isProgressiveFailureReason(phase) ? { stoppedRuns: { ...stoppedRuns, [saved.runId]: phase } } : {}),
   })
 }
@@ -93,7 +94,7 @@ function failedPhase(phase: ProgressiveImportState['phase']): ProgressiveImportS
 
 export function stopProgressiveImport(runId: string, phase: ProgressiveFailureReason): void {
   if (!validId(runId)) return
-  const { current, stoppedRuns } = useProgressiveImportStore.getState()
+  const { current, pendingRunId, stoppedRuns } = useProgressiveImportStore.getState()
   // Repeated cleanup notifications must neither erase known coverage nor
   // downgrade an identity/privacy/cancellation stop to a generic failure.
   const priority: Record<ProgressiveFailureReason, number> = {
@@ -102,6 +103,7 @@ export function stopProgressiveImport(runId: string, phase: ProgressiveFailureRe
   const previous = stoppedRuns[runId]
   const reason = previous && priority[previous] > priority[phase] ? previous : phase
   useProgressiveImportStore.setState({
+    ...(!current && pendingRunId === runId ? { initialFailure: { runId, importId: null, phase: reason } } : {}),
     stoppedRuns: Object.fromEntries([...Object.entries(stoppedRuns).filter(([id]) => id !== runId), [runId, reason]].slice(-100)),
     ...(current?.runId === runId ? { current: { ...current,
       phase: reason === 'failed' ? failedPhase(current.phase) : reason,
