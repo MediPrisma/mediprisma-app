@@ -157,7 +157,11 @@ export interface DateTimeInput {
  * time). A hidden input reads as blank to `compute` and to the results, so an
  * answer left in it from another case never changes this one.
  */
-export type CalcInput = (NumberInput | SelectInput | DateTimeInput) & { visibleWhen?: (values: CalcValues) => boolean }
+export type CalcInput = (NumberInput | SelectInput | DateTimeInput) & {
+  visibleWhen?: (values: CalcValues) => boolean
+  /** An auto-filled value older than this many days carries a small 「N 個月前」 beside its date. */
+  staleAfterDays?: number
+}
 
 /** True while the input applies to the values as they stand. */
 export function inputVisible(input: CalcInput, values: CalcValues): boolean {

@@ -5,7 +5,7 @@ import { HpaRiskResults } from './HpaRiskResults'
 import { DoacDoseResults } from './DoacDoseResults'
 import { DoacPeriopResults } from './DoacPeriopResults'
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
+import { ArrowLeft, RotateCw, Sparkles, Clock, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,13 @@ function safeCompute(
     // had filled every field that they hadn't.
     return { result: null, crashed: true }
   }
+}
+
+/** How long ago, in the words a badge has room for: 「45 天前」「5 個月前」「2 年前」. */
+export function agoText(days: number, zh: boolean): string {
+  if (days < 60) return zh ? `${days} 天前` : `${days} d ago`
+  if (days < 730) return zh ? `${Math.floor(days / 30)} 個月前` : `${Math.floor(days / 30)} mo ago`
+  return zh ? `${Math.floor(days / 365)} 年前` : `${Math.floor(days / 365)} y ago`
 }
 
 interface FilledInfo {
@@ -421,6 +428,8 @@ export function CalculatorDetail({
             ? (zh ? `正常 ${range.low}–${range.high}` : `Normal ${range.low}–${range.high}`)
             : undefined
           const implausible = input.type === "number" && isImplausible(input, values[input.key] ?? "")
+          const ageDays = fill?.date && Number.isFinite(Date.parse(fill.date)) ? Math.floor((Date.now() - Date.parse(fill.date)) / 86_400_000) : undefined
+          const staleDays = input.staleAfterDays !== undefined && ageDays !== undefined && ageDays > input.staleAfterDays ? ageDays : undefined
           return (
             <div key={input.key} className="space-y-1">
               <div className="flex items-center justify-between gap-2">
@@ -436,6 +445,16 @@ export function CalculatorDetail({
                     >
                       <AlertTriangle className="h-3 w-3" />
                       {fill.date ? fill.date.slice(0, 10) : ""} · {fill.sourceUnit}
+                    </span>
+                  ) : staleDays !== undefined ? (
+                    // Used as filled, never withheld: the date turns amber and says how old it is.
+                    <span
+                      className="flex shrink-0 items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400"
+                      title={zh ? `自動帶入的資料已 ${staleDays} 天（超過 ${input.staleAfterDays} 天），建議確認或重新量測` : `Auto-filled from ${staleDays} days ago (over ${input.staleAfterDays}); confirm or re-measure`}
+                      data-testid={`calc-stale-${input.key}`}
+                    >
+                      <Clock className="h-3 w-3" />
+                      {fill.date.slice(0, 10)} · {agoText(staleDays, zh)}
                     </span>
                   ) : (
                     <span

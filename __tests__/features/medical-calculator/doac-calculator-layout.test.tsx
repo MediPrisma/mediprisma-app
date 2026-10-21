@@ -165,6 +165,26 @@ describe('DOAC calculators on screen', () => {
     expect(within(screen.getByTestId('calc-group-ddi')).getByText('1 項未填；其餘 12 項無')).toBeInTheDocument()
   })
 
+  it('an old weight keeps its value, with its age beside the date in amber; a recent creatinine does not', () => {
+    jest.useFakeTimers({ now: new Date('2026-10-22T08:00:00+08:00'), doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick', 'setImmediate'] })
+    jest.mocked(useLabAutofill).mockReturnValue({
+      autofill: {
+        resolve: (source: any) => source?.kind === 'vital' ? { value: 64, unit: 'kg', date: '2026-03-01' } : source?.kind === 'lab' ? { value: 1.1, unit: 'mg/dL', date: '2026-10-01' } : undefined,
+        sex: 'male', clinicalSelects: {},
+      },
+      isLoading: false, error: null, retry: jest.fn(async () => {}),
+    } as unknown as ReturnType<typeof useLabAutofill>)
+    const { container } = render(
+      <LanguageProvider>
+        <CalculatorDetail calc={doseCalc} onBack={() => {}} isFavorite={false} onToggleFavorite={() => {}} />
+      </LanguageProvider>,
+    )
+    expect(container.querySelector<HTMLInputElement>('#calc-weight')!.value).toBe('64')
+    expect(screen.getByTestId('calc-stale-weight')).toHaveTextContent('2026-03-01 · 7 個月前')
+    expect(screen.queryByTestId('calc-stale-scr')).toBeNull()
+    jest.useRealTimers()
+  })
+
   it('peri-procedural, once daily: no second dose time, no apixaban 2.5 question, no ablation or catheter times', () => {
     const { container } = renderCalc(periopCalc, { doacRegimen: 'rivaroxaban:20:1' })
     for (const key of ['dose_time_2', 'dose_intent', 'sheath_removed_at', 'catheter_removed_at', 'traumatic_puncture']) {
