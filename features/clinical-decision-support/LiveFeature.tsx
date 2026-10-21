@@ -827,6 +827,7 @@ export default function LiveClinicalDecisionSupportFeature({
               nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },
             physicianDecisions: { ...physicianDecisions },
           }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
+          <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
           {showLayoutSwitcher ? (
             <LayoutSwitcher
               locale={cdssLocale}
@@ -865,8 +866,6 @@ export default function LiveClinicalDecisionSupportFeature({
         </div>
       </header>
 
-
-      <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
 
       {/*
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy

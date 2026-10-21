@@ -6,6 +6,7 @@ import { useMedicationEndDateFit } from '../hooks/useMedicationEndDateFit'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/clinical-color-roles"
 import { clinicalTooltipSurfaceClass } from "@/features/clinical-summary/components/clinical-metadata-styles"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -155,6 +156,10 @@ export function MedicationItem({
   const sourceLabel = candidate ? (locale === 'en' ? 'Compare sources' : '跨來源待核對') : integrated ? (locale === 'en' ? 'Hospital + cloud' : '院內＋雲端')
     : medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
       : medication.dataOrigin === 'medcloud' ? (locale === 'en' ? 'MediCloud' : '雲端') : undefined
+  const sourceOriginLabel = medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
+    : medication.dataOrigin === 'medcloud' ? (locale === 'en' ? 'MediCloud' : '雲端') : (locale === 'en' ? 'Sources' : '來源')
+  const sourceFactsDiffer = medication.sourceComparison?.warnings?.some(warning => ['source-facts-differ', 'source-status-conflict'].includes(warning))
+  const sourceButtonLabel = sourceFactsDiffer ? (locale === 'en' ? 'Diff.' : '差異') : sourceOriginLabel
   const sourceDescription = medication.sourceComparison
     ? <SourcePrescriptionComparison comparison={medication.sourceComparison} /> : integrated
     ? (locale === 'en' ? 'One matched prescription, with hospital and MediCloud source records retained.' : '同一筆藥囑的院內與健保雲端資料已整合，兩邊原始紀錄均保留。')
@@ -403,6 +408,7 @@ export function MedicationItem({
       className={cn(
         "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
         onRowToggle && "cursor-pointer",
+        medication.sourceComparison && 'items-center',
         grouped || leadingControl ? "min-h-11 pl-9 pr-3" : "px-3",
         grouped
           ? "rounded-none border-0 bg-transparent"
@@ -411,14 +417,6 @@ export function MedicationItem({
           && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
     >
-      {(medication.sourceComparison?.status === 'ambiguous' || medication.sourceComparison?.warnings?.some(warning => ['source-currentness-differs', 'source-facts-differ'].includes(warning))) && (
-        <details open={medication.sourceComparison.detailsInitiallyOpen !== false} className="col-span-full row-start-4 min-w-0 border-t border-border/60 pt-1 text-xs">
-          <summary className="min-h-11 cursor-pointer font-medium sm:min-h-8" onClick={event => event.stopPropagation()}>
-            {locale === 'en' ? 'Source correspondence unconfirmed' : '來源對應未確認'} · {medication.sourceComparison.records.filter(record => record.dataOrigin === 'hospital').length} {locale === 'en' ? 'hospital orders' : '筆院內藥囑'} / {medication.sourceComparison.records.filter(record => record.dataOrigin === 'medcloud').length} {locale === 'en' ? 'cloud records' : '筆雲端紀錄'}
-          </summary>
-          <SourcePrescriptionComparison comparison={medication.sourceComparison} />
-        </details>
-      )}
       {leadingControl && (
         <div className="absolute inset-y-0 left-0 flex w-9 items-stretch">
           {leadingControl}
@@ -526,7 +524,8 @@ export function MedicationItem({
           <div
             data-medication-classification
             className={cn(
-              "col-start-2 row-start-3 flex h-4 min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2",
+              "col-start-2 row-start-3 flex min-w-0 items-center gap-1 overflow-hidden @min-[456px]:row-start-2",
+              medication.sourceComparison ? 'h-6' : 'h-4',
               narrowThirdLineEmpty && "@max-[456px]:hidden",
               singleLineWhenWide && "@min-[45rem]:col-start-3 @min-[45rem]:row-start-1",
             )}
@@ -566,7 +565,29 @@ export function MedicationItem({
                 {chronicLabel}
               </span>
             )}
-            {sourceLabel && (
+            {medication.sourceComparison ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    data-medication-source-trigger
+                    aria-label={`${sourceButtonLabel}${sourceFactsDiffer ? ` (${sourceOriginLabel})` : ''}${locale === 'en' ? ': View source records' : '：查看來源紀錄'}`}
+                    onClick={event => event.stopPropagation()}
+                    className="inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80 underline decoration-dotted underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {sourceButtonLabel}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  aria-label={locale === 'en' ? 'Source records' : '來源紀錄'}
+                  align="end"
+                  className="max-h-[min(70vh,32rem)] w-[min(90vw,28rem)] overflow-y-auto p-3"
+                  onClick={event => event.stopPropagation()}
+                >
+                  <SourcePrescriptionComparison comparison={medication.sourceComparison} displayOrigin={medication.dataOrigin} />
+                </PopoverContent>
+              </Popover>
+            ) : sourceLabel && (
               <TapTooltip
                 asChild
                 content={sourceDescription}
