@@ -5,6 +5,8 @@ import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-clie
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services/local-bundle-mutation-queue'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import { PatientMapper } from '@/src/infrastructure/fhir/mappers/patient.mapper'
+import { originalFhirFilename } from '@/src/application/utils/original-fhir-filename'
 
 export function useOriginalFhirDownload() {
   const [isLocal, setIsLocal] = useState(false)
@@ -63,12 +65,16 @@ export function useOriginalFhirDownload() {
           setAvailable(false)
           return
         }
+        // Read the same import's source Patient; query caches or local name overlays
+        // may describe a different view and must not label these original bytes.
+        let filename = originalFhirFilename(null)
+        try {
+          filename = originalFhirFilename(PatientMapper.fromBundle(await LocalBundleService.load()))
+        } catch { /* Optional demographics must not prevent downloading the original. */ }
         const url = URL.createObjectURL(original)
         const link = document.createElement('a')
         link.href = url
-        const date = new Date()
-        const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
-        link.download = `FHIR_original_${stamp}.json`
+        link.download = filename
         document.body.appendChild(link)
         try {
           link.click()
