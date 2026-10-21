@@ -7,6 +7,7 @@
 // a quick view of what the patient is on right now without having to scan
 // every visit.
 import { useMemo, useState } from "react"
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import type { ClinicalContextSection, DataFilters, TimeRange } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import { buildIcdDictionary, extractEncounterIcds } from "@/src/shared/utils/icd-lookup"
@@ -55,7 +56,7 @@ function summarizeMedLine(
       : status === 'on-hold'
         ? '; ON HOLD—not currently in use'
         : ''
-  return `${name}${dosing ? ` (${dosing})` : ''}${dur} [status: ${status}${semantics}]`
+  return `${name}${dosing ? ` (${dosing})` : ''}${dur} [status: ${status}${semantics}]${sourceComparisonNarrative(m) ? ` [${sourceComparisonNarrative(m)}]` : ''}`
 }
 
 function summarizeProcLine(

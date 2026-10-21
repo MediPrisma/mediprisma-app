@@ -186,6 +186,7 @@ export class FhirMapper implements IDataMapper {
   // Static methods for backward compatibility
   static toCondition(fhirResource: Condition): ConditionEntity {
     return {
+      meta: fhirResource.meta,
       id: fhirResource.id || '',
       code: fhirResource.code,
       category: fhirResource.category,
@@ -221,6 +222,7 @@ export class FhirMapper implements IDataMapper {
     return {
       id: fhirResource.id || '',
       meta: request.meta,
+      identifier: request.identifier,
       medicationCodeableConcept: fhirResource.medicationCodeableConcept,
       medicationReference: fhirResource.medicationReference,
       status: fhirResource.status,
@@ -244,6 +246,10 @@ export class FhirMapper implements IDataMapper {
       ...(atcClassification ? { atcClassification } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       _sourceCapturedAt: request._sourceCapturedAt,
+      _reconciledSourceReferences: request._reconciledSourceReferences,
+      _encounterInferred: request._encounterInferred,
+      _sourceRecordComparison: request._sourceRecordComparison,
+      _sourcePrescriptionRecords: request._sourcePrescriptionRecords,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -483,6 +489,9 @@ export class FhirMapper implements IDataMapper {
 
   static toEncounter(fhirResource: any): EncounterEntity {
     return {
+      meta: fhirResource.meta,
+      _sourceRecordComparison: fhirResource._sourceRecordComparison,
+      _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
       id: fhirResource.id || '',
       status: fhirResource.status,
       class: fhirResource.class,

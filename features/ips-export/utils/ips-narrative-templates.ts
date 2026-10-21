@@ -21,6 +21,9 @@ import { conceptLabel, conceptLabelEn, escapeHtml, formatDate, resultLabel } fro
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { medicationDisplayParts } from './medication-display'
 import type { IpsSectionLabels } from './ips-builder'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { medicationExportUnit, sourceSupplyText } from './medication-source-records'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
 
@@ -122,15 +125,17 @@ export function narrativeMedications(
   medications: MedicationEntity[],
   labels: IpsSectionLabels['medicationTable'],
 ): string {
-  const rows = medications.map((m) => {
+  const rows = medications.map((medication) => {
+    const { canonical: m, sources } = medicationExportUnit(medication)
     const dosage = medicationDisplayParts(m)
     return [
       // Prefer the English coding[].display (bridge canonical); fall back to
       // text so non-bridge sources are carried over faithfully.
-      dash(conceptLabelEn(m.medicationCodeableConcept)),
-      dash(m.status || ''),
+      dash([conceptLabelEn(m.medicationCodeableConcept), m.exportSourceLabel, sourceComparisonNarrative(m),
+        sourceSelfPurchase(m) === true ? '自費／自購（self-pay）' : undefined].filter(Boolean).join(' · ')),
+      dash(m.exportCurrentnessUnconfirmed ? `unknown (original source: ${m.status || 'unknown'})` : m.status || ''),
       dash(dosage.directions),
-      dash(dosage.supply),
+      dash([dosage.supply, sourceSupplyText(m), ...sources.map(source => [source.exportSourceLabel, sourceSupplyText(source)].filter(Boolean).join('; '))].filter(Boolean).join(' | ')),
       dash(formatDate(m.authoredOn)),
     ]
   })
