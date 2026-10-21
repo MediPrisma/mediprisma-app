@@ -439,7 +439,7 @@ it('exports both original records of a confirmed pair with their source quantiti
   expect(JSON.stringify(exported[0].note)).toContain('Source total quantity: 28 TAB')
   expect(JSON.stringify(exported[0].note)).not.toContain('Source supply duration')
   expect(JSON.stringify(exported[1].note)).toContain('Source supply duration: 28 d')
-  const narrative = narrativeMedications(orders as any, { medication: 'Medication', status: 'Status', directions: 'Directions', supply: 'Supply', date: 'Date' })
+  const narrative = narrativeMedications(orders as any, { medication: 'Medication', status: 'Status', directions: 'Directions', supply: 'Supply', date: 'Date', code: 'Code' })
   expect(narrative).toContain('Hospital record: MedicationRequest/hospital-med')
   expect(narrative).toContain('MediCloud record: MedicationRequest/cloud-med')
 })
