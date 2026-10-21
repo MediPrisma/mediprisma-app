@@ -34,6 +34,10 @@ it('projects one hospital and two cloud copies as one comparison while preservin
   expect(JSON.stringify(copiesFixture)).toBe(original)
   const exported = mapMedications(collection.medications, 'Patient/synthetic-export').entries
   expect(exported).toHaveLength(3)
+  const exportNotes = exported.map(entry => JSON.stringify(entry.resource.note))
+  expect(exportNotes.filter(note => note.includes('Hospital record: MedicationRequest/synthetic-order-a'))).toHaveLength(1)
+  expect(exportNotes.filter(note => note.includes('MediCloud record: MedicationRequest/synthetic-cloud-order-a'))).toHaveLength(2)
+  expect(exportNotes.some(note => note.includes('MediCloud record: MedicationRequest/synthetic-cloud-order-a-copy'))).toBe(true)
   const { container } = render(<MedicationItem medication={row} />)
   const details = within(container.querySelector('details')!)
   expect(details.getByText(/1 筆院內藥囑 \/ 2 筆雲端紀錄/)).toBeInTheDocument()

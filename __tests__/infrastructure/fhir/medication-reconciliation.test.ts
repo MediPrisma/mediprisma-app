@@ -386,6 +386,27 @@ it('shows both distinct regimens when one hospital and one cloud prescription co
   expect(result.current).toHaveLength(2)
 })
 
+it.each(['cloud-only', 'opposite-flags'])('keeps cloud self-pay records separate: %s', scenario => {
+  const { hospital, cloud } = fixture()
+  cloud.note = [{ text: '自購：Y' }]
+  if (scenario === 'opposite-flags') hospital.note = [{ text: '自購：N' }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital._reconciledSourceReferences).toBeUndefined()
+  expect(hospital.note).not.toContainEqual({ text: '自購：Y' })
+})
+
+it.each([
+  { rateQuantity: { value: 2, unit: 'mL/h' } },
+  { rateRatio: { numerator: { value: 2, unit: 'mL' }, denominator: { value: 1, unit: 'h' } } },
+  { rateRange: { low: { value: 2, unit: 'mL/h' }, high: { value: 3, unit: 'mL/h' } } },
+])('does not supplement a text-only rate SIG with an unverified structured rate %#', rate => {
+  const { hospital, cloud } = fixture()
+  hospital.dosageInstruction = [{ text: '1 mL/h IV QD' }]
+  cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } }, doseAndRate: [rate] }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital.dosageInstruction[0].doseAndRate).toBeUndefined()
+})
+
 it.each([
   [{ rateQuantity: { value: 1, unit: 'mL/h' } }, { rateQuantity: { value: 2, unit: 'mL/h' } }],
   [{ rateRatio: { numerator: { value: 1, unit: 'mg' }, denominator: { value: 1, unit: 'h' } } },

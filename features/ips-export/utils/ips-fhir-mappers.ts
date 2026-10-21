@@ -269,7 +269,7 @@ const VALID_MED_STATEMENT_STATUS = [
 export function mapMedications(medications: MedicationEntity[], patientRef: string): SectionMapResult {
   const entries = medicationSourceRecords(medications).map((m) => {
     const directions = medicationDirectionsForFhir(m)
-    const dosage = m.exportSourceLabel ? m.dosageInstruction : directions ? [{ text: directions }] : undefined
+    const dosage = m.exportOriginalDosage ? m.dosageInstruction : directions ? [{ text: directions }] : undefined
     const notes = [m.exportSourceLabel, sourceComparisonNarrative(m), sourceSupplyText(m), sourceSelfPurchase(m) === true ? '來源明列自費／自購（self-pay）' : undefined,
       `Original source order status: ${m.status || 'unknown'}; actual medication use has not been verified.`,
       ...(m.note ?? []).map(note => note.text)]

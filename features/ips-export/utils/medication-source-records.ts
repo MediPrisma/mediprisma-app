@@ -4,20 +4,30 @@ import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-so
 export type ExportMedication = MedicationEntity & {
   identifier?: Array<Record<string, unknown>>
   exportSourceLabel?: string
+  exportOriginalDosage?: boolean
 }
 
 /** A confirmed import merge must not make the source prescriptions disappear
  * from the portable summary. Each exported source remains explicitly labelled
  * as a record of the same prescription, not an additional prescription. */
 export function medicationSourceRecords(medications: MedicationEntity[]): ExportMedication[] {
-  return medications.flatMap((medication) => medication._sourcePrescriptionRecords?.length
-    ? medication._sourcePrescriptionRecords.map((source): ExportMedication => ({
+  return medications.flatMap((medication) => {
+    const sources: ExportMedication[] = medication._sourcePrescriptionRecords?.length
+      ? medication._sourcePrescriptionRecords.map((source): ExportMedication => ({
       ...source,
       medicationCodeableConcept: source._resolvedMedicationCodeableConcept ?? source.medicationCodeableConcept,
       _sourceRecordComparison: medication._sourceRecordComparison,
-      exportSourceLabel: `${isVghtpeSource(source) ? 'Hospital' : isMedcloudSource(source) ? 'MediCloud' : 'Original source'} record: ${source.resourceType}/${source.id}`,
+      exportOriginalDosage: true,
     }))
-    : [medication])
+      : [medication]
+    return sources.map(source => {
+      const reference = `${source._sourceResourceType || 'MedicationRequest'}/${source.id}`
+      const origin = source._sourceRecordComparison?.sourceStatuses?.find(record => record.reference === reference)?.origin
+      const sourceMeta = source as ExportMedication & { meta?: { source?: string } }
+      return { ...source, exportSourceLabel: `${origin === 'hospital' || isVghtpeSource(sourceMeta) ? 'Hospital'
+        : origin === 'medcloud' || isMedcloudSource(sourceMeta) ? 'MediCloud' : 'Original source'} record: ${reference}` }
+    })
+  })
 }
 
 export function sourceSupplyText(medication: ExportMedication): string | undefined {

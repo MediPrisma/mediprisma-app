@@ -54,7 +54,7 @@ function frequencyKey(dosage: any): string | undefined {
 function hasConflict(hospital: Resource, cloud: Resource): boolean {
   // A self-pay addition and an insured claim may legitimately share a product
   // and visit. Never erase that distinction as a presumed source duplicate.
-  if (sourceSelfPurchase(hospital) === true) return true
+  if (sourceSelfPurchase(hospital) === true || sourceSelfPurchase(cloud) === true) return true
   for (const identifier of hospital.identifier ?? []) {
     if (!identifier.system || !identifier.value) continue
     const sameIssuer = (cloud.identifier ?? []).filter((other: any) => other.system === identifier.system && other.value)
@@ -132,6 +132,7 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     // dose. Keep both sources instead of adding e.g. "2 TAB" to "1 TAB PO QD".
     if (sig(left) && !aDose && (bDose?.doseQuantity || bDose?.doseRange)
       || sig(right) && !bDose && (aDose?.doseQuantity || aDose?.doseRange)) return true
+    if (sig(left) && !aRate && bRate || sig(right) && !bRate && aRate) return true
     for (const field of ['route', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method']) {
       if (sig(left) && left[field] === undefined && right[field] !== undefined
         || sig(right) && right[field] === undefined && left[field] !== undefined) return true
@@ -213,7 +214,8 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   for (const { order, key } of hospital) {
     const matches = cloud.filter((other) => {
       if (!key || !other.key || other.key.context !== key.context
-        || sourceSelfPurchase(order) === true || conflictingSourceIdentifier(order, other.order)) return false
+        || sourceSelfPurchase(order) === true || sourceSelfPurchase(other.order) === true
+        || conflictingSourceIdentifier(order, other.order)) return false
       if (hasConflict(order, other.order)) {
         const conflicts = conflictingPairs.get(order) ?? new Set<Resource>()
         conflicts.add(other.order); conflictingPairs.set(order, conflicts)
