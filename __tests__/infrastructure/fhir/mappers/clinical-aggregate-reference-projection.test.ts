@@ -53,7 +53,7 @@ it('preserves wrong-version, foreign-host, and ambiguous Encounter references wh
   expect(collisionRows).toHaveLength(2)
   expect(new Set(collisionRows.map(row => row.id)).size).toBe(2)
   const byVersion = new Map(collisionRows.map(row => [
-    source.clinicalSource!.graph.nodes.find(node => node.key === row.clinicalSourceNodeKey)?.resource.meta?.versionId,
+    (source.clinicalSource!.graph.nodes.find(node => node.key === row.clinicalSourceNodeKey)?.resource.meta as { versionId?: string } | undefined)?.versionId,
     row.id,
   ]))
   expect(source.procedures.map(row => row.encounter?.reference)).toEqual([
