@@ -68,19 +68,9 @@ function findExtension(node: any, url: string): any | undefined {
  * Expand every Claim in `entries` into standard FHIR resources, appended to
  * `entries` in place. Non-Claim bundles are untouched (the loop finds nothing).
  */
-export function expandClaimResources(entries: any[], canLinkEncounter: (claim: object, reference: string) => boolean = () => false): void {
+export function expandClaimResources(entries: any[], resolveClaimTarget: (claim: object, path: string, resourceType: string) => any | undefined = () => undefined): void {
   const claims = entries.filter((r) => r?.resourceType === 'Claim')
   if (!claims.length) return
-
-  // Index encounters so we can backfill a missing visit date/subject.
-  const encounterById = new Map<string, any>()
-  for (const r of entries) {
-    if (r?.resourceType === 'Encounter' && r.id) encounterById.set(r.id, r)
-  }
-  const medRequestById = new Map<string, any>()
-  for (const r of entries) {
-    if (r?.resourceType === 'MedicationRequest' && r.id) medRequestById.set(r.id, r)
-  }
 
   const synthesised: any[] = []
 
@@ -95,11 +85,13 @@ export function expandClaimResources(entries: any[], canLinkEncounter: (claim: o
     const encounterRef: string | undefined = findExtension(claim, EXT_CLAIM_ENCOUNTER)
       ?.valueReference?.reference
     const encounter = encounterRef ? { reference: encounterRef } : undefined
-    const encounterId = encounterRef ? encounterRef.split('/').pop() : undefined
+    const encounterIndex = claim.extension?.findIndex((extension: any) => extension.url === EXT_CLAIM_ENCOUNTER)
+    const resolvedEncounter = resolveClaimTarget(claim, `extension[${encounterIndex}].valueReference`, 'Encounter')
+    const canLinkEncounter = Boolean(resolvedEncounter && encounterRef === 'Encounter/' + resolvedEncounter.id)
 
     // --- Backfill the PAS Encounter (usually has no period.start / subject) ---
-    if (encounterId) {
-      const enc = encounterById.get(encounterId)
+    if (canLinkEncounter) {
+      const enc = resolvedEncounter
       if (enc) {
         if (!enc.period?.start && created) enc.period = { ...(enc.period ?? {}), start: created }
         if (!enc.subject && subject) enc.subject = subject
@@ -255,25 +247,22 @@ export function expandClaimResources(entries: any[], canLinkEncounter: (claim: o
     // it already renders, but PAS omits authoredOn/encounter, so give it the
     // application date and link it to the visit for correct sorting/grouping.
     const items: any[] = Array.isArray(claim.item) ? claim.item : []
-    for (const item of items) {
+    for (const [itemIndex, item] of items.entries()) {
       // The requestedService extension points at the MedicationRequest; match
       // by any valueReference to a MedicationRequest rather than the exact url.
       const exts: any[] = Array.isArray(item?.extension) ? item.extension : []
-      const mrRef: string | undefined = exts
-        .map((e) => e?.valueReference?.reference)
-        .find((r) => typeof r === 'string' && r.startsWith('MedicationRequest/'))
-      const mrId = mrRef ? mrRef.split('/').pop() : undefined
-      const mr = mrId ? medRequestById.get(mrId) : undefined
+      const extensionIndex = exts.findIndex(e => typeof e?.valueReference?.reference === 'string' && e.valueReference.reference.startsWith('MedicationRequest/'))
+      const mr = resolveClaimTarget(claim, `item[${itemIndex}].extension[${extensionIndex}].valueReference`, 'MedicationRequest')
       if (!mr) continue
       if (!mr.authoredOn && created) mr.authoredOn = created
-      if (!mr.encounter && encounter) {
+      if (!mr.encounter && encounter && canLinkEncounter) {
         mr.encounter = encounter
-        if (/^Encounter\/[^/]+$/.test(encounter.reference) && canLinkEncounter(claim, encounter.reference)) claimEncounterLinks.set(mr, encounter.reference)
+        if (/^Encounter\/[^/]+$/.test(encounter.reference) && canLinkEncounter) claimEncounterLinks.set(mr, encounter.reference)
       }
     }
     for (const resource of synthesised.slice(synthesisedStart)) {
       const reference = resource.encounter?.reference
-      if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference) && canLinkEncounter(claim, reference)) claimEncounterLinks.set(resource, reference)
+      if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference) && canLinkEncounter) claimEncounterLinks.set(resource, reference)
     }
   }
   entries.push(...synthesised)

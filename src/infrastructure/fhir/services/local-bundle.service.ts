@@ -1500,6 +1500,7 @@ export const LocalBundleService = {
       const key = sourceKeyByResource.get(resource)
       if (key) resource.clinicalSourceNodeKey = key
     }
+    const claimEncounterResourcesByKey = new Map<string, object>()
     const bindMappedResource = <T extends object>(mapped: T, resource: any): T => {
       const key = sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey
       let variant = key ? recordVariants.get(key) : undefined
@@ -1508,7 +1509,7 @@ export const LocalBundleService = {
       if (key) readClinicalMedicationContentModifier(sourceNodesByKey.get(key)!.resource)
       return bindClaimEncounterLink({ ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
         ...(variant ? { clinicalRecordVariant: variant } : {}), ...(imported?.sourceId ? { sourceId: imported.sourceId } : {}), ...(imported?.sourceVersionId ? { sourceVersionId: imported.sourceVersionId } : {}),
-        ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }, resource)
+        ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }, (key && claimEncounterResourcesByKey.get(key)) || resource)
     }
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     const containedIdScopes = new Map<string, Set<string>>()
@@ -1531,15 +1532,18 @@ export const LocalBundleService = {
     // Condition / Procedure / Observation / DocumentReference resources the rest
     // of the pipeline already renders. No-op for non-PAS bundles. Runs before the
     // byType() split below so the synthesised resources flow through unchanged.
-    expandClaimResources(entries, (claim, reference) => {
+    expandClaimResources(entries, (claim, path, resourceType) => {
       const key = sourceKeyByResource.get(claim)
-      if (!key) return false
-      const index = (claim as any).extension?.findIndex((extension: any) => extension.url === 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter')
-      return clinicalSource.graph.references.some(edge => edge.origin.key === key
-        && edge.path === `extension[${index}].valueReference` && edge.status === 'resolved'
-        && edge.targetKeys.length === 1 && entries.some(resource => resource.resourceType === 'Encounter'
-          && sourceKeyByResource.get(resource) === edge.targetKeys[0] && reference === 'Encounter/' + resource.id))
+      if (!key) return undefined
+      const edge = clinicalSource.graph.references.find(reference => reference.origin.key === key && reference.path === path)
+      if (edge?.status !== 'resolved' || edge.targetKeys.length !== 1) return undefined
+      const targets = entries.filter(resource => resource.resourceType === resourceType && sourceKeyByResource.get(resource) === edge.targetKeys[0])
+      return targets.length === 1 ? targets[0] : undefined
     })
+    for (const resource of entries) {
+      const key = sourceKeyByResource.get(resource)
+      if (key) claimEncounterResourcesByKey.set(key, resource)
+    }
 
     // Roche DIP support: flatten the oncology (mCODE) resources Roche nests
     // inside List.contained and relink its identifier-based references, so the
