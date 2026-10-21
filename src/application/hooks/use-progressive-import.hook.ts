@@ -3,11 +3,12 @@
 import { useEffect } from 'react'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
-import { PROGRESSIVE_STATUS_MESSAGE, useProgressiveImportStore, isProgressiveFailureReason, stopProgressiveImport } from '../stores/progressive-import.store'
+import { PROGRESSIVE_STATUS_MESSAGE, useProgressiveImportStore, isProgressiveFailureReason, stopProgressiveImport, restoreProgressiveImportStatus } from '../stores/progressive-import.store'
 
 export function useProgressiveImportStatus() {
   const current = useProgressiveImportStore(state => state.current)
   useEffect(() => {
+    restoreProgressiveImportStatus(LocalBundleService.getActiveImportId())
     const clearChanged = () => {
       const active = useProgressiveImportStore.getState().current
       if (active && active.importId !== LocalBundleService.getActiveImportId()) {

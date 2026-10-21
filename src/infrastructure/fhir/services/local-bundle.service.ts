@@ -107,6 +107,8 @@ let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
 let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
 // Only used if persistence fails; Blob keeps source bytes out of the parsed JSON heap.
 let memOriginalFhir: Blob | null = null
+// A storage-restricted first snapshot has no durable predecessor to reopen.
+let memBundleUsesMemoryOnlySession = false
 // A stored bundle can be requested concurrently by the Patient and clinical
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
@@ -1066,6 +1068,15 @@ export const LocalBundleService = {
           Object.assign(form, original)
         }
       }
+      const publishInMemory = (originalFhir: Blob | null, memoryOnlySession = false) => {
+        memBundle = bundle
+        memBundleImportId = importId
+        memBundleIsDemo = demo
+        memBundleSourceMetadata = sourceMetadata ?? null
+        memUserEnteredPatientProfile = patientProfile
+        memOriginalFhir = originalFhir
+        memBundleUsesMemoryOnlySession = memoryOnlySession
+      }
       try {
         const preparedKey = await prepareSessionBundleKey()
         let previousMarker: string | null, previousDemo: string | null
@@ -1119,12 +1130,7 @@ export const LocalBundleService = {
           try { writeTabBundleScope(importId, demo) }
           catch { throw new BundleSessionStorageError('bundle session marker unavailable') }
           // No asynchronous work between the final guard and publication.
-          memBundle = bundle
-          memBundleImportId = importId
-          memBundleIsDemo = demo
-          memBundleSourceMetadata = sourceMetadata ?? null
-          memUserEnteredPatientProfile = patientProfile
-          memOriginalFhir = originalPersisted ? null : options.originalFhir ?? null
+          publishInMemory(originalPersisted ? null : options.originalFhir ?? null)
           published = true
         } finally {
           if (!published) {
@@ -1159,15 +1165,10 @@ export const LocalBundleService = {
         signal.throwIfAborted()
         // Never acknowledge a memory-only replacement while reload would
         // silently reopen the older durable snapshot. Keep it and report failure.
-        if (activeImportId) throw error
+        if (activeImportId && !memBundleUsesMemoryOnlySession) throw error
         // Persistence is optional; cancellation and ownership checks are not.
         // No plaintext is persisted, and source/images remain usable in this tab.
-        memBundle = bundle
-        memBundleImportId = importId
-        memBundleIsDemo = demo
-        memBundleSourceMetadata = sourceMetadata ?? null
-        memUserEnteredPatientProfile = patientProfile
-        memOriginalFhir = options.originalFhir ?? null
+        publishInMemory(options.originalFhir ?? null, true)
       }
       return
     }
@@ -1186,6 +1187,7 @@ export const LocalBundleService = {
       }
     }
     memBundle = bundle
+    memBundleUsesMemoryOnlySession = false
     memBundleImportId = importId
     memBundleIsDemo = demo
     memBundleSourceMetadata = sourceMetadata ?? null
@@ -1251,6 +1253,7 @@ export const LocalBundleService = {
     memBundleSourceMetadata = null
     memUserEnteredPatientProfile = null
     memOriginalFhir = null
+    memBundleUsesMemoryOnlySession = false
     if (typeof window === 'undefined') return
     clearTabBundleScope()
     // Remove only legacy origin-wide markers. New tab-local markers never

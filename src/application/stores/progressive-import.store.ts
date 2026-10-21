@@ -46,6 +46,45 @@ export const useProgressiveImportStore = create<{
   stoppedRuns: Record<string, ProgressiveFailureReason>
 }>(() => ({ current: null, pendingRunId: null, stoppedRuns: {} }))
 
+// Only opaque transaction ids and coverage state survive a tab reload. Never
+// store patient attributes, source data, credentials, or a resumable request.
+const STATUS_STORAGE_KEY = 'mediprisma:progressive-status-v1'
+const phases: ProgressiveImportState['phase'][] = ['waiting', 'reports-pending', 'reports-pending-partial', 'reports-failed', 'update-failed', 'loaded', 'empty', 'partial', 'failed', 'cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable']
+
+function writeStoredStatus(current: ProgressiveImportState | null): void {
+  try {
+    if (current) sessionStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(current))
+    else sessionStorage.removeItem(STATUS_STORAGE_KEY)
+  } catch { /* storage-restricted sessions remain memory-only */ }
+}
+
+useProgressiveImportStore.subscribe((state, previous) => {
+  if (state.current !== previous.current) writeStoredStatus(state.current)
+})
+
+export function restoreProgressiveImportStatus(activeImportId: string | null): void {
+  if (useProgressiveImportStore.getState().current) return
+  let saved: ProgressiveImportState | null = null
+  try {
+    const value = JSON.parse(sessionStorage.getItem(STATUS_STORAGE_KEY) ?? 'null')
+    if (value && validId(value.runId) && validId(value.importId) && phases.includes(value.phase)) saved = value
+  } catch { /* absent or invalid status is not a work authorization */ }
+  if (!saved || saved.importId !== activeImportId) {
+    writeStoredStatus(null)
+    return
+  }
+  // Reload interrupts the extension's exact-document transport. Preserve known
+  // coverage and safety warnings; never imply an old document is still working.
+  const stoppedRuns = useProgressiveImportStore.getState().stoppedRuns
+  const stopped = stoppedRuns[saved.runId]
+  const phase = stopped === 'failed' ? failedPhase(saved.phase) : stopped
+    ?? (['waiting', 'reports-pending', 'reports-pending-partial'].includes(saved.phase)
+      ? failedPhase(saved.phase) : saved.phase)
+  useProgressiveImportStore.setState({ current: { ...saved, phase },
+    ...(isProgressiveFailureReason(phase) ? { stoppedRuns: { ...stoppedRuns, [saved.runId]: phase } } : {}),
+  })
+}
+
 function failedPhase(phase: ProgressiveImportState['phase']): ProgressiveImportState['phase'] {
   if (['reports-pending', 'reports-pending-partial', 'reports-failed'].includes(phase)) return 'reports-failed'
   if (['loaded', 'partial', 'update-failed'].includes(phase)) return 'update-failed'

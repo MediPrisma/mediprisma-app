@@ -33,6 +33,13 @@ test.each(['read', 'key', 'marker'] as const)('guarded import stays usable in me
   expect(await local.load()).toEqual(bundle)
   expect((bundle.entry[1].resource as any).presentedForm[0].data).toBe('AQID')
   expect(await local.loadOriginalFhir()).toBe(source)
+  for (const importId of ['visits-a', 'final-a']) {
+    const updated = { ...chart(), id: importId }, updatedSource = new Blob([JSON.stringify(updated)])
+    await local.save(updated, { importId, replaceImportId: local.getActiveImportId()!, originalFhir: updatedSource, signal: new AbortController().signal })
+    expect(local.getActiveImportId()).toBe(importId)
+    expect(await local.load()).toEqual(updated)
+    expect(await local.loadOriginalFhir()).toBe(updatedSource)
+  }
 })
 
 test('storage restriction does not swallow a cancellation or a changed active import guard', async () => {

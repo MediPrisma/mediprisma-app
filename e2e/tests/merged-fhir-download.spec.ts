@@ -6,6 +6,7 @@ import { importBundle, openFeaturePanel, openLeftTab } from '../fixtures/import'
 import { stubFirebaseAnonymousAuth } from '../fixtures/firebase-auth'
 import { createMergedFhirFixture, type RawBundle, type SourceImage } from '../fixtures/merged-fhir'
 import { expectImportWorker, observeImportWorkers } from '../fixtures/import-worker'
+import { quietGuidedTours } from '../fixtures/guided-tour'
 
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
 const parse = (bytes: Buffer): RawBundle => JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/, ''))
@@ -13,6 +14,7 @@ const activeImport = (page: Page) => page.evaluate(() => sessionStorage.getItem(
 
 test('progressive snapshots replace one patient chart and preserve late terminal warnings', async ({ page }, info) => {
   test.setTimeout(120_000)
+  await quietGuidedTours(page)
   await page.addInitScript(() => {
     localStorage.setItem('medical-note-locale', 'zh-TW')
     localStorage.setItem('medical-note-audience', 'medical')
@@ -57,7 +59,6 @@ test('progressive snapshots replace one patient chart and preserve late terminal
   expect(final.ok).toBe(true)
   await expect(page.getByRole('status').filter({ hasText: '已載入院內門診資料' })).toBeVisible()
   expect((await send('hospital', finalResources, visits.importId as string)).ok).toBe(false)
-  expect((await send('hospital', [{ ...patient, id: 'other-patient' }], final.importId as string)).ok).toBe(false)
   await openDownloads(page)
   const pending = page.waitForEvent('download')
   await page.getByRole('button', { name: '下載原始 FHIR', exact: true }).click()
@@ -76,12 +77,14 @@ test('progressive snapshots replace one patient chart and preserve late terminal
   })
   expect((await send('hospital', finalResources, final.importId as string)).ok).toBe(false)
   await page.evaluate(() => (window as Window & { restoreStorage?: () => void }).restoreStorage!())
+  expect((await send('hospital', [{ ...patient, id: 'other-patient' }], final.importId as string)).ok).toBe(false)
   await page.evaluate(importId => window.postMessage({ source: 'medcloud2-extension', type: 'medcloud:outpatient-status', version: 1,
     runId: 'progressive-run', importId, phase: 'patient-changed' }, location.origin), visits.importId)
   await expect(page.getByRole('alert').filter({ hasText: '畫面仍為先前病人資料' })).toBeVisible()
   await info.attach('late-patient-change-warning', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
   await page.reload()
   await expect(page.getByText('合成分階段病人', { exact: true }).first()).toBeAttached()
+  await expect(page.getByRole('alert').filter({ hasText: '畫面仍為先前病人資料' })).toBeVisible()
   expect(await activeImport(page)).toBe(`import:${final.importId}`)
   await openDownloads(page)
   const restoredDownload = page.waitForEvent('download')

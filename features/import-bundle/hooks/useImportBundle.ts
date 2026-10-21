@@ -27,6 +27,7 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
 import { prepareLocalImportFile } from '../services/local-import-file.service'
+import { ProgressiveImportError } from '../services/progressive-import-transaction'
 
 /** Ceiling for pulling the bundled demo chart (~1.7MB) over hospital Wi-Fi. */
 const DEMO_FETCH_TIMEOUT_MS = 30_000
@@ -165,9 +166,9 @@ export function useImportBundle(): UseImportBundleReturn {
       await serializeLocalBundleMutation(async () => {
         const assertExpectedImport = () => {
           options?.signal?.throwIfAborted()
-          if (options?.requireEmpty && LocalBundleService.hasData()) throw new Error('目前已載入其他資料，已停止自動匯入。')
+          if (options?.requireEmpty && LocalBundleService.hasData()) throw new ProgressiveImportError('IMPORT_STALE', '目前已載入其他資料，已停止自動匯入。')
           if (options?.expectedImportId && LocalBundleService.getActiveImportId() !== options.expectedImportId) {
-            throw new Error('目前資料已變更，已停止院內門診補載。')
+            throw new ProgressiveImportError('IMPORT_STALE', '目前資料已變更，已停止院內門診補載。')
           }
         }
         assertExpectedImport()
@@ -178,7 +179,7 @@ export function useImportBundle(): UseImportBundleReturn {
           const patientId = (bundle: any) => bundle?.entry?.filter((entry: any) => entry?.resource?.resourceType === 'Patient').map((entry: any) => entry.resource.id)
           const previousIds = patientId(previous), nextIds = patientId(prepared.bundle)
           if (previousIds?.length !== 1 || nextIds?.length !== 1 || !previousIds[0] || previousIds[0] !== nextIds[0]) {
-            throw new Error('病人資料不符，已停止院內門診補載。')
+            throw new ProgressiveImportError('PATIENT_HIS_MISMATCH', '病人資料不符，已停止院內門診補載。')
           }
         }
         const patientProfile = options?.expectedImportId ? LocalBundleService.getUserEnteredPatientProfile() : undefined
