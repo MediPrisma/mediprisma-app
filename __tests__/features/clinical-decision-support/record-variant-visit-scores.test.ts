@@ -41,6 +41,7 @@ it('does not describe unresolved AF diagnoses as absent on the heart-failure map
   expect(profile.excludedClinicalRecordVariants?.filter(row => row.resourceType === 'Condition')).toHaveLength(2)
   expect(model.points.some(point => /no AF diagnosis/i.test(point.headline ?? ''))).toBe(false)
   expect(model.points.some(point => point.needsData?.some(text => /source record|reconcil/i.test(text)))).toBe(true)
-  const withoutUnresolvedRecords = buildVisitModel({ packId, result, profile: { ...profile, excludedClinicalRecordVariants: [] }, locale: 'en' })!
+  const profileWithoutUnresolvedRecords = { ...profile, excludedClinicalRecordVariants: [] }
+  const withoutUnresolvedRecords = buildVisitModel({ packId, result, profile: profileWithoutUnresolvedRecords, locale: 'en' })!
   expect(withoutUnresolvedRecords.points.some(point => /no AF diagnosis/i.test(point.headline ?? ''))).toBe(true)
 })
