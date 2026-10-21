@@ -1,3 +1,4 @@
+import { clinicalEncounterAlias } from '@/src/infrastructure/fhir/mappers/clinical-projection-disposition'
 import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions, outboundClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
@@ -814,7 +815,7 @@ function encounterLinks(collection: ClinicalDataCollection) {
     if (graph && edge) {
       if (edge.status !== 'resolved') { incomplete = true; return undefined }
       const linked = edge.targetKeys.flatMap(key => {
-        const direct = byNode.get(key)
+        const direct = byNode.get(key) ?? byNode.get(clinicalEncounterAlias(collection.clinicalSource!, key) ?? '')
         if (direct) return [direct]
         const node = nodes.get(key)
         return node ? collection.encounters.filter(encounter => {

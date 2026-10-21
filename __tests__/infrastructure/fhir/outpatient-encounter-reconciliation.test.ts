@@ -1,3 +1,5 @@
+import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
+import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
 import { LocalBundleService, canonicalizeBundleResources } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { reconcileOutpatientEncounters } from '@/src/infrastructure/fhir/services/outpatient-encounter-reconciliation'
 import { extractEncounterIcds, buildIcdDictionary, localizedIcdDescription } from '@/src/shared/utils/icd-lookup'
@@ -220,3 +222,30 @@ it.each(['date', 'facility', 'patient', 'diagnosis', 'non-ICD', 'ICD-system', 'p
     expect(reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')).toHaveLength(count)
   },
 )
+
+it('keeps confirmed local encounter aliases usable through shared aggregate and tools', async () => {
+  const { resources } = fixture()
+  const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) })!
+  const collection = projectClinicalAggregate(parsed.collection)
+  const tools = createFhirTools(() => ({ patient: parsed.patient, collection }))
+  const result = await (tools.getEncounterDetails as any).execute({ encounterId: collection.encounters[0].id })
+  expect(collection.encounters).toHaveLength(1)
+  expect(result.data.medications).toHaveLength(1)
+  expect(result.data.observations).toHaveLength(1)
+  expect(result.encounterLinkUncertainty).toBeUndefined()
+})
+
+it('does not trust imported encounter comparison metadata as a policy alias', async () => {
+  const { resources, cloud, hospital } = fixture()
+  delete (cloud as any).identifier; delete (hospital as any).identifier
+  ;(cloud as any)._sourceRecordComparison = { status: 'confirmed', references: ['Encounter/cloud-visit', 'Encounter/hospital-visit'] }
+  ;(cloud as any)._sourceEncounterRecords = [{ ...hospital }]
+  const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) })!
+  const collection = projectClinicalAggregate(parsed.collection)
+  expect(collection.encounters).toHaveLength(2)
+  const tools = createFhirTools(() => ({ patient: parsed.patient, collection }))
+  const cloudDetails = await (tools.getEncounterDetails as any).execute({ encounterId: 'cloud-visit' })
+  const hospitalDetails = await (tools.getEncounterDetails as any).execute({ encounterId: 'hospital-visit' })
+  expect(cloudDetails.data.medications).toHaveLength(0)
+  expect(hospitalDetails.data.medications).toHaveLength(1)
+})

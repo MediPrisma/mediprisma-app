@@ -1,6 +1,6 @@
+import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 import { clinicalSourceResourcesEqual } from './clinical-source-graph'
 import type { ClinicalSourceGraph, ClinicalSourceNode } from './clinical-source-graph'
-import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
@@ -31,6 +31,22 @@ function baseIdentity(node: ClinicalSourceNode, nodes?: Map<string, ClinicalSour
     (node.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null,
     node.contentHash,
   ])
+}
+
+/** Patient demographic/version refresh is not a new clinical event. Only an
+ * explicit subject/patient edge whose candidates all name the same scoped
+ * Patient is comparable this way; the raw graph keeps its resolution status. */
+function patientReferenceIdentity(edge: ClinicalSourceGraph['references'][number], nodes: Map<string, ClinicalSourceNode>): string | undefined {
+  if (!['subject', 'patient'].includes(edge.path) || !['resolved', 'ambiguous'].includes(edge.status) || !edge.targetKeys.length) return undefined
+  const identities = new Set<string>()
+  for (const key of edge.targetKeys) {
+    const target = nodes.get(key)
+    if (!target || target.resource.resourceType !== 'Patient' || target.isContained || target.embeddedIn || (!target.resource.id && !target.fullUrl)) return undefined
+    const identity = clinicalSourceRestIdentity(target)
+    const logical = identity && /^https?:\/\//i.test(identity) ? identity.replace(/\/_history\/[^/]+\/?$/, '') : identity
+    identities.add(stable([target.sourceId, target.patientScope, target.restBase ?? null, logical, target.resource.id ?? null]))
+  }
+  return identities.size === 1 ? [...identities][0] : undefined
 }
 
 interface ContextIndex {
@@ -70,6 +86,8 @@ export function clinicalSourceContextIdentity(graph: ClinicalSourceGraph, node: 
     visiting.add(current.key)
     let cyclic = false
     const outgoing = (edges.get(current.key) ?? []).map((edge) => {
+      const patientIdentity = patientReferenceIdentity(edge, nodes)
+      if (patientIdentity !== undefined) return [edge.path, 'patient-identity', edge.reference ?? null, edge.display ?? null, patientIdentity]
       let targets: string[] | number
       if (edge.status === 'resolved' || (edge.status === 'ambiguous' && edge.targetKeys.length > 0)) {
         targets = [...new Set(edge.targetKeys.map((key) => {
@@ -116,7 +134,14 @@ export function clinicalSourceNodesEqualWithContext(
     for (let i = 0; i < aEdges.length; i++) {
       const ae = aEdges[i]
       const be = bEdges[i]
-      if (ae.path !== be.path || ae.status !== be.status || ae.reference !== be.reference || ae.display !== be.display) return false
+      if (ae.path !== be.path || ae.reference !== be.reference || ae.display !== be.display) return false
+      const ap = patientReferenceIdentity(ae, nodes)
+      const bp = patientReferenceIdentity(be, nodes)
+      if (ap !== undefined || bp !== undefined) {
+        if (ap !== bp) return false
+        continue
+      }
+      if (ae.status !== be.status) return false
       if (ae.status !== 'resolved' && !(ae.status === 'ambiguous' && ae.targetKeys.length > 0)) {
         if (ae.targetKeys.length !== be.targetKeys.length) return false
         continue

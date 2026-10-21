@@ -8,3 +8,12 @@ export function recordClinicalProjectionDisposition(source: ClinicalReconciliati
 export function isClinicalSourceRepresentedElsewhere(source: ClinicalReconciliationResult, key: string): boolean {
   return dispositions.get(source)?.has(key) ?? false
 }
+
+const encounterAliases = new WeakMap<ClinicalReconciliationResult, ReadonlyMap<string, string>>()
+/** Only the local confirmed encounter policy may register these node aliases. */
+export function recordClinicalEncounterAliases(source: ClinicalReconciliationResult, aliases: ReadonlyMap<string, string>): void {
+  encounterAliases.set(source, new Map(aliases))
+}
+export function clinicalEncounterAlias(source: ClinicalReconciliationResult, key: string): string | undefined {
+  return encounterAliases.get(source)?.get(key)
+}
