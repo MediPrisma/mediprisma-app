@@ -3,6 +3,9 @@ import type { ClinicalRecordVariantExclusion } from '@/src/core/entities/clinica
 /** Generic record types have no revision-selection policy. Keep them in the UI
  * and source graph, while representing their unresolved existence explicitly in
  * AI inputs instead of presenting competing versions as independent facts. */
+export const clinicalVariantEvidenceIdentity = (row: { clinicalSourceNodeKey?: string }): string | undefined => row.clinicalSourceNodeKey
+const exclusionKey = (item: ClinicalRecordVariantExclusion): string => item.evidenceIdentity ?? JSON.stringify(item)
+
 export const GENERIC_CLINICAL_VARIANT_ARRAYS: Readonly<Record<string, string>> = {
   medications: 'MedicationRequest', medicationRemainingSummaries: 'Basic', conditions: 'Condition',
   encounters: 'Encounter', allergies: 'AllergyIntolerance', procedures: 'Procedure',
@@ -13,7 +16,7 @@ export function excludeUnresolvedGenericVariants<T extends object>(input: T, sel
   const selectedByArray: Record<string, string> = { conditions: 'problemList', medicationRemainingSummaries: 'medications', compositions: 'documents', documentReferences: 'documents', imagingStudies: 'imagingReports', devices: 'medicalDevices', consents: 'advanceDirectives' }
   const next: any = { ...input }
   const excluded = new Map<string, ClinicalRecordVariantExclusion>()
-  for (const item of (input as any).clinicalRecordVariantExclusions ?? []) excluded.set(JSON.stringify(item), item)
+  for (const item of (input as any).clinicalRecordVariantExclusions ?? []) excluded.set(exclusionKey(item), item)
   for (const [key, resourceType] of Object.entries(GENERIC_CLINICAL_VARIANT_ARRAYS)) {
     const rows = (input as any)[key]
     if (!Array.isArray(rows)) continue
@@ -21,9 +24,10 @@ export function excludeUnresolvedGenericVariants<T extends object>(input: T, sel
       if (!row.clinicalRecordVariant) return true
       if (selection && !(selection as any)[selectedByArray[key] ?? key]) return false
       const item: ClinicalRecordVariantExclusion = { ...row.clinicalRecordVariant,
+        ...(clinicalVariantEvidenceIdentity(row) ? { evidenceIdentity: clinicalVariantEvidenceIdentity(row) } : {}),
         resourceType: row._sourceResourceType ?? resourceType, sourceId: row.sourceId ?? row.id,
         ...(row.sourceVersionId ? { versionId: row.sourceVersionId } : {}) }
-      excluded.set(JSON.stringify(item), item)
+      excluded.set(exclusionKey(item), item)
       return false
     })
     next[key] = filtered.length === rows.length ? rows : filtered
@@ -47,11 +51,11 @@ export function formatClinicalVariantExclusions(input: { clinicalRecordVariantEx
 export function excludeUnresolvedDecisionVariants<T extends object>(input: T, selection?: object): T & { clinicalRecordVariantExclusions?: readonly ClinicalRecordVariantExclusion[] } {
   const generic = excludeUnresolvedGenericVariants(input, selection)
   const next: any = { ...generic }
-  const excluded = new Map<string, ClinicalRecordVariantExclusion>((generic.clinicalRecordVariantExclusions ?? []).map(item => [JSON.stringify(item), item]))
+  const excluded = new Map<string, ClinicalRecordVariantExclusion>((generic.clinicalRecordVariantExclusions ?? []).map(item => [exclusionKey(item), item]))
   const keep = (row: any, resourceType: string) => {
     if (!row.clinicalRecordVariant) return true
-    const item = { ...row.clinicalRecordVariant, resourceType, sourceId: row.sourceId ?? row.id, ...(row.sourceVersionId || row.meta?.versionId ? { versionId: row.sourceVersionId ?? row.meta.versionId } : {}) }
-    excluded.set(JSON.stringify(item), item)
+    const item = { ...row.clinicalRecordVariant, ...(clinicalVariantEvidenceIdentity(row) ? { evidenceIdentity: clinicalVariantEvidenceIdentity(row) } : {}), resourceType, sourceId: row.sourceId ?? row.id, ...(row.sourceVersionId || row.meta?.versionId ? { versionId: row.sourceVersionId ?? row.meta.versionId } : {}) }
+    excluded.set(exclusionKey(item), item)
     return false
   }
   for (const [key, type] of [['observations', 'Observation'], ['vitalSigns', 'Observation'], ['diagnosticReports', 'DiagnosticReport']]) {
@@ -70,5 +74,5 @@ export function excludeUnresolvedDecisionVariants<T extends object>(input: T, se
 
 /** Outbound traces use only opaque groups and ordinals; original IDs stay in UI/IPS audit. */
 export function outboundClinicalVariantExclusions(items: readonly ClinicalRecordVariantExclusion[]) {
-  return items.map(({ sourceId: _sourceId, ...item }, index) => ({ ...item, recordOrdinal: index + 1 }))
+  return items.map(({ sourceId: _sourceId, evidenceIdentity: _evidenceIdentity, ...item }, index) => ({ ...item, recordOrdinal: index + 1 }))
 }

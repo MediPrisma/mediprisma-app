@@ -1,7 +1,8 @@
+import { clinicalVariantEvidenceIdentity } from '@/src/core/utils/clinical-variant-inputs'
 import type { ClinicalRecordVariant } from '@/src/core/entities/clinical-data.entity'
 
-type RecordRow = { id?: string; sourceId?: string; sourceVersionId?: string; _sourceResourceType?: string; clinicalRecordVariant?: ClinicalRecordVariant }
-export interface ExcludedClinicalRecordVariant extends ClinicalRecordVariant { resourceType: string; resourceId?: string; sourceId?: string; versionId?: string }
+type RecordRow = { clinicalSourceNodeKey?: string; id?: string; sourceId?: string; sourceVersionId?: string; _sourceResourceType?: string; clinicalRecordVariant?: ClinicalRecordVariant }
+export interface ExcludedClinicalRecordVariant extends ClinicalRecordVariant { resourceType: string; resourceId?: string; evidenceIdentity?: string; sourceId?: string; versionId?: string }
 
 /** Decision inputs are copies. Unordered record variants remain visible in the
  * chart and export, but none may silently become the preferred numeric fact. */
@@ -15,7 +16,7 @@ export function selectCdssClinicalInputs<T extends {
   const accept = (row: RecordRow, resourceType: ExcludedClinicalRecordVariant['resourceType']): boolean => {
     if (!row.clinicalRecordVariant) return true
     const annotation = row.clinicalRecordVariant
-    excluded.set(JSON.stringify([resourceType, annotation.groupId, row.id]), { ...annotation, resourceType: row._sourceResourceType ?? resourceType, resourceId: row.id, ...(row.sourceId ? { sourceId: row.sourceId } : {}), ...(row.sourceVersionId ? { versionId: row.sourceVersionId } : {}) })
+    excluded.set(JSON.stringify([resourceType, annotation.groupId, row.clinicalSourceNodeKey ?? [row.id, row.sourceVersionId]]), { ...annotation, ...(clinicalVariantEvidenceIdentity(row) ? { evidenceIdentity: clinicalVariantEvidenceIdentity(row) } : {}), resourceType: row._sourceResourceType ?? resourceType, resourceId: row.id, ...(row.sourceId ? { sourceId: row.sourceId } : {}), ...(row.sourceVersionId ? { versionId: row.sourceVersionId } : {}) })
     return false
   }
   const observations = input.observations.filter(row => accept(row, 'Observation'))
