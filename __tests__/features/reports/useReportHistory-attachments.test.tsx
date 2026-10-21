@@ -36,12 +36,15 @@ it('preserves conclusion and notes while retaining additional plain text and exc
 })
 
 it.each([
-  [{ effectivePeriod: { start: '2026-06-24' }, issued: '2026-06-25' }, '2026-06-24', '2026/6/24'],
-  [{ effectiveDateTime: '2026-06-24T23:30:00Z' }, '2026-06-25', '2026/6/25'],
-])('keeps the source examination day in history: %j', (dates, day, label) => {
+  [{ effectivePeriod: { start: '2026-06-24' }, issued: '2026-06-25' }, '2026-06-24'],
+  [{ effectiveDateTime: '2026-06-24T23:30:00Z' }, '2026-06-25'],
+])('keeps the source examination day in history: %j', (dates, day) => {
   mockUseClinicalData.mockReturnValue({ diagnosticReports: [{ id: 'dated', status: 'final', code: { text: 'CT CHEST' }, category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }], meta: { source: 'https://medcloud2.nhi.gov.tw/' }, conclusion: body, ...dates }] })
   const { result } = renderHook(() => useReportHistory('CT CHEST'))
   expect(result.current[0].calendarDate).toBe(day)
   render(<LanguageProvider><ReportHistoryList data={result.current} /></LanguageProvider>)
+  // The runtime locale differs between Windows and Linux CI. Assert the
+  // already-verified examination day using that locale's displayed spelling.
+  const label = new Intl.DateTimeFormat().format(new Date(`${day}T12:00:00`))
   expect(screen.getByText(label)).toBeVisible()
 })
