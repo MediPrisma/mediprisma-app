@@ -297,6 +297,14 @@ describe('emergency', () => {
     }
     expect(allText(plan({ procedure_kind: 'emergency', neuraxial: 'none' }))).not.toContain('ASRA 2025')
   })
+  it('a traumatic puncture delays the emergency restart too: apixaban 48 h, rivaroxaban 24 h, the others with anaesthesia (#review Astra 7)', () => {
+    const emergency = { procedure_kind: 'emergency', neuraxial: 'single', traumatic_puncture: 'yes' }
+    expect(allText(plan({ ...emergency, regimen: 'apixaban:2.5:2', dose_intent: 'low' }))).toContain('延後 48 小時')
+    expect(allText(plan({ ...emergency, regimen: 'rivaroxaban:10:1', dose_time_2: '' }))).toContain('延後 24 小時')
+    expect(allCites(plan({ ...emergency, regimen: 'dabigatran:150:2' }))).toContain(GUIDELINE_CITES.asraTraumaticNone)
+    expect(allText(plan({ ...emergency, traumatic_puncture: '' }))).toContain('若脊髓／硬膜外穿刺出血')
+    expect(allText(plan({ ...emergency, neuraxial: 'plexus' }))).not.toContain('穿刺出血')
+  })
   it('dabigatran: idarucizumab, haemodialysis removes it, and it may restart 24 h after idarucizumab', () => {
     expect(allCites(plan({ procedure_kind: 'emergency', regimen: 'dabigatran:150:2' }))).toEqual(expect.arrayContaining([CITES.dabigatranIdarucizumab, CITES.dabigatranDialysable, CITES.dabigatranIdarucizumabRestart]))
   })

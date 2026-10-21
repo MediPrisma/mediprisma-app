@@ -441,6 +441,18 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
           : t(`有${removal ? '留置導管' : '阻斷'}：第一劑需在穿刺${removal ? '與拔管' : ''}後 ≥${rule.restartHours} 小時（ASRA 2025，${doseClass === 'high' ? '高' : '低'}劑量）${removal ? '，導管未拔前不恢復' : ''}。`, `With a ${removal ? 'catheter' : 'block'}: the first dose waits ≥${rule.restartHours} h after the puncture${removal ? ' and the catheter removal' : ''} (ASRA 2025, ${doseClass} dose)${removal ? '; no restart with the catheter in place' : ''}.`),
         rule.restart,
       ))
+      // A traumatic neuraxial puncture delays the restart further, here as anywhere.
+      if (emergencyBlock === '' || emergencyBlock === 'single' || emergencyBlock === 'catheter') {
+        const delay = agent === 'apixaban' ? 48 : agent === 'rivaroxaban' ? 24 : undefined
+        const traumatic = values.traumatic_puncture ?? ''
+        if (traumatic === 'yes') {
+          result.notes.push(delay === undefined
+            ? line(t(`脊髓／硬膜外穿刺出血：${agent} 的仿單與 ASRA 都沒有給延後時數，恢復時間請與麻醉科確認。`, `Traumatic neuraxial puncture: neither the ${agent} label nor ASRA gives a delay; agree the restart with anaesthesia.`), G.asraTraumaticNone)
+            : line(t(`脊髓／硬膜外穿刺出血：自穿刺起延後 ${delay} 小時，與上述條件取最晚者。`, `Traumatic neuraxial puncture: delay ${delay} h from the puncture, whichever is latest of the conditions above.`), G.asraTraumatic, ...(agent === 'rivaroxaban' ? [CITES.rivaroxabanTraumatic] : [])))
+        } else if (traumatic === '') {
+          result.notes.push(line(t('若脊髓／硬膜外穿刺出血：apixaban 自穿刺起延後 48 小時、rivaroxaban 24 小時；dabigatran、edoxaban 沒有給時數，需與麻醉科確認。', 'If the neuraxial puncture was traumatic: apixaban waits 48 h and rivaroxaban 24 h from it; dabigatran and edoxaban have no stated delay — agree it with anaesthesia.'), G.asraTraumatic, G.asraTraumaticNone))
+        }
+      }
     }
     result.notes.push(levelNote(agent, false, doseClass, c))
     return result
