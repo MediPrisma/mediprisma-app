@@ -112,9 +112,17 @@ export function compareImagingCopies(a: Report, b: Report): number {
 
 /** Findings may be templated. Explicit exam labels still constrain a match,
  * even though generic hospital/NHI names are allowed to differ. */
-function examQualifiers(report: Report): string[] {
+function examQualifiers(report: Report): string[] | null {
   const header = EXAM_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1]?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
   const label = [report.code?.text, ...(report.code?.coding ?? []).map(c => c.display), header].filter(Boolean).join(' ').normalize('NFKC')
+  // This is deliberately a bounded recognizer, not a body-site guesser. A new
+  // anatomy/protocol term (e.g. knee/ankle) must fail closed until supported.
+  const recognized = label
+    .replace(/\bc\s*\.\s*t\s*\.?/gi, 'ct')
+    .replace(/電腦斷層造影|電腦斷層|磁振造影|磁振|核磁共振|有造影劑|無造影劑|超音波|乳房|胸腔檢查|胸腔|胸部|頭部|頭顱|腦部|頸部|腹部|骨盆|脊椎|左側|右側|雙側|左乳|右乳|雙乳|包括|各種|角度|部位|之/g, '')
+    .replace(/\b(?:ct|scan|computed|tomography|chest|thorax|lungs?|head|brain|cranial|neck|abdomen|abdominal|hepatobiliary|liver|gallbladder|pelvis|pelvic|spine|spinal|breasts?|sono|sonogram|sonography|ultrasound|ultrasonography|mri?|magnetic|resonance|imaging|left|right|lt|rt|bilateral|ap|pa|lateral|oblique|x|ray|radiograph(?:y)?|view|views|contrast|with|without|other|system|including|all|various|angles?|and|parts?|of|the)\b/gi, '')
+    .replace(/[\s\p{P}]/gu, '')
+  if (recognized) return null
   const left = /\b(?:left|lt)\b|左側|左乳|左肺/i.test(label)
   const right = /\b(?:right|rt)\b|右側|右乳|右肺/i.test(label)
   const side = /\bbilateral\b|雙側|雙乳/i.test(label) || (left && right) ? 'bilateral' : left ? 'left' : right ? 'right' : ''
@@ -128,7 +136,11 @@ function examQualifiers(report: Report): string[] {
     ['spine', /\b(?:spine|spinal)\b|脊椎/i],
   ] as const
   const site = sites.filter(([, pattern]) => pattern.test(label)).map(([name]) => name).join(',')
-  return [header, side, site]
+  const withContrast = /\bwith\s+contrast\b|有造影劑/i.test(label)
+  const withoutContrast = /\bwithout\s+contrast\b|無造影劑/i.test(label)
+  const contrast = withContrast === withoutContrast ? '' : withContrast ? 'with' : 'without'
+  const view = ['ap', 'pa', 'lateral', 'oblique'].filter(value => new RegExp(`\\b${value}\\b`, 'i').test(label)).join(',')
+  return [header, side, site, contrast, view]
 }
 
 /** Shared grouping projection for rows, tab counts and AI context. Returned
@@ -150,7 +162,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     const key = reportNaturalGroupingKey(report)
     naturalGroups.set(key, [...(naturalGroups.get(key) ?? []), report])
   }
-  const buckets = new Map<string, { report: Report; source: Source }[]>()
+  const buckets = new Map<string, { report: Report; source: Source; qualifiers: string[] }[]>()
   for (const report of reports) {
     if (!report || inferReportDisplayGroup(report) !== 'imaging') continue
     // Echo/Doppler and their viewer-only companions have a separate established
@@ -181,19 +193,21 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     const narrative = normalizeImagingReportCopy(raw)
     // Short stock phrases and explicitly truncated previews cannot identify an exam.
     if (narrative.length < 80 || /…|\.{3}/.test(raw)) continue
+    const qualifiers = examQualifiers(report)
+    if (!qualifiers) continue
     const key = JSON.stringify([subject, day, institution, method, report.status, narrative])
     const bucket = buckets.get(key) ?? []
-    bucket.push({ report, source })
+    bucket.push({ report, source, qualifiers })
     buckets.set(key, bucket)
   }
   for (const [key, bucket] of buckets) {
     const hospital = bucket.filter(item => item.source === 'hospital')
     const cloud = bucket.filter(item => item.source === 'cloud')
     if (!hospital.length || !cloud.length) continue
-    const qualifiers = bucket.map(({ report }) => examQualifiers(report))
+    const qualifiers = bucket.map(item => item.qualifiers)
     // Unknown/generic labels do not supply evidence. Contradictory explicit
     // headers, laterality or body regions must never disappear with a wrapper.
-    if ([0, 1, 2].some(index => new Set(qualifiers.map(q => q[index]).filter(Boolean)).size > 1)) continue
+    if (qualifiers[0].some((_, index) => new Set(qualifiers.map(q => q[index]).filter(Boolean)).size > 1)) continue
     const members = new Set(bucket.map(item => item.report))
     // Do not pull a complete report away from a same-source truncated or
     // otherwise related member that the existing natural grouping owns.

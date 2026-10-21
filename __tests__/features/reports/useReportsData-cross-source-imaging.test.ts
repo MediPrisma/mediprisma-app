@@ -77,6 +77,10 @@ describe('cross-source imaging reports', () => {
   it.each([
     ['Left breast ultrasound', 'Right breast ultrasound'],
     ['Chest CT', 'Brain CT'],
+    ['Left knee MRI', 'Left ankle MRI'],
+    ['Shoulder ultrasound', 'Ultrasonography, other'],
+    ['Chest CT with contrast', 'Chest CT without contrast'],
+    ['CHEST AP VIEW', 'CHEST PA VIEW'],
   ])('uses explicit title qualifiers as a conflict check: %s / %s', (left, right) => {
     const reports = pair().map((report, index) => ({ ...report, code: { text: index ? right : left }, conclusion: BODY }))
     expect(buildReportsData(reports).reportRows).toHaveLength(2)
