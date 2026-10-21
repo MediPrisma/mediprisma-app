@@ -82,6 +82,35 @@ it('collapses timed and date-only copies of the same whole-day supply interval',
   expect(result.current.drugs[0].refillCount).toBe(1)
 })
 
+it('does not create a cross-source comparison when the hospital source is absent', () => {
+  const input: any = JSON.parse(JSON.stringify(copiesFixture))
+  input.entry = input.entry.filter((entry: any) => entry.resource.id !== 'synthetic-order-a')
+  const collection = LocalBundleService.parse(input)!.collection
+  expect(collection.medications).toHaveLength(2)
+  expect(collection.medications.every(med => !med._sourceRecordComparison)).toBe(true)
+})
+
+it('keeps the refill count for id-less records with distinct source dates', () => {
+  const base = { status: 'completed', medicationCodeableConcept: { text: 'Synthetic product' },
+    dispenseRequest: { expectedSupplyDuration: { value: 28, code: 'd' } } }
+  const { result } = renderHook(() => useMedicationTimeline([
+    { ...base, authoredOn: '2026-05-07' }, { ...base, authoredOn: '2026-06-07' },
+  ], 'medical', 'all', '其他', 'zh-TW'))
+  expect(result.current.drugs[0].bars).toHaveLength(2)
+  expect(result.current.drugs[0].refillCount).toBe(2)
+})
+
+it('uses one calendar supply basis when an invalid recorded end is ignored', () => {
+  const input: any = JSON.parse(JSON.stringify(copiesFixture))
+  const hospital = input.entry.find((entry: any) => entry.resource.id === 'synthetic-order-a').resource
+  hospital.authoredOn = '2026-05-07T09:00:00+08:00'
+  hospital.dispenseRequest.validityPeriod = { end: '20260603' }
+  const collection = LocalBundleService.parse(input)!.collection
+  const { result } = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW'))
+  expect(result.current.drugs[0].bars).toHaveLength(1)
+  expect(result.current.drugs[0].bars[0].supplyEndDay).toBe('2026-06-03')
+})
+
 it('keeps overview and list dates aligned for UTC midnight equivalents and fractional supply', () => {
   const medication = { id: 'fractional-utc', authoredOn: '2026-10-18T16:00:00Z', status: 'active',
     medicationCodeableConcept: { text: 'Synthetic product' }, dispenseRequest: { expectedSupplyDuration: { value: 2.4, code: 'd' } } }

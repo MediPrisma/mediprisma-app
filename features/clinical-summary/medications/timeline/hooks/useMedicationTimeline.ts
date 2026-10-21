@@ -547,7 +547,7 @@ export function useMedicationTimeline(
       domainMax = Math.max(domainMax, endMs)
 
       const existing = drugsMap.get(rowKey)
-      const refillKey = collapsed && comparison ? [...comparison.references].sort().join('|') : med.id
+      const refillKey = collapsed && comparison ? [...comparison.references].sort().join('|') : med.id || bar.refillId
       const counted = countedRefills.get(rowKey) ?? new Set<string>()
       const isNewRefill = !counted.has(refillKey)
       counted.add(refillKey)
