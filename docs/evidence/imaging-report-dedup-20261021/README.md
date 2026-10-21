@@ -2,8 +2,8 @@
 
 All records, report text, identifiers and viewer responses in these screenshots are synthetic. No patient export or authenticated NHI response is included.
 
-Before: `af0bfe42c50ecba16b62a58a35ba4808c79b472e` (PR base).
-After application code: `f6af89341604e6df3e0f244471bf6b604d4f374e` (latest master integrated; cross-source interval bounds and all distinct source images/studies/results preserved). The following evidence-only commit does not change application code.
+Before: `119d4143be37ff3041d6d358f2c396f58f49721a` (PR base, including the production import Worker fix).
+After application code: `35318125cb22a3f4b7ea9db0a4ec6e6085495a0e` (latest master integrated; cross-source interval bounds and all distinct source images/studies/results preserved). The following evidence-only commit does not change application code.
 
 Both isolated checkouts ran `e2e/tests/reports-cross-source-imaging.spec.ts` with the same generated bundle, locale, light theme, collapsed report rows, search and viewport. Before uses `IMAGING_BEFORE=1`; assertions expect eight rows before and four groups after. Six widths passed: 320, 390, 430, 768, 1024 and 1440 CSS pixels, height 1000.
 
@@ -26,4 +26,4 @@ Explicit period-end conflicts and reversed/invalid intervals remain separate. Eq
 
 Every known period end also constrains the other source's examination clock, even when its own start is date-only. Negative-timezone regressions keep untagged imaging period dates aligned between rows and AI context. Redundant natural-group narrative observations are skipped only when their clinical metadata matches a retained complete observation. Exact image descriptors collapse; different bytes, references, content types, titles or sizes remain available.
 
-Additional integration check: `merged-fhir-download.spec.ts` passed. `original-fhir-download.spec.ts` timed out at the popup's Copy tab (line 78 → line 31), both on the unmodified base and on the PR. This existing popup-layout test limitation is recorded separately from the passing imaging regression.
+Additional integration checks: the Worker module regression passes after integrating PR #344. `merged-fhir-download.spec.ts` passed before that upstream merge. `original-fhir-download.spec.ts` timed out at the popup's Copy tab (line 78 → line 31), both on the earlier unmodified base `af0bfe42` and on the PR. This existing popup-layout test limitation is recorded separately from the passing imaging regression.
