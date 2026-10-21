@@ -1,0 +1,102 @@
+import { reconcileClinicalSources } from '../clinical-reconciliation'
+import { createClinicalSourceProjectionIds } from '../clinical-source-projection'
+import type { ClinicalReconciliationResult } from '../clinical-reconciliation'
+
+const scope = { sourceId: 'ehr-source', patientScope: 'patient-1', restBase: 'https://ehr.example/fhir' }
+
+describe('createClinicalSourceProjectionIds', () => {
+  it('assigns the same ID to exact copies across query generations without putting generation in the ID', () => {
+    const resource = { resourceType: 'Observation', id: 'o-1', meta: { versionId: '3' }, valueQuantity: { value: 7 } }
+    const source = reconcileClinicalSources([
+      { ...scope, generation: 'query-1', resources: [{ resource, fullUrl: 'https://ehr.example/fhir/Observation/o-1' }] },
+      { ...scope, generation: 'query-2', resources: [{ resource: { ...resource, valueQuantity: { value: 7 } }, fullUrl: 'https://ehr.example/fhir/Observation/o-1' }] },
+    ])
+    const ids = createClinicalSourceProjectionIds(source)
+    const nodes = source.graph.nodes.filter((node) => node.resource.resourceType === 'Observation')
+    expect(nodes).toHaveLength(2)
+    expect(ids.get(nodes[0].key)).toBe(ids.get(nodes[1].key))
+    expect(ids.get(nodes[0].key)).toMatch(/^[A-Za-z0-9.-]{1,64}$/)
+  })
+
+  it('separates versions, payload revisions, and distinct fullUrls', () => {
+    const source = reconcileClinicalSources([{
+      ...scope,
+      generation: 'query',
+      resources: [
+        { resource: { resourceType: 'Observation', id: 'same', meta: { versionId: '1' }, valueInteger: 1 }, fullUrl: 'https://ehr.example/fhir/Observation/same' },
+        { resource: { resourceType: 'Observation', id: 'same', meta: { versionId: '2' }, valueInteger: 1 }, fullUrl: 'https://ehr.example/fhir/Observation/same' },
+        { resource: { resourceType: 'Observation', id: 'same', meta: { versionId: '1' }, valueInteger: 2 }, fullUrl: 'https://ehr.example/fhir/Observation/same' },
+        { resource: { resourceType: 'Observation', id: 'same', meta: { versionId: '1' }, valueInteger: 1 }, fullUrl: 'urn:uuid:other-copy' },
+      ],
+    }])
+    const nodes = source.graph.nodes.filter((node) => node.resource.resourceType === 'Observation')
+    const ids = createClinicalSourceProjectionIds(source)
+    expect(new Set(nodes.map((node) => ids.get(node.key))).size).toBe(4)
+  })
+
+  it('uses stable parent identity for contained resources and includes them in the result map', () => {
+    const capture = (generation: string) => ({
+      ...scope,
+      generation,
+      resources: [
+        { resourceType: 'List', id: 'a', contained: [{ resourceType: 'Observation', id: 'member', valueInteger: 1 }] },
+        { resourceType: 'List', id: 'b', contained: [{ resourceType: 'Observation', id: 'member', valueInteger: 1 }] },
+      ],
+    })
+    const source = reconcileClinicalSources([capture('one'), capture('two')])
+    const ids = createClinicalSourceProjectionIds(source)
+    const contained = source.graph.nodes.filter((node) => node.isContained && node.resource.resourceType === 'Observation')
+    expect(contained).toHaveLength(4)
+    expect(ids.get(contained[0].key)).toBe(ids.get(contained[2].key))
+    expect(ids.get(contained[1].key)).toBe(ids.get(contained[3].key))
+    expect(ids.get(contained[0].key)).not.toBe(ids.get(contained[1].key))
+  })
+
+  it('retains identical anonymous event occurrences with deterministic IDs for repeated input', () => {
+    const capture = { ...scope, generation: 'query', resources: [
+      { resourceType: 'Observation', status: 'final', valueInteger: 4 },
+      { resourceType: 'Observation', status: 'final', valueInteger: 4 },
+    ] }
+    const source = reconcileClinicalSources([capture])
+    const first = createClinicalSourceProjectionIds(source)
+    const second = createClinicalSourceProjectionIds(reconcileClinicalSources([capture]))
+    const nodes = source.graph.nodes.filter((node) => node.resource.resourceType === 'Observation')
+    expect(nodes).toHaveLength(2)
+    expect(first.get(nodes[0].key)).not.toBe(first.get(nodes[1].key))
+    expect(nodes.map((node) => first.get(node.key))).toEqual(nodes.map((node) => second.get(node.key)))
+  })
+
+  it('throws instead of silently reusing an ID when content hashes collide', () => {
+    const source = reconcileClinicalSources([{
+      ...scope,
+      generation: 'query',
+      resources: [
+        { resourceType: 'DiagnosticReport', id: 'r', status: 'final', conclusion: 'first' },
+        { resourceType: 'DiagnosticReport', id: 'r', status: 'final', conclusion: 'second' },
+      ],
+    }])
+    const collided = {
+      ...source,
+      graph: {
+        ...source.graph,
+        nodes: source.graph.nodes.map((node) => ({ ...node, contentHash: 'forced-collision' })),
+      },
+    } as unknown as ClinicalReconciliationResult
+    expect(() => createClinicalSourceProjectionIds(collided)).toThrow(/hash collision/i)
+  })
+
+  it('returns only Observation and DiagnosticReport node keys', () => {
+    const source = reconcileClinicalSources([{
+      ...scope,
+      generation: 'query',
+      resources: [
+        { resourceType: 'Patient', id: 'p' },
+        { resourceType: 'Observation', id: 'o', valueString: 'x' },
+        { resourceType: 'DiagnosticReport', id: 'r' },
+      ],
+    }])
+    const ids = createClinicalSourceProjectionIds(source)
+    expect(ids.size).toBe(2)
+    expect([...ids.keys()].every((key) => ['Observation', 'DiagnosticReport'].includes(source.graph.nodes.find((node) => node.key === key)!.resource.resourceType))).toBe(true)
+  })
+})
