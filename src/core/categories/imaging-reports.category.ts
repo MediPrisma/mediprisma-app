@@ -13,7 +13,7 @@ import { expandObservationValues, observationDisplayValue } from '@/src/core/uti
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
 import { compareImagingCopies, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
-import { getImagingCopySource, getReportDate } from '@/src/shared/utils/report-identity'
+import { getReportDate } from '@/src/shared/utils/report-identity'
 import { formatDate } from '@/src/shared/utils/fhir-helpers'
 import {
   reportSource,
@@ -343,7 +343,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       const reportDate = report.effectiveDateTime
         || (inferReportDisplayGroup(report) === 'imaging' ? report.effectivePeriod?.start : undefined)
       const datePart = reportDate
-        ? ` (${getImagingCopySource(report) && inferReportDisplayGroup(report) === 'imaging'
+        ? ` (${inferReportDisplayGroup(report) === 'imaging'
           ? formatDate(getReportDate(report)) : new Date(reportDate).toLocaleDateString()})`
         : ''
       

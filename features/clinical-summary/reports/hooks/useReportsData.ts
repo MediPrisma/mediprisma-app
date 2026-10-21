@@ -376,7 +376,7 @@ export function buildReportsData(
         || (linkedStudies[0] ? imagingStudyTitle(linkedStudies[0]) : '')
       const summaryParts: string[] = []
       const attachments: string[] = []
-      const images: ReportImage[] = []
+      let images: ReportImage[] = []
       const viewerEntries = allSourceReports.flatMap((report) => (
         getNhiViewerActions(report).map((action) => ({ action, report }))
       ))
@@ -447,6 +447,16 @@ export function buildReportsData(
           // every structured result from the remaining source procedures so a
           // shared conclusion can never hide a different numeric/coded result.
           if (isSharedReport && !includeClinicalContent && isNarrativeOnlyObservation) continue
+          // Dropped natural duplicates may still own distinct clinical
+          // metadata. Suppress their text only when a retained observation
+          // has the same metadata and a complete copy of that narrative.
+          if (!clinicalReports.has(dr) && isNarrativeOnlyObservation) {
+            const metadata = (value: Observation) => JSON.stringify({ ...value, id: undefined, valueString: undefined })
+            const duplicate = grp.some(report => (Array.isArray(report._observations) ? report._observations : []).some(kept =>
+              typeof kept?.valueString === 'string' && metadata(kept) === metadata(o)
+                && normalizeImagingClinicalText(kept.valueString).startsWith(normalizeImagingClinicalText(o.valueString ?? ''))))
+            if (duplicate) continue
+          }
           if (perTitle) {
             allObs.push({
               ...o,
@@ -521,6 +531,18 @@ export function buildReportsData(
             if (t) attachments.push(t)
           }
         }
+      }
+
+      // Identical descriptors are the same retained asset. Different bytes,
+      // references, content types or source annotations must remain available.
+      if (inferReportDisplayGroup(head) === 'imaging') {
+        const imageDescriptors = new Set<string>()
+        images = images.filter(image => {
+          const descriptor = JSON.stringify(image)
+          if (imageDescriptors.has(descriptor)) return false
+          imageDescriptors.add(descriptor)
+          return true
+        })
       }
 
       // ImagingStudy is study metadata, not a diagnostic conclusion. Append it

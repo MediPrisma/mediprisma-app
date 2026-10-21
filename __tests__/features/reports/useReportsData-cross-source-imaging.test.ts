@@ -23,6 +23,42 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it('collapses only redundant narrative observations and identical image descriptors, retaining distinct metadata', () => {
+    const reports = [0, 1].map(index => ({ ...pair()[0], id: `native-${index}`, conclusion: undefined,
+      _observations: [{ id: `text-${index}`, status: 'final', code: { text: 'Report text' }, valueString: index ? BODY : BODY.slice(0, 110) }],
+      presentedForm: [{ contentType: 'image/png', data: 'synthetic-identical-image', title: 'Original image' }],
+    }))
+    let row = buildReportsData(reports).reportRows[0]
+    expect(row.bridgeDupCount).toBe(1)
+    expect(row.obs.filter(obs => obs.valueString)).toHaveLength(1)
+    expect(row.images).toHaveLength(1)
+    Object.assign(reports[0]._observations[0], { interpretation: [{ text: 'Source-specific interpretation' }] })
+    reports[0].presentedForm[0].title = 'Different original annotation'
+    row = buildReportsData(reports).reportRows[0]
+    expect(row.obs.filter(obs => obs.valueString)).toHaveLength(2)
+    expect(row.images).toHaveLength(2)
+  })
+
+  it.each([0, 1])('rejects a source examination after the other source period ended, direction %s', index => {
+    const reports = pair()
+    reports[index].effectiveDateTime = undefined
+    reports[index].effectivePeriod = { start: '2026-06-24', end: '2026-06-24T11:30:00+08:00' }
+    reports[1 - index].effectiveDateTime = '2026-06-24T15:30:00+08:00'
+    expect(reportDisplayGroupingKeys(reports).size).toBe(0)
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    expect(imagingReportsCategory.getCount(reports, filters, {} as any)).toBe(2)
+    reports[1 - index].effectiveDateTime = '2026-06-24T11:29:00+08:00'
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+  })
+
+  it('keeps untagged imaging period dates aligned between rows and AI context', () => {
+    const report = { ...pair()[0], meta: {}, effectiveDateTime: undefined, effectivePeriod: { start: '2026-06-24' }, issued: '2026-06-25' }
+    const row = buildReportsData([report]).reportRows[0]
+    const section = imagingReportsCategory.getContextSection([report], { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }, {} as any)
+    expect(JSON.stringify(section)).toContain(formatDate(row.effectiveDate))
+  })
+
   it.each(['2026-06-24T15:30:00+08:00', '2026-06-25', 'invalid'])('rejects conflicting or invalid examination period end %s', end => {
     const reports = pair().map((report, index) => ({ ...report, effectiveDateTime: undefined,
       effectivePeriod: { start: '2026-06-24T11:00:00+08:00', end: index ? end : '2026-06-24T11:30:00+08:00' },

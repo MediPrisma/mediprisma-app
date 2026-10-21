@@ -317,6 +317,9 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     if ([...identifiers.values()].some(sets => sets.length > 1 && ![...sets[0]].some(value => sets.every(set => set.has(value))))) continue
     const times = bucket.map(item => examTime(item.report)).filter(Boolean)
     if (times.includes('conflicting-exam-times') || new Set(times).size > 1) continue
+    // A date-only start must not hide another source's clock occurring after
+    // this report explicitly ended. Apply every known bound across the group.
+    if (ends.some(end => end?.instant !== undefined && times.some(time => Number(time) > end.instant!))) continue
     for (const { report } of bucket) keys.set(report, `cross-source|${key}`)
   }
   return keys
