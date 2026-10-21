@@ -1,3 +1,4 @@
+import { getReportInstitution, getReportDate as reportDate, reportNaturalGroupingKey } from '@/src/shared/utils/report-identity'
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import { collectAdultPreventiveObservationIds } from './adult-preventive-source'
 import { collectReportMemberIds, referenceId } from '@/src/core/utils/observation-selectors'
@@ -14,10 +15,8 @@ import {
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
 import { cancerScreeningProgramKey } from './cancer-screening-grouping'
-import {
-  qualifyingSharedReportKeys,
-  sharedReportGroupingKey,
-} from '@/src/shared/utils/shared-report-grouping'
+import { compareImagingCopies, imagingCopyInstitution, normalizeImagingClinicalText, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { sharedReportNarrative } from '@/src/shared/utils/shared-report-grouping'
 
 /**
  * Lightweight counts for the ReportsCard primary tabs.
@@ -48,14 +47,21 @@ interface CountRow {
 
 const GLUCOSE_KEEP_SEPARATE = new Set(['C-PEPTIDE'])
 
-function reportDate(report: any): string | undefined {
-  return report?.effectiveDateTime || report?.issued
-}
-
+// Restrict the new identity projection to imaging. Laboratory/pathology count
+// reconciliation is separate work; preserve their pre-existing count keys.
 function reportInstitution(report: any): string | undefined {
+  if (inferReportDisplayGroup(report) === 'imaging') return getReportInstitution(report)
   return report?._observations?.[0]?.performer?.[0]?.display
     || report?.performer?.[0]?.display
     || undefined
+}
+
+function reportNaturalKey(report: any): string {
+  if (inferReportDisplayGroup(report) === 'imaging') return reportNaturalGroupingKey(report)
+  const title = (getCodeableConceptText(report?.code) || '').trim()
+  const date = (reportDate(report) || '').slice(0, 10)
+  const institution = (reportInstitution(report) || '').trim()
+  return `${title}|${date}|${institution}|${isAdultReport(report) ? 'adult-preventive' : ''}`
 }
 
 function reportObservations(reports: any[]): any[] {
@@ -69,13 +75,6 @@ function reportObservations(reports: any[]): any[] {
 function isAdultReport(report: any): boolean {
   return isAdultPreventiveHealthExamResource(report)
     || (report?._observations ?? []).some(isAdultPreventiveHealthExamResource)
-}
-
-function reportNaturalKey(report: any): string {
-  const title = (getCodeableConceptText(report?.code) || '').trim()
-  const date = (reportDate(report) || '').slice(0, 10)
-  const institution = (reportInstitution(report) || '').trim()
-  return `${title}|${date}|${institution}|${isAdultReport(report) ? 'adult-preventive' : ''}`
 }
 
 function isCtReport(report: any): boolean {
@@ -95,6 +94,7 @@ function isCtReport(report: any): boolean {
  * divergent narratives remain separate rows in the All tab.
  */
 function reportNarrative(report: any): string {
+  if (inferReportDisplayGroup(report) === 'imaging') return sharedReportNarrative(report)
   const parts: string[] = []
   if (typeof report?.conclusion === 'string' && report.conclusion.trim()) {
     parts.push(report.conclusion)
@@ -121,9 +121,9 @@ function normalizeNarrative(value: string): string {
 
 function hasDistinctCtNarratives(reports: any[]): boolean {
   const narratives = reports
-    .map(reportNarrative)
+    .map(report => inferReportDisplayGroup(report) === 'imaging'
+      ? normalizeImagingClinicalText(reportNarrative(report)) : normalizeNarrative(reportNarrative(report)))
     .filter(Boolean)
-    .map(normalizeNarrative)
     .sort((a, b) => b.length - a.length)
   if (narratives.length < 2) return false
   const longest = narratives[0]
@@ -151,11 +151,11 @@ function createDiagnosticReportRows(
   }
 
   const groups = new Map<string, any[]>()
-  const sharedKeys = qualifyingSharedReportKeys(diagnosticReports)
+  const sharedKeys = reportDisplayGroupingKeys(diagnosticReports)
   for (const report of diagnosticReports) {
     if (!report) continue
-    const sharedKey = sharedReportGroupingKey(report)
-    const key = sharedKey && sharedKeys.has(sharedKey)
+    const sharedKey = sharedKeys.get(report)
+    const key = sharedKey
       ? `shared-report|${sharedKey}`
       : reportNaturalKey(report)
     const group = groups.get(key)
@@ -164,7 +164,8 @@ function createDiagnosticReportRows(
   }
 
   const toCountRow = (reports: any[]): CountRow => {
-    const head = reports[0]
+    const isCrossSource = sharedKeys.get(reports[0])?.startsWith('cross-source|')
+    const head = isCrossSource ? [...reports].sort(compareImagingCopies)[0] : reports[0]
     const study = (head?.imagingStudy ?? [])
       .map((entry: any) => studiesById.get(referenceId(entry?.reference) || ''))
       .find(Boolean)
@@ -175,7 +176,7 @@ function createDiagnosticReportRows(
       group: inferReportDisplayGroup(head),
       rawTitle,
       effectiveDate: reportDate(head) || study?.started,
-      institution: reportInstitution(head)
+      institution: (isCrossSource ? imagingCopyInstitution(head) : undefined) || reportInstitution(head)
         || (study ? imagingStudyInstitution(study) : undefined),
       observations: reportObservations(reports),
     }
@@ -183,11 +184,7 @@ function createDiagnosticReportRows(
 
   const rows: CountRow[] = []
   for (const reports of groups.values()) {
-    const isSharedReport = reports.length > 1
-      && (() => {
-        const key = sharedReportGroupingKey(reports[0])
-        return !!key && sharedKeys.has(key)
-      })()
+    const isSharedReport = reports.length > 1 && sharedKeys.has(reports[0])
     if (
       !isSharedReport
       &&
