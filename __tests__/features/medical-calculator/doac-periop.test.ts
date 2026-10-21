@@ -361,6 +361,17 @@ describe('third review by the coordinator', () => {
     expect(result.skippedBefore).toEqual([])
     expect(result.resume.firstDose).toBeUndefined()
   })
+  it('the procedure-day morning line appears only where that dose is actually omitted (#review re8 Astra 1)', () => {
+    const afternoon = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T16:00', surgery_end_at: '2026-11-03T17:00' })
+    expect(formatLocal(afternoon.lastDose!)).toBe('11-03 08:00')
+    expect(allText(afternoon)).not.toContain('早上那一劑（')
+    const night = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T00:00', surgery_end_at: '2026-11-03T01:00' })
+    expect(formatLocal(night.resume.firstDose!)).toBe('11-03 08:00')
+    expect(allText(night)).not.toContain('早上那一劑（')
+    expect(allText(plan({ procedure_kind: 'minimal', haemostasis: 'yes' }))).toContain('極低風險處置當天早上那一劑（11-03 08:00）不服用')
+    // Low risk names Figure 15’s optional evening dose it leaves out.
+    expect(allText(plan({ procedure_kind: 'low' }))).toContain('低風險列另把處置當晚一劑畫為可選')
+  })
   it('CrCl 79.96 is not printed as 80.0', () => {
     expect(crclLabel(79.96)).toBe('79.96')
     expect(crclLabel(79.999)).toBe('79.999')

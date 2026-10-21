@@ -170,7 +170,7 @@ export const CITES = {
 
   rivaroxabanMissed: cite('rivaroxaban', '4.2', 86, 'If a dose is missed the patient should take Xarelto immediately and continue on the following day with the once daily intake as recommended.'),
   rivaroxabanMissed10: cite('rivaroxaban', '4.2', 29, 'If a dose is missed the patient should take Xarelto immediately and then continue the following day with once daily intake as before.', 'Xarelto 10 mg'),
-  rivaroxabanMissed15bid: cite('rivaroxaban', '4.2', 87, 'If a dose is missed during the 15 mg twice daily treatment phase (day 1 - 21), the patient should take Xarelto immediately to ensure intake of 30 mg Xarelto per day.'),
+  rivaroxabanMissed15bid: cite('rivaroxaban', '4.2', 87, 'If a dose is missed during the 15 mg twice daily treatment phase (day 1 - 21), the patient should take Xarelto immediately to ensure intake of 30 mg Xarelto per day. In this case two 15 mg tablets may be taken at once.'),
   rivaroxabanVteAcute: cite('rivaroxaban', '4.2', 86, 'The recommended dose for the initial treatment of acute DVT or PE is 15 mg twice daily for the first three weeks followed by 20 mg once daily for the continued treatment and prevention of recurrent DVT and PE.'),
   rivaroxabanVteExtended: cite('rivaroxaban', '4.2', 87, 'When extended prevention of recurrent DVT and PE is indicated (following completion of at least 6 months therapy for DVT or PE), the recommended dose is 10 mg once daily.'),
   rivaroxabanVteExtendedHigh: cite('rivaroxaban', '4.2', 87, 'a dose of Xarelto 20 mg once daily should be considered.'),
@@ -369,7 +369,7 @@ export function doacCrcl(values: CalcValues): DoacCrcl | null {
   return computed === null ? null : { value: computed, source: 'cockcroft-gault' }
 }
 
-/** A CrCl as compared: the raw value, printed to one decimal where that keeps it on the same side of 15, 30 and 50. */
+/** A CrCl as compared: one decimal, or as many more as keep the printed value on the same side of 15, 30, 50 and 80. */
 export function crclLabel(value: number): string {
   const bands = [15, 30, 50, 80]
   // Enough decimals that the printed value stays on its own side of every band (79.999 is not 80.00).
