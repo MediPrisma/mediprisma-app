@@ -31,7 +31,13 @@ export function excludeUnresolvedGenericVariants<T extends object>(input: T, sel
       excluded.set(exclusionKey(item), item)
       return false
     })
-    next[key] = filtered.length === rows.length ? rows : filtered
+    const decisionRows = key === 'medications' ? filtered.map(row => {
+      if (!row.clinicalMedicationContentUncertainty) return row
+      if (!row.medicationCodeableConcept && !row.medicationReference?.display && !row.drugTerminology && !row.atcClassification) return row
+      const { medicationCodeableConcept: _code, drugTerminology: _terminology, atcClassification: _atc, ...rest } = row
+      return { ...rest, ...(row.medicationReference ? { medicationReference: { reference: row.medicationReference.reference } } : {}) }
+    }) : filtered
+    next[key] = decisionRows.length === rows.length && decisionRows.every((row, index) => row === rows[index]) ? rows : decisionRows
   }
   if (excluded.size) {
     const previous = (input as any).clinicalRecordVariantExclusions

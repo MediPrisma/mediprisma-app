@@ -39,7 +39,7 @@ export function stripClinicalCaptureMetadata<T>(value: T): T {
   }
   for (const [key, child] of Object.entries(value)) {
     if (key === 'clinicalRecordVariantExclusions' && Array.isArray(child)) { next[key] = outboundClinicalVariantExclusions(child); changed = true; continue }
-    if (key === 'clinicalSourceNodeKey' || key === 'clinicalSourceDerivedMemberKeys' || key === 'clinicalSource') { changed = true; continue }
+    if (key === 'clinicalMedicationCodeProvenance' || key === 'clinicalSourceNodeKey' || key === 'clinicalSourceDerivedMemberKeys' || key === 'clinicalSource') { changed = true; continue }
     next[key] = stripClinicalCaptureMetadata(child)
     if (next[key] !== child) changed = true
   }

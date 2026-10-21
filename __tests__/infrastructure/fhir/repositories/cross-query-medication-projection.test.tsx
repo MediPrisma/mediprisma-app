@@ -52,7 +52,7 @@ it.each(['MedicationRequest', 'MedicationStatement'])('projects cross-query Medi
 it.each(['https://foreign.example/fhir/Medication/drug', 'Medication/drug/_history/99'])('does not promote unresolved reference %s or retain a stale promoted code', reference => {
  const source = reconcileClinicalSources([{ sourceId: 'source', patientScope: 'a', generation: '1', restBase: 'https://synthetic.example/fhir', resources: [{ resourceType: 'MedicationRequest', id: 'request', medicationReference: { reference } }, { resourceType: 'Medication', id: 'drug', meta: { versionId: '1' }, code: { text: 'Wrong drug' } }] }])
  const key = source.graph.nodes.find(node => node.resource.id === 'request')!.key
- const rows: any[] = [{ id: 'request', clinicalSourceNodeKey: key, medicationCodeableConcept: { text: 'Stale promoted drug' } }]
+ const rows: any[] = [{ id: 'request', clinicalSourceNodeKey: key, clinicalMedicationCodeProvenance: 'graph-reference', medicationCodeableConcept: { text: 'Stale promoted drug' } }]
  expect(projectClinicalMedicationContents(rows, source)[0].medicationCodeableConcept).toBeUndefined()
 })
 
@@ -66,7 +66,7 @@ it('keeps explicit inline code and does not choose an ambiguous Medication revis
  const inline = { ...row('inline'), medicationCodeableConcept: { text: 'Explicit inline drug' } }
  const rows = [inline, row('reference')]
  const projected = projectClinicalMedicationContents(rows, source)
- expect(projected[0]).toBe(inline)
+ expect(projected[0].medicationCodeableConcept).toEqual(inline.medicationCodeableConcept)
  expect(projected[1].clinicalMedicationContentUncertainty?.reason).toBe('ambiguous-reference')
  expect(projectClinicalMedicationContents(projected, source)).toBe(projected)
  expect(rows[1].medicationCodeableConcept).toBeUndefined()

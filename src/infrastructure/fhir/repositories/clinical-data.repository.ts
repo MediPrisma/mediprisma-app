@@ -114,12 +114,12 @@ function mapMedicationSearchResponse(
       const target = edge ? source?.graph.nodes.find(node => node.key === edge.targetKeys[0]) : undefined
       const referencedMedication = target?.resource.resourceType === 'Medication' ? target.resource : undefined
 
-      return bindSourceNode(FhirMapper.toMedication({
+      return { ...bindSourceNode(FhirMapper.toMedication({
         ...resource,
         medicationCodeableConcept:
           resource.medicationCodeableConcept ?? mutableClinicalProjection(referencedMedication?.code),
         _sourceResourceType: sourceType,
-      }), entry)
+      }), entry), ...(resource.medicationCodeableConcept ? { clinicalMedicationCodeProvenance: 'mapped-policy' as const } : referencedMedication?.code ? { clinicalMedicationCodeProvenance: 'graph-reference' as const } : {}) }
     })
 }
 

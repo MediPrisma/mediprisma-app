@@ -16,7 +16,9 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
     const raw = origin.resource
     if (!raw.medicationReference && !raw.medicationCodeableConcept) return row
     let uncertainty: MedicationEntity['clinicalMedicationContentUncertainty']
-    let code = raw.medicationCodeableConcept as MedicationEntity['medicationCodeableConcept']
+    const mapped = row.clinicalMedicationCodeProvenance === 'mapped-policy' || !!raw.medicationCodeableConcept
+    let code = (mapped ? row.medicationCodeableConcept ?? raw.medicationCodeableConcept : undefined) as MedicationEntity['medicationCodeableConcept']
+    let provenance: MedicationEntity['clinicalMedicationCodeProvenance'] = code ? 'mapped-policy' : undefined
     if (!code) {
       const edge = edges.get(origin.key)
       uncertainty = { reason: edge?.status === 'ambiguous' ? 'ambiguous-reference' : edge?.status === 'resolved' ? 'missing-medication-code' : 'unresolved-reference' }
@@ -28,12 +30,16 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
         code = first.resource.code as MedicationEntity['medicationCodeableConcept']
       }
     }
-    if (code) uncertainty = undefined
+    if (code) { uncertainty = undefined; provenance ??= 'graph-reference' }
+    // A code without provenance is unverified, not proof of a drug identity.
+    // Only a known graph promotion may be revoked when its edge disappears.
+    if (!code && row.medicationCodeableConcept && !row.clinicalMedicationCodeProvenance) code = row.medicationCodeableConcept
     if ((clinicalSourceResourcesEqual(row.medicationCodeableConcept, code) || row.medicationCodeableConcept === code)
-      && row.clinicalMedicationContentUncertainty?.reason === uncertainty?.reason) return row
+      && row.clinicalMedicationContentUncertainty?.reason === uncertainty?.reason
+      && row.clinicalMedicationCodeProvenance === provenance) return row
     changed = true
-    const { medicationCodeableConcept: _previous, clinicalMedicationContentUncertainty: _oldUncertainty, ...rest } = row
-    return { ...rest, ...(code ? { medicationCodeableConcept: mutableClinicalProjection(code) } : {}), ...(uncertainty ? { clinicalMedicationContentUncertainty: uncertainty } : {}) }
+    const { medicationCodeableConcept: _previous, clinicalMedicationContentUncertainty: _oldUncertainty, clinicalMedicationCodeProvenance: _oldProvenance, ...rest } = row
+    return { ...rest, ...(code ? { medicationCodeableConcept: mutableClinicalProjection(code) } : {}), ...(uncertainty ? { clinicalMedicationContentUncertainty: uncertainty } : {}), ...(provenance ? { clinicalMedicationCodeProvenance: provenance } : {}) }
   })
   return changed ? projected : rows
 }
