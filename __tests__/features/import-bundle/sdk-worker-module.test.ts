@@ -5,11 +5,9 @@ import vm from 'node:vm'
 
 type Sdk = Pick<typeof import('@/vendor/nhi-fhir-bridge-sdk-json/browser.js'), 'parseJsonBytes' | 'convertSdkJsonToFhir'>
 
-function loadSdk(windowPresent: boolean, clientDefines: boolean): Sdk {
+function loadSdk(windowPresent: boolean): Sdk {
   let source = fs.readFileSync(path.join(process.cwd(), 'vendor/nhi-fhir-bridge-sdk-json/browser.js'), 'utf8')
-  // Reproduce Next's client build optimization, including when emitted for a Worker.
-  if (clientDefines) source = source.replaceAll('typeof window', '"object"')
-  // Execute the actual standalone ESM artifact in an isolated global scope.
+  // Execute the actual artifact without a window. CI separately verifies the real Next build.
   source = source.replace(/export\{([^}]+)\};/, (_, names: string) =>
     `globalThis.__sdk={${names.split(',').map(name => {
       const [local, exported = local] = name.trim().split(/\s+as\s+/)
@@ -24,8 +22,8 @@ function loadSdk(windowPresent: boolean, clientDefines: boolean): Sdk {
 test('the SDK avoids a bare window probe and loads in a Worker-like global with matching results and IDs', () => {
   const source = fs.readFileSync(path.join(process.cwd(), 'vendor/nhi-fhir-bridge-sdk-json/browser.js'), 'utf8')
   expect(source).not.toMatch(/\btypeof\s+window\b/)
-  const browser = loadSdk(true, false)
-  const worker = loadSdk(false, true)
+  const browser = loadSdk(true)
+  const worker = loadSdk(false)
   const input = { myhealthbank: { bdata: {
     'b1.1': 'A123456789', 'b1.2': '1151021',
     r7: ['98', '101'].map(value => ({ 'r7.4': '合成測試醫院', 'r7.6': '20261020',

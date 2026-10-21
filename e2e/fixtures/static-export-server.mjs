@@ -21,7 +21,9 @@ http.createServer(async (request, response) => {
     if (file !== root && !file.startsWith(root + path.sep)) {
       response.writeHead(403).end(); return
     }
-    for (const candidate of [file, file + '.html', path.join(file, 'index.html')]) {
+    const candidates = file === root ? [path.join(root, 'index.html')]
+      : [file, file + '.html', path.join(file, 'index.html')]
+    for (const candidate of candidates) {
       let handle
       try {
         handle = await open(candidate, 'r')

@@ -3,11 +3,11 @@ import { createHash } from 'node:crypto'
 import { test, expect } from '../fixtures/test'
 import { importBundle, openFeaturePanel } from '../fixtures/import'
 import { expectImportWorker } from '../fixtures/import-worker'
-import { convertSdkJsonToFhir } from '../../vendor/nhi-fhir-bridge-sdk-json/browser.js'
 
 test('SDK JSON converts in the production Worker and its downloaded FHIR can be reimported', async ({ page, requireImportWorker }, info) => {
   test.skip(!requireImportWorker, 'Requires the production Worker profile')
   test.setTimeout(120_000)
+  const { convertSdkJsonToFhir } = await import('../../vendor/nhi-fhir-bridge-sdk-json/browser.js')
   const source = info.outputPath('sdk-source.json')
   const input = { myhealthbank: { bdata: {
     'b1.1': 'A123456789', 'b1.2': '1151021',
