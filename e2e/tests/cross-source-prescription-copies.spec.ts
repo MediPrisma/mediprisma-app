@@ -8,7 +8,7 @@ test('one hospital prescription owns the compact row and keeps cloud originals i
   await page.clock.setFixedTime(new Date('2026-10-21T04:00:00Z'))
   await importBundle(page, { bundlePath })
   const panel = await openLeftTab(page, /^用藥$/)
-  const comparison = panel.getByRole('button', { name: '查看來源紀錄' })
+  const comparison = panel.getByRole('button', { name: '院內：查看來源紀錄' })
   await expect(comparison).toHaveCount(1)
   await expect(comparison).toBeVisible()
   await expect(panel.locator('[data-medication-list-surface] li')).toHaveCount(1)
