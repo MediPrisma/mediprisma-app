@@ -27,7 +27,7 @@ import type {
   IpsBundleEntry,
   SectionMapResult,
 } from './ips-types'
-import { INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
+import { CLINICAL_RECORD_VARIANT_EXTENSION, INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
@@ -39,10 +39,10 @@ import { medicationExportUnit, sourceSupplyText, type ExportMedication } from '.
 // ---------------------------------------------------------------------------
 
 /** App-defined FHIR extension: ambiguity is retained without inventing a preferred revision. */
-export const CLINICAL_RECORD_VARIANT_EXTENSION = 'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant'
+export { CLINICAL_RECORD_VARIANT_EXTENSION } from './ips-constants'
 function recordVariantExtension(row: { sourceId?: string; sourceVersionId?: string; _sourceResourceType?: string; clinicalRecordVariant?: import('@/src/core/entities/clinical-data.entity').ClinicalRecordVariant }): Record<string, unknown> {
   const variant = row.clinicalRecordVariant
-  return variant ? { extension: [{ url: CLINICAL_RECORD_VARIANT_EXTENSION, extension: [
+  return variant ? { modifierExtension: [{ url: CLINICAL_RECORD_VARIANT_EXTENSION, extension: [
     { url: 'groupId', valueString: variant.groupId },
     { url: 'classification', valueCode: variant.classification },
     { url: 'variantCount', valuePositiveInt: variant.variantCount },

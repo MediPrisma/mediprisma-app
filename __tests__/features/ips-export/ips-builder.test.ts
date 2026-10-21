@@ -1,5 +1,7 @@
 import { buildIpsBundle } from '@/features/ips-export/utils/ips-builder'
 import { validateIpsBundle } from '@/features/ips-export/utils/ips-lite-validator'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { CLINICAL_RECORD_VARIANT_EXTENSION } from '@/features/ips-export/utils/ips-constants'
 import {
   COMPOSITION_TYPE_LOINC,
   IPS_PROFILES,
@@ -45,6 +47,31 @@ function sectionByLoinc(bundle: ReturnType<typeof buildIpsBundle>, loinc: string
 }
 
 describe('buildIpsBundle — structure', () => {
+  it('exports unresolved source versions as modifiers with complete human-readable meaning', async () => {
+    const parsed = await LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+      { resource: PATIENT },
+      ...['1', '2'].flatMap(version => [
+        { resource: { resourceType: 'Observation', id: 'potassium', meta: { versionId: version }, status: 'final', code: { text: 'Potassium' }, effectiveDateTime: '2026-10-01', valueQuantity: { value: version === '1' ? 5 : 6.2, unit: 'mmol/L' } } },
+        { resource: { resourceType: 'Condition', id: 'problem', meta: { versionId: version }, code: { text: version === '1' ? 'First problem' : 'Revised problem' } } },
+      ]),
+    ] })
+    const bundle = buildIpsBundle({ patient: PATIENT, data: parsed.collection })
+    const resources = bundle.entry.map(entry => entry.resource).filter(resource => ['Observation', 'Condition'].includes(resource.resourceType))
+    expect(resources).toHaveLength(4)
+    for (const resource of resources) {
+      expect(resource.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
+      expect((resource.extension as Array<{ url: string }> | undefined)?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION)).not.toBe(true)
+      const narrative = resource.text as { status: string; div: string }
+      expect(narrative.status).toBe('extensions')
+      expect(narrative.div).toContain('Manual reconciliation required')
+      expect(narrative.div).toContain('Do not treat these variants as concurrent facts')
+      expect(narrative.div).toContain((resource.code as { text: string }).text)
+      expect(resource).not.toHaveProperty('clinicalRecordVariant')
+    }
+    expect((resources.find(resource => resource.resourceType === 'Observation' && (resource.valueQuantity as { value: number }).value === 6.2)!.text as { div: string }).div).toContain('6.2')
+    expect(validateIpsBundle(bundle).ok).toBe(true)
+  })
+
   it('produces a document Bundle with a Composition first entry', () => {
     const bundle = buildIpsBundle({ patient: PATIENT, data: emptyCollection() })
     expect(bundle.resourceType).toBe('Bundle')

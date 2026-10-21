@@ -53,7 +53,7 @@ it('carries actual local MedicationRequest and Condition versions through policy
   expect(prompt).not.toContain('same-medication')
   expect(prompt).not.toContain('clinicalSourceNodeKey')
   const exports = [...mapMedications(data.medications, 'Patient/synthetic').entries, ...mapProblemList(data.conditions, 'Patient/synthetic').entries].map(entry => entry.resource)
-  const variants = exports.filter(resource => (resource.extension as any[])?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION))
+  const variants = exports.filter(resource => (resource.modifierExtension as any[])?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION))
   expect(variants).toHaveLength(4)
   expect(variants.every(resource => !('clinicalRecordVariant' in resource))).toBe(true)
 })
@@ -77,7 +77,7 @@ it('adds only legal extensions to every remaining IPS resource mapper', () => {
     expect(resources.length).toBeGreaterThan(0)
     for (const resource of resources) {
       expect(resource).not.toHaveProperty('clinicalRecordVariant')
-      expect(resource.extension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION, extension: expect.arrayContaining([{ url: 'sourceId', valueString: 'original' }, { url: 'versionId', valueString: '1' }]) }))
+      expect(resource.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION, extension: expect.arrayContaining([{ url: 'sourceId', valueString: 'original' }, { url: 'versionId', valueString: '1' }]) }))
     }
   }
 })

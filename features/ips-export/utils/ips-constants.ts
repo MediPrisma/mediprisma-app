@@ -97,3 +97,5 @@ export const SECTION_EMPTY_REASON = {
   code: 'unavailable',
   display: 'Unavailable',
 } as const
+/** Application canonical; not yet published as an externally resolvable definition. */
+export const CLINICAL_RECORD_VARIANT_EXTENSION = 'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant'

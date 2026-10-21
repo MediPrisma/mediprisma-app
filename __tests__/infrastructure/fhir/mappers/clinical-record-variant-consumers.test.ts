@@ -47,15 +47,15 @@ it.each([true, false])('preserves ambiguous records but never promotes revision=
   const resources = [...results.entries, ...results.referencedOnly].map(entry => entry.resource)
   for (const resource of resources) {
     expect(resource).not.toHaveProperty('clinicalRecordVariant')
-    expect(resource.extension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
+    expect(resource.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
   }
-  expect(mapVitalSigns([data.observations[0]], 'Patient/synthetic').entries[0].resource.extension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
+  expect(mapVitalSigns([data.observations[0]], 'Patient/synthetic').entries[0].resource.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
   expect(data.observations.map((row: any) => row.valueQuantity.value)).toEqual([7, 9])
 })
 
 it('keeps unrelated decision inputs and clears obsolete annotations after authoritative refresh', () => {
   const data = collection(true)
-  const raw = { ...obs(4), id: 'unrelated' }
+  const raw = { ...obs(140), id: 'unrelated', code: { coding: [{ system: 'http://loinc.org', code: '2951-2' }], text: 'Sodium' } }
   const source = reconcileClinicalSources([{ sourceId: 'synthetic-source', patientScope: 'patient', generation: 'next', resources: [raw] }])
   const normal = projectClinicalAggregate({ observations: [] as import('@/src/core/entities/clinical-data.entity').ObservationEntity[] }, source).observations![0]
   const selected = selectCdssClinicalInputs({ observations: [...data.observations, normal] })
@@ -73,7 +73,7 @@ it('quarantines unresolved narrative-only report revisions while retaining unrel
   ]
   const selected = selectCdssClinicalInputs({ observations: [], diagnosticReports: reports })
   expect(selected.input.diagnosticReports).toEqual([reports[2]])
-  expect(selected.excluded).toEqual(reports.slice(0, 2).map(report => ({ ...annotation, resourceType: 'DiagnosticReport', resourceId: report.id })))
+  expect(selected.excluded).toEqual(reports.slice(0, 2).map(report => ({ ...annotation, resourceType: 'DiagnosticReport', resourceId: report.id, code: report.code, effectiveDate: report.effectiveDateTime })))
   const profile = createHospitalAwareCdssPatientProfile({ patient: { id: 'synthetic', age: 70 }, conditions: [], encounters: [], observations: [], medications: [], allergies: [], carePlans: [], diagnosticReports: reports })
   expect(profile.excludedClinicalRecordVariants).toEqual(selected.excluded)
   expect(JSON.stringify(profile.facts)).not.toMatch(/echo-1|echo-2/)

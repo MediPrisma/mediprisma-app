@@ -8,6 +8,7 @@ import type {
 import { getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
 import { clinicalRecordKey, reportMemberRecordKeys, isVitalObservation } from '@/src/core/utils/observation-selectors'
 import type { FhirResource, IpsBundleEntry } from './ips-types'
+import { CLINICAL_RECORD_VARIANT_EXTENSION } from './ips-constants'
 
 /** Generate a UUID v4. Uses crypto.randomUUID when available, else a fallback. */
 export function uuidv4(): string {
@@ -32,10 +33,29 @@ export function uuidv4(): string {
 export function makeEntry(resource: FhirResource): { entry: IpsBundleEntry; reference: string } {
   const id = resource.id ?? uuidv4()
   const fullUrl = `urn:uuid:${id}`
+  const modifiers = resource.modifierExtension as Array<{ url?: string }> | undefined
+  const hasUnresolvedVariant = modifiers?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION)
+  // Finalize after each mapper has supplied its complete resource and text.
+  // Modifier meaning must remain visible even when a receiver reads narrative only.
+  const narrative = hasUnresolvedVariant ? {
+    status: 'extensions',
+    div: `<div xmlns="http://www.w3.org/1999/xhtml"><p><strong>Manual reconciliation required: unresolved versions of the same source record. Do not treat these variants as concurrent facts, separate events, or independent trend points.</strong></p>${(resource.text as { div?: string } | undefined)?.div ?? ''}${recordFieldsNarrative(resource)}</div>`,
+  } : undefined
   return {
-    entry: { fullUrl, resource: { ...resource, id } },
+    entry: { fullUrl, resource: { ...resource, id, ...(narrative ? { text: narrative } : {}) } },
     reference: fullUrl,
   }
+}
+
+/** Include the exported clinical fields, not just the ambiguity warning. */
+function recordFieldsNarrative(resource: FhirResource): string {
+  const render = (value: unknown): string => {
+    if (value == null) return ''
+    if (Array.isArray(value)) return `<ul>${value.map(item => `<li>${render(item)}</li>`).join('')}</ul>`
+    if (typeof value === 'object') return `<dl>${Object.entries(value).filter(([key]) => key !== 'data').map(([key, child]) => `<dt>${escapeHtml(key.replace(/([a-z])([A-Z])/g, '$1 $2'))}</dt><dd>${render(child)}</dd>`).join('')}</dl>`
+    return escapeHtml(value)
+  }
+  return render(Object.fromEntries(Object.entries(resource).filter(([key]) => !['text', 'meta', 'modifierExtension'].includes(key))))
 }
 
 /** Escape a string for safe inclusion inside XHTML narrative text nodes. */
