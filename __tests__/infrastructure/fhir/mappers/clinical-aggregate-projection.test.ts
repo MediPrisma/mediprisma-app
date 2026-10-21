@@ -10,7 +10,13 @@ const snapshot = { id: ids.get(snapshotNode.key)!, sourceId: 'snapshot', clinica
 const report = { id: ids.get(reportNode.key)!, sourceId: 'report', clinicalSourceNodeKey: reportNode.key, result: [{ reference: '#snapshot' }], _observations: [snapshot] }
 
 it('does not promote a contained audit resource merely because an existing report member points to it', () => {
-  const projected = projectClinicalAggregate({ observations: [], diagnosticReports: [report] } as any, source)
+  const auditSource = reconcileClinicalSources([{ sourceId: 'audit', patientScope: 'synthetic', generation: '1', resources: [
+    { resourceType: 'Provenance', id: 'audit', contained: [{ resourceType: 'Observation', id: 'snapshot', valueQuantity: { value: 5 } }] },
+    { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: '#snapshot' }] },
+  ] }])
+  const auditReport = auditSource.graph.nodes.find(node => node.resource.resourceType === 'DiagnosticReport')!
+  const auditObservation = auditSource.graph.nodes.find(node => node.resource.resourceType === 'Observation')!
+  const projected = projectClinicalAggregate({ observations: [], diagnosticReports: [{ ...report, clinicalSourceNodeKey: auditReport.key, _observations: [{ ...snapshot, clinicalSourceNodeKey: auditObservation.key }] }] } as any, auditSource)
   expect(projected.observations).toEqual([])
   expect(projected.diagnosticReports[0]._observations).toEqual([])
   expect(projected.diagnosticReports[0].result[0].reference).toBe('#snapshot')

@@ -221,7 +221,8 @@ describe('useClinicalData', () => {
 })
 
  it('shares the same reconciliation result and row arrays across UI and whole-collection AI/CDSS reads', async () => {
-  const clinicalSource = { policyVersion: 'synthetic-v1', graph: { nodes: [], references: [] }, policies: {}, evidence: {} }
+  const { reconcileClinicalSources } = await import('@/src/core/services/clinical-reconciliation')
+  const clinicalSource = reconcileClinicalSources([])
   const repository = fakeSmartRepository({ getClinicalSource: () => clinicalSource })
   mockGetClinicalDataRepository.mockResolvedValue(repository as any)
   mockUsePatientQuery.mockReturnValue({ data: { id: 'patient-1' }, isLoading: false, isFetching: false })

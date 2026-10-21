@@ -1,4 +1,5 @@
 import { CLINICAL_RECONCILIATION_POLICY_VERSION } from '@/src/core/services/clinical-reconciliation'
+import { getClinicalSourceLifecycleEpoch } from '@/src/infrastructure/fhir/services/clinical-source-session'
 import { localImportScopeSegment } from '@/src/infrastructure/fhir/services/local-bundle-scope'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 /**
@@ -117,15 +118,16 @@ export const CLINICAL_DATA_QUERY_ROOT = 'clinical-data'
 /** Third key segment of the shared data-source query. Never a resource id. */
 const SOURCE_KEY_SEGMENT = '__source'
 
-export function clinicalDataSourceQueryKey(patientId: string) {
-  return [CLINICAL_DATA_QUERY_ROOT, patientId, SOURCE_KEY_SEGMENT, localImportScopeSegment(), CLINICAL_RECONCILIATION_POLICY_VERSION] as const
+export function clinicalDataSourceQueryKey(patientId: string, sourceEpoch = getClinicalSourceLifecycleEpoch()) {
+  return [CLINICAL_DATA_QUERY_ROOT, patientId, SOURCE_KEY_SEGMENT, localImportScopeSegment(), CLINICAL_RECONCILIATION_POLICY_VERSION, sourceEpoch] as const
 }
 
 export function clinicalResourceQueryKey(
   patientId: string | undefined,
   id: ClinicalResourceId,
+  sourceEpoch = getClinicalSourceLifecycleEpoch(),
 ) {
-  return [CLINICAL_DATA_QUERY_ROOT, patientId, id, localImportScopeSegment(), CLINICAL_RECONCILIATION_POLICY_VERSION] as const
+  return [CLINICAL_DATA_QUERY_ROOT, patientId, id, localImportScopeSegment(), CLINICAL_RECONCILIATION_POLICY_VERSION, sourceEpoch] as const
 }
 
 export interface ClinicalDataSource {

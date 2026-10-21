@@ -1189,6 +1189,9 @@ export interface ClinicalDataQueryStatus {
   resourceType: string
   state: ClinicalDataQueryState
   count?: number
+  /** Returned clinical rows withheld because their explicit patient reference contradicted the requested patient. */
+  excludedCount?: number
+  exclusionReason?: 'foreign-patient-reference'
   httpStatus?: number
   message?: string
   operationOutcome?: {

@@ -22,7 +22,8 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
  */
 
 import { useQueries, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { getClinicalSourceLifecycleEpoch, subscribeClinicalSourceLifecycle } from '@/src/infrastructure/fhir/services/clinical-source-session'
 import type {
   ClinicalDataCollection,
   ClinicalDataQueryKey,
@@ -167,6 +168,18 @@ const sharedAggregates = new WeakMap<object, {
   signature: unknown[]
   snapshot: ClinicalSnapshot
 }>()
+const sharedReprojections = new WeakMap<ClinicalSnapshot, WeakMap<ClinicalReconciliationResult, ClinicalResourceAggregate>>()
+function reprojectClinicalSnapshot(snapshot: ClinicalSnapshot, source: ClinicalReconciliationResult | undefined): ClinicalResourceAggregate {
+  if (!source || source === snapshot.aggregate.clinicalSource) return snapshot.aggregate
+  let projections = sharedReprojections.get(snapshot)
+  if (!projections) { projections = new WeakMap(); sharedReprojections.set(snapshot, projections) }
+  const cached = projections.get(source)
+  if (cached) return cached
+  const projected = projectClinicalAggregate({ ...snapshot.aggregate.entities, vitalSigns: snapshot.aggregate.vitalSigns, clinicalSource: source })
+  const aggregate = { ...snapshot.aggregate, entities: projected, vitalSigns: projected.vitalSigns, clinicalSource: source }
+  projections.set(source, aggregate)
+  return aggregate
+}
 function combineClinicalResults(results: Parameters<typeof buildClinicalResults>[0]): ClinicalSnapshot {
   const key = results.find(result => result.data)?.data
   const signature = results.flatMap(result => [result.data, result.error, result.isLoading, result.isFetching, result.isPending])
@@ -182,6 +195,7 @@ function useClinicalResourceAggregate() {
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
   const queryClient = useQueryClient()
   const patientId = patient?.id
+  const sourceEpoch = useSyncExternalStore(subscribeClinicalSourceLifecycle, getClinicalSourceLifecycleEpoch, getClinicalSourceLifecycleEpoch)
 
   // One shared, session-stable data source per load generation. fetchQuery both collapses the
   // concurrent per-type callers onto a single resolution — critical in
@@ -190,18 +204,18 @@ function useClinicalResourceAggregate() {
   // it exactly once without an idle tab re-parsing an unchanged Bundle.
   const getSource = useCallback(
     (id: string) => queryClient.fetchQuery({
-      queryKey: clinicalDataSourceQueryKey(id),
+      queryKey: clinicalDataSourceQueryKey(id, sourceEpoch),
       queryFn: () => resolveClinicalDataSource(id),
       staleTime: CLINICAL_SESSION_STALE_TIME,
       gcTime: CLINICAL_SESSION_GC_TIME,
       retry: 1,
     }),
-    [queryClient],
+    [queryClient, sourceEpoch],
   )
 
   const snapshot = useQueries({
     queries: CLINICAL_RESOURCE_UNITS.map((unit) => ({
-      queryKey: clinicalResourceQueryKey(patientId, unit.id),
+      queryKey: clinicalResourceQueryKey(patientId, unit.id, sourceEpoch),
       queryFn: () => {
         if (!patientId) throw new Error('Patient ID is required')
         return loadClinicalResource(unit, patientId, () => getSource(patientId))
@@ -233,12 +247,7 @@ function useClinicalResourceAggregate() {
   // Patient reads share the capture store but need not refetch clinical queries.
   // Re-read its immutable generation on render so a same-id patient refresh is visible.
   const clinicalSource = snapshot.aggregate.readClinicalSource?.() ?? snapshot.aggregate.clinicalSource
-  const aggregate = useMemo(() => clinicalSource === snapshot.aggregate.clinicalSource
-    ? snapshot.aggregate
-    : (() => {
-      const projected = projectClinicalAggregate({ ...snapshot.aggregate.entities, vitalSigns: snapshot.aggregate.vitalSigns, clinicalSource })
-      return { ...snapshot.aggregate, entities: projected, vitalSigns: projected.vitalSigns, clinicalSource }
-    })(), [snapshot, clinicalSource])
+  const aggregate = reprojectClinicalSnapshot(snapshot, clinicalSource)
   return { aggregate, patientLoading, refetch }
 }
 

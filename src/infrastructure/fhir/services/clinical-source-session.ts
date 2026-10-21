@@ -14,15 +14,22 @@ const sessions = new WeakMap<object, Map<string, ClinicalSourceSession>>()
 const bindings = new WeakMap<object, ClinicalSourceSession>()
 const ownerClients = new WeakMap<object, object>()
 let sequence = 0
+let lifecycleEpoch = 0
+const lifecycleListeners = new Set<() => void>()
+export const getClinicalSourceLifecycleEpoch = () => lifecycleEpoch
+export function subscribeClinicalSourceLifecycle(listener: () => void): () => void {
+  lifecycleListeners.add(listener)
+  return () => { lifecycleListeners.delete(listener) }
+}
 const revokedClinicalSource = reconcileClinicalSources([])
 
 /** Sessions are keyed by the actual authenticated client, then its server base.
  * Weak keys release all captures when an old authenticated client is discarded. */
 export function clinicalSourceSession(client: object, restBase?: string, owner?: object): ClinicalSourceSession {
-  if (owner && ownerClients.get(owner) && ownerClients.get(owner) !== client) purgeClinicalSourceSession(owner)
+  const base = restBase?.replace(/\/+$/, '')
+  if (owner && ownerClients.get(owner) && (ownerClients.get(owner) !== client || bindings.get(owner)?.restBase !== base)) purgeClinicalSourceSession(owner)
   let servers = sessions.get(client)
   if (!servers) { servers = new Map(); sessions.set(client, servers) }
-  const base = restBase?.replace(/\/+$/, '')
   let session = servers.get(base ?? '')
   if (!session) {
     session = { sourceId: `smart-session-${++sequence}`, restBase: base, revoked: false, generation: 0, captures: new Map(), successfulResponses: new Map(), results: new Map() }
@@ -43,6 +50,10 @@ export function purgeClinicalSourceSession(owner: object): void {
   if (client) sessions.delete(client)
   bindings.delete(owner)
   ownerClients.delete(owner)
+  if (client) {
+    lifecycleEpoch++
+    for (const listener of lifecycleListeners) listener()
+  }
 }
 export function forgetClinicalSourceSession(owner: object): void { purgeClinicalSourceSession(owner) }
 export function knownClinicalSourceSession(owner: object): ClinicalSourceSession | undefined { return bindings.get(owner) }

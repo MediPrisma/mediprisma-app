@@ -82,7 +82,39 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     const { clinicalRecordVariant: _previous, ...rest } = row
     return { ...rest, ...(variant ? { clinicalRecordVariant: variant } : {}) } as R
   }
-  const eligible = selectClinicalSourceNodes(source).filter(node => node.resource.resourceType === 'Observation')
+  const activeNodes = selectClinicalSourceNodes(source)
+  const activeKeys = new Set(activeNodes.map(node => node.key))
+  const eligible = activeNodes.filter(node => node.resource.resourceType === 'Observation')
+  // A resolved clinical member is an active result, including #contained
+  // panels and their siblings. Merely storing a snapshot inside an audit
+  // resource never promotes it into the patient's measurements.
+  const pending = [
+    ...eligible.map(node => node.key),
+    ...(input.diagnosticReports ?? []).flatMap(row => row.clinicalSourceNodeKey && activeKeys.has(row.clinicalSourceNodeKey) ? [row.clinicalSourceNodeKey] : []),
+  ]
+  const visited = new Set<string>()
+  const promoted = new Set<string>()
+  for (let index = 0; index < pending.length; index++) {
+    const key = pending[index]
+    if (visited.has(key)) continue
+    visited.add(key)
+    const origin = context.nodes.get(key)
+    if (!origin) continue
+    for (const edge of context.edges.get(key) ?? []) {
+      if (edge.status !== 'resolved' || !/^(result|hasMember)\[\d+\]$/.test(edge.path)) continue
+      for (const targetKey of edge.targetKeys) {
+        const target = context.nodes.get(targetKey)
+        if (!target || target.resource.resourceType !== 'Observation' || target.embeddedIn) continue
+        if (target.isContained) {
+          const owner = context.nodes.get(target.parentKey ?? '')
+          if (!owner || !['DiagnosticReport', 'Observation'].includes(owner.resource.resourceType)) continue
+          if (target.parentKey !== origin.key && target.parentKey !== origin.parentKey) continue
+          if (!promoted.has(targetKey)) { promoted.add(targetKey); eligible.push(target) }
+        } else if (!activeKeys.has(targetKey)) continue
+        pending.push(targetKey)
+      }
+    }
+  }
   const eligibleById = new Map(eligible.map(node => [context.ids.get(node.key)!, node]))
   const observationsById = new Map<string, ObservationEntity>()
   const legacyRows: ObservationEntity[] = []
