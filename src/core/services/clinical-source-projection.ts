@@ -155,11 +155,27 @@ export function createClinicalSourceProjectionIds(
     if (bucket.length > 1) {
       throw new Error('Clinical source projection ID hash collision: distinct source identities share a row ID digest')
     }
-    const rowId = `cs${hash}`
-    if (rowId.length > 64 || !/^[A-Za-z0-9.-]+$/.test(rowId)) {
-      throw new Error('Clinical source projection produced an invalid FHIR row ID')
+    // The navigation base stays stable as supporting queries settle. When
+    // multiple records actually share that base, retain the full-context
+    // distinctions already proved by reconciliation instead of folding rows.
+    const contexts = new Map<string, { node: ClinicalSourceNode; keys: string[] }>()
+    for (const key of bucket[0].nodeKeys) {
+      const node = nodesByKey.get(key)!
+      const context = clinicalSourceContextIdentity(source.graph, node)
+      const previous = contexts.get(context)
+      if (previous && !clinicalSourceNodesEqualWithContext(source.graph, previous.node, node)) {
+        throw new Error('Clinical source projection context hash collision: distinct records share a context digest')
+      }
+      if (previous) previous.keys.push(key)
+      else contexts.set(context, { node, keys: [key] })
     }
-    for (const key of bucket[0].nodeKeys) idsByNodeKey.set(key, rowId)
+    for (const [context, group] of contexts) {
+      const rowId = `cs${hash}${contexts.size > 1 ? `-${context}` : ''}`
+      if (rowId.length > 64 || !/^[A-Za-z0-9.-]+$/.test(rowId)) {
+        throw new Error('Clinical source projection produced an invalid FHIR row ID')
+      }
+      for (const key of group.keys) idsByNodeKey.set(key, rowId)
+    }
   }
   return idsByNodeKey
 }

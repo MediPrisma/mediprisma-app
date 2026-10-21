@@ -2,6 +2,32 @@ import { reconcileClinicalSources } from '@/src/core/services/clinical-reconcili
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
 
+it('retains identical observations when their resolved encounter contexts differ', () => {
+  const captures = ['1', '2'].map(version => ({ sourceId: 'ehr', patientScope: 'patient', restBase: 'https://ehr.invalid/fhir', generation: version, resources: [
+    { resourceType: 'Encounter', id: 'visit', meta: { versionId: version }, status: version === '1' ? 'in-progress' : 'finished' },
+    { resourceType: 'Observation', id: 'value', status: 'final', encounter: { reference: 'Encounter/visit' }, valueInteger: 7 },
+    { resourceType: 'DiagnosticReport', id: `report-${version}`, result: [{ reference: 'Observation/value' }] },
+  ] }))
+  const source = reconcileClinicalSources(captures)
+  const repeatedSource = reconcileClinicalSources([...captures, { ...captures[0], generation: 'copy' }])
+  const repeatedIds = createClinicalSourceProjectionIds(repeatedSource)
+  expect(new Set(repeatedSource.graph.nodes.filter(node => node.resource.resourceType === 'Observation').map(node => repeatedIds.get(node.key))).size).toBe(2)
+  const reports = source.graph.nodes.filter(node => node.resource.resourceType === 'DiagnosticReport').map(node => ({ id: node.resource.id, clinicalSourceNodeKey: node.key, result: [{ reference: 'Observation/value' }] }))
+  const projected = projectClinicalAggregate({ observations: [], diagnosticReports: reports } as any, source)
+  expect(projected.observations).toHaveLength(2)
+  expect(new Set(projected.observations.map((row: any) => row.id)).size).toBe(2)
+  for (const report of projected.diagnosticReports) {
+    const member = report._observations[0]
+    expect(projected.observations).toContain(member)
+    expect(report.result[0].reference).toBe(`Observation/${member.id}`)
+    const origin = source.graph.nodes.find(node => node.key === report.clinicalSourceNodeKey)!
+    const target = source.graph.references.find(edge => edge.origin.key === origin.key && edge.path === 'result[0]')!
+    expect(target.targetKeys).toContain(member.clinicalSourceNodeKey)
+    expect(member.clinicalRecordVariant?.variantCount).toBe(2)
+  }
+  expect(projected.diagnosticReports[0]._observations[0]).not.toBe(projected.diagnosticReports[1]._observations[0])
+})
+
 const source = reconcileClinicalSources([{ sourceId: 'synthetic-audit', patientScope: 'synthetic', generation: '1', resources: [{ resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: '#snapshot' }], contained: [{ resourceType: 'Observation', id: 'snapshot', status: 'final', code: { text: 'Synthetic snapshot' }, valueQuantity: { value: 5 } }] }] }])
 const ids = createClinicalSourceProjectionIds(source)
 const reportNode = source.graph.nodes.find(node => node.resource.resourceType === 'DiagnosticReport')!
