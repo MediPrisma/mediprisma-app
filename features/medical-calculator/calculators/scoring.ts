@@ -209,12 +209,22 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
   },
   'doac-dose-nvaf': {
     formula: {
-      en: 'CrCl by Cockcroft–Gault (actual weight), compared unrounded. Apixaban 2.5 mg bid if ≥2 of age ≥80, weight ≤60 kg, Cr ≥1.5, or CrCl 15–29; rivaroxaban 15 mg qd at CrCl 15–49; edoxaban 30 mg qd if any of CrCl 15–50, weight ≤60 kg, ciclosporin/dronedarone/erythromycin/ketoconazole; dabigatran 110 mg bid at age ≥80 or with verapamil, 150 or 110 mg bid at age 75–80, CrCl 30–50 or GI risk.',
-      zh: 'CrCl 以 Cockcroft–Gault（實際體重）計算，以未四捨五入值比較。Apixaban：年齡 ≥80、體重 ≤60 kg、Cr ≥1.5 中 ≥2 項，或 CrCl 15–29 → 2.5 mg bid；rivaroxaban：CrCl 15–49 → 15 mg qd；edoxaban：CrCl 15–50、體重 ≤60 kg、併用 ciclosporin／dronedarone／erythromycin／ketoconazole 任一 → 30 mg qd；dabigatran：年齡 ≥80 或併用 verapamil → 110 mg bid，75–80 歲、CrCl 30–50 或胃腸出血風險 → 150 或 110 mg bid。',
+      en: 'CrCl by Cockcroft–Gault (actual weight), compared unrounded. NVAF: apixaban 2.5 mg bid if ≥2 of age ≥80, weight ≤60 kg, Cr ≥1.5, or CrCl 15–29; rivaroxaban 15 mg qd at CrCl 15–49; edoxaban 30 mg qd if any of CrCl 15–50, weight ≤60 kg, ciclosporin/dronedarone/erythromycin/ketoconazole; dabigatran 110 mg bid at age ≥80 or with verapamil, 150 or 110 mg bid at age 75–80, CrCl 30–50 or GI risk. Acute VTE: apixaban 10 mg bid ×7 d then 5 mg bid; rivaroxaban 15 mg bid ×21 d then 20 mg qd; edoxaban and dabigatran after ≥5 d parenteral, with the same reductions as NVAF. Extended: apixaban 2.5 mg bid; rivaroxaban 10 (or 20) mg qd. Hip/knee: apixaban 2.5 mg bid; rivaroxaban 10 mg qd; dabigatran 220 mg qd (150 mg qd at CrCl 30–50, age ≥75, or verapamil/amiodarone/quinidine).',
+      zh: 'CrCl 以 Cockcroft–Gault（實際體重）計算，以未四捨五入值比較。NVAF：apixaban 年齡 ≥80、體重 ≤60 kg、Cr ≥1.5 中 ≥2 項，或 CrCl 15–29 → 2.5 mg bid；rivaroxaban CrCl 15–49 → 15 mg qd；edoxaban CrCl 15–50、體重 ≤60 kg、併用 ciclosporin／dronedarone／erythromycin／ketoconazole 任一 → 30 mg qd；dabigatran 年齡 ≥80 或併用 verapamil → 110 mg bid，75–80 歲、CrCl 30–50 或胃腸出血風險 → 150 或 110 mg bid。急性 VTE：apixaban 10 mg bid ×7 天 → 5 mg bid；rivaroxaban 15 mg bid ×21 天 → 20 mg qd；edoxaban、dabigatran 先注射抗凝 ≥5 天，減量條件同 NVAF。延長治療：apixaban 2.5 mg bid；rivaroxaban 10（或 20）mg qd。髖膝預防：apixaban 2.5 mg bid；rivaroxaban 10 mg qd；dabigatran 220 mg qd（CrCl 30–50、≥75 歲、併用 verapamil／amiodarone／quinidine → 150 mg qd）。',
     },
     note: {
-      en: 'Contraindication, not-recommended and avoid rules (renal, dialysis, liver, interactions, pregnancy) take precedence and quote the EU SmPC section and page. Taiwan labels pending pharmacy review.',
-      zh: '禁忌、不建議與應避免（腎、透析、肝、交互作用、懷孕）優先於劑量，各附 EU SmPC 章節與頁碼。臺灣仿單待藥學部核對。',
+      en: 'Contraindication, not-recommended and avoid rules (renal, dialysis, liver, interactions, pregnancy, unstable PE) take precedence and quote the EU SmPC section and page. Taiwan labels pending pharmacy review.',
+      zh: '禁忌、不建議與應避免（腎、透析、肝、交互作用、懷孕、不穩定 PE）優先於劑量，各附 EU SmPC 章節與頁碼。臺灣仿單待藥學部核對。',
+    },
+  },
+  'doac-periop': {
+    formula: {
+      en: 'Last dose before an elective procedure (EHRA 2021 Fig 14): dabigatran CrCl ≥80 24/48 h, 50–79 36/72 h, 30–49 48/96 h (low/high risk); apixaban, edoxaban, rivaroxaban CrCl ≥30 24/48 h, 15–29 36/48 h; minor risk at trough (12 h bid, 24 h qd). Neuraxial or deep plexus/peripheral block (ASRA 2025): high dose — apixaban, edoxaban, rivaroxaban 72 h, dabigatran 72 h at CrCl ≥50 and 120 h at 30–49; low dose — apixaban 36 h, rivaroxaban 24 h (30 h at CrCl <30), dabigatran 48 h; the longer applies. AF ablation and minor risk: the last scheduled dose is kept; a short interval is flagged. Restart: the latest of 6 h (minor) / 24 h (low) / 48 (–72) h (high) after the end, and 24 h (high dose) or 6 h (low dose) after needle placement or catheter removal; traumatic puncture apixaban 48 h, rivaroxaban 24 h; haemostasis first.',
+      zh: '擇期手術最後一劑（EHRA 2021 Fig 14）：dabigatran CrCl ≥80 24／48 h、50–79 36／72 h、30–49 48／96 h（低／高風險）；apixaban、edoxaban、rivaroxaban CrCl ≥30 24／48 h、15–29 36／48 h；極低風險在谷底做（bid 12 h、qd 24 h）。神經軸或深部神經叢／周邊阻斷（ASRA 2025）：高劑量 apixaban、edoxaban、rivaroxaban 72 h，dabigatran CrCl ≥50 72 h、30–49 120 h；低劑量 apixaban 36 h、rivaroxaban 24 h（CrCl <30 為 30 h）、dabigatran 48 h；取較長者。AF 消融與極低風險：照常服用處置前最後一劑，間隔不足時提醒。恢復：取手術結束後極低 6 h／低 24 h／高 48（–72）h，以及穿刺或拔管後 24 h（高劑量）或 6 h（低劑量）中最晚者；穿刺出血 apixaban 48 h、rivaroxaban 24 h；並先確認止血。',
+    },
+    note: {
+      en: 'No interval for CrCl <15, dialysis, or dabigatran below 30. Skipped doses use the patient’s actual dose times. No bridging; anti-Xa never clears a patient; andexanet is not a pre-operative reversal.',
+      zh: 'CrCl <15、透析、dabigatran CrCl <30 不給時數。跳過劑數用病人實際服藥時刻。不橋接；anti-Xa 不據以判定可否手術；andexanet 不作為術前逆轉。',
     },
   },
   'crcl-cockcroft-gault': {

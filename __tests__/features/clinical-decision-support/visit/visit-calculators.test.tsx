@@ -105,11 +105,18 @@ describe('決策地圖 v2 · 計算機', () => {
   // Owner decision 2026-10-21: the DOAC dose calculator (label rules the AF
   // CDSS does not hold) opens from the AF page's dose point, so the AF page
   // has the same button — with AF's calculators only.
-  it('on the AF page lists AF’s calculators only, the DOAC dose calculator beside DP-09 (P9)', () => {
+  // The peri-procedural calculator sits beside it at the same point.
+  it('on the AF page lists AF’s calculators only, the two DOAC calculators beside DP-09 (P9)', () => {
     render(<Page id="p9-hfpef-af-dose" page="af" />)
-    expect(screen.getByTestId('cdss-book-calculators')).toHaveAccessibleName('計算機，4 個可用')
+    expect(screen.getByTestId('cdss-book-calculators')).toHaveAccessibleName('計算機，5 個可用')
     openList()
     expect(screen.getByTestId('cdss-book-calculator-doac-dose')).toHaveTextContent('→ DP-09')
+    expect(screen.getByTestId('cdss-book-calculator-doac-periop')).toHaveTextContent('→ DP-09')
+    expect(screen.getByTestId('cdss-book-calculator-doac-dose')).toHaveTextContent('DOAC 劑量計算機 · NVAF／VTE 依仿單')
+    // The VTE-only questions are not counted to fill on the NVAF dose point:
+    // the NVAF calculator's 22 here, plus the indication to confirm.
+    expect(screen.getByTestId('cdss-book-calculator-doac-dose')).toHaveTextContent('待填 23')
+    expect(screen.getByTestId('cdss-book-calculator-doac-periop')).toHaveTextContent('DOAC 手術前後停藥計算機')
     expect(screen.getByTestId('cdss-book-calculator-cha2ds2-va')).toHaveTextContent('→ DP-14')
     expect(screen.queryByTestId('cdss-book-calculator-maggic')).toBeNull()
     expect(screen.queryByTestId('cdss-book-calculator-hfa-peff')).toBeNull()
@@ -119,6 +126,7 @@ describe('決策地圖 v2 · 計算機', () => {
     render(<Page id="p9-hfpef-af-dose" page="hf" />)
     openList()
     expect(screen.queryByTestId('cdss-book-calculator-doac-dose')).toBeNull()
+    expect(screen.queryByTestId('cdss-book-calculator-doac-periop')).toBeNull()
   })
 
   it('lists the calculators by chapter, each with its point and where it stands for this patient (P9)', () => {

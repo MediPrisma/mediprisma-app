@@ -132,9 +132,27 @@ export interface SelectInput {
   options: SelectOption[]
   source?: AutofillSource
   defaultValue?: string
+  /**
+   * Asked only in some of the cases the calculator covers (one indication's
+   * question): a blank stays unknown to the rules that read it, but the
+   * calculator lists do not count it as one to fill.
+   */
+  optional?: boolean
 }
 
-export type CalcInput = NumberInput | SelectInput
+/** A local date-time (「2026-11-03T08:00」) or a time of day (「20:00」), typed by hand; never auto-filled. */
+export interface DateTimeInput {
+  key: string
+  type: 'datetime' | 'time'
+  label: L
+  defaultValue?: string
+  optional?: boolean
+  /** Never auto-filled and unitless; declared so code reading any input's source or unit still reads one. */
+  source?: undefined
+  unit?: undefined
+}
+
+export type CalcInput = NumberInput | SelectInput | DateTimeInput
 
 export type Severity = 'normal' | 'low' | 'moderate' | 'high'
 

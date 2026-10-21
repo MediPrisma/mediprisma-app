@@ -12,14 +12,18 @@ import type { ClinicalSelectValue } from './hfpef-clinical-autofill'
 export type DoacSelectKey =
   | 'doacRegimen'
   | 'ddi_ketoconazole' | 'ddi_itraconazole' | 'ddi_vori_posaconazole' | 'ddi_hiv_pi' | 'ddi_ciclosporin' | 'ddi_tacrolimus'
-  | 'ddi_dronedarone' | 'ddi_verapamil' | 'ddi_erythromycin' | 'ddi_clarithromycin' | 'ddi_glecaprevir' | 'ddi_inducer' | 'ddi_anticoagulant'
+  | 'ddi_dronedarone' | 'ddi_verapamil' | 'ddi_amiodarone' | 'ddi_quinidine' | 'ddi_erythromycin' | 'ddi_clarithromycin' | 'ddi_glecaprevir' | 'ddi_inducer' | 'ddi_anticoagulant'
 
-/** The regimens the calculator's select offers, as `agent:mg:timesPerDay`. */
+/**
+ * The regimens the calculator's select offers, as `agent:mg:timesPerDay`.
+ * The VTE loading doses (apixaban 10 mg bid, rivaroxaban 15 mg bid) and the
+ * once-daily dabigatran of hip/knee prophylaxis are among them.
+ */
 export const DOAC_REGIMEN_OPTIONS = [
-  'apixaban:5:2', 'apixaban:2.5:2',
-  'rivaroxaban:20:1', 'rivaroxaban:15:1', 'rivaroxaban:10:1',
+  'apixaban:10:2', 'apixaban:5:2', 'apixaban:2.5:2',
+  'rivaroxaban:20:1', 'rivaroxaban:15:2', 'rivaroxaban:15:1', 'rivaroxaban:10:1',
   'edoxaban:60:1', 'edoxaban:30:1', 'edoxaban:15:1',
-  'dabigatran:150:2', 'dabigatran:110:2', 'dabigatran:75:2',
+  'dabigatran:150:2', 'dabigatran:110:2', 'dabigatran:75:2', 'dabigatran:220:1', 'dabigatran:150:1', 'dabigatran:110:1', 'dabigatran:75:1',
 ] as const
 
 const DOACS = ['apixaban', 'rivaroxaban', 'edoxaban', 'dabigatran'] as const
@@ -33,6 +37,8 @@ const DDI_INGREDIENTS: Record<Exclude<DoacSelectKey, 'doacRegimen'>, readonly st
   ddi_tacrolimus: ['tacrolimus'],
   ddi_dronedarone: ['dronedarone'],
   ddi_verapamil: ['verapamil'],
+  ddi_amiodarone: ['amiodarone'],
+  ddi_quinidine: ['quinidine'],
   ddi_erythromycin: ['erythromycin'],
   ddi_clarithromycin: ['clarithromycin'],
   ddi_glecaprevir: ['glecaprevir'],

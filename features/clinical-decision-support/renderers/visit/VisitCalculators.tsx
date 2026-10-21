@@ -52,6 +52,7 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // Label rules the AF dose point leaves to a calculator (owner decision
   // 2026-10-21: CDSS = guideline, label = calculator); its card names it.
   { id: 'doac-dose', dp: 'DP-09', source: 'af', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/, needsPoint: true },
+  { id: 'doac-periop', dp: 'DP-09', source: 'af', calculatorId: 'doac-periop', names: /DOAC 手術前後停藥計算機|DOAC peri-procedural calculator/, needsPoint: true },
   { id: 'maggic', dp: 'DP-19', prognosis: 'maggic', names: /MAGGIC/, note: true },
   { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', names: /LIFE[-‐–]Preserved/, note: true },
   { id: 'shfm', dp: 'DP-19', prognosis: 'shfm', names: /SHFM|Seattle Heart Failure Model/ },
@@ -110,7 +111,7 @@ function CalculatorRows({ groups, isEnglish, onChoose }: {
     if (row.fixed || !row.calc) return { status: row.fixed ?? 'data-only' }
     const computed = computeAutofilledResult(row.calc, autofill)
     if (computed) return { status: 'computed', value: `${computed.result.value}${computed.result.unit ? ` ${computed.result.unit}` : ''}` }
-    const empty = row.calc.inputs.filter((input) => !(input.type === 'number' && input.optional) && !resolveInput(input, autofill).filled).length
+    const empty = row.calc.inputs.filter((input) => !input.optional && !resolveInput(input, autofill).filled).length
     // Every input filled from the record, a judgement still the clinician's.
     return empty ? { status: 'to-fill', value: String(empty) } : { status: 'to-confirm' }
   }

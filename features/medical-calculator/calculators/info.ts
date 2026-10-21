@@ -38,8 +38,12 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     caveats: { en: 'Underestimates GFR above 60; not validated for AKI or extremes of age/body size. Prefer CKD-EPI 2021.', zh: 'GFR > 60 時會低估；未驗證於急性腎損傷或極端年齡／體型。建議改用 CKD-EPI 2021。' },
   },
   'doac-dose-nvaf': {
-    useWhen: { en: 'Checking a DOAC dose for adult non-valvular AF against each agent’s label (renal, hepatic, interactions).', zh: '成人非瓣膜性心房顫動，依各藥仿單核對 DOAC 劑量（腎、肝功能與交互作用）。' },
-    caveats: { en: 'EU SmPC rules; the Taiwan labels are pending pharmacy review (edoxaban 15 mg, apixaban with dual inhibitors). NVAF only — not VTE, prophylaxis or peri-procedural interruption. Does not assess mechanical valves, mitral stenosis, antiphospholipid syndrome or active bleeding. A check beside the guideline card; it does not change the CDSS recommendation.', zh: '依 EU SmPC；臺灣仿單待藥學部核對（edoxaban 15 mg、apixaban 併用雙重抑制劑）。僅限 NVAF，不含 VTE、預防用藥與手術前後停藥。不評估機械瓣、二尖瓣狹窄、抗磷脂症候群與活動性出血。僅為指引卡旁的核對，不改變 CDSS 建議。' },
+    useWhen: { en: 'Checking a DOAC dose against each agent’s label for adult NVAF, acute DVT/PE, extended prevention of recurrent VTE, or prophylaxis after hip or knee replacement.', zh: '成人 NVAF、急性 DVT／PE、VTE 延長治療或髖膝置換後預防，依各藥仿單核對 DOAC 劑量。' },
+    caveats: { en: 'EU SmPC rules; the Taiwan labels are pending pharmacy review (edoxaban 15 mg, apixaban with dual inhibitors). VTE indications use their own dose rules, not NVAF’s reductions. Peri-procedural interruption is the separate peri-procedural calculator. Does not assess mechanical valves, mitral stenosis, antiphospholipid syndrome, active bleeding or the choice of agent in cancer-associated VTE. A check beside the guideline card; it does not change the CDSS recommendation.', zh: '依 EU SmPC；臺灣仿單待藥學部核對（edoxaban 15 mg、apixaban 併用雙重抑制劑）。VTE 適應症用各自的劑量規則，不套用 NVAF 的減量條件。手術前後停藥請用另一個停藥計算機。不評估機械瓣、二尖瓣狹窄、抗磷脂症候群、活動性出血與癌症相關 VTE 的藥物選擇。僅為指引卡旁的核對，不改變 CDSS 建議。' },
+  },
+  'doac-periop': {
+    useWhen: { en: 'Planning when to stop a DOAC before an elective procedure, spinal/epidural anaesthesia or AF ablation, and when to restart it.', zh: '計畫擇期手術、脊髓／硬膜外麻醉或 AF 消融前何時停 DOAC、術後何時恢復。' },
+    caveats: { en: 'EHRA 2021 and ASRA 2025 (5th edition) are guidelines, not labels; each is quoted with its own page. Intervals are minimums and need the team’s individual judgement. No interval is given for CrCl <15, dialysis or dabigatran below 30. ASRA’s acceptable residual level (<30 ng/mL) is quoted as written, never used to clear a patient. A VTE loading dose or a prophylactic dose is flagged. No bridging.', zh: 'EHRA 2021 與 ASRA 2025（第 5 版）是指引，不是仿單，各附頁碼。時數為最低間隔，需由團隊個別判斷。CrCl <15、透析、dabigatran CrCl <30 不給停藥時數。ASRA 的可接受殘餘濃度（<30 ng/mL）只照原文列出，不據以判定可否處置。VTE 起始劑量與預防劑量會另外提醒。不橋接。' },
   },
   'crcl-cockcroft-gault': {
     useWhen: { en: 'Renal drug dosing in stable adults (the equation most drug labels use).', zh: '穩定成人之腎臟藥物劑量調整（多數藥品仿單採用此公式）。' },
