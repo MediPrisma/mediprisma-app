@@ -1,0 +1,63 @@
+{
+  "base": "cb25ef88e40c75548ef2d9c6ef8fe60f3880860b",
+  "applicationCode": "510fbbb0ed567047864a8b89cf823a6014eac58d",
+  "fixtureSHA256": "9a96500d75de65a65fb970ddc9622fea5cfc1895c683730e9b86119541042fb6",
+  "identicalFixtures": true,
+  "viewports": [
+    320,
+    390,
+    430,
+    768,
+    1024,
+    1440
+  ],
+  "filteredRows": {
+    "before": 8,
+    "after": 4
+  },
+  "sourceHistoryTested": true,
+  "attachmentSourceHistoryTested": true,
+  "periodEndAndSourceAssetsTested": true,
+  "crossPeriodBoundsTested": true,
+  "nhiViewer": {
+    "simulatedBridge": true,
+    "liveAuthenticatedService": false,
+    "caseSeqNo": "SYNTHETIC-0"
+  },
+  "screenshots": {
+    "before-1440.png": {
+      "sha256": "63e083207eca81f60760caf44db4dee41ef79142113e3ed7b47a5099eb2cff57"
+    },
+    "after-1440.png": {
+      "sha256": "267e28c44071099bebdde73ca489a06fe8ae871a8826f8a8112b2a2c14c22d0f"
+    },
+    "before-390.png": {
+      "sha256": "f7ddcf76e261c5b2e7643897b5226e53c273bbf2867e34333ad1d3c6175eac58"
+    },
+    "after-390.png": {
+      "sha256": "26169fe4020cf9d62eedde8e68ab9cd8ef2525211a14791b0c870c868434417e"
+    },
+    "after-sources.png": {
+      "sha256": "b32edfad3c4edaa1fabfc663ab30131848378bf2e7a26088c183f18197c88fca"
+    },
+    "after-viewer.png": {
+      "sha256": "630b6afa1264bf04564352eda6945d83d985e5df6c4b258aeba94d92e335846d"
+    }
+  },
+  "localUnitTests": {
+    "suites": 85,
+    "passed": 755
+  },
+  "additionalIntegration": {
+    "workerModule": "passed",
+    "mergedDownloadReimport": "passed before upstream merge",
+    "originalDownloadPopup": "same timeout reproduced on earlier base and PR"
+  },
+  "relatedTestsInNegativeTimezone": 141,
+  "identifierFullSetsAndTypesTested": true,
+  "sharedObservationIdentityTested": true,
+  "sourceHistoryConflictTested": true,
+  "observationRenderKeysTested": true,
+  "unnamespacedIdentifiersTested": true,
+  "aiProcedureLabelsTested": true
+}

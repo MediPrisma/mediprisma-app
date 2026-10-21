@@ -36,6 +36,7 @@ export interface Reference {
 }
 
 export interface Identifier {
+  type?: CodeableConcept
   system?: string
   value?: string
   use?: string

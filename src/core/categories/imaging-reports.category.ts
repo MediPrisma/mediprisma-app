@@ -1,7 +1,7 @@
 // Imaging Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, ImagingStudy, Observation } from '@/src/shared/types/fhir.types'
-import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
+import { inferGroupFromDiagnosticReport, inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { referenceId } from '../utils/observation-selectors'
@@ -12,10 +12,11 @@ import {
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
+import { compareImagingCopies, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { getReportDate } from '@/src/shared/utils/report-identity'
+import { formatDate } from '@/src/shared/utils/fhir-helpers'
 import {
-  qualifyingSharedReportKeys,
   reportSource,
-  sharedReportGroupingKey,
   sharedReportNarrative,
   sharedReportTitle,
 } from '@/src/shared/utils/shared-report-grouping'
@@ -39,6 +40,19 @@ function presentedFormText(report: ImagingReportData): string[] {
 type ImagingReportData = DiagnosticReport & {
   _imagingStudyText?: string
   _imagingStudyIds?: string[]
+  /** Resolved against all source reports before category/window filtering. */
+  _displayGrouping?: { key?: string }
+}
+
+function displayGroupingKeys(reports: ImagingReportData[]): Map<DiagnosticReport, string> {
+  const fallback = reports.some(report => !report._displayGrouping)
+    ? reportDisplayGroupingKeys(reports) : undefined
+  const keys = new Map<DiagnosticReport, string>()
+  for (const report of reports) {
+    const key = report._displayGrouping ? report._displayGrouping.key : fallback?.get(report)
+    if (key) keys.set(report, key)
+  }
+  return keys
 }
 
 function isSharedNarrativeAttachment(attachment: any): boolean {
@@ -67,13 +81,12 @@ function reportSupplementalText(report: ImagingReportData): string[] {
   ].filter((text): text is string => !!text?.trim())
 }
 
-function groupedReportCount(reports: ImagingReportData[]): number {
-  const qualifyingKeys = qualifyingSharedReportKeys(reports)
+function groupedReportCount(reports: ImagingReportData[], groupingKeys: Map<DiagnosticReport, string>): number {
   const seen = new Set<string>()
   let count = 0
   for (const report of reports) {
-    const key = sharedReportGroupingKey(report)
-    if (key && qualifyingKeys.has(key)) {
+    const key = groupingKeys.get(report)
+    if (key) {
       if (seen.has(key)) continue
       seen.add(key)
     }
@@ -91,7 +104,7 @@ const getLatestImagingReports = (reports: ImagingReportData[]): ImagingReportDat
     // the time-range filter below and the reports display. getMostRecentDate
     // would pick the LATER of the two (issued), keying "latest" dedup off a
     // different date than the range filter.
-    (report) => report.effectiveDateTime || report.issued
+    getReportDate
   )
 }
 
@@ -136,6 +149,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   
   extractData: (clinicalData) => {
     const reports = (clinicalData?.diagnosticReports || []) as DiagnosticReport[]
+    const groupingKeys = reportDisplayGroupingKeys(reports)
     const studies = (clinicalData?.imagingStudies || []) as ImagingStudy[]
     const studyById = new Map(studies.filter((study) => !!study.id).map((study) => [study.id!, study]))
     const linkedIds = new Set<string>()
@@ -153,6 +167,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           .map((study) => formatImagingStudyMetadata(study))
         return {
           ...report,
+          _displayGrouping: { key: groupingKeys.get(report) },
           _imagingStudyIds: ids,
           _imagingStudyText: metadata.join('\n\n'),
         }
@@ -161,6 +176,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     const standaloneItems = studies
       .filter((study) => !study.id || !linkedIds.has(study.id))
       .map((study): ImagingReportData => ({
+        _displayGrouping: {},
         id: study.id,
         resourceType: 'ImagingStudy',
         status: study.status,
@@ -183,6 +199,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   },
   
   getCount: (data, filters, allClinicalData) => {
+    const groupingKeys = displayGroupingKeys(data)
     // Filter out reports without content (matching useReportsData logic)
     let filtered = data.filter(report => {
       if (normalizeClinicalStatus(report.status) === 'entered-in-error') return false
@@ -199,7 +216,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     if (timeRange && timeRange !== 'all') {
       const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
       filtered = filtered.filter(report =>
-        inWindow(report.effectiveDateTime || report.issued)
+        inWindow(getReportDate(report))
       )
     }
 
@@ -207,11 +224,14 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       filtered = getLatestImagingReports(filtered)
     }
 
-    return groupedReportCount(filtered)
+    return groupedReportCount(filtered, visibleReportGroupingKeys(filtered, groupingKeys))
   },
   
   getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
     if (data.length === 0) return null
+    // Establish ambiguity on the complete source set, before latest/time filters
+    // can remove an otherwise conflicting copy of an exam.
+    let groupingKeys = displayGroupingKeys(data)
     
     let filtered = data.filter((report) => normalizeClinicalStatus(report.status) !== 'entered-in-error')
 
@@ -219,7 +239,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     if (timeRange && timeRange !== 'all') {
       const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
       filtered = filtered.filter(report =>
-        inWindow(report.effectiveDateTime || report.issued)
+        inWindow(getReportDate(report))
       )
     }
 
@@ -231,14 +251,14 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       filtered = getLatestImagingReports(filtered)
     }
 
+    groupingKeys = visibleReportGroupingKeys(filtered, groupingKeys)
     const observations = allClinicalData?.observations || []
     
     const items: string[] = []
-    const qualifyingKeys = qualifyingSharedReportKeys(filtered)
     const sharedGroups = new Map<string, ImagingReportData[]>()
     filtered.forEach((report) => {
-      const key = sharedReportGroupingKey(report)
-      if (!key || !qualifyingKeys.has(key)) return
+      const key = groupingKeys.get(report)
+      if (!key) return
       const group = sharedGroups.get(key)
       if (group) group.push(report)
       else sharedGroups.set(key, [report])
@@ -275,33 +295,39 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     }
 
     filtered.forEach(report => {
-      const groupingKey = sharedReportGroupingKey(report)
-      if (groupingKey && qualifyingKeys.has(groupingKey)) {
+      const groupingKey = groupingKeys.get(report)
+      if (groupingKey && (sharedGroups.get(groupingKey)?.length ?? 0) > 1) {
         if (renderedSharedKeys.has(groupingKey)) return
         renderedSharedKeys.add(groupingKey)
 
         const groupedReports = sharedGroups.get(groupingKey) ?? [report]
+        const isCrossSource = groupingKey.startsWith('cross-source|')
+        const representative = isCrossSource
+          ? [...groupedReports].sort(compareImagingCopies)[0] : report
         const sources = groupedReports.map(reportSource)
-        const groupTitle = sharedReportTitle(sources, 'en')
-          ?? sources.map((source) => source.title).join(' + ')
-        const reportDate = report.effectiveDateTime || report.effectivePeriod?.start
+        const groupTitle = isCrossSource ? reportSource(representative).title
+          : sharedReportTitle(sources, 'en') ?? sources.map((source) => source.title).join(' + ')
+        // Existing shared pathology reports already use the examination period.
+        // Preserve that contract independently of the ordinary row date fallback.
+        const reportDate = isCrossSource ? getReportDate(representative)
+          : representative.effectiveDateTime || representative.effectivePeriod?.start
         const datePart = reportDate
-          ? ` (${new Date(reportDate).toLocaleDateString()})`
+          ? ` (${isCrossSource ? formatDate(reportDate) : new Date(reportDate).toLocaleDateString()})`
           : ''
-        const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'
+        const reportStatus = normalizeClinicalStatus(representative.status) || 'unknown'
         items.push(`${groupTitle}${datePart} [status: ${reportStatus}] [shared narrative; count once]`)
 
         groupedReports.forEach((sourceReport) => {
           const source = reportSource(sourceReport)
           const codes = source.codes.length > 0 ? ` [codes: ${source.codes.join(', ')}]` : ''
           const id = source.reportId ? ` [id: ${source.reportId}]` : ''
-          items.push(`  • Source report: ${source.title}${codes}${id}`)
+          items.push(`  • ${isCrossSource ? 'Source report (shared narrative)' : 'Source report'}: ${source.title}${codes}${id}`)
           appendObservations(sourceReport, '    ')
           reportSupplementalText(sourceReport)
             .forEach((text) => items.push(`    • ${text}`))
         })
 
-        items.push(`  • Shared narrative: ${sharedReportNarrative(report)}`)
+        items.push(`  • Shared narrative: ${sharedReportNarrative(representative)}`)
         return
       }
 
@@ -314,8 +340,11 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         }
       })
 
-      const datePart = report.effectiveDateTime 
-        ? ` (${new Date(report.effectiveDateTime).toLocaleDateString()})` 
+      const reportDate = report.effectiveDateTime
+        || (inferReportDisplayGroup(report) === 'imaging' ? report.effectivePeriod?.start : undefined)
+      const datePart = reportDate
+        ? ` (${inferReportDisplayGroup(report) === 'imaging'
+          ? formatDate(getReportDate(report)) : new Date(reportDate).toLocaleDateString()})`
         : ''
       
       const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'
