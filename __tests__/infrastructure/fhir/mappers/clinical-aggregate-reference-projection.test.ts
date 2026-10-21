@@ -90,3 +90,59 @@ it('uses a visible mapped row ID for singleton targets and preserves an already-
   expect(projected.procedures[1].encounter.reference).toBe('Encounter/domain-alias')
   expect(projected.encounters.map((row: any) => row.id)).toEqual(['mapped-target-row', 'mapped-alias-row'])
 })
+
+it.each([
+  ['absolute', 'https://ehr.example/fhir/Encounter/visit/_history/2', 'https://ehr.example/fhir/Encounter/visit/_history/2'],
+  ['URN', 'urn:uuid:visit', 'urn:uuid:visit'],
+] as const)('reprojects only its own %s reference when a later version changes the target ID', (_kind, fullUrl, reference) => {
+  const initialCapture = {
+    sourceId: 'ehr', patientScope: 'patient', generation: 'query-a', restBase: 'https://ehr.example/fhir', resources: [
+      { fullUrl, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2' }, status: 'finished' } },
+      { resource: { resourceType: 'Encounter', id: 'domain-alias', status: 'finished' } },
+      { resource: { resourceType: 'Procedure', id: 'procedure', status: 'completed', encounter: { reference } } },
+      { resource: { resourceType: 'Procedure', id: 'aliased-procedure', status: 'completed', encounter: { reference } } },
+    ],
+  }
+  const firstSource = reconcileClinicalSources([initialCapture])
+  const firstEncounter = firstSource.graph.nodes.find(node => node.resource.resourceType === 'Encounter')!
+  const domainAlias = firstSource.graph.nodes.find(node => node.resource.id === 'domain-alias')!
+  const procedure = firstSource.graph.nodes.find(node => node.resource.resourceType === 'Procedure')!
+  const aliasedProcedure = firstSource.graph.nodes.find(node => node.resource.id === 'aliased-procedure')!
+  const firstProjection = projectClinicalAggregate({
+    encounters: [
+      { ...firstEncounter.resource, id: firstEncounter.resource.id!, clinicalSourceNodeKey: firstEncounter.key },
+      { ...domainAlias.resource, id: domainAlias.resource.id!, clinicalSourceNodeKey: domainAlias.key },
+    ],
+    procedures: [
+      { ...procedure.resource, id: procedure.resource.id!, clinicalSourceNodeKey: procedure.key },
+      { ...aliasedProcedure.resource, id: aliasedProcedure.resource.id!, clinicalSourceNodeKey: aliasedProcedure.key, encounter: { reference: 'Encounter/domain-alias' } },
+    ],
+  } as any, firstSource)
+  expect(firstProjection.encounters[0].id).toBe('visit')
+  expect(firstProjection.procedures[0].encounter.reference).toBe('Encounter/visit')
+  expect(firstProjection.procedures[1].encounter.reference).toBe('Encounter/domain-alias')
+
+  const laterCapture = {
+    sourceId: 'ehr', patientScope: 'patient', generation: 'query-b', restBase: 'https://ehr.example/fhir', resources: [
+      { fullUrl: 'https://ehr.example/fhir/Encounter/visit/_history/3', resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '3' }, status: 'finished' } },
+    ],
+  }
+  const secondSource = reconcileClinicalSources([initialCapture, laterCapture])
+  const laterEncounter = secondSource.graph.nodes.find(node => node.resource.resourceType === 'Encounter' && (node.resource.meta as { versionId?: string } | undefined)?.versionId === '3')!
+  const reprojected = projectClinicalAggregate({ ...firstProjection, encounters: [...firstProjection.encounters, { ...laterEncounter.resource, id: laterEncounter.resource.id!, clinicalSourceNodeKey: laterEncounter.key }], clinicalSource: secondSource } as any, secondSource)
+  const currentVersion = (reprojected.encounters as any[]).find(row => row.clinicalSourceNodeKey === firstEncounter.key)!
+  expect(currentVersion.id).not.toBe('visit')
+  expect(reprojected.procedures[0].encounter.reference).toBe(`Encounter/${currentVersion.id}`)
+  expect(reprojected.procedures[1].encounter.reference).toBe('Encounter/domain-alias')
+  expect(JSON.stringify(reprojected.procedures[0])).not.toContain('clinical-source-projected-reference')
+
+  const ambiguousSource = reconcileClinicalSources([initialCapture, laterCapture, {
+    sourceId: 'ehr', patientScope: 'patient', generation: 'query-a', restBase: 'https://ehr.example/fhir', resources: [
+      { fullUrl, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2' }, status: 'entered-in-error' } },
+    ],
+  }])
+  const ambiguousReprojection = projectClinicalAggregate({ ...reprojected, clinicalSource: ambiguousSource } as any, ambiguousSource)
+  expect(ambiguousSource.graph.references.find(edge => edge.origin.resource.resourceType === 'Procedure' && edge.path === 'encounter')?.status).toBe('ambiguous')
+  expect(ambiguousReprojection.procedures[0].encounter.reference).toBe(reference)
+  expect(ambiguousReprojection.procedures[1].encounter.reference).toBe('Encounter/domain-alias')
+})

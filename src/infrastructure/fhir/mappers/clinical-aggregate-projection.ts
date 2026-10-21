@@ -16,6 +16,8 @@ import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus
 
 type SourceNode = ClinicalReconciliationResult['graph']['nodes'][number]
 type SourceEdge = ClinicalReconciliationResult['graph']['references'][number]
+const projectedReferenceProvenance = Symbol('clinical-source-projected-reference')
+type ProjectedReferenceProvenance = { path: string; originNodeKey: string; sourceReference: string; projectedReference: string }
 export interface ClinicalProjectionContext {
   ids: ReadonlyMap<string, string>
   /** IDs from actual mapped rows, used when a generic resource has no collision ID. */
@@ -36,23 +38,15 @@ export function createClinicalProjectionContext(source: ClinicalReconciliationRe
 /** Copy only a changed reference path; never mutate a cached entity or raw graph. */
 export function projectClinicalReferences<T>(resource: T, nodeKey: string, context: ClinicalProjectionContext): T {
   const rowId = (key: string) => context.ids.get(key) ?? context.visibleRowIds.get(key)
+  const provenance = [...(((resource as any)?.[projectedReferenceProvenance] as ProjectedReferenceProvenance[] | undefined) ?? [])]
   let projected = resource
-  for (const edge of context.edges.get(nodeKey) ?? []) {
-    if (edge.status !== 'resolved') continue
-    const targetIds = [...new Set(edge.targetKeys.map(rowId).filter((id): id is string => Boolean(id)))]
-    if (targetIds.length !== 1) continue
-    const target = edge.targetKeys.map(key => context.nodes.get(key)).find(node => node && rowId(node.key) === targetIds[0])
-    if (!target) continue
-    const parts = edge.path.replace(/\[(\d+)\]/g, '.$1').split('.')
-    let current: any = projected
-    for (const part of parts) current = current?.[part]
-    const reference = targetIds.length === 1 ? target.resource.resourceType + '/' + targetIds[0] : edge.reference
-    if (!reference) continue
-    if (!current || typeof current.reference !== 'string' || current.reference === reference) continue
-    // Domain mapping can reconcile or reorder references after the raw graph
-    // was captured. Only rewrite the mapped value when it still corresponds to
-    // the exact raw edge at this path; otherwise preserve the domain decision.
-    if (current.reference !== edge.reference) continue
+  const readReference = (value: any, path: string) => {
+    let current = value
+    for (const part of path.replace(/\[(\d+)\]/g, '.$1').split('.')) current = current?.[part]
+    return current
+  }
+  const writeReference = (path: string, reference: string) => {
+    const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.')
     const copy = (value: any): any => Array.isArray(value) ? [...value] : { ...value }
     const root: any = copy(projected)
     let original: any = projected
@@ -64,6 +58,58 @@ export function projectClinicalReferences<T>(resource: T, nodeKey: string, conte
     }
     cursor.reference = reference
     projected = root
+  }
+  for (const edge of context.edges.get(nodeKey) ?? []) {
+    if (typeof edge.reference !== 'string') continue
+    const current = readReference(projected, edge.path)
+    if (!current || typeof current.reference !== 'string') continue
+    const markerIndex = provenance.findIndex(marker => marker.path === edge.path && marker.originNodeKey === nodeKey
+      && marker.sourceReference === edge.reference && marker.projectedReference === current.reference)
+    const isPriorProjection = markerIndex >= 0
+    if (edge.status !== 'resolved') {
+      if (isPriorProjection) {
+        writeReference(edge.path, edge.reference)
+        provenance.splice(markerIndex, 1)
+      }
+      continue
+    }
+    const targetIds = [...new Set(edge.targetKeys.map(rowId).filter((id): id is string => Boolean(id)))]
+    if (targetIds.length !== 1) {
+      if (isPriorProjection) {
+        writeReference(edge.path, edge.reference)
+        provenance.splice(markerIndex, 1)
+      }
+      continue
+    }
+    const target = edge.targetKeys.map(key => context.nodes.get(key)).find(node => node && rowId(node.key) === targetIds[0])
+    if (!target) {
+      if (isPriorProjection) {
+        writeReference(edge.path, edge.reference)
+        provenance.splice(markerIndex, 1)
+      }
+      continue
+    }
+    const reference = targetIds.length === 1 ? target.resource.resourceType + '/' + targetIds[0] : edge.reference
+    if (!reference) continue
+    if (current.reference === reference) continue
+    // Domain mapping can reconcile or reorder references after the raw graph
+    // was captured. Rewrite only the raw value or a prior value this projector
+    // stamped on this exact path; any other value belongs to domain policy.
+    if (current.reference !== edge.reference && !isPriorProjection) continue
+    writeReference(edge.path, reference)
+    if (reference === edge.reference) {
+      if (isPriorProjection) provenance.splice(markerIndex, 1)
+    } else {
+      const marker = { path: edge.path, originNodeKey: nodeKey, sourceReference: edge.reference, projectedReference: reference }
+      if (isPriorProjection) provenance[markerIndex] = marker
+      else provenance.push(marker)
+    }
+  }
+  // Attach after all edges have updated the marker list. Symbols survive the
+  // entity spreads used by projection but remain absent from JSON/FHIR output.
+  if (projected !== resource && projected && typeof projected === 'object') {
+    if (provenance.length) Object.defineProperty(projected, projectedReferenceProvenance, { value: provenance, configurable: true, enumerable: true })
+    else delete (projected as any)[projectedReferenceProvenance]
   }
   return projected
 }
@@ -253,7 +299,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     }
     let statuses = input.resourceQueryStatus
     for (const [key, status] of Object.entries(input.resourceQueryStatus)) {
-      if (!status) continue
+      if (!status || status.state === 'pending') continue
       const type = key.split(':')[0]
       const counts = exclusions.get(type)
       const excludedCount = Object.values(counts ?? {}).reduce((sum, count) => sum + count, 0)
