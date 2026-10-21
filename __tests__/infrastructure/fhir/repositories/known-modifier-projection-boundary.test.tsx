@@ -114,7 +114,9 @@ it.each([{ resources: [] }, { resources: [good()] }])('recovers only quarantine-
  const fresh = await freshRepo.fetchAllClinicalData('a')
  const recovered = projectClinicalAggregate(old, fresh.clinicalSource!)
  expect(recovered.resourceQueryStatus?.Condition?.invalidModifierCount).toBeUndefined()
- expect(recovered.resourceQueryStatus?.Condition?.state).toBe('ok')
+ expect(recovered.conditions).toHaveLength(resources.length)
+ expect(recovered.resourceQueryStatus?.Condition?.state).toBe(resources.length ? 'ok' : 'empty')
+ expect(recovered.resourceQueryStatus?.Condition?.count).toBe(resources.length)
  for (const state of ['pending', 'error', 'unauthorized', 'forbidden', 'unsupported', 'incomplete'] as const) {
   const independent = { ...old, resourceQueryStatus: { ...old.resourceQueryStatus, Condition: { ...old.resourceQueryStatus!.Condition!, state, message: 'Independent issue', invalidModifierPreviousStatus: undefined } } }
   const next = projectClinicalAggregate(independent, fresh.clinicalSource!)

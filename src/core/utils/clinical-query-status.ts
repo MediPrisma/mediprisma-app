@@ -5,7 +5,8 @@ export const MEDICATION_CONTENT_UNAVAILABLE_MESSAGE = 'Medication prescriptions 
 /** A drug-content gap is usable missing input, never ownership loss, an
  * invalid modifier, or a failed query. Stale ownership flags cannot hide them. */
 export function medicationContentOwnsIncompleteStatus(status: ClinicalDataQueryStatus | undefined): boolean {
-  return status?.state === 'incomplete' && status.medicationContentOnlyIncomplete === true
+  return !!status && ['MedicationRequest', 'MedicationStatement'].includes(status.resourceType)
+    && status.state === 'incomplete' && status.medicationContentOnlyIncomplete === true
     && !status.exclusionReason && !(status.excludedCount && status.excludedCount > 0)
     && !Object.values(status.exclusionCounts ?? {}).some(count => (count ?? 0) > 0)
 }

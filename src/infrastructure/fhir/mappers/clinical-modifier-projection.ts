@@ -39,7 +39,8 @@ export function projectClinicalModifierQueryStatus(input: Partial<Record<Clinica
       && !Object.values(previous.exclusionCounts ?? {}).some(count => (count ?? 0) > 0)
     const status: ClinicalDataQueryStatus = canRestore
       ? previous.medicationContentUncertaintyCount
-        ? { ...rest, state: 'incomplete', medicationContentOnlyIncomplete: true, message: MEDICATION_CONTENT_UNAVAILABLE_MESSAGE }
+        ? ['MedicationRequest', 'MedicationStatement'].includes(key)
+          ? { ...rest, state: 'incomplete', medicationContentOnlyIncomplete: true, message: MEDICATION_CONTENT_UNAVAILABLE_MESSAGE } : rest
         : { ...rest, state: prior.state, message: prior.message } : rest
     if (result === input) result = { ...input }
     result[key] = status
