@@ -94,6 +94,15 @@ export function isMedicationBeingTaken(
 }
 
 
+/** The prescriptions being taken now, as the package reads them: an id and `isMedicationBeingTaken`. */
+export function currentMedicationRecords(
+  medications: readonly MedicationEntity[],
+  now: Date = new Date(),
+): MedicationEntity[] {
+  return medications.filter((medication) => Boolean(medication.id) && isMedicationBeingTaken(medication, now))
+}
+
+
 /**
  * The day this prescription's supply runs out, as an ISO date. Undefined under
  * exactly the condition that stops a `completed` prescription from counting as
