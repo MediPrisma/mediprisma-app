@@ -1,4 +1,5 @@
 import { selectCdssClinicalInputs, type ExcludedClinicalRecordVariant } from './clinical-record-inputs'
+import { assessMedicationCurrentness, medicationExpectedStartTimestamp } from '@/src/core/utils/clinical-context-selection.utils'
 import {
   classifyCurrentMedications,
   createFhirCdssPatientProfile,
@@ -130,23 +131,18 @@ export function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMe
 
 const ANTICOAGULANT_FACT_KEYS = ['currentDoac', 'currentVitaminKAntagonist', 'currentOralAnticoagulant'] as const
 
-/** A validityPeriod is a dispensing window, not evidence of taking a drug.
- * https://hl7.org/fhir/R4/medicationrequest-definitions.html#MedicationRequest.dispenseRequest.validityPeriod
- * No arbitrary age cutoff or cloud-prescription grace period is applied to an
- * EHR order. An explicit active MedicationStatement can confirm current use. */
+/** Use the hospital's order status and the same supply calculation as the chart.
+ * This is the app's recorded-medication policy, not an assertion of adherence. */
 function hospitalUseState(medication: MedicationEntity, now: Date): HospitalMedicationUseState {
   const status = medication.status?.trim().toLowerCase() ?? ''
   if (EXCLUDED.has(status) || NOT_CURRENT.has(status)) return 'not-current'
   if (status === 'on-hold') return 'on-hold'
-  const written = Date.parse(medication.authoredOn ?? '')
+  const written = medicationExpectedStartTimestamp(medication)
   const future = Number.isFinite(written) && written > now.getTime()
-  if (medication._sourceResourceType === 'MedicationStatement' && status === 'active' && !future) {
-    return 'confirmed-current'
-  }
-  const end = Date.parse(medication.dispenseRequest?.validityPeriod?.end ?? '')
-  return Number.isFinite(end) && end < now.getTime()
-    ? 'historical-record-current-status-unknown'
-    : 'active-order-unconfirmed'
+  if (future) return 'not-current'
+  const assessment = assessMedicationCurrentness(medication, now.getTime())
+  if (assessment.current) return 'confirmed-current'
+  return assessment.uncertain ? 'active-order-unconfirmed' : 'not-current'
 }
 
 function sourceFor(medication: MedicationEntity, ingredientName?: string): CdssFactSource {
@@ -168,9 +164,9 @@ function sourceFor(medication: MedicationEntity, ingredientName?: string): CdssF
 
 export function hospitalMedicationUseLabel(state: HospitalMedicationUseState, english = false): string {
   const labels: Record<HospitalMedicationUseState, [string, string]> = {
-    'confirmed-current': ['用藥清單確認使用中', 'Current use documented in a medication statement'],
-    'active-order-unconfirmed': ['有開立紀錄，目前使用待確認', 'Prescription recorded; current use needs confirmation'],
-    'historical-record-current-status-unknown': ['歷史處方，目前使用待確認', 'Historical prescription; current use needs confirmation'],
+    'confirmed-current': ['依院內紀錄使用中', 'Current according to the hospital record'],
+    'active-order-unconfirmed': ['院內開立紀錄', 'Hospital prescription record'],
+    'historical-record-current-status-unknown': ['歷史處方', 'Historical prescription'],
     'on-hold': ['來源標示暫停中', 'On hold in the source record'],
     'not-current': ['來源標示已結束／停用', 'Ended or stopped in the source record'],
   }

@@ -24,18 +24,18 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
-  it('keeps unresolved source-record versions separate through shared imaging grouping', () => {
+  it('automatically selects one source-record version before shared imaging grouping', () => {
     const original = pair()[0]
     const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
       { resource: { resourceType: 'Patient', id: 'synthetic' } },
       ...['1', '2'].map(version => ({ resource: { ...original, id: 'same-report', meta: { ...original.meta, versionId: version } } })),
     ] } as any)!
     const reports = parsed.collection.diagnosticReports as any[]
-    expect(reports).toHaveLength(2)
-    expect(reports.every(report => report.clinicalRecordVariant?.variantCount === 2)).toBe(true)
-    expect(buildReportsData(reports).reportRows).toHaveLength(2)
-    expect(calculateReportTabCounts(reports).all).toBe(2)
-    expect(reportDisplayGroupingKeys(reports).size).toBe(0)
+    expect(reports).toHaveLength(1)
+    expect(reports[0].clinicalRecordVariant).toBeUndefined()
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+    expect(calculateReportTabCounts(reports).all).toBe(1)
+    expect(parsed.collection.clinicalSource?.graph.nodes.filter(node => node.resource.resourceType === 'DiagnosticReport')).toHaveLength(2)
   })
   it('renders a shared Observation object once while retaining distinct objects with the same id', () => {
     const observation = { id: 'shared-result', code: { text: 'Measurement' }, valueQuantity: { value: 4, unit: 'mm' } }

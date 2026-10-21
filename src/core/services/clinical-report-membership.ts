@@ -2,6 +2,7 @@ import type { DiagnosticReportEntity, ObservationEntity } from '@/src/core/entit
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 import { isClinicalSourceNodePatientEligible } from './clinical-patient-scope'
+import { createClinicalRecordResolution } from './clinical-record-resolution'
 
 /** Attach only graph-resolved members across progressive query snapshots. */
 export function attachReportObservations(
@@ -25,7 +26,9 @@ export function attachReportObservations(
     return !!node && node.resource.resourceType === 'Observation' && isClinicalSourceNodePatientEligible(node, source!.graph.nodes)
   }
   const graphEdges = new Map<string, Array<ClinicalReconciliationResult['graph']['references'][number]>>()
-  for (const edge of source?.graph.references ?? []) {
+  const resolution = source && createClinicalRecordResolution(source)
+  for (const rawEdge of source?.graph.references ?? []) {
+    const edge = resolution?.reference(rawEdge) ?? rawEdge
     const edges = graphEdges.get(edge.origin.key) ?? []
     edges.push(edge)
     graphEdges.set(edge.origin.key, edges)

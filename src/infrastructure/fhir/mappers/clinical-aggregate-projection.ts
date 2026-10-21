@@ -4,7 +4,7 @@ import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } 
 import { isClinicalSourceRepresentedElsewhere } from './clinical-projection-disposition'
 import { includeCapturedClinicalRows } from './clinical-graph-intake'
 import { getClinicalSourceNodePatientExclusionReason, isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
-import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
+import { createClinicalRecordResolution, selectAutomaticClinicalRecordRows } from '@/src/core/services/clinical-record-resolution'
 import type { ClinicalDataCollection, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
@@ -19,7 +19,7 @@ import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus
 
 type SourceNode = ClinicalReconciliationResult['graph']['nodes'][number]
 type SourceEdge = ClinicalReconciliationResult['graph']['references'][number]
-const projectedReferenceProvenance = Symbol('clinical-source-projected-reference')
+const projectedReferenceProvenance = 'clinicalSourceProjectedReferences'
 type ProjectedReferenceProvenance = { path: string; originNodeKey: string; sourceReference: string; projectedReference: string }
 export interface ClinicalProjectionContext {
   ids: ReadonlyMap<string, string>
@@ -29,8 +29,13 @@ export interface ClinicalProjectionContext {
   edges: Map<string, SourceEdge[]>
 }
 export function createClinicalProjectionContext(source: ClinicalReconciliationResult, genericNodeKeys?: ReadonlySet<string>): ClinicalProjectionContext {
+  const resolution = createClinicalRecordResolution(source, genericNodeKeys)
   const context: ClinicalProjectionContext = { ids: createClinicalSourceProjectionIds(source, genericNodeKeys), visibleRowIds: new Map(), nodes: new Map(source.graph.nodes.map(node => [node.key, node])), edges: new Map() }
-  for (const edge of source.graph.references) {
+  const ids = new Map(context.ids)
+  for (const [key, preferred] of resolution.preferred) if (ids.has(preferred)) ids.set(key, ids.get(preferred)!)
+  context.ids = ids
+  for (const rawEdge of source.graph.references) {
+    const edge = resolution.reference(rawEdge)
     const edges = context.edges.get(edge.origin.key) ?? []
     edges.push(edge)
     context.edges.set(edge.origin.key, edges)
@@ -108,8 +113,8 @@ export function projectClinicalReferences<T>(resource: T, nodeKey: string, conte
       else provenance.push(marker)
     }
   }
-  // Attach after all edges have updated the marker list. Symbols survive the
-  // entity spreads used by projection but remain absent from JSON/FHIR output.
+  // An enumerable string survives React Query's Object.keys structural sharing.
+  // Outbound AI metadata stripping and explicit IPS mappers omit this field.
   if (projected !== resource && projected && typeof projected === 'object') {
     if (provenance.length) Object.defineProperty(projected, projectedReferenceProvenance, { value: provenance, configurable: true, enumerable: true })
     else delete (projected as any)[projectedReferenceProvenance]
@@ -137,6 +142,8 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   if (!source?.graph) return input
   input = includeCapturedClinicalRows(input, source)
   const mappedNodeKeys = new Set(Object.values(input).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
+  const resolution = createClinicalRecordResolution(source, mappedNodeKeys)
+  input = selectAutomaticClinicalRecordRows(input, resolution)
   const invalidModifiers = malformedClinicalProjectionNodes(source, mappedNodeKeys)
   const invalidModifierKeys = new Set(invalidModifiers.map(node => node.key))
   const context = createClinicalProjectionContext(source, mappedNodeKeys)
@@ -155,15 +162,14 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     }
   }
   context.visibleRowIds = visibleRowIds
-  const variants = createClinicalRecordVariants(source, { additionalNodeKeys: mappedNodeKeys, quarantineMalformed: true })
   const annotate = <R extends { clinicalSourceNodeKey?: string; clinicalRecordVariant?: unknown }>(row: R): R => {
     const originKey = row.clinicalSourceNodeKey ?? getClaimDerivedSource(row)?.originNodeKey
-    const variant = originKey ? variants.get(originKey) : undefined
+    const variant = originKey && !resolution.includes(originKey) ? resolution.variants.get(originKey) : undefined
     if (JSON.stringify(row.clinicalRecordVariant) === JSON.stringify(variant)) return row
     const { clinicalRecordVariant: _previous, ...rest } = row
     return { ...rest, ...(variant ? { clinicalRecordVariant: variant } : {}) } as R
   }
-  const activeNodes = selectClinicalSourceNodes(source).filter(node => !invalidModifierKeys.has(node.key) && !isClinicalSourceRepresentedElsewhere(source, node.key))
+  const activeNodes = selectClinicalSourceNodes(source).filter(node => resolution.includes(node.key) && !invalidModifierKeys.has(node.key) && !isClinicalSourceRepresentedElsewhere(source, node.key))
   const activeKeys = new Set(activeNodes.map(node => node.key))
   const eligible = activeNodes.filter(node => node.resource.resourceType === 'Observation')
   // A resolved clinical member is an active result, including #contained
@@ -185,7 +191,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
       if (edge.status !== 'resolved' || !/^(result|hasMember)\[\d+\]$/.test(edge.path)) continue
       for (const targetKey of edge.targetKeys) {
         const target = context.nodes.get(targetKey)
-        if (!target || target.resource.resourceType !== 'Observation' || target.embeddedIn) continue
+        if (!target || !resolution.includes(targetKey) || target.resource.resourceType !== 'Observation' || target.embeddedIn) continue
         if (target.isContained) {
           const owner = context.nodes.get(target.parentKey ?? '')
           if (!owner || !['DiagnosticReport', 'Observation'].includes(owner.resource.resourceType)) continue
@@ -208,7 +214,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     }
     let node = context.nodes.get(originalKey)
     if (!node && !requireActive) node = eligibleById.get(row.id ?? '')
-    if (!node || node.resource.resourceType !== 'Observation' || node.embeddedIn) return
+    if (!node || !resolution.includes(node.key) || node.resource.resourceType !== 'Observation' || node.embeddedIn) return
     const id = context.ids.get(node.key)
     if (!id || (requireActive && node.isContained && !observationsById.has(id))) return
     const projected = row.clinicalSourceNodeKey === node.key && row.id === id

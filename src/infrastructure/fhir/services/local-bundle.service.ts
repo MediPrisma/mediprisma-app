@@ -7,7 +7,8 @@ import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-sourc
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
 import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
-import { createClinicalRecordVariants, scopedImportedClinicalRecordVariant } from '@/src/core/services/clinical-record-variants'
+import { scopedImportedClinicalRecordVariant } from '@/src/core/services/clinical-record-variants'
+import { createClinicalRecordResolution, selectAutomaticClinicalRecordRows } from '@/src/core/services/clinical-record-resolution'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -1636,6 +1637,7 @@ export const LocalBundleService = {
     }
     assertPatientOwnership(clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn))
     assertPatientOwnership(clinicalContainedPatientExclusions(clinicalSource).map(item => item.node))
+    const resolution = createClinicalRecordResolution(clinicalSource)
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
     const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
     if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
@@ -1645,9 +1647,9 @@ export const LocalBundleService = {
     const sourceKeyByResource = new WeakMap<object, string>()
     let entries: any[] = canonicalizeBundleResources({
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
-    }, clinicalSource, sourceKeyByResource)
+    }, clinicalSource, sourceKeyByResource).filter(resource => resolution.includes(sourceKeyByResource.get(resource)!))
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
-    const recordVariants = new Map(createClinicalRecordVariants(clinicalSource))
+    const recordVariants = new Map([...resolution.variants].filter(([key]) => !resolution.includes(key)))
     // Metadata belongs to mutable mapper inputs, never the captured FHIR graph.
     for (const resource of entries) {
       const key = sourceKeyByResource.get(resource)
@@ -1658,13 +1660,13 @@ export const LocalBundleService = {
       const key = sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey
       let variant = key ? recordVariants.get(key) : undefined
       const imported = key ? readClinicalRecordVariantModifier(sourceNodesByKey.get(key)!.resource) : undefined
-      if (key && imported && !variant) { variant = scopedImportedClinicalRecordVariant(sourceNodesByKey.get(key)!, imported.variant); recordVariants.set(key, variant) }
+      if (key && imported && !variant && !resolution.includes(key)) { variant = scopedImportedClinicalRecordVariant(sourceNodesByKey.get(key)!, imported.variant); recordVariants.set(key, variant) }
       if (key) readClinicalMedicationContentModifier(sourceNodesByKey.get(key)!.resource)
       return bindClaimDerivedSource(bindClaimEncounterLink({ ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
         ...(variant ? { clinicalRecordVariant: variant } : {}), ...(imported?.sourceId ? { sourceId: imported.sourceId } : {}), ...(imported?.sourceVersionId ? { sourceVersionId: imported.sourceVersionId } : {}),
         ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }, (key && claimEncounterResourcesByKey.get(key)) || resource), resource, sourceKeyByResource, recordVariants)
     }
-    const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
+    const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(rawEdge => { const edge = resolution.reference(rawEdge); return [edge.origin.key + '|' + edge.path, edge] }))
     const containedIdScopes = new Map<string, Set<string>>()
     for (const node of clinicalSource.graph.nodes) {
       if (!node.isContained || typeof node.resource.id !== 'string') continue
@@ -1688,7 +1690,8 @@ export const LocalBundleService = {
     expandClaimResources(entries, (claim, path, resourceType) => {
       const key = sourceKeyByResource.get(claim)
       if (!key) return undefined
-      const edge = clinicalSource.graph.references.find(reference => reference.origin.key === key && reference.path === path)
+      const rawEdge = clinicalSource.graph.references.find(reference => reference.origin.key === key && reference.path === path)
+      const edge = rawEdge && resolution.reference(rawEdge)
       if (edge?.status !== 'resolved' || edge.targetKeys.length !== 1) return undefined
       const targets = entries.filter(resource => resource.resourceType === resourceType && sourceKeyByResource.get(resource) === edge.targetKeys[0])
       return targets.length === 1 ? targets[0] : undefined
@@ -1957,7 +1960,8 @@ export const LocalBundleService = {
 
     collection.medications = projectClinicalMedicationContents(collection.medications, clinicalSource)
     collection.resourceQueryStatus = projectClinicalMedicationQueryStatus(collection.medications, collection.resourceQueryStatus)
-    return { patient, collection }
+    const mappedKeys = new Set(Object.values(collection).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
+    return { patient, collection: selectAutomaticClinicalRecordRows(collection, createClinicalRecordResolution(clinicalSource, mappedKeys)) }
   },
 
   async parseStored(): Promise<LocalBundleData | null> {

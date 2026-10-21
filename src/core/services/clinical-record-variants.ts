@@ -12,7 +12,7 @@ import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
  * Audit/history snapshots and unassessed types never validate as clinical rows. */
 export function selectClinicalModifierNodes(source: ClinicalReconciliationResult, additionalNodeKeys: ReadonlySet<string> = new Set()): readonly ClinicalSourceNode[] {
   const nodes = new Map(source.graph.nodes.map(node => [node.key, node]))
-  const roots = selectClinicalSourceNodes(source).filter(node => !['Patient', 'Basic'].includes(node.resource.resourceType) && source.policies[node.resource.resourceType]?.strategy === 'preserve-existing-view').map(node => node.key)
+  const roots = selectClinicalSourceNodes(source).filter(node => !['Patient', 'Basic'].includes(node.resource.resourceType) && (node.resource.resourceType === 'Claim' || source.policies[node.resource.resourceType]?.strategy === 'preserve-existing-view')).map(node => node.key)
   const pending = [...roots, ...additionalNodeKeys]
   const selected = new Map<string, ClinicalSourceNode>()
   const edges = new Map<string, typeof source.graph.references[number][]>()

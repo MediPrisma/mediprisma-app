@@ -47,7 +47,7 @@ function sectionByLoinc(bundle: ReturnType<typeof buildIpsBundle>, loinc: string
 }
 
 describe('buildIpsBundle — structure', () => {
-  it('exports unresolved source versions as modifiers with complete human-readable meaning', async () => {
+  it('exports automatically selected source versions without a manual reconciliation requirement', async () => {
     const parsed = await LocalBundleService.parse({ resourceType: 'Bundle', entry: [
       { resource: PATIENT },
       ...['1', '2'].flatMap(version => [
@@ -58,18 +58,17 @@ describe('buildIpsBundle — structure', () => {
     if (!parsed) throw new Error('Synthetic source bundle must parse before export')
     const bundle = buildIpsBundle({ patient: PATIENT, data: parsed.collection })
     const resources = bundle.entry.map(entry => entry.resource).filter(resource => ['Observation', 'Condition'].includes(resource.resourceType))
-    expect(resources).toHaveLength(4)
+      expect(resources).toHaveLength(2)
     for (const resource of resources) {
-      expect(resource.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
+        expect(resource.modifierExtension ?? []).not.toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
       expect((resource.extension as Array<{ url: string }> | undefined)?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION)).not.toBe(true)
       const narrative = resource.text as { status: string; div: string }
-      expect(narrative.status).toBe('extensions')
-      expect(narrative.div).toContain('Manual reconciliation required')
-      expect(narrative.div).toContain('Do not treat these variants as concurrent facts')
-      expect(narrative.div).toContain((resource.code as { text: string }).text)
+        expect(narrative?.div ?? '').not.toContain('Manual reconciliation required')
+        expect(resource.code).toBeDefined()
       expect(resource).not.toHaveProperty('clinicalRecordVariant')
     }
-    expect((resources.find(resource => resource.resourceType === 'Observation' && (resource.valueQuantity as { value: number }).value === 6.2)!.text as { div: string }).div).toContain('6.2')
+      const observation = resources.find(resource => resource.resourceType === 'Observation')!
+      expect(observation.valueQuantity).toBeDefined()
     expect(validateIpsBundle(bundle).ok).toBe(true)
   })
 

@@ -1,5 +1,14 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-10-21 owner decision: source reconciliation is automatic on every route.
+The source-version notice and medication comparison/verification prompts are
+removed. Hospital records take priority in the existing cross-source medication
+policy; same-record versions are selected by source priority, valid update/event
+time, final status, completeness and stable content identity. Original source
+payloads remain available for audit. No extra reconciliation action is required
+before UI, AI or CDSS can consume the selected record. Transport failures and
+patient-ownership validation remain distinct from version selection.
+
 2026-10-05 latest owner decision: CDSS save/history must be bound to the signed-in user. On `?site=vghtpe`, Firebase/intranet admission requires a nonanonymous App account; intranet retains the hospital subnet check. Only the original saver may list/read a record. The earlier same-day network-only decision is superseded. Deployment target: `https://fhir.mediprisma.tw`.
 
 Every place the app behaves differently because of *how it was opened* is

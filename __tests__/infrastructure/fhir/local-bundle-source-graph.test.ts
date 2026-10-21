@@ -262,11 +262,9 @@ it('maps revisions of contained diagnoses across versions of the same Roche List
   const parsed = LocalBundleService.parse(bundle)!
   const diagnoses = parsed.collection.conditions.filter(condition => condition.sourceId === 'diagnosis')
 
-  expect(diagnoses).toHaveLength(2)
-  expect(diagnoses.map(condition => condition.clinicalRecordVariant)).toEqual([
-    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
-    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
-  ])
+  expect(diagnoses).toHaveLength(1)
+  expect(diagnoses[0].clinicalRecordVariant).toBeUndefined()
+  expect(parsed.collection.clinicalSource?.graph.nodes.filter(node => node.resource.resourceType === 'Condition')).toHaveLength(2)
 })
 
 it('carries variants from contained records across versions of the same Roche List', () => {
@@ -285,9 +283,8 @@ it('carries variants from contained records across versions of the same Roche Li
   const parsed = LocalBundleService.parse(bundle)!
   const diagnoses = parsed.collection.conditions.filter(condition => condition.sourceId === 'diagnosis')
 
-  expect(diagnoses).toHaveLength(2)
-  expect(diagnoses.map(condition => condition.clinicalRecordVariant)).toEqual([
-    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
-    expect.objectContaining({ classification: 'revision', variantCount: 2 }),
-  ])
+  expect(diagnoses).toHaveLength(1)
+  expect(diagnoses[0].clinicalRecordVariant).toBeUndefined()
+  const reversed = LocalBundleService.parse({ ...bundle, entry: [...bundle.entry].reverse() })!
+  expect(reversed.collection.conditions.map(row => row.code)).toEqual(diagnoses.map(row => row.code))
 })

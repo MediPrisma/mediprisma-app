@@ -1,5 +1,4 @@
 "use client"
-import { ClinicalRecordVariantsNotice } from './renderers/ClinicalRecordVariantsNotice'
 
 import { usePreventInputs, usePreventStore } from './stores/prevent-inputs.store'
 import { buildPreventReading, applyPreventReading } from './utils/prevent-reading'
@@ -738,7 +737,6 @@ export default function LiveClinicalDecisionSupportFeature({
           selectedPackId={selectedPack.id}
           onSelect={setRequestedPackId}
         />
-        <ClinicalRecordVariantsNotice excluded={recordProfile?.excludedClinicalRecordVariants} locale={cdssLocale} />
         <StateMessage
           locale={cdssLocale}
           title={notApplicable.title}
@@ -874,7 +872,6 @@ export default function LiveClinicalDecisionSupportFeature({
       </header>
 
 
-      <ClinicalRecordVariantsNotice excluded={recordProfile?.excludedClinicalRecordVariants} locale={cdssLocale} />
 
       {/*
         The visit flow carries the handoff inside 紀錄與追蹤, where the copy

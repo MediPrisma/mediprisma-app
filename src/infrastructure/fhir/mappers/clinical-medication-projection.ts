@@ -1,4 +1,5 @@
-import { readClinicalMedicationContentModifier, readClinicalRecordVariantModifier, hasMalformedClinicalModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { readClinicalMedicationContentModifier, hasMalformedClinicalModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { createClinicalRecordResolution } from '@/src/core/services/clinical-record-resolution'
 import type { MedicationEntity, ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
@@ -9,7 +10,8 @@ import { mutableClinicalProjection } from '../services/clinical-source-session'
  * resources obtained by another query. No reference-tail or identifier guesses. */
 export function projectClinicalMedicationContents(rows: MedicationEntity[], source: ClinicalReconciliationResult): MedicationEntity[] {
   const nodes = new Map(source.graph.nodes.map(node => [node.key, node]))
-  const edges = new Map(source.graph.references.filter(edge => edge.path === 'medicationReference').map(edge => [edge.origin.key, edge]))
+  const resolution = createClinicalRecordResolution(source)
+  const edges = new Map(source.graph.references.filter(edge => edge.path === 'medicationReference').map(rawEdge => { const edge = resolution.reference(rawEdge); return [edge.origin.key, edge] }))
   let changed = false
   const projected = rows.map(row => {
     const origin = row.clinicalSourceNodeKey ? nodes.get(row.clinicalSourceNodeKey) : undefined
@@ -28,7 +30,7 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
       const first = targets[0]
       if (first && targets.every(target => target && target.resource.resourceType === 'Medication' && !target.embeddedIn
         && isClinicalSourceNodePatientEligible(target, source.graph.nodes) && !hasMalformedClinicalModifier(target.resource)
-        && !readClinicalRecordVariantModifier(target.resource) && !readClinicalMedicationContentModifier(target.resource)
+        && !readClinicalMedicationContentModifier(target.resource)
         && clinicalSourceResourcesEqual(target.resource, first.resource))) {
         code = first.resource.code as MedicationEntity['medicationCodeableConcept']
       }

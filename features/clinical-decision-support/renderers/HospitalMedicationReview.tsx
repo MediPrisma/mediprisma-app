@@ -8,27 +8,21 @@ export function HospitalMedicationReview({ evidence, locale }: {
   evidence?: readonly HospitalMedicationEvidence[]
   locale: CdssLocale
 }) {
-  const pending = evidence?.filter((item) => item.useState === 'active-order-unconfirmed'
-    || item.useState === 'historical-record-current-status-unknown'
-    || (item.useState === 'confirmed-current' && !item.ingredientName)) ?? []
+  const pending = evidence?.filter((item) => item.useState !== 'not-current') ?? []
   if (!pending.length) return null
   const english = locale === 'en'
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs shadow-none" data-testid="cdss-hospital-medication-review"
-          aria-label={english ? `Medication review ${pending.length} hospital prescriptions` : `用藥核對 ${pending.length} 筆院內處方`}>
-          {english ? 'Medication review' : '用藥核對'} <span className="tabular-nums">{pending.length}</span>
+          aria-label={english ? `Hospital medications ${pending.length} prescriptions` : `院內用藥 ${pending.length} 筆處方`}>
+          {english ? 'Hospital medications' : '院內用藥'} <span className="tabular-nums">{pending.length}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label={english ? 'Hospital medication review' : '院內用藥核對'} className="max-h-[min(75vh,36rem)] w-[min(90vw,32rem)] overflow-y-auto p-3">
+      <PopoverContent align="end" aria-label={english ? 'Hospital medications' : '院內用藥'} className="max-h-[min(75vh,36rem)] w-[min(90vw,32rem)] overflow-y-auto p-3">
       <h3 className="text-sm font-semibold text-foreground">
-        {english ? `Confirm current use of ${pending.length} hospital prescription(s)` : `${pending.length} 筆院內處方，目前使用待確認`}
+        {english ? `${pending.length} hospital prescription(s)` : `${pending.length} 筆院內處方`}
       </h3>
-      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        {english ? 'Safety checks include possible prescription exposure. A prescription alone does not confirm actual use; reconcile the list before starting or increasing medication.'
-          : '安全判讀納入處方的可能用藥暴露。開立紀錄無法確認實際服藥，開始或加量前請先核對用藥清單。'}
-      </p>
         <ul className="mt-2 divide-y divide-border text-xs">
           {pending.map((item) => (
             <li key={item.factKey} className="space-y-1 break-words py-2" data-testid="cdss-hospital-medication-evidence">

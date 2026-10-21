@@ -21,34 +21,34 @@ function original() {
  ])]
  return LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!
 }
-it('retains unresolved modifiers through actual IPS export, reimport, aggregate and AI/CDSS selection', () => {
+function legacy() {
+ return {resourceType:'Bundle',entry:[{resource:{resourceType:'Patient',id:'synthetic'}},{resource:{resourceType:'Condition',id:'legacy',code:{text:'Available diagnosis'},modifierExtension:[{url:CLINICAL_RECORD_VARIANT_EXTENSION,extension:[{url:'groupId',valueString:'legacy-group'},{url:'classification',valueCode:'revision'},{url:'variantCount',valuePositiveInt:2},{url:'reason',valueString:'Legacy source versions'}]}]}}]}
+}
+it('retains selected facts through actual IPS export, reimport, aggregate and AI/CDSS selection', () => {
  const parsed = original()
  const bundle = buildIpsBundle({ patient: parsed.patient!, data: parsed.collection })
  const roundtrip = LocalBundleService.parse(bundle as any)!
  expect(roundtrip).not.toBeNull()
  const projected = projectClinicalAggregate(roundtrip.collection)
  const uncertain = [...projected.conditions, ...projected.medications, ...projected.observations].filter(row => row.clinicalRecordVariant)
- expect(uncertain).toHaveLength(6)
- expect(projected.medications.every(row => row._sourceResourceType === 'MedicationRequest')).toBe(true)
- expect(uncertain.every(row => row.clinicalRecordVariant!.variantCount === 2)).toBe(true)
- expect(new Set(uncertain.map(row => row.sourceVersionId))).toEqual(new Set(['1', '2']))
+ expect(uncertain).toHaveLength(0)
+ expect(projected.medications).toHaveLength(1)
+ expect(projected.observations).toHaveLength(1)
  const selected = selectCdssClinicalInputs(projected)
- expect(selected.input.conditions.map(row => row.code?.text)).toEqual(['Independent condition'])
- expect(selected.input.medications).toEqual([])
- expect(selected.input.observations).toEqual([])
+ expect(selected.excluded).toEqual([])
+ expect(selected.input.conditions.map(row => row.code?.text)).toEqual(projected.conditions.map(row => row.code?.text))
+ expect(selected.input.medications).toHaveLength(1)
+ expect(selected.input.observations).toHaveLength(1)
  const ai = scopeClinicalDataForAi(projected, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [])
- expect(ai.medications).toEqual([])
- expect(ai.observations).toEqual([])
- expect(ai.conditions?.map(row => row.code?.text)).toEqual(['Independent condition'])
+ expect(ai.medications).toHaveLength(1)
+ expect(ai.observations).toHaveLength(1)
+ expect(ai.conditions?.map(row => row.code?.text)).toEqual(projected.conditions.map(row => row.code?.text))
 })
-it('keeps a single exported unresolved variant quarantined and rejects a malformed known modifier', () => {
- const parsed = original()
- const bundle = buildIpsBundle({ patient: parsed.patient!, data: parsed.collection })
- const first = bundle.entry.find(entry => entry.resource.resourceType === 'Condition' && (entry.resource.modifierExtension as any[])?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION))!
- const patient = bundle.entry.find(entry => entry.resource.resourceType === 'Patient')!
- const one = { resourceType: 'Bundle', entry: [patient, first] }
+it('automatically uses the available valid legacy version and rejects malformed modifiers', () => {
+ const one = legacy()
  const imported = LocalBundleService.parse(one as any)!
- expect(projectClinicalAggregate(imported.collection).conditions[0].clinicalRecordVariant?.variantCount).toBe(2)
+ expect(projectClinicalAggregate(imported.collection).conditions[0].clinicalRecordVariant).toBeUndefined()
+ expect(selectCdssClinicalInputs(imported.collection).input.conditions[0].code?.text).toBe('Available diagnosis')
  const malformed = JSON.parse(JSON.stringify(one))
  malformed.entry[1].resource.modifierExtension[0].extension.find((field: any) => field.url === 'classification').valueCode = 'resolved'
  expect(() => LocalBundleService.parse(malformed)).toThrow(/modifier|variant/i)
@@ -65,18 +65,18 @@ it.each([
  ['devices', 'Device', { status: 'active', type: { text: 'Synthetic device' } }],
  ['carePlans', 'CarePlan', { status: 'active', intent: 'plan', title: 'Synthetic care plan' }],
  ['consents', 'Consent', { status: 'active', scope: { text: 'Synthetic consent' } }],
-] as const)('preserves the modifier across the supported %s mapper family', (key, resourceType, fields) => {
+] as const)('preserves one automatically selected record across the supported %s mapper family', (key, resourceType, fields) => {
  const patient = { resourceType: 'Patient', id: 'synthetic' }
  const data = LocalBundleService.parse({ resourceType: 'Bundle', entry: [patient, ...['1', '2'].map(versionId => ({ ...fields, resourceType, id: 'record', meta: { versionId } }))].map(resource => ({ resource })) } as any)!
  const exported = buildIpsBundle({ patient: data.patient!, data: data.collection })
  const imported = LocalBundleService.parse(exported as any)!
  const rows = projectClinicalAggregate(imported.collection)[key]
- expect(rows).toHaveLength(2)
- expect(rows.every(row => row.clinicalRecordVariant?.variantCount === 2)).toBe(true)
- expect(new Set(rows.map(row => row.sourceVersionId))).toEqual(new Set(['1', '2']))
+ expect(rows).toHaveLength(1)
+ expect(rows[0].clinicalRecordVariant).toBeUndefined()
+ expect(data.collection.clinicalSource?.graph.nodes.filter(node=>node.resource.resourceType===resourceType)).toHaveLength(2)
 })
 it('preserves independent unresolved medication content through export, reimport, AI and CDSS', async () => {
- const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [{ resourceType: 'Patient', id: 'synthetic' }, { resourceType: 'MedicationRequest', id: 'prescription', status: 'active', intent: 'order', medicationReference: { reference: 'Medication/drug' } }, ...['1', '2'].map(versionId => ({ resourceType: 'Medication', id: 'drug', meta: { versionId }, code: { text: 'Unresolved drug ' + versionId } }))].map(resource => ({ resource })) } as any)!
+ const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [{ resourceType: 'Patient', id: 'synthetic' }, { resourceType: 'MedicationRequest', id: 'prescription', status: 'active', intent: 'order', medicationReference: { reference: 'Medication/missing' } }].map(resource => ({ resource })) } as any)!
  const bundle = buildIpsBundle({ patient: parsed.patient!, data: parsed.collection })
  const statement = bundle.entry.find(entry => entry.resource.resourceType === 'MedicationStatement')!.resource
  expect(validateIpsBundle(bundle).ok).toBe(true)
@@ -86,13 +86,13 @@ it('preserves independent unresolved medication content through export, reimport
  expect((statement.medicationCodeableConcept as any).coding).toBeUndefined()
  const imported = projectClinicalAggregate(LocalBundleService.parse(bundle as any)!.collection)
  expect(imported.medications).toHaveLength(1)
- expect(imported.medications[0].clinicalMedicationContentUncertainty?.reason).toBe('ambiguous-reference')
+ expect(imported.medications[0].clinicalMedicationContentUncertainty?.reason).toBe('unresolved-reference')
  expect(imported.medications[0].clinicalRecordVariant).toBeUndefined()
  expect(imported.medications[0].medicationCodeableConcept).toBeUndefined()
  const profile = createHospitalAwareCdssPatientProfile({ ...imported, patient: { id: 'synthetic', age: 70, gender: 'male' } })
  expect(profile.hospitalMedicationInventoryUnresolved).toBeDefined()
  const ai = scopeClinicalDataForAi(imported, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [])
- expect(ai.medications?.[0].clinicalMedicationContentUncertainty).toEqual({ reason: 'ambiguous-reference' })
+ expect(ai.medications?.[0].clinicalMedicationContentUncertainty).toEqual({ reason: 'unresolved-reference' })
  const overview: any = await createFhirTools(() => ({ patient: null, collection: imported })).getDataOverview.execute!({}, { toolCallId: 'synthetic', messages: [] })
  expect(overview.data.medications).toMatchObject({ incomplete: true, canConcludeAbsence: false })
  const malformed = JSON.parse(JSON.stringify(bundle))
@@ -101,8 +101,7 @@ it('preserves independent unresolved medication content through export, reimport
 })
 
 it.each(['duplicate-child', 'missing-reason', 'invalid-count', 'unknown-child', 'ordinary-extension', 'wrong-container'])('rejects malformed known record modifiers: %s', malformedCase => {
- const parsed = original()
- const bundle: any = buildIpsBundle({ patient: parsed.patient!, data: parsed.collection })
+ const bundle: any = legacy()
  const resource = bundle.entry.find((entry: any) => entry.resource.resourceType === 'Condition' && entry.resource.modifierExtension)?.resource
  const modifier = resource.modifierExtension[0]
  if (malformedCase === 'duplicate-child') modifier.extension.push({ ...modifier.extension[0] })

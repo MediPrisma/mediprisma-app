@@ -226,9 +226,9 @@ export function OverviewMedsSection({
           {strings.meds.chronicBadge}
         </Badge>
       )
-      const sourceBadge = (item.row.selfPurchased || item.row.sourceComparison && item.row.sourceComparison.status !== 'confirmed') && (
+      const sourceBadge = item.row.selfPurchased && (
         <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-medium">
-          {item.row.selfPurchased ? (locale === 'en' ? 'Self-pay' : '自費／自購') : (locale === 'en' ? 'Compare sources' : '跨來源待核對')}
+          {locale === 'en' ? 'Self-pay' : '自費／自購'}
         </span>
       )
       const daysBadge = daysLeft !== undefined && (
