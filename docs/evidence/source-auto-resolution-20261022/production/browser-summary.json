@@ -1,0 +1,105 @@
+{
+  "sourceCommit": "bd9020b1aeeb70f6f99cb97d70176dc69c37daba",
+  "testedAt": "2026-10-21T17:17:18.033Z",
+  "stats": {
+    "startTime": "2026-10-21T17:17:18.033Z",
+    "duration": 47413.496,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "title": "duplicate transport result",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 5568
+        }
+      ]
+    },
+    {
+      "title": "unresolved source notice and resolution",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 12930
+        }
+      ]
+    },
+    {
+      "title": "Claim links and retained procedure inventory",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 9705
+        }
+      ]
+    },
+    {
+      "title": "hospital primary prescription requires no reconciliation and keeps audit sources optional",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 8593
+        }
+      ]
+    },
+    {
+      "title": "source selection",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "duration": 8456
+        }
+      ]
+    }
+  ],
+  "widths": [
+    320,
+    390,
+    430,
+    768,
+    1024,
+    1440
+  ],
+  "firebaseAuth": "isolated local fixture; no real account",
+  "patientData": "synthetic only",
+  "aiAutoGenerate": false,
+  "screenshots": [
+    {
+      "name": "production-after-lab-1440.png",
+      "sha256": "4e740e39b955eb6db12680c611c5f7637fe5b4dea120853b1d9c1c200e39421f"
+    },
+    {
+      "name": "production-after-variants-1440.png",
+      "sha256": "9b767b6be9fa15286e08bb1a79878ab954b46f4f32095f0cec1eb1270f658896"
+    },
+    {
+      "name": "production-after-variants-390.png",
+      "sha256": "054614902ef522cb9d5bccd0b1d9da28ab9c5b4e9455d5ecc6966a17a397a866"
+    },
+    {
+      "name": "production-medication-1440.png",
+      "sha256": "fd6283daddc3a32dde9fa5d629b653af77ba9ba9be36b95cbf37d0d122b9b1d9"
+    },
+    {
+      "name": "production-medication-390.png",
+      "sha256": "a63c4d7f38fd0419992cba71082510b98e1a67d9ef6ead7243f3a83877186e26"
+    },
+    {
+      "name": "production-medication-audit-390.png",
+      "sha256": "3c65eb3bf4a3e821505e67335662d49724ad9d7667a19c441cc13da7a4815d75"
+    },
+    {
+      "name": "production-missing-content-390.png",
+      "sha256": "054614902ef522cb9d5bccd0b1d9da28ab9c5b4e9455d5ecc6966a17a397a866"
+    }
+  ]
+}

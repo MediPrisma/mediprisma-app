@@ -37,3 +37,21 @@ Latest-head CI: 9,577 unit tests passed, one existing skipped; 776 suites passed
 
 
 Final review adjudication: the last Opus pagination/transport concern is ruled out by the production classifier: pagination failures classify as error (not incomplete), 503 as error and 403 as forbidden. The attached production-code probe verifies their messages and states survive foreign-row exclusion. All three cases pass. Minor property-order/memoisation nits are nonblocking; clinical values and cached-snapshot identity are covered separately.
+
+
+## Production verification
+
+Merged code: `bd9020b1aeeb70f6f99cb97d70176dc69c37daba` (reviewed PR head `15d5b74e1d72ddbf66a2d8b39119a63f6d583814`).
+
+[Master CI](https://github.com/MediPrisma/mediprisma-app/actions/runs/39641120581) passed: 9,577 tests passed, one existing skipped; production builds, public fallback, native Worker roundtrip and gallery browser checks passed. [Publish workflow](https://github.com/MediPrisma/mediprisma-app/actions/runs/39641987993) and Cloudflare Pages succeeded. Published site commit: `131bb426a5888222b813eb1aa962347ac585e3aa`.
+
+https://mediprisma.tw/app/ returned HTTP 200. All 39 expected script references match the published build, including 15 changed references; the three largest new script assets also match their Git blob fingerprints byte-for-byte.
+
+All five actual production browser cases passed (47.4 seconds): repeated lab transmission, automatic source selection with no reconciliation notice, correct Claim visit links and retained unlinked procedure, one hospital-primary prescription with optional audit sources, and usable decision workspace with genuinely unavailable medication content. Medication and missing-content screens passed at 320, 390, 430, 768, 1024 and 1440 widths. Fresh contexts, locally stubbed Firebase auth, synthetic records only, automatic AI generation disabled.
+
+![One prescription on production](production/production-medication-390.png)
+![No source-reconciliation banner on production](production/production-after-variants-390.png)
+
+The separate, automatically triggered full-site E2E workflow is still running at evidence capture and is **not counted as passed**. Its status is retained in production/merged-background-e2e.json; [live run](https://github.com/MediPrisma/mediprisma-app/actions/runs/39641120591). It is independent of the successful deployment CI and the five completed production cases.
+
+Production receipts and screenshot hashes are stored in production/.

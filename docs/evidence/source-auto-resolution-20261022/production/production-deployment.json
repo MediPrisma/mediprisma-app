@@ -1,0 +1,36 @@
+{
+  "checkedAt": "2026-10-21T17:17:08.617Z",
+  "sourceCommit": "bd9020b1aeeb70f6f99cb97d70176dc69c37daba",
+  "siteCommit": "131bb426a5888222b813eb1aa962347ac585e3aa",
+  "siteCommitMessage": "chore: sync /app from mediprisma-app@bd9020b",
+  "url": "https://mediprisma.tw/app/",
+  "status": 200,
+  "htmlSha256": "dda2a2e021ada533b97a9562aa40e5d12f9f05588a05e558ee575803d041552e",
+  "expectedScriptCount": 39,
+  "actualScriptCount": 39,
+  "missingExpectedScripts": [],
+  "changedScriptCount": 15,
+  "verifiedAssets": [
+    {
+      "url": "/app/_next/static/chunks/2u6b-kl70_gp-.js",
+      "sha": "b0d034b8aaabddbc775ce72d899e471398f6d147",
+      "size": 800310,
+      "status": 200,
+      "productionGitBlobSha": "b0d034b8aaabddbc775ce72d899e471398f6d147"
+    },
+    {
+      "url": "/app/_next/static/chunks/23rco835ylw-a.js",
+      "sha": "7a131fe631f1e46bd27a88d8f9dccaf52f21db9b",
+      "size": 769392,
+      "status": 200,
+      "productionGitBlobSha": "7a131fe631f1e46bd27a88d8f9dccaf52f21db9b"
+    },
+    {
+      "url": "/app/_next/static/chunks/203efdfidz_nk.js",
+      "sha": "63e517d9709feeebf9ab8cb86b7ffe8b578afbf9",
+      "size": 637525,
+      "status": 200,
+      "productionGitBlobSha": "63e517d9709feeebf9ab8cb86b7ffe8b578afbf9"
+    }
+  ]
+}
