@@ -1397,11 +1397,15 @@ export const LocalBundleService = {
     // split('/').pop() resolvers) works regardless of the bundle's reference
     // style. See canonicalizeBundleResources.
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
+    if (projectedNodes.filter(node => node.resource.resourceType === 'Patient').length > 1) {
+      throw new Error('此資料包含多個不同的病人或病人版本，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+    }
     const entries: any[] = canonicalizeBundleResources({
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
     }, clinicalSource)
     const sourceKeyByResource = new WeakMap<object, string>(entries.map((resource, index) => [resource, projectedNodes[index].key]))
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
+    const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     if (!entries.length) return null
 
     // TW-PAS support: unpack any Claim (事前審查申請) into the standard
@@ -1487,7 +1491,7 @@ export const LocalBundleService = {
       if (m.medicationCodeableConcept || !m.medicationReference?.reference) return m
       const sourceKey = sourceKeyByResource.get(m)
       if (sourceKey) {
-        const edge = clinicalSource.graph.references.find(reference => reference.origin.key === sourceKey && reference.path === 'medicationReference')
+        const edge = sourceReferencesByPath.get(sourceKey + '|medicationReference')
         const target = edge?.status === 'resolved' ? sourceNodesByKey.get(edge.targetKeys[0])?.resource : undefined
         return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: target.code } : m
       }

@@ -84,3 +84,15 @@ it.each([
   const medication: any = LocalBundleService.parse(bundle)!.collection.medications[0]
   expect(medication.medicationCodeableConcept?.text).toBe(resolved ? 'Correct synthetic medication' : undefined)
 })
+
+it('retains nested history Bundle resources in the graph without adding current clinical events', () => {
+  const bundle: any = fixture()
+  bundle.entry.push({ resource: { resourceType: 'Bundle', id: 'history', type: 'history', entry: [
+    { resource: { resourceType: 'Observation', id: 'historical-result', status: 'final', code: { text: 'Historical only' }, valueString: 'OLD' } },
+    { resource: { resourceType: 'Patient', id: 'historical-patient', gender: 'male' } },
+  ] } })
+  const parsed = LocalBundleService.parse(bundle)!
+  expect(parsed.patient.id).toBe('patient')
+  expect(parsed.collection.observations.map(row => row.id)).toEqual(['result'])
+  expect(parsed.collection.clinicalSource!.graph.nodes.some(node => node.resource.id === 'historical-result')).toBe(true)
+})
