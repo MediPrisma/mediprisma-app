@@ -98,6 +98,32 @@ test('a replacement that cannot publish its storage pointer fails instead of ack
   expect(await (await reloaded.loadOriginalFhir())!.text()).toBe(await source.text())
 })
 
+test('a profile write makes a recovered memory-only chart durable before another replacement fails', async () => {
+  const local = await service()
+  const { getSessionBundleKey } = await import('@/src/infrastructure/fhir/services/bundle-crypto')
+  await getSessionBundleKey({ create: true })
+  const put = FakeObjectStore.prototype.put
+  const failure = jest.spyOn(FakeObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, recordKey) {
+    if (this.name === 'bundles') throw new DOMException('synthetic quota', 'QuotaExceededError')
+    return put.call(this, value, recordKey)
+  })
+  const previous = chart()
+  await local.save(previous, { importId: 'recovered-cloud', signal: new AbortController().signal })
+  failure.mockRestore()
+  await local.setUserEnteredPatientProfile(null)
+  const key = sessionStorage.getItem('__bundle_session_key__'), marker = sessionStorage.getItem('fhir_bundle_override')
+  jest.spyOn(FakeObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, recordKey) {
+    if (this.name === 'bundles' && recordKey === 'rejected-new') throw new DOMException('synthetic quota', 'QuotaExceededError')
+    return put.call(this, value, recordKey)
+  })
+  await expect(local.save(chart(), { importId: 'rejected-new', signal: new AbortController().signal })).rejects.toThrow('已保留先前病歷')
+  expect(sessionStorage.getItem('__bundle_session_key__')).toBe(key)
+  expect(sessionStorage.getItem('fhir_bundle_override')).toBe(marker)
+  const reloaded = await service()
+  expect(await reloaded.load()).toEqual(previous)
+  expect(reloaded.getActiveImportId()).toBe('recovered-cloud')
+})
+
 test('a failed replacement envelope preserves the previous encrypted chart, images and original FHIR across reload', async () => {
   const local = await service(), previous = chart(), source = new Blob([JSON.stringify(previous)])
   await local.save(previous, { importId: 'previous', originalFhir: source, signal: new AbortController().signal })

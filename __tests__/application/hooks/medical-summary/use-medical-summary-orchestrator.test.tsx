@@ -245,6 +245,24 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
+  it('aborts a background launch by its captured slots after the presentation scope changes', async () => {
+    let finish!: () => void
+    summaryGenerate.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+    const controller = new AbortController()
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+    let generation!: Promise<void>
+    act(() => { generation = result.current.generateForLaunch(controller.signal) })
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
+    arrange({ summaryScopeKey: 'new-scope', summaryGenerationSlotKey: 'new-summary-slot', safetyGenerationSlotKey: 'new-safety-slot' })
+    rerender()
+    act(() => controller.abort())
+    expect(summaryCancel).toHaveBeenCalledWith('patient-1::medical::zh-TW::summary-model::ctx-input-a')
+    expect(safetyCancel).toHaveBeenCalledWith('patient-1::medical::zh-TW::safety-model::ctx-input-a')
+    expect(summaryCancel).not.toHaveBeenCalledWith('new-summary-slot')
+    expect(safetyCancel).not.toHaveBeenCalledWith('new-safety-slot')
+    await act(async () => { finish(); await generation })
+  })
+
   it('does not start manual generation when required demographics are cancelled', async () => {
     mockRequestDemographicsForAi.mockResolvedValueOnce(false)
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())

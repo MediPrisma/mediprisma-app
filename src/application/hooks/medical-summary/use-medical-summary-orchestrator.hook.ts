@@ -448,7 +448,13 @@ export function useMedicalSummaryOrchestrator() {
     const ownedBatch = activeBatchRef.current!
     const cancelOwnedBatch = () => {
       cancelledBatchIdsRef.current.add(batchId)
-      if (activeBatchRef.current?.id === batchId) cancelTrackedBatch(ownedBatch)
+      if (activeBatchRef.current?.id === batchId) cancelTrackedBatch(activeBatchRef.current)
+      else {
+        // A scope switch may hide this batch while its exact slots still run
+        // in the background. Stop them without replacing the new presentation.
+        if (ownedBatch.expectsSummary) pipelineCancellationRef.current.cancelSummary(ownedBatch.summarySlotKey)
+        if (ownedBatch.expectsSafety) pipelineCancellationRef.current.cancelSafety(ownedBatch.safetySlotKey)
+      }
     }
     signal?.addEventListener('abort', cancelOwnedBatch, { once: true })
     manualBatchIdsRef.current.add(batchId)

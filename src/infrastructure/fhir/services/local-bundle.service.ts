@@ -1818,6 +1818,7 @@ export const LocalBundleService = {
       bundleRecordKey(memBundleImportId),
     )
     writeTabBundleScope(memBundleImportId, memBundleIsDemo)
+    memBundleUsesMemoryOnlySession = false
     memUserEnteredPatientProfile = normalized
   },
 }
