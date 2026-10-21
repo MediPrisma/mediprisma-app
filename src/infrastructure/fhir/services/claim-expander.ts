@@ -43,7 +43,8 @@ export function copyClaimDerivedSource(from: object, to: object): void {
 }
 export function bindClaimDerivedSource<T extends object>(mapped: T, resource: object, sourceKeys: WeakMap<object, string>, variants: ReadonlyMap<string, ClinicalRecordVariant>): T {
   const origin = claimDerivedResources.get(resource)
-  const key = origin && sourceKeys.get(origin.claim)
+  if (!origin) return mapped
+  const key = sourceKeys.get(origin.claim)
   if (!key) return mapped
   const variant = variants.get(key)
   return Object.assign(mapped, { clinicalClaimDerivedSource: { originNodeKey: key, path: origin.path },
@@ -52,19 +53,24 @@ export function bindClaimDerivedSource<T extends object>(mapped: T, resource: ob
 
 const unresolvedClaimEncounters = new WeakSet<object>()
 const unresolvedClaimEncounter = Symbol('unresolved-claim-encounter')
+export function hasUnresolvedClaimEncounterSource(resource: unknown): boolean {
+  return Boolean(resource && typeof resource === 'object' && unresolvedClaimEncounters.has(resource))
+}
 export function hasUnresolvedClaimEncounter(resource: unknown): boolean {
-  return Boolean(resource && typeof resource === 'object' && (unresolvedClaimEncounters.has(resource) || (resource as any)[unresolvedClaimEncounter] === true))
+  return Boolean(resource && typeof resource === 'object' && (unresolvedClaimEncounters.has(resource) || (resource as any)[unresolvedClaimEncounter] === true || (resource as any).clinicalClaimEncounterRelation?.state === 'unresolved'))
 }
 const claimEncounterLinks = new WeakMap<object, string>()
 const claimEncounterLink = Symbol('claim-derived-encounter-link')
 /** Only the trusted Claim expander can grant this domain-derived link. */
 export function bindClaimEncounterLink<T extends object>(mapped: T, resource: object): T {
-  if (hasUnresolvedClaimEncounter(resource)) Object.assign(mapped, { [unresolvedClaimEncounter]: true })
+  if (hasUnresolvedClaimEncounterSource(resource)) Object.assign(mapped, { [unresolvedClaimEncounter]: true, clinicalClaimEncounterRelation: { state: 'unresolved' } })
   const reference = claimEncounterLinks.get(resource)
-  return reference ? Object.assign(mapped, { [claimEncounterLink]: reference }) : mapped
+  return reference ? Object.assign(mapped, { [claimEncounterLink]: reference, clinicalClaimEncounterRelation: { state: 'resolved', reference } }) : mapped
 }
 export function hasClaimEncounterLink(row: object & { encounter?: { reference?: string } }): boolean {
-  return Boolean((row as any)[claimEncounterLink] && (row as any)[claimEncounterLink] === row.encounter?.reference)
+  const relation = (row as any).clinicalClaimEncounterRelation
+  const reference = relation?.state === 'resolved' ? relation.reference : (row as any)[claimEncounterLink]
+  return Boolean(reference && reference === row.encounter?.reference)
 }
 
 const LOINC_BODY_WEIGHT = '29463-7'

@@ -46,6 +46,7 @@ it('keeps Claim revision-derived facts visible and distinct but uncertain across
  expect(buildSourceCatalog(scoped as any).filter(row => row.resourceType === 'Condition')).toHaveLength(1)
  expect(JSON.stringify(scoped)).not.toContain('clinicalSourceNodeKey')
  expect(JSON.stringify(scoped)).not.toContain('clinicalClaimDerivedSource')
+ expect(JSON.stringify(scoped)).not.toContain('clinicalClaimEncounterRelation')
  expect(JSON.stringify(scoped)).not.toContain('originNodeKey')
  expect(collection.clinicalSource!.graph.nodes.filter(node => node.resource.resourceType === 'Claim')).toHaveLength(2)
 })
@@ -96,6 +97,7 @@ it('does not trust source-supplied derived identity and preserves original targe
  rawEncounter.period = { start: '2025-01-01' }
  rawEncounter.subject = { reference: 'Patient/synthetic' }
  const rawPrescription = data.entry.find((entry: any) => entry.resource.resourceType === 'MedicationRequest').resource
+ rawPrescription.clinicalClaimEncounterRelation = { state: 'unresolved' }
  rawPrescription.authoredOn = '2025-01-02'
  rawPrescription.encounter = { reference: 'Encounter/visit-1' }
  const rawCondition = data.entry.find((entry: any) => entry.resource.id === 'unrelated').resource
@@ -103,6 +105,7 @@ it('does not trust source-supplied derived identity and preserves original targe
  const collection = projectClinicalAggregate(LocalBundleService.parse(data)!.collection)
  expect(collection.conditions.find(row => row.id === 'unrelated')?.clinicalClaimDerivedSource).toBeUndefined()
  expect(collection.medications[0].authoredOn).toBe('2025-01-02')
+ expect(collection.medications[0].clinicalClaimEncounterRelation).toBeUndefined()
  expect(collection.medications[0].encounter?.reference).toBe('Encounter/visit-1')
  expect(collection.encounters.find(row => row.id === 'visit-1')?.period?.start).toBe('2025-01-01')
 })

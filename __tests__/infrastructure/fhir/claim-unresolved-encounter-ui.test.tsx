@@ -78,3 +78,27 @@ it.each(['unresolved-and-valid', 'two-valid-targets', 'conflicting-dates', 'orig
  }
  expect(actual[0]).toEqual(actual[1])
 })
+it.each([true, false])('keeps Claim visit authority consistent after actual query-cache structural sharing: resolved=%s', async valid => {
+ const { QueryClient } = await import('@tanstack/react-query')
+ const base = valid ? 'https://local.example/fhir' : 'https://foreign.example/fhir'
+ const raw: any = { resourceType: 'Bundle', entry: [
+  { resource: { resourceType: 'Patient', id: 'p' } },
+  { fullUrl: 'https://local.example/fhir/Encounter/visit', resource: { resourceType: 'Encounter', id: 'visit', status: 'finished', class: { code: 'AMB' }, period: { start: '2025-01-01' } } },
+  { fullUrl: base + '/MedicationRequest/med', resource: { resourceType: 'MedicationRequest', id: 'med', status: 'active', intent: 'order', medicationCodeableConcept: { text: 'Synthetic prescription' } } },
+  { fullUrl: base + '/Claim/claim', resource: { resourceType: 'Claim', id: 'claim', patient: { reference: 'Patient/p' }, created: '2025-01-01', extension: [{ url: 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter', valueReference: { reference: 'Encounter/visit' } }], item: [{ extension: [{ url: 'requestedService', valueReference: { reference: 'MedicationRequest/med' } }] }], procedure: [{ procedureCodeableConcept: { text: 'Synthetic procedure' } }] } },
+ ] }
+ const first = LocalBundleService.parse(raw, undefined, 'first')!.collection
+ const next = LocalBundleService.parse(raw, undefined, 'second')!.collection
+ const client = new QueryClient()
+ client.setQueryData(['synthetic'], first)
+ client.setQueryData(['synthetic'], next)
+ const cached = client.getQueryData<typeof next>(['synthetic'])!
+ const collection = projectClinicalAggregate(cached, next.clinicalSource)
+ const { result, unmount } = renderHook(() => useEncounterDetails(collection.medications, collection.diagnosticReports, collection.observations, collection.procedures, [], collection.conditions, 'en-US', 'medical', [], undefined, collection.encounters))
+ const output: any = await createFhirTools(() => ({ patient: null, collection })).getEncounterDetails.execute!({ encounterId: collection.encounters[0].id }, { toolCallId: 'synthetic', messages: [] })
+ expect(result.current.get(collection.encounters[0].id)?.medications ?? []).toHaveLength(valid ? 1 : 0)
+ expect(output.data.medications).toHaveLength(valid ? 1 : 0)
+ expect(output.data.procedures).toHaveLength(valid ? 1 : 0)
+ if (!valid) { expect(output.incomplete).toBe(true); expect(output.canConcludeAbsence).toBe(false) }
+ unmount(); client.clear()
+})

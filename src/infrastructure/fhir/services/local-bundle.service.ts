@@ -38,7 +38,7 @@ import {
   isMedicationRemainingSummaryBasic,
 } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
-import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncounter, bindClaimDerivedSource, copyClaimDerivedSource } from './claim-expander'
+import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncounterSource, bindClaimDerivedSource, copyClaimDerivedSource } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
@@ -1011,7 +1011,7 @@ function terminologyFromMedicationKnowledge(
 // VGH behaviour).
 function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>, sourceKeys?: WeakMap<object, string>): any[] {
   return resources.map((r) => {
-    if (r.encounter?.reference || hasUnresolvedClaimEncounter(r)) return r // preserve an explicit unresolved source relation
+    if (r.encounter?.reference || hasUnresolvedClaimEncounterSource(r)) return r // preserve an explicit unresolved source relation
 
     const dateFields: string[] = [
       r.performedDateTime,    // Procedure
@@ -1057,7 +1057,7 @@ function attachEncounterRefsForMeds(
   originalResources?: ReadonlyMap<string, object>,
 ): any[] {
   return meds.map((m) => {
-    if (m.encounter || hasUnresolvedClaimEncounter(m) || hasUnresolvedClaimEncounter(originalResources?.get(m.clinicalSourceNodeKey))) return m
+    if (m.encounter || hasUnresolvedClaimEncounterSource(m) || hasUnresolvedClaimEncounterSource(originalResources?.get(m.clinicalSourceNodeKey))) return m
     const date = toDateStr(m.authoredOn || m.effectiveDateTime)
     const requester = m.requester?.display?.trim() || ''
     if (!date || !requester) return m
