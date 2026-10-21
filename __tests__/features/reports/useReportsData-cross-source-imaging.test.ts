@@ -304,6 +304,19 @@ describe('cross-source imaging reports', () => {
     })).toBe('2026-06-25')
   })
 
+  it.each([undefined, '2026-06-25'])('preserves the original examination period on shared pathology reports with issued=%s', issued => {
+    const reports = pair().map((report, index) => ({ ...report,
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'PAT' }] }],
+      code: { text: `Pathology ${index}` }, performer: [{ display: 'Example hospital' }],
+      encounter: { reference: 'Encounter/pathology' }, effectiveDateTime: undefined,
+      effectivePeriod: { start: '2026-06-24' }, issued, conclusion: BODY,
+    }))
+    const section = imagingReportsCategory.getContextSection(reports, { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }, { observations: [], encounters: [] } as any)
+    const text = section && !Array.isArray(section) ? section.items.join('\n') : ''
+    expect(text).toContain(new Date('2026-06-24').toLocaleDateString())
+    expect(text).not.toContain(new Date('2026-06-25').toLocaleDateString())
+  })
+
   it('renders a lone source normally when latest filtering removes its paired report', () => {
     const reports = pair()
     reports.push({ ...reports[0], id: 'newer-hospital', effectiveDateTime: '2026-06-25', conclusion: `${BODY} New finding.` })

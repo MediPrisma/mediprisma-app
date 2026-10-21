@@ -1,7 +1,7 @@
 // Imaging Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, ImagingStudy, Observation } from '@/src/shared/types/fhir.types'
-import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
+import { inferGroupFromDiagnosticReport, inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { referenceId } from '../utils/observation-selectors'
@@ -288,7 +288,9 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         const sources = groupedReports.map(reportSource)
         const groupTitle = sharedReportTitle(sources, 'en')
           ?? sources.map((source) => source.title).join(' + ')
-        const reportDate = getReportDate(representative)
+        // Existing shared pathology reports already use the examination period.
+        // Preserve that contract independently of the ordinary row date fallback.
+        const reportDate = representative.effectiveDateTime || representative.effectivePeriod?.start
         const datePart = reportDate
           ? ` (${new Date(reportDate).toLocaleDateString()})`
           : ''
@@ -318,7 +320,8 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         }
       })
 
-      const reportDate = getReportDate(report)
+      const reportDate = inferReportDisplayGroup(report) === 'imaging'
+        ? getReportDate(report) : report.effectiveDateTime
       const datePart = reportDate
         ? ` (${new Date(reportDate).toLocaleDateString()})`
         : ''
