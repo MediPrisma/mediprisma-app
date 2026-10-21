@@ -2,7 +2,7 @@
 "use client"
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, History } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -362,7 +362,6 @@ export function MedicationList({
           >
             <div className="flex items-center gap-2">
               {showInactive ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              <History className="h-4 w-4" />
               <span className="text-sm font-semibold">
                 {mt.history} ({totalInactive} {locale === 'en' ? 'records' : '筆紀錄'})
               </span>

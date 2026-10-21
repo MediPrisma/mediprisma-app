@@ -1,6 +1,5 @@
 "use client"
 
-import { CalendarDays } from 'lucide-react'
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { CLINICAL_SOURCE_TONE } from "@/features/clinical-summary/components/clinical-color-roles"
@@ -91,7 +90,6 @@ export function VisitHeader({
       className="flex min-w-0 items-center gap-1.5 pb-0.5 pl-9 pr-3 pt-1.5 text-[0.6875rem] leading-tight text-muted-foreground"
     >
       <span className="sr-only">{label}</span>
-      <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span aria-hidden className="shrink-0 font-semibold tabular-nums text-foreground/85">{date}</span>
       {/* The rows below leave institution and diagnosis to this header, so
           both keep the row's tones and its tap-to-reveal (a title tooltip

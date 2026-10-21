@@ -401,7 +401,7 @@ function CumulativeSection({
             onClick={onToggleExpanded}
             aria-expanded={expanded}
             aria-controls={`cumulative-section-${categoryId}`}
-            className="inline-flex min-h-[26px] items-center gap-1 rounded-md border border-dashed border-border px-2.5 text-[0.6875rem] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-[36px]"
+            className="inline-flex min-h-[26px] items-center gap-1 rounded-md px-2.5 text-[0.6875rem] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-[36px]"
           >
             {expanded
               ? (strings.showLess ?? '收合 · 回到{range}（{count} 筆）')
