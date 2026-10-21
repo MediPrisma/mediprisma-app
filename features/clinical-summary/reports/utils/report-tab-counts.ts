@@ -14,10 +14,7 @@ import {
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
 import { cancerScreeningProgramKey } from './cancer-screening-grouping'
-import {
-  qualifyingSharedReportKeys,
-  sharedReportGroupingKey,
-} from '@/src/shared/utils/shared-report-grouping'
+import { reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 
 /**
  * Lightweight counts for the ReportsCard primary tabs.
@@ -151,11 +148,11 @@ function createDiagnosticReportRows(
   }
 
   const groups = new Map<string, any[]>()
-  const sharedKeys = qualifyingSharedReportKeys(diagnosticReports)
+  const sharedKeys = reportDisplayGroupingKeys(diagnosticReports)
   for (const report of diagnosticReports) {
     if (!report) continue
-    const sharedKey = sharedReportGroupingKey(report)
-    const key = sharedKey && sharedKeys.has(sharedKey)
+    const sharedKey = sharedKeys.get(report)
+    const key = sharedKey
       ? `shared-report|${sharedKey}`
       : reportNaturalKey(report)
     const group = groups.get(key)
@@ -185,8 +182,7 @@ function createDiagnosticReportRows(
   for (const reports of groups.values()) {
     const isSharedReport = reports.length > 1
       && (() => {
-        const key = sharedReportGroupingKey(reports[0])
-        return !!key && sharedKeys.has(key)
+        return sharedKeys.has(reports[0])
       })()
     if (
       !isSharedReport

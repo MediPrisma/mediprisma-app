@@ -1,6 +1,7 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
 import { getVghtpeSource } from '../adapters/vghtpe-source-display'
+import { imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferReportDisplayGroup } from '../utils/grouping-helpers'
@@ -43,10 +44,8 @@ import {
 } from '@/src/shared/utils/observation-provenance.utils'
 import {
   qualifyingSharedEchoFamilyKeys,
-  qualifyingSharedReportKeys,
   reportSource,
   sharedEchoReportFamilyKey,
-  sharedReportGroupingKey,
   sharedReportNarrative,
   sharedReportTitle,
   type SharedReportSource,
@@ -272,7 +271,7 @@ export function buildReportsData(
     // Pass 1: build the natural grouping (as before).
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
-    const qualifyingSharedKeys = qualifyingSharedReportKeys(diagnosticReports)
+    const displayGroupingKeys = reportDisplayGroupingKeys(diagnosticReports)
     const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
@@ -281,10 +280,7 @@ export function buildReportsData(
       const inst = (getDrInstitution(dr) || '').trim()
       const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
       const sourceProvenance = isNhiMedicloudReport(dr) ? 'nhi-medicloud' : ''
-      const sharedKey = sharedReportGroupingKey(dr)
-      const ownSharedKey = sharedKey && qualifyingSharedKeys.has(sharedKey)
-        ? sharedKey
-        : null
+      const ownSharedKey = displayGroupingKeys.get(dr)
       const echoFamilyKey = sharedEchoReportFamilyKey(dr)
       const companionSharedKey = !ownSharedKey
         && echoFamilyKey
@@ -355,9 +351,10 @@ export function buildReportsData(
         // actions and source ids survive, but they do not become duplicate
         // written-report sources or empty clinical-content members.
         const sharedNarrativeKey = key.slice('shared-report|'.length)
-        const contentReports = grp.filter((report) =>
-          sharedReportGroupingKey(report) === sharedNarrativeKey,
-        )
+        const isCrossSource = sharedNarrativeKey.startsWith('cross-source|')
+        const contentReports = grp.filter(report => displayGroupingKeys.get(report) === sharedNarrativeKey)
+        // Keep the richer original report as the display representative.
+        if (isCrossSource) contentReports.sort((a, b) => sharedReportNarrative(b).length - sharedReportNarrative(a).length)
         groups.set(key, contentReports.length > 0 ? contentReports : grp)
         viewerReportsByKey.set(key, grp)
         diagnosticReportIdsByKey.set(
@@ -367,7 +364,10 @@ export function buildReportsData(
         sharedReportKeys.add(key)
         sharedReportSourcesByKey.set(
           key,
-          (contentReports.length > 0 ? contentReports : grp).map(reportSource),
+          (contentReports.length > 0 ? contentReports : grp).map(report => ({
+            ...reportSource(report),
+            ...(isCrossSource ? { narrative: sharedReportNarrative(report) } : {}),
+          })),
         )
         groupOrder.push(key)
         continue
@@ -811,7 +811,8 @@ export function buildReportsData(
       // table cells. Here absence is meaningful because it activates the
       // explicit "inferred imaging" / "unclassified" provenance label.
       const category = categoryText === '—' ? '' : categoryText
-      const institution = getDrInstitution(head)
+      const institution = (key.startsWith('shared-report|cross-source|') ? imagingCopyInstitution(head) : undefined)
+        || getDrInstitution(head)
         || (linkedStudies[0] ? imagingStudyInstitution(linkedStudies[0]) : undefined)
       const isLinkedImagingStudy = rowStudyIds.size > 0
       const reportGroup = inferReportDisplayGroup(head)

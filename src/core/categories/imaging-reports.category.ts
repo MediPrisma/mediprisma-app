@@ -12,10 +12,9 @@ import {
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
+import { reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import {
-  qualifyingSharedReportKeys,
   reportSource,
-  sharedReportGroupingKey,
   sharedReportNarrative,
   sharedReportTitle,
 } from '@/src/shared/utils/shared-report-grouping'
@@ -68,12 +67,12 @@ function reportSupplementalText(report: ImagingReportData): string[] {
 }
 
 function groupedReportCount(reports: ImagingReportData[]): number {
-  const qualifyingKeys = qualifyingSharedReportKeys(reports)
+  const groupingKeys = reportDisplayGroupingKeys(reports)
   const seen = new Set<string>()
   let count = 0
   for (const report of reports) {
-    const key = sharedReportGroupingKey(report)
-    if (key && qualifyingKeys.has(key)) {
+    const key = groupingKeys.get(report)
+    if (key) {
       if (seen.has(key)) continue
       seen.add(key)
     }
@@ -234,11 +233,11 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     const observations = allClinicalData?.observations || []
     
     const items: string[] = []
-    const qualifyingKeys = qualifyingSharedReportKeys(filtered)
+    const groupingKeys = reportDisplayGroupingKeys(filtered)
     const sharedGroups = new Map<string, ImagingReportData[]>()
     filtered.forEach((report) => {
-      const key = sharedReportGroupingKey(report)
-      if (!key || !qualifyingKeys.has(key)) return
+      const key = groupingKeys.get(report)
+      if (!key) return
       const group = sharedGroups.get(key)
       if (group) group.push(report)
       else sharedGroups.set(key, [report])
@@ -275,8 +274,8 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     }
 
     filtered.forEach(report => {
-      const groupingKey = sharedReportGroupingKey(report)
-      if (groupingKey && qualifyingKeys.has(groupingKey)) {
+      const groupingKey = groupingKeys.get(report)
+      if (groupingKey) {
         if (renderedSharedKeys.has(groupingKey)) return
         renderedSharedKeys.add(groupingKey)
 
@@ -296,6 +295,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           const codes = source.codes.length > 0 ? ` [codes: ${source.codes.join(', ')}]` : ''
           const id = source.reportId ? ` [id: ${source.reportId}]` : ''
           items.push(`  • Source report: ${source.title}${codes}${id}`)
+          if (groupingKey.startsWith('cross-source|')) items.push(`    • Original source narrative: ${sharedReportNarrative(sourceReport)}`)
           appendObservations(sourceReport, '    ')
           reportSupplementalText(sourceReport)
             .forEach((text) => items.push(`    • ${text}`))

@@ -252,6 +252,11 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
                 {labels.recordId}: {source.reportId}
               </span>
             )}
+            {source.narrative && (
+              <div className="whitespace-pre-wrap break-words text-foreground/90 sm:col-span-2">
+                {source.narrative}
+              </div>
+            )}
           </li>
         ))}
       </ul>
