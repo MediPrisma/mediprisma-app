@@ -14,7 +14,7 @@ import { excludeUnresolvedGenericVariants } from '@/src/core/utils/clinical-vari
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
-import { clinicalEncounterAlias } from '@/src/core/services/clinical-encounter-alias'
+import { graphEncounterReferenceOrganization, scopedEncounterReferenceOrganization } from '@/src/core/services/clinical-source-catalog-evidence'
 import { getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
 import { getAnalyteCanonicalKey, TEST_ALIASES } from '@voho0000/clinical-lab-normalization/canonical'
 import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
@@ -420,7 +420,10 @@ export function buildSourceCatalog(
     reference: string | undefined,
     originNodeKey: string | undefined,
     paths: readonly string[],
+    document: object,
   ): string | undefined => {
+    const scopedValues = paths.map(path => scopedEncounterReferenceOrganization(document, path))
+    if (scopedValues.some(value => value !== undefined)) return scopedValues.find(value => typeof value === 'string') as string | undefined
     const source = input.clinicalSource
     if (!source?.graph) {
       const id = referenceId(reference)
@@ -429,25 +432,8 @@ export function buildSourceCatalog(
     // With a source graph, only an edge that was resolved under the graph's
     // source/base/version/patient rules can supply a linked organization.
     if (!reference || !originNodeKey) return undefined
-    const targetRows = new Map<string, EncounterEntity>()
-    for (const edge of source.graph.references) {
-      if (edge.origin.key !== originNodeKey || !paths.includes(edge.path) || edge.status !== 'resolved') continue
-      for (const targetKey of edge.targetKeys) {
-        const visibleKey = clinicalEncounterAlias(source, targetKey) ?? targetKey
-        for (const encounter of input.encounters ?? []) {
-          if (encounter.clinicalSourceNodeKey === visibleKey) targetRows.set(encounter.id, encounter)
-        }
-      }
-    }
-    if (targetRows.size !== 1) return undefined
-    const [encounter] = targetRows.values()
-    const expectedReference = `Encounter/${encounter.id}`
-    const edgeMatchesCurrent = source.graph.references.some(edge => edge.origin.key === originNodeKey && paths.includes(edge.path)
-      && edge.status === 'resolved' && edge.targetKeys.some(targetKey => {
-        const visibleKey = clinicalEncounterAlias(source, targetKey) ?? targetKey
-        return (input.encounters ?? []).some(row => row.clinicalSourceNodeKey === visibleKey && row.id === encounter.id)
-      }) && (edge.reference === reference || expectedReference === reference))
-    return edgeMatchesCurrent ? encounter.serviceProvider?.display?.trim() || undefined : undefined
+    const values = paths.map(path => graphEncounterReferenceOrganization(source, originNodeKey, path, reference, input.encounters ?? []))
+    return values.find(Boolean)
   }
 
   sortByDateDesc(input.encounters ?? [], (e) => e.period?.start)
@@ -665,7 +651,7 @@ export function buildSourceCatalog(
       date: day(document.date),
       organization:
         document.author?.[0]?.display?.trim() ||
-        linkedEncounterOrganization(document.encounter?.reference, document.clinicalSourceNodeKey, ['encounter']),
+        linkedEncounterOrganization(document.encounter?.reference, document.clinicalSourceNodeKey, ['encounter'], document),
       getContentText: () => listClinicalDocuments({ compositions: [document] })[0]?.text ?? '',
     })),
     ...(input.documentReferences ?? []).map((document) => ({
@@ -685,6 +671,7 @@ export function buildSourceCatalog(
           encounter.reference,
           document.clinicalSourceNodeKey,
           [`context.encounter[${index}]`],
+          document,
         )).find(Boolean) ||
         extractInstitutionFromDocumentTitle(document.content?.[0]?.attachment?.title),
       getContentText: () => listClinicalDocuments({ documentReferences: [document] })[0]?.text ?? '',

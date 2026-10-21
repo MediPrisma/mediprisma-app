@@ -23,6 +23,7 @@ import { imagingStudyTitle } from '@/src/shared/utils/imaging-study.utils'
 import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-domain-filter.utils'
 import { floorStartDay, prescribingAnalyteKey } from '@/src/core/utils/first-visit-floors'
 import { AI_REPORT_GROUPS, reportModalityClass } from '@/src/core/utils/report-narrative.utils'
+import { graphEncounterReferenceOrganization, registerScopedEncounterReferenceEvidence } from '@/src/core/services/clinical-source-catalog-evidence'
 
 /** Remove local capture joins from outbound AI data without mutating clinical rows. */
 export function stripClinicalCaptureMetadata<T>(value: T): T {
@@ -512,5 +513,24 @@ function scopeClinicalDataView(
       return { resourceType: item.resourceType, groupId: item.groupId, classification: item.classification, variantCount: item.variantCount, reason: 'Unresolved source records outside the selected evidence; do not infer absence.' }
     })
   }
-  return stripClinicalCaptureMetadata(scoped)
+  const outbound = stripClinicalCaptureMetadata(scoped)
+  const source = input.clinicalSource
+  if (source?.graph) {
+    const documents = [...(scoped.compositions ?? []), ...(scoped.documentReferences ?? [])]
+    const outboundDocuments = [...(outbound.compositions ?? []), ...(outbound.documentReferences ?? [])]
+    const evidence = documents.map((document: any) => {
+      const paths = new Map<string, string | null>()
+      const nodeKey = document.clinicalSourceNodeKey
+      if ('encounter' in document) {
+        paths.set('encounter', graphEncounterReferenceOrganization(source, nodeKey, 'encounter', document.encounter?.reference, encounters) ?? null)
+      }
+      for (const [index, item] of (document.context?.encounter ?? []).entries()) {
+        const path = `context.encounter[${index}]`
+        paths.set(path, graphEncounterReferenceOrganization(source, nodeKey, path, item?.reference, encounters) ?? null)
+      }
+      return paths
+    })
+    registerScopedEncounterReferenceEvidence(outbound, outboundDocuments, evidence)
+  }
+  return outbound
 }
