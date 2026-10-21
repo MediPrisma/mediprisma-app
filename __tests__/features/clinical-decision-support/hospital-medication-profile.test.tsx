@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { createFhirCdssPatientProfile, type FhirCdssProfileInput } from '@voho0000/personalized-care-fhir'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 import { createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
@@ -168,9 +168,20 @@ describe('hospital medications entering CDSS', () => {
   it('shows ingredient provenance and source dates in the reconciliation panel; cancelled drugs stay out', () => {
     const profile = build([hospital(), hospital({ id: 'cancelled', status: 'cancelled' })])
     render(<HospitalMedicationReview evidence={profile.hospitalMedicationEvidence} locale="zh-TW" />)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '用藥核對 1 筆院內處方' }))
     expect(screen.getByText('1 筆院內處方，目前使用待確認')).toBeInTheDocument()
     expect(screen.getByText('Diclofenac sodium')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '對照來源' })).toHaveAttribute('href', expect.stringContaining('licId=01044041'))
     expect(screen.getByText(/2026-09-30/)).toBeInTheDocument()
   })
+
+  it('names an unresolved medication in the on-demand review instead of a generic ingredient placeholder', () => {
+    const profile = build([hospital({ medicationCodeableConcept: { coding: [{ system: 'urn:oid:vgh.medication.name', code: 'Synthetic unnamed ointment 2%', display: 'Synthetic unnamed ointment 2%' }] } })])
+    render(<HospitalMedicationReview evidence={profile.hospitalMedicationEvidence} locale="zh-TW" />)
+    fireEvent.click(screen.getByRole('button', { name: '用藥核對 1 筆院內處方' }))
+    expect(screen.getByText('Synthetic unnamed ointment 2%')).toBeInTheDocument()
+    expect(screen.queryByText('成分未確認')).not.toBeInTheDocument()
+  })
 })
+

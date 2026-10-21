@@ -22,6 +22,7 @@ import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
 import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 
 function sourceCalendarDate(value?: string): string {
   const day = medicationClinicalDay(value)?.match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -134,7 +135,7 @@ export function useMedicationRows(
     // Cross-source duplicate reconciliation belongs to the import graph so
     // lists, timelines and AI receive the same records. A name/day match in
     // this view alone cannot prove a duplicate prescription.
-    const visibleMedications = medications
+    const visibleMedications = medications.map(hospitalMedicationDisplayRecord)
 
     // NOTE: vaccine-categorized MedicationRequests (e.g. a tetanus shot
     // ordered as treatment for a wound) STAY in the medication list. Only
@@ -380,7 +381,8 @@ export function useMedicationRows(
         nhiDrugCode: (med.medicationCodeableConcept || med.code)?.coding?.find((coding: any) => isNhiDrugCodeSystem(coding.system))?.code,
         sourceOrderIdentifiers: med.identifier?.filter((identifier: any) => identifier.system === 'urn:oid:vgh.medication.order' && identifier.value)
           .map((identifier: any) => identifier.value),
-        dataOrigin: med._reconciledSourceReferences?.length > 1 ? 'integrated'
+        dataOrigin: med._sourcePrescriptionRecords?.some(isVghtpeSource) ? 'hospital'
+          : med._reconciledSourceReferences?.length > 1 ? 'integrated'
           : isVghtpeSource(med) || isHospitalOutpatientMedication(med) ? 'hospital'
             : isMedcloudSource(med) ? 'medcloud' : undefined,
         drugKey,
@@ -433,9 +435,9 @@ export function useMedicationRows(
     }
     const comparisonRows = projectMedicationComparisons(enriched,
       row => (sourceById.get(row.id) as any)?._sourceRecordComparison, row => row,
-    ).map(({ record, sources, comparison, ownedIds, warnings, detailsInitiallyOpen }) => comparison ? {
+    ).map(({ record, sources, comparison, ownedIds, warnings }) => comparison ? {
       ...record,
-      sourceComparison: { status: comparison.status, records: sources ?? [], warnings, detailsInitiallyOpen },
+      sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
       reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
       searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
     } : record)
