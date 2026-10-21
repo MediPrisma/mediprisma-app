@@ -494,7 +494,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRetainedResultState((current) => {
       if (!allowResultRetention || !resultScope) return null
-      if (exactResultBelongsToSelectedModel) {
+      if (exactResultBelongsToSelectedModel && !isRunning) {
         if (
           current?.scope === resultScope &&
           current.modelId === resolvedModelId &&
@@ -514,7 +514,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       // Legacy builds could seed the Flash-Lite demo snapshot into whichever
       // model happened to be selected. With no current result it is still a
       // useful fallback, but its immutable provenance remains Flash-Lite.
-      if (exactResult !== undefined && exactResultOwnerModelId) {
+      if (!isRunning && exactResult !== undefined && exactResultOwnerModelId) {
         return {
           scope: resultScope,
           modelId: exactResultOwnerModelId,
@@ -526,6 +526,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     })
   }, [
     allowResultRetention,
+    isRunning,
     exactResult,
     exactResultBelongsToSelectedModel,
     exactResultOwnerModelId,

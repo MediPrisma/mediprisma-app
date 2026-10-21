@@ -161,15 +161,18 @@ describe('useAiSlotGeneration demo snapshot', () => {
     let finish!: () => void, signal!: AbortSignal
     const store = createAiResultStore<{ headline: string }>()
     const run = jest.fn((context) => new Promise<{ headline: string }>(resolve => {
+      store.getState().setResult(context.operationKey, { headline: 'provisional automatic preview' })
       signal = context.signal
       finish = () => resolve({ headline: 'late automatic result' })
     }))
     useProgressiveImportStore.setState({ current: { runId: 'background-run', importId: 'cloud-import', phase: 'waiting' } })
     const { result } = renderHook(() => useAiSlotGeneration({
       defaultModelId: 'gpt-5.4-nano', selectedModelId: 'gpt-5.4-nano', autoRunEnabled: true,
+      retainResultOnModelChange: true,
       requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
     }))
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(result.current.result?.headline).toBe('provisional automatic preview'))
     act(() => stopProgressiveImport('background-run', phase))
     expect(signal.aborted).toBe(true)
     expect(mockStopAi).toHaveBeenCalledWith(result.current.slotKey)
