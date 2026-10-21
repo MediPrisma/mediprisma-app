@@ -50,7 +50,7 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
   return changed ? projected : rows
 }
 
-const CONTENT_UNCERTAINTY_MESSAGE = 'Medication prescriptions exist but referenced drug content is unresolved. Reconcile the medication content; current drug classes and medication absence cannot be concluded.'
+const CONTENT_UNCERTAINTY_MESSAGE = 'Medication prescriptions exist; referenced drug content is unavailable. Current drug classes and medication absence cannot be concluded.'
 
 /** Content uncertainty is distinct from an absent medication history. */
 export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], input: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}): Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> {

@@ -30,10 +30,10 @@ export function buildHospitalAwareCdssResult(
 export function applyUnresolvedRecordTherapyReview(result: CdssResult, profile: HospitalAwareCdssProfile, locale: CdssLocale): CdssResult {
   const unresolved = profile.excludedClinicalRecordVariants?.filter(item => !['MedicationRequest', 'MedicationStatement'].includes(item.resourceType)) ?? []
   if (!unresolved.length) return result
-  const label = locale === 'en' ? 'Reconcile unresolved source records' : '核對未決來源紀錄'
+  const label = locale === 'en' ? 'Clinical content unavailable' : '臨床內容未提供'
   const message = locale === 'en'
-    ? 'Clinical source versions, including measurements and reports, are unresolved. Reconcile eligibility and contraindications before starting or adjusting therapy; verified safety evidence remains available.'
-    : '臨床來源版本（含檢驗及報告）尚未釐清，開始或調整治療前需核對適用條件及禁忌；已確認的安全證據仍可使用。'
+    ? 'Clinical content is unavailable for some eligibility or contraindication facts; verified safety evidence remains available.'
+    : '部分適用條件或禁忌缺少臨床內容，已確認的安全證據仍可使用。'
   const adapt = (item: CdssRecommendation): CdssRecommendation => {
     const therapy = item.domain === 'medication' || item.presentationType === 'medication'
       || item.visitDecision?.actions.some(action => action.decisionKind === 'prescribed' || action.decisionKind === 'dose-adjusted')

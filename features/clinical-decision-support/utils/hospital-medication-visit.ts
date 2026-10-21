@@ -43,10 +43,10 @@ export function applyHospitalMedicationVisitReview(
       return {
         ...point,
         state: 'info' as const,
-        headline: locale === 'en' ? 'Diagnosis source records unresolved' : '診斷來源尚待核對',
-        why: locale === 'en' ? 'Unresolved source diagnoses cannot establish whether AF is present or absent.' : '診斷來源仍有未決版本或衝突，尚不能據此判定有無心房顫動。',
+        headline: locale === 'en' ? 'Diagnosis content unavailable' : '診斷內容未提供',
+        why: locale === 'en' ? 'Available diagnosis content does not establish whether AF is present or absent.' : '可用診斷內容不足以判定有無心房顫動。',
         actions: [],
-        needsData: [...new Set([...(point.needsData ?? []), locale === 'en' ? 'Reconcile source records' : '核對診斷來源紀錄'])],
+        needsData: point.needsData,
       }
     })
     if (points.some((point, index) => point !== model.points[index])) model = { ...model, points }
@@ -62,7 +62,6 @@ export function applyHospitalMedicationVisitReview(
   const label = first ? regimenLabel(first) : recorded !== undefined ? String(recorded) : 'OAC'
   const date = first?.date ?? pending.sources[0]?.date
   // The same words the result adapter uses for every module it holds back.
-  const reconcile = english ? 'Hospital medication record' : '院內用藥紀錄'
   const verdictSuffix = english ? ' · hospital prescription record' : ' · 院內處方紀錄'
   const review = (point: DecisionPointView): DecisionPointView => {
     if ((point.decisionId ?? point.semanticId) !== OAC_WHETHER) return point
@@ -78,8 +77,8 @@ export function applyHospitalMedicationVisitReview(
     return {
       ...rest,
       state: 'info',
-      headline: variantPending ? english ? 'Medication inventory unresolved' : '來源用藥未釐清' : english ? `${label}: hospital record` : `${label}：院內紀錄`,
-      why: variantPending ? english ? 'Medication source versions or conflicts are unresolved. Neither anticoagulant use nor absence is established; reconcile before deciding whether to start or change treatment.' : '來源用藥版本或衝突未釐清，尚不能判定已使用或未使用抗凝藥；治療決策前需先核對。' : english
+      headline: variantPending ? english ? 'Medication content unavailable' : '藥品內容未提供' : english ? `${label}: hospital record` : `${label}：院內紀錄`,
+      why: variantPending ? english ? 'Medication content is unavailable. Anticoagulant use or absence cannot be inferred from the available record.' : '藥品內容未提供，無法從現有紀錄判定是否使用抗凝藥。' : english
         ? `Hospital prescription${date ? ` (${date})` : ''}; use status not recorded; available prescription facts are included in medication and safety assessment`
         : `院內處方${date ? `（${date}）` : ''}，紀錄未提供使用狀態；已納入用藥與安全判讀`,
       ...(point.chain ? {

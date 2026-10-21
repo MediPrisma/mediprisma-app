@@ -34,4 +34,3 @@ it('carries top-level Condition versions with versioned REST fullUrls into one a
   expect(parsed.collection.clinicalSource?.graph.nodes.map(node => node.fullUrl)).toContain('https://ehr.example/fhir/MedicationRequest/medication/_history/1')
   expect(parsed.collection.clinicalSource?.graph.nodes.map(node => node.fullUrl)).toContain('https://ehr.example/fhir/MedicationRequest/medication/_history/2')
 })
-

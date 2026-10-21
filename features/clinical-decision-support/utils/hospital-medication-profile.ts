@@ -59,15 +59,15 @@ export type HospitalAwareCdssProfile = CdssPatientProfile & {
 function withUnresolvedMedicationInventory(profile: HospitalAwareCdssProfile): HospitalAwareCdssProfile {
   const diagnoses = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'Condition') ?? []
   if (diagnoses.length) profile = { ...profile, facts: { ...profile.facts, unresolvedDiagnosisRecords: {
-    zh: '診斷來源有未決版本或衝突，指引適用性需核對，不能據此判定沒有疾病',
-    en: 'Diagnosis records have unresolved versions or conflicts. Guideline applicability requires reconciliation; excluded records cannot establish absent disease.',
+    zh: '診斷內容未提供，無法據此判定沒有疾病',
+    en: 'Diagnosis content is unavailable; unavailable records cannot establish absent disease.',
     sources: diagnoses.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })),
   } } }
   const excluded = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'MedicationRequest' || item.resourceType === 'MedicationStatement') ?? []
   const contents = profile.unresolvedClinicalMedicationContents ?? []
   if (!excluded.length && !contents.length) return profile
   const sources: CdssFactSource[] = [...excluded.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })), ...contents.map(item => item.source)]
-  const uncertainty = { zh: '來源用藥內容、版本或衝突尚未釐清，目前使用及未使用均無法判定，需核對', en: 'Medication content or source versions are unresolved; neither current use nor absence can be determined from excluded records. Reconcile medications.', sources }
+  const uncertainty = { zh: '藥品內容未提供，無法判定藥物種類或未用藥', en: 'Medication content is unavailable; drug identity and medication absence cannot be determined.', sources }
   const facts = { ...profile.facts }
   const contexts = { ...profile.medicationClassContexts }
   for (const [key, context] of Object.entries(contexts)) {
@@ -291,8 +291,8 @@ export function createHospitalAwareCdssPatientProfile(
     const factKey = context.factKey.startsWith('hfHarmful') ? `hospitalMedicationClass:${classId}` : context.factKey
     if (factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass) continue
     facts[factKey] = {
-      zh: `院內處方：${names.join('、')}；目前使用待確認`,
-      en: `Hospital prescription: ${names.join(', ')}; current use needs confirmation`,
+      zh: `院內處方：${names.join('、')}；紀錄未提供使用狀態`,
+      en: `Hospital prescription: ${names.join(', ')}; use status not recorded`,
       sources: matching.map((item) => item.source),
     }
   }
@@ -306,8 +306,8 @@ export function createHospitalAwareCdssPatientProfile(
     contexts[classId as CdssMedicationClassId] = { ...context, state: 'uncertain' }
     if (!context.factKey.startsWith('hfHarmful')
       && !(context.factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass)) facts[context.factKey] = {
-      zh: '院內藥物成分辨識不完整，目前用藥需核對',
-      en: 'Hospital ingredient mapping is incomplete; reconcile current medications',
+      zh: '院內紀錄未提供藥物成分',
+      en: 'Hospital ingredient not recorded',
       sources: unresolved.map((item) => item.source),
     }
   }
@@ -341,8 +341,8 @@ export function createHospitalAwareCdssPatientProfile(
     const pendingSources = fact.sources?.filter((source) => pendingById.has(`${source.resourceType}:${source.resourceId}`)) ?? []
     facts[key] = { ...fact, sources: fact.sources?.map(restoreSource),
       ...(pendingSources.length ? {
-        zh: `用藥暴露紀錄（院內使用待確認）：${fact.zh}`,
-        en: `Medication exposure record (hospital use unconfirmed): ${fact.en}`,
+        zh: `院內用藥暴露紀錄（使用狀態未提供）：${fact.zh}`,
+        en: `Hospital medication exposure record (use status not recorded): ${fact.en}`,
       } : {}),
     }
   }

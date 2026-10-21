@@ -1,3 +1,4 @@
+import { applyHospitalMedicationVisitReview } from '@/features/clinical-decision-support/utils/hospital-medication-visit'
 import { QueryClient } from '@tanstack/react-query'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
@@ -210,4 +211,20 @@ it('exports each distinct hospital order without attaching the other hospital or
  expect(withCopies).toHaveLength(1)
  expect(withCopies[0].contained).toHaveLength(2)
  expect(withCopies[0].contained.filter((record:any)=>record.note?.some((note:any)=>note.text?.startsWith('Hospital record:')))).toHaveLength(1)
+})
+
+it('carries unavailable drug content through profile, visit map and AI without manual reconciliation tasks',async()=>{
+ const collection=parse([{resourceType:'MedicationRequest',id:'unavailable-drug',status:'active',medicationReference:{reference:'Medication/missing'},authoredOn:'2026-10-01'}])
+ expect(collection.medications[0].clinicalMedicationContentUncertainty).toBeDefined()
+ const profile=createHospitalAwareCdssPatientProfile({...collection,patient:{id:'synthetic',age:70},now:new Date('2026-10-02')})
+ expect(profile.hospitalMedicationInventoryUnresolved).toBeDefined()
+ expect(JSON.stringify(profile.facts)).not.toMatch(/reconcil|核對|未決|釐清/i)
+ const model=applyHospitalMedicationVisitReview({source:'af',headline:'Synthetic AF',points:[{semanticId:'af-oac-whether',state:'done',headline:'Synthetic anticoagulation',why:'Synthetic reason',actions:[]}]} as any,profile,'zh-TW')
+ expect(model.points[0].headline).toBe('藥品內容未提供')
+ expect(model.points[0].actions).toEqual([])
+ expect(JSON.stringify(model)).not.toMatch(/reconcil|核對|未決|釐清/i)
+ const tools=createFhirTools(()=>({patient:null,collection}))
+ const output:any=await tools.getActiveMedicationList.execute!({}, {toolCallId:'synthetic',messages:[]})
+ expect(output.canConcludeAbsence).toBe(false)
+ expect(JSON.stringify(output)).not.toMatch(/reconcil|核對|未決|釐清/i)
 })

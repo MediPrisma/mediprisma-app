@@ -80,4 +80,3 @@ it('keeps the settled chart and tools available through a background source refr
   expect(result.current.tools.data?.diagnosticReports[0]?._observations?.[0]?.valueQuantity?.value).toBe(8)
  }finally{unmount();queryClient.clear()}
 })
-

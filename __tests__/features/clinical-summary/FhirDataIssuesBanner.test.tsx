@@ -43,4 +43,3 @@ describe('FhirDataIssuesBanner', () => {
     expect(screen.getByText('沒有讀取權限（403）')).toBeInTheDocument()
   })
 })
-
