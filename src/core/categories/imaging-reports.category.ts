@@ -336,8 +336,8 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         }
       })
 
-      const reportDate = inferReportDisplayGroup(report) === 'imaging'
-        ? getReportDate(report) : report.effectiveDateTime
+      const reportDate = report.effectiveDateTime
+        || (inferReportDisplayGroup(report) === 'imaging' ? report.effectivePeriod?.start : undefined)
       const datePart = reportDate
         ? ` (${new Date(reportDate).toLocaleDateString()})`
         : ''

@@ -22,6 +22,44 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it.each([
+    { code: { text: 'CT CHEST', coding: [null] } },
+    { code: { text: 'CT CHEST', coding: [{ code: 123 }] } },
+    { meta: { tag: [null] } },
+    { performer: [null] },
+    { _observations: [null] },
+    { presentedForm: [null] },
+    { identifier: [null] },
+  ])('keeps malformed imported metadata from breaking grouping: %j', invalid => {
+    const reports = pair()
+    Object.assign(reports[0], invalid)
+    expect(() => reportDisplayGroupingKeys(reports)).not.toThrow()
+    expect(reportDisplayGroupingKeys(reports).size).toBe(0)
+  })
+
+  it('does not label a signing-only date as an examination date in AI context', () => {
+    const report = { ...pair()[0], effectiveDateTime: undefined, issued: '2030-01-19', conclusion: BODY }
+    const section = imagingReportsCategory.getContextSection([report], { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }, {} as any)
+    expect(JSON.stringify(section)).not.toContain(new Date(report.issued).toLocaleDateString())
+  })
+
+  it('renders a lone visible source normally with full-set grouping keys', () => {
+    const reports = pair()
+    const row = buildReportsData([reports[0]], [], 'standardized', 'medical', 'en', reportDisplayGroupingKeys(reports)).reportRows[0]
+    expect(row.sharedReportSources).toBeUndefined()
+    expect(row.institution).toBe('DOC00000 Example')
+  })
+
+  it('uses the same Taiwan examination day for UTC and local copies', () => {
+    const reports = pair()
+    reports[0].effectiveDateTime = '2026-06-24T23:30:00Z'
+    reports[1].effectiveDateTime = '2026-06-25T07:30:00+08:00'
+    expect(getReportDate(reports[0])?.slice(0, 10)).toBe('2026-06-25')
+    const rows = buildReportsData(reports).reportRows
+    expect(rows).toHaveLength(1)
+    expect(rows[0].effectiveDate?.slice(0, 10)).toBe('2026-06-25')
+  })
+
   it('keeps a filtered encounter and AI subset ambiguous when another source candidate exists', () => {
     const reports = pair().map(report => ({ ...report, encounter: { reference: 'Encounter/a' }, _encounterInferred: true }))
     const other = { ...reports[0], id: 'repeated-hospital', encounter: { reference: 'Encounter/b' } }

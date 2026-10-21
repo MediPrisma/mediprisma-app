@@ -174,6 +174,17 @@ function examQualifiers(report: Report): string[] | null {
  * retains its existing strict boundary; cross-source copies get an additional
  * one-to-one check, so two identical same-day exams cannot be paired by luck. */
 export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Report, string> {
+  try {
+    return calculateReportDisplayGroupingKeys(reports)
+  } catch {
+    // Imported FHIR may contain malformed nested elements. Grouping is an
+    // optional display projection: uncertainty must keep reports separate,
+    // never prevent the remaining source records from being displayed.
+    return new Map()
+  }
+}
+
+function calculateReportDisplayGroupingKeys(reports: readonly Report[]): Map<Report, string> {
   const keys = new Map<Report, string>()
   const sharedKeys = qualifyingSharedReportKeys([...reports])
   for (const report of reports) {

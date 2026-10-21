@@ -227,7 +227,14 @@ export function buildReportsData(
     // Pass 1: build the natural grouping (as before).
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
-    const displayGroupingKeys = groupingKeys ?? reportDisplayGroupingKeys(diagnosticReports)
+    const sourceGroupingKeys = groupingKeys ?? reportDisplayGroupingKeys(diagnosticReports)
+    const visibleMembers = new Map<string, number>()
+    for (const report of diagnosticReports) {
+      const key = sourceGroupingKeys.get(report)
+      if (key) visibleMembers.set(key, (visibleMembers.get(key) ?? 0) + 1)
+    }
+    const displayGroupingKeys = new Map([...sourceGroupingKeys]
+      .filter(([, key]) => (visibleMembers.get(key) ?? 0) > 1))
     const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return

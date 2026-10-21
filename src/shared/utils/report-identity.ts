@@ -5,9 +5,18 @@ import { inferReportDisplayGroup } from './report-grouping-helpers'
 export function getReportDate(report: any): string | undefined {
   // This change adds period support for imaging only. Preserve the existing
   // issued-date fallback for unrelated laboratory/pathology report grouping.
-  return report?.effectiveDateTime
-    || (inferReportDisplayGroup(report) === 'imaging' ? report?.effectivePeriod?.start : undefined)
+  const imaging = inferReportDisplayGroup(report) === 'imaging'
+  const value = report?.effectiveDateTime
+    || (imaging ? report?.effectivePeriod?.start : undefined)
     || report?.issued
+  // Grouping and calendar-window consumers must agree on the examination day.
+  // Keep the instant, expressed in the Taiwan source timezone, without changing
+  // the original FHIR resource or the date projection of other report groups.
+  if (imaging && typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !value.endsWith('+08:00')) {
+    const instant = Date.parse(value)
+    if (Number.isFinite(instant)) return new Date(instant + 8 * 60 * 60 * 1000).toISOString().replace(/Z$/, '+08:00')
+  }
+  return value
 }
 
 export function isNhiMedicloudReport(report: any): boolean {
