@@ -2,6 +2,23 @@
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
+it.each(['MedicationRequest', 'Observation', 'Procedure'])('marks recent visit counts incomplete when linked %s versions were excluded', async resourceType => {
+  const resources: any[] = [
+    { resourceType: 'Patient', id: 'synthetic' },
+    { resourceType: 'Encounter', id: 'visit', status: 'finished', period: { start: '2026-10-01' }, subject: { reference: 'Patient/synthetic' } },
+    ...['1', '2'].map(version => ({ resourceType, id: 'record', meta: { versionId: version }, status: 'active',
+      encounter: { reference: 'Encounter/visit' }, code: { text: 'Unresolved ' + version },
+      medicationCodeableConcept: { text: 'Unresolved ' + version }, valueQuantity: { value: Number(version) },
+    })),
+  ]
+  const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!
+  const tools = createFhirTools(() => ({ patient: parsed.patient, collection: parsed.collection }))
+  const result = await (tools.getRecentVisits as any).execute({ limit: 5 })
+  expect(result).toMatchObject({ success: true, count: 1, incomplete: true, canConcludeAbsence: false })
+  expect(result.clinicalRecordVariantExclusions).toHaveLength(2)
+  expect(result.clinicalRecordVariantExclusions.every((row: any) => row.resourceType === resourceType)).toBe(true)
+})
+
 it('keeps unresolved medication and condition versions out of actual tool facts and reports why', async () => {
   const resources: any[] = [{ resourceType: 'Patient', id: 'synthetic' }]
   for (const version of ['1', '2']) {

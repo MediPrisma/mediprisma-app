@@ -1,5 +1,6 @@
 import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions, outboundClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
+import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
 // Unified FHIR Tools for AI Agent
 //
 // Single implementation backing BOTH SMART-live mode and local-bundle mode.
@@ -798,9 +799,44 @@ function normalizeDiagnosisTerm(value: string): string {
   return value.normalize('NFKC').toLowerCase().replace(/[\s.\-–—_·]/g, '')
 }
 
-function refToId(ref: string | undefined): string | undefined {
-  if (!ref) return undefined
-  return ref.includes('/') ? ref.split('/').pop() : ref
+/** Resolve joins in their captured source scope, never by a URL's final segment. */
+function encounterLinks(collection: ClinicalDataCollection) {
+  const graph = collection.clinicalSource?.graph
+  const byId = new Map<string, typeof collection.encounters>()
+  for (const encounter of collection.encounters) byId.set(encounter.id, [...(byId.get(encounter.id) ?? []), encounter])
+  const ambiguous = (id: string) => (byId.get(id)?.length ?? 0) > 1
+  const byNode = new Map(collection.encounters.filter(row => row.clinicalSourceNodeKey).map(row => [row.clinicalSourceNodeKey!, row]))
+  const nodes = new Map(graph?.nodes.map(node => [node.key, node]))
+  const edges = new Map(graph?.references.filter(edge => edge.path === 'encounter').map(edge => [edge.origin.key, edge]))
+  let incomplete = false
+  const target = (row: { clinicalSourceNodeKey?: string; encounter?: { reference?: string }; _encounterInferred?: boolean }) => {
+    const edge = row.clinicalSourceNodeKey ? edges.get(row.clinicalSourceNodeKey) : undefined
+    if (graph && edge) {
+      if (edge.status !== 'resolved') { incomplete = true; return undefined }
+      const linked = edge.targetKeys.flatMap(key => {
+        const direct = byNode.get(key)
+        if (direct) return [direct]
+        const node = nodes.get(key)
+        return node ? collection.encounters.filter(encounter => {
+          const candidate = encounter.clinicalSourceNodeKey ? nodes.get(encounter.clinicalSourceNodeKey) : undefined
+          return candidate && clinicalSourceNodesEqualWithContext(graph, node, candidate)
+        }) : []
+      })
+      const distinct = [...new Set(linked)]
+      if (distinct.length === 1) return distinct[0]
+      incomplete = true
+      return undefined
+    }
+    const reference = row.encounter?.reference
+    if (!reference) return undefined
+    // Date-inferred local links are explicitly marked by the mapper. Legacy
+    // snapshots without a graph may only use a unique, plain relative reference.
+    const id = (!graph || row._encounterInferred) ? /^Encounter\/([^/]+)$/.exec(reference)?.[1] : undefined
+    if (id && byId.get(id)?.length === 1) return byId.get(id)![0]
+    incomplete = true
+    return undefined
+  }
+  return { target, ambiguous, get incomplete() { return incomplete } }
 }
 
 function encounterDeptText(enc: any): string {
@@ -1483,7 +1519,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Concise summary of the most recent N visits: date, department, primary ICD, and counts of meds/labs/procedures. Use this before drilling into a specific visit with getEncounterDetails.',
       inputSchema: recentVisitsSchema,
       execute: async ({ limit, type }: z.infer<typeof recentVisitsSchema>) => {
-        const scrub = scrubForDomains(["Encounter","Condition"])
+        const scrub = scrubForDomains(['Encounter', 'Condition', 'MedicationRequest', 'MedicationStatement', 'Observation', 'DiagnosticReport', 'Procedure'])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
 
@@ -1495,26 +1531,25 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
         )
         const top = filtered.slice(0, limit && limit > 0 ? limit : 10)
 
-        const medsByEnc = new Map<string, number>()
-        for (const m of collection.medications) {
-          const id = refToId(m.encounter?.reference)
-          if (id) medsByEnc.set(id, (medsByEnc.get(id) ?? 0) + 1)
+        const links = encounterLinks(collection)
+        const counts = (rows: Array<{ clinicalSourceNodeKey?: string; encounter?: { reference?: string } }>) => {
+          const result = new Map<(typeof collection.encounters)[number], number>()
+          for (const row of rows) {
+            const encounter = links.target(row)
+            if (encounter) result.set(encounter, (result.get(encounter) ?? 0) + 1)
+          }
+          return result
         }
-        const labsByEnc = new Map<string, number>()
-        for (const o of collection.observations) {
-          const id = refToId(o.encounter?.reference)
-          if (id) labsByEnc.set(id, (labsByEnc.get(id) ?? 0) + 1)
-        }
-        const procsByEnc = new Map<string, number>()
-        for (const p of collection.procedures) {
-          const id = refToId(p.encounter?.reference)
-          if (id) procsByEnc.set(id, (procsByEnc.get(id) ?? 0) + 1)
-        }
+        const medsByEnc = counts(collection.medications)
+        const labsByEnc = counts(uniqueObservations(collection))
+        const procsByEnc = counts(collection.procedures)
+        const incompleteLinks = links.incomplete || top.some(e => links.ambiguous(e.id))
 
         return scrub({
           success: true,
           summary: `Top ${top.length} of ${filtered.length} recent visits`,
           count: top.length,
+          ...(incompleteLinks ? { incomplete: true, canConcludeAbsence: false, encounterLinkUncertainty: 'Some encounter links cannot be uniquely resolved in their source scope.' } : {}),
           data: top.map((e: any) => ({
             encounterId: e.id,
             date: encounterDate(e)?.slice(0, 10),
@@ -1522,9 +1557,9 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
             department: encounterDeptText(e),
             primaryIcd: e.reasonCode?.[0]?.coding?.[0]?.code,
             primaryIcdLabel: pickName(e.reasonCode?.[0]) || e.reasonCode?.[0]?.text,
-            medCount: medsByEnc.get(e.id) ?? 0,
-            labCount: labsByEnc.get(e.id) ?? 0,
-            procedureCount: procsByEnc.get(e.id) ?? 0,
+            medCount: links.ambiguous(e.id) ? null : medsByEnc.get(e) ?? 0,
+            labCount: links.ambiguous(e.id) ? null : labsByEnc.get(e) ?? 0,
+            procedureCount: links.ambiguous(e.id) ? null : procsByEnc.get(e) ?? 0,
           })),
         })
       },
@@ -1534,11 +1569,13 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Drill into one specific visit. Returns all diagnoses (incl. secondary), medications, lab observations, procedures linked to that encounter. Use this when the user asks about a specific visit identified via queryEncounters or getRecentVisits.',
       inputSchema: encounterDetailsSchema,
       execute: async ({ encounterId }: z.infer<typeof encounterDetailsSchema>) => {
-        const scrub = scrubForDomains(["Encounter","Condition","MedicationRequest","MedicationStatement","Observation","DiagnosticReport","Procedure"])
+        const scrub = scrubForDomains(['Encounter', 'Condition', 'MedicationRequest', 'MedicationStatement', 'Observation', 'DiagnosticReport', 'Procedure', 'ImagingStudy'])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: null })
 
-        const enc = collection.encounters.find((e: any) => e.id === encounterId)
+        const candidates = collection.encounters.filter((e: any) => e.id === encounterId)
+        if (candidates.length > 1) return scrub({ success: false, code: 'ambiguous-encounter-identity', incomplete: true, canConcludeAbsence: false, summary: 'Multiple source encounters have this identifier; a unique visit cannot be selected.', data: null })
+        const enc = candidates[0]
         if (!enc) {
           return scrub({
             success: false,
@@ -1547,7 +1584,8 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
           })
         }
 
-        const matches = (ref: any) => refToId(ref?.reference) === encounterId
+        const links = encounterLinks(collection)
+        const matches = (row: any) => links.target(row) === enc
 
         const diagnoses = (enc.reasonCode ?? []).map((rc: any) => ({
           code: rc.coding?.[0]?.code,
@@ -1555,12 +1593,12 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
         }))
 
         const nowMs = Date.now()
-        const medicationRecords = collection.medications.filter((m: any) => matches(m.encounter))
+        const medicationRecords = collection.medications.filter(matches)
         const meds = medicationRecords.map((medication) =>
           medicationToolFields(medication, nowMs, 'dosage')
         )
 
-        const obs = uniqueObservations(collection).filter((o: any) => matches(o.encounter)).map((o: any) => ({
+        const obs = uniqueObservations(collection).filter(matches).map((o: any) => ({
           name: pickName(o.code),
           value: o.valueQuantity?.value ?? o.valueString,
           unit: o.valueQuantity?.unit,
@@ -1568,19 +1606,19 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
           ...observationComponentFields(o),
         }))
 
-        const procs = collection.procedures.filter((p: any) => matches(p.encounter)).map((p: any) => ({
+        const procs = collection.procedures.filter(matches).map((p: any) => ({
           procedure: pickName(p.code),
           status: p.status,
           performedDateTime: p.performedDateTime || p.performedPeriod?.start,
         }))
 
-        const reports = collection.diagnosticReports.filter((r: any) => matches(r.encounter)).map((r: any) => ({
+        const reports = collection.diagnosticReports.filter(matches).map((r: any) => ({
           reportName: pickName(r.code),
           conclusion: r.conclusion,
           effectiveDateTime: r.effectiveDateTime,
         }))
 
-        const imagingStudies = (collection.imagingStudies ?? []).filter((study: any) => matches(study.encounter)).map((study: any) => ({
+        const imagingStudies = (collection.imagingStudies ?? []).filter(matches).map((study: any) => ({
           description: study.description,
           status: study.status,
           started: study.started,
@@ -1599,6 +1637,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
         return scrub({
           success: true,
           summary: `Encounter ${encounterId} details`,
+          ...(links.incomplete ? { incomplete: true, canConcludeAbsence: false, encounterLinkUncertainty: 'Some encounter links cannot be uniquely resolved in their source scope.' } : {}),
           data: {
             encounterId,
             date: encounterDate(enc)?.slice(0, 10),
