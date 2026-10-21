@@ -97,6 +97,45 @@ describe('MedcloudLaunchProvider', () => {
     expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
   })
 
+  it.each(['cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'] as const)(
+    'does not rearm a %s launch on a subsequent manual chart', phase => {
+      render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+      act(() => useProgressiveImportStore.setState({ pendingRunId: 'run-a', stoppedRuns: { 'run-a': phase } }))
+      settleImportedBundle()
+      act(() => useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} }))
+      settleImportedBundle()
+      expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    },
+  )
+
+  it('retires a pre-commit stop even without a settled event or a current run', () => {
+    const data = jest.spyOn(LocalBundleService, 'hasData').mockReturnValue(false)
+    render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+    act(() => useProgressiveImportStore.setState({ stoppedRuns: { 'run-a': 'cancelled' } }))
+    act(() => useProgressiveImportStore.setState({ stoppedRuns: {} }))
+    data.mockReturnValue(true)
+    settleImportedBundle()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    data.mockRestore()
+  })
+
+  it('does not rearm a stopped VGH launch when credentials arrive after a manual chart', async () => {
+    render(<MedcloudLaunchProvider launchHref={launchHref}><div>app</div></MedcloudLaunchProvider>)
+    act(() => useProgressiveImportStore.setState({ pendingRunId: 'run-a', stoppedRuns: { 'run-a': 'patient-changed' } }))
+    act(() => useProgressiveImportStore.setState({ pendingRunId: null, stoppedRuns: {} }))
+    settleImportedBundle()
+    act(() => window.dispatchEvent(extensionMessage('late-credential')))
+    await waitFor(() => expect(postMessage).toHaveBeenCalled())
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  })
+
+  it('keeps a generic delivery failure recoverable for the same run', () => {
+    render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+    act(() => useProgressiveImportStore.setState({ pendingRunId: 'run-a', stoppedRuns: { 'run-a': 'failed' } }))
+    settleImportedBundle()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).not.toBeNull()
+  })
+
   it('activates the runtime-only profile, selects it everywhere, and acknowledges', async () => {
     const { unmount } = render(
       <MedcloudLaunchProvider launchHref={launchHref}>

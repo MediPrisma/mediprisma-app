@@ -72,6 +72,7 @@ export function MedcloudLaunchProvider({
   const launchSummaryModelIdRef = useRef<string | null>(null)
   const launchMessageIdRef = useRef<string | null>(null)
   const autoSummaryQueuedRef = useRef(false)
+  const autoLaunchStoppedRef = useRef(false)
   const lastSupplementImportRef = useRef<string | null>(null)
   const resolvedLaunchHref = launchHref ?? (
     typeof window === 'undefined' ? '' : window.location.href
@@ -85,11 +86,26 @@ export function MedcloudLaunchProvider({
     return new URL(resolvedLaunchHref).origin
   }, [launchOptions, resolvedLaunchHref])
 
+  // A terminal launch must never migrate onto a later manual/demo chart, even
+  // if the stop arrives before the first snapshot or before its credential.
+  const retireStoppedAutoLaunch = useCallback(() => {
+    const { stoppedRuns } = useProgressiveImportStore.getState()
+    if (isProgressiveAutoSummaryBlocked()
+      || (!LocalBundleService.hasData() && Object.values(stoppedRuns).some(reason => reason !== 'failed'))) {
+      autoLaunchStoppedRef.current = true
+      autoSummaryQueuedRef.current = true
+      const messageId = launchMessageIdRef.current
+      if (messageId) useMedcloudLaunchStore.getState().claimSummary(messageId)
+      launchMessageIdRef.current = null
+    }
+    return autoLaunchStoppedRef.current
+  }, [])
+
   const queueAutoSummaryIfReady = useCallback(() => {
     const modelId = launchSummaryModelIdRef.current
     if (
       !launchOptions?.auto ||
-      isProgressiveAutoSummaryBlocked() ||
+      retireStoppedAutoLaunch() ||
       !bundleSettledRef.current ||
       !modelId ||
       autoSummaryQueuedRef.current
@@ -97,6 +113,7 @@ export function MedcloudLaunchProvider({
     const messageId = launchMessageIdRef.current ?? (
       globalThis.crypto?.randomUUID?.() ?? `medcloud-auto-${Date.now()}`
     )
+    launchMessageIdRef.current = messageId
     autoSummaryQueuedRef.current = true
     const progressive = useProgressiveImportStore.getState()
     const runId = progressive.pendingRunId ?? progressive.current?.runId
@@ -104,7 +121,7 @@ export function MedcloudLaunchProvider({
     useMedcloudLaunchStore.getState().queueSummary({ messageId, modelId,
       ...(runId && importId ? { progressiveRunId: runId, progressiveImportId: importId } : {}),
     })
-  }, [launchOptions])
+  }, [launchOptions, retireStoppedAutoLaunch])
 
   // Persist hydration can finish after this provider mounts. Watching all four
   // preferences makes a later non-parameter Extension launch recover as soon
@@ -133,8 +150,9 @@ export function MedcloudLaunchProvider({
 
   useEffect(() => {
     if (!launchOptions?.auto || typeof window === 'undefined') return
+    retireStoppedAutoLaunch()
+    const unsubscribe = useProgressiveImportStore.subscribe(retireStoppedAutoLaunch)
     const handleBundleSettled = () => {
-      if (isProgressiveAutoSummaryBlocked()) return
       bundleSettledRef.current = true
       queueAutoSummaryIfReady()
     }
@@ -152,10 +170,11 @@ export function MedcloudLaunchProvider({
     }
     window.addEventListener(PROGRESSIVE_IMPORT_EVENT, handleSupplement)
     return () => {
+      unsubscribe()
       window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, handleBundleSettled)
       window.removeEventListener(PROGRESSIVE_IMPORT_EVENT, handleSupplement)
     }
-  }, [launchOptions, queueAutoSummaryIfReady])
+  }, [launchOptions, queueAutoSummaryIfReady, retireStoppedAutoLaunch])
 
   const acknowledge = useCallback((messageId: string) => {
     if (!launchOrigin || typeof window === 'undefined') return
