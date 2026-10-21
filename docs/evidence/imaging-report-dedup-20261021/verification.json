@@ -1,6 +1,6 @@
 {
   "base": "af0bfe42c50ecba16b62a58a35ba4808c79b472e",
-  "applicationCode": "3863caf903701c687db989b39b8e5d31004cf149",
+  "applicationCode": "6c3979eb10840e95f80f0b9f23089d2dcfa388e5",
   "fixtureSHA256": "9a96500d75de65a65fb970ddc9622fea5cfc1895c683730e9b86119541042fb6",
   "identicalFixtures": true,
   "viewports": [
@@ -17,6 +17,7 @@
   },
   "sourceHistoryTested": true,
   "attachmentSourceHistoryTested": true,
+  "periodEndAndSourceAssetsTested": true,
   "nhiViewer": {
     "simulatedBridge": true,
     "liveAuthenticatedService": false,
@@ -33,10 +34,10 @@
       "sha256": "a5c392982d8db65a11718e0565742fd38e1d1f0d5fe7647c69173a4c87d0c95f"
     },
     "after-390.png": {
-      "sha256": "ffa0555206710f97dfc012a37128902283847483e7ddf9fb8e2a7f2cfd4adc0f"
+      "sha256": "a634d81b9a29eb134e46667297fb47e230524376f72868cd991cdfecb980738b"
     },
     "after-sources.png": {
-      "sha256": "33d3a499cd93ac91dda2520856ee5e8429c3a413ae6f9ae7e4eb82bdadad478f"
+      "sha256": "070299979b03c70176af3842c2b8b9dfa01133a85176047dd57ca07bbab527e8"
     },
     "after-viewer.png": {
       "sha256": "630b6afa1264bf04564352eda6945d83d985e5df6c4b258aeba94d92e335846d"
@@ -44,9 +45,9 @@
   },
   "localUnitTests": {
     "suites": 17,
-    "passed": 299
+    "passed": 305
   },
-  "utcCrossSourceTests": 119,
+  "utcCrossSourceTests": 125,
   "utcHistoryTests": 4,
   "additionalIntegration": {
     "mergedDownloadReimport": "passed",
