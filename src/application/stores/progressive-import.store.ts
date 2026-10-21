@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useMedcloudLaunchStore, type MedcloudSummaryRequest } from '../launch/medcloud-launch.store'
 
 // Shared transaction protocol for the importer and launch coordinator.
 
@@ -63,6 +64,20 @@ export function stopProgressiveImport(runId: string, phase: ProgressiveFailureRe
       phase: reason === 'failed' ? failedPhase(current.phase) : reason,
     } } : {}),
   })
+  const queued = useMedcloudLaunchStore.getState().pendingSummary
+  if (reason !== 'failed' && queued?.progressiveRunId === runId) {
+    useMedcloudLaunchStore.setState({ pendingSummary: null })
+  }
+}
+
+/** Check again at the consumer, after data/auth readiness and its timer. */
+export function isProgressiveSummaryRequestCurrent(request: MedcloudSummaryRequest, activeImportId: string | null): boolean {
+  if (!request.progressiveRunId) return true
+  const { current, pendingRunId, stoppedRuns } = useProgressiveImportStore.getState()
+  const stopped = stoppedRuns[request.progressiveRunId]
+  return request.progressiveImportId === activeImportId
+    && (current?.runId === request.progressiveRunId || pendingRunId === request.progressiveRunId)
+    && (!stopped || stopped === 'failed')
 }
 
 export function isProgressiveAutoSummaryBlocked(): boolean {

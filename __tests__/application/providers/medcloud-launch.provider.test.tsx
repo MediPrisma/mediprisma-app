@@ -21,6 +21,7 @@ import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/g
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 const launchHref = 'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
 const ENCRYPTED_RUNTIME_SECRET =
@@ -79,6 +80,15 @@ describe('MedcloudLaunchProvider', () => {
   })
 
   afterEach(() => postMessage.mockRestore())
+
+  it('binds queued cloud summaries to the active progressive run and import', () => {
+    const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
+    useProgressiveImportStore.setState({ pendingRunId: 'run-a' })
+    render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+    settleImportedBundle()
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toMatchObject({ progressiveRunId: 'run-a', progressiveImportId: 'cloud-import' })
+    active.mockRestore()
+  })
 
   it.each(['cancelled', 'patient-changed', 'privacy-stale'] as const)('does not queue a summary when a %s import finishes its accepted save', phase => {
     render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)

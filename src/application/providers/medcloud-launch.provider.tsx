@@ -22,7 +22,7 @@ import { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
-import { PROGRESSIVE_IMPORT_EVENT, isProgressiveAutoSummaryBlocked } from '@/src/application/stores/progressive-import.store'
+import { PROGRESSIVE_IMPORT_EVENT, isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 interface MedcloudLaunchProviderProps {
@@ -98,7 +98,12 @@ export function MedcloudLaunchProvider({
       globalThis.crypto?.randomUUID?.() ?? `medcloud-auto-${Date.now()}`
     )
     autoSummaryQueuedRef.current = true
-    useMedcloudLaunchStore.getState().queueSummary({ messageId, modelId })
+    const progressive = useProgressiveImportStore.getState()
+    const runId = progressive.pendingRunId ?? progressive.current?.runId
+    const importId = LocalBundleService.getActiveImportId()
+    useMedcloudLaunchStore.getState().queueSummary({ messageId, modelId,
+      ...(runId && importId ? { progressiveRunId: runId, progressiveImportId: importId } : {}),
+    })
   }, [launchOptions])
 
   // Persist hydration can finish after this provider mounts. Watching all four

@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
+import { isProgressiveSummaryRequestCurrent } from '@/src/application/stores/progressive-import.store'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 interface UseMedcloudAutoSummaryOptions {
   authLoading: boolean
@@ -51,6 +53,10 @@ export function useMedcloudAutoSummary({
     // replacement slot instead of consuming it for a result the UI no longer
     // presents.
     const timer = window.setTimeout(() => {
+      if (!isProgressiveSummaryRequestCurrent(request, LocalBundleService.getActiveImportId())) {
+        claimSummary(request.messageId)
+        return
+      }
       if (summaryModelId === request.modelId) {
         claimSummary(request.messageId)
         return

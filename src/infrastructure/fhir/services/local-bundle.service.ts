@@ -1157,6 +1157,9 @@ export const LocalBundleService = {
         signal.throwIfAborted()
         options.beforeCommit?.()
         signal.throwIfAborted()
+        // Never acknowledge a memory-only replacement while reload would
+        // silently reopen the older durable snapshot. Keep it and report failure.
+        if (activeImportId) throw error
         // Persistence is optional; cancellation and ownership checks are not.
         // No plaintext is persisted, and source/images remain usable in this tab.
         memBundle = bundle

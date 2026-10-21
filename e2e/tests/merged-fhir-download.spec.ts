@@ -66,10 +66,29 @@ test('progressive snapshots replace one patient chart and preserve late terminal
   const exported = parse(await fs.readFile(filename))
   expect(exported.entry.map(entry => entry.resource)).toEqual(finalResources)
   expect(new Set(exported.entry.map(entry => `${entry.resource.resourceType}/${entry.resource.id}`)).size).toBe(finalResources.length)
+  await page.evaluate(() => {
+    const previous = Storage.prototype.setItem, marker = sessionStorage.getItem('fhir_bundle_override')
+    ;(window as Window & { restoreStorage?: () => void }).restoreStorage = () => { Storage.prototype.setItem = previous }
+    Storage.prototype.setItem = function (name, value) {
+      if (this === sessionStorage && name === 'fhir_bundle_override' && value !== marker) throw new DOMException('synthetic quota', 'QuotaExceededError')
+      return previous.call(this, name, value)
+    }
+  })
+  expect((await send('hospital', finalResources, final.importId as string)).ok).toBe(false)
+  await page.evaluate(() => (window as Window & { restoreStorage?: () => void }).restoreStorage!())
   await page.evaluate(importId => window.postMessage({ source: 'medcloud2-extension', type: 'medcloud:outpatient-status', version: 1,
     runId: 'progressive-run', importId, phase: 'patient-changed' }, location.origin), visits.importId)
   await expect(page.getByRole('alert').filter({ hasText: '畫面仍為先前病人資料' })).toBeVisible()
   await info.attach('late-patient-change-warning', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
+  await page.reload()
+  await expect(page.getByText('合成分階段病人', { exact: true }).first()).toBeAttached()
+  expect(await activeImport(page)).toBe(`import:${final.importId}`)
+  await openDownloads(page)
+  const restoredDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下載原始 FHIR', exact: true }).click()
+  const restored = info.outputPath('progressive-after-quota-reload.json')
+  await (await restoredDownload).saveAs(restored)
+  expect(parse(await fs.readFile(restored)).entry.map(entry => entry.resource)).toEqual(finalResources)
 })
 
 async function openDownloads(page: Page) {

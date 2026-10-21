@@ -47,3 +47,20 @@ test('storage restriction does not swallow a cancellation or a changed active im
   await expect(local.save(chart(), { importId: 'stale', signal: new AbortController().signal, beforeCommit: () => { throw new Error('active import changed') } })).rejects.toThrow('active import changed')
   expect(local.getActiveImportId()).toBe('previous')
 })
+
+test('a replacement that cannot publish its storage pointer fails instead of acknowledging a newer memory-only snapshot', async () => {
+  const local = await service(), previous = chart(), source = new Blob(['previous source'])
+  await local.save(previous, { importId: 'previous', originalFhir: source })
+  const marker = sessionStorage.getItem('fhir_bundle_override'), key = sessionStorage.getItem('__bundle_session_key__')
+  const set = Storage.prototype.setItem
+  jest.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name: string, value: string) {
+    if (this === sessionStorage && name === 'fhir_bundle_override' && value !== marker) throw new DOMException('synthetic quota', 'QuotaExceededError')
+    return set.call(this, name, value)
+  })
+  await expect(local.save(chart(), { importId: 'unpublished', replaceImportId: 'previous', signal: new AbortController().signal })).rejects.toThrow('bundle session marker unavailable')
+  expect(sessionStorage.getItem('fhir_bundle_override')).toBe(marker)
+  expect(sessionStorage.getItem('__bundle_session_key__')).toBe(key)
+  expect(local.getActiveImportId()).toBe('previous')
+  expect(await local.load()).toEqual(previous)
+  expect(await local.loadOriginalFhir()).toBe(source)
+})

@@ -1,11 +1,42 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useMedcloudAutoSummary } from '@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from '@/src/application/launch/medcloud-launch-context'
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 describe('useMedcloudAutoSummary', () => {
-  beforeEach(() => useMedcloudLaunchStore.getState().clear())
+  beforeEach(() => {
+    useMedcloudLaunchStore.getState().clear()
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
+  })
+  afterEach(() => jest.restoreAllMocks())
+
+  it.each(['patient-changed', 'privacy-stale', 'cancelled', 'source-unavailable'] as const)('revokes a queued progressive summary on %s before data becomes ready', async phase => {
+    const generate = jest.fn(async () => undefined)
+    jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
+    useMedcloudLaunchStore.getState().queueSummary({ messageId: 'queued-cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'cloud-import' })
+    const { rerender } = renderHook(({ ready }) => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+      dataReady: ready, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }), { initialProps: { ready: false } })
+    act(() => stopProgressiveImport('run-a', phase))
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    rerender({ ready: true })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+    expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('rechecks the active import inside the scheduled timer before generating', async () => {
+    const generate = jest.fn(async () => undefined)
+    jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('manually-replaced')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
+    useMedcloudLaunchStore.getState().queueSummary({ messageId: 'stale-cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'cloud-import' })
+    renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+      dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+    await waitFor(() => expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull())
+    expect(generate).not.toHaveBeenCalled()
+  })
 
   it('keeps the launch pending until the persisted account state is resolved', async () => {
     const generate = jest.fn(async () => undefined)
