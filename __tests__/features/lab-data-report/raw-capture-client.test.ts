@@ -1,8 +1,10 @@
 import {
+  medcloudExtensionVersion,
   RAW_CAPTURE_REQUEST,
   RAW_CAPTURE_RESULT,
   rawCaptureOrigin,
   requestRawCapture,
+  supportsRawCapture,
 } from '@/features/lab-data-report/utils/raw-capture-client'
 
 // jsdom serves the page from http://localhost, which the client treats as a
@@ -111,5 +113,28 @@ describe('requestRawCapture', () => {
 
   it('does not ask with an invalid bundle id', async () => {
     await expect(requestRawCapture('bad id!')).resolves.toEqual({ ok: false, code: 'INVALID_REQUEST' })
+  })
+})
+
+describe('extension version gate', () => {
+  const tagged = (code: string) => ({ meta: { tag: [{ system: 'https://cloud-wildcatch.invalid/fhir/CodeSystem/adapter-version', code }] } })
+
+  it.each([
+    ['0.12.19', true],
+    ['0.12.20', true],
+    ['0.13.0', true],
+    ['1.0', true],
+    ['0.12.18', false],
+    ['0.12.13', false],
+    ['0.9.99', false],
+    ['test', false],
+    [undefined, false],
+  ])('%s supports the raw capture: %s', (version, expected) => {
+    expect(supportsRawCapture(version)).toBe(expected)
+  })
+
+  it('reads the highest adapter version the bridge stamped', () => {
+    expect(medcloudExtensionVersion([tagged('0.12.13'), tagged('0.12.19'), tagged('0.12.2'), {}])).toBe('0.12.19')
+    expect(medcloudExtensionVersion([{ meta: { tag: [{ system: 'other', code: '9.9.9' }] } }])).toBeUndefined()
   })
 })
