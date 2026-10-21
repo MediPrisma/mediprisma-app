@@ -117,9 +117,7 @@ export function compareImagingCopies(a: Report, b: Report): number {
 
 /** Findings may be templated. Explicit exam labels still constrain a match,
  * even though generic hospital/NHI names are allowed to differ. */
-function examQualifiers(report: Report): string[] | null {
-  const header = EXAM_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1]?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
-  const label = [report.code?.text, ...(report.code?.coding ?? []).map(c => c.display), header].filter(Boolean).join(' ').normalize('NFKC')
+function parseExamLabel(label: string): string[] | null {
   // This is deliberately a bounded recognizer, not a body-site guesser. A new
   // anatomy/protocol term (e.g. knee/ankle) must fail closed until supported.
   const recognized = label
@@ -145,7 +143,25 @@ function examQualifiers(report: Report): string[] | null {
   const withoutContrast = (/\bcontrast\b/i.test(label) && /\bwithout\b/i.test(label)) || /無造影劑/.test(label)
   const contrast = [withContrast && 'with', withoutContrast && 'without'].filter(Boolean).join(',')
   const view = ['ap', 'pa', 'lateral', 'oblique'].filter(value => new RegExp(`\\b${value}\\b`, 'i').test(label)).join(',')
-  return [header, side, site, contrast, view]
+  return [side, site, contrast, view]
+}
+
+function examQualifiers(report: Report): string[] | null {
+  const header = EXAM_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1]?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
+  const labels = [report.code?.text, ...(report.code?.coding ?? []).map(c => c.display), header]
+    .filter((label): label is string => !!label?.trim())
+  const parsed = labels.map(label => parseExamLabel(label.normalize('NFKC')))
+  if (parsed.some(value => value === null)) return null
+  const values = parsed as string[][]
+  const qualifiers: string[] = []
+  for (let index = 0; index < 4; index++) {
+    const explicit = new Set(values.map(value => value[index]).filter(Boolean))
+    // Different fields describing this same source must agree too. Never turn
+    // a left/right disagreement across fields into a bilateral examination.
+    if (explicit.size > 1) return null
+    qualifiers.push([...explicit][0] ?? '')
+  }
+  return [header, ...qualifiers]
 }
 
 /** Shared grouping projection for rows, tab counts and AI context. Returned

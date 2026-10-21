@@ -123,6 +123,19 @@ describe('cross-source imaging reports', () => {
   })
 
   it.each([
+    ['Left breast ultrasound', 'Right breast ultrasound', 'Bilateral breast ultrasound'],
+    ['Chest CT', 'Abdominal CT', 'Chest and abdominal CT'],
+    ['Chest CT with contrast', 'Chest CT without contrast', 'Chest CT with and without contrast'],
+    ['CHEST AP VIEW', 'CHEST PA VIEW', 'CHEST AP AND PA VIEW'],
+  ])('rejects contradictory source fields: %s / %s', (text, display, other) => {
+    const reports = pair()
+    reports[0].code = { text, coding: [{ display }] }
+    reports[1].code = { text: other }
+    reports[0].conclusion = BODY
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it.each([
     ['Left breast ultrasound', 'Right breast ultrasound'],
     ['Chest CT', 'Brain CT'],
     ['Left knee MRI', 'Left ankle MRI'],
