@@ -11,7 +11,6 @@
 "use client"
 
 import { useMemo } from 'react'
-import { Building2 } from 'lucide-react'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
@@ -158,7 +157,6 @@ function CarePlanListItem({ it }: { it: CarePlanItem }) {
       {it.range && <div className="mt-0.5 text-xs text-muted-foreground">{it.range}</div>}
       {it.institution && (
         <div className="mt-1 flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
-          <Building2 className="h-3 w-3 shrink-0" />
           <span>{it.institution}</span>
         </div>
       )}

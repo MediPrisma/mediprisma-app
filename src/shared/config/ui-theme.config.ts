@@ -275,10 +275,10 @@ export const TAB_ACTIVE_CLASSES = {
  * pointer-oriented desktop layouts.
  */
 export const SUBTAB_LIST_CLASSES =
-  'h-auto min-h-[44px] rounded-none border-x-0 border-t-0 border-b border-border bg-transparent p-0 shadow-none xl:min-h-[24px]'
+  'h-auto min-h-[44px] rounded-none border-x-0 border-t-0 border-b border-border bg-transparent p-0 shadow-none dark:bg-transparent xl:min-h-[24px]'
 
 export const SUBTAB_TRIGGER_CLASSES =
-  "relative min-h-[44px] min-w-0 rounded-none border-0 bg-transparent px-2 py-0 text-sm font-medium text-muted-foreground shadow-none transition-colors after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-transparent after:content-[''] hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=active]:after:bg-primary dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-transparent xl:min-h-[24px]"
+  "relative min-h-[44px] min-w-0 rounded-none border-0 bg-transparent px-2 py-0 text-sm font-medium text-muted-foreground shadow-none transition-colors after:absolute after:inset-x-2 after:-bottom-px after:h-[1.5px] after:bg-transparent after:content-[''] hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:after:bg-foreground dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-transparent xl:min-h-[24px]"
 
 /**
  * Entry points that dock existing clinical content into the right pane.
@@ -286,7 +286,7 @@ export const SUBTAB_TRIGGER_CLASSES =
  * this existing action look absent after the shell was flattened.
  */
 export const RIGHT_PANE_ACTION_CLASSES =
-  'hidden cursor-pointer items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-none transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:inline-flex'
+  'reveal-on-hover hidden cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 md:inline-flex'
 
 /**
  * Card boundary classes. Routine feature cards use one neutral boundary;

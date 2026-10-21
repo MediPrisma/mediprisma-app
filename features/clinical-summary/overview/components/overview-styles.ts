@@ -17,12 +17,12 @@ import { cn } from '@/src/shared/utils/cn.utils'
 
 /** Pill filter chip. Active state reuses the reports workspace control tone. */
 export const OVERVIEW_CHIP_BASE =
-  'inline-flex h-6 shrink-0 cursor-pointer items-center rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
+  'inline-flex h-6 shrink-0 cursor-pointer items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
 
 export function overviewChipClass(active: boolean): string {
   return cn(
     OVERVIEW_CHIP_BASE,
-    active && `${REPORT_ACTIVE_CONTROL_TONE} border-primary/30`,
+    active && `${REPORT_ACTIVE_CONTROL_TONE} font-semibold`,
   )
 }
 
@@ -48,7 +48,7 @@ export const OVERVIEW_SOURCE_CLASS = cn(
 
 /** Neutral metadata badge (科別, 分類) — the same tone VisitItem uses. */
 export const OVERVIEW_META_BADGE_CLASS =
-  'inline-flex shrink-0 items-center rounded-md border border-border bg-muted/60 px-1.5 py-0 font-medium text-muted-foreground'
+  'inline-flex shrink-0 items-center py-0 text-muted-foreground'
 
 export const OVERVIEW_ATTENTION_PILL_CLASS = cn(
   'inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 font-medium',

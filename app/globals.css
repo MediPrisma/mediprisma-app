@@ -60,32 +60,29 @@ body :where(button, [role="button"], [role="menuitem"], [role="option"], .select
     color-mix(in oklab, var(--muted-foreground) 18%, transparent) 5px,
     color-mix(in oklab, var(--muted-foreground) 18%, transparent) 7px
   );
-  /* Frosted clinical blue: canvas → panel → card remain visibly layered. */
-  --background: oklch(0.955 0.014 250);
-  --panel: oklch(0.976 0.010 250);
-  --foreground: oklch(0.19 0.014 260);
-  --card: oklch(0.992 0.004 250);
-  --card-foreground: oklch(0.19 0.014 260);
-  --popover: oklch(0.996 0.003 250);
-  --popover-foreground: oklch(0.15 0.01 264);
-  /* Primary: Modern blue with depth */
-  --primary: oklch(0.55 0.18 250);
+  /* Quiet chart: one paper surface, ink text, hairlines for structure.
+     Colour is reserved for interaction (ink blue) and clinical meaning. */
+  --background: oklch(0.985 0.002 95);
+  --panel: oklch(0.985 0.002 95);
+  --foreground: oklch(0.21 0.008 265);
+  --card: oklch(0.995 0.001 95);
+  --card-foreground: oklch(0.21 0.008 265);
+  --popover: oklch(0.998 0.001 95);
+  --popover-foreground: oklch(0.18 0.008 265);
+  --primary: oklch(0.46 0.13 258);
   --primary-foreground: oklch(0.99 0 0);
-  /* Secondary and muted surfaces stay visibly distinct at clinical density. */
-  --secondary: oklch(0.938 0.015 250);
-  --secondary-foreground: oklch(0.22 0.014 260);
-  --muted: oklch(0.94 0.014 250);
-  --muted-foreground: oklch(0.45 0.018 260);
-  --accent: oklch(0.925 0.032 250);
-  --accent-foreground: oklch(0.42 0.14 250);
-  /* Destructive: Modern red */
-  --destructive: oklch(0.58 0.22 25);
+  --secondary: oklch(0.955 0.003 95);
+  --secondary-foreground: oklch(0.24 0.008 265);
+  --muted: oklch(0.962 0.003 95);
+  --muted-foreground: oklch(0.49 0.01 265);
+  --accent: oklch(0.948 0.006 258);
+  --accent-foreground: oklch(0.30 0.06 258);
+  --destructive: oklch(0.55 0.2 27);
   /* Clinical abnormal values are data, not destructive actions. */
-  --clinical-abnormal: oklch(0.56 0.20 25);
-  /* Boundaries remain quiet, but no longer disappear on high-quality displays. */
-  --border: oklch(0.845 0.024 250);
-  --input: oklch(0.90 0.018 250);
-  --ring: oklch(0.55 0.18 250);
+  --clinical-abnormal: oklch(0.53 0.19 27);
+  --border: oklch(0.905 0.004 95);
+  --input: oklch(0.875 0.005 95);
+  --ring: oklch(0.46 0.13 258);
   /* Charts: Vibrant and distinct */
   --chart-1: oklch(0.65 0.20 250);
   --chart-2: oklch(0.60 0.18 160);
@@ -93,14 +90,14 @@ body :where(button, [role="button"], [role="menuitem"], [role="option"], .select
   --chart-4: oklch(0.62 0.20 300);
   --chart-5: oklch(0.68 0.18 30);
   /* Sidebar */
-  --sidebar: oklch(0.976 0.010 250);
+  --sidebar: oklch(0.985 0.002 95);
   --sidebar-foreground: oklch(0.15 0.01 264);
-  --sidebar-primary: oklch(0.55 0.18 250);
+  --sidebar-primary: oklch(0.46 0.13 258);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.935 0.018 250);
+  --sidebar-accent: oklch(0.948 0.006 258);
   --sidebar-accent-foreground: oklch(0.15 0.01 264);
-  --sidebar-border: oklch(0.845 0.024 250);
-  --sidebar-ring: oklch(0.55 0.18 250);
+  --sidebar-border: oklch(0.905 0.004 95);
+  --sidebar-ring: oklch(0.46 0.13 258);
 }
 
 .dark {
@@ -109,10 +106,10 @@ body :where(button, [role="button"], [role="menuitem"], [role="option"], .select
      not an OLED entertainment surface. Lift the entire palette away from
      black, keep chroma low, and reserve color for selection and clinical
      meaning. The three structural levels remain quiet but perceptible. */
-  --background: oklch(0.235 0.012 245);
-  --panel: oklch(0.255 0.012 245);
+  --background: oklch(0.225 0.008 255);
+  --panel: oklch(0.225 0.008 255);
   --foreground: oklch(0.80 0.008 245);
-  --card: oklch(0.285 0.012 245);
+  --card: oklch(0.245 0.008 255);
   --card-foreground: oklch(0.81 0.008 245);
   --popover: oklch(0.315 0.014 245);
   --popover-foreground: oklch(0.82 0.008 245);
@@ -129,7 +126,7 @@ body :where(button, [role="button"], [role="menuitem"], [role="option"], .select
   /* Muted coral reads as clinical information rather than an emitted alarm. */
   --clinical-abnormal: oklch(0.69 0.09 20);
   /* Translucent-looking hairlines: enough for grouping, never a foreground. */
-  --border: oklch(0.33 0.013 245);
+  --border: oklch(0.31 0.008 255);
   --input: oklch(0.345 0.014 245);
   --ring: oklch(0.66 0.105 240);
   --chart-1: oklch(0.66 0.13 240);
@@ -137,7 +134,7 @@ body :where(button, [role="button"], [role="menuitem"], [role="option"], .select
   --chart-3: oklch(0.68 0.12 55);
   --chart-4: oklch(0.64 0.13 300);
   --chart-5: oklch(0.67 0.12 25);
-  --sidebar: oklch(0.255 0.012 245);
+  --sidebar: oklch(0.225 0.008 255);
   --sidebar-foreground: oklch(0.80 0.008 245);
   --sidebar-primary: oklch(0.66 0.105 240);
   --sidebar-primary-foreground: oklch(0.20 0.012 245);
@@ -262,4 +259,29 @@ body :where(button, [role="button"], [role="menuitem"], [role="option"], .select
      can see it. With no padding the two boxes coincide, so this costs the
      other strips nothing. */
   background-origin: content-box;
+}
+
+/* Actions on intent.
+   Secondary controls (expand, copy, edit, translate, panel collapse) stay out
+   of the clinician's field of view until the pointer or keyboard focus enters
+   the section that owns them. A `.reveal-scope` owns its `.reveal-on-hover`
+   descendants. Only fine pointers that can hover hide them: touch screens,
+   pens and keyboard-only use always see every control, and an open menu or a
+   focused control never disappears under the reader. */
+@media (hover: hover) and (pointer: fine) {
+  .reveal-scope .reveal-on-hover {
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+  .reveal-scope:hover .reveal-on-hover,
+  .reveal-scope:focus-within .reveal-on-hover,
+  .reveal-scope .reveal-on-hover:has([data-state="open"]),
+  .reveal-scope .reveal-on-hover[data-state="open"] {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-scope .reveal-on-hover {
+    transition: none;
+  }
 }

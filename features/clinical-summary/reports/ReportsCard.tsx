@@ -5,7 +5,6 @@ import { startTransition, useCallback, useEffect, useMemo, useState } from "reac
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
-  CARD_BORDER_CLASSES,
   SUBTAB_LIST_CLASSES,
   SUBTAB_TRIGGER_CLASSES,
 } from "@/src/shared/config/ui-theme.config"
@@ -56,7 +55,7 @@ type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
 type RawPreparationPriority = 'idle' | 'after-paint'
 // Clip rounded edges without creating a scroll container: the cumulative
 // category bar must stick to the report panel's actual scrolling viewport.
-const REPORT_CARD_CLASS = `${CARD_BORDER_CLASSES.clinical} overflow-clip rounded-lg border-border shadow-none hover:shadow-none`
+const REPORT_CARD_CLASS = 'overflow-clip rounded-none border-0 bg-transparent shadow-none hover:shadow-none'
 
 interface CumulativeSourceFocus {
   categoryId: string
@@ -749,7 +748,7 @@ export function ReportsCard() {
       type="button"
       onClick={() => setExpanded(!expanded)}
       aria-label={expanded ? 'Minimize' : 'Expand to fullscreen'}
-      className="absolute right-2 top-2 z-30 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-md border border-border bg-background px-0 text-xs text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:top-1.5 max-md:!min-h-[36px] max-md:!min-w-[36px] lg:min-h-8 lg:min-w-8 @min-[1160px]:px-2"
+      className="reveal-on-hover absolute right-2 top-2 z-30 inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-md border border-transparent bg-transparent px-0 text-xs text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:top-1.5 max-md:!min-h-[36px] max-md:!min-w-[36px] lg:min-h-8 lg:min-w-8 @min-[1160px]:px-2"
       title={expanded ? 'Minimize' : 'Expand to fullscreen'}
     >
       {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
@@ -837,7 +836,7 @@ export function ReportsCard() {
 
                 <span className="h-4 w-px bg-border" aria-hidden />
 
-                <div className="inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/40 p-0.5" role="group" aria-label={(t.reports as any).labViewLabel}>
+                <div className="inline-flex items-center gap-0.5" role="group" aria-label={(t.reports as any).labViewLabel}>
                   {([
                     { byDay: true, label: (t.reports as any).byCollectionDay, title: (t.reports as any).byCollectionDayTooltip },
                     { byDay: false, label: (t.reports as any).flatList, title: undefined },
@@ -875,17 +874,16 @@ export function ReportsCard() {
                       onClick={() => setProcedureCategoryFilter(option.value)}
                       aria-pressed={active}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
                         active
-                          ? "border-primary bg-primary/10 font-medium text-primary"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                          ? "bg-foreground/[0.07] font-semibold text-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
                       <span>{option.label}</span>
                       <span
                         className={cn(
-                          "min-w-4 rounded-full px-1 text-center text-[0.625rem] tabular-nums",
-                          active ? "bg-primary/15" : "bg-muted",
+                          "min-w-4 text-center text-[0.6875rem] font-normal tabular-nums text-muted-foreground",
                         )}
                       >
                         {option.count}
@@ -997,9 +995,9 @@ export function ReportsCard() {
   return (
     // Phones keep the two tab rows visually connected while larger layouts
     // retain the roomier card inset.
-    <Card className={`${REPORT_CARD_CLASS} @container relative w-full max-w-full pt-1 md:pt-3`}>
+    <Card className={`${REPORT_CARD_CLASS} reveal-scope @container relative w-full max-w-full pt-1 md:pt-3`}>
       {expandButton}
-      <CardContent className="min-w-0 px-3 pb-3 sm:px-4 sm:pb-4">
+      <CardContent className="min-w-0 px-0.5 pb-3">
         {reportsContent}
       </CardContent>
     </Card>

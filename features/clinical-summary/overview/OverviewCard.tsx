@@ -207,14 +207,16 @@ export function OverviewCard() {
       ) : data.isLoading ? (
         <LoadingSkeleton />
       ) : isWide ? (
-        <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-[repeat(2,minmax(0,1fr))] gap-3 overflow-hidden">
+        // Hairlines between the four quadrants come from the grid itself: the
+        // 1px gap shows the border colour behind cells painted with the panel.
+        <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-[repeat(2,minmax(0,1fr))] gap-px overflow-hidden border-y border-border bg-border">
           <OverviewCell id="labs" register={registerCell}>{labs}</OverviewCell>
           <OverviewCell id="reports" register={registerCell}>{reports}</OverviewCell>
           <OverviewCell id="meds" register={registerCell}>{meds}</OverviewCell>
           <OverviewCell id="visits" register={registerCell}>{visits}</OverviewCell>
         </div>
       ) : (
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-1">
+        <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto pb-1">
           <OverviewNavTiles data={data} onJump={jumpTo} />
           {labs}
           {reports}

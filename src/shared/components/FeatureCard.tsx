@@ -4,7 +4,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 import { LoadingSkeleton } from './LoadingSkeleton'
 import { ErrorMessage } from './ErrorMessage'
 import { EmptyState } from './EmptyState'
-import { FEATURE_CARD_THEMES, UI_COLORS } from '@/src/shared/config/ui-theme.config'
+import type { UI_COLORS } from '@/src/shared/config/ui-theme.config'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 
@@ -32,7 +32,6 @@ interface FeatureCardProps {
 export function FeatureCard({
   title,
   featureId,
-  icon: customIcon,
   isLoading = false,
   error = null,
   isEmpty = false,
@@ -43,19 +42,13 @@ export function FeatureCard({
   className,
   children
 }: FeatureCardProps) {
-  // Get theme from registry or use defaults
-  const theme = featureId ? FEATURE_CARD_THEMES[featureId] : null
-  const Icon = customIcon || theme?.icon
   const hasTitle = !!title
 
+  // A section, not a decorated card: the title carries the hierarchy on its
+  // own, so no marker stripe and no category icon compete with the data.
+  // `icon` stays accepted for existing callers.
   const titleContent = (
     <>
-      <span
-        data-slot="clinical-section-marker"
-        aria-hidden="true"
-        className="h-4 w-0.5 shrink-0 rounded-sm bg-primary/70"
-      />
-      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
       {title}
       {titleAccessory}
     </>
@@ -77,10 +70,10 @@ export function FeatureCard({
     // line of its own. The action wraps before the title shrinks, and a title
     // wider than the card (Patient Information at 200% text) wraps its words.
     return (
-      <Card className={cn("@container/inline-card gap-0 rounded-lg border-border bg-card py-1.5 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none", className)}>
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 px-3 sm:px-5 @max-[36rem]/inline-card:flex @max-[36rem]/inline-card:flex-wrap @max-[36rem]/inline-card:items-center">
+      <Card data-variant="clinical-section" className={cn("reveal-scope @container/inline-card gap-0 rounded-none border-0 border-b border-border/70 bg-transparent py-1.5 shadow-none", className)}>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 px-0.5 @max-[36rem]/inline-card:flex @max-[36rem]/inline-card:flex-wrap @max-[36rem]/inline-card:items-center">
           {hasTitle && (
-            <CardTitle className="col-start-1 row-start-1 flex min-h-8 items-center gap-2 text-base">
+            <CardTitle className="col-start-1 row-start-1 flex min-h-8 items-center gap-2 text-sm font-semibold text-foreground">
               {titleContent}
             </CardTitle>
           )}
@@ -94,7 +87,7 @@ export function FeatureCard({
             {body}
           </div>
           {headerAction && (
-            <div data-slot="card-action" className="col-start-3 row-start-1 flex min-h-8 items-center justify-end gap-1 @max-[36rem]/inline-card:ml-auto @max-[36rem]/inline-card:flex-wrap">
+            <div data-slot="card-action" className="reveal-on-hover col-start-3 row-start-1 flex min-h-8 items-center justify-end gap-1 @max-[36rem]/inline-card:ml-auto @max-[36rem]/inline-card:flex-wrap">
               {headerAction}
             </div>
           )}
@@ -110,16 +103,16 @@ export function FeatureCard({
   // spacing so real clinical content starts earlier, while md+ preserves the
   // established desktop rhythm. A neutral boundary replaces accent stripes:
   // clinical color is reserved for status, severity, and selected state.
-    <Card className={cn("gap-2 rounded-lg border-border bg-card py-2 shadow-[0_1px_2px_rgb(15_23_42/0.04)] hover:shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none dark:hover:shadow-none md:py-3", className)}>
+    <Card data-variant="clinical-section" className={cn("reveal-scope gap-2 rounded-none border-0 border-b border-border/70 bg-transparent pb-4 pt-3 shadow-none last:border-b-0", className)}>
       {hasTitle && (
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+        <CardHeader className="px-0.5">
+          <CardTitle className="flex min-h-7 items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
             {titleContent}
           </CardTitle>
-          {headerAction && <CardAction>{headerAction}</CardAction>}
+          {headerAction && <CardAction className="reveal-on-hover">{headerAction}</CardAction>}
         </CardHeader>
       )}
-      <CardContent className="px-3 sm:px-5">
+      <CardContent className="px-0.5">
         {body}
       </CardContent>
     </Card>

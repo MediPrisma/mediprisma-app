@@ -31,11 +31,11 @@ describe('HeaderOverflowMenu — smoke', () => {
     expect(screen.getByRole('button', { name: /更多|more/i })).toBeInTheDocument()
   })
 
-  it('keeps the compact menu through tablet widths and hides it on wide desktop', () => {
+  it('is the one utility entry at every width', () => {
     const { container } = renderMenu()
-    const wrapper = container.querySelector('.lg\\:hidden')
-    expect(wrapper).not.toBeNull()
-    // The kebab trigger must remain inside the responsive wrapper, not a sibling.
-    expect(wrapper?.querySelector('button[aria-label]')).not.toBeNull()
+    // Audience, language and tours live only here now, so the menu is never
+    // hidden behind a breakpoint.
+    expect(container.querySelector('.lg\\:hidden')).toBeNull()
+    expect(screen.getByRole('button', { name: /更多|more/i })).toBeInTheDocument()
   })
 })

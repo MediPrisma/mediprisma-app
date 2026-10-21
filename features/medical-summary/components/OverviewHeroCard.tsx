@@ -2,7 +2,7 @@
 // button. Safety alerts live in 開藥注意 after 影像與病理重點.
 "use client"
 
-import { Check, ClipboardList, Copy, Info, TriangleAlert } from "lucide-react"
+import { Check, Copy, Info, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -52,17 +52,14 @@ export function OverviewHeroCard({
   return (
     <section
       data-tour="medical-summary-overview"
-      className="overflow-hidden rounded-lg border border-border bg-card"
+      className="reveal-scope overflow-hidden border-b border-border"
       aria-labelledby="medical-summary-overview-title"
     >
-      <div className="bg-primary/[0.035] px-3.5 py-3 dark:bg-primary/[0.055]">
+      <div className="px-0.5 pb-4 pt-2">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ClipboardList className="h-4 w-4" aria-hidden="true" />
-          </div>
           <h3
             id="medical-summary-overview-title"
-            className="min-w-0 text-[length:max(14px,0.875rem)] font-semibold text-foreground"
+            className="min-w-0 text-[length:max(13px,0.8125rem)] font-medium text-muted-foreground"
           >
             {title}
           </h3>
@@ -91,13 +88,13 @@ export function OverviewHeroCard({
           ) : null}
           <span className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
             {dataRange ? (
-              <span className="text-[length:max(14px,0.875rem)] tabular-nums text-foreground/80">{dataRange}</span>
+              <span className="text-[length:max(13px,0.8125rem)] tabular-nums text-muted-foreground">{dataRange}</span>
             ) : null}
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="h-[44px] shrink-0 gap-1.5 px-2 text-xs shadow-none hover:shadow-none lg:h-8"
+              variant="ghost"
+              className="reveal-on-hover h-[44px] shrink-0 gap-1.5 px-2 text-xs text-muted-foreground shadow-none hover:shadow-none lg:h-8"
               onClick={handleCopy}
               aria-label={copied ? copiedLabel : copyLabel}
             >
@@ -110,7 +107,7 @@ export function OverviewHeroCard({
             </Button>
           </span>
         </div>
-        <p className="mt-1.5 text-[length:max(15px,1rem)] font-semibold leading-snug text-foreground">
+        <p className="mt-1.5 text-[length:max(16px,1.0625rem)] font-semibold leading-snug text-foreground">
           {result.headline}
         </p>
         {reviewLabel && reviewUnavailable ? (

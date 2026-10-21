@@ -1,6 +1,5 @@
 "use client"
 
-import { Building2 } from 'lucide-react'
 import type { ReportHistoryItem } from '../hooks/useObservationHistory'
 import { FormattedReportText } from './FormattedReportText'
 import { REPORT_SOURCE_TONE } from './report-color-roles'
@@ -39,7 +38,6 @@ export function ReportHistoryList({ data }: ReportHistoryListProps) {
             <span className="font-medium text-foreground">{item.calendarDate ? formatCalendarDate(item.calendarDate) : formatDate(item.date, locale)}</span>
             {item.institution && (
               <span className={`inline-flex items-center gap-1 ${REPORT_SOURCE_TONE}`}>
-                <Building2 className="h-3 w-3" />
                 {formatOrganizationDisplay(item.institution, locale)}
               </span>
             )}

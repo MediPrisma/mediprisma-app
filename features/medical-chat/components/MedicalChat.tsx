@@ -32,7 +32,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { ChatMessageList } from "./ChatMessageList"
 import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
@@ -660,10 +659,15 @@ export default function MedicalChat() {
   useKeyboardShortcuts(isExpanded, expandable.collapse)
 
   const chatContent = (
-    <Card className={`flex h-full min-h-0 flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : CARD_BORDER_CLASSES.chat} !gap-0 !py-0`}>
+    // The panel is the surface: no box around the conversation.
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 bg-transparent shadow-none !gap-0 !py-0">
       {!isExpanded && (
-        <div data-tour="medical-chat-controls" className="relative flex items-center justify-between px-2 py-1">
+        // Occasional controls (history, titles, model, maximize) wait in the
+        // row until the pointer or focus reaches it; 新對話 and an active
+        // 無痕 state stay in view.
+        <div data-tour="medical-chat-controls" className="reveal-scope relative flex items-center justify-between gap-2 px-1 py-1">
           <div className="flex items-center gap-1">
+            <span className="reveal-on-hover inline-flex">
             {/* Keep the history drawer visible even when signed out — its
                 internal empty-state shows a "sign in to save chats" CTA,
                 which is how users discover the feature exists. The temp-
@@ -671,13 +675,14 @@ export default function MedicalChat() {
                 that makes no sense when we weren't saving in the first
                 place, so hide it for signed-out users. */}
             <ChatHistoryDrawer persistenceEnabled={cloudChatHistoryEnabled} />
+            </span>
             {user && (
               <button
                 onClick={handleToggleTemporaryMode}
-                className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs transition-colors ${
+                className={`inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs transition-colors ${
                   isTemporaryMode
-                    ? 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-300'
-                    : 'bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                    ? 'bg-foreground/[0.07] font-medium text-foreground hover:bg-foreground/10'
+                    : 'reveal-on-hover text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
                 title={
                   isTemporaryMode
@@ -700,7 +705,7 @@ export default function MedicalChat() {
               near-center without ever colliding. */}
           <button
             onClick={() => setShowHeader(!showHeader)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0 px-1 whitespace-nowrap"
+            className="reveal-on-hover shrink-0 whitespace-nowrap px-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             title={showHeader ? t.chat.hideHeader : t.chat.showHeader}
           >
             {showHeader ? `▲ ${t.chat.hideHeader}` : `▼ ${t.chat.showHeader}`}
@@ -708,6 +713,7 @@ export default function MedicalChat() {
           <div className="flex min-w-0 items-center gap-1">
             {/* The toolbar above the input is already crowded — the model
                 picker lives here in the header strip instead. */}
+            <span className="reveal-on-hover inline-flex min-w-0">
             <ModelPicker
               modelId={chatModelPref}
               fallbackModelId={MODEL_PREF_DEFAULTS.chat}
@@ -717,9 +723,10 @@ export default function MedicalChat() {
                 : t.modelPicker.chatTooltip}
               agentModeActive
             />
+            </span>
             <button
               onClick={handleNewConversation}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/40 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title={t.chat.newChat}
             >
               <SquarePen className="h-3.5 w-3.5" />
@@ -727,7 +734,7 @@ export default function MedicalChat() {
             </button>
             <button
               onClick={expandable.toggle}
-              className="text-muted-foreground hover:text-foreground transition-colors p-1"
+              className="reveal-on-hover shrink-0 p-1 text-muted-foreground transition-colors hover:text-foreground"
               title={t.common.maximize}
             >
               <Maximize2 className="h-4 w-4" />
@@ -750,7 +757,7 @@ export default function MedicalChat() {
         />
       )}
       
-      <CardContent className={`min-h-0 flex-1 overflow-y-auto bg-background p-0 ${isExpanded || !showHeader ? '' : 'border-t'}`}>
+      <CardContent className={`min-h-0 flex-1 overflow-y-auto bg-transparent p-0 ${isExpanded || !showHeader ? '' : 'border-t'}`}>
         {(patientError || clinicalDataError) && (
           <div className="mx-4 mt-4 mb-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 px-3 py-2 text-sm">
             <div className="font-medium text-amber-800 dark:text-amber-200 mb-1">{t.medicalChat.fhirDataWarning}</div>
@@ -779,10 +786,10 @@ export default function MedicalChat() {
         />
       </CardContent>
 
-      <CardFooter className="flex max-h-[80%] shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain border-t px-3 pb-2 sm:px-6 !pt-2">
+      <CardFooter className="flex max-h-[80%] shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain border-t px-1 pb-2 sm:px-2 !pt-2">
         <div
           data-tour="medical-chat-composer"
-          className="flex w-full flex-col gap-1"
+          className="reveal-scope flex w-full flex-col gap-1"
         >
           <ChatToolbar
             onInsertTemplate={handleInsertTemplate}
@@ -884,14 +891,14 @@ export default function MedicalChat() {
             </div>
           )}
           {isTemporaryMode && user && (
-            <div className="flex items-center justify-between gap-2 rounded-md border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-xs text-purple-700 dark:border-purple-500/25 dark:bg-purple-500/10 dark:text-purple-300">
+            <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-3 py-1.5 text-xs text-foreground/80">
               <span className="inline-flex items-center gap-1.5">
                 <MessageSquareDashed className="h-3.5 w-3.5" />
                 {(t.chat as any).temporaryModeBanner ?? '無痕對話 · 此對話不會被儲存'}
               </span>
               <button
                 onClick={handleToggleTemporaryMode}
-                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-purple-100 dark:hover:bg-purple-500/15"
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-foreground/[0.07]"
                 title={(t.chat as any).temporaryModeExit ?? '結束無痕對話'}
               >
                 <X className="h-3 w-3" />

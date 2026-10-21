@@ -256,7 +256,7 @@ export function MedicationList({
             <ul
               id={activeListId}
               data-medication-list-surface="grouped"
-              className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
+              className="@container divide-y divide-border/70 overflow-hidden border-y border-border/70"
             >
               {activeByVisit.map((medication, index) => {
                 const visitBand = activeBands[index]

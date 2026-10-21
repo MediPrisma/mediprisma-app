@@ -45,7 +45,8 @@ describe("dark theme comfort and accessibility", () => {
   it("uses lifted low-chroma surfaces instead of an OLED-black canvas", () => {
     expect(tokens.background[0]).toBeGreaterThanOrEqual(0.22)
     expect(tokens.background[1]).toBeLessThanOrEqual(0.02)
-    expect(tokens.background[0]).toBeLessThan(tokens.panel[0])
+    // The shell and the panels are one surface; cards lift from it.
+    expect(tokens.background[0]).toBeLessThanOrEqual(tokens.panel[0])
     expect(tokens.panel[0]).toBeLessThan(tokens.card[0])
     expect(tokens.card[0]).toBeLessThan(tokens.popover[0])
   })

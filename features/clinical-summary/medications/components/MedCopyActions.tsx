@@ -179,11 +179,11 @@ export function MedCopyButtons({ state }: { state: MedCopyActionsState }) {
   const { api, copied, receipt, copyWith } = state
   const { openEditor, editorDialog } = useMedCopyFormatEditor(api)
 
-  const segment = 'inline-flex items-center gap-1 px-2 text-xs font-medium hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50 max-md:text-sm'
+  const segment = 'inline-flex items-center gap-1 px-2 text-xs font-medium hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50 max-md:text-sm'
 
   return (
     // Taller on a phone, where it is tapped rather than clicked.
-    <div className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-md border border-primary/50 text-primary max-md:h-11">
+    <div className={`reveal-on-hover inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-md text-muted-foreground max-md:h-11 ${copied ? '!opacity-100 text-foreground' : ''}`}>
       <button
         type="button"
         onClick={() => void copyWith(api.format)}
@@ -200,7 +200,7 @@ export function MedCopyButtons({ state }: { state: MedCopyActionsState }) {
         type="button"
         aria-label={strings.editButtonLabel}
         onClick={openEditor}
-        className={`${segment} border-l border-primary/50 max-md:px-4`}
+        className={`${segment} max-md:px-4`}
       >
         <Pencil aria-hidden="true" className="h-3 w-3" />
         {strings.editButton}

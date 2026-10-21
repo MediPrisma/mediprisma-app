@@ -405,13 +405,13 @@ export function MedicationItem({
         onRowToggle()
       } : undefined}
       className={cn(
-        "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-secondary/45 focus-within:bg-secondary/35 dark:hover:bg-secondary/45 dark:focus-within:bg-secondary/35",
+        "relative grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_4.75rem] gap-x-2 gap-y-0.5 overflow-hidden py-1 leading-tight transition-colors hover:bg-muted/60 focus-within:bg-muted/50",
         onRowToggle && "cursor-pointer",
         medication.sourceComparison && 'items-center',
         grouped || leadingControl ? "min-h-11 pl-9 pr-3" : "px-3",
         grouped
           ? "rounded-none border-0 bg-transparent"
-          : "rounded-md border border-border/70 bg-muted/40 dark:border-border/80 dark:bg-muted/30",
+          : "rounded-none border-0 border-b border-border/70 bg-transparent",
         singleLineWhenWide
           && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
@@ -613,7 +613,7 @@ export function MedicationItem({
             {showStatementChip && (
               <span
                 title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
-                className="inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[0.625rem] font-medium text-primary"
+                className="inline-flex shrink-0 items-center rounded-full border border-border px-1.5 py-0 text-[0.625rem] font-medium text-foreground/80"
               >
                 {sourceChipStatementLabel ?? '目前服用'}
               </span>

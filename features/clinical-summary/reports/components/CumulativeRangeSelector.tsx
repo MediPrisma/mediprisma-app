@@ -15,12 +15,12 @@ import {
 import type { CumulativeLayoutMode } from "@/src/application/stores/cumulative-report-prefs.store"
 
 const SEGMENT_GROUP_CLASSES =
-  "inline-flex items-center gap-px rounded-md border border-border bg-muted/60 p-px"
+  "inline-flex items-center gap-px"
 // Touch targets: phones get the repo's 36px floor, desktop stays compact so
 // the toolbar keeps its single-row height.
 const SEGMENT_CLASSES =
   "inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-[0.6875rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-[36px] max-md:px-2.5"
-const SEGMENT_ACTIVE_CLASSES = "bg-card font-semibold text-primary shadow-[0_0_0_1px_var(--border)]"
+const SEGMENT_ACTIVE_CLASSES = "bg-foreground/[0.07] font-semibold text-foreground"
 const SEGMENT_IDLE_CLASSES = "text-muted-foreground hover:text-foreground"
 
 export function useCumulativeRangeLabels(): Record<CumulativeRangeId, string> {
@@ -109,7 +109,7 @@ export function CumulativeLayoutToggle({
       aria-label={groupLabel}
       className={cn(SEGMENT_GROUP_CLASSES, "shrink-0", className)}
     >
-      {options.map(({ id, label, Icon }) => {
+      {options.map(({ id, label }) => {
         const active = id === value
         return (
           <button
@@ -120,7 +120,6 @@ export function CumulativeLayoutToggle({
             onClick={() => onChange(id)}
             className={cn(SEGMENT_CLASSES, active ? SEGMENT_ACTIVE_CLASSES : SEGMENT_IDLE_CLASSES)}
           >
-            <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
             {label}
           </button>
         )

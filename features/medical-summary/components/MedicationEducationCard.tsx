@@ -51,7 +51,7 @@ export function MedicationEducationCard({
 
   return (
     <section
-      className="rounded-lg border border-border bg-card px-3 py-2.5"
+      className="reveal-scope border-b border-border px-0.5 py-3"
       aria-labelledby="medication-education-title"
     >
       <h3 id="medication-education-title" className="mb-1.5 text-[length:max(12px,0.75rem)] font-semibold tracking-wide text-muted-foreground">

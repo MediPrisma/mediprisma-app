@@ -88,7 +88,9 @@ describe('ChatToolbar patient-data badge', () => {
     )
 
     expect(screen.getByTestId('chat-patient-data-toggle')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('chat-patient-data-toggle')).toHaveClass('bg-sky-50')
+    // An active privacy switch is never tucked away behind hover.
+    expect(screen.getByTestId('chat-patient-data-toggle')).toHaveClass('bg-foreground/[0.07]')
+    expect(screen.getByTestId('chat-patient-data-toggle')).not.toHaveClass('reveal-on-hover')
 
     rerender(<ChatToolbar {...baseProps} canTogglePatientData={false} />)
     expect(screen.queryByTestId('chat-patient-data-toggle')).not.toBeInTheDocument()

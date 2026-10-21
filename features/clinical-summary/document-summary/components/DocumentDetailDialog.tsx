@@ -13,7 +13,7 @@
 "use client"
 
 import { useState } from "react"
-import { Building2, FileText, Maximize2 } from "lucide-react"
+import { FileText, Maximize2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ReportInterpretationButton, ReportInterpretationPanel } from "@/features/report-interpretation"
 import { CompositionRenderer } from "./CompositionRenderer"
@@ -95,7 +95,7 @@ export function DocumentDetailDialog({
         onClick={() => setOpen(true)}
         title={strings.openInDialog}
         aria-label={strings.openInDialog}
-        className="inline-flex shrink-0 items-center justify-center rounded-md border border-border/60 bg-background p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        className="reveal-on-hover inline-flex shrink-0 items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
       >
         <Maximize2 className="h-3.5 w-3.5" aria-hidden />
       </button>
@@ -113,7 +113,7 @@ export function DocumentDetailDialog({
             {entry.isIps && (
               <span
                 title={strings.ipsBadgeTooltip}
-                className="inline-flex shrink-0 items-center rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0 text-[0.625rem] font-medium text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
+                className="inline-flex shrink-0 items-center text-xs font-normal text-muted-foreground"
               >
                 {strings.ipsBadge}
               </span>
@@ -121,7 +121,7 @@ export function DocumentDetailDialog({
             {entry.isDischargeSummary && entry.typeLabel !== strings.dischargeBadge && (
               <span
                 title={strings.dischargeBadgeTooltip}
-                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[0.625rem] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                className="inline-flex shrink-0 items-center text-xs font-normal text-muted-foreground"
               >
                 {strings.dischargeBadge}
               </span>
@@ -143,7 +143,6 @@ export function DocumentDetailDialog({
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   {entry.institution && (
                     <span className="inline-flex items-center gap-1">
-                      <Building2 className="h-3 w-3 shrink-0" aria-hidden />
                       {entry.institution}
                     </span>
                   )}

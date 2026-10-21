@@ -112,5 +112,7 @@ export function rowsPerVisit(rows: MedicationRow[]): Map<string, number> {
   return counts
 }
 
-/** Tint for the alternate band. */
-export const visitBandTintClass = 'bg-sky-500/[0.07] dark:bg-sky-400/[0.09]'
+/** Alternate bands are no longer tinted: each visit opens with its own header
+ *  row and a top rule, which separates visits without colour. Kept as a hook
+ *  for callers. */
+export const visitBandTintClass = ''

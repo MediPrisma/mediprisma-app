@@ -11,7 +11,6 @@ import { cn } from '@/src/shared/utils/cn.utils'
 
 export function OverviewSectionCard({
   id,
-  icon: Icon,
   title,
   count,
   actions,
@@ -22,7 +21,8 @@ export function OverviewSectionCard({
   headingRef,
 }: {
   id?: string
-  icon: LucideIcon
+  /** Accepted for callers; a section is named by its title alone. */
+  icon?: LucideIcon
   title: string
   count?: string
   actions?: ReactNode
@@ -40,30 +40,24 @@ export function OverviewSectionCard({
       id={id}
       data-overview-section={id}
       className={cn(
-        'gap-2 rounded-lg border-border bg-card py-2 shadow-[0_1px_2px_rgb(15_23_42/0.04)] dark:shadow-none md:py-2.5',
+        'reveal-scope gap-2 rounded-none border-0 bg-panel py-3 shadow-none',
         // Fill the grid cell rather than hugging the content: the row budget is
         // measured from the content box, so a card that shrank to fit an empty
         // state would never grow back.
         bounded && 'min-h-0 flex-1 overflow-hidden',
       )}
     >
-      <CardHeader className="flex flex-wrap items-center justify-between gap-2 px-3.5 sm:px-5">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-2 px-1 sm:px-4">
         <CardTitle
           ref={headingRef}
           className={cn(
-            'flex min-w-0 flex-auto items-center gap-1.5 text-base',
+            'flex min-w-0 flex-auto items-baseline gap-2 text-sm font-semibold tracking-tight',
             flash && 'resource-flash',
           )}
         >
-          <span
-            data-slot="clinical-section-marker"
-            aria-hidden="true"
-            className="h-4 w-0.5 shrink-0 rounded-sm bg-primary/70"
-          />
-          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="whitespace-nowrap">{title}</span>
           {count && (
-            <span className="min-w-0 truncate text-[0.8125rem] font-medium text-muted-foreground">
+            <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
               {count}
             </span>
           )}
@@ -75,7 +69,7 @@ export function OverviewSectionCard({
       <CardContent
         ref={contentRef}
         className={cn(
-          'px-3.5 sm:px-5',
+          'px-1 sm:px-4',
           bounded && 'flex min-h-0 flex-1 flex-col overflow-hidden',
         )}
       >

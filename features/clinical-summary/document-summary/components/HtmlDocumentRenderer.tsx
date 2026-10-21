@@ -11,7 +11,6 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { FileText } from 'lucide-react'
 import {
   Accordion,
   AccordionContent,
@@ -291,20 +290,19 @@ export function HtmlDocumentRenderer({
         setOpenValue(v)
       }}
     >
-      <AccordionItem value="body" className="rounded-md border border-border/60 bg-background">
+      <AccordionItem value="body" className="border-0">
         {/* AccordionTrigger ships its own ChevronDown that auto-rotates via
             `[&[data-state=open]>svg]:rotate-180` (see components/ui/accordion).
             We use the default chevron so the open/closed state is visually
             unambiguous — important because the title is a neutral noun
             ("文件內容") rather than an action verb. */}
-        <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">
+        <AccordionTrigger className="px-0 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:no-underline">
           <div className="flex flex-1 items-center gap-2 min-w-0">
-            <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <span className="truncate font-medium">{labels.bodyHeader}</span>
           </div>
           {rightControl && <span className="mr-1 shrink-0">{rightControl}</span>}
         </AccordionTrigger>
-        <AccordionContent className="px-3 pb-3">
+        <AccordionContent className="px-0 pb-2">
           {hasOpened && (
             <HtmlDocumentBody
               attachment={attachment}

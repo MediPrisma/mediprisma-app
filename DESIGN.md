@@ -14,10 +14,42 @@ Use this visual hierarchy:
 
 Existing CSS variables and shared components are the implementation source of truth. Do not duplicate their numeric values here until the project has a generated token workflow.
 
+## Quiet chart
+
+The workspace reads like a well-kept chart, not a dashboard. Every element on
+screen competes for a clinician's attention, so an element earns its place by
+carrying clinical content or the current task.
+
+- **One surface.** The shell and both panels share one paper surface, joined by
+  a single hairline. No floating panels, gutters, or boxes around a tab's whole
+  content.
+- **Rules, not boxes.** A section is a title over content with a hairline
+  below it. Rows are separated by hairlines. Reserve a bordered container for
+  an overlay, an input, or a genuinely self-contained action.
+- **The patient is the headline.** The header is one 48px bar: the patient's
+  name, age, and sex lead; the product mark is a small icon; every utility
+  (import, audience, language, tours, account, display) lives in the 更多 menu
+  or as an icon-only control with an accessible name.
+- **Actions on intent.** Secondary controls — expand, copy, edit, translate,
+  model choice, regenerate, panel collapse — sit inside a `.reveal-scope` as
+  `.reveal-on-hover` and appear when the pointer or keyboard focus reaches
+  their section. They are hidden only on hover-capable fine pointers; touch and
+  keyboard users always see them. Never hide a control that is showing a
+  non-default state, a busy state, or the only way to start the task.
+- **Words name things.** Tabs and section titles are text only; icons appear
+  where a label is hidden or for familiar utilities.
+- **Colour means something.** Category, source, and type are muted text, never
+  a coloured chip or link. Ink blue is for focus and the one primary action;
+  red, amber, and green are for abnormal, warning, and verified states. The
+  selected state of a tab or filter is ink weight with a 1.5px foreground rule
+  or a faint neutral fill.
+- **Nothing pops over the chart uninvited.** New-feature announcements show as
+  a dot on 更多 and inside the tour hub, not as popovers anchored to controls.
+
 ## Colors
 
-- Use neutral surfaces for the application shell and routine grouping.
-- Use one interaction blue for navigation, focus, links, and the primary action.
+- Use one neutral paper surface for the shell and panels; cards lift only slightly from it.
+- Use one ink blue for focus, links, and the primary action. Selected tabs and filters use foreground ink, not blue.
 - Reserve red, amber, and green for clinical risk, warning, error, success, or verified state.
 - Never communicate meaning by color alone.
 - Do not use decorative gradients on pages, headings, cards, or controls.
@@ -43,7 +75,7 @@ Existing CSS variables and shared components are the implementation source of tr
 
 ## Layout and Spacing
 
-- Preserve the split between the clinical summary and the active task panel.
+- Preserve the split between the clinical summary and the active task panel, joined by one hairline with no gutter.
 - Use a 4px or 8px spacing rhythm and compact clinical density.
 - Align related content to shared edges.
 - Prefer sections, rows, lists, and tables for repeated information.
@@ -81,7 +113,7 @@ Features should supply content, labels, icons, and state. They should not recrea
 ### Cards and Sections
 
 - Use a card only for an independent action, safety message, or self-contained module.
-- Keep routine cards flat with a visible boundary.
+- Routine sections (`FeatureCard`, overview sections, summary sections) are ruled sections: no box, a bottom hairline.
 - Do not use thick colored edge strips such as `border-l-4` as card decoration.
 - Replace nested cards with headings, dividers, or rows.
 
@@ -89,7 +121,7 @@ Features should supply content, labels, icons, and state. They should not recrea
 
 - Use tabs for frequent switching between closely related views.
 - Keep labels clear and order them by clinical need.
-- Use a flat or line-based selected state with one interaction color.
+- Use a flat or line-based selected state in foreground ink.
 - Do not give each feature a decorative selected color.
 
 ### Buttons and Actions

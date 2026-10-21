@@ -189,7 +189,7 @@ const MessageItem = memo(function MessageItem({
         {message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0 && (
           <>
             <span>•</span>
-            <span className="flex items-center gap-1 text-blue-500 dark:text-blue-300">
+            <span className="flex items-center gap-1 text-muted-foreground">
               <Sparkles className="h-3 w-3" />
               <span className="font-medium">
                 {message.toolCalls.includes('searchMedicalLiterature') ? 'Perplexity' : 'FHIR'}
@@ -219,8 +219,8 @@ const MessageItem = memo(function MessageItem({
           className={cn(
             "relative px-4 py-2.5 text-sm break-words",
             message.role === "assistant" 
-              ? "rounded-2xl rounded-tl-sm bg-muted/80 text-foreground shadow-sm" 
-              : "rounded-2xl rounded-tr-sm bg-blue-500 text-white shadow-md",
+              ? "rounded-lg bg-transparent px-0.5 text-foreground"
+              : "rounded-lg bg-foreground/[0.07] text-foreground",
           )}
         >
           {message.images && message.images.length > 0 && (
@@ -228,7 +228,7 @@ const MessageItem = memo(function MessageItem({
               {message.images.map((image, idx) => (
                 <div
                   key={idx}
-                  className="relative rounded-lg overflow-hidden border border-white/20"
+                  className="relative rounded-lg overflow-hidden border border-border"
                   style={{ maxWidth: '200px', maxHeight: '200px' }}
                 >
                   <img
@@ -259,11 +259,11 @@ const MessageItem = memo(function MessageItem({
               className={cn(
                 "mb-2 rounded-md border px-2 py-1.5 text-xs leading-snug",
                 message.role === "user"
-                  ? "border-white/25 bg-white/15 text-white/90"
+                  ? "border-border/70 bg-background/60 text-muted-foreground"
                   : "border-border/70 bg-background/60 text-muted-foreground",
               )}
             >
-              <div className={cn("mb-0.5 font-medium", message.role === "user" ? "text-white" : "text-foreground")}>
+              <div className={cn("mb-0.5 font-medium", "text-foreground")}>
                 {(t.chat as any).replyingTo ?? 'Replying to'} {message.replyTo.label}
               </div>
               <div className="max-h-[2.5rem] overflow-hidden opacity-90">
@@ -402,8 +402,7 @@ export function ChatMessageList({
       <div className="flex flex-col gap-4 min-h-full justify-end">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-            <div className="text-4xl mb-3 opacity-20">💬</div>
-            <div className="max-w-2xl text-sm font-medium leading-relaxed text-foreground">
+            <div className="max-w-md text-sm leading-relaxed text-muted-foreground">
               {dataScope === 'auto'
                 ? t.chat.autoEmptyStateTitle
                 : dataScope === 'general'
@@ -414,7 +413,7 @@ export function ChatMessageList({
                     ? t.chat.localEmptyStateTitle
                     : t.chat.emptyStateTitle}
             </div>
-            <div className="mt-1.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            <div className="mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground/80">
               {dataScope === 'auto'
                 ? t.chat.autoEmptyState
                 : dataScope === 'general'

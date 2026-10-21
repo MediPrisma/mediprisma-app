@@ -58,19 +58,19 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
               disabled={loading}
               title={i18n.exitDemo}
               aria-label={i18n.exitDemo}
-              className="group flex h-auto w-auto items-center justify-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-1 dark:ring-inset dark:ring-emerald-500/25 dark:hover:bg-emerald-500/15 max-md:h-[44px] max-md:w-[44px] max-md:rounded-md max-md:p-0 @max-[72rem]:h-9 @max-[72rem]:w-11 @max-[72rem]:rounded-md @max-[72rem]:p-0"
+              className="group flex h-7 w-auto items-center justify-center gap-1 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 max-md:h-[44px] max-md:w-[44px] max-md:p-0"
             >
               <FlaskConical className="h-3 w-3" />
-              <span className="max-md:hidden @max-[72rem]:hidden">{i18n.demoData}</span>
+              <span className="max-md:hidden">{i18n.demoData}</span>
               <X className="h-3 w-3 opacity-60 transition-opacity group-hover:opacity-100" />
             </button>
           ) : (
             <span
-              className="flex h-auto w-auto items-center justify-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-1 dark:ring-inset dark:ring-amber-500/25 max-md:h-[44px] max-md:w-[44px] max-md:rounded-md max-md:p-0 @max-[72rem]:h-9 @max-[72rem]:w-9 @max-[72rem]:rounded-md @max-[72rem]:p-0"
+              className="flex h-7 w-auto items-center justify-center gap-1 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground max-md:h-[44px] max-md:w-[44px] max-md:p-0"
               title={i18n.localData}
             >
               <Database className="h-3 w-3" />
-              <span className="max-md:hidden @max-[72rem]:hidden">{i18n.localData}</span>
+              <span className="max-md:hidden">{i18n.localData}</span>
             </span>
           )
         )}
@@ -91,10 +91,10 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
           </Button>
         )}
         <Button
-          variant="outline"
+          variant={iconOnlyOnMobile ? 'ghost' : 'outline'}
           size="sm"
           className={`h-9 gap-1.5 text-xs shadow-none hover:shadow-none sm:text-sm max-md:h-[44px] ${
-            iconOnlyOnMobile ? 'w-auto px-3 max-md:w-[44px] max-md:px-0 @max-[72rem]:w-9 @max-[72rem]:px-0' : 'px-3'
+            iconOnlyOnMobile ? 'w-9 px-0 text-muted-foreground hover:text-foreground max-md:w-[44px]' : 'px-3'
           }`}
           onClick={() => fileRef.current?.open()}
           disabled={loading}
@@ -106,7 +106,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
               header uses this. Without the flag the label always shows,
               which the welcome-screen CTA needs because it's the main
               call-to-action and shouldn't be ambiguous. */}
-          <span className={iconOnlyOnMobile ? 'max-md:hidden @max-[72rem]:hidden' : ''}>
+          <span className={iconOnlyOnMobile ? 'sr-only' : ''}>
             {loading ? i18n.importing : i18n.button}
           </span>
         </Button>

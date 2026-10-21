@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState } from "react"
-import { Building2, ChevronDown, PanelRight } from "lucide-react"
+import { ChevronDown, PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -62,7 +62,7 @@ const getTypeBadge = (type: VisitType, labels: any) => {
     other:      { label: labels.other,      className: CLINICAL_CATEGORY_TONE },
   }
   const { label, className } = typeMap[type] || typeMap.other
-  return <Badge variant="outline" className={cn("h-5 border-transparent px-1.5 py-0 text-[0.6875rem]", className)}>{label}</Badge>
+  return <Badge variant="outline" className={cn("h-5 border-transparent px-1 py-0 text-[0.6875rem]", className)}>{label}</Badge>
 }
 
 const getCareDisciplineBadge = (
@@ -73,7 +73,7 @@ const getCareDisciplineBadge = (
     <Badge
       variant="outline"
       data-care-discipline={discipline}
-      className="h-5 border-border bg-muted/60 px-1.5 py-0 text-[0.6875rem] font-medium text-muted-foreground"
+      className="h-5 border-transparent bg-transparent px-0 py-0 text-[0.6875rem] font-normal text-muted-foreground"
     >
       {labels[discipline]}
     </Badge>
@@ -120,7 +120,7 @@ function VisitStat({ kind, label, count, attention = false, title, className }: 
       ) : (
         <>
           <span className="whitespace-nowrap text-muted-foreground">{label}</span>
-          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-sm bg-foreground/[0.06] px-1 font-semibold tabular-nums text-foreground/80 max-sm:h-[16px] max-sm:min-w-[16px] max-sm:px-0.5 dark:bg-foreground/[0.08] dark:text-foreground/75">
+          <span className="inline-flex h-4 min-w-4 items-center justify-center px-0.5 tabular-nums text-muted-foreground max-sm:h-[16px] max-sm:min-w-[16px]">
             {count}
           </span>
         </>
@@ -229,11 +229,11 @@ function VisitItemComponent({
       ref={anchorRef}
       data-tour="visit-tour-row"
       className={cn(
-        "min-w-0 max-w-full overflow-hidden rounded-lg border transition-colors",
+        "reveal-scope min-w-0 max-w-full overflow-hidden rounded-none border transition-colors",
         CLINICAL_LIST_ROW_TONE,
         // 向右展開 active: tint the whole row so it's clear which visit the
         // right pane is showing.
-        isRightActive && "border-primary/40 bg-primary/5",
+        isRightActive && "bg-accent",
       )}
     >
       {/* role="button" instead of <button> so we can nest the +N ICD-expand
@@ -251,7 +251,7 @@ function VisitItemComponent({
           }
         }}
         className={cn(
-          "w-full cursor-pointer rounded-lg px-3 py-1 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-ring/40",
+          "w-full cursor-pointer px-2 py-1.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
           CLINICAL_LIST_ROW_HOVER_TONE,
         )}
       >
@@ -266,21 +266,8 @@ function VisitItemComponent({
             data-testid="visit-primary-metadata"
             className="col-start-1 row-start-1 flex min-w-0 items-center gap-x-1.5 overflow-hidden leading-5 max-sm:col-end-3 max-sm:gap-x-1"
           >
-            {getTypeBadge(visit.type, t.visitHistory.badges)}
-            <VisitSourceComparisonBadge visit={visit} />
-            {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
-            {visit.location && (
-              <span
-                className={cn(
-                  "inline-flex h-5 min-w-0 max-w-[9rem] shrink-0 items-center gap-1 text-[0.6875rem] max-sm:max-w-none max-sm:flex-1 max-sm:shrink max-sm:text-[12px]",
-                  CLINICAL_SOURCE_TONE,
-                )}
-                title={visit.location}
-              >
-                <Building2 className="h-3 w-3 shrink-0 max-sm:hidden" aria-hidden />
-                <span className="truncate">{visit.location}</span>
-              </span>
-            )}
+            {/* The date leads the row; setting, source and place follow as
+                muted context. */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -301,6 +288,20 @@ function VisitItemComponent({
                 <span className="tabular-nums">{dateLabel}</span>
               </TooltipContent>
             </Tooltip>
+            {getTypeBadge(visit.type, t.visitHistory.badges)}
+            <VisitSourceComparisonBadge visit={visit} />
+            {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
+            {visit.location && (
+              <span
+                className={cn(
+                  "inline-flex h-5 min-w-0 max-w-[9rem] shrink-0 items-center gap-1 text-[0.6875rem] max-sm:max-w-none max-sm:flex-1 max-sm:shrink max-sm:text-[12px]",
+                  CLINICAL_SOURCE_TONE,
+                )}
+                title={visit.location}
+              >
+                <span className="truncate">{visit.location}</span>
+              </span>
+            )}
             {visit.status === "in-progress" && (
               <Badge variant="outline" className="h-5 px-1.5 py-0 text-[0.6875rem] border-green-500 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300">
                 {t.visitHistory.inProgress}
@@ -336,7 +337,7 @@ function VisitItemComponent({
                         : `Show all ${mobileStats.length} statistics`}
                       onClick={(event) => event.stopPropagation()}
                       onMouseDown={(event) => event.stopPropagation()}
-                      className="inline-flex h-5 shrink-0 items-center justify-center rounded-md border border-border bg-background px-1.5 text-[0.6875rem] font-medium text-muted-foreground sm:hidden"
+                      className="inline-flex h-5 shrink-0 items-center justify-center rounded-md px-1.5 text-[0.6875rem] font-medium text-muted-foreground hover:bg-muted sm:hidden"
                     >
                       +{hiddenMobileStatCount}
                     </button>
@@ -373,7 +374,7 @@ function VisitItemComponent({
                 onToggle(visit.id)
               }}
               onMouseDown={(event) => event.stopPropagation()}
-              className="col-start-3 row-start-1 inline-flex h-6 w-6 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="col-start-3 row-start-1 inline-flex h-6 w-6 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               <ChevronDown
                 className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")}
@@ -416,7 +417,7 @@ function VisitItemComponent({
                 )}>
                 <span
                   data-testid="visit-icd-field-label"
-                  className="shrink-0 font-medium text-muted-foreground max-sm:hidden"
+                  className="sr-only"
                   title={(t.visitHistory as any).icdCodesTooltip}
                 >
                   {(t.visitHistory as any).recordedIcdCodes ?? t.visitHistory.reason}:{' '}
@@ -585,7 +586,7 @@ function VisitItemComponent({
                 className={cn(
                   RIGHT_PANE_ACTION_CLASSES,
                   "h-6 w-6 border-transparent bg-transparent p-0 text-muted-foreground/75 hover:border-border hover:bg-background/80 hover:text-foreground focus-visible:border-border focus-visible:bg-background",
-                  isRightActive && "border-primary bg-primary/10 text-primary",
+                  isRightActive && "!opacity-100 bg-foreground/[0.07] text-foreground",
                 )}
               >
                 <PanelRight className="h-3 w-3" />

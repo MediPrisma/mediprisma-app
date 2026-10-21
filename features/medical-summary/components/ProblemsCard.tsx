@@ -107,7 +107,7 @@ export function ProblemsCard({
 
   return (
     <section
-      className="rounded-lg border border-border bg-card px-3 py-2.5"
+      className="reveal-scope border-b border-border px-0.5 py-3"
       aria-labelledby="medical-summary-problems-title"
     >
       {/* Narrow containers stack the two header lines: a wrapping subtitle and

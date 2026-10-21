@@ -10,7 +10,7 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { ChevronDown, FileText } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { CompositionEntity } from '@/src/core/entities/clinical-data.entity'
@@ -187,15 +187,14 @@ export function CompositionRenderer({
           onOpenChange={setContinuousOpen}
           data-continuous-composition="true"
           data-composition-layout="preventive-care"
-          className="@container overflow-hidden rounded-md border border-border/60 bg-background"
+          className="@container overflow-hidden"
         >
           <CollapsibleTrigger asChild>
             <button
               type="button"
               aria-label={continuousOpen ? labels.collapseFullDocument : labels.expandFullDocument}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50"
+              className="flex w-full items-center gap-2 px-0 py-1.5 text-left text-sm text-muted-foreground hover:text-foreground"
             >
-              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 font-medium">{labels.fullDocument}</span>
               {rightControl && <span className="mr-1 shrink-0">{rightControl}</span>}
               <ChevronDown
@@ -265,18 +264,17 @@ export function CompositionRenderer({
               <AccordionItem
                 key={idx}
                 value={`section-${idx}`}
-                className="rounded-md border border-border/60 bg-background"
+                className="border-0"
               >
                 {/* Default AccordionTrigger ships its own chevron with the
                     correct `[&[data-state=open]>svg]:rotate-180` rotation —
                     use it as-is so the open/closed state is unambiguous. */}
-                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">
+                <AccordionTrigger className="px-0 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:no-underline">
                   <div className="flex flex-1 items-center gap-2 min-w-0">
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                    <span className="truncate font-medium">{title}</span>
+                            <span className="truncate font-medium">{title}</span>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-3 pb-3">
+                <AccordionContent className="px-0 pb-2">
                   {/* Sanitized FHIR Narrative XHTML. `prose` gives the embedded
                       tables/lists/headings sensible defaults. */}
                   <div

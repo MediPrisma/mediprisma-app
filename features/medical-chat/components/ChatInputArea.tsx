@@ -134,13 +134,13 @@ export function ChatInputArea({
       )}
 
       {replyDraft && (
-        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-2 text-xs text-blue-900 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-100">
-          <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300" />
+        <div className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-xs text-foreground">
+          <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <div className="mb-0.5 font-medium">
               {(t.chat as any).replyingTo ?? 'Replying to'} {replyDraft.label}
             </div>
-            <div className="max-h-[2.5rem] overflow-hidden leading-snug text-blue-800/80 dark:text-blue-100/75">
+            <div className="max-h-[2.5rem] overflow-hidden leading-snug text-muted-foreground">
               {replyDraft.excerpt}
             </div>
           </div>
@@ -150,7 +150,7 @@ export function ChatInputArea({
               onClick={onCancelReply}
               aria-label={(t.chat as any).cancelReply ?? 'Cancel reply'}
               title={(t.chat as any).cancelReply ?? 'Cancel reply'}
-              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-blue-700/70 hover:bg-blue-100 hover:text-blue-900 dark:text-blue-100/70 dark:hover:bg-blue-500/15 dark:hover:text-blue-50"
+              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -187,7 +187,7 @@ export function ChatInputArea({
                 aria-expanded={slash.open}
                 aria-controls={slash.open ? slashMenuId : undefined}
                 aria-activedescendant={slash.open ? `${slashMenuId}-option-${slash.active}` : undefined}
-                className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 pl-4 pr-10 py-3 text-sm max-md:text-[16px] ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+                className="w-full resize-none overflow-y-auto rounded-lg border border-input bg-card pl-3.5 pr-10 py-2.5 text-sm max-md:text-[16px] placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                 style={{
                   minHeight: '44px',
                   // Keep a pasted clinical template from consuming the entire
@@ -212,7 +212,7 @@ export function ChatInputArea({
               {/* While recording, overlay a live waveform over the textarea so the
                   user gets real-time feedback that the mic is picking up sound. */}
               {voice.isRecording && (
-                <div className="absolute inset-0 flex items-center gap-3 rounded-xl border-2 border-primary/50 bg-background px-4">
+                <div className="absolute inset-0 flex items-center gap-3 rounded-lg border border-ring bg-card px-4">
                   <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/60" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />

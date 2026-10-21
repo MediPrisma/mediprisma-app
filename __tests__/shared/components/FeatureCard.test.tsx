@@ -21,14 +21,12 @@ describe("FeatureCard", () => {
 
     expect(screen.getByText("Patient information")).toBeInTheDocument()
     expect(screen.getByText("Clinical content")).toBeInTheDocument()
-    expect(card).toHaveClass("border-border")
-    expect(card).toHaveClass("py-2", "md:py-3")
+    // A ruled section: a bottom hairline, no box and no shadow.
+    expect(card).toHaveClass("border-b", "border-border/70", "rounded-none")
+    expect(card).not.toHaveClass("shadow-sm")
     expect(card).not.toHaveClass("border-l-4")
-    expect(container.querySelector('[data-slot="card-content"]')).toHaveClass(
-      "px-3",
-      "sm:px-5",
-    )
-    expect(marker).toHaveClass("h-4", "w-0.5", "bg-primary/70")
+    expect(container.querySelector('[data-slot="card-content"]')).toHaveClass("px-0.5")
+    expect(marker).toBeNull()
   })
 
   it("keeps title help beside the title instead of creating a content row", () => {
@@ -65,6 +63,7 @@ describe("FeatureCard", () => {
     expect(title.parentElement).toBe(content.parentElement)
     expect(action.parentElement).toBe(content.parentElement)
     expect(content).toHaveTextContent("Height 168 cm")
-    expect(container.querySelector('[data-slot="clinical-section-marker"]')).toBeInTheDocument()
+    // The title carries the hierarchy alone: no marker stripe beside it.
+    expect(container.querySelector('[data-slot="clinical-section-marker"]')).not.toBeInTheDocument()
   })
 })

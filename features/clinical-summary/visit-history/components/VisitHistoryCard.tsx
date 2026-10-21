@@ -13,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { dateSearchTokens } from "@/src/shared/utils/date.utils"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
@@ -362,8 +361,8 @@ export function VisitHistoryCard() {
   // card, so the heading would be redundant. Mobile spacing mirrors the
   // compact FeatureCard rhythm; md+ keeps the established desktop density.
   return (
-    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-2 md:py-3`} data-tour="visits-card">
-      <CardContent className="px-3 sm:px-5">
+    <Card className="gap-2 rounded-none border-0 bg-transparent py-2 shadow-none md:py-3" data-tour="visits-card">
+      <CardContent className="px-0.5">
         {isLoading ? (
           <div className="text-sm text-muted-foreground">{t.common.loading}</div>
         ) : error ? (
@@ -614,10 +613,10 @@ function ContentToggle({
         // re-measure rather than eyeball if these paddings change. At a larger
         // root font on a narrow phone the strip may scroll; flex-nowrap still
         // guarantees one row.
-        "inline-flex min-h-[28px] shrink-0 items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+        "inline-flex min-h-[28px] shrink-0 items-center whitespace-nowrap rounded-md border border-transparent px-2 py-0.5 text-xs font-medium transition-colors",
         active
-          ? "border-primary bg-primary/10 text-primary"
-          : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+          ? "bg-foreground/[0.07] font-semibold text-foreground"
+          : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
     >
       {label}

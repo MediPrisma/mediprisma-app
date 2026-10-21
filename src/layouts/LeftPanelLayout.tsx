@@ -257,16 +257,12 @@ export default function ClinicalSummaryFeature() {
         }}
         className="flex min-h-0 flex-1 flex-col gap-0"
       >
-        {/* Grid columns are driven by the registered tab count so adding /
-            removing tabs in feature-registry.ts doesn't need a layout edit.
-            Tailwind JIT can't generate dynamic `grid-cols-N` from a runtime
-            length, so the column template goes via inline style. The label
-            already uses `truncate` + a `title` tooltip, so narrower per-tab
-            widths still render the full label on hover. */}
+        {/* Text tabs at their natural width, left-aligned like a chart's
+            section index. A narrow panel scrolls the strip rather than
+            truncating every label to two characters. */}
         <ClinicalTabList
           data-tour="left-tabs"
-          className="grid gap-1"
-          style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+          className="scroll-hint-x overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map(tab => {
             const theme = getTabTheme(tab.id)

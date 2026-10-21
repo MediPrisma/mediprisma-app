@@ -635,10 +635,12 @@ export default function MedicalSummaryFeature() {
         }}
         className="gap-2"
       >
-      <div className="flex flex-nowrap items-center gap-1.5 @max-[19rem]:flex-wrap">
-        <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-primary @max-[32rem]:hidden" />
-        <h2 className="shrink-0 text-base font-semibold text-foreground">{ms.title}</h2>
-        <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-primary/10 dark:text-primary @max-[32rem]:hidden">
+      {/* The title row names the view and its provenance (AI). Model choice,
+          regeneration and settings are occasional, so once a summary exists
+          they wait in the row until the pointer or focus reaches it. */}
+      <div className="reveal-scope flex flex-nowrap items-center gap-1.5 @max-[19rem]:flex-wrap">
+        <h2 className="sr-only">{ms.title}</h2>
+        <span className="shrink-0 text-[0.6875rem] font-medium text-muted-foreground @max-[32rem]:hidden">
           {ms.badge}
         </span>
         <TabsList className={`${SUBTAB_LIST_CLASSES} w-auto`}>
@@ -663,7 +665,7 @@ export default function MedicalSummaryFeature() {
               </span>
             ) : null}
             {customGenerating && activeView !== "custom" ? (
-              <Loader2 className="h-3 w-3 animate-spin text-violet-500 dark:text-primary" aria-label={ms.customGenerating} />
+              <Loader2 className="h-3 w-3 animate-spin text-primary" aria-label={ms.customGenerating} />
             ) : customUnread ? (
               <span
                 className="h-2 w-2 rounded-full bg-primary"
@@ -675,7 +677,9 @@ export default function MedicalSummaryFeature() {
         </TabsList>
         <div
           data-tour="medical-summary-controls"
-          className="ml-auto flex min-w-0 basis-0 flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none"
+          className={`ml-auto flex min-w-0 basis-0 flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none ${
+            (activeView === "custom" || hasAnyResult) && !isBusy ? "reveal-on-hover" : ""
+          }`}
         >
           {activeView === "standard" ? (
             <ModelPicker
@@ -705,7 +709,7 @@ export default function MedicalSummaryFeature() {
             <InfoHint
               aria-label={ms.adaptedScopeLabel}
               side="bottom"
-              className="h-7 shrink-0 gap-1 rounded-md border border-violet-300 bg-violet-50 px-1.5 text-violet-700 hover:bg-violet-100 hover:text-violet-900 dark:border-primary/30 dark:bg-primary/10 dark:text-primary dark:hover:bg-primary/15 dark:hover:text-primary"
+              className="h-7 shrink-0 gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               contentClassName="max-w-[min(90vw,24rem)] text-left leading-relaxed"
               label={(
                 <span className="hidden text-[0.6875rem] font-medium @min-[44rem]:inline">

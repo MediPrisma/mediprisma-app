@@ -22,7 +22,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Building2, Info, PanelRight } from 'lucide-react'
+import { Info, PanelRight } from 'lucide-react'
 import { FeatureCard } from '@/src/shared/components'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
@@ -96,7 +96,7 @@ export function DocumentSummaryCard() {
       isEmpty={isEmpty}
       emptyMessage={strings.noData}
     >
-      <ul className="space-y-2" data-tour="documents-list">
+      <ul className="divide-y divide-border/70" data-tour="documents-list">
         {entries.map((entry) => (
           <DocumentEntryCard
             key={entry.id}
@@ -239,7 +239,7 @@ function DocumentEntryCard({
       className={cn(
         RIGHT_PANE_ACTION_CLASSES,
         'px-1 py-0.5',
-        isRightActive && 'border-primary bg-primary/10 text-primary',
+        isRightActive && '!opacity-100 bg-foreground/[0.07] text-foreground',
       )}
     >
       <PanelRight className="h-3.5 w-3.5" />
@@ -251,8 +251,8 @@ function DocumentEntryCard({
       ref={anchorRef}
       data-tour="document-entry"
       className={cn(
-        'rounded-md border border-border/60 bg-muted/20 p-2.5 transition-colors',
-        isRightActive && 'border-primary/40 bg-primary/5',
+        'reveal-scope px-0.5 py-3 transition-colors',
+        isRightActive && 'bg-accent',
       )}
     >
       {/* Header strip: type label · IPS / discharge badge · date · maximize */}
@@ -262,7 +262,7 @@ function DocumentEntryCard({
           {entry.isIps && (
             <span
               title={strings.ipsBadgeTooltip}
-              className="inline-flex shrink-0 items-center rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0 text-[0.625rem] font-medium text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
+              className="inline-flex shrink-0 items-center text-[0.6875rem] font-normal text-muted-foreground"
             >
               {strings.ipsBadge}
             </span>
@@ -272,7 +272,7 @@ function DocumentEntryCard({
           {entry.isDischargeSummary && entry.typeLabel !== strings.dischargeBadge && (
             <span
               title={strings.dischargeBadgeTooltip}
-              className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[0.625rem] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+              className="inline-flex shrink-0 items-center text-[0.6875rem] font-normal text-muted-foreground"
             >
               {strings.dischargeBadge}
             </span>
@@ -363,7 +363,6 @@ function DocumentEntryCard({
         <div className="mb-1.5 flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
           {entry.institution && (
             <span className="inline-flex items-center gap-1">
-              <Building2 className="h-3 w-3 shrink-0" aria-hidden />
               {entry.institution}
             </span>
           )}

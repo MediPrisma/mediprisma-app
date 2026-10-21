@@ -13,7 +13,7 @@ interface SummarySectionPendingProps {
 
 export function SummarySectionPending({ title, label }: SummarySectionPendingProps) {
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+    <div className="reveal-scope border-b border-border px-0.5 py-3">
       <h3 className="mb-2 text-[length:max(12px,0.75rem)] font-semibold tracking-wide text-muted-foreground">
         {title}
       </h3>

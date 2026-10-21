@@ -11,7 +11,7 @@ import {
 } from '@/src/shared/components/clinical-workspace'
 
 describe('Clinical workspace tabs', () => {
-  it('keeps the label while hiding a secondary icon in a narrow panel', () => {
+  it('names a labelled tab by its words alone', () => {
     render(
       <Tabs defaultValue="summary">
         <ClinicalTabList>
@@ -27,31 +27,27 @@ describe('Clinical workspace tabs', () => {
 
     const tab = screen.getByRole('tab', { name: '醫療摘要' })
     expect(tab).toHaveAttribute('title', '醫療摘要')
-    expect(tab.querySelector('svg')).toHaveClass('@max-[28rem]:hidden')
+    expect(tab.querySelector('svg')).toBeNull()
     expect(tab.querySelector('span')).toHaveClass('truncate')
     expect(tab.querySelector('span')).not.toHaveClass('@max-[28rem]:hidden')
   })
 
-  it('synchronizes icons at workspace zoom breakpoints while remaining panel-aware', () => {
+  it('keeps an icon only where the label is hidden', () => {
     render(
       <Tabs defaultValue="summary">
         <ClinicalTabList>
           <ClinicalTabTrigger
             value="summary"
             icon={ClipboardList}
-            iconVisibility="responsive"
             label="醫療摘要"
+            labelVisibility="never"
           />
         </ClinicalTabList>
       </Tabs>,
     )
 
     const tab = screen.getByRole('tab', { name: '醫療摘要' })
-    expect(tab.querySelector('svg')).toHaveClass(
-      'max-xl:hidden',
-      '@max-[28rem]:hidden',
-    )
-    expect(tab.querySelector('span')).not.toHaveClass('max-xl:hidden')
-    expect(tab.querySelector('span')).not.toHaveClass('@max-[28rem]:hidden')
+    expect(tab.querySelector('svg')).not.toBeNull()
+    expect(tab).toHaveAttribute('aria-label', '醫療摘要')
   })
 })

@@ -1,6 +1,5 @@
 "use client"
 
-import { Building2 } from 'lucide-react'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
@@ -45,7 +44,6 @@ export function ReportInstitutionLabel({
         className,
       )}
     >
-      <Building2 className="h-3 w-3 shrink-0" aria-hidden />
       <span className="truncate">{institutionName}</span>
       {sourceSuffix && <span className="min-w-0 truncate">{sourceSuffix}</span>}
     </TapTooltip>

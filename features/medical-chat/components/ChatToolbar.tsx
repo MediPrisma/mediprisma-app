@@ -119,7 +119,7 @@ export function ChatToolbar({
       className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] items-center gap-1 md:flex md:gap-1.5"
     >
       {templates.length > 0 ? (
-        <div className="flex h-9 min-w-0 w-full items-stretch overflow-hidden rounded-lg border bg-background md:flex-1 sm:max-w-[14rem]">
+        <div className="flex h-9 min-w-0 w-full items-stretch overflow-hidden rounded-md md:flex-1 sm:max-w-[14rem]">
           <Button
             type="button"
             size="sm"
@@ -129,9 +129,9 @@ export function ChatToolbar({
             data-testid="chat-template-insert"
             aria-label={insertTemplateLabel}
             title={insertTemplateLabel}
-            className="h-full min-w-0 flex-1 justify-start gap-1 rounded-none px-2 text-xs font-medium hover:bg-accent md:gap-2 md:px-2.5"
+            className="h-full min-w-0 flex-1 justify-start gap-1 rounded-none px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground md:gap-2 md:px-2.5"
           >
-            <FileText className="h-4 w-4 shrink-0 text-primary max-md:hidden" />
+            <FileText className="h-4 w-4 shrink-0 max-md:hidden" />
             <span className="min-w-0 flex-1 truncate text-left">{selectedTemplateLabel}</span>
           </Button>
           <DropdownMenu>
@@ -143,7 +143,7 @@ export function ChatToolbar({
                 data-testid="chat-template-menu"
                 aria-label={t.chat.selectTemplate}
                 title={t.chat.selectTemplate}
-                className="h-full w-8 shrink-0 rounded-none border-l bg-muted/30 hover:bg-accent md:w-9"
+                className="h-full w-8 shrink-0 rounded-none text-muted-foreground hover:bg-muted hover:text-foreground md:w-9"
               >
                 <ChevronDown className="h-4 w-4" />
               </Button>
@@ -169,14 +169,14 @@ export function ChatToolbar({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="ghost"
           onClick={handleOpenGallery}
           data-testid="chat-template-gallery"
           aria-label={t.promptGallery.browseGallery}
           title={t.promptGallery.browseGallery}
-          className="h-9 shrink-0 gap-1.5 px-2.5 text-xs"
+          className="h-9 shrink-0 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
         >
-          <Library className="h-4 w-4 text-primary" />
+          <Library className="h-4 w-4" />
           <span className="hidden xl:inline">{t.chat.templateGallery}</span>
         </Button>
       )}
@@ -188,7 +188,7 @@ export function ChatToolbar({
         data-testid="chat-template-manage"
         aria-label={t.chat.manageTemplates}
         title={t.chat.manageTemplates}
-        className="h-9 shrink-0 gap-1.5 px-2.5 text-xs"
+        className="reveal-on-hover h-9 shrink-0 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
       >
         <SlidersHorizontal className="h-4 w-4" />
         <span className="hidden xl:inline">{t.chat.manageTemplates}</span>
@@ -203,7 +203,7 @@ export function ChatToolbar({
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={handlePatientDataClick}
               onPointerDown={handlePatientDataPointerDown}
               onPointerUp={clearPatientDataLongPressTimer}
@@ -219,8 +219,8 @@ export function ChatToolbar({
                 : t.chat.patientDataOffEnable}
               className={`h-7 max-md:h-[44px] [html[data-keyboard-open=true]_&]:hidden shrink-0 rounded-full px-2 text-[0.6875rem] shadow-none touch-manipulation max-md:px-1.5 ${
                 patientDataDisabled
-                  ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/15'
-                  : 'text-muted-foreground'
+                  ? 'bg-foreground/[0.07] font-medium text-foreground hover:bg-foreground/10'
+                  : 'reveal-on-hover text-muted-foreground hover:text-foreground'
               }`}
             >
               <ShieldOff className="h-3.5 w-3.5" />
@@ -241,7 +241,7 @@ export function ChatToolbar({
       <Button
         type="button"
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={onOpenAiExecution}
         disabled={!canExportAiExecution}
         data-testid="chat-ai-execution-export"
@@ -249,7 +249,7 @@ export function ChatToolbar({
         title={canExportAiExecution
           ? t.chat.exportAiExecution
           : t.chat.exportAiExecutionUnavailable}
-        className="h-7 w-7 max-md:h-[44px] max-md:w-[44px] [html[data-keyboard-open=true]_&]:hidden shrink-0 text-muted-foreground opacity-35 transition-opacity touch-manipulation hover:opacity-100"
+        className="h-7 w-7 max-md:h-[44px] max-md:w-[44px] [html[data-keyboard-open=true]_&]:hidden reveal-on-hover shrink-0 text-muted-foreground touch-manipulation hover:text-foreground"
       >
         <Bug className="h-3.5 w-3.5" />
       </Button>

@@ -319,7 +319,7 @@ export function MedListCard() {
           {canCopy && <MedCopyDialogs state={copyState} />}
           <div data-tour="medication-toolbar" className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
-              <div className="inline-flex h-[36px] min-w-0 rounded-md border bg-transparent p-0.5 text-xs md:h-auto md:bg-muted/40">
+              <div className="inline-flex h-[36px] min-w-0 gap-0.5 text-xs md:h-auto">
                 {([
                   'list',
                   'timeline',
@@ -337,9 +337,9 @@ export function MedListCard() {
                     }}
                     aria-label={v === 'remaining' ? remainingViewLabel : undefined}
                     className={cn(
-                      'h-[30px] min-w-0 rounded-sm px-2 py-0 transition-colors md:h-auto md:px-3 md:py-1',
+                      'h-[36px] min-w-0 rounded-md px-2 py-0 transition-colors md:h-auto md:px-2.5 md:py-1',
                       view === v
-                        ? 'bg-background text-foreground shadow-sm font-medium'
+                        ? 'bg-foreground/[0.07] text-foreground font-semibold'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
@@ -365,7 +365,7 @@ export function MedListCard() {
                   className={cn(
                     RIGHT_PANE_ACTION_CLASSES,
                     'gap-1 px-2 py-1 text-xs font-medium',
-                    isTimelineRight && 'border-primary bg-primary/10 text-primary',
+                    isTimelineRight && '!opacity-100 border-border bg-foreground/[0.07] text-foreground',
                   )}
                 >
                   <PanelRight className="h-3.5 w-3.5" />
@@ -428,7 +428,7 @@ export function MedListCard() {
               from a MedicationStatement (typical IPS dataset). Mixed lists
               fall through to the per-row chip rendered inside MedicationItem. */}
           {view !== 'remaining' && sourceMix === 'statement-only' && (
-            <div className="flex items-start gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[0.6875rem] text-muted-foreground">
+            <div className="flex items-start gap-1.5 px-0.5 text-[0.6875rem] text-muted-foreground">
               <Info className="h-3.5 w-3.5 shrink-0 mt-[1px]" aria-hidden />
               <span>{sourceHintStatement}</span>
             </div>

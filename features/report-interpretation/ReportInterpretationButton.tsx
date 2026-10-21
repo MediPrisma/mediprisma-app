@@ -55,13 +55,13 @@ export function ReportInterpretationButton({
   const activeLabel = locale === 'zh-TW' ? '收合翻譯解讀' : 'Hide translation'
   const accessibleLabel = busy ? label : active ? activeLabel : label
   const className_ = cn(
-    // A real, self-evident button — visible border + tinted fill + primary
-    // label even at rest (the old ghost styling read as a text link). Still
-    // compact so a list of many reports doesn't get loud.
+    // A quiet, labelled button. At rest it is an occasional action, so it
+    // waits for the owning row's hover/focus (`reveal-on-hover`; touch and
+    // keyboard always see it). Running or open, it is state, and stays shown.
     'inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-xs font-medium transition-colors cursor-pointer',
     active || busy
-      ? 'border-primary bg-primary/15 text-primary'
-      : 'border-primary/40 bg-primary/5 text-primary hover:border-primary hover:bg-primary/10',
+      ? 'border-border bg-foreground/[0.07] text-foreground'
+      : 'reveal-on-hover border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
     busy && 'cursor-wait opacity-75',
     className,
   )

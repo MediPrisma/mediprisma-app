@@ -3,8 +3,6 @@
 // Narrow layout only: four tiles that are both the section counters and the
 // jump targets. Their numbers come from the same OverviewData object the cards
 // render, so a tile can never disagree with the header beneath it.
-import type { LucideIcon } from 'lucide-react'
-import { Calendar, FlaskConical, Pill, ScanLine } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { OverviewData } from '../hooks/useOverviewData'
@@ -17,7 +15,6 @@ import {
 
 interface TileModel {
   id: OverviewSectionId
-  icon: LucideIcon
   label: string
   value: number
   unit: string
@@ -37,7 +34,6 @@ export function OverviewNavTiles({
   const tiles: TileModel[] = [
     {
       id: 'labs',
-      icon: FlaskConical,
       label: strings.sections.labs,
       value: data.labs.resultCount,
       unit: strings.units.labs,
@@ -52,7 +48,6 @@ export function OverviewNavTiles({
     },
     {
       id: 'reports',
-      icon: ScanLine,
       label: strings.sections.reports,
       value: data.reports.count,
       unit: strings.units.reports,
@@ -60,7 +55,6 @@ export function OverviewNavTiles({
     },
     {
       id: 'meds',
-      icon: Pill,
       label: strings.sections.meds,
       value: data.meds.count,
       unit: strings.units.meds,
@@ -74,7 +68,6 @@ export function OverviewNavTiles({
     },
     {
       id: 'visits',
-      icon: Calendar,
       label: strings.sections.visits,
       value: data.visits.count,
       unit: strings.units.visits,
@@ -98,9 +91,9 @@ export function OverviewNavTiles({
   ]
 
   return (
-    <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
+    // A ruled index strip, not four cards: the counts are what is read.
+    <div className="grid shrink-0 grid-cols-4 divide-x divide-border border-b border-border">
       {tiles.map((tile) => {
-        const Icon = tile.icon
         return (
           <button
             key={tile.id}
@@ -109,19 +102,18 @@ export function OverviewNavTiles({
             title={strings.tiles.jumpTo.replace('{section}', tile.label)}
             onClick={() => onJump(tile.id)}
             className={cn(
-              'flex min-w-0 cursor-pointer flex-col gap-1 rounded-lg border border-border bg-card px-2.5 py-2 text-left transition-colors',
-              'hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              'flex min-h-[44px] min-w-0 cursor-pointer flex-col gap-1 px-2.5 py-2 text-left transition-colors',
+              'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50',
             )}
           >
             <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="truncate text-[0.8125rem] font-semibold text-foreground">
+              <span className="truncate text-xs font-medium text-muted-foreground">
                 {tile.label}
               </span>
             </span>
             <span className="flex min-w-0 flex-wrap items-center gap-1.5">
               <span className="flex items-baseline gap-0.5">
-                <span className="text-xl font-bold leading-none tabular-nums text-foreground">
+                <span className="text-lg font-semibold leading-none tabular-nums text-foreground">
                   {tile.value}
                 </span>
                 <span className="text-xs text-muted-foreground">{tile.unit}</span>

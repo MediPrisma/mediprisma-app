@@ -3,8 +3,6 @@
 
 import { AppProviders } from "@/src/application/providers/app-providers"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
-import { AudienceSwitcher } from "@/src/shared/components/AudienceSwitcher"
 import { FirstRunOnboardingDialog } from "./_components/FirstRunOnboardingDialog"
 import { HeaderOverflowMenu } from "@/src/shared/components/HeaderOverflowMenu"
 import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
@@ -27,7 +25,6 @@ import { usePatient } from "@/src/application/hooks/patient/use-patient-query.ho
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type UIEvent } from "react"
-import { ChevronUp, ChevronDown } from "lucide-react"
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
 import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
@@ -36,11 +33,10 @@ import {
   FirstRunTourOffer,
   GuidedTourOverlay,
   TourHub,
-  TourHubButton,
   TourHubMenuItem,
-  WhatsNewHint,
   useGuidedTourStore,
 } from "@/features/guided-tour"
+import { useUnseenNews } from "@/features/guided-tour/use-unseen-news"
 import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-route"
 import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/guideline-packs/pilot-gate"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
@@ -220,11 +216,7 @@ function PageContent() {
     setCollapseChosen(true)
   }, [revealSeq, setMobileView])
 
-  // Header collapse: tuck the title/toolbar away into a slim strip so the
-  // panels get the full viewport height. In-session only (same hydration
-  // reasoning as `collapsed`). The less-used header controls (匯入資料 /
-  // 語言 / 身份 …) come back with one click on the strip.
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
+  const unseenNewsCount = useUnseenNews().length
 
   // Onboarding detection: when neither SMART nor a local bundle is available,
   // the data hooks return `patient: null` with no error. Show a welcome
@@ -583,71 +575,25 @@ function PageContent() {
 
   return (
     <ClinicalWorkspaceRoot>
-      {headerCollapsed ? (
-        // Slim strip — reclaims the full header height for the panels. The
-        // whole strip is the expand affordance; the app icon + chevron make it
-        // read as a clickable control rather than a stray divider.
-        <button
-          type="button"
-          onClick={() => setHeaderCollapsed(false)}
-          aria-expanded={false}
-          aria-label={t.header.expandHeader}
-          title={t.header.expandHeader}
-          className="group flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 border-b bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:min-h-8"
-        >
-          <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="" className="h-4 w-4 object-contain opacity-70" />
-          <ChevronDown className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
-        </button>
-      ) : (
-      <header className="@container relative shrink-0 border-b border-border bg-card px-3 py-1.5 sm:px-4">
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 items-center justify-center overflow-hidden max-[359px]:hidden">
-              <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="App Icon" className="h-full w-full object-contain" />
-            </div>
-            <h1 className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
-              <span>MediPrisma</span>
-              <span className="max-lg:hidden @max-[80rem]:hidden"> · SMART on FHIR</span>
-            </h1>
-          </div>
-          <ClinicalPatientContext patient={patient} />
-          {/* Header right cluster — kept lean (v0.4.0).
-              Less-used controls (theme, version, feedback, connection
-              info) live inside HeaderOverflowMenu (kebab); audience +
-              language collapse into the same menu only on mobile so the
-              bar never wraps on narrow screens. */}
-          <div className="flex shrink-0 items-center gap-1 sm:gap-3 @max-[72rem]:gap-1">
-            {/* iconOnlyOnMobile: header is space-constrained, so the
-                "匯入資料" label collapses on phones. The Welcome screen
-                mounts the same component without this flag so its big
-                CTA always reads as a labeled button. */}
-            <ImportBundleButton iconOnlyOnMobile />
-            <div className="flex items-center gap-2 max-lg:hidden lg:gap-3">
-              <AudienceSwitcher />
-              <LanguageSwitcher />
-            </div>
-            <TourHubButton disabled={!dataLoaded} />
-            <HeaderAuthButton />
-            <HeaderOverflowMenu
-              tourMenu={<TourHubMenuItem disabled={!dataLoaded} />}
-            />
-          </div>
+      {/* One quiet bar. The patient is the headline; the product mark and
+          every utility (import, audience, language, tours, account) step back
+          to icons and the 更多 menu so nothing here competes with the chart. */}
+      <header className="relative flex h-12 shrink-0 items-center gap-3 border-b border-border bg-panel px-3 max-md:h-[52px] sm:px-4">
+        <h1 className="flex shrink-0 items-center gap-2 max-[359px]:hidden">
+          <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="" className="h-5 w-5 object-contain" />
+          <span className={patient ? 'sr-only' : 'text-sm font-semibold tracking-tight text-foreground'}>MediPrisma</span>
+        </h1>
+        <ClinicalPatientContext patient={patient} />
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <ImportBundleButton iconOnlyOnMobile />
+          <HeaderAuthButton />
+          <HeaderOverflowMenu
+            hasNews={unseenNewsCount > 0}
+            tourMenu={<TourHubMenuItem disabled={!dataLoaded} />}
+          />
         </div>
-        {/* Keep the collapse handle fully inside the header. Letting it
-            straddle the bottom edge covered the compact desktop tab row. */}
-        <button
-          type="button"
-          onClick={() => setHeaderCollapsed(true)}
-          aria-label={t.header.collapseHeader}
-          title={t.header.collapseHeader}
-          className="absolute bottom-0 left-1/2 z-20 inline-flex h-6 w-8 -translate-x-1/2 items-center justify-center rounded-t-md border border-b-0 border-border bg-background/80 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary max-md:hidden"
-        >
-          <ChevronUp className="h-3 w-3" />
-        </button>
       </header>
-      )}
 
-      <ClinicalPatientContext patient={patient} variant="mobile" />
       
       {/* Email Verification Banner */}
       <div className="px-3 sm:px-6">
@@ -736,7 +682,7 @@ function PageContent() {
           }
           desktopWidth={
             isLargeScreen && collapsed === null
-              ? `${100 - leftWidth - 0.5}%`
+              ? `calc(${100 - leftWidth}% - 1px)`
               : undefined
           }
         >
@@ -811,7 +757,6 @@ function PageContent() {
 
       <FirstRunOnboardingDialog />
       <FirstRunTourOffer eligible={tourEligible} />
-      <WhatsNewHint eligible={tourEligible} />
       <GuidedTourOverlay />
       <TourHub />
       <RightFeatureTour />

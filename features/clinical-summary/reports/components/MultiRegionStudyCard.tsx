@@ -22,7 +22,7 @@
 "use client"
 
 import { useState } from 'react'
-import { AlertTriangle, Building2, ChevronDown, ExternalLink, FileText, ImageIcon, PanelRight } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ExternalLink, FileText, ImageIcon, PanelRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -155,7 +155,6 @@ export function MultiRegionStudyCard({ row, showTypeBadge }: MultiRegionStudyCar
               {dateStr && <span className="tabular-nums">{dateStr}</span>}
               {row.institution && (
                 <span className="inline-flex items-center gap-1">
-                  <Building2 className="h-3 w-3 shrink-0" aria-hidden />
                   {formatOrganizationDisplay(row.institution, locale)}
                 </span>
               )}
@@ -413,7 +412,7 @@ function NarrativeSubCard({
                 className={cn(
                   RIGHT_PANE_ACTION_CLASSES,
                   'px-2 py-1 text-xs font-medium',
-                  isRightActive && 'border-primary bg-primary/10 text-primary',
+                  isRightActive && '!opacity-100 border-border bg-foreground/[0.07] text-foreground',
                 )}
               >
                 <PanelRight className="h-3.5 w-3.5" />

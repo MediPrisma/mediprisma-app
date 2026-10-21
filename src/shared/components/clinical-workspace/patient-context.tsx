@@ -51,27 +51,26 @@ export function ClinicalPatientContext({
       data-slot="clinical-patient-context"
       aria-label={accessibleLabel}
       className={cn(
-        "min-w-0 items-center gap-2 text-xs text-muted-foreground",
-        variant === "header" &&
-          "flex flex-1 border-l-2 border-primary/35 px-3 max-md:hidden",
+        "min-w-0 items-baseline gap-1.5 text-sm text-muted-foreground",
+        variant === "header" && "flex flex-1",
         variant === "mobile" &&
           "flex min-h-[40px] shrink-0 border-b border-border bg-card px-3 md:hidden",
         className,
       )}
       {...props}
     >
-      <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground">
+      <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-foreground">
         {name}
       </span>
       {ageText && (
         <>
-          <span aria-hidden="true" className="text-muted-foreground/45">
+          <span aria-hidden="true" className="text-muted-foreground/40">
             ·
           </span>
           <span className="shrink-0 tabular-nums">{ageText}</span>
         </>
       )}
-      <span aria-hidden="true" className="text-muted-foreground/45">
+      <span aria-hidden="true" className="text-muted-foreground/40">
         ·
       </span>
       <span className="shrink-0">{genderText}</span>

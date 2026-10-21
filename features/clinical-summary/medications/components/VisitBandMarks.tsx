@@ -17,24 +17,17 @@ import {
 import { TruncatedRevealLabel } from './TruncatedRevealLabel'
 import { sharedVisitIcd, startDayOf, type VisitBand } from '../utils/visit-bands'
 
-/** Overlay marks for a visit-banded row (parent must be `relative`). The left
- *  bar repeats the band as shape + contrast so visits stay separable for
- *  colour-blind readers and in print; a heavier top rule marks each new visit.
+/** Overlay marks for a visit-banded row (parent must be `relative`). A top
+ *  rule marks each new visit; with the visit header row it separates visits by
+ *  shape alone, with no colour, so it holds for colour-blind readers and print.
  *  Both are pointer-events-none so the row's toggle and hover still work. */
 export function VisitBandMarks({ band }: { band: VisitBand }) {
   return (
     <>
-      <span
-        aria-hidden
-        className={cn(
-          'pointer-events-none absolute inset-y-0 left-0 z-10 w-[3px]',
-          band.band === 1 ? 'bg-sky-500/70 dark:bg-sky-400/70' : 'bg-border',
-        )}
-      />
       {band.visitStart && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-foreground/20"
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-border"
         />
       )}
     </>

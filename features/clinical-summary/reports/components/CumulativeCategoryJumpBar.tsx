@@ -36,7 +36,7 @@ export function CumulativeCategoryJumpBar({
   return (
     // bg-card (not transparent): the sections scroll UNDER this bar, so it has
     // to be opaque on the card surface at every theme.
-    <div className="sticky top-0 z-20 flex items-center gap-1.5 border-b border-border bg-card py-1">
+    <div className="reveal-scope sticky top-0 z-20 flex items-center gap-1.5 border-b border-border bg-panel py-1">
       <nav
         aria-label={strings.jumpBarLabel ?? '累積報告分類'}
         className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -51,10 +51,10 @@ export function CumulativeCategoryJumpBar({
               aria-current={active ? 'true' : undefined}
               onClick={() => onJump(entry.id)}
               className={cn(
-                "inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[0.6875rem] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:h-[26px] max-md:px-2.5",
+                "inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[0.6875rem] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:h-[26px] max-md:px-2.5",
                 active
-                  ? "border-primary/30 bg-primary/10 font-semibold text-primary"
-                  : "border-transparent bg-muted font-medium text-muted-foreground hover:text-foreground",
+                  ? "border-transparent bg-foreground/[0.07] font-semibold text-foreground"
+                  : "border-transparent bg-transparent font-medium text-muted-foreground hover:text-foreground",
               )}
             >
               {entry.label}
@@ -69,7 +69,7 @@ export function CumulativeCategoryJumpBar({
             type="button"
             aria-label={reorderTitle}
             title={reorderTitle}
-            className="inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-border bg-background px-1.5 text-[0.6875rem] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:h-[26px] max-md:min-w-[36px] max-md:justify-center"
+            className="reveal-on-hover inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-transparent bg-transparent px-1.5 text-[0.6875rem] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:h-[26px] max-md:min-w-[36px] max-md:justify-center"
           >
             <SlidersHorizontal className="h-3 w-3 shrink-0" aria-hidden="true" />
             <span className="hidden md:inline">{reorderLabel}</span>

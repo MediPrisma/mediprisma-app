@@ -41,8 +41,12 @@ const AUDIENCE_ORDER: Audience[] = ['medical', 'patient']
 
 export function HeaderOverflowMenu({
   tourMenu,
+  hasNews = false,
 }: {
   tourMenu?: ReactNode
+  /** Something new waits in the tour hub, whose entry lives in this menu.
+   *  A dot on the trigger is the only signal; nothing pops over the chart. */
+  hasNews?: boolean
 }) {
   const { t, locale, setLocale } = useLanguage()
   const { audience, setAudience } = useAudience()
@@ -51,17 +55,20 @@ export function HeaderOverflowMenu({
   return (
     // Keep the compact menu through tablet widths; the full Audience/Language
     // controls return only once the two-panel workspace has desktop room.
-    <div className="lg:hidden">
+    <div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             data-tour="header-more"
-            className="h-[44px] w-[44px] shadow-none hover:shadow-none"
+            className="relative h-9 w-9 text-muted-foreground shadow-none hover:text-foreground hover:shadow-none max-md:h-[44px] max-md:w-[44px]"
             aria-label={(t.header as any)?.moreMenu ?? '更多'}
           >
             <MoreHorizontal className="h-4 w-4" />
+            {hasNews && (
+              <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">

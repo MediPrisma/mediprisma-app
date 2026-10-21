@@ -908,10 +908,10 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
           <div
             data-tour="report-tour-row"
             className={cn(
-              'w-full min-w-0 max-w-full overflow-hidden rounded-md border bg-muted/40 px-2 py-1 transition-colors sm:px-2.5 sm:py-1.5',
+              'reveal-scope w-full min-w-0 max-w-full overflow-hidden border-0 border-b border-border/70 px-1 py-1.5 transition-colors hover:bg-muted/60',
               // 向右展開 active: tint the row so it's clear which report the
               // right pane is showing.
-              isReportRightActive && 'border-primary/40 bg-primary/5',
+              isReportRightActive && 'bg-accent',
             )}
           >
             <div
@@ -999,7 +999,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                         className={cn(
                           RIGHT_PANE_ACTION_CLASSES,
                           'gap-1 px-2 py-1 text-xs font-medium',
-                          isReportRightActive && 'border-primary bg-primary/10 text-primary',
+                          isReportRightActive && '!opacity-100 border-border bg-foreground/[0.07] text-foreground',
                         )}
                       >
                         <PanelRight className="h-3.5 w-3.5" />
@@ -1471,7 +1471,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   className={cn(
                     RIGHT_PANE_ACTION_CLASSES,
                     'px-1 py-0.5',
-                    isPanelRightActive && 'border-primary bg-primary/10 text-primary',
+                    isPanelRightActive && '!opacity-100 border-border bg-foreground/[0.07] text-foreground',
                   )}
                 >
                   <PanelRight className="h-3.5 w-3.5" />

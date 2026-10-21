@@ -382,8 +382,6 @@ function RightPanelContentInner() {
   }
 
   const showOverflowMenu = overflowFeatures.length > 0
-  const columnCount =
-    pinnedFeatures.length + (activeOverflowFeature ? 1 : 0) + (showOverflowMenu ? 1 : 0) + lockedFeatures.length
   return (
     <Tabs
       value={effectiveTab}
@@ -406,16 +404,14 @@ function RightPanelContentInner() {
           `scroll-hint-x` says so. */}
       <ClinicalTabList
         data-tour="right-tabs"
-        className="scroll-hint-x grid gap-1 overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden"
-        style={{ gridTemplateColumns: `repeat(${features.length}, minmax(4.5rem, 1fr))` }}
+        className="scroll-hint-x overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden"
       >
         {features.map(renderTrigger)}
       </ClinicalTabList>
 
       <ClinicalTabList
         data-tour="right-tabs"
-        className="grid gap-1 max-md:hidden"
-        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(4.5rem, 1fr))` }}
+        className="scroll-hint-x overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:hidden"
       >
         {pinnedFeatures.map(renderTrigger)}
         {activeOverflowFeature && renderTrigger(activeOverflowFeature)}
@@ -426,7 +422,7 @@ function RightPanelContentInner() {
           <DropdownMenu>
             <DropdownMenuTrigger
               data-tour="right-tabs-overflow"
-              className="flex min-w-0 items-center justify-center gap-1.5 rounded-none text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
+              className="flex min-w-0 flex-none items-center justify-center gap-1.5 rounded-none px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=open]:text-foreground"
               title={t.tabs.more}
               aria-label={t.tabs.more}
             >

@@ -42,19 +42,19 @@ export function getMedicationDaysLeftBadgeClass(daysRemaining: number) {
   if (daysRemaining <= 3) {
     return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-orange-400 bg-orange-100 text-orange-950 dark:border-orange-500/60 dark:bg-orange-500/20 dark:text-orange-100`
   }
-  return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200`
+  return `${MEDICATION_DAYS_LEFT_BASE} ${MEDICATION_DAYS_LEFT_NUMERIC} border-transparent bg-transparent text-muted-foreground`
 }
 
 // Chronic-prescription visual language is shared by the list badge and the
-// timeline. A restrained clinical teal distinguishes the prescription type
-// without borrowing the brighter emerald used for success or verified states.
+// timeline. A plain outline names the prescription type; colour stays
+// reserved for supply that is running out.
 export const medicationChronicBadgeClass =
-  "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950/50 dark:text-teal-300"
+  "border-border bg-transparent text-foreground/80"
 
 export function getMedicationStatusBadgeClass(status: string) {
   return status.toLowerCase() === "active"
-    ? "border-border bg-muted/45 text-foreground/70 dark:bg-muted/30 dark:text-muted-foreground"
-    : "border-border/70 bg-muted/25 text-muted-foreground dark:bg-muted/20 dark:text-muted-foreground"
+    ? "border-transparent bg-transparent text-foreground/70"
+    : "border-transparent bg-transparent text-muted-foreground"
 }
 
 export const medicationChronicSwatchClass =

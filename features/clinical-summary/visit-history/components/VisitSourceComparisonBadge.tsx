@@ -20,7 +20,7 @@ export function VisitSourceComparisonBadge({ visit }: { visit: VisitRecord }) {
         {record.diagnoses.map((text, index) => <div key={index} className="break-words">{text}</div>)}
       </div>)}
     </div>}>
-    <span tabIndex={0} className="inline-flex shrink-0 cursor-help rounded-sm bg-muted px-1 text-xs font-medium">
+    <span tabIndex={0} className="inline-flex shrink-0 cursor-help text-xs text-muted-foreground underline decoration-dotted decoration-muted-foreground/50 underline-offset-2">
       {visit.sourceComparisonStatus !== 'confirmed' ? (en ? 'Compare sources' : '跨來源待核對') : (en ? 'Hospital + cloud' : '院內＋雲端')}
     </span>
   </TapTooltip>

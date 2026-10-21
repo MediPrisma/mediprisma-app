@@ -117,7 +117,7 @@ export function CustomInsightModulesSection({ onManage }: CustomInsightModulesSe
                 }}
                 asChild
               >
-                <article className="min-w-0 rounded-lg border border-border bg-card px-3 py-2.5">
+                <article className="reveal-scope min-w-0 border-b border-border px-0.5 py-3">
                   <div className="mb-2">
                     <div className="relative">
                       {canToggleResult ? (

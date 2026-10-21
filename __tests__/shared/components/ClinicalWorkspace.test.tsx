@@ -56,9 +56,10 @@ describe("ClinicalWorkspace primitives", () => {
       </ClinicalWorkspaceMain>,
     )
 
-    expect(
-      container.querySelector('[data-slot="clinical-workspace-main"]'),
-    ).toHaveClass("md:gap-0")
+    // Flush panels: no gutter and no padding, one hairline seam between them.
+    const main = container.querySelector('[data-slot="clinical-workspace-main"]')
+    expect(main).not.toHaveClass("md:gap-1")
+    expect(main).not.toHaveClass("p-1")
     container
       .querySelectorAll('[data-slot="clinical-workspace-panel"]')
       .forEach((panel) => expect(panel).not.toHaveClass("md:border"))
@@ -175,7 +176,7 @@ describe("ClinicalWorkspace primitives", () => {
     expect(patient).toHaveClass("rounded-none")
     expect(patient).toHaveClass("min-h-[40px]", "md:min-h-[44px]")
     expect(patient).toHaveClass("xl:min-h-10")
-    expect(patient).toHaveClass("data-[state=active]:after:bg-primary")
+    expect(patient).toHaveClass("data-[state=active]:after:bg-foreground")
     expect(tabList).toHaveClass("xl:h-10")
     expect(tabList).toHaveClass("xl:min-h-10")
     expect(tabList).toHaveClass("min-h-[40px]", "md:min-h-[44px]")

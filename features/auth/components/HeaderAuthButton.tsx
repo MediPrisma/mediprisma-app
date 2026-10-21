@@ -69,12 +69,12 @@ export function HeaderAuthButton() {
         variant="outline"
         size="sm"
         disabled
-        className="h-9 w-auto gap-2 px-3 shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
+        className="h-9 w-9 gap-2 border-transparent bg-transparent p-0 text-muted-foreground shadow-none hover:text-foreground hover:shadow-none dark:border-transparent dark:bg-transparent max-md:h-[44px] max-md:w-[44px]"
         aria-label={t.auth.restoringSession}
         title={t.auth.restoringSession}
       >
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        <span className="max-md:hidden @max-[72rem]:hidden">
+        <span className="sr-only">
           {t.auth.restoringSession}
         </span>
       </Button>
@@ -91,12 +91,12 @@ export function HeaderAuthButton() {
             <Button
               variant="outline"
               size="sm"
-              className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
+              className="h-9 w-9 gap-2 border-transparent bg-transparent p-0 text-muted-foreground shadow-none hover:text-foreground hover:shadow-none dark:border-transparent dark:bg-transparent max-md:h-[44px] max-md:w-[44px]"
               aria-label={t.auth.guest}
               title={t.auth.guest}
             >
               <Gift className="h-4 w-4" />
-              <span className="max-md:hidden @max-[72rem]:hidden">{t.auth.guest}</span>
+              <span className="sr-only">{t.auth.guest}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -131,12 +131,12 @@ export function HeaderAuthButton() {
           size="sm"
           variant="outline"
           onClick={() => setShowAuthDialog(true)}
-          className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
+          className="h-9 w-9 gap-2 border-transparent bg-transparent p-0 text-muted-foreground shadow-none hover:text-foreground hover:shadow-none dark:border-transparent dark:bg-transparent max-md:h-[44px] max-md:w-[44px]"
           aria-label={t.auth.signIn}
           title={t.auth.signIn}
         >
           <LogIn className="h-4 w-4" />
-          <span className="max-md:hidden @max-[72rem]:hidden">{t.auth.signIn}</span>
+          <span className="sr-only">{t.auth.signIn}</span>
         </Button>
         <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
       </>
@@ -149,12 +149,12 @@ export function HeaderAuthButton() {
         <Button
           variant="outline"
           size="sm"
-          className="h-9 w-auto gap-2 px-3 shadow-none hover:shadow-none max-md:h-[44px] max-md:w-[44px] max-md:p-0 @max-[72rem]:w-9 @max-[72rem]:p-0"
+          className="h-9 w-9 gap-2 border-transparent bg-transparent p-0 text-muted-foreground shadow-none hover:text-foreground hover:shadow-none dark:border-transparent dark:bg-transparent max-md:h-[44px] max-md:w-[44px]"
           aria-label={user.displayName || user.email?.split('@')[0] || t.auth.signedInAs}
           title={user.displayName || user.email?.split('@')[0] || t.auth.signedInAs}
         >
           <User className="h-4 w-4" />
-          <span className="max-w-32 truncate max-md:hidden @max-[72rem]:hidden">{user.displayName || user.email?.split('@')[0]}</span>
+          <span className="sr-only">{user.displayName || user.email?.split('@')[0]}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

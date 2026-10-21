@@ -15,7 +15,7 @@ import {
  * Keeping these roles here prevents each report component from introducing a
  * slightly different emerald, blue, or rose treatment.
  */
-export const REPORT_ACTIVE_CONTROL_TONE = 'bg-primary/10 text-primary'
+export const REPORT_ACTIVE_CONTROL_TONE = 'bg-foreground/[0.07] text-foreground'
 
 export const REPORT_CATEGORY_TONE = CLINICAL_CATEGORY_TONE
 

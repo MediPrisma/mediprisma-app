@@ -405,7 +405,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
               </span>
             ) : (
               <>
-                <TrendingUp className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span className="block min-w-0 truncate @min-[480px]:hidden">
                   {(t.reports as any).cumulativeTrend?.hintShort ?? '查看趨勢'}
                 </span>
@@ -417,14 +417,18 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
           </span>
         )}
         <div className="col-start-2 flex items-center gap-2 justify-self-end @min-[390px]:col-start-3">
-          {layoutToggle}
+          {/* Layout and 回報 are occasional; the naming mode is reading
+              state and stays in view. */}
+          <span className="reveal-on-hover inline-flex">{layoutToggle}</span>
           {nameModeControl ?? <ReportNameModeSwitch responsiveLabels />}
           {reportPanels.length > 0 && (
-            <LabDataReportButton
-              panels={reportPanels}
-              observations={observations}
-              nameMode={nameMode}
-            />
+            <span className="reveal-on-hover inline-flex">
+              <LabDataReportButton
+                panels={reportPanels}
+                observations={observations}
+                nameMode={nameMode}
+              />
+            </span>
           )}
         </div>
       </div>

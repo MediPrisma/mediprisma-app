@@ -106,7 +106,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
   if (groups.length === 0 && others.length === 0 && unreviewed.length === 0 && unverifiedPoints.length === 0) {
     if (!labels.noReports || highlights.totalReports > 0) return null
     return (
-      <section className="rounded-lg border border-border bg-card px-3 py-2.5" aria-labelledby="medical-summary-reports-title">
+      <section className="reveal-scope border-b border-border px-0.5 py-3" aria-labelledby="medical-summary-reports-title">
         <h3 id="medical-summary-reports-title" className="mb-1 text-[length:max(12px,0.75rem)] font-semibold tracking-wide text-muted-foreground">
           {labels.title}
         </h3>
@@ -249,7 +249,7 @@ export function ReportHighlightsCard({ highlights, labels, onNavigate }: ReportH
 
   return (
     <section
-      className="rounded-lg border border-border bg-card px-3 py-2.5"
+      className="reveal-scope border-b border-border px-0.5 py-3"
       aria-labelledby="medical-summary-reports-title"
     >
       <h3

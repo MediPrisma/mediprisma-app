@@ -7,18 +7,18 @@
  * neutral secondary surface while retaining the inpatient distinction.
  */
 export const CLINICAL_CATEGORY_TONE =
-  'bg-emerald-100 text-emerald-700 dark:bg-secondary/80 dark:text-secondary-foreground/85'
+  'bg-transparent text-muted-foreground dark:border-transparent'
 
 export const CLINICAL_INPATIENT_TONE =
-  'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
+  'bg-foreground/[0.07] text-foreground'
 
-export const CLINICAL_SOURCE_TONE = 'text-blue-600/80 dark:text-primary/75'
+export const CLINICAL_SOURCE_TONE = 'text-muted-foreground'
 
 export const CLINICAL_ABNORMAL_TONE =
-  'bg-red-100 text-red-700 dark:bg-clinical-abnormal/10 dark:text-clinical-abnormal dark:ring-1 dark:ring-inset dark:ring-clinical-abnormal/25'
+  'bg-red-50 text-red-700 dark:bg-clinical-abnormal/10 dark:text-clinical-abnormal dark:ring-1 dark:ring-inset dark:ring-clinical-abnormal/25'
 
-export const CLINICAL_LIST_ROW_TONE = 'border-border/90 bg-muted/40'
+export const CLINICAL_LIST_ROW_TONE = 'rounded-none border-transparent border-b-border/70 bg-transparent'
 
-export const CLINICAL_LIST_ROW_HOVER_TONE = 'hover:bg-muted/70'
+export const CLINICAL_LIST_ROW_HOVER_TONE = 'hover:bg-muted'
 
 export const CLINICAL_COUNT_TONE = 'text-muted-foreground'

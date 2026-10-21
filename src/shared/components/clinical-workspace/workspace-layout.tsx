@@ -64,7 +64,7 @@ export const ClinicalWorkspaceMain = forwardRef<
       ref={ref}
       data-slot="clinical-workspace-main"
       className={cn(
-        "relative flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-1 sm:p-2 md:flex-row md:gap-0",
+        "relative flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row",
         className,
       )}
       {...props}
@@ -103,10 +103,10 @@ export const ClinicalWorkspacePanel = forwardRef<
       ref={ref}
       data-slot="clinical-workspace-panel"
       className={cn(
-        "min-h-0 min-w-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-panel md:w-auto md:rounded-lg",
+        "min-h-0 min-w-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-panel md:w-auto",
         !mobileActive && !preserveMobileLayoutWhenInactive && "max-md:hidden",
         !mobileActive && preserveMobileLayoutWhenInactive
-          && "max-md:pointer-events-none max-md:invisible max-md:absolute max-md:inset-1 max-md:h-[calc(100%-0.5rem)]",
+          && "max-md:pointer-events-none max-md:invisible max-md:absolute max-md:inset-0 max-md:h-full",
         desktopState === "collapsed" && "md:hidden",
         desktopState === "fill" && "md:flex-1",
         desktopState === "split" && "md:flex-initial",
@@ -143,7 +143,7 @@ export function ClinicalMobilePanelSwitcher({
     <nav
       data-slot="clinical-mobile-panel-switcher"
       aria-label={`${leftLabel} / ${rightLabel}`}
-      className="flex shrink-0 border-b bg-panel md:hidden"
+      className="flex shrink-0 border-b border-border bg-panel md:hidden"
     >
       <button
         type="button"
@@ -152,7 +152,7 @@ export function ClinicalMobilePanelSwitcher({
         className={cn(
           buttonClasses,
           activePanel === "left"
-            ? "border-primary text-primary"
+            ? "border-foreground text-foreground"
             : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
         )}
       >
@@ -165,7 +165,7 @@ export function ClinicalMobilePanelSwitcher({
         className={cn(
           buttonClasses,
           activePanel === "right"
-            ? "border-primary text-primary"
+            ? "border-foreground text-foreground"
             : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
         )}
       >
@@ -203,7 +203,7 @@ export function ClinicalWorkspaceDivider({
       role="separator"
       aria-label={label}
       aria-orientation="vertical"
-      className="group relative flex w-2 shrink-0 items-center justify-center max-md:hidden"
+      className="reveal-scope group relative flex w-px shrink-0 items-center justify-center bg-border max-md:hidden"
     >
       <div
         className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize"
@@ -211,11 +211,11 @@ export function ClinicalWorkspaceDivider({
       />
       <div
         data-slot="clinical-workspace-divider-line"
-        className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/65 transition-colors group-hover:bg-primary/50 group-active:bg-primary"
+        className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-primary/40 group-active:bg-primary"
       />
 
       {showCollapseActions && (
-        <div className="absolute z-10 flex flex-col gap-0.5 rounded-full border border-border/70 bg-panel/95 p-0.5 shadow-sm backdrop-blur-sm">
+        <div className="reveal-on-hover absolute z-10 flex flex-col gap-0.5 rounded-full border border-border bg-popover p-0.5 shadow-sm">
           {/* Two chevrons cannot say what they will do, and what they DO is
               stateful: the first press re-centres a lopsided split, the next
               collapses that side (the labels come from the shell and change
@@ -297,7 +297,7 @@ export function ClinicalWorkspaceRail({
       title={label}
       aria-label={label}
       className={cn(
-        "group flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-border bg-panel text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:hidden",
+        "group flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 border-x border-border bg-panel text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary max-md:hidden",
         // Two different things, so two different colours. Work in flight uses
         // the shell's own interaction blue; a FINISHED run uses teal — the
         // colour 醫療摘要 already carries in the right panel — so the rail is
