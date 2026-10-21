@@ -134,7 +134,7 @@ it('flags all four source records for two genuine identical orders and two unide
   expect(records.every(record => record._sourceRecordComparison.status === 'ambiguous')).toBe(true)
   expect(records[0]._sourceRecordComparison.references).toEqual(['MedicationRequest/h1', 'MedicationRequest/h2', 'MedicationRequest/c1', 'MedicationRequest/c2'])
   const { result } = renderHook(() => useMedicationRows(records))
-  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['cloud-med', 'cloud-bid-order']))
+  expect(result.current).toHaveLength(2)
   expect(result.current.map(row => row.id)).toEqual(['h1', 'h2'])
   expect(result.current[0].sourceComparison?.records).toHaveLength(4)
   expect(result.current[0].sourceComparison?.records.filter(record => record.dataOrigin === 'hospital').map(record => record.id)).toEqual(['h1', 'h2'])
@@ -314,7 +314,7 @@ it('does not fold contradictory cloud regimens through an incomplete hospital re
   const secondCloud = { ...cloud, id: 'cloud-bid-order', dosageInstruction: [{ text: 'BID' }] }
   const orders = reconcileMedicationRequests([hospital, cloud, secondCloud])
   const { result } = renderHook(() => useMedicationRows(orders))
-  expect(result.current).toHaveLength(2)
+  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['cloud-med', 'cloud-bid-order']))
   expect(result.current[0].sourceComparison?.warnings).toContain('source-facts-differ')
 })
 
