@@ -12,6 +12,7 @@ import {
 } from "@/src/shared/utils/lab-categories"
 import type { Row } from "@/features/clinical-summary/reports/types"
 import { buildReportsData } from "@/features/clinical-summary/reports/hooks/useReportsData"
+import { reportDisplayGroupingKeys } from "@/src/shared/utils/report-copy-grouping"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
 import type { EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
@@ -484,6 +485,7 @@ export function useEncounterDetails(
     }
 
     if (Array.isArray(diagnosticReports)) {
+      const groupingKeys = reportDisplayGroupingKeys(diagnosticReports)
       const reportsByEncounter = new Map<string, any[]>()
       diagnosticReports.forEach((report: any) => {
         const encounterId = getReferenceId(report?.encounter)
@@ -512,7 +514,7 @@ export function useEncounterDetails(
           'standardized',
           audience,
           locale === 'zh-TW' ? 'zh-TW' : 'en',
-          diagnosticReports,
+          groupingKeys,
         ).reportRows
 
         // Numeric/member-observation DiagnosticReports already appear in the

@@ -97,12 +97,17 @@ function examTime(report: Report): string | undefined {
 }
 
 function modality(report: Report): string | undefined {
-  const title = [report.code?.text, ...(report.code?.coding ?? []).map(c => c.display)].filter(Boolean).join(' ')
-  if (/magnetic|\bmri?\b|磁振|核磁/i.test(title)) return 'MR'
-  if (/computed tomography|\bct\b|電腦斷層/i.test(title)) return 'CT'
-  if (/sono|ultrason|超音波/i.test(title)) return 'US'
-  if (/x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i.test(title)) return 'XR'
-  return undefined
+  const header = EXAM_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1]
+  const title = [report.code?.text, ...(report.code?.coding ?? []).map(c => c.display), header].filter(Boolean).join(' ').normalize('NFKC')
+    .replace(/\bc\s*\.\s*t\s*\.?/gi, 'ct')
+  const methods = [
+    ['MR', /magnetic|\bmri?\b|磁振|核磁/i],
+    ['CT', /computed tomography|\bct\b|電腦斷層/i],
+    ['US', /sono|ultrason|超音波/i],
+    ['XR', /x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i],
+  ] as const
+  const found = methods.filter(([, pattern]) => pattern.test(title))
+  return found.length === 1 ? found[0][0] : undefined
 }
 
 export function compareImagingCopies(a: Report, b: Report): number {

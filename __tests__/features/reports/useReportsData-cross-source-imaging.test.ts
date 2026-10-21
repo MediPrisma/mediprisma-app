@@ -26,7 +26,7 @@ describe('cross-source imaging reports', () => {
     const reports = pair().map(report => ({ ...report, encounter: { reference: 'Encounter/a' }, _encounterInferred: true }))
     const other = { ...reports[0], id: 'repeated-hospital', encounter: { reference: 'Encounter/b' } }
     const full = [...reports, other]
-    expect(buildReportsData(reports, [], 'standardized', 'medical', 'en', full).reportRows).toHaveLength(2)
+    expect(buildReportsData(reports, [], 'standardized', 'medical', 'en', reportDisplayGroupingKeys(full)).reportRows).toHaveLength(2)
     const { result } = renderHook(() => useEncounterDetails([], full, [], [], [], [], 'en', 'medical'))
     expect(result.current.get('a')?.reports).toHaveLength(2)
     const extracted = imagingReportsCategory.extractData({ diagnosticReports: full } as any)
@@ -105,6 +105,20 @@ describe('cross-source imaging reports', () => {
     const reports = pair().map((report, index) => ({ ...report, code: { text: 'Ultrasonography' },
       conclusion: `${index ? right : left} Date Of Examination:2026/06/24 Date Of RCP:2026/06/24 ${BODY}`,
     }))
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it.each(['MRI CHEST', 'SONOGRAM CHEST', 'CHEST AP VIEW'])('rejects a %s header on a CT order', header => {
+    const reports = pair()
+    reports[0].conclusion = `${header} Date Of Examination:2026/06/24 Date Of RCP:2026/06/24 ${BODY}`
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it('rejects contradictory modalities across code displays, including dotted C.T.', () => {
+    const reports = pair()
+    reports[0].code = { text: 'C.T. CHEST', coding: [{ display: 'MRI CHEST' }] }
+    reports[1].code = { text: 'MRI CHEST' }
+    reports[0].conclusion = BODY
     expect(buildReportsData(reports).reportRows).toHaveLength(2)
   })
 
