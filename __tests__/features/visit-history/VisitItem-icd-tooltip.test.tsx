@@ -139,7 +139,7 @@ describe('VisitItem ICD tooltip', () => {
     expect(reportStat.querySelector('svg')).toBeNull()
     const abnormalStat = screen.getByLabelText('異常 2')
     expect(abnormalStat).toHaveAttribute('data-visit-stat', 'abnormal')
-    expect(within(abnormalStat).getByText('異常').parentElement).toHaveClass('bg-red-100', 'text-red-700')
+    expect(within(abnormalStat).getByText('異常').parentElement).toHaveClass('bg-red-50', 'text-red-700')
     expect(screen.getByLabelText('處置 1')).toHaveClass('max-sm:hidden')
     expect(screen.getByTestId('visit-stat-more')).toHaveTextContent('+1')
     fireEvent.click(screen.getByTestId('visit-stat-more'))

@@ -2,6 +2,7 @@ import { render } from '@testing-library/react'
 import { MedicationList } from '@/features/clinical-summary/medications/components/MedicationList'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 import { CLINICAL_SOURCE_TONE } from '@/features/clinical-summary/components/clinical-color-roles'
+import { clinicalIcdToneClass } from '@/features/clinical-summary/components/clinical-metadata-styles'
 
 jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
@@ -222,8 +223,8 @@ describe('current medications — visit bands and headers', () => {
     )
     const header = container.querySelector('[data-visit-header]')!
     const icd = header.querySelector('[data-visit-header-icd]')!
-    // Same sand chip as the row's ICD (clinicalIcdToneClass).
-    expect(icd.className).toContain('bg-amber-50/50')
+    // Same chip as the row's ICD (clinicalIcdToneClass).
+    expect(icd.className).toContain(clinicalIcdToneClass)
     expect(icd.textContent).toContain('I10')
     const institution = header.querySelector('[data-testid="visit-header-institution"]')!
     expect(institution.textContent).toBe('臺大醫院')

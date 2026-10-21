@@ -120,9 +120,8 @@ describe('ReportRow mobile actions', () => {
 
     expect(screen.getByTestId('report-type-badge')).toHaveTextContent('檢驗')
     expect(screen.getByTestId('report-type-badge')).toHaveClass(
-      'border-blue-300',
-      'bg-blue-50',
-      'text-blue-800',
+      'border-transparent',
+      'text-muted-foreground',
     )
   })
 
@@ -175,11 +174,11 @@ describe('ReportRow mobile actions', () => {
       .toHaveAttribute('data-auto-generate', 'false')
 
     const rightPaneButton = screen.getByRole('button', { name: '在右側面板展開全文' })
-    expect(rightPaneButton).toHaveClass('border-primary', 'bg-primary/10', 'text-primary')
+    expect(rightPaneButton).toHaveClass('!opacity-100', 'bg-foreground/[0.07]', 'text-foreground')
 
     fireEvent.click(rightPaneButton)
     expect(screen.getByTestId('right-detail-source')).toHaveTextContent('none')
-    expect(rightPaneButton).toHaveClass('md:inline-flex', 'border-border', 'bg-background')
+    expect(rightPaneButton).toHaveClass('md:inline-flex', 'border-transparent', 'bg-transparent')
 
     fireEvent.click(rightPaneButton)
     expect(screen.getByTestId('report-interpretation-panel'))

@@ -93,10 +93,8 @@ describe('VisitItem inpatient medication periods', () => {
       '執行 2025/05/20–2025/05/21、2025/05/22–2025/05/28',
     )).toBeInTheDocument()
     expect(screen.getByText('住院')).toHaveClass(
-      'bg-blue-100',
-      'text-blue-700',
-      'dark:bg-blue-500/10',
-      'dark:text-blue-300',
+      'bg-foreground/[0.07]',
+      'text-foreground',
     )
     expect(screen.getByText('住院')).not.toHaveClass('bg-emerald-100', 'text-emerald-700')
   })

@@ -46,10 +46,10 @@ export function getMedicationDaysLeftBadgeClass(daysRemaining: number) {
 }
 
 // Chronic-prescription visual language is shared by the list badge and the
-// timeline. A plain outline names the prescription type; colour stays
-// reserved for supply that is running out.
+// timeline. It stays teal: the badge is the key to the timeline's teal bars,
+// so the colour carries an encoding, not decoration.
 export const medicationChronicBadgeClass =
-  "border-border bg-transparent text-foreground/80"
+  "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950/50 dark:text-teal-300"
 
 export function getMedicationStatusBadgeClass(status: string) {
   return status.toLowerCase() === "active"
