@@ -13,4 +13,3 @@ export function ClinicalRecordVariantsNotice({ excluded, locale }: {
     </p>
   )
 }
-

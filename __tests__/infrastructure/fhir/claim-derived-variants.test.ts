@@ -109,3 +109,27 @@ it('does not trust source-supplied derived identity and preserves original targe
  expect(collection.medications[0].encounter?.reference).toBe('Encounter/visit-1')
  expect(collection.encounters.find(row => row.id === 'visit-1')?.period?.start).toBe('2025-01-01')
 })
+it.each(['medication', 'encounter'])('does not infer a shared %s date from one known Claim while Claim revisions also participate', target => {
+ for (const reverse of [false, true]) {
+  const data: any = bundle()
+  const known = { resourceType: 'Claim', id: 'independent-claim', patient: { reference: 'Patient/synthetic' }, created: '2026-09-03', extension: [{ url: 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter', valueReference: { reference: 'Encounter/visit-1' } }], item: [{ extension: [{ url: 'requestedService', valueReference: { reference: 'MedicationRequest/prescription' } }] }], procedure: [{ procedureCodeableConcept: { text: 'Independent claim procedure' } }] }
+  data.entry.push({ resource: known })
+  if (reverse) data.entry.reverse()
+  const collection = projectClinicalAggregate(LocalBundleService.parse(data)!.collection)
+  if (target === 'medication') expect(collection.medications[0].authoredOn).toBeUndefined()
+  else expect(collection.encounters.find(row => row.id === 'visit-1')?.period?.start).toBeUndefined()
+  expect(collection.medications[0].clinicalClaimEncounterRelation?.state).toBe('unresolved')
+  expect(collection.clinicalSource!.graph.nodes.filter(node => node.resource.resourceType === 'Claim')).toHaveLength(3)
+  expect(collection.procedures).toHaveLength(5)
+ }
+})
+it('preserves explicit shared-target dates when uncertain and known Claims coexist', () => {
+ const data: any = bundle()
+ data.entry.find((entry: any) => entry.resource.resourceType === 'MedicationRequest').resource.authoredOn = '2025-01-01'
+ data.entry.find((entry: any) => entry.resource.id === 'visit-1').resource.period = { start: '2025-01-02' }
+ const claim = { ...data.entry.find((entry: any) => entry.resource.resourceType === 'Claim').resource, id: 'independent-claim', meta: undefined, created: '2026-09-03' }
+ data.entry.push({ resource: claim })
+ const collection = projectClinicalAggregate(LocalBundleService.parse(data)!.collection)
+ expect(collection.medications[0].authoredOn).toBe('2025-01-01')
+ expect(collection.encounters.find(row => row.id === 'visit-1')?.period?.start).toBe('2025-01-02')
+})

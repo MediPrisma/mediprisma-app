@@ -120,4 +120,3 @@ it('subscribes all consumers to a same-source Patient capture without manual rer
   unmount()
   queryClient.clear()
 })
-

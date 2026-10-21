@@ -104,7 +104,8 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
 
   const synthesised: any[] = []
   const derivedIds = new Set(entries.map(resource => resource.resourceType + '/' + resource.id))
-  const medicationClaims = new Map<any, { dates: Set<string>; encounters: Set<string>; unresolvedEncounter: boolean }>()
+  const medicationClaims = new Map<any, { dates: Set<string>; unresolvedDate: boolean; encounters: Set<string>; unresolvedEncounter: boolean }>()
+  const encounterDateClaims = new Map<any, { dates: Set<string>; unresolvedDate: boolean }>()
 
   for (const claim of claims) {
     const synthesisedStart = synthesised.length
@@ -131,12 +132,17 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
     const resolvedEncounter = resolveClaimTarget(claim, `extension[${encounterIndex}].valueReference`, 'Encounter')
     const canLinkEncounter = Boolean(!uncertainClaim && resolvedEncounter && encounterRef === 'Encounter/' + resolvedEncounter.id)
     const encounter = canLinkEncounter && encounterRef ? { reference: encounterRef } : undefined
+    if (resolvedEncounter && encounterRef === 'Encounter/' + resolvedEncounter.id) {
+      const dates = encounterDateClaims.get(resolvedEncounter) ?? { dates: new Set<string>(), unresolvedDate: false }
+      if (uncertainClaim) dates.unresolvedDate = true
+      else if (created) dates.dates.add(created)
+      encounterDateClaims.set(resolvedEncounter, dates)
+    }
 
     // --- Backfill the PAS Encounter (usually has no period.start / subject) ---
     if (canLinkEncounter) {
       const enc = resolvedEncounter
       if (enc) {
-        if (!enc.period?.start && created) enc.period = { ...(enc.period ?? {}), start: created }
         if (!enc.subject && subject) enc.subject = subject
       }
     }
@@ -297,8 +303,9 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
       const extensionIndex = exts.findIndex(e => typeof e?.valueReference?.reference === 'string' && e.valueReference.reference.startsWith('MedicationRequest/'))
       const mr = resolveClaimTarget(claim, `item[${itemIndex}].extension[${extensionIndex}].valueReference`, 'MedicationRequest')
       if (!mr) continue
-      const candidates = medicationClaims.get(mr) ?? { dates: new Set<string>(), encounters: new Set<string>(), unresolvedEncounter: false }
-      if (created && !uncertainClaim) candidates.dates.add(created)
+      const candidates = medicationClaims.get(mr) ?? { dates: new Set<string>(), unresolvedDate: false, encounters: new Set<string>(), unresolvedEncounter: false }
+      if (uncertainClaim) candidates.unresolvedDate = true
+      else if (created) candidates.dates.add(created)
       if (encounter && canLinkEncounter) candidates.encounters.add(encounter.reference)
       if (uncertainClaim || (encounterRef && !canLinkEncounter)) candidates.unresolvedEncounter = true
       medicationClaims.set(mr, candidates)
@@ -309,9 +316,16 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
       if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference) && canLinkEncounter) claimEncounterLinks.set(resource, reference)
     }
   }
+  // Unresolved participants remain date authorities even though their candidate
+  // values are withheld; another Claim cannot silently become the sole date.
+  for (const [encounter, candidates] of encounterDateClaims) {
+    if (!encounter.period?.start && !candidates.unresolvedDate && candidates.dates.size === 1) {
+      encounter.period = { ...(encounter.period ?? {}), start: [...candidates.dates][0] }
+    }
+  }
   // Apply the set once: Claim order never chooses a visit or date for an order.
   for (const [medication, candidates] of medicationClaims) {
-    if (!medication.authoredOn && candidates.dates.size === 1) medication.authoredOn = [...candidates.dates][0]
+    if (!medication.authoredOn && !candidates.unresolvedDate && candidates.dates.size === 1) medication.authoredOn = [...candidates.dates][0]
     if (medication.encounter) continue
     if (candidates.encounters.size === 1 && !candidates.unresolvedEncounter) {
       const reference = [...candidates.encounters][0]

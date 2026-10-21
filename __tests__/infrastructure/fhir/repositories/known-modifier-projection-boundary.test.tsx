@@ -124,4 +124,3 @@ it.each([{ resources: [] }, { resources: [good()] }])('recovers only quarantine-
  const content = { ...old, resourceQueryStatus: { ...old.resourceQueryStatus, Condition: { ...old.resourceQueryStatus!.Condition!, medicationContentUncertaintyCount: 1 } } }
  expect(projectClinicalAggregate(content, fresh.clinicalSource!).resourceQueryStatus?.Condition?.state).toBe('incomplete')
 })
-
