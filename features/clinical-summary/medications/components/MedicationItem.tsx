@@ -30,6 +30,7 @@ import {
   getMedicationStatusBadgeClass,
 } from './medication-chip-styles'
 import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
+import { SourcePrescriptionComparison } from './SourcePrescriptionComparison'
 import { doseUnlessRepeated } from '../utils/dose-helpers'
 
 interface MedicationItemProps {
@@ -71,9 +72,22 @@ interface MedicationItemProps {
   resourceNavigationIds?: string[]
 }
 
-function getStatusBadge(medication: MedicationRow, mt: any) {
+function getStatusBadge(medication: MedicationRow, mt: any, locale: string) {
+  if (medication.currentnessUncertain) return { label: locale === 'en' ? 'Status uncertain' : '狀態未確認', variant: 'secondary' as const }
+  const endedStatus = {
+    cancelled: locale === 'en' ? 'cancelled' : '已取消',
+    'entered-in-error': locale === 'en' ? 'entered in error' : '誤植紀錄',
+    stopped: locale === 'en' ? 'stopped' : '已停用',
+    'on-hold': locale === 'en' ? 'on hold' : '暫停',
+    draft: locale === 'en' ? 'draft' : '草稿',
+    'not-taken': locale === 'en' ? 'not taken' : '未服用',
+  }[medication.status as 'cancelled' | 'entered-in-error' | 'stopped' | 'on-hold' | 'draft' | 'not-taken']
+  if (endedStatus) return { label: endedStatus, variant: 'secondary' as const }
   if (medication.isInactive) {
-    return { label: mt.statusEnded ?? 'ended', variant: 'secondary' as const }
+    return { label: medication.statusEstimated ? (locale === 'en' ? 'Estimated supply ended' : '供藥估計到期')
+      : medication.status === 'completed' ? (locale === 'en' ? 'completed' : '已完成')
+      : medication.endDateSource === 'estimated' ? (locale === 'en' ? 'Estimated supply ended' : '供藥估計到期')
+        : mt.statusEnded ?? 'ended', variant: 'secondary' as const }
   }
   const remainingDays = medication.displayRemainingDays ?? medication.daysRemaining
   if (remainingDays !== undefined) {
@@ -130,15 +144,25 @@ export function MedicationItem({
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const mt = (t.medications as any)
-  const badge = getStatusBadge(medication, mt)
+  const badge = getStatusBadge(medication, mt, locale)
   const chronicLabel = mt.chronic ?? '慢箋'
   const isMedical = audience === 'medical'
   const showStatementChip =
     showSourceChip && medication.sourceResourceType === 'MedicationStatement'
+  const terminology = medication.drugTerminology
+  const candidate = !!medication.sourceComparison && medication.sourceComparison.status !== 'confirmed'
+  const integrated = !candidate && (medication.reconciledOrderIds?.length ?? 0) > 1
+  const sourceLabel = candidate ? (locale === 'en' ? 'Compare sources' : '跨來源待核對') : integrated ? (locale === 'en' ? 'Hospital + cloud' : '院內＋雲端')
+    : medication.dataOrigin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內')
+      : medication.dataOrigin === 'medcloud' ? (locale === 'en' ? 'MediCloud' : '雲端') : undefined
+  const sourceDescription = medication.sourceComparison
+    ? <SourcePrescriptionComparison comparison={medication.sourceComparison} /> : integrated
+    ? (locale === 'en' ? 'One matched prescription, with hospital and MediCloud source records retained.' : '同一筆藥囑的院內與健保雲端資料已整合，兩邊原始紀錄均保留。')
+    : (locale === 'en' ? 'The source of this prescription record.' : '此筆用藥紀錄的資料來源。')
+  const hasMedicationDetails = !!(terminology || medication.hospitalMedicationName || medication.nhiDrugCode || integrated || candidate || medication.sourceOrderIdentifiers?.length)
   const billingIcdTitle = medication.icdCode
     ? `${medication.icdCode}${medication.icdText ? ` ${medication.icdText}` : ''}`
     : mt.billingIcdTooltip
-  const terminology = medication.drugTerminology
   const fullMedicationTitle = [
     medication.title,
     medication.secondaryTitle,
@@ -328,18 +352,13 @@ export function MedicationItem({
   const firstRefillDate = shortDate(medication.firstRefillDate)
   const refillSummary = medication.refillCount > 1
     ? (firstRefillDate
-        ? (mt.refillSummarySince
-          ?? (locale.startsWith('zh')
-            ? '累計 {count} 次 · {date} 起'
-            : '{count} refills · since {date}'))
-        : (mt.refillSummary
-          ?? (locale.startsWith('zh') ? '累計 {count} 次' : '{count} refills')))
+        ? (locale.startsWith('zh') ? '{count} 筆紀錄 · {date} 起' : '{count} records · since {date}')
+        : (locale.startsWith('zh') ? '{count} 筆紀錄' : '{count} records'))
       .replace('{count}', String(medication.refillCount))
       .replace('{date}', firstRefillDate)
     : ''
   const refillCompact = medication.refillCount > 1
-    ? (mt.refillSummary
-      ?? (locale.startsWith('zh') ? '累計 {count} 次' : '{count} refills'))
+    ? (locale.startsWith('zh') ? '{count} 筆紀錄' : '{count} records')
       .replace('{count}', String(medication.refillCount))
     : ''
   const rowInstitution = visitContextInHeader ? undefined : medication.pharmacy
@@ -353,6 +372,7 @@ export function MedicationItem({
     && !medication.isChronic
     && !((medication.overlapCount ?? 0) > 0)
     && !showStatementChip
+    && !sourceLabel
   // A row under a visit header has nothing left in its middle column at
   // desktop widths, so from a 720px list it folds onto one line:
   // name | dates + regimen | class chips | status + refills. Below that it
@@ -363,7 +383,7 @@ export function MedicationItem({
   // MedicationStatement, so this row answers to both.
   const anchorRef = useResourceAnchor(
     ['MedicationRequest', 'MedicationStatement'],
-    resourceNavigationIds ?? medication.id,
+    [...new Set([medication.id, ...(resourceNavigationIds ?? []), ...(medication.reconciledOrderIds ?? [])])],
     onResourceNavigationMatch,
   )
 
@@ -391,6 +411,14 @@ export function MedicationItem({
           && "@min-[45rem]:min-h-8 @min-[45rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)_minmax(0,0.6fr)_8.5rem] @min-[45rem]:content-center",
       )}
     >
+      {(medication.sourceComparison?.status === 'ambiguous' || medication.sourceComparison?.warnings?.some(warning => ['source-currentness-differs', 'source-facts-differ'].includes(warning))) && (
+        <details open={medication.sourceComparison.detailsInitiallyOpen !== false} className="col-span-full row-start-4 min-w-0 border-t border-border/60 pt-1 text-xs">
+          <summary className="min-h-11 cursor-pointer font-medium sm:min-h-8" onClick={event => event.stopPropagation()}>
+            {locale === 'en' ? 'Source correspondence unconfirmed' : '來源對應未確認'} · {medication.sourceComparison.records.filter(record => record.dataOrigin === 'hospital').length} {locale === 'en' ? 'hospital orders' : '筆院內藥囑'} / {medication.sourceComparison.records.filter(record => record.dataOrigin === 'medcloud').length} {locale === 'en' ? 'cloud records' : '筆雲端紀錄'}
+          </summary>
+          <SourcePrescriptionComparison comparison={medication.sourceComparison} />
+        </details>
+      )}
       {leadingControl && (
         <div className="absolute inset-y-0 left-0 flex w-9 items-stretch">
           {leadingControl}
@@ -407,10 +435,10 @@ export function MedicationItem({
             <span
               className={cn(
                 "flex min-w-0 flex-1 items-baseline gap-1",
-                (terminology || medication.hospitalMedicationName) && "cursor-help",
+                hasMedicationDetails && "cursor-help",
               )}
               title={fullMedicationTitle}
-              tabIndex={terminology || medication.hospitalMedicationName ? 0 : undefined}
+              tabIndex={hasMedicationDetails ? 0 : undefined}
             >
               <span
                 className="min-w-0 truncate text-[0.8125rem] font-semibold tracking-[-0.005em]"
@@ -419,6 +447,11 @@ export function MedicationItem({
               </span>
             </span>
           </MedicationTerminologyTooltip>
+          {medication.selfPurchased && (
+            <span className="ml-1 shrink-0 rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80">
+              {locale.startsWith('zh') ? '自費／自購' : 'Self-pay'}
+            </span>
+          )}
           {medication.route && routeTitle ? (
             <span
               data-medication-route
@@ -532,6 +565,17 @@ export function MedicationItem({
               >
                 {chronicLabel}
               </span>
+            )}
+            {sourceLabel && (
+              <TapTooltip
+                asChild
+                content={sourceDescription}
+                contentClassName={`${clinicalTooltipSurfaceClass} max-w-[min(90vw,26rem)] whitespace-normal text-[max(12px,0.75rem)]`}
+              >
+                <span tabIndex={0} className="inline-flex shrink-0 cursor-help items-center rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80">
+                  {sourceLabel}
+                </span>
+              </TapTooltip>
             )}
             {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
                 the SAME institution is still inside its window and was folded

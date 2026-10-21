@@ -131,10 +131,10 @@ describe('MedicationHistoryList row parity', () => {
     expect(container.querySelector('[data-medication-classification]'))
       .not.toHaveTextContent('新北市聯合醫院')
     expect(row.getByText('甲狀腺製劑')).toBeInTheDocument()
-    expect(row.getByText('已結束')).toBeInTheDocument()
+    expect(row.getByText('已完成')).toBeInTheDocument()
     // One copy per width: the status column (456px and up) and the end of
     // the regimen line below that; CSS shows exactly one.
-    expect(row.getAllByText('累計 2 次')).toHaveLength(2)
+    expect(row.getAllByText('2 筆紀錄')).toHaveLength(2)
     // The older fill's row shows its own dates.
     expect(fillRows(container)[1].querySelector('[data-medication-regimen]'))
       .toHaveTextContent('26/07/06 → 26/08/05（30 天）')

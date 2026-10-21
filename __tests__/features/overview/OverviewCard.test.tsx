@@ -122,7 +122,7 @@ describe('OverviewCard (demo bundle)', () => {
       expect(ongoing.compareDocumentPosition(finished) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
     expectOngoingFirst(card)
-    expect(within(card).getByText('已用完 7 天')).toBeInTheDocument()
+    expect(within(card).getByText('已用完 8 天')).toBeInTheDocument()
     fireEvent.click(within(card).getByRole('button', { name: zhTW.overview.expandList }))
     expectOngoingFirst(screen.getByRole('dialog'))
   })

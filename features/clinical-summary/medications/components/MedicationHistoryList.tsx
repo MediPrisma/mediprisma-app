@@ -223,8 +223,8 @@ export function MedicationHistoryList({
 
   useEffect(() => {
     if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
-    const targetInRegular = regular.findIndex((entry) => entry.fill.id === pending.resourceId)
-    const targetInInjectables = injectable.some((entry) => entry.fill.id === pending.resourceId)
+    const targetInRegular = regular.findIndex((entry) => entry.fill.id === pending.resourceId || entry.fill.reconciledOrderIds?.includes(pending.resourceId))
+    const targetInInjectables = injectable.some((entry) => entry.fill.id === pending.resourceId || entry.fill.reconciledOrderIds?.includes(pending.resourceId))
     if (targetInRegular < 0 && !targetInInjectables) return
     const timer = window.setTimeout(() => {
       if (targetInInjectables) setShowInjectables(true)

@@ -42,6 +42,10 @@ export function humanDoseAmount(doseAndRate?: DoseAndRate[], text?: string): str
   }
   
   if (text) {
+    // A decimal-only matcher would read "1/2 tab" as "2 tab". Keep a
+    // fractional free-text dose verbatim in the full SIG instead of inventing
+    // a separate numeric dose. An explicit structured dose still wins above.
+    if (/\d\s*\/\s*\d|[¼½¾⅓⅔]/.test(text)) return ''
     const m = text.match(/(\d+(?:\.\d+)?)\s*(tab(?:let)?s?|cap(?:sule)?s?|mL|ml|mg|mcg|g|drop(?:s)?|puff(?:s)?)/i)
     if (m) {
       const val = m[1]

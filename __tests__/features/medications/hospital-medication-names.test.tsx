@@ -26,6 +26,28 @@ function medication(generic?: string, product?: string, id = 'med-1') {
 }
 
 describe('VGH hospital medication ingredient display', () => {
+  it('does not hide a same-name same-day prescription from a different clinic', () => {
+    const hospital = medication('Letrozole FC tab 2.5 mg', undefined, 'hospital')
+    const other = { ...medication(undefined, undefined, 'other'),
+      medicationCodeableConcept: { text: 'Letrozole FC tab 2.5 mg' }, requester: { display: 'Other clinic' } }
+    const { result } = renderHook(() => useMedicationRows([hospital, other]))
+    expect(result.current.map((row) => row.id).sort()).toEqual(['hospital', 'other'])
+  })
+
+  it.each(['N', '否', '無', '0', 'UNKNOWN'])('does not label the source self-purchase value %s as self-pay', (value) => {
+    const source = { ...medication('Letrozole FC tab 2.5 mg'), note: [{ text: `自購：${value}` }, { text: '非慢箋' }] }
+    const { result } = renderHook(() => useMedicationRows([source]))
+    expect(result.current[0].selfPurchased).toBe(false)
+    expect(result.current[0].isChronic).toBe(false)
+  })
+
+  it('retains explicitly recorded self-pay and chronic-prescription markers', () => {
+    const source = { ...medication('Letrozole FC tab 2.5 mg'), note: [{ text: '自購：Y' }, { text: '慢簽' }] }
+    const { result } = renderHook(() => useMedicationRows([source]))
+    expect(result.current[0].selfPurchased).toBe(true)
+    expect(result.current[0].isChronic).toBe(true)
+  })
+
   it('uses the same-row explicit generic and retains brand/form/strength for switching and search', () => {
     const source = medication('Letrozole FC tab 2.5 mg', 'Femara FC tab 2.5 mg')
     const original = JSON.stringify(source)

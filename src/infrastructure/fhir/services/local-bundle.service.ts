@@ -33,6 +33,8 @@ import {
 import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
+import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
+import { reconcileMedicationRequests } from './medication-reconciliation'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
@@ -1011,7 +1013,7 @@ function attachEncounterRefsForMeds(
     if (!date || !requester) return m
     const id = encounterByDateProvider.get(`${date}|${requester}`)
     if (!id) return m
-    return { ...m, encounter: { reference: `Encounter/${id}` } }
+    return { ...m, encounter: { reference: `Encounter/${id}` }, _encounterInferred: true }
   })
 }
 
@@ -1432,12 +1434,19 @@ export const LocalBundleService = {
       throw new Error('此資料包含多個不同的病人或病人版本，無法安全匯入。請提供單一病人的 FHIR Bundle。')
     }
     const sourceKeyByResource = new WeakMap<object, string>()
-    const entries: any[] = canonicalizeBundleResources({
+    let entries: any[] = canonicalizeBundleResources({
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
     }, clinicalSource, sourceKeyByResource)
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     if (!entries.length) return null
+
+    // Comparison projections belong to this import, never to the source FHIR.
+    // Recompute them so re-imported exports cannot hide genuine source orders.
+    for (const resource of entries) {
+      for (const key of ['_sourceRecordComparison', '_sourcePrescriptionRecords', '_sourceEncounterRecords',
+        '_reconciledSourceReferences', '_resolvedMedicationCodeableConcept']) delete resource[key]
+    }
 
     // TW-PAS support: unpack any Claim (事前審查申請) into the standard
     // Condition / Procedure / Observation / DocumentReference resources the rest
@@ -1460,6 +1469,8 @@ export const LocalBundleService = {
     // references to human-readable display strings (attending physician,
     // institution) so the UI's `.display`-only renderers can show them.
     attachReferenceDisplays(entries)
+    entries = reconcileOutpatientEncounters(entries)
+    entries = reconcileMedicationRequests(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
     const sourceCapturedAt = typeof bundle.timestamp === 'string'
@@ -1493,14 +1504,20 @@ export const LocalBundleService = {
     // disambiguate when multiple same-day encounters exist across providers
     // (e.g. ENT clinic + pharmacy refill on the same day).
     const encounterByDateProvider = new Map<string, string>()
+    const ambiguousDateProviders = new Set<string>()
     for (const enc of encounters) {
       const d = toDateStr(enc.period?.start)
       if (d && !encounterDateMap.has(d)) {
         encounterDateMap.set(d, enc.id)
       }
       const provider = enc.serviceProvider?.display?.trim() || ''
-      if (d && provider && !encounterByDateProvider.has(`${d}|${provider}`)) {
-        encounterByDateProvider.set(`${d}|${provider}`, enc.id)
+      const providerKey = `${d}|${provider}`
+      if (d && provider && !ambiguousDateProviders.has(providerKey)) {
+        const previous = encounterByDateProvider.get(providerKey)
+        if (previous && previous !== enc.id) {
+          ambiguousDateProviders.add(providerKey)
+          encounterByDateProvider.delete(providerKey)
+        } else encounterByDateProvider.set(providerKey, enc.id)
       }
     }
 

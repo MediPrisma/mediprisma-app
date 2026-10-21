@@ -7,15 +7,15 @@
 // apart it can be tested on its own.
 import { useMemo } from 'react'
 import { medicationClinicalIdentityKey } from '@/src/shared/utils/fhir-display-helpers'
-import { computeDurationDays } from '@/features/clinical-summary/medications/utils/duration-helpers'
 import { humanDoseAmount, displayDosageInstruction, doseUnlessRepeated } from '@/features/clinical-summary/medications/utils/dose-helpers'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { useGroupedMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
+import { medicationExpectedEnd } from '@/src/core/utils/clinical-context-selection.utils'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import {
   classifyMedicationChanges,
   overlapsOverviewWindow,
-  toDayKey,
   type OverviewMedChange,
   type OverviewMedFact,
   type OverviewWindow,
@@ -48,7 +48,7 @@ export interface OverviewMedsData {
   changeCount: number
 }
 
-const MEDICATION_INACTIVE_STATUSES = new Set(['stopped', 'completed'])
+const MEDICATION_INACTIVE_STATUSES = new Set(['stopped', 'completed', 'cancelled', 'entered-in-error', 'on-hold', 'draft'])
 
 /**
  * Identity used only for medication change detection. A refill can switch NHI
@@ -117,42 +117,19 @@ function medicationWindowDays(
   medication: any,
   knownStatus?: string,
 ): { startDay?: string; endDay?: string; supplyEndDay?: string } {
-  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const status = knownStatus ?? (typeof medication?.status === 'string'
     ? medication.status.toLowerCase()
     : '')
   const start = medication?.authoredOn
     ?? medication?.effectiveDateTime
     ?? medication?.dispenseRequest?.validityPeriod?.start
-  let end = medication?.dispenseRequest?.validityPeriod?.end
-    ?? dosage?.timing?.repeat?.boundsPeriod?.end
-  // The day the supply runs to, as a calendar day: the source's own end when
-  // it has one, else the start day plus the supplied days. Never from the
-  // rounded-up remaining-day count, which can land a day late.
-  let supplyEndDay = toDayKey(end)
-  if (!end && start && (medication?.dispenseRequest?.expectedSupplyDuration || dosage?.timing?.repeat?.boundsDuration)) {
-    const days = computeDurationDays({
-      expectedDuration: medication?.dispenseRequest?.expectedSupplyDuration,
-      boundsDuration: dosage?.timing?.repeat?.boundsDuration,
-    })
-    const date = new Date(start)
-    if (days && !Number.isNaN(date.getTime())) {
-      // Match the medication tab's source-duration coverage calculation.
-      date.setDate(date.getDate() + days)
-      end = date.toISOString()
-      const startDay = toDayKey(start)
-      if (startDay) {
-        const [y, m, d] = startDay.split('-').map(Number)
-        supplyEndDay = new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
-      }
-    }
-  }
+  const end = medicationExpectedEnd(medication)
   return {
-    startDay: toDayKey(start),
-    endDay: toDayKey(end ?? (MEDICATION_INACTIVE_STATUSES.has(status)
+    startDay: medicationClinicalDay(start),
+    endDay: medicationClinicalDay(end ?? (MEDICATION_INACTIVE_STATUSES.has(status)
       ? medication?.effectiveDateTime ?? medication?.authoredOn
       : undefined)),
-    supplyEndDay,
+    supplyEndDay: end,
   }
 }
 
@@ -278,8 +255,9 @@ export function useOverviewMeds(
       // Still running, or finished inside the recent tail (see the constant).
       // An undated record cannot be ruled out, so it counts as current.
       const finishedDay = endDay ?? startDay
-      const isCurrent = !row.isInactive || !finishedDay
-        || daysBetween(finishedDay, window.endDay) <= MEDICATION_RECENTLY_FINISHED_DAYS
+      const excludedFromCurrent = row.currentnessUncertain || ['cancelled', 'entered-in-error', 'on-hold', 'draft', 'stopped', 'not-taken'].includes(row.status)
+      const isCurrent = !excludedFromCurrent && (!row.isInactive || !finishedDay
+        || daysBetween(finishedDay, window.endDay) <= MEDICATION_RECENTLY_FINISHED_DAYS)
       const doseText = [doseUnlessRepeated(row.dose, row.frequency), row.frequency]
         .filter((part) => part && part !== '—')
         .join(' · ')
@@ -300,7 +278,7 @@ export function useOverviewMeds(
         isChronic: row.isChronic,
         isInactive: row.isInactive,
         isCurrent,
-        daysRemaining: row.displayRemainingDays ?? row.daysRemaining,
+        daysRemaining: excludedFromCurrent ? undefined : row.displayRemainingDays ?? row.daysRemaining,
         change,
         row,
       })

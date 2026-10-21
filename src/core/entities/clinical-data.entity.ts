@@ -3,6 +3,7 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
 // Core Domain Entities: Clinical Data
 
 export interface ConditionEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   code?: {
     text?: string
@@ -121,6 +122,7 @@ export interface ClinicalFhirExtension {
 }
 
 export interface MedicationEntity {
+  identifier?: Array<{ system?: string; value?: string }>
   id: string
   meta?: {
     source?: string
@@ -291,6 +293,12 @@ export interface MedicationEntity {
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
   /** Source capture instant from Bundle.timestamp; not the local import time. */
   _sourceCapturedAt?: string
+  _reconciledSourceReferences?: string[]
+  _encounterInferred?: boolean
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourcePrescriptionRecords?: any[]
+  /** IPS-only presentation flag; the original source status is never rewritten. */
+  exportCurrentnessUnconfirmed?: boolean
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
@@ -776,6 +784,9 @@ export interface ProcedureSpecialMaterialEntity {
 }
 
 export interface EncounterEntity {
+  meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourceEncounterRecords?: any[]
   id: string
   status?: string
   class?: {

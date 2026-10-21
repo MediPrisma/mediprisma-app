@@ -1,8 +1,5 @@
-// Active-medication merge rules — 慢箋 early refill produces two ACTIVE
-// MedicationRequests for the SAME ongoing prescription (same drug, same
-// institution, overlapping windows). One card, covering to the latest end.
-// The load-bearing counterpart: same drug from DIFFERENT institutions is a
-// potential duplicate-therapy / 重複就醫 signal and must NEVER be merged.
+// Distinct source orders remain visible. Only canonical import reconciliation
+// may pair a hospital/cloud copy of the same prescription.
 
 import { groupMedications } from '@/features/clinical-summary/medications/hooks/useGroupedMedications'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
@@ -26,25 +23,39 @@ beforeEach(() => {
   seq = 0
 })
 
-describe('groupMedications — active-list merge', () => {
-  it('merges same-drug SAME-institution overlapping actives into one row (latest coverage wins)', () => {
+describe('groupMedications — order-preserving presentation', () => {
+  it('keeps an explicit self-pay addition separate from the same product at the same clinic', () => {
+    const insured = row({ title: 'Synthetic medicine', pharmacy: 'Synthetic clinic', dose: '1 TAB' })
+    const selfPay = row({ title: 'Synthetic medicine', pharmacy: 'Synthetic clinic', dose: '1 TAB', selfPurchased: true })
+    expect(groupMedications([insured, selfPay]).activeMedications).toHaveLength(2)
+  })
+  it.each(['dose', 'frequency', 'route'] as const)('keeps different %s regimens at the same clinic visible', (field) => {
+    const first = row({ title: 'Synthetic medicine', pharmacy: 'Synthetic clinic', [field]: 'first regimen' })
+    const second = row({ title: 'Synthetic medicine', pharmacy: 'Synthetic clinic', [field]: 'second regimen' })
+    const { activeMedications } = groupMedications([first, second])
+    expect(activeMedications).toHaveLength(2)
+    expect(activeMedications.map((medication) => medication[field])).toEqual(['first regimen', 'second regimen'])
+    expect(activeMedications.every((medication) => medication.overlapCount === 0)).toBe(true)
+  })
+
+  it('preserves distinct renewals at the same institution with each source coverage window', () => {
     // The reported case: eye drops 6/10→7/8 still active + early refill 7/1→7/29.
     const old = row({ title: '舒而坦 眼藥水', pharmacy: '示範嘉恩醫院', startedOn: '2026-06-10', endDate: '2026-07-08' })
     const renew = row({ title: '舒而坦 眼藥水', pharmacy: '示範嘉恩醫院', startedOn: '2026-07-01', endDate: '2026-07-29' })
     const { activeMedications } = groupMedications([old, renew])
-    expect(activeMedications).toHaveLength(1)
-    expect(activeMedications[0].endDate).toBe('2026-07-29') // 剩X天 covers to the latest end
-    expect(activeMedications[0].overlapCount).toBe(1)       // drives the 已續領 chip
+    expect(activeMedications).toHaveLength(2)
+    expect(activeMedications.map(m => m.endDate)).toEqual(['2026-07-08', '2026-07-29'])
+    expect(activeMedications.every(m => m.overlapCount === 0)).toBe(true)
   })
 
-  it('FOLDS a pharmacy dispensing into the prescribing clinic (藥局 ≠ duplicate)', () => {
+  it('keeps the pharmacy source record inspectable without inferring the same order', () => {
     // 便通樂: prescribed at 嘉恩醫院 (門診), released at 康健藥局 (藥局). One Rx.
     const hosp = row({ title: '便通樂膜衣錠', pharmacy: '示範嘉恩醫院', startedOn: '2026-06-25', endDate: '2026-07-23' })
     const pharm = row({ title: '便通樂膜衣錠', pharmacy: '示範康健藥局', startedOn: '2026-06-25', endDate: '2026-07-23' })
     const { activeMedications } = groupMedications([hosp, pharm])
-    expect(activeMedications).toHaveLength(1)
-    expect(activeMedications[0].pharmacy).toBe('示範嘉恩醫院') // names the prescriber, not the pharmacy
-    expect(activeMedications[0].overlapCount).toBe(0) // pharmacy pickup ≠ 續領, no chip
+    expect(activeMedications).toHaveLength(2)
+    expect(activeMedications.map(m => m.pharmacy)).toEqual(['示範嘉恩醫院', '示範康健藥局'])
+    expect(activeMedications.every(m => m.overlapCount === 0)).toBe(true)
   })
 
   it('KEEPS same drug from TWO DIFFERENT CLINICS as separate rows (real 重複用藥)', () => {
@@ -62,16 +73,16 @@ describe('groupMedications — active-list merge', () => {
     expect(activeMedications[0].overlapCount).toBe(0)
   })
 
-  it('picks the latest fill even with DISPLAY-formatted non-padded dates (7/29 vs 7/8)', () => {
+  it('retains each fill with DISPLAY-formatted non-padded dates (7/29 vs 7/8)', () => {
     // Real MedicationRow dates come out of formatDate() → "2026/7/8" style.
     // Lexicographically "2026/7/29" < "2026/7/8", so a string compare picks
     // the WRONG (old) fill — this pins the timestamp-based comparison.
     const old = row({ title: '派滴兒點眼液', pharmacy: '示範嘉恩醫院', startedOn: '2026/6/10', endDate: '2026/7/8' })
     const renew = row({ title: '派滴兒點眼液', pharmacy: '示範嘉恩醫院', startedOn: '2026/7/1', endDate: '2026/7/29' })
     const { activeMedications } = groupMedications([old, renew])
-    expect(activeMedications).toHaveLength(1)
-    expect(activeMedications[0].endDate).toBe('2026/7/29')
-    expect(activeMedications[0].startedOn).toBe('2026/7/1')
+    expect(activeMedications).toHaveLength(2)
+    expect(activeMedications[0].endDate).toBe('2026/7/8')
+    expect(activeMedications[1].startedOn).toBe('2026/7/1')
   })
 
   it('does not merge different drugs from the same institution', () => {
@@ -103,13 +114,13 @@ describe('groupMedications — active-list merge', () => {
     expect(groupMedications([named, bare]).activeMedications).toHaveLength(2)
   })
 
-  it('keeps the merged row at the first-seen list position (stable ordering)', () => {
+  it('keeps every order at its source list position (stable ordering)', () => {
     const first = row({ title: 'A藥', pharmacy: 'A院', endDate: '2026-07-08' })
     const mid = row({ title: 'B藥', pharmacy: 'A院', endDate: '2026-07-10' })
     const renewOfFirst = row({ title: 'A藥', pharmacy: 'A院', endDate: '2026-07-29' })
     const { activeMedications } = groupMedications([first, mid, renewOfFirst])
-    expect(activeMedications.map((m) => m.title)).toEqual(['A藥', 'B藥'])
-    expect(activeMedications[0].endDate).toBe('2026-07-29')
+    expect(activeMedications.map((m) => m.title)).toEqual(['A藥', 'B藥', 'A藥'])
+    expect(activeMedications[0].endDate).toBe('2026-07-08')
   })
 
   it('inactive rows are untouched by the merge (history keeps every fill)', () => {

@@ -8,6 +8,9 @@ import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 // Every tool response goes through `scrubPii()` so cloud LLMs never see
 // patient ID, DOB, or provider names.
 import { tool } from 'ai'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { summarizeSourceComparisons } from '@/src/shared/utils/source-record-comparison'
 import type { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -884,31 +887,20 @@ function countsAsRefillRecord(medication: MedicationEntity): boolean {
 
 // Compact deduper for repeated refill cycles. `refillPool` may include older
 // completed cycles while `meds` contains only the currently-valid rows.
-function dedupMedicationRecords(
+function annotateMedicationRecordCounts(
   meds: MedicationEntity[],
   refillPool: MedicationEntity[] = meds,
-): Array<MedicationEntity & { refillCount: number }> {
-  const refillCounts = new Map<string, number>()
+): Array<MedicationEntity & { sourceRecordCount: number }> {
+  const sourceRecordCounts = new Map<string, number>()
   for (const medication of refillPool) {
     if (!countsAsRefillRecord(medication)) continue
     const key = medicationRegimenKey(medication)
-    refillCounts.set(key, (refillCounts.get(key) ?? 0) + 1)
+    sourceRecordCounts.set(key, (sourceRecordCounts.get(key) ?? 0) + 1)
   }
 
-  const byRegimen = new Map<string, MedicationEntity & { refillCount: number }>()
-  for (const m of meds) {
-    const key = medicationRegimenKey(m)
-    const existing = byRegimen.get(key)
-    if (!existing) {
-      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
-      continue
-    }
-    if (m.authoredOn && (!existing.authoredOn || m.authoredOn > existing.authoredOn)) {
-      // Keep every displayed field from one newest source row.
-      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
-    }
-  }
-  return Array.from(byRegimen.values())
+  // Product/regimen similarity does not prove prescription identity. The
+  // import graph has already reconciled confirmed copies; retain real orders.
+  return meds.map((m) => ({ ...m, sourceRecordCount: sourceRecordCounts.get(medicationRegimenKey(m)) ?? 1 }))
 }
 
 function medicationNameFields(medication: any): {
@@ -1046,6 +1038,10 @@ function medicationToolFields(
     ...medicationNameFields(medication),
     ...medicationClassificationFields(medication),
     status: medication.status,
+    ...(sourceSelfPurchase(medication) === true ? { selfPurchased: true } : {}),
+    ...(medication._encounterInferred ? { encounterLinkBasis: 'date-and-facility-inferred; not source-confirmed' } : {}),
+    ...(medication._sourceRecordComparison ? { sourceComparison: medication._sourceRecordComparison,
+      sourceComparisonInstruction: sourceComparisonNarrative(medication) } : {}),
     authoredOn: medication.authoredOn,
     ...(dosage ? { [dosageField]: dosage } : {}),
     ...(hasStructuredDosage ? { dosageDetails: structuredDosage } : {}),
@@ -1309,12 +1305,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const uncertainMedicationRecords = collection.medications.filter((medication) =>
           isMedicationCurrentnessUncertain(medication, nowMs)
         )
-        const allMedications = dedupMedicationRecords(
+        const allMedications = annotateMedicationRecordCounts(
           activeMedicationRecords,
           collection.medications,
         )
           .sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
-        const allUncertainMedications = dedupMedicationRecords(
+        const allUncertainMedications = annotateMedicationRecordCounts(
           uncertainMedicationRecords,
           collection.medications,
         ).sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
@@ -1324,7 +1320,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           return {
             name,
             ...rest,
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           }
         })
         const medicationsWithUncertainStatus = allUncertainMedications
@@ -1336,7 +1332,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
               name,
               ...rest,
               currentness: 'uncertain-source-status',
-              refillCount: medication.refillCount,
+              sourceRecordCount: medication.sourceRecordCount,
             }
           })
         const medicationRules = medicationGroundingRules([
@@ -1450,6 +1446,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           count: filtered.length,
           data: capped.map((e: any) => ({
             encounterId: e.id,
+            ...(e._sourceRecordComparison ? { sourceComparison: e._sourceRecordComparison } : {}),
             class: e.class?.code || e.class?.coding?.[0]?.code,
             type: pickName(e.type?.[0]),
             department: encounterDeptText(e),
@@ -2350,7 +2347,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     getActiveMedicationList: tool({
-      description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Refill cycles collapse only when governed product identity, regimen, and source agree. Set chronicOnly to filter to 慢箋.',
+      description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Every distinct order remains available; sourceComparison marks unconfirmed source copies. Set chronicOnly to filter to 慢箋.',
       inputSchema: activeMedicationsSchema,
       execute: async ({ chronicOnly }: z.infer<typeof activeMedicationsSchema>) => {
         const { collection } = getData()
@@ -2376,9 +2373,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
           && isMedicationCurrentnessUncertain(m, now)
         )
 
-        const deduped = dedupMedicationRecords(active, list)
+        const deduped = annotateMedicationRecordCounts(active, list)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
-        const uncertainDeduped = dedupMedicationRecords(uncertain, list)
+        const uncertainDeduped = annotateMedicationRecordCounts(uncertain, list)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
         const currentPage = deduped.slice(0, 50)
         const uncertainPage = uncertainDeduped.slice(0, 50)
@@ -2387,10 +2384,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         return scrub({
           success: true,
-          summary: uncertainDeduped.length > 0
-            ? `${deduped.length} current medication(s); ${uncertainDeduped.length} medication group(s) lack both usable lifecycle status and a computable supply window`
-            : `${deduped.length} current medication(s)`,
+          summary: `${deduped.length} current medication source records in ${summarizeSourceComparisons(active).comparisonGroupCount} display groups; ${summarizeSourceComparisons(active).unconfirmedGroupCount} groups have unconfirmed cross-source correspondence.${uncertainDeduped.length ? ` ${uncertainDeduped.length} additional records have unresolved currentness.` : ''} Source record count is not a confirmed prescription count.`,
           count: deduped.length,
+          sourceComparisonCounts: summarizeSourceComparisons(active),
           ...paginationMeta(deduped.length, currentPage.length),
           incomplete,
           canConcludeAbsence,
@@ -2401,12 +2397,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: medicationGroundingRules([...currentPage, ...uncertainPage]),
           data: currentPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
           uncertainData: uncertainPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
             currentness: 'uncertain-source-status',
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
         })
       },

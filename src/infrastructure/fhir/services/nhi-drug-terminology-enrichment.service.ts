@@ -13,16 +13,9 @@ import type {
   NhiDrugTerminologyResolutionStatus,
 } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/types'
 
-export const NHI_DRUG_CODE_SYSTEMS = [
-  'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code',
-  'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw',
-] as const
-const NHI_DRUG_CODE_SYSTEM_SET = new Set<string>(NHI_DRUG_CODE_SYSTEMS)
+import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
+export { isNhiDrugCodeSystem, NHI_DRUG_CODE_SYSTEMS } from '@/src/shared/utils/nhi-drug-code-system'
 const WHO_ATC_CODE_SYSTEM = 'http://www.whocc.no/atc'
-
-export function isNhiDrugCodeSystem(system: unknown): boolean {
-  return typeof system === 'string' && NHI_DRUG_CODE_SYSTEM_SET.has(system)
-}
 
 const ATC_HIERARCHY_TAG_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
