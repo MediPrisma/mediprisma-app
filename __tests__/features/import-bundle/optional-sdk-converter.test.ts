@@ -7,7 +7,7 @@ const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)
 
 test('imports a FHIR Bundle when the SDK converter is absent', () => {
   const bundle = { resourceType: 'Bundle', type: 'collection', entry: [] }
-  expect(convertLocalImportBytes(bytes(bundle))).toEqual({ bundle })
+  expect(convertLocalImportBytes(bytes(bundle))).toEqual({ bundle, originalFhirJson: JSON.stringify(bundle) })
 })
 test('SDK input fails explicitly without inventing a converted bundle', () => {
   expect(() => convertLocalImportBytes(bytes({ myhealthbank: { bdata: {} } })))

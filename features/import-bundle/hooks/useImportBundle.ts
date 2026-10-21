@@ -97,6 +97,7 @@ export function useImportBundle(): UseImportBundleReturn {
     bundle: any,
     demo: boolean,
     sourceMetadata?: ClinicalSourceMetadata,
+    originalFhirJson = JSON.stringify(bundle),
   ) => {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
@@ -119,6 +120,7 @@ export function useImportBundle(): UseImportBundleReturn {
       importId: localImportId,
       demo,
       sourceMetadata,
+      originalFhirJson,
     })
     // Importing NEW data must not leave the PREVIOUS bundle's derived results
     // around, or the render goes inconsistent (old AI summary / safety scan /
@@ -145,7 +147,7 @@ export function useImportBundle(): UseImportBundleReturn {
     try {
       await serializeLocalBundleMutation(async () => {
         const prepared = await prepareLocalImportFile(file)
-        await persistBundle(prepared.bundle, false, prepared.sourceMetadata)
+        await persistBundle(prepared.bundle, false, prepared.sourceMetadata, prepared.originalFhirJson)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'

@@ -99,6 +99,7 @@ let memBundleImportId: string | null = null
 let memBundleIsDemo = false
 let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
 let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
+let memOriginalFhirJson: string | null = null
 // A stored bundle can be requested concurrently by the Patient and clinical
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
@@ -119,6 +120,7 @@ interface PersistedBundleEnvelope {
   demo: boolean
   sourceMetadata?: ClinicalSourceMetadata
   patientProfile?: UserEnteredPatientProfile
+  originalFhirJson?: string
   bundle: object
 }
 
@@ -920,6 +922,12 @@ export const LocalBundleService = {
     }
   },
 
+  /** Original import only; never rebuild from the enriched/mapped clinical data. */
+  async loadOriginalFhirJson(): Promise<string | null> {
+    await this.load()
+    return memOriginalFhirJson
+  },
+
   // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
   // Blob store (off-heap) — `extractAndStoreImages` mutates `bundle` in place so
   // the retained copies (memBundle + the JSON in IndexedDB) stay small. Only a
@@ -935,6 +943,7 @@ export const LocalBundleService = {
       demo?: boolean
       sourceMetadata?: ClinicalSourceMetadata
       patientProfile?: UserEnteredPatientProfile | null
+      originalFhirJson?: string
     } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
@@ -947,6 +956,10 @@ export const LocalBundleService = {
       ? (memBundle !== null ? memBundleImportId : readTabLocalImportId())
       : null
     const isNewImport = Boolean(importId && importId !== activeImportId)
+    // Same-import saves (terminology migration/profile edits) retain the snapshot.
+    // An older import without a snapshot must not be presented as original data.
+    const originalFhirJson = options.originalFhirJson
+      ?? (importId === activeImportId ? memOriginalFhirJson : null)
     if (typeof window !== 'undefined') {
       if (isNewImport) {
         // A new import is a new patient-workspace encryption boundary. This is
@@ -966,6 +979,7 @@ export const LocalBundleService = {
     memBundleIsDemo = demo
     memBundleSourceMetadata = sourceMetadata ?? null
     memUserEnteredPatientProfile = patientProfile
+    memOriginalFhirJson = originalFhirJson
     if (typeof window === 'undefined') return
     try {
       const key = await getSessionBundleKey({ create: true })
@@ -977,6 +991,7 @@ export const LocalBundleService = {
             demo,
             ...(sourceMetadata ? { sourceMetadata } : {}),
             ...(patientProfile ? { patientProfile } : {}),
+            ...(originalFhirJson !== null ? { originalFhirJson } : {}),
             bundle,
           } satisfies PersistedBundleEnvelope
         : bundle
@@ -1012,6 +1027,7 @@ export const LocalBundleService = {
     memBundleIsDemo = false
     memBundleSourceMetadata = null
     memUserEnteredPatientProfile = null
+    memOriginalFhirJson = null
     if (typeof window === 'undefined') return
     clearTabBundleScope()
     // Remove only legacy origin-wide markers. New tab-local markers never
@@ -1092,6 +1108,9 @@ export const LocalBundleService = {
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
             memBundleSourceMetadata = decrypted.sourceMetadata ?? null
+            memOriginalFhirJson = typeof decrypted.originalFhirJson === 'string'
+              ? decrypted.originalFhirJson
+              : null
             memUserEnteredPatientProfile = parseUserEnteredPatientProfile(
               decrypted.patientProfile,
             )
@@ -1537,6 +1556,7 @@ export const LocalBundleService = {
         ? { sourceMetadata: memBundleSourceMetadata }
         : {}),
       ...(normalized ? { patientProfile: normalized } : {}),
+      ...(memOriginalFhirJson !== null ? { originalFhirJson: memOriginalFhirJson } : {}),
       bundle,
     } satisfies PersistedBundleEnvelope
 

@@ -32,6 +32,7 @@ import { IpsExportPreview } from './components/IpsExportPreview'
 import { InferredProblemsReview } from './components/InferredProblemsReview'
 import { AiHandoffPanel } from './components/AiHandoffPanel'
 import { EmrHandoffPanel } from './components/EmrHandoffPanel'
+import { OriginalFhirDownload } from '@/features/import-bundle/components/OriginalFhirDownload'
 
 export default function IpsExportFeature() {
   const { t } = useLanguage()
@@ -172,6 +173,7 @@ export default function IpsExportFeature() {
         </TabsContent>
 
         <TabsContent value="institution">
+          <OriginalFhirDownload />
           <IpsExportPreview
             bundle={bundle}
             markdown={markdown}

@@ -10,6 +10,8 @@ const MAX_SDK_IMPORT_BYTES = 32 * 1024 * 1024
 
 export interface PreparedLocalImport {
   bundle: Record<string, unknown>
+  /** Snapshot before application enrichment, parsing, and image extraction. */
+  originalFhirJson: string
   sourceMetadata?: ClinicalSourceMetadata
 }
 
@@ -51,7 +53,9 @@ function sdkMetadata(
 
 export function convertLocalImportBytes(bytes: ArrayBuffer): PreparedLocalImport {
   const parsed = parseJsonBytes(bytes)
-  if (isFhirBundle(parsed)) return { bundle: parsed }
+  if (isFhirBundle(parsed)) {
+    return { bundle: parsed, originalFhirJson: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes) }
+  }
 
   if (bytes.byteLength > MAX_SDK_IMPORT_BYTES) {
     throw new Error('SDK JSON exceeds the 32 MB conversion limit')
@@ -59,6 +63,7 @@ export function convertLocalImportBytes(bytes: ArrayBuffer): PreparedLocalImport
   const converted = convertSdkJsonToFhir(parsed, { identifierMode: 'masked' })
   return {
     bundle: converted.bundle,
+    originalFhirJson: JSON.stringify(converted.bundle),
     sourceMetadata: sdkMetadata(converted.report, converted.bundle),
   }
 }
