@@ -29,6 +29,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 |---|---|
 | `smoke.spec.ts` | Import Bundle and render patient |
 | `original-fhir-download.spec.ts` | Original FHIR download preserves all source data and attachments across reload and repeated import; a new tab cannot download another tab's data |
+| `merged-fhir-download.spec.ts` | Cloud + hospital source resources, provenance, unknown fields and four distinct embedded images remain byte-identical through download, reload and repeated reimport in a clean browser context |
 | `medcloud-handoff.spec.ts` | Cloud Wildcatch observes the first stable import target, immediately transfers a Bundle with `DataTransfer`, receives the settled event, and renders the patient |
 | `demo-data.spec.ts` | Load／identify／exit built-in demo |
 | `medical-summary-cumulative-navigation.spec.ts` | AI summary → cumulative report navigation from every non-report clinical tab after Reports background pre-mount |
