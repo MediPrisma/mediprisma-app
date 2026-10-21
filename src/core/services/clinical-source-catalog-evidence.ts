@@ -2,7 +2,8 @@ import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 import { clinicalEncounterAlias } from './clinical-encounter-alias'
 import type { EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 
-type EncounterReferenceEvidence = Map<string, string | null>
+export type ScopedEncounterReference = { encounterId: string; organization?: string }
+type EncounterReferenceEvidence = Map<string, ScopedEncounterReference | null>
 const scopedEvidence = new WeakMap<object, EncounterReferenceEvidence>()
 
 /**
@@ -22,7 +23,7 @@ export function registerScopedEncounterReferenceEvidence(
 export function scopedEncounterReferenceOrganization(
   document: object,
   path: string,
-): string | null | undefined {
+): ScopedEncounterReference | null | undefined {
   const paths = scopedEvidence.get(document)
   if (!paths) return undefined
   if (!paths.has(path)) return null
@@ -36,7 +37,7 @@ export function graphEncounterReferenceOrganization(
   path: string,
   reference: string | undefined,
   encounters: readonly EncounterEntity[],
-): string | undefined {
+): ScopedEncounterReference | undefined {
   if (!reference || !originNodeKey) return undefined
   const targets = new Map<string, EncounterEntity>()
   for (const edge of source.graph.references) {
@@ -58,5 +59,8 @@ export function graphEncounterReferenceOrganization(
       })
       && (edge.reference === reference || reference === `Encounter/${encounter.id}`),
   )
-  return currentReferenceMatches ? encounter.serviceProvider?.display?.trim() || undefined : undefined
+  return currentReferenceMatches ? {
+    encounterId: encounter.id,
+    ...(encounter.serviceProvider?.display?.trim() ? { organization: encounter.serviceProvider.display.trim() } : {}),
+  } : undefined
 }

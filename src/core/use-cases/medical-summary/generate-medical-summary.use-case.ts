@@ -423,7 +423,9 @@ export function buildSourceCatalog(
     document: object,
   ): string | undefined => {
     const scopedValues = paths.map(path => scopedEncounterReferenceOrganization(document, path))
-    if (scopedValues.some(value => value !== undefined)) return scopedValues.find(value => typeof value === 'string') as string | undefined
+    if (scopedValues.some(value => value !== undefined)) {
+      return scopedValues.find(value => value && (input.encounters ?? []).some(row => row.id === value.encounterId))?.organization
+    }
     const source = input.clinicalSource
     if (!source?.graph) {
       const id = referenceId(reference)
@@ -433,7 +435,7 @@ export function buildSourceCatalog(
     // source/base/version/patient rules can supply a linked organization.
     if (!reference || !originNodeKey) return undefined
     const values = paths.map(path => graphEncounterReferenceOrganization(source, originNodeKey, path, reference, input.encounters ?? []))
-    return values.find(Boolean)
+    return values.find(Boolean)?.organization
   }
 
   sortByDateDesc(input.encounters ?? [], (e) => e.period?.start)

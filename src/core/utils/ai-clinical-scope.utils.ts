@@ -23,7 +23,7 @@ import { imagingStudyTitle } from '@/src/shared/utils/imaging-study.utils'
 import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-domain-filter.utils'
 import { floorStartDay, prescribingAnalyteKey } from '@/src/core/utils/first-visit-floors'
 import { AI_REPORT_GROUPS, reportModalityClass } from '@/src/core/utils/report-narrative.utils'
-import { graphEncounterReferenceOrganization, registerScopedEncounterReferenceEvidence } from '@/src/core/services/clinical-source-catalog-evidence'
+import { graphEncounterReferenceOrganization, registerScopedEncounterReferenceEvidence, type ScopedEncounterReference } from '@/src/core/services/clinical-source-catalog-evidence'
 
 /** Remove local capture joins from outbound AI data without mutating clinical rows. */
 export function stripClinicalCaptureMetadata<T>(value: T): T {
@@ -519,7 +519,7 @@ function scopeClinicalDataView(
     const documents = [...(scoped.compositions ?? []), ...(scoped.documentReferences ?? [])]
     const outboundDocuments = [...(outbound.compositions ?? []), ...(outbound.documentReferences ?? [])]
     const evidence = documents.map((document: any) => {
-      const paths = new Map<string, string | null>()
+      const paths = new Map<string, ScopedEncounterReference | null>()
       const nodeKey = document.clinicalSourceNodeKey
       if ('encounter' in document) {
         paths.set('encounter', graphEncounterReferenceOrganization(source, nodeKey, 'encounter', document.encounter?.reference, encounters) ?? null)

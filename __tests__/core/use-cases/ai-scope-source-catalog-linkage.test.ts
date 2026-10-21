@@ -1,6 +1,7 @@
 import { ALL_DATA_FILTERS, ALL_DATA_SELECTION } from '@/src/shared/constants/data-selection.constants'
 import { reconcileClinicalSources } from '@/src/core/services/clinical-reconciliation'
 import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritized-clinical-context.utils'
 import { buildSourceCatalog } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 
 const restBase = 'https://ehr.example/fhir'
@@ -33,6 +34,33 @@ it('preserves graph-resolved encounter linkage after AI scope strips graph metad
   expect(catalogAfterAiScope([
     { resourceType: 'Encounter', id: 'visit', serviceProvider: { display: 'Synthetic local hospital' } },
   ], 'Encounter/visit')).toBe('Synthetic local hospital')
+})
+
+it('does not cite an encounter removed by token-budget prioritization', () => {
+  const resources = [
+    { resourceType: 'Encounter', id: 'old-visit', period: { start: '2018-01-01' }, serviceProvider: { display: 'Synthetic old hospital' } },
+    { resourceType: 'Encounter', id: 'latest-visit', period: { start: '2026-09-17' }, serviceProvider: { display: 'Synthetic current hospital' } },
+  ]
+  const source = reconcileClinicalSources([{
+    sourceId: 'ehr', patientScope: 'patient', generation: 'synthetic', restBase,
+    resources: [...resources, { resourceType: 'Composition', id: 'doc', encounter: { reference: 'Encounter/old-visit' } }],
+  }])
+  const encounters = source.graph.nodes.filter(node => node.resource.resourceType === 'Encounter').map(node => ({
+    id: node.resource.id!, clinicalSourceNodeKey: node.key,
+    serviceProvider: { display: String((node.resource.serviceProvider as { display?: string } | undefined)?.display ?? '') },
+    period: node.resource.period as { start: string },
+  }))
+  const documentNode = source.graph.nodes.find(node => node.resource.resourceType === 'Composition')!
+  const scoped = scopeClinicalDataForAi({
+    clinicalSource: source,
+    encounters: encounters as any,
+    compositions: [{ id: 'doc', clinicalSourceNodeKey: documentNode.key, encounter: { reference: 'Encounter/old-visit' }, date: '2026-09-17' }] as any,
+  }, ALL_DATA_SELECTION, ALL_DATA_FILTERS, ['doc'], Date.parse('2026-10-01'))
+  const prioritized = prioritizeClinicalDataForTokenBudget(scoped as any, 1, 100_000, Date.parse('2026-10-01')).data
+
+  expect(prioritized.encounters?.map(encounter => encounter.id)).not.toContain('old-visit')
+  expect(prioritized.compositions?.map(document => document.id)).toContain('doc')
+  expect(buildSourceCatalog(prioritized as any).find(entry => entry.resourceType === 'Composition')?.organization).toBeUndefined()
 })
 
 it.each([
