@@ -1,4 +1,4 @@
-import { hasClaimEncounterLink } from '@/src/infrastructure/fhir/services/claim-expander'
+import { hasClaimEncounterLink, hasUnresolvedClaimEncounter } from '@/src/infrastructure/fhir/services/claim-expander'
 import { clinicalEncounterAlias } from '@/src/infrastructure/fhir/mappers/clinical-projection-disposition'
 import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions, outboundClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
@@ -815,6 +815,7 @@ function encounterLinks(collection: ClinicalDataCollection) {
   for (const edge of graph?.references ?? []) if (edge.path === 'encounter') edges.set(edge.origin.key, edge)
   let incomplete = false
   const target = (row: { clinicalSourceNodeKey?: string; encounter?: { reference?: string }; _encounterInferred?: boolean }) => {
+    if (hasUnresolvedClaimEncounter(row)) { incomplete = true; return undefined }
     const edge = row.clinicalSourceNodeKey ? edges.get(row.clinicalSourceNodeKey) : undefined
     if (graph && edge) {
       if (edge.status !== 'resolved') { incomplete = true; return undefined }

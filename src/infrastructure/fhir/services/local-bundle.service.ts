@@ -37,7 +37,7 @@ import {
   isMedicationRemainingSummaryBasic,
 } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
-import { expandClaimResources, bindClaimEncounterLink } from './claim-expander'
+import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncounter } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
@@ -1005,7 +1005,7 @@ function terminologyFromMedicationKnowledge(
 // VGH behaviour).
 function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>, sourceKeys?: WeakMap<object, string>): any[] {
   return resources.map((r) => {
-    if (r.encounter?.reference) return r // already has a reference
+    if (r.encounter?.reference || hasUnresolvedClaimEncounter(r)) return r // preserve an explicit unresolved source relation
 
     const dateFields: string[] = [
       r.performedDateTime,    // Procedure
@@ -1047,9 +1047,10 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
 function attachEncounterRefsForMeds(
   meds: any[],
   encounterByDateProvider: Map<string, string>,
+  originalResources?: ReadonlyMap<string, object>,
 ): any[] {
   return meds.map((m) => {
-    if (m.encounter?.reference) return m
+    if (m.encounter?.reference || hasUnresolvedClaimEncounter(m) || hasUnresolvedClaimEncounter(originalResources?.get(m.clinicalSourceNodeKey))) return m
     const date = toDateStr(m.authoredOn || m.effectiveDateTime)
     const requester = m.requester?.display?.trim() || ''
     if (!date || !requester) return m
@@ -1718,6 +1719,7 @@ export const LocalBundleService = {
     const meds = attachEncounterRefsForMeds(
       [...medicationRequests, ...medicationStatements],
       encounterByDateProvider,
+      claimEncounterResourcesByKey,
     )
 
     const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap, sourceKeyByResource)

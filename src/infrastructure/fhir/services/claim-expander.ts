@@ -32,10 +32,16 @@ import { encodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 // Standard vital-sign LOINC codes — kept in sync with the app's own vitals
 // matcher (features/clinical-summary/vitals/types → LOINC.WEIGHT / .HEIGHT).
 // Hardcoded rather than imported to avoid an infrastructure→feature dependency.
+const unresolvedClaimEncounters = new WeakSet<object>()
+const unresolvedClaimEncounter = Symbol('unresolved-claim-encounter')
+export function hasUnresolvedClaimEncounter(resource: unknown): boolean {
+  return Boolean(resource && typeof resource === 'object' && (unresolvedClaimEncounters.has(resource) || (resource as any)[unresolvedClaimEncounter] === true))
+}
 const claimEncounterLinks = new WeakMap<object, string>()
 const claimEncounterLink = Symbol('claim-derived-encounter-link')
 /** Only the trusted Claim expander can grant this domain-derived link. */
 export function bindClaimEncounterLink<T extends object>(mapped: T, resource: object): T {
+  if (hasUnresolvedClaimEncounter(resource)) Object.assign(mapped, { [unresolvedClaimEncounter]: true })
   const reference = claimEncounterLinks.get(resource)
   return reference ? Object.assign(mapped, { [claimEncounterLink]: reference }) : mapped
 }
@@ -84,10 +90,11 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
     // The Claim links its visit via an extension, not the usual encounter field.
     const encounterRef: string | undefined = findExtension(claim, EXT_CLAIM_ENCOUNTER)
       ?.valueReference?.reference
-    const encounter = encounterRef ? { reference: encounterRef } : undefined
+
     const encounterIndex = claim.extension?.findIndex((extension: any) => extension.url === EXT_CLAIM_ENCOUNTER)
     const resolvedEncounter = resolveClaimTarget(claim, `extension[${encounterIndex}].valueReference`, 'Encounter')
     const canLinkEncounter = Boolean(resolvedEncounter && encounterRef === 'Encounter/' + resolvedEncounter.id)
+    const encounter = canLinkEncounter && encounterRef ? { reference: encounterRef } : undefined
 
     // --- Backfill the PAS Encounter (usually has no period.start / subject) ---
     if (canLinkEncounter) {
@@ -254,6 +261,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
       const extensionIndex = exts.findIndex(e => typeof e?.valueReference?.reference === 'string' && e.valueReference.reference.startsWith('MedicationRequest/'))
       const mr = resolveClaimTarget(claim, `item[${itemIndex}].extension[${extensionIndex}].valueReference`, 'MedicationRequest')
       if (!mr) continue
+      if (!mr.encounter?.reference && encounterRef && !canLinkEncounter) unresolvedClaimEncounters.add(mr)
       if (!mr.authoredOn && created) mr.authoredOn = created
       if (!mr.encounter && encounter && canLinkEncounter) {
         mr.encounter = encounter
@@ -261,6 +269,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
       }
     }
     for (const resource of synthesised.slice(synthesisedStart)) {
+      if (encounterRef && !canLinkEncounter) unresolvedClaimEncounters.add(resource)
       const reference = resource.encounter?.reference
       if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference) && canLinkEncounter) claimEncounterLinks.set(resource, reference)
     }
