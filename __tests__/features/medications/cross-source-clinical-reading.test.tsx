@@ -109,6 +109,9 @@ it('uses one calendar supply basis when an invalid recorded end is ignored', () 
   const { result } = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW'))
   expect(result.current.drugs[0].bars).toHaveLength(1)
   expect(result.current.drugs[0].bars[0].supplyEndDay).toBe('2026-06-03')
+  const rows = renderHook(() => useMedicationRows(collection.medications))
+  expect(rows.result.current[0].endDateIso).toBe('2026-06-03')
+  expect(rows.result.current[0].endDateSource).toBe('estimated')
 })
 
 it('keeps overview and list dates aligned for UTC midnight equivalents and fractional supply', () => {

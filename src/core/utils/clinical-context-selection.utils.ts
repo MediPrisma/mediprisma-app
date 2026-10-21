@@ -44,15 +44,12 @@ export function medicationRecordedTreatmentEnd(medication: any): string | undefi
   const originalHospital = medication?._sourcePrescriptionRecords?.find(isVghtpeSource) ?? medication
   // Standard validityPeriod is dispensing authorization, not treatment time.
   // North VGH's legacy adapter uses it for the recorded execution interval.
-  return dosage?.timing?.repeat?.boundsPeriod?.end
-    || (isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined)
+  return [dosage?.timing?.repeat?.boundsPeriod?.end,
+    isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined]
+    .find(end => typeof end === 'string' && /^\d{4}-\d{2}-\d{2}/.test(end) && Number.isFinite(Date.parse(end)))
 }
 
 const isElapsedDuration = (duration: any) => /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(String(duration?.code || duration?.unit || '').toLowerCase())
-const validRecordedTreatmentEnd = (medication: any): string | undefined => {
-  const end = medicationRecordedTreatmentEnd(medication)
-  return typeof end === 'string' && /^\d{4}-\d{2}-\d{2}/.test(end) && Number.isFinite(Date.parse(end)) ? end : undefined
-}
 
 export function medicationExpectedStartTimestamp(medication: any): number {
   const start = medication?.authoredOn || medication?.effectiveDateTime
@@ -62,7 +59,7 @@ export function medicationExpectedStartTimestamp(medication: any): number {
     .find(value => durationToDays(value, false) !== undefined)
   const days = durationToDays(duration, false)
   const day = medicationClinicalDay(start)
-  return day && days && Number.isInteger(days) && !isElapsedDuration(duration) && !validRecordedTreatmentEnd(medication)
+  return day && days && Number.isInteger(days) && !isElapsedDuration(duration) && !medicationRecordedTreatmentEnd(medication)
     ? medicationClinicalTimestamp(day) : medicationClinicalTimestamp(start)
 }
 
@@ -70,7 +67,7 @@ export function medicationExpectedStartTimestamp(medication: any): number {
  * exact elapsed time, while whole-day supplies cover their final calendar day. */
 export function medicationExpectedEndTimestamp(medication: any): number | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
-  const explicitEnd = validRecordedTreatmentEnd(medication)
+  const explicitEnd = medicationRecordedTreatmentEnd(medication)
   const started = medication?.authoredOn || medication?.effectiveDateTime
   const calendarEnd = (day: string) => {
     return medicationClinicalTimestamp(day.slice(0, 10)) + 86400000 - 1
