@@ -1,0 +1,329 @@
+{
+  "base": "0c71c9cdfe62ad12473217af0be030b41b5d4c25",
+  "head": "15d5b74e1d72ddbf66a2d8b39119a63f6d583814",
+  "syntheticDataOnly": true,
+  "ci": {
+    "url": "https://github.com/MediPrisma/mediprisma-app/actions/runs/39638803215",
+    "passedTests": 9577,
+    "skippedTests": 1,
+    "passedSuites": 776,
+    "skippedSuites": 1,
+    "conclusion": "success",
+    "publicFallbackTests": 78,
+    "galleryBrowserCases": 4,
+    "productionImportRoundtrips": 3
+  },
+  "browser": {
+    "prBaseBeforeCases": 3,
+    "latestHeadAfterCases": 3,
+    "medicationCase": 1,
+    "missingContentCase": 1,
+    "widths": [
+      320,
+      390,
+      430,
+      768,
+      1024,
+      1440
+    ]
+  },
+  "review": {
+    "models": [
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-astra",
+        "requestedSpeed": "regular",
+        "appliedServiceTier": "not exposed by CLI",
+        "fastAndUltrafastDisabled": true
+      },
+      {
+        "provider": "Anthropic firstParty",
+        "model": "claude-opus-5-5",
+        "requestedSpeed": "regular",
+        "reportedSpeed": "standard",
+        "fastMode": "off"
+      }
+    ],
+    "scope": "Full PR review then all increments, no peer findings or author verdict supplied to independent readers",
+    "latestDisposition": "No confirmed blocking findings remain. Transport-incomplete hypothesis ruled out using production classifier and actual pagination/503/403 errors; three probe cases pass. Optional reference-key ordering/style improvements do not alter clinical values.",
+    "stages": [
+      {
+        "stage": "final",
+        "astra": {
+          "name": "final-astra-regular",
+          "base": "0c71c9cdfe62ad12473217af0be030b41b5d4c25",
+          "head": "29e8429563824e164f9d08d7a61dab64dab06a55",
+          "started": "2026-10-21T15:48:39.973Z",
+          "ended": "2026-10-21T15:50:10.916Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "final-opus-regular",
+          "base": "0c71c9cdfe62ad12473217af0be030b41b5d4c25",
+          "head": "29e8429563824e164f9d08d7a61dab64dab06a55",
+          "started": "2026-10-21T15:48:39.984Z",
+          "ended": "2026-10-21T15:52:55.570Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "increment",
+        "astra": {
+          "name": "increment-astra-regular",
+          "base": "29e8429563824e164f9d08d7a61dab64dab06a55",
+          "head": "1adf054c22ee22a2e088522012b5fa82b9f15989",
+          "started": "2026-10-21T16:00:47.941Z",
+          "ended": "2026-10-21T16:01:24.031Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "increment-opus-regular",
+          "base": "29e8429563824e164f9d08d7a61dab64dab06a55",
+          "head": "1adf054c22ee22a2e088522012b5fa82b9f15989",
+          "started": "2026-10-21T16:00:47.951Z",
+          "ended": "2026-10-21T16:03:59.684Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "closure",
+        "astra": {
+          "name": "closure-astra-regular",
+          "base": "1adf054c22ee22a2e088522012b5fa82b9f15989",
+          "head": "740564bc880cb3f724972c115037bdf9d1312097",
+          "started": "2026-10-21T16:04:23.136Z",
+          "ended": "2026-10-21T16:04:42.067Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "closure-opus-regular",
+          "base": "1adf054c22ee22a2e088522012b5fa82b9f15989",
+          "head": "740564bc880cb3f724972c115037bdf9d1312097",
+          "started": "2026-10-21T16:04:23.147Z",
+          "ended": "2026-10-21T16:06:04.743Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "frozen",
+        "astra": {
+          "name": "frozen-astra-regular",
+          "base": "740564bc880cb3f724972c115037bdf9d1312097",
+          "head": "ba85bce3b1cf4306584358e197272f64af9eaadd",
+          "started": "2026-10-21T16:12:09.105Z",
+          "ended": "2026-10-21T16:12:47.750Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "frozen-opus-regular",
+          "base": "740564bc880cb3f724972c115037bdf9d1312097",
+          "head": "ba85bce3b1cf4306584358e197272f64af9eaadd",
+          "started": "2026-10-21T16:12:09.115Z",
+          "ended": "2026-10-21T16:14:48.079Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "identity",
+        "astra": {
+          "name": "identity-astra-regular",
+          "base": "ba85bce3b1cf4306584358e197272f64af9eaadd",
+          "head": "4ca180fcb27445beeba761a31455f25a7478ab00",
+          "started": "2026-10-21T16:14:22.132Z",
+          "ended": "2026-10-21T16:14:36.011Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "identity-opus-regular",
+          "base": "ba85bce3b1cf4306584358e197272f64af9eaadd",
+          "head": "4ca180fcb27445beeba761a31455f25a7478ab00",
+          "started": "2026-10-21T16:14:22.142Z",
+          "ended": "2026-10-21T16:15:11.600Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "gate",
+        "astra": {
+          "name": "gate-astra-regular",
+          "base": "4ca180fcb27445beeba761a31455f25a7478ab00",
+          "head": "6332120c3eb9464e5f8d5151cd0a1e9e1f5aff06",
+          "started": "2026-10-21T16:18:08.405Z",
+          "ended": "2026-10-21T16:18:28.417Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "gate-opus-regular",
+          "base": "4ca180fcb27445beeba761a31455f25a7478ab00",
+          "head": "6332120c3eb9464e5f8d5151cd0a1e9e1f5aff06",
+          "started": "2026-10-21T16:18:08.414Z",
+          "ended": "2026-10-21T16:19:19.746Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "release",
+        "astra": {
+          "name": "release-astra-regular",
+          "base": "6332120c3eb9464e5f8d5151cd0a1e9e1f5aff06",
+          "head": "c1c15ad1dcedb8ad229fa0635a320bb56e7e13fb",
+          "started": "2026-10-21T16:25:12.870Z",
+          "ended": "2026-10-21T16:25:30.127Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "release-opus-regular",
+          "base": "6332120c3eb9464e5f8d5151cd0a1e9e1f5aff06",
+          "head": "c1c15ad1dcedb8ad229fa0635a320bb56e7e13fb",
+          "started": "2026-10-21T16:25:12.880Z",
+          "ended": "2026-10-21T16:27:24.547Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "test-final",
+        "astra": {
+          "name": "test-final-astra-regular",
+          "base": "c1c15ad1dcedb8ad229fa0635a320bb56e7e13fb",
+          "head": "ed70c25deb72572be6856df24d0567177028755d",
+          "started": "2026-10-21T16:27:11.121Z",
+          "ended": "2026-10-21T16:27:25.014Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "test-final-opus-regular",
+          "base": "c1c15ad1dcedb8ad229fa0635a320bb56e7e13fb",
+          "head": "ed70c25deb72572be6856df24d0567177028755d",
+          "started": "2026-10-21T16:27:11.131Z",
+          "ended": "2026-10-21T16:28:56.709Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "recovery",
+        "astra": {
+          "name": "recovery-astra-regular",
+          "base": "ed70c25deb72572be6856df24d0567177028755d",
+          "head": "30c67d593824613f42fef5e73e4e3488acf89235",
+          "started": "2026-10-21T16:30:50.531Z",
+          "ended": "2026-10-21T16:31:23.528Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "recovery-opus-regular",
+          "base": "ed70c25deb72572be6856df24d0567177028755d",
+          "head": "30c67d593824613f42fef5e73e4e3488acf89235",
+          "started": "2026-10-21T16:30:50.541Z",
+          "ended": "2026-10-21T16:32:12.428Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "ship",
+        "astra": {
+          "name": "ship-astra-regular",
+          "base": "30c67d593824613f42fef5e73e4e3488acf89235",
+          "head": "9fa15a08011ab274b5276e5470ce6cc8e2d04026",
+          "started": "2026-10-21T16:41:28.614Z",
+          "ended": "2026-10-21T16:41:48.816Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "ship-opus-regular",
+          "base": "30c67d593824613f42fef5e73e4e3488acf89235",
+          "head": "9fa15a08011ab274b5276e5470ce6cc8e2d04026",
+          "started": "2026-10-21T16:41:28.624Z",
+          "ended": "2026-10-21T16:44:17.077Z",
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "stage": "causal",
+        "astra": {
+          "name": "causal-astra-regular",
+          "base": "9fa15a08011ab274b5276e5470ce6cc8e2d04026",
+          "head": "15d5b74e1d72ddbf66a2d8b39119a63f6d583814",
+          "started": "2026-10-21T16:57:06.049Z",
+          "ended": "2026-10-21T16:57:29.063Z",
+          "code": 0,
+          "signal": null
+        },
+        "opus": {
+          "name": "causal-opus-regular",
+          "base": "9fa15a08011ab274b5276e5470ce6cc8e2d04026",
+          "head": "15d5b74e1d72ddbf66a2d8b39119a63f6d583814",
+          "started": "2026-10-21T16:57:06.059Z",
+          "ended": "2026-10-21T17:00:10.021Z",
+          "code": 0,
+          "signal": null
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "after-lab-1440.png",
+      "sha256": "2cbc4f62d2a0504f62e8ba50ffe3ee517e19bb7221682e06b8624ca23be68305"
+    },
+    {
+      "name": "after-variants-1440.png",
+      "sha256": "7b515c07b3a8626e173d9f5d2084f98279c27822b10366674fc9cc7a6f513794"
+    },
+    {
+      "name": "after-variants-390.png",
+      "sha256": "34c1df7a0fb873b11eefd06f25bed76a16ece0e449b5082d1ee5c6e6efc998a2"
+    },
+    {
+      "name": "before-390.png",
+      "sha256": "8f60930801089a295a6d375dd69bb3c3d39246bd6f7fda788cd527dc4741c718"
+    },
+    {
+      "name": "before-lab-1440.png",
+      "sha256": "bd262c2e8ecbff90973375ee2059c8fff18fbf2e30687cf4d17b6e45296c8fd2"
+    },
+    {
+      "name": "before-variants-1440.png",
+      "sha256": "d64dc855f81488b03e888ab390e45a76de8a81484423a68f2179467038e042bb"
+    },
+    {
+      "name": "before-variants-390.png",
+      "sha256": "0ec04ccf6fc8af5e552dc08ff0bc7c8e150a21b26145bb61dcdd2367f5ec0a41"
+    },
+    {
+      "name": "medication-1440.png",
+      "sha256": "49c53be47d0182fb7a4f169dce1375c6abeb0a01273cdaa60feff14ad38f9b7a"
+    },
+    {
+      "name": "medication-390.png",
+      "sha256": "e279f183c91fe4e413c17e40cb76f015814ebe1e42dacb854ff45c28f1e31968"
+    },
+    {
+      "name": "medication-audit-390.png",
+      "sha256": "7813ad81eabd615723bc466531f61ddcde81b0411982d20d496ce23d5432299d"
+    },
+    {
+      "name": "missing-content-390.png",
+      "sha256": "f1d6543869c4324e867c610ae64785c1da96f9c59057d735951e5249c42ca616"
+    }
+  ]
+}
