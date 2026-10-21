@@ -26,7 +26,7 @@ it('rejects an ambiguous legacy stored chart while retaining its original downlo
   }
 })
 
-it.each(['multiple-patients', 'foreign-subject', 'urn-only-patient', 'contained-patient'])('keeps the loaded patient and original bytes when a later %s import is rejected', async kind => {
+it.each(['multiple-patients', 'foreign-subject', 'urn-only-patient', 'contained-patient', 'audit-patient-alias'])('keeps the loaded patient and original bytes when a later %s import is rejected', async kind => {
   const single = { resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id: 'patient-a' } }] }
   const source = JSON.stringify(single)
   const original = new Blob([source], { type: 'application/fhir+json' })
@@ -45,7 +45,14 @@ it.each(['multiple-patients', 'foreign-subject', 'urn-only-patient', 'contained-
     { resource: { resourceType: 'Patient', id: 'patient-a' } },
     { resource: { resourceType: 'Observation', id: 'unknown-owner', subject: { reference: '#local-patient' }, contained: [{ resourceType: 'Patient', id: 'local-patient' }] } },
   ] }
-  const expectedError = kind === 'urn-only-patient' || kind === 'contained-patient' ? '病人歸屬無法確認' : '單一病人的 FHIR Bundle'
+  if (kind === 'audit-patient-alias') multi = { resourceType: 'Bundle', entry: [
+    { fullUrl: 'urn:uuid:selected-patient', resource: { resourceType: 'Patient' } },
+    { resource: { resourceType: 'Bundle', type: 'history', entry: [
+      { fullUrl: 'urn:uuid:audit-patient', resource: { resourceType: 'Patient', id: 'other-patient' } },
+    ] } },
+    { resource: { resourceType: 'Observation', id: 'foreign-owner', subject: { reference: 'urn:uuid:audit-patient' } } },
+  ] }
+  const expectedError = ['urn-only-patient', 'contained-patient', 'audit-patient-alias'].includes(kind) ? '病人歸屬無法確認' : '單一病人的 FHIR Bundle'
   jest.mocked(prepareLocalImportFile)
     .mockResolvedValueOnce({ bundle: single, originalFhir: original } as any)
     .mockResolvedValueOnce({ bundle: multi, originalFhir: new Blob([JSON.stringify(multi)]) } as any)
