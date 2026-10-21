@@ -79,6 +79,7 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
   if (!claims.length) return
 
   const synthesised: any[] = []
+  const medicationClaims = new Map<any, { dates: Set<string>; encounters: Set<string>; unresolvedEncounter: boolean }>()
 
   for (const claim of claims) {
     const synthesisedStart = synthesised.length
@@ -261,17 +262,29 @@ export function expandClaimResources(entries: any[], resolveClaimTarget: (claim:
       const extensionIndex = exts.findIndex(e => typeof e?.valueReference?.reference === 'string' && e.valueReference.reference.startsWith('MedicationRequest/'))
       const mr = resolveClaimTarget(claim, `item[${itemIndex}].extension[${extensionIndex}].valueReference`, 'MedicationRequest')
       if (!mr) continue
-      if (!mr.encounter?.reference && encounterRef && !canLinkEncounter) unresolvedClaimEncounters.add(mr)
-      if (!mr.authoredOn && created) mr.authoredOn = created
-      if (!mr.encounter && encounter && canLinkEncounter) {
-        mr.encounter = encounter
-        if (/^Encounter\/[^/]+$/.test(encounter.reference) && canLinkEncounter) claimEncounterLinks.set(mr, encounter.reference)
-      }
+      const candidates = medicationClaims.get(mr) ?? { dates: new Set<string>(), encounters: new Set<string>(), unresolvedEncounter: false }
+      if (created) candidates.dates.add(created)
+      if (encounter && canLinkEncounter) candidates.encounters.add(encounter.reference)
+      if (encounterRef && !canLinkEncounter) candidates.unresolvedEncounter = true
+      medicationClaims.set(mr, candidates)
     }
     for (const resource of synthesised.slice(synthesisedStart)) {
       if (encounterRef && !canLinkEncounter) unresolvedClaimEncounters.add(resource)
       const reference = resource.encounter?.reference
       if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference) && canLinkEncounter) claimEncounterLinks.set(resource, reference)
+    }
+  }
+  // Apply the set once: Claim order never chooses a visit or date for an order.
+  for (const [medication, candidates] of medicationClaims) {
+    if (!medication.authoredOn && candidates.dates.size === 1) medication.authoredOn = [...candidates.dates][0]
+    if (medication.encounter?.reference) continue
+    if (candidates.encounters.size === 1) {
+      const reference = [...candidates.encounters][0]
+      medication.encounter = { reference }
+      unresolvedClaimEncounters.delete(medication)
+      claimEncounterLinks.set(medication, reference)
+    } else if (candidates.encounters.size > 1 || candidates.unresolvedEncounter) {
+      unresolvedClaimEncounters.add(medication)
     }
   }
   entries.push(...synthesised)
