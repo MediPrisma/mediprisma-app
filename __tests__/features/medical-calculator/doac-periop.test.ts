@@ -127,6 +127,16 @@ describe('neuraxial and deep blocks (ASRA 2025, fifth edition)', () => {
       expect(allText(result)).toContain('不適用「在谷底做、不跳過劑量」')
     }
   })
+  it('AF ablation with any block: ASRA’s 72 h replaces “uninterrupted”, never both (#review Astra 5)', () => {
+    for (const neuraxial of ['single', 'catheter', 'plexus', 'plexus-catheter']) {
+      const result = plan({ procedure_kind: 'af-ablation', neuraxial })
+      expect(result).toMatchObject({ state: 'ablation', holdHours: 72 })
+      expect(result.troughOnly).toBeUndefined()
+      expect(result.skippedBefore).toHaveLength(6)
+      expect(allText(result)).not.toMatch(/不中斷或最小中斷；|不需中斷/)
+      expect(allCites(result)).not.toContain(CITES.apixabanAblation)
+    }
+  })
   it('a minor-risk procedure does not skip the neuraxial rules: high tier, 72 h', () => {
     const result = plan({ procedure_kind: 'minimal', neuraxial: 'single' })
     expect(result).toMatchObject({ tier: 'high', holdHours: 72 })

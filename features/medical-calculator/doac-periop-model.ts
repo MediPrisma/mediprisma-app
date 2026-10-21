@@ -466,8 +466,13 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   if (kind === 'af-ablation') {
     result.state = 'ablation'
     hours = 12
-    result.basis.push(line(t('AF 導管消融：不中斷或最小中斷；最後一劑預設術前 12 小時（可至 24 小時），不套一般高風險流程。', 'AF catheter ablation: uninterrupted or minimally interrupted; last dose 12 h before by default (up to 24 h), not the general high-risk flow.'), G.ehraFig16, G.ehraAblation, G.ehraTable12Minor))
-    if (agent === 'apixaban') result.basis.push(line(t('仿單：AF 消融時 apixaban 不需中斷。', 'Label: apixaban need not be interrupted for AF ablation.'), CITES.apixabanAblation))
+    if (blockUsed) {
+      // A block's ASRA interval replaces the ablation's minimal interruption: never both.
+      result.basis.push(line(t('AF 導管消融合併脊髓／硬膜外或深部阻斷：改依下方 ASRA 的停藥時數，不適用消融的「不中斷或最小中斷」。', 'AF catheter ablation with a spinal/epidural or deep block: ASRA’s interval below applies instead of the ablation’s “uninterrupted or minimally interrupted”.'), G.ehraFig16))
+    } else {
+      result.basis.push(line(t('AF 導管消融：不中斷或最小中斷；最後一劑預設術前 12 小時（可至 24 小時），不套一般高風險流程。', 'AF catheter ablation: uninterrupted or minimally interrupted; last dose 12 h before by default (up to 24 h), not the general high-risk flow.'), G.ehraFig16, G.ehraAblation, G.ehraTable12Minor))
+      if (agent === 'apixaban') result.basis.push(line(t('仿單：AF 消融時 apixaban 不需中斷。', 'Label: apixaban need not be interrupted for AF ablation.'), CITES.apixabanAblation))
+    }
     if (agent === 'dabigatran' && regimen.mg === 110) result.notes.push(line(t('仿單：dabigatran 110 mg bid 用於 AF 消融沒有資料。', 'Label: no data for dabigatran 110 mg bid in AF ablation.'), CITES.dabigatranAblation110))
   } else {
     result.state = 'timed'
