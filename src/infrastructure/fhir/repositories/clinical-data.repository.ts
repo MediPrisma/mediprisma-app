@@ -144,17 +144,23 @@ let repositorySequence = 0
 
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
   private readonly sourceCaptures: ClinicalSourceCapture[] = []
+  private readonly successfulResponses = new Map<string, any>()
+  private readonly retainedFailures = new Map<string, unknown>()
   private generation = 0
+  private readonly sourceResults = new Map<string, { generation: number; result: ClinicalReconciliationResult }>()
   private readonly sourceId = `smart-repository-${++repositorySequence}`
 
   getClinicalSource(patientId: string): ClinicalReconciliationResult {
-    return reconcileClinicalSources(this.sourceCaptures.filter(capture => capture.patientScope === patientId))
+    const cached = this.sourceResults.get(patientId)
+    if (cached?.generation === this.generation) return cached.result
+    const result = reconcileClinicalSources(this.sourceCaptures.filter(capture => capture.patientScope === patientId))
+    this.sourceResults.set(patientId, { generation: this.generation, result })
+    return result
   }
 
   /** Preserve complete successful search captures before filtering or mapping.
    * Snapshots are audit evidence, never new events or deletion signals. */
   private async requestSource(url: string): Promise<any> {
-    const response = await fhirClient.requestAllPages(url)
     const params = new URLSearchParams(url.split('?')[1] ?? '')
     const patientScope = (params.get('patient') ?? params.get('subject') ?? '').replace(/^Patient\//, '')
     let restBase: string | undefined
@@ -164,6 +170,18 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     } catch {
       // A completed response remains usable if session metadata is unavailable.
     }
+    const queryType = url.split('?')[0]
+    const cacheKey = JSON.stringify([restBase ?? this.sourceId, patientScope, url])
+    let response: any
+    try {
+      response = await fhirClient.requestAllPages(url)
+    } catch (error) {
+      const previous = this.successfulResponses.get(cacheKey)
+      if (!previous) throw error
+      this.retainedFailures.set(queryType, error)
+      return previous
+    }
+    this.retainedFailures.delete(queryType)
     const capture: ClinicalSourceCapture = {
       sourceId: restBase ? this.sourceId + '|' + restBase : this.sourceId,
       patientScope, generation: String(++this.generation), restBase,
@@ -171,13 +189,16 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     }
     this.sourceCaptures.push(capture)
     const source = reconcileClinicalSources([capture])
-    return { ...response, entry: selectClinicalSourceNodes(source).map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+    const projected = { ...response, entry: selectClinicalSourceNodes(source).map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+    this.successfulResponses.set(cacheKey, projected)
+    return projected
   }
 
   private resourceQueryStatus: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}
 
   private markQuerySuccess(key: ClinicalDataQueryKey, resourceType: string, count: number) {
-    this.resourceQueryStatus[key] = successfulFhirQueryStatus(resourceType, count)
+    const retainedFailure = this.retainedFailures.get(resourceType)
+    this.resourceQueryStatus[key] = retainedFailure ? classifyFhirQueryError(retainedFailure, resourceType) : successfulFhirQueryStatus(resourceType, count)
   }
 
   private markQueryFailure(key: ClinicalDataQueryKey, resourceType: string, error: unknown) {

@@ -26,9 +26,9 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
   const identities = new Map<string, typeof graph.nodes[number][]>()
   for (const node of graph.nodes) {
     policies[node.resource.resourceType] ??= { assessment: 'not-assessed', strategy: 'retain-source-only' }
-    if (((node as { occurrences?: number }).occurrences ?? 1) > 1) evidence.sameRecord.push({ nodeKeys: [node.key], reason: 'Exact duplicate transmissions retained in node occurrences' })
+    if ((node.occurrences ?? 1) > 1) evidence.sameRecord.push({ nodeKeys: [node.key], reason: 'Exact duplicate transmissions retained in node occurrences' })
     if (!node.resource.id) continue
-    const identity = JSON.stringify([node.sourceId, node.patientScope, node.fullUrl ?? null, node.resource.resourceType, node.resource.id])
+    const identity = JSON.stringify([node.sourceId, node.patientScope, node.fullUrl ?? null, node.parentKey ?? null, node.restBase ?? null, node.resource.resourceType, node.resource.id])
     const existing = identities.get(identity) ?? []
     for (const prior of existing) {
       const pair = { nodeKeys: [prior.key, node.key], reason: 'Same source, patient, resource type and logical id' }
@@ -47,7 +47,15 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
   Object.defineProperty(result, 'graph', { value: graph, enumerable: false })
   // Source keys encode capture scope, generation and payload without serializing
   // raw source resources (including provenance snapshots) into AI prompts.
-  Object.defineProperty(result, 'toJSON', { enumerable: false, value: () => ({ policyVersion: result.policyVersion, fingerprint: graph.nodes.map(node => node.key).join('|') }) })
+  const signature = canonical([result.policyVersion, captures.map(capture => [capture.sourceId, capture.patientScope, capture.generation, capture.restBase ?? null]), graph.nodes.map(node => node.key)])
+  let first = 0x811c9dc5
+  let second = 0x9e3779b9
+  for (let index = 0; index < signature.length; index++) {
+    first = Math.imul(first ^ signature.charCodeAt(index), 0x01000193) >>> 0
+    second = Math.imul(second ^ (signature.charCodeAt(index) + index), 0x85ebca6b) >>> 0
+  }
+  const fingerprint = first.toString(16).padStart(8, '0') + second.toString(16).padStart(8, '0')
+  Object.defineProperty(result, 'toJSON', { enumerable: false, value: () => ({ policyVersion: result.policyVersion, fingerprint }) })
   return result
 }
 
@@ -55,8 +63,9 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
 export function selectClinicalSourceNodes(result: ClinicalReconciliationResult) {
   const seen = new Set<string>()
   return result.graph.nodes.filter(node => {
-    if ((node as { isContained?: boolean }).isContained) return false
-    const identity = canonical([node.sourceId, node.patientScope, node.fullUrl ?? null, node.resource])
+    if (node.isContained) return false
+    if (!node.resource.id && !node.fullUrl) return true
+    const identity = canonical([node.sourceId, node.patientScope, node.restBase ?? null, node.fullUrl ?? null, node.resource])
     if (seen.has(identity)) return false
     seen.add(identity)
     return true

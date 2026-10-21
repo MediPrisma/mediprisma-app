@@ -516,3 +516,17 @@ it('maps only the current successful refresh while keeping prior captures as aud
   expect(await repo.fetchObservations('refresh')).toEqual([])
   expect(repo.getClinicalSource('refresh').graph.nodes).toHaveLength(3)
 })
+
+it('retains prior successful rows on a failed refresh while reporting the failure', async () => {
+  const repo = new FhirClinicalDataRepository()
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  request.mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Observation', id: 'retained' } }] })
+  expect(await repo.fetchObservations('retention')).toEqual([{ id: 'retained' }])
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchObservations('retention')).toEqual([{ id: 'retained' }])
+  expect(repo.getQueryStatus('Observation')?.state).toBe('error')
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchObservations('different-patient')).toEqual([])
+})

@@ -46,3 +46,37 @@ it('projects identical transmissions once and excludes raw source snapshots from
   expect(JSON.stringify(model)).toContain('fingerprint')
 })
 
+
+it('preserves identical anonymous events without treating them as retransmissions', () => {
+  const event = { resourceType: 'Procedure', status: 'completed', code: { text: 'synthetic procedure' } }
+  const model = reconcileClinicalSources([capture('1', [event, event]), capture('2', [event])])
+  expect(selectClinicalSourceResources(model)).toHaveLength(3)
+  expect(model.evidence.sameRecord).toEqual([])
+})
+
+it('does not correlate contained ids owned by different parents', () => {
+  const model = reconcileClinicalSources([capture('1', [
+    { resourceType: 'DiagnosticReport', id: 'one', contained: [{ resourceType: 'Observation', id: 'same', valueString: 'one' }] },
+    { resourceType: 'DiagnosticReport', id: 'two', contained: [{ resourceType: 'Observation', id: 'same', valueString: 'two' }] },
+  ])])
+  expect(model.evidence.sameRecord).toEqual([])
+  expect(model.evidence.conflict).toEqual([])
+  expect(selectClinicalSourceResources(model)).toHaveLength(2)
+})
+
+it('does not treat records from distinct REST bases as the same source identity', () => {
+  const resource = { resourceType: 'Observation', id: 'collision' }
+  const model = reconcileClinicalSources([
+    { ...capture('1', [resource]), restBase: 'https://one.example/fhir' },
+    { ...capture('2', [resource]), restBase: 'https://two.example/fhir' },
+  ])
+  expect(selectClinicalSourceResources(model)).toHaveLength(2)
+  expect(model.evidence.sameRecord).toEqual([])
+})
+
+it('uses a compact signature that includes empty-capture generations', () => {
+  const first = JSON.stringify(reconcileClinicalSources([capture('1', [])]))
+  const second = JSON.stringify(reconcileClinicalSources([capture('2', [])]))
+  expect(first).not.toEqual(second)
+  expect(first.length).toBeLessThan(120)
+})
