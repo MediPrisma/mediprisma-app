@@ -131,10 +131,15 @@ function parseExamLabel(label: string): string[] | null {
   const side = /\bbilateral\b|雙側|雙乳/i.test(label) || (left && right) ? 'bilateral' : left ? 'left' : right ? 'right' : ''
   const sites = [
     ['breast', /\bbreasts?\b|乳房|左乳|右乳|雙乳/i],
-    ['chest', /\b(?:chest|thorax|lungs?)\b|胸|肺/i],
-    ['head', /\b(?:head|brain|cranial)\b|頭部|頭顱|腦部/i],
+    ['chest', /\b(?:chest|thorax)\b|胸/i],
+    ['lung', /\blungs?\b|肺/i],
+    ['head', /\b(?:head|cranial)\b|頭部|頭顱/i],
+    ['brain', /\bbrain\b|腦部/i],
     ['neck', /\bneck\b|頸/i],
-    ['abdomen', /\b(?:abdomen|abdominal|hepatobiliary|liver|gallbladder)\b|腹|肝|膽/i],
+    ['abdomen', /\b(?:abdomen|abdominal)\b|腹/i],
+    ['hepatobiliary', /\bhepatobiliary\b/i],
+    ['liver', /\bliver\b|肝/i],
+    ['gallbladder', /\bgallbladder\b|膽/i],
     ['pelvis', /\bpelvi[cs]\b|骨盆/i],
     ['spine', /\b(?:spine|spinal)\b|脊椎/i],
   ] as const
