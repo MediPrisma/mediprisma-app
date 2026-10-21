@@ -10,7 +10,7 @@ describe('FhirDataIssuesBanner', () => {
   it('does not create a manual reconciliation banner for unavailable content', () => {
     jest.mocked(useLanguage).mockReturnValue({ locale: 'zh-TW' } as any)
     jest.mocked(useClinicalData).mockReturnValue({
-      queryIssues: [['MedicationRequest', { resourceType: 'MedicationRequest', state: 'incomplete', medicationContentUncertaintyCount: 1 }]],
+      queryIssues: [['MedicationRequest', { resourceType: 'MedicationRequest', state: 'incomplete', medicationContentUncertaintyCount: 1, medicationContentOnlyIncomplete: true }]],
       hasBlockingQueryIssues: true, isLoading: false, refetch: jest.fn(),
     } as any)
     render(<FhirDataIssuesBanner />)
@@ -43,3 +43,5 @@ describe('FhirDataIssuesBanner', () => {
     expect(screen.getByText('沒有讀取權限（403）')).toBeInTheDocument()
   })
 })
+
+it('does not turn optional unsupported data into a blocking transport warning when medication content is unavailable',()=>{jest.mocked(useLanguage).mockReturnValue({locale:'zh-TW'} as any);jest.mocked(useClinicalData).mockReturnValue({queryIssues:[['MedicationRequest',{state:'incomplete',medicationContentOnlyIncomplete:true}],['ImagingStudy',{state:'unsupported'}]],hasBlockingQueryIssues:true,isLoading:false,refetch:jest.fn()} as any);render(<FhirDataIssuesBanner/>);expect(screen.getByText('FHIR 伺服器未提供部分選用資料')).toBeInTheDocument();expect(screen.queryByText('部分病歷資料未載入，畫面可能不完整')).not.toBeInTheDocument()})

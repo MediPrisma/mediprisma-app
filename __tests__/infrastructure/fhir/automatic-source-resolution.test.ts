@@ -208,9 +208,12 @@ it('exports each distinct hospital order without attaching the other hospital or
  const roots=bundle.entry.map((entry:any)=>entry.resource).filter((resource:any)=>resource.resourceType==='MedicationStatement'&&/Aromasin/i.test(JSON.stringify(resource.medicationCodeableConcept)))
  expect(roots).toHaveLength(2)
  const withCopies=roots.filter((root:any)=>root.contained?.length)
- expect(withCopies).toHaveLength(1)
- expect(withCopies[0].contained).toHaveLength(2)
- expect(withCopies[0].contained.filter((record:any)=>record.note?.some((note:any)=>note.text?.startsWith('Hospital record:')))).toHaveLength(1)
+ expect(withCopies).toHaveLength(0)
+ const group:any=bundle.entry.map((entry:any)=>entry.resource).find((resource:any)=>resource.resourceType==='Provenance')
+ expect(group.target).toHaveLength(2)
+ expect(group.contained).toHaveLength(3)
+ expect(group.entity).toHaveLength(3)
+ expect(LocalBundleService.parse(bundle)!.collection.medications).toHaveLength(6)
 })
 
 it('carries unavailable drug content through profile, visit map and AI without manual reconciliation tasks',async()=>{
@@ -227,4 +230,12 @@ it('carries unavailable drug content through profile, visit map and AI without m
  const output:any=await tools.getActiveMedicationList.execute!({}, {toolCallId:'synthetic',messages:[]})
  expect(output.canConcludeAbsence).toBe(false)
  expect(JSON.stringify(output)).not.toMatch(/reconcil|核對|未決|釐清/i)
+})
+
+it('does not replace a native AF not-indicated conclusion when medication content is unavailable',()=>{
+ const collection=parse([{resourceType:'MedicationRequest',id:'unavailable-drug',status:'active',medicationReference:{reference:'Medication/missing'}}])
+ const profile=createHospitalAwareCdssPatientProfile({...collection,patient:{id:'synthetic',age:70}})
+ const point={semanticId:'af-oac-whether',state:'not-applicable',headline:'Native not indicated',why:'Native clinical evidence',actions:[]}
+ const model={source:'af',headline:'Synthetic AF',points:[point]}
+ expect(applyHospitalMedicationVisitReview(model as any,profile,'en').points[0]).toBe(point)
 })

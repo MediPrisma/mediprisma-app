@@ -22,7 +22,7 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
  */
 
 import { useQueries, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { getClinicalSourceLifecycleEpoch, subscribeClinicalSourceLifecycle, getClinicalSourceCaptureEpoch, subscribeClinicalSourceCaptures } from '@/src/infrastructure/fhir/services/clinical-source-session'
 import type {
   ClinicalDataCollection,
@@ -268,9 +268,12 @@ function useClinicalResourceAggregate() {
   }, [snapshot, captureEpoch, patient])
   const aggregate = reprojectClinicalSnapshot(snapshot, clinicalSource)
   const scope = JSON.stringify([patientId, sourceEpoch])
-  if (aggregate.allSettled && !aggregate.anyFetching && !patientLoading) {
-    settledAggregates.set(queryClient, { scope, aggregate })
-  } else if (aggregate.anyFetching && !aggregate.anyLoading && !patientLoading) {
+  useEffect(() => {
+    if (aggregate.allSettled && !aggregate.anyFetching && !patientLoading) {
+      settledAggregates.set(queryClient, { scope, aggregate })
+    }
+  }, [aggregate, patientLoading, queryClient, scope])
+  if (aggregate.anyFetching && !aggregate.anyLoading && !patientLoading) {
     const settled = settledAggregates.get(queryClient)
     if (settled?.scope === scope) {
       let refreshing = refreshingAggregates.get(settled.aggregate)

@@ -65,3 +65,12 @@ it.each(['Condition','AllergyIntolerance'])('keeps active %s safety evidence whe
   expect(rows[0].clinicalStatus).toBe('active')
  }
 })
+
+it.each(['birthDate','gender','identifier'])('rejects contradictory undated Patient %s but automatically uses a documented later correction',field=>{
+ const values:any={birthDate:['1950-01-01','1980-01-01'],gender:['male','female'],identifier:[[{system:'urn:synthetic:id',value:'one'}],[{system:'urn:synthetic:id',value:'two'}]]}
+ const resources=values[field].map((value:any,index:number)=>({...patient,[field]:value,...(index?{name:[{text:'Synthetic correction'}]}:{})}))
+ const input=(rows:any[])=>({resourceType:'Bundle',entry:rows.map(resource=>({resource}))})
+ expect(()=>LocalBundleService.parse(input(resources))).toThrow(/病人身分/)
+ const ordered=resources.map((resource:any,index:number)=>({...resource,meta:{lastUpdated:`2026-10-0${index+1}`}}))
+ expect(LocalBundleService.parse(input(ordered))!.patient.name).toEqual([{text:'Synthetic correction'}])
+})

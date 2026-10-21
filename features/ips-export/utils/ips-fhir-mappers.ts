@@ -32,7 +32,7 @@ import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comp
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
 import { medicationDirectionsForFhir } from './medication-display'
-import { medicationExportUnit, sourceSupplyText, type ExportMedication } from './medication-source-records'
+import { medicationExportUnit, medicationSourceRecords, sourceSupplyText, type ExportMedication } from './medication-source-records'
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -282,7 +282,7 @@ const VALID_MED_STATEMENT_STATUS = [
   'not-taken',
 ]
 
-export function mapMedications(medications: MedicationEntity[], patientRef: string): SectionMapResult {
+export function mapMedications(medications: MedicationEntity[], patientRef: string, auditRecords?: MedicationEntity[]): SectionMapResult {
   const makeStatement = (m: ExportMedication): FhirResource => {
     const directions = medicationDirectionsForFhir(m)
     const dosage = m.exportOriginalDosage ? m.dosageInstruction : directions ? [{ text: directions }] : undefined
@@ -317,23 +317,28 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
     }
     return makeEntry(resource).entry
   })
-  const groups = new Map<string, { status: string; references: string[] }>()
+  const groups = new Map<string, { status: string; references: string[]; sourceReferences: string[] }>()
   medications.forEach((medication, index) => {
     const comparison = medication._sourceRecordComparison
     if (!comparison || comparison.status === 'confirmed') return
     const key = [...comparison.references].sort().join('|')
-    const group = groups.get(key) ?? { status: comparison.status, references: [] }
+    const group = groups.get(key) ?? { status: comparison.status, references: [], sourceReferences: comparison.references }
     group.references.push(entries[index].fullUrl)
     groups.set(key, group)
   })
-  const referencedOnly = [...groups.values()].filter(group => group.references.length > 1).map(group => makeEntry({
+  const referencedOnly = [...groups.values()].filter(group => group.references.length > 1).map(group => {
+    const sources=medicationSourceRecords((auditRecords ?? []).filter(record=>group.sourceReferences.includes(`${record._sourceResourceType || 'MedicationRequest'}/${record.id}`)))
+      .map((source,index)=>({...makeStatement(source),id:`group-source-${index+1}`}))
+    return makeEntry({
     resourceType: 'Provenance',
     target: group.references.map(reference => ({ reference })),
     recorded: new Date().toISOString(),
     activity: { coding: [{ system: 'urn:mediprisma:source-comparison-status', code: group.status }],
-      text: 'Unconfirmed cross-source comparison; distinct prescriptions may exist. Do not sum source quantities.' },
+      text: 'Hospital-primary comparison group. Distinct hospital orders retained; audit copies have no asserted one-to-one correspondence. Do not sum source quantities.' },
+    ...(sources.length ? {contained:sources,entity:sources.map(source=>({role:'source',what:{reference:`#${source.id}`}}))} : {}),
     agent: [{ who: { display: 'MediPrisma' } }],
-  }).entry)
+  }).entry
+  })
   return { entries, referencedOnly }
 }
 

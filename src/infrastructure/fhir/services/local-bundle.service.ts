@@ -1647,6 +1647,21 @@ export const LocalBundleService = {
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
     const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
     const selectedPatientKeys = new Set(primaryPatients.map(node => resolution.preferred.get(node.key) ?? node.key))
+    const identityConflict = primaryPatients.some((left, index) => primaryPatients.slice(index + 1).some(right => {
+      const a: any = left.resource, b: any = right.resource
+      if (a.birthDate && b.birthDate && !a.birthDate.startsWith(b.birthDate) && !b.birthDate.startsWith(a.birthDate)) return true
+      if (a.gender && b.gender && a.gender !== 'unknown' && b.gender !== 'unknown' && a.gender !== b.gender) return true
+      return (a.identifier ?? []).some((identifier: any) => identifier.value && identifier.system
+        && (b.identifier ?? []).some((other: any) => other.system === identifier.system && other.value)
+        && !(b.identifier ?? []).some((other: any) => other.system === identifier.system && other.value === identifier.value))
+    }))
+    if (identityConflict) {
+      const selected = primaryPatients.find(node => resolution.includes(node.key))
+      const updated = Date.parse(String(selected?.resource.meta?.lastUpdated ?? ''))
+      const ordered = Number.isFinite(updated) && primaryPatients.every(node => node.key === selected?.key
+        || Date.parse(String(node.resource.meta?.lastUpdated ?? '')) < updated)
+      if (!ordered) throw new Error('此資料包含互相矛盾且無更新順序的病人身分資料，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+    }
     if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
       || selectedPatientKeys.size !== 1 && !clinicalSourceNodesEqualWithContext(clinicalSource.graph, primaryPatients[0], node))) {
       throw new Error('此資料包含多個不同的病人，無法安全匯入。請提供單一病人的 FHIR Bundle。')

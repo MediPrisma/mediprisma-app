@@ -65,6 +65,9 @@ export function applyHospitalMedicationVisitReview(
   const verdictSuffix = english ? ' · hospital prescription record' : ' · 院內處方紀錄'
   const review = (point: DecisionPointView): DecisionPointView => {
     if ((point.decisionId ?? point.semanticId) !== OAC_WHETHER) return point
+    // A native conclusion that anticoagulation is not indicated does not
+    // depend on knowing whether the unavailable drug is an anticoagulant.
+    if (variantPending && point.state === 'not-applicable') return point
     const verdict = point.scoreTable?.verdict
     const onIt = verdict !== undefined ? ON_IT_SUFFIXES.find((suffix) => verdict.endsWith(suffix)) : undefined
     // 「≥2 建議抗凝 · 已在用」 → 「≥2 建議抗凝 · 院內處方紀錄」, and not yet the patient's conclusion.

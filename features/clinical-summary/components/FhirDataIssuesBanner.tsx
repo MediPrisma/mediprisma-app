@@ -23,13 +23,15 @@ export function FhirDataIssuesBanner() {
   const { locale } = useLanguage()
   const {
     queryIssues,
-    hasBlockingQueryIssues,
     isLoading,
     refetch,
   } = useClinicalData()
 
-  const visibleIssues = queryIssues.filter(([, status]) => status?.state !== 'incomplete')
+  const visibleIssues = queryIssues.filter(([, status]) => status?.state !== 'incomplete' || status.medicationContentOnlyIncomplete !== true)
   if (isLoading || visibleIssues.length === 0) return null
+  const hasBlockingQueryIssues = visibleIssues.some(([key, status]) =>
+    ['Condition', 'MedicationRequest', 'AllergyIntolerance', 'Observation', 'DiagnosticReport', 'Encounter'].includes(key)
+    || (status?.invalidModifierCount ?? 0) > 0)
 
   const isZh = locale === 'zh-TW'
   const labels = STATE_LABELS[isZh ? 'zh-TW' : 'en']
