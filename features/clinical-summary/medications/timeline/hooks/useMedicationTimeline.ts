@@ -8,12 +8,12 @@
 import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
-import { assessMedicationCurrentness, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { assessMedicationCurrentness, medicationExpectedStartTimestamp, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
 import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
-import { medicationClinicalDay, medicationClinicalTimestamp } from '@/src/shared/utils/medication-calendar'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import {
   resolveHospitalMedicationName,
   hospitalMedicationDisplayName,
@@ -297,6 +297,16 @@ export function isTimelineDrugCurrent(drug: TimelineDrug, nowMs: number): boolea
   return drug.bars.some((bar) => bar.startMs <= nowMs && (bar.sourceCurrent ?? bar.endMs >= nowMs))
 }
 
+function sourceIntervalDescription(med: any, sources: any[] | undefined, locale: string): string | undefined {
+  const counts = { hospital: 0, medcloud: 0 }
+  const lines = (sources ?? []).map(source => {
+    const origin = isVghtpeSource(source) ? 'hospital' : 'medcloud'
+    const label = origin === 'hospital' ? (locale === 'en' ? 'Hospital' : '院內') : (locale === 'en' ? 'MediCloud' : '雲端')
+    return `${label} ${++counts[origin]}: ${medicationClinicalDay(source.authoredOn || source.effectiveDateTime) || '?'} → ${medicationExpectedEnd(source) || (locale === 'en' ? 'supply period not provided' : '未提供供藥期間')}`
+  })
+  return [sourceComparisonNarrative(med), ...lines].filter(Boolean).join('\n') || undefined
+}
+
 function sortGroups(groups: CategoryGroup[]): CategoryGroup[] {
   return groups.sort((a, b) => {
     const aFallback = a.key === FALLBACK_CATEGORY_KEY
@@ -415,6 +425,7 @@ export function useMedicationTimeline(
         })()
 
     const drugsMap = new Map<string, TimelineDrug>()
+    const countedRefills = new Map<string, Set<string>>()
     const clinicalDrugKeys = new Set<string>()
     let domainMin = Infinity
     let domainMax = -Infinity
@@ -425,35 +436,34 @@ export function useMedicationTimeline(
         isInactive: !assessment.current, currentnessUncertain: assessment.uncertain }
     })
     const intervals = projected.flatMap(item => {
-      if (!item.sources || item.ownedIds?.length !== item.sources.length) return [{ ...item, periodSource: item.record }]
+      if (!item.sources || !item.collapsed) return [{ ...item, periodSource: item.record }]
       // Collapse identical intervals only. A missing interval and a documented
       // supply are separate evidence, drawn on the same comparison row.
       const distinct = new Map<string, any>()
       for (const source of item.sources) {
         const assessment = assessMedicationCurrentness(source, now)
-        const key = JSON.stringify([medicationClinicalTimestamp(source.authoredOn || source.effectiveDateTime || ''),
+        const key = JSON.stringify([medicationExpectedStartTimestamp(source),
           medicationExpectedEndTimestamp(source), assessment.current, assessment.uncertain])
         if (!distinct.has(key)) distinct.set(key, source)
       }
       return [...distinct.values()].map(periodSource => ({ ...item, periodSource }))
     })
-    for (const { record: med, sources, periodSource } of intervals) {
+    for (const { record: med, sources, periodSource, collapsed, comparison } of intervals) {
       if (!med) continue
-      if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(med.status).toLowerCase())) continue
+      if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(periodSource.status).toLowerCase())) continue
       const clinicalDrugKey = medicationClinicalIdentityKey(med)
       if (!clinicalDrugKey) continue
 
       const startIso = periodSource.authoredOn || periodSource.effectiveDateTime
       if (!startIso) continue
-      const startMs = medicationClinicalTimestamp(startIso)
+      const startMs = medicationExpectedStartTimestamp(periodSource)
       if (Number.isNaN(startMs) || startMs < rangeStart) continue
 
       const supplyEndDay = medicationExpectedEnd(periodSource)
       const dosage = periodSource.dosageInstruction?.[0] || periodSource.dosage?.[0]
-      const periodDosage = periodSource.dosageInstruction?.[0] || periodSource.dosage?.[0]
       const reportedDays = durationToDays(periodSource.dispenseRequest?.expectedSupplyDuration, false)
-        ?? durationToDays(periodDosage?.timing?.repeat?.boundsDuration, false)
-        ?? periodToDays(periodDosage?.timing?.repeat?.boundsPeriod)
+        ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
+        ?? periodToDays(dosage?.timing?.repeat?.boundsPeriod)
         ?? periodToDays(supplyEndDay ? { start: medicationClinicalDay(startIso), end: supplyEndDay } : undefined)
       const supplyDays = reportedDays ?? 1
       const exactEnd = medicationExpectedEndTimestamp(periodSource)
@@ -502,22 +512,21 @@ export function useMedicationTimeline(
         ? `${organization.key}::${clinicalDrugKey}`
         : clinicalDrugKey
 
-      const icdCoding = med.reasonCode?.[0]?.coding?.[0]
+      const icdCoding = periodSource.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code as string | undefined
-      const rawIcdText = pickByLocale(med.reasonCode?.[0], locale)
+      const rawIcdText = pickByLocale(periodSource.reasonCode?.[0], locale)
       const icdText = stripLeadingIcdCode(rawIcdText, icdCode ?? '')
       const frequency = displayDosageInstruction(dosage)
-      const requesterDisplay = med.requester?.display
-        ? formatOrganizationDisplay(med.requester.display, locale)
+      const requesterDisplay = periodSource.requester?.display
+        ? formatOrganizationDisplay(periodSource.requester.display, locale)
         : ''
 
       const bar: RefillBar = {
         sourceCurrent: assessMedicationCurrentness(periodSource, now).current,
-        sourceComparison: [sourceComparisonNarrative(med), ...(sources ?? []).map((source, index) =>
-          `${isVghtpeSource(source) ? (locale === 'en' ? 'Hospital' : '院內') : (locale === 'en' ? 'MediCloud' : '雲端')} ${index + 1}: ${medicationClinicalDay(source.authoredOn || source.effectiveDateTime) || '?'} → ${medicationExpectedEnd(source) || (locale === 'en' ? 'supply period not provided' : '未提供供藥期間')}`)].filter(Boolean).join('\n') || undefined,
+        sourceComparison: sourceIntervalDescription(med, sources, locale),
         sourceComparisonUnconfirmed: !!med._sourceRecordComparison && med._sourceRecordComparison.status !== 'confirmed',
         supplyEndDay,
-        selfPurchased: sourceSelfPurchase(med) === true,
+        selfPurchased: sourceSelfPurchase(periodSource) === true,
         sourceStatus: periodSource.status,
         supplyDaysUnrecorded: reportedDays === undefined || exactEnd === undefined,
         refillId: periodSource.id || `${medicationSourceCode(med) || clinicalDrugKey}-${startIso}`,
@@ -525,12 +534,12 @@ export function useMedicationTimeline(
         endMs,
         supplyDays,
         authoredOnIso: startIso,
-        sourceMedicationCode: medicationSourceCode(med) || undefined,
+        sourceMedicationCode: medicationSourceCode(periodSource) || undefined,
         frequency: frequency || undefined,
         pharmacy: requesterDisplay || undefined,
         icdCode,
         icdText,
-        prescriptionType: recordedPrescriptionType(med),
+        prescriptionType: recordedPrescriptionType(periodSource),
       }
 
       clinicalDrugKeys.add(clinicalDrugKey)
@@ -538,12 +547,17 @@ export function useMedicationTimeline(
       domainMax = Math.max(domainMax, endMs)
 
       const existing = drugsMap.get(rowKey)
+      const refillKey = collapsed && comparison ? [...comparison.references].sort().join('|') : med.id
+      const counted = countedRefills.get(rowKey) ?? new Set<string>()
+      const isNewRefill = !counted.has(refillKey)
+      counted.add(refillKey)
+      countedRefills.set(rowKey, counted)
       if (existing) {
         const isLatest = startMs >= existing.lastStartMs
         existing.bars.push(bar)
         existing.firstStartMs = Math.min(existing.firstStartMs, startMs)
         existing.lastStartMs = Math.max(existing.lastStartMs, startMs)
-        existing.refillCount++
+        if (isNewRefill) existing.refillCount++
         if (isLatest) {
           existing.drugName = drugName
           existing.drugProductName = drugProductName

@@ -4,12 +4,17 @@ import type { Condition, DiagnosisRow, Category, Coding } from '../types'
 import { formatDate } from '../utils/fhir-helpers'
 import { buildIcdDictionary, localizedIcdDescription, stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 
 export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: Map<string, string>, encounters: readonly any[] = []) {
   return useMemo<DiagnosisRow[]>(() => {
     if (!conditions || !Array.isArray(conditions)) return []
     const dictionary = icdDict ?? buildIcdDictionary(conditions, locale)
     const encounterMap = new Map(encounters.map((encounter) => [encounter.id, encounter]))
+    const sourceDate = (value?: string) => {
+      const day = medicationClinicalDay(value)
+      return day ? new Intl.DateTimeFormat(locale, { timeZone: 'Asia/Taipei' }).format(new Date(`${day}T00:00:00+08:00`)) : formatDate(value)
+    }
     
     const rows = (conditions as Condition[]).map((condition, index) => {
       const icdCodes = [...new Set(
@@ -41,7 +46,7 @@ export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: 
         originalNarrative: original && original !== title ? original : undefined,
         originalNarrativeLabel: locale === 'en' ? 'Original diagnosis' : '來源診斷原文',
         icdCodes,
-        when: formatDate(condition.onsetDateTime || condition.recordedDate),
+        when: sourceDate(condition.onsetDateTime || condition.recordedDate),
         clinical: typeof condition.clinicalStatus === 'string' 
           ? condition.clinicalStatus 
           : (condition.clinicalStatus?.coding?.[0]?.display || condition.clinicalStatus?.coding?.[0]?.code || ''),
@@ -60,9 +65,9 @@ export function useDiagnosisRows(conditions: any[], locale = 'zh-TW', icdDict?: 
         records: [{ id: condition.id || `condition-${index}`,
           originalText: condition.code?.text || condition.code?.coding?.find((coding) => coding.display)?.display,
           date: condition.recordedDate || condition.onsetDateTime,
-          when: formatDate(condition.recordedDate || condition.onsetDateTime) || (locale === 'en' ? 'Date not provided' : '未提供日期'),
+          when: sourceDate(condition.recordedDate || condition.onsetDateTime) || (locale === 'en' ? 'Date not provided' : '未提供日期'),
           onsetWhen: condition.onsetDateTime && condition.recordedDate && condition.onsetDateTime !== condition.recordedDate
-            ? `${locale === 'en' ? 'Onset' : '起始日期'} ${formatDate(condition.onsetDateTime)}` : undefined,
+            ? `${locale === 'en' ? 'Onset' : '起始日期'} ${sourceDate(condition.onsetDateTime)}` : undefined,
           institution: (() => {
             const encounter = encounterMap.get(condition.encounter?.reference?.split('/').pop())
             const name = encounter?.serviceProvider?.display

@@ -247,9 +247,7 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     )
 
     expect(result.current[0].durationDays).toBe(2)
-    expect(result.current[0].endDate).toBe(
-      new Date(inpatientOrder.dispenseRequest.validityPeriod.end).toLocaleDateString(),
-    )
+    expect(result.current[0].endDate).toBe('2025/5/21')
   })
 
   it('preserves a composite hospital frequency code from the dosage text', () => {

@@ -48,6 +48,20 @@ export function medicationRecordedTreatmentEnd(medication: any): string | undefi
     || (isVghtpeSource(originalHospital) ? originalHospital?.dispenseRequest?.validityPeriod?.end : undefined)
 }
 
+const isElapsedDuration = (duration: any) => /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(String(duration?.code || duration?.unit || '').toLowerCase())
+
+export function medicationExpectedStartTimestamp(medication: any): number {
+  const start = medication?.authoredOn || medication?.effectiveDateTime
+  if (!start) return NaN
+  const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
+  const duration = [medication?.dispenseRequest?.expectedSupplyDuration, dosage?.timing?.repeat?.boundsDuration]
+    .find(value => durationToDays(value, false) !== undefined)
+  const days = durationToDays(duration, false)
+  const day = medicationClinicalDay(start)
+  return day && days && Number.isInteger(days) && !isElapsedDuration(duration) && !medicationRecordedTreatmentEnd(medication)
+    ? medicationClinicalTimestamp(day) : medicationClinicalTimestamp(start)
+}
+
 /** End of the inclusive coverage interval; fractional durations keep their
  * exact elapsed time, while whole-day supplies cover their final calendar day. */
 export function medicationExpectedEndTimestamp(medication: any): number | undefined {
@@ -64,9 +78,7 @@ export function medicationExpectedEndTimestamp(medication: any): number | undefi
     .find(value => durationToDays(value, false) !== undefined)
   const days = durationToDays(duration, false)
   if (!started || !days) return undefined
-  const unit = String(duration?.code || duration?.unit || '').toLowerCase()
-  const elapsedTimeUnit = /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(unit)
-  if (Number.isInteger(days) && !elapsedTimeUnit) {
+  if (Number.isInteger(days) && !isElapsedDuration(duration)) {
     const endDay = medicationSupplyEndDay(medicationClinicalDay(started), days)
     return endDay ? calendarEnd(endDay) : undefined
   }

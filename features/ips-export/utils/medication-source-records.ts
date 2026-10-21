@@ -5,7 +5,6 @@ export type ExportMedication = MedicationEntity & {
   identifier?: Array<Record<string, unknown>>
   exportSourceLabel?: string
   exportOriginalDosage?: boolean
-  exportCurrentnessUnconfirmed?: boolean
   exportIntegrated?: boolean
 }
 
@@ -20,6 +19,7 @@ export function medicationSourceRecords(medications: MedicationEntity[]): Export
       medicationCodeableConcept: source._resolvedMedicationCodeableConcept ?? source.medicationCodeableConcept,
       _sourceRecordComparison: medication._sourceRecordComparison,
       exportOriginalDosage: true,
+      exportCurrentnessUnconfirmed: medication.exportCurrentnessUnconfirmed,
     }))
       : [medication]
     return sources.map(source => {

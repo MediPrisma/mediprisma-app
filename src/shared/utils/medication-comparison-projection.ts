@@ -12,7 +12,7 @@ export function projectMedicationComparisons<T extends { id: string }>(
   const byId = new Map(records.map(record => [record.id, record]))
   const consumed = new Set<string>()
   const result: Array<{ record: T; sources?: T[]; comparison?: SourceRecordComparison;
-    ownedIds?: string[]; warnings?: string[]; detailsInitiallyOpen?: boolean }> = []
+    ownedIds?: string[]; warnings?: string[]; detailsInitiallyOpen?: boolean; collapsed?: boolean }> = []
   for (const record of records) {
     if (consumed.has(record.id)) continue
     const comparison = comparisonFor(record)
@@ -34,6 +34,7 @@ export function projectMedicationComparisons<T extends { id: string }>(
       : hospital.length > 1 ? [...hospital, ...(cloud.length > hospital.length ? cloud : [])] : [representative]
     if (display.length > 1 && display.every(source => stateFor(source).isInactive) && !stateFor(representative).isInactive) display.unshift(representative)
     display.forEach((source, index) => result.push({ record: source, sources: complete, comparison,
+      collapsed: display.length === 1,
       detailsInitiallyOpen: index === 0,
       ownedIds: [source.id, ...(index === 0 ? complete.filter(other => !display.some(item => item.id === other.id)).map(other => other.id) : [])],
       warnings: [...(comparison.warnings ?? []), ...(mixedCurrentness ? ['source-currentness-differs'] : [])],

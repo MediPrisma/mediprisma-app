@@ -474,6 +474,10 @@ it('exports both original records of a confirmed pair with their source quantiti
   expect(narrative).toContain('Hospital record: MedicationRequest/hospital-med')
   expect(narrative).toContain('MediCloud record: MedicationRequest/cloud-med')
   expect((narrative.match(/<tr>/g) || []).length).toBe(2) // heading plus one integrated row
+  const uncertain = mapMedications([{ ...orders[0], exportCurrentnessUnconfirmed: true }] as any, 'Patient/export').entries[0].resource
+  expect(uncertain.status).toBe('unknown')
+  expect((uncertain.contained as any[]).every(source => source.status === 'unknown')).toBe(true)
+  expect(JSON.stringify(uncertain.contained)).toContain('Original source order status: active')
 })
 
 it('exports uncertain use without rewriting the original source status in provenance', () => {

@@ -295,6 +295,8 @@ export interface MedicationEntity {
   _encounterInferred?: boolean
   _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
   _sourcePrescriptionRecords?: any[]
+  /** IPS-only presentation flag; the original source status is never rewritten. */
+  exportCurrentnessUnconfirmed?: boolean
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
