@@ -11,15 +11,22 @@ export async function runProgressiveImport(request: ProgressiveImportRequest, fi
   const cancellation = new AbortController()
   const applyStop = () => {
     const reason = useProgressiveImportStore.getState().stoppedRuns[request.runId]
-    if (reason) cancellation.abort(reason)
+    if (reason && reason !== 'failed') cancellation.abort(reason)
   }
-  useProgressiveImportStore.setState({ pendingRunId: request.runId })
+  const stoppedRuns = useProgressiveImportStore.getState().stoppedRuns
+  useProgressiveImportStore.setState({ pendingRunId: request.runId,
+    ...(stoppedRuns[request.runId] === 'failed' ? { stoppedRuns: Object.fromEntries(Object.entries(stoppedRuns).filter(([id]) => id !== request.runId)) } : {}),
+  })
   const unsubscribe = useProgressiveImportStore.subscribe(applyStop)
   applyStop()
   const onCancel = (event: Event) => {
     const detail = (event as CustomEvent).detail
     if (detail?.runId === request.runId && detail.requestId === request.requestId) {
-      stopProgressiveImport(request.runId, isProgressiveFailureReason(detail.phase) ? detail.phase : 'cancelled')
+      const phase = isProgressiveFailureReason(detail.phase) ? detail.phase : 'cancelled'
+      // A timed-out optional visit request must stop its own writer, while a
+      // later final snapshot can still replace the unchanged active chart.
+      if (phase === 'failed') { cancellation.abort(phase); return }
+      stopProgressiveImport(request.runId, phase)
     }
   }
   window.addEventListener('medcloud:progressive-import-cancelled', onCancel)

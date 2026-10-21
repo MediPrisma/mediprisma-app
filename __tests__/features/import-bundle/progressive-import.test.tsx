@@ -93,6 +93,36 @@ test('initial cloud import cannot overwrite an already populated workspace', asy
   expect(mockSave).not.toHaveBeenCalled()
 })
 
+test('a failed optional visit request is aborted without blocking the same run final report snapshot', async () => {
+  let release!: (value: any) => void
+  mockPrepare.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  const receipts: CustomEvent[] = []
+  const receive = (event: Event) => receipts.push(event as CustomEvent)
+  window.addEventListener(PROGRESSIVE_IMPORT_EVENT, receive)
+  function Workspace() { const { importFile } = useImportBundle(); return <><BundleFileInput importFile={importFile} /><ProgressiveImportStatus /></> }
+  render(<Workspace />)
+  const input = document.querySelector('input')!
+  const request = (requestId: string, stage: string) => {
+    input.setAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE, JSON.stringify({ version: 1, requestId, runId: 'run-a', stage, expectedImportId: 'original-import' }))
+    fireEvent.change(input, { target: { files: [new File(['{}'], `${stage}.json`)] } })
+  }
+  request('optional-visits', 'hospital-visits')
+  await waitFor(() => expect(release).toBeDefined())
+  act(() => window.dispatchEvent(new CustomEvent('medcloud:progressive-import-cancelled', {
+    detail: { requestId: 'optional-visits', runId: 'run-a', phase: 'failed' },
+  })))
+  await act(async () => release({ bundle: mockIncoming }))
+  await waitFor(() => expect(receipts).toHaveLength(1))
+  expect(receipts[0].detail.ok).toBe(false)
+  expect(mockSave).not.toHaveBeenCalled()
+  request('final-report', 'hospital')
+  await waitFor(() => expect(receipts).toHaveLength(2))
+  expect(receipts[1].detail).toMatchObject({ requestId: 'final-report', ok: true, importId: 'new-import' })
+  expect(mockSave).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('status')).toHaveTextContent('已載入院內門診資料')
+  window.removeEventListener(PROGRESSIVE_IMPORT_EVENT, receive)
+})
+
 test('an App-detected patient mismatch emits a typed failure and leaves a persistent patient warning', async () => {
   mockIncoming = bundle('patient-b')
   useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'original-import', phase: 'loaded' } })
@@ -168,6 +198,20 @@ test('duplicate failure notifications preserve loaded visits and explicit invali
   stopProgressiveImport('run-a', 'failed')
   expect(useProgressiveImportStore.getState().current?.phase).toBe('patient-changed')
   expect(isProgressiveAutoSummaryBlocked()).toBe(true)
+})
+
+test.each(['patient-changed', 'privacy-stale'] as const)('late cancellation cannot downgrade a %s warning, including after reload', phase => {
+  completeProgressiveImport({ version: 1, requestId: 'safety', runId: 'run-a', stage: 'hospital' }, 'original-import')
+  stopProgressiveImport('run-a', phase)
+  stopProgressiveImport('run-a', 'cancelled')
+  stopProgressiveImport('run-a', 'failed')
+  expect(useProgressiveImportStore.getState().current?.phase).toBe(phase)
+  const saved = sessionStorage.getItem('mediprisma:progressive-status-v1')!
+  useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
+  sessionStorage.setItem('mediprisma:progressive-status-v1', saved)
+  render(<ProgressiveImportStatus />)
+  expect(useProgressiveImportStore.getState().current?.phase).toBe(phase)
+  expect(screen.getByText(phase === 'patient-changed' ? /來源病人已變更/ : /隱私設定已變更/)).toBeVisible()
 })
 
 test('failure after a complete import does not claim that no hospital records loaded', () => {

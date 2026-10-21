@@ -48,6 +48,7 @@ import { runGenerationJob, type AiGenerationMeasurement, type AiRunMetrics } fro
 import { withCollectorOperation } from '@/src/application/telemetry/collector-operation'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
+import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
 import type {
   AiGenerationIssue,
@@ -437,6 +438,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     }
   }, [])
   const autoTriggeredRef = useRef<string | null>(null)
+  const progressiveAutoBlocked = useProgressiveImportStore(() => isProgressiveAutoSummaryBlocked())
   // An automatic Medcloud launch has its own credential-gated, message-id-scoped
   // runner. Suppress saved background auto-run preferences on this route so a
   // previous public-provider choice cannot send patient data before the
@@ -562,7 +564,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // Guests auto-run too (v0.25.x): callers apply the source-aware real-data
   // consent gate, results are cached 12h per patient, and the 50/day free quota
   // is still enforced server-side.
-  const generate = useCallback(async () => {
+  const generateRun = useCallback(async (automatic: boolean) => {
+    if (automatic && isProgressiveAutoSummaryBlocked()) return
     if (modelUnavailable || !slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
     if (store.getState().running[slotKey]) return
@@ -570,6 +573,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     const fedClinicalData = clinicalContextScope?.clinicalData ?? scopedClinicalData
     const runAbort = new AbortController()
     runAbortControllersRef.current.set(runAbort, slotKey)
+    const unsubscribe = automatic ? useProgressiveImportStore.subscribe(() => {
+      if (!isProgressiveAutoSummaryBlocked()) return
+      runAbort.abort()
+      stopAi(slotKey)
+    }) : undefined
     const generatedResult = await runGenerationJob({
       store,
       key: slotKey,
@@ -597,7 +605,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         }
         : undefined,
       shouldCommit: () => (
-        (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
+        !runAbort.signal.aborted && (!automatic || !isProgressiveAutoSummaryBlocked())
+        && (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
       readRunMetrics: readRunMetrics ? () => readRunMetrics(slotKey) : undefined,
       produce: (measureResult, identifySummaryRun, operation) =>
@@ -623,6 +632,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           signal: runAbort.signal,
         }),
     }).finally(() => {
+      unsubscribe?.()
       runAbortControllersRef.current.delete(runAbort)
     })
     if (
@@ -637,7 +647,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts, readRunMetrics, patient, clinicalNowMs, clinicalContextScope])
+  }, [stopAi, modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts, readRunMetrics, patient, clinicalNowMs, clinicalContextScope])
+
+  const generate = useCallback(() => generateRun(false), [generateRun])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
@@ -796,6 +808,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   useEffect(() => {
     if (!shouldAutoRunSummarySlot({
       enabled: autoRunEnabled &&
+        !progressiveAutoBlocked &&
         !medcloudLaunchOwnsAutoRun &&
         selectedModelReady &&
         !bundleTransitionActive &&
@@ -810,8 +823,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       triggeredIdentity: autoTriggeredRef.current,
     })) return
     autoTriggeredRef.current = autoRunIdentity
-    void generate()
-  }, [autoRunEnabled, medcloudLaunchOwnsAutoRun, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generate])
+    void generateRun(true)
+  }, [autoRunEnabled, progressiveAutoBlocked, medcloudLaunchOwnsAutoRun, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generateRun])
 
   return {
     patientId,

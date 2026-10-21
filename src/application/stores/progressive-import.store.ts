@@ -96,7 +96,11 @@ export function stopProgressiveImport(runId: string, phase: ProgressiveFailureRe
   const { current, stoppedRuns } = useProgressiveImportStore.getState()
   // Repeated cleanup notifications must neither erase known coverage nor
   // downgrade an identity/privacy/cancellation stop to a generic failure.
-  const reason = phase === 'failed' ? stoppedRuns[runId] ?? phase : phase
+  const priority: Record<ProgressiveFailureReason, number> = {
+    failed: 0, cancelled: 1, 'source-unavailable': 2, 'privacy-stale': 3, 'patient-changed': 4,
+  }
+  const previous = stoppedRuns[runId]
+  const reason = previous && priority[previous] > priority[phase] ? previous : phase
   useProgressiveImportStore.setState({
     stoppedRuns: Object.fromEntries([...Object.entries(stoppedRuns).filter(([id]) => id !== runId), [runId, reason]].slice(-100)),
     ...(current?.runId === runId ? { current: { ...current,
@@ -121,7 +125,7 @@ export function isProgressiveSummaryRequestCurrent(request: MedcloudSummaryReque
 
 export function isProgressiveAutoSummaryBlocked(): boolean {
   const { current, pendingRunId, stoppedRuns } = useProgressiveImportStore.getState()
-  return (!!pendingRunId && !!stoppedRuns[pendingRunId])
+  return (!!pendingRunId && !!stoppedRuns[pendingRunId] && stoppedRuns[pendingRunId] !== 'failed')
     || !!current && ['cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'].includes(current.phase)
 }
 
