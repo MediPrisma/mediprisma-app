@@ -5,6 +5,8 @@ import { normalizeImagingReportCopy, reportDisplayGroupingKeys } from '@/src/sha
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
 import { getReportDate } from '@/src/shared/utils/report-identity'
 import { NHI_MEDICLOUD_SOURCE_EXTENSION_URL } from '@/src/shared/utils/observation-provenance.utils'
+import { renderHook } from '@testing-library/react'
+import { useEncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
 
 const BODY = 'Synthetic imaging finding: a 4 mm nodule in the left upper lobe is unchanged. No pleural effusion. Follow-up imaging in twelve months is recommended.'
 const FOOTER = ' Reported By Example Radiologist(LicenseRD#:0000) On:2026/06/25(10:30:00),(by Example Radiologist)At:TEST01Positive Rate Evaluation 2'
@@ -20,6 +22,21 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it('keeps a filtered encounter and AI subset ambiguous when another source candidate exists', () => {
+    const reports = pair().map(report => ({ ...report, encounter: { reference: 'Encounter/a' }, _encounterInferred: true }))
+    const other = { ...reports[0], id: 'repeated-hospital', encounter: { reference: 'Encounter/b' } }
+    const full = [...reports, other]
+    expect(buildReportsData(reports, [], 'standardized', 'medical', 'en', full).reportRows).toHaveLength(2)
+    const { result } = renderHook(() => useEncounterDetails([], full, [], [], [], [], 'en', 'medical'))
+    expect(result.current.get('a')?.reports).toHaveLength(2)
+    const extracted = imagingReportsCategory.extractData({ diagnosticReports: full } as any)
+      .filter(report => report.id !== other.id)
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    expect(imagingReportsCategory.getCount(extracted, filters, {} as any)).toBe(2)
+    const section = imagingReportsCategory.getContextSection(extracted, filters, {} as any)
+    expect(JSON.stringify(section)).not.toContain('[shared narrative; count once]')
+  })
+
   it.each([
     [['健保署', '臺北榮總'], 2],
     [['臺北榮總'], 1],

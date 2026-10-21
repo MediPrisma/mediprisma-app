@@ -39,6 +39,19 @@ function presentedFormText(report: ImagingReportData): string[] {
 type ImagingReportData = DiagnosticReport & {
   _imagingStudyText?: string
   _imagingStudyIds?: string[]
+  /** Resolved against all source reports before category/window filtering. */
+  _displayGrouping?: { key?: string }
+}
+
+function displayGroupingKeys(reports: ImagingReportData[]): Map<DiagnosticReport, string> {
+  const fallback = reports.some(report => !report._displayGrouping)
+    ? reportDisplayGroupingKeys(reports) : undefined
+  const keys = new Map<DiagnosticReport, string>()
+  for (const report of reports) {
+    const key = report._displayGrouping ? report._displayGrouping.key : fallback?.get(report)
+    if (key) keys.set(report, key)
+  }
+  return keys
 }
 
 function isSharedNarrativeAttachment(attachment: any): boolean {
@@ -135,6 +148,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   
   extractData: (clinicalData) => {
     const reports = (clinicalData?.diagnosticReports || []) as DiagnosticReport[]
+    const groupingKeys = reportDisplayGroupingKeys(reports)
     const studies = (clinicalData?.imagingStudies || []) as ImagingStudy[]
     const studyById = new Map(studies.filter((study) => !!study.id).map((study) => [study.id!, study]))
     const linkedIds = new Set<string>()
@@ -152,6 +166,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           .map((study) => formatImagingStudyMetadata(study))
         return {
           ...report,
+          _displayGrouping: { key: groupingKeys.get(report) },
           _imagingStudyIds: ids,
           _imagingStudyText: metadata.join('\n\n'),
         }
@@ -160,6 +175,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     const standaloneItems = studies
       .filter((study) => !study.id || !linkedIds.has(study.id))
       .map((study): ImagingReportData => ({
+        _displayGrouping: {},
         id: study.id,
         resourceType: 'ImagingStudy',
         status: study.status,
@@ -182,7 +198,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   },
   
   getCount: (data, filters, allClinicalData) => {
-    const groupingKeys = reportDisplayGroupingKeys(data)
+    const groupingKeys = displayGroupingKeys(data)
     // Filter out reports without content (matching useReportsData logic)
     let filtered = data.filter(report => {
       if (normalizeClinicalStatus(report.status) === 'entered-in-error') return false
@@ -214,7 +230,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     if (data.length === 0) return null
     // Establish ambiguity on the complete source set, before latest/time filters
     // can remove an otherwise conflicting copy of an exam.
-    const groupingKeys = reportDisplayGroupingKeys(data)
+    const groupingKeys = displayGroupingKeys(data)
     
     let filtered = data.filter((report) => normalizeClinicalStatus(report.status) !== 'entered-in-error')
 

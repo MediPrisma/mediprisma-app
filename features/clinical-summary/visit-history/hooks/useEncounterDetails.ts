@@ -512,6 +512,7 @@ export function useEncounterDetails(
           'standardized',
           audience,
           locale === 'zh-TW' ? 'zh-TW' : 'en',
+          diagnosticReports,
         ).reportRows
 
         // Numeric/member-observation DiagnosticReports already appear in the

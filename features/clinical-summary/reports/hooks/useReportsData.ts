@@ -91,6 +91,8 @@ function viewerActionIdentity(action: NhiViewerAction): string {
  * Shared DiagnosticReport -> Row projection used by both the Reports page and
  * encounter details. Keep grouping, narrative/image merging, and source ids in
  * this pure builder so every ReportRow consumer receives the same model.
+ * Filtered views must supply the complete source set as groupingReports;
+ * otherwise a hidden repeated examination could incorrectly resolve ambiguity.
  */
 export function buildReportsData(
   diagnosticReports: any[],
@@ -98,6 +100,7 @@ export function buildReportsData(
   nameMode: AnalyteNameMode = 'standardized',
   audience: 'medical' | 'patient' = 'medical',
   locale: Locale = 'en',
+  groupingReports: any[] = diagnosticReports,
 ) {
     const rows: Row[] = []
     const seen = new Set() as Set<string>
@@ -224,7 +227,7 @@ export function buildReportsData(
     // Pass 1: build the natural grouping (as before).
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
-    const displayGroupingKeys = reportDisplayGroupingKeys(diagnosticReports)
+    const displayGroupingKeys = reportDisplayGroupingKeys(groupingReports)
     const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
@@ -851,11 +854,12 @@ export function useReportsData(
   diagnosticReports: any[],
   imagingStudies: any[] = [],
   nameMode: AnalyteNameMode = 'standardized',
+  groupingReports: any[] = diagnosticReports,
 ) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
   return useMemo(
-    () => buildReportsData(diagnosticReports, imagingStudies, nameMode, audience, locale),
-    [diagnosticReports, imagingStudies, audience, locale, nameMode],
+    () => buildReportsData(diagnosticReports, imagingStudies, nameMode, audience, locale, groupingReports),
+    [diagnosticReports, imagingStudies, audience, locale, nameMode, groupingReports],
   )
 }
