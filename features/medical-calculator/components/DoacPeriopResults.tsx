@@ -22,7 +22,7 @@ const STATE: Record<PeriopResult['state'], { zh: string; en: string; style: stri
   missing: { zh: '待補資料', en: 'Needs inputs', style: 'bg-muted text-muted-foreground' },
 }
 
-const FIELD_KEY: Record<string, string> = { CrCl: 'scr' }
+const FIELD_KEY: Record<string, string> = { CrCl: 'scr', anaesthesia: 'traumatic_puncture' }
 
 function GuidelineCiteView({ cite, zh }: { cite: GuidelineCite; zh: boolean }) {
   const source = cite.source === 'ehra' ? 'EHRA 2021' : 'ASRA 2025'

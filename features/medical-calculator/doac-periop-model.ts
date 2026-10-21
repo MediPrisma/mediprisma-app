@@ -36,7 +36,7 @@
  * restart withholds the earliest time.
  */
 import type { CalcValues, L } from './types'
-import { CITES, doacCrcl, parseRegimen, type DoacAgent, type DoacCrcl, type LabelCite } from './doac-dose-model'
+import { CITES, crclLabel, doacCrcl, parseRegimen, type DoacAgent, type DoacCrcl, type LabelCite } from './doac-dose-model'
 
 export interface GuidelineSource {
   title: string
@@ -116,6 +116,7 @@ export const GUIDELINE_CITES = {
   asraApixabanHighRestart: asra('Apixaban, high dose', 8, 'We suggest that needle placement/catheter removal occurs at least 24 hours prior to the first postoperative dose'),
   asraApixabanHighInSitu: asra('Apixaban, high dose', 8, 'With the unanticipated administration of high dose of apixaban with a neuraxial catheter in situ, we suggest that apixaban dosing be withheld for at least 72 hours'),
   asraApixabanLow: asra('Apixaban, low dose', 8, 'We suggest that a low dose of apixaban be discontinued for at least 36 hours prior to neuraxial block or deep plexus/peripheral block.'),
+  asraApixabanLowLevel: asra('Apixaban, low dose', 8, 'We suggest that a residual apixaban plasma level <30 ng/mL or a residual aXa activity plasma level ≤0.1 IU/mL is acceptable prior to neuraxial block or deep plexus/peripheral block'),
   asraApixabanLowRestart: asra('Apixaban, low dose', 8, 'We suggest that needle placement/catheter removal occurs at least 6 hours prior to the first postoperative dose'),
   asraApixabanLowInSitu: asra('Apixaban, low dose', 8, 'With the unanticipated administration of low dose of apixaban with a neuraxial catheter in situ, we suggest that apixaban dosing be withheld for at least 36 hours'),
 
@@ -130,6 +131,7 @@ export const GUIDELINE_CITES = {
   asraRivaroxabanHighRestart: asra('Rivaroxaban, high dose', 9, 'We suggest that needle placement/catheter removal occurs at least 24 hours prior to the first postoperative dose'),
   asraRivaroxabanHighInSitu: asra('Rivaroxaban, high dose', 9, 'With the unanticipated administration of high dose of rivaroxaban with a neuraxial catheter in situ, we suggest that rivaroxaban dosing be withheld for at least 72 hours'),
   asraRivaroxabanLow: asra('Rivaroxaban, low dose', 9, 'We suggest that a low dose of rivaroxaban be discontinued for at least 24 hours (30 hours if CrCl <30 mL/min) prior to neuraxial block or deep plexus/peripheral block.'),
+  asraRivaroxabanLowLevel: asra('Rivaroxaban, low dose', 9, 'We suggest that a residual rivaroxaban plasma level <30 ng/mL or a residual aXa activity plasma level ≤0.1 IU/mL'),
   asraRivaroxabanLowRestart: asra('Rivaroxaban, low dose', 9, 'We suggest that needle placement/catheter removal occurs at least 6 hours prior to the first postoperative dose'),
   asraRivaroxabanLowInSitu: asra('Rivaroxaban, low dose', 9, 'With the unanticipated administration of low dose of rivaroxaban with a neuraxial catheter in situ, we suggest that rivaroxaban dosing be withheld for at least 24 hours (30 hours if CrCl <30 mL/min)'),
 
@@ -340,12 +342,12 @@ function asraRule(agent: DoacAgent, doseClass: DoseClass, crcl: number): AsraRul
   if (agent === 'apixaban') {
     return doseClass === 'high'
       ? { hours: 72, hold: G.asraApixabanHigh, restartHours: 24, restart: G.asraApixabanHighRestart, level: G.asraApixabanHighLevel, inSitu: G.asraApixabanHighInSitu }
-      : { hours: 36, hold: G.asraApixabanLow, restartHours: 6, restart: G.asraApixabanLowRestart, level: G.asraApixabanHighLevel, inSitu: G.asraApixabanLowInSitu }
+      : { hours: 36, hold: G.asraApixabanLow, restartHours: 6, restart: G.asraApixabanLowRestart, level: G.asraApixabanLowLevel, inSitu: G.asraApixabanLowInSitu }
   }
   if (agent === 'rivaroxaban') {
     return doseClass === 'high'
       ? { hours: 72, hold: G.asraRivaroxabanHigh, restartHours: 24, restart: G.asraRivaroxabanHighRestart, level: G.asraRivaroxabanHighLevel, inSitu: G.asraRivaroxabanHighInSitu }
-      : { hours: crcl < 30 ? 30 : 24, hold: G.asraRivaroxabanLow, restartHours: 6, restart: G.asraRivaroxabanLowRestart, level: G.asraRivaroxabanHighLevel, inSitu: G.asraRivaroxabanLowInSitu }
+      : { hours: crcl < 30 ? 30 : 24, hold: G.asraRivaroxabanLow, restartHours: 6, restart: G.asraRivaroxabanLowRestart, level: G.asraRivaroxabanLowLevel, inSitu: G.asraRivaroxabanLowInSitu }
   }
   if (agent === 'edoxaban') {
     // ASRA has no low dose of edoxaban: every dose is read as high.
@@ -481,8 +483,8 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     result.state = 'no-hours'
     result.missing = result.missing.filter((key) => key !== 'CrCl' && key !== 'dialysis')
     result.basis.push(noIndication
-      ? line(t(`${dialysis === 'yes' ? '透析' : `CrCl ${c!.toFixed(1)} <15`}：EHRA 無正式停藥時數（No official indication for use），需個別評估，建議會診。`, `${dialysis === 'yes' ? 'Dialysis' : `CrCl ${c!.toFixed(1)} <15`}: EHRA gives no interval (no official indication for use); individual assessment, consult.`), G.ehraFig14)
-      : line(t(`dabigatran CrCl ${c!.toFixed(1)} <30：仿單禁忌，EHRA 列為 Not indicated，不給停藥時數。`, `Dabigatran, CrCl ${c!.toFixed(1)} <30: contraindicated in the label, not indicated in EHRA; no interval given.`), CITES.dabigatranRenal, G.ehraFig14))
+      ? line(t(`${dialysis === 'yes' ? '透析' : `CrCl ${crclLabel(c!)} <15`}：EHRA 無正式停藥時數（No official indication for use），需個別評估，建議會診。`, `${dialysis === 'yes' ? 'Dialysis' : `CrCl ${crclLabel(c!)} <15`}: EHRA gives no interval (no official indication for use); individual assessment, consult.`), G.ehraFig14)
+      : line(t(`dabigatran CrCl ${crclLabel(c!)} <30：仿單禁忌，EHRA 列為 Not indicated，不給停藥時數。`, `Dabigatran, CrCl ${crclLabel(c!)} <30: contraindicated in the label, not indicated in EHRA; no interval given.`), CITES.dabigatranRenal, G.ehraFig14))
     if (agent === 'dabigatran' && c !== undefined && c < 30 && block !== 'none') {
       result.basis.push(line(block === ''
         ? t('若有脊髓／硬膜外或深部神經叢／周邊阻斷：ASRA 2025 建議 CrCl <30 不做，除非已測 dabigatran 濃度且 <30 ng/mL。', 'If a spinal/epidural or deep plexus/peripheral block is planned: ASRA 2025 advises against it at CrCl <30 unless a dabigatran level is obtained and <30 ng/mL.')
@@ -530,7 +532,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     } else {
       const pair = ehraHours(agent, crclValue)!
       hours = tier === 'high' ? pair[1] : pair[0]
-      result.basis.push(line(t(`EHRA：${tier === 'high' ? '高' : '低'}出血風險、CrCl ${crclValue.toFixed(1)}，最後一劑距手術 ≥${hours} 小時`, `EHRA: ${tier} bleeding risk, CrCl ${crclValue.toFixed(1)}: last dose ≥${hours} h before`), G.ehraFig14))
+      result.basis.push(line(t(`EHRA：${tier === 'high' ? '高' : '低'}出血風險、CrCl ${crclLabel(crclValue)}，最後一劑距手術 ≥${hours} 小時`, `EHRA: ${tier} bleeding risk, CrCl ${crclLabel(crclValue)}: last dose ≥${hours} h before`), G.ehraFig14))
       result.basis.push(labelInterval(agent, tier, crclValue))
     }
     result.tier = tier
@@ -612,6 +614,17 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
         result.hoursFromLastDose = (surgery.getTime() - last.getTime()) / HOUR
       }
       result.skippedBefore = before.filter((at) => at.getTime() > (last ?? result.lastDoseBy!).getTime())
+      // A dose just short of the interval should not silently cost a whole extra dosing interval
+      // (EHRA Figure 15 draws the morning taker's Day −1 dose as optional): say how to keep it.
+      const firstSkipped = result.skippedBefore[0]
+      const interval = 24 / regimen.perDay
+      if (last && firstSkipped && result.hoursFromLastDose! - hours >= interval / 2) {
+        const short = hours - (surgery.getTime() - firstSkipped.getTime()) / HOUR
+        result.cautions.push(line(
+          t(`依實際服藥時刻，最後一劑是 ${formatLocal(last)}，停藥 ${hoursText(result.hoursFromLastDose!)} 小時，比所需 ${hours} 小時多約一次給藥間隔：可把 ${formatLocal(firstSkipped)} 那一劑提前 ${hoursText(short)} 小時服用，或處置延後 ${hoursText(short)} 小時，就不必多停一劑；由團隊決定。`, `By the actual dose times the last dose is ${formatLocal(last)}, ${hoursText(result.hoursFromLastDose!)} h off against the ${hours} h needed — about one dosing interval more: take the ${formatLocal(firstSkipped)} dose ${hoursText(short)} h earlier, or move the procedure ${hoursText(short)} h later, and no extra dose is lost; the team decides.`),
+          G.ehraFig15,
+        ))
+      }
     }
   }
 
@@ -665,7 +678,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       restart.push({ line: line(t('穿刺是否出血未填：若出血，apixaban 延後 48 小時、rivaroxaban 延後 24 小時', 'Traumatic puncture unanswered: if so, apixaban waits 48 h and rivaroxaban 24 h'), G.asraTraumatic), key: 'traumatic_puncture' })
     } else if (traumatic === 'yes') {
       restart.push(delay === undefined
-        ? { line: line(t(`穿刺出血：${agent} 的仿單與 ASRA 都沒有給延後時數，請與麻醉科確認後再定恢復時間`, `Traumatic puncture: neither the ${agent} label nor ASRA gives a delay; agree the restart with anaesthesia`), G.asraTraumaticNone), key: 'traumatic_puncture' }
+        ? { line: line(t(`穿刺出血：${agent} 的仿單與 ASRA 都沒有給延後時數，請與麻醉科確認後再定恢復時間`, `Traumatic puncture: neither the ${agent} label nor ASRA gives a delay; agree the restart with anaesthesia`), G.asraTraumaticNone), key: 'anaesthesia' }
         : {
           at: surgery ? addHours(surgery, delay) : undefined,
           line: line(t(`穿刺出血：自穿刺起延後 ${delay} 小時`, `Traumatic puncture: delay ${delay} h from the puncture`), G.asraTraumatic, ...(agent === 'rivaroxaban' ? [CITES.rivaroxabanTraumatic] : [])),
@@ -730,6 +743,8 @@ export const PERIOP_FIELD_LABELS: Record<string, L> = {
   catheter_removed_at: { zh: '拔管時刻', en: 'catheter removal time' },
   traumatic_puncture: { zh: '穿刺是否出血', en: 'traumatic puncture' },
   haemostasis: { zh: '止血', en: 'haemostasis' },
+  // Not an input: the restart waits on anaesthesia's word (a traumatic puncture with no stated delay).
+  anaesthesia: { zh: '需與麻醉科確認', en: 'agree with anaesthesia' },
 }
 
 /** 「11-03 08:00」 in local time. */

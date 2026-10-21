@@ -148,6 +148,28 @@ describe('neuraxial and deep blocks (ASRA 2025, fifth edition)', () => {
   })
 })
 
+describe('a timed interval does not silently cost an extra dose (#review coordinator 3b)', () => {
+  it('rivaroxaban daily 09:00, low risk at 08:00: last dose 11-01 09:00 (47 h) is flagged — take 11-02 09:00 an hour earlier or move the procedure', () => {
+    const result = plan({ regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', procedure_kind: 'low' })
+    expect(formatLocal(result.lastDose!)).toBe('11-01 09:00')
+    expect(result.hoursFromLastDose).toBe(47)
+    const text = result.cautions.map((c) => c.text.zh).join()
+    expect(text).toContain('11-02 09:00 那一劑提前 1 小時服用，或處置延後 1 小時')
+    expect(allCites(result)).toContain(GUIDELINE_CITES.ehraFig15)
+  })
+  it('an interval met to the hour raises nothing', () => {
+    expect(plan({}).cautions).toEqual([])
+  })
+  it('a CrCl just under 30 is printed on its own side of 30', () => {
+    const result = plan({ regimen: 'dabigatran:150:2', crcl_manual: '29.96' })
+    expect(allText(result)).toContain('CrCl 29.96 <30')
+  })
+  it('low doses quote ASRA’s own low-dose residual-level paragraph', () => {
+    expect(allCites(plan({ neuraxial: 'plexus', procedure_kind: 'low', regimen: 'apixaban:2.5:2', dose_intent: 'low' }))).toContain(GUIDELINE_CITES.asraApixabanLowLevel)
+    expect(allCites(plan({ neuraxial: 'plexus', procedure_kind: 'low', regimen: 'rivaroxaban:10:1', dose_time_2: '' }))).toContain(GUIDELINE_CITES.asraRivaroxabanLowLevel)
+  })
+})
+
 describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', () => {
   it('rivaroxaban daily at 08:00, ablation at 19:00: the 08:00 dose is kept (11 h), not one more skipped (35 h)', () => {
     const result = plan({ regimen: 'rivaroxaban:20:1', dose_time_1: '08:00', dose_time_2: '', procedure_kind: 'af-ablation', surgery_at: '2026-11-03T19:00' })
@@ -254,6 +276,9 @@ describe('restart: the latest condition', () => {
     const edo = plan({ neuraxial: 'single', traumatic_puncture: 'yes', regimen: 'edoxaban:60:1', dose_time_2: '' })
     expect(edo.resume.earliest).toBeUndefined()
     expect(allCites(edo)).toContain(GUIDELINE_CITES.asraTraumaticNone)
+    // Answered, it is no longer 「待填」 but a word from anaesthesia (#review coordinator).
+    expect(edo.pending).not.toContain('traumatic_puncture')
+    expect(edo.pending).toContain('anaesthesia')
   })
   it('the interval before runs to the start, the restart from the end (#review Astra 2)', () => {
     // A puncture at 07:30 is the start: 72 h before it, not before 08:00.
