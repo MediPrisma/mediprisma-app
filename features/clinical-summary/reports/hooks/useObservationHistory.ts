@@ -352,7 +352,8 @@ export function useReportHistory(reportCode?: string) {
       // The source history must retain text supplied only as an attachment,
       // just as the report row and shared-source narrative do. Leave binary
       // and HTML attachments to their existing viewers.
-      const attachmentText = sharedReportNarrative({ presentedForm: dr.presentedForm })
+      const attachmentText = inferReportDisplayGroup(dr) === 'imaging'
+        ? sharedReportNarrative({ presentedForm: dr.presentedForm }) : ''
       if (attachmentText) notes.push(attachmentText)
       if (!conclusion && notes.length === 0) return
 

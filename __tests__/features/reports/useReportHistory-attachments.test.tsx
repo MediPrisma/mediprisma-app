@@ -29,7 +29,7 @@ it('loads attachment-only histories from both original titles of a merged row', 
 })
 
 it('preserves conclusion and notes while retaining additional plain text and excluding binary or HTML attachments', () => {
-  mockUseClinicalData.mockReturnValue({ diagnosticReports: [{ id: 'mixed', code: { text: 'CT CHEST' }, conclusion: 'Original conclusion', note: [{ text: 'Original note' }], presentedForm: [attachment('Additional plain text'), { contentType: 'text/html', data: Buffer.from('<b>HTML only</b>').toString('base64') }, { contentType: 'application/pdf', data: Buffer.from('Binary only').toString('base64') }] }] })
+  mockUseClinicalData.mockReturnValue({ diagnosticReports: [{ id: 'mixed', category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }], code: { text: 'CT CHEST' }, conclusion: 'Original conclusion', note: [{ text: 'Original note' }], presentedForm: [attachment('Additional plain text'), { contentType: 'text/html', data: Buffer.from('<b>HTML only</b>').toString('base64') }, { contentType: 'application/pdf', data: Buffer.from('Binary only').toString('base64') }] }] })
   const { result } = renderHook(() => useReportHistory('CT CHEST'))
   expect(result.current[0].conclusion).toBe('Original conclusion')
   expect(result.current[0].notes).toEqual(['Original note', 'Additional plain text'])

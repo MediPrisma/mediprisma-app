@@ -23,6 +23,55 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it.each(['2026-06-24T15:30:00+08:00', '2026-06-25', 'invalid'])('rejects conflicting or invalid examination period end %s', end => {
+    const reports = pair().map((report, index) => ({ ...report, effectiveDateTime: undefined,
+      effectivePeriod: { start: '2026-06-24T11:00:00+08:00', end: index ? end : '2026-06-24T11:30:00+08:00' },
+    }))
+    expect(reportDisplayGroupingKeys(reports).size).toBe(0)
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    expect(imagingReportsCategory.getCount(reports, filters, {} as any)).toBe(2)
+    expect(JSON.stringify(imagingReportsCategory.getContextSection(reports, filters, {} as any))).not.toContain('[shared narrative; count once]')
+  })
+
+  it('accepts equivalent period end instants while rejecting a reversed interval', () => {
+    const reports = pair().map((report, index) => ({ ...report, effectiveDateTime: undefined,
+      effectivePeriod: { start: '2026-06-24T11:00:00+08:00', end: index ? '2026-06-24T03:30:00Z' : '2026-06-24T11:30:00+08:00' },
+    }))
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+    reports[1].effectivePeriod.end = '2026-06-24T10:30:00+08:00'
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it('keeps every source asset and structured result when period dates bring duplicate narratives together', () => {
+    const reports = [0, 1].map(index => ({ ...pair()[0], id: `period-${index}`, effectiveDateTime: undefined,
+      effectivePeriod: { start: '2026-06-24' }, issued: `2026-06-${25 + index}`, conclusion: BODY,
+      presentedForm: [{ contentType: 'image/png', data: `synthetic-image-${index}`, title: `Image ${index}` }],
+      imagingStudy: [{ reference: `ImagingStudy/study-${index}` }],
+      _observations: [{ id: `measurement-${index}`, code: { text: 'Measurement' }, valueQuantity: { value: index + 1 } }],
+    }))
+    const studies = [0, 1].map(index => ({ resourceType: 'ImagingStudy', id: `study-${index}`, status: 'available' }))
+    const rows = buildReportsData(reports, studies).reportRows
+    expect(rows).toHaveLength(1)
+    expect(rows[0].images?.map(image => image.data)).toEqual(['synthetic-image-0', 'synthetic-image-1'])
+    expect(rows[0].imagingStudyIds).toEqual(['study-0', 'study-1'])
+    expect(rows[0].obs.filter(obs => obs.valueQuantity).map(obs => obs.valueQuantity?.value)).toEqual([1, 2])
+    expect(rows[0].diagnosticReportIds).toEqual(['period-0', 'period-1'])
+  })
+
+  it('keeps distinct period boundaries and clinical notation separate in natural imaging groups', () => {
+    const reports = [0, 1].map(index => ({ ...pair()[0], id: `period-${index}`, effectiveDateTime: undefined,
+      effectivePeriod: { start: '2026-06-24T11:00:00+08:00', end: `2026-06-24T1${index + 2}:00:00+08:00` },
+      issued: `2026-06-${25 + index}`, conclusion: BODY,
+    }))
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    reports[1].effectivePeriod = reports[0].effectivePeriod
+    reports[0].conclusion = `${BODY} Measurement: 10² mm.`
+    reports[1].conclusion = `${BODY} Measurement: 102 mm.`
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
   it.each([['10² mm', '102 mm'], ['10₂ mm', '102 mm'], ['2 µm', '2 μm'], ['4 mM', '4 mm']])('preserves clinical characters: %s versus %s', (left, right) => {
     const reports = pair().map((report, index) => ({ ...report, conclusion: `${BODY} Measurement: ${index ? right : left}.` }))
     expect(normalizeImagingReportCopy(reports[0].conclusion)).not.toBe(normalizeImagingReportCopy(reports[1].conclusion))

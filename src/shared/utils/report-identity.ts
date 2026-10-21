@@ -37,9 +37,13 @@ export function isAdultPreventiveReport(report: any): boolean {
 
 /** One natural key for the displayed rows and the cross-source guard. */
 export function reportNaturalGroupingKey(report: any): string {
-  return [getCodeableConceptText(report?.code).trim(), (getReportDate(report) ?? '').slice(0, 10),
+  // A period is an interval. Its explicit bounds must not disappear when an
+  // imaging report falls back to the established same-source grouping path.
+  const period = inferReportDisplayGroup(report) === 'imaging' && report.effectivePeriod
+  const key = [getCodeableConceptText(report?.code).trim(), (getReportDate(report) ?? '').slice(0, 10),
     (getReportInstitution(report) ?? '').trim(), isAdultPreventiveReport(report) ? 'adult-preventive' : '',
     isNhiMedicloudReport(report) ? 'nhi-medicloud' : ''].join('|')
+  return period ? `${key}|period:${JSON.stringify([period.start ?? '', period.end ?? ''])}` : key
 }
 
 /** Canonical performing-institution projection shared by report display and grouping. */

@@ -17,14 +17,22 @@ const CLOCK = String.raw`\d{2}:\d{2}(?::\d{2})?`
 const SIGNATURE = new RegExp(String.raw`\s+Reported\s+By\s+(?:(?!\bOn:|Reported\s+By)[^\r\n]){1,180}?\bOn:\s*${DATE}\s*\(${CLOCK}\)\s*,?\s*\(by\s+[^)\r\n]{1,180}\)\s*At:\s*[A-Za-z0-9_-]+?(?:(ACR\s+BI-RADS\s+[0-6])|(Positive\s+Rate\s+Evaluation\s+\d+))?\s*$`, 'i')
 const EXAM_HEADER = new RegExp(String.raw`^((?:SONO(?:GRAM)?|CHEST|CT(?:/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(${DATE})(?:\s+${CLOCK})?\s+Date\s+Of\s+RCP:\s*${DATE}\s*`, 'i')
 
+function foldFullWidthAscii(value: string): string {
+  return value.replace(/[\uFF01-\uFF5E]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xfee0)).replace(/\u3000/g, ' ')
+}
+
+/** Safe typography comparison without discarding source signatures/addenda. */
+export function normalizeImagingClinicalText(value: string): string {
+  return foldFullWidthAscii(value).replace(/\s+/g, ' ').trim()
+}
+
 /** Compare complete clinical text, never a similarity score or a prefix.
  * Only the bridge's recognized administrative wrapper is ignored. Unknown
  * footer formats remain part of the text and therefore fail closed. */
 export function normalizeImagingReportCopy(value: string): string {
   // Fold only full-width ASCII and its space. Compatibility normalization and
   // lowercasing can erase clinical differences: 10²/102, µ/μ or mM/mm.
-  let text = value.replace(/[\uFF01-\uFF5E]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
-    .replace(/\u3000/g, ' ').trim().replace(EXAM_HEADER, '')
+  let text = foldFullWidthAscii(value).trim().replace(EXAM_HEADER, '')
   // Multiple signatures can bracket a clinical addendum. Never reduce that
   // multi-version document to the text before its first signature.
   const signature = (text.match(/\bReported\s+By\b/gi)?.length ?? 0) === 1 ? SIGNATURE.exec(text) : null
@@ -62,8 +70,7 @@ export function imagingCopyInstitution(report: Report): string | undefined {
   return undefined
 }
 
-function examDay(report: Report): string | undefined {
-  const raw = report.effectiveDateTime ?? report.effectivePeriod?.start
+function sourceDay(raw: string | undefined): string | undefined {
   if (!raw || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(raw)) return undefined
   const day = raw.slice(0, 10)
   const date = new Date(`${day}T00:00:00Z`)
@@ -71,6 +78,24 @@ function examDay(report: Report): string | undefined {
   if (!raw.includes('T')) return day
   const instant = sourceInstant(raw)
   return instant === undefined ? undefined : new Date(instant + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function examDay(report: Report): string | undefined {
+  return sourceDay(report.effectiveDateTime ?? report.effectivePeriod?.start)
+}
+
+function periodEnd(report: Report): { day: string; instant?: number } | null | undefined {
+  const period = report.effectivePeriod
+  if (!period) return undefined
+  // FHIR effective[x] is a choice, not two independent examination dates.
+  if (report.effectiveDateTime) return null
+  if (!period.end) return undefined
+  const day = sourceDay(period.end)
+  if (!day) return null
+  const instant = period.end.includes('T') ? sourceInstant(period.end) : undefined
+  const start = period.start?.includes('T') ? sourceInstant(period.start) : undefined
+  if (day < (examDay(report) ?? '') || (instant !== undefined && start !== undefined && instant < start)) return null
+  return { day, instant }
 }
 
 // This source adapter is Taipei VGH: offset-less source times are UTC+08:00.
@@ -257,6 +282,10 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     const hospital = bucket.filter(item => item.source === 'hospital')
     const cloud = bucket.filter(item => item.source === 'cloud')
     if (!hospital.length || !cloud.length) continue
+    const ends = bucket.map(({ report }) => periodEnd(report))
+    if (ends.some(end => end === null)
+      || new Set(ends.map(end => end?.day).filter(Boolean)).size > 1
+      || new Set(ends.map(end => end?.instant).filter(value => value !== undefined)).size > 1) continue
     const qualifiers = bucket.map(item => item.qualifiers)
     // Unknown/generic labels do not supply evidence. Contradictory explicit
     // headers, laterality or body regions must never disappear with a wrapper.

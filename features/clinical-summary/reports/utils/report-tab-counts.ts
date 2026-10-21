@@ -15,7 +15,8 @@ import {
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
 import { cancerScreeningProgramKey } from './cancer-screening-grouping'
-import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { compareImagingCopies, imagingCopyInstitution, normalizeImagingClinicalText, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { sharedReportNarrative } from '@/src/shared/utils/shared-report-grouping'
 
 /**
  * Lightweight counts for the ReportsCard primary tabs.
@@ -93,6 +94,7 @@ function isCtReport(report: any): boolean {
  * divergent narratives remain separate rows in the All tab.
  */
 function reportNarrative(report: any): string {
+  if (inferReportDisplayGroup(report) === 'imaging') return sharedReportNarrative(report)
   const parts: string[] = []
   if (typeof report?.conclusion === 'string' && report.conclusion.trim()) {
     parts.push(report.conclusion)
@@ -119,9 +121,9 @@ function normalizeNarrative(value: string): string {
 
 function hasDistinctCtNarratives(reports: any[]): boolean {
   const narratives = reports
-    .map(reportNarrative)
+    .map(report => inferReportDisplayGroup(report) === 'imaging'
+      ? normalizeImagingClinicalText(reportNarrative(report)) : normalizeNarrative(reportNarrative(report)))
     .filter(Boolean)
-    .map(normalizeNarrative)
     .sort((a, b) => b.length - a.length)
   if (narratives.length < 2) return false
   const longest = narratives[0]

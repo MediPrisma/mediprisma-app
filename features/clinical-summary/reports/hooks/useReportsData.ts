@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { getVghtpeSource } from '../adapters/vghtpe-source-display'
 import { getReportInstitution as getDrInstitution, getReportDate as getDrDate, isNhiMedicloudReport, isAdultPreventiveReport, reportNaturalGroupingKey } from '@/src/shared/utils/report-identity'
-import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { compareImagingCopies, imagingCopyInstitution, normalizeImagingClinicalText, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferReportDisplayGroup } from '../utils/grouping-helpers'
@@ -142,6 +142,7 @@ export function buildReportsData(
     // Concatenate all available sources so the distinct-narrative check
     // catches dups regardless of which field bridge populated this time.
     const getDrNarrative = (dr: any): string => {
+      if (inferReportDisplayGroup(dr) === 'imaging') return sharedReportNarrative(dr)
       const parts: string[] = []
       if (typeof dr?.conclusion === 'string' && dr.conclusion.trim()) {
         parts.push(dr.conclusion)
@@ -171,6 +172,8 @@ export function buildReportsData(
         .normalize('NFKC')
         .toLowerCase()
         .replace(/\s+/g, '')
+    const normalizedReportNarrative = (dr: DiagnosticReport): string => inferReportDisplayGroup(dr) === 'imaging'
+      ? normalizeImagingClinicalText(getDrNarrative(dr)) : normaliseNarrative(getDrNarrative(dr))
     // Strict-prefix dup test (bridge's "Option 1"): two narratives are
     // considered duplicates only when one's normalised form is an EXACT
     // PREFIX of the other's. Provably safe — if the shorter narrative is a
@@ -185,9 +188,8 @@ export function buildReportsData(
       a.length <= b.length && b.startsWith(a)
     const hasDistinctNarratives = (grp: DiagnosticReport[]): boolean => {
       const norms = grp
-        .map(getDrNarrative)
+        .map(normalizedReportNarrative)
         .filter((t): t is string => t.length > 0)
-        .map(normaliseNarrative)
       if (norms.length < 2) return false
       // Sort longest → shortest; every shorter narrative must be a prefix of
       // the longest for the group to qualify as a single (deduped) report.
@@ -264,7 +266,7 @@ export function buildReportsData(
           imageOnly.push(dr)
           continue
         }
-        withNarr.push({ dr, norm: normaliseNarrative(text) })
+        withNarr.push({ dr, norm: normalizedReportNarrative(dr) })
       }
       // Sort longest-first so the kept member is always the most complete
       // narrative. A shorter member is dropped iff its normalised form is a
@@ -350,9 +352,12 @@ export function buildReportsData(
       const isSharedReport = sharedReportKeys.has(key)
       const sharedReportSources = sharedReportSourcesByKey.get(key)
       const isMulti = grp.length > 1
+      const allSourceReports = viewerReportsByKey.get(key) ?? grp
+      const sourceReports = inferReportDisplayGroup(head) === 'imaging' ? allSourceReports : grp
+      const clinicalReports = new Set(grp)
       const linkedStudies: ImagingStudy[] = []
       const rowStudyIds = new Set<string>()
-      for (const dr of grp) {
+      for (const dr of sourceReports) {
         for (const ref of dr.imagingStudy ?? []) {
           const id = referenceId(ref.reference)
           if (!id || rowStudyIds.has(id)) continue
@@ -372,8 +377,7 @@ export function buildReportsData(
       const summaryParts: string[] = []
       const attachments: string[] = []
       const images: ReportImage[] = []
-      const viewerReports = viewerReportsByKey.get(key) ?? grp
-      const viewerEntries = viewerReports.flatMap((report) => (
+      const viewerEntries = allSourceReports.flatMap((report) => (
         getNhiViewerActions(report).map((action) => ({ action, report }))
       ))
       // Exact duplicate extensions are always the same request and are safe to
@@ -408,11 +412,11 @@ export function buildReportsData(
       ).map(({ action }) => action)
       const allObs: Observation[] = []
 
-      for (const dr of grp) {
+      for (const dr of sourceReports) {
         // Exact shared-report groups retain every source identity, image, and
         // viewer action, while presenting narrative/observations from one
         // representative. The grouping key proved those full narratives equal.
-        const includeClinicalContent = !isSharedReport || dr === head
+        const includeClinicalContent = clinicalReports.has(dr) && (!isSharedReport || dr === head)
         const obs = Array.isArray((dr as any)._observations)
           ? (dr as any)._observations.filter((o: any): o is Observation => !!o)
           : []
@@ -442,7 +446,7 @@ export function buildReportsData(
           // The exact full narrative is already represented by the head. Keep
           // every structured result from the remaining source procedures so a
           // shared conclusion can never hide a different numeric/coded result.
-          if (!includeClinicalContent && isNarrativeOnlyObservation) continue
+          if (isSharedReport && !includeClinicalContent && isNarrativeOnlyObservation) continue
           if (perTitle) {
             allObs.push({
               ...o,
@@ -506,10 +510,10 @@ export function buildReportsData(
             // keeping only the title. (HTML attachments are handled by the
             // document renderer, not here — skip them to avoid raw markup.)
             const ct = (form?.contentType || '').toLowerCase()
-            if (includeClinicalContent && form?.data && ct.startsWith('text/') && !ct.includes('html')) {
+            if (form?.data && ct.startsWith('text/') && !ct.includes('html')) {
               const decoded = decodeBase64Utf8(form.data).trim()
               if (decoded) {
-                summaryParts.push(decoded)
+                if (includeClinicalContent) summaryParts.push(decoded)
                 continue
               }
             }
@@ -795,7 +799,7 @@ export function buildReportsData(
         obs: obsWithSummary,
         group: reportGroup,
         institution,
-        hospitalSource: getVghtpeSource([...grp, ...allObs]),
+        hospitalSource: getVghtpeSource([...sourceReports, ...allObs]),
         sourceProgram: grp.some(isAdultPreventiveReport)
           ? 'adult-preventive'
           : undefined,
