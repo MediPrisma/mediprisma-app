@@ -99,7 +99,8 @@ let memBundleImportId: string | null = null
 let memBundleIsDemo = false
 let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
 let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
-let memOriginalFhirJson: string | null = null
+// Only used if persistence fails; Blob keeps source bytes out of the parsed JSON heap.
+let memOriginalFhir: Blob | null = null
 // A stored bundle can be requested concurrently by the Patient and clinical
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
@@ -120,7 +121,6 @@ interface PersistedBundleEnvelope {
   demo: boolean
   sourceMetadata?: ClinicalSourceMetadata
   patientProfile?: UserEnteredPatientProfile
-  originalFhirJson?: string
   bundle: object
 }
 
@@ -922,10 +922,29 @@ export const LocalBundleService = {
     }
   },
 
-  /** Original import only; never rebuild from the enriched/mapped clinical data. */
-  async loadOriginalFhirJson(): Promise<string | null> {
-    await this.load()
-    return memOriginalFhirJson
+  /** Check availability without decrypting a potentially large source file. */
+  async hasOriginalFhir(): Promise<boolean> {
+    if (!await this.load()) return false
+    if (memOriginalFhir) return true
+    if (!memBundleImportId || typeof indexedDB === 'undefined') return false
+    const db = await openDb()
+    try {
+      return await new Promise<boolean>((resolve, reject) => {
+        const request = db.transaction(IMG_STORE, 'readonly').objectStore(IMG_STORE)
+          .count(`${memBundleImportId}:original-fhir`)
+        request.onsuccess = () => resolve(request.result > 0)
+        request.onerror = () => reject(request.error)
+      })
+    } finally {
+      db.close()
+    }
+  },
+
+  /** Read the original bytes lazily; never reconstruct from mapped clinical data. */
+  async loadOriginalFhir(): Promise<Blob | null> {
+    if (!await this.load()) return null
+    if (memOriginalFhir) return memOriginalFhir
+    return memBundleImportId ? this.getImage(`${memBundleImportId}:original-fhir`) : null
   },
 
   // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
@@ -943,7 +962,7 @@ export const LocalBundleService = {
       demo?: boolean
       sourceMetadata?: ClinicalSourceMetadata
       patientProfile?: UserEnteredPatientProfile | null
-      originalFhirJson?: string
+      originalFhir?: Blob
     } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
@@ -956,10 +975,6 @@ export const LocalBundleService = {
       ? (memBundle !== null ? memBundleImportId : readTabLocalImportId())
       : null
     const isNewImport = Boolean(importId && importId !== activeImportId)
-    // Same-import saves (terminology migration/profile edits) retain the snapshot.
-    // An older import without a snapshot must not be presented as original data.
-    const originalFhirJson = options.originalFhirJson
-      ?? (importId === activeImportId ? memOriginalFhirJson : null)
     if (typeof window !== 'undefined') {
       if (isNewImport) {
         // A new import is a new patient-workspace encryption boundary. This is
@@ -979,7 +994,8 @@ export const LocalBundleService = {
     memBundleIsDemo = demo
     memBundleSourceMetadata = sourceMetadata ?? null
     memUserEnteredPatientProfile = patientProfile
-    memOriginalFhirJson = originalFhirJson
+    if (isNewImport || importId !== activeImportId) memOriginalFhir = null
+    if (options.originalFhir) memOriginalFhir = options.originalFhir
     if (typeof window === 'undefined') return
     try {
       const key = await getSessionBundleKey({ create: true })
@@ -991,12 +1007,24 @@ export const LocalBundleService = {
             demo,
             ...(sourceMetadata ? { sourceMetadata } : {}),
             ...(patientProfile ? { patientProfile } : {}),
-            ...(originalFhirJson !== null ? { originalFhirJson } : {}),
             bundle,
           } satisfies PersistedBundleEnvelope
         : bundle
       await idbPut(await encryptJson(key, persisted), bundleRecordKey(importId))
       writeTabBundleScope(importId, demo)
+      if (options.originalFhir && importId) {
+        // Profile/migration writes never copy the source. A quota failure here
+        // must not remove the already-saved chart or extracted images.
+        try {
+          await idbPutImages([{
+            id: `${importId}:original-fhir`,
+            record: await encryptBytes(key, await options.originalFhir.arrayBuffer(), 'application/fhir+json'),
+          }])
+          memOriginalFhir = null
+        } catch {
+          // The source remains downloadable from its Blob for this session.
+        }
+      }
     } catch {
       // Could not persist ciphertext. Detach only this tab and this import;
       // another MediPrisma tab's Bundle must remain untouched.
@@ -1027,7 +1055,7 @@ export const LocalBundleService = {
     memBundleIsDemo = false
     memBundleSourceMetadata = null
     memUserEnteredPatientProfile = null
-    memOriginalFhirJson = null
+    memOriginalFhir = null
     if (typeof window === 'undefined') return
     clearTabBundleScope()
     // Remove only legacy origin-wide markers. New tab-local markers never
@@ -1108,9 +1136,6 @@ export const LocalBundleService = {
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
             memBundleSourceMetadata = decrypted.sourceMetadata ?? null
-            memOriginalFhirJson = typeof decrypted.originalFhirJson === 'string'
-              ? decrypted.originalFhirJson
-              : null
             memUserEnteredPatientProfile = parseUserEnteredPatientProfile(
               decrypted.patientProfile,
             )
@@ -1556,7 +1581,6 @@ export const LocalBundleService = {
         ? { sourceMetadata: memBundleSourceMetadata }
         : {}),
       ...(normalized ? { patientProfile: normalized } : {}),
-      ...(memOriginalFhirJson !== null ? { originalFhirJson: memOriginalFhirJson } : {}),
       bundle,
     } satisfies PersistedBundleEnvelope
 

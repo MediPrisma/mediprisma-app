@@ -97,10 +97,13 @@ export default function IpsExportFeature() {
   // Loading clinical data
   if (isLoading) {
     return (
+      <>
+      <OriginalFhirDownload />
       <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
         {x.loading}
       </div>
+      </>
     )
   }
 
@@ -109,6 +112,8 @@ export default function IpsExportFeature() {
   // making the user leave and re-open the tab.
   if (error) {
     return (
+      <>
+      <OriginalFhirDownload />
       <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.clinical}`}>
         <CardContent className="text-sm">
           <div className="mb-1 font-medium text-destructive">{x.errorTitle}</div>
@@ -125,18 +130,22 @@ export default function IpsExportFeature() {
           </Button>
         </CardContent>
       </Card>
+      </>
     )
   }
 
   // No patient / no data loaded yet
   if (!hasPatient || !bundle) {
     return (
+      <>
+      <OriginalFhirDownload />
       <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.clinical}`}>
         <CardContent className="py-4 text-center text-sm text-muted-foreground">
           <FileOutput className="mx-auto mb-2 h-6 w-6 opacity-60" />
           {x.noData}
         </CardContent>
       </Card>
+      </>
     )
   }
 
