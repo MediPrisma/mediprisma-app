@@ -167,7 +167,7 @@ test('Conlifu copies without medication knowledge use a hospital row and a toolb
   await expect(panel.getByText('Conlifu * oint 2% 5 g',{exact:true})).toBeVisible()
   await panel.getByRole('button',{name:'院內：查看來源紀錄'}).click()
   const sources=page.getByRole('dialog',{name:'來源紀錄'})
-  await expect(sources.getByText('CONLIFU OINTMENT 2%',{exact:true})).toBeVisible()
+  await expect(sources.getByText(/^CONLIFU OINTMENT 2[%％]$/)).toBeVisible()
   await page.keyboard.press('Escape')
   await openCdss(page)
   const feature=page.getByTestId('live-clinical-decision-support')

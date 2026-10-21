@@ -8,6 +8,7 @@ const cloud=(value:string)=>({text:value,coding:[{system:NHI,code:'SYNTH001',dis
 it('compares a complete ointment product with an omitted tube size without knowledge resources',()=>{
  expect(hospitalProductMayMatchConcept(name('Conlifu * oint 2% 5 g'),cloud('CONLIFU OINTMENT 2%'))).toBe(true)
  expect(hospitalProductMayMatchConcept(name('Conlifu * oint 2% 5 g'),cloud('CONLIFU OINTMENT 2% 5g'))).toBe(true)
+ expect(hospitalProductMayMatchConcept(name('Conlifu * oint 2% 5 g'),cloud('CONLIFU OINTMENT 2％'))).toBe(true)
 })
 it.each(['CONLIFU','CONLIFU OINTMENT','CONLIFU OINTMENT 5%','CONLIFU CREAM 2%','CONLIFU OINTMENT 2% 15g','OTHER OINTMENT 2%'])('keeps a missing or conflicting product descriptor separate: %s',(value)=>{
  expect(hospitalProductMayMatchConcept(name('Conlifu * oint 2% 5 g'),cloud(value))).toBe(false)
