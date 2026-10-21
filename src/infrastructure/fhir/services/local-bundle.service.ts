@@ -1,6 +1,7 @@
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
+import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -1467,6 +1468,7 @@ export const LocalBundleService = {
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
     }, clinicalSource, sourceKeyByResource)
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
+    const recordVariants = createClinicalRecordVariants(clinicalSource)
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     if (!entries.length) return null
 
@@ -1675,6 +1677,7 @@ export const LocalBundleService = {
 
     // Build observation map for DiagnosticReport expansion
     const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r),
+      ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
       sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
       ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}),
       clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
@@ -1682,6 +1685,7 @@ export const LocalBundleService = {
     // Attach encounter refs to DiagnosticReports using same-day strategy
     const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any) =>
       ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByResource.get(r),
+        ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
         sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
         ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}) })
     )

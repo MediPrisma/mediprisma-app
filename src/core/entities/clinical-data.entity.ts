@@ -395,7 +395,16 @@ export interface AllergyEntity {
   sourceId?: string
 }
 
+export interface ClinicalRecordVariant {
+  groupId: string
+  classification: 'revision' | 'conflict'
+  variantCount: number
+  reason: string
+}
+
 export interface ObservationEntity {
+  /** Unresolved variants of one source record, not independent measurements. */
+  clinicalRecordVariant?: ClinicalRecordVariant
   /** Opaque identity in the shared source graph; survives query structural sharing. */
   clinicalSourceNodeKey?: string
   /** Explicit hasMember edges produced by a local domain projection. */
@@ -554,6 +563,8 @@ export interface ObservationEntity {
 }
 
 export interface DiagnosticReportEntity {
+  /** Unresolved variants of one source record; chronology is not inferred. */
+  clinicalRecordVariant?: ClinicalRecordVariant
   /** Opaque identity in the shared source graph; survives query structural sharing. */
   clinicalSourceNodeKey?: string
   /** Explicit membership added by a local domain projection, using source node keys. */
