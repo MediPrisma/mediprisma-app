@@ -315,3 +315,10 @@ it('strips derived member capture keys at the AI boundary', () => {
   const { stripClinicalCaptureMetadata } = jest.requireActual('@/src/core/utils/ai-clinical-scope.utils')
   expect(stripClinicalCaptureMetadata({ clinicalSourceDerivedMemberKeys: ['opaque'], id: 'report' })).toEqual({ id: 'report' })
 })
+
+it('keeps authoritative empty report membership after capture metadata has been stripped', () => {
+  const input: any = { observations: [syntheticAiLab('x', 10)], diagnosticReports: [{ ...syntheticAiReport('Observation/x'), resolvedReportMembership: true, _observations: [] }] }
+  const scoped = scopeClinicalDataForAi(input, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [], NOW)
+  expect(scoped.diagnosticReports).toEqual([])
+  expect(scoped.observations).toHaveLength(1)
+})

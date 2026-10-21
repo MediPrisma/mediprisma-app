@@ -95,7 +95,7 @@ function reportObservations(report: any, observationsById: Map<string, any>): an
     if (key) found.set(key, observation)
     else withoutId.push(observation)
   }
-  if (report?.clinicalSourceNodeKey) return [...found.values(), ...withoutId]
+  if (report?.clinicalSourceNodeKey || report?.resolvedReportMembership) return [...found.values(), ...withoutId]
   for (const reference of report?.result ?? []) {
     const id = reference?.reference?.match(/^Observation\/([^/]+)$/)?.[1]
     const observation = id ? observationsById.get(id) : undefined

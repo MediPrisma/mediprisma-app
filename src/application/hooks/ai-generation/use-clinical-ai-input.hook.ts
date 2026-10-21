@@ -43,6 +43,8 @@ import type { ClinicalData } from '@/src/application/hooks/clinical-context/type
 import { isDemoDataActive } from '@/src/application/hooks/ai-generation/ai-data-source'
 import { clinicalNowMs } from '@/src/shared/constants/demo-data.constants'
 
+const EMPTY_VARIANT_EXCLUSIONS = Object.freeze([])
+
 export type ClinicalAiDataInput = SummaryCatalogInput & {
   isLoading?: boolean
   isFetching?: boolean
@@ -333,7 +335,9 @@ export function useClinicalAiInput(
     profile: fitCandidate.profile,
     clinicalDataOverride: (prioritizedResult?.data
       ?? (consumer === 'nhiLipid' ? activeClinicalData : undefined)) as ClinicalData | undefined,
-    preScopedVariantExclusions: prioritizedResult?.data.clinicalRecordVariantExclusions,
+    preScopedVariantExclusions: prioritizedResult
+      ? prioritizedResult.data.clinicalRecordVariantExclusions ?? EMPTY_VARIANT_EXCLUSIONS
+      : undefined,
     documentTokenBudget:
       prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
     contextVariant: options.contextVariant,

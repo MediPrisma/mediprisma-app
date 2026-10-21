@@ -34,6 +34,7 @@ export type ObservationSource = Partial<
  */
 interface ReportMemberSource {
   clinicalSourceNodeKey?: string
+  resolvedReportMembership?: boolean
   result?: Array<{ reference?: string }> | null
   _observations?: Array<{ id?: string; clinicalSourceNodeKey?: string }> | null
 }
@@ -81,7 +82,7 @@ export function collectReportMemberIds(
 ): Set<string> {
   const ids = new Set<string>()
   for (const report of reports ?? []) {
-    for (const ref of report.result ?? []) {
+    for (const ref of report.clinicalSourceNodeKey || report.resolvedReportMembership ? [] : report.result ?? []) {
       const id = referenceId(ref.reference)
       if (id) ids.add(id)
     }
@@ -105,7 +106,7 @@ export function reportMemberRecordKeys(reports?: ReadonlyArray<ReportMemberSourc
   const keys = new Set<string>()
   for (const report of reports ?? []) {
     // Source-bound membership was already resolved by the shared graph.
-    if (!report.clinicalSourceNodeKey) for (const reference of report.result ?? []) {
+    if (!report.clinicalSourceNodeKey && !report.resolvedReportMembership) for (const reference of report.result ?? []) {
       const id = reference.reference?.match(/^Observation\/([^/]+)$/)?.[1]
       if (id) keys.add('id:' + id)
     }
