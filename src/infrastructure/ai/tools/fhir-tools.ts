@@ -1094,13 +1094,15 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
   // discharge summaries and report conclusions carry the patient's name /
   // chart number / 身分證字號 INSIDE the text, so every string is also masked
   // against those patterns and the loaded patient's own name/id literals.
-  const scrub = <T,>(payload: T): T => {
+  const scrub = <T,>(payload: T, resourceTypes?: readonly string[]): T => {
     const data = getData()
     const exclusions = data.collection?.clinicalRecordVariantExclusions
+      ?.filter(item => !resourceTypes || resourceTypes.includes(item.resourceType))
     const annotated = exclusions?.length && payload && typeof payload === 'object' && !Array.isArray(payload)
-      ? { ...payload, incomplete: true, canConcludeAbsence: false, clinicalRecordVariantExclusions: outboundClinicalVariantExclusions(exclusions), sourceRecordUncertainty: formatClinicalVariantExclusions(data.collection!) } : payload
+      ? { ...payload, incomplete: true, canConcludeAbsence: false, clinicalRecordVariantExclusions: outboundClinicalVariantExclusions(exclusions), sourceRecordUncertainty: formatClinicalVariantExclusions({ clinicalRecordVariantExclusions: exclusions }) } : payload
     return scrubPii(annotated, buildPatientTextLiterals(data.patient)) as T
   }
+  const scrubForDomains = (resourceTypes: readonly string[]) => <T,>(payload: T): T => scrub(payload, resourceTypes)
 
   // A failed name/category/date match is not an empty chart. Give the model
   // actual values within the requested date/abnormality scope to discover the source's names without another
@@ -1110,6 +1112,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
     payload: T,
     filters?: { discovery: boolean; dateFrom?: string; dateTo?: string; abnormalOnly?: boolean },
   ) => {
+    const scrub = scrubForDomains(['Observation', 'DiagnosticReport'])
     const collection = getData().collection
     if (!payload.success || payload.count !== 0 || !collection || !filters?.discovery) return scrub(payload)
     const observations = uniqueObservations(collection)
@@ -1152,6 +1155,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Get anonymized patient demographics (gender + age only). Patient name, ID, and date of birth are intentionally not surfaced.',
       inputSchema: patientInfoSchema,
       execute: async () => {
+        const scrub = scrubForDomains([])
         const { patient } = getData()
         if (!patient) {
           return scrub({ success: false, summary: 'Patient not loaded yet', data: null })
@@ -1429,6 +1433,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       inputSchema: encountersSchema,
       execute: async ({ class: encounterClass, department, institution, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof encountersSchema>) => {
+        const scrub = scrubForDomains(["Encounter","Condition"])
         const list = getData().collection?.encounters ?? []
         let filtered = list.filter((e: any) =>
           matchEncounterClass(e.class, encounterClass) &&
@@ -1478,6 +1483,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Concise summary of the most recent N visits: date, department, primary ICD, and counts of meds/labs/procedures. Use this before drilling into a specific visit with getEncounterDetails.',
       inputSchema: recentVisitsSchema,
       execute: async ({ limit, type }: z.infer<typeof recentVisitsSchema>) => {
+        const scrub = scrubForDomains(["Encounter","Condition"])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
 
@@ -1528,6 +1534,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Drill into one specific visit. Returns all diagnoses (incl. secondary), medications, lab observations, procedures linked to that encounter. Use this when the user asks about a specific visit identified via queryEncounters or getRecentVisits.',
       inputSchema: encounterDetailsSchema,
       execute: async ({ encounterId }: z.infer<typeof encounterDetailsSchema>) => {
+        const scrub = scrubForDomains(["Encounter","Condition","MedicationRequest","MedicationStatement","Observation","DiagnosticReport","Procedure"])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: null })
 
@@ -1614,6 +1621,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'List unique departments / service types the patient has visited. Useful to discover what specialties are represented before filtering queryEncounters by department.',
       inputSchema: listDepartmentsSchema,
       execute: async () => {
+        const scrub = scrubForDomains(["Encounter"])
         const { collection } = getData()
         const list = collection?.encounters ?? []
         const counts = new Map<string, number>()
@@ -1638,6 +1646,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Find every visit whose recorded diagnosis / reason (ICD code or text) matches, across the whole record, oldest first, with the first and latest occurrence. ONE call answers "when did X first appear", "how many visits carried X", "was X ever recorded" — do not page through visits with getEncounterDetails for that. Matching ignores case, dots, spaces and dashes (R350, R35.0 and 頻尿 all work) and a code matches as a prefix. Also returns matching problem-list Conditions. Visit-level codes are billing/reason codes, not confirmed diagnoses.',
       inputSchema: encounterDiagnosisSearchSchema,
       execute: async ({ query, dateFrom, dateTo, limit }: z.infer<typeof encounterDiagnosisSearchSchema>) => {
+        const scrub = scrubForDomains(["Encounter","Condition"])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
         const needle = normalizeDiagnosisTerm(query)
@@ -1693,6 +1702,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query patient conditions/diagnoses (cross-visit). Use this for confirmed clinical conditions, not visit-level billing ICDs.',
       inputSchema: conditionsSchema,
       execute: async ({ category, clinicalStatus, limit }: z.infer<typeof conditionsSchema>) => {
+        const scrub = scrubForDomains(["Condition"])
         const list = getData().collection?.conditions ?? []
         const filtered = list.filter((c: any) =>
           matchCategoryCoding(c.category, category) &&
@@ -2007,6 +2017,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       inputSchema: imagingRecordsSchema,
       execute: async ({ query, modality, bodySite, status, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof imagingRecordsSchema>) => {
+        const scrub = scrubForDomains(["DiagnosticReport","Observation","ImagingStudy"])
         const collection = getData().collection
         if (!collection) {
           return scrub(unavailableQueryResult(
@@ -2230,6 +2241,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query patient procedures (surgeries, interventions).',
       inputSchema: proceduresSchema,
       execute: async ({ status, dateFrom, dateTo, limit }: z.infer<typeof proceduresSchema>) => {
+        const scrub = scrubForDomains(["Procedure"])
         const list = getData().collection?.procedures ?? []
         let filtered = list.filter((p: any) => matchStatus(p.status, status))
         if (dateFrom || dateTo) {
@@ -2255,6 +2267,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'List distinct observation / lab names the patient has on record, with how many entries exist for each. Useful before using searchObservationByName when you\'re unsure what to search for.',
       inputSchema: listObservationCodesSchema,
       execute: async () => {
+        const scrub = scrubForDomains(['Observation', 'DiagnosticReport'])
         const { collection } = getData()
         const unavailable = unavailableQueryResult(
           collection,
@@ -2292,6 +2305,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       inputSchema: medicationsSchema,
       execute: async ({ query, status, chronic, timeRange, dateFrom, dateTo, limit }:
         z.infer<typeof medicationsSchema>) => {
+        const scrub = scrubForDomains(["MedicationRequest","MedicationStatement","Basic"])
         const { collection } = getData()
         if (!collection) {
           return scrub(unavailableQueryResult(
@@ -2366,6 +2380,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Every distinct order remains available; sourceComparison marks unconfirmed source copies. Set chronicOnly to filter to 慢箋.',
       inputSchema: activeMedicationsSchema,
       execute: async ({ chronicOnly }: z.infer<typeof activeMedicationsSchema>) => {
+        const scrub = scrubForDomains(["MedicationRequest","MedicationStatement","Basic"])
         const { collection } = getData()
         if (!collection) {
           return scrub(unavailableQueryResult(
@@ -2428,6 +2443,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query patient allergies and intolerances. Filter by `severity` (high/moderate/low) to narrow to clinically significant ones.',
       inputSchema: allergiesSchema,
       execute: async ({ type, severity }: z.infer<typeof allergiesSchema>) => {
+        const scrub = scrubForDomains(["AllergyIntolerance"])
         const list = getData().collection?.allergies ?? []
         const filtered = list.filter((a: any) =>
           matchAllergyType(a.type, type) &&
@@ -2451,6 +2467,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       description: 'Query preventive vaccinations (FHIR Immunization). Supports date range.',
       inputSchema: immunizationsSchema,
       execute: async ({ dateFrom, dateTo, limit }: z.infer<typeof immunizationsSchema>) => {
+        const scrub = scrubForDomains(["Immunization"])
         const list = getData().collection?.immunizations ?? []
         let filtered = list
         if (dateFrom || dateTo) {

@@ -15,7 +15,7 @@ it('keeps unresolved medication and condition versions out of actual tool facts 
   for (const name of ['queryMedications', 'queryConditions'] as const) {
     const result = await (tools[name] as any).execute({})
     expect(result.count).toBe(1)
-    expect(result.clinicalRecordVariantExclusions).toHaveLength(4)
+    expect(result.clinicalRecordVariantExclusions).toHaveLength(2)
     expect(result.sourceRecordUncertainty).toContain('Do not infer absent disease, negative history, no medication')
     expect(JSON.stringify(result)).not.toContain('clinicalSourceNodeKey')
   }
@@ -33,6 +33,12 @@ it('reports domain uncertainty machine-readably when actual condition and medica
   expect(result).toMatchObject({ incomplete: true, canConcludeAbsence: false })
   for (const field of ['conditions', 'medications']) expect(result.data[field]).toMatchObject({ count: 0, incomplete: true, canConcludeAbsence: false, recordState: 'unresolved-variants', unresolvedVariantCount: 2 })
   expect(result.data.allergies).toMatchObject({ count: 0, incomplete: false, canConcludeAbsence: true, recordState: 'complete' })
+  const allergies = await (tools.queryAllergies as any).execute({})
+  expect(allergies.clinicalRecordVariantExclusions).toBeUndefined()
+  expect(allergies.incomplete).not.toBe(true)
+  const medications = await (tools.queryMedications as any).execute({})
+  expect(medications).toMatchObject({ incomplete: true, canConcludeAbsence: false })
+  expect(medications.clinicalRecordVariantExclusions.every((row: any) => row.resourceType === 'MedicationRequest')).toBe(true)
   expect(JSON.stringify(result)).not.toContain('sensitive-source')
 })
 

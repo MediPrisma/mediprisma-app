@@ -1,4 +1,4 @@
-import { excludeUnresolvedGenericVariants, outboundClinicalVariantExclusions } from './clinical-variant-inputs'
+import { excludeUnresolvedDecisionVariants, outboundClinicalVariantExclusions } from './clinical-variant-inputs'
 import type { DataFilters, DataSelection } from '@/src/core/entities/clinical-context.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import {
@@ -287,7 +287,15 @@ export function scopeClinicalDataForAi(
   // Apply the product-level domain exclusions before any time-window or
   // category scoping. This also keeps excluded records out of citations and
   // structured source catalogs, not only the human-readable prompt text.
-  input = excludeUnresolvedGenericVariants(filterAiExcludedClinicalDomains(input), selection)
+  const selectedObservationDomain = selection.labReports || selection.vitalSigns || selection.observations
+  const selectedReportDomain = selection.labReports || selection.imagingReports
+  input = excludeUnresolvedDecisionVariants({
+    ...filterAiExcludedClinicalDomains(input),
+    // Apply the same decision boundary before latest/window selection, so a
+    // version cannot win a date tie and become an apparently settled fact.
+    ...(!selectedObservationDomain ? { observations: [], vitalSigns: [] } : {}),
+    ...(!selectedReportDomain ? { diagnosticReports: [] } : {}),
+  }, selection)
 
   const encounters = selection.encounters
     ? filterEncounterRecords(input.encounters ?? [], filters.encounterTimeRange, input)
