@@ -39,6 +39,11 @@ function productDescriptor(value: unknown): { name: string; pack?: string } | un
     || !/\b(?:tablet|capsule|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i.test(name)) return undefined
   const topical = /\b(?:cream|ointment|gel)\b/.test(name)
   if (topical && !/\d\s*%|\d\s*(?:mg|mcg|g)\s*\/\s*(?:g|ml)\b/.test(name)) return undefined
+  // A liquid's bottle/ampoule volume does not establish its drug strength.
+  // Preserve explicit drug amounts (including injectable powder strengths),
+  // percentages and mass/volume concentrations, but reject volume-only labels.
+  const liquid = /\b(?:injection|inj|solution|drops)\b/.test(name)
+  if (liquid && !/\d\s*(?:mg|mcg|iu)\b|\d\s*%|\d\s*g\s*\/\s*(?:\d+(?:\.\d+)?\s*)?(?:g|ml)\b/.test(name)) return undefined
   const topicalPack = topical
     ? name.match(/^(.*\d\s*%)\s+(\d+(?:\.\d+)?\s*(?:g|ml))(?:\s*\/?\s*(?:tub|tube|bottle))?$/) : undefined
   if (topicalPack) name = topicalPack[1]
