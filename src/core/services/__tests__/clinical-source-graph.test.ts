@@ -6,9 +6,10 @@ const capture = (resources: ClinicalSourceCapture['resources'], overrides: Parti
 
 describe('buildClinicalSourceGraph', () => {
   it('keeps all resource types and unknown fields, deeply clones and freezes input', () => {
-    const input = { resourceType: 'AlienResource', id: 'x', custom: { list: [1, { value: 'original' }] } }
+    const nested = { value: 'original' }
+    const input = { resourceType: 'AlienResource', id: 'x', custom: { list: [1, nested] } }
     const graph = buildClinicalSourceGraph([capture([input])])
-    input.custom.list[1].value = 'changed'
+    nested.value = 'changed'
     expect(graph.nodes).toHaveLength(1)
     expect(graph.nodes[0].resource.resourceType).toBe('AlienResource')
     expect((graph.nodes[0].resource.custom as any).list[1].value).toBe('original')
@@ -122,6 +123,19 @@ describe('buildClinicalSourceGraph', () => {
     ])
     expect(payloadMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')?.status).toBe('ambiguous')
     expect(versionMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')?.status).toBe('ambiguous')
+  })
+
+  it('keeps distinct URN identities ambiguous for logical references and resolves exact URNs', () => {
+    const graph = buildClinicalSourceGraph([capture([
+      { resourceType: 'ServiceRequest', id: 'relative', subject: { reference: 'Observation/x' } },
+      { resourceType: 'ServiceRequest', id: 'exact-a', subject: { reference: 'urn:uuid:a' } },
+      { resourceType: 'ServiceRequest', id: 'exact-b', subject: { reference: 'urn:uuid:b' } },
+      { resource: { resourceType: 'Observation', id: 'x', status: 'final', valueInteger: 1 }, fullUrl: 'urn:uuid:a' },
+      { resource: { resourceType: 'Observation', id: 'x', status: 'final', valueInteger: 1 }, fullUrl: 'urn:uuid:b' },
+    ])])
+    expect(graph.references.find((edge) => edge.origin.resource.id === 'relative')?.status).toBe('ambiguous')
+    expect(graph.references.find((edge) => edge.origin.resource.id === 'exact-a')?.status).toBe('resolved')
+    expect(graph.references.find((edge) => edge.origin.resource.id === 'exact-b')?.status).toBe('resolved')
   })
 
   it('keeps unknown audit resource types but does not promote nested provenance snapshots', () => {

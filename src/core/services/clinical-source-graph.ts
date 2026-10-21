@@ -87,10 +87,19 @@ const withoutVersion = (url: string): string => url.replace(/\/_history\/[^/]+\/
 
 const equivalenceKey = (node: ClinicalSourceNode, base: string | undefined, contentHash: string): string => {
   const version = (node.resource.meta as Record<string, unknown> | undefined)?.versionId ?? ''
-  const logicalIdentity = node.resource.id
-    ? [node.resource.resourceType, node.resource.id]
-    : [node.fullUrl ?? '', node.resource.resourceType]
-  return stable([node.sourceId, node.patientScope, base ?? '', logicalIdentity, version, contentHash])
+  return stable([
+    node.sourceId,
+    node.patientScope,
+    base ?? '',
+    node.restBase ?? null,
+    node.fullUrl ?? null,
+    node.parentKey ?? null,
+    node.embeddedIn ?? null,
+    node.resource.resourceType,
+    node.resource.id ?? null,
+    version,
+    contentHash,
+  ])
 }
 
 const referencesIn = (value: unknown, path = ''): Array<{ path: string; reference?: string; display?: string; identifierOnly?: boolean }> => {
