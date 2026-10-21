@@ -1,4 +1,4 @@
-import { render, renderHook, screen, within } from '@testing-library/react'
+import { fireEvent, render, renderHook, screen, within } from '@testing-library/react'
 import fixture from '@/e2e/fixtures/cross-source-prescriptions.json'
 import copiesFixture from '@/e2e/fixtures/cross-source-prescription-copies.json'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
@@ -43,8 +43,12 @@ it('projects one hospital and two cloud copies as one comparison while preservin
   expect(exportedGroup).toHaveLength(1)
   expect(exportedGroup[0].resource.activity).toMatchObject({ coding: [{ code: 'ambiguous' }] })
   const { container } = render(<MedicationItem medication={row} />)
-  const details = within(container.querySelector('details')!)
-  expect(details.getByText(/1 筆院內藥囑 \/ 2 筆雲端紀錄/)).toBeInTheDocument()
+  expect(container.querySelector('details')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '查看來源紀錄' }))
+  const details = within(screen.getByRole('dialog', { name: '來源紀錄' }))
+  expect(details.getByText('以院內紀錄為準；雲端紀錄保留供查閱。')).toBeInTheDocument()
+  expect(details.getByText('雲端 1')).toBeInTheDocument()
+  expect(details.getByText('雲端 2')).toBeInTheDocument()
   expect(details.getAllByText(/總量 28/)).toHaveLength(2)
 })
 
@@ -56,18 +60,18 @@ it('uses the same one-group projection for the medication timeline', () => {
   expect(result.current.drugs[0].bars[0].sourceComparisonUnconfirmed).toBe(true)
 })
 
-it('keeps the cloud supply interval when a grouped hospital record has no duration', () => {
+it('uses the hospital interval when its cloud copies have a supply duration the hospital did not record', () => {
   const input: any = JSON.parse(JSON.stringify(copiesFixture))
   const hospital = input.entry.find((entry: any) => entry.resource.id === 'synthetic-order-a').resource
   delete hospital.dispenseRequest
   const collection = LocalBundleService.parse(input)!.collection
   const { result } = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW'))
   expect(result.current.drugs).toHaveLength(1)
-  expect(result.current.drugs[0].bars).toHaveLength(2)
+  expect(result.current.drugs[0].bars).toHaveLength(1)
   expect(result.current.drugs[0].refillCount).toBe(1)
-  const bar = result.current.drugs[0].bars.find(bar => bar.supplyDays === 28)!
-  expect(bar.supplyDays).toBe(28)
-  expect(bar.supplyEndDay).toBe('2026-06-03')
+  const bar = result.current.drugs[0].bars[0]
+  expect(bar.supplyDaysUnrecorded).toBe(true)
+  expect(bar.supplyEndDay).toBeUndefined()
   expect(bar.sourceComparison).toContain('院內 1:')
   expect(bar.sourceComparison).toContain('未提供供藥期間')
 })
@@ -145,7 +149,7 @@ it('compares possible source copies without deleting either, retaining two real 
   expect(grouped.activeMedications).toHaveLength(4)
   expect(grouped.activeMedications.filter(row => row.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
   render(<>{rows.map(row => <MedicationItem key={row.id} medication={row} />)}</>)
-  expect(screen.getByText('跨來源待核對')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '查看來源紀錄' })).toBeInTheDocument()
   expect(screen.getByText('自費／自購')).toBeInTheDocument()
   expect(screen.getByText('已取消')).toBeInTheDocument()
   expect(screen.getAllByText(/BC23097100/).length).toBeGreaterThan(0)
@@ -183,7 +187,7 @@ it('shares currentness semantics with AI/IPS and does not invent a stop date or 
   expect(result.current.find(row => row.id === 'uncertain-status')).toMatchObject({ isInactive: true, currentnessUncertain: true })
 })
 
-it('keeps a current cloud source visible when its hospital comparison has unknown status and no supply period', () => {
+it('keeps hospital unknown status instead of promoting a cloud copy into the primary current medication', () => {
   const source: any = JSON.parse(JSON.stringify(fixture))
   const hospital = source.entry.find((entry: any) => entry.resource.id === 'synthetic-order-a').resource
   hospital.status = 'unknown'; delete hospital.dispenseRequest
@@ -194,13 +198,15 @@ it('keeps a current cloud source visible when its hospital comparison has unknow
     return { rows, overview }
   })
   const comparison = result.current.rows.find(row => row.sourceComparison)!
-  expect(comparison).toMatchObject({ id: 'synthetic-cloud-order-a', isInactive: false, currentnessUncertain: false })
+  expect(comparison).toMatchObject({ id: 'synthetic-order-a', dataOrigin: 'hospital', isInactive: true, currentnessUncertain: true })
   expect(comparison.sourceComparison?.warnings).toContain('source-currentness-differs')
   expect(comparison.sourceComparison?.records).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: 'synthetic-order-a', status: 'unknown', isInactive: true }),
     expect.objectContaining({ id: 'synthetic-cloud-order-a', status: 'active', isInactive: false }),
   ]))
-  expect(result.current.overview.meds.items.find(item => item.row.sourceComparison)?.isCurrent).toBe(true)
+  expect(result.current.overview.meds.items.find(item => item.row.sourceComparison)?.isCurrent).toBe(false)
+  const timeline = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW'))
+  expect(timeline.result.current.drugs.find(drug => drug.bars.some(bar => bar.refillId === 'synthetic-order-a'))?.bars[0]).toMatchObject({ sourceCurrent: false, supplyDaysUnrecorded: true })
   render(<MedicationItem medication={comparison} />)
   expect(screen.getAllByText(/來源狀態或供藥期間不同/).length).toBeGreaterThan(0)
 })

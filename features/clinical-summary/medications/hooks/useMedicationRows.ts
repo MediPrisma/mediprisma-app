@@ -433,9 +433,9 @@ export function useMedicationRows(
     }
     const comparisonRows = projectMedicationComparisons(enriched,
       row => (sourceById.get(row.id) as any)?._sourceRecordComparison, row => row,
-    ).map(({ record, sources, comparison, ownedIds, warnings, detailsInitiallyOpen }) => comparison ? {
+    ).map(({ record, sources, comparison, ownedIds, warnings }) => comparison ? {
       ...record,
-      sourceComparison: { status: comparison.status, records: sources ?? [], warnings, detailsInitiallyOpen },
+      sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
       reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
       searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
     } : record)
