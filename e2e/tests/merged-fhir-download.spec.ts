@@ -131,6 +131,10 @@ test('merged cloud and hospital originals and every embedded image survive downl
     await verifyClinicalData(restored)
     await verifyImages(restored, images, 'second-reimport', info)
     await verifyDownload(restored, 'second-reimport-download')
+    await restored.reload()
+    await verifyClinicalData(restored)
+    await verifyImages(restored, images, 'second-reimport-reload', info)
+    await verifyDownload(restored, 'second-reimport-reload-download')
     await info.attach('restored-download-panel', { body: await restored.screenshot({ fullPage: true }), contentType: 'image/png' })
   } finally {
     await clean.close()
