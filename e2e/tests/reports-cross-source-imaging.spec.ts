@@ -61,7 +61,7 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
   if (!before) {
     const first = rows.filter({ hasText: 'SONOGRAM- BREAST' })
     const header = first.locator('[role="button"][aria-expanded]').first()
-    if (await header.getAttribute('aria-expanded') !== 'true') await header.click()
+    if (await header.getAttribute('aria-expanded') !== 'true') await header.press('Enter')
     const sources = first.getByTestId('shared-report-sources')
     await sources.locator('summary').click()
     await expect(sources).toContainText('hospital-imaging-0')

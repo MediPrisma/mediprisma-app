@@ -66,8 +66,7 @@ function reportSupplementalText(report: ImagingReportData): string[] {
   ].filter((text): text is string => !!text?.trim())
 }
 
-function groupedReportCount(reports: ImagingReportData[]): number {
-  const groupingKeys = reportDisplayGroupingKeys(reports)
+function groupedReportCount(reports: ImagingReportData[], groupingKeys: Map<DiagnosticReport, string>): number {
   const seen = new Set<string>()
   let count = 0
   for (const report of reports) {
@@ -182,6 +181,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   },
   
   getCount: (data, filters, allClinicalData) => {
+    const groupingKeys = reportDisplayGroupingKeys(data)
     // Filter out reports without content (matching useReportsData logic)
     let filtered = data.filter(report => {
       if (normalizeClinicalStatus(report.status) === 'entered-in-error') return false
@@ -206,11 +206,14 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       filtered = getLatestImagingReports(filtered)
     }
 
-    return groupedReportCount(filtered)
+    return groupedReportCount(filtered, groupingKeys)
   },
   
   getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
     if (data.length === 0) return null
+    // Establish ambiguity on the complete source set, before latest/time filters
+    // can remove an otherwise conflicting copy of an exam.
+    const groupingKeys = reportDisplayGroupingKeys(data)
     
     let filtered = data.filter((report) => normalizeClinicalStatus(report.status) !== 'entered-in-error')
 
@@ -233,7 +236,6 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     const observations = allClinicalData?.observations || []
     
     const items: string[] = []
-    const groupingKeys = reportDisplayGroupingKeys(filtered)
     const sharedGroups = new Map<string, ImagingReportData[]>()
     filtered.forEach((report) => {
       const key = groupingKeys.get(report)

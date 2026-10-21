@@ -129,6 +129,36 @@ describe('cross-source imaging reports', () => {
     expect(buildReportsData(reports).reportRows).toHaveLength(2)
     reports[1].effectiveDateTime = '2026-06-24T03:30:00Z'
     expect(buildReportsData(reports).reportRows).toHaveLength(1)
+    reports[1].effectiveDateTime = '2026-06-24T00:00:00Z'
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it('validates full-width headers with the same normalization used for matching', () => {
+    const reports = pair()
+    reports[0].conclusion = `CT CHEST Date Of Examination：２０２６/０６/２３ １１:３０:００ Date Of RCP：２０２６/０６/２４ ${BODY}`
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    reports[0].conclusion = `CT CHEST Date Of Examination：２０２６/０６/２４ １１:３０:００ Date Of RCP：２０２６/０６/２４ ${BODY}`
+    reports[1].effectiveDateTime = '2026-06-24T15:30:00+08:00'
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it('does not ignore clinical attachments outside the text comparison', () => {
+    for (const contentType of ['text/html', 'application/pdf', 'application/xml']) {
+      expect(buildReportsData(pair().map((report, index) => ({ ...report,
+        presentedForm: [{ contentType, data: btoa(`Different finding ${index}`) }],
+      }))).reportRows).toHaveLength(2)
+    }
+  })
+
+  it('does not resolve an ambiguous repeat merely because latest filtering removed a copy', () => {
+    const reports = pair()
+    reports.push({ ...reports[0], id: 'hospital-repeat' })
+    const filters = { imagingReportVersion: 'latest', imagingReportTimeRange: 'all' }
+    const data = { observations: [], encounters: [] }
+    expect(imagingReportsCategory.getCount(reports, filters, data as any)).toBe(2)
+    const section = imagingReportsCategory.getContextSection(reports, filters, data as any)
+    const text = section && !Array.isArray(section) ? section.items.join('\n') : ''
+    expect(text).not.toContain('[shared narrative; count once]')
   })
 
   it('rejects conflicting explicit encounters and same-system exam identifiers', () => {

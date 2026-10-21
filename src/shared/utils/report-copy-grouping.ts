@@ -78,12 +78,13 @@ function sourceInstant(value: string): number | undefined {
 }
 
 function examTime(report: Report): string | undefined {
-  const header = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/i.exec(sharedReportNarrative(report))
+  const header = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/i.exec(sharedReportNarrative(report).normalize('NFKC'))
   const headerTime = header ? sourceInstant(`${header[1].replaceAll('/', '-')}T${header[2]}`) : undefined
   const value = report.effectiveDateTime ?? report.effectivePeriod?.start ?? ''
   const clock = /T(\d{2}:\d{2}(?::\d{2})?)/.exec(value)?.[1]
-  // The bridge supplies midnight when it knows only a date.
-  const meaningful = clock && !/^00:00(?::00)?$/.test(clock) ? sourceInstant(value) : undefined
+  // Only a date-only value has unknown time. Explicit midnight (including UTC
+  // midnight) remains an instant; it must not bypass conflict detection.
+  const meaningful = clock ? sourceInstant(value) : undefined
   if (headerTime !== undefined && meaningful !== undefined && headerTime !== meaningful) return 'conflicting-exam-times'
   const instant = headerTime ?? meaningful
   return instant === undefined ? undefined : String(instant)
@@ -126,6 +127,12 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     // Leave those reports separate, including unresolved result references.
     if (report.result?.length
       || report._observations?.some(obs => !obs.valueString || obs.valueString.trim().length <= 30 || obs.valueQuantity || obs.valueCodeableConcept || obs.component?.length)) continue
+    // Only text we actually compare and images may accompany this match.
+    // HTML, PDFs and unresolved URL-backed reports may contain extra findings.
+    if (report.presentedForm?.some(form => {
+      const type = (form.contentType ?? '').toLowerCase()
+      return !type.startsWith('image/') && !(type.startsWith('text/') && !type.includes('html') && form.data)
+    })) continue
     const source = sourceOf(report)
     const institution = imagingCopyInstitution(report)
     const method = modality(report)
@@ -134,7 +141,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     if (!source || !institution || !method || !day || !subject || !['final', 'amended', 'corrected'].includes(report.status ?? '')) continue
     if (report.meta?.tag?.some(tag => tag.code === 'adult-preventive')) continue
     const raw = sharedReportNarrative(report)
-    const headerDay = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})/i.exec(raw)?.[1].replaceAll('/', '-')
+    const headerDay = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})/i.exec(raw.normalize('NFKC'))?.[1].replaceAll('/', '-')
     if (headerDay && headerDay !== day) continue
     const narrative = normalizeImagingReportCopy(raw)
     // Short stock phrases and explicitly truncated previews cannot identify an exam.
