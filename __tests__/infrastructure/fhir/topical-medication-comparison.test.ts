@@ -25,10 +25,10 @@ it.each(['1 g','100 g','1 ml','100 ml'])('retains a numeric concentration denomi
  expect(hospitalProductMayMatchConcept(name(`${product} 5 g`),cloud(product))).toBe(true)
  expect(hospitalProductMayMatchConcept(name(`${product} 5 g`),cloud(`${product} 15 g`))).toBe(false)
 })
-it.each(['Synthetic solution 2%', 'Synthetic injection 10 mg/2 ml', 'Synthetic injection 10 mg'])('accepts a liquid product with an explicit strength: %s',(product)=>{
+it.each(['Synthetic solution 2%', 'Synthetic injection 10 mg/2 ml', 'Synthetic injection 10 mg', '2% Synthetic solution'])('accepts a liquid product with an explicit strength: %s',(product)=>{
  expect(hospitalProductMayMatchConcept(name(product),cloud(product))).toBe(true)
 })
-it.each(['Synthetic solution 100 ml','Synthetic drops 5 ml','Synthetic injection 2 ml','Synthetic solution 100 g','ointment 2%','tablet 5mg','2% ointment','film-coated tablet 5mg','Synthetic tablet 100 ml'])('keeps incomplete product descriptions as separate rows: %s',(product)=>{
+it.each(['Synthetic solution 100 ml','Synthetic drops 5 ml','Synthetic injection 2 ml','Synthetic solution 100 g','ointment 2%','tablet 5mg','2% ointment','film-coated tablet 5mg','Synthetic tablet 100 ml','oral solution 2%','20mg 1g ointment 2%'])('keeps incomplete product descriptions as separate rows: %s',(product)=>{
  const base={resourceType:'MedicationRequest',subject:{reference:'Patient/synthetic'},encounter:{reference:'Encounter/synthetic'},authoredOn:'2026-05-07',status:'active',dispenseRequest:{expectedSupplyDuration:{value:7,code:'d'}}}
  const hospital:any={...base,id:'synthetic-liquid-hospital',meta:{source:'ehr-fhir-bridge/scraper'},medicationCodeableConcept:name(product),dosageInstruction:[{text:'BID'}]}
  const other:any={...base,id:'synthetic-liquid-cloud',meta:{source:'https://medcloud2.nhi.gov.tw/'},medicationCodeableConcept:cloud(product),dosageInstruction:[{text:'BID'}]}
