@@ -118,3 +118,24 @@ it.each([false,true])('clears a repaired modifier without making the remaining m
  else{expect(isMedicationContentOnlyIncomplete(after.resourceQueryStatus.MedicationRequest)).toBe(true)}
 })
 
+
+it.each([false,true].flatMap(invalidFirst=>[false,true].map(resolved=>[invalidFirst,resolved])))('recovers content and modifier states in either arrival order (invalid first=%s, content resolved=%s)',(invalidFirst,resolved)=>{
+ const unknown={resourceType:'MedicationRequest',id:'unknown',status:'active',medicationReference:{reference:'Medication/missing'}}
+ const invalid={resourceType:'MedicationRequest',id:'invalid',status:'active',medicationCodeableConcept:{text:'Synthetic invalid source'},modifierExtension:[{url:'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant',extension:[]}]}
+ const stage=(resources:any[],status:any={MedicationRequest:{resourceType:'MedicationRequest',state:'ok',count:1}})=>{
+  const source=reconcileClinicalSources([capture('snapshot',[patient,...resources])])
+  return projectClinicalAggregate({clinicalSource:source,medications:source.graph.nodes.filter(node=>node.resource.resourceType==='MedicationRequest').map(node=>({...node.resource,clinicalSourceNodeKey:node.key})),resourceQueryStatus:status} as any)
+ }
+ const first=stage(invalidFirst?[invalid]:[unknown])
+ const mixed=stage([invalid,unknown],first.resourceQueryStatus)
+ expect(mixed.resourceQueryStatus.MedicationRequest.invalidModifierCount).toBe(1)
+ expect(isMedicationContentOnlyIncomplete(mixed.resourceQueryStatus.MedicationRequest)).toBe(false)
+ const remaining=[unknown,...(resolved?[{resourceType:'Medication',id:'missing',code:{text:'Synthetic resolved medicine'}}]:[])]
+ const repaired=stage(remaining,mixed.resourceQueryStatus)
+ const repeated=projectClinicalAggregate(repaired)
+ for(const output of [repaired,repeated]){
+  expect(output.resourceQueryStatus.MedicationRequest.invalidModifierCount).toBeUndefined()
+  if(resolved)expect(output.resourceQueryStatus.MedicationRequest.state).toBe('ok')
+  else expect(isMedicationContentOnlyIncomplete(output.resourceQueryStatus.MedicationRequest)).toBe(true)
+ }
+})

@@ -1,3 +1,4 @@
+import type { ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
 import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { getClaimDerivedSource } from '../services/claim-expander'
 import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } from './clinical-modifier-projection'
@@ -308,8 +309,8 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   next.vitalSigns = vitalSigns.length === input.vitalSigns?.length && vitalSigns.every((row, index) => row === input.vitalSigns![index]) ? input.vitalSigns : vitalSigns
   // Projection and completeness must use the same final graph: another query
   // can resolve an opaque Patient reference after this query was marked ok.
+  const arrayByType: Record<string, string> = { Condition: 'conditions', MedicationRequest: 'medications', MedicationStatement: 'medications', AllergyIntolerance: 'allergies', Observation: 'observations', DiagnosticReport: 'diagnosticReports', Encounter: 'encounters', Procedure: 'procedures', ImagingStudy: 'imagingStudies', DocumentReference: 'documentReferences', Composition: 'compositions', Immunization: 'immunizations', CarePlan: 'carePlans', Consent: 'consents', Device: 'devices', Basic: 'medicationRemainingSummaries' }
   if (input.resourceQueryStatus) {
-    const arrayByType: Record<string, string> = { Condition: 'conditions', MedicationRequest: 'medications', MedicationStatement: 'medications', AllergyIntolerance: 'allergies', Observation: 'observations', DiagnosticReport: 'diagnosticReports', Encounter: 'encounters', Procedure: 'procedures', ImagingStudy: 'imagingStudies', DocumentReference: 'documentReferences', Composition: 'compositions', Immunization: 'immunizations', CarePlan: 'carePlans', Consent: 'consents', Device: 'devices', Basic: 'medicationRemainingSummaries' }
     const captureKey = (node: SourceNode) => JSON.stringify([node.sourceId, node.patientScope, node.generation])
     const reportCaptures = new Set(source.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'DiagnosticReport').map(captureKey))
     const exclusions = new Map<string, { 'foreign-patient-reference'?: number; 'unresolved-patient-reference'?: number }>()
@@ -369,5 +370,20 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   }
   next.resourceQueryStatus = projectClinicalMedicationQueryStatus(next.medications ?? [], next.resourceQueryStatus)
   next.resourceQueryStatus = projectClinicalModifierQueryStatus(next.resourceQueryStatus, invalidModifiers, source)
+  // A repaired modifier may restore an earlier empty/ok state after new rows
+  // have arrived. Completeness must describe the final visible collection.
+  let completedStatuses = next.resourceQueryStatus
+  for (const [key, status] of Object.entries(next.resourceQueryStatus ?? {}) as Array<[ClinicalDataQueryKey, ClinicalDataQueryStatus | undefined]>) {
+    if (!status || !['ok', 'empty'].includes(status.state)) continue
+    const type = key.split(':')[0]
+    const rows = key === 'Observation:vital-signs' ? next.vitalSigns : next[arrayByType[type]]
+    if (!Array.isArray(rows)) continue
+    const count = rows.filter((row: any) => !row.clinicalSourceNodeKey || context.nodes.get(row.clinicalSourceNodeKey)?.resource.resourceType === type).length
+    const state = count ? 'ok' : 'empty'
+    if (status.count === count && status.state === state) continue
+    if (completedStatuses === next.resourceQueryStatus) completedStatuses = { ...completedStatuses }
+    completedStatuses[key as keyof typeof completedStatuses] = { ...status, count, state }
+  }
+  next.resourceQueryStatus = completedStatuses
   return next as T
 }

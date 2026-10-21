@@ -2,7 +2,7 @@ import { readClinicalMedicationContentModifier, hasMalformedClinicalModifier } f
 import { createClinicalRecordResolution } from '@/src/core/services/clinical-record-resolution'
 import type { MedicationEntity, ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
-import { medicationContentOwnsIncompleteStatus } from '@/src/core/utils/clinical-query-status'
+import { medicationContentOwnsIncompleteStatus, MEDICATION_CONTENT_UNAVAILABLE_MESSAGE } from '@/src/core/utils/clinical-query-status'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
 import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
 import { mutableClinicalProjection } from '../services/clinical-source-session'
@@ -51,7 +51,6 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
   return changed ? projected : rows
 }
 
-const CONTENT_UNCERTAINTY_MESSAGE = 'Medication prescriptions exist; referenced drug content is unavailable. Current drug classes and medication absence cannot be concluded.'
 
 /** Content uncertainty is distinct from an absent medication history. */
 export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], input: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}): Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> {
@@ -76,7 +75,7 @@ export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], i
     const status: ClinicalDataQueryStatus = { ...previous, resourceType: type,
       state: preserveQueryState ? previous.state : 'incomplete', medicationContentUncertaintyCount: count,
       ...(!preserveQueryState ? { medicationContentOnlyIncomplete: true } : {}),
-      message: preserveQueryState ? previous.message : CONTENT_UNCERTAINTY_MESSAGE }
+      message: preserveQueryState ? previous.message : MEDICATION_CONTENT_UNAVAILABLE_MESSAGE }
     if (preserveQueryState) delete status.medicationContentOnlyIncomplete
     if (JSON.stringify(previous) === JSON.stringify(status)) continue
     if (result === input) result = { ...input }

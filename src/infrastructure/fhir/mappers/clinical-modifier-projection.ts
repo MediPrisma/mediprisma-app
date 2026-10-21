@@ -3,6 +3,7 @@ import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-
 import { selectClinicalModifierNodes } from '@/src/core/services/clinical-record-variants'
 import { hasMalformedClinicalModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
+import { MEDICATION_CONTENT_UNAVAILABLE_MESSAGE } from '@/src/core/utils/clinical-query-status'
 
 type Node = ClinicalReconciliationResult['graph']['nodes'][number]
 export function malformedClinicalProjectionNodes(source: ClinicalReconciliationResult, additionalNodeKeys?: ReadonlySet<string>): readonly Node[] {
@@ -34,8 +35,12 @@ export function projectClinicalModifierQueryStatus(input: Partial<Record<Clinica
     const previous = input[key]
     if (!previous?.invalidModifierCount || counts.has(key === 'Observation:vital-signs' ? 'Observation' : key)) continue
     const { invalidModifierCount: _count, invalidModifierPreviousStatus: prior, ...rest } = previous
-    const status: ClinicalDataQueryStatus = prior && previous.state === 'incomplete' && !previous.medicationContentUncertaintyCount
-      ? { ...rest, state: prior.state, message: prior.message } : rest
+    const canRestore = prior && previous.state === 'incomplete' && !previous.exclusionReason && !(previous.excludedCount && previous.excludedCount > 0)
+      && !Object.values(previous.exclusionCounts ?? {}).some(count => (count ?? 0) > 0)
+    const status: ClinicalDataQueryStatus = canRestore
+      ? previous.medicationContentUncertaintyCount
+        ? { ...rest, state: 'incomplete', medicationContentOnlyIncomplete: true, message: MEDICATION_CONTENT_UNAVAILABLE_MESSAGE }
+        : { ...rest, state: prior.state, message: prior.message } : rest
     if (result === input) result = { ...input }
     result[key] = status
   }
@@ -44,7 +49,7 @@ export function projectClinicalModifierQueryStatus(input: Partial<Record<Clinica
       const previous = input[key]
       const preserve = previous && !['ok', 'empty', 'incomplete'].includes(previous.state)
       const status: ClinicalDataQueryStatus = { ...previous, resourceType: previous?.resourceType ?? type, state: preserve ? previous.state : 'incomplete', invalidModifierCount: keys.size,
-        ...(previous?.state === 'ok' || previous?.state === 'empty' ? { invalidModifierPreviousStatus: { state: previous.state, message: previous.message } } : {}),
+        ...(!previous || previous.state === 'ok' || previous.state === 'empty' ? { invalidModifierPreviousStatus: { state: previous?.state === 'empty' ? 'empty' as const : 'ok' as const, message: previous?.message } } : {}),
         message: previous && !['ok', 'empty'].includes(previous.state) ? previous.message : 'Some clinical records have malformed recognized modifiers and were quarantined. This domain is incomplete; absence cannot be concluded.' }
       if (JSON.stringify(previous) === JSON.stringify(status)) continue
       if (result === input) result = { ...input }

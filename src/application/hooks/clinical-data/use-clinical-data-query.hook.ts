@@ -268,7 +268,7 @@ function useClinicalResourceAggregate() {
     return snapshot.aggregate.readClinicalSource?.() ?? snapshot.aggregate.clinicalSource
   }, [snapshot, captureEpoch, patient])
   const aggregate = reprojectClinicalSnapshot(snapshot, clinicalSource)
-  const scope = JSON.stringify([patientId, sourceEpoch])
+  const scope = JSON.stringify(clinicalResourceQueryKey(patientId, 'conditions', sourceEpoch))
   useEffect(() => {
     if (aggregate.allSettled && !aggregate.anyFetching && !patientLoading) {
       settledAggregates.set(queryClient, { scope, aggregate })
@@ -292,7 +292,8 @@ function useClinicalResourceAggregate() {
  * Whole-collection view, kept for consumers that reason over the complete chart
  * (IPS export, FHIR tools). `data` stays undefined until EVERY type has
  * settled — those consumers must never mistake a half-loaded chart for a thin
- * one.
+ * one. During a same-scope background refresh, data retains the previous
+ * complete graph and rows; isFetching remains true until replacement settles.
  */
 export function useClinicalDataQuery() {
   const {

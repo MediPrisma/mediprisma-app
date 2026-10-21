@@ -1,7 +1,7 @@
 import { clinicalResourceQueryKey, clinicalDataSourceQueryKey } from '@/src/application/hooks/clinical-data/clinical-data-fetch-plan'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useClinicalData, useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { getClinicalDataRepository } from '@/src/application/composition'
 
@@ -285,4 +285,26 @@ describe('content-only completeness is not a transport failure',()=>{
    expect(result.current.hasBlockingQueryIssues).toBe(false)
   }finally{unmount();queryClient.clear()}
  })
+})
+
+it('never reuses another local import snapshot with the same patient and lifecycle epoch',async()=>{
+ mockUsePatientQuery.mockReturnValue({data:{id:'patient-1'},isLoading:false,isFetching:false})
+ mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository({fetchConditions:jest.fn(async()=>[{id:'import-a-condition'}])}) as any)
+ sessionStorage.setItem('fhir_bundle_override','import:synthetic-a')
+ const{result,rerender,unmount,queryClient}=renderClinicalData()
+ let release!: (value:any)=>void
+ const pending=new Promise<any>(resolve=>{release=resolve})
+ let refreshed:Promise<any>|undefined
+ try{
+  await waitFor(()=>expect(result.current.conditions[0]?.id).toBe('import-a-condition'))
+  const cached=queryClient.getQueriesData({queryKey:['clinical-data','patient-1']})
+  sessionStorage.setItem('fhir_bundle_override','import:synthetic-b')
+  for(const[key,value]of cached){if(key[2]!=='__source'&&value){queryClient.setQueryData(clinicalResourceQueryKey('patient-1',key[2] as any),{...(value as object),entities:key[2]==='conditions'?[{id:'import-b-condition'}]:[]})}}
+  act(()=>{refreshed=queryClient.fetchQuery({queryKey:clinicalResourceQueryKey('patient-1','conditions'),queryFn:()=>pending,staleTime:0})})
+  rerender()
+  await waitFor(()=>expect(result.current.isFetching).toBe(true))
+  expect(result.current.conditions.map(row=>row.id)).toEqual(['import-b-condition'])
+  await act(async()=>{release({entities:[{id:'import-b-refreshed'}],status:{Condition:{resourceType:'Condition',state:'ok',count:1}}});await refreshed})
+  await waitFor(()=>expect(result.current.conditions[0]?.id).toBe('import-b-refreshed'))
+ }finally{release?.({entities:[],status:{}});unmount();queryClient.clear();sessionStorage.removeItem('fhir_bundle_override')}
 })
