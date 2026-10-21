@@ -130,7 +130,7 @@ function buildClinicalResults(
     if (result?.data && result.isFetching) {
       for (const key of unit.statusKeys) resourceQueryStatus[key] = {
         ...resourceQueryStatus[key], resourceType: resourceQueryStatus[key]?.resourceType ?? key.split(':')[0],
-        state: 'error', count: undefined,
+        state: 'pending', count: undefined,
         message: 'Clinical records are refreshing. The updated result is not complete; absence cannot be concluded.',
       }
     }
@@ -326,7 +326,7 @@ export function useClinicalData() {
     const isLoading = patientLoading || aggregate.anyLoading
     const resourceQueryStatus = aggregate.resourceQueryStatus
     const queryIssues = Object.entries(resourceQueryStatus)
-      .filter(([, status]) => status && status.state !== 'ok' && status.state !== 'empty')
+      .filter(([, status]) => status && status.state !== 'ok' && status.state !== 'empty' && status.state !== 'pending')
     const hasBlockingQueryIssues = queryIssues.some(([key]) => BLOCKING_FHIR_QUERY_KEYS.has(key))
 
     return {

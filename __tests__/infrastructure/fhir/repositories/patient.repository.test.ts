@@ -215,6 +215,19 @@ describe('shared SMART source capture', () => {
     expect(clinical.getClinicalSource('other-patient').graph.nodes).toEqual([])
   })
 
+  it.each(['pinned', 'by-id'])('does not display an unselected Patient from a %s read', async mode => {
+    const { PatientMapper: ActualPatientMapper } = jest.requireActual('@/src/infrastructure/fhir/mappers/patient.mapper')
+    ;(PatientMapper.toDomain as jest.Mock).mockImplementation(ActualPatientMapper.toDomain)
+    ;(fhirClient.request as jest.Mock).mockResolvedValue({ resourceType: 'Patient', id: 'different-patient', gender: 'unknown' })
+    const repository = new FhirPatientRepository()
+    expect(await (mode === 'pinned' ? repository.getCurrentPatient() : repository.getPatientById('selected'))).toBeNull()
+    expect(PatientMapper.toDomain).toHaveBeenCalledWith(null)
+    expect(new FhirClinicalDataRepository().getClinicalSource('selected').graph.nodes).toEqual([])
+    const { knownClinicalSourceSession, readClinicalSource } = jest.requireActual('@/src/infrastructure/fhir/services/clinical-source-session')
+    const session = knownClinicalSourceSession(fhirClient)
+    expect(readClinicalSource(session, 'unassigned:' + session.sourceId + ':patient-search').graph.nodes.map((node: any) => node.resource.id)).toEqual(['different-patient'])
+  })
+
   it('isolates unassigned search resources from the selected Patient graph', async () => {
     delete client.patient.id
     ;(fhirClient.request as jest.Mock).mockResolvedValue({ resourceType: 'Bundle', entry: [

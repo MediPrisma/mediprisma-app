@@ -1193,6 +1193,8 @@ export type ClinicalDataQueryKey =
 export type ClinicalDataQueryState =
   | 'ok'
   | 'empty'
+  | 'pending'
+  | 'incomplete'
   | 'unauthorized'
   | 'forbidden'
   | 'unsupported'

@@ -7,6 +7,18 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook')
 jest.mock('@/src/application/providers/language.provider')
 
 describe('FhirDataIssuesBanner', () => {
+  it('distinguishes unresolved content from a transport failure', () => {
+    jest.mocked(useLanguage).mockReturnValue({ locale: 'zh-TW' } as any)
+    jest.mocked(useClinicalData).mockReturnValue({
+      queryIssues: [['MedicationRequest', { resourceType: 'MedicationRequest', state: 'incomplete', medicationContentUncertaintyCount: 1 }]],
+      hasBlockingQueryIssues: true, isLoading: false, refetch: jest.fn(),
+    } as any)
+    render(<FhirDataIssuesBanner />)
+    expect(screen.getByText('部分病歷內容待核對')).toBeInTheDocument()
+    expect(screen.getByText('內容尚待核對')).toBeInTheDocument()
+    expect(screen.queryByText('查詢失敗')).not.toBeInTheDocument()
+  })
+
   it('shows that a failed clinical query makes the chart incomplete', () => {
     jest.mocked(useLanguage).mockReturnValue({ locale: 'zh-TW' } as any)
     jest.mocked(useClinicalData).mockReturnValue({

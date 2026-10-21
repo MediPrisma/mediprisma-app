@@ -39,9 +39,12 @@ export class FhirPatientRepository implements IPatientRepository {
     clearClinicalSourceQuery(session, query)
     captureClinicalSource(session, query, unassignedScope, unassigned)
     const source = selectedId ? captureClinicalSource(session, query, selectedId, selectedResources) : undefined
-    if (!source) return response
+    if (!source) return response.resourceType === 'Bundle' ? { ...response, entry: [] } : null
     const projected = selectClinicalSourceNodes(source)
-    if (response.resourceType === 'Patient') return mutableClinicalProjection(projected[0]?.resource ?? response)
+    if (response.resourceType === 'Patient') {
+      const patient = projected.find(node => node.resource.resourceType === 'Patient' && node.resource.id === selectedId)
+      return patient ? mutableClinicalProjection(patient.resource) : null
+    }
     return { ...response, entry: projected.map(node => ({ resource: mutableClinicalProjection(node.resource), fullUrl: node.fullUrl })) }
   }
 

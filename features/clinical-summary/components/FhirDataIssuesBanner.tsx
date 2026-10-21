@@ -10,12 +10,14 @@ const STATE_LABELS = {
     forbidden: '沒有讀取權限（403）',
     unsupported: '伺服器不支援',
     error: '查詢失敗',
+    incomplete: '內容尚待核對',
   },
   en: {
     unauthorized: 'Authorization expired (401)',
     forbidden: 'Access forbidden (403)',
     unsupported: 'Not supported by server',
     error: 'Query failed',
+    incomplete: 'Content needs reconciliation',
   },
 } as const
 
@@ -32,7 +34,10 @@ export function FhirDataIssuesBanner() {
 
   const isZh = locale === 'zh-TW'
   const labels = STATE_LABELS[isZh ? 'zh-TW' : 'en']
-  const title = hasBlockingQueryIssues
+  const contentOnly = queryIssues.every(([, status]) => status?.state === 'incomplete')
+  const title = contentOnly
+    ? (isZh ? '部分病歷內容待核對' : 'Some clinical content needs reconciliation')
+    : hasBlockingQueryIssues
     ? (isZh ? '部分病歷資料未載入，畫面可能不完整' : 'Some clinical data did not load; this chart may be incomplete')
     : (isZh ? 'FHIR 伺服器未提供部分選用資料' : 'The FHIR server does not provide some optional data')
 

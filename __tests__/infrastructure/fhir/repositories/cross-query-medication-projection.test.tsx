@@ -75,9 +75,14 @@ it('keeps explicit inline code and does not choose an ambiguous Medication revis
 it('clears content-only incompleteness after resolution while preserving independent query failures', () => {
  const rows: any[] = [{ id: 'request', _sourceResourceType: 'MedicationRequest', clinicalMedicationContentUncertainty: { reason: 'ambiguous-reference' } }]
  const pending = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state: 'ok', count: 1 } })
- expect(pending.MedicationRequest).toMatchObject({ state: 'error', medicationContentUncertaintyCount: 1 })
+ expect(pending.MedicationRequest).toMatchObject({ state: 'incomplete', medicationContentUncertaintyCount: 1 })
  const resolved = [{ id: 'request', _sourceResourceType: 'MedicationRequest' }] as any
  expect(projectClinicalMedicationQueryStatus(resolved, pending).MedicationRequest).toMatchObject({ state: 'ok', count: 1 })
  const network = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state: 'error', httpStatus: 401, message: 'Unauthorized' } })
  expect(projectClinicalMedicationQueryStatus(resolved, network).MedicationRequest).toMatchObject({ state: 'error', httpStatus: 401, message: 'Unauthorized' })
+ for (const state of ['pending', 'unauthorized', 'forbidden', 'unsupported'] as const) {
+  const independent = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state, message: 'Independent status' } })
+  expect(independent.MedicationRequest).toMatchObject({ state, message: 'Independent status', medicationContentUncertaintyCount: 1 })
+  expect(projectClinicalMedicationQueryStatus(resolved, independent).MedicationRequest).toMatchObject({ state, message: 'Independent status' })
+ }
 })
