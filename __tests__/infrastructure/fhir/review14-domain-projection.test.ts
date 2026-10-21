@@ -55,3 +55,16 @@ it.each(['https://foreign.example/fhir/Encounter/visit', 'Encounter/visit/_histo
  expect(output.data.procedures).toEqual([])
  expect(output.incomplete).toBe(true)
 })
+it('does not grant a cross-base relative Claim link that the source graph cannot resolve', async () => {
+ const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+  { resource: { resourceType: 'Patient', id: 'p' } },
+  { fullUrl: 'https://local.example/fhir/Encounter/visit', resource: { resourceType: 'Encounter', id: 'visit', status: 'finished', class: { code: 'AMB' } } },
+  { fullUrl: 'https://foreign.example/fhir/Claim/claim', resource: { resourceType: 'Claim', id: 'claim', patient: { reference: 'Patient/p' }, created: '2025-01-01', extension: [{ url: 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter', valueReference: { reference: 'Encounter/visit' } }], procedure: [{ procedureCodeableConcept: { text: 'Foreign Claim procedure' } }] } },
+ ] } as any)!
+ const source = parsed.collection.clinicalSource!
+ expect(source.graph.references.find(edge => edge.origin.resource.resourceType === 'Claim' && edge.path === 'extension[0].valueReference')?.status).toBe('unresolved')
+ const collection = projectClinicalAggregate(parsed.collection)
+ const output: any = await createFhirTools(() => ({ patient: parsed.patient, collection })).getEncounterDetails.execute!({ encounterId: collection.encounters[0].id }, { toolCallId: 'synthetic', messages: [] })
+ expect(output.data.procedures).toEqual([])
+ expect(output.incomplete).toBe(true)
+})

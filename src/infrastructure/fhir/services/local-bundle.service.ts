@@ -1531,7 +1531,15 @@ export const LocalBundleService = {
     // Condition / Procedure / Observation / DocumentReference resources the rest
     // of the pipeline already renders. No-op for non-PAS bundles. Runs before the
     // byType() split below so the synthesised resources flow through unchanged.
-    expandClaimResources(entries)
+    expandClaimResources(entries, (claim, reference) => {
+      const key = sourceKeyByResource.get(claim)
+      if (!key) return false
+      const index = (claim as any).extension?.findIndex((extension: any) => extension.url === 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter')
+      return clinicalSource.graph.references.some(edge => edge.origin.key === key
+        && edge.path === `extension[${index}].valueReference` && edge.status === 'resolved'
+        && edge.targetKeys.length === 1 && entries.some(resource => resource.resourceType === 'Encounter'
+          && sourceKeyByResource.get(resource) === edge.targetKeys[0] && reference === 'Encounter/' + resource.id))
+    })
 
     // Roche DIP support: flatten the oncology (mCODE) resources Roche nests
     // inside List.contained and relink its identifier-based references, so the

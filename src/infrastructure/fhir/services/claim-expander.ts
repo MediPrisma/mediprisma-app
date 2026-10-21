@@ -68,7 +68,7 @@ function findExtension(node: any, url: string): any | undefined {
  * Expand every Claim in `entries` into standard FHIR resources, appended to
  * `entries` in place. Non-Claim bundles are untouched (the loop finds nothing).
  */
-export function expandClaimResources(entries: any[]): void {
+export function expandClaimResources(entries: any[], canLinkEncounter: (claim: object, reference: string) => boolean = () => false): void {
   const claims = entries.filter((r) => r?.resourceType === 'Claim')
   if (!claims.length) return
 
@@ -85,6 +85,7 @@ export function expandClaimResources(entries: any[]): void {
   const synthesised: any[] = []
 
   for (const claim of claims) {
+    const synthesisedStart = synthesised.length
     const claimId: string = claim.id || 'claim'
     const patientRef: string | undefined = claim.patient?.reference
     const created: string | undefined = claim.created
@@ -267,14 +268,13 @@ export function expandClaimResources(entries: any[]): void {
       if (!mr.authoredOn && created) mr.authoredOn = created
       if (!mr.encounter && encounter) {
         mr.encounter = encounter
-        if (/^Encounter\/[^/]+$/.test(encounter.reference)) claimEncounterLinks.set(mr, encounter.reference)
+        if (/^Encounter\/[^/]+$/.test(encounter.reference) && canLinkEncounter(claim, encounter.reference)) claimEncounterLinks.set(mr, encounter.reference)
       }
     }
-  }
-
-  for (const resource of synthesised) {
-    const reference = resource.encounter?.reference
-    if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference)) claimEncounterLinks.set(resource, reference)
+    for (const resource of synthesised.slice(synthesisedStart)) {
+      const reference = resource.encounter?.reference
+      if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference) && canLinkEncounter(claim, reference)) claimEncounterLinks.set(resource, reference)
+    }
   }
   entries.push(...synthesised)
 }
