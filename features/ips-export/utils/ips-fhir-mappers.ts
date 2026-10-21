@@ -32,7 +32,7 @@ import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comp
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
 import { medicationDirectionsForFhir } from './medication-display'
-import { medicationSourceRecords, sourceSupplyText, type ExportMedication } from './medication-source-records'
+import { medicationExportUnit, sourceSupplyText, type ExportMedication } from './medication-source-records'
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -278,7 +278,7 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
     const resource: FhirResource = {
       resourceType: 'MedicationStatement',
       meta: { profile: [IPS_PROFILES.medicationStatement] },
-      status: pickStatus(m.status, VALID_MED_STATEMENT_STATUS, 'unknown'),
+      status: m.exportCurrentnessUnconfirmed ? 'unknown' : pickStatus(m.status, VALID_MED_STATEMENT_STATUS, 'unknown'),
       medicationCodeableConcept:
         toCodeableConcept(m.medicationCodeableConcept, 'Unknown medication') ?? { text: 'Unknown medication' },
       subject: { reference: patientRef },
@@ -290,12 +290,12 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
     return resource
   }
   const entries = medications.map(m => {
-    const [canonical] = medicationSourceRecords([{ ...m, _sourcePrescriptionRecords: undefined }])
+    const { canonical, sources } = medicationExportUnit(m)
     const resource = makeStatement(canonical)
-    if (m._sourcePrescriptionRecords?.length) {
-      const sources = medicationSourceRecords([m]).map((source, index) => ({ ...makeStatement(source), id: `source-${index + 1}` }))
-      resource.contained = sources
-      resource.derivedFrom = sources.map(source => ({ reference: `#${source.id}` }))
+    if (sources.length) {
+      const contained = sources.map((source, index) => ({ ...makeStatement(source), id: `source-${index + 1}` }))
+      resource.contained = contained
+      resource.derivedFrom = contained.map(source => ({ reference: `#${source.id}` }))
     }
     return makeEntry(resource).entry
   })

@@ -22,6 +22,13 @@ it('uses an exact Chinese MediCloud Condition label without borrowing hospital n
   expect(extractEncounterIcds({ reasonCode: [{ text: 'I10' }] }, undefined, 'zh-TW')[0].description).toBeTruthy()
 })
 
+it('retains both navigation aliases for a confirmed encounter whose source was reconciled away', () => {
+  const [visit] = projectEncounterComparisons([{ id: 'cloud', _sourceRecordComparison: {
+    status: 'confirmed', references: ['Encounter/hospital', 'Encounter/cloud'],
+  } }])
+  expect((visit as any)._comparisonEncounterIds).toEqual(['hospital', 'cloud'])
+})
+
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({ locale: 'zh-TW' }),
 }))

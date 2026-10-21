@@ -457,6 +457,8 @@ it('exports both original records of a confirmed pair with their source quantiti
   const result = mapMedications(orders as any, 'Patient/export')
   expect(result.entries).toHaveLength(1)
   expect(result.entries[0].resource.derivedFrom).toEqual([{ reference: '#source-1' }, { reference: '#source-2' }])
+  expect(JSON.stringify(result.entries[0].resource.note)).toContain('Integrated prescription')
+  expect(JSON.stringify(result.entries[0].resource.note)).not.toContain('Source supply duration')
   const exported = result.entries[0].resource.contained as any[]
   expect(exported).toHaveLength(2)
   expect(exported[0].identifier).toEqual(hospital.identifier)
@@ -471,4 +473,14 @@ it('exports both original records of a confirmed pair with their source quantiti
   const narrative = narrativeMedications(orders as any, { medication: 'Medication', status: 'Status', directions: 'Directions', supply: 'Supply', date: 'Date', code: 'Code' })
   expect(narrative).toContain('Hospital record: MedicationRequest/hospital-med')
   expect(narrative).toContain('MediCloud record: MedicationRequest/cloud-med')
+  expect((narrative.match(/<tr>/g) || []).length).toBe(2) // heading plus one integrated row
+})
+
+it('exports uncertain use without rewriting the original source status in provenance', () => {
+  const source: any = { id: 'uncertain-export', status: 'active', exportCurrentnessUnconfirmed: true,
+    medicationCodeableConcept: { text: 'Synthetic product' } }
+  const [entry] = mapMedications([source], 'Patient/export').entries
+  expect(entry.resource.status).toBe('unknown')
+  expect(JSON.stringify(entry.resource.note)).toContain('Original source order status: active')
+  expect(JSON.stringify(entry.resource.note)).not.toContain('Original source order status: unknown')
 })

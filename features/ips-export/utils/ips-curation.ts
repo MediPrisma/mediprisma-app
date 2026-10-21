@@ -278,7 +278,7 @@ function curateMedications(
     meds = meds.flatMap((m) => {
       const assessment = assessMedicationCurrentness(m, now.getTime())
       if (assessment.current) return [m]
-      return assessment.uncertain ? [{ ...m, status: 'unknown', note: [...(m.note ?? []), {
+      return assessment.uncertain ? [{ ...m, exportCurrentnessUnconfirmed: true, note: [...(m.note ?? []), {
         text: `Current medication use is unconfirmed; original source status: ${m.status || 'unknown'}. Verify source records before prescribing.`,
       }] }] : []
     })

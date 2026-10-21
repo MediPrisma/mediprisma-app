@@ -59,7 +59,8 @@ export function projectEncounterComparisons<T extends Record<string, any>>(encou
     const comparison: SourceRecordComparison | undefined = visit._sourceRecordComparison
     const sources = comparison?.references.map((reference) => byReference.get(reference)).filter(Boolean) as T[] | undefined
     if (!sources || comparison?.references.length !== 2 || sources.length !== 2 || sources.some((source) => consumed.has(source.id))) {
-      result.push(comparison ? { ...visit, _comparisonEncounterIds: [visit.id] } : visit); continue
+      result.push(comparison ? { ...visit, _comparisonEncounterIds: comparison.status === 'confirmed'
+        ? comparison.references.map(reference => reference.split('/').pop()) : [visit.id] } : visit); continue
     }
     // The reconciler writes the hospital first. Keep its clinical detail;
     // Chinese wording is selected separately by system-aware ICD lookup.

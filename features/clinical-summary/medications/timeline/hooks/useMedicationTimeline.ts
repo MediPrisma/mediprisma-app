@@ -294,7 +294,7 @@ function countGroup(drugs: TimelineDrug[]) {
 }
 
 export function isTimelineDrugCurrent(drug: TimelineDrug, nowMs: number): boolean {
-  return drug.bars.some((bar) => bar.sourceCurrent ?? (bar.startMs <= nowMs && bar.endMs >= nowMs))
+  return drug.bars.some((bar) => bar.startMs <= nowMs && (bar.sourceCurrent ?? bar.endMs >= nowMs))
 }
 
 function sortGroups(groups: CategoryGroup[]): CategoryGroup[] {

@@ -5,6 +5,8 @@ export type ExportMedication = MedicationEntity & {
   identifier?: Array<Record<string, unknown>>
   exportSourceLabel?: string
   exportOriginalDosage?: boolean
+  exportCurrentnessUnconfirmed?: boolean
+  exportIntegrated?: boolean
 }
 
 /** A confirmed import merge must not make the source prescriptions disappear
@@ -31,7 +33,7 @@ export function medicationSourceRecords(medications: MedicationEntity[]): Export
 }
 
 export function sourceSupplyText(medication: ExportMedication): string | undefined {
-  if (!medication.exportSourceLabel || !medication.dispenseRequest) return undefined
+  if (medication.exportIntegrated || !medication.exportSourceLabel || !medication.dispenseRequest) return undefined
   const { quantity, expectedSupplyDuration, validityPeriod } = medication.dispenseRequest
   const quantityText = (value: { value?: number; unit?: string; code?: string } | undefined) =>
     value?.value === undefined ? undefined : [value.value, value.unit || value.code].filter(value => value !== undefined).join(' ')
@@ -40,4 +42,14 @@ export function sourceSupplyText(medication: ExportMedication): string | undefin
     quantityText(expectedSupplyDuration) && `Source supply duration: ${quantityText(expectedSupplyDuration)}`,
     validityPeriod && `Source dispensing validity (not treatment period): ${validityPeriod.start || '?'} to ${validityPeriod.end || '?'}`,
   ].filter(Boolean).join('; ') || undefined
+}
+
+export function medicationExportUnit(medication: MedicationEntity) {
+  const [canonical] = medicationSourceRecords([{ ...medication, _sourcePrescriptionRecords: undefined }])
+  const sources = medication._sourcePrescriptionRecords?.length ? medicationSourceRecords([medication]) : []
+  if (sources.length) {
+    canonical.exportIntegrated = true
+    canonical.exportSourceLabel = `Integrated prescription; original source records retained: ${medication._reconciledSourceReferences?.join(' + ') || sources.map(source => source.exportSourceLabel).join(' + ')}`
+  }
+  return { canonical, sources }
 }
