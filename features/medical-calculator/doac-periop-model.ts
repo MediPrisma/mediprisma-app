@@ -336,8 +336,9 @@ const sameDay = (x: Date, y: Date) => x.getFullYear() === y.getFullYear() && x.g
  * EHRA Figure 15 draws minor and low risk dose by dose: twice daily, the dose
  * at the procedure is the star and the next one is optional. The calculator
  * applies that to a minor procedure (`procedureDose`: the dose held before the
- * start, or the first one at or after it that day) and names it only where it
- * is actually omitted; low risk restarts 24 h after the end (Figure 14), which
+ * start, or one scheduled within the procedure itself) and names it only where
+ * it is actually omitted; any other dose before the restart follows the
+ * missed-dose rule below; low risk restarts 24 h after the end (Figure 14), which
  * leaves out the optional evening dose. On every other restart day (low and
  * high risk, an ablation, whose figures draw the restart only) the label's
  * missed-dose rule decides whether the last dose before the restart is taken
@@ -386,8 +387,8 @@ function missedDoseRule(agent: DoacAgent, regimen: { agent: DoacAgent; mg: numbe
 /** EHRA Figure 15's minor-risk row, for the one dose it actually omits. */
 const procedureMorningLine = (dose: Date, nextSkipped?: Date): PeriopLine => line(
   nextSkipped
-    ? t(`極低風險處置時刻那一劑（${formatLocal(dose)}）不服用、不補服（EHRA Fig 15 的極低風險列）；圖上下一劑可選，但本例恢復時間未到，${formatLocal(nextSkipped)} 那一劑也不服。`, `The dose at the minor procedure (${formatLocal(dose)}) is not taken nor made up (EHRA Figure 15, minor-risk row); the figure makes the next dose optional, but here the restart is later, so the ${formatLocal(nextSkipped)} dose is not taken either.`)
-    : t(`極低風險處置時刻那一劑（${formatLocal(dose)}）不服用、不補服，下一劑可選（EHRA Fig 15 的極低風險列）。`, `The dose at the minor procedure (${formatLocal(dose)}) is not taken nor made up; the next dose is optional (EHRA Figure 15, minor-risk row).`),
+    ? t(`極低風險處置時刻那一劑（${formatLocal(dose)}）不服用、不補服（EHRA Fig 15 的極低風險列）；圖上處置後當天那一劑可選，但本例恢復時間未到，下一劑 ${formatLocal(nextSkipped)} 也不服。`, `The dose at the minor procedure (${formatLocal(dose)}) is not taken nor made up (EHRA Figure 15, minor-risk row); the figure makes the dose later that day optional, but here the restart is later, so the next dose, ${formatLocal(nextSkipped)}, is not taken either.`)
+    : t(`極低風險處置時刻那一劑（${formatLocal(dose)}）不服用、不補服（EHRA Fig 15 的極低風險列）；之後的劑量依恢復時間。`, `The dose at the minor procedure (${formatLocal(dose)}) is not taken nor made up (EHRA Figure 15, minor-risk row); later doses follow the restart.`),
   G.ehraFig15,
 )
 
@@ -797,9 +798,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   result.resume.lines = restart.map((item) => item.line)
   const open = restart.filter((item) => item.key).map((item) => item.key!)
   result.pending.push(...open)
-  // EHRA Figure 15's minor-risk row omits the dose at the procedure: the one held before it, or the first at or after it that day.
+  // EHRA Figure 15's minor-risk row omits the dose at the procedure: the one held before it, or one scheduled
+  // within the procedure itself (from the start to the end, or at the start when no end is given).
   const procedureDose = known && surgery && troughOnly && result.state !== 'ablation' && regimen.perDay === 2
-    ? result.heldBefore ?? scheduledDoses(minutes as number[], surgery, addHours(surgery, 24)).find((at) => at.getTime() >= surgery.getTime() && sameDay(at, surgery))
+    ? result.heldBefore ?? scheduledDoses(minutes as number[], surgery, ended ?? surgery)[0]
     : undefined
   if (!open.length && restart.some((item) => item.at)) {
     const earliest = new Date(Math.max(...restart.filter((item) => item.at).map((item) => item.at!.getTime())))
@@ -830,7 +832,11 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
         if (result.resume.delayed === result.heldBefore) result.skippedBefore = []
       }
       const omitted = [...result.skippedBefore.filter((at) => at === result.heldBefore), ...result.resume.skippedAfter].find(rule.procedureMorning)
-      if (omitted) result.resume.lines.push(procedureMorningLine(omitted, result.resume.skippedAfter.find((at) => at.getTime() > omitted.getTime() && sameDay(at, omitted))))
+      if (omitted) {
+        // The dose right after it, wherever midnight falls; named only when it too is skipped.
+        const next = scheduledDoses(minutes as number[], addHours(omitted, 1 / 60), addHours(omitted, 24))[0]
+        result.resume.lines.push(procedureMorningLine(omitted, next && result.resume.skippedAfter.some((at) => at.getTime() === next.getTime()) ? next : undefined))
+      }
     }
   } else if (known && surgery && (result.state === 'timed' || result.state === 'ablation')) {
     // No restart time yet: still say which doses wait for it, so none is taken at the procedure by habit.

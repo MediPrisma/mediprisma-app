@@ -362,11 +362,31 @@ describe('third review by the coordinator', () => {
     expect(result.resume.firstDose).toBeUndefined()
   })
   it('the minor-risk line names the dose at the procedure, only where it is omitted (#review re8 Astra 1; coordinator 4th 3)', () => {
-    // Afternoon: 08:00 was taken before; the dose at the procedure is 20:00, not the morning one.
+    // Afternoon: 08:00 was taken before and no dose falls in the procedure; 20:00 is moved to the 23:00 restart (#review coordinator 5th).
     const afternoon = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T16:00', surgery_end_at: '2026-11-03T17:00' })
     expect(formatLocal(afternoon.lastDose!)).toBe('11-03 08:00')
-    expect(allText(afternoon)).toContain('極低風險處置時刻那一劑（11-03 20:00）不服用')
-    expect(formatLocal(afternoon.resume.firstDose!)).toBe('11-04 08:00')
+    expect(allText(afternoon)).not.toContain('處置時刻那一劑（')
+    expect(formatLocal(afternoon.resume.delayed!)).toBe('11-03 20:00')
+    expect(formatLocal(afternoon.resume.firstDose!)).toBe('11-03 23:00')
+    // 14:00–14:30: restart 20:30, the 20:00 dose is taken then, not omitted.
+    const early = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T14:00', surgery_end_at: '2026-11-03T14:30' })
+    expect(early.resume.skippedAfter).toEqual([])
+    expect(formatLocal(early.resume.delayed!)).toBe('11-03 20:00')
+    expect(formatLocal(early.resume.firstDose!)).toBe('11-03 20:30')
+    expect(allText(early)).not.toContain('處置時刻那一劑（')
+    // Doses 00:00/12:00, procedure 06:00–06:30: 00:00 was taken; 12:00 is moved to the 12:30 restart.
+    const six = plan({ procedure_kind: 'minimal', haemostasis: 'yes', dose_time_1: '00:00', dose_time_2: '12:00', surgery_at: '2026-11-03T06:00', surgery_end_at: '2026-11-03T06:30' })
+    expect(formatLocal(six.lastDose!)).toBe('11-03 00:00')
+    expect(formatLocal(six.resume.delayed!)).toBe('11-03 12:00')
+    expect(formatLocal(six.resume.firstDose!)).toBe('11-03 12:30')
+    // 00:00–08:30, past the 08:00 dose: 11-02 20:00 is held; 08:00 (5.5 h before 20:00) is not moved; the text names 08:00 as skipped too.
+    const overnight = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T00:00', surgery_end_at: '2026-11-03T08:30' })
+    expect(times(overnight.resume.skippedAfter)).toEqual(['11-03 08:00'])
+    expect(formatLocal(overnight.resume.firstDose!)).toBe('11-03 20:00')
+    expect(allText(overnight)).toContain('處置時刻那一劑（11-02 20:00）')
+    expect(allText(overnight)).toContain('下一劑 11-03 08:00 也不服')
+    // The next dose is never called optional when it is the first back.
+    expect(allText(plan({ procedure_kind: 'minimal', haemostasis: 'yes' }))).not.toContain('可選，')
     // Midnight: the 20:00 dose before it is held; 08:00 is the first back.
     const night = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T00:00', surgery_end_at: '2026-11-03T01:00' })
     expect(formatLocal(night.resume.firstDose!)).toBe('11-03 08:00')
@@ -382,7 +402,7 @@ describe('third review by the coordinator', () => {
     // Restart past midnight: the next dose is not called optional (#review re9 Opus 1).
     const lateEnd = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T13:00', surgery_end_at: '2026-11-03T18:30' })
     expect(times(lateEnd.resume.skippedAfter)).toEqual(['11-03 20:00'])
-    expect(allText(lateEnd)).toContain('本例恢復時間未到，11-03 20:00 那一劑也不服')
+    expect(allText(lateEnd)).toContain('本例恢復時間未到，下一劑 11-03 20:00 也不服')
     expect(allText(lateEnd)).not.toContain('下一劑可選（')
     // Restart not yet known, procedure at midnight: the held dose is named ahead (#review re9 Opus 3).
     expect(allText(plan({ procedure_kind: 'minimal', surgery_at: '2026-11-03T00:00', surgery_end_at: '' }))).toContain('極低風險處置時刻那一劑（11-02 20:00）不服用')
