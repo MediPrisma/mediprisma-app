@@ -18,7 +18,7 @@ type Source = 'hospital' | 'cloud'
 const VGH_NAMES = new Set(['臺北榮總', '台北榮總', '臺北榮民總醫院', '台北榮民總醫院'])
 const DATE = String.raw`\d{4}[/-]\d{2}[/-]\d{2}`
 const CLOCK = String.raw`\d{2}:\d{2}(?::\d{2})?`
-const SIGNATURE = new RegExp(String.raw`\s+Reported\s+By\s+[^\r\n]{1,180}?\bOn:\s*${DATE}\s*\(${CLOCK}\)\s*,?\s*\(by\s+[^)\r\n]{1,180}\)\s*At:\s*[A-Za-z0-9_-]+?(?:(ACR\s+BI-RADS\s+[0-6])|(Positive\s+Rate\s+Evaluation\s+\d+))?\s*$`, 'i')
+const SIGNATURE = new RegExp(String.raw`\s+Reported\s+By\s+(?:(?!\bOn:|Reported\s+By)[^\r\n]){1,180}?\bOn:\s*${DATE}\s*\(${CLOCK}\)\s*,?\s*\(by\s+[^)\r\n]{1,180}\)\s*At:\s*[A-Za-z0-9_-]+?(?:(ACR\s+BI-RADS\s+[0-6])|(Positive\s+Rate\s+Evaluation\s+\d+))?\s*$`, 'i')
 const EXAM_HEADER = new RegExp(String.raw`^((?:SONO(?:GRAM)?|CHEST|CT(?:/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(${DATE})(?:\s+${CLOCK})?\s+Date\s+Of\s+RCP:\s*${DATE}\s*`, 'i')
 
 /** Compare complete clinical text, never a similarity score or a prefix.
@@ -26,7 +26,9 @@ const EXAM_HEADER = new RegExp(String.raw`^((?:SONO(?:GRAM)?|CHEST|CT(?:/SCAN)?|
  * footer formats remain part of the text and therefore fail closed. */
 export function normalizeImagingReportCopy(value: string): string {
   let text = value.normalize('NFKC').trim().replace(EXAM_HEADER, '')
-  const signature = SIGNATURE.exec(text)
+  // Multiple signatures can bracket a clinical addendum. Never reduce that
+  // multi-version document to the text before its first signature.
+  const signature = (text.match(/\bReported\s+By\b/gi)?.length ?? 0) === 1 ? SIGNATURE.exec(text) : null
   if (signature) {
     const body = text.slice(0, signature.index)
     const birads = signature[1]?.match(/[0-6]$/)?.[0]

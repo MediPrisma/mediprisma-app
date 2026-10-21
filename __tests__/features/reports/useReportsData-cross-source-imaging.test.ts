@@ -45,6 +45,11 @@ describe('cross-source imaging reports', () => {
     expect(normalizeImagingReportCopy(`${text}${signature} ADDENDUM: new mass.`)).not.toBe(normalizeImagingReportCopy(text))
     const prior = `Prior examination showed BI-RADS category 2. ${BODY}`
     expect(normalizeImagingReportCopy(prior + signature)).not.toBe(normalizeImagingReportCopy(prior))
+    const addendum = `${BODY} Reported By A(Lic) On:2026/06/25(10:30:00),(by A)At:ST01 ADDENDUM: new mass. Reported By B(Lic) On:2026/06/26(09:00:00),(by B)At:ST01`
+    expect(normalizeImagingReportCopy(addendum)).not.toBe(normalizeImagingReportCopy(BODY))
+    const copies = pair()
+    copies[0].conclusion = addendum
+    expect(buildReportsData(copies).reportRows).toHaveLength(2)
   })
 
   it.each([
