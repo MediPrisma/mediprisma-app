@@ -65,6 +65,24 @@ describe('cross-source imaging reports', () => {
   })
 
   it.each([
+    ['SONOGRAM LEFT BREAST', 'SONOGRAM RIGHT BREAST'],
+    ['SONOGRAM BREAST', 'SONOGRAM LIVER'],
+  ])('does not discard contradictory examination headers: %s / %s', (left, right) => {
+    const reports = pair().map((report, index) => ({ ...report, code: { text: 'Ultrasonography' },
+      conclusion: `${index ? right : left} Date Of Examination:2026/06/24 Date Of RCP:2026/06/24 ${BODY}`,
+    }))
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it.each([
+    ['Left breast ultrasound', 'Right breast ultrasound'],
+    ['Chest CT', 'Brain CT'],
+  ])('uses explicit title qualifiers as a conflict check: %s / %s', (left, right) => {
+    const reports = pair().map((report, index) => ({ ...report, code: { text: index ? right : left }, conclusion: BODY }))
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it.each([
     ['another patient', { subject: { reference: 'Patient/other' } }],
     ['another day', { effectiveDateTime: '2026-06-23' }],
     ['invalid date', { effectiveDateTime: '2026-02-30' }],

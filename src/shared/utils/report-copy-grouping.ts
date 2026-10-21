@@ -110,6 +110,27 @@ export function compareImagingCopies(a: Report, b: Report): number {
     || (a.id ?? '').localeCompare(b.id ?? '')
 }
 
+/** Findings may be templated. Explicit exam labels still constrain a match,
+ * even though generic hospital/NHI names are allowed to differ. */
+function examQualifiers(report: Report): string[] {
+  const header = EXAM_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1]?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
+  const label = [report.code?.text, ...(report.code?.coding ?? []).map(c => c.display), header].filter(Boolean).join(' ').normalize('NFKC')
+  const left = /\b(?:left|lt)\b|左側|左乳|左肺/i.test(label)
+  const right = /\b(?:right|rt)\b|右側|右乳|右肺/i.test(label)
+  const side = /\bbilateral\b|雙側|雙乳/i.test(label) || (left && right) ? 'bilateral' : left ? 'left' : right ? 'right' : ''
+  const sites = [
+    ['breast', /\bbreast\b|乳房|左乳|右乳|雙乳/i],
+    ['chest', /\b(?:chest|thorax|lung)\b|胸|肺/i],
+    ['head', /\b(?:head|brain|cranial)\b|頭部|頭顱|腦部/i],
+    ['neck', /\bneck\b|頸/i],
+    ['abdomen', /\b(?:abdomen|abdominal|hepatobiliary|liver|gallbladder)\b|腹|肝|膽/i],
+    ['pelvis', /\bpelvi[cs]\b|骨盆/i],
+    ['spine', /\b(?:spine|spinal)\b|脊椎/i],
+  ] as const
+  const site = sites.filter(([, pattern]) => pattern.test(label)).map(([name]) => name).join(',')
+  return [header, side, site]
+}
+
 /** Shared grouping projection for rows, tab counts and AI context. Returned
  * keys do not modify source resources. Same-source shared-procedure grouping
  * retains its existing strict boundary; cross-source copies get an additional
@@ -169,6 +190,10 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     const hospital = bucket.filter(item => item.source === 'hospital')
     const cloud = bucket.filter(item => item.source === 'cloud')
     if (!hospital.length || !cloud.length) continue
+    const qualifiers = bucket.map(({ report }) => examQualifiers(report))
+    // Unknown/generic labels do not supply evidence. Contradictory explicit
+    // headers, laterality or body regions must never disappear with a wrapper.
+    if ([0, 1, 2].some(index => new Set(qualifiers.map(q => q[index]).filter(Boolean)).size > 1)) continue
     const members = new Set(bucket.map(item => item.report))
     // Do not pull a complete report away from a same-source truncated or
     // otherwise related member that the existing natural grouping owns.
