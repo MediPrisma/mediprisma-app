@@ -8,6 +8,7 @@ import { createMergedFhirFixture, type RawBundle, type SourceImage } from '../fi
 
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
 const parse = (bytes: Buffer): RawBundle => JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/, ''))
+const activeImport = (page: Page) => page.evaluate(() => sessionStorage.getItem('fhir_bundle_override'))
 
 async function openDownloads(page: Page) {
   await openFeaturePanel(page)
@@ -105,6 +106,8 @@ test('merged cloud and hospital originals and every embedded image survive downl
   }
 
   await importBundle(page, { bundlePath: source })
+  const originalImport = await activeImport(page)
+  expect(originalImport).toMatch(/^import:.+/)
   await expect(page.getByText('整併測試病人').first()).toBeAttached()
   await verifyClinicalData(page)
   await verifyImages(page, images, 'first-import', info)
@@ -120,7 +123,12 @@ test('merged cloud and hospital originals and every embedded image survive downl
   try {
     await stubFirebaseAnonymousAuth(clean)
     const restored = await clean.newPage()
+    await restored.goto('/')
+    expect(await activeImport(restored)).toBeNull()
     await importBundle(restored, { bundlePath: downloaded })
+    const firstReimport = await activeImport(restored)
+    expect(firstReimport).toMatch(/^import:.+/)
+    expect(firstReimport).not.toBe(originalImport)
     await expect(restored.getByText('整併測試病人').first()).toBeAttached()
     await verifyClinicalData(restored)
     await verifyImages(restored, images, 'clean-reimport', info)
@@ -130,6 +138,9 @@ test('merged cloud and hospital originals and every embedded image survive downl
     await verifyDownload(restored, 'clean-reimport-reload-download')
     // Repeat using an actual download from the new context, not the fixture.
     await importBundle(restored, { bundlePath: secondDownload })
+    const secondReimport = await activeImport(restored)
+    expect(secondReimport).toMatch(/^import:.+/)
+    expect(secondReimport).not.toBe(firstReimport)
     await verifyClinicalData(restored)
     await verifyImages(restored, images, 'second-reimport', info)
     await verifyDownload(restored, 'second-reimport-download')
