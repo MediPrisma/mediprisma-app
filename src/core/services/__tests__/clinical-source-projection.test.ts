@@ -211,4 +211,40 @@ describe('createClinicalSourceProjectionIds', () => {
       createClinicalSourceProjectionIds(repeated).get(repeatedReport.key),
     )
   })
+
+  it('keeps same-payload panels distinct when ambiguous candidate sets have different contexts', () => {
+    const capture = (generation: string, values: [number, number]) => ({
+      ...scope,
+      generation,
+      resources: [
+        { resourceType: 'Observation', id: 'panel', hasMember: [{ reference: 'Observation/x' }] },
+        { resource: { resourceType: 'Observation', id: 'x', valueInteger: values[0] }, fullUrl: 'urn:uuid:candidate-a' },
+        { resource: { resourceType: 'Observation', id: 'x', valueInteger: values[1] }, fullUrl: 'urn:uuid:candidate-b' },
+      ],
+    })
+    const source = reconcileClinicalSources([capture('capture-a', [7, 8]), capture('capture-b', [9, 10])])
+    const panels = source.graph.nodes.filter(node => node.resource.id === 'panel')
+    expect(source.graph.references.filter(edge => panels.some(panel => panel.key === edge.origin.key)).map(edge => edge.status)).toEqual(['ambiguous', 'ambiguous'])
+    expect(selectClinicalSourceNodes(source).filter(node => node.resource.id === 'panel')).toHaveLength(2)
+    const ids = createClinicalSourceProjectionIds(source)
+    expect(ids.get(panels[0].key)).not.toBe(ids.get(panels[1].key))
+  })
+
+  it('merges ambiguous edges with the same candidate contexts across generations', () => {
+    const capture = (generation: string) => ({
+      ...scope,
+      generation,
+      resources: [
+        { resourceType: 'Observation', id: 'panel', hasMember: [{ reference: 'Observation/x' }] },
+        { resource: { resourceType: 'Observation', id: 'x', valueInteger: 7 }, fullUrl: 'urn:uuid:candidate-a' },
+        { resource: { resourceType: 'Observation', id: 'x', valueInteger: 8 }, fullUrl: 'urn:uuid:candidate-b' },
+      ],
+    })
+    const source = reconcileClinicalSources([capture('capture-a'), capture('capture-b')])
+    const panels = source.graph.nodes.filter(node => node.resource.id === 'panel')
+    expect(source.graph.references.filter(edge => panels.some(panel => panel.key === edge.origin.key)).map(edge => edge.status)).toEqual(['ambiguous', 'ambiguous'])
+    expect(selectClinicalSourceNodes(source).filter(node => node.resource.id === 'panel')).toHaveLength(1)
+    const ids = createClinicalSourceProjectionIds(source)
+    expect(ids.get(panels[0].key)).toBe(ids.get(panels[1].key))
+  })
 })

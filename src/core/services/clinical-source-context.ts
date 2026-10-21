@@ -70,7 +70,7 @@ export function clinicalSourceContextIdentity(graph: ClinicalSourceGraph, node: 
     let cyclic = false
     const outgoing = (edges.get(current.key) ?? []).map((edge) => {
       let targets: string[] | number
-      if (edge.status === 'resolved') {
+      if (edge.status === 'resolved' || (edge.status === 'ambiguous' && edge.targetKeys.length > 0)) {
         targets = [...new Set(edge.targetKeys.map((key) => {
             const target = nodes.get(key)
             // A dangling resolved edge is malformed; retain its key so it cannot
@@ -116,7 +116,7 @@ export function clinicalSourceNodesEqualWithContext(
       const ae = aEdges[i]
       const be = bEdges[i]
       if (ae.path !== be.path || ae.status !== be.status || ae.reference !== be.reference || ae.display !== be.display) return false
-      if (ae.status !== 'resolved') {
+      if (ae.status !== 'resolved' && !(ae.status === 'ambiguous' && ae.targetKeys.length > 0)) {
         if (ae.targetKeys.length !== be.targetKeys.length) return false
         continue
       }
