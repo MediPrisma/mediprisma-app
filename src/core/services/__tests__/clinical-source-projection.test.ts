@@ -1,5 +1,6 @@
 import { reconcileClinicalSources } from '../clinical-reconciliation'
 import { createClinicalSourceProjectionIds } from '../clinical-source-projection'
+import { selectClinicalSourceNodes } from '../clinical-reconciliation'
 import type { ClinicalReconciliationResult } from '../clinical-reconciliation'
 
 const scope = { sourceId: 'ehr-source', patientScope: 'patient-1', restBase: 'https://ehr.example/fhir' }
@@ -151,5 +152,63 @@ describe('createClinicalSourceProjectionIds', () => {
     const ids = createClinicalSourceProjectionIds(source)
     expect(ids.size).toBe(2)
     expect([...ids.keys()].every((key) => ['Observation', 'DiagnosticReport'].includes(source.graph.nodes.find((node) => node.key === key)!.resource.resourceType))).toBe(true)
+  })
+
+  it('keeps identical panels distinct when their resolved members differ across captures', () => {
+    const capture = (generation: string, value: number) => ({
+      ...scope,
+      generation,
+      resources: [
+        { resourceType: 'Observation', id: 'panel', hasMember: [{ reference: 'Observation/leaf' }] },
+        { resourceType: 'Observation', id: 'leaf', valueInteger: value },
+        { resourceType: 'DiagnosticReport', id: `report-${generation}`, result: [{ reference: 'Observation/panel' }] },
+      ],
+    })
+    const source = reconcileClinicalSources([capture('capture-a', 7), capture('capture-b', 9)])
+    const panels = source.graph.nodes.filter((node) => node.resource.id === 'panel')
+    expect(panels).toHaveLength(2)
+    expect(selectClinicalSourceNodes(source).filter((node) => node.resource.id === 'panel')).toHaveLength(2)
+    const ids = createClinicalSourceProjectionIds(source)
+    expect(ids.get(panels[0].key)).not.toBe(ids.get(panels[1].key))
+    expect(source.evidence.sameRecord.some((item) => item.nodeKeys.every((key) => panels.some((panel) => panel.key === key)))).toBe(false)
+  })
+
+  it('merges identical resolved context across generations and terminates on reference cycles', () => {
+    const capture = (generation: string) => ({
+      ...scope,
+      generation,
+      resources: [
+        { resourceType: 'Observation', id: 'panel', hasMember: [{ reference: 'Observation/leaf' }] },
+        { resourceType: 'Observation', id: 'leaf', valueInteger: 7, hasMember: [{ reference: 'Observation/panel' }] },
+      ],
+    })
+    const source = reconcileClinicalSources([capture('capture-a'), capture('capture-b')])
+    const panels = source.graph.nodes.filter((node) => node.resource.id === 'panel')
+    expect(selectClinicalSourceNodes(source).filter((node) => node.resource.id === 'panel')).toHaveLength(1)
+    const ids = createClinicalSourceProjectionIds(source)
+    expect(ids.get(panels[0].key)).toBe(ids.get(panels[1].key))
+    const reversed = { ...source, graph: { ...source.graph, nodes: [...source.graph.nodes].reverse() } } as typeof source
+    const reversedIds = createClinicalSourceProjectionIds(reversed)
+    expect(panels.map((node) => ids.get(node.key))).toEqual(panels.map((node) => reversedIds.get(node.key)))
+  })
+
+  it('treats multiple equivalent resolved transmission targets as one context target', () => {
+    const origin = { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'Observation/leaf' }] }
+    const leaf = { resourceType: 'Observation', id: 'leaf', valueInteger: 7 }
+    const single = reconcileClinicalSources([
+      { ...scope, generation: 'origin', resources: [origin] },
+      { ...scope, generation: 'leaf-copy-a', resources: [leaf] },
+    ])
+    const repeated = reconcileClinicalSources([
+      { ...scope, generation: 'origin', resources: [origin] },
+      { ...scope, generation: 'leaf-copy-a', resources: [leaf] },
+      { ...scope, generation: 'leaf-copy-b', resources: [leaf] },
+    ])
+    const singleReport = single.graph.nodes.find((node) => node.resource.resourceType === 'DiagnosticReport')!
+    const repeatedReport = repeated.graph.nodes.find((node) => node.resource.resourceType === 'DiagnosticReport')!
+    expect(repeated.graph.references.find((edge) => edge.origin.key === repeatedReport.key)?.targetKeys).toHaveLength(2)
+    expect(createClinicalSourceProjectionIds(single).get(singleReport.key)).toBe(
+      createClinicalSourceProjectionIds(repeated).get(repeatedReport.key),
+    )
   })
 })

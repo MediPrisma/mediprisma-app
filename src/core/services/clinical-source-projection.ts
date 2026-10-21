@@ -1,4 +1,5 @@
 import { clinicalSourceResourcesEqual } from './clinical-source-graph'
+import { clinicalSourceContextIdentity, clinicalSourceNodesEqualWithContext } from './clinical-source-context'
 import type { ClinicalSourceNode } from './clinical-source-graph'
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 
@@ -15,7 +16,7 @@ function stableMetadata(value: unknown): string {
   return JSON.stringify(value) ?? 'null'
 }
 
-function digest(value: string): string {
+export function clinicalSourceIdentityDigest(value: string): string {
   // Two independent 32-bit streams form a compact 64-bit, browser-safe digest.
   let first = 0x811c9dc5
   let second = 0x9e3779b9
@@ -110,26 +111,27 @@ export function createClinicalSourceProjectionIds(
       node.resource.id ?? null,
       versionId,
       node.contentHash,
+      clinicalSourceContextIdentity(source.graph, node),
       parentIdentity ?? null,
       occurrence ?? null,
       // Without an id or fullUrl, equal payloads in independent query captures
       // are not proven retransmissions. Keep each graph capture slot distinct.
       hasReliableIdentity ? null : node.key,
     ])
-    records.push({ node, identity, digest: digest(identity) })
+    records.push({ node, identity, digest: clinicalSourceIdentityDigest(identity) })
   }
 
-  const buckets = new Map<string, Array<{ identity: string; resource: ClinicalSourceNode['resource']; nodeKeys: string[] }>>()
+  const buckets = new Map<string, Array<{ identity: string; resource: ClinicalSourceNode['resource']; node: ClinicalSourceNode; nodeKeys: string[] }>>()
   for (const record of records) {
     const bucket = buckets.get(record.digest) ?? []
     const existing = bucket.find((candidate) => candidate.identity === record.identity)
     if (existing) {
-      if (!clinicalSourceResourcesEqual(existing.resource, record.node.resource)) {
+      if (!clinicalSourceNodesEqualWithContext(source.graph, existing.node, record.node)) {
         throw new Error('Clinical source projection ID hash collision: matching identity metadata has different resources')
       }
       existing.nodeKeys.push(record.node.key)
     } else {
-      bucket.push({ identity: record.identity, resource: record.node.resource, nodeKeys: [record.node.key] })
+      bucket.push({ identity: record.identity, resource: record.node.resource, node: record.node, nodeKeys: [record.node.key] })
     }
     buckets.set(record.digest, bucket)
   }

@@ -1,4 +1,5 @@
 import { buildClinicalSourceGraph, clinicalSourceResourcesEqual, type ClinicalSourceCapture, type ClinicalSourceGraph, type ClinicalSourceNode } from './clinical-source-graph'
+import { clinicalSourceContextIdentity, clinicalSourceNodesEqualWithContext } from './clinical-source-context'
 
 export const CLINICAL_RECONCILIATION_POLICY_VERSION = 'conservative-source-v1'
 export type ClinicalResourcePolicy = { assessment: 'supported' | 'not-assessed'; strategy: 'preserve-existing-view' | 'retain-source-only' }
@@ -36,8 +37,10 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
     const existing = identities.get(identity) ?? []
     for (const prior of existing) {
       const pair = { nodeKeys: [prior.key, node.key], reason: 'Same source, patient, resource type and logical id' }
-      if (prior.contentHash === node.contentHash && clinicalSourceResourcesEqual(prior.resource, node.resource)) evidence.sameRecord.push(pair)
-      else {
+      if (prior.contentHash === node.contentHash && clinicalSourceResourcesEqual(prior.resource, node.resource)) {
+        if (clinicalSourceNodesEqualWithContext(graph, prior, node)) evidence.sameRecord.push(pair)
+        else evidence.conflict.push({ ...pair, reason: 'Same payload has different resolved reference context' })
+      } else {
         const previousVersion = (prior.resource.meta as { versionId?: string } | undefined)?.versionId
         const version = (node.resource.meta as { versionId?: string } | undefined)?.versionId
         if (version && previousVersion && version !== previousVersion) evidence.revision.push({ ...pair, reason: 'Distinct explicit version ids; chronology is not inferred' })
@@ -79,9 +82,9 @@ export function selectClinicalSourceNodes(result: ClinicalReconciliationResult) 
   return result.graph.nodes.filter(node => {
     if (node.isContained || node.embeddedIn) return false
     if (!node.resource.id && !node.fullUrl) return true
-    const identity = recordScopeIdentity(node) + '|' + node.contentHash
+    const identity = recordScopeIdentity(node) + '|' + node.contentHash + '|' + clinicalSourceContextIdentity(result.graph, node)
     const bucket = seen.get(identity) ?? []
-    if (bucket.some(prior => clinicalSourceResourcesEqual(prior.resource, node.resource))) return false
+    if (bucket.some(prior => clinicalSourceNodesEqualWithContext(result.graph, prior, node))) return false
     bucket.push(node)
     seen.set(identity, bucket)
     return true
