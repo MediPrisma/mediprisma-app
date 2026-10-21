@@ -23,6 +23,43 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it('renders a shared Observation object once while retaining distinct objects with the same id', () => {
+    const observation = { id: 'shared-result', code: { text: 'Measurement' }, valueQuantity: { value: 4, unit: 'mm' } }
+    const reports = [0, 1].map(index => ({ ...pair()[0], id: `copy-${index}`, conclusion: BODY, _observations: [observation] }))
+    expect(buildReportsData(reports).reportRows[0].obs.filter(obs => obs.valueQuantity)).toHaveLength(1)
+    reports[1]._observations = [{ ...observation, valueQuantity: { value: 5, unit: 'mm' } }]
+    expect(buildReportsData(reports).reportRows[0].obs.filter(obs => obs.valueQuantity).map(obs => obs.valueQuantity?.value)).toEqual([4, 5])
+  })
+
+  it('keeps conflicting identifier roles separate and ignores coding order only', () => {
+    const reports = pair()
+    const typeCodes = [{ system: 'urn:synthetic:identifier-type', code: 'ACSN' }, { system: 'urn:synthetic:secondary-type', code: 'EXAM' }]
+    reports[0].identifier = [{ system: 'urn:synthetic:ids', value: 'EXAM-1', type: { coding: typeCodes } }]
+    reports[1].identifier = [{ system: 'urn:synthetic:ids', value: 'EXAM-1', type: { coding: [{ ...typeCodes[0], code: 'ORDER' }, typeCodes[1]] } }]
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+    reports[1].identifier[0].type.coding = [...typeCodes].reverse()
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+  })
+
+  it.each([false, true])('rejects conflicting accession identifiers even with a shared order, typed=%s', typed => {
+    const reports = pair()
+    const identifiers = (accession: string) => [
+      { system: 'urn:synthetic:exam-identifiers', value: 'ORDER-A', ...(typed ? { type: { coding: [{ system: 'urn:synthetic:identifier-type', code: 'ORDER' }] } } : {}) },
+      { system: 'urn:synthetic:exam-identifiers', value: accession, ...(typed ? { type: { coding: [{ system: 'urn:synthetic:identifier-type', code: 'ACSN' }] } } : {}) },
+    ]
+    reports[0].identifier = identifiers('ACCESSION-1')
+    reports[1].identifier = identifiers('ACCESSION-2')
+    expect(reportDisplayGroupingKeys(reports).size).toBe(0)
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    expect(imagingReportsCategory.getCount(reports, filters, {} as any)).toBe(2)
+    expect(JSON.stringify(imagingReportsCategory.getContextSection(reports, filters, {} as any))).not.toContain('[shared narrative; count once]')
+    reports[1].identifier = identifiers('ACCESSION-1').reverse()
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+  })
+
   it('suppresses a mixed-channel synthetic summary only when the retained report represents all its metadata', () => {
     const reports = [0, 1].map(index => ({ ...pair()[0], id: `mixed-${index}`, conclusion: index ? BODY : undefined,
       _observations: index ? [] : [{ resourceType: 'Observation', id: 'mixed-summary', status: 'final', code: { text: 'Report Summary' }, valueString: BODY.slice(0, 110) }],

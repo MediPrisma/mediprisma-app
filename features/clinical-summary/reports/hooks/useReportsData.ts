@@ -353,7 +353,8 @@ export function buildReportsData(
       const sharedReportSources = sharedReportSourcesByKey.get(key)
       const isMulti = grp.length > 1
       const allSourceReports = viewerReportsByKey.get(key) ?? grp
-      const sourceReports = inferReportDisplayGroup(head) === 'imaging' ? allSourceReports : grp
+      const isImagingGroup = inferReportDisplayGroup(head) === 'imaging'
+      const sourceReports = isImagingGroup ? allSourceReports : grp
       const clinicalReports = new Set(grp)
       const linkedStudies: ImagingStudy[] = []
       const rowStudyIds = new Set<string>()
@@ -411,6 +412,7 @@ export function buildReportsData(
           : uniqueViewerEntries
       ).map(({ action }) => action)
       const allObs: Observation[] = []
+      const seenSourceObservations = new Set<Observation>()
 
       for (const dr of sourceReports) {
         // Exact shared-report groups retain every source identity, image, and
@@ -436,6 +438,7 @@ export function buildReportsData(
         const drTitle = derivePerDrTitle(dr)
         const perTitle = (!isSharedReport && isMulti && drTitle !== groupText) ? drTitle : null
         for (const o of obs) {
+          if (isImagingGroup && seenSourceObservations.has(o)) continue
           const isNarrativeOnlyObservation = (
             typeof o?.valueString === 'string'
             && o.valueString.trim().length > 30
@@ -470,6 +473,9 @@ export function buildReportsData(
             })
             if (duplicate) continue
           }
+          // Repeated references can resolve to the exact same resource. Do
+          // not deduplicate by id or value: distinct source objects survive.
+          if (isImagingGroup) seenSourceObservations.add(o)
           if (perTitle) {
             allObs.push({
               ...o,

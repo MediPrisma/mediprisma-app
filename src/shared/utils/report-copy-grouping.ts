@@ -318,11 +318,18 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     for (const { report } of bucket) {
       const bySystem = new Map<string, Set<string>>()
       for (const id of report.identifier ?? []) {
-        if (id.system && id.value) bySystem.set(id.system, new Set([...(bySystem.get(id.system) ?? []), id.value]))
+        if (id.system && id.value) {
+          const typeCodes = id.type?.coding?.map(coding => JSON.stringify([coding.system ?? '', coding.code ?? ''])).sort()
+          const identity = JSON.stringify([id.value, typeCodes?.length ? typeCodes : id.type?.text ?? null])
+          bySystem.set(id.system, new Set([...(bySystem.get(id.system) ?? []), identity]))
+        }
       }
       for (const [system, values] of bySystem) identifiers.set(system, [...(identifiers.get(system) ?? []), values])
     }
-    if ([...identifiers.values()].some(sets => sets.length > 1 && ![...sets[0]].some(value => sets.every(set => set.has(value))))) continue
+    // A shared order cannot override a different accession in the same
+    // namespace. Require complete typed sets, independent of array order.
+    if ([...identifiers.values()].some(sets => sets.length > 1 && sets.some(set =>
+      set.size !== sets[0].size || [...sets[0]].some(value => !set.has(value))))) continue
     const times = bucket.map(item => examTime(item.report)).filter(Boolean)
     if (times.includes('conflicting-exam-times') || new Set(times).size > 1) continue
     // A date-only start must not hide another source's clock occurring after
