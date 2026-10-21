@@ -56,6 +56,20 @@ it('uses the same one-group projection for the medication timeline', () => {
   expect(result.current.drugs[0].bars[0].sourceComparisonUnconfirmed).toBe(true)
 })
 
+it('keeps the cloud supply interval when a grouped hospital record has no duration', () => {
+  const input: any = JSON.parse(JSON.stringify(copiesFixture))
+  const hospital = input.entry.find((entry: any) => entry.resource.id === 'synthetic-order-a').resource
+  delete hospital.dispenseRequest
+  const collection = LocalBundleService.parse(input)!.collection
+  const { result } = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW'))
+  expect(result.current.drugs).toHaveLength(1)
+  const bar = result.current.drugs[0].bars[0]
+  expect(bar.supplyDays).toBe(28)
+  expect(bar.supplyEndDay).toBe('2026-06-03')
+  expect(bar.sourceComparison).toContain('synthetic-order-a:')
+  expect(bar.sourceComparison).toContain('supply period not provided')
+})
+
 it('keeps overview and list dates aligned for UTC midnight equivalents and fractional supply', () => {
   const medication = { id: 'fractional-utc', authoredOn: '2026-10-18T16:00:00Z', status: 'active',
     medicationCodeableConcept: { text: 'Synthetic product' }, dispenseRequest: { expectedSupplyDuration: { value: 2.4, code: 'd' } } }

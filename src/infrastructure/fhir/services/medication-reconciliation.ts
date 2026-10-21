@@ -147,7 +147,8 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     if (sig(left) && !(aDose?.doseQuantity || aDose?.doseRange) && (bDose?.doseQuantity || bDose?.doseRange)
       || sig(right) && !(bDose?.doseQuantity || bDose?.doseRange) && (aDose?.doseQuantity || aDose?.doseRange)) return true
     if (sig(left) && !aRate && bRate || sig(right) && !bRate && aRate) return true
-    for (const field of ['route', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method']) {
+    for (const field of ['route', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method',
+      'additionalInstruction', 'patientInstruction', 'maxDosePerAdministration', 'maxDosePerLifetime', 'maxDosePerPeriod']) {
       if (sig(left) && left[field] === undefined && right[field] !== undefined
         || sig(right) && right[field] === undefined && left[field] !== undefined) return true
     }

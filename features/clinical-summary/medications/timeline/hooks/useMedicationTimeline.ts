@@ -423,25 +423,34 @@ export function useMedicationTimeline(
       return { dataOrigin: isVghtpeSource(med) ? 'hospital' : isMedcloudSource(med) ? 'medcloud' : undefined,
         isInactive: !assessment.current, currentnessUncertain: assessment.uncertain }
     })
-    for (const { record: med } of projected) {
+    for (const { record: med, sources, ownedIds } of projected) {
       if (!med) continue
       if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(med.status).toLowerCase())) continue
       const clinicalDrugKey = medicationClinicalIdentityKey(med)
       if (!clinicalDrugKey) continue
 
-      const startIso = med.authoredOn || med.effectiveDateTime
+      // A compact comparison bar uses an actual source interval, never a
+      // fabricated one-day course when a partner recorded a complete supply.
+      const periodSources = sources && ownedIds?.length === sources.length ? sources : [med]
+      const periodSource = periodSources.reduce((best, source) => {
+        const sourceEnd = medicationExpectedEndTimestamp(source)
+        const bestEnd = medicationExpectedEndTimestamp(best)
+        return sourceEnd !== undefined && (bestEnd === undefined || sourceEnd > bestEnd) ? source : best
+      }, med)
+      const startIso = periodSource.authoredOn || periodSource.effectiveDateTime
       if (!startIso) continue
       const startMs = medicationClinicalTimestamp(startIso)
       if (Number.isNaN(startMs) || startMs < rangeStart) continue
 
-      const supplyEndDay = medicationExpectedEnd(med)
+      const supplyEndDay = medicationExpectedEnd(periodSource)
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
-      const reportedDays = durationToDays(med.dispenseRequest?.expectedSupplyDuration, false)
-        ?? durationToDays(dosage?.timing?.repeat?.boundsDuration, false)
-        ?? periodToDays(dosage?.timing?.repeat?.boundsPeriod)
+      const periodDosage = periodSource.dosageInstruction?.[0] || periodSource.dosage?.[0]
+      const reportedDays = durationToDays(periodSource.dispenseRequest?.expectedSupplyDuration, false)
+        ?? durationToDays(periodDosage?.timing?.repeat?.boundsDuration, false)
+        ?? periodToDays(periodDosage?.timing?.repeat?.boundsPeriod)
         ?? periodToDays(supplyEndDay ? { start: medicationClinicalDay(startIso), end: supplyEndDay } : undefined)
       const supplyDays = reportedDays ?? 1
-      const exactEnd = medicationExpectedEndTimestamp(med)
+      const exactEnd = medicationExpectedEndTimestamp(periodSource)
       const endMs = exactEnd === undefined ? startMs + 86400000 : exactEnd + 1
       const prescriptionType = resolvedPrescriptionType(
         prescriptionTypesByDrug.get(clinicalDrugKey),
@@ -497,7 +506,8 @@ export function useMedicationTimeline(
         : ''
 
       const bar: RefillBar = {
-        sourceComparison: sourceComparisonNarrative(med),
+        sourceComparison: [sourceComparisonNarrative(med), ...(sources ?? []).map(source =>
+          `${source.id}: ${source.authoredOn || source.effectiveDateTime || '?'} → ${medicationExpectedEnd(source) || 'supply period not provided'}`)].filter(Boolean).join('\n') || undefined,
         sourceComparisonUnconfirmed: !!med._sourceRecordComparison && med._sourceRecordComparison.status !== 'confirmed',
         supplyEndDay,
         selfPurchased: sourceSelfPurchase(med) === true,

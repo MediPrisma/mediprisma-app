@@ -425,6 +425,14 @@ it.each(['additionalInstruction', 'patientInstruction', 'maxDosePerAdministratio
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
 })
 
+it('does not add an unverified patient instruction to a full hospital SIG', () => {
+  const { hospital, cloud } = fixture()
+  hospital.dosageInstruction = [{ text: '1 TAB PO QD with food' }]
+  cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } }, patientInstruction: 'Take on an empty stomach' }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital.dosageInstruction[0].patientInstruction).toBeUndefined()
+})
+
 it.each([
   [{ rateQuantity: { value: 1, unit: 'mL/h' } }, { rateQuantity: { value: 2, unit: 'mL/h' } }],
   [{ rateRatio: { numerator: { value: 1, unit: 'mg' }, denominator: { value: 1, unit: 'h' } } },
