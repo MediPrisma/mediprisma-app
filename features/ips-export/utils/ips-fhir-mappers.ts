@@ -32,6 +32,7 @@ import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comp
 import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
 import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
 import { medicationDirectionsForFhir } from './medication-display'
+import { medicationSourceRecords, sourceSupplyText } from './medication-source-records'
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -266,10 +267,10 @@ const VALID_MED_STATEMENT_STATUS = [
 ]
 
 export function mapMedications(medications: MedicationEntity[], patientRef: string): SectionMapResult {
-  const entries = medications.map((m) => {
+  const entries = medicationSourceRecords(medications).map((m) => {
     const directions = medicationDirectionsForFhir(m)
-    const dosage = directions ? [{ text: directions }] : undefined
-    const notes = [sourceComparisonNarrative(m), sourceSelfPurchase(m) === true ? '來源明列自費／自購（self-pay）' : undefined,
+    const dosage = m.exportSourceLabel ? m.dosageInstruction : directions ? [{ text: directions }] : undefined
+    const notes = [m.exportSourceLabel, sourceComparisonNarrative(m), sourceSupplyText(m), sourceSelfPurchase(m) === true ? '來源明列自費／自購（self-pay）' : undefined,
       `Original source order status: ${m.status || 'unknown'}; actual medication use has not been verified.`,
       ...(m.note ?? []).map(note => note.text)]
       .filter((text): text is string => Boolean(text)).map((text) => ({ text }))
@@ -281,6 +282,7 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
       medicationCodeableConcept:
         toCodeableConcept(m.medicationCodeableConcept, 'Unknown medication') ?? { text: 'Unknown medication' },
       subject: { reference: patientRef },
+      ...(m.identifier?.length ? { identifier: m.identifier } : {}),
       ...requiredDateTime('effectiveDateTime', m.authoredOn),
       ...(dosage ? { dosage } : {}),
       ...(notes.length ? { note: notes } : {}),

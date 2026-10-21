@@ -95,8 +95,16 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     if (quantityConflicts(left.doseAndRate?.[0]?.doseQuantity, right.doseAndRate?.[0]?.doseQuantity)) return true
     const aDose = left.doseAndRate?.[0], bDose = right.doseAndRate?.[0]
     if ((aDose?.doseRange && bDose?.doseQuantity) || (aDose?.doseQuantity && bDose?.doseRange)) return true
+    const rateType = (dose: any) => ['rateQuantity', 'rateRatio', 'rateRange'].find(field => dose?.[field])
+    const aRate = rateType(aDose), bRate = rateType(bDose)
+    if (aRate && bRate && aRate !== bRate) return true
+    if (quantityConflicts(aDose?.rateQuantity, bDose?.rateQuantity)) return true
+    for (const part of ['numerator', 'denominator']) {
+      if (quantityConflicts(aDose?.rateRatio?.[part], bDose?.rateRatio?.[part])) return true
+    }
     for (const edge of ['low', 'high']) {
       if (quantityConflicts(aDose?.doseRange?.[edge], bDose?.doseRange?.[edge])) return true
+      if (quantityConflicts(aDose?.rateRange?.[edge], bDose?.rateRange?.[edge])) return true
     }
     const leftFrequency = frequencyKey(left)
     const rightFrequency = frequencyKey(right)

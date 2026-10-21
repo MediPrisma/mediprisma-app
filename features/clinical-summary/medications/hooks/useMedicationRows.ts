@@ -449,13 +449,14 @@ export function useMedicationRows(
         // details instead of repeating the same hospital prescription row.
         // Keep distinct hospital orders and any conflicting source facts as
         // separate rows; every original remains in sourceComparison.records.
-        const compatibleCloudCopies = hospitalRows.length === 1 && cloudRows.length > 1
-          && !comparison.warnings?.some((warning: string) =>
-            ['source-facts-differ', 'source-status-conflict'].includes(warning))
-        const moreNumerousSource = compatibleCloudCopies ? hospitalRows
-          : cloudRows.length > hospitalRows.length ? cloudRows : hospitalRows
-        const displayRows = moreNumerousSource.length > 1 ? [...moreNumerousSource] : [representative]
-        if (moreNumerousSource.length > 1 && displayRows.every(source => source.isInactive) && !representative.isInactive) displayRows.unshift(representative)
+        const factsConflict = comparison.warnings?.some((warning: string) =>
+          ['source-facts-differ', 'source-status-conflict'].includes(warning))
+        const displayRows = factsConflict
+          ? [...sourceRows as MedicationRow[]]
+          : hospitalRows.length > 1
+            ? [...hospitalRows, ...(cloudRows.length > hospitalRows.length ? cloudRows : [])]
+            : [representative]
+        if (displayRows.length > 1 && displayRows.every(source => source.isInactive) && !representative.isInactive) displayRows.unshift(representative)
         displayRows.forEach((display, displayIndex) => comparisonRows.push({ ...display, _startSortValue: enriched[index]._startSortValue,
           sourceComparison: { status: comparison.status, records: sourceRows as MedicationRow[],
             detailsInitiallyOpen: displayIndex === 0,

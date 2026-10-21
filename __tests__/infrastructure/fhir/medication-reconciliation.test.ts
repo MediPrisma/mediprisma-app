@@ -3,6 +3,8 @@ import { reconcileMedicationRequests } from '@/src/infrastructure/fhir/services/
 import { renderHook } from '@testing-library/react'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { medicationExpectedEnd, assessMedicationCurrentness } from '@/src/core/utils/clinical-context-selection.utils'
+import { mapMedications } from '@/features/ips-export/utils/ips-fhir-mappers'
+import { narrativeMedications } from '@/features/ips-export/utils/ips-narrative-templates'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
 function fixture() {
@@ -360,4 +362,63 @@ it('preserves both records when two different supply-end strings are unparseable
   cloud.dispenseRequest.validityPeriod = { end: '2026-13-02' }
   expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
   expect(hospital._sourceRecordComparison.warnings).toContain('source-facts-differ')
+})
+
+it('preserves every hospital row when two hospital orders have three possible cloud copies', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier
+  const orders = reconcileMedicationRequests([
+    hospital, { ...hospital, id: 'hospital-second-order' }, cloud,
+    { ...cloud, id: 'cloud-second-order' }, { ...cloud, id: 'cloud-third-order' },
+  ])
+  const { result } = renderHook(() => useMedicationRows(orders))
+  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['hospital-med', 'hospital-second-order']))
+  expect(result.current[0].sourceComparison?.records).toHaveLength(5)
+})
+
+it('shows both distinct regimens when one hospital and one cloud prescription conflict', () => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier
+  cloud.dosageInstruction = [{ text: 'BID' }]
+  const orders = reconcileMedicationRequests([hospital, cloud])
+  const { result } = renderHook(() => useMedicationRows(orders))
+  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['hospital-med', 'cloud-med']))
+  expect(result.current).toHaveLength(2)
+})
+
+it.each([
+  [{ rateQuantity: { value: 1, unit: 'mL/h' } }, { rateQuantity: { value: 2, unit: 'mL/h' } }],
+  [{ rateRatio: { numerator: { value: 1, unit: 'mg' }, denominator: { value: 1, unit: 'h' } } },
+    { rateRatio: { numerator: { value: 1, unit: 'mg' }, denominator: { value: 2, unit: 'h' } } }],
+  [{ rateRange: { low: { value: 1 }, high: { value: 2 } } }, { rateRange: { low: { value: 1 }, high: { value: 3 } } }],
+  [{ rateQuantity: { value: 1 } }, { rateRange: { low: { value: 1 }, high: { value: 1 } } }],
+])('does not confirm prescriptions with conflicting administration rates %#', (left, right) => {
+  const { hospital, cloud } = fixture()
+  hospital.dosageInstruction = [{ doseAndRate: [left] }]
+  cloud.dosageInstruction = [{ doseAndRate: [right] }]
+  expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  expect(hospital._sourceRecordComparison.warnings).toContain('source-facts-differ')
+})
+
+it('exports both original records of a confirmed pair with their source quantities, identifiers and regimens', () => {
+  const { hospital, cloud } = fixture()
+  hospital.dispenseRequest = { quantity: { value: 28, unit: 'TAB' } }
+  cloud.dispenseRequest.quantity = { value: 28, unit: 'TAB' }
+  cloud.dosageInstruction = [{ timing: { code: { text: 'QD' } } }]
+  const orders = reconcileMedicationRequests([hospital, cloud])
+  expect(orders).toHaveLength(1)
+  const exported = mapMedications(orders as any, 'Patient/export').entries.map(entry => entry.resource)
+  expect(exported).toHaveLength(2)
+  expect(exported[0].identifier).toEqual(hospital.identifier)
+  expect(exported[1].identifier).toEqual(cloud.identifier)
+  expect(exported[0].dosage).toEqual(hospital._sourcePrescriptionRecords[0].dosageInstruction)
+  expect(exported[1].dosage).toEqual(hospital._sourcePrescriptionRecords[1].dosageInstruction)
+  expect(JSON.stringify(exported[0].note)).toContain('Hospital record: MedicationRequest/hospital-med')
+  expect(JSON.stringify(exported[1].note)).toContain('MediCloud record: MedicationRequest/cloud-med')
+  expect(JSON.stringify(exported[0].note)).toContain('Source total quantity: 28 TAB')
+  expect(JSON.stringify(exported[0].note)).not.toContain('Source supply duration')
+  expect(JSON.stringify(exported[1].note)).toContain('Source supply duration: 28 d')
+  const narrative = narrativeMedications(orders as any, { medication: 'Medication', status: 'Status', directions: 'Directions', supply: 'Supply', date: 'Date' })
+  expect(narrative).toContain('Hospital record: MedicationRequest/hospital-med')
+  expect(narrative).toContain('MediCloud record: MedicationRequest/cloud-med')
 })
