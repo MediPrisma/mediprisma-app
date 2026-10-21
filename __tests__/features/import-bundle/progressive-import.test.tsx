@@ -10,7 +10,8 @@ let mockIncoming: any
 const mockGenerateId = jest.fn(() => 'new-import')
 const mockSave = jest.fn(async (bundle: any, options: any) => { mockBundle = bundle; mockImportId = options.importId })
 const mockPrepare = jest.fn(async () => ({ bundle: mockIncoming }))
-jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: async () => {} }) }))
+const mockInvalidateQueries = jest.fn(async () => {})
+jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: () => mockInvalidateQueries() }) }))
 jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage: () => ({ locale: 'zh-TW' }) }))
 jest.mock('@/src/infrastructure/fhir/services/local-bundle.service', () => ({ LocalBundleService: {
   hasData: () => !!mockBundle, load: async () => mockBundle, parse: () => ({}), save: (bundle: any, options: any) => mockSave(bundle, options),
@@ -24,6 +25,7 @@ const bundle = (id = 'patient-a') => ({ resourceType: 'Bundle', entry: [{ resour
 beforeEach(() => {
   jest.clearAllMocks(); mockImportId = 'original-import'; mockBundle = bundle(); mockIncoming = bundle()
   mockGenerateId.mockReturnValue('new-import')
+  mockInvalidateQueries.mockImplementation(async () => {})
   mockPrepare.mockImplementation(async () => ({ bundle: mockIncoming, originalFhir: new Blob([JSON.stringify(mockIncoming)]) }))
   useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
 })
@@ -122,6 +124,25 @@ test('a same-run privacy stop aborts a pending import even when the injected can
   await act(async () => { release({ bundle: mockIncoming }) })
   expect(mockSave).not.toHaveBeenCalled()
   expect(mockImportId).toBe('original-import')
+})
+
+test('a terminal notice during the post-commit query refresh survives the final receipt', async () => {
+  let refresh!: () => void
+  mockInvalidateQueries.mockImplementation(() => new Promise<void>(resolve => { refresh = resolve }))
+  useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'original-import', phase: 'reports-pending' } })
+  function Workspace() { const { importFile } = useImportBundle(); return <><BundleFileInput importFile={importFile} /><ProgressiveImportStatus /></> }
+  render(<Workspace />)
+  const input = document.querySelector('input')!
+  input.setAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE, JSON.stringify({ version: 1, requestId: 'committed', runId: 'run-a', stage: 'hospital', expectedImportId: 'original-import' }))
+  fireEvent.change(input, { target: { files: [new File(['{}'], 'final.json')] } })
+  await waitFor(() => expect(refresh).toBeDefined())
+  expect(mockImportId).toBe('new-import')
+  act(() => window.dispatchEvent(new MessageEvent('message', { source: window, origin: location.origin,
+    data: { source: 'medcloud2-extension', type: PROGRESSIVE_STATUS_MESSAGE, version: 1, runId: 'run-a', importId: 'original-import', phase: 'privacy-stale' } })))
+  await act(async () => { refresh() })
+  await screen.findByText(/隱私設定已變更/)
+  expect(useProgressiveImportStore.getState().current).toMatchObject({ importId: 'new-import', phase: 'privacy-stale' })
+  expect(isProgressiveAutoSummaryBlocked()).toBe(true)
 })
 
 test('a retained visit snapshot explicitly distinguishes failed reports from an ordinary partial import', () => {

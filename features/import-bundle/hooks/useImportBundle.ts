@@ -109,7 +109,6 @@ export function useImportBundle(): UseImportBundleReturn {
     patientProfile?: ReturnType<typeof LocalBundleService.getUserEnteredPatientProfile>,
     signal?: AbortSignal,
     beforeCommit?: () => void,
-    replaceImportId?: string,
   ) => {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
@@ -136,7 +135,7 @@ export function useImportBundle(): UseImportBundleReturn {
       demo,
       sourceMetadata,
       originalFhir,
-      ...(signal ? { signal, beforeCommit, replaceImportId } : {}),
+      ...(signal ? { signal, beforeCommit } : {}),
       ...(patientProfile ? { patientProfile } : {}),
     })
     // Importing NEW data must not leave the PREVIOUS bundle's derived results
@@ -185,7 +184,7 @@ export function useImportBundle(): UseImportBundleReturn {
         const patientProfile = options?.expectedImportId ? LocalBundleService.getUserEnteredPatientProfile() : undefined
         assertExpectedImport()
         const importId = await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
-          options?.signal, assertExpectedImport, options?.expectedImportId)
+          options?.signal, assertExpectedImport)
         options?.onCommitted?.(importId)
       })
     } catch (err) {

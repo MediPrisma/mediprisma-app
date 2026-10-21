@@ -38,6 +38,7 @@ import {
   NHI_DRUG_ENRICHMENT_POLICY_VERSION,
 } from './nhi-drug-terminology-enrichment.service'
 import { enrichBundleWithNhiDrugTerminologyOffMainThread } from './nhi-drug-terminology-enrichment.worker-client'
+import { serializeLocalBundleMutation } from './local-bundle-mutation-queue'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   applyUserEnteredPatientProfile,
@@ -112,7 +113,7 @@ let memBundleUsesMemoryOnlySession = false
 // A stored bundle can be requested concurrently by the Patient and clinical
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
-const terminologyMigrationByBundle = new WeakMap<object, Promise<object>>()
+const terminologyMigrationByBundle = new WeakMap<object, Promise<object | null>>()
 // Mapping a FHIR Bundle into every domain collection is also expensive and was
 // previously repeated independently by the Patient and clinical-data queries.
 // Cache only the post-storage parse (not the import validator): save() may move
@@ -1034,7 +1035,6 @@ export const LocalBundleService = {
       originalFhir?: Blob
       signal?: AbortSignal
       beforeCommit?: () => void
-      replaceImportId?: string
     } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
@@ -1087,10 +1087,11 @@ export const LocalBundleService = {
         let published = false
         let keyCommitted = false
         let originalPersisted = false
+        let envelopePersisted = false
         try {
           try {
             signal.throwIfAborted()
-            await idbSweepExpiredRecords()
+            try { await idbSweepExpiredRecords() } catch { /* expiry cleanup is best effort */ }
             signal.throwIfAborted()
             try {
               await extractAndStoreImages(bundle, importId, preparedKey.key)
@@ -1105,6 +1106,7 @@ export const LocalBundleService = {
               ...(patientProfile ? { patientProfile } : {}),
             }
             await idbPut(await encryptJson(preparedKey.key, persisted), bundleRecordKey(importId))
+            envelopePersisted = true
             signal.throwIfAborted()
             if (options.originalFhir) {
               try {
@@ -1125,6 +1127,12 @@ export const LocalBundleService = {
           signal.throwIfAborted()
           options.beforeCommit?.()
           signal.throwIfAborted()
+          if (!envelopePersisted) {
+            if (activeImportId && !memBundleUsesMemoryOnlySession) throw new Error('院內門診資料暫存失敗，已保留先前病歷。')
+            publishInMemory(options.originalFhir ?? null, true)
+            published = true
+            return
+          }
           preparedKey.commit()
           keyCommitted = true
           try { writeTabBundleScope(importId, demo) }
@@ -1149,14 +1157,9 @@ export const LocalBundleService = {
             } catch { /* best-effort cleanup of the unpublished scope */ }
           }
         }
-        // Only the exact scope replaced by this transaction can be retired.
-        // Another tab's imports and ordinary manual imports are never swept here.
-        if (options.replaceImportId && options.replaceImportId === activeImportId) {
-          try {
-            await idbDelete(bundleRecordKey(activeImportId))
-            await idbDeleteImagesForImport(options.replaceImportId, true)
-          } catch { /* expiry sweep will retry cleanup */ }
-        }
+        // A duplicated tab may still own the previous pointer and key. Keep its
+        // ciphertext until the existing expiry sweep; do not await any cleanup
+        // after publication before the caller can notify the workspace.
       } catch (error) {
         if (!(error instanceof BundleSessionStorageError)) throw error
         restoreInlineImages()
@@ -1226,8 +1229,10 @@ export const LocalBundleService = {
       // Could not persist ciphertext. Detach only this tab and this import;
       // another MediPrisma tab's Bundle must remain untouched.
       try {
-        await idbDelete(bundleRecordKey(importId))
-        if (importId) await idbDeleteImagesForImport(importId)
+        if (isNewImport) {
+          await idbDelete(bundleRecordKey(importId))
+          if (importId) await idbDeleteImagesForImport(importId)
+        }
       } catch {
         // Best-effort cleanup.
       }
@@ -1715,6 +1720,7 @@ export const LocalBundleService = {
     if (!hasNhiDrugTerminologyKnowledge(bundle)) {
       let migration = terminologyMigrationByBundle.get(bundle)
       if (!migration) {
+        const owner = { bundle, importId: memBundleImportId }
         migration = (async () => {
           // Worker-routed: this upgrade runs while the workspace is painting
           // its first patient view, and the terminology snapshot's JSON.parse
@@ -1726,14 +1732,19 @@ export const LocalBundleService = {
             result.report.status === 'enriched'
             && result.report.linkedRequestCount > 0
           ) {
-            await this.save(result.bundle, {
-              ...(memBundleImportId ? { importId: memBundleImportId } : {}),
-              demo: memBundleIsDemo,
-              ...(memBundleSourceMetadata
-                ? { sourceMetadata: memBundleSourceMetadata }
-                : {}),
-              patientProfile: memUserEnteredPatientProfile,
-            })
+            if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return memBundle
+            // Query refresh may itself be awaited by an import holding this
+            // queue. Return the derived view now; persist it behind that writer
+            // only if its original chart still owns the scope.
+            void serializeLocalBundleMutation(async () => {
+              if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return
+              await this.save(result.bundle, {
+                ...(owner.importId ? { importId: owner.importId } : {}),
+                demo: memBundleIsDemo,
+                ...(memBundleSourceMetadata ? { sourceMetadata: memBundleSourceMetadata } : {}),
+                patientProfile: memUserEnteredPatientProfile,
+              })
+            }).catch(() => { /* optional enrichment persistence; original chart remains available */ })
             return result.bundle
           }
           return bundle
@@ -1741,6 +1752,7 @@ export const LocalBundleService = {
         terminologyMigrationByBundle.set(bundle, migration)
       }
       bundle = await migration
+      if (!bundle) return null
     }
 
     const sourceMetadata = memBundleSourceMetadata
