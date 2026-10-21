@@ -498,11 +498,11 @@ describe('repository source intake', () => {
     expect(repo.getClinicalSource('other').graph.nodes).toEqual([])
     request.mockResolvedValueOnce({ entry: [] })
     await repo.fetchObservations('synthetic')
-    expect(repo.getClinicalSource('synthetic').graph.nodes).toHaveLength(2)
+    expect(repo.getClinicalSource('synthetic').graph.nodes).toHaveLength(0)
   })
 })
 
-it('maps only the current successful refresh while keeping prior captures as audit evidence', async () => {
+it('maps only the current successful refresh while replacing its active source capture', async () => {
   const repo = new FhirClinicalDataRepository()
   const request = fhirClient.requestAllPages as jest.Mock
   request.mockReset()
@@ -514,7 +514,7 @@ it('maps only the current successful refresh while keeping prior captures as aud
   expect(await repo.fetchObservations('refresh')).toEqual([{ id: 'a', valueString: 'revised' }])
   request.mockResolvedValueOnce({ entry: [] })
   expect(await repo.fetchObservations('refresh')).toEqual([])
-  expect(repo.getClinicalSource('refresh').graph.nodes).toHaveLength(3)
+  expect(repo.getClinicalSource('refresh').graph.nodes).toHaveLength(0)
 })
 
 it('retains prior successful rows on a failed refresh while reporting the failure', async () => {
@@ -529,4 +529,44 @@ it('retains prior successful rows on a failed refresh while reporting the failur
   expect(repo.getQueryStatus('Observation')?.state).toBe('error')
   request.mockRejectedValueOnce(new Error('network unavailable'))
   expect(await repo.fetchObservations('different-patient')).toEqual([])
+})
+
+describe('medication graph resolution at intake', () => {
+  it.each([
+    ['https://foreign.example/fhir/Medication/same', [{ fullUrl: 'https://local.example/fhir/Medication/same', resource: { resourceType: 'Medication', id: 'same', code: { text: 'wrong host' } } }]],
+    ['Medication/same/_history/2', [{ resource: { resourceType: 'Medication', id: 'same', meta: { versionId: '1' }, code: { text: 'wrong version' } } }]],
+    ['Medication/same', [{ resource: { resourceType: 'Medication', id: 'same', code: { text: 'first' } } }, { resource: { resourceType: 'Medication', id: 'same', code: { text: 'second' } } }]],
+  ])('does not promote unresolved or ambiguous reference %s', async (reference, included) => {
+    const repo = new FhirClinicalDataRepository()
+    ;(fhirClient.requestAllPages as jest.Mock).mockImplementation((url: string) => Promise.resolve({ entry: url.startsWith('MedicationRequest') ? [
+      { resource: { resourceType: 'MedicationRequest', id: 'order', medicationReference: { reference } } }, ...included,
+    ] : [] }))
+    ;(FhirMapper.toMedication as jest.Mock).mockImplementation((resource: any) => resource)
+    const result = await repo.fetchMedications('synthetic-medication')
+    expect(result).toHaveLength(1)
+    expect(result[0].medicationCodeableConcept).toBeUndefined()
+  })
+})
+
+it('replaces only the refreshed query active graph and preserves another resource type', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => resource)
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => resource)
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'condition' } }] })
+  await repo.fetchConditions('active-scope')
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Observation', id: 'lab' } }] })
+  await repo.fetchObservations('active-scope')
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValueOnce({ entry: [] })
+  await repo.fetchObservations('active-scope')
+  expect(repo.getClinicalSource('active-scope').graph.nodes.map(node => node.resource.id)).toEqual(['condition'])
+})
+
+it.each(['https://local.example/fhir/Medication/exact', 'Medication/exact/_history/2'])('promotes an unambiguous graph-verified medication reference %s', async reference => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.requestAllPages as jest.Mock).mockImplementation((url: string) => Promise.resolve({ entry: url.startsWith('MedicationRequest') ? [
+    { resource: { resourceType: 'MedicationRequest', id: 'order', medicationReference: { reference } } },
+    { fullUrl: 'https://local.example/fhir/Medication/exact', resource: { resourceType: 'Medication', id: 'exact', meta: { versionId: '2' }, code: { text: 'verified code' } } },
+  ] : [] }))
+  ;(FhirMapper.toMedication as jest.Mock).mockImplementation((resource: any) => resource)
+  expect((await repo.fetchMedications('exact-medication'))[0].medicationCodeableConcept).toEqual({ text: 'verified code' })
 })

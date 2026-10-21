@@ -77,14 +77,6 @@ export function selectVitalSignObservations(
   )
 }
 
-function medicationReferenceCandidates(reference: string): string[] {
-  const withoutHistory = reference.split('/_history/')[0]
-  const segments = withoutHistory.split('/').filter(Boolean)
-  const id = segments.at(-1)
-  return [reference, withoutHistory, id, id ? `Medication/${id}` : undefined]
-    .filter((candidate): candidate is string => Boolean(candidate))
-}
-
 /**
  * Extract the requested medication resources from a searchset and promote the
  * code from included/contained Medication resources when the choice element is
@@ -96,17 +88,6 @@ function mapMedicationSearchResponse(
   sourceType: MedicationSourceType,
 ): MedicationEntity[] {
   const entries = response.entry || []
-  const medicationLookup = new Map<string, any>()
-
-  for (const entry of entries) {
-    const resource = entry.resource
-    if (resource?.resourceType !== 'Medication') continue
-    if (entry.fullUrl) medicationLookup.set(entry.fullUrl, resource)
-    if (resource.id) {
-      medicationLookup.set(resource.id, resource)
-      medicationLookup.set(`Medication/${resource.id}`, resource)
-    }
-  }
 
   return entries
     .filter((entry: any) => {
@@ -117,19 +98,12 @@ function mapMedicationSearchResponse(
     })
     .map((entry: any) => {
       const resource = entry.resource
-      const reference = resource.medicationReference?.reference as string | undefined
-      let referencedMedication: any
-
-      if (reference?.startsWith('#')) {
-        referencedMedication = resource.contained?.find(
-          (contained: any) => contained.id === reference.slice(1) && contained.resourceType === 'Medication',
-        )
-      } else if (reference) {
-        for (const candidate of medicationReferenceCandidates(reference)) {
-          referencedMedication = medicationLookup.get(candidate)
-          if (referencedMedication) break
-        }
-      }
+      const source: ClinicalReconciliationResult | undefined = response._clinicalSource
+      const edge = source?.graph.references.find(edge =>
+        edge.origin.resource === resource && edge.path === 'medicationReference' && edge.status === 'resolved',
+      )
+      const target = edge ? source?.graph.nodes.find(node => node.key === edge.targetKeys[0]) : undefined
+      const referencedMedication = target?.resource.resourceType === 'Medication' ? target.resource : undefined
 
       return FhirMapper.toMedication({
         ...resource,
@@ -143,7 +117,7 @@ function mapMedicationSearchResponse(
 let repositorySequence = 0
 
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
-  private readonly sourceCaptures: ClinicalSourceCapture[] = []
+  private readonly sourceCaptures = new Map<string, ClinicalSourceCapture>()
   private readonly successfulResponses = new Map<string, any>()
   private readonly retainedFailures = new Map<string, unknown>()
   private generation = 0
@@ -153,13 +127,13 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
   getClinicalSource(patientId: string): ClinicalReconciliationResult {
     const cached = this.sourceResults.get(patientId)
     if (cached?.generation === this.generation) return cached.result
-    const result = reconcileClinicalSources(this.sourceCaptures.filter(capture => capture.patientScope === patientId))
+    const result = reconcileClinicalSources([...this.sourceCaptures.values()].filter(capture => capture.patientScope === patientId))
     this.sourceResults.set(patientId, { generation: this.generation, result })
     return result
   }
 
-  /** Preserve complete successful search captures before filtering or mapping.
-   * Snapshots are audit evidence, never new events or deletion signals. */
+  /** Capture complete successful searches before mapping. Each successful query
+   * replaces its active snapshot; failed/partial requests retain the previous one. */
   private async requestSource(url: string): Promise<any> {
     const params = new URLSearchParams(url.split('?')[1] ?? '')
     const patientScope = (params.get('patient') ?? params.get('subject') ?? '').replace(/^Patient\//, '')
@@ -187,13 +161,14 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       patientScope, generation: String(++this.generation), restBase,
       resources: (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string').map((entry: any) => JSON.parse(JSON.stringify(entry))),
     }
-    this.sourceCaptures.push(capture)
+    this.sourceCaptures.set(cacheKey, capture)
     const source = reconcileClinicalSources([capture])
     const includeTypes = queryType === 'DiagnosticReport' ? ['Observation']
       : queryType === 'MedicationRequest' || queryType === 'MedicationStatement' ? ['Medication'] : []
     const projected = { ...response, entry: selectClinicalSourceNodes(source)
       .filter(node => node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType))
       .map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+    Object.defineProperty(projected, '_clinicalSource', { value: source, enumerable: false })
     this.successfulResponses.set(cacheKey, projected)
     return projected
   }
