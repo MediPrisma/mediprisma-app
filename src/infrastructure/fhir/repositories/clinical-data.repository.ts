@@ -143,6 +143,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     try {
       response = await fhirClient.requestAllPages(url)
     } catch (error) {
+      if (session.revoked) throw new LocalBundleModeError()
       if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl?.replace(/\/+$/, '') !== session.restBase)) throw new Error('FHIR session changed during query')
       const previous = session.successfulResponses.get(cacheKey)
       if (!previous) throw error
@@ -154,6 +155,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       }
       return { ...previous, _clinicalSource: previous._clinicalSource, _retainedFailure: error }
     }
+    if (session.revoked) throw new LocalBundleModeError()
     if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl?.replace(/\/+$/, '') !== session.restBase)) throw new Error('FHIR session changed during query')
     const source = captureClinicalSource(session, cacheKey, patientScope,
       (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string'))

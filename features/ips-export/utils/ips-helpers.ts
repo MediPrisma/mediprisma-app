@@ -6,7 +6,7 @@ import type {
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import { getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
-import { collectReportMemberIds, isVitalObservation } from '@/src/core/utils/observation-selectors'
+import { clinicalRecordKey, reportMemberRecordKeys, isVitalObservation } from '@/src/core/utils/observation-selectors'
 import type { FhirResource, IpsBundleEntry } from './ips-types'
 
 /** Generate a UUID v4. Uses crypto.randomUUID when available, else a fallback. */
@@ -165,8 +165,8 @@ export function orphanResultObservations(
   reports: DiagnosticReportEntity[],
   observations: ObservationEntity[],
 ): ObservationEntity[] {
-  const memberIds = collectReportMemberIds(reports)
+  const memberIds = reportMemberRecordKeys(reports)
   return observations.filter(
-    (o) => !isVitalObservation(o) && !(o.id != null && memberIds.has(o.id)),
+    (o) => !isVitalObservation(o) && !(clinicalRecordKey(o) && memberIds.has(clinicalRecordKey(o)!)),
   )
 }

@@ -1,3 +1,4 @@
+import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 // Unified FHIR Tools for AI Agent
 //
 // Single implementation backing BOTH SMART-live mode and local-bundle mode.
@@ -235,8 +236,9 @@ function observationConcepts(observation: any): any[] {
 function uniqueObservations(collection: ClinicalDataCollection): any[] {
   const seen = new Set<string>()
   return [...collection.observations, ...collection.vitalSigns].filter((observation: any) => {
-    if (observation.id && seen.has(observation.id)) return false
-    if (observation.id) seen.add(observation.id)
+    const key = clinicalRecordKey(observation)
+    if (key && seen.has(key)) return false
+    if (key) seen.add(key)
     return true
   })
 }
@@ -1235,12 +1237,8 @@ export function createFhirTools(getData: () => AgentDataSource) {
               ...statusFor('ImagingStudy'),
             },
             observations: {
-              // Dedup by id — many bridges include vital-signs entries in
-              // both `observations` and `vitalSigns` arrays.
-              count: new Set([
-                ...collection.observations.map((o: any) => o.id).filter(Boolean),
-                ...collection.vitalSigns.map((o: any) => o.id).filter(Boolean),
-              ]).size,
+              // Count source records once when vitals also appear in observations.
+              count: uniqueObservations(collection).length,
               range: range(
                 [...collection.observations, ...collection.vitalSigns],
                 observationDate,

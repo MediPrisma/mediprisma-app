@@ -97,7 +97,7 @@ export function clinicalRecordKey(record: { id?: string; clinicalSourceNodeKey?:
   return record.clinicalSourceNodeKey ? 'source:' + record.clinicalSourceNodeKey : record.id ? 'id:' + record.id : undefined
 }
 
-function reportMemberRecordKeys(reports?: ReadonlyArray<ReportMemberSource> | null): Set<string> {
+export function reportMemberRecordKeys(reports?: ReadonlyArray<ReportMemberSource> | null): Set<string> {
   const keys = new Set<string>()
   for (const report of reports ?? []) {
     // Source-bound membership was already resolved by the shared graph.

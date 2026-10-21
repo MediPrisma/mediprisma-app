@@ -298,7 +298,7 @@ it('preserves same-id source reports and observations, including an orphan, unti
   ])
   const scoped = scopeClinicalDataForAi(input, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [], NOW)
   expect(scoped.observations?.map(observation => observation.valueQuantity?.value).sort()).toEqual([10, 20, 30])
-  expect(scoped.diagnosticReports?.map(report => report.meta?.versionId)).toEqual(['1', '2'])
+  expect(scoped.diagnosticReports?.map((report: any) => report.meta?.versionId)).toEqual(['1', '2'])
   expect(scoped.diagnosticReports?.[0]._observations?.map(observation => observation.valueQuantity?.value)).toEqual([10, 20])
   expect(JSON.stringify(scoped)).not.toContain('clinicalSource')
 })
@@ -309,4 +309,9 @@ it('does not classify an unrelated same-id source observation as a selected vita
   const scoped = scopeClinicalDataForAi({ observations: [vital, other], vitalSigns: [vital] } as any, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [], NOW)
   expect(scoped.observations).toHaveLength(2)
   expect(scoped.observations?.map(observation => observation.code?.text)).toEqual(['Pulse', 'Synthetic social observation'])
+})
+
+it('strips derived member capture keys at the AI boundary', () => {
+  const { stripClinicalCaptureMetadata } = jest.requireActual('@/src/core/utils/ai-clinical-scope.utils')
+  expect(stripClinicalCaptureMetadata({ clinicalSourceDerivedMemberKeys: ['opaque'], id: 'report' })).toEqual({ id: 'report' })
 })

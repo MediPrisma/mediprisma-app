@@ -1,6 +1,6 @@
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import { collectAdultPreventiveObservationIds } from './adult-preventive-source'
-import { collectReportMemberIds, referenceId } from '@/src/core/utils/observation-selectors'
+import { clinicalRecordKey, reportMemberRecordKeys, referenceId } from '@/src/core/utils/observation-selectors'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
 import {
@@ -218,12 +218,13 @@ function createOrphanObservationRows(
   // member cannot be counted again as a standalone Observation row.
   const adultIds = collectAdultPreventiveObservationIds(compositions)
   const isAdultObservation = (observation: any) => isAdultPreventiveHealthExamResource(observation) || adultIds.has(observation.id)
-  const reportMemberIds = collectReportMemberIds(diagnosticReports)
+  const reportMemberIds = reportMemberRecordKeys(diagnosticReports)
   const groups = new Map<string, any[]>()
 
   for (const observation of observations) {
     if (!observation) continue
-    if (observation.id && reportMemberIds.has(observation.id)) continue
+    const recordKey = clinicalRecordKey(observation)
+    if (recordKey && reportMemberIds.has(recordKey)) continue
     const hasDisplayableResult = (
       (Array.isArray(observation.component) && observation.component.length > 0)
       || (Array.isArray(observation.hasMember) && observation.hasMember.length > 0)

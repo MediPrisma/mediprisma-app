@@ -18,3 +18,10 @@ it('ignores capture-only node keys but changes for clinical values, patient and 
   expect(JSON.stringify(stripClinicalCaptureMetadata(input))).not.toContain('clinicalSourceNodeKey')
   expect(input.observations[0].clinicalSourceNodeKey).toBe('capture-one')
 })
+
+it('ignores changes to derived-member capture keys in the AI source signature', () => {
+  const source: any = { diagnosticReports: [{ id: 'r', clinicalSourceDerivedMemberKeys: ['first'], conclusion: 'same clinical value' }] }
+  const changed: any = { diagnosticReports: [{ id: 'r', clinicalSourceDerivedMemberKeys: ['second'], conclusion: 'same clinical value' }] }
+  expect(clinicalAiSourceSignature(null, {}, source, [])).toBe(clinicalAiSourceSignature(null, {}, changed, []))
+  expect(JSON.stringify(stripClinicalCaptureMetadata(source))).not.toContain('clinicalSourceDerivedMemberKeys')
+})

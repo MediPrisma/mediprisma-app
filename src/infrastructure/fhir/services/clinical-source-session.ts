@@ -4,6 +4,7 @@ import type { ClinicalSourceCapture } from '@/src/core/services/clinical-source-
 export interface ClinicalSourceSession {
   readonly sourceId: string
   readonly restBase?: string
+  revoked: boolean
   generation: number
   readonly captures: Map<string, ClinicalSourceCapture>
   readonly successfulResponses: Map<string, any>
@@ -11,26 +12,42 @@ export interface ClinicalSourceSession {
 }
 const sessions = new WeakMap<object, Map<string, ClinicalSourceSession>>()
 const bindings = new WeakMap<object, ClinicalSourceSession>()
+const ownerClients = new WeakMap<object, object>()
 let sequence = 0
 
 /** Sessions are keyed by the actual authenticated client, then its server base.
  * Weak keys release all captures when an old authenticated client is discarded. */
 export function clinicalSourceSession(client: object, restBase?: string, owner?: object): ClinicalSourceSession {
+  if (owner && ownerClients.get(owner) && ownerClients.get(owner) !== client) purgeClinicalSourceSession(owner)
   let servers = sessions.get(client)
   if (!servers) { servers = new Map(); sessions.set(client, servers) }
   const base = restBase?.replace(/\/+$/, '')
   let session = servers.get(base ?? '')
   if (!session) {
-    session = { sourceId: `smart-session-${++sequence}`, restBase: base, generation: 0, captures: new Map(), successfulResponses: new Map(), results: new Map() }
+    session = { sourceId: `smart-session-${++sequence}`, restBase: base, revoked: false, generation: 0, captures: new Map(), successfulResponses: new Map(), results: new Map() }
     servers.set(base ?? '', session)
   }
-  if (owner) bindings.set(owner, session)
+  if (owner) { ownerClients.set(owner, client); bindings.set(owner, session) }
   return session
 }
-export function forgetClinicalSourceSession(owner: object): void { bindings.delete(owner) }
+export function purgeClinicalSourceSession(owner: object): void {
+  const client = ownerClients.get(owner)
+  for (const session of client ? sessions.get(client)?.values() ?? [] : []) {
+    session.revoked = true
+    session.captures.clear()
+    session.successfulResponses.clear()
+    session.results.clear()
+    session.generation++
+  }
+  if (client) sessions.delete(client)
+  bindings.delete(owner)
+  ownerClients.delete(owner)
+}
+export function forgetClinicalSourceSession(owner: object): void { purgeClinicalSourceSession(owner) }
 export function knownClinicalSourceSession(owner: object): ClinicalSourceSession | undefined { return bindings.get(owner) }
 
 export function captureClinicalSource(session: ClinicalSourceSession, queryKey: string, patientScope: string, resources: ClinicalSourceCapture['resources']): ClinicalReconciliationResult {
+  if (session.revoked) throw new Error('FHIR session changed during query')
   const capture: ClinicalSourceCapture = {
     sourceId: session.sourceId, restBase: session.restBase, patientScope,
     generation: String(++session.generation), resources: mutableClinicalProjection(resources),
@@ -39,6 +56,7 @@ export function captureClinicalSource(session: ClinicalSourceSession, queryKey: 
   return reconcileClinicalSources([capture])
 }
 export function readClinicalSource(session: ClinicalSourceSession, patientScope: string): ClinicalReconciliationResult {
+  if (session.revoked) return reconcileClinicalSources([])
   const cached = session.results.get(patientScope)
   if (cached?.generation === session.generation) return cached.result
   const result = reconcileClinicalSources([...session.captures.values()].filter(capture => capture.patientScope === patientScope))

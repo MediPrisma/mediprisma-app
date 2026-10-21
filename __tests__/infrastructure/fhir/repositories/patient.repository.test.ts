@@ -215,16 +215,20 @@ describe('shared SMART source capture', () => {
     expect(clinical.getClinicalSource('other-patient').graph.nodes).toEqual([])
   })
 
-  it('captures every resource from patient search while mapping only its selected Patient', async () => {
+  it('isolates unassigned search resources from the selected Patient graph', async () => {
     delete client.patient.id
     ;(fhirClient.request as jest.Mock).mockResolvedValue({ resourceType: 'Bundle', entry: [
       { fullUrl: 'urn:uuid:selected', resource: { resourceType: 'Patient', id: 'selected', extension: [{ url: 'raw', valueString: 'source' }] } },
       { resource: { resourceType: 'UnknownPatientContext', id: 'unknown' } },
+      { resource: { resourceType: 'UnknownPatientContext', id: 'related', subject: { reference: 'urn:uuid:selected' } } },
       { resource: { resourceType: 'Patient', id: 'other' } },
     ] })
     expect(await new FhirPatientRepository().getCurrentPatient()).toEqual({ id: 'selected' })
     const clinical = new FhirClinicalDataRepository()
-    expect(clinical.getClinicalSource('selected').graph.nodes.map((node: any) => node.resource.id)).toEqual(['selected', 'unknown', 'other'])
+    expect(clinical.getClinicalSource('selected').graph.nodes.map((node: any) => node.resource.id)).toEqual(['selected', 'related'])
+    const { knownClinicalSourceSession, readClinicalSource } = jest.requireActual('@/src/infrastructure/fhir/services/clinical-source-session')
+    const session = knownClinicalSourceSession(fhirClient)
+    expect(readClinicalSource(session, 'unassigned:' + session.sourceId + ':patient-search').graph.nodes.map((node: any) => node.resource.id)).toEqual(['unknown', 'other'])
     expect(clinical.getClinicalSource('other').graph.nodes).toEqual([])
     expect(fhirClient.request).toHaveBeenCalledTimes(1)
   })
@@ -292,4 +296,20 @@ it('clears the previous Patient-search snapshot on a successful empty refresh', 
   ;(fhirClient.request as jest.Mock).mockResolvedValueOnce({ resourceType: 'Bundle', entry: [] })
   await patients.getCurrentPatient()
   expect(clinical.getClinicalSource('previous').graph.nodes).toEqual([])
+})
+
+it('replaces the old Patient-search selection instead of retaining its patient graph', async () => {
+  jest.resetAllMocks()
+  const client = { state: { serverUrl: 'https://selection.example/fhir' } }
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(client)
+  ;(PatientMapper.fromBundle as jest.Mock).mockImplementation(bundle => ({ id: bundle.entry[0].resource.id }))
+  const patients = new FhirPatientRepository()
+  const { FhirClinicalDataRepository } = jest.requireActual('@/src/infrastructure/fhir/repositories/clinical-data.repository')
+  const clinical = new FhirClinicalDataRepository()
+  ;(fhirClient.request as jest.Mock).mockResolvedValueOnce({ resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id: 'first' } }, { resource: { resourceType: 'Patient', id: 'second' } }] })
+  expect(await patients.getCurrentPatient()).toEqual({ id: 'first' })
+  ;(fhirClient.request as jest.Mock).mockResolvedValueOnce({ resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id: 'second' } }, { resource: { resourceType: 'Patient', id: 'first' } }] })
+  expect(await patients.getCurrentPatient()).toEqual({ id: 'second' })
+  expect(clinical.getClinicalSource('first').graph.nodes).toEqual([])
+  expect(clinical.getClinicalSource('second').graph.nodes.map((node: any) => node.resource.id)).toEqual(['second'])
 })

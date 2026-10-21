@@ -1,3 +1,4 @@
+import { purgeClinicalSourceSession } from '@/src/infrastructure/fhir/services/clinical-source-session'
 // FHIR Client Service
 import type FHIR from 'fhirclient'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
@@ -118,6 +119,7 @@ export function clearSmartSession(): void {
 export class FhirClientService {
   private static instance: FhirClientService
   private client: FHIRClient | null = null
+  private sessionGeneration = 0
 
   private constructor() {}
 
@@ -152,9 +154,12 @@ export class FhirClientService {
     }
 
     try {
+      const generation = this.sessionGeneration
       const FHIR = (await import('fhirclient')).default
-      this.client = await FHIR.oauth2.ready()
-      return this.client
+      const client = await FHIR.oauth2.ready()
+      if (generation !== this.sessionGeneration) throw new LocalBundleModeError()
+      this.client = client
+      return client
     } catch (error) {
       if (error instanceof LocalBundleModeError) throw error
       console.error('Failed to initialize FHIR client:', error)
@@ -199,6 +204,8 @@ export class FhirClientService {
   }
 
   clearClient(): void {
+    this.sessionGeneration++
+    purgeClinicalSourceSession(this)
     this.client = null
   }
 }
