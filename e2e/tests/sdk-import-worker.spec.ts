@@ -2,18 +2,20 @@ import fs from 'node:fs/promises'
 import { test, expect } from '../fixtures/test'
 import { importBundle, openFeaturePanel } from '../fixtures/import'
 import { expectImportWorker } from '../fixtures/import-worker'
+import { convertSdkJsonToFhir } from '../../vendor/nhi-fhir-bridge-sdk-json/browser.js'
 
 test('SDK JSON converts in the production Worker and its downloaded FHIR can be reimported', async ({ page, requireImportWorker }, info) => {
   test.skip(!requireImportWorker, 'Requires the production Worker profile')
   test.setTimeout(120_000)
   const source = info.outputPath('sdk-source.json')
-  await fs.writeFile(source, JSON.stringify({ myhealthbank: { bdata: {
+  const input = { myhealthbank: { bdata: {
     'b1.1': 'A123456789', 'b1.2': '1151021',
     r7: ['98', '101'].map(value => ({ 'r7.4': '合成測試醫院', 'r7.6': '20261020',
       'r7.8': '09005C', 'r7.10': 'Glucose', 'r7.11': value })),
-  } } }))
+  } } }
+  await fs.writeFile(source, JSON.stringify(input))
   await importBundle(page, { bundlePath: source })
-  await expectImportWorker(page, info, 'sdk-conversion')
+  const sdkWorker = await expectImportWorker(page, info, 'sdk-conversion')
   await openFeaturePanel(page)
   await page.getByRole('tab', { name: '複製', exact: true }).click()
   await page.getByRole('tab', { name: '下載檔案', exact: true }).click()
@@ -23,6 +25,10 @@ test('SDK JSON converts in the production Worker and its downloaded FHIR can be 
   await (await pending).saveAs(path)
   const bytes = await fs.readFile(path)
   const converted = JSON.parse(bytes.toString('utf8'))
+  expect(sdkWorker.originalBytes).toBe(bytes.length)
+  expect(converted).toEqual(convertSdkJsonToFhir(input, {
+    identifierMode: 'masked', timestamp: converted.timestamp,
+  }).bundle)
   expect(converted.resourceType).toBe('Bundle')
   const resources = converted.entry.map((entry: { resource: Record<string, unknown> }) => entry.resource)
   expect(resources.find((resource: { resourceType: string }) => resource.resourceType === 'Patient').identifier[0].value).toBe('A12345XXXX')

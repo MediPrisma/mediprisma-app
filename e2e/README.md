@@ -136,12 +136,18 @@ emulator config above.
 
 ### Production import Worker
 
-Build the app with the usual Firebase test configuration, then run
-`npx playwright test -c playwright.import-production.config.ts`. This profile
+For a server build, use the fake Firebase variables from `playwright.config.ts`,
+run `npm run build` without `GITHUB_PAGES` or `DEPLOY_BASE_PATH`, then run
+`npx playwright test -c playwright.import-production.config.ts`. This mode
 starts `next start` on port 3022 and requires native conversion Worker success,
 including the transferred original-FHIR Blob, on every import. A successful
 main-thread fallback cannot pass it. The default development profile still
 tests the supported fallback path.
+
+For deployment parity, run `npm run build:mediprisma` with the same fake Firebase
+variables, set `E2E_STATIC_DIR=out` and `E2E_APP_PATH=/app`, then run the same
+Playwright command. It serves the static artifact under `/app` on loopback;
+it does not try to use `next start` for an `output: 'export'` build.
 
 To verify the real deployed site instead of starting a server, set
 `E2E_BASE_URL=https://mediprisma.tw` and `E2E_APP_PATH=/app` before running the

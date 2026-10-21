@@ -1,6 +1,6 @@
 import { expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test'
 
-type ImportMessage = { type?: string; phase?: string; originalBytes?: number; error?: string }
+type ImportMessage = { type?: string; phase?: string; originalBytes?: number; error?: string; receivedAt?: number }
 type ProbeWindow = Window & { __importWorkerMessages?: ImportMessage[] }
 
 /** Observe native Worker messages; never replace conversion or suppress fallback. */
@@ -12,10 +12,15 @@ export async function observeImportWorkers(context: BrowserContext) {
     window.Worker = class extends NativeWorker {
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options)
+        host.__importWorkerMessages!.push({ type: 'created', receivedAt: performance.now() })
         this.addEventListener('message', ({ data }) => {
           host.__importWorkerMessages!.push({ type: data?.type, phase: data?.phase,
+            receivedAt: performance.now(),
             originalBytes: data?.result?.originalFhir instanceof Blob ? data.result.originalFhir.size : undefined,
             error: typeof data?.error === 'string' ? data.error : undefined })
+        })
+        this.addEventListener('error', event => {
+          host.__importWorkerMessages!.push({ type: 'worker-error', receivedAt: performance.now(), error: event.message })
         })
       }
     }
@@ -33,4 +38,5 @@ export async function expectImportWorker(page: Page, info: TestInfo, stage: stri
   expect(messages.filter(message => message.type === 'unavailable' && message.error?.startsWith('Local conversion worker'))).toEqual([])
   expect(messages.filter(message => message.type === 'progress').map(message => message.phase))
     .toEqual(expect.arrayContaining(['ready', 'parsed', 'converted', 'enriched']))
+  return successes[0]
 }

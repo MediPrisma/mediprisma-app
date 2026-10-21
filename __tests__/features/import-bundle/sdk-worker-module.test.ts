@@ -21,7 +21,9 @@ function loadSdk(windowPresent: boolean, clientDefines: boolean): Sdk {
   return vm.runInNewContext(source + ';globalThis.__sdk', globals) as Sdk
 }
 
-test('the client-built SDK initializes without window and retains browser conversion results and IDs', () => {
+test('the SDK avoids a bare window probe and loads in a Worker-like global with matching results and IDs', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'vendor/nhi-fhir-bridge-sdk-json/browser.js'), 'utf8')
+  expect(source).not.toMatch(/\btypeof\s+window\b/)
   const browser = loadSdk(true, false)
   const worker = loadSdk(false, true)
   const input = { myhealthbank: { bdata: {
