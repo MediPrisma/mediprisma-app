@@ -19,6 +19,7 @@ export class MedicalSummaryCardProgressTimeoutError extends Error {
 }
 
 interface StreamWithCardProgressTimeoutInput {
+  signal?: AbortSignal
   stream: (
     signal: AbortSignal,
     onChunk: (streamedText: string) => void,
@@ -43,11 +44,14 @@ export interface StreamWithCardProgressTimeoutResult {
  * unit of progress is a parsed card, not an upstream SSE heartbeat.
  */
 export async function streamWithCardProgressTimeout({
+  signal,
   stream,
   onChunk,
   timeoutMs = MEDICAL_SUMMARY_CARD_PROGRESS_TIMEOUT_MS,
   firstOutputTimeoutMs,
 }: StreamWithCardProgressTimeoutInput): Promise<StreamWithCardProgressTimeoutResult> {
+  const assertActive = () => { if (signal?.aborted) throw new DOMException('Operation aborted', 'AbortError') }
+  assertActive()
   const controller = new AbortController()
   let latestText = ''
   let timedOut = false
@@ -61,7 +65,7 @@ export async function streamWithCardProgressTimeout({
   let outputStarted = false
   const armWatchdog = () => {
     clearWatchdog()
-    if (timeoutMs === null) return
+    if (!active || signal?.aborted || timeoutMs === null) return
     const windowMs = !outputStarted && firstOutputTimeoutMs !== undefined
       ? firstOutputTimeoutMs
       : timeoutMs
@@ -80,6 +84,8 @@ export async function streamWithCardProgressTimeout({
     }, windowMs)
   }
 
+  const onAbort = () => { active = false; clearWatchdog(); controller.abort() }
+  signal?.addEventListener('abort', onAbort, { once: true })
   armWatchdog()
   try {
     const fullText = await stream(controller.signal, (streamedText) => {
@@ -94,15 +100,18 @@ export async function streamWithCardProgressTimeout({
       }
       if (madeProgress) armWatchdog()
     })
+    assertActive()
     if (!timedOut) latestText = fullText
     return { fullText: latestText, timedOut }
   } catch (error) {
+    assertActive()
     // Only swallow the AbortError created by this watchdog. A user stop or
     // scope change aborts the operation-owned controller instead and must
     // still terminate the whole generation pipeline.
     if (!timedOut) throw error
     return { fullText: latestText, timedOut: true }
   } finally {
+    signal?.removeEventListener('abort', onAbort)
     active = false
     clearWatchdog()
   }
