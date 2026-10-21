@@ -35,4 +35,7 @@ it('bounds long Unicode filenames while keeping the date and .json extension', (
   expect(Buffer.byteLength(filename, 'utf8')).toBeLessThan(255)
   expect(filename).toMatch(/_20261021\.json$/)
   expect(filename).not.toContain('\uFFFD')
+  expect(filename).toContain('_patient-123_')
+  expect(originalFhirFilename({ ...patient, id: 'patient-456', name: [{ text: '病'.repeat(500) }] }, date))
+    .not.toBe(filename)
 })

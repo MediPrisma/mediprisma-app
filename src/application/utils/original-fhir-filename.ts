@@ -2,8 +2,18 @@ import { getPatientDisplayName, type PatientEntity } from '@/src/core/entities/p
 
 function filenamePart(value: string): string {
   // Windows forbids '*'; keep the source's masking explicit with 'X'.
-  return value.replace(/[*＊]/gu, 'X').replace(/[^\p{L}\p{N}_\-○〇●◯]+/gu, '_')
+  const safe = value.replace(/[*＊]/gu, 'X').replace(/[^\p{L}\p{N}_\-○〇●◯]+/gu, '_')
     .replace(/^_+|_+$/g, '')
+  // Reserve each component's own budget so a long name cannot remove the ID.
+  const encoder = new TextEncoder()
+  let bytes = 0
+  let bounded = ''
+  for (const char of safe) {
+    bytes += encoder.encode(char).length
+    if (bytes > 100) break
+    bounded += char
+  }
+  return bounded
 }
 
 export function originalFhirFilename(patient: PatientEntity | null, date = new Date()): string {
@@ -22,16 +32,6 @@ export function originalFhirFilename(patient: PatientEntity | null, date = new D
     const name = getPatientDisplayName(patient)
     identity = [name === 'Unknown Patient' ? '' : name, identifier]
       .map(filenamePart).filter(Boolean).join('_')
-    // Bound UTF-8 bytes without splitting Unicode characters or the extension.
-    let bytes = 0
-    const encoder = new TextEncoder()
-    let bounded = ''
-    for (const char of identity) {
-      bytes += encoder.encode(char).length
-      if (bytes > 200) break
-      bounded += char
-    }
-    identity = bounded
   } catch {
     // Malformed optional demographics must not prevent an unchanged raw download.
   }

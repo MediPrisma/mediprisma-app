@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { TextEncoder } from 'node:util'
 import { useOriginalFhirDownload } from '@/src/application/hooks/use-original-fhir-download'
 
 let mockImportId = 'first'
@@ -31,6 +32,7 @@ beforeEach(() => {
   mockSerialize.mockReset().mockImplementation((callback: () => Promise<unknown>) => callback())
   mockCreateObjectURL.mockReset()
   URL.createObjectURL = mockCreateObjectURL
+  global.TextEncoder = TextEncoder
 })
 
 it('labels the unchanged original Blob with its own source patient and national ID', async () => {
