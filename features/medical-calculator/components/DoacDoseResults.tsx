@@ -135,7 +135,7 @@ export function DoacDoseResults({ values, locale, onReviewField }: {
       )}
       {shared.length > 0 && (
         <div className="flex flex-wrap items-center gap-1 border-b px-3 py-2 text-xs text-muted-foreground" data-testid="doac-shared-missing">
-          <span>{zh ? '待填（四藥共用，可能改為禁忌或不建議）：' : 'To fill (all four; may make one contraindicated or not recommended):'}</span>
+          <span>{zh ? '待填（各藥共用，可能改為禁忌或不建議）：' : 'To fill (shared; may make one contraindicated or not recommended):'}</span>
           <MissingChips keys={shared} zh={zh} onReviewField={onReviewField} />
         </div>
       )}

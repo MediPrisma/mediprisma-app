@@ -5,11 +5,12 @@ import { diagnosisSelect, type ClinicalSelectValue } from './hfpef-clinical-auto
 /**
  * The DOAC calculators' patient questions the record can answer: liver
  * enzymes and bilirubin against the reporting lab's own upper limit, dialysis
- * and chronic liver disease from the claimed diagnoses, a recent GI lesion for
- * dabigatran, and pregnancy where sex or age settles it. What the record
- * cannot settle stays blank, and every answer says where it came from.
+ * and a recent GI lesion for dabigatran from a code that names them, and
+ * pregnancy for a man. A missing code is never read as 「no」: the liver
+ * class (Child-Pugh) and dialysis stay blank without positive evidence, as
+ * pregnancy does for any woman. Every answer says where it came from.
  */
-export type DoacPatientKey = 'doac_liver' | 'doac_liver_enzymes' | 'doac_bilirubin_high' | 'doac_dialysis' | 'doac_pregnancy' | 'doac_gi_risk'
+export type DoacPatientKey = 'doac_liver_enzymes' | 'doac_bilirubin_high' | 'doac_dialysis' | 'doac_pregnancy' | 'doac_gi_risk'
 
 /** The fields of an Observation read here; the record's own entity is wider. */
 export interface LabObservation {
@@ -56,8 +57,6 @@ const older = (...dates: string[]) => dates.sort((a, b) => Date.parse(a) - Date.
 
 /** ICD-10 Z99.2, Z49, Z91.15; ICD-9 V45.1, V56. */
 const isDialysisCode = (code: string) => /^(?:Z992|Z49|Z9115|V451|V56)/.test(code)
-/** ICD-10 K70–K77, B18, I85; ICD-9 571–573, 070.2/070.3/070.5, 456.0–456.2. */
-const isLiverCode = (code: string) => /^(?:K7[0-7]|B18|I85|57[123]|070[235]|456[012])/.test(code)
 /** ICD-10 K20, K21, K25–K29, K92.0–K92.2; ICD-9 530.1, 530.81, 531–535, 578. */
 const isGiLesionCode = (code: string) => /^(?:K2[015-9]|K92[012]|5301|53081|53[1-5]|578)/.test(code)
 
@@ -92,25 +91,17 @@ export function doacPatientSelects(input: {
     out.doac_bilirubin_high = { value: raised ? 'yes' : 'no', date: bili.date, testName: `${reading('總膽紅素', bili)}，${raised ? '≥' : '<'}1.5×ULN`, obsId: bili.obsId, facility: bili.facility, resourceType: 'Observation' }
   }
 
-  // Diagnoses: 健保雲端 carries every claim, so a record that has diagnoses
-  // and none of these reads as 「none」. A record with no diagnoses says nothing.
-  const hasDiagnoses = conditions.length > 0 || encounters.length > 0
+  // Dialysis: a code that names it says yes. No code says nothing — an ESRD
+  // code alone, or a post-dialysis creatinine, would otherwise read as 「no」
+  // (#355 review).
   const dialysis = diagnosisSelect(conditions, encounters, now, isDialysisCode, '透析')
   if (dialysis) out.doac_dialysis = dialysis
-  else if (hasDiagnoses) out.doac_dialysis = { value: 'no', date: today, testName: '未見透析診斷碼（依申報診斷推算，請核對）' }
-  // A liver code, or a raised enzyme or bilirubin, needs the Child-Pugh class:
-  // left for the clinician, never filled as 「no liver disease」.
-  const liverCode = diagnosisSelect(conditions, encounters, now, isLiverCode, '肝病')
-  const labRaised = out.doac_liver_enzymes?.value === 'yes' || out.doac_bilirubin_high?.value === 'yes'
-  if (!liverCode && !labRaised && hasDiagnoses) out.doac_liver = { value: 'none', date: today, testName: '未見慢性肝病診斷碼（依申報診斷推算，請核對）' }
   // Dabigatran's 「gastritis, oesophagitis, GERD」: a recent code says yes; no
   // code says nothing, since 「other bleeding risk」 is the clinician's call.
   const gi = diagnosisSelect(conditions, encounters, now, isGiLesionCode, '胃食道病灶', GI_WINDOW_DAYS)
   if (gi) out.doac_gi_risk = gi
 
+  // Age does not rule out pregnancy or breast-feeding (#355 review): a woman is asked.
   if (demographics.gender === 'male') out.doac_pregnancy = { value: 'no', date: today, testName: '男性' }
-  else if (demographics.gender === 'female' && typeof demographics.age === 'number' && demographics.age >= 55) {
-    out.doac_pregnancy = { value: 'no', date: today, testName: `${demographics.age} 歲女性（請核對）` }
-  }
   return out
 }

@@ -104,7 +104,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     { key: 'postop_day', type: 'number', label: { en: 'Day after surgery, 0 = day of surgery (optional)', zh: '術後第幾天，手術當天為 0（選填）' }, unit: 'day', optional: true, visibleWhen: hipKnee },
     ...RENAL_INPUTS,
     {
-      key: 'liver', type: 'select', label: { en: 'Liver', zh: '肝功能' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_liver' },
+      key: 'liver', type: 'select', label: { en: 'Liver', zh: '肝功能' }, defaultValue: '',
       options: [
         { value: 'none', label: { en: 'No liver disease', zh: '無肝病' } },
         { value: 'A', label: { en: 'Child-Pugh A', zh: 'Child-Pugh A' } },

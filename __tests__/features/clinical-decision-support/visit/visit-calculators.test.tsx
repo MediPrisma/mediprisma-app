@@ -114,9 +114,9 @@ describe('決策地圖 v2 · 計算機', () => {
     expect(screen.getByTestId('cdss-book-calculator-doac-periop')).toHaveTextContent('→ DP-09')
     expect(screen.getByTestId('cdss-book-calculator-doac-dose')).toHaveTextContent('DOAC 劑量計算機 · NVAF／VTE 依仿單')
     // The VTE-only questions are not counted to fill on the NVAF dose point:
-    // the NVAF calculator's 22 here, plus the indication to confirm, less
-    // pregnancy, which the patient's sex now answers.
-    expect(screen.getByTestId('cdss-book-calculator-doac-dose')).toHaveTextContent('待填 22')
+    // the NVAF calculator's 22 here, plus the indication to confirm. P9 is a
+    // woman, so pregnancy is still asked (age does not settle it).
+    expect(screen.getByTestId('cdss-book-calculator-doac-dose')).toHaveTextContent('待填 23')
     expect(screen.getByTestId('cdss-book-calculator-doac-periop')).toHaveTextContent('DOAC 手術前後停藥計算機')
     expect(screen.getByTestId('cdss-book-calculator-cha2ds2-va')).toHaveTextContent('→ DP-14')
     expect(screen.queryByTestId('cdss-book-calculator-maggic')).toBeNull()
