@@ -200,17 +200,60 @@ export function createClinicalSourceProjectionIds(
   // a distinct record in the same UI namespace with that id. This preserves
   // existing navigation IDs while giving only real collisions unique IDs.
   const genericGroups = new Map<string, Array<{ node: ClinicalSourceNode; namespace: string }>>()
+  const genericUnidentified = new Map<string, { node: ClinicalSourceNode; keys: string[] }>()
   for (const node of source.graph.nodes) {
     const namespace = collisionProjectedNamespaces.get(node.resource.resourceType)
     const legacyId = node.resource.id
     if (genericNodeKeys ? !genericNodeKeys.has(node.key) : node.isContained || node.embeddedIn) continue
-    if (!namespace || typeof legacyId !== 'string' || !legacyId) continue
+    if (!namespace) continue
+    if (typeof legacyId !== 'string' || !legacyId) {
+      // A missing FHIR id still needs a usable UI/navigation id. A fullUrl is
+      // reliable across repeated query captures; an anonymous resource is
+      // scoped to its graph node so equal payloads are never mistaken for a
+      // retransmission.
+      const versionId = (node.resource.meta as { versionId?: unknown } | undefined)?.versionId ?? null
+      const identity = stableMetadata([
+        namespace,
+        node.sourceId,
+        node.patientScope,
+        node.restBase ?? null,
+        node.resource.resourceType,
+        node.fullUrl ?? null,
+        versionId,
+        node.contentHash,
+        clinicalSourceRestIdentity(node),
+        clinicalSourceContextIdentity(source.graph, node),
+        stableParentIdentity(node) ?? null,
+        node.fullUrl ? null : node.key,
+      ])
+      const existing = genericUnidentified.get(identity)
+      if (existing) {
+        if (!clinicalSourceNodesEqualWithContext(source.graph, existing.node, node)) {
+          throw new Error('Clinical source projection ID hash collision: matching unidentified generic identity metadata has different resources')
+        }
+        existing.keys.push(node.key)
+      } else genericUnidentified.set(identity, { node, keys: [node.key] })
+      continue
+    }
     const groupKey = stableMetadata([namespace, legacyId])
     const group = genericGroups.get(groupKey) ?? []
     group.push({ node, namespace })
     genericGroups.set(groupKey, group)
   }
   const collisionDigests = new Map<string, string>()
+  for (const [identity, record] of genericUnidentified) {
+    const digest = clinicalSourceIdentityDigest(identity)
+    const previousIdentity = collisionDigests.get(digest)
+    if (previousIdentity && previousIdentity !== identity) {
+      throw new Error('Clinical source projection ID hash collision: distinct unidentified generic records share a row ID digest')
+    }
+    collisionDigests.set(digest, identity)
+    const rowId = `cs${digest}`
+    if (rowId.length > 64 || !/^[A-Za-z0-9.-]+$/.test(rowId)) {
+      throw new Error('Clinical source projection produced an invalid FHIR row ID')
+    }
+    for (const key of record.keys) idsByNodeKey.set(key, rowId)
+  }
   for (const group of genericGroups.values()) {
     if (group.length < 2) continue
     const distinct = new Map<string, { node: ClinicalSourceNode; keys: string[]; baseIdentity: string; context: string }>()
