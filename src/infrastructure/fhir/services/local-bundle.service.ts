@@ -1,5 +1,6 @@
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
+import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -584,6 +585,8 @@ function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void
 export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconciliationResult, sourceKeys?: WeakMap<object, string>): any[] {
   const rawEntries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
   const entries = rawEntries.filter((e) => e?.resource)
+  const sourceNodes = source ? selectClinicalSourceNodes(source) : []
+  const projectionIds = source ? createClinicalSourceProjectionIds(source) : new Map<string, string>()
 
   // Pass 1 — assign ids; index every resolvable key to its canonical target.
   const targets = new Map<string, RefTarget>()
@@ -620,6 +623,7 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
       while (reservedIds.has(`${resourceType}/${id}`)) id += '-source'
     }
     reservedIds.add(`${resourceType}/${id}`)
+    id = projectionIds.get(sourceNodes[index]?.key) ?? id
     res.id = id
     const target: RefTarget = { resourceType, id }
     if (e.fullUrl) indexTarget(e.fullUrl, target)
@@ -646,6 +650,7 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
       for (const child of resource.contained ?? []) {
         const node = children.find(candidate => clinicalSourceResourcesEqual(candidate.resource, child))
         if (!node) continue
+        child.id = projectionIds.get(node.key) ?? child.id
         mappedByKey.set(node.key, child)
         indexClone(node.key, child)
       }
@@ -1614,11 +1619,14 @@ export const LocalBundleService = {
     const specialMaterialsByProcedure = groupSpecialMaterialsByProcedure(byType('Basic'))
 
     // Build observation map for DiagnosticReport expansion
-    const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r), clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
+    const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r),
+      sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
+      clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
     const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any, index: number) =>
       ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByResource.get(r),
+        sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
         ...(derivedReportMembers.has(reports[index]) ? { clinicalSourceDerivedMemberKeys: derivedReportMembers.get(reports[index]) } : {}) })
     )
 

@@ -175,7 +175,8 @@ describe('LocalBundleService.parse — urn:uuid id-less bundle', () => {
   it('loads the clinical resources (not just demographics)', () => {
     const data = LocalBundleService.parse(urnBundle())!
     expect(data.collection.observations).toHaveLength(1)
-    expect(data.collection.observations[0].id).toBe('obs-1')
+    expect(data.collection.observations[0].id).toMatch(/^[A-Za-z0-9.-]{1,64}$/)
+    expect(data.collection.observations[0].sourceId).toBeUndefined()
     expect(data.collection.diagnosticReports).toHaveLength(1)
     expect(data.collection.encounters).toHaveLength(1)
     expect(data.collection.medications).toHaveLength(1)
@@ -184,7 +185,8 @@ describe('LocalBundleService.parse — urn:uuid id-less bundle', () => {
   it('links a DiagnosticReport to its member Observation across urn:uuid refs', () => {
     const data = LocalBundleService.parse(urnBundle())!
     const report = data.collection.diagnosticReports[0]
-    expect(report._observations?.map((o) => o.id)).toEqual(['obs-1'])
+    expect(report._observations).toEqual([data.collection.observations[0]])
+    expect(report.result?.[0].reference).toBe('Observation/' + data.collection.observations[0].id)
   })
 
   it('resolves MedicationRequest.medicationReference into a drug name', () => {

@@ -18,7 +18,7 @@ it('retains all original source types/fullUrls before mapper rewrites and keeps 
   expect(source.graph.nodes.map(node => node.resource.resourceType)).toEqual(expect.arrayContaining(['Patient', 'ServiceRequest', 'Observation', 'Provenance', 'FutureClinicalType']))
   expect(source.graph.nodes.find(node => node.resource.id === 'order')?.fullUrl).toBe('https://synthetic.invalid/fhir/ServiceRequest/order')
   expect(source.graph.nodes.find(node => node.resource.id === 'result')?.resource.basedOn).toEqual([{ reference: 'https://synthetic.invalid/fhir/ServiceRequest/order' }])
-  expect(collection.observations.map(row => row.id)).toEqual(['result'])
+  expect(collection.observations.map(row => row.sourceId)).toEqual(['result'])
   expect(source.policies.FutureClinicalType.assessment).toBe('not-assessed')
   expect(JSON.stringify(bundle)).toBe(before)
   expect(JSON.stringify(collection)).not.toContain('AUDIT_ONLY_SECRET')
@@ -64,7 +64,7 @@ it('projects a proven same-source record once while retaining transmission evide
   const bundle = fixture()
   bundle.entry.push(JSON.parse(JSON.stringify(bundle.entry[2])))
   const collection = LocalBundleService.parse(bundle)!.collection
-  expect(collection.observations.map(row => row.id)).toEqual(['result'])
+  expect(collection.observations.map(row => row.sourceId)).toEqual(['result'])
   expect(collection.clinicalSource!.graph.nodes.find(node => node.resource.id === 'result')?.occurrences).toBe(2)
   expect(collection.clinicalSource!.evidence.sameRecord).toHaveLength(1)
 })
@@ -86,8 +86,8 @@ it('preserves distinct fullUrl identities in mapped rows and does not attach an 
   bundle.entry.push({ resource: { resourceType: 'DiagnosticReport', id: 'exact-report', status: 'final', code: { text: 'synthetic' }, result: [{ reference: 'https://one.invalid/Observation/result' }] } })
   const collection = LocalBundleService.parse(bundle)!.collection
   expect(new Set(collection.observations.map(row => row.id)).size).toBe(2)
-  expect((collection.diagnosticReports.find(row => row.id === 'ambiguous-report') as any)?._observations ?? []).toHaveLength(0)
-  expect((collection.diagnosticReports.find(row => row.id === 'exact-report') as any)?._observations[0].valueQuantity.value).toBe(7)
+  expect((collection.diagnosticReports.find(row => row.sourceId === 'ambiguous-report') as any)?._observations ?? []).toHaveLength(0)
+  expect((collection.diagnosticReports.find(row => row.sourceId === 'exact-report') as any)?._observations[0].valueQuantity.value).toBe(7)
 })
 
 it('uses the report origin base to preserve a legal relative member across colliding server ids', () => {
@@ -121,7 +121,7 @@ it('retains nested history Bundle resources in the graph without adding current 
   ] } })
   const parsed = LocalBundleService.parse(bundle)!
   expect(parsed.patient.id).toBe('patient')
-  expect(parsed.collection.observations.map(row => row.id)).toEqual(['result'])
+  expect(parsed.collection.observations.map(row => row.sourceId)).toEqual(['result'])
   expect(parsed.collection.clinicalSource!.graph.nodes.some(node => node.resource.id === 'historical-result')).toBe(true)
 })
 
@@ -150,11 +150,11 @@ it('canonicalizes contained references and retains graph and explicit Roche deri
   ] }
   const before = JSON.stringify(bundle)
   const collection = LocalBundleService.parse(bundle)!.collection
-  const biomarker = collection.observations.find(row => row.id === 'biomarker')!
+  const biomarker = collection.observations.find(row => row.sourceId === 'biomarker')!
   const canonical = canonicalizeBundleResources(bundle, collection.clinicalSource)
   const contained = canonical.find(resource => resource.id === 'biomarkers').contained[0]
   expect(contained.subject.reference).toBe('Patient/patient')
-  expect(contained.hasMember).toEqual([{ reference: 'Observation/member' }])
+  expect(contained.hasMember).toEqual([{ reference: 'Observation/' + collection.observations.find(row => row.sourceId === 'member')!.id }])
   expect(biomarker.clinicalSourceNodeKey).toBeDefined()
   const reports = attachReportObservations(collection.diagnosticReports, collection.observations, collection.clinicalSource)
   expect(reports[0]._observations?.map(row => row.valueString)).toEqual(['histology value', 'marker value', 'member value'])
