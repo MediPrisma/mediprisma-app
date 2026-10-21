@@ -1,4 +1,4 @@
-import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
+import type { MedicationEntity, ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
 import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
@@ -15,9 +15,11 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
     if (!origin || !['MedicationRequest', 'MedicationStatement'].includes(origin.resource.resourceType)) return row
     const raw = origin.resource
     if (!raw.medicationReference && !raw.medicationCodeableConcept) return row
+    let uncertainty: MedicationEntity['clinicalMedicationContentUncertainty']
     let code = raw.medicationCodeableConcept as MedicationEntity['medicationCodeableConcept']
     if (!code) {
       const edge = edges.get(origin.key)
+      uncertainty = { reason: edge?.status === 'ambiguous' ? 'ambiguous-reference' : edge?.status === 'resolved' ? 'missing-medication-code' : 'unresolved-reference' }
       const targets = edge?.status === 'resolved' ? edge.targetKeys.map(key => nodes.get(key)) : []
       const first = targets[0]
       if (first && targets.every(target => target && target.resource.resourceType === 'Medication' && !target.embeddedIn
@@ -26,10 +28,40 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
         code = first.resource.code as MedicationEntity['medicationCodeableConcept']
       }
     }
-    if (clinicalSourceResourcesEqual(row.medicationCodeableConcept, code) || row.medicationCodeableConcept === code) return row
+    if (code) uncertainty = undefined
+    if ((clinicalSourceResourcesEqual(row.medicationCodeableConcept, code) || row.medicationCodeableConcept === code)
+      && row.clinicalMedicationContentUncertainty?.reason === uncertainty?.reason) return row
     changed = true
-    const { medicationCodeableConcept: _previous, ...rest } = row
-    return code ? { ...rest, medicationCodeableConcept: mutableClinicalProjection(code) } : rest
+    const { medicationCodeableConcept: _previous, clinicalMedicationContentUncertainty: _oldUncertainty, ...rest } = row
+    return { ...rest, ...(code ? { medicationCodeableConcept: mutableClinicalProjection(code) } : {}), ...(uncertainty ? { clinicalMedicationContentUncertainty: uncertainty } : {}) }
   })
   return changed ? projected : rows
+}
+
+const CONTENT_UNCERTAINTY_MESSAGE = 'Medication prescriptions exist but referenced drug content is unresolved. Reconcile the medication content; current drug classes and medication absence cannot be concluded.'
+
+/** Content uncertainty is distinct from an absent medication history. */
+export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], input: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}): Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> {
+  let result = input
+  for (const type of ['MedicationRequest', 'MedicationStatement'] as const) {
+    const count = rows.filter(row => (row._sourceResourceType ?? 'MedicationRequest') === type && row.clinicalMedicationContentUncertainty).length
+    const previous = input[type]
+    if (!count) {
+      if (!previous?.medicationContentUncertaintyCount) continue
+      const { medicationContentUncertaintyCount: _previousCount, ...rest } = previous
+      const rowCount = rows.filter(row => (row._sourceResourceType ?? 'MedicationRequest') === type).length
+      const recovered: ClinicalDataQueryStatus = previous.message === CONTENT_UNCERTAINTY_MESSAGE
+        ? { ...rest, count: rowCount, state: rowCount ? 'ok' : 'empty', message: undefined } : rest
+      if (result === input) result = { ...input }
+      result[type] = recovered
+      continue
+    }
+    const status: ClinicalDataQueryStatus = { ...previous, resourceType: type, state: 'error', medicationContentUncertaintyCount: count,
+      message: previous?.state === 'error' && previous.message !== CONTENT_UNCERTAINTY_MESSAGE
+        ? previous.message ?? 'Medication query is incomplete and referenced drug content is unresolved.' : CONTENT_UNCERTAINTY_MESSAGE }
+    if (JSON.stringify(previous) === JSON.stringify(status)) continue
+    if (result === input) result = { ...input }
+    result[type] = status
+  }
+  return result
 }

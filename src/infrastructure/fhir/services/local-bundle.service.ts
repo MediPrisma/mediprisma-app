@@ -1,3 +1,4 @@
+import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
@@ -1769,6 +1770,8 @@ export const LocalBundleService = {
       ...(sourceMetadata ? { sourceMetadata } : {}),
     }
 
+    collection.medications = projectClinicalMedicationContents(collection.medications, clinicalSource)
+    collection.resourceQueryStatus = projectClinicalMedicationQueryStatus(collection.medications, collection.resourceQueryStatus)
     return { patient, collection }
   },
 

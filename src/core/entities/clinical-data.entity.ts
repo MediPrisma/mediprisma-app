@@ -128,6 +128,8 @@ export interface ClinicalFhirExtension {
 }
 
 export interface MedicationEntity extends ClinicalSourceRecord {
+  /** Prescription exists, but its referenced drug content is not established. */
+  clinicalMedicationContentUncertainty?: { reason: 'ambiguous-reference' | 'unresolved-reference' | 'missing-medication-code' }
   identifier?: Array<{ system?: string; value?: string }>
   id: string
   meta?: {
@@ -1190,6 +1192,7 @@ export type ClinicalDataQueryState =
   | 'error'
 
 export interface ClinicalDataQueryStatus {
+  medicationContentUncertaintyCount?: number
   resourceType: string
   state: ClinicalDataQueryState
   count?: number

@@ -39,6 +39,7 @@ export interface HospitalUnconfirmedAnticoagulation {
 
 export type HospitalAwareCdssProfile = CdssPatientProfile & {
   excludedClinicalRecordVariants?: readonly ExcludedClinicalRecordVariant[]
+  unresolvedClinicalMedicationContents?: readonly { source: CdssFactSource; reason: string }[]
   hospitalMedicationInventoryUnresolved?: { sources: readonly CdssFactSource[] }
   hospitalMedicationEvidence?: readonly HospitalMedicationEvidence[]
   hospitalMedicationPolicyVersion?: string
@@ -62,9 +63,10 @@ function withUnresolvedMedicationInventory(profile: HospitalAwareCdssProfile): H
     sources: diagnoses.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })),
   } } }
   const excluded = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'MedicationRequest' || item.resourceType === 'MedicationStatement') ?? []
-  if (!excluded.length) return profile
-  const sources: CdssFactSource[] = excluded.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' }))
-  const uncertainty = { zh: '來源用藥有未決版本或衝突，目前使用及未使用均無法由隔離紀錄判定，需核對', en: 'Medication source records have unresolved versions or conflicts; neither current use nor absence can be determined from excluded records. Reconcile medications.', sources }
+  const contents = profile.unresolvedClinicalMedicationContents ?? []
+  if (!excluded.length && !contents.length) return profile
+  const sources: CdssFactSource[] = [...excluded.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })), ...contents.map(item => item.source)]
+  const uncertainty = { zh: '來源用藥內容、版本或衝突尚未釐清，目前使用及未使用均無法判定，需核對', en: 'Medication content or source versions are unresolved; neither current use nor absence can be determined from excluded records. Reconcile medications.', sources }
   const facts = { ...profile.facts }
   const contexts = { ...profile.medicationClassContexts }
   for (const [key, context] of Object.entries(contexts)) {
@@ -185,7 +187,8 @@ export function createHospitalAwareCdssPatientProfile(
   const evidence: HospitalMedicationEvidence[] = []
   const internalStatuses = new Map<string, string | undefined>()
   const internalUseStates = new Map<string, HospitalMedicationUseState>()
-  const medications = selected.input.medications.map((source, index): HostMedication => {
+  const unresolvedContents = input.medications.filter(row => row.clinicalMedicationContentUncertainty).map(row => ({ source: sourceFor(row), reason: row.clinicalMedicationContentUncertainty!.reason }))
+  const medications = selected.input.medications.filter(row => !row.clinicalMedicationContentUncertainty).map((source, index): HostMedication => {
     const name = resolveHospitalMedicationName(source.medicationCodeableConcept)
     if (!name) return source
     const useState = hospitalUseState(source, now)
@@ -216,7 +219,8 @@ export function createHospitalAwareCdssPatientProfile(
     return normalized
   })
   const profile: HospitalAwareCdssProfile = withUnresolvedMedicationInventory({ ...createFhirCdssPatientProfile({ ...selected.input, medications, now }),
-    ...(selected.excluded.length ? { excludedClinicalRecordVariants: selected.excluded } : {}) })
+    ...(selected.excluded.length ? { excludedClinicalRecordVariants: selected.excluded } : {}),
+    ...(unresolvedContents.length ? { unresolvedClinicalMedicationContents: unresolvedContents } : {}) })
   if (!evidence.length) return profile
 
   const facts = { ...profile.facts }

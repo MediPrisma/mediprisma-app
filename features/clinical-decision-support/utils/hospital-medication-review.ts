@@ -65,16 +65,18 @@ export function applyHospitalMedicationReview(
   result: CdssResult, profile: HospitalAwareCdssProfile, locale: CdssLocale,
 ): CdssResult {
   const excluded = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'MedicationRequest' || item.resourceType === 'MedicationStatement') ?? []
-  const variantSources: CdssFactSource[] = excluded.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' }))
+  const contents = profile.unresolvedClinicalMedicationContents ?? []
+  const unresolvedRecordCount = excluded.length + contents.length
+  const variantSources: CdssFactSource[] = excluded.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })).concat(contents.map(item => item.source))
   const evidence = profile.hospitalMedicationEvidence ?? []
   const pendingEvidence = evidence.filter(isPendingHospitalMedication)
   const unresolved = evidence.filter((entry) => !entry.ingredientName
     && (entry.useState === 'confirmed-current' || isPendingHospitalMedication(entry)))
   const pending = Object.entries(profile.medicationClassContexts ?? {}).filter(([, context]) =>
     context?.state === 'active-order-unconfirmed' || context?.state === 'historical-record-current-status-unknown'
-      || (context?.state === 'uncertain' && (unresolved.length > 0 || excluded.length > 0)))
+      || (context?.state === 'uncertain' && (unresolved.length > 0 || unresolvedRecordCount > 0)))
   // AF's DOAC/VKA regimens have no medication class context.
-  if (!excluded.length && (!evidence.length || (!pending.length && !pendingEvidence.length && !unresolved.length))) return result
+  if (!unresolvedRecordCount && (!evidence.length || (!pending.length && !pendingEvidence.length && !unresolved.length))) return result
   const pendingClasses = new Set(pending.map(([classId]) => classId))
   const pendingKeys = new Set(pending.map(([, context]) => context!.factKey))
   const sourceKey = (source: CdssFactSource) => `${source.resourceType}:${source.resourceId}`
@@ -82,12 +84,12 @@ export function applyHospitalMedicationReview(
   for (const [key, fact] of Object.entries(profile.facts)) {
     if (fact.sources?.some((source) => pendingSources.has(sourceKey(source)))) pendingKeys.add(key)
   }
-  if (unresolved.length || excluded.length) for (const key of HOSPITAL_MEDICATION_EXPOSURE_FACT_KEYS) pendingKeys.add(key)
+  if (unresolved.length || unresolvedRecordCount) for (const key of HOSPITAL_MEDICATION_EXPOSURE_FACT_KEYS) pendingKeys.add(key)
   const english = locale === 'en'
   const label = english ? 'Confirm current medication use' : '核對目前用藥'
-  const message = excluded.length ? english
-    ? 'Medication source records have unresolved versions or conflicts. Reconcile actual use and dose before deciding a medicine is absent, starting it, or increasing it; other verified evidence remains available.'
-    : '來源用藥有未決版本或衝突，判定未使用、開始或加量前需核對實際用藥與劑量；其他已確認證據仍可使用。'
+  const message = unresolvedRecordCount ? english
+    ? 'Medication content or source versions are unresolved. Reconcile actual use and dose before deciding a medicine is absent, starting it, or increasing it; other verified evidence remains available.'
+    : '來源用藥內容、版本或衝突尚未釐清，判定未使用、開始或加量前需核對實際用藥與劑量；其他已確認證據仍可使用。'
     : english
     ? 'Hospital prescriptions may still be in use. Confirm actual use, dose, and stop/hold status before starting or increasing medication; possible exposure remains included in safety checks.'
     : '院內處方仍可能正在使用。開始或加量前，先核對實際用藥、劑量與停藥／暫停狀態；安全判讀持續納入可能的用藥暴露。'
@@ -102,8 +104,8 @@ export function applyHospitalMedicationReview(
             : pendingEvidence.filter((entry) => entry.classIds.includes(classId))
           : []
         const sourceMatches = pendingEvidence.filter((entry) => row.sources?.some((source) => sourceKey(source) === sourceKey(entry.source)))
-        const incompleteMedicationRow = (unresolved.length > 0 || excluded.length > 0) && row.category === 'medication'
-          && (row.direction === 'against' || row.direction === 'unknown' || (excluded.length > 0 && (!row.sources?.length || row.sources.every(source => variantSources.some(variant => sourceKey(source) === sourceKey(variant))))))
+        const incompleteMedicationRow = (unresolved.length > 0 || unresolvedRecordCount > 0) && row.category === 'medication'
+          && (row.direction === 'against' || row.direction === 'unknown' || (unresolvedRecordCount > 0 && (!row.sources?.length || row.sources.every(source => variantSources.some(variant => sourceKey(source) === sourceKey(variant))))))
         if (!matching.length && !sourceMatches.length && !incompleteMedicationRow) return row
         changedTable = true
         const sources = matching.length ? matching : sourceMatches
@@ -122,7 +124,7 @@ export function applyHospitalMedicationReview(
           defaultEnabled: possibleSafetyExposure ? row.defaultEnabled : false,
           value: possibleSafetyExposure ? [row.value, useLabel].filter(Boolean).join(english ? '; ' : '；')
             : incompleteMedicationRow && !sources.length
-            ? excluded.length ? english ? 'Unresolved source-record variants; reconcile medications first' : '來源用藥版本或衝突未釐清，需先核對用藥'
+            ? unresolvedRecordCount ? english ? 'Unresolved source-record variants or medication content; reconcile medications first' : '來源用藥內容、版本或衝突未釐清，需先核對用藥'
               : english ? 'Unresolved hospital ingredients; reconcile medications first' : '院內成分未確認，需先核對用藥'
             : english ? `Current use needs confirmation${names.length ? `: ${names.join(', ')}` : ''}`
               : `目前使用待確認${names.length ? `：${names.join('、')}` : ''}`,
@@ -139,10 +141,10 @@ export function applyHospitalMedicationReview(
     })
     const affected = changedTable || (item.overviewEvidenceFactKey && pendingKeys.has(item.overviewEvidenceFactKey)) || item.patientEvidence.some((entry) => entry.factKeys.some((key) => pendingKeys.has(key)))
     if (!affected) return item
-    const reconcileEvidence = (entries: typeof item.patientEvidence) => entries.map(entry => excluded.length && entry.factKeys.some(key => pendingKeys.has(key))
+    const reconcileEvidence = (entries: typeof item.patientEvidence) => entries.map(entry => unresolvedRecordCount && entry.factKeys.some(key => pendingKeys.has(key))
       ? { ...entry, value: message, sources: [...(entry.sources ?? []), ...variantSources] } : entry)
     const patientEvidence = reconcileEvidence(item.patientEvidence)
-    const semanticRule = excluded.length && item.semanticRule ? { ...item.semanticRule,
+    const semanticRule = unresolvedRecordCount && item.semanticRule ? { ...item.semanticRule,
       patientData: reconcileEvidence(item.semanticRule.patientData), decisionLogic: message, clinicalConclusion: message,
     } : item.semanticRule
     // MRA hyperkalemia and AF interaction/dose checks need no evidence table to
