@@ -1879,3 +1879,14 @@ describe('createFhirTools (unified)', () => {
     })
   })
 })
+
+it('keeps distinct reconciled same-id observation values in actual tool output without capture metadata', async () => {
+  const observations = [10, 20].map((value, index) => ({ id: 'same', clinicalSourceNodeKey: 'synthetic-source-' + index, status: 'final', code: { text: 'Synthetic lab' }, effectiveDateTime: '2026-07-02', valueQuantity: { value, unit: 'mg/dL' } }))
+  const collection: any = { ...sampleCollection, observations, vitalSigns: [observations[0]], diagnosticReports: [] }
+  const sourceTools = createFhirTools(() => ({ patient: samplePatient, collection }))
+  const result = await (sourceTools.queryObservations as any).execute({})
+  expect(result.data.map((row: any) => row.value)).toEqual([10, 20])
+  expect(result.count).toBe(2)
+  expect(JSON.stringify(result)).not.toContain('clinicalSource')
+  expect(JSON.stringify(result)).not.toContain('synthetic-source-')
+})

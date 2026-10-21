@@ -1,6 +1,19 @@
+import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+
 // Core Domain Entities: Clinical Data
 
-export interface ConditionEntity {
+export interface ClinicalSourceRecord {
+  clinicalClaimEncounterRelation?: { state: 'resolved' | 'unresolved'; reference?: string }
+  /** Trusted Local Claim projection identity; never a raw FHIR field or AI payload. */
+  clinicalClaimDerivedSource?: { originNodeKey: string; path: string }
+  sourceVersionId?: string
+  clinicalSourceNodeKey?: string
+  clinicalRecordVariant?: ClinicalRecordVariant
+}
+
+export interface ConditionEntity extends ClinicalSourceRecord {
+  /** Existing local date-derived link; not a source-confirmed encounter. */
+  _encounterInferred?: boolean
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   code?: {
@@ -119,7 +132,10 @@ export interface ClinicalFhirExtension {
   valueInstant?: string
 }
 
-export interface MedicationEntity {
+export interface MedicationEntity extends ClinicalSourceRecord {
+  clinicalMedicationCodeProvenance?: 'mapped-policy' | 'graph-reference'
+  /** Prescription exists, but its referenced drug content is not established. */
+  clinicalMedicationContentUncertainty?: { reason: 'ambiguous-reference' | 'unresolved-reference' | 'missing-medication-code' }
   identifier?: Array<{ system?: string; value?: string }>
   id: string
   meta?: {
@@ -307,7 +323,7 @@ export interface MedicationEntity {
  * resource and one same-ingredient/same-dosage-form group; it is deliberately
  * not a MedicationEntity because it is not a prescription.
  */
-export interface MedicationRemainingSummaryEntity {
+export interface MedicationRemainingSummaryEntity extends ClinicalSourceRecord {
   id: string
   groupIdentifier?: string
   groupName?: string
@@ -327,7 +343,7 @@ export interface MedicationRemainingSummaryEntity {
   sourceId?: string
 }
 
-export interface AllergyEntity {
+export interface AllergyEntity extends ClinicalSourceRecord {
   id: string
   code?: {
     text?: string
@@ -393,7 +409,22 @@ export interface AllergyEntity {
   sourceId?: string
 }
 
-export interface ObservationEntity {
+export interface ClinicalRecordVariant {
+  groupId: string
+  classification: 'revision' | 'conflict'
+  variantCount: number
+  reason: string
+}
+
+export interface ObservationEntity extends ClinicalSourceRecord {
+  /** Local convenience association by date; not an explicit FHIR encounter link. */
+  _encounterInferred?: boolean
+  /** Unresolved variants of one source record, not independent measurements. */
+  clinicalRecordVariant?: ClinicalRecordVariant
+  /** Opaque identity in the shared source graph; survives query structural sharing. */
+  clinicalSourceNodeKey?: string
+  /** Explicit hasMember edges produced by a local domain projection. */
+  clinicalSourceDerivedMemberKeys?: string[]
   basedOn?: Array<{ reference?: string; display?: string }>
   extension?: ClinicalFhirExtension[]
   method?: { text?: string; coding?: Array<{ system?: string; code?: string; display?: string }> }
@@ -547,7 +578,13 @@ export interface ObservationEntity {
   sourceId?: string
 }
 
-export interface DiagnosticReportEntity {
+export interface DiagnosticReportEntity extends ClinicalSourceRecord {
+  /** Unresolved variants of one source record; chronology is not inferred. */
+  clinicalRecordVariant?: ClinicalRecordVariant
+  /** Opaque identity in the shared source graph; survives query structural sharing. */
+  clinicalSourceNodeKey?: string
+  /** Explicit membership added by a local domain projection, using source node keys. */
+  clinicalSourceDerivedMemberKeys?: string[]
   basedOn?: Array<{ reference?: string; display?: string }>
   id: string
   meta?: {
@@ -581,6 +618,8 @@ export interface DiagnosticReportEntity {
     end?: string
   }
   _observations?: ObservationEntity[]
+  /** Keeps authoritative graph membership semantics after outbound capture IDs are stripped. */
+  resolvedReportMembership?: boolean
   status?: string
   issued?: string
   category?: any
@@ -626,7 +665,9 @@ export interface DiagnosticReportEntity {
  * readable study/series/instance fields and references only; the app does not
  * fetch DICOM bytes or act as a PACS viewer.
  */
-export interface ImagingStudyEntity {
+export interface ImagingStudyEntity extends ClinicalSourceRecord {
+  /** Existing local date-derived link; not a source-confirmed encounter. */
+  _encounterInferred?: boolean
   id: string
   identifier?: Array<{
     system?: string
@@ -690,7 +731,9 @@ export interface ImagingStudyEntity {
   sourceId?: string
 }
 
-export interface ProcedureEntity {
+export interface ProcedureEntity extends ClinicalSourceRecord {
+  /** Existing local date-derived link; not a source-confirmed encounter. */
+  _encounterInferred?: boolean
   id: string
   /** Source-derived procedure class from FHIR Procedure.category. */
   category?: {
@@ -773,7 +816,7 @@ export interface ProcedureSpecialMaterialEntity {
   relationshipBasis?: string
 }
 
-export interface EncounterEntity {
+export interface EncounterEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
   _sourceEncounterRecords?: any[]
@@ -822,7 +865,7 @@ export interface EncounterEntity {
   sourceId?: string
 }
 
-export interface DocumentReferenceEntity {
+export interface DocumentReferenceEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   status?: string
@@ -874,7 +917,7 @@ export interface DocumentReferenceEntity {
   sourceId?: string
 }
 
-export interface CompositionEntity {
+export interface CompositionEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   status?: string
@@ -942,7 +985,7 @@ export interface CompositionEntity {
  * stay in the medication list, while genuine preventive-care vaccinations
  * from 疾病管制署 (CDC) surface here.
  */
-export interface ImmunizationEntity {
+export interface ImmunizationEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   vaccineCode?: {
@@ -979,7 +1022,7 @@ export interface ImmunizationEntity {
  * these is in progress — these fields follow the standard R4 shape and will
  * be locked against real bridge samples once they land.
  */
-export interface ConsentEntity {
+export interface ConsentEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   scope?: {
@@ -1033,7 +1076,7 @@ export interface ConsentEntity {
  * Procedure rather than the Device itself, so the card joins on date when
  * available. Field shape follows standard R4 pending bridge samples.
  */
-export interface DeviceEntity {
+export interface DeviceEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   type?: {
@@ -1076,7 +1119,7 @@ export interface DeviceEntity {
  * conditions the plan targets. Field shape follows standard R4 pending bridge
  * samples.
  */
-export interface CarePlanEntity {
+export interface CarePlanEntity extends ClinicalSourceRecord {
   id: string
   status?: string
   intent?: string
@@ -1153,15 +1196,30 @@ export type ClinicalDataQueryKey =
 export type ClinicalDataQueryState =
   | 'ok'
   | 'empty'
+  | 'pending'
+  | 'incomplete'
   | 'unauthorized'
   | 'forbidden'
   | 'unsupported'
   | 'error'
 
 export interface ClinicalDataQueryStatus {
+  invalidModifierCount?: number
+  /** Restores only the clean query state this quarantine projection replaced. */
+  invalidModifierPreviousStatus?: { state: 'ok' | 'empty'; message?: string }
+  invalidModifierPreviouslyUnreported?: boolean
+  medicationContentUncertaintyCount?: number
+  /** Only this content projection may recover the incomplete state it created. */
+  medicationContentOnlyIncomplete?: boolean
   resourceType: string
   state: ClinicalDataQueryState
   count?: number
+  /** Returned clinical rows withheld because their explicit patient reference contradicted the requested patient. */
+  excludedCount?: number
+  exclusionReason?: 'foreign-patient-reference' | 'unresolved-patient-reference'
+  exclusionCounts?: Partial<Record<'foreign-patient-reference' | 'unresolved-patient-reference', number>>
+  /** Underlying query/clinical completeness before the ownership overlay. */
+  exclusionPreviousStatus?: ClinicalDataQueryStatus
   httpStatus?: number
   message?: string
   operationOutcome?: {
@@ -1215,7 +1273,21 @@ export interface ClinicalSourceMetadata {
   }>
 }
 
+export interface ClinicalRecordVariantExclusion extends ClinicalRecordVariant {
+  analyteKeys?: readonly string[]
+  code?: { coding?: { system?: string; code?: string }[]; text?: string }
+  effectiveDate?: string
+  /** Internal opaque evidence identity, removed from outward AI traces. */
+  evidenceIdentity?: string
+  resourceType: string
+  sourceId?: string
+  versionId?: string
+}
+
 export interface ClinicalDataCollection {
+  clinicalRecordVariantExclusions?: readonly ClinicalRecordVariantExclusion[]
+  /** Complete immutable pre-mapper source graph and shared reconciliation evidence. */
+  clinicalSource?: ClinicalReconciliationResult
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
   /** IMUE0120 Basic summaries; never counted as prescriptions or reports. */

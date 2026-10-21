@@ -46,14 +46,14 @@ describe('hospital prescription exposure review regressions', () => {
     expect(['needs-data', 'review']).toContain(recommendation.status)
     expect(recommendation.title).not.toMatch(/not taking|未使用/)
     const row = recommendation.evidenceTables?.flatMap((table) => table.items).find((item) => item.id === 'af-medication:oac')
-    expect(row?.direction).toBe('unknown')
+    expect(row?.direction).toBe('supports')
     expect(row?.value).not.toMatch(/Not taking|未使用/)
     expect(row?.sources?.[0]).toMatchObject({ resourceId: source.id, status: 'active', date: '2026-09-25' })
     expect(profile.afMedicationRegimens?.[0]).toMatchObject({ ingredient: 'apixaban', doseMg: 5, timesPerDay: 2 })
     expect(profile.facts.currentDoac.sources?.[0].resourceId).toBe(source.id)
-    expect(profile.facts.currentOralAnticoagulant.zh).toContain('院內使用待確認')
-    expect(profile.hospitalMedicationEvidence?.[0].useState).toBe('active-order-unconfirmed')
-    expect(recommendation.visitDecision).toBeUndefined()
+    expect(profile.facts.currentOralAnticoagulant.zh).not.toContain('院內使用待確認')
+    expect(profile.hospitalMedicationEvidence?.[0].useState).toBe('confirmed-current')
+    expect(recommendation.visitDecision).toEqual(moduleOf(native,'af-anticoagulation-concordance')?.visitDecision)
   })
 
   it.each<CdssLocale>(['zh-TW', 'en'])('retains the native high-priority MRA severe-hyperkalemia card (%s)', (locale) => {
@@ -62,12 +62,12 @@ describe('hospital prescription exposure review regressions', () => {
     const baseline = moduleOf(native, 'heart-failure-mra-safety')!
     expect(baseline).toMatchObject({ status: 'actionable', priority: 'high' })
     const profile = build([source])
-    expect(profile.medicationClassContexts?.['mineralocorticoid-receptor-antagonist']?.state).toBe('active-order-unconfirmed')
+    expect(profile.medicationClassContexts?.['mineralocorticoid-receptor-antagonist']?.state).toBe('confirmed-current')
     const safety = moduleOf(buildHospitalAwareCdssResult(hfPack, profile, locale), 'heart-failure-mra-safety')!
     expect(safety).toMatchObject({ status: baseline.status, priority: baseline.priority, title: baseline.title })
     expect(safety.nextActions).toEqual(expect.arrayContaining(baseline.nextActions))
-    expect(safety.patientEvidence.find((entry) => entry.factKeys.includes('mraTherapy'))?.value).toMatch(/使用待確認|use needs confirmation/)
-    expect(safety.recommendation).toMatch(/可能|may still be in use/)
+    expect(safety.patientEvidence.find((entry) => entry.factKeys.includes('mraTherapy'))?.value).not.toMatch(/使用待確認|use needs confirmation/)
+    expect(safety.recommendation).toBe(baseline.recommendation)
   })
 
   it('evaluates current physician-entered potassium rather than a cached exposure profile', () => {
@@ -87,7 +87,7 @@ describe('hospital prescription exposure review regressions', () => {
     const row = (interaction.evidenceTables?.flatMap((table) => table.items) ?? []).find((item) => item.id === 'af-ddi:apixaban:ketoconazole')!
     expect(row.direction).toBe('supports')
     expect(row.value).toContain('Verify Taiwan labeling before dosing')
-    expect(row.value).toContain('Current use needs confirmation')
+    expect(row.value).not.toContain('Current use needs confirmation')
     expect(row.sources?.map((citation) => citation.resourceId)).toEqual(['fictional-apixaban', source.id])
   })
 
@@ -107,7 +107,7 @@ describe('hospital prescription exposure review regressions', () => {
     const profile = build([source])
     expect(profile.facts[key]).toBeDefined()
     if (!name.startsWith('Meitifen')) expect(native.facts[key]).toBeDefined()
-    expect(profile.facts[key].zh).toContain('院內使用待確認')
+    expect(profile.facts[key].zh).not.toContain('院內使用待確認')
     expect(profile.facts[key].sources?.[0]).toMatchObject({ resourceId: source.id, status: 'active', date: '2026-09-25' })
     expect(source.drugTerminology).toBeUndefined()
     expect(JSON.stringify(source)).toBe(before)
@@ -146,7 +146,7 @@ describe('hospital prescription exposure review regressions', () => {
     // This fictional source already carries the native coverage module's NHI code.
     source.medicationCodeableConcept!.coding!.push({ system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code', code: 'BC26476100' })
     const profile = build([source])
-    expect(profile.medicationContexts?.forxiga).toMatchObject({ status: 'active', useState: 'active_order_unconfirmed' })
+    expect(profile.medicationContexts?.forxiga).toMatchObject({ status: 'active', useState: 'confirmed_current' })
     expect(JSON.stringify(profile)).not.toContain('draft:mediprisma-hospital:')
   })
 
@@ -155,9 +155,10 @@ describe('hospital prescription exposure review regressions', () => {
       drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 'fictional', ingredientText: 'GLICLAZIDE', atcCode: 'A10BB09' } }
     const native = createFhirCdssPatientProfile({ ...input, medications: [official] })
     const profile = build([official, order('Insulin aspart inj 100 units/ml')])
-    expect(profile.medicationClassContexts?.insulin?.state).toBe('active-order-unconfirmed')
+    expect(profile.medicationClassContexts?.insulin?.state).toBe('confirmed-current')
     expect(profile.medicationClassContexts?.sulfonylurea?.state).toBe('confirmed-current')
-    expect(profile.facts.hypoglycemiaRiskMedications).toEqual(native.facts.hypoglycemiaRiskMedications)
+    expect(profile.facts.hypoglycemiaRiskMedications.sources?.map(source=>source.resourceId)).toEqual(expect.arrayContaining(['fictional-nhi-su','fictional-insulin']))
+    expect(native.facts.hypoglycemiaRiskMedications).toBeDefined()
   })
 
   it.each(['active', 'completed'])('leaves native AF evaluation identical for a national-cloud %s prescription', (status) => {

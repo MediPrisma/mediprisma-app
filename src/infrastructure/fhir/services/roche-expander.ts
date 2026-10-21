@@ -52,10 +52,12 @@ function looksLikeReference(node: any): boolean {
 function resolveRefsDeep(
   node: any,
   byId: Map<string, string>,
-  byIdentifier: Map<string, string>,
+  byIdentifier: Map<string, any[]>,
+  onResolved?: (path: string, target: any) => void,
+  path = '',
 ): void {
   if (Array.isArray(node)) {
-    for (const item of node) resolveRefsDeep(item, byId, byIdentifier)
+    node.forEach((item, index) => resolveRefsDeep(item, byId, byIdentifier, onResolved, `${path}[${index}]`))
     return
   }
   if (!node || typeof node !== 'object') return
@@ -65,12 +67,20 @@ function resolveRefsDeep(
       const m = node.reference.match(/^(?:urn:uuid:|#)(.+)$/)
       if (m && byId.has(m[1])) node.reference = byId.get(m[1])
     } else if (node.identifier?.value != null) {
-      const target = byIdentifier.get(String(node.identifier.value))
-      if (target) node.reference = target
+      const matches = byIdentifier.get(String(node.identifier.value)) ?? []
+      const candidates = matches.filter(target => (target.identifier ?? []).some((identifier: any) =>
+        String(identifier.value) === String(node.identifier.value)
+        && (!node.identifier.system || identifier.system === node.identifier.system),
+      ) && (!node.type || node.type === target.resourceType))
+      if (candidates.length === 1) {
+        const target = candidates[0]
+        node.reference = `${target.resourceType}/${target.id}`
+        onResolved?.(path, target)
+      }
     }
   }
 
-  for (const key of Object.keys(node)) resolveRefsDeep(node[key], byId, byIdentifier)
+  for (const key of Object.keys(node)) resolveRefsDeep(node[key], byId, byIdentifier, onResolved, path ? `${path}.${key}` : key)
 }
 
 /**
@@ -78,7 +88,11 @@ function resolveRefsDeep(
  * untouched (isRocheBundle returns false). Runs AFTER canonicalizeBundleResources
  * (so top-level ids are already stamped) and BEFORE the byType() split.
  */
-export function expandRocheResources(entries: any[]): void {
+export function expandRocheResources(
+  entries: any[],
+  onDerivedMember?: (report: any, observation: any) => void,
+  sourceIdFor?: (resource: any) => string | undefined,
+): void {
   if (!Array.isArray(entries) || entries.length === 0) return
   if (!isRocheBundle(entries)) return
 
@@ -114,15 +128,30 @@ export function expandRocheResources(entries: any[]): void {
 
   // (2) Index every top-level resource by id and by each identifier value.
   const byId = new Map<string, string>()
-  const byIdentifier = new Map<string, string>()
+  const ambiguousIds = new Set<string>()
+  const indexId = (id: string, reference: string) => {
+    if (ambiguousIds.has(id)) return
+    const existing = byId.get(id)
+    if (existing && existing !== reference) {
+      byId.delete(id)
+      ambiguousIds.add(id)
+      return
+    }
+    byId.set(id, reference)
+  }
+  const byIdentifier = new Map<string, any[]>()
   for (const res of entries) {
     if (!res?.resourceType || res.id == null) continue
     const ref = `${res.resourceType}/${res.id}`
-    byId.set(String(res.id), ref)
+    indexId(String(res.id), ref)
+    const sourceId = sourceIdFor?.(res)
+    if (sourceId != null && sourceId !== '' && String(sourceId) !== String(res.id)) indexId(String(sourceId), ref)
     const ids = Array.isArray(res.identifier) ? res.identifier : []
     for (const ident of ids) {
-      if (ident?.value != null && !byIdentifier.has(String(ident.value))) {
-        byIdentifier.set(String(ident.value), ref)
+      if (ident?.value != null) {
+        const matches = byIdentifier.get(String(ident.value)) ?? []
+        if (!matches.includes(res)) matches.push(res)
+        byIdentifier.set(String(ident.value), matches)
       }
     }
   }
@@ -130,7 +159,13 @@ export function expandRocheResources(entries: any[]): void {
   // (3) Rewrite urn:uuid / # / identifier-only references throughout so
   //     subject → Patient, focus/reasonReference → Condition, hasMember/bodySite
   //     → their targets all resolve to relative ResourceType/id references.
-  for (const res of entries) resolveRefsDeep(res, byId, byIdentifier)
+  for (const res of entries) resolveRefsDeep(res, byId, byIdentifier, (path, target) => {
+    if (target.resourceType !== 'Observation') return
+    if ((res.resourceType === 'DiagnosticReport' && /^result\[\d+\]$/.test(path))
+      || (res.resourceType === 'Observation' && /^hasMember\[\d+\]$/.test(path))) {
+      onDerivedMember?.(res, target)
+    }
+  })
 
   // (4) Cancer staging is a DIAGNOSIS attribute (mCODE models it on the
   //     Condition via `stage.assessment` → a TNM stage-group Observation whose
@@ -195,6 +230,8 @@ export function expandRocheResources(entries: any[]): void {
       if (!Array.isArray(pathologyDr.result)) pathologyDr.result = []
       for (const id of biomarkerIds) {
         pathologyDr.result.push({ type: 'Observation', reference: `Observation/${id}` })
+        const matches = hoisted.filter(resource => resource.resourceType === 'Observation' && String(resource.id) === id)
+        if (matches.length === 1) onDerivedMember?.(pathologyDr, matches[0])
       }
     }
   }

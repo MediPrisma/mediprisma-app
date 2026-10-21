@@ -1,3 +1,4 @@
+import { excludeUnresolvedDecisionVariants } from '@/src/core/utils/clinical-variant-inputs'
 import type { ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 
 export type SymptomChange = 'improved' | 'unchanged' | 'worse' | 'resolved'
@@ -19,7 +20,7 @@ export function parseHfHistory(raw: unknown): HfFollowUpHistory {
 /** Read explicit observations only; encounter diagnosis codes are not chief complaints. */
 export function hfFollowUpHistory(observations: readonly ObservationEntity[]): HfFollowUpHistory {
   const history: HfFollowUpHistory = { complaints: [], weights: [] }
-  for (const item of observations) {
+  for (const item of excludeUnresolvedDecisionVariants({ observations }).observations) {
     const date = item.effectiveDateTime?.slice(0, 10)
     if (!validDate(date) || ['entered-in-error', 'cancelled'].includes(item.status ?? '')) continue
     const source = `Observation/${item.id ?? ''}`

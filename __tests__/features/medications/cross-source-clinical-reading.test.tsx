@@ -46,7 +46,7 @@ it('projects one hospital and two cloud copies as one comparison while preservin
   expect(container.querySelector('details')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '院內：查看來源紀錄' }))
   const details = within(screen.getByRole('dialog', { name: '來源紀錄' }))
-  expect(details.getByText('以院內紀錄為準；雲端紀錄保留供查閱。')).toBeInTheDocument()
+  expect(details.queryByText(/核對|尚未確認|請勿/)).not.toBeInTheDocument()
   expect(details.getByText('雲端 1')).toBeInTheDocument()
   expect(details.getByText('雲端 2')).toBeInTheDocument()
   expect(details.getAllByText(/總量 28/)).toHaveLength(2)
@@ -211,7 +211,7 @@ it('keeps hospital unknown status instead of promoting a cloud copy into the pri
   expect(screen.getByText('狀態未確認')).toBeInTheDocument()
   expect(screen.queryByRole('dialog', { name: '來源紀錄' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '院內：查看來源紀錄' }))
-  expect(within(screen.getByRole('dialog', { name: '來源紀錄' })).getByText(/來源狀態或供藥期間不同/)).toBeInTheDocument()
+  expect(within(screen.getByRole('dialog', { name: '來源紀錄' })).queryByText(/核對|來源狀態或供藥期間不同/)).not.toBeInTheDocument()
 })
 
 it('retains the comparison warning when only one source is in the current view', () => {
@@ -273,7 +273,7 @@ it('keeps overview, visit detail and IPS consistent without presenting cancellat
   expect(detail.medications.filter(medication => medication.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
   const exported = mapMedications(collection.medications, 'Patient/synthetic-export').entries.map(entry => entry.resource)
   expect(exported).toHaveLength(6)
-  expect(exported.filter(resource => JSON.stringify(resource.note).includes('Possible cross-source copies'))).toHaveLength(2)
+  expect(exported.filter(resource => JSON.stringify(resource.note).includes('Hospital records determine'))).toHaveLength(2)
   expect(exported.filter(resource => JSON.stringify(resource.note).includes('self-pay'))).toHaveLength(1)
   expect(exported.some(resource => JSON.stringify(resource.note).includes('status: cancelled'))).toBe(true)
 })
@@ -283,7 +283,7 @@ it('signals source fact conflicts in the existing row button without adding a di
  const row=renderHook(()=>useMedicationRows(collection.medications)).result.current[0]
  row.sourceComparison={...row.sourceComparison!,warnings:['source-facts-differ']}
  const {container}=render(<MedicationItem medication={row}/>)
- expect(screen.getByRole('button',{name:'差異 (院內)：查看來源紀錄'})).toBeInTheDocument()
- expect(screen.getByText('差異',{exact:true})).toBeInTheDocument()
+  expect(screen.getByRole('button',{name:'院內：查看來源紀錄'})).toBeInTheDocument()
+  expect(screen.queryByText('差異',{exact:true})).not.toBeInTheDocument()
  expect(container.querySelector('details')).toBeNull()
 })

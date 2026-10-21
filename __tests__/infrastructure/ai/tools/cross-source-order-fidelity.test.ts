@@ -9,14 +9,14 @@ it('retains real identical orders and explicitly identifies possible source copi
     const parsed = LocalBundleService.parse(fixture)!
     const tools = createFhirTools(() => parsed)
     const result = await (tools.getActiveMedicationList as any).execute({})
-    expect(result.count).toBe(5) // source records, including two unconfirmed copies
-    expect(result.sourceComparisonCounts).toEqual({ sourceRecordCount: 5, comparisonGroupCount: 4, unconfirmedGroupCount: 1 })
+    expect(result.count).toBe(4) // two distinct real Metformin orders remain; the cloud copy is not a second prescription.
+    expect(result.sourceComparisonCounts).toEqual({ sourceRecordCount: 4, comparisonGroupCount: 4, unconfirmedGroupCount: 1 })
     expect(result.data.filter((record: any) => /Metformin/i.test(record.medication))).toHaveLength(2)
-    expect(result.data.filter((record: any) => record.sourceComparison?.status === 'candidate')).toHaveLength(2)
+    expect(result.data.filter((record: any) => record.sourceComparison?.status === 'candidate')).toHaveLength(1)
     expect(result.data.filter((record: any) => record.selfPurchased)).toHaveLength(1)
     expect(result.data.some((record: any) => record.status === 'cancelled')).toBe(false)
     expect(result.data.filter((record: any) => record.sourceComparison?.status === 'candidate')
-      .every((record: any) => record.sourceComparisonInstruction.includes('Preserve distinct orders within each source'))).toBe(true)
+      .every((record: any) => record.sourceComparisonInstruction.includes('Hospital records determine'))).toBe(true)
   } finally { jest.useRealTimers() }
 })
 
@@ -31,12 +31,8 @@ it.each([true, false])('reports cancelled hospital versus active cloud as uncert
     const tools = createFhirTools(() => parsed)
     const result = await (tools.getActiveMedicationList as any).execute({})
     expect(result.data.some((record: any) => record.sourceComparison?.warnings?.includes('source-status-conflict'))).toBe(false)
-    expect(result.uncertainData).toEqual(expect.arrayContaining([expect.objectContaining({
-      sourceComparison: expect.objectContaining({ sourceStatuses: expect.arrayContaining([
-        expect.objectContaining({ origin: 'hospital', status: 'cancelled', basis: 'source-status' }),
-        expect.objectContaining({ origin: 'medcloud', status: 'active', basis: tagged ? 'coverage-estimate' : 'source-status' }),
-      ]) }),
-    })]))
-    expect(result.canConcludeAbsence).toBe(false)
+    expect(result.uncertainData).toEqual([])
+    expect(result.canConcludeAbsence).toBe(true)
+    expect(parsed.collection.medications.some(record=>record.status==='cancelled')).toBe(true)
   } finally { jest.useRealTimers() }
 })

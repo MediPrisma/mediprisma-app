@@ -1,4 +1,5 @@
 import type { SourceRecordComparison } from './source-record-comparison'
+import { isVghtpeSource, isMedcloudSource } from './clinical-source-identity'
 
 type SourceState = { dataOrigin?: string; isInactive: boolean; currentnessUncertain?: boolean }
 
@@ -33,9 +34,7 @@ export function projectMedicationComparisons<T extends { id: string }>(
     const mixedCurrentness = complete.some(source =>
       stateFor(source).isInactive !== stateFor(representative).isInactive
       || !!stateFor(source).currentnessUncertain !== !!stateFor(representative).currentnessUncertain)
-    const factsConflict = comparison.warnings?.some(warning => ['source-facts-differ', 'source-status-conflict'].includes(warning))
-    const display = factsConflict || !hospital.length || !cloud.length ? [...complete]
-      : hospital.length > 1 ? [...hospital, ...(cloud.length > hospital.length ? cloud : [])] : [representative]
+    const display = hospital.length && cloud.length ? [...hospital] : [...complete]
     if (display.length > 1 && display.every(source => stateFor(source).isInactive) && !stateFor(representative).isInactive) display.unshift(representative)
     display.forEach((source, index) => result.push({ record: source, sources: complete, comparison,
       collapsed: display.length === 1,
@@ -45,4 +44,19 @@ export function projectMedicationComparisons<T extends { id: string }>(
     complete.forEach(source => consumed.add(source.id))
   }
   return result
+}
+
+/** UI, AI and CDSS use the same hospital-primary clinical record set.
+ * Original copies and pairing metadata remain in the source collection/audit;
+ * choosing a display/decision source does not assert a shared FHIR identity. */
+export function selectHospitalMedicationComparisons<T extends { id: string; _sourceRecordComparison?: SourceRecordComparison }>(records: T[]): T[] {
+  const projected=projectHospitalMedicationComparisons(records).map(item=>item.record)
+  return projected.length===records.length && projected.every((record,index)=>record===records[index]) ? records : projected
+}
+
+export function projectHospitalMedicationComparisons<T extends { id: string; _sourceRecordComparison?: SourceRecordComparison }>(records: T[]) {
+  return projectMedicationComparisons(records, record=>record._sourceRecordComparison, record=>({
+    dataOrigin:isVghtpeSource(record as any) ? 'hospital' : isMedcloudSource(record as any) ? 'medcloud' : undefined,
+    isInactive:false,
+  }))
 }

@@ -193,8 +193,8 @@ describe('LiveFeature profile wiring', () => {
     expect(input.medications[0].drugTerminology).toEqual({ ingredientText: 'Diclofenac sodium' })
     expect(lastProfile().medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state)
       .toBe('confirmed-current') // The pack evaluates possible exposure for safety.
-    expect((lastProfile() as HospitalAwareCdssProfile).hospitalMedicationEvidence?.[0].useState).toBe('historical-record-current-status-unknown')
-    expect(lastProfile().facts.hfHarmfulNsaid.zh).toContain('院內使用待確認')
+    expect((lastProfile() as HospitalAwareCdssProfile).hospitalMedicationEvidence?.[0].useState).toBe('confirmed-current')
+    expect(lastProfile().facts.hfHarmfulNsaid.zh).not.toContain('院內使用待確認')
     expect(lastProfile().facts['hospitalMedication:MedicationRequest:fictional-hospital-order'].sources?.[0].status).toBe('active')
   })
 

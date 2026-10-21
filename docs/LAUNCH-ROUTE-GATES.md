@@ -1,5 +1,16 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-10-21 owner decision: source reconciliation is automatic on every route.
+The source-version notice and medication comparison/verification prompts are
+removed. Hospital records take priority in the existing cross-source medication
+policy; same-record versions are selected by source priority and valid source
+update time. When update order is unavailable, retracted/stopped medication states take
+priority, followed by final status, completeness and stable content identity.
+Clinical event dates and opaque version IDs are not version clocks. Original source
+payloads remain available for audit. No extra reconciliation action is required
+before UI, AI or CDSS can consume the selected record. Transport failures and
+patient-ownership validation remain distinct from version selection.
+
 2026-10-05 latest owner decision: CDSS save/history must be bound to the signed-in user. On `?site=vghtpe`, Firebase/intranet admission requires a nonanonymous App account; intranet retains the hospital subnet check. Only the original saver may list/read a record. The earlier same-day network-only decision is superseded. Deployment target: `https://fhir.mediprisma.tw`.
 
 Every place the app behaves differently because of *how it was opened* is
@@ -246,3 +257,5 @@ eligibility is preserved. No previously visible clinical surface is removed.
 | HF 「執行 HF 模型預測」 without an HF diagnosis | Disabled when the prepared input has no heart-failure diagnosis code (ICD-10-CM I50.x or ICD-9-CM 428.x), with 「未偵測到心衰診斷，請先在步驟 2 確認心衰病史」 under it; enabled as soon as step 2 supplies I50.9. With an existing HF code, step 2 stays optional and eligibility remains the API’s decision. | Every route where the HF research calculator is available. | Explicit owner request in chat with a screenshot, 2026-10-07 |
 | HF observed-incidence basis (n and 依據族群) | Collapsed by default behind 「依據」 under each horizon; the rate line stays visible as 「同層實際發生率（群體）」 with its CI. One click shows n and the cohort. A toggle, not a tooltip, so it works without hover. | Every route where the HF research calculator is available. | Explicit owner request in chat with a screenshot, 2026-10-07 |
 | HF 「整理模型資料」 button | Replaced by automatic local preparation when the detail opens (no network request) and a 「重新整理」 link in step 1. Nothing is sent until 「執行 HF 模型預測」. | Every route where the HF research calculator is available. | Explicit chat request, 2026-10-07 |
+
+Automatic source resolution also retains active Condition/Allergy evidence when update ordering is absent, never groups different resource identities by imported modifier labels, and redirects duplicate-include references to the selected version. Background refreshes keep the previous complete snapshot within the same patient and lifecycle scope until all updated searches settle. Missing medication content is stated neutrally; it does not create a reconciliation banner or task.

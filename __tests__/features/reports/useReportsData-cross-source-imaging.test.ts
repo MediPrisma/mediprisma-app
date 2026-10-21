@@ -8,6 +8,7 @@ import { NHI_MEDICLOUD_SOURCE_EXTENSION_URL } from '@/src/shared/utils/observati
 import { renderHook } from '@testing-library/react'
 import { useEncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
 import { formatDate } from '@/src/shared/utils/fhir-helpers'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 const BODY = 'Synthetic imaging finding: a 4 mm nodule in the left upper lobe is unchanged. No pleural effusion. Follow-up imaging in twelve months is recommended.'
 const FOOTER = ' Reported By Example Radiologist(LicenseRD#:0000) On:2026/06/25(10:30:00),(by Example Radiologist)At:TEST01Positive Rate Evaluation 2'
@@ -23,6 +24,19 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it('automatically selects one source-record version before shared imaging grouping', () => {
+    const original = pair()[0]
+    const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+      { resource: { resourceType: 'Patient', id: 'synthetic' } },
+      ...['1', '2'].map(version => ({ resource: { ...original, id: 'same-report', meta: { ...original.meta, versionId: version } } })),
+    ] } as any)!
+    const reports = parsed.collection.diagnosticReports as any[]
+    expect(reports).toHaveLength(1)
+    expect(reports[0].clinicalRecordVariant).toBeUndefined()
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+    expect(calculateReportTabCounts(reports).all).toBe(1)
+    expect(parsed.collection.clinicalSource?.graph.nodes.filter(node => node.resource.resourceType === 'DiagnosticReport')).toHaveLength(2)
+  })
   it('renders a shared Observation object once while retaining distinct objects with the same id', () => {
     const observation = { id: 'shared-result', code: { text: 'Measurement' }, valueQuantity: { value: 4, unit: 'mm' } }
     const reports = [0, 1].map(index => ({ ...pair()[0], id: `copy-${index}`, conclusion: BODY, _observations: [observation] }))

@@ -1,3 +1,14 @@
+import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
+import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
+import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
+import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
+import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
+import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
+import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
+import { scopedImportedClinicalRecordVariant } from '@/src/core/services/clinical-record-variants'
+import { createClinicalRecordResolution, selectAutomaticClinicalRecordRows } from '@/src/core/services/clinical-record-resolution'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -28,7 +39,7 @@ import {
   isMedicationRemainingSummaryBasic,
 } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
-import { expandClaimResources } from './claim-expander'
+import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncounterSource, bindClaimDerivedSource, copyClaimDerivedSource } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
@@ -545,6 +556,34 @@ function cloneResource<T>(resource: T): T {
   return JSON.parse(JSON.stringify(resource))
 }
 
+/** Reject explicit patient identity contradictions, not absent/unresolved context. */
+function assertPatientReferences(resources: any[], patient: { resource: { id?: string }; fullUrl?: string }): void {
+  const patientUrlIdentity = (reference?: string): string | undefined => {
+    if (!reference || !/^https?:\/\//i.test(reference)) return undefined
+    try { return new URL(reference.replace(/\/_history\/[^/]+\/?$/, '').replace(/\/$/, '')).href }
+    catch { return undefined }
+  }
+  const patientUrl = patientUrlIdentity(patient.fullUrl)
+  const knownId = patient.resource.id || (patientUrl ? idFromFullUrl(patientUrl) : undefined)
+  for (const resource of resources) {
+    for (const field of ['subject', 'patient']) {
+      const reference = resource?.[field]?.reference
+      if (typeof reference !== 'string') continue
+      const relative = /^Patient\/([^/]+)(?:\/_history\/[^/]+)?$/.exec(reference)
+      const absolute = /^https?:\/\/.+\/Patient\/([^/]+)(?:\/_history\/[^/]+)?$/i.exec(reference)
+      const id = relative?.[1] ?? absolute?.[1]
+      if (!id) continue
+      const referenceUrl = absolute ? patientUrlIdentity(reference) : undefined
+      if (absolute && !referenceUrl) continue
+      const differentId = knownId && id !== knownId
+      const differentUrl = referenceUrl && patientUrl && referenceUrl !== patientUrl
+      if (differentId || differentUrl) {
+        throw new Error('此資料的病人引用與目前病人不一致，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+      }
+    }
+  }
+}
+
 /** Rewrite every internal `reference` string in-place to `ResourceType/id`. */
 function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void {
   if (Array.isArray(node)) {
@@ -586,25 +625,113 @@ function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void
  *      equivalent `ResourceType/id`) is rewritten to the relative form.
  * References to other servers / unknown targets are left untouched.
  */
-export function canonicalizeBundleResources(bundle: any): any[] {
+export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconciliationResult, sourceKeys?: WeakMap<object, string>): any[] {
   const rawEntries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
   const entries = rawEntries.filter((e) => e?.resource)
+  const sourceNodes = source ? selectClinicalSourceNodes(source) : []
+  if (source && (entries.length !== sourceNodes.length || entries.some((entry, index) =>
+    (entry.fullUrl ?? null) !== (sourceNodes[index].fullUrl ?? null)
+    || !clinicalSourceResourcesEqual(entry.resource, sourceNodes[index].resource),
+  ))) {
+    throw new Error('Clinical source projection input does not match its selected source records')
+  }
+  const projectionIds = new Map(source ? createClinicalSourceProjectionIds(source) : [])
+  const resolution = source && createClinicalRecordResolution(source)
+  for (const [key, preferred] of resolution?.preferred ?? []) {
+    const id = projectionIds.get(preferred)
+    if (id) projectionIds.set(key, id)
+  }
 
   // Pass 1 — assign ids; index every resolvable key to its canonical target.
   const targets = new Map<string, RefTarget>()
+  const ambiguous = new Set<string>()
+  const indexTarget = (alias: string, target: RefTarget) => {
+    if (ambiguous.has(alias)) return
+    const existing = targets.get(alias)
+    if (existing?.resourceType === target.resourceType && existing.id === target.id) return
+    if (existing) {
+      targets.delete(alias)
+      ambiguous.add(alias)
+    } else targets.set(alias, target)
+  }
+  const identityCounts = new Map<string, number>()
+  for (const entry of entries) {
+    const id = entry.resource.id || idFromFullUrl(entry.fullUrl)
+    if (id) {
+      const identity = String(entry.resource.resourceType) + '/' + String(id)
+      identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1)
+    }
+  }
+  const reservedIds = new Set(identityCounts.keys())
   const resources = entries.map((e, index) => {
     const res = cloneResource(e.resource)
     const resourceType: string = res.resourceType ?? 'Resource'
-    const id = String(res.id || idFromFullUrl(e.fullUrl) || `${resourceType}-${index}`)
+    const sourceId = res.id || idFromFullUrl(e.fullUrl)
+    const originalId = String(sourceId || `${resourceType}-${index}`)
+    // Colliding logical ids from distinct fullUrls/versions must not become
+    // one UI key or let a relative reference select an arbitrary source.
+    let id = (identityCounts.get(`${resourceType}/${originalId}`) ?? 0) > 1
+      ? `${originalId}-source-${index}`
+      : originalId
+    if (!sourceId || id !== originalId) {
+      while (reservedIds.has(`${resourceType}/${id}`)) id += '-source'
+    }
+    reservedIds.add(`${resourceType}/${id}`)
+    id = projectionIds.get(sourceNodes[index]?.key) ?? id
     res.id = id
     const target: RefTarget = { resourceType, id }
-    if (e.fullUrl) targets.set(e.fullUrl, target)
-    targets.set(`${resourceType}/${id}`, target)
+    if (e.fullUrl) indexTarget(e.fullUrl, target)
+    const relative = `${resourceType}/${originalId}`
+    indexTarget(relative, target)
+    if (res.meta?.versionId) {
+      indexTarget(`${relative}/_history/${res.meta.versionId}`, target)
+      if (e.fullUrl) indexTarget(`${e.fullUrl}/_history/${res.meta.versionId}`, target)
+    }
     return res
   })
 
   // Pass 2 — rewrite internal references to the relative ResourceType/id form.
-  for (const res of resources) rewriteReferences(res, targets)
+  if (source) {
+    const nodes = selectClinicalSourceNodes(source)
+    const nodesByKey = new Map(source.graph.nodes.map(node => [node.key, node]))
+    const mappedByKey = new Map(nodes.map((node, index) => [node.key, resources[index]]))
+    const childrenByParent = new Map<string, typeof source.graph.nodes[number][]>()
+    for (const node of source.graph.nodes) {
+      if (node.parentKey) childrenByParent.set(node.parentKey, [...(childrenByParent.get(node.parentKey) ?? []), node])
+    }
+    const indexClone = (key: string, resource: any) => {
+      sourceKeys?.set(resource, key)
+      // Hoisted/normalized clinical copies must retain their captured identity.
+      resource.clinicalSourceNodeKey = key
+      const children = childrenByParent.get(key) ?? []
+      for (const child of resource.contained ?? []) {
+        const node = children.find(candidate => clinicalSourceResourcesEqual(candidate.resource, child))
+        if (!node) continue
+        child.id = projectionIds.get(node.key) ?? child.id
+        mappedByKey.set(node.key, child)
+        indexClone(node.key, child)
+      }
+    }
+    for (const node of nodes) indexClone(node.key, mappedByKey.get(node.key))
+    for (const rawEdge of source.graph.references) {
+      const edge = resolution!.reference(rawEdge)
+      if (edge.status !== 'resolved' || !edge.reference) continue
+      const origin = mappedByKey.get(edge.origin.key)
+      const target = mappedByKey.get(edge.targetKeys[0])
+      if (!origin || !target) continue
+      const path = edge.path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
+      let reference = origin
+      for (const part of path) reference = reference?.[part]
+      if (reference?.reference === edge.reference) {
+        const targetNode = nodesByKey.get(edge.targetKeys[0])
+        // Contained resources remain local to their owning resource. A domain
+        // expander may later hoist them and rewrite the fragment explicitly.
+        reference.reference = targetNode?.isContained ? '#' + target.id : target.resourceType + '/' + target.id
+      }
+    }
+  } else {
+    for (const res of resources) rewriteReferences(res, targets)
+  }
   return resources
 }
 
@@ -889,9 +1016,9 @@ function terminologyFromMedicationKnowledge(
 // don't carry a "requester / provider" field, so date alone is the best we
 // have. Multi-encounter same-day collisions take the first match (existing
 // VGH behaviour).
-function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>): any[] {
+function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>, sourceKeys?: WeakMap<object, string>): any[] {
   return resources.map((r) => {
-    if (r.encounter?.reference) return r // already has a reference
+    if (r.encounter?.reference || hasUnresolvedClaimEncounterSource(r)) return r // preserve an explicit unresolved source relation
 
     const dateFields: string[] = [
       r.performedDateTime,    // Procedure
@@ -905,7 +1032,7 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
     for (const d of dateFields) {
       const key = toDateStr(d)
       if (key && encounterDateMap.has(key)) {
-        return {
+        const attached = {
           ...r,
           encounter: { reference: `Encounter/${encounterDateMap.get(key)}` },
           // Preserve the difference between a source encounter reference and
@@ -914,6 +1041,10 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
           // the same encounter.
           _encounterInferred: true,
         }
+        const sourceKey = sourceKeys?.get(r)
+        if (sourceKey) sourceKeys?.set(attached, sourceKey)
+        copyClaimDerivedSource(r, attached)
+        return attached
       }
     }
 
@@ -930,9 +1061,10 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
 function attachEncounterRefsForMeds(
   meds: any[],
   encounterByDateProvider: Map<string, string>,
+  originalResources?: ReadonlyMap<string, object>,
 ): any[] {
   return meds.map((m) => {
-    if (m.encounter?.reference) return m
+    if (m.encounter || hasUnresolvedClaimEncounterSource(m) || hasUnresolvedClaimEncounterSource(originalResources?.get(m.clinicalSourceNodeKey))) return m
     const date = toDateStr(m.authoredOn || m.effectiveDateTime)
     const requester = m.requester?.display?.trim() || ''
     if (!date || !requester) return m
@@ -1069,6 +1201,10 @@ export const LocalBundleService = {
         }
       }
       const publishInMemory = (originalFhir: Blob | null, memoryOnlySession = false) => {
+        if (isNewImport) {
+          parsedStoredDataByBundle.delete(bundle)
+          terminologyMigrationByBundle.delete(bundle)
+        }
         memBundle = bundle
         memBundleImportId = importId
         memBundleIsDemo = demo
@@ -1190,6 +1326,10 @@ export const LocalBundleService = {
           // still usable and the viewer falls back to decoding `data` directly.
         }
       }
+    }
+    if (isNewImport) {
+      parsedStoredDataByBundle.delete(bundle)
+      terminologyMigrationByBundle.delete(bundle)
     }
     memBundle = bundle
     memBundleUsesMemoryOnlySession = false
@@ -1473,13 +1613,91 @@ export const LocalBundleService = {
   parse(
     bundle: any,
     sourceMetadata?: ClinicalSourceMetadata,
+    captureGeneration?: string,
   ): LocalBundleData | null {
+    // Preserve every source before identity rewriting, expansion or mapping.
+    const rawEntries = Array.isArray(bundle?.entry) ? bundle.entry : []
+    const originalPatient = rawEntries.find((entry: any) => entry?.resource?.resourceType === 'Patient')
+    const generation = captureGeneration ?? (typeof bundle?.timestamp === 'string' ? bundle.timestamp : 'in-memory')
+    const clinicalSource = reconcileClinicalSources([{
+      sourceId: 'local-bundle:' + (captureGeneration ?? 'import'),
+      patientScope: String(originalPatient?.fullUrl ?? originalPatient?.resource?.id ?? 'unknown-patient'),
+      generation,
+      resources: rawEntries.filter((entry: any) => typeof entry?.resource?.resourceType === 'string'),
+    }])
     // Canonicalise identity FIRST: stamp ids onto id-less resources and rewrite
     // urn:uuid / absolute references to the relative ResourceType/id form, so
     // every downstream step (patient-id gate, report-member linking, the inline
     // split('/').pop() resolvers) works regardless of the bundle's reference
     // style. See canonicalizeBundleResources.
-    let entries: any[] = canonicalizeBundleResources(bundle)
+    // Validate the import before the shared selector excludes foreign rows.
+    // Rejected imports must preserve the previously loaded patient and raw file.
+    if (originalPatient?.resource) assertPatientReferences(rawEntries.map((entry: any) => entry?.resource).filter(Boolean), originalPatient)
+    const assertPatientOwnership = (nodes: Iterable<(typeof clinicalSource.graph.nodes)[number]>) => {
+      for (const node of nodes) {
+        if (node.resource.resourceType === 'Patient') continue
+        const reason = getClinicalSourceNodePatientExclusionReason(node, clinicalSource.graph.nodes)
+        if (reason === 'unresolved-patient-reference') throw new Error('部分臨床資料的病人歸屬無法確認，無法安全匯入。請提供具有明確病人引用的 FHIR Bundle。')
+        if (reason === 'foreign-patient-reference') throw new Error('臨床資料的病人引用與目前病人不一致，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+      }
+    }
+    assertPatientOwnership(clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn))
+    assertPatientOwnership(clinicalContainedPatientExclusions(clinicalSource).map(item => item.node))
+    const resolution = createClinicalRecordResolution(clinicalSource, new Set(), false)
+    const projectedNodes = selectClinicalSourceNodes(clinicalSource)
+    const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
+    const selectedPatientKeys = new Set(primaryPatients.map(node => resolution.preferred.get(node.key) ?? node.key))
+    const identityConflict = primaryPatients.some((left, index) => primaryPatients.slice(index + 1).some(right => {
+      const a: any = left.resource, b: any = right.resource
+      if (a.birthDate && b.birthDate && !a.birthDate.startsWith(b.birthDate) && !b.birthDate.startsWith(a.birthDate)) return true
+      if (a.gender && b.gender && a.gender !== 'unknown' && b.gender !== 'unknown' && a.gender !== b.gender) return true
+      return (a.identifier ?? []).some((identifier: any) => identifier.value && identifier.system
+        && (b.identifier ?? []).some((other: any) => other.system === identifier.system && other.value)
+        && !(a.identifier ?? []).some((own: any) => own.system === identifier.system && own.value
+          && (b.identifier ?? []).some((other: any) => other.system === own.system && other.value === own.value)))
+    }))
+    if (identityConflict) {
+      const selected = primaryPatients.find(node => resolution.includes(node.key))
+      const updated = Date.parse(String((selected?.resource.meta as { lastUpdated?: unknown } | undefined)?.lastUpdated ?? ''))
+      const ordered = Number.isFinite(updated) && primaryPatients.every(node => node.key === selected?.key
+        || (selected && clinicalSourceResourcesEqual(node.resource, selected.resource))
+        || Date.parse(String((node.resource.meta as { lastUpdated?: unknown } | undefined)?.lastUpdated ?? '')) < updated)
+      if (!ordered) throw new Error('此資料包含互相矛盾且無更新順序的病人身分資料，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+    }
+    if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
+      || selectedPatientKeys.size !== 1 && !clinicalSourceNodesEqualWithContext(clinicalSource.graph, primaryPatients[0], node))) {
+      throw new Error('此資料包含多個不同的病人，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+    }
+    const sourceKeyByResource = new WeakMap<object, string>()
+    let entries: any[] = canonicalizeBundleResources({
+      entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
+    }, clinicalSource, sourceKeyByResource).filter(resource => resolution.includes(sourceKeyByResource.get(resource)!))
+    const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
+    const recordVariants = new Map([...resolution.variants].filter(([key]) => !resolution.includes(key)))
+    // Metadata belongs to mutable mapper inputs, never the captured FHIR graph.
+    for (const resource of entries) {
+      const key = sourceKeyByResource.get(resource)
+      if (key) resource.clinicalSourceNodeKey = key
+    }
+    const claimEncounterResourcesByKey = new Map<string, object>()
+    const bindMappedResource = <T extends object>(mapped: T, resource: any): T => {
+      const key = sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey
+      let variant = key ? recordVariants.get(key) : undefined
+      const imported = key ? readClinicalRecordVariantModifier(sourceNodesByKey.get(key)!.resource) : undefined
+      if (key && imported && !variant && !resolution.includes(key)) { variant = scopedImportedClinicalRecordVariant(sourceNodesByKey.get(key)!, imported.variant); recordVariants.set(key, variant) }
+      if (key) readClinicalMedicationContentModifier(sourceNodesByKey.get(key)!.resource)
+      return bindClaimDerivedSource(bindClaimEncounterLink({ ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
+        ...(variant ? { clinicalRecordVariant: variant } : {}), ...(imported?.sourceId ? { sourceId: imported.sourceId } : {}), ...(imported?.sourceVersionId ? { sourceVersionId: imported.sourceVersionId } : {}),
+        ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }, (key && claimEncounterResourcesByKey.get(key)) || resource), resource, sourceKeyByResource, recordVariants)
+    }
+    const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(rawEdge => { const edge = resolution.reference(rawEdge); return [edge.origin.key + '|' + edge.path, edge] }))
+    const containedIdScopes = new Map<string, Set<string>>()
+    for (const node of clinicalSource.graph.nodes) {
+      if (!node.isContained || typeof node.resource.id !== 'string') continue
+      const scopes = containedIdScopes.get(node.resource.id) ?? new Set<string>()
+      scopes.add(JSON.stringify([node.sourceId, node.patientScope]))
+      containedIdScopes.set(node.resource.id, scopes)
+    }
     if (!entries.length) return null
 
     // Comparison projections belong to this import, never to the source FHIR.
@@ -1493,19 +1711,61 @@ export const LocalBundleService = {
     // Condition / Procedure / Observation / DocumentReference resources the rest
     // of the pipeline already renders. No-op for non-PAS bundles. Runs before the
     // byType() split below so the synthesised resources flow through unchanged.
-    expandClaimResources(entries)
+    expandClaimResources(entries, (claim, path, resourceType) => {
+      const key = sourceKeyByResource.get(claim)
+      if (!key) return undefined
+      const rawEdge = clinicalSource.graph.references.find(reference => reference.origin.key === key && reference.path === path)
+      const edge = rawEdge && resolution.reference(rawEdge)
+      if (edge?.status !== 'resolved' || edge.targetKeys.length !== 1) return undefined
+      const targets = entries.filter(resource => resource.resourceType === resourceType && sourceKeyByResource.get(resource) === edge.targetKeys[0])
+      return targets.length === 1 ? targets[0] : undefined
+    }, claim => recordVariants.has(sourceKeyByResource.get(claim) ?? ''))
+    for (const resource of entries) {
+      const key = sourceKeyByResource.get(resource)
+      if (key) claimEncounterResourcesByKey.set(key, resource)
+    }
 
     // Roche DIP support: flatten the oncology (mCODE) resources Roche nests
     // inside List.contained and relink its identifier-based references, so the
     // Condition / cancer-staging Observations / treatment Procedures surface and
     // the DiagnosticReports link to the patient. No-op for non-Roche bundles.
-    expandRocheResources(entries)
+    const observationsBeforeExpansion = new Map(entries.filter(resource => resource.resourceType === 'Observation').map(resource => [resource, sourceKeyByResource.get(resource)]))
+    const derivedMembers = new Map<string, string[]>()
+    expandRocheResources(entries, (origin, observation) => {
+      const originKey = sourceKeyByResource.get(origin)
+      const key = sourceKeyByResource.get(observation)
+      if (originKey && key) derivedMembers.set(originKey, [...(derivedMembers.get(originKey) ?? []), key])
+    }, resource => {
+      const key = sourceKeyByResource.get(resource)
+      const sourceNode = key ? sourceNodesByKey.get(key) : undefined
+      const sourceId = sourceNode?.resource.id
+      if (!sourceNode?.isContained || typeof sourceId !== 'string') return undefined
+      return containedIdScopes.get(sourceId)?.size === 1 ? sourceId : undefined
+    })
+    recordClinicalProjectionDisposition(clinicalSource, [...observationsBeforeExpansion].flatMap(([resource, key]) => key && !entries.includes(resource) ? [key] : []))
+    assertPatientOwnership(entries.flatMap(resource => {
+      const node = sourceNodesByKey.get(sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey)
+      return node ? [node] : []
+    }))
+    const primaryPatient = projectedNodes.find(node => node.resource.resourceType === 'Patient')
+    if (primaryPatient) assertPatientReferences(entries, primaryPatient)
 
     // Display canonicalisation: resolve Practitioner / Organization / Location
     // references to human-readable display strings (attending physician,
     // institution) so the UI's `.display`-only renderers can show them.
     attachReferenceDisplays(entries)
     entries = reconcileOutpatientEncounters(entries)
+    const confirmedEncounterAliases = new Map<string, string>()
+    for (const encounter of entries) {
+      if (encounter.resourceType !== 'Encounter' || encounter._sourceRecordComparison?.status !== 'confirmed') continue
+      const retainedKey = sourceKeyByResource.get(encounter) ?? encounter.clinicalSourceNodeKey
+      if (!retainedKey || !sourceNodesByKey.has(retainedKey)) continue
+      for (const original of encounter._sourceEncounterRecords ?? []) {
+        const originalKey = original.clinicalSourceNodeKey
+        if (originalKey && sourceNodesByKey.has(originalKey)) confirmedEncounterAliases.set(originalKey, retainedKey)
+      }
+    }
+    recordClinicalEncounterAliases(clinicalSource, confirmedEncounterAliases)
     entries = reconcileMedicationRequests(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
@@ -1571,16 +1831,22 @@ export const LocalBundleService = {
 
     // Promote a referenced Medication.code into medicationCodeableConcept so the
     // display helpers (which only look at medicationCodeableConcept) find a drug
-    // name. References are already relative post-canonicalisation; referenceId
-    // also tolerates urn-form as a second line of defence.
+    // name. Original records use only graph-confirmed references, including
+    // contained and versioned resources. Derived records use unique relative ids.
     const resolveMedicationCode = <T extends {
       medicationCodeableConcept?: unknown
       medicationReference?: { reference?: string }
     }>(m: T): T => {
       if (m.medicationCodeableConcept || !m.medicationReference?.reference) return m
-      const refId = referenceId(m.medicationReference.reference)
+      const sourceKey = sourceKeyByResource.get(m)
+      if (sourceKey) {
+        const edge = sourceReferencesByPath.get(sourceKey + '|medicationReference')
+        const target = edge?.status === 'resolved' ? sourceNodesByKey.get(edge.targetKeys[0])?.resource : undefined
+        return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: cloneResource(target.code), _clinicalMedicationCodeProvenance: 'graph-reference' } : m
+      }
+      const refId = /^Medication\/([^/]+)$/.exec(m.medicationReference.reference)?.[1]
       const medResource = refId ? medicationMap.get(refId) : null
-      return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code } : m
+      return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code, _clinicalMedicationCodeProvenance: 'mapped-policy' } : m
     }
 
     // Normalize MedicationStatements to a MedicationRequest-compatible shape so
@@ -1632,13 +1898,14 @@ export const LocalBundleService = {
     const meds = attachEncounterRefsForMeds(
       [...medicationRequests, ...medicationStatements],
       encounterByDateProvider,
+      claimEncounterResourcesByKey,
     )
 
-    const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap)
+    const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap, sourceKeyByResource)
     const reports = byType('DiagnosticReport')
     const imagingStudies = attachEncounterRefsByDate(byType('ImagingStudy'), encounterDateMap)
     const procs  = attachEncounterRefsByDate(byType('Procedure'), encounterDateMap)
-    const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap)
+    const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap, sourceKeyByResource)
     const allerg = byType('AllergyIntolerance')
     const docRefs = byType('DocumentReference')
     const comps  = byType('Composition')
@@ -1666,18 +1933,25 @@ export const LocalBundleService = {
             resource,
             sourceCapturedAt,
           )
-          return [summary.id, summary] as const
+          return [recordVariants.has(sourceKeyByResource.get(resource)!) ? sourceKeyByResource.get(resource)! : summary.id, bindMappedResource(summary, resource)] as const
         }),
     ).values()]
 
     const specialMaterialsByProcedure = groupSpecialMaterialsByProcedure(byType('Basic'))
 
     // Build observation map for DiagnosticReport expansion
-    const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
+    const allObs = obs.map((r: any) => ({ ...bindMappedResource(FhirMapper.toObservation(r), r),
+      ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
+      sourceId: (sourceKeyByResource.has(r) ? readClinicalRecordVariantModifier(sourceNodesByKey.get(sourceKeyByResource.get(r)!)!.resource)?.sourceId ?? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id),
+      ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}),
+      clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
-    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap).map((r: any) =>
-      FhirMapper.toDiagnosticReport(r, allObs)
+    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any) =>
+      ({ ...bindMappedResource(FhirMapper.toDiagnosticReport(r, allObs), r), clinicalSourceNodeKey: sourceKeyByResource.get(r),
+        ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
+        sourceId: (sourceKeyByResource.has(r) ? readClinicalRecordVariantModifier(sourceNodesByKey.get(sourceKeyByResource.get(r)!)!.resource)?.sourceId ?? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id),
+        ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}) })
     )
 
     // Separate vital signs from other observations
@@ -1688,26 +1962,30 @@ export const LocalBundleService = {
     })
 
     const collection: ClinicalDataCollection = {
-      conditions:       conds.map((r: any) => FhirMapper.toCondition(r)),
-      medications:      meds.map((r: any) => FhirMapper.toMedication(r)),
+      clinicalSource,
+      conditions:       conds.map((r: any) => bindMappedResource(FhirMapper.toCondition(r), r)),
+      medications:      meds.map((r: any) => ({ ...bindMappedResource(FhirMapper.toMedication(r), r), ...(r.medicationCodeableConcept ? { clinicalMedicationCodeProvenance: r._clinicalMedicationCodeProvenance ?? 'mapped-policy' } : {}) })),
       medicationRemainingSummaries,
-      allergies:        allerg.map((r: any) => FhirMapper.toAllergy(r)),
+      allergies:        allerg.map((r: any) => bindMappedResource(FhirMapper.toAllergy(r), r)),
       observations,
       vitalSigns,
       diagnosticReports: processedReports,
-      imagingStudies:    imagingStudies.map((r: any) => FhirMapper.toImagingStudy(r)),
-      procedures:       procs.map((r: any) => FhirMapper.toProcedure(r, specialMaterialsByProcedure)),
-      encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
-      documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
-      compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
-      immunizations:    imms.map((r: any) => FhirMapper.toImmunization(r)),
-      consents:         consents.map((r: any) => FhirMapper.toConsent(r)),
-      devices:          devices.map((r: any) => FhirMapper.toDevice(r)),
-      carePlans:        carePlans.map((r: any) => FhirMapper.toCarePlan(r)),
+      imagingStudies:    imagingStudies.map((r: any) => bindMappedResource(FhirMapper.toImagingStudy(r), r)),
+      procedures:       procs.map((r: any) => bindMappedResource(FhirMapper.toProcedure(r, specialMaterialsByProcedure), r)),
+      encounters:       encounters.map((r: any) => bindMappedResource(FhirMapper.toEncounter(r), r)),
+      documentReferences: docRefs.map((r: any) => bindMappedResource(FhirMapper.toDocumentReference(r), r)),
+      compositions:     comps.map((r: any) => bindMappedResource(FhirMapper.toComposition(r), r)),
+      immunizations:    imms.map((r: any) => bindMappedResource(FhirMapper.toImmunization(r), r)),
+      consents:         consents.map((r: any) => bindMappedResource(FhirMapper.toConsent(r), r)),
+      devices:          devices.map((r: any) => bindMappedResource(FhirMapper.toDevice(r), r)),
+      carePlans:        carePlans.map((r: any) => bindMappedResource(FhirMapper.toCarePlan(r), r)),
       ...(sourceMetadata ? { sourceMetadata } : {}),
     }
 
-    return { patient, collection }
+    collection.medications = projectClinicalMedicationContents(collection.medications, clinicalSource)
+    collection.resourceQueryStatus = projectClinicalMedicationQueryStatus(collection.medications, collection.resourceQueryStatus)
+    const mappedKeys = new Set(Object.values(collection).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
+    return { patient, collection: selectAutomaticClinicalRecordRows(collection, createClinicalRecordResolution(clinicalSource, mappedKeys, false)) }
   },
 
   async parseStored(): Promise<LocalBundleData | null> {
@@ -1764,7 +2042,7 @@ export const LocalBundleService = {
     const cached = parsedStoredDataByBundle.get(bundle)
     const parsed = cached?.sourceMetadata === sourceMetadata
       ? cached.data
-      : this.parse(bundle, sourceMetadata ?? undefined)
+      : this.parse(bundle, sourceMetadata ?? undefined, memBundleImportId ?? undefined)
     if (!parsed) return null
     if (cached?.sourceMetadata !== sourceMetadata) {
       parsedStoredDataByBundle.set(bundle, { sourceMetadata, data: parsed })

@@ -1,3 +1,4 @@
+import { excludeUnresolvedDecisionVariants } from '@/src/core/utils/clinical-variant-inputs'
 // useLabAutofill — resolves calculator input sources against the current
 // patient's most-recent observations + demographics.
 //
@@ -139,6 +140,12 @@ export function buildAutofill(
   conditions: ConditionEntity[] = [],
   encounters: EncounterEntity[] = [],
 ): Autofill {
+  const selected = excludeUnresolvedDecisionVariants({ observations, diagnosticReports: reports, medications, conditions, encounters })
+  observations = selected.observations
+  reports = selected.diagnosticReports
+  medications = selected.medications
+  conditions = selected.conditions
+  encounters = selected.encounters
   const echo = buildEchoAutofill(reports, observations)
   const byCanonical: Record<string, AutofillValue> = {}
   const byLoinc: Record<string, AutofillValue> = {}

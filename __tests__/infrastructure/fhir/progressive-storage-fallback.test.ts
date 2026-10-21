@@ -226,7 +226,7 @@ test.each(['enriched', 'unavailable', 'not-applicable'])(
   await queue.serializeLocalBundleMutation(async () => {})
   expect(local.getActiveImportId()).toBe('hospital')
   expect(await local.load()).toBe(newer)
-  expect(parsed).toEqual(local.parse(newer))
+  expect(parsed).toEqual(local.parse(newer, undefined, 'hospital'))
   expect(await (await local.loadOriginalFhir())!.text()).toBe(await original.text())
 })
 

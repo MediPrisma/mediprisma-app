@@ -247,6 +247,7 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
   const buckets = new Map<string, { report: Report; source: Source; qualifiers: string[] }[]>()
   for (const report of reports) {
     if (!report || inferReportDisplayGroup(report) !== 'imaging') continue
+    if ('clinicalRecordVariant' in report && report.clinicalRecordVariant) continue
     // Echo/Doppler and their viewer-only companions have a separate established
     // shared-study path. Do not re-key just part of that family here.
     if (report.code?.coding?.some(coding => ['18005C', '18007C'].includes(coding.code?.trim().toUpperCase() ?? ''))) continue
