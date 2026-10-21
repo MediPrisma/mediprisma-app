@@ -8,6 +8,7 @@ import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 export function useOriginalFhirDownload() {
   const [isLocal, setIsLocal] = useState(false)
+  const [importId, setImportId] = useState<string | null>(null)
   const [available, setAvailable] = useState(false)
   const [checking, setChecking] = useState(true)
   const [downloading, setDownloading] = useState(false)
@@ -24,11 +25,16 @@ export function useOriginalFhirDownload() {
         const state = await serializeLocalBundleMutation(async () => {
           const local = shouldUseLocalBundle()
           if (current === revision) setIsLocal(local)
-          return { local, exists: local && await LocalBundleService.hasOriginalFhir() }
+          return {
+            local,
+            exists: local && await LocalBundleService.hasOriginalFhir(),
+            importId: LocalBundleService.getActiveImportId(),
+          }
         })
         if (current === revision) {
           setIsLocal(state.local)
           setAvailable(state.exists)
+          setImportId(state.importId)
         }
       } catch {
         if (current === revision) setFailed(true)
@@ -50,7 +56,7 @@ export function useOriginalFhirDownload() {
     try {
       await serializeLocalBundleMutation(async () => {
         // Read and download within the same import boundary, including on re-import.
-        const original = shouldUseLocalBundle()
+        const original = importId === LocalBundleService.getActiveImportId() && shouldUseLocalBundle()
           ? await LocalBundleService.loadOriginalFhir()
           : null
         if (original === null) {
