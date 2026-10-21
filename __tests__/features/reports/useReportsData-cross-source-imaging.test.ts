@@ -11,7 +11,7 @@ function pair(): any[] {
   return [
     { ...common, id: 'hospital', code: { text: 'CT/SCAN- CHEST', coding: [{ system: 'urn:oid:his.report.code', code: 'CTCHEST' }] },
       meta: { tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] },
-      performer: [{ display: 'DOC-SYNTHETIC Example' }], conclusion: `Impression ${BODY}${FOOTER}` },
+      performer: [{ display: 'DOC00000 Example' }], conclusion: `Impression ${BODY}${FOOTER}` },
     { ...common, id: 'cloud', code: { text: '電腦斷層造影－有造影劑 (Computed tomography)', coding: [{ system: 'https://example.test/order', code: '33072B' }] },
       meta: { source: 'https://medcloud2.nhi.gov.tw/' }, performer: [{ display: '臺北榮總' }], conclusion: `Impression ${BODY}` },
   ]
@@ -110,6 +110,21 @@ describe('cross-source imaging reports', () => {
     }))
     expect(buildReportsData(reports).reportRows).toHaveLength(2)
     expect(reportDisplayGroupingKeys(pair().map(report => ({ ...report, result: [{ reference: 'Observation/unresolved' }] })))).toHaveProperty('size', 0)
+    expect(reportDisplayGroupingKeys(pair().map(report => ({ ...report,
+      result: [{ reference: 'Observation/loaded' }, { reference: 'Observation/unresolved' }],
+      _observations: [{ id: 'loaded', valueString: BODY }],
+    })))).toHaveProperty('size', 0)
+  })
+
+  it.each([
+    [{ display: '高雄榮民總醫院' }],
+    [{ display: '臺北榮總' }, { display: '高雄榮民總醫院' }],
+    [{ reference: 'Organization/unknown' }],
+    [{ display: 'Unknown institution' }],
+  ])('rejects contradictory or unknown hospital-side facility evidence: %j', (...performer) => {
+    const reports = pair()
+    reports[0].performer = performer
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
   })
 
   it('aligns counts and AI source references with the rendered group', () => {

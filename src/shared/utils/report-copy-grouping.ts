@@ -46,7 +46,10 @@ function sourceOf(report: Report): Source | undefined {
 export function imagingCopyInstitution(report: Report): string | undefined {
   const performers = [...(report.performer ?? []), ...(report._observations ?? []).flatMap(obs => obs.performer ?? [])]
   const organizations = performers.filter(p => !p.reference || /(?:^|\/)Organization\//.test(p.reference))
-  if (organizations.some(p => p.reference && p.display?.trim() && !VGH_NAMES.has(p.display.trim()))) return undefined
+  // Only the known legacy DOC physician label can be ignored. An unknown
+  // organization/name is not evidence that this particular exam was at VGH.
+  if (organizations.some(p => !VGH_NAMES.has(p.display?.trim() ?? '')
+    && (p.reference || (p.display?.trim() && !/^DOC[A-Z0-9]+\b/i.test(p.display.trim()))))) return undefined
   if (organizations.some(p => VGH_NAMES.has(p.display?.trim() ?? ''))) return '臺北榮總'
   if (sourceOf(report) === 'hospital') {
     // Explicit contradictory organization evidence beats the adapter default.
@@ -100,7 +103,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     if (!report || inferReportDisplayGroup(report) !== 'imaging') continue
     // A text match cannot establish equality of independent structured results.
     // Leave those reports separate, including unresolved result references.
-    if ((report.result?.length && !report._observations?.length)
+    if (report.result?.length
       || report._observations?.some(obs => !obs.valueString || obs.valueQuantity || obs.valueCodeableConcept || obs.component?.length)) continue
     const source = sourceOf(report)
     const institution = imagingCopyInstitution(report)

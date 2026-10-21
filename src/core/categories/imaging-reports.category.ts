@@ -295,7 +295,6 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           const codes = source.codes.length > 0 ? ` [codes: ${source.codes.join(', ')}]` : ''
           const id = source.reportId ? ` [id: ${source.reportId}]` : ''
           items.push(`  • Source report: ${source.title}${codes}${id}`)
-          if (groupingKey.startsWith('cross-source|')) items.push(`    • Original source narrative: ${sharedReportNarrative(sourceReport)}`)
           appendObservations(sourceReport, '    ')
           reportSupplementalText(sourceReport)
             .forEach((text) => items.push(`    • ${text}`))
