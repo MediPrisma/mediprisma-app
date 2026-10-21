@@ -140,7 +140,7 @@ function buildClinicalResults(
   // search, so their readiness is that query's readiness.
   resourceReady.vitalSigns = resourceReady.observations
 
-  const projected = projectClinicalAggregate({ ...entities, vitalSigns, clinicalSource })
+  const projected = projectClinicalAggregate({ ...entities, vitalSigns, clinicalSource, resourceQueryStatus })
   for (const unit of CLINICAL_RESOURCE_UNITS) writeEntities[unit.id] = projected[unit.id]
   vitalSigns = projected.vitalSigns
 
@@ -150,7 +150,7 @@ function buildClinicalResults(
     sourceMetadata,
     clinicalSource,
     readClinicalSource: results.find(result => result.data?.getClinicalSource)?.data?.getClinicalSource,
-    resourceQueryStatus,
+    resourceQueryStatus: projected.resourceQueryStatus,
     resourceReady,
     anyLoading,
     anyFetching,
@@ -175,8 +175,8 @@ function reprojectClinicalSnapshot(snapshot: ClinicalSnapshot, source: ClinicalR
   if (!projections) { projections = new WeakMap(); sharedReprojections.set(snapshot, projections) }
   const cached = projections.get(source)
   if (cached) return cached
-  const projected = projectClinicalAggregate({ ...snapshot.aggregate.entities, vitalSigns: snapshot.aggregate.vitalSigns, clinicalSource: source })
-  const aggregate = { ...snapshot.aggregate, entities: projected, vitalSigns: projected.vitalSigns, clinicalSource: source }
+  const projected = projectClinicalAggregate({ ...snapshot.aggregate.entities, vitalSigns: snapshot.aggregate.vitalSigns, clinicalSource: source, resourceQueryStatus: snapshot.aggregate.resourceQueryStatus })
+  const aggregate = { ...snapshot.aggregate, entities: projected, vitalSigns: projected.vitalSigns, clinicalSource: source, resourceQueryStatus: projected.resourceQueryStatus }
   projections.set(source, aggregate)
   return aggregate
 }

@@ -1,4 +1,4 @@
-import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
+import { getClinicalSourceNodePatientExclusionReason, isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
 import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
 import type { ClinicalDataCollection, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
@@ -183,5 +183,46 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   const vitalIds = new Set((input.vitalSigns ?? []).map(row => row.id))
   const vitalSigns = observations.filter(row => isVitalObservation(row) || vitalIds.has(row.id))
   next.vitalSigns = vitalSigns.length === input.vitalSigns?.length && vitalSigns.every((row, index) => row === input.vitalSigns![index]) ? input.vitalSigns : vitalSigns
+  // Projection and completeness must use the same final graph: another query
+  // can resolve an opaque Patient reference after this query was marked ok.
+  if (input.resourceQueryStatus) {
+    const arrayByType: Record<string, string> = { Condition: 'conditions', MedicationRequest: 'medications', MedicationStatement: 'medications', AllergyIntolerance: 'allergies', Observation: 'observations', DiagnosticReport: 'diagnosticReports', Encounter: 'encounters', Procedure: 'procedures', ImagingStudy: 'imagingStudies', DocumentReference: 'documentReferences', Composition: 'compositions', Immunization: 'immunizations', CarePlan: 'carePlans', Consent: 'consents', Device: 'devices', Basic: 'medicationRemainingSummaries' }
+    const captureKey = (node: SourceNode) => JSON.stringify([node.sourceId, node.patientScope, node.generation])
+    const reportCaptures = new Set(source.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'DiagnosticReport').map(captureKey))
+    const exclusions = new Map<string, { 'foreign-patient-reference'?: number; 'unresolved-patient-reference'?: number }>()
+    for (const node of source.graph.nodes) {
+      if (node.isContained || node.embeddedIn) continue
+      const reason = getClinicalSourceNodePatientExclusionReason(node, source.graph.nodes)
+      if (!reason) continue
+      const types = [node.resource.resourceType, ...(node.resource.resourceType === 'Observation' && reportCaptures.has(captureKey(node)) ? ['DiagnosticReport'] : [])]
+      for (const type of types) {
+        const counts = exclusions.get(type) ?? {}
+        counts[reason] = (counts[reason] ?? 0) + node.occurrences
+        exclusions.set(type, counts)
+      }
+    }
+    let statuses = input.resourceQueryStatus
+    for (const [key, status] of Object.entries(input.resourceQueryStatus)) {
+      if (!status) continue
+      const type = key.split(':')[0]
+      const counts = exclusions.get(type)
+      const excludedCount = Object.values(counts ?? {}).reduce((sum, count) => sum + count, 0)
+      if (!excludedCount) continue
+      // Retain real transport/auth failures rather than replacing them with success.
+      if (!status.exclusionReason && status.state !== 'ok' && status.state !== 'empty') continue
+      const rows = key === 'Observation:vital-signs' ? next.vitalSigns : next[arrayByType[type]]
+      const count = Array.isArray(rows) ? rows.filter((row: any) => !row.clinicalSourceNodeKey || context.nodes.get(row.clinicalSourceNodeKey)?.resource.resourceType === type).length : status.count
+      const { excludedCount: _oldCount, exclusionReason: _oldReason, exclusionCounts: _oldCounts, message: _oldMessage, ...rest } = status
+      const projectedStatus = { ...rest, count, state: 'error', excludedCount, exclusionCounts: counts,
+        exclusionReason: counts?.['unresolved-patient-reference'] ? 'unresolved-patient-reference' : 'foreign-patient-reference',
+        message: 'Some returned clinical records have foreign or unresolved patient ownership and were excluded. This domain is incomplete; absence cannot be concluded.' }
+
+      if (JSON.stringify(projectedStatus) !== JSON.stringify(status)) {
+        if (statuses === input.resourceQueryStatus) statuses = { ...statuses }
+        statuses[key as keyof typeof statuses] = projectedStatus as typeof status
+      }
+    }
+    next.resourceQueryStatus = statuses
+  }
   return next as T
 }
