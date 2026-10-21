@@ -41,6 +41,13 @@ export function attachReportObservations(
         }
       }
       walk(report.clinicalSourceNodeKey, 'result')
+      for (const key of report.clinicalSourceDerivedMemberKeys ?? []) {
+        const member = byNodeKey.get(key)
+        if (!member || visited.has(key)) continue
+        visited.add(key)
+        members.push(member)
+        walk(key, 'hasMember')
+      }
       if (Array.isArray(existing) && existing.length === members.length && members.every((member, index) => member === existing[index])) return report
       enrichedAny = true
       return { ...report, _observations: members }

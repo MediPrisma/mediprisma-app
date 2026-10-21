@@ -32,7 +32,7 @@ describe('buildClinicalSourceGraph', () => {
     expect(edges.every((edge) => edge.targetKeys[0] === patientKey)).toBe(true)
   })
 
-  it('does not cross source or patient boundaries and reports ambiguous logical references', () => {
+  it('does not cross source or patient boundaries and prefers the origin generation', () => {
     const graph = buildClinicalSourceGraph([
       capture([{ resourceType: 'Patient', id: 'p' }, { resourceType: 'Observation', id: 'o', subject: { reference: 'Patient/p' } }]),
       capture([{ resourceType: 'Patient', id: 'p' }], { sourceId: 'ehr-b' }),
@@ -40,8 +40,9 @@ describe('buildClinicalSourceGraph', () => {
       capture([{ resourceType: 'Patient', id: 'p', meta: { versionId: '2' } }], { generation: 'import-2' }),
     ])
     const edge = graph.references.find((item) => item.origin.resource.id === 'o')!
-    expect(edge.status).toBe('ambiguous')
-    expect(edge.targetKeys).toHaveLength(2)
+    expect(edge.status).toBe('resolved')
+    expect(edge.targetKeys).toHaveLength(1)
+    expect(graph.nodes.find((node) => node.key === edge.targetKeys[0])?.generation).toBe('import-1')
     expect(edge.targetKeys).not.toContain(graph.nodes.find((n) => n.sourceId === 'ehr-b')!.key)
   })
 
@@ -101,7 +102,7 @@ describe('buildClinicalSourceGraph', () => {
     expect(edge.targetKeys).toEqual([graph.nodes.find((node) => node.fullUrl === 'https://b.example/fhir/Observation/x')!.key])
   })
 
-  it('resolves byte-identical records repeated across capture generations and retains both nodes', () => {
+  it('prefers same-generation included records over repeated records in later captures', () => {
     const graph = buildClinicalSourceGraph([
       capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }, { resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 42 } }]),
       capture([{ resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 42 } }], { generation: 'import-2' }),
@@ -109,10 +110,11 @@ describe('buildClinicalSourceGraph', () => {
     const edge = graph.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')!
     expect(graph.nodes.filter((node) => node.resource.resourceType === 'Observation')).toHaveLength(2)
     expect(edge.status).toBe('resolved')
-    expect(edge.targetKeys).toHaveLength(2)
+    expect(edge.targetKeys).toHaveLength(1)
+    expect(graph.nodes.find((node) => node.key === edge.targetKeys[0])?.generation).toBe('import-1')
   })
 
-  it('keeps same-id records ambiguous when payload or version differs across generations', () => {
+  it('prefers same-generation records when another query returns a newer payload or version', () => {
     const payloadMismatch = buildClinicalSourceGraph([
       capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }, { resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 42 } }]),
       capture([{ resourceType: 'Observation', id: 'x', status: 'final', valueQuantity: { value: 43 } }], { generation: 'import-2' }),
@@ -121,8 +123,22 @@ describe('buildClinicalSourceGraph', () => {
       capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }, { resourceType: 'Observation', id: 'x', meta: { versionId: '1' }, valueQuantity: { value: 42 } }]),
       capture([{ resourceType: 'Observation', id: 'x', meta: { versionId: '2' }, valueQuantity: { value: 42 } }], { generation: 'import-2' }),
     ])
-    expect(payloadMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')?.status).toBe('ambiguous')
-    expect(versionMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')?.status).toBe('ambiguous')
+    const payloadEdge = payloadMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')!
+    const versionEdge = versionMismatch.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')!
+    expect(payloadEdge.status).toBe('resolved')
+    expect(payloadMismatch.nodes.find((node) => node.key === payloadEdge.targetKeys[0])?.generation).toBe('import-1')
+    expect(versionEdge.status).toBe('resolved')
+    expect(versionMismatch.nodes.find((node) => node.key === versionEdge.targetKeys[0])?.generation).toBe('import-1')
+  })
+
+  it('falls back to a later query capture when the origin capture has no matching resource', () => {
+    const graph = buildClinicalSourceGraph([
+      capture([{ resourceType: 'ServiceRequest', id: 'order', subject: { reference: 'Observation/x' } }]),
+      capture([{ resourceType: 'Observation', id: 'x', valueInteger: 1 }], { generation: 'import-2' }),
+    ])
+    const edge = graph.references.find((item) => item.origin.resource.resourceType === 'ServiceRequest')!
+    expect(edge.status).toBe('resolved')
+    expect(graph.nodes.find((node) => node.key === edge.targetKeys[0])?.generation).toBe('import-2')
   })
 
   it('keeps distinct URN identities ambiguous for logical references and resolves exact URNs', () => {

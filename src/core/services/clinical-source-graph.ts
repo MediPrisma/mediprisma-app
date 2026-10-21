@@ -301,6 +301,14 @@ export function buildClinicalSourceGraph(captures: readonly ClinicalSourceCaptur
         const logical = logicalIndex.get(indexKey(scope, context, expectedBase, normalized)) ?? []
         candidates = exact.length ? exact : (isAbsolute && !expectedBase) ? [] : logical.filter((node) => !versionMatch || (node.resource.meta as Record<string, unknown> | undefined)?.versionId === versionMatch[1])
       }
+      // Progressive SMART searches often return a newer snapshot of a logical
+      // resource in a different capture. Prefer candidates from the origin's
+      // generation whenever that capture contains the referenced resource; a
+      // later query must not make an earlier report's _include edge ambiguous.
+      // If the origin capture has no candidate, retain the cross-capture fallback
+      // so references to resources fetched by a separate query still resolve.
+      const sameGeneration = candidates.filter((candidate) => candidate.generation === origin.generation)
+      if (sameGeneration.length > 0) candidates = sameGeneration
       const distinct = [...new Map(candidates.map((n) => [n.key, n])).values()].sort((a, b) => a.key.localeCompare(b.key))
       const classes: ClinicalSourceNode[][] = []
       for (const candidate of distinct) {
