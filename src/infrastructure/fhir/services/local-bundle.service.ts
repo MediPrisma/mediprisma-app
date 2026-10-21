@@ -608,16 +608,17 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
   const resources = entries.map((e, index) => {
     const res = cloneResource(e.resource)
     const resourceType: string = res.resourceType ?? 'Resource'
-    const originalId = String(res.id || idFromFullUrl(e.fullUrl) || `${resourceType}-${index}`)
+    const sourceId = res.id || idFromFullUrl(e.fullUrl)
+    const originalId = String(sourceId || `${resourceType}-${index}`)
     // Colliding logical ids from distinct fullUrls/versions must not become
     // one UI key or let a relative reference select an arbitrary source.
     let id = (identityCounts.get(`${resourceType}/${originalId}`) ?? 0) > 1
       ? `${originalId}-source-${index}`
       : originalId
-    if (id !== originalId) {
+    if (!sourceId || id !== originalId) {
       while (reservedIds.has(`${resourceType}/${id}`)) id += '-source'
-      reservedIds.add(`${resourceType}/${id}`)
     }
+    reservedIds.add(`${resourceType}/${id}`)
     res.id = id
     const target: RefTarget = { resourceType, id }
     if (e.fullUrl) indexTarget(e.fullUrl, target)
@@ -931,7 +932,7 @@ function terminologyFromMedicationKnowledge(
 // don't carry a "requester / provider" field, so date alone is the best we
 // have. Multi-encounter same-day collisions take the first match (existing
 // VGH behaviour).
-function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>): any[] {
+function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>, sourceKeys?: WeakMap<object, string>): any[] {
   return resources.map((r) => {
     if (r.encounter?.reference) return r // already has a reference
 
@@ -947,7 +948,7 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
     for (const d of dateFields) {
       const key = toDateStr(d)
       if (key && encounterDateMap.has(key)) {
-        return {
+        const attached = {
           ...r,
           encounter: { reference: `Encounter/${encounterDateMap.get(key)}` },
           // Preserve the difference between a source encounter reference and
@@ -956,6 +957,9 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
           // the same encounter.
           _encounterInferred: true,
         }
+        const sourceKey = sourceKeys?.get(r)
+        if (sourceKey) sourceKeys?.set(attached, sourceKey)
+        return attached
       }
     }
 
@@ -1404,7 +1408,6 @@ export const LocalBundleService = {
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
     }, clinicalSource)
     const sourceKeyByResource = new WeakMap<object, string>(entries.map((resource, index) => [resource, projectedNodes[index].key]))
-    const sourceKeyByMappedId = new Map(entries.map((resource, index) => [resource.resourceType + '/' + resource.id, projectedNodes[index].key]))
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     if (!entries.length) return null
@@ -1552,7 +1555,7 @@ export const LocalBundleService = {
       encounterByDateProvider,
     )
 
-    const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap)
+    const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap, sourceKeyByResource)
     const reports = byType('DiagnosticReport')
     const imagingStudies = attachEncounterRefsByDate(byType('ImagingStudy'), encounterDateMap)
     const procs  = attachEncounterRefsByDate(byType('Procedure'), encounterDateMap)
@@ -1591,11 +1594,11 @@ export const LocalBundleService = {
     const specialMaterialsByProcedure = groupSpecialMaterialsByProcedure(byType('Basic'))
 
     // Build observation map for DiagnosticReport expansion
-    const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r), clinicalSourceNodeKey: sourceKeyByMappedId.get('Observation/' + r.id) }))
+    const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r), clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
-    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap).map((r: any) =>
-      ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByMappedId.get('DiagnosticReport/' + r.id) })
+    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any) =>
+      ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByResource.get(r) })
     )
 
     // Separate vital signs from other observations

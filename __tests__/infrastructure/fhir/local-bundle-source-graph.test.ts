@@ -32,6 +32,33 @@ it('preserves the capture generation in the shared result', () => {
   expect(first.graph.nodes[0].key).not.toBe(second.graph.nodes[0].key)
 })
 
+it('keeps anonymous generated ids separate from explicit ids and preserves source joins through encounter enrichment', () => {
+  const observation = { resourceType: 'Observation', status: 'final', code: { text: 'Synthetic lab' }, effectiveDateTime: '2026-10-21', valueQuantity: { value: 7 } }
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: [
+    { resource: { resourceType: 'Patient', id: 'patient' } },
+    { resource: observation },
+    { resource: { ...observation, id: 'Observation-1', valueQuantity: { value: 99 } } },
+    { resource: { resourceType: 'Encounter', id: 'visit', status: 'finished', class: { code: 'AMB' }, period: { start: '2026-10-21' } } },
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', status: 'final', code: { text: 'Synthetic report' }, effectiveDateTime: '2026-10-21', result: [{ reference: 'Observation/Observation-1' }] } },
+  ] }
+  const before = JSON.stringify(bundle)
+  const collection = LocalBundleService.parse(bundle)!.collection
+  expect(collection.observations).toHaveLength(2)
+  expect(new Set(collection.observations.map(row => row.id)).size).toBe(2)
+  expect(new Set(collection.observations.map(row => row.clinicalSourceNodeKey)).size).toBe(2)
+  for (const row of collection.observations) {
+    const node = collection.clinicalSource!.graph.nodes.find(item => item.key === row.clinicalSourceNodeKey)
+    expect(node?.resource.valueQuantity).toEqual(row.valueQuantity)
+    expect(row.encounter?.reference).toBe('Encounter/visit')
+  }
+  const report = collection.diagnosticReports[0]
+  expect(report.clinicalSourceNodeKey).toBeDefined()
+  expect(report._observations).toHaveLength(1)
+  expect(report._observations?.[0].valueQuantity?.value).toBe(99)
+  expect(report._observations?.[0].clinicalSourceNodeKey).toBe(collection.observations[1].clinicalSourceNodeKey)
+  expect(JSON.stringify(bundle)).toBe(before)
+})
+
 it('projects a proven same-source record once while retaining transmission evidence', () => {
   const bundle = fixture()
   bundle.entry.push(JSON.parse(JSON.stringify(bundle.entry[2])))
