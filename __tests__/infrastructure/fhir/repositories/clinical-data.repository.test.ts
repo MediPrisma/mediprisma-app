@@ -39,14 +39,14 @@ describe('FhirClinicalDataRepository', () => {
       const mockEncounter = { id: 'enc-1', status: 'finished' }
 
       mockFhirClient.requestAllPages.mockImplementation((url: string) => {
-        if (url.startsWith('Condition')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('AllergyIntolerance')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('Observation') && url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('Observation') && !url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Condition')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('AllergyIntolerance')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('Observation') && url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('Observation') && !url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
         if (url.startsWith('DiagnosticReport')) return Promise.resolve({ entry: [{ resource: { resourceType: 'DiagnosticReport' } }] })
         if (url.startsWith('ImagingStudy')) return Promise.resolve({ entry: [{ resource: { resourceType: 'ImagingStudy' } }] })
-        if (url.startsWith('Procedure')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Procedure')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
         if (url.startsWith('Encounter')) return Promise.resolve({ entry: [{ resource: { resourceType: 'Encounter' } }] })
         if (url.startsWith('DocumentReference')) return Promise.resolve({ entry: [] })
         if (url.startsWith('Composition')) return Promise.resolve({ entry: [] })
@@ -79,7 +79,7 @@ describe('FhirClinicalDataRepository', () => {
     // re-downloaded rows the unfiltered Observation search had already
     // returned. They are filtered out of that result instead.
     it('derives vital signs from the Observation result without a second search', async () => {
-      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [{ resource: {} }] })
+      mockFhirClient.requestAllPages.mockImplementation((url: string) => Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] }))
       mockMapper.toObservation.mockReturnValue({
         id: 'vital-1',
         status: 'final',
@@ -157,8 +157,8 @@ describe('FhirClinicalDataRepository', () => {
     it('should fetch conditions successfully', async () => {
       const mockResponse = {
         entry: [
-          { resource: { id: 'cond-1', code: { text: 'Diabetes' } } },
-          { resource: { id: 'cond-2', code: { text: 'Hypertension' } } }
+          { resource: { resourceType: 'Condition', id: 'cond-1', code: { text: 'Diabetes' } } },
+          { resource: { resourceType: 'Condition', id: 'cond-2', code: { text: 'Hypertension' } } }
         ]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
@@ -173,7 +173,7 @@ describe('FhirClinicalDataRepository', () => {
     })
 
     it('should fallback when sort fails', async () => {
-      const mockResponse = { entry: [{ resource: { id: 'cond-1' } }] }
+      const mockResponse = { entry: [{ resource: { resourceType: 'Condition', id: 'cond-1' } }] }
       mockFhirClient.requestAllPages
         .mockRejectedValueOnce(new Error('Sort not supported'))
         .mockResolvedValueOnce(mockResponse)
@@ -303,7 +303,7 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchAllergies', () => {
     it('should fetch allergies successfully', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'allergy-1', code: { text: 'Peanuts' } } }]
+        entry: [{ resource: { resourceType: 'AllergyIntolerance', id: 'allergy-1', code: { text: 'Peanuts' } } }]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toAllergy.mockReturnValue({ id: 'allergy-1', code: { text: 'Peanuts' } })
@@ -327,7 +327,7 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchObservations', () => {
     it('should fetch all observations', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'obs-1', code: { text: 'Glucose' } } }]
+        entry: [{ resource: { resourceType: 'Observation', id: 'obs-1', code: { text: 'Glucose' } } }]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toObservation.mockReturnValue({ id: 'obs-1', code: { text: 'Glucose' }, status: 'final' })
@@ -355,8 +355,8 @@ describe('FhirClinicalDataRepository', () => {
     it('filters the unfiltered Observation search instead of searching by category', async () => {
       const mockResponse = {
         entry: [
-          { resource: { id: 'vital-1' } },
-          { resource: { id: 'lab-1' } },
+          { resource: { resourceType: 'Observation', id: 'vital-1' } },
+          { resource: { resourceType: 'Observation', id: 'lab-1' } },
         ]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
@@ -436,7 +436,7 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchProcedures', () => {
     it('should fetch procedures', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'proc-1', code: { text: 'Surgery' } } }]
+        entry: [{ resource: { resourceType: 'Procedure', id: 'proc-1', code: { text: 'Surgery' } } }]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toProcedure.mockReturnValue({ id: 'proc-1', code: { text: 'Surgery' }, status: 'completed' })
@@ -480,4 +480,39 @@ describe('FhirClinicalDataRepository', () => {
       expect(mockMapper.toEncounter).toHaveBeenCalledTimes(1)
     })
   })
+})
+
+describe('repository source intake', () => {
+  it('captures unknown included resources before mapping and isolates patient snapshots', async () => {
+    const repo = new FhirClinicalDataRepository()
+    const request = fhirClient.requestAllPages as jest.Mock
+    request.mockResolvedValueOnce({ entry: [
+      { fullUrl: 'urn:uuid:unknown', resource: { resourceType: 'UnknownClinicalType', id: 'unknown', extension: [{ url: 'synthetic', valueString: 'preserved' }] } },
+      { resource: { resourceType: 'Observation', id: 'obs' } },
+    ] })
+    ;(FhirMapper.toObservation as jest.Mock).mockReturnValue({ id: 'obs' })
+    await repo.fetchObservations('synthetic')
+    const source = repo.getClinicalSource('synthetic')
+    expect(source.graph.nodes).toHaveLength(2)
+    expect(source.graph.nodes.find(node => node.resource.id === 'unknown')?.resource.extension).toEqual([{ url: 'synthetic', valueString: 'preserved' }])
+    expect(repo.getClinicalSource('other').graph.nodes).toEqual([])
+    request.mockResolvedValueOnce({ entry: [] })
+    await repo.fetchObservations('synthetic')
+    expect(repo.getClinicalSource('synthetic').graph.nodes).toHaveLength(2)
+  })
+})
+
+it('maps only the current successful refresh while keeping prior captures as audit evidence', async () => {
+  const repo = new FhirClinicalDataRepository()
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id, valueString: resource.valueString }))
+  const observation = (id: string, valueString = 'first') => ({ resource: { resourceType: 'Observation', id, valueString } })
+  request.mockResolvedValueOnce({ entry: [observation('a'), observation('b')] })
+  expect(await repo.fetchObservations('refresh')).toHaveLength(2)
+  request.mockResolvedValueOnce({ entry: [observation('a', 'revised')] })
+  expect(await repo.fetchObservations('refresh')).toEqual([{ id: 'a', valueString: 'revised' }])
+  request.mockResolvedValueOnce({ entry: [] })
+  expect(await repo.fetchObservations('refresh')).toEqual([])
+  expect(repo.getClinicalSource('refresh').graph.nodes).toHaveLength(3)
 })

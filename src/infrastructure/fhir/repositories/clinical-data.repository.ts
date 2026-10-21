@@ -1,3 +1,5 @@
+import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import type { ClinicalSourceCapture } from '@/src/core/services/clinical-source-graph'
 // FHIR Clinical Data Repository Implementation
 import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories/clinical-data.repository.interface'
 import type {
@@ -138,7 +140,40 @@ function mapMedicationSearchResponse(
     })
 }
 
+let repositorySequence = 0
+
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
+  private readonly sourceCaptures: ClinicalSourceCapture[] = []
+  private generation = 0
+  private readonly sourceId = `smart-repository-${++repositorySequence}`
+
+  getClinicalSource(patientId: string): ClinicalReconciliationResult {
+    return reconcileClinicalSources(this.sourceCaptures.filter(capture => capture.patientScope === patientId))
+  }
+
+  /** Preserve complete successful search captures before filtering or mapping.
+   * Snapshots are audit evidence, never new events or deletion signals. */
+  private async requestSource(url: string): Promise<any> {
+    const response = await fhirClient.requestAllPages(url)
+    const params = new URLSearchParams(url.split('?')[1] ?? '')
+    const patientScope = (params.get('patient') ?? params.get('subject') ?? '').replace(/^Patient\//, '')
+    let restBase: string | undefined
+    try {
+      const client = await fhirClient.getClient()
+      restBase = client?.state?.serverUrl
+    } catch {
+      // A completed response remains usable if session metadata is unavailable.
+    }
+    const capture: ClinicalSourceCapture = {
+      sourceId: restBase ? this.sourceId + '|' + restBase : this.sourceId,
+      patientScope, generation: String(++this.generation), restBase,
+      resources: (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string').map((entry: any) => JSON.parse(JSON.stringify(entry))),
+    }
+    this.sourceCaptures.push(capture)
+    const source = reconcileClinicalSources([capture])
+    return { ...response, entry: selectClinicalSourceNodes(source).map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+  }
+
   private resourceQueryStatus: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}
 
   private markQuerySuccess(key: ClinicalDataQueryKey, resourceType: string, count: number) {
@@ -164,11 +199,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   private async requestWithBasicFallback(primary: string, fallback?: string): Promise<any> {
     try {
-      return await fhirClient.requestAllPages(primary)
+      return await this.requestSource(primary)
     } catch (error) {
       if (!fallback || !shouldRetryBasicFhirSearch(error)) throw error
       warnFhirError('FHIR server rejected optional search features; retrying a basic search:', error)
-      return fhirClient.requestAllPages(fallback)
+      return this.requestSource(fallback)
     }
   }
 
@@ -215,14 +250,14 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
     // Re-attach observations to DiagnosticReports that _include didn't populate.
     // The bridge may not support _include; this mirrors what local-bundle.service does.
-    const obsMap = new Map(observations.map(o => [o.id, o]))
+    const obsMap = new Map(observations.filter(o => observations.filter(candidate => candidate.id === o.id).length === 1).map(o => [o.id, o]))
     const enrichedDiagnosticReports = diagnosticReports.map(dr => {
       if (Array.isArray((dr as any)._observations) && (dr as any)._observations.length > 0) {
         return dr
       }
       if (!Array.isArray(dr.result) || dr.result.length === 0) return dr
       const resultIds = (dr.result as any[])
-        .map((ref: any) => ref.reference?.split('/').pop())
+        .map((ref: any) => ref.reference?.match(/^Observation\/([^/]+)$/)?.[1])
         .filter(Boolean) as string[]
       const matched = resultIds.map(id => obsMap.get(id)).filter((o): o is ObservationEntity => o !== undefined)
       return matched.length > 0 ? { ...dr, _observations: matched } : dr
@@ -253,6 +288,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       devices,
       carePlans,
       resourceQueryStatus: { ...this.resourceQueryStatus },
+      clinicalSource: this.getClinicalSource(patientId),
     }
   }
 
@@ -285,7 +321,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchConsents(patientId: string): Promise<ConsentEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
+      const response = await this.requestSource(
         `Consent?patient=${patientId}&_count=100`
       )
       const result = response.entry?.map((e: any) => FhirMapper.toConsent(e.resource)) || []
@@ -300,7 +336,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchDevices(patientId: string): Promise<DeviceEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
+      const response = await this.requestSource(
         `Device?patient=${patientId}&_count=100`
       )
       const result = response.entry?.map((e: any) => FhirMapper.toDevice(e.resource)) || []
@@ -404,7 +440,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchAllergies(patientId: string): Promise<AllergyEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
+      const response = await this.requestSource(
         `AllergyIntolerance?patient=${patientId}&_count=100`
       )
       const result = response.entry?.map((e: any) => FhirMapper.toAllergy(e.resource)) || []

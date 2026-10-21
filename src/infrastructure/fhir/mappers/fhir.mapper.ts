@@ -386,11 +386,11 @@ export class FhirMapper implements IDataMapper {
     // Attach related observations with expansion of hasMember
     if (fhirResource.result && observations.length > 0) {
       const resultIds = fhirResource.result
-        .map((ref: Reference) => ref.reference?.split('/').pop())
+        .map((ref: Reference) => ref.reference?.match(/^Observation\/([^/]+)$/)?.[1])
         .filter(Boolean)
       
       // Create a map of observations by ID for easy lookup
-      const obsMap = new Map(observations.map(obs => [obs.id, obs]))
+      const obsMap = new Map(observations.filter(obs => observations.filter(candidate => candidate.id === obs.id).length === 1).map(obs => [obs.id, obs]))
       
       // Get the actual observation objects
       const reportObservations = resultIds
@@ -403,7 +403,7 @@ export class FhirMapper implements IDataMapper {
         
         const members = obs.hasMember
           .map((m: any) => {
-            const memberId = m.reference?.split('/').pop()
+            const memberId = m.reference?.match(/^Observation\/([^/]+)$/)?.[1]
             return memberId ? obsMap.get(memberId) : null
           })
           .filter(Boolean)
