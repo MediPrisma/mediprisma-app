@@ -32,6 +32,25 @@ function regimenLabel(regimen: HospitalUnconfirmedAnticoagulation['regimens'][nu
 export function applyHospitalMedicationVisitReview(
   model: VisitDecisionModel, profile: CdssPatientProfile, locale: CdssLocale,
 ): VisitDecisionModel {
+  const unresolvedDiagnoses = (profile as HospitalAwareCdssProfile).excludedClinicalRecordVariants?.some(row => row.resourceType === 'Condition')
+  if (unresolvedDiagnoses) {
+    // These HF points derive their negative conclusion directly from the
+    // absence of an established AF diagnosis. Quarantined source diagnoses
+    // cannot establish that absence. Other native positive decisions and the
+    // native AF score's existing unknown-item handling remain unchanged.
+    const points = model.points.map(point => {
+      if (point.state !== 'not-applicable' || !['hf-af-anticoagulation', 'hf-af-rate-rhythm'].includes(point.semanticId)) return point
+      return {
+        ...point,
+        state: 'info' as const,
+        headline: locale === 'en' ? 'Diagnosis source records unresolved' : '診斷來源尚待核對',
+        why: locale === 'en' ? 'Unresolved source diagnoses cannot establish whether AF is present or absent.' : '診斷來源仍有未決版本或衝突，尚不能據此判定有無心房顫動。',
+        actions: [],
+        needsData: [...new Set([...(point.needsData ?? []), locale === 'en' ? 'Reconcile source records' : '核對診斷來源紀錄'])],
+      }
+    })
+    if (points.some((point, index) => point !== model.points[index])) model = { ...model, points }
+  }
   const unresolvedInventory = (profile as HospitalAwareCdssProfile).hospitalMedicationInventoryUnresolved
   const variantPending = unresolvedInventory && !anticoagulationOnProfile(profile)
   const pending = (profile as HospitalAwareCdssProfile).hospitalMedicationUnconfirmedAnticoagulation
