@@ -1,20 +1,21 @@
 import { classifyReport, reportNarrative, extractEcgFindings, isMedicationBeingTaken, medicationAtcCode, medicationDisplayName, medicationSupplyEndDate } from '@voho0000/personalized-care-fhir'
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import { doacSelects, type DoacSelectKey } from './doac-clinical-autofill'
+import type { DoacPatientKey } from './doac-patient-autofill'
 
 /**
  * Yes/no and graded answers the record (or the CDSS visit) can give a
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
   testName: string
   facility?: string
   obsId?: string
-  resourceType?: 'Condition' | 'Encounter' | 'DiagnosticReport' | 'MedicationRequest' | 'MedicationStatement'
+  resourceType?: 'Condition' | 'Encounter' | 'Observation' | 'DiagnosticReport' | 'MedicationRequest' | 'MedicationStatement'
 }
 
 // Only explicit AF, never flutter, paced rhythm or a generic non-sinus finding.
@@ -131,26 +132,29 @@ export function afDiagnosis(conditions: ConditionEntity[], encounters: Encounter
  * or encounter diagnoses — 「是」 only. The cloud record covers about a year,
  * so a code it lacks is not a 「否」: that stays the clinician's to answer.
  */
-function diagnosisSelect(
+export function diagnosisSelect(
   conditions: ConditionEntity[],
   encounters: EncounterEntity[],
   now: Date,
   matches: (code: string) => boolean,
   name: string,
+  /** Only a diagnosis dated within this many days counts; an undated one then does not. */
+  withinDays?: number,
 ): ClinicalSelectValue | undefined {
   const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
+  const tooOld = (date: string) => withinDays !== undefined && (!date || now.getTime() - Date.parse(date) > withinDays * 86_400_000)
   for (const condition of conditions) {
     if (['refuted', 'entered-in-error', 'provisional', 'differential', 'unconfirmed'].includes(condition.verificationStatus ?? '') || condition._inferred) continue
     if (['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
     const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
-    if (date && Date.parse(date) > now.getTime()) continue
+    if ((date && Date.parse(date) > now.getTime()) || tooOld(date)) continue
     const code = condition.code?.coding?.find((coding) => (!coding.system || /icd/i.test(coding.system)) && matches(normal(coding.code)))
     if (code) return { value: 'yes', date, testName: `${name}診斷碼：${code.code}（請核對）`, obsId: condition.id, resourceType: 'Condition' }
   }
   for (const encounter of encounters) {
     if (['cancelled', 'entered-in-error'].includes(encounter.status ?? '')) continue
     const date = encounter.period?.start ?? ''
-    if (date && Date.parse(date) > now.getTime()) continue
+    if ((date && Date.parse(date) > now.getTime()) || tooOld(date)) continue
     const codes = (encounter.reasonCode ?? []).flatMap((reason) => reason.coding ?? []).map((coding) => coding.code)
     // Older bridge rows encode the ICD at the beginning of the diagnosis display.
     for (const text of [...(encounter.reasonCode ?? []).map((reason) => reason.text), ...(encounter.diagnosis ?? []).map((item) => item.condition?.display)]) {

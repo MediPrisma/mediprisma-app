@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react'
 import type { CalcValues, L } from '../types'
-import { DOAC_RULES_VERSION, LABEL_SOURCES, crclLabel } from '../doac-dose-model'
+import { LABEL_SOURCES, crclLabel } from '../doac-dose-model'
 import {
   GUIDELINE_SOURCES,
   PERIOP_FIELD_LABELS,
@@ -13,7 +13,7 @@ import {
   type PeriopLine,
   type PeriopResult,
 } from '../doac-periop-model'
-import { Cite as LabelCiteView } from './DoacDoseResults'
+import { Cite as LabelCiteView, SourcesAndLimits } from './DoacDoseResults'
 
 const STATE: Record<PeriopResult['state'], { zh: string; en: string; style: string }> = {
   timed: { zh: '依出血風險分級', en: 'By bleeding risk', style: 'bg-sky-50 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300' },
@@ -166,12 +166,13 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
           </div>
         )}
       </div>
-      <p className="border-t px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+      <SourcesAndLimits title={zh ? '來源與限制 · EHRA 2021、ASRA 2025、EU SmPC' : 'Sources and limits · EHRA 2021, ASRA 2025, EU SmPC'}>
+      <p className="text-muted-foreground">
         {zh
-          ? `依 EHRA 2021、ASRA 2025（第 5 版）與 EU SmPC · ${DOAC_RULES_VERSION}。時數是最低間隔；最後決定由手術、麻醉團隊依個別出血與栓塞風險判斷，並以書面告知病人與相關醫師。`
-          : `EHRA 2021, ASRA 2025 (5th edition) and the EU SmPC · ${DOAC_RULES_VERSION}. Intervals are minimums; the surgical and anaesthetic team decides by the individual bleeding and thrombotic risk, and writes the plan down for the patient and the physicians involved.`}
+          ? '時數是最低間隔；最後決定由手術、麻醉團隊依個別出血與栓塞風險判斷，並以書面告知病人與相關醫師。'
+          : 'Intervals are minimums; the surgical and anaesthetic team decides by the individual bleeding and thrombotic risk, and writes the plan down for the patient and the physicians involved.'}
       </p>
-      <ul className="border-t px-3 py-2 text-xs">
+      <ul>
         {Object.values(GUIDELINE_SOURCES).map((source) => (
           <li key={source.url}>
             <a className="inline-flex min-h-8 items-center gap-1 text-primary underline underline-offset-4" href={source.url} target="_blank" rel="noopener noreferrer">
@@ -190,6 +191,7 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
           </li>
         )}
       </ul>
+      </SourcesAndLimits>
     </section>
   )
 }

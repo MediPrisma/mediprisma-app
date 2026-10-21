@@ -15,6 +15,7 @@ import { usePatient } from '@/src/application/hooks/patient/use-patient-query.ho
 import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinical-lab-normalization/canonical'
 import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue } from '../hfpef-clinical-autofill'
 import { buildEchoAutofill } from '../echo-autofill'
+import { doacPatientSelects, type LabObservation } from '../doac-patient-autofill'
 import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
 import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
@@ -298,7 +299,14 @@ export function buildAutofill(
     }
   }
 
-  return { resolve, sex, clinicalSelects: buildClinicalSelects(reports, medications, now, conditions, encounters) }
+  return {
+    resolve,
+    sex,
+    clinicalSelects: {
+      ...buildClinicalSelects(reports, medications, now, conditions, encounters),
+      ...doacPatientSelects({ observations: observations as LabObservation[], conditions, encounters, demographics: { age, gender: sex }, now }),
+    },
+  }
 }
 
 export interface LabAutofillState {
