@@ -1,6 +1,6 @@
 {
   "base": "af0bfe42c50ecba16b62a58a35ba4808c79b472e",
-  "applicationCode": "b65d1dd4ae10fd880c0f7719c8086df17e11179c",
+  "applicationCode": "3863caf903701c687db989b39b8e5d31004cf149",
   "fixtureSHA256": "9a96500d75de65a65fb970ddc9622fea5cfc1895c683730e9b86119541042fb6",
   "identicalFixtures": true,
   "viewports": [
@@ -16,6 +16,7 @@
     "after": 4
   },
   "sourceHistoryTested": true,
+  "attachmentSourceHistoryTested": true,
   "nhiViewer": {
     "simulatedBridge": true,
     "liveAuthenticatedService": false,
@@ -32,20 +33,21 @@
       "sha256": "a5c392982d8db65a11718e0565742fd38e1d1f0d5fe7647c69173a4c87d0c95f"
     },
     "after-390.png": {
-      "sha256": "18a19d1cd8d05be65ab3022bcbf9f9b33f9bd6ab85c45e8677b98a8deca5778e"
+      "sha256": "ffa0555206710f97dfc012a37128902283847483e7ddf9fb8e2a7f2cfd4adc0f"
     },
     "after-sources.png": {
-      "sha256": "94738e2acdfa3c8e1324248e17f73f264f77db083717e3581a8014090d613657"
+      "sha256": "33d3a499cd93ac91dda2520856ee5e8429c3a413ae6f9ae7e4eb82bdadad478f"
     },
     "after-viewer.png": {
       "sha256": "630b6afa1264bf04564352eda6945d83d985e5df6c4b258aeba94d92e335846d"
     }
   },
   "localUnitTests": {
-    "suites": 16,
-    "passed": 295
+    "suites": 17,
+    "passed": 299
   },
   "utcCrossSourceTests": 119,
+  "utcHistoryTests": 4,
   "additionalIntegration": {
     "mergedDownloadReimport": "passed",
     "originalDownloadPopup": "same timeout reproduced on base and PR"

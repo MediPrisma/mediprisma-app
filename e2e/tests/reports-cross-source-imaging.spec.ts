@@ -60,27 +60,32 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
   await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
   await page.getByRole('tab').filter({ hasText: /^全部/ }).first().click()
   await page.getByPlaceholder(/搜尋/).fill(marker)
-  const rows = page.locator('[data-tour="report-tour-row"]').filter({ visible: true })
+  const rows = page.getByRole('tabpanel', { name: /^全部/ }).locator('[data-tour="report-tour-row"], [data-slot="accordion-item"]').filter({ visible: true })
   await expect(rows).toHaveCount(before ? 8 : 4)
   // Capture the same explicit state on both revisions, independently of the
   // app's responsive/default expansion preferences.
-  for (const header of await rows.locator('[role="button"][aria-expanded]').all()) {
+  for (const row of await rows.all()) {
+    const header = row.locator('[aria-expanded]').first()
     if (await header.getAttribute('aria-expanded') === 'true') await header.press('Enter')
   }
   const output = process.env.IMAGING_EVIDENCE_DIR || testInfo.outputDir
   await fs.mkdir(output, { recursive: true })
+  if (path.resolve(output) !== path.resolve(testInfo.outputDir)) await fs.copyFile(fixture, path.join(output, 'synthetic-imaging.json'))
   for (const width of [1440, 1024, 768, 430, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 })
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
     if (!before) {
       const source = rows.first().locator('[aria-label^="臺北榮總"]').first()
       const date = await rows.first().getByText('2026/6/24', { exact: true }).first().boundingBox()
-      const textRight = await source.locator('span').evaluateAll(spans => Math.max(...spans.map(span => {
+      const textBoxes = await source.locator('span').evaluateAll(spans => spans.map(span => {
         const rect = span.getBoundingClientRect()
-        return rect.width ? rect.right : 0
-      })))
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height }
+      }).filter(rect => rect.width > 0 && rect.height > 0))
       expect(date).not.toBeNull()
-      expect(textRight).toBeLessThanOrEqual(date!.x + 1)
+      // Attachment panels may wrap metadata onto separate lines. Assert actual
+      // rectangle separation rather than assuming source/date share one row.
+      expect(textBoxes.every(box => box.right <= date!.x + 1 || box.left >= date!.x + date!.width - 1
+        || box.bottom <= date!.y + 1 || box.top >= date!.y + date!.height - 1)).toBe(true)
     }
     await page.screenshot({ path: path.join(output, `${before ? 'before' : 'after'}-${width}.png`), fullPage: true })
   }
@@ -90,7 +95,7 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
     await expect(rows.filter({ hasText: 'SONOGRAM- BREAST' })).toHaveCount(1)
     await page.getByPlaceholder(/搜尋/).fill(marker)
     const first = rows.filter({ hasText: 'SONOGRAM- BREAST' })
-    const header = first.locator('[role="button"][aria-expanded]').first()
+    const header = first.locator('[aria-expanded]').first()
     if (await header.getAttribute('aria-expanded') !== 'true') await header.press('Enter')
     const sources = first.getByTestId('shared-report-sources')
     await sources.locator('summary').click()
