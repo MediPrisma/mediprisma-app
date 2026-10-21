@@ -107,8 +107,8 @@ test.each([false, true])('a profile write recovers memory-only durability (exist
     if (this.name === 'bundles') throw new DOMException('synthetic quota', 'QuotaExceededError')
     return put.call(this, value, recordKey)
   })
-  const previous = chart()
-  await local.save(previous, { importId: 'recovered-cloud', signal: new AbortController().signal })
+  const previous = chart(), source = new Blob(['\uFEFF', JSON.stringify(previous, null, 2), '\r\n'])
+  await local.save(previous, { importId: 'recovered-cloud', originalFhir: source, signal: new AbortController().signal })
   failure.mockRestore()
   await local.setUserEnteredPatientProfile(null)
   const key = sessionStorage.getItem('__bundle_session_key__'), marker = sessionStorage.getItem('fhir_bundle_override')
@@ -122,6 +122,58 @@ test.each([false, true])('a profile write recovers memory-only durability (exist
   const reloaded = await service()
   expect(await reloaded.load()).toEqual(previous)
   expect(reloaded.getActiveImportId()).toBe('recovered-cloud')
+  expect(Array.from(new Uint8Array(await (await reloaded.loadOriginalFhir())!.arrayBuffer())))
+    .toEqual(Array.from(new Uint8Array(await source.arrayBuffer())))
+})
+
+async function memoryChartWithSource(local: Awaited<ReturnType<typeof service>>) {
+  const previous = chart(), source = new Blob([JSON.stringify(previous)]), put = FakeObjectStore.prototype.put
+  const failure = jest.spyOn(FakeObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, recordKey) {
+    if (this.name === 'bundles') throw new DOMException('synthetic quota', 'QuotaExceededError')
+    return put.call(this, value, recordKey)
+  })
+  await local.save(previous, { importId: 'memory-source', originalFhir: source, signal: new AbortController().signal })
+  failure.mockRestore()
+  return { previous, source, put }
+}
+
+test('a durable chart with a lost key is not rewritten under an unrelated replacement key', async () => {
+  const local = await service(), previous = chart()
+  await local.save(previous, { importId: 'durable-key', signal: new AbortController().signal })
+  sessionStorage.removeItem('__bundle_session_key__')
+  const encrypt = jest.spyOn(webcrypto.subtle, 'encrypt')
+  await expect(local.setUserEnteredPatientProfile(null)).rejects.toThrow('Encrypted browser storage is unavailable')
+  expect(encrypt).not.toHaveBeenCalled()
+  expect(sessionStorage.getItem('__bundle_session_key__')).toBeNull()
+  expect(local.getActiveImportId()).toBe('durable-key')
+  expect(await local.load()).toBe(previous)
+})
+
+test('failed source recovery keeps the original Blob and permits later memory-only stages', async () => {
+  const local = await service(), { previous, source, put } = await memoryChartWithSource(local)
+  jest.spyOn(FakeObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, recordKey) {
+    if (this.name === 'bundles' || String((value as { id?: string })?.id).startsWith('original-fhir:')) throw new DOMException('synthetic quota', 'QuotaExceededError')
+    return put.call(this, value, recordKey)
+  })
+  await expect(local.setUserEnteredPatientProfile(null)).rejects.toBeDefined()
+  expect(await local.load()).toBe(previous)
+  expect(await local.loadOriginalFhir()).toBe(source)
+  expect(sessionStorage.getItem('fhir_bundle_override')).toBeNull()
+  await local.save(chart(), { importId: 'memory-visits', originalFhir: source, signal: new AbortController().signal })
+  expect(local.getActiveImportId()).toBe('memory-visits')
+  expect(await local.loadOriginalFhir()).toBe(source)
+})
+
+test('source recovery resolving after clear cannot resurrect the old chart or source pointer', async () => {
+  const local = await service()
+  await memoryChartWithSource(local)
+  const encrypt = webcrypto.subtle.encrypt.bind(webcrypto.subtle)
+  jest.spyOn(webcrypto.subtle, 'encrypt').mockImplementationOnce(async (...args) => { await local.clear(); return encrypt(...args) })
+  await expect(local.setUserEnteredPatientProfile(null)).rejects.toThrow('目前病歷已變更')
+  const reloaded = await service()
+  expect(await reloaded.load()).toBeNull()
+  expect(await reloaded.loadOriginalFhir()).toBeNull()
+  expect(reloaded.getActiveImportId()).toBeNull()
 })
 
 test('a failed replacement envelope preserves the previous encrypted chart, images and original FHIR across reload', async () => {

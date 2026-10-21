@@ -91,6 +91,21 @@ describe("useInsightGeneration provenance", () => {
     expect(useInsightResponsesStore.getState().responses.first.text).toBe('new manual')
   })
 
+  it('discards an uncommitted multi-module batch when stopped after its first staged response', async () => {
+    let finish!: (value: string) => void
+    mockQuery.mockReset().mockResolvedValueOnce('uncommitted first module')
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finish = resolve }))
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'import-a', phase: 'waiting' } })
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let generation!: Promise<void>
+    act(() => { generation = result.current.runPanels(['first', 'second'], { automatic: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(2))
+    expect(useInsightResponsesStore.getState().responses).toEqual({})
+    act(() => stopProgressiveImport('run-a', 'privacy-stale'))
+    await act(async () => { finish('late second module'); await generation })
+    expect(useInsightResponsesStore.getState().responses).toEqual({})
+  })
+
   it("captures the immutable model, completion time and request duration per module", async () => {
     let finishQuery!: (value: string) => void
     mockQuery.mockImplementationOnce(() => new Promise<string>((resolve) => {

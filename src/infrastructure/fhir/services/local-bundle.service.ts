@@ -1799,26 +1799,55 @@ export const LocalBundleService = {
       throw new Error('Encrypted browser storage is unavailable')
     }
 
-    const key = await getSessionBundleKey({ create: true })
+    const owner = { importId: memBundleImportId, demo: memBundleIsDemo,
+      sourceMetadata: memBundleSourceMetadata, originalFhir: memOriginalFhir,
+      recovering: memBundleUsesMemoryOnlySession }
+    const assertOwner = () => {
+      if (memBundle !== bundle || memBundleImportId !== owner.importId) throw new Error('目前病歷已變更，請重新開啟病人資料。')
+    }
+    const key = await getSessionBundleKey({ create: owner.recovering })
     if (!key) throw new Error('Encrypted browser storage is unavailable')
+    assertOwner()
     const persisted = {
       __mediprismaBundle: 1,
-      importId: memBundleImportId,
-      demo: memBundleIsDemo,
-      ...(memBundleSourceMetadata
-        ? { sourceMetadata: memBundleSourceMetadata }
+      importId: owner.importId,
+      demo: owner.demo,
+      ...(owner.sourceMetadata
+        ? { sourceMetadata: owner.sourceMetadata }
         : {}),
       ...(normalized ? { patientProfile: normalized } : {}),
       bundle,
     } satisfies PersistedBundleEnvelope
 
-    // Update in-memory state only after the encrypted IndexedDB write succeeds.
-    await idbPut(
-      await encryptJson(key, persisted),
-      bundleRecordKey(memBundleImportId),
-    )
-    writeTabBundleScope(memBundleImportId, memBundleIsDemo)
-    memBundleUsesMemoryOnlySession = false
-    memUserEnteredPatientProfile = normalized
+    const previousMarker = owner.recovering ? sessionStorage.getItem(STORAGE_KEY) : null
+    const previousDemo = owner.recovering ? sessionStorage.getItem(DEMO_FLAG_KEY) : null
+    try {
+      if (owner.recovering && owner.originalFhir) await storeOriginalFhir(owner.importId, owner.originalFhir, key)
+      assertOwner()
+      const encrypted = await encryptJson(key, persisted)
+      assertOwner()
+      await idbPut(encrypted, bundleRecordKey(owner.importId))
+      assertOwner()
+      try { writeTabBundleScope(owner.importId, owner.demo) }
+      catch (error) {
+        if (owner.recovering) try {
+          for (const [storageKey, value] of [[STORAGE_KEY, previousMarker], [DEMO_FLAG_KEY, previousDemo]] as const) {
+            if (value === null) sessionStorage.removeItem(storageKey)
+            else sessionStorage.setItem(storageKey, value)
+          }
+        } catch { /* browser storage may remain blocked */ }
+        throw error
+      }
+      // Recovery is durable only after both original source and chart are saved.
+      memBundleUsesMemoryOnlySession = false
+      memUserEnteredPatientProfile = normalized
+      if (owner.recovering && owner.originalFhir) memOriginalFhir = null
+    } catch (error) {
+      if (owner.recovering) try {
+        await idbDelete(bundleRecordKey(owner.importId))
+        await idbDeleteImagesForImport(owner.importId, true)
+      } catch { /* unpublished recovery data expires; the original Blob stays in memory */ }
+      throw error
+    }
   },
 }
