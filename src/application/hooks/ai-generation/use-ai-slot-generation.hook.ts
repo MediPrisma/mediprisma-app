@@ -605,8 +605,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         }
         : undefined,
       shouldCommit: () => (
-        !runAbort.signal.aborted && (!automatic || !isProgressiveAutoSummaryBlocked())
-        && (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
+        !runAbort.signal.aborted && (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
       readRunMetrics: readRunMetrics ? () => readRunMetrics(slotKey) : undefined,
       produce: (measureResult, identifySummaryRun, operation) =>

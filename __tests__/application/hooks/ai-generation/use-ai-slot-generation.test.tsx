@@ -179,7 +179,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(saveEncryptedCache).not.toHaveBeenCalled()
   })
 
-  it('rechecks a late automatic cache publication even after the producer has completed', async () => {
+  it('retains an accepted automatic artifact during delayed cache publication after a safety stop', async () => {
     mockPatientId = 'smart-patient-1'
     const store = createAiResultStore<{ headline: string }>()
     const run = jest.fn(async () => ({ headline: 'completed automatic result' }))
@@ -189,10 +189,12 @@ describe('useAiSlotGeneration demo snapshot', () => {
       requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
     }))
     await waitFor(() => expect(result.current.result?.headline).toBe('completed automatic result'))
+    await waitFor(() => expect(result.current.isRunning).toBe(false))
+    await act(async () => { await Promise.resolve() })
     const canPublish = jest.mocked(saveEncryptedCache).mock.calls[0][2]!
     expect(canPublish()).toBe(true)
     act(() => stopProgressiveImport('background-run', 'privacy-stale'))
-    expect(canPublish()).toBe(false)
+    expect(canPublish()).toBe(true)
   })
 
   it('blocks an unavailable selected model only when the feature opts out of fallback', async () => {
