@@ -1,12 +1,13 @@
 import { classifyReport, reportNarrative, extractEcgFindings, isMedicationBeingTaken, medicationAtcCode, medicationDisplayName, medicationSupplyEndDate } from '@voho0000/personalized-care-fhir'
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
+import { doacSelects, type DoacSelectKey } from './doac-clinical-autofill'
 
 /**
  * Yes/no and graded answers the record (or the CDSS visit) can give a
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha'
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -233,5 +234,6 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...(copd ? { copd } : {}),
     ...(betaBlocker ? { betaBlocker } : {}),
     ...(aceiArb ? { aceiArb } : {}),
+    ...doacSelects(medications, now),
   }
 }

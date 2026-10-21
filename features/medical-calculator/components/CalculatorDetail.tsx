@@ -2,6 +2,7 @@
 
 import { ScoreInterpretation } from './ScoreInterpretation'
 import { HpaRiskResults } from './HpaRiskResults'
+import { DoacDoseResults } from './DoacDoseResults'
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -193,6 +194,16 @@ export function CalculatorDetail({
     { key: 'history', title: zh ? '病史與吸菸' : 'History and smoking', hint: zh ? '病史請依曾經確診的情形填寫，不以這次血壓或血糖判定；不確定可先留空。' : 'Use previously diagnosed conditions, not today’s BP or glucose. Leave unknown history unanswered.', keys: ['diabetes', 'hbp', 'smoke', 'prior_cvd'] },
     { key: 'labs', title: zh ? '血壓與檢驗' : 'Blood pressure and labs', hint: zh ? '核對數值、單位與來源日期；血糖請使用空腹檢驗。' : 'Check values, units and source dates; use a fasting glucose result.', keys: ['sbp', 'glu', 'chol', 'tg', 'ldlc', 'hdlc'] },
   ].map((group) => ({ ...group, inputs: group.keys.flatMap((key) => calc.inputs.filter((input) => input.key === key)) }))
+    : calc.inputGroups ? [
+      ...calc.inputGroups.map((group) => ({
+        key: group.key,
+        title: tr(locale, group.title),
+        hint: group.hint ? tr(locale, group.hint) : '',
+        inputs: group.keys.flatMap((key) => calc.inputs.filter((input) => input.key === key)),
+      })),
+      // An input no group names still shows, last.
+      { key: 'other', title: '', hint: '', inputs: calc.inputs.filter((input) => !calc.inputGroups!.some((group) => group.keys.includes(input.key))) },
+    ].filter((group) => group.inputs.length)
     : [{ key: 'all', title: '', hint: '', inputs: calc.inputs }]
 
   // Jump to the source report in the left panel (reuses the shared nav store
@@ -327,6 +338,8 @@ export function CalculatorDetail({
         <div ref={hpaResultRef} tabIndex={-1}>
           <HpaRiskResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
         </div>
+      ) : calc.id === 'doac-dose-nvaf' ? (
+        <DoacDoseResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
       ) : (
       <div className={`relative rounded-lg border border-border px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : ""}`}>
         {result && (

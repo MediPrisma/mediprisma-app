@@ -179,6 +179,8 @@ export interface CalculatorDef {
    *  more than `windowDays`, the detail view warns that the values may be from
    *  different reports (e.g. FENa mixing today's urine with last month's serum). */
   coherence?: { keys: string[]; windowDays: number }
+  /** Inputs shown under headings, in this order; inputs not named go last. */
+  inputGroups?: { key: string; title: L; hint?: L; keys: string[] }[]
 }
 
 export const CATEGORY_LABELS: Record<CalcCategory, L> = {
