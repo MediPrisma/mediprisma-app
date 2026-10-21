@@ -1138,24 +1138,50 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
       ? { ...payload, incomplete: true, canConcludeAbsence: false, clinicalRecordVariantExclusions: outboundClinicalVariantExclusions(exclusions), sourceRecordUncertainty: formatClinicalVariantExclusions({ clinicalRecordVariantExclusions: exclusions }) } : payload
     return scrubPii(annotated, buildPatientTextLiterals(data.patient)) as T
   }
-  const scrubForDomains = (resourceTypes: readonly string[]) => <T,>(payload: T): T => scrub(payload, resourceTypes)
-  const scrubForQueries = (resourceTypes: readonly string[], keys: ClinicalDataQueryKey[], noun: string) => <T,>(payload: T): T => {
+  const DOMAIN_QUERY_KEYS: Partial<Record<string, ClinicalDataQueryKey[]>> = {
+    Condition: ['Condition'],
+    MedicationRequest: ['MedicationRequest'],
+    MedicationStatement: ['MedicationStatement'],
+    Basic: ['Basic'],
+    AllergyIntolerance: ['AllergyIntolerance'],
+    Observation: ['Observation', 'Observation:vital-signs'],
+    DiagnosticReport: ['DiagnosticReport'],
+    ImagingStudy: ['ImagingStudy'],
+    Procedure: ['Procedure'],
+    Encounter: ['Encounter'],
+    DocumentReference: ['DocumentReference'],
+    Composition: ['Composition'],
+    Immunization: ['Immunization'],
+    Consent: ['Consent'],
+    Device: ['Device'],
+    CarePlan: ['CarePlan'],
+  }
+  const scrubForDomains = (resourceTypes: readonly string[], explicitKeys?: ClinicalDataQueryKey[]) => <T,>(payload: T): T => {
     const collection = getData().collection
-    const unavailable = unavailableQueryResult(collection ?? null, keys, noun)
-    if (!unavailable) return scrub(payload, resourceTypes)
+    const keys = explicitKeys ?? [...new Set(resourceTypes.flatMap(type => DOMAIN_QUERY_KEYS[type] ?? []))]
+    const queryIssues: SafeQueryIssue[] = collection
+      ? queryIssuesFor(collection, keys)
+      : keys.map(resourceType => ({ resourceType, state: 'not-loaded' as ClinicalDataQueryStatus['state'] }))
+    if (queryIssues.length === 0) return scrub(payload, resourceTypes)
 
     const result = payload as any
-    if (typeof result?.count === 'number' && result.count > 0) {
-      return scrub({
+    const count = typeof result?.count === 'number'
+      ? result.count
+      : Array.isArray(result?.data) ? result.data.length : undefined
+    const incomplete = result && typeof result === 'object' && !Array.isArray(result)
+      ? {
         ...result,
+        ...(count === undefined ? {} : { count }),
+        ...(count === 0 && result.success === true ? { success: false } : {}),
         incomplete: true,
         canConcludeAbsence: false,
-        queryIssues: unavailable.queryIssues,
-        summary: `${result.summary || ''}（相關 FHIR 查詢不完整）`.trim(),
-      }, resourceTypes) as T
-    }
-    return scrub(unavailable, resourceTypes) as T
+        queryIssues,
+        summary: `${result.summary || '無法確認是否有相關臨床資料'}（相關 FHIR 查詢不完整）`,
+      }
+      : { success: false, count: 0, incomplete: true, canConcludeAbsence: false, queryIssues, data: [] }
+    return scrub(incomplete, resourceTypes) as T
   }
+  const scrubForQueries = (resourceTypes: readonly string[], keys: ClinicalDataQueryKey[], _noun: string) => <T,>(payload: T): T => scrubForDomains(resourceTypes, keys)(payload)
 
   // A failed name/category/date match is not an empty chart. Give the model
   // actual values within the requested date/abnormality scope to discover the source's names without another
