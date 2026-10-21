@@ -1,6 +1,6 @@
 import type { DiagnosticReport as Report } from '../types/fhir.types'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
-import { reportNaturalGroupingKey } from './report-identity'
+import { getImagingCopySource as sourceOf, reportNaturalGroupingKey } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
 import {
@@ -35,12 +35,6 @@ export function normalizeImagingReportCopy(value: string): string {
   // Keep token boundaries: list item "1. 2 cm" must never equal "1.2 cm".
   // Missing spaces within words are uncertain content, not an automatic match.
   return text.toLowerCase().replace(/\s+/g, ' ').trim()
-}
-
-function sourceOf(report: Report): Source | undefined {
-  if (report.meta?.tag?.some(tag => tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')) return 'hospital'
-  if (/^https:\/\/medcloud2\.nhi\.gov\.tw(?:\/|$)/.test(report.meta?.source ?? '')) return 'cloud'
-  return undefined
 }
 
 /** This adapter's explicit source tag identifies Taipei VGH. An old hospital
@@ -174,17 +168,18 @@ function examQualifiers(report: Report): string[] | null {
  * retains its existing strict boundary; cross-source copies get an additional
  * one-to-one check, so two identical same-day exams cannot be paired by luck. */
 export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Report, string> {
+  const originalKeys = new Map<Report, string>()
   try {
-    return calculateReportDisplayGroupingKeys(reports)
+    return calculateReportDisplayGroupingKeys(reports, originalKeys)
   } catch {
     // Imported FHIR may contain malformed nested elements. Grouping is an
     // optional display projection: uncertainty must keep reports separate,
     // never prevent the remaining source records from being displayed.
-    return new Map()
+    return originalKeys
   }
 }
 
-function calculateReportDisplayGroupingKeys(reports: readonly Report[]): Map<Report, string> {
+function calculateReportDisplayGroupingKeys(reports: readonly Report[], originalKeys: Map<Report, string>): Map<Report, string> {
   const keys = new Map<Report, string>()
   const sharedKeys = qualifyingSharedReportKeys([...reports])
   for (const report of reports) {
@@ -192,7 +187,7 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[]): Map<Rep
     const key = sharedReportGroupingKey(report)
     if (key && sharedKeys.has(key)) keys.set(report, key)
   }
-  const originalKeys = new Map(keys)
+  for (const [report, key] of keys) originalKeys.set(report, key)
   const naturalGroups = new Map<string, Report[]>()
   for (const report of reports) {
     if (!report) continue

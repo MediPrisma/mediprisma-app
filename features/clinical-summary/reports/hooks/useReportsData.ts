@@ -42,6 +42,7 @@ import {
   reportSource,
   sharedEchoReportFamilyKey,
   sharedReportNarrative,
+  sharedReportSourceIdentity,
   sharedReportTitle,
   type SharedReportSource,
 } from '@/src/shared/utils/shared-report-grouping'
@@ -212,12 +213,7 @@ export function buildReportsData(
     const pushAsOwnGroup = (dr: DiagnosticReport) => {
       // Suffix with DR id so each split group gets a distinct key — keeps
       // the map insertion order stable and avoids accidental re-merging.
-      const text = (getCodeableConceptText(dr.code) || '').trim()
-      const date = (getDrDate(dr) || '').slice(0, 10)
-      const inst = (getDrInstitution(dr) || '').trim()
-      const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
-      const sourceProvenance = isNhiMedicloudReport(dr) ? 'nhi-medicloud' : ''
-      const key = `${text}|${date}|${inst}|${sourceProgram}|${sourceProvenance}|${dr.id || `split-${splitGroupIndex++}`}`
+      const key = `${reportNaturalGroupingKey(dr)}|${dr.id || `split-${splitGroupIndex++}`}`
       groups.set(key, [dr])
       diagnosticReportIdsByKey.set(key, dr.id ? [dr.id] : [])
       viewerReportsByKey.set(key, [dr])
@@ -228,13 +224,20 @@ export function buildReportsData(
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
     const sourceGroupingKeys = groupingKeys ?? reportDisplayGroupingKeys(diagnosticReports)
-    const visibleMembers = new Map<string, number>()
+    const visibleMembers = new Map<string, { count: number; identities: Set<string> }>()
     for (const report of diagnosticReports) {
       const key = sourceGroupingKeys.get(report)
-      if (key) visibleMembers.set(key, (visibleMembers.get(key) ?? 0) + 1)
+      if (key) {
+        const members = visibleMembers.get(key) ?? { count: 0, identities: new Set<string>() }
+        members.count++
+        members.identities.add(sharedReportSourceIdentity(report))
+        visibleMembers.set(key, members)
+      }
     }
     const displayGroupingKeys = new Map([...sourceGroupingKeys]
-      .filter(([, key]) => (visibleMembers.get(key) ?? 0) > 1))
+      .filter(([, key]) => key.startsWith('cross-source|')
+        ? (visibleMembers.get(key)?.count ?? 0) > 1
+        : (visibleMembers.get(key)?.identities.size ?? 0) > 1))
     const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return

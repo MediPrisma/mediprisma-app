@@ -2,6 +2,12 @@ import { getNhiMedicloudOriginalInstitution, isNhiAuthorityDisplay, isNhiMediclo
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
 
+export function getImagingCopySource(report: any): 'hospital' | 'cloud' | undefined {
+  if (report.meta?.tag?.some((tag: any) => tag?.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')) return 'hospital'
+  if (/^https:\/\/medcloud2\.nhi\.gov\.tw(?:\/|$)/.test(report.meta?.source ?? '')) return 'cloud'
+  return undefined
+}
+
 export function getReportDate(report: any): string | undefined {
   // This change adds period support for imaging only. Preserve the existing
   // issued-date fallback for unrelated laboratory/pathology report grouping.
@@ -12,7 +18,7 @@ export function getReportDate(report: any): string | undefined {
   // Grouping and calendar-window consumers must agree on the examination day.
   // Keep the instant, expressed in the Taiwan source timezone, without changing
   // the original FHIR resource or the date projection of other report groups.
-  if (imaging && typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !value.endsWith('+08:00')) {
+  if (imaging && getImagingCopySource(report) && typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !value.endsWith('+08:00')) {
     const instant = Date.parse(value)
     if (Number.isFinite(instant)) return new Date(instant + 8 * 60 * 60 * 1000).toISOString().replace(/Z$/, '+08:00')
   }

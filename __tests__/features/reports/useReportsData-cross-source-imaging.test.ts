@@ -60,6 +60,35 @@ describe('cross-source imaging reports', () => {
     expect(rows[0].effectiveDate?.slice(0, 10)).toBe('2026-06-25')
   })
 
+  it('preserves the source timezone of unrelated imaging reports', () => {
+    const report = { ...pair()[0], meta: {}, effectiveDateTime: '2026-06-24T20:00:00-04:00' }
+    expect(getReportDate(report)).toBe(report.effectiveDateTime)
+  })
+
+  it('retains existing shared pathology groups when a different imaging record is malformed', () => {
+    const pathology = pair().map((report, index) => ({ ...report, code: { text: `Pathology ${index}` },
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'PAT' }] }],
+      encounter: { reference: 'Encounter/pathology' }, performer: [{ display: 'Example hospital' }], conclusion: BODY,
+    }))
+    const invalid = { ...pair()[0], identifier: [null] }
+    const keys = reportDisplayGroupingKeys([...pathology, invalid, pair()[1]])
+    expect(keys.has(pathology[0])).toBe(true)
+    expect(keys.get(pathology[0])).toBe(keys.get(pathology[1]))
+    expect(keys.has(invalid)).toBe(false)
+  })
+
+  it('does not label duplicate copies of one visible procedure as a shared-procedure group', () => {
+    const reports = pair().map((report, index) => ({ ...report, code: { text: `Pathology ${index}` },
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'PAT' }] }],
+      encounter: { reference: 'Encounter/pathology' }, performer: [{ display: 'Example hospital' }], conclusion: BODY,
+    }))
+    const duplicate = { ...reports[0], id: 'duplicate-pathology' }
+    const keys = reportDisplayGroupingKeys([...reports, duplicate])
+    const rows = buildReportsData([reports[0], duplicate], [], 'standardized', 'medical', 'en', keys).reportRows
+    expect(rows).toHaveLength(1)
+    expect(rows[0].sharedReportSources).toBeUndefined()
+  })
+
   it('keeps a filtered encounter and AI subset ambiguous when another source candidate exists', () => {
     const reports = pair().map(report => ({ ...report, encounter: { reference: 'Encounter/a' }, _encounterInferred: true }))
     const other = { ...reports[0], id: 'repeated-hospital', encounter: { reference: 'Encounter/b' } }
