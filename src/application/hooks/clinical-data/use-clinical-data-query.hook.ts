@@ -1,3 +1,4 @@
+import { attachReportObservations } from '@/src/core/services/clinical-report-membership'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 /**
  * Clinical Data Query Hook (React Query)
@@ -27,7 +28,6 @@ import type {
   ClinicalDataQueryKey,
   ClinicalDataQueryStatus,
   ClinicalSourceMetadata,
-  DiagnosticReportEntity,
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import {
@@ -64,49 +64,6 @@ const NOTHING_READY = Object.freeze(
     ['vitalSigns', false],
   ]) as Record<ClinicalResourceReadyKey, boolean>,
 )
-
-/**
- * Re-attach member observations to DiagnosticReports whose `_include` came back
- * empty (the bridge may not support it). fetchAllClinicalData used to do this
- * after its Promise.all; with one query per type the reports and their members
- * land separately, so the join moved here and reports enrich as soon as the
- * Observation query settles.
- *
- * Returns the input array unchanged when nothing needed enriching, so the
- * combined snapshot stays referentially stable.
- */
-function attachReportObservations(
-  reports: DiagnosticReportEntity[],
-  observations: ObservationEntity[],
-): DiagnosticReportEntity[] {
-  if (reports.length === 0 || observations.length === 0) return reports
-
-  const byId = new Map<string, ObservationEntity[]>()
-  for (const observation of observations) {
-    const key = 'Observation/' + observation.id
-    byId.set(key, [...(byId.get(key) ?? []), observation])
-  }
-  let enrichedAny = false
-
-  const next = reports.map((report) => {
-    const existing = (report as any)._observations
-    if (Array.isArray(existing) && existing.length > 0) return report
-    if (!Array.isArray(report.result) || report.result.length === 0) return report
-
-    const members = (report.result as any[])
-      .map((reference: any) => {
-        const matches = byId.get(reference.reference)
-        return matches?.length === 1 ? matches[0] : undefined
-      })
-      .filter((observation): observation is ObservationEntity => observation !== undefined)
-
-    if (members.length === 0) return report
-    enrichedAny = true
-    return { ...report, _observations: members }
-  })
-
-  return enrichedAny ? next : reports
-}
 
 /** Entity arrays keyed by unit id — same element types the collection uses, so
  * consumers keep their precise entity typing. */
@@ -185,6 +142,7 @@ function buildClinicalResults(
   entities.diagnosticReports = attachReportObservations(
     entities.diagnosticReports,
     entities.observations,
+    clinicalSource,
   )
 
   return {

@@ -22,6 +22,23 @@ import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-do
 import { floorStartDay, prescribingAnalyteKey } from '@/src/core/utils/first-visit-floors'
 import { AI_REPORT_GROUPS, reportModalityClass } from '@/src/core/utils/report-narrative.utils'
 
+/** Remove local capture joins from outbound AI data without mutating clinical rows. */
+export function stripClinicalCaptureMetadata<T>(value: T): T {
+  if (!value || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    const next = value.map(stripClinicalCaptureMetadata)
+    return (next.every((item, index) => item === value[index]) ? value : next) as T
+  }
+  const next: Record<string, unknown> = {}
+  let changed = false
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'clinicalSourceNodeKey' || key === 'clinicalSource') { changed = true; continue }
+    next[key] = stripClinicalCaptureMetadata(child)
+    if (next[key] !== child) changed = true
+  }
+  return (changed ? next : value) as T
+}
+
 const LAB_FALLBACK_SAMPLING_DAYS = 3
 const NHI_VIEWER_REQUEST_EXTENSION_URL =
   'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-nhi-viewer-request'
@@ -410,7 +427,7 @@ export function scopeClinicalDataForAi(
   const immunizationWindow = makeTimeRangeTest(filters.immunizationTimeRange, input)
   const documentIds = new Set(includedDocumentIds)
 
-  return {
+  return stripClinicalCaptureMetadata({
     encounters,
     medications,
     procedures,
@@ -436,5 +453,5 @@ export function scopeClinicalDataForAi(
     compositions: selection.documents ? (input.compositions ?? []).filter((document) => documentIds.has(document.id)) : [],
     documentReferences: selection.documents ? (input.documentReferences ?? []).filter((document) => documentIds.has(document.id)) : [],
     resourceQueryStatus: input.resourceQueryStatus,
-  }
+  })
 }

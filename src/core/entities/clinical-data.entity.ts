@@ -388,6 +388,8 @@ export interface AllergyEntity {
 }
 
 export interface ObservationEntity {
+  /** Opaque identity in the shared source graph; survives query structural sharing. */
+  clinicalSourceNodeKey?: string
   basedOn?: Array<{ reference?: string; display?: string }>
   extension?: ClinicalFhirExtension[]
   method?: { text?: string; coding?: Array<{ system?: string; code?: string; display?: string }> }
@@ -542,6 +544,8 @@ export interface ObservationEntity {
 }
 
 export interface DiagnosticReportEntity {
+  /** Opaque identity in the shared source graph; survives query structural sharing. */
+  clinicalSourceNodeKey?: string
   basedOn?: Array<{ reference?: string; display?: string }>
   id: string
   meta?: {

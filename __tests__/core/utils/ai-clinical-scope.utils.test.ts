@@ -246,3 +246,13 @@ describe('scopeClinicalDataForAi', () => {
     expect(imagingInput.diagnosticReports[0].presentedForm[0].url).toBe(sensitiveUrl)
   })
 })
+
+it('strips local source join keys from selected AI rows and report members', () => {
+  const observation = { id: 'result', status: 'final', clinicalSourceNodeKey: 'local-capture', code: { text: 'Synthetic test' }, valueQuantity: { value: 7 }, effectiveDateTime: '2026-07-02', category: [{ coding: [{ code: 'laboratory' }] }] }
+  const data: any = { observations: [observation], diagnosticReports: [{ id: 'report', clinicalSourceNodeKey: 'local-report', status: 'final', code: { text: 'Synthetic report' }, effectiveDateTime: '2026-07-02', category: [{ coding: [{ code: 'LAB' }] }], result: [{ reference: 'Observation/result' }], _observations: [observation] }] }
+  const scoped = scopeClinicalDataForAi(data, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [], NOW)
+  expect(scoped.diagnosticReports).toHaveLength(1)
+  expect(JSON.stringify(scoped)).not.toContain('clinicalSourceNodeKey')
+  expect(scoped.diagnosticReports![0]._observations![0].valueQuantity?.value).toBe(7)
+  expect(data.diagnosticReports[0].clinicalSourceNodeKey).toBe('local-report')
+})

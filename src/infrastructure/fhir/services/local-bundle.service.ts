@@ -1404,6 +1404,7 @@ export const LocalBundleService = {
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
     }, clinicalSource)
     const sourceKeyByResource = new WeakMap<object, string>(entries.map((resource, index) => [resource, projectedNodes[index].key]))
+    const sourceKeyByMappedId = new Map(entries.map((resource, index) => [resource.resourceType + '/' + resource.id, projectedNodes[index].key]))
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
     const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(edge => [edge.origin.key + '|' + edge.path, edge]))
     if (!entries.length) return null
@@ -1590,11 +1591,11 @@ export const LocalBundleService = {
     const specialMaterialsByProcedure = groupSpecialMaterialsByProcedure(byType('Basic'))
 
     // Build observation map for DiagnosticReport expansion
-    const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
+    const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r), clinicalSourceNodeKey: sourceKeyByMappedId.get('Observation/' + r.id) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
     const processedReports = attachEncounterRefsByDate(reports, encounterDateMap).map((r: any) =>
-      FhirMapper.toDiagnosticReport(r, allObs)
+      ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByMappedId.get('DiagnosticReport/' + r.id) })
     )
 
     // Separate vital signs from other observations
