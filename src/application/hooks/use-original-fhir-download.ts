@@ -7,6 +7,7 @@ import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 export function useOriginalFhirDownload() {
+  const [isLocal, setIsLocal] = useState(false)
   const [available, setAvailable] = useState(false)
   const [checking, setChecking] = useState(true)
   const [downloading, setDownloading] = useState(false)
@@ -20,10 +21,14 @@ export function useOriginalFhirDownload() {
       setAvailable(false)
       setFailed(false)
       try {
-        const exists = await serializeLocalBundleMutation(async () => (
-          shouldUseLocalBundle() && await LocalBundleService.hasOriginalFhir()
-        ))
-        if (current === revision) setAvailable(exists)
+        const state = await serializeLocalBundleMutation(async () => {
+          const local = shouldUseLocalBundle()
+          return { local, exists: local && await LocalBundleService.hasOriginalFhir() }
+        })
+        if (current === revision) {
+          setIsLocal(state.local)
+          setAvailable(state.exists)
+        }
       } catch {
         if (current === revision) setFailed(true)
       } finally {
@@ -70,5 +75,5 @@ export function useOriginalFhirDownload() {
     }
   }
 
-  return { available, checking, downloading, failed, download }
+  return { isLocal, available, checking, downloading, failed, download }
 }

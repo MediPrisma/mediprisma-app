@@ -8,7 +8,8 @@ test('original FHIR survives processing, reload and repeated local import', asyn
   // Include material IPS does not export and an inline image the app externalizes.
   bundle.extension = [{ url: 'https://example.test/original', valueString: 'keep 原始內容' }]
   bundle.entry.push({ fullUrl: 'urn:uuid:original-binary', resource: {
-    resourceType: 'Binary', id: 'original-binary', contentType: 'text/plain', data: 'b3JpZ2luYWw=',
+    resourceType: 'Binary', id: 'original-binary', contentType: 'application/octet-stream',
+    data: Buffer.alloc(4 * 1024 * 1024 + 257, 0x61).toString('base64'),
   } })
   bundle.entry.push({ resource: {
     resourceType: 'DiagnosticReport', id: 'original-image', status: 'final',
@@ -91,7 +92,7 @@ test('original FHIR survives processing, reload and repeated local import', asyn
   await page.addInitScript(() => {
     const put = IDBObjectStore.prototype.put
     IDBObjectStore.prototype.put = function (value, key) {
-      if (this.name === 'images' && String(key).endsWith(':original-fhir')) {
+      if (this.name === 'images' && String(key).startsWith('original-fhir:') && String(key).endsWith(':1')) {
         throw new DOMException('Synthetic raw backup quota failure', 'QuotaExceededError')
       }
       return put.call(this, value, key)

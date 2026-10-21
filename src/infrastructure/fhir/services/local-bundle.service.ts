@@ -91,6 +91,8 @@ const LEGACY_BUNDLE_KEY = 'current'
 // the bundle/entities stay small and the bytes are fetched on demand (when the
 // user opens the viewer). See ReportImageDialog.
 const IMG_STORE = 'images'
+const ORIGINAL_FHIR_CHUNK_BYTES = 4 * 1024 * 1024
+const originalFhirPrefix = (importId: string) => `original-fhir:${importId}:`
 
 // Session cache: avoids re-reading IndexedDB on every query. Module-level so it
 // is shared across all hook instances in the same tab.
@@ -308,8 +310,9 @@ async function idbDeleteImages(imageIds: string[]): Promise<void> {
 
 /** Delete only image records owned by one import. Cursor deletion avoids
  * clearing another MediPrisma tab's concurrently-open patient. */
-async function idbDeleteImagesForImport(importId: string): Promise<void> {
+async function idbDeleteImagesForImport(importId: string, includeOriginal = false): Promise<void> {
   const prefix = `${importId}:`
+  const originalPrefix = originalFhirPrefix(importId)
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
@@ -318,7 +321,9 @@ async function idbDeleteImagesForImport(importId: string): Promise<void> {
       req.onsuccess = () => {
         const cursor = req.result
         if (!cursor) return
-        if (typeof cursor.key === 'string' && cursor.key.startsWith(prefix)) {
+        if (typeof cursor.key === 'string' && (
+          cursor.key.startsWith(prefix) || (includeOriginal && cursor.key.startsWith(originalPrefix))
+        )) {
           tx.objectStore(IMG_STORE).delete(cursor.key)
         }
         cursor.continue()
@@ -385,6 +390,44 @@ async function idbGetImage(id: string): Promise<unknown> {
   } finally {
     db.close()
   }
+}
+
+/** Keep peak encryption memory bounded even for large imaging exports. Publish
+ * the encrypted manifest last so a partial write is never offered as complete. */
+async function storeOriginalFhir(importId: string, source: Blob, key: CryptoKey): Promise<void> {
+  const prefix = originalFhirPrefix(importId)
+  const chunks = Math.ceil(source.size / ORIGINAL_FHIR_CHUNK_BYTES)
+  for (let i = 0; i < chunks; i++) {
+    const bytes = await source.slice(i * ORIGINAL_FHIR_CHUNK_BYTES, (i + 1) * ORIGINAL_FHIR_CHUNK_BYTES).arrayBuffer()
+    await idbPutImages([{ id: `${prefix}${i}`, record: await encryptBytes(key, bytes) }])
+  }
+  await idbPutImages([{
+    id: `${prefix}manifest`,
+    record: await encryptJson(key, { chunks, size: source.size }),
+  }])
+}
+
+async function readOriginalFhir(importId: string): Promise<Blob | null> {
+  const prefix = originalFhirPrefix(importId)
+  const stored = await idbGetImage(`${prefix}manifest`)
+  if (!stored) return null
+  const key = await getSessionBundleKey()
+  if (!key || !isEncryptedRecord(stored)) throw new Error('Original FHIR is unavailable')
+  const manifest = await decryptJson<{ chunks: number; size: number }>(key, stored)
+  if (!Number.isSafeInteger(manifest.size) || manifest.size < 0
+    || manifest.chunks !== Math.ceil(manifest.size / ORIGINAL_FHIR_CHUNK_BYTES)) {
+    throw new Error('Invalid original FHIR manifest')
+  }
+  const parts: Blob[] = []
+  for (let i = 0; i < manifest.chunks; i++) {
+    const chunk = await idbGetImage(`${prefix}${i}`)
+    if (!isEncryptedRecord(chunk)) throw new Error('Original FHIR chunk is unavailable')
+    // Blob parts keep already-decrypted chunks off the contiguous JS heap.
+    parts.push(new Blob([await decryptBytes(key, chunk)]))
+  }
+  const result = new Blob(parts, { type: 'application/fhir+json' })
+  if (result.size !== manifest.size) throw new Error('Incomplete original FHIR')
+  return result
 }
 
 // Pure (no IndexedDB): walk a bundle's DiagnosticReports and move every inline
@@ -926,12 +969,13 @@ export const LocalBundleService = {
   async hasOriginalFhir(): Promise<boolean> {
     if (!await this.load()) return false
     if (memOriginalFhir) return true
-    if (!memBundleImportId || typeof indexedDB === 'undefined') return false
+    const importId = memBundleImportId
+    if (!importId || typeof indexedDB === 'undefined') return false
     const db = await openDb()
     try {
       return await new Promise<boolean>((resolve, reject) => {
         const request = db.transaction(IMG_STORE, 'readonly').objectStore(IMG_STORE)
-          .count(`${memBundleImportId}:original-fhir`)
+          .count(`${originalFhirPrefix(importId)}manifest`)
         request.onsuccess = () => resolve(request.result > 0)
         request.onerror = () => reject(request.error)
       })
@@ -944,7 +988,7 @@ export const LocalBundleService = {
   async loadOriginalFhir(): Promise<Blob | null> {
     if (!await this.load()) return null
     if (memOriginalFhir) return memOriginalFhir
-    return memBundleImportId ? this.getImage(`${memBundleImportId}:original-fhir`) : null
+    return memBundleImportId ? readOriginalFhir(memBundleImportId) : null
   },
 
   // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
@@ -1016,10 +1060,7 @@ export const LocalBundleService = {
         // Profile/migration writes never copy the source. A quota failure here
         // must not remove the already-saved chart or extracted images.
         try {
-          await idbPutImages([{
-            id: `${importId}:original-fhir`,
-            record: await encryptBytes(key, await options.originalFhir.arrayBuffer(), 'application/fhir+json'),
-          }])
+          await storeOriginalFhir(importId, options.originalFhir, key)
           memOriginalFhir = null
         } catch {
           // The source remains downloadable from its Blob for this session.
@@ -1069,7 +1110,7 @@ export const LocalBundleService = {
       // Best-effort: the marker is already gone, so hasData() is false regardless.
     }
     try {
-      if (activeImportId) await idbDeleteImagesForImport(activeImportId)
+      if (activeImportId) await idbDeleteImagesForImport(activeImportId, true)
       await idbDeleteImages(legacyImageRefs)
     } catch {
       // Best-effort image cleanup.

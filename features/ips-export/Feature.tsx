@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -94,26 +94,22 @@ export default function IpsExportFeature() {
     [curatedData, patient, labels, includePatientIdentifiers],
   )
 
-  // Loading clinical data
+  // Keep the download tab available independently of IPS assembly.
+  let exportStatus: ReactNode = null
   if (isLoading) {
-    return (
-      <>
-      <OriginalFhirDownload />
+    exportStatus = (
       <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
         {x.loading}
       </div>
-      </>
     )
   }
 
   // Clinical data failed to load. A transient FHIR/network failure must not
   // strand the whole export behind a message — offer the retry here instead of
   // making the user leave and re-open the tab.
-  if (error) {
-    return (
-      <>
-      <OriginalFhirDownload />
+  else if (error) {
+    exportStatus = (
       <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.clinical}`}>
         <CardContent className="text-sm">
           <div className="mb-1 font-medium text-destructive">{x.errorTitle}</div>
@@ -130,22 +126,18 @@ export default function IpsExportFeature() {
           </Button>
         </CardContent>
       </Card>
-      </>
     )
   }
 
   // No patient / no data loaded yet
-  if (!hasPatient || !bundle) {
-    return (
-      <>
-      <OriginalFhirDownload />
+  else if (!hasPatient || !bundle) {
+    exportStatus = (
       <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.clinical}`}>
         <CardContent className="py-4 text-center text-sm text-muted-foreground">
           <FileOutput className="mx-auto mb-2 h-6 w-6 opacity-60" />
           {x.noData}
         </CardContent>
       </Card>
-      </>
     )
   }
 
@@ -173,17 +165,17 @@ export default function IpsExportFeature() {
 
         {showEmrTab && (
           <TabsContent value="emr">
-            <EmrHandoffPanel />
+            {exportStatus ?? <EmrHandoffPanel />}
           </TabsContent>
         )}
 
         <TabsContent value="ai">
-          <AiHandoffPanel />
+          {exportStatus ?? <AiHandoffPanel />}
         </TabsContent>
 
         <TabsContent value="institution">
           <OriginalFhirDownload />
-          <IpsExportPreview
+          {exportStatus ?? (bundle && <IpsExportPreview
             bundle={bundle}
             markdown={markdown}
             validation={validation}
@@ -198,11 +190,11 @@ export default function IpsExportFeature() {
             onDownloadMarkdown={() => downloadMarkdown(markdown)}
             onCopyJson={() => copyJson(bundle)}
             onCopyMarkdown={() => copyMarkdown(markdown)}
-          />
+          />)}
         </TabsContent>
       </Tabs>
 
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+      {bundle && <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
         <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
           <SheetHeader className="border-b bg-muted/20 px-4 py-3 pr-10 sm:px-5">
             <SheetTitle className="flex items-center gap-2 text-base">
@@ -282,7 +274,7 @@ export default function IpsExportFeature() {
             </div>
           </ScrollArea>
         </SheetContent>
-      </Sheet>
+      </Sheet>}
     </div>
   )
 }

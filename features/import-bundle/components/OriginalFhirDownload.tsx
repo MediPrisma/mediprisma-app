@@ -8,7 +8,9 @@ import { useOriginalFhirDownload } from '@/src/application/hooks/use-original-fh
 export function OriginalFhirDownload() {
   const { t } = useLanguage()
   const x = t.ipsExport
-  const { available, checking, downloading, failed, download } = useOriginalFhirDownload()
+  const { isLocal, available, checking, downloading, failed, download } = useOriginalFhirDownload()
+
+  if (!isLocal) return null
 
   return (
     <section aria-label={x.originalFhirTitle} className="mb-6 space-y-3 border-b pb-5">
