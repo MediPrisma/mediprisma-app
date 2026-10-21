@@ -51,6 +51,9 @@ function sourceOf(report: Report): Source | undefined {
  * person's display as a hospital, or infer the hospital from report contents. */
 export function imagingCopyInstitution(report: Report): string | undefined {
   const performers = [...(report.performer ?? []), ...(report._observations ?? []).flatMap(obs => obs.performer ?? [])]
+  // Unresolved URNs/contained references do not establish whether the actor
+  // is a person or an institution. Never silently ignore a possible hospital.
+  if (performers.some(p => p.reference && !/(?:^|\/)(?:Organization|Practitioner|PractitionerRole)\//.test(p.reference))) return undefined
   const organizations = performers.filter(p => (!p.reference || /(?:^|\/)Organization\//.test(p.reference))
     && !isNhiAuthorityDisplay(p.display ?? ''))
   // Only the known legacy DOC physician label can be ignored. An unknown

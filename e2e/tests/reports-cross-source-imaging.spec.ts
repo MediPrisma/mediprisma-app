@@ -50,6 +50,11 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
   await page.getByPlaceholder(/搜尋/).fill(marker)
   const rows = page.locator('[data-tour="report-tour-row"]').filter({ visible: true })
   await expect(rows).toHaveCount(before ? 8 : 4)
+  // Capture the same explicit state on both revisions, independently of the
+  // app's responsive/default expansion preferences.
+  for (const header of await rows.locator('[role="button"][aria-expanded]').all()) {
+    if (await header.getAttribute('aria-expanded') === 'true') await header.press('Enter')
+  }
   const output = process.env.IMAGING_EVIDENCE_DIR || testInfo.outputDir
   await fs.mkdir(output, { recursive: true })
   for (const width of [1440, 1024, 768, 430, 390, 320]) {

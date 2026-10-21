@@ -288,6 +288,8 @@ describe('cross-source imaging reports', () => {
     [{ display: '高雄榮民總醫院' }],
     [{ display: '臺北榮總' }, { display: '高雄榮民總醫院' }],
     [{ reference: 'Organization/unknown' }],
+    [{ reference: 'urn:uuid:other-hospital', display: '高雄榮民總醫院' }],
+    [{ reference: '#org', display: '高雄榮民總醫院' }],
     [{ display: 'Unknown institution' }],
   ])('rejects contradictory or unknown hospital-side facility evidence: %j', (...performer) => {
     const reports = pair()
