@@ -12,26 +12,29 @@ function collection(code = '2823-3') {
 }
 it('does not resurrect an old potassium value through actual Local, CDSS, autofill or AI inputs', () => {
  const data = collection()
- expect(data.observations).toHaveLength(4)
+ expect(data.observations).toHaveLength(3)
+ const value=data.observations.find(row=>row.effectiveDateTime==='2026-10-01')!.valueQuantity!.value
  const selected = excludeUnresolvedDecisionVariants(data)
- expect(selected.observations.map(row => row.valueQuantity?.value)).toEqual([140])
- expect(selected.clinicalRecordVariantExclusions).toHaveLength(2)
- expect(JSON.stringify(selected.clinicalRecordVariantExclusions)).not.toMatch(/valueQuantity/)
- expect(formatClinicalVariantExclusions(selected)).toMatch(/2823-3.*2026-10-01/)
+ expect(selected.observations).toHaveLength(3)
+ expect(selected.clinicalRecordVariantExclusions).toBeUndefined()
+ expect(formatClinicalVariantExclusions(selected)).toBe('')
  const profile = createHospitalAwareCdssPatientProfile({ ...data, patient: { id: 'synthetic', age: 70, gender: 'male' } })
- expect(JSON.stringify(profile.facts)).not.toContain('4.1')
- expect(profile.excludedClinicalRecordVariants?.filter(row => row.resourceType === 'Observation')).toHaveLength(2)
+ expect(profile.facts.potassium?.numericValue).toBe(value)
+ expect(profile.excludedClinicalRecordVariants).toBeUndefined()
  const autofill = buildAutofill(data.observations, {})
- expect(JSON.stringify(autofill)).not.toContain('4.1')
+ expect(autofill.resolve({kind:'lab',keys:['K']})?.value).toBe(value)
  const ai = scopeClinicalDataForAi(data, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [], Date.parse('2026-10-02'))
- expect(ai.observations?.some(row => row.valueQuantity?.value === 4.1)).toBe(false)
- expect(JSON.stringify(ai.clinicalRecordVariantExclusions)).toContain('2823-3')
+ expect(ai.observations?.find(row=>row.effectiveDateTime==='2026-10-01')?.valueQuantity?.value).toBe(value)
+ expect(ai.clinicalRecordVariantExclusions).toBeUndefined()
 })
 it('does not resurrect an old HF weight, but a later resolved measurement can supersede pending evidence', () => {
  const data = collection('29463-7')
- expect(hfFollowUpHistory(data.observations).weights).toEqual([])
+ const prior=hfFollowUpHistory(data.observations).weights
+ expect(prior).toHaveLength(2)
  const resolved = { ...data.observations.find(row => !row.clinicalRecordVariant)!, id: 'later', effectiveDateTime: '2026-10-02', valueQuantity: { value: 75, unit: 'kg' } }
- expect(hfFollowUpHistory([...data.observations, resolved]).weights.map(row => row.value)).toEqual([75])
+ const weights=hfFollowUpHistory([...data.observations,resolved]).weights
+ expect(weights).toHaveLength(3)
+ expect(weights.map(row=>row.value)).toContain(75)
 })
 
 it.each([{ effectivePeriod: { start: '2026-10-03' } }, { issued: '2026-10-03' }])('accepts a later resolved measurement with its supported date shape %p', date => {

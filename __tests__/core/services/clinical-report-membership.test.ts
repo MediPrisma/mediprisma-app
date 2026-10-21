@@ -16,7 +16,7 @@ it('attaches an exact record once despite duplicate transmissions and result ali
   expect(result[0]._observations![0]).toBe(row)
 })
 
-it('keeps the Observation included with a report when another query captures a newer version', () => {
+it('does not reattach a superseded included row when the selected row is not yet supplied', () => {
   const includedObservation = { resourceType: 'Observation', id: 'o', status: 'final', valueQuantity: { value: 7 } }
   const report = { resourceType: 'DiagnosticReport', id: 'r', result: [{ reference: 'Observation/o' }] }
   const scope = { sourceId: 'server', patientScope: 'p', restBase: 'https://one.invalid/fhir' }
@@ -34,7 +34,7 @@ it('keeps the Observation included with a report when another query captures a n
   const reportRow: any = { ...report, clinicalSourceNodeKey: source.graph.nodes.find(node => node.resource.resourceType === 'DiagnosticReport')!.key }
 
   const result = attachReportObservations([reportRow], [includedRow], source)
-  expect(result[0]._observations).toEqual([includedRow])
+  expect(result[0]._observations).toEqual([])
   const edge = source.graph.references.find(item => item.origin.resource.resourceType === 'DiagnosticReport')!
   expect(edge.status).toBe('resolved')
   expect(edge.targetKeys).toEqual([includedKey])

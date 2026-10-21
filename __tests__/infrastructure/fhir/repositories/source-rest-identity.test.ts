@@ -22,9 +22,9 @@ it.each([true, false])('unifies exact include/search retransmissions with fullUr
 })
 it.each([true, false])('keeps differing versions in one uncertainty group with fullUrl on the include: %s', async includeHasFullUrl => {
   const data = await load(base + '/Observation/result', true, includeHasFullUrl)
-  expect(data.observations).toHaveLength(2)
-  expect(data.observations.every(row => row.clinicalRecordVariant?.classification === 'revision')).toBe(true)
-  expect(new Set(data.observations.map(row => row.clinicalRecordVariant?.groupId)).size).toBe(1)
+  expect(data.observations).toHaveLength(1)
+  expect(data.observations[0].clinicalRecordVariant).toBeUndefined()
+  expect(data.clinicalSource!.evidence.revision.length).toBeGreaterThan(0)
 })
 it('uses the same authenticated REST identity for generic clinical retransmissions', async () => {
   const condition = { resourceType: 'Condition', id: 'condition', subject: { reference: 'Patient/p' }, code: { text: 'Synthetic diagnosis' } }

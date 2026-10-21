@@ -67,7 +67,8 @@ it('keeps explicit inline code and does not choose an ambiguous Medication revis
  const rows = [inline, row('reference')]
  const projected = projectClinicalMedicationContents(rows, source)
  expect(projected[0].medicationCodeableConcept).toEqual(inline.medicationCodeableConcept)
- expect(projected[1].clinicalMedicationContentUncertainty?.reason).toBe('ambiguous-reference')
+ expect(projected[1].clinicalMedicationContentUncertainty).toBeUndefined()
+ expect(['Drug version 1','Drug version 2']).toContain(projected[1].medicationCodeableConcept?.text)
  expect(projectClinicalMedicationContents(projected, source)).toBe(projected)
  expect(rows[1].medicationCodeableConcept).toBeUndefined()
 })

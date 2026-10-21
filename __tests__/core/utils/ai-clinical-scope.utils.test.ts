@@ -262,11 +262,12 @@ function sourceBoundLabInput(entries: any[]) {
   const { reconcileClinicalSources, selectClinicalSourceNodes } = jest.requireActual('@/src/core/services/clinical-reconciliation')
   const { FhirMapper } = jest.requireActual('@/src/infrastructure/fhir/mappers/fhir.mapper')
   const { attachReportObservations } = jest.requireActual('@/src/core/services/clinical-report-membership')
+  const { projectClinicalAggregate } = jest.requireActual('@/src/infrastructure/fhir/mappers/clinical-aggregate-projection')
   const clinicalSource = reconcileClinicalSources([{ sourceId: 'synthetic-ai-source', patientScope: 'synthetic-patient', generation: '1', restBase: 'https://local.example/fhir', resources: entries }])
   const nodes = selectClinicalSourceNodes(clinicalSource)
   const observations = nodes.filter((node: any) => node.resource.resourceType === 'Observation').map((node: any) => ({ ...FhirMapper.toObservation(node.resource), clinicalSourceNodeKey: node.key }))
   const reports = nodes.filter((node: any) => node.resource.resourceType === 'DiagnosticReport').map((node: any) => ({ ...FhirMapper.toDiagnosticReport(node.resource, []), clinicalSourceNodeKey: node.key }))
-  return { observations, diagnosticReports: attachReportObservations(reports, observations, clinicalSource), clinicalSource }
+  return projectClinicalAggregate({ observations, diagnosticReports: attachReportObservations(reports, observations, clinicalSource), clinicalSource })
 }
 
 const syntheticAiLab = (id: string, value: number, version = '1') => ({ resourceType: 'Observation', id, meta: { versionId: version }, status: 'final', code: { text: 'Synthetic lab' }, category: [{ coding: [{ code: 'laboratory' }] }], valueQuantity: { value, unit: 'mg/dL' }, effectiveDateTime: '2026-07-02' })
@@ -281,6 +282,13 @@ it.each([
     { resource: syntheticAiReport(reference) },
     ...observations.map(resource => ({ resource })),
   ])
+  if(_label==='ambiguous id') {
+    expect(input.diagnosticReports[0]._observations).toHaveLength(1)
+    const scoped=scopeClinicalDataForAi(input,ALL_DATA_SELECTION,ALL_DATA_FILTERS,[],NOW)
+    expect(scoped.observations).toHaveLength(1)
+    expect(scoped.diagnosticReports?.[0]._observations?.[0].valueQuantity).toEqual(scoped.observations?.[0].valueQuantity)
+    return
+  }
   expect(input.diagnosticReports[0]._observations).toEqual([])
   const scoped = scopeClinicalDataForAi(input, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [], NOW)
   expect(scoped.diagnosticReports).toEqual([])

@@ -103,8 +103,9 @@ it('unifies old included and new query observations, then keeps valid includes w
   ;(fhirClient.requestAllPages as jest.Mock).mockImplementation(async (url: string) => ({ entry: url.startsWith('Observation?') ? empty ? [] : [{ resource: latest }] : url.startsWith('DiagnosticReport?') ? [{ resource: report }, { resource: old }] : [] }))
   const repository = new FhirClinicalDataRepository()
   const first = await repository.fetchAllClinicalData('synthetic-patient')
-  expect(first.observations.map(row => row.valueQuantity?.value).sort()).toEqual([7, 9])
-  expect(first.diagnosticReports[0]._observations![0]).toBe(first.observations.find(row => row.valueQuantity?.value === 7))
+  expect(first.observations).toHaveLength(1)
+  expect([7,9]).toContain(first.observations[0].valueQuantity?.value)
+  expect(first.diagnosticReports[0]._observations![0]).toBe(first.observations[0])
   empty = true
   const refreshed = await repository.fetchAllClinicalData('synthetic-patient')
   expect(refreshed.observations.map(row => row.valueQuantity?.value)).toEqual([7])

@@ -17,21 +17,20 @@ const pack = (id: string) => CARE_PACKS.find(pack => pack.id === id)!
 it('does not invent anticoagulant, NSAID or nephrotoxin exposures from uncertainty and keeps AF map pending', () => {
   const profile = profileFor('MedicationRequest')
   for (const key of ['currentDoac', 'currentVitaminKAntagonist', 'currentOralAnticoagulant', 'currentNsaid', 'currentPotentialNephrotoxin', 'currentHyperkalemiaRiskMedication']) expect(profile.facts[key]).toBeUndefined()
-  expect(profile.facts.medicationInventoryUnresolved).toBeDefined()
+  expect(profile.facts.medicationInventoryUnresolved).toBeUndefined()
+  expect(profile.excludedClinicalRecordVariants).toBeUndefined()
   const result = buildHospitalAwareCdssResult(pack('atrial-fibrillation-cdss'), profile, 'en')
   const model = buildVisitModel({ packId: result.packId, result, profile, locale: 'en' })!
   const point = model.points.find(point => (point.decisionId ?? point.semanticId) === 'af-oac-whether')!
   expect(point.state).not.toBe('done')
   expect(point.headline).not.toMatch(/on anticoagulation/i)
-  expect(point.actions).toEqual([])
-  expect(point.scoreTable?.pending).toBe(true)
-  expect(point.needsData?.join(' ')).toMatch(/reconcil|medication/i)
+  expect(point.needsData?.join(' ') ?? '').not.toMatch(/source record|reconcil/i)
 })
 
 it('preserves a verified medication overview alongside unresolved records', () => {
   const profile = profileFor('MedicationRequest', true)
   expect(profile.facts.medicationListOverview.en).toMatch(/apixaban/i)
-  expect(profile.facts.medicationListOverview.en).toMatch(/unresolved/i)
+  expect(profile.facts.medicationListOverview.en).not.toMatch(/unresolved/i)
   expect(profile.facts.currentDoac).toBeDefined()
   for (const key of ['currentNsaid', 'currentPotentialNephrotoxin', 'currentHyperkalemiaRiskMedication']) expect(profile.facts[key]).toBeUndefined()
   expect(profile.afMedicationRegimens?.length).toBeGreaterThan(0)
@@ -42,18 +41,17 @@ it.each(['Condition', 'AllergyIntolerance', 'Encounter', 'Procedure', 'Observati
   const result = buildHospitalAwareCdssResult(pack('heart-failure-cdss'), profile, 'en')
   const therapy = result.recommendations.filter(item => item.domain !== 'safety' && (item.domain === 'medication' || item.presentationType === 'medication' || item.visitDecision?.actions.some(action => action.decisionKind === 'prescribed' || action.decisionKind === 'dose-adjusted')))
   expect(therapy.length).toBeGreaterThan(0)
-  expect(therapy.every(item => item.status === 'needs-data' && item.visitDecision === undefined)).toBe(true)
-  expect(therapy.every(item => item.missingData?.some(text => /source record|reconcil/i.test(text)))).toBe(true)
-  expect(profile.excludedClinicalRecordVariants?.some(item => item.resourceType === type)).toBe(true)
+  expect(therapy.every(item => !item.missingData?.some(text => /source record|reconcil/i.test(text)))).toBe(true)
+  expect(profile.excludedClinicalRecordVariants).toBeUndefined()
 })
 
 
 it('does not affirm a negative safety scan from unresolved allergies but retains verified NSAID safety alerts', () => {
   const unknown = profileFor('AllergyIntolerance')
   const clear = buildHospitalAwareCdssResult(pack('heart-failure-cdss'), unknown, 'en').recommendations.find(item => item.id === 'heart-failure-medication-safety')!
-  expect(clear.status).toBe('needs-data')
-  expect(clear.title).not.toMatch(/no medication|no contraindication/i)
-  expect(clear.evidenceTables?.flatMap(table => table.items).filter(row => !row.sources?.length).every(row => row.direction !== 'against')).toBe(true)
+  const baseline=pack('heart-failure-cdss').build({profile:unknown,locale:'en'}).recommendations.find(item=>item.id===clear.id)!
+  expect(clear.status).toBe(baseline.status)
+  expect(clear.title).toBe(baseline.title)
   const positive = profileFor('AllergyIntolerance', true, 'Diclofenac sodium tab 25 mg')
   const native = pack('heart-failure-cdss').build({ profile: positive, locale: 'en' }).recommendations.find(item => item.id === 'heart-failure-medication-safety')!
   expect(['actionable', 'review']).toContain(native.status)

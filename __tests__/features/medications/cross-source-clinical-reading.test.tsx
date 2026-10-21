@@ -273,7 +273,7 @@ it('keeps overview, visit detail and IPS consistent without presenting cancellat
   expect(detail.medications.filter(medication => medication.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
   const exported = mapMedications(collection.medications, 'Patient/synthetic-export').entries.map(entry => entry.resource)
   expect(exported).toHaveLength(6)
-  expect(exported.filter(resource => JSON.stringify(resource.note).includes('Possible cross-source copies'))).toHaveLength(2)
+  expect(exported.filter(resource => JSON.stringify(resource.note).includes('Hospital records determine'))).toHaveLength(2)
   expect(exported.filter(resource => JSON.stringify(resource.note).includes('self-pay'))).toHaveLength(1)
   expect(exported.some(resource => JSON.stringify(resource.note).includes('status: cancelled'))).toBe(true)
 })

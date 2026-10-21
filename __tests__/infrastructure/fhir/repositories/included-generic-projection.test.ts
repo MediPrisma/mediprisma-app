@@ -19,9 +19,10 @@ it.each([true, false])('projects included Conditions when Condition query is emp
 })
 it('retains versions included by separate queries and updates authoritative-empty status', async () => {
   const data = await new FhirClinicalDataRepository().fetchAllClinicalData('p')
-  expect(data.conditions.map(row => row.code?.text).sort()).toEqual(['Condition 1', 'Condition 2'])
-  expect(data.conditions.every(row => row.clinicalRecordVariant?.variantCount === 2)).toBe(true)
-  expect(data.resourceQueryStatus?.Condition).toMatchObject({ state: 'ok', count: 2 })
+  expect(data.conditions).toHaveLength(1)
+  expect(['Condition 1','Condition 2']).toContain(data.conditions[0].code?.text)
+  expect(data.conditions[0].clinicalRecordVariant).toBeUndefined()
+  expect(data.resourceQueryStatus?.Condition).toMatchObject({ state: 'ok', count: 1 })
 })
 
 it('uses explicit adapters for included domains while audit and support resources stay graph-only', async () => {

@@ -5,6 +5,13 @@ import { reconcileClinicalSources } from '@/src/core/services/clinical-reconcili
 import { selectCdssClinicalInputs } from '@/features/clinical-decision-support/utils/clinical-record-inputs'
 import { CLINICAL_RECORD_VARIANT_EXTENSION } from '@/src/core/services/clinical-record-variant-modifier'
 import { stripClinicalCaptureMetadata } from '@/src/core/utils/ai-clinical-scope.utils'
+import { createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
+import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
+import { buildIpsBundle } from '@/features/ips-export/utils/ips-builder'
+import crossSource from '@/e2e/fixtures/cross-source-prescriptions.json'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import { ALL_DATA_SELECTION, ALL_DATA_FILTERS } from '@/src/shared/constants/data-selection.constants'
 
 const patient = { resourceType: 'Patient', id: 'synthetic' }
 const bundle = (resources: any[]) => ({ resourceType: 'Bundle', type: 'collection', entry: [patient, ...resources].map(resource => ({ resource })) })
@@ -91,4 +98,88 @@ it('keeps cache-roundtripped report references pointing at the selected visible 
   const after = projectClinicalAggregate({ ...fresh, diagnosticReports: client.getQueryData(['reports']) } as any, source)
   expect(after.observations.map((row: any) => 'Observation/' + row.id)).toContain(after.diagnosticReports[0].result[0].reference)
   expect(JSON.stringify(stripClinicalCaptureMetadata(after))).not.toContain('clinicalSourceProjectedReferences')
+})
+
+it('selects an error retraction over an undated final value without treating clinical event dates as version clocks', () => {
+  const collection = parse([observation(100), {...observation(120),status:'entered-in-error',effectiveDateTime:'2026-09-01'}])
+  expect(collection.observations).toHaveLength(1)
+  expect(collection.observations[0].status).toBe('entered-in-error')
+  expect(collection.clinicalSource?.graph.nodes.filter(node=>node.resource.resourceType==='Observation')).toHaveLength(2)
+})
+
+it('automatically honors a stopped hospital order when update ordering is unavailable', () => {
+  const order={resourceType:'MedicationRequest',id:'order',status:'active',authoredOn:'2026-10-01',medicationCodeableConcept:{text:'Meitifen SR FC * tab 75 mg',coding:[{system:'urn:oid:vgh.medication.product',display:'Meitifen SR FC * tab 75 mg'}]}}
+  const collection=parse([order,{...order,status:'stopped'}])
+  expect(collection.medications).toHaveLength(1)
+  expect(collection.medications[0].status).toBe('stopped')
+  const profile=createHospitalAwareCdssPatientProfile({...collection,patient:{id:'synthetic',age:70},now:new Date('2026-10-02')})
+  expect(profile.hospitalMedicationEvidence?.[0].useState).toBe('not-current')
+  expect(profile.facts.currentNsaid).toBeUndefined()
+})
+
+it('does not restore a retracted potassium measurement as a current clinical fact',()=>{
+  const code={coding:[{system:'http://loinc.org',code:'2823-3'}]}
+  const collection=parse([{...observation(4.2),code},{...observation(6.8),code,status:'entered-in-error'}])
+  const profile=createHospitalAwareCdssPatientProfile({...collection,patient:{id:'synthetic',age:70},now:new Date('2026-10-02')})
+  expect(profile.facts.potassium?.numericValue).toBeUndefined()
+})
+
+it('uses a documented later restart instead of always preferring a stopped status',()=>{
+  const order={resourceType:'MedicationRequest',id:'order',medicationCodeableConcept:{text:'Synthetic medicine'}}
+  const collection=parse([{...order,status:'stopped',meta:{lastUpdated:'2026-10-01'}},{...order,status:'active',meta:{lastUpdated:'2026-10-02'}}])
+  expect(collection.medications[0].status).toBe('active')
+})
+
+it('selects an explicitly corrected result without mistaking its corrected event date for an older version',()=>{
+  const collection=parse([{...observation(100),effectiveDateTime:'2026-10-02'},{...observation(120),status:'corrected',effectiveDateTime:'2026-10-01'}])
+  expect(collection.observations[0].status).toBe('corrected')
+  expect(collection.observations[0].valueQuantity?.value).toBe(120)
+})
+
+it('automatically resolves versions of a referenced medication instead of creating a content-reconciliation task',()=>{
+  const collection=parse([{resourceType:'MedicationRequest',id:'prescription',status:'active',medicationReference:{reference:'Medication/drug'}},
+    ...['1','2'].map(version=>({resourceType:'Medication',id:'drug',meta:{versionId:version,lastUpdated:`2026-10-0${version}`},code:{text:'Drug version '+version}}))])
+  expect(collection.medications[0].medicationCodeableConcept?.text).toBe('Drug version 2')
+  expect(collection.medications[0].clinicalMedicationContentUncertainty).toBeUndefined()
+})
+
+it('canonicalizes an explicit old-version report reference to the selected visible measurement before Local consumers run',()=>{
+  const resources=[{...observation(100,'2026-10-01'),meta:{versionId:'1',lastUpdated:'2026-10-01'}},{...observation(120,'2026-10-02'),meta:{versionId:'2',lastUpdated:'2026-10-02'}},
+    {resourceType:'DiagnosticReport',id:'report',status:'final',code:{text:'Synthetic report'},result:[{reference:'Observation/glucose/_history/1'}]}]
+  const collection=LocalBundleService.parse(bundle(resources))!.collection
+  expect(collection.observations).toHaveLength(1)
+  expect(collection.observations[0].valueQuantity?.value).toBe(120)
+  expect(collection.diagnosticReports[0].result?.[0].reference).toBe('Observation/'+collection.observations[0].id)
+  const projected=projectClinicalAggregate(collection)
+  expect(projected.diagnosticReports[0]._observations?.[0]).toBe(projected.observations[0])
+  expect(JSON.stringify(buildIpsBundle({patient:{resourceType:'Patient',id:'synthetic'},data:projected}))).not.toContain('clinicalSourceProjectedReferences')
+})
+
+it('keeps AI visit details linked to the same automatically selected encounter as the chart',async()=>{
+  const collection=parse([{resourceType:'Encounter',id:'visit',status:'in-progress',meta:{lastUpdated:'2026-10-01'},period:{start:'2026-10-01'}},
+    {resourceType:'Encounter',id:'visit',status:'finished',meta:{lastUpdated:'2026-10-02'},period:{start:'2026-10-01'}},
+    {...observation(100),encounter:{reference:'Encounter/visit'}}])
+  expect(collection.encounters).toHaveLength(1)
+  expect(collection.observations[0].encounter?.reference).toBe('Encounter/'+collection.encounters[0].id)
+  const tools=createFhirTools(()=>({patient:null,collection}))
+  const details:any=await tools.getEncounterDetails.execute!({encounterId:collection.encounters[0].id},{toolCallId:'synthetic',messages:[]})
+  expect(JSON.stringify(details)).toContain('Glucose')
+})
+
+it('uses the hospital-primary prescription in AI, CDSS and IPS while keeping original cloud copies as audit evidence',()=>{
+  const parsed=LocalBundleService.parse(crossSource)!
+  const data=parsed.collection
+  const selected=selectCdssClinicalInputs(data).input
+  const paired=selected.medications.filter(row=>row._sourceRecordComparison?.status==='candidate')
+  expect(paired).toHaveLength(1)
+  expect(isVghtpeSource(paired[0])).toBe(true)
+  const ai=scopeClinicalDataForAi(data,ALL_DATA_SELECTION,ALL_DATA_FILTERS,[],Date.parse('2026-10-20'))
+  expect(ai.medications?.filter(row=>row._sourceRecordComparison?.status==='candidate')).toHaveLength(1)
+  const exported=buildIpsBundle({patient:parsed.patient!,data})
+  const statements=exported.entry.filter(entry=>entry.resource.resourceType==='MedicationStatement')
+  expect(statements).toHaveLength(5)
+  expect(statements.some(entry=>(entry.resource.contained as any[])?.length===2)).toBe(true)
+  const imported=LocalBundleService.parse(exported as any)!.collection
+  expect(imported.medications).toHaveLength(5)
+  expect(data.medications).toHaveLength(6)
 })

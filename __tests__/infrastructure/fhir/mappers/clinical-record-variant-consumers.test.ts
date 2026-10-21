@@ -17,40 +17,36 @@ function collection(revision: boolean) {
   return projectClinicalAggregate({ observations: [], diagnosticReports: reports } as any, source)
 }
 
-it.each([true, false])('preserves ambiguous records but never promotes revision=%s to serial or CDSS numeric evidence', revision => {
+it.each([true, false])('uses one selected revision=%s consistently in serial evidence, AI and CDSS', revision => {
   const data = collection(revision)
-  expect(data.observations).toHaveLength(2)
-  const annotation = data.observations[0].clinicalRecordVariant
-  expect(annotation).toMatchObject({ classification: revision ? 'revision' : 'conflict', variantCount: 2 })
-  expect(data.observations[1].clinicalRecordVariant).toEqual(annotation)
+  expect(data.observations).toHaveLength(1)
+  expect(data.observations[0].clinicalRecordVariant).toBeUndefined()
+  expect([7,9]).toContain(data.observations[0].valueQuantity.value)
   const scoped: any = scopeClinicalDataForAi(data, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [])
   const catalog = buildSourceCatalog(scoped)
-  expect(scoped.observations).toEqual([])
-  expect(scoped.diagnosticReports).toEqual([])
-  expect(catalog).toEqual([])
-  expect(scoped.clinicalRecordVariantExclusions.filter((item: any) => item.resourceType === 'Observation')).toHaveLength(2)
+  expect(scoped.observations).toHaveLength(1)
+  expect(scoped.diagnosticReports).toHaveLength(1)
+  expect(catalog.length).toBeGreaterThan(0)
+  expect(scoped.clinicalRecordVariantExclusions).toBeUndefined()
   expect(JSON.stringify(scoped)).not.toContain('clinicalSourceNodeKey')
   const auditCatalog = buildSourceCatalog(stripClinicalCaptureMetadata(data))
-  expect(formatSourceList(auditCatalog)).toContain('chronology unresolved; do not treat as separate events or trend points')
+  expect(formatSourceList(auditCatalog)).not.toContain('chronology unresolved')
   expect(buildLongitudinalInvestigationContext(scoped, catalog)).toBe('')
-  expect(stripClinicalCaptureMetadata(data).observations[0].clinicalRecordVariant).toEqual(annotation)
+  expect(stripClinicalCaptureMetadata(data).observations[0].clinicalRecordVariant).toBeUndefined()
   const input = { patient: { id: 'synthetic', age: 70 }, conditions: [], encounters: [], observations: data.observations, medications: [], allergies: [], carePlans: [], diagnosticReports: data.diagnosticReports, now: new Date('2026-10-02') }
   const selected = selectCdssClinicalInputs(input)
-  expect(selected.input.observations).toEqual([])
-  expect(selected.input.diagnosticReports.every((report: any) => report._observations?.length === 0)).toBe(true)
-  expect(selected.excluded.filter(row => row.resourceType === 'Observation')).toHaveLength(2)
-  expect(selected.excluded.filter(row => row.resourceType === 'Observation').every(row => row.reason === annotation.reason)).toBe(true)
+  expect(selected.input.observations).toHaveLength(1)
+  expect(selected.input.diagnosticReports.every((report: any) => report._observations?.length === 1)).toBe(true)
+  expect(selected.excluded).toEqual([])
   const profile = createHospitalAwareCdssPatientProfile(input)
-  expect(profile.excludedClinicalRecordVariants?.filter(row => row.resourceType === 'Observation')).toHaveLength(2)
-  expect(JSON.stringify(profile.facts)).not.toContain(data.observations[0].id)
+  expect(profile.excludedClinicalRecordVariants).toBeUndefined()
   const results = mapResults(data.diagnosticReports, data.observations, 'Patient/synthetic')
   const resources = [...results.entries, ...results.referencedOnly].map(entry => entry.resource)
   for (const resource of resources) {
     expect(resource).not.toHaveProperty('clinicalRecordVariant')
-    expect(resource.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
+    expect(resource.modifierExtension ?? []).not.toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
   }
-  expect(mapVitalSigns([data.observations[0]], 'Patient/synthetic').entries[0].resource.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
-  expect(data.observations.map((row: any) => row.valueQuantity.value)).toEqual([7, 9])
+  expect(mapVitalSigns([data.observations[0]], 'Patient/synthetic').entries[0].resource.modifierExtension ?? []).not.toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
 })
 
 it('keeps unrelated decision inputs and clears obsolete annotations after authoritative refresh', () => {
@@ -59,8 +55,8 @@ it('keeps unrelated decision inputs and clears obsolete annotations after author
   const source = reconcileClinicalSources([{ sourceId: 'synthetic-source', patientScope: 'patient', generation: 'next', resources: [raw] }])
   const normal = projectClinicalAggregate({ observations: [] as import('@/src/core/entities/clinical-data.entity').ObservationEntity[] }, source).observations![0]
   const selected = selectCdssClinicalInputs({ observations: [...data.observations, normal] })
-  expect(selected.input.observations).toEqual([normal])
-  const stale = { ...normal, clinicalRecordVariant: data.observations[0].clinicalRecordVariant }
+  expect(selected.input.observations).toEqual([...data.observations,normal])
+  const stale = { ...normal, clinicalRecordVariant: {groupId:'old',classification:'revision' as const,variantCount:2,reason:'Old source snapshot'} }
   expect(projectClinicalAggregate({ observations: [stale] }, source).observations![0].clinicalRecordVariant).toBeUndefined()
 })
 

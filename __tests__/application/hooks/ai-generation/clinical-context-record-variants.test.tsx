@@ -23,12 +23,12 @@ it('keeps unresolved report and observation payloads out of actual registry-gene
   mockData = { ...LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!.collection, isLoading: false, isFetching: false, error: null }
   const { result } = renderHook(() => useClinicalContext('insights'))
   const text = result.current.getFullClinicalContext()
-  expect(text).toContain('These records exist but their versions or conflicts are unresolved')
+  expect(text).not.toContain('These records exist but their versions or conflicts are unresolved')
   expect(text).not.toContain('private-weight')
   expect(text).not.toContain('private-report')
-  expect(text).not.toContain('Private variant narrative')
-  expect(text).not.toContain('70 kg')
-  expect(mockData.observations).toHaveLength(2)
+  expect(text).toContain(`${mockData.observations[0].valueQuantity.value} kg`)
+  expect(mockData.observations).toHaveLength(1)
+  expect(mockData.diagnosticReports).toHaveLength(1)
 })
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
 
@@ -41,7 +41,7 @@ it('uses the same selected uncertainty scope in the rendered AI context', () => 
   try {
     const { result } = renderHook(() => useClinicalContext('insights'))
     const text = result.current.getFullClinicalContext()
-    expect(text).toContain('Unresolved source records outside the selected evidence')
+    expect(text).not.toContain('Unresolved source records outside the selected evidence')
     expect(text).not.toMatch(/Excluded historical measurement|2021-10-01|2823-3/)
   } finally { mockProfile.filters = ALL_DATA_FILTERS }
 })
@@ -60,10 +60,10 @@ it('retains selected pending measurements after actual token prioritization with
     const { result } = renderHook(() => useClinicalAiInput(32_768, 'insights', 4_000 / clinicalContextTokenTarget(32_768)))
     expect(result.current.contextAdaptation?.tier).toBe('prioritized')
     const text = result.current.formattedClinicalContext
-    expect(text).toContain('http://loinc.org|2823-3')
-    expect(text).toContain('date=2026-10-02')
-    expect(text).toContain('Unresolved source records outside the selected evidence')
+    expect(text).toContain('| K (mmol/L) |')
+    const value=mockData.observations.find((row:any)=>row.effectiveDateTime==='2026-10-02').valueQuantity.value
+    expect(text).toContain(`| 2026-10-02 | ${value} |`)
+    expect(text).not.toContain('Unresolved source records outside the selected evidence')
     expect(text).not.toMatch(/Excluded historical measurement|2021-10-01|14749-6|pending-potassium/)
-    expect(text).not.toMatch(/4\.2 mmol\/L|6\.1 mmol\/L/)
   } finally { mockProfile.filters = ALL_DATA_FILTERS }
 })

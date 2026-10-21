@@ -1,4 +1,5 @@
 import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { selectHospitalMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import type { ClinicalRecordVariantExclusion } from '@/src/core/entities/clinical-data.entity'
 
 /** Generic record types have no revision-selection policy. Keep them in the UI
@@ -31,7 +32,7 @@ export function excludeUnresolvedGenericVariants<T extends object>(input: T, sel
       excluded.set(exclusionKey(item), item)
       return false
     })
-    const decisionRows = key === 'medications' ? filtered.map(row => {
+    const decisionRows = key === 'medications' ? selectHospitalMedicationComparisons(filtered).map(row => {
       if (!row.clinicalMedicationContentUncertainty) return row
       if (!row.medicationCodeableConcept && !row.medicationReference?.display && !row.drugTerminology && !row.atcClassification) return row
       const { medicationCodeableConcept: _code, drugTerminology: _terminology, atcClassification: _atc, ...rest } = row

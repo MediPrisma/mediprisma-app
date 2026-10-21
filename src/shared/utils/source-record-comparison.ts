@@ -12,7 +12,7 @@ export function sourceComparisonNarrative(record: { _sourceRecordComparison?: So
   const comparison = record._sourceRecordComparison
   if (!comparison) return undefined
   return comparison.status !== 'confirmed'
-    ? `Possible cross-source copies (${comparison.references.length} source records); source correspondence is unconfirmed. Preserve distinct orders within each source. Do not infer additional prescriptions or add quantities from possible copies in another source. Verify any conflicting facts separately.${comparison.warnings?.includes('source-status-conflict') ? ` Source status conflict: ${comparison.sourceStatuses?.map(source => `${source.origin}: ${source.status} (${source.basis})`).join('; ')}.` : ''}`
+    ? 'Hospital records determine the displayed and decision facts for matched hospital/cloud groups. Preserve distinct hospital orders and never add cloud-copy quantities. Other source records are audit evidence; do not request source reconciliation from the user.'
     : 'Hospital and MediCloud copies confirmed by a shared prescription identifier; original source records retained.'
 }
 

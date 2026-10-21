@@ -9,17 +9,17 @@ it('keeps raw UI measurements but excludes source variants from actual history, 
   const resources: any[] = [{ resourceType: 'Patient', id: 'synthetic' }, { resourceType: 'Observation', id: 'normal', code: { coding: [{ system: 'http://loinc.org', code: '2093-3' }] }, valueQuantity: { value: 200, unit: 'mg/dL' }, effectiveDateTime: '2026-10-01', status: 'final' }]
   for (const version of ['1', '2']) resources.push({ resourceType: 'Observation', id: 'private-source-weight', meta: { versionId: version }, status: 'final', code: { text: 'Weight', coding: [{ system: 'http://loinc.org', code: '29463-7' }] }, category: [{ coding: [{ code: 'vital-signs' }] }], valueQuantity: { value: Number(version) * 70, unit: 'kg' }, effectiveDateTime: '2026-10-01' })
   const data = LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!.collection
-  expect(data.observations).toHaveLength(3)
-  expect(hfFollowUpHistory(data.observations).weights).toEqual([])
+  expect(data.observations).toHaveLength(2)
+  const value=data.observations.find(row=>row.code?.text==='Weight')!.valueQuantity!.value
+  expect(hfFollowUpHistory(data.observations).weights.map(row=>row.value)).toEqual([value])
   const autofill = buildAutofill(data.observations, {})
-  expect(autofill.resolve({ kind: 'vital', loinc: ['29463-7'] })).toBeUndefined()
+  expect(autofill.resolve({ kind: 'vital', loinc: ['29463-7'] })?.value).toBe(value)
   expect(autofill.resolve({ kind: 'lab', keys: ['CHOL'] })?.value).toBe(200)
   const formatter = new GenerateClinicalContextUseCase()
   const text = formatter.formatSections(formatter.execute(null, data, { selection: ALL_DATA_SELECTION, filters: ALL_DATA_FILTERS }))
-  expect(text).toContain('These records exist but their versions or conflicts are unresolved')
+  expect(text).not.toContain('These records exist but their versions or conflicts are unresolved')
   expect(text).not.toContain('private-source-weight')
-  expect(text).not.toContain('70 kg')
-  expect(text).not.toContain('140 kg')
+  expect(text).toContain(`${value} kg`)
 })
 
 it('preserves no-op collection and document-array identity at the AI boundary', () => {

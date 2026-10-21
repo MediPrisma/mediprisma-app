@@ -141,7 +141,7 @@ function hospitalUseState(medication: MedicationEntity, now: Date): HospitalMedi
   const future = Number.isFinite(written) && written > now.getTime()
   if (future) return 'not-current'
   const assessment = assessMedicationCurrentness(medication, now.getTime())
-  if (assessment.current) return 'confirmed-current'
+  if (assessment.current || status === 'active' && assessment.uncertain) return 'confirmed-current'
   return assessment.uncertain ? 'active-order-unconfirmed' : 'not-current'
 }
 

@@ -122,7 +122,7 @@ export function assessMedicationCurrentness(
     && !isVghtpeSource(medication)
     && !['draft', 'on-hold', 'stopped', 'cancelled', 'entered-in-error', 'ended', 'not-taken'].includes(status)
     && (!end || supplyWindowOpen)) {
-    return { current: false, uncertain: true, basis: 'conflicting-source-status' }
+    return { current: false, uncertain: false, basis: 'source-status' }
   }
 
   if (!status || status === 'unknown') {

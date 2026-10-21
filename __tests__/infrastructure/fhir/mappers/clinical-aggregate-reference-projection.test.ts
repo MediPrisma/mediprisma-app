@@ -50,18 +50,14 @@ it('preserves wrong-version, foreign-host, and ambiguous Encounter references wh
     ],
   })
   const collisionRows = source.encounters.filter(row => row.sourceId === 'visit')
-  expect(collisionRows).toHaveLength(2)
-  expect(new Set(collisionRows.map(row => row.id)).size).toBe(2)
-  const byVersion = new Map(collisionRows.map(row => [
-    (source.clinicalSource!.graph.nodes.find(node => node.key === row.clinicalSourceNodeKey)?.resource.meta as { versionId?: string } | undefined)?.versionId,
-    row.id,
-  ]))
+  expect(collisionRows).toHaveLength(1)
+  const selectedId=collisionRows[0].id
   expect(source.procedures.map(row => row.encounter?.reference)).toEqual([
     'https://ehr.example/fhir/Encounter/visit/_history/1',
-    `Encounter/${byVersion.get('2')}`,
-    `Encounter/${byVersion.get('3')}`,
+    `Encounter/${selectedId}`,
+    `Encounter/${selectedId}`,
     'https://foreign.example/fhir/Encounter/foreign',
-    'Encounter/visit',
+    `Encounter/${selectedId}`,
   ])
 })
 
@@ -97,7 +93,7 @@ it.each([
 ] as const)('reprojects only its own %s reference when a later version changes the target ID', (_kind, fullUrl, reference) => {
   const initialCapture = {
     sourceId: 'ehr', patientScope: 'patient', generation: 'query-a', restBase: 'https://ehr.example/fhir', resources: [
-      { fullUrl, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2' }, status: 'finished' } },
+      { fullUrl, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2', lastUpdated:'2026-10-01' }, status: 'finished' } },
       { resource: { resourceType: 'Encounter', id: 'domain-alias', status: 'finished' } },
       { resource: { resourceType: 'Procedure', id: 'procedure', status: 'completed', encounter: { reference } } },
       { resource: { resourceType: 'Procedure', id: 'aliased-procedure', status: 'completed', encounter: { reference } } },
@@ -124,13 +120,13 @@ it.each([
 
   const laterCapture = {
     sourceId: 'ehr', patientScope: 'patient', generation: 'query-b', restBase: 'https://ehr.example/fhir', resources: [
-      { fullUrl: 'https://ehr.example/fhir/Encounter/visit/_history/3', resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '3' }, status: 'finished' } },
+      { fullUrl: 'https://ehr.example/fhir/Encounter/visit/_history/3', resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '3', lastUpdated:'2026-10-02' }, status: 'finished' } },
     ],
   }
   const secondSource = reconcileClinicalSources([initialCapture, laterCapture])
   const laterEncounter = secondSource.graph.nodes.find(node => node.resource.resourceType === 'Encounter' && (node.resource.meta as { versionId?: string } | undefined)?.versionId === '3')!
   const reprojected = projectClinicalAggregate({ ...firstProjection, encounters: [...firstProjection.encounters, { ...laterEncounter.resource, id: laterEncounter.resource.id!, clinicalSourceNodeKey: laterEncounter.key }], clinicalSource: secondSource } as any, secondSource)
-  const currentVersion = (reprojected.encounters as any[]).find(row => row.clinicalSourceNodeKey === firstEncounter.key)!
+  const currentVersion = (reprojected.encounters as any[]).find(row => row.clinicalSourceNodeKey === (_kind==='URN'?firstEncounter.key:laterEncounter.key))!
   expect(currentVersion.id).not.toBe('visit')
   expect(reprojected.procedures[0].encounter.reference).toBe(`Encounter/${currentVersion.id}`)
   expect(reprojected.procedures[1].encounter.reference).toBe('Encounter/domain-alias')

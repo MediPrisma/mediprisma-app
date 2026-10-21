@@ -306,7 +306,8 @@ it.each(['quantity', 'frequency', 'status'])('keeps surplus cloud rows visible w
   if (field === 'status') secondCloud.status = 'stopped'
   const orders = reconcileMedicationRequests([hospital, cloud, secondCloud])
   const { result } = renderHook(() => useMedicationRows(orders))
-  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['cloud-med', 'cloud-conflicting-order']))
+    expect(result.current.map(row => row.id)).toEqual(['hospital-med'])
+    expect(result.current[0].sourceComparison?.records).toHaveLength(3)
   expect(result.current.every(row => row.sourceComparison?.records.length === 3)).toBe(true)
 })
 
@@ -317,7 +318,9 @@ it('does not fold contradictory cloud regimens through an incomplete hospital re
   const secondCloud = { ...cloud, id: 'cloud-bid-order', dosageInstruction: [{ text: 'BID' }] }
   const orders = reconcileMedicationRequests([hospital, cloud, secondCloud])
   const { result } = renderHook(() => useMedicationRows(orders))
-  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['cloud-med', 'cloud-bid-order']))
+  expect(result.current.map(row => row.id)).toEqual(['hospital-med'])
+  expect(result.current[0].dose).toBeUndefined()
+  expect(result.current[0].sourceComparison?.records).toHaveLength(3)
   expect(result.current[0].sourceComparison?.warnings).toContain('source-facts-differ')
 })
 
@@ -349,7 +352,7 @@ it('does not let one stopped hospital order invalidate a separate active hospita
   reconcileMedicationRequests([hospital, activeHospital, cloud])
   const now = Date.parse('2026-10-20T08:00:00+08:00')
   expect(assessMedicationCurrentness(activeHospital, now).current).toBe(true)
-  expect(assessMedicationCurrentness(cloud, now)).toMatchObject({ current: false, uncertain: true })
+  expect(assessMedicationCurrentness(cloud, now)).toMatchObject({ current: false, uncertain: false })
 })
 
 it('recognises equivalent Taiwan prescription dates represented in UTC and UTC+08', () => {
@@ -378,14 +381,14 @@ it('preserves every hospital row when two hospital orders have three possible cl
   expect(result.current[0].sourceComparison?.records).toHaveLength(5)
 })
 
-it('shows both distinct regimens when one hospital and one cloud prescription conflict', () => {
+it('uses the hospital regimen when the matched cloud copy has a different regimen', () => {
   const { hospital, cloud } = fixture()
   delete hospital.identifier; delete cloud.identifier
   cloud.dosageInstruction = [{ text: 'BID' }]
   const orders = reconcileMedicationRequests([hospital, cloud])
   const { result } = renderHook(() => useMedicationRows(orders))
-  expect(result.current.map(row => row.id)).toEqual(expect.arrayContaining(['hospital-med', 'cloud-med']))
-  expect(result.current).toHaveLength(2)
+  expect(result.current.map(row => row.id)).toEqual(['hospital-med'])
+  expect(result.current).toHaveLength(1)
 })
 
 it.each(['cloud-only', 'opposite-flags'])('keeps cloud self-pay records separate: %s', scenario => {

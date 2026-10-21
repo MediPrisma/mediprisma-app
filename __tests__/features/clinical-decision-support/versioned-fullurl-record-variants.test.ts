@@ -5,11 +5,11 @@ it('carries top-level Condition versions with versioned REST fullUrls into CDSS 
   const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
     { fullUrl: 'urn:uuid:patient-a', resource: { resourceType: 'Patient', id: 'a' } },
     { fullUrl: 'https://ehr.example/fhir/Condition/heart-failure/_history/1', resource: {
-      resourceType: 'Condition', id: 'heart-failure', meta: { versionId: '1' }, clinicalStatus: { text: 'active' },
+      resourceType: 'Condition', id: 'heart-failure', meta: { versionId: '1' }, clinicalStatus: { coding:[{code:'active'}] },
       code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'I50.2' }] },
     } },
     { fullUrl: 'https://ehr.example/fhir/Condition/heart-failure/_history/2', resource: {
-      resourceType: 'Condition', id: 'heart-failure', meta: { versionId: '2' }, clinicalStatus: { text: 'resolved' },
+      resourceType: 'Condition', id: 'heart-failure', meta: { versionId: '2' }, clinicalStatus: { coding:[{code:'resolved'}] },
       code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'I50.2' }] },
     } },
     { fullUrl: 'https://ehr.example/fhir/MedicationRequest/medication/_history/1', resource: {
@@ -27,10 +27,10 @@ it('carries top-level Condition versions with versioned REST fullUrls into CDSS 
     now: new Date('2026-10-21T00:00:00Z'),
   })
 
-  expect(profile.excludedClinicalRecordVariants).toEqual(expect.arrayContaining([
-    expect.objectContaining({ resourceType: 'Condition', classification: 'revision', variantCount: 2 }),
-    expect.objectContaining({ resourceType: 'MedicationRequest', classification: 'revision', variantCount: 2 }),
-  ]))
+  expect(profile.excludedClinicalRecordVariants).toBeUndefined()
+  expect(parsed.collection.conditions).toHaveLength(1)
+  expect(parsed.collection.conditions[0].clinicalStatus).toBe('resolved')
+  expect(parsed.collection.medications).toHaveLength(1)
   expect(parsed.collection.clinicalSource?.graph.nodes.map(node => node.fullUrl)).toContain('https://ehr.example/fhir/MedicationRequest/medication/_history/1')
   expect(parsed.collection.clinicalSource?.graph.nodes.map(node => node.fullUrl)).toContain('https://ehr.example/fhir/MedicationRequest/medication/_history/2')
 })

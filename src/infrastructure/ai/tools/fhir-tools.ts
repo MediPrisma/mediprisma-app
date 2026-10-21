@@ -804,6 +804,7 @@ function normalizeDiagnosisTerm(value: string): string {
 /** Resolve joins in their captured source scope, never by a URL's final segment. */
 function encounterLinks(collection: ClinicalDataCollection) {
   const graph = collection.clinicalSource?.graph
+  const resolution = collection.clinicalSource && createClinicalRecordResolution(collection.clinicalSource)
   const byId = new Map<string, typeof collection.encounters>()
   for (const encounter of collection.encounters) byId.set(encounter.id, [...(byId.get(encounter.id) ?? []), encounter])
   const ambiguous = (id: string) => (byId.get(id)?.length ?? 0) > 1
@@ -811,8 +812,9 @@ function encounterLinks(collection: ClinicalDataCollection) {
   const nodes = new Map(graph?.nodes.map(node => [node.key, node]))
   // MedicationStatement.context is the mapper's explicit source for encounter.
   // Prefer a supplied encounter edge, matching the mapper's choice order.
-  const edges = new Map(graph?.references.filter(edge => edge.path === 'context' && edge.origin.resource.resourceType === 'MedicationStatement').map(edge => [edge.origin.key, edge]))
-  for (const edge of graph?.references ?? []) if (edge.path === 'encounter') edges.set(edge.origin.key, edge)
+  const references = graph?.references.map(edge => resolution!.reference(edge)) ?? []
+  const edges = new Map(references.filter(edge => edge.path === 'context' && edge.origin.resource.resourceType === 'MedicationStatement').map(edge => [edge.origin.key, edge]))
+  for (const edge of references) if (edge.path === 'encounter') edges.set(edge.origin.key, edge)
   let incomplete = false
   const target = (row: { clinicalSourceNodeKey?: string; encounter?: { reference?: string }; _encounterInferred?: boolean }) => {
     if (hasUnresolvedClaimEncounter(row)) { incomplete = true; return undefined }
@@ -2504,7 +2506,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
 
         return scrub({
           success: true,
-          summary: `${deduped.length} current medication source records in ${summarizeSourceComparisons(active).comparisonGroupCount} display groups; ${summarizeSourceComparisons(active).unconfirmedGroupCount} groups have unconfirmed cross-source correspondence.${uncertainDeduped.length ? ` ${uncertainDeduped.length} additional records have unresolved currentness.` : ''} Source record count is not a confirmed prescription count.`,
+          summary: `${deduped.length} current medication records. Hospital records take priority in matched hospital/cloud groups; original source copies remain available for audit.${uncertainDeduped.length ? ` ${uncertainDeduped.length} records have no established current status.` : ''}`,
           count: deduped.length,
           sourceComparisonCounts: summarizeSourceComparisons(active),
           ...paginationMeta(deduped.length, currentPage.length),
@@ -2581,3 +2583,4 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
     }),
   }
 }
+import { createClinicalRecordResolution } from '@/src/core/services/clinical-record-resolution'

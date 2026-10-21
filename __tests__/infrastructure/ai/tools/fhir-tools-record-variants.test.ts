@@ -2,7 +2,7 @@
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
-it.each(['MedicationRequest', 'Observation', 'Procedure'])('marks recent visit counts incomplete when linked %s versions were excluded', async resourceType => {
+it.each(['MedicationRequest', 'Observation', 'Procedure'])('counts the automatically selected linked %s without a reconciliation task', async resourceType => {
   const resources: any[] = [
     { resourceType: 'Patient', id: 'synthetic' },
     { resourceType: 'Encounter', id: 'visit', status: 'finished', period: { start: '2026-10-01' }, subject: { reference: 'Patient/synthetic' } },
@@ -14,9 +14,9 @@ it.each(['MedicationRequest', 'Observation', 'Procedure'])('marks recent visit c
   const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!
   const tools = createFhirTools(() => ({ patient: parsed.patient, collection: parsed.collection }))
   const result = await (tools.getRecentVisits as any).execute({ limit: 5 })
-  expect(result).toMatchObject({ success: true, count: 1, incomplete: true, canConcludeAbsence: false })
-  expect(result.clinicalRecordVariantExclusions).toHaveLength(2)
-  expect(result.clinicalRecordVariantExclusions.every((row: any) => row.resourceType === resourceType)).toBe(true)
+  expect(result).toMatchObject({ success: true, count: 1 })
+  expect(result.incomplete).not.toBe(true)
+  expect(result.clinicalRecordVariantExclusions).toBeUndefined()
 })
 
 it('keeps unresolved medication and condition versions out of actual tool facts and reports why', async () => {
@@ -31,9 +31,9 @@ it('keeps unresolved medication and condition versions out of actual tool facts 
   const tools = createFhirTools(() => ({ patient: parsed.patient, collection: parsed.collection }))
   for (const name of ['queryMedications', 'queryConditions'] as const) {
     const result = await (tools[name] as any).execute({})
-    expect(result.count).toBe(1)
-    expect(result.clinicalRecordVariantExclusions).toHaveLength(2)
-    expect(result.sourceRecordUncertainty).toContain('Do not infer absent disease, negative history, no medication')
+    expect(result.count).toBe(2)
+    expect(result.clinicalRecordVariantExclusions).toBeUndefined()
+    expect(result.sourceRecordUncertainty).toBeUndefined()
     expect(JSON.stringify(result)).not.toContain('clinicalSourceNodeKey')
   }
 })
@@ -47,15 +47,15 @@ it('reports domain uncertainty machine-readably when actual condition and medica
   const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!
   const tools = createFhirTools(() => ({ patient: parsed.patient, collection: parsed.collection }))
   const result = await (tools.getDataOverview as any).execute({})
-  expect(result).toMatchObject({ incomplete: true, canConcludeAbsence: false })
-  for (const field of ['conditions', 'medications']) expect(result.data[field]).toMatchObject({ count: 0, incomplete: true, canConcludeAbsence: false, recordState: 'unresolved-variants', unresolvedVariantCount: 2 })
+  expect(result.incomplete).not.toBe(true)
+  for (const field of ['conditions', 'medications']) expect(result.data[field]).toMatchObject({ count: 1, incomplete: false, canConcludeAbsence: true, recordState: 'complete' })
   expect(result.data.allergies).toMatchObject({ count: 0, incomplete: false, canConcludeAbsence: true, recordState: 'complete' })
   const allergies = await (tools.queryAllergies as any).execute({})
   expect(allergies.clinicalRecordVariantExclusions).toBeUndefined()
   expect(allergies.incomplete).not.toBe(true)
   const medications = await (tools.queryMedications as any).execute({})
-  expect(medications).toMatchObject({ incomplete: true, canConcludeAbsence: false })
-  expect(medications.clinicalRecordVariantExclusions.every((row: any) => row.resourceType === 'MedicationRequest')).toBe(true)
+  expect(medications.incomplete).not.toBe(true)
+  expect(medications.clinicalRecordVariantExclusions).toBeUndefined()
   expect(JSON.stringify(result)).not.toContain('sensitive-source')
 })
 
@@ -69,9 +69,9 @@ it('does not expose unresolved Observation or DiagnosticReport variants as tool 
   const tools = createFhirTools(() => ({ patient: parsed.patient, collection: parsed.collection }))
   for (const tool of [tools.queryObservations, tools.queryDiagnosticReports]) {
     const result = await (tool as any).execute({})
-    expect(result).toMatchObject({ count: 0, incomplete: true, canConcludeAbsence: false })
-    expect(result.clinicalRecordVariantExclusions).toHaveLength(4)
-    expect(JSON.stringify(result.data)).not.toMatch(/70|140|EF/)
+    expect(result).toMatchObject({ count: 1 })
+    expect(result.incomplete).not.toBe(true)
+    expect(result.clinicalRecordVariantExclusions).toBeUndefined()
   }
 })
 

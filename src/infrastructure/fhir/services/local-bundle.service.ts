@@ -635,7 +635,12 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
   ))) {
     throw new Error('Clinical source projection input does not match its selected source records')
   }
-  const projectionIds = source ? createClinicalSourceProjectionIds(source) : new Map<string, string>()
+  const projectionIds = new Map(source ? createClinicalSourceProjectionIds(source) : [])
+  const resolution = source && createClinicalRecordResolution(source)
+  for (const [key, preferred] of resolution?.preferred ?? []) {
+    const id = projectionIds.get(preferred)
+    if (id) projectionIds.set(key, id)
+  }
 
   // Pass 1 — assign ids; index every resolvable key to its canonical target.
   const targets = new Map<string, RefTarget>()
@@ -708,7 +713,8 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
       }
     }
     for (const node of nodes) indexClone(node.key, mappedByKey.get(node.key))
-    for (const edge of source.graph.references) {
+    for (const rawEdge of source.graph.references) {
+      const edge = resolution!.reference(rawEdge)
       if (edge.status !== 'resolved' || !edge.reference) continue
       const origin = mappedByKey.get(edge.origin.key)
       const target = mappedByKey.get(edge.targetKeys[0])
@@ -1637,7 +1643,7 @@ export const LocalBundleService = {
     }
     assertPatientOwnership(clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn))
     assertPatientOwnership(clinicalContainedPatientExclusions(clinicalSource).map(item => item.node))
-    const resolution = createClinicalRecordResolution(clinicalSource)
+    const resolution = createClinicalRecordResolution(clinicalSource, new Set(), false)
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
     const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
     if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
@@ -1961,7 +1967,7 @@ export const LocalBundleService = {
     collection.medications = projectClinicalMedicationContents(collection.medications, clinicalSource)
     collection.resourceQueryStatus = projectClinicalMedicationQueryStatus(collection.medications, collection.resourceQueryStatus)
     const mappedKeys = new Set(Object.values(collection).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
-    return { patient, collection: selectAutomaticClinicalRecordRows(collection, createClinicalRecordResolution(clinicalSource, mappedKeys)) }
+    return { patient, collection: selectAutomaticClinicalRecordRows(collection, createClinicalRecordResolution(clinicalSource, mappedKeys, false)) }
   },
 
   async parseStored(): Promise<LocalBundleData | null> {

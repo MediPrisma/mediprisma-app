@@ -49,7 +49,8 @@ export function medicationExportUnit(medication: MedicationEntity) {
   const sources = medication._sourcePrescriptionRecords?.length ? medicationSourceRecords([medication]) : []
   if (sources.length) {
     canonical.exportIntegrated = true
-    canonical.exportSourceLabel = `Integrated prescription; original source records retained: ${medication._reconciledSourceReferences?.join(' + ') || sources.map(source => source.exportSourceLabel).join(' + ')}`
+    const label=medication._sourceRecordComparison?.status==='confirmed' ? 'Integrated prescription' : 'Hospital-primary prescription'
+    canonical.exportSourceLabel = `${label}; original source records retained: ${medication._reconciledSourceReferences?.join(' + ') || sources.map(source => source.exportSourceLabel).join(' + ')}`
   }
   return { canonical, sources }
 }

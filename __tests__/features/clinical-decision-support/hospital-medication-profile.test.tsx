@@ -69,16 +69,16 @@ describe('hospital medications entering CDSS', () => {
       hospital({ id: 'undated', authoredOn: undefined, status: 'unknown' })])
     const context = profile.medicationClassContexts?.['nsaid-or-cox2-inhibitor']
     expect(context?.prescriptions?.map((item) => item.status)).toEqual(['active'])
-    expect(context?.undatedPrescriptions?.[0].status).toBe('unknown')
+    expect(profile.hospitalMedicationEvidence?.find(item=>item.source.resourceId==='undated')?.source.status).toBe('unknown')
     expect(JSON.stringify(profile)).not.toContain('"status":"draft"')
     expect(context?.state).toBe('confirmed-current')
     expect(profile.facts.hfHarmfulNsaid.zh).toContain('Diclofenac sodium')
     expect(profile.hospitalMedicationEvidence?.find(item=>item.source.resourceId==='ended')?.useState).toBe('not-current')
   })
 
-  it('does not treat an in-date dispensing validity period as proof of taking', () => {
+  it('uses the explicit active hospital status when dispensing validity is not a treatment interval', () => {
     expect(build([hospital({ dispenseRequest: { validityPeriod: { start: '2026-09-01', end: '2026-12-31' } } })])
-      .medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('active-order-unconfirmed')
+      .medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('confirmed-current')
   })
 
   it.each(['cancelled', 'entered-in-error', 'stopped', 'completed', 'not-taken'])('respects the source %s status', (status) => {

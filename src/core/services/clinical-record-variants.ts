@@ -17,7 +17,7 @@ export function selectClinicalModifierNodes(source: ClinicalReconciliationResult
   const selected = new Map<string, ClinicalSourceNode>()
   const edges = new Map<string, typeof source.graph.references[number][]>()
   for (const edge of source.graph.references) {
-    if (edge.status !== 'resolved' || !(edge.path === 'medicationReference' || /^(result|hasMember)\[\d+\]$/.test(edge.path))) continue
+    if (!(edge.status === 'resolved' || edge.status === 'ambiguous' && edge.path === 'medicationReference') || !(edge.path === 'medicationReference' || /^(result|hasMember)\[\d+\]$/.test(edge.path))) continue
     const group = edges.get(edge.origin.key) ?? []; group.push(edge); edges.set(edge.origin.key, group)
   }
   for (let index = 0; index < pending.length; index++) {

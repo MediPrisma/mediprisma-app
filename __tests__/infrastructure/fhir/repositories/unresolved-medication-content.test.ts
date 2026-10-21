@@ -6,7 +6,7 @@ import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import { GenerateClinicalContextUseCase } from '@/src/core/use-cases/clinical-context/generate-clinical-context.use-case'
 import { ALL_DATA_FILTERS, ALL_DATA_SELECTION } from '@/src/shared/constants/data-selection.constants'
 jest.mock('@/src/infrastructure/fhir/client/fhir-client.service')
-const resources = () => [{ resourceType: 'Patient', id: 'a' }, { resourceType: 'MedicationRequest', id: 'request', status: 'active', intent: 'order', medicationReference: { reference: 'Medication/drug' } }, ...['1', '2'].map(version => ({ resourceType: 'Medication', id: 'drug', meta: { versionId: version }, code: { text: version === '1' ? 'Apixaban' : 'Warfarin' } }))]
+const resources = () => [{ resourceType: 'Patient', id: 'a' }, { resourceType: 'MedicationRequest', id: 'request', status: 'active', intent: 'order', medicationReference: { reference: 'Medication/missing' } }]
 
 it.each(['local', 'smart'])('keeps a %s prescription with an ambiguous Medication reference explicitly unknown in profile, tools and AI', async path => {
  jest.resetAllMocks()
@@ -19,9 +19,9 @@ it.each(['local', 'smart'])('keeps a %s prescription with an ambiguous Medicatio
  const profile = createHospitalAwareCdssPatientProfile({ ...data, patient: { id: 'a', age: 70, gender: 'male' } })
  const beforeOverview: any = await createFhirTools(() => ({ patient: null, collection: data })).getDataOverview.execute!({}, { toolCallId: 'synthetic', messages: [] })
  expect({ inventoryUnknown: !!profile.hospitalMedicationInventoryUnresolved, canConcludeMedicationAbsence: beforeOverview.data.medications.canConcludeAbsence }).toEqual({ inventoryUnknown: true, canConcludeMedicationAbsence: false })
- expect(data.medications[0].clinicalMedicationContentUncertainty).toEqual({ reason: 'ambiguous-reference' })
+ expect(data.medications[0].clinicalMedicationContentUncertainty).toEqual({ reason: 'unresolved-reference' })
  expect(profile.hospitalMedicationInventoryUnresolved).toBeDefined()
- expect(profile.unresolvedClinicalMedicationContents?.[0].reason).toBe('ambiguous-reference')
+ expect(profile.unresolvedClinicalMedicationContents?.[0].reason).toBe('unresolved-reference')
  expect(beforeOverview.data.medications.count).toBe(1)
  const contexts = Object.values(profile.medicationClassContexts ?? {})
  expect(contexts.length).toBeGreaterThan(0)

@@ -112,6 +112,12 @@ describe('an anticoagulant known only from an unconfirmed hospital prescription'
     const { profile, result, model } = afPage([unconfirmed(status)])
     // Possible exposure stays where the safety checks read it (the earlier P1).
     expect(profile.afMedicationRegimens?.[0]).toMatchObject({ ingredient: 'apixaban', doseMg: 5, timesPerDay: 2 })
+    if(status==='active') {
+      expect(profile.hospitalMedicationUnconfirmedAnticoagulation).toBeUndefined()
+      expect(dp07(model).state).toBe('done')
+      expect(JSON.stringify(dp07(model))).not.toContain('使用待核對')
+      return
+    }
     expect(profile.hospitalMedicationUnconfirmedAnticoagulation?.regimens.map((regimen) => regimen.ingredient)).toEqual(['apixaban'])
     expect(profile.hospitalMedicationUnconfirmedAnticoagulation?.sources).toEqual([
       expect.objectContaining({ resourceType: 'MedicationRequest', resourceId: 'fictional-visit-oac-0', status, date: '2026-09-25' }),
@@ -253,6 +259,12 @@ describe('決策地圖 v2 with an unconfirmed hospital apixaban order', () => {
 
   it.each(['unknown', 'active'] as const)('shows DP-07 and its CHA₂DS₂-VA 待核對 for a %s order, never 「已定」 or 「已在用」', (status) => {
     render(<Page medications={[unconfirmed(status)]} />)
+    if(status==='active') {
+      expect(bookEntry()).toHaveAttribute('data-book-mark','done')
+      expect(within(bookEntry()).getByTestId('cdss-book-score')).toHaveTextContent('已在用')
+      expect(bookEntry()).not.toHaveTextContent('使用待核對')
+      return
+    }
     expect(bookMapLine()).toHaveAttribute('data-book-mark', 'info')
     expect(bookEntry()).toHaveAttribute('data-book-mark', 'info')
     expect(bookMapLine()).not.toHaveTextContent('已定')

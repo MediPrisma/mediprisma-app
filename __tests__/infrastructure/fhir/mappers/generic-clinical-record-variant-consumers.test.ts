@@ -22,44 +22,41 @@ function parsed() {
 it('carries actual local MedicationRequest and Condition versions through policy mapping and decision boundaries', () => {
   const data = parsed()
   for (const rows of [data.medications.filter(row => row.sourceId === 'same-medication'), data.conditions.filter(row => row.sourceId === 'same-condition')]) {
-    expect(rows.length).toBeGreaterThan(0)
-    expect(rows.every(row => row.clinicalRecordVariant?.variantCount === 2)).toBe(true)
-    expect(rows.map(row => row.sourceVersionId).sort()).toEqual(['1', '2'])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].clinicalRecordVariant).toBeUndefined()
+    expect(['1','2']).toContain(rows[0].sourceVersionId)
   }
   expect(data.clinicalSource!.graph.nodes.filter(node => node.resource.resourceType === 'ResearchStudy')).toHaveLength(2)
   expect(Object.keys(data)).not.toContain('researchStudies')
   const selected = selectCdssClinicalInputs(data)
-  expect(selected.input.medications.map(row => row.sourceId)).toEqual(['normal-medication'])
-  expect(selected.input.conditions.map(row => row.sourceId)).toEqual(['normal-condition'])
+  expect(selected.input.medications.map(row => row.sourceId).sort()).toEqual(['normal-medication','same-medication'])
+  expect(selected.input.conditions.map(row => row.sourceId).sort()).toEqual(['normal-condition','same-condition'])
   const profile = createHospitalAwareCdssPatientProfile({ ...data, patient: { id: 'synthetic', age: 70 }, now: new Date('2026-10-02') })
-  expect(profile.hospitalMedicationEvidence).toHaveLength(1)
-  expect(profile.hospitalMedicationEvidence![0].source.resourceId).toBe(data.medications.find(row => row.sourceId === 'normal-medication')!.id)
-  expect(profile.excludedClinicalRecordVariants?.map(row => row.resourceType).sort()).toEqual(['Condition', 'Condition', 'MedicationRequest', 'MedicationRequest'])
-  expect(profile.excludedClinicalRecordVariants?.every(row => row.reason && row.sourceId && row.versionId)).toBe(true)
+  expect(profile.hospitalMedicationEvidence).toHaveLength(2)
+  expect(profile.excludedClinicalRecordVariants).toBeUndefined()
   const scoped = scopeClinicalDataForAi(data, ALL_DATA_SELECTION, ALL_DATA_FILTERS, [])
-  expect(scoped.medications!.map(row => row.sourceId)).toEqual(['normal-medication'])
-  expect(scoped.conditions!.map(row => row.sourceId)).toEqual(['normal-condition'])
-  expect(scoped.clinicalRecordVariantExclusions).toHaveLength(4)
+  expect(scoped.medications).toHaveLength(2)
+  expect(scoped.conditions).toHaveLength(2)
+  expect(scoped.clinicalRecordVariantExclusions).toBeUndefined()
   const directCatalog = buildSourceCatalog(data)
-  expect(directCatalog.filter(entry => entry.resourceType.startsWith('Medication'))).toHaveLength(1)
-  expect(directCatalog.filter(entry => entry.resourceType === 'Condition')).toHaveLength(1)
+  expect(directCatalog.filter(entry => entry.resourceType.startsWith('Medication'))).toHaveLength(2)
+  expect(directCatalog.filter(entry => entry.resourceType === 'Condition')).toHaveLength(2)
   const formatter = new GenerateClinicalContextUseCase()
   const context = formatter.formatSections(formatter.execute(null, data, { selection: ALL_DATA_SELECTION, filters: ALL_DATA_FILTERS }))
   const messages = new GenerateMedicalSummaryUseCase().buildMessages({ clinicalContext: context, catalog: buildSourceCatalog(scoped), locale: 'en' })
   const prompt = messages.map(message => message.content).join('\n')
-  expect(prompt).toContain('These records exist but their versions or conflicts are unresolved')
-  expect(prompt).toContain('Do not infer absent disease, negative history, no medication')
-  expect(prompt).toContain('MedicationRequest record 1 version=1')
+  expect(prompt).not.toContain('These records exist but their versions or conflicts are unresolved')
+  expect(prompt).not.toContain('MedicationRequest record 1 version=1')
   expect(prompt).not.toContain('same-medication')
   expect(prompt).not.toContain('clinicalSourceNodeKey')
   const exports = [...mapMedications(data.medications, 'Patient/synthetic').entries, ...mapProblemList(data.conditions, 'Patient/synthetic').entries].map(entry => entry.resource)
   const variants = exports.filter(resource => (resource.modifierExtension as any[])?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION))
-  expect(variants).toHaveLength(4)
+  expect(variants).toHaveLength(0)
   expect(variants.every(resource => !('clinicalRecordVariant' in resource))).toBe(true)
 })
 
 it('quarantines all ten actual CDSS input array contracts independently without changing normal rows', () => {
-  const annotation = parsed().medications.find(row => row.clinicalRecordVariant)!.clinicalRecordVariant!
+  const annotation = {groupId:'legacy',classification:'conflict' as const,variantCount:2,reason:'Legacy unprojected source records'}
   const fields = ['conditions', 'encounters', 'observations', 'medications', 'allergies', 'carePlans', 'procedures', 'immunizations', 'diagnosticReports', 'documentReferences']
   const input: any = Object.fromEntries(fields.map(field => [field, [{ id: field + '-variant', clinicalRecordVariant: annotation }, { id: field + '-normal' }]]))
   const selected = selectCdssClinicalInputs(input)
@@ -69,7 +66,7 @@ it('quarantines all ten actual CDSS input array contracts independently without 
 })
 
 it('adds only legal extensions to every remaining IPS resource mapper', () => {
-  const annotation = parsed().medications.find(row => row.clinicalRecordVariant)!.clinicalRecordVariant!
+  const annotation = {groupId:'legacy',classification:'conflict' as const,variantCount:2,reason:'Legacy unprojected source records'}
   const mappers: Record<string, any> = { mapAllergies, mapImmunizations, mapProcedures, mapDevices, mapCarePlans, mapAdvanceDirectives }
   for (const name of ['mapAllergies', 'mapImmunizations', 'mapProcedures', 'mapDevices', 'mapCarePlans', 'mapAdvanceDirectives']) {
     const result = mappers[name]([{ id: 'synthetic', clinicalRecordVariant: annotation, sourceId: 'original', sourceVersionId: '1' }], 'Patient/synthetic')

@@ -3,8 +3,10 @@
 2026-10-21 owner decision: source reconciliation is automatic on every route.
 The source-version notice and medication comparison/verification prompts are
 removed. Hospital records take priority in the existing cross-source medication
-policy; same-record versions are selected by source priority, valid update/event
-time, final status, completeness and stable content identity. Original source
+policy; same-record versions are selected by source priority and valid source
+update time. When update order is unavailable, retracted/stopped states take
+priority, followed by final status, completeness and stable content identity.
+Clinical event dates and opaque version IDs are not version clocks. Original source
 payloads remain available for audit. No extra reconciliation action is required
 before UI, AI or CDSS can consume the selected record. Transport failures and
 patient-ownership validation remain distinct from version selection.

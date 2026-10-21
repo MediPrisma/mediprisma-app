@@ -202,7 +202,13 @@ function assembleSection(
 
 export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
   const labels: IpsSectionLabels = { ...DEFAULT_SECTION_LABELS, ...(opts.labels ?? {}) }
-  const data = opts.data
+  const medications=selectHospitalMedicationComparisons(opts.data.medications).map(medication=>{
+    const comparison=medication._sourceRecordComparison
+    if(!comparison || comparison.status==='confirmed' || medication._sourcePrescriptionRecords?.length) return medication
+    const sources=opts.data.medications.filter(source=>comparison.references.includes(`${source._sourceResourceType || 'MedicationRequest'}/${source.id}`))
+    return sources.length<2 ? medication : {...medication,_sourcePrescriptionRecords:sources}
+  })
+  const data = {...opts.data,medications}
   const now = opts.now ?? new Date()
   const timestamp = now.toISOString()
 
@@ -365,3 +371,4 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
   }
   return bundle
 }
+import { selectHospitalMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'

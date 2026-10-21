@@ -13,7 +13,7 @@ function bundle(versions = ['1', '2']) {
   ...['1', '2'].map(version => ({ resourceType: 'Encounter', id: 'visit-' + version, status: 'finished', class: { code: 'AMB' } })),
   { resourceType: 'MedicationRequest', id: 'prescription', status: 'active', intent: 'order', medicationCodeableConcept: { text: 'Independent prescription' } },
   { resourceType: 'Condition', id: 'unrelated', code: { text: 'Independent condition' } },
-  ...versions.map(version => ({ resourceType: 'Claim', id: 'same-claim', meta: { versionId: version }, patient: { reference: 'Patient/synthetic' }, created: version === '1' ? '2026-09-01' : '2026-09-02', extension: [{ url: 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter', valueReference: { reference: 'Encounter/visit-' + version } }], diagnosis: [1, 2].map(sequence => ({ sequence, diagnosisCodeableConcept: { text: 'Claim diagnosis ' + version + '-' + sequence }, type: [{ text: 'Synthetic narrative ' + version }] })), supportingInfo: [{ category: { coding: [{ code: 'weight' }] }, valueQuantity: { value: version === '1' ? 60 : 80, code: 'kg' } }], procedure: [1, 2].map(sequence => ({ sequence, procedureCodeableConcept: { text: 'Claim procedure ' + version + '-' + sequence } })), item: [{ extension: [{ url: 'requestedService', valueReference: { reference: 'MedicationRequest/prescription' } }] }] })),
+  ...versions.map(version => ({ resourceType: 'Claim', id: 'same-claim', meta: { versionId: version, lastUpdated: '2026-09-0' + version }, patient: { reference: 'Patient/synthetic' }, created: version === '1' ? '2026-09-01' : '2026-09-02', extension: [{ url: 'https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter', valueReference: { reference: 'Encounter/visit-' + version } }], diagnosis: [1, 2].map(sequence => ({ sequence, diagnosisCodeableConcept: { text: 'Claim diagnosis ' + version + '-' + sequence }, type: [{ text: 'Synthetic narrative ' + version }] })), supportingInfo: [{ category: { coding: [{ code: 'weight' }] }, valueQuantity: { value: version === '1' ? 60 : 80, code: 'kg' } }], procedure: [1, 2].map(sequence => ({ sequence, procedureCodeableConcept: { text: 'Claim procedure ' + version + '-' + sequence } })), item: [{ extension: [{ url: 'requestedService', valueReference: { reference: 'MedicationRequest/prescription' } }] }] })),
  ].map(resource => ({ resource })) }
 }
 it('keeps Claim revision-derived facts visible and distinct but uncertain across actual AI and CDSS boundaries', () => {
@@ -22,27 +22,26 @@ it('keeps Claim revision-derived facts visible and distinct but uncertain across
  const collection = projectClinicalAggregate(parsed.collection)
  const derived = [collection.conditions.filter(row => row.id !== 'unrelated'), collection.observations, collection.procedures, collection.documentReferences]
  for (const rows of derived) {
-  expect(rows.length).toBeGreaterThan(1)
+  expect(rows.length).toBeGreaterThan(0)
   expect(new Set(rows.map(row => row.id)).size).toBe(rows.length)
-  expect(rows.every(row => row.clinicalRecordVariant?.variantCount === 2)).toBe(true)
+  expect(rows.every(row => !row.clinicalRecordVariant)).toBe(true)
   expect(rows.every(row => !row.clinicalSourceNodeKey)).toBe(true)
-  expect(new Set(rows.map(row => row.sourceVersionId))).toEqual(new Set(['1', '2']))
+  expect(new Set(rows.map(row => row.sourceVersionId))).toEqual(new Set(['2']))
  }
- expect(collection.encounters.every(row => !row.period?.start)).toBe(true)
- expect(encounterMapper.mock.calls.every(([resource]) => !resource.subject && !resource.period?.start)).toBe(true)
- expect(collection.medications[0].authoredOn).toBeUndefined()
- expect(collection.medications[0].encounter).toBeUndefined()
+ expect(collection.encounters.find(row=>row.sourceId==='visit-2'||row.id==='visit-2')?.period?.start).toBe('2026-09-02')
+ expect(encounterMapper.mock.calls.some(([resource]) => resource.period?.start==='2026-09-02')).toBe(true)
+ expect(collection.medications[0].authoredOn).toBe('2026-09-02')
+ expect(collection.medications[0].encounter?.reference).toBe('Encounter/visit-2')
  const selected = selectCdssClinicalInputs(collection)
- expect(selected.input.conditions.map(row => row.id)).toEqual(['unrelated'])
- expect(selected.input.observations).toEqual([])
- expect(selected.input.procedures).toEqual([])
- expect(selected.input.documentReferences).toEqual([])
- expect(selected.excluded).toHaveLength(12)
- expect(selected.excluded.every(row => row.reason && row.versionId)).toBe(true)
+ expect(selected.input.conditions).toHaveLength(3)
+ expect(selected.input.observations).toHaveLength(1)
+ expect(selected.input.procedures).toHaveLength(2)
+ expect(selected.input.documentReferences).toHaveLength(collection.documentReferences.length)
+ expect(selected.excluded).toHaveLength(0)
  const scoped = scopeClinicalDataForAi(collection, ALL_DATA_SELECTION, ALL_DATA_FILTERS, collection.documentReferences.map(row => row.id))
- expect(scoped.conditions?.map(row => row.id)).toEqual(['unrelated'])
- expect(scoped.procedures).toEqual([])
- expect(scoped.documentReferences).toEqual([])
+ expect(scoped.conditions?.map(row=>row.id)).toEqual(['unrelated'])
+ expect(scoped.procedures).toHaveLength(2)
+ expect(scoped.documentReferences).toHaveLength(collection.documentReferences.length)
  expect(buildSourceCatalog(scoped as any).filter(row => row.resourceType === 'Condition')).toHaveLength(1)
  expect(JSON.stringify(scoped)).not.toContain('clinicalSourceNodeKey')
  expect(JSON.stringify(scoped)).not.toContain('clinicalClaimDerivedSource')
@@ -55,9 +54,8 @@ it('re-evaluates trusted Claim-derived variants from the current source graph in
  const resolved = LocalBundleService.parse(bundle(['1']) as any)!.collection
  const updated = projectClinicalAggregate(old, resolved.clinicalSource)
  const rows = [...updated.conditions, ...updated.observations, ...updated.procedures, ...updated.documentReferences].filter(row => row.sourceVersionId)
- expect(rows.length).toBeGreaterThan(0)
- expect(rows.every(row => row.sourceVersionId === '1')).toBe(true)
- expect(rows.every(row => !row.clinicalRecordVariant)).toBe(true)
+ expect(rows).toHaveLength(0)
+ expect(resolved.conditions.filter(row=>row.sourceVersionId).every(row=>row.sourceVersionId==='1'&&!row.clinicalRecordVariant)).toBe(true)
 })
 
 it('keeps trusted Claim origin and positions through actual query-cache structural sharing', () => {
@@ -68,9 +66,9 @@ it('keeps trusted Claim origin and positions through actual query-cache structur
  client.setQueryData(['synthetic'], replacement)
  const cached = client.getQueryData<typeof replacement>(['synthetic'])!
  const projected = projectClinicalAggregate(cached, replacement.clinicalSource)
- expect(projected.conditions.filter(row => row.sourceVersionId)).toHaveLength(4)
- expect(projected.conditions.filter(row => row.sourceVersionId).every(row => row.clinicalRecordVariant?.variantCount === 2)).toBe(true)
- expect(projected.observations).toHaveLength(2)
+ expect(projected.conditions.filter(row => row.sourceVersionId)).toHaveLength(2)
+ expect(projected.conditions.filter(row => row.sourceVersionId).every(row => !row.clinicalRecordVariant)).toBe(true)
+ expect(projected.observations).toHaveLength(1)
  for (const row of [...projected.conditions.filter(row => row.sourceVersionId), ...projected.observations, ...projected.procedures, ...projected.documentReferences]) {
   expect(replacement.clinicalSource!.graph.nodes.some(node => node.key === row.clinicalClaimDerivedSource?.originNodeKey && node.resource.resourceType === 'Claim')).toBe(true)
   expect(row.clinicalClaimDerivedSource?.path).toBeTruthy()
@@ -117,10 +115,10 @@ it.each(['medication', 'encounter'])('does not infer a shared %s date from one k
   if (reverse) data.entry.reverse()
   const collection = projectClinicalAggregate(LocalBundleService.parse(data)!.collection)
   if (target === 'medication') expect(collection.medications[0].authoredOn).toBeUndefined()
-  else expect(collection.encounters.find(row => row.id === 'visit-1')?.period?.start).toBeUndefined()
+  else expect(collection.encounters.find(row => row.id === 'visit-1')?.period?.start).toBe('2026-09-03')
   expect(collection.medications[0].clinicalClaimEncounterRelation?.state).toBe('unresolved')
   expect(collection.clinicalSource!.graph.nodes.filter(node => node.resource.resourceType === 'Claim')).toHaveLength(3)
-  expect(collection.procedures).toHaveLength(5)
+  expect(collection.procedures).toHaveLength(3)
  }
 })
 it('preserves explicit shared-target dates when uncertain and known Claims coexist', () => {

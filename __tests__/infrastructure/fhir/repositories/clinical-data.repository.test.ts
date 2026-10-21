@@ -586,7 +586,8 @@ describe('medication graph resolution at intake', () => {
     ;(FhirMapper.toMedication as jest.Mock).mockImplementation((resource: any) => resource)
     const result = await repo.fetchMedications('synthetic-medication')
     expect(result).toHaveLength(1)
-    expect(result[0].medicationCodeableConcept).toBeUndefined()
+    if(reference==='Medication/same') expect(['first','second']).toContain(result[0].medicationCodeableConcept?.text)
+    else expect(result[0].medicationCodeableConcept).toBeUndefined()
   })
 })
 

@@ -14,7 +14,7 @@ function deferred() {
   const promise = new Promise<any>(done => { resolve = done })
   return { promise, resolve }
 }
-const observation = (version: string, value: number) => ({ resourceType: 'Observation', id: 'same', meta: { versionId: version }, status: 'final', code: { text: 'Synthetic lab' }, category: [{ coding: [{ code: 'laboratory' }] }], valueQuantity: { value }, effectiveDateTime: '2026-07-02' })
+const observation = (version: string, value: number) => ({ resourceType: 'Observation', id: 'same', meta: { versionId: version, lastUpdated:`2026-10-0${version}` }, status: 'final', code: { text: 'Synthetic lab' }, category: [{ coding: [{ code: 'laboratory' }] }], valueQuantity: { value }, effectiveDateTime: '2026-07-02' })
 
 it.each(['composition-first', 'observation-first'])('shares every active Observation and cross-query reference in %s progressive settlement', async order => {
   jest.resetAllMocks()
@@ -38,8 +38,8 @@ it.each(['composition-first', 'observation-first'])('shares every active Observa
   else { await act(async () => resolveObservations()); await act(async () => resolveComposition()) }
   await waitFor(() => expect(result.current.complete.data).toBeDefined())
   const collection = result.current.complete.data!
-  expect(collection.observations.map(row => row.valueQuantity?.value).sort()).toEqual([7, 9])
-  expect(collection.diagnosticReports[0]._observations![0]).toBe(collection.observations.find(row => row.valueQuantity?.value === 7))
+  expect(collection.observations.map(row => row.valueQuantity?.value)).toEqual([9])
+  expect(collection.diagnosticReports[0]._observations![0]).toBe(collection.observations[0])
   expect(collection.compositions[0].section?.[0].entry?.map(entry => entry.reference)).toEqual([
     'Observation/' + collection.observations.find(row => row.valueQuantity?.value === 9)!.id,
     'DiagnosticReport/' + collection.diagnosticReports[0].id,
