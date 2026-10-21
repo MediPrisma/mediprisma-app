@@ -4,6 +4,8 @@ import { inferReportDisplayGroup } from './report-grouping-helpers'
 
 export type SharedReportSource = {
   reportId?: string
+  /** Original source text retained for cross-source display grouping. */
+  narrative?: string
   title: string
   codes: string[]
   codings: Array<{
