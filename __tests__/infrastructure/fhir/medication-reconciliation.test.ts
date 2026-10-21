@@ -502,5 +502,6 @@ it('does not revive locally reconciled source prescriptions during shared aggreg
   expect(data.clinicalSource!.graph.nodes.filter(node => node.resource.resourceType === 'MedicationRequest')).toHaveLength(2)
   const projected = projectClinicalAggregate(data)
   expect(projected.medications).toHaveLength(1)
-  expect(projected.medications[0].sourcePrescriptions).toEqual(data.medications[0].sourcePrescriptions)
+  expect(data.medications[0]._sourcePrescriptionRecords).toHaveLength(2)
+  expect(projected.medications[0]._sourcePrescriptionRecords).toEqual(data.medications[0]._sourcePrescriptionRecords)
 })
