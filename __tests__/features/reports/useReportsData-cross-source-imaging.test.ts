@@ -3,6 +3,7 @@ import { calculateReportTabCounts } from '@/features/clinical-summary/reports/ut
 import { imagingReportsCategory } from '@/src/core/categories/imaging-reports.category'
 import { normalizeImagingReportCopy, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
+import { getReportDate } from '@/src/shared/utils/report-identity'
 
 const BODY = 'Synthetic imaging finding: a 4 mm nodule in the left upper lobe is unchanged. No pleural effusion. Follow-up imaging in twelve months is recommended.'
 const FOOTER = ' Reported By Example Radiologist(LicenseRD#:0000) On:2026/06/25(10:30:00),(by Example Radiologist)At:TEST01Positive Rate Evaluation 2'
@@ -295,6 +296,22 @@ describe('cross-source imaging reports', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].effectiveDate).toBe('2026-06-24')
     expect(calculateReportTabCounts(reports).imaging).toBe(1)
+  })
+
+  it.each(['LAB', 'PAT'])('preserves the existing %s date fallback outside imaging', category => {
+    expect(getReportDate({ effectivePeriod: { start: '2026-06-24' }, issued: '2026-06-25',
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: category }] }],
+    })).toBe('2026-06-25')
+  })
+
+  it('renders a lone source normally when latest filtering removes its paired report', () => {
+    const reports = pair()
+    reports.push({ ...reports[0], id: 'newer-hospital', effectiveDateTime: '2026-06-25', conclusion: `${BODY} New finding.` })
+    const filters = { imagingReportVersion: 'latest', imagingReportTimeRange: 'all' }
+    const section = imagingReportsCategory.getContextSection(reports, filters, { observations: [], encounters: [] } as any)
+    const text = section && !Array.isArray(section) ? section.items.join('\n') : ''
+    expect(text).not.toContain('[shared narrative; count once]')
+    expect(imagingReportsCategory.getCount(reports, filters, { observations: [], encounters: [] } as any)).toBe(2)
   })
 
   it('does not pick a cross-source pair from nearby same-title exams in either input order', () => {

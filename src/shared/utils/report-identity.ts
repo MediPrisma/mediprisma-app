@@ -1,8 +1,13 @@
 import { getNhiMedicloudOriginalInstitution, isNhiAuthorityDisplay, isNhiMedicloudObservation, isAdultPreventiveHealthExamResource } from './observation-provenance.utils'
 import { getCodeableConceptText } from './fhir-helpers'
+import { inferReportDisplayGroup } from './report-grouping-helpers'
 
 export function getReportDate(report: any): string | undefined {
-  return report?.effectiveDateTime || report?.effectivePeriod?.start || report?.issued
+  // This change adds period support for imaging only. Preserve the existing
+  // issued-date fallback for unrelated laboratory/pathology report grouping.
+  return report?.effectiveDateTime
+    || (inferReportDisplayGroup(report) === 'imaging' ? report?.effectivePeriod?.start : undefined)
+    || report?.issued
 }
 
 export function isNhiMedicloudReport(report: any): boolean {

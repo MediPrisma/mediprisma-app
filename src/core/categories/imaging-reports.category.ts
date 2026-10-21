@@ -13,6 +13,7 @@ import { expandObservationValues, observationDisplayValue } from '@/src/core/uti
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
 import { compareImagingCopies, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { getReportDate } from '@/src/shared/utils/report-identity'
 import {
   reportSource,
   sharedReportNarrative,
@@ -89,7 +90,7 @@ const getLatestImagingReports = (reports: ImagingReportData[]): ImagingReportDat
     // the time-range filter below and the reports display. getMostRecentDate
     // would pick the LATER of the two (issued), keying "latest" dedup off a
     // different date than the range filter.
-    (report) => report.effectiveDateTime || report.effectivePeriod?.start || report.issued
+    getReportDate
   )
 }
 
@@ -198,7 +199,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     if (timeRange && timeRange !== 'all') {
       const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
       filtered = filtered.filter(report =>
-        inWindow(report.effectiveDateTime || report.effectivePeriod?.start || report.issued)
+        inWindow(getReportDate(report))
       )
     }
 
@@ -221,7 +222,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     if (timeRange && timeRange !== 'all') {
       const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
       filtered = filtered.filter(report =>
-        inWindow(report.effectiveDateTime || report.effectivePeriod?.start || report.issued)
+        inWindow(getReportDate(report))
       )
     }
 
@@ -277,7 +278,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
 
     filtered.forEach(report => {
       const groupingKey = groupingKeys.get(report)
-      if (groupingKey) {
+      if (groupingKey && (sharedGroups.get(groupingKey)?.length ?? 0) > 1) {
         if (renderedSharedKeys.has(groupingKey)) return
         renderedSharedKeys.add(groupingKey)
 
@@ -287,7 +288,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         const sources = groupedReports.map(reportSource)
         const groupTitle = sharedReportTitle(sources, 'en')
           ?? sources.map((source) => source.title).join(' + ')
-        const reportDate = representative.effectiveDateTime || representative.effectivePeriod?.start
+        const reportDate = getReportDate(representative)
         const datePart = reportDate
           ? ` (${new Date(reportDate).toLocaleDateString()})`
           : ''
@@ -317,8 +318,9 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         }
       })
 
-      const datePart = report.effectiveDateTime 
-        ? ` (${new Date(report.effectiveDateTime).toLocaleDateString()})` 
+      const reportDate = getReportDate(report)
+      const datePart = reportDate
+        ? ` (${new Date(reportDate).toLocaleDateString()})`
         : ''
       
       const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'
