@@ -23,6 +23,38 @@ function pair(): any[] {
 }
 
 describe('cross-source imaging reports', () => {
+  it.each([['10² mm', '102 mm'], ['10₂ mm', '102 mm'], ['2 µm', '2 μm'], ['4 mM', '4 mm']])('preserves clinical characters: %s versus %s', (left, right) => {
+    const reports = pair().map((report, index) => ({ ...report, conclusion: `${BODY} Measurement: ${index ? right : left}.` }))
+    expect(normalizeImagingReportCopy(reports[0].conclusion)).not.toBe(normalizeImagingReportCopy(reports[1].conclusion))
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    expect(imagingReportsCategory.getCount(reports, filters, {} as any)).toBe(2)
+    const section = imagingReportsCategory.getContextSection(reports, filters, {} as any)
+    expect(JSON.stringify(section)).not.toContain('[shared narrative; count once]')
+  })
+
+  it('still folds full-width ASCII formatting without folding scientific characters', () => {
+    const reports = pair()
+    reports[1].conclusion = BODY.replace(/[!-~]/g, char => String.fromCharCode(char.charCodeAt(0) + 0xfee0))
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+  })
+
+  it.each(['different-studies', 'same-reference', 'unresolved', 'one-sided', 'identifier-only'])('keeps study-linked reports out of unverified narrative pairing: %s', kind => {
+    const reports = pair()
+    reports[0].imagingStudy = [{ reference: 'ImagingStudy/a' }]
+    if (kind !== 'one-sided') reports[1].imagingStudy = [{ reference: kind === 'same-reference' ? 'ImagingStudy/a' : 'ImagingStudy/b' }]
+    if (kind === 'identifier-only') reports[1].imagingStudy = [{ identifier: { system: 'urn:dicom:uid', value: 'urn:oid:1.2.3.2' } }]
+    const imagingStudies = kind === 'unresolved' ? [] : ['a', 'b'].map((id, index) => ({ resourceType: 'ImagingStudy', id, status: 'available', subject: reports[0].subject, identifier: [{ system: 'urn:dicom:uid', value: `urn:oid:1.2.3.${index + 1}` }] }))
+    expect(reportDisplayGroupingKeys(reports).size).toBe(0)
+    expect(buildReportsData(reports, imagingStudies).reportRows.filter(row => row.diagnosticReportIds?.length)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+    const data = { diagnosticReports: reports, imagingStudies, observations: [], encounters: [] }
+    const extracted = imagingReportsCategory.extractData(data as any)
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    expect(JSON.stringify(imagingReportsCategory.getContextSection(extracted, filters, data as any))).not.toContain('[shared narrative; count once]')
+  })
+
   it('retains the evaluation footer even when the cloud copy has more whitespace', () => {
     const reports = pair()
     reports[1].conclusion = BODY.replaceAll(' ', '  \n  ')
@@ -205,7 +237,7 @@ describe('cross-source imaging reports', () => {
     reports[1].conclusion = text.replaceAll(' ', '  \n ')
     expect(buildReportsData(reports).reportRows).toHaveLength(1)
     expect(normalizeImagingReportCopy('no table')).not.toBe(normalizeImagingReportCopy('notable'))
-    expect(normalizeImagingReportCopy('Impressionistic lesion description')).toBe('impressionistic lesion description')
+    expect(normalizeImagingReportCopy('Impressionistic lesion description')).toBe('Impressionistic lesion description')
   })
 
   it.each([

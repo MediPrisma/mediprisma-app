@@ -41,6 +41,11 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
       ] }],
     } })
   }
+  bundle.entry.push({ resource: {
+    ...bundle.entry.find((entry: any) => entry.resource?.id === 'cloud-imaging-0').resource,
+    id: 'cloud-breast-history', effectiveDateTime: '2026-05-24', extension: [],
+    conclusion: 'Synthetic prior breast report for source-specific history. No suspicious mass. The prior examination is preserved under the original NHI title.',
+  } })
   const fixture = testInfo.outputPath('synthetic-imaging.json')
   await fs.mkdir(testInfo.outputDir, { recursive: true })
   await fs.writeFile(fixture, JSON.stringify(bundle))
@@ -74,6 +79,9 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
   }
   await page.setViewportSize({ width: 1440, height: 1000 })
   if (!before) {
+    await page.getByPlaceholder(/搜尋/).fill('乳房超音波')
+    await expect(rows.filter({ hasText: 'SONOGRAM- BREAST' })).toHaveCount(1)
+    await page.getByPlaceholder(/搜尋/).fill(marker)
     const first = rows.filter({ hasText: 'SONOGRAM- BREAST' })
     const header = first.locator('[role="button"][aria-expanded]').first()
     if (await header.getAttribute('aria-expanded') !== 'true') await header.press('Enter')
@@ -83,6 +91,11 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
     await expect(sources).toContainText('cloud-imaging-0')
     await expect(sources).toContainText('Reported By Example')
     await page.screenshot({ path: path.join(output, 'after-sources.png'), fullPage: true })
+    // Keep history entry points for each original title rather than broadening
+    // a generic NHI title into an inferred cross-anatomy history alias.
+    const cloudSource = sources.locator('li').filter({ hasText: 'cloud-imaging-0' })
+    await cloudSource.getByRole('button', { name: '查看歷史紀錄' }).click()
+    await expect(page.getByText('Synthetic prior breast report for source-specific history.', { exact: false })).toBeVisible()
     const popupPromise = context.waitForEvent('page')
     await first.getByRole('button', { name: /開啟.*健保影像|DICOM Viewer/ }).first().click()
     const popup = await popupPromise

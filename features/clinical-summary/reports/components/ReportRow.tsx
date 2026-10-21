@@ -241,7 +241,19 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
             key={`${source.reportId ?? 'source'}-${index}`}
             className="grid gap-0.5 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3"
           >
-            <span className="min-w-0 break-words text-foreground/90">{source.title}</span>
+            <span className="flex min-w-0 items-center gap-1 break-words text-foreground/90">
+              {source.title}
+              {source.narrative && (
+                <ObservationLongitudinalAction
+                  observation={{ code: { text: 'Report Summary' }, valueString: source.narrative }}
+                  title={source.title}
+                  sourceId={`report-source-history-${source.reportId ?? index}`}
+                  reportTitle={source.title}
+                  reportLookupTitle={source.title}
+                  stopPropagation
+                />
+              )}
+            </span>
             {source.codes.length > 0 && (
               <span className="break-all tabular-nums">
                 {labels.orderCode}: {source.codes.join(', ')}

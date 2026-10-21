@@ -21,7 +21,10 @@ const EXAM_HEADER = new RegExp(String.raw`^((?:SONO(?:GRAM)?|CHEST|CT(?:/SCAN)?|
  * Only the bridge's recognized administrative wrapper is ignored. Unknown
  * footer formats remain part of the text and therefore fail closed. */
 export function normalizeImagingReportCopy(value: string): string {
-  let text = value.normalize('NFKC').trim().replace(EXAM_HEADER, '')
+  // Fold only full-width ASCII and its space. Compatibility normalization and
+  // lowercasing can erase clinical differences: 10²/102, µ/μ or mM/mm.
+  let text = value.replace(/[\uFF01-\uFF5E]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\u3000/g, ' ').trim().replace(EXAM_HEADER, '')
   // Multiple signatures can bracket a clinical addendum. Never reduce that
   // multi-version document to the text before its first signature.
   const signature = (text.match(/\bReported\s+By\b/gi)?.length ?? 0) === 1 ? SIGNATURE.exec(text) : null
@@ -35,7 +38,7 @@ export function normalizeImagingReportCopy(value: string): string {
   text = text.replace(/^Impression\b\s*:?\s*/i, '')
   // Keep token boundaries: list item "1. 2 cm" must never equal "1.2 cm".
   // Missing spaces within words are uncertain content, not an automatic match.
-  return text.toLowerCase().replace(/\s+/g, ' ').trim()
+  return text.replace(/\s+/g, ' ').trim()
 }
 
 /** This adapter's explicit source tag identifies Taipei VGH. An old hospital
@@ -218,6 +221,10 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     // may carry an interpretation, status or reference range not represented in
     // that string. Keep all such reports separate rather than hiding metadata.
     if (report.result?.length || report._observations?.length || report.conclusionCode?.length) continue
+    // Narrative equality cannot establish DICOM study identity. Keep linked
+    // reports separate until a shared study identity can be verified here,
+    // including identical/unresolved references and identifier-only links.
+    if (report.imagingStudy?.length) continue
     // Only text we actually compare and images may accompany this match.
     // HTML, PDFs and unresolved URL-backed reports may contain extra findings.
     if (report.presentedForm?.some(form => {
