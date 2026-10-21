@@ -207,6 +207,16 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
       zh: 'Scr 單位 mg/dL。四變數 MDRD（IDMS 可追溯），省略種族係數。',
     },
   },
+  'doac-dose-nvaf': {
+    formula: {
+      en: 'CrCl by Cockcroft–Gault (actual weight), compared unrounded. Apixaban 2.5 mg bid if ≥2 of age ≥80, weight ≤60 kg, Cr ≥1.5, or CrCl 15–29; rivaroxaban 15 mg qd at CrCl 15–49; edoxaban 30 mg qd if any of CrCl 15–50, weight ≤60 kg, ciclosporin/dronedarone/erythromycin/ketoconazole; dabigatran 110 mg bid at age ≥80 or with verapamil, 150 or 110 mg bid at age 75–80, CrCl 30–50 or GI risk.',
+      zh: 'CrCl 以 Cockcroft–Gault（實際體重）計算，以未四捨五入值比較。Apixaban：年齡 ≥80、體重 ≤60 kg、Cr ≥1.5 中 ≥2 項，或 CrCl 15–29 → 2.5 mg bid；rivaroxaban：CrCl 15–49 → 15 mg qd；edoxaban：CrCl 15–50、體重 ≤60 kg、併用 ciclosporin／dronedarone／erythromycin／ketoconazole 任一 → 30 mg qd；dabigatran：年齡 ≥80 或併用 verapamil → 110 mg bid，75–80 歲、CrCl 30–50 或胃腸出血風險 → 150 或 110 mg bid。',
+    },
+    note: {
+      en: 'Contraindication, not-recommended and avoid rules (renal, dialysis, liver, interactions, pregnancy) take precedence and quote the EU SmPC section and page. Taiwan labels pending pharmacy review.',
+      zh: '禁忌、不建議與應避免（腎、透析、肝、交互作用、懷孕）優先於劑量，各附 EU SmPC 章節與頁碼。臺灣仿單待藥學部核對。',
+    },
+  },
   'crcl-cockcroft-gault': {
     formula: {
       en: 'CrCl = [(140 − age) × weight × (0.85 if female)] / (72 × Scr)',

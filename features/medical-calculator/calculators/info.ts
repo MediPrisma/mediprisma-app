@@ -37,6 +37,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'CKD staging (older equation; CKD-EPI 2021 is now preferred).', zh: '慢性腎臟病分期（較舊公式；現以 CKD-EPI 2021 為優先）。' },
     caveats: { en: 'Underestimates GFR above 60; not validated for AKI or extremes of age/body size. Prefer CKD-EPI 2021.', zh: 'GFR > 60 時會低估；未驗證於急性腎損傷或極端年齡／體型。建議改用 CKD-EPI 2021。' },
   },
+  'doac-dose-nvaf': {
+    useWhen: { en: 'Checking a DOAC dose for adult non-valvular AF against each agent’s label (renal, hepatic, interactions).', zh: '成人非瓣膜性心房顫動，依各藥仿單核對 DOAC 劑量（腎、肝功能與交互作用）。' },
+    caveats: { en: 'EU SmPC rules; the Taiwan labels are pending pharmacy review (edoxaban 15 mg, apixaban with dual inhibitors). NVAF only — not VTE, prophylaxis or peri-procedural interruption. Does not assess mechanical valves, mitral stenosis, antiphospholipid syndrome or active bleeding. A check beside the guideline card; it does not change the CDSS recommendation.', zh: '依 EU SmPC；臺灣仿單待藥學部核對（edoxaban 15 mg、apixaban 併用雙重抑制劑）。僅限 NVAF，不含 VTE、預防用藥與手術前後停藥。不評估機械瓣、二尖瓣狹窄、抗磷脂症候群與活動性出血。僅為指引卡旁的核對，不改變 CDSS 建議。' },
+  },
   'crcl-cockcroft-gault': {
     useWhen: { en: 'Renal drug dosing in stable adults (the equation most drug labels use).', zh: '穩定成人之腎臟藥物劑量調整（多數藥品仿單採用此公式）。' },
     caveats: { en: 'Assumes stable renal function; uses actual body weight — over/underestimates in obesity or edema (consider ideal/adjusted weight). Not for AKI.', zh: '假設腎功能穩定；採實際體重 — 肥胖或水腫時會高／低估（可考慮理想／校正體重）。不適用於急性腎損傷。' },
