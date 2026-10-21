@@ -1,3 +1,4 @@
+import { anticoagulationOnProfile } from './hospital-medication-profile'
 import type { CdssLocale, CdssPatientProfile, DecisionPointView, VisitDecisionModel } from '../types'
 import type { HospitalAwareCdssProfile, HospitalUnconfirmedAnticoagulation } from './hospital-medication-profile'
 
@@ -31,7 +32,10 @@ function regimenLabel(regimen: HospitalUnconfirmedAnticoagulation['regimens'][nu
 export function applyHospitalMedicationVisitReview(
   model: VisitDecisionModel, profile: CdssPatientProfile, locale: CdssLocale,
 ): VisitDecisionModel {
+  const unresolvedInventory = (profile as HospitalAwareCdssProfile).hospitalMedicationInventoryUnresolved
+  const variantPending = unresolvedInventory && !anticoagulationOnProfile(profile)
   const pending = (profile as HospitalAwareCdssProfile).hospitalMedicationUnconfirmedAnticoagulation
+    ?? (variantPending ? { regimens: [], sources: unresolvedInventory.sources } : undefined)
   if (!pending) return model
   const english = locale === 'en'
   const first = pending.regimens[0]
@@ -46,17 +50,17 @@ export function applyHospitalMedicationVisitReview(
     const verdict = point.scoreTable?.verdict
     const onIt = verdict !== undefined ? ON_IT_SUFFIXES.find((suffix) => verdict.endsWith(suffix)) : undefined
     // 「≥2 建議抗凝 · 已在用」 → 「≥2 建議抗凝 · 院內處方待核對」, and not yet the patient's conclusion.
-    const scoreTable = point.scoreTable && onIt
-      ? { ...point.scoreTable, verdict: `${verdict!.slice(0, -onIt.length)}${verdictSuffix}`, pending: true }
+    const scoreTable = point.scoreTable && (onIt || variantPending)
+      ? { ...point.scoreTable, ...(onIt ? { verdict: `${verdict!.slice(0, -onIt.length)}${verdictSuffix}` } : {}), pending: true }
       : point.scoreTable
-    if (point.state !== 'done') return scoreTable === point.scoreTable ? point : { ...point, scoreTable: scoreTable! }
+    if (!variantPending && point.state !== 'done') return scoreTable === point.scoreTable ? point : { ...point, scoreTable: scoreTable! }
     // 「已抗凝」 has no next step and no 「what changes the answer」; neither applies while use is unconfirmed.
     const { next: _next, changesIf: _changesIf, ...rest } = point
     return {
       ...rest,
       state: 'info',
-      headline: english ? `${label}: use to confirm` : `${label}：使用待核對`,
-      why: english
+      headline: variantPending ? english ? 'Medication inventory unresolved' : '來源用藥未釐清' : english ? `${label}: use to confirm` : `${label}：使用待核對`,
+      why: variantPending ? english ? 'Medication source versions or conflicts are unresolved. Neither anticoagulant use nor absence is established; reconcile before deciding whether to start or change treatment.' : '來源用藥版本或衝突未釐清，尚不能判定已使用或未使用抗凝藥；治療決策前需先核對。' : english
         ? `Hospital prescription${date ? ` (${date})` : ''}; current use needs confirmation. Confirm actual use before starting or changing anticoagulation`
         : `院內處方${date ? `（${date}）` : ''}，目前使用待確認；開始或調整抗凝前先核對實際用藥`,
       ...(point.chain ? {

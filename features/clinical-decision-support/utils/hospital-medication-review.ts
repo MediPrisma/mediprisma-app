@@ -21,7 +21,44 @@ export function buildHospitalAwareCdssResult(
   pack: ClinicalGuidelinePack, profile: HospitalAwareCdssProfile, locale: CdssLocale,
 ): CdssResult {
   const result = pack.build({ profile: createHospitalMedicationEvaluationProfile(profile), locale })
-  return applyHospitalMedicationReview(result, profile, locale)
+  return applyUnresolvedRecordTherapyReview(applyHospitalMedicationReview(result, profile, locale), profile, locale)
+}
+
+/** No condition/allergy/visit/procedure version is chosen as a contraindication
+ * verdict. Preserve verified safety results; defer non-safety treatment actions. */
+export function applyUnresolvedRecordTherapyReview(result: CdssResult, profile: HospitalAwareCdssProfile, locale: CdssLocale): CdssResult {
+  const unresolved = profile.excludedClinicalRecordVariants?.filter(item => ['Condition', 'AllergyIntolerance', 'Encounter', 'Procedure'].includes(item.resourceType)) ?? []
+  if (!unresolved.length) return result
+  const label = locale === 'en' ? 'Reconcile unresolved source records' : '核對未決來源紀錄'
+  const message = locale === 'en'
+    ? 'Condition, allergy, encounter or procedure source versions are unresolved. Reconcile eligibility and contraindications before starting or adjusting therapy; verified safety evidence remains available.'
+    : '診斷、過敏、就醫或處置來源版本尚未釐清，開始或調整治療前需核對適用條件及禁忌；已確認的安全證據仍可使用。'
+  const adapt = (item: CdssRecommendation): CdssRecommendation => {
+    const therapy = item.domain === 'medication' || item.presentationType === 'medication'
+      || item.visitDecision?.actions.some(action => action.decisionKind === 'prescribed' || action.decisionKind === 'dose-adjusted')
+    const positiveSafety = item.domain === 'safety' && (item.status === 'actionable' || item.status === 'review')
+      && (item.patientEvidence.some(entry => entry.sources?.length)
+        || item.evidenceTables?.some(table => table.items.some(row => row.direction === 'supports' && row.sources?.length)))
+    if (item.domain === 'safety' ? positiveSafety : !therapy) return item
+    const reconcileEvidence = (entries: typeof item.patientEvidence) => entries.map(entry => !entry.sources?.length ? { ...entry, value: message } : entry)
+    const evidenceTables = item.evidenceTables?.map(table => {
+      const items = table.items.map(row => row.direction === 'against' && !row.sources?.length
+        ? { ...row, direction: 'unknown' as const, defaultEnabled: false, value: message } : row)
+      const enabled = items.filter(row => profile.evidenceOverrides?.[row.id] ?? row.defaultEnabled)
+      return { ...table, items, supportsCount: enabled.filter(row => row.direction === 'supports').length,
+        againstCount: enabled.filter(row => row.direction === 'against').length, unknownCount: items.filter(row => row.direction === 'unknown').length }
+    })
+    return { ...item, patientEvidence: reconcileEvidence(item.patientEvidence), evidenceTables, status: 'needs-data', visitDecision: undefined,
+      title: label + (item.moduleName ? ': ' + item.moduleName : ''), recommendation: message, rationale: message, nextActions: [message],
+      missingData: [...new Set([...(item.missingData ?? []), label])],
+      clinicalReviewItems: [...new Set([...(item.clinicalReviewItems ?? []), label])],
+      ...(item.semanticRule ? { semanticRule: { ...item.semanticRule, patientData: reconcileEvidence(item.semanticRule.patientData), decisionLogic: message, clinicalConclusion: message } } : {}) }
+  }
+  return { ...result, recommendations: result.recommendations.map(adapt), automatedChecks: result.automatedChecks?.map(check => {
+    if (!check.recommendation) return check
+    const recommendation = adapt(check.recommendation)
+    return recommendation === check.recommendation ? check : { ...check, label: recommendation.title, value: recommendation.recommendation, recommendation }
+  }) }
 }
 
 export function applyHospitalMedicationReview(

@@ -39,6 +39,7 @@ export interface HospitalUnconfirmedAnticoagulation {
 
 export type HospitalAwareCdssProfile = CdssPatientProfile & {
   excludedClinicalRecordVariants?: readonly ExcludedClinicalRecordVariant[]
+  hospitalMedicationInventoryUnresolved?: { sources: readonly CdssFactSource[] }
   hospitalMedicationEvidence?: readonly HospitalMedicationEvidence[]
   hospitalMedicationPolicyVersion?: string
   /** Classes with an unconfirmed prescription: eligible for safety exposure checks. */
@@ -69,11 +70,15 @@ function withUnresolvedMedicationInventory(profile: HospitalAwareCdssProfile): H
   for (const [key, context] of Object.entries(contexts)) {
     if (!context || context.state !== 'not-found') continue
     contexts[key as CdssMedicationClassId] = { ...context, state: 'uncertain' }
-    facts[context.factKey] = uncertainty
+    // Missing current-class facts must not become truthy exposure assertions.
+    if (!facts[context.factKey]?.sources?.length) delete facts[context.factKey]
   }
-  for (const key of HOSPITAL_MEDICATION_EXPOSURE_FACT_KEYS) if (!facts[key]?.sources?.length) facts[key] = uncertainty
-  facts.medicationListOverview = { ...uncertainty, sources: [...(profile.facts.medicationListOverview?.sources ?? []), ...sources] }
-  return { ...profile, facts, medicationClassContexts: contexts }
+  facts.medicationInventoryUnresolved = uncertainty
+  const overview = profile.facts.medicationListOverview
+  facts.medicationListOverview = overview && !overview.en.includes(uncertainty.en)
+    ? { ...overview, zh: overview.zh + '；' + uncertainty.zh, en: overview.en + '; ' + uncertainty.en,
+        sources: [...(overview.sources ?? []), ...sources] } : overview ?? uncertainty
+  return { ...profile, facts, medicationClassContexts: contexts, hospitalMedicationInventoryUnresolved: { sources } }
 }
 
 export const HOSPITAL_MEDICATION_POLICY_VERSION = 'vgh-cdss-medications-20261001-v2'
@@ -114,7 +119,7 @@ const ANTICOAGULANT_INGREDIENTS = new Set(['apixaban', 'dabigatran', 'edoxaban',
 const isAnticoagulantRegimen = (regimen: AfMedicationRegimen) => ANTICOAGULANT_INGREDIENTS.has(regimen.ingredient)
 
 /** What the AF visit map reads as 「已抗凝」: an anticoagulant regimen, a current DOAC/VKA class, or a VKA fact. */
-function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMedicationRegimens' | 'medicationClassContexts' | 'facts'>): boolean {
+export function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMedicationRegimens' | 'medicationClassContexts' | 'facts'>): boolean {
   return Boolean(profile.afMedicationRegimens?.some(isAnticoagulantRegimen))
     || (['direct-oral-anticoagulant', 'vitamin-k-antagonist'] as CdssMedicationClassId[])
       .some((classId) => profile.medicationClassContexts?.[classId]?.state === 'confirmed-current')

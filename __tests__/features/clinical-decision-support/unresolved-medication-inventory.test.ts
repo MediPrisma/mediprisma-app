@@ -9,7 +9,7 @@ it('does not turn an entirely quarantined medication inventory into absent class
   const data = LocalBundleService.parse({ resourceType: 'Bundle', entry: resources.map(resource => ({ resource })) } as any)!.collection
   const profile = createHospitalAwareCdssPatientProfile({ ...data, patient: { id: 'synthetic', age: 70 }, now: new Date('2026-10-01') })
   expect(Object.values(profile.medicationClassContexts ?? {}).every(context => context?.state !== 'not-found')).toBe(true)
-  expect(profile.facts.currentOralAnticoagulant.en).toContain('neither current use nor absence')
+  expect(profile.facts.medicationInventoryUnresolved.en).toContain('neither current use nor absence')
   for (const id of ['heart-failure-cdss', 'atrial-fibrillation-cdss']) {
     const result = buildHospitalAwareCdssResult(CARE_PACKS.find(pack => pack.id === id)!, profile, 'en')
     const recommendation = result.recommendations.find(row => row.id === (id === 'heart-failure-cdss' ? 'heart-failure-medication-safety' : 'af-anticoagulation-concordance'))!
