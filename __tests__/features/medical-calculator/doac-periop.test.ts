@@ -148,6 +148,16 @@ describe('restart: the latest condition', () => {
     expect(open.resume.earliest).toBeUndefined()
     expect(open.pending).toContain('surgery_end_at')
   })
+  it('an end before the start, or a catheter removed before it, is a typing error, never an early restart (#review Astra re-review 2)', () => {
+    const typo = plan({ neuraxial: 'single', surgery_at: '2026-11-03T07:30', surgery_end_at: '2026-11-01T10:00' })
+    expect(typo.resume.earliest).toBeUndefined()
+    expect(typo.resume.firstDose).toBeUndefined()
+    expect(typo.pending).toContain('surgery_end_at')
+    expect(allText(typo)).toContain('結束時刻早於開始時刻')
+    const catheterTypo = plan({ neuraxial: 'catheter', catheter_removed_at: '2026-11-02T10:00' })
+    expect(catheterTypo.resume.earliest).toBeUndefined()
+    expect(catheterTypo.pending).toContain('catheter_removed_at')
+  })
   it('haemostasis not yet established: no earliest time', () => {
     expect(plan({ haemostasis: 'no' }).resume.earliest).toBeUndefined()
     expect(plan({ haemostasis: 'yes' }).resume.earliest).toBeDefined()

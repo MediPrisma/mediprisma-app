@@ -52,7 +52,8 @@ const REGIMEN_INPUT: CalcInput = {
 export const DOAC_DOSE: CalculatorDef[] = [{
   id: 'doac-dose-nvaf',
   version: DOAC_RULES_VERSION,
-  name: { en: 'DOAC dose calculator · by label (NVAF / VTE)', zh: 'DOAC 劑量計算機 · 依仿單（NVAF／VTE）' },
+  // No closing 「（…）」: the visit page's list reads one as the name's acronym.
+  name: { en: 'DOAC dose calculator · NVAF / VTE by label', zh: 'DOAC 劑量計算機 · NVAF／VTE 依仿單' },
   category: 'cardiac',
   blurb: { en: 'Apixaban, rivaroxaban, edoxaban and dabigatran by their labels, for NVAF, VTE treatment and hip/knee prophylaxis.', zh: '依各藥仿單比對四種 DOAC 劑量：NVAF、VTE 治療與延長治療、髖膝置換後預防。' },
   inputs: [
@@ -67,7 +68,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       ],
     },
     {
-      key: 'parenteral_lead_in', type: 'select', label: { en: 'Parenteral anticoagulation (acute VTE)', zh: '注射抗凝（急性 VTE）' }, defaultValue: '',
+      key: 'parenteral_lead_in', type: 'select', label: { en: 'Parenteral anticoagulation (acute VTE)', zh: '注射抗凝（急性 VTE）' }, defaultValue: '', optional: true,
       options: [
         { value: 'done', label: { en: '≥5 days completed', zh: '已完成 ≥5 天' } },
         { value: 'ongoing', label: { en: 'Under way, <5 days', zh: '進行中，未滿 5 天' } },
@@ -75,10 +76,10 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       ],
     },
     {
-      key: 'anticoagulant_switch', type: 'select', label: { en: 'The other anticoagulant is only the acute-VTE parenteral agent, stopped as the oral one starts', zh: '其他抗凝血劑只有急性 VTE 的注射劑，開始口服時停用' }, defaultValue: '',
+      key: 'anticoagulant_switch', type: 'select', label: { en: 'The other anticoagulant is only the acute-VTE parenteral agent, stopped as the oral one starts', zh: '其他抗凝血劑只有急性 VTE 的注射劑，開始口服時停用' }, defaultValue: '', optional: true,
       options: [{ value: 'no', label: { en: 'No (warfarin, another DOAC, or kept on)', zh: '否（warfarin、另一種 DOAC，或會繼續用）' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
     },
-    { key: 'pe_unstable', type: 'select', label: { en: 'Haemodynamically unstable PE, or thrombolysis/embolectomy possible (acute VTE)', zh: '血行動力學不穩定 PE，或可能溶栓／取栓（急性 VTE）' }, options: YES_NO, defaultValue: '' },
+    { key: 'pe_unstable', type: 'select', label: { en: 'Haemodynamically unstable PE, or thrombolysis/embolectomy possible (acute VTE)', zh: '血行動力學不穩定 PE，或可能溶栓／取栓（急性 VTE）' }, options: YES_NO, defaultValue: '', optional: true },
     { key: 'vte_day', type: 'number', label: { en: 'Day of oral treatment (acute VTE, optional)', zh: '口服治療第幾天（急性 VTE，選填）' }, unit: 'day', optional: true },
     { key: 'postop_day', type: 'number', label: { en: 'Day after surgery, 0 = day of surgery (hip/knee, optional)', zh: '術後第幾天，手術當天為 0（髖膝預防，選填）' }, unit: 'day', optional: true },
     ...RENAL_INPUTS,
@@ -105,8 +106,8 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     ddi('ddi_tacrolimus', { en: 'Tacrolimus', zh: 'Tacrolimus' }),
     ddi('ddi_dronedarone', { en: 'Dronedarone', zh: 'Dronedarone' }),
     ddi('ddi_verapamil', { en: 'Verapamil', zh: 'Verapamil' }),
-    ddi('ddi_amiodarone', { en: 'Amiodarone (dabigatran hip/knee prophylaxis)', zh: 'Amiodarone（dabigatran 髖膝預防用）' }),
-    ddi('ddi_quinidine', { en: 'Quinidine (dabigatran hip/knee prophylaxis)', zh: 'Quinidine（dabigatran 髖膝預防用）' }),
+    { ...ddi('ddi_amiodarone', { en: 'Amiodarone (dabigatran hip/knee prophylaxis)', zh: 'Amiodarone（dabigatran 髖膝預防用）' }), optional: true } as CalcInput,
+    { ...ddi('ddi_quinidine', { en: 'Quinidine (dabigatran hip/knee prophylaxis)', zh: 'Quinidine（dabigatran 髖膝預防用）' }), optional: true } as CalcInput,
     ddi('ddi_erythromycin', { en: 'Erythromycin', zh: 'Erythromycin' }),
     ddi('ddi_clarithromycin', { en: 'Clarithromycin', zh: 'Clarithromycin' }),
     ddi('ddi_glecaprevir', { en: 'Glecaprevir/pibrentasvir', zh: 'Glecaprevir/pibrentasvir' }),
@@ -152,9 +153,9 @@ export const DOAC_DOSE: CalculatorDef[] = [{
       key: 'procedure_kind', type: 'select', label: { en: 'Procedure', zh: '處置' }, defaultValue: '',
       options: [
         { value: 'af-ablation', label: { en: 'AF catheter ablation', zh: 'AF 導管消融' } },
-        { value: 'minimal', label: { en: 'Minor risk: ≤3 teeth extracted, cataract/glaucoma, endoscopy without biopsy, superficial surgery, pacemaker/ICD, EP study', zh: '極低風險：拔牙 ≤3 顆、白內障／青光眼、內視鏡不切片、表淺手術、心律調節器／ICD、電生理檢查' } },
-        { value: 'low', label: { en: 'Low risk: complex dental, endoscopy with simple biopsy, small orthopaedic surgery', zh: '低風險：複雜牙科、內視鏡簡單切片、小型骨科手術' } },
-        { value: 'high', label: { en: 'High risk: cardiac, vascular, neuro, abdominal, thoracic, major urologic or orthopaedic surgery, liver/kidney biopsy, complex endoscopy, ESWL', zh: '高風險：心臟、周邊血管、神經、腹部、胸腔、大型泌尿或骨科手術、肝腎切片、複雜內視鏡、體外震波碎石' } },
+        { value: 'minimal', label: { en: 'Minor bleeding risk', zh: '極低出血風險' } },
+        { value: 'low', label: { en: 'Low bleeding risk', zh: '低出血風險' } },
+        { value: 'high', label: { en: 'High bleeding risk', zh: '高出血風險' } },
         { value: 'emergency', label: { en: 'Emergency or urgent (cannot be planned)', zh: '緊急／急迫（無法計畫）' } },
       ],
     },
@@ -178,7 +179,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
   inputGroups: [
     { key: 'regimen', title: { zh: '目前處方與服藥時刻', en: 'Prescription and dose times' }, hint: { zh: '跳過幾劑要用病人實際服藥的時刻，不用處方預設時間。', en: 'Skipped doses need the times the patient actually takes them.' }, keys: ['regimen', 'dose_time_1', 'dose_time_2'] },
     { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
-    { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, hint: { zh: '分級依 EHRA 2021 Table 12；有脊髓／硬膜外麻醉時一律另依 ASRA 2018，不論分級。未填視為未知。', en: 'Tiers follow EHRA 2021 Table 12; spinal/epidural anaesthesia always adds ASRA 2018 whatever the tier. A blank is unknown.' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at', 'renal_reliable', 'hypertension', 'antiplatelet'] },
+    { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, hint: { zh: '分級依 EHRA 2021 Table 12。極低：拔牙 ≤3 顆、白內障／青光眼、內視鏡不切片、表淺手術、心律調節器／ICD、電生理檢查。低：複雜牙科、內視鏡簡單切片、小型骨科手術。高：心臟、周邊血管、神經、腹部、胸腔、大型泌尿或骨科手術、肝腎切片、複雜內視鏡、體外震波碎石。有脊髓／硬膜外麻醉時一律另依 ASRA 2018，不論分級。未填視為未知。', en: 'Tiers follow EHRA 2021 Table 12. Minor: ≤3 teeth extracted, cataract/glaucoma, endoscopy without biopsy, superficial surgery, pacemaker/ICD, EP study. Low: complex dental, endoscopy with simple biopsy, small orthopaedic surgery. High: cardiac, vascular, neuro, abdominal, thoracic, major urologic or orthopaedic surgery, liver/kidney biopsy, complex endoscopy, ESWL. Spinal/epidural anaesthesia always adds ASRA 2018 whatever the tier. A blank is unknown.' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at', 'renal_reliable', 'hypertension', 'antiplatelet'] },
     { key: 'after', title: { zh: '術後', en: 'After the procedure' }, hint: { zh: '術前停藥算到開始時刻，術後恢復從結束時刻起算。', en: 'The interval before runs to the start; the restart is counted from the end.' }, keys: ['surgery_end_at', 'haemostasis', 'catheter_removed_at', 'traumatic_puncture'] },
   ],
   compute: (values) => {

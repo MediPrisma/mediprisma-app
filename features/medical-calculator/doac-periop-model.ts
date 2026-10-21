@@ -346,7 +346,9 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       ? line(t(`${dialysis === 'yes' ? '透析' : `CrCl ${c!.toFixed(1)} <15`}：EHRA 無正式停藥時數（No official indication for use），需個別評估，建議會診。`, `${dialysis === 'yes' ? 'Dialysis' : `CrCl ${c!.toFixed(1)} <15`}: EHRA gives no interval (no official indication for use); individual assessment, consult.`), G.ehraFig14)
       : line(t(`dabigatran CrCl ${c!.toFixed(1)} <30：仿單禁忌，EHRA 列為 Not indicated，不給停藥時數。`, `Dabigatran, CrCl ${c!.toFixed(1)} <30: contraindicated in the label, not indicated in EHRA; no interval given.`), CITES.dabigatranRenal, G.ehraFig14))
     if (agent === 'dabigatran' && c !== undefined && c < 30 && neuraxial !== 'none') {
-      result.basis.push(line(t('ASRA：CrCl <30 建議不做神經軸阻斷。', 'ASRA: no neuraxial block at CrCl <30.'), G.asraDabigatranBelow30))
+      result.basis.push(line(neuraxial === ''
+        ? t('若有脊髓／硬膜外麻醉：ASRA 建議 CrCl <30 不做神經軸阻斷。', 'If spinal/epidural anaesthesia is planned: ASRA advises no neuraxial block at CrCl <30.')
+        : t('ASRA：CrCl <30 建議不做神經軸阻斷。', 'ASRA: no neuraxial block at CrCl <30.'), G.asraDabigatranBelow30))
     }
     result.notes.push(levelNote(agent), line(t('不以 LMWH／UFH 橋接。', 'No LMWH/UFH bridging.'), G.ehraBridging))
     return result
@@ -402,7 +404,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   // Clock times: the start (the puncture, if any) for the interval before, the
   // end for the interval after, and the patient's own dose times.
   const surgery = parseLocalDateTime(values.surgery_at)
-  const ended = parseLocalDateTime(values.surgery_end_at)
+  // An end before the start is a typing error, not an early restart.
+  const endedAt = parseLocalDateTime(values.surgery_end_at)
+  const endBeforeStart = !!(endedAt && surgery && endedAt.getTime() < surgery.getTime())
+  const ended = endBeforeStart ? undefined : endedAt
   if (!surgery) result.pending.push('surgery_at')
   const timeKeys = (['dose_time_1', 'dose_time_2'] as const).slice(0, regimen.perDay)
   const minutes = timeKeys.map((key) => parseClock(values[key]))
@@ -432,9 +437,13 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       ), G.ehraFig14, G.ehraFig15),
       key: ended ? undefined : 'surgery_end_at',
     })
+    if (endBeforeStart) restart.push({ line: line(t('結束時刻早於開始時刻：請更正，未更正前不算恢復時間', 'The end is before the start: correct it; no restart time until then')), key: 'surgery_end_at' })
   }
   if (neuraxial === 'catheter') {
-    const removed = parseLocalDateTime(values.catheter_removed_at)
+    const removedAt = parseLocalDateTime(values.catheter_removed_at)
+    const removedBeforeStart = !!(removedAt && surgery && removedAt.getTime() < surgery.getTime())
+    const removed = removedBeforeStart ? undefined : removedAt
+    if (removedBeforeStart) restart.push({ line: line(t('拔管時刻早於開始時刻：請更正', 'Catheter removal is before the start: correct it')), key: 'catheter_removed_at' })
     const labelCatheter = agent === 'apixaban' ? [t('仿單 ≥5 小時', 'label ≥5 h'), CITES.apixabanCatheter] as const
       : agent === 'rivaroxaban' ? [t('仿單 ≥6 小時', 'label ≥6 h'), CITES.rivaroxabanCatheter] as const
         : agent === 'dabigatran' ? [t('仿單 ≥2 小時', 'label ≥2 h'), CITES.dabigatranCatheter] as const

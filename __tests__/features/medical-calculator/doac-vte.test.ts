@@ -22,6 +22,12 @@ describe('the indication', () => {
     expect(calculateDoacDoses({ ...base, age: '82', weight: '58', scr: '1.2' }).indication).toBe('nvaf')
     expect(dose('', { age: '82', weight: '58', scr: '1.2' }, 'apixaban')).toBe('2.5x2')
   })
+  it('the questions only some indications ask are not counted to fill', () => {
+    const inputs = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!.inputs
+    for (const key of ['parenteral_lead_in', 'anticoagulant_switch', 'pe_unstable', 'ddi_amiodarone', 'ddi_quinidine', 'vte_day', 'postop_day']) {
+      expect(inputs.find((i) => i.key === key)?.optional).toBe(true)
+    }
+  })
   it('the calculator offers the five, NVAF first and by default', () => {
     const input = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!.inputs.find((i) => i.key === 'indication')!
     expect(input).toMatchObject({ type: 'select', defaultValue: 'nvaf' })
@@ -150,6 +156,11 @@ describe('dabigatran', () => {
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
     expect(calc.compute({ ...base, indication: 'vtep-hip', age: '76', crcl_manual: '62', regimen: 'dabigatran:75:1', postop_day: '0' })!.interpretation?.zh).toContain('與仿單劑量一致')
   })
+  it('knee, no reduction: 110 mg once on the day of surgery is a regimen the form offers and reads as matching (#review Astra re-review 3)', () => {
+    const regimen = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!.inputs.find((i) => i.key === 'regimen')!
+    expect(regimen.type === 'select' && regimen.options.map((o) => o.value)).toContain('dabigatran:110:1')
+    expect(checkRegimen('dabigatran:110:1', run('vtep-knee', { crcl_manual: '62' }).results, 0)?.state).toBe('matches')
+  })
   it('CrCl 28: contraindicated in every indication', () => {
     for (const indication of ['vte-acute', 'vte-extended', 'vtep-hip']) expect(agent(indication, { crcl_manual: '28' }, 'dabigatran').verdict).toBe('contraindicated')
   })
@@ -162,6 +173,12 @@ describe('shared acute-VTE rules', () => {
     expect(switching.hits.map((h) => h.cite)).toContain(CITES.apixabanSwitch)
     expect(agent('vte-acute', { ddi_anticoagulant: 'yes' }, 'apixaban')).toMatchObject({ verdict: 'review', missing: expect.arrayContaining(['anticoagulant_switch']) })
     expect(agent('nvaf', { ddi_anticoagulant: 'yes', anticoagulant_switch: 'yes' }, 'apixaban').verdict).toBe('contraindicated')
+  })
+  it('the switch names a subcutaneous agent and a UFH infusion apart: edoxaban starts 4 h after the infusion stops (#review Astra re-review 1)', () => {
+    const edo = cites('vte-acute', { ddi_anticoagulant: 'yes', anticoagulant_switch: 'yes' }, 'edoxaban')
+    expect(edo).toEqual(expect.arrayContaining([CITES.edoxabanSwitchSc, CITES.edoxabanSwitchUfh]))
+    expect(cites('vte-acute', { ddi_anticoagulant: 'yes', anticoagulant_switch: 'yes' }, 'rivaroxaban')).toContain(CITES.rivaroxabanSwitchUfh)
+    expect(cites('vte-acute', { ddi_anticoagulant: 'yes', anticoagulant_switch: 'yes' }, 'dabigatran')).toContain(CITES.dabigatranSwitchUfh)
   })
   it('a completed lead-in does not excuse warfarin or a second DOAC (#review Astra 1)', () => {
     const { results } = run('vte-acute', { ddi_anticoagulant: 'yes', parenteral_lead_in: 'done', anticoagulant_switch: 'no' })

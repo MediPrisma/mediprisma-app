@@ -111,7 +111,7 @@ function CalculatorRows({ groups, isEnglish, onChoose }: {
     if (row.fixed || !row.calc) return { status: row.fixed ?? 'data-only' }
     const computed = computeAutofilledResult(row.calc, autofill)
     if (computed) return { status: 'computed', value: `${computed.result.value}${computed.result.unit ? ` ${computed.result.unit}` : ''}` }
-    const empty = row.calc.inputs.filter((input) => !(input.type === 'number' && input.optional) && !resolveInput(input, autofill).filled).length
+    const empty = row.calc.inputs.filter((input) => !input.optional && !resolveInput(input, autofill).filled).length
     // Every input filled from the record, a judgement still the clinician's.
     return empty ? { status: 'to-fill', value: String(empty) } : { status: 'to-confirm' }
   }

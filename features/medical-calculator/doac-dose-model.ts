@@ -174,6 +174,7 @@ export const CITES = {
   rivaroxabanVteRenalUnstudied: cite('rivaroxaban', '4.2', 89, 'The recommendation for the use of 15 mg is based on PK modelling and has not been studied in this clinical setting'),
   rivaroxabanVteRenal10: cite('rivaroxaban', '4.2', 89, 'When the recommended dose is 10 mg once daily, no dose adjustment from the recommended dose is necessary.'),
   rivaroxabanSwitch: cite('rivaroxaban', '4.2', 88, 'discontinue the parenteral anticoagulant and start Xarelto 0 to 2 hours before the time that the next scheduled administration of the parenteral medicinal product (e.g. low molecular weight heparins) would be due'),
+  rivaroxabanSwitchUfh: cite('rivaroxaban', '4.2', 88, 'or at the time of discontinuation of a continuously administered parenteral medicinal product (e.g. intravenous unfractionated heparin).'),
   rivaroxabanUnstablePe: cite('rivaroxaban', '4.4', 92, 'Xarelto is not recommended as an alternative to unfractionated heparin in patients with pulmonary embolism who are haemodynamically unstable or may receive thrombolysis or pulmonary embolectomy'),
   rivaroxabanVtepDose: cite('rivaroxaban', '4.2', 29, 'The recommended dose is 10 mg rivaroxaban taken orally once daily. The initial dose should be taken 6 to 10 hours after surgery, provided that haemostasis has been established.', 'Xarelto 10 mg'),
   rivaroxabanVtepHip: cite('rivaroxaban', '4.2', 29, 'For patients undergoing major hip surgery, a treatment duration of 5 weeks is recommended.', 'Xarelto 10 mg'),
@@ -182,6 +183,8 @@ export const CITES = {
 
   edoxabanVte: cite('edoxaban', '4.2', 3, 'The recommended dose is 60 mg edoxaban once daily following initial use of parenteral anticoagulant for at least 5 days'),
   edoxabanVteNoOverlap: cite('edoxaban', '4.2', 3, 'Edoxaban and initial parenteral anticoagulant should not be administered simultaneously.'),
+  edoxabanSwitchSc: cite('edoxaban', '4.2 Table 2', 4, 'Discontinue subcutaneous anticoagulant and start edoxaban at the time of the next scheduled subcutaneous anticoagulant dose.'),
+  edoxabanSwitchUfh: cite('edoxaban', '4.2 Table 2', 4, 'Discontinue the infusion and start edoxaban 4 hours later.'),
   edoxabanVteDuration: cite('edoxaban', '4.2', 3, 'The duration of therapy for treatment of DVT and PE (venous thromboembolism (VTE)), and prevention of recurrent VTE should be individualised after careful assessment of the treatment benefit against the risk for bleeding'),
   edoxabanUnstablePe: cite('edoxaban', '4.4', 9, 'Edoxaban is not recommended as an alternative to UFH in patients with pulmonary embolism who are haemodynamically unstable or may receive thrombolysis or pulmonary embolectomy'),
   edoxabanIndications: cite('edoxaban', '4.1', 2, 'Lixiana is indicated in treatment of deep vein thrombosis (DVT) and pulmonary embolism (PE), and for the prevention of recurrent DVT and PE in adults'),
@@ -189,6 +192,7 @@ export const CITES = {
   dabigatranVte: cite('dabigatran', '4.2 Table 2', 34, '300 mg dabigatran etexilate taken as one 150 mg capsule twice daily following treatment with a parenteral anticoagulant for at least 5 days'),
   dabigatranVte220: cite('dabigatran', '4.2', 34, 'For DVT/PE the recommendation for the use of 220 mg dabigatran etexilate taken as one 110 mg capsule twice daily is based on pharmacokinetic and pharmacodynamic analyses and has not been studied in this clinical setting.'),
   dabigatranSwitch: cite('dabigatran', '4.2', 33, 'The parenteral anticoagulant should be discontinued and dabigatran etexilate should be started 0-2 hours prior to the time that the next dose of the alternate therapy would be due'),
+  dabigatranSwitchUfh: cite('dabigatran', '4.2', 33, 'or at the time of discontinuation in case of continuous treatment (e.g. intravenous Unfractionated Heparin (UFH))'),
   dabigatranVtepTable: cite('dabigatran', '4.2 Table 1', 32, 'Dose recommendations and duration of therapy for primary prevention of VTE in orthopaedic surgery'),
   dabigatranVtepElderly: cite('dabigatran', '4.2 Table 1', 32, 'Patients aged 75 or above'),
   dabigatranVtepHaemostasis: cite('dabigatran', '4.2', 32, 'For both surgeries, if haemostasis is not secured, initiation of treatment should be delayed.'),
@@ -352,11 +356,25 @@ export function crclLabel(value: number): string {
   return same ? shown.toFixed(1) : value.toFixed(2)
 }
 
-const SWITCH_CITE: Record<DoacAgent, LabelCite> = {
-  apixaban: CITES.apixabanSwitch,
-  rivaroxaban: CITES.rivaroxabanSwitch,
-  edoxaban: CITES.edoxabanVteNoOverlap,
-  dabigatran: CITES.dabigatranSwitch,
+/**
+ * How each label starts the oral agent from the parenteral one: a
+ * subcutaneous injection and an intravenous UFH infusion are not the same
+ * switch (edoxaban waits 4 h after the infusion stops).
+ */
+const SWITCH_RULES: Record<DoacAgent, { text: L; cite: LabelCite }[]> = {
+  apixaban: [{ text: { zh: '轉換：停用注射劑，於下一次預定給藥時間開始口服，兩者不可同時給（仿單未另分 UFH 輸注）', en: 'Switch: stop the parenteral agent and start at its next scheduled time, never both (the label does not separate a UFH infusion)' }, cite: CITES.apixabanSwitch }],
+  rivaroxaban: [
+    { text: { zh: '由 LMWH 轉換：於下一次注射預定時間前 0–2 小時開始，兩者不可同時給', en: 'From LMWH: start 0–2 h before the next scheduled injection, never both' }, cite: CITES.rivaroxabanSwitch },
+    { text: { zh: '由 UFH 持續輸注轉換：停止輸注時開始', en: 'From a continuous UFH infusion: start when it is stopped' }, cite: CITES.rivaroxabanSwitchUfh },
+  ],
+  edoxaban: [
+    { text: { zh: '由皮下注射劑（LMWH、fondaparinux）轉換：於下一次皮下注射預定時間開始', en: 'From a subcutaneous agent (LMWH, fondaparinux): start at the time of its next scheduled dose' }, cite: CITES.edoxabanSwitchSc },
+    { text: { zh: '由 UFH 靜脈輸注轉換：停止輸注 4 小時後開始', en: 'From an intravenous UFH infusion: start 4 h after stopping it' }, cite: CITES.edoxabanSwitchUfh },
+  ],
+  dabigatran: [
+    { text: { zh: '由 LMWH 轉換：於下一次注射預定時間前 0–2 小時開始，兩者不可同時給', en: 'From LMWH: start 0–2 h before the next scheduled injection, never both' }, cite: CITES.dabigatranSwitch },
+    { text: { zh: '由 UFH 持續輸注轉換：停止輸注時開始', en: 'From a continuous UFH infusion: start when it is stopped' }, cite: CITES.dabigatranSwitchUfh },
+  ],
 }
 
 /**
@@ -416,7 +434,7 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
       // DOAC, so that is asked, never inferred from the lead-in.
       const switching = values.anticoagulant_switch ?? ''
       if (acute && switching === 'yes') {
-        hit('caution', t('其他抗凝血劑只有急性 VTE 的注射劑：停用注射劑，於下一次預定給藥時間開始口服，兩者不可同時給', 'The only other anticoagulant is the acute-VTE parenteral one: stop it and start the oral agent at its next scheduled time, never both'), SWITCH_CITE[agent])
+        for (const rule of SWITCH_RULES[agent]) hit('caution', rule.text, rule.cite)
       } else if (acute && switching === '') {
         hit('review', t('併用其他抗凝血劑：若只有急性 VTE 的注射劑且開始口服時停用，依轉換規則；否則禁忌。請填「是否只是注射劑轉換」', 'Another anticoagulant: if it is only the acute-VTE parenteral agent, stopped as the oral one starts, the switch rules apply; otherwise contraindicated. Answer 「only the parenteral switch」'), CITES[`${agent}Anticoagulant`])
         missing.push('anticoagulant_switch')

@@ -23,7 +23,7 @@ export const DOAC_REGIMEN_OPTIONS = [
   'apixaban:10:2', 'apixaban:5:2', 'apixaban:2.5:2',
   'rivaroxaban:20:1', 'rivaroxaban:15:2', 'rivaroxaban:15:1', 'rivaroxaban:10:1',
   'edoxaban:60:1', 'edoxaban:30:1', 'edoxaban:15:1',
-  'dabigatran:150:2', 'dabigatran:110:2', 'dabigatran:75:2', 'dabigatran:220:1', 'dabigatran:150:1', 'dabigatran:75:1',
+  'dabigatran:150:2', 'dabigatran:110:2', 'dabigatran:75:2', 'dabigatran:220:1', 'dabigatran:150:1', 'dabigatran:110:1', 'dabigatran:75:1',
 ] as const
 
 const DOACS = ['apixaban', 'rivaroxaban', 'edoxaban', 'dabigatran'] as const

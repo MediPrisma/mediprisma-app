@@ -37,9 +37,14 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 - **急性期的注射抗凝不算「併用其他抗凝血劑」**，但必須在 `anticoagulant_switch` 明確填「是」：其他抗凝血劑只有急性 VTE 的注射劑，而且開始口服時就停用。這時改成轉換提醒（不可同時給，於下一次預定時間開始口服）。
   - 「其他抗凝血劑」也包含 warfarin 和另一種 DOAC，所以不會從注射抗凝已完成去推斷。
   - 空白時判為需個別判斷；填「否」時判為禁忌。
+  - 轉換方式依各藥仿單分列皮下注射與 UFH 輸注：
+    - edoxaban：由皮下注射劑轉換時，在下一次皮下注射預定時間開始；由 UFH 輸注轉換時，停止輸注 4 小時後開始。
+    - rivaroxaban、dabigatran：由 LMWH 轉換時，在下一次注射預定時間前 0–2 小時開始；由 UFH 輸注轉換時，停止輸注時開始。
+    - apixaban：仿單只寫下一次預定給藥時間。
+- 只在部分適應症才問的欄位（注射抗凝、注射劑轉換、不穩定 PE、amiodarone、quinidine、天數）標為 `optional`，計算機清單的「待填」數不計入。規則讀到這些欄位時，空白仍視為未知。
 - **不穩定 PE**（`pe_unstable`）：apixaban、rivaroxaban、edoxaban 判為不建議；dabigatran 的 SmPC 沒有這一條，判為需個別判斷。
 - **apixaban 加強效誘導劑**：急性 DVT／PE 判為不建議（SmPC：should not be used），其他適應症判為謹慎。
-- **劑量隨時間改變**：處方比對會讀天數。急性 VTE 讀口服治療第幾天（`vte_day`，從 1 起算）；dabigatran 髖膝預防讀術後第幾天（`postop_day`，手術當天為 0），手術當天是 110／75 mg，第 1 天起是 220／150 mg qd。沒有填天數時，不會判為「一致」。
+- **劑量隨時間改變**：處方比對會讀天數。急性 VTE 讀口服治療第幾天（`vte_day`，從 1 起算）；dabigatran 髖膝預防讀術後第幾天（`postop_day`，手術當天為 0），手術當天是 110／75 mg（處方選項 `dabigatran:110:1`、`dabigatran:75:1`），第 1 天起是 220／150 mg qd。沒有填天數時，不會判為「一致」。
 
 ## 手術前後停藥（`doac-periop-model.ts`）
 
@@ -56,7 +61,7 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
    - 拔管 + 6 h（ASRA；仿單 apixaban ≥5 h、rivaroxaban ≥6 h、dabigatran ≥2 h）。
    - 穿刺出血時，穿刺時刻 + 24 h（rivaroxaban 仿單）。
 
-   止血確認是每一次都要的條件。結束時刻、拔管時刻或穿刺是否出血未填，或填「尚未止血」時，不輸出最早恢復時刻。
+   止血確認是每一次都要的條件。結束時刻、拔管時刻或穿刺是否出血未填，或填「尚未止血」時，不輸出最早恢復時刻。結束時刻或拔管時刻早於開始時刻時，視為輸入錯誤，要求更正，也不輸出恢復時間。
 8. **殘餘藥效**：以該藥校正的 anti-Xa（dabigatran 用 dTT／ECT）可估計濃度。ASRA 寫明可接受的殘餘濃度未定，EHRA 寫明依濃度調整沒有前瞻性證據。計算機沒有數值欄位、沒有閾值，也不會輸出「可開刀」。
 9. **緊急手術**：依 EHRA Fig 12。dabigatran 可用 idarucizumab，也可透析移除。Xa 抑制劑不以 andexanet 作為術前通用逆轉：EU 只核准用於危及生命或無法控制的出血，ANNEXA-4 未納入緊急手術病人。
 10. 不橋接。
@@ -76,7 +81,7 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 
 同一份 PDF 中，其他劑量的 SmPC 會在引文的 `document` 欄位標明，例如 apixaban 髖膝預防的「Eliquis 2.5 mg」（p.2–5、10），以及 rivaroxaban 髖膝預防的「Xarelto 10 mg」（p.29–31）。
 
-每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 118 段：117 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
+每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 122 段：121 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
 
 ### 指引（不是仿單，另列來源與頁碼）
 
