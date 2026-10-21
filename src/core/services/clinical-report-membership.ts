@@ -39,6 +39,15 @@ export function attachReportObservations(
           members.push(member)
           walk(member.clinicalSourceNodeKey!, 'hasMember')
         }
+        if (kind === 'hasMember') {
+          for (const key of byNodeKey.get(origin)?.clinicalSourceDerivedMemberKeys ?? []) {
+            const member = byNodeKey.get(key)
+            if (!member || visited.has(key)) continue
+            visited.add(key)
+            members.push(member)
+            walk(key, 'hasMember')
+          }
+        }
       }
       walk(report.clinicalSourceNodeKey, 'result')
       for (const key of report.clinicalSourceDerivedMemberKeys ?? []) {

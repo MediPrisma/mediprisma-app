@@ -1443,10 +1443,11 @@ export const LocalBundleService = {
     // inside List.contained and relink its identifier-based references, so the
     // Condition / cancer-staging Observations / treatment Procedures surface and
     // the DiagnosticReports link to the patient. No-op for non-Roche bundles.
-    const derivedReportMembers = new WeakMap<object, string[]>()
-    expandRocheResources(entries, (report, observation) => {
+    const derivedMembers = new Map<string, string[]>()
+    expandRocheResources(entries, (origin, observation) => {
+      const originKey = sourceKeyByResource.get(origin)
       const key = sourceKeyByResource.get(observation)
-      if (key) derivedReportMembers.set(report, [...(derivedReportMembers.get(report) ?? []), key])
+      if (originKey && key) derivedMembers.set(originKey, [...(derivedMembers.get(originKey) ?? []), key])
     })
 
     // Display canonicalisation: resolve Practitioner / Organization / Location
@@ -1621,13 +1622,14 @@ export const LocalBundleService = {
     // Build observation map for DiagnosticReport expansion
     const allObs = obs.map((r: any) => ({ ...FhirMapper.toObservation(r),
       sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
+      ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}),
       clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
-    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any, index: number) =>
+    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any) =>
       ({ ...FhirMapper.toDiagnosticReport(r, allObs), clinicalSourceNodeKey: sourceKeyByResource.get(r),
         sourceId: sourceKeyByResource.has(r) ? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id,
-        ...(derivedReportMembers.has(reports[index]) ? { clinicalSourceDerivedMemberKeys: derivedReportMembers.get(reports[index]) } : {}) })
+        ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}) })
     )
 
     // Separate vital signs from other observations

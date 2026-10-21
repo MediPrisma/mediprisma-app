@@ -390,6 +390,8 @@ export interface AllergyEntity {
 export interface ObservationEntity {
   /** Opaque identity in the shared source graph; survives query structural sharing. */
   clinicalSourceNodeKey?: string
+  /** Explicit hasMember edges produced by a local domain projection. */
+  clinicalSourceDerivedMemberKeys?: string[]
   basedOn?: Array<{ reference?: string; display?: string }>
   extension?: ClinicalFhirExtension[]
   method?: { text?: string; coding?: Array<{ system?: string; code?: string; display?: string }> }
