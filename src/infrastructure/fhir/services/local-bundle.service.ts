@@ -219,7 +219,22 @@ async function idbSweepExpiredRecords(now = Date.now()): Promise<void> {
             isEncryptedRecord(cursor.value)
             && now - cursor.value.savedAt > MAX_BUNDLE_AGE_MS
           ) {
-            cursor.delete()
+            if (storeName === IMG_STORE && typeof cursor.key === 'string'
+              && cursor.key.startsWith('original-fhir:')) {
+              // Original chunks share the owning chart's lifetime. Profile
+              // edits can refresh that chart without rewriting its backup.
+              const originalKey = cursor.key
+              const importId = originalKey.slice('original-fhir:'.length, originalKey.lastIndexOf(':'))
+              const owner = tx.objectStore(STORE).get(importId)
+              owner.onsuccess = () => {
+                if (!isEncryptedRecord(owner.result) || now - owner.result.savedAt > MAX_BUNDLE_AGE_MS) {
+                  tx.objectStore(IMG_STORE).delete(originalKey)
+                }
+              }
+              owner.onerror = () => reject(owner.error)
+            } else {
+              cursor.delete()
+            }
           }
           cursor.continue()
         }
@@ -310,9 +325,7 @@ async function idbDeleteImages(imageIds: string[]): Promise<void> {
 
 /** Delete only image records owned by one import. Cursor deletion avoids
  * clearing another MediPrisma tab's concurrently-open patient. */
-async function idbDeleteImagesForImport(importId: string, includeOriginal = false): Promise<void> {
-  const prefix = `${importId}:`
-  const originalPrefix = originalFhirPrefix(importId)
+async function idbDeleteBlobPrefixes(prefixes: string[]): Promise<void> {
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
@@ -321,9 +334,7 @@ async function idbDeleteImagesForImport(importId: string, includeOriginal = fals
       req.onsuccess = () => {
         const cursor = req.result
         if (!cursor) return
-        if (typeof cursor.key === 'string' && (
-          cursor.key.startsWith(prefix) || (includeOriginal && cursor.key.startsWith(originalPrefix))
-        )) {
+        if (typeof cursor.key === 'string' && prefixes.some(prefix => String(cursor.key).startsWith(prefix))) {
           tx.objectStore(IMG_STORE).delete(cursor.key)
         }
         cursor.continue()
@@ -336,6 +347,13 @@ async function idbDeleteImagesForImport(importId: string, includeOriginal = fals
   } finally {
     db.close()
   }
+}
+
+function idbDeleteImagesForImport(importId: string, includeOriginal = false): Promise<void> {
+  return idbDeleteBlobPrefixes([
+    `${importId}:`,
+    ...(includeOriginal ? [originalFhirPrefix(importId)] : []),
+  ])
 }
 
 function legacyImageRefsInBundle(bundle: object | null): string[] {
@@ -988,7 +1006,8 @@ export const LocalBundleService = {
   async loadOriginalFhir(): Promise<Blob | null> {
     if (!await this.load()) return null
     if (memOriginalFhir) return memOriginalFhir
-    return memBundleImportId ? readOriginalFhir(memBundleImportId) : null
+    if (!memBundleImportId || typeof indexedDB === 'undefined') return null
+    return readOriginalFhir(memBundleImportId)
   },
 
   // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
@@ -1064,6 +1083,8 @@ export const LocalBundleService = {
           memOriginalFhir = null
         } catch {
           // The source remains downloadable from its Blob for this session.
+          // Do not strand partial chunks in a quota-constrained database.
+          try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
         }
       }
     } catch {

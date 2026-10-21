@@ -3,7 +3,8 @@ import { test, expect } from '../fixtures/test'
 import { importBundle, openFeaturePanel, openLeftTab, SYNTHETIC_BUNDLE } from '../fixtures/import'
 
 test('original FHIR survives processing, reload and repeated local import', async ({ page }, testInfo) => {
-  test.setTimeout(120_000)
+  test.setTimeout(180_000)
+  const importedAt = Date.now()
   const bundle = JSON.parse(await fs.readFile(SYNTHETIC_BUNDLE, 'utf8'))
   // Include material IPS does not export and an inline image the app externalizes.
   bundle.extension = [{ url: 'https://example.test/original', valueString: 'keep 原始內容' }]
@@ -25,14 +26,14 @@ test('original FHIR survives processing, reload and repeated local import', asyn
   await fs.writeFile(source, original)
   await importBundle(page, { bundlePath: source })
 
-  const openDownloads = async () => {
-    await openFeaturePanel(page)
-    await page.getByRole('tab', { name: '複製', exact: true }).click()
-    await page.getByRole('tab', { name: '下載檔案', exact: true }).click()
+  const openDownloads = async (target = page) => {
+    await openFeaturePanel(target)
+    await target.getByRole('tab', { name: '複製', exact: true }).click()
+    await target.getByRole('tab', { name: '下載檔案', exact: true }).click()
   }
-  const downloadOriginal = async (filename: string) => {
-    const pending = page.waitForEvent('download')
-    await page.getByRole('button', { name: '下載原始 FHIR', exact: true }).click()
+  const downloadOriginal = async (filename: string, target = page) => {
+    const pending = target.waitForEvent('download')
+    await target.getByRole('button', { name: '下載原始 FHIR', exact: true }).click()
     const download = await pending
     expect(download.suggestedFilename()).toMatch(/^FHIR_original_.*\.json$/)
     const saved = testInfo.outputPath(filename)
@@ -49,12 +50,15 @@ test('original FHIR survives processing, reload and repeated local import', asyn
   await downloadOriginal('after-reload.json')
 
   // A demographic overlay updates the chart envelope, not the original source.
+  await page.clock.setFixedTime(importedAt + 11 * 60 * 60 * 1000)
   await openLeftTab(page, /^病人資訊$/)
   await page.getByRole('button', { name: '補充資料', exact: true }).click()
   const profileDialog = page.getByRole('dialog', { name: '補充或更新病人基本資料' })
   await profileDialog.getByLabel('姓名', { exact: true }).fill('合成測試更新姓名')
   await profileDialog.getByRole('button', { name: '儲存', exact: true }).click()
   await expect(profileDialog).not.toBeVisible()
+  // The refreshed chart still owns its original after the backup's initial TTL.
+  await page.clock.setFixedTime(importedAt + 13 * 60 * 60 * 1000)
   await page.reload()
   await openDownloads()
   await downloadOriginal('after-profile-edit.json')
@@ -64,11 +68,21 @@ test('original FHIR survives processing, reload and repeated local import', asyn
   await otherTab.goto('/')
   await expect(otherTab.getByTestId('welcome-demo-card')).toBeVisible()
   await otherTab.close()
+  await page.clock.setFixedTime(Date.now())
+
+  // An opener-created tab legitimately shares the old import/key. Replacing
+  // this tab's data must not delete the original the opener copy still uses.
+  const opened = page.waitForEvent('popup')
+  await page.evaluate(() => { window.open('/') })
+  const sharedTab = await opened
+  await openDownloads(sharedTab)
 
   // Import the actual downloaded file through the production file input.
   await importBundle(page, { bundlePath: downloaded })
   await openDownloads()
   await downloadOriginal('second-download.json')
+  await downloadOriginal('shared-tab-download.json', sharedTab)
+  await sharedTab.close()
   await expect(page.getByText('王小明').first()).toBeAttached()
   const verifyImage = async () => {
     await openLeftTab(page, /^報告$/)

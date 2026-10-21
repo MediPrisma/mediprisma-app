@@ -23,6 +23,7 @@ export function useOriginalFhirDownload() {
       try {
         const state = await serializeLocalBundleMutation(async () => {
           const local = shouldUseLocalBundle()
+          if (current === revision) setIsLocal(local)
           return { local, exists: local && await LocalBundleService.hasOriginalFhir() }
         })
         if (current === revision) {
@@ -59,7 +60,9 @@ export function useOriginalFhirDownload() {
         const url = URL.createObjectURL(original)
         const link = document.createElement('a')
         link.href = url
-        link.download = `FHIR_original_${new Date().toISOString().slice(0, 10)}.json`
+        const date = new Date()
+        const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
+        link.download = `FHIR_original_${stamp}.json`
         document.body.appendChild(link)
         try {
           link.click()
