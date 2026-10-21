@@ -140,7 +140,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     if (!report || inferReportDisplayGroup(report) !== 'imaging') continue
     // Echo/Doppler and their viewer-only companions have a separate established
     // shared-study path. Do not re-key just part of that family here.
-    if (report.code?.coding?.some(coding => ['18005C', '18007C'].includes(coding.code ?? ''))) continue
+    if (report.code?.coding?.some(coding => ['18005C', '18007C'].includes(coding.code?.trim().toUpperCase() ?? ''))) continue
     // A text match cannot establish equality of independent structured results.
     // Leave those reports separate, including unresolved result references.
     if (report.result?.length

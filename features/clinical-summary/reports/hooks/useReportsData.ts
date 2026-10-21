@@ -109,7 +109,7 @@ function isNhiMedicloudReport(dr: any): boolean {
 // can't drift apart again — a past bug had the row header alone preferring
 // issued, so a report grouped under 6/2 was displayed as 6/5.
 function getDrDate(dr: any): string | undefined {
-  return dr?.effectiveDateTime || dr?.issued
+  return dr?.effectiveDateTime || dr?.effectivePeriod?.start || dr?.issued
 }
 
 function isAdultPreventiveReport(dr: DiagnosticReport): boolean {

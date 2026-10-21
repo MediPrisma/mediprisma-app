@@ -219,12 +219,12 @@ describe('cross-source imaging reports', () => {
     expect(keys.has(reports[0])).toBe(false)
   })
 
-  it('keeps the established echo family and viewer-only companion together', () => {
+  it.each(['18005C', ' 18005c '])('keeps the established echo family and viewer-only companion together for %s', echoCode => {
     const reports = pair().map(report => ({ ...report, code: { text: 'Cardiac ultrasound' } }))
     reports[1].encounter = { reference: 'Encounter/echo' }
-    reports[1].code = { text: 'Cardiac ultrasound', coding: [{ code: '18005C' }] }
-    const doppler = { ...reports[1], id: 'doppler', code: { text: 'Doppler ultrasound', coding: [{ code: '18007C' }] } }
-    const viewer = { ...reports[1], id: 'viewer', conclusion: undefined, extension: [{ url: NHI_VIEWER_REQUEST_EXTENSION_URL, extension: [
+    reports[1].code = { text: 'Cardiac ultrasound', coding: [{ code: echoCode }] }
+    const doppler = { ...reports[1], id: 'doppler', code: { text: 'Doppler ultrasound', coding: [{ code: echoCode.replace('5', '7') }] } }
+    const viewer = { ...reports[1], id: 'viewer', code: { text: 'Echo viewer', coding: [{ code: echoCode }] }, conclusion: undefined, extension: [{ url: NHI_VIEWER_REQUEST_EXTENSION_URL, extension: [
       { url: 'version', valueInteger: 1 }, { url: 'proc-id', valueCode: 'IMUE0130' },
       { url: 'patient-context-hash', valueString: 'b'.repeat(64) }, { url: 'ipl-case-seq-no', valueString: 'ECHO-SYNTHETIC' },
     ] }] }
@@ -232,6 +232,17 @@ describe('cross-source imaging reports', () => {
     expect(rows).toHaveLength(2)
     expect(rows.find(row => row.diagnosticReportIds?.includes('cloud'))?.diagnosticReportIds).toEqual(['cloud', 'doppler', 'viewer'])
     expect(rows.find(row => row.diagnosticReportIds?.includes('cloud'))?.viewerActions).toHaveLength(1)
+  })
+
+  it('uses effectivePeriod.start before the later signing date in a merged row', () => {
+    const reports = pair()
+    reports[0].effectiveDateTime = undefined
+    reports[0].effectivePeriod = { start: '2026-06-24' }
+    reports[0].issued = '2026-06-25'
+    const rows = buildReportsData(reports).reportRows
+    expect(rows).toHaveLength(1)
+    expect(rows[0].effectiveDate).toBe('2026-06-24')
+    expect(calculateReportTabCounts(reports).imaging).toBe(1)
   })
 
   it('does not pick a cross-source pair from nearby same-title exams in either input order', () => {

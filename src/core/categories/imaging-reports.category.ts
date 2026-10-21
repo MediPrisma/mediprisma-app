@@ -89,7 +89,7 @@ const getLatestImagingReports = (reports: ImagingReportData[]): ImagingReportDat
     // the time-range filter below and the reports display. getMostRecentDate
     // would pick the LATER of the two (issued), keying "latest" dedup off a
     // different date than the range filter.
-    (report) => report.effectiveDateTime || report.issued
+    (report) => report.effectiveDateTime || report.effectivePeriod?.start || report.issued
   )
 }
 
@@ -198,7 +198,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     if (timeRange && timeRange !== 'all') {
       const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
       filtered = filtered.filter(report =>
-        inWindow(report.effectiveDateTime || report.issued)
+        inWindow(report.effectiveDateTime || report.effectivePeriod?.start || report.issued)
       )
     }
 
@@ -221,7 +221,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     if (timeRange && timeRange !== 'all') {
       const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
       filtered = filtered.filter(report =>
-        inWindow(report.effectiveDateTime || report.issued)
+        inWindow(report.effectiveDateTime || report.effectivePeriod?.start || report.issued)
       )
     }
 

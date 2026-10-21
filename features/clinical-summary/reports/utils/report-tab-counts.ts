@@ -46,7 +46,7 @@ interface CountRow {
 const GLUCOSE_KEEP_SEPARATE = new Set(['C-PEPTIDE'])
 
 function reportDate(report: any): string | undefined {
-  return report?.effectiveDateTime || report?.issued
+  return report?.effectiveDateTime || report?.effectivePeriod?.start || report?.issued
 }
 
 function reportInstitution(report: any): string | undefined {
