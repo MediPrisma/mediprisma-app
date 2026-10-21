@@ -4,7 +4,7 @@
  * The specification's own example (2026-10-20) is the first case; the rest
  * are the corrections its review asked for.
  */
-import { CITES } from '@/features/medical-calculator/doac-dose-model'
+import { CITES, crclLabel } from '@/features/medical-calculator/doac-dose-model'
 import { GUIDELINE_CITES, calculatePeriop, ehraHours, formatLocal, isLabelCite, parseClock, parseLocalDateTime, type PeriopResult } from '@/features/medical-calculator/doac-periop-model'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
@@ -32,10 +32,14 @@ describe('the specification’s example: apixaban 5 mg bid, CrCl 62, total knee 
     expect(formatLocal(result.lastDose!)).toBe('10-31 08:00')
     expect(times(result.skippedBefore)).toEqual(['10-31 20:00', '11-01 08:00', '11-01 20:00', '11-02 08:00', '11-02 20:00', '11-03 08:00'])
   })
-  it('restart from 11-05 10:00 (high risk, 48 h after the end), with haemostasis confirmed first; the 11-05 20:00 dose is the first back', () => {
+  it('restart from 11-05 10:00 (high risk, 48 h after the end), with haemostasis confirmed first; the 11-05 08:00 dose is taken at 10:00 by the apixaban label (#review coordinator 3rd)', () => {
     expect(formatLocal(result.resume.earliest!)).toBe('11-05 10:00')
-    expect(formatLocal(result.resume.firstDose!)).toBe('11-05 20:00')
-    expect(times(result.resume.skippedAfter)).toEqual(['11-03 20:00', '11-04 08:00', '11-04 20:00', '11-05 08:00'])
+    // EHRA Figure 15 draws both apixaban doses on Day +2; it is the label that lets the morning dose wait until 10:00.
+    expect(formatLocal(result.resume.delayed!)).toBe('11-05 08:00')
+    expect(formatLocal(result.resume.firstDose!)).toBe('11-05 10:00')
+    expect(times(result.resume.skippedAfter)).toEqual(['11-03 20:00', '11-04 08:00', '11-04 20:00'])
+    expect(allCites(result)).toContain(CITES.apixabanMissed)
+    expect(allText(result)).not.toContain('不服用、不補服（EHRA')
     expect(allText(result)).toContain('恢復前需確認止血')
   })
   it('the label’s own 48 h stands beside EHRA, and no bridging', () => {
@@ -196,15 +200,15 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(result.hoursFromLastDose).toBe(11.5)
     expect(result.skippedBefore).toEqual([])
   })
-  it('bid: the dose due at the start is not taken nor made up; the next scheduled one resumes (#review final Astra 2, Opus)', () => {
-    // bid 08:00/20:00, minor risk 08:00–10:00: 20:00 the day before is last; 08:00 is not taken; 20:00 resumes (EHRA Figure 15).
+  it('bid: the dose due at the start waits for a same-day restart, by the label (#review final Astra 2, Opus; coordinator 3rd)', () => {
+    // bid 08:00/20:00, minor risk 08:00–10:00: 20:00 the day before is last; 08:00 is taken at the 16:00 restart.
     const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes' })
     expect(result.skippedBefore).toEqual([])
     expect(formatLocal(result.resume.earliest!)).toBe('11-03 16:00')
-    expect(times(result.resume.skippedAfter)).toEqual(['11-03 08:00'])
-    expect(result.resume.delayed).toBeUndefined()
-    expect(formatLocal(result.resume.firstDose!)).toBe('11-03 20:00')
-    expect(allText(result)).toContain('不服用、不補服')
+    expect(result.resume.skippedAfter).toEqual([])
+    expect(formatLocal(result.resume.delayed!)).toBe('11-03 08:00')
+    expect(formatLocal(result.resume.firstDose!)).toBe('11-03 16:00')
+    expect(allText(result)).toContain('由團隊決定')
   })
   it('qd: a restart past midnight, or more than one dose in between, is not made up — never two doses in one day (#review final Opus 2)', () => {
     const late = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T18:00' })
@@ -236,14 +240,14 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(result.resume.delayed!)).toBe('11-04 08:00')
     expect(formatLocal(result.resume.firstDose!)).toBe('11-04 10:00')
   })
-  it('apixaban bid: the evening dose is taken at a same-evening restart; the morning one is not (EHRA Figure 15), with the label’s difference quoted (#review Astra sweep 2, Opus)', () => {
+  it('apixaban bid: only the last dose before a same-day restart is taken at it, by the label (#review Astra sweep 2, Opus)', () => {
     const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_end_at: '2026-11-03T15:00' })
     expect(formatLocal(result.resume.earliest!)).toBe('11-03 21:00')
     expect(times(result.resume.skippedAfter)).toEqual(['11-03 08:00'])
     expect(formatLocal(result.resume.delayed!)).toBe('11-03 20:00')
     expect(formatLocal(result.resume.firstDose!)).toBe('11-03 21:00')
-    expect(allCites(result)).toEqual(expect.arrayContaining([GUIDELINE_CITES.ehraFig15, CITES.apixabanMissed]))
-    expect(allText(result)).toContain('apixaban 仿單允許早上漏服時立即補服')
+    expect(allCites(result)).toContain(CITES.apixabanMissed)
+    expect(allText(result)).toContain('早上那一劑可與晚上那一劑一起服；晚上那一劑只能當晚補')
     // Past midnight the evening dose is not made up.
     const late = plan({ procedure_kind: 'minimal', haemostasis: 'yes', surgery_end_at: '2026-11-03T19:00' })
     expect(late.resume.delayed).toBeUndefined()
@@ -279,11 +283,11 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(bid.heldBefore!)).toBe('11-03 08:00')
     expect(formatLocal(bid.lastDose!)).toBe('11-02 20:00')
     expect(bid.hoursFromLastDose).toBe(14)
-    expect(times(bid.skippedBefore)).toEqual(['11-03 08:00'])
-    // The procedure day’s morning dose is not made up (EHRA Figure 15); 20:00 resumes.
-    expect(bid.resume.delayed).toBeUndefined()
+    expect(bid.skippedBefore).toEqual([])
+    // By the apixaban label the held morning dose is taken at the 17:00 restart, listed once.
+    expect(formatLocal(bid.resume.delayed!)).toBe('11-03 08:00')
     expect(bid.resume.skippedAfter).toEqual([])
-    expect(formatLocal(bid.resume.firstDose!)).toBe('11-03 20:00')
+    expect(formatLocal(bid.resume.firstDose!)).toBe('11-03 17:00')
     expect(bid.cautions.map((c) => c.text.zh).join()).toContain('11-03 08:00 那一劑距開始只有 2 小時，未到谷底：處置前不服')
     const headline = CALCULATORS.find((c) => c.id === 'doac-periop')!.compute({ ...base, procedure_kind: 'minimal', haemostasis: 'yes', surgery_at: '2026-11-03T10:00', surgery_end_at: '2026-11-03T11:00' })!
     expect(headline.interpretation!.zh).toContain('11-03 08:00 那一劑距開始太近，處置前不服；處置前最後服用 11-02 20:00，距開始 14 小時')
@@ -324,6 +328,41 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(formatLocal(result.lastDose!)).toBe('11-02 20:00')
     expect(result.hoursFromLastDose).toBe(12)
     expect(result.cautions).toEqual([])
+  })
+})
+
+describe('third review by the coordinator', () => {
+  it('AF ablation: the restart is 3 h after the sheath is out, and the dose at the start waits for it (EHRA Figure 16)', () => {
+    const ablation = { procedure_kind: 'af-ablation', surgery_at: '2026-11-03T07:00', surgery_end_at: '2026-11-03T10:00', haemostasis: 'yes' }
+    const waiting = plan(ablation)
+    expect(waiting.resume.earliest).toBeUndefined()
+    expect(waiting.pending).toContain('sheath_removed_at')
+    expect(allText(waiting)).toContain('恢復時間未定：11-03 08:00 起的劑量先不服')
+    const out = plan({ ...ablation, sheath_removed_at: '2026-11-03T10:00' })
+    expect(out.pending).toEqual([])
+    expect(formatLocal(out.resume.earliest!)).toBe('11-03 13:00')
+    expect(formatLocal(out.resume.delayed!)).toBe('11-03 08:00')
+    expect(formatLocal(out.resume.firstDose!)).toBe('11-03 13:00')
+    expect(allCites(out)).toContain(GUIDELINE_CITES.ehraFig16)
+    expect(plan({ ...ablation, sheath_removed_at: '2026-11-03T06:00' }).pending).toContain('sheath_removed_at')
+  })
+  it('a block with a prophylactic dose: the longer interval is named when EHRA’s is the longer', () => {
+    const result = plan({ regimen: 'rivaroxaban:10:1', dose_time_2: '', neuraxial: 'single' })
+    expect(result.holdHours).toBe(48)
+    expect(allText(result)).toContain('取較長者：48 小時（EHRA 高風險）')
+    expect(allText(result)).toContain('術前取 EHRA 與 ASRA 低劑量規則的較長者')
+  })
+  it('two equal bid dose times are stopped, with no doses counted', () => {
+    const result = plan({ dose_time_2: '08:00' })
+    expect(result.cautions.map((c) => c.text.zh).join()).toContain('兩個服藥時刻相同')
+    expect(result.pending).toContain('dose_time_2')
+    expect(result.lastDose).toBeUndefined()
+    expect(result.skippedBefore).toEqual([])
+    expect(result.resume.firstDose).toBeUndefined()
+  })
+  it('CrCl 79.96 is not printed as 80.0', () => {
+    expect(crclLabel(79.96)).toBe('79.96')
+    expect(crclLabel(62)).toBe('62.0')
   })
 })
 

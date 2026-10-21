@@ -52,10 +52,11 @@ describe('DOAC peri-procedural results', () => {
     render(<DoacPeriopResults values={{ ...spec, neuraxial: 'none' }} locale="zh-TW" />)
     expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('給回術前的治療劑量，不需起始負荷；需確認止血')
   })
-  it('minor risk: “not stopped early”, and the dose at the start is listed as held', () => {
+  it('minor risk: “not stopped early”, and the dose at the start waits for the restart', () => {
     render(<DoacPeriopResults values={{ ...spec, neuraxial: 'none', procedure_kind: 'minimal', haemostasis: 'yes' }} locale="zh-TW" />)
     expect(screen.getByTestId('doac-periop-hold')).toHaveTextContent('不提前停藥・谷底約 12 小時')
-    expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('處置當下到恢復前不服用、不補服 1 劑：11-03 08:00')
+    expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('11-03 08:00 那一劑延到恢復時服用')
+    expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('恢復的第一劑：11-03 16:00')
   })
   it('minor risk, once daily: the day’s dose is shown moved to the restart', () => {
     render(<DoacPeriopResults values={{ ...spec, neuraxial: 'none', procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T09:00' }} locale="zh-TW" />)
