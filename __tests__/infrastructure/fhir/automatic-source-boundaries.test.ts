@@ -82,3 +82,11 @@ it.each([false,true])('accepts compatible identifier additions independent of Pa
  const parsed=LocalBundleService.parse({resourceType:'Bundle',entry:rows.map(resource=>({resource}))})!
  expect(parsed.patient.identifier).toHaveLength(2)
 })
+
+it.each([false,true])('accepts an ordered Patient correction when its winning version has equivalent URL copies (reverse=%s)',reverse=>{
+ const old={...patient,birthDate:'1950-01-01',meta:{versionId:'1',lastUpdated:'2026-10-01'}}
+ const current={...patient,birthDate:'1980-01-01',meta:{versionId:'2',lastUpdated:'2026-10-02'}}
+ const entries=[{fullUrl:'https://one.invalid/fhir/Patient/synthetic/_history/1',resource:old},{fullUrl:'https://one.invalid/fhir/Patient/synthetic',resource:current},{fullUrl:'https://one.invalid/fhir/Patient/synthetic/_history/2',resource:current}]
+ const parsed=LocalBundleService.parse({resourceType:'Bundle',entry:reverse?entries.reverse():entries})!
+ expect(parsed.patient.birthDate).toBe('1980-01-01')
+})

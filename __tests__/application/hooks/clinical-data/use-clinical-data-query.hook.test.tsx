@@ -267,3 +267,22 @@ it('refreshes the shared source generation after a same-id patient refresh witho
   expect(result.current.observations).toBe(originalRows)
   expect(repository.fetchObservations).toHaveBeenCalledTimes(1)
 })
+
+describe('content-only completeness is not a transport failure',()=>{
+ it('allows the chart consumers to use available facts while retaining missing drug content for safety',async()=>{
+  mockUsePatientQuery.mockReturnValue({data:{id:'patient-1'},isLoading:false,isFetching:false})
+  mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository({
+   fetchMedications:jest.fn(async()=>[{id:'missing-drug',clinicalMedicationContentUncertainty:{reason:'unresolved-reference'}}]),
+   getQueryStatus:jest.fn((key:string)=>key==='MedicationRequest'?{resourceType:key,state:'incomplete',medicationContentOnlyIncomplete:true,medicationContentUncertaintyCount:1}:key==='ImagingStudy'?{resourceType:key,state:'unsupported'}:undefined),
+  }) as any)
+  const{result,unmount,queryClient}=renderClinicalData()
+  try{
+   await waitFor(()=>expect(result.current.isLoading).toBe(false))
+   expect(result.current.resourceQueryStatus.MedicationRequest?.state).toBe('incomplete')
+   expect(result.current.medications[0].clinicalMedicationContentUncertainty).toBeDefined()
+   expect(result.current.queryIssues.map(([key])=>key)).not.toContain('MedicationRequest')
+   expect(result.current.queryIssues.map(([key])=>key)).toContain('ImagingStudy')
+   expect(result.current.hasBlockingQueryIssues).toBe(false)
+  }finally{unmount();queryClient.clear()}
+ })
+})

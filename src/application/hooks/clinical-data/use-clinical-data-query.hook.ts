@@ -354,6 +354,7 @@ export function useClinicalData() {
     const resourceQueryStatus = aggregate.resourceQueryStatus
     const queryIssues = Object.entries(resourceQueryStatus)
       .filter(([, status]) => status && status.state !== 'ok' && status.state !== 'empty' && status.state !== 'pending')
+      .filter(([, status]) => status?.state !== 'incomplete' || status.medicationContentOnlyIncomplete !== true)
     const hasBlockingQueryIssues = queryIssues.some(([key, status]) => BLOCKING_FHIR_QUERY_KEYS.has(key) || (status.invalidModifierCount ?? 0) > 0)
 
     return {
