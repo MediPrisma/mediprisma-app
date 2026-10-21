@@ -13,6 +13,8 @@ import { excludeUnresolvedGenericVariants } from '@/src/core/utils/clinical-vari
 //  - Dates / organizations / resource types always come from the bundle.
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
+import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { clinicalEncounterAlias } from '@/src/core/services/clinical-encounter-alias'
 import { getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
 import { getAnalyteCanonicalKey, TEST_ALIASES } from '@voho0000/clinical-lab-normalization/canonical'
 import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
@@ -145,6 +147,7 @@ export function normaliseSummarySourceKey(rawKey: string): string {
 export type MedicalSummaryHarnessProfile = 'frontier' | 'local-small'
 
 export interface SummaryCatalogInput {
+  clinicalSource?: ClinicalReconciliationResult
   encounters?: EncounterEntity[]
   medications?: MedicationEntity[]
   observations?: ObservationEntity[]
@@ -413,9 +416,38 @@ export function buildSourceCatalog(
       .filter((encounter) => encounter.id)
       .map((encounter) => [encounter.id, encounter.serviceProvider?.display?.trim() || undefined]),
   )
-  const linkedEncounterOrganization = (reference?: string): string | undefined => {
-    const id = referenceId(reference)
-    return id ? encounterOrganizationById.get(id) : undefined
+  const linkedEncounterOrganization = (
+    reference: string | undefined,
+    originNodeKey: string | undefined,
+    paths: readonly string[],
+  ): string | undefined => {
+    const source = input.clinicalSource
+    if (!source?.graph) {
+      const id = referenceId(reference)
+      return id ? encounterOrganizationById.get(id) : undefined
+    }
+    // With a source graph, only an edge that was resolved under the graph's
+    // source/base/version/patient rules can supply a linked organization.
+    if (!reference || !originNodeKey) return undefined
+    const targetRows = new Map<string, EncounterEntity>()
+    for (const edge of source.graph.references) {
+      if (edge.origin.key !== originNodeKey || !paths.includes(edge.path) || edge.status !== 'resolved') continue
+      for (const targetKey of edge.targetKeys) {
+        const visibleKey = clinicalEncounterAlias(source, targetKey) ?? targetKey
+        for (const encounter of input.encounters ?? []) {
+          if (encounter.clinicalSourceNodeKey === visibleKey) targetRows.set(encounter.id, encounter)
+        }
+      }
+    }
+    if (targetRows.size !== 1) return undefined
+    const [encounter] = targetRows.values()
+    const expectedReference = `Encounter/${encounter.id}`
+    const edgeMatchesCurrent = source.graph.references.some(edge => edge.origin.key === originNodeKey && paths.includes(edge.path)
+      && edge.status === 'resolved' && edge.targetKeys.some(targetKey => {
+        const visibleKey = clinicalEncounterAlias(source, targetKey) ?? targetKey
+        return (input.encounters ?? []).some(row => row.clinicalSourceNodeKey === visibleKey && row.id === encounter.id)
+      }) && (edge.reference === reference || expectedReference === reference))
+    return edgeMatchesCurrent ? encounter.serviceProvider?.display?.trim() || undefined : undefined
   }
 
   sortByDateDesc(input.encounters ?? [], (e) => e.period?.start)
@@ -633,7 +665,7 @@ export function buildSourceCatalog(
       date: day(document.date),
       organization:
         document.author?.[0]?.display?.trim() ||
-        linkedEncounterOrganization(document.encounter?.reference),
+        linkedEncounterOrganization(document.encounter?.reference, document.clinicalSourceNodeKey, ['encounter']),
       getContentText: () => listClinicalDocuments({ compositions: [document] })[0]?.text ?? '',
     })),
     ...(input.documentReferences ?? []).map((document) => ({
@@ -649,7 +681,11 @@ export function buildSourceCatalog(
       date: day(document.context?.period?.start ?? document.date),
       organization:
         document.author?.[0]?.display?.trim() ||
-        linkedEncounterOrganization(document.context?.encounter?.[0]?.reference) ||
+        (document.context?.encounter ?? []).map((encounter, index) => linkedEncounterOrganization(
+          encounter.reference,
+          document.clinicalSourceNodeKey,
+          [`context.encounter[${index}]`],
+        )).find(Boolean) ||
         extractInstitutionFromDocumentTitle(document.content?.[0]?.attachment?.title),
       getContentText: () => listClinicalDocuments({ documentReferences: [document] })[0]?.text ?? '',
     })),
