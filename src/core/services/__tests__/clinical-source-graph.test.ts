@@ -70,6 +70,32 @@ describe('buildClinicalSourceGraph', () => {
     expect(graph.references[0].status).toBe('resolved')
   })
 
+  it('keeps relative references on the origin fullUrl base when multiple hosts share the scope', () => {
+    const graph = buildClinicalSourceGraph([{
+      sourceId: 'multi-host', patientScope: 'patient-1', generation: 'import-1', resources: [
+        { resource: { resourceType: 'DiagnosticReport', id: 'r', result: [{ reference: 'Observation/x' }] }, fullUrl: 'https://a.example/fhir/DiagnosticReport/r' },
+        { resource: { resourceType: 'Observation', id: 'x' }, fullUrl: 'https://a.example/fhir/Observation/x' },
+        { resource: { resourceType: 'Observation', id: 'x' }, fullUrl: 'https://b.example/fhir/Observation/x' },
+      ],
+    }])
+    const edge = graph.references.find((item) => item.origin.resource.resourceType === 'DiagnosticReport')!
+    expect(edge.status).toBe('resolved')
+    expect(edge.targetKeys).toEqual([graph.nodes.find((node) => node.fullUrl === 'https://a.example/fhir/Observation/x')!.key])
+  })
+
+  it('uses an absolute reference host to select among same-id resources from different hosts', () => {
+    const graph = buildClinicalSourceGraph([{
+      sourceId: 'multi-host', patientScope: 'patient-1', generation: 'import-1', resources: [
+        { resourceType: 'DiagnosticReport', id: 'r', result: [{ reference: 'https://b.example/fhir/Observation/x' }] },
+        { resource: { resourceType: 'Observation', id: 'x' }, fullUrl: 'https://a.example/fhir/Observation/x' },
+        { resource: { resourceType: 'Observation', id: 'x' }, fullUrl: 'https://b.example/fhir/Observation/x' },
+      ],
+    }])
+    const edge = graph.references.find((item) => item.origin.resource.resourceType === 'DiagnosticReport')!
+    expect(edge.status).toBe('resolved')
+    expect(edge.targetKeys).toEqual([graph.nodes.find((node) => node.fullUrl === 'https://b.example/fhir/Observation/x')!.key])
+  })
+
   it('keeps unknown audit resource types but does not promote nested provenance snapshots', () => {
     const graph = buildClinicalSourceGraph([capture([
       { resourceType: 'Provenance', id: 'audit' },
@@ -108,8 +134,8 @@ describe('buildClinicalSourceGraph', () => {
   })
 
   it('records display-only and unresolved references without inventing targets', () => {
-    const graph = buildClinicalSourceGraph([capture([{ resourceType: 'Observation', id: 'o', subject: { display: 'Unknown patient' }, basedOn: { reference: 'ServiceRequest/missing' }, focus: { identifier: { value: 'unknown' } }, code: { coding: [{ display: 'a code, not a reference' }] } }])])
-    expect(graph.references.map((e) => e.status).sort()).toEqual(['display-only', 'unresolved', 'unresolved'])
+    const graph = buildClinicalSourceGraph([capture([{ resourceType: 'Observation', id: 'o', subject: { display: 'Unknown patient' }, basedOn: { reference: 'ServiceRequest/missing' }, focus: { identifier: { value: 'unknown' } }, code: { coding: [{ display: 'a code, not a reference' }] }, entity: [{ what: { identifier: { value: 'audit-target' } } }], extension: [{ valueReference: { display: 'Referenced from extension' } }] }])])
+    expect(graph.references.map((e) => e.status).sort()).toEqual(['display-only', 'display-only', 'unresolved', 'unresolved', 'unresolved'])
     expect(graph.references.every((e) => e.targetKeys.length === 0)).toBe(true)
   })
 })

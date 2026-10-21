@@ -76,7 +76,7 @@ const referencesIn = (value: unknown, path = ''): Array<{ path: string; referenc
   if (!Array.isArray(value)) {
     const record = value as Record<string, unknown>
     const lastPathPart = path.split('.').pop()?.replace(/\[\d+\]$/, '') ?? ''
-    const displayReferenceFields = /^(subject|encounter|performer|requester|author|custodian|patient|actor|target|source|destination|recipient|result|specimen|device|reasonReference|medicationReference|supportingInfo|context|partOf|derivedFrom|hasMember|basedOn|focus|generalPractitioner|managingOrganization|organization|serviceProvider|location|careTeam|insurance|payor)$/i
+    const displayReferenceFields = /^(subject|encounter|performer|requester|author|custodian|patient|actor|target|source|destination|recipient|result|specimen|device|reasonReference|medicationReference|supportingInfo|context|partOf|derivedFrom|hasMember|basedOn|focus|generalPractitioner|managingOrganization|organization|serviceProvider|location|careTeam|insurance|payor|what|who|individual|valueReference)$/i
     if (typeof record.reference === 'string' || (record.type === 'Reference' && typeof record.display === 'string') || (displayReferenceFields.test(lastPathPart) && (typeof record.display === 'string' || (record.identifier && typeof record.identifier === 'object')))) {
       found.push({ path, reference: typeof record.reference === 'string' ? record.reference : undefined, display: typeof record.display === 'string' ? record.display : undefined, identifierOnly: Boolean(record.identifier && typeof record.identifier === 'object' && typeof record.reference !== 'string') })
     }
@@ -180,7 +180,9 @@ export function buildClinicalSourceGraph(captures: readonly ClinicalSourceCaptur
         candidates = scoped.filter((node) => node.isContained && node.parentKey === parentKey && node.resource.id === raw.slice(1))
       } else {
         let normalized = raw
-        const matchingBases = [...new Set(scoped.map((node) => baseByKey.get(node.key) ?? deriveRestBase(node.fullUrl)).filter((base): base is string => Boolean(base && raw.startsWith(`${base}/`))))].sort((a, b) => b.length - a.length)
+        const originNode = origin.isContained && origin.parentKey ? nodes.find((node) => node.key === origin.parentKey) ?? origin : origin
+        const originBase = baseByKey.get(originNode.key) ?? originNode.restBase ?? deriveRestBase(originNode.fullUrl)
+        const matchingBases = [...new Set(scoped.map((node) => baseByKey.get(node.key) ?? node.restBase ?? deriveRestBase(node.fullUrl)).filter((base): base is string => Boolean(base && raw.startsWith(`${base}/`))))].sort((a, b) => b.length - a.length)
         if (matchingBases.length) normalized = raw.slice(matchingBases[0].length + 1)
         else if (/^https?:\/\//i.test(raw)) {
           try { normalized = new URL(raw).pathname.replace(/^\//, '') } catch { normalized = raw }
@@ -189,7 +191,12 @@ export function buildClinicalSourceGraph(captures: readonly ClinicalSourceCaptur
         normalized = normalized.replace(/^\//, '').replace(/\/_history\/[^/]+\/?$/, '')
         const exact = scoped.filter((node) => node.fullUrl && withoutVersion(node.fullUrl) === withoutVersion(raw) && (!versionMatch || (node.resource.meta as Record<string, unknown> | undefined)?.versionId === versionMatch[1]))
         const isAbsolute = /^https?:\/\//i.test(raw)
-        candidates = exact.length ? exact : (isAbsolute && matchingBases.length === 0) ? [] : scoped.filter((node) => !node.isContained && `${node.resource.resourceType}/${node.resource.id}` === normalized && (!versionMatch || (node.resource.meta as Record<string, unknown> | undefined)?.versionId === versionMatch[1]))
+        const expectedBase = isAbsolute ? (matchingBases[0] ?? deriveRestBase(raw)) : originBase
+        candidates = exact.length ? exact : (isAbsolute && !expectedBase) ? [] : scoped.filter((node) => {
+          const candidateBase = baseByKey.get(node.key) ?? node.restBase ?? deriveRestBase(node.fullUrl)
+          const baseMatches = expectedBase ? candidateBase === expectedBase : true
+          return !node.isContained && baseMatches && `${node.resource.resourceType}/${node.resource.id}` === normalized && (!versionMatch || (node.resource.meta as Record<string, unknown> | undefined)?.versionId === versionMatch[1])
+        })
       }
       const distinct = [...new Map(candidates.map((n) => [n.key, n])).values()].sort((a, b) => a.key.localeCompare(b.key))
       const status: ClinicalSourceReferenceStatus = distinct.length === 1 ? 'resolved' : distinct.length > 1 ? 'ambiguous' : 'unresolved'
