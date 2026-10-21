@@ -5,6 +5,7 @@ import { test, expect } from '../fixtures/test'
 import { importBundle, openFeaturePanel, openLeftTab } from '../fixtures/import'
 import { stubFirebaseAnonymousAuth } from '../fixtures/firebase-auth'
 import { createMergedFhirFixture, type RawBundle, type SourceImage } from '../fixtures/merged-fhir'
+import { expectImportWorker, observeImportWorkers } from '../fixtures/import-worker'
 
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
 const parse = (bytes: Buffer): RawBundle => JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/, ''))
@@ -58,9 +59,9 @@ async function verifyImages(page: Page, images: SourceImage[], stage: string, in
   }
 }
 
-test('merged cloud and hospital originals and every embedded image survive download and clean-context reimport', async ({ page, browser }, info) => {
+test('merged cloud and hospital originals and every embedded image survive download and clean-context reimport', async ({ page, browser, requireImportWorker }, info) => {
   test.setTimeout(180_000)
-  const { bundle, original, images } = createMergedFhirFixture()
+  const { bundle, original, images } = createMergedFhirFixture(process.env.E2E_IMPORT_FIXTURE_TIMESTAMP)
   const source = info.outputPath('merged-source.json')
   await fs.writeFile(source, original)
   expect(original.length).toBeGreaterThan(4 * 1024 * 1024)
@@ -106,6 +107,8 @@ test('merged cloud and hospital originals and every embedded image survive downl
   }
 
   await importBundle(page, { bundlePath: source })
+  await info.attach('initial-import-workspace', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
+  if (requireImportWorker) await expectImportWorker(page, info, 'initial', original.length)
   const originalImport = await activeImport(page)
   expect(originalImport).toMatch(/^import:.+/)
   await expect(page.getByText('整併測試病人').first()).toBeAttached()
@@ -122,10 +125,12 @@ test('merged cloud and hospital originals and every embedded image survive downl
   })
   try {
     await stubFirebaseAnonymousAuth(clean)
+    if (requireImportWorker) await observeImportWorkers(clean)
     const restored = await clean.newPage()
-    await restored.goto('/')
+    await restored.goto(process.env.E2E_APP_PATH || '/')
     expect(await activeImport(restored)).toBeNull()
     await importBundle(restored, { bundlePath: downloaded })
+    if (requireImportWorker) await expectImportWorker(restored, info, 'clean-reimport', original.length)
     const firstReimport = await activeImport(restored)
     expect(firstReimport).toMatch(/^import:.+/)
     expect(firstReimport).not.toBe(originalImport)
@@ -138,6 +143,7 @@ test('merged cloud and hospital originals and every embedded image survive downl
     await verifyDownload(restored, 'clean-reimport-reload-download')
     // Repeat using an actual download from the new context, not the fixture.
     await importBundle(restored, { bundlePath: secondDownload })
+    if (requireImportWorker) await expectImportWorker(restored, info, 'second-reimport', original.length)
     const secondReimport = await activeImport(restored)
     expect(secondReimport).toMatch(/^import:.+/)
     expect(secondReimport).not.toBe(firstReimport)
