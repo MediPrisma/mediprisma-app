@@ -26,17 +26,26 @@ it('rejects an ambiguous legacy stored chart while retaining its original downlo
   }
 })
 
-it.each(['multiple-patients', 'foreign-subject'])('keeps the loaded patient and original bytes when a later %s import is rejected', async kind => {
+it.each(['multiple-patients', 'foreign-subject', 'urn-only-patient', 'contained-patient'])('keeps the loaded patient and original bytes when a later %s import is rejected', async kind => {
   const single = { resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id: 'patient-a' } }] }
   const source = JSON.stringify(single)
   const original = new Blob([source], { type: 'application/fhir+json' })
-  const multi = kind === 'multiple-patients' ? { resourceType: 'Bundle', entry: [
+  let multi: any = kind === 'multiple-patients' ? { resourceType: 'Bundle', entry: [
     { fullUrl: 'https://one.invalid/Patient/patient-a', resource: { resourceType: 'Patient', id: 'patient-a' } },
     { fullUrl: 'https://two.invalid/Patient/patient-a', resource: { resourceType: 'Patient', id: 'patient-a' } },
   ] } : { resourceType: 'Bundle', entry: [
     { resource: { resourceType: 'Patient', id: 'patient-a' } },
     { resource: { resourceType: 'MedicationRequest', id: 'foreign', subject: { reference: 'Patient/patient-b' } } },
   ] }
+  if (kind === 'urn-only-patient') multi = { resourceType: 'Bundle', entry: [
+    { fullUrl: 'urn:uuid:selected-patient', resource: { resourceType: 'Patient' } },
+    { resource: { resourceType: 'Observation', id: 'unknown-owner', subject: { reference: 'Patient/other' } } },
+  ] }
+  if (kind === 'contained-patient') multi = { resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'patient-a' } },
+    { resource: { resourceType: 'Observation', id: 'unknown-owner', subject: { reference: '#local-patient' }, contained: [{ resourceType: 'Patient', id: 'local-patient' }] } },
+  ] }
+  const expectedError = kind === 'urn-only-patient' || kind === 'contained-patient' ? '病人歸屬無法確認' : '單一病人的 FHIR Bundle'
   jest.mocked(prepareLocalImportFile)
     .mockResolvedValueOnce({ bundle: single, originalFhir: original } as any)
     .mockResolvedValueOnce({ bundle: multi, originalFhir: new Blob([JSON.stringify(multi)]) } as any)
@@ -46,12 +55,12 @@ it.each(['multiple-patients', 'foreign-subject'])('keeps the loaded patient and 
   try {
     await act(async () => { await result.current.importFile(new File(['first'], 'first.json')) })
     const importId = LocalBundleService.getActiveImportId()
-    await act(async () => { await expect(result.current.importFile(new File(['second'], 'second.json'))).rejects.toThrow('單一病人的 FHIR Bundle') })
+    await act(async () => { await expect(result.current.importFile(new File(['second'], 'second.json'))).rejects.toThrow(expectedError) })
     expect(LocalBundleService.getActiveImportId()).toBe(importId)
     expect((await LocalBundleService.load() as any).entry[0].resource.id).toBe('patient-a')
     expect(await LocalBundleService.loadOriginalFhir()).toBe(original)
     expect(result.current.hasBundle).toBe(true)
-    expect(result.current.error).toContain('單一病人')
+    expect(result.current.error).toContain(expectedError)
   } finally {
     unmount()
     queryClient.clear()

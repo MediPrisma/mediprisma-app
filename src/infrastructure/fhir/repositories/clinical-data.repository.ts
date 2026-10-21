@@ -1,6 +1,6 @@
 import { createClinicalProjectionContext, projectClinicalReferences, mapProjectedObservation as mapSourceObservation, projectClinicalAggregate, type ClinicalProjectionContext } from '../mappers/clinical-aggregate-projection'
 import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
-import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
+import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
 import { captureClinicalSource, invalidateClinicalSource, mutableClinicalProjection, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
 // FHIR Clinical Data Repository Implementation
 import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories/clinical-data.repository.interface'
@@ -169,14 +169,21 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string'))
     const includeTypes = queryType === 'DiagnosticReport' ? ['Observation']
       : queryType === 'MedicationRequest' || queryType === 'MedicationStatement' ? ['Medication'] : []
-    const excludedCount = source.graph.nodes.filter(node => !node.isContained && !node.embeddedIn
-      && (node.resource.resourceType === queryType || (queryType === 'DiagnosticReport' && node.resource.resourceType === 'Observation'))
-      && !isClinicalSourceNodePatientEligible(node, source.graph.nodes)).reduce((count, node) => count + node.occurrences, 0)
+    const exclusionCounts: NonNullable<ClinicalDataQueryStatus['exclusionCounts']> = {}
+    for (const node of source.graph.nodes) {
+      if (node.isContained || node.embeddedIn || !(node.resource.resourceType === queryType || (queryType === 'DiagnosticReport' && node.resource.resourceType === 'Observation'))) continue
+      const reason = getClinicalSourceNodePatientExclusionReason(node, source.graph.nodes)
+      if (reason) exclusionCounts[reason] = (exclusionCounts[reason] ?? 0) + node.occurrences
+    }
+    const excludedCount = Object.values(exclusionCounts).reduce((sum, count) => sum + count, 0)
     const projected = { ...response, entry: selectClinicalSourceNodes(source)
       .filter(node => node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType))
       .map(node => ({ resource: node.resource, fullUrl: node.fullUrl, _clinicalSourceNodeKey: node.key })) }
     Object.defineProperty(projected, '_clinicalSource', { value: source, enumerable: false })
-    if (excludedCount) Object.defineProperty(projected, '_excludedPatientRows', { value: excludedCount, enumerable: true })
+    if (excludedCount) {
+      Object.defineProperty(projected, '_excludedPatientRows', { value: excludedCount, enumerable: true })
+      Object.defineProperty(projected, '_excludedPatientReasons', { value: exclusionCounts, enumerable: true })
+    }
     const projection = createClinicalProjectionContext(source)
     Object.defineProperty(projected, '_clinicalProjection', { value: projection, enumerable: false })
     session.successfulResponses.set(cacheKey, projected)
@@ -190,8 +197,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     this.resourceQueryStatus[key] = retainedFailure ? classifyFhirQueryError(retainedFailure, resourceType)
       : response?._excludedPatientRows ? {
         resourceType, state: 'error', count, excludedCount: response._excludedPatientRows,
-        exclusionReason: 'foreign-patient-reference',
-        message: 'Some returned clinical records refer to a different patient and were excluded. This domain is incomplete; absence cannot be concluded.',
+        exclusionReason: response._excludedPatientReasons?.['unresolved-patient-reference'] ? 'unresolved-patient-reference' : 'foreign-patient-reference',
+        exclusionCounts: response._excludedPatientReasons,
+        message: response._excludedPatientReasons?.['unresolved-patient-reference']
+          ? 'Some returned clinical records have unresolved patient ownership and were excluded. This domain is incomplete; absence cannot be concluded.'
+          : 'Some returned clinical records refer to a different patient and were excluded. This domain is incomplete; absence cannot be concluded.',
       } : successfulFhirQueryStatus(resourceType, count)
   }
 

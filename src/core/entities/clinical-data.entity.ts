@@ -1191,7 +1191,8 @@ export interface ClinicalDataQueryStatus {
   count?: number
   /** Returned clinical rows withheld because their explicit patient reference contradicted the requested patient. */
   excludedCount?: number
-  exclusionReason?: 'foreign-patient-reference'
+  exclusionReason?: 'foreign-patient-reference' | 'unresolved-patient-reference'
+  exclusionCounts?: Partial<Record<'foreign-patient-reference' | 'unresolved-patient-reference', number>>
   httpStatus?: number
   message?: string
   operationOutcome?: {
@@ -1246,6 +1247,8 @@ export interface ClinicalSourceMetadata {
 }
 
 export interface ClinicalRecordVariantExclusion extends ClinicalRecordVariant {
+  /** Internal opaque evidence identity, removed from outward AI traces. */
+  evidenceIdentity?: string
   resourceType: string
   sourceId?: string
   versionId?: string

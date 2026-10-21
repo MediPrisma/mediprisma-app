@@ -1,6 +1,7 @@
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
+import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
 // LocalBundleService
@@ -685,6 +686,8 @@ export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconc
     }
     const indexClone = (key: string, resource: any) => {
       sourceKeys?.set(resource, key)
+      // Hoisted/normalized clinical copies must retain their captured identity.
+      resource.clinicalSourceNodeKey = key
       const children = childrenByParent.get(key) ?? []
       for (const child of resource.contained ?? []) {
         const node = children.find(candidate => clinicalSourceResourcesEqual(candidate.resource, child))
@@ -1468,6 +1471,15 @@ export const LocalBundleService = {
     // Validate the import before the shared selector excludes foreign rows.
     // Rejected imports must preserve the previously loaded patient and raw file.
     if (originalPatient?.resource) assertPatientReferences(rawEntries.map((entry: any) => entry?.resource).filter(Boolean), originalPatient)
+    const assertPatientOwnership = (nodes: Iterable<(typeof clinicalSource.graph.nodes)[number]>) => {
+      for (const node of nodes) {
+        if (node.resource.resourceType === 'Patient') continue
+        const reason = getClinicalSourceNodePatientExclusionReason(node, clinicalSource.graph.nodes)
+        if (reason === 'unresolved-patient-reference') throw new Error('部分臨床資料的病人歸屬無法確認，無法安全匯入。請提供具有明確病人引用的 FHIR Bundle。')
+        if (reason === 'foreign-patient-reference') throw new Error('臨床資料的病人引用與目前病人不一致，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+      }
+    }
+    assertPatientOwnership(clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn))
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
     const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
     if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
@@ -1517,6 +1529,10 @@ export const LocalBundleService = {
       const key = sourceKeyByResource.get(observation)
       if (originKey && key) derivedMembers.set(originKey, [...(derivedMembers.get(originKey) ?? []), key])
     })
+    assertPatientOwnership(entries.flatMap(resource => {
+      const node = sourceNodesByKey.get(sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey)
+      return node ? [node] : []
+    }))
     const primaryPatient = projectedNodes.find(node => node.resource.resourceType === 'Patient')
     if (primaryPatient) assertPatientReferences(entries, primaryPatient)
 
@@ -1663,7 +1679,7 @@ export const LocalBundleService = {
     const reports = byType('DiagnosticReport')
     const imagingStudies = attachEncounterRefsByDate(byType('ImagingStudy'), encounterDateMap)
     const procs  = attachEncounterRefsByDate(byType('Procedure'), encounterDateMap)
-    const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap)
+    const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap, sourceKeyByResource)
     const allerg = byType('AllergyIntolerance')
     const docRefs = byType('DocumentReference')
     const comps  = byType('Composition')

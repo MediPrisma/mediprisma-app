@@ -87,6 +87,7 @@ type SharedReportBoundary = {
 }
 
 function sharedReportBoundary(report: any): SharedReportBoundary | null {
+  if (report?.clinicalRecordVariant) return null
   const subject = explicitReference(report?.subject?.reference)
   const encounter = report?._encounterInferred
     ? null

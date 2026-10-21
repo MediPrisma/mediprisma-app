@@ -37,6 +37,9 @@ export function isAdultPreventiveReport(report: any): boolean {
 
 /** One natural key for the displayed rows and the cross-source guard. */
 export function reportNaturalGroupingKey(report: any): string {
+  if (report?.clinicalRecordVariant) {
+    return `source-record-variant|${JSON.stringify([report.clinicalRecordVariant.groupId, report.id ?? report.clinicalSourceNodeKey])}`
+  }
   // A period is an interval. Its explicit bounds must not disappear when an
   // imaging report falls back to the established same-source grouping path.
   const period = inferReportDisplayGroup(report) === 'imaging' && report.effectivePeriod

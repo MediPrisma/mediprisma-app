@@ -4,6 +4,22 @@ import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 
 jest.mock('@/src/infrastructure/fhir/client/fhir-client.service')
 
+it('marks resolved contained Patient ownership unresolved without interpreting its local id as a foreign REST id', async () => {
+  const client = { state: { serverUrl: 'https://contained-scope.example/fhir' } }
+  jest.mocked(fhirClient.getClient).mockResolvedValue(client as any)
+  jest.mocked(fhirClient.requestAllPages).mockResolvedValue({ entry: [
+    { resource: { resourceType: 'Observation', id: 'contained-owner', subject: { reference: '#local-patient' }, contained: [{ resourceType: 'Patient', id: 'local-patient' }], valueQuantity: { value: 99 } } },
+    { resource: { resourceType: 'Observation', id: 'unresolved-reference', subject: { reference: '#missing' }, contained: [{ resourceType: 'Patient', id: 'other' }], valueQuantity: { value: 7 } } },
+  ] } as any)
+  const repository = new FhirClinicalDataRepository()
+  const observations = await repository.fetchObservations('current')
+  expect(observations.map(row => row.valueQuantity?.value)).toEqual([7])
+  expect(repository.getQueryStatus('Observation')).toMatchObject({ state: 'error', count: 1, excludedCount: 1,
+    exclusionReason: 'unresolved-patient-reference', exclusionCounts: { 'unresolved-patient-reference': 1 } })
+  expect(repository.getQueryStatus('Observation')?.message).not.toContain('different patient')
+  expect(repository.getClinicalSource('current').graph.nodes.some(node => node.resource.id === 'contained-owner')).toBe(true)
+})
+
 it('reports excluded clinical rows as domain incompleteness without blocking domains containing only foreign support nodes', async () => {
   const client = { state: { serverUrl: 'https://scope.example/fhir' } }
   jest.mocked(fhirClient.getClient).mockResolvedValue(client as any)
