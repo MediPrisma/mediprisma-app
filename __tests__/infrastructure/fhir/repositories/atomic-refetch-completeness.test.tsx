@@ -10,7 +10,7 @@ jest.mock('@/src/infrastructure/fhir/client/fhir-client.service')
 jest.mock('@/src/application/composition')
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({ usePatientQuery: () => ({ data: { id: 'a' }, isLoading: false, isFetching: false }) }))
 
-it.each(['medications', 'procedures'] as const)('marks %s pending while a subquery has captured new rows and another is still fetching', async unit => {
+it.each(['medications', 'procedures'] as const)('retains the complete %s snapshot while subqueries refresh, then switches atomically', async unit => {
  jest.resetAllMocks()
  ;(fhirClient.getClient as jest.Mock).mockResolvedValue({ state: { serverUrl: 'https://synthetic.example/fhir' } })
  let refresh = false
@@ -28,6 +28,7 @@ it.each(['medications', 'procedures'] as const)('marks %s pending while a subque
  const { result, unmount } = renderHook(() => ({ ui: useClinicalData(), whole: useClinicalDataQuery() }), { wrapper })
  await waitFor(() => expect(result.current.whole.data).toBeDefined())
  expect(result.current.ui[unit]).toHaveLength(1)
+ const settledSource = result.current.whole.data!.clinicalSource
  refresh = true
  let refetch!: Promise<void>
  act(() => { refetch = client.refetchQueries({ queryKey: clinicalResourceQueryKey('a', unit), exact: true }) })
@@ -37,13 +38,15 @@ it.each(['medications', 'procedures'] as const)('marks %s pending while a subque
  await act(async () => { await client.refetchQueries({ queryKey: clinicalResourceQueryKey('a', 'conditions'), exact: true }) })
  expect(result.current.ui.isLoading).toBe(false)
  expect(result.current.ui.isFetching).toBe(true)
- expect(result.current.ui.resourceReady[unit]).toBe(false)
- expect(result.current.ui.resourceQueryStatus[type]).toMatchObject({ state: 'pending', message: expect.stringMatching(/refresh|updat/i) })
+ expect(result.current.ui.resourceReady[unit]).toBe(true)
+ expect(result.current.ui.resourceQueryStatus[type]).toMatchObject({ state: 'ok', count: 1 })
  expect(result.current.ui.queryIssues).toEqual([])
  expect(result.current.ui.hasBlockingQueryIssues).toBe(false)
- expect(result.current.whole.data).toBeUndefined()
+ expect(result.current.whole.data?.clinicalSource).toBe(settledSource)
+ expect(JSON.stringify(result.current.whole.data?.[unit])).toContain('Initial')
+ expect(JSON.stringify(result.current.whole.data?.[unit])).not.toContain('Refreshed')
  await act(async () => { release(); await refetch })
- await waitFor(() => expect(result.current.whole.data).toBeDefined())
+ await waitFor(() => expect(result.current.ui.isFetching).toBe(false))
  expect(result.current.ui.resourceReady[unit]).toBe(true)
  expect(result.current.ui.resourceQueryStatus[type]).toMatchObject({ state: 'ok', count: 1 })
  expect(JSON.stringify(result.current.ui[unit])).toContain('Refreshed')
@@ -51,7 +54,7 @@ it.each(['medications', 'procedures'] as const)('marks %s pending while a subque
  unmount(); client.clear()
 })
 
-it('does not carry an old ownership exclusion into a pending refresh', async () => {
+it('retains the settled ownership error until a complete replacement clears it', async () => {
  jest.resetAllMocks()
  ;(fhirClient.getClient as jest.Mock).mockResolvedValue({ state: { serverUrl: 'https://synthetic.example/fhir' } })
  let refresh = false
@@ -72,12 +75,12 @@ it('does not carry an old ownership exclusion into a pending refresh', async () 
  let refetch!: Promise<void>
  act(() => { refetch = client.refetchQueries({ queryKey: clinicalResourceQueryKey('a', 'conditions'), exact: true }) })
  await waitFor(() => expect(result.current.isFetching).toBe(true))
- expect(result.current.resourceQueryStatus.Condition).toMatchObject({ state: 'pending' })
- expect(result.current.resourceQueryStatus.Condition?.excludedCount).toBeUndefined()
- expect(result.current.resourceQueryStatus.Condition?.exclusionReason).toBeUndefined()
+ expect(result.current.resourceQueryStatus.Condition).toMatchObject({ state: 'error', excludedCount: 1, exclusionReason: 'foreign-patient-reference' })
  expect(result.current.resourceQueryStatus.Condition?.httpStatus).toBeUndefined()
- expect(result.current.hasBlockingQueryIssues).toBe(false)
+ expect(result.current.hasBlockingQueryIssues).toBe(true)
  await act(async () => { release(); await refetch })
  await waitFor(() => expect(result.current.resourceQueryStatus.Condition?.state).toBe('empty'))
+ expect(result.current.resourceQueryStatus.Condition?.excludedCount).toBeUndefined()
+ expect(result.current.hasBlockingQueryIssues).toBe(false)
  unmount(); client.clear()
 })
