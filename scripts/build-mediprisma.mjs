@@ -9,7 +9,7 @@
 //
 // Output: ./out  — copy it into the docs site at static/app/ (see the docs
 // repo's scripts/sync-app.mjs).
-import { execSync } from 'node:child_process'
+import { execSync, spawnSync } from 'node:child_process'
 import { existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -18,6 +18,11 @@ const BASE_PATH = '/app'
 const repoRoot = process.cwd()
 const API_DIR = join(repoRoot, 'app', 'api')
 const STASH_DIR = join(repoRoot, '.api-stash-mediprisma-build')
+
+// Check the same production env Next will load, before moving any API files.
+// Keep env loading in a child process so it cannot alter legacy build behavior.
+const preflight = spawnSync(process.execPath, [join(repoRoot, 'scripts', 'check-deployment-env.mjs')], { stdio: 'inherit' })
+if (preflight.error || preflight.status !== 0) process.exit(1)
 
 // Recover from an interrupted previous run.
 if (existsSync(STASH_DIR) && !existsSync(API_DIR)) {

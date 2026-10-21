@@ -53,6 +53,8 @@ jobs:
         run: |
           npm run test:optional
           node --input-type=module -e "import assert from 'node:assert/strict'; import { detectOptionalPackages } from './scripts/optional-package-state.mjs'; assert.deepEqual(detectOptionalPackages(process.cwd()), { labs: false, care: false, education: false, fhir: false })"
+      - name: Deployment configuration regressions (synthetic, no network)
+        run: npm run test:deployment
       - name: Public calculator and education regressions
         env:
           TEST_OPTIONAL_EDUCATION: "missing"

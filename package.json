@@ -12,6 +12,8 @@
     "start": "next start",
     "build:gh": "node scripts/build-gh.mjs",
     "build:mediprisma": "node scripts/build-mediprisma.mjs",
+    "check:deployment": "node scripts/check-deployment-env.mjs",
+    "test:deployment": "node --test scripts/__tests__/deployment-env.test.mjs",
     "build:demo": "node scripts/build-demo-bundle.mjs && node scripts/enrich-demo-bundle.mjs",
     "demo:enrich": "node scripts/enrich-demo-bundle.mjs",
     "demo:hf-cases": "node scripts/generate-hf-demo-cases.cjs",
