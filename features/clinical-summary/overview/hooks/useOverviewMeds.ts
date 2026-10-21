@@ -16,7 +16,6 @@ import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import {
   classifyMedicationChanges,
   overlapsOverviewWindow,
-  toDayKey,
   type OverviewMedChange,
   type OverviewMedFact,
   type OverviewWindow,
