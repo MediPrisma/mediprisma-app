@@ -37,7 +37,7 @@ export async function importBundle(
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   }, options.locale ?? 'zh-TW')
   await quietGuidedTours(page)
-  await page.goto('/')
+  await page.goto(process.env.E2E_APP_PATH || '/')
   // The header file input exists in the server-rendered loading shell, before
   // its change handler is ready. A clean page resolves to Welcome, while a
   // re-import resolves straight back to the persisted patient workspace. Wait

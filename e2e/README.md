@@ -30,6 +30,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `smoke.spec.ts` | Import Bundle and render patient |
 | `original-fhir-download.spec.ts` | Original FHIR download preserves all source data and attachments across reload and repeated import; a new tab cannot download another tab's data |
 | `merged-fhir-download.spec.ts` | Cloud + hospital source resources, provenance, unknown fields and four distinct embedded images remain byte-identical through download, reload and repeated reimport in a clean browser context |
+| `sdk-import-worker.spec.ts` | Production Worker converts SDK JSON with distinct results; the downloaded FHIR is importable again |
 | `medcloud-handoff.spec.ts` | Cloud Wildcatch observes the first stable import target, immediately transfers a Bundle with `DataTransfer`, receives the settled event, and renders the patient |
 | `demo-data.spec.ts` | Load／identify／exit built-in demo |
 | `medical-summary-cumulative-navigation.spec.ts` | AI summary → cumulative report navigation from every non-report clinical tab after Reports background pre-mount |
@@ -132,6 +133,23 @@ emulator config above.
 8. Update the coverage table above when adding a new spec.
 
 ## CI
+
+### Production import Worker
+
+Build the app with the usual Firebase test configuration, then run
+`npx playwright test -c playwright.import-production.config.ts`. This profile
+starts `next start` on port 3022 and requires native conversion Worker success,
+including the transferred original-FHIR Blob, on every import. A successful
+main-thread fallback cannot pass it. The default development profile still
+tests the supported fallback path.
+
+To verify the real deployed site instead of starting a server, set
+`E2E_BASE_URL=https://mediprisma.tw` and `E2E_APP_PATH=/app` before running the
+same command. Only synthetic input is used; Firebase anonymous authentication
+is stubbed by the shared fixture, while app assets, conversion, local storage,
+downloads and image decoding are real.
+Set `E2E_IMPORT_FIXTURE_TIMESTAMP` to an ISO timestamp when replaying identical
+merged-FHIR bytes across before/after builds; it defaults to the current time.
 
 `.github/workflows/e2e.yml` runs the main suite on pushes to `master`, installs Chromium with system dependencies, and uploads `playwright-report/` for seven days. It is currently independent of the GitHub Pages deploy gate.
 

@@ -16,7 +16,7 @@ export type SourceImage = {
   height: number
 }
 
-export function createMergedFhirFixture() {
+export function createMergedFhirFixture(date = new Date().toISOString()) {
   const bundle: RawBundle = {
     resourceType: 'Bundle', type: 'collection', entry: [],
     extension: [{ url: 'urn:example:merged-export', valueString: '雲端＋院內原始資料，保留所有來源' }],
@@ -27,7 +27,6 @@ export function createMergedFhirFixture() {
   add({ resourceType: 'Patient', id: 'merged-patient',
     name: [{ text: '整併測試病人' }], gender: 'female', birthDate: '1970-01-01' })
   const subject = { reference: 'urn:uuid:merged-patient' }
-  const date = new Date().toISOString()
   const images: SourceImage[] = []
   for (const source of ['cloud', 'hospital'] as const) {
     const meta = {
