@@ -1,7 +1,7 @@
 // Refactored Clinical Context Hook
 "use client"
 
-import { excludeUnresolvedGenericVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { useCallback, useMemo } from "react"
 import {
   useDataSelection,
@@ -79,7 +79,7 @@ export function useClinicalContext(
     : options.clinicalDataOverride
   const clinicalData = useMemo(
     () => sourceClinicalData
-      ? excludeUnresolvedGenericVariants(filterAiExcludedClinicalDomains(sourceClinicalData as any), selectedData) as ClinicalData
+      ? excludeUnresolvedDecisionVariants(filterAiExcludedClinicalDomains(sourceClinicalData as any), selectedData) as ClinicalData
       : null,
     [sourceClinicalData, selectedData],
   )

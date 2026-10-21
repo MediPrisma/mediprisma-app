@@ -1,4 +1,4 @@
-import { excludeUnresolvedGenericVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions, outboundClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 // Unified FHIR Tools for AI Agent
 //
@@ -1088,7 +1088,7 @@ function medicationGroundingRules(medications: MedicationEntity[]) {
 export function createFhirTools(getRawData: () => AgentDataSource) {
   const getData = (): AgentDataSource => {
     const raw = getRawData()
-    return { ...raw, collection: raw.collection ? excludeUnresolvedGenericVariants(raw.collection) : raw.collection }
+    return { ...raw, collection: raw.collection ? excludeUnresolvedDecisionVariants(raw.collection) : raw.collection }
   }
   // Structured scrub (ids / birthDate / provider display) + free-text scrub:
   // discharge summaries and report conclusions carry the patient's name /
@@ -1098,7 +1098,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
     const data = getData()
     const exclusions = data.collection?.clinicalRecordVariantExclusions
     const annotated = exclusions?.length && payload && typeof payload === 'object' && !Array.isArray(payload)
-      ? { ...payload, clinicalRecordVariantExclusions: exclusions, sourceRecordUncertainty: formatClinicalVariantExclusions(data.collection!) } : payload
+      ? { ...payload, incomplete: true, canConcludeAbsence: false, clinicalRecordVariantExclusions: outboundClinicalVariantExclusions(exclusions), sourceRecordUncertainty: formatClinicalVariantExclusions(data.collection!) } : payload
     return scrubPii(annotated, buildPatientTextLiterals(data.patient)) as T
   }
 
@@ -1197,18 +1197,23 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
           collection,
           Object.keys(collection.resourceQueryStatus ?? {}) as ClinicalDataQueryKey[],
         )
-        const statusFor = (key: ClinicalDataQueryKey) =>
-          collection.resourceQueryStatus?.[key]
-            ? { queryStatus: collection.resourceQueryStatus[key]?.state }
-            : {}
+        const exclusions = collection.clinicalRecordVariantExclusions ?? []
+        const domainStateFor = (...keys: ClinicalDataQueryKey[]) => {
+          const unresolvedVariantCount = exclusions.filter(item => keys.includes(item.resourceType as ClinicalDataQueryKey)).length
+          const incomplete = unresolvedVariantCount > 0 || queryIssuesFor(collection, keys).length > 0
+          return { incomplete, canConcludeAbsence: !incomplete, unresolvedVariantCount,
+            recordState: unresolvedVariantCount ? 'unresolved-variants' : incomplete ? 'query-incomplete' : 'complete' }
+        }
+        const statusFor = (key: ClinicalDataQueryKey) => ({ ...domainStateFor(key),
+          ...(collection.resourceQueryStatus?.[key] ? { queryStatus: collection.resourceQueryStatus[key]?.state } : {}) })
 
         return scrub({
           success: true,
-          summary: allQueryIssues.length > 0
-            ? 'Data inventory loaded, but one or more FHIR resource queries are incomplete'
+          summary: allQueryIssues.length > 0 || exclusions.length > 0
+            ? 'Data inventory loaded, but resource queries or unresolved source-record variants prevent absence conclusions'
             : 'Data inventory across all resource types',
-          incomplete: allQueryIssues.length > 0,
-          canConcludeAbsence: allQueryIssues.length === 0,
+          incomplete: allQueryIssues.length > 0 || exclusions.length > 0,
+          canConcludeAbsence: allQueryIssues.length === 0 && exclusions.length === 0,
           queryIssues: allQueryIssues,
           data: {
             conditions: {
@@ -1217,6 +1222,7 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
             },
             medications: {
               count: collection.medications.length,
+              ...domainStateFor('MedicationRequest', 'MedicationStatement'),
               range: range(collection.medications, (m) => m.authoredOn),
               medicationRequestQueryStatus:
                 collection.resourceQueryStatus?.MedicationRequest?.state,

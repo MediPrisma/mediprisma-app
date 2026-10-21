@@ -5,7 +5,7 @@ import { GenerateClinicalContextUseCase } from '@/src/core/use-cases/clinical-co
 import { buildSourceCatalog, GenerateMedicalSummaryUseCase } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { selectCdssClinicalInputs } from '@/features/clinical-decision-support/utils/clinical-record-inputs'
 import { createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
-import { mapMedications, mapProblemList, CLINICAL_RECORD_VARIANT_EXTENSION } from '@/features/ips-export/utils/ips-fhir-mappers'
+import { mapMedications, mapProblemList, mapAllergies, mapImmunizations, mapProcedures, mapDevices, mapCarePlans, mapAdvanceDirectives, CLINICAL_RECORD_VARIANT_EXTENSION } from '@/features/ips-export/utils/ips-fhir-mappers'
 
 function parsed() {
   const resources: any[] = [{ resourceType: 'Patient', id: 'synthetic' }]
@@ -49,7 +49,8 @@ it('carries actual local MedicationRequest and Condition versions through policy
   const prompt = messages.map(message => message.content).join('\n')
   expect(prompt).toContain('These records exist but their versions or conflicts are unresolved')
   expect(prompt).toContain('Do not infer absent disease, negative history, no medication')
-  expect(prompt).toContain('MedicationRequest/same-medication version=1')
+  expect(prompt).toContain('MedicationRequest record 1 version=1')
+  expect(prompt).not.toContain('same-medication')
   expect(prompt).not.toContain('clinicalSourceNodeKey')
   const exports = [...mapMedications(data.medications, 'Patient/synthetic').entries, ...mapProblemList(data.conditions, 'Patient/synthetic').entries].map(entry => entry.resource)
   const variants = exports.filter(resource => (resource.extension as any[])?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION))
@@ -69,7 +70,7 @@ it('quarantines all ten actual CDSS input array contracts independently without 
 
 it('adds only legal extensions to every remaining IPS resource mapper', () => {
   const annotation = parsed().medications.find(row => row.clinicalRecordVariant)!.clinicalRecordVariant!
-  const mappers = require('@/features/ips-export/utils/ips-fhir-mappers')
+  const mappers: Record<string, any> = { mapAllergies, mapImmunizations, mapProcedures, mapDevices, mapCarePlans, mapAdvanceDirectives }
   for (const name of ['mapAllergies', 'mapImmunizations', 'mapProcedures', 'mapDevices', 'mapCarePlans', 'mapAdvanceDirectives']) {
     const result = mappers[name]([{ id: 'synthetic', clinicalRecordVariant: annotation, sourceId: 'original', sourceVersionId: '1' }], 'Patient/synthetic')
     const resources = [...result.entries, ...result.referencedOnly].map(entry => entry.resource)

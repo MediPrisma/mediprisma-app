@@ -1,4 +1,4 @@
-import { excludeUnresolvedGenericVariants } from './clinical-variant-inputs'
+import { excludeUnresolvedGenericVariants, outboundClinicalVariantExclusions } from './clinical-variant-inputs'
 import type { DataFilters, DataSelection } from '@/src/core/entities/clinical-context.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import {
@@ -34,6 +34,7 @@ export function stripClinicalCaptureMetadata<T>(value: T): T {
   const next: Record<string, unknown> = {}
   let changed = false
   for (const [key, child] of Object.entries(value)) {
+    if (key === 'clinicalRecordVariantExclusions' && Array.isArray(child)) { next[key] = outboundClinicalVariantExclusions(child); changed = true; continue }
     if (key === 'clinicalSourceNodeKey' || key === 'clinicalSourceDerivedMemberKeys' || key === 'clinicalSource') { changed = true; continue }
     next[key] = stripClinicalCaptureMetadata(child)
     if (next[key] !== child) changed = true

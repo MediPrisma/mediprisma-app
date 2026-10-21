@@ -1,4 +1,4 @@
-import { excludeUnresolvedGenericVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 // Use Case: Generate Clinical Context
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -19,7 +19,7 @@ export class GenerateClinicalContextUseCase {
     clinicalData: ClinicalDataCollection,
     options: ClinicalContextOptions
   ): ClinicalContextSection[] {
-    clinicalData = excludeUnresolvedGenericVariants(clinicalData, options.selection)
+    clinicalData = excludeUnresolvedDecisionVariants(clinicalData, options.selection)
     const { selection, filters } = options
     const context: ClinicalContextSection[] = []
 

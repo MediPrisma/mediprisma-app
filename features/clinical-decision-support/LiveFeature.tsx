@@ -724,7 +724,11 @@ export default function LiveClinicalDecisionSupportFeature({
   if (!profile || !result) {
     // Why a pathway did not activate is governed clinical language, so the pack
     // that owns the eligibility rule owns the wording too.
-    const notApplicable = selectedPack.notApplicable(cdssLocale)
+    const unresolvedDiagnosis = recordProfile?.excludedClinicalRecordVariants?.some(item => item.resourceType === 'Condition')
+    const notApplicable = unresolvedDiagnosis ? {
+      title: cdssLocale === 'en' ? 'Guideline applicability requires diagnosis reconciliation' : '診斷來源有未決版本，指引適用性待核對',
+      body: cdssLocale === 'en' ? 'Unresolved diagnosis records were excluded. Their absence from decision inputs does not mean the patient has no disease. Other verified data remain available.' : '未決診斷紀錄暫不採用，不代表沒有疾病；其他已確認資料仍可評估。',
+    } : selectedPack.notApplicable(cdssLocale)
     return (
       <div className="@container mx-auto w-full max-w-[84rem] space-y-3 py-1">
         <DiseaseSwitcher

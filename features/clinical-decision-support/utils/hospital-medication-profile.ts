@@ -52,6 +52,30 @@ export type HospitalAwareCdssProfile = CdssPatientProfile & {
   hospitalMedicationUnconfirmedAnticoagulation?: HospitalUnconfirmedAnticoagulation
 }
 
+/** Quarantined source records cannot establish a negative medication inventory. */
+function withUnresolvedMedicationInventory(profile: HospitalAwareCdssProfile): HospitalAwareCdssProfile {
+  const diagnoses = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'Condition') ?? []
+  if (diagnoses.length) profile = { ...profile, facts: { ...profile.facts, unresolvedDiagnosisRecords: {
+    zh: '診斷來源有未決版本或衝突，指引適用性需核對，不能據此判定沒有疾病',
+    en: 'Diagnosis records have unresolved versions or conflicts. Guideline applicability requires reconciliation; excluded records cannot establish absent disease.',
+    sources: diagnoses.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })),
+  } } }
+  const excluded = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'MedicationRequest' || item.resourceType === 'MedicationStatement') ?? []
+  if (!excluded.length) return profile
+  const sources: CdssFactSource[] = excluded.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' }))
+  const uncertainty = { zh: '來源用藥有未決版本或衝突，目前使用及未使用均無法由隔離紀錄判定，需核對', en: 'Medication source records have unresolved versions or conflicts; neither current use nor absence can be determined from excluded records. Reconcile medications.', sources }
+  const facts = { ...profile.facts }
+  const contexts = { ...profile.medicationClassContexts }
+  for (const [key, context] of Object.entries(contexts)) {
+    if (!context || context.state !== 'not-found') continue
+    contexts[key as CdssMedicationClassId] = { ...context, state: 'uncertain' }
+    facts[context.factKey] = uncertainty
+  }
+  for (const key of HOSPITAL_MEDICATION_EXPOSURE_FACT_KEYS) if (!facts[key]?.sources?.length) facts[key] = uncertainty
+  facts.medicationListOverview = { ...uncertainty, sources: [...(profile.facts.medicationListOverview?.sources ?? []), ...sources] }
+  return { ...profile, facts, medicationClassContexts: contexts }
+}
+
 export const HOSPITAL_MEDICATION_POLICY_VERSION = 'vgh-cdss-medications-20261001-v2'
 
 /** Native exposure facts used outside medication class contexts, including AF. */
@@ -186,8 +210,8 @@ export function createHospitalAwareCdssPatientProfile(
       name, useState, ingredientName, classIds, factKey: `hospitalMedication:${source._sourceResourceType ?? 'MedicationRequest'}:${source.id}` })
     return normalized
   })
-  const profile: HospitalAwareCdssProfile = { ...createFhirCdssPatientProfile({ ...selected.input, medications, now }),
-    ...(selected.excluded.length ? { excludedClinicalRecordVariants: selected.excluded } : {}) }
+  const profile: HospitalAwareCdssProfile = withUnresolvedMedicationInventory({ ...createFhirCdssPatientProfile({ ...selected.input, medications, now }),
+    ...(selected.excluded.length ? { excludedClinicalRecordVariants: selected.excluded } : {}) })
   if (!evidence.length) return profile
 
   const facts = { ...profile.facts }
@@ -298,7 +322,7 @@ export function createHospitalAwareCdssPatientProfile(
     const status = item.source.status?.trim().toLowerCase() ?? ''
     return status === 'active' || status === 'unknown' || status === ''
   }).map((item) => `${item.source.resourceType}:${item.source.resourceId}`))
-  const exposureProfile = uncertain.length ? createFhirCdssPatientProfile({ ...input, now,
+  const exposureProfile = uncertain.length ? createFhirCdssPatientProfile({ ...selected.input, now,
     medications: medications.map((item) => pendingById.has(`${item._sourceResourceType ?? 'MedicationRequest'}:${item.id}`)
       ? { ...item, status: 'active' } : item),
   }) : profile
@@ -345,8 +369,8 @@ export function createHospitalAwareCdssPatientProfile(
         ].filter(isPending).map((source) => [`${source.resourceType}:${source.resourceId}`, source])).values()],
       }
     : undefined
-  return { ...profile, facts, medicationContexts, medicationClassContexts: contexts, hospitalMedicationEvidence: evidence,
+  return withUnresolvedMedicationInventory({ ...profile, facts, medicationContexts, medicationClassContexts: contexts, hospitalMedicationEvidence: evidence,
     hospitalMedicationPolicyVersion: HOSPITAL_MEDICATION_POLICY_VERSION,
     hospitalMedicationPossibleExposureClasses: possibleExposureClasses, afMedicationRegimens,
-    ...(unconfirmedAnticoagulation ? { hospitalMedicationUnconfirmedAnticoagulation: unconfirmedAnticoagulation } : {}) }
+    ...(unconfirmedAnticoagulation ? { hospitalMedicationUnconfirmedAnticoagulation: unconfirmedAnticoagulation } : {}) })
 }
