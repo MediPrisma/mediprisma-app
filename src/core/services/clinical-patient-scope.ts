@@ -27,6 +27,24 @@ function absoluteBase(value: string): string | undefined {
   } catch { return undefined }
 }
 
+const patientIndexByGraph = new WeakMap<readonly ClinicalSourceNode[], Map<string, readonly ClinicalSourceNode[]>>()
+
+function patientsBySource(graphNodes: readonly ClinicalSourceNode[], sourceId: string): readonly ClinicalSourceNode[] {
+  let index = patientIndexByGraph.get(graphNodes)
+  if (!index) {
+    const building = new Map<string, ClinicalSourceNode[]>()
+    for (const candidate of graphNodes) {
+      if (candidate.resource.resourceType !== 'Patient') continue
+      const patients = building.get(candidate.sourceId) ?? []
+      patients.push(candidate)
+      building.set(candidate.sourceId, patients)
+    }
+    index = building
+    patientIndexByGraph.set(graphNodes, index)
+  }
+  return index.get(sourceId) ?? []
+}
+
 /**
  * Return false only for an explicit patient contradiction. Unknown URNs,
  * missing references, and absolute references whose base cannot be established
@@ -42,42 +60,61 @@ export function isClinicalSourceNodePatientEligible(
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
   if (references.length === 0 && node.resource.resourceType !== 'Patient') return true
 
-  const sameSourcePatients = graphNodes.filter(candidate => candidate.sourceId === node.sourceId && candidate.resource.resourceType === 'Patient')
+  const sameSourcePatients = patientsBySource(graphNodes, node.sourceId)
   const expectedIds = new Set<string>()
   const expectedUrls = new Set<string>()
   const scopeId = patientIdFrom(node.patientScope)
   if (scopeId) expectedIds.add(scopeId)
   if (/^(?:https?:\/\/|urn:)/i.test(node.patientScope)) expectedUrls.add(node.patientScope)
+  const authenticatedBase = node.restBase ? absoluteBase(node.restBase) ?? trimBase(node.restBase) : undefined
+  const patientUrlIsTrusted = (patient: ClinicalSourceNode): boolean => {
+    if (!patient.fullUrl || !authenticatedBase) return true
+    const base = absoluteBase(patient.fullUrl)
+    // URNs are opaque identifiers and can be linked to the requested patient
+    // through the response, but an absolute URL from another server cannot.
+    return !base || base === authenticatedBase
+  }
   for (const patient of sameSourcePatients) {
     const inScope = patient.patientScope === node.patientScope
-    if (inScope && patient.fullUrl && (patient.fullUrl === node.patientScope || !scopeId || patient.resource.id === scopeId)) {
+    if (inScope && patient.fullUrl && patientUrlIsTrusted(patient)
+      && (patient.fullUrl === node.patientScope || !scopeId || patient.resource.id === scopeId)) {
       expectedUrls.add(patient.fullUrl)
       if (patient.resource.id) expectedIds.add(patient.resource.id)
     }
-    if (patient.fullUrl && patient.fullUrl === node.patientScope) {
+    if (patient.fullUrl && patient.fullUrl === node.patientScope && patientUrlIsTrusted(patient)) {
       expectedUrls.add(patient.fullUrl)
       if (patient.resource.id) expectedIds.add(patient.resource.id)
     }
   }
 
   if (node.resource.resourceType === 'Patient') {
+    if (node.fullUrl && authenticatedBase) {
+      const base = absoluteBase(node.fullUrl)
+      if (base && base !== authenticatedBase) return false
+    }
     if (node.resource.id && expectedIds.size > 0 && !expectedIds.has(node.resource.id)) return false
     if (node.fullUrl && expectedUrls.size > 0 && !expectedUrls.has(node.fullUrl)
       && !(node.resource.id && expectedIds.has(node.resource.id))) return false
   }
 
   const knownBases = new Set<string>()
-  if (node.restBase) knownBases.add(trimBase(node.restBase))
-  for (const value of expectedUrls) {
-    const base = absoluteBase(value)
-    if (base) knownBases.add(base)
+  if (authenticatedBase) {
+    // The authenticated REST base is authoritative; response Patient URLs
+    // must never expand the set of trusted servers.
+    knownBases.add(authenticatedBase)
+  } else {
+    for (const value of expectedUrls) {
+      const base = absoluteBase(value)
+      if (base) knownBases.add(base)
+    }
   }
   for (const reference of references) {
     if (/^urn:/i.test(reference)) {
       if (expectedUrls.has(reference)) continue
       const knownPatient = sameSourcePatients.find(patient => patient.fullUrl === reference)
       if (knownPatient && !expectedUrls.has(reference)
-        && !(knownPatient.resource.id && expectedIds.has(knownPatient.resource.id))) return false
+        && (!patientUrlIsTrusted(knownPatient)
+          || !(knownPatient.resource.id && expectedIds.has(knownPatient.resource.id)))) return false
       continue
     }
     const id = patientIdFrom(reference)

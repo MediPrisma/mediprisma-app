@@ -82,12 +82,14 @@ it('excludes only explicit subject contradictions and retains foreign nodes in t
       { resourceType: 'Observation', id: 'relative-foreign', subject: { reference: 'Patient/b' } },
       { resourceType: 'Observation', id: 'urn-foreign', subject: { reference: 'urn:uuid:patient-b' } },
       { resourceType: 'Observation', id: 'other-server', subject: { reference: 'https://other.example/fhir/Patient/a' } },
+      { resourceType: 'Observation', id: 'normalized-server', subject: { reference: 'https://EHR.example:443/fhir/Patient/a' } },
+      { resourceType: 'Observation', id: 'different-scheme', subject: { reference: 'http://ehr.example/fhir/Patient/a' } },
       { resourceType: 'Observation', id: 'matching', subject: { reference: 'urn:uuid:patient-a' } },
       { resourceType: 'Observation', id: 'missing-subject' },
     ],
   }])
   expect(source.graph.nodes.map(node => node.resource.id)).toContain('urn-foreign')
-  expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual(['a', 'matching', 'missing-subject'])
+  expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual(['a', 'normalized-server', 'matching', 'missing-subject'])
 
   const unknownBase = reconcileClinicalSources([{
     sourceId: 'ehr', patientScope: 'a', generation: 'unknown-base', resources: [
@@ -96,6 +98,19 @@ it('excludes only explicit subject contradictions and retains foreign nodes in t
     ],
   }])
   expect(selectClinicalSourceResources(unknownBase).map(resource => resource.id)).toEqual(['same-id-unknown-base', 'unknown-urn'])
+})
+
+it('does not let a same-id Patient from another host expand an authenticated REST base', () => {
+  const source = reconcileClinicalSources([{
+    sourceId: 'ehr', patientScope: 'a', generation: 'foreign-patient-host', restBase: 'https://a.example/fhir', resources: [
+      { resource: { resourceType: 'Patient', id: 'a' }, fullUrl: 'https://b.example/fhir/Patient/a' },
+      { resource: { resourceType: 'Observation', id: 'foreign-host', subject: { reference: 'https://b.example/fhir/Patient/a' } } },
+      { resource: { resourceType: 'Patient', id: 'a' }, fullUrl: 'https://a.example/fhir/Patient/a' },
+      { resource: { resourceType: 'Observation', id: 'legal', subject: { reference: 'https://a.example/fhir/Patient/a' } } },
+    ],
+  }])
+  expect(source.graph.nodes.map(node => node.resource.id)).toEqual(['a', 'foreign-host', 'a', 'legal'])
+  expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual(['a', 'legal'])
 })
 
 it('uses a compact signature that includes empty-capture generations', () => {

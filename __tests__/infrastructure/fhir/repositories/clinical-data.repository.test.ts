@@ -43,6 +43,24 @@ describe('FhirClinicalDataRepository', () => {
       expect(source.graph.nodes.map(node => node.resource.id)).toEqual(['a', 'b', 'foreign', 'urn-foreign', 'urn-matching', 'matching', 'missing-subject'])
     })
 
+    it('keeps a same-id Patient from another host in the raw graph without trusting its URL', async () => {
+      const client = { state: { serverUrl: 'https://ehr.example/fhir' } }
+      mockFhirClient.getClient.mockResolvedValue(client as any)
+      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [
+        { fullUrl: 'https://other.example/fhir/Patient/a', resource: { resourceType: 'Patient', id: 'a' } },
+        { resource: { resourceType: 'Observation', id: 'foreign-host', status: 'final', subject: { reference: 'https://other.example/fhir/Patient/a' }, valueInteger: 1 } },
+        { fullUrl: 'https://ehr.example/fhir/Patient/a', resource: { resourceType: 'Patient', id: 'a' } },
+        { resource: { resourceType: 'Observation', id: 'legal', status: 'final', subject: { reference: 'https://ehr.example/fhir/Patient/a' }, valueInteger: 2 } },
+      ] })
+      mockMapper.toObservation.mockImplementation((resource: any) => ({ ...resource }))
+
+      const observations = await repository.fetchObservations('a')
+
+      expect(observations.map(row => row.sourceId)).toEqual(['legal'])
+      const source = readClinicalSource((repository as any).session, 'a')
+      expect(source.graph.nodes.map(node => node.resource.id)).toEqual(['a', 'foreign-host', 'a', 'legal'])
+    })
+
     it('should fetch all clinical data types', async () => {
       // Mock all fetch methods
       const mockCondition = { id: 'cond-1', code: { text: 'Diabetes' } }
