@@ -61,6 +61,7 @@ export function mapProjectedObservation(resource: any, nodeKey: string, context:
     ...FhirMapper.toObservation(projectClinicalReferences(mutableClinicalProjection(resource), nodeKey, context)),
     id: context.ids.get(nodeKey) ?? resource.id,
     sourceId: resource.id,
+    sourceVersionId: resource.meta?.versionId,
     clinicalSourceNodeKey: nodeKey,
   }
 }

@@ -535,14 +535,14 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const source: ClinicalReconciliationResult = response._clinicalSource
       const graph = source.graph
       const observationNodes = new Map(graph.nodes
-        .filter(node => node.resource.resourceType === 'Observation')
+        .filter(node => node.resource.resourceType === 'Observation' && getClinicalSourceNodePatientExclusionReason(node, graph.nodes) === undefined)
         .map(node => [node.key, node]))
       const resolvedObservations = (origin: unknown, path: RegExp) => graph.references
         .filter(edge => edge.origin.resource === origin && path.test(edge.path) && edge.status === 'resolved')
         .flatMap(edge => edge.targetKeys.map(key => observationNodes.get(key)).filter((node): node is NonNullable<typeof node> => Boolean(node)))
       const result = reports.map((report: any) => {
         const nodeKey = reportNodeKeys.get(report) as string
-        const mapped = { ...FhirMapper.toDiagnosticReport(domainClinicalResource(report, nodeKey, response._clinicalProjection), []), id: response._clinicalProjection.ids.get(nodeKey) ?? report.id, sourceId: report.id, clinicalSourceNodeKey: nodeKey }
+        const mapped = { ...FhirMapper.toDiagnosticReport(domainClinicalResource(report, nodeKey, response._clinicalProjection), []), id: response._clinicalProjection.ids.get(nodeKey) ?? report.id, sourceId: report.id, sourceVersionId: report.meta?.versionId, clinicalSourceNodeKey: nodeKey }
         const members = resolvedObservations(report, /^result\[\d+\]$/).flatMap(node => [node, ...resolvedObservations(node.resource, /^hasMember\[\d+\]$/)])
         const unique = [...new Map(members.map(node => [node.key, node])).values()]
         return unique.length ? { ...mapped, _observations: unique.map(node => mapSourceObservation(node.resource, node.key, response._clinicalProjection)) } : mapped

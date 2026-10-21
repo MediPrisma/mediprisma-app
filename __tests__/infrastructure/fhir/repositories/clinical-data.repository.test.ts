@@ -735,6 +735,29 @@ it('keeps enumerable source-node keys on mapped observations and reports', async
   }
 })
 
+it('excludes foreign-patient Observations from direct DiagnosticReport membership while retaining source versions', async () => {
+  const repo = new FhirClinicalDataRepository()
+  const base = 'https://reports.example/fhir'
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue({ state: { serverUrl: base } })
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValue({ entry: [
+    { fullUrl: `${base}/Patient/a`, resource: { resourceType: 'Patient', id: 'a' } },
+    { fullUrl: `${base}/Patient/b`, resource: { resourceType: 'Patient', id: 'b' } },
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', meta: { versionId: 'report-v4' }, result: [
+      { reference: 'Observation/foreign' }, { reference: 'Observation/owned' },
+    ] } },
+    { resource: { resourceType: 'Observation', id: 'foreign', meta: { versionId: 'obs-v8' }, subject: { reference: 'Patient/b' }, valueString: 'foreign' } },
+    { resource: { resourceType: 'Observation', id: 'owned', meta: { versionId: 'obs-v3' }, subject: { reference: 'Patient/a' }, valueString: 'owned' } },
+  ] })
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+
+  const [report] = await repo.fetchDiagnosticReports('a')
+
+  expect(report.sourceVersionId).toBe('report-v4')
+  expect(report._observations?.map(observation => [observation.sourceId, observation.sourceVersionId])).toEqual([['owned', 'obs-v3']])
+  expect(repo.getClinicalSource('a').graph.nodes.map(node => node.resource.id)).toContain('foreign')
+})
+
 it.each(['absolute', 'urn', 'version'])('assembles graph-resolved report membership from separate %s searches', async kind => {
   const repo = new FhirClinicalDataRepository()
   const base = 'https://cross-query.example/fhir'
@@ -743,11 +766,13 @@ it.each(['absolute', 'urn', 'version'])('assembles graph-resolved report members
   ;(fhirClient.requestAllPages as jest.Mock).mockImplementation(async (url: string) => ({ entry: url.startsWith('Observation?') ? [
     { fullUrl: kind === 'urn' ? reference : base + '/Observation/cross-query', resource: { resourceType: 'Observation', id: 'cross-query', meta: { versionId: '2' }, status: 'final', code: { text: 'synthetic' } } },
   ] : url.startsWith('DiagnosticReport?') ? [
-    { resource: { resourceType: 'DiagnosticReport', id: 'cross-report', status: 'final', code: { text: 'synthetic report' }, result: [{ reference }] } },
+    { resource: { resourceType: 'DiagnosticReport', id: 'cross-report', meta: { versionId: 'report-v5' }, status: 'final', code: { text: 'synthetic report' }, result: [{ reference }] } },
   ] : [] }))
   const realMapper = jest.requireActual('@/src/infrastructure/fhir/mappers/fhir.mapper').FhirMapper
   ;(FhirMapper.toObservation as jest.Mock).mockImplementation(realMapper.toObservation)
   ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation(realMapper.toDiagnosticReport)
   const collection = await repo.fetchAllClinicalData('cross-query-patient')
   expect(collection.diagnosticReports[0]._observations?.map(observation => observation.sourceId)).toEqual(['cross-query'])
+  expect(collection.diagnosticReports[0].sourceVersionId).toBe('report-v5')
+  expect(collection.diagnosticReports[0]._observations?.[0].sourceVersionId).toBe('2')
 })
