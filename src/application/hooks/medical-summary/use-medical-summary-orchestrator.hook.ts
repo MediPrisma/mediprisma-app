@@ -414,7 +414,7 @@ export function useMedicalSummaryOrchestrator() {
     setActiveBatch(next)
   }, [])
 
-  const cancelTrackedBatch = useCallback((current: ActiveGenerationBatch) => {
+  const cancelTrackedBatch = useCallback((current: ActiveGenerationBatch, preserveAccepted = false) => {
     cancelledScopeKeysRef.current.add(current.scopeKey)
     setCancellingScopeKey(current.scopeKey)
     if (!current.cancelled) {
@@ -427,8 +427,10 @@ export function useMedicalSummaryOrchestrator() {
     // Summary and safety own independent useUnifiedAi instances. Stopping the
     // user-facing batch must abort every expected half, including an auto
     // pipeline that is still waiting for hydration.
-    if (current.expectsSummary) cancelSummary(current.summarySlotKey)
-    if (current.expectsSafety) cancelSafety(current.safetySlotKey)
+    const summary = preserveAccepted ? readSummaryGenerationSlot(current.summarySlotKey) : null
+    const safety = preserveAccepted ? readSafetyGenerationSlot(current.safetySlotKey) : null
+    if (current.expectsSummary && (!summary?.result || summary.isRunning)) cancelSummary(current.summarySlotKey)
+    if (current.expectsSafety && (!safety?.result || safety.isRunning)) cancelSafety(current.safetySlotKey)
 
     // Completed pipelines are intentionally left in their exact cache slots.
     // The presentation layer publishes each validated half progressively, so
@@ -437,18 +439,24 @@ export function useMedicalSummaryOrchestrator() {
   }, [
     cancelSafety,
     cancelSummary,
+    readSummaryGenerationSlot,
+    readSafetyGenerationSlot,
   ])
 
   useEffect(() => {
     const stopAutomaticBatch = () => {
       const batch = activeBatchRef.current
       if (isProgressiveAutoSummaryBlocked() && batch?.coordinatedAuto && !batch.cancelled) {
-        cancelTrackedBatch(batch)
+        const summary = readSummaryGenerationSlot(batch.summarySlotKey)
+        const safety = readSafetyGenerationSlot(batch.safetySlotKey)
+        if ((!batch.expectsSummary || (summary.result && !summary.isRunning))
+          && (!batch.expectsSafety || (safety.result && !safety.isRunning))) return
+        cancelTrackedBatch(batch, true)
       }
     }
     stopAutomaticBatch()
     return useProgressiveImportStore.subscribe(stopAutomaticBatch)
-  }, [cancelTrackedBatch])
+  }, [cancelTrackedBatch, readSummaryGenerationSlot, readSafetyGenerationSlot])
 
   const runManualBatch = useCallback(async (jobs: GenerationPipeline[], signal?: AbortSignal) => {
     if (signal?.aborted) return

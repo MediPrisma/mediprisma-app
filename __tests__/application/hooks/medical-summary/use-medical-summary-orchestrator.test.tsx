@@ -247,6 +247,19 @@ describe('useMedicalSummaryOrchestrator', () => {
     useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
   })
 
+  it('does not cancel accepted automatic slots while the completion render is pending', () => {
+    useProgressiveImportStore.setState({ current: { runId: 'completed-auto', importId: 'cloud', phase: 'waiting' }, pendingRunId: null, stoppedRuns: {} })
+    arrange({ summaryResult: null, safetyResult: null, summaryGenerating: true })
+    renderHook(() => useMedicalSummaryOrchestrator())
+    // The underlying jobs accepted both results, before React's completion effect.
+    readSummaryGenerationSlot.mockReturnValue({ result: { headline: 'accepted' }, isRunning: false })
+    readSafetyGenerationSlot.mockReturnValue({ result: { alerts: [] }, isRunning: false })
+    act(() => stopProgressiveImport('completed-auto', 'privacy-stale'))
+    expect(summaryCancel).not.toHaveBeenCalled()
+    expect(safetyCancel).not.toHaveBeenCalled()
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
+  })
+
   it('does not start an automatic launch cancelled while awaiting demographics', async () => {
     let accept!: (value: boolean) => void
     mockRequestDemographicsForAi.mockImplementationOnce(() => new Promise<boolean>(resolve => { accept = resolve }))
