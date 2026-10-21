@@ -20,8 +20,8 @@ it('separates a mass-ratio concentration from its optional tube size',()=>{
  expect(hospitalProductMayMatchConcept(name('Synthetic ointment 20 mg/g 5 g'),cloud('SYNTHETIC OINTMENT 20 mg/g'))).toBe(true)
  expect(hospitalProductMayMatchConcept(name('Synthetic ointment 20 mg/g 5 g'),cloud('SYNTHETIC OINTMENT 20 mg/g 15 g'))).toBe(false)
 })
-it.each(['1 g','100 g','1 ml','100 ml'])('retains a numeric concentration denominator and separates its package: %s',(denominator)=>{
- const product=`Synthetic ointment 20 mg/${denominator}`
+it.each([['mg','1 g'],['mg','100 g'],['mg','1 ml'],['mg','100 ml'],['iu','g']])('retains an explicit concentration and separates its package: %s/%s',(unit,denominator)=>{
+ const product=`Synthetic ointment 20 ${unit}/${denominator}`
  expect(hospitalProductMayMatchConcept(name(`${product} 5 g`),cloud(product))).toBe(true)
  expect(hospitalProductMayMatchConcept(name(`${product} 5 g`),cloud(`${product} 15 g`))).toBe(false)
 })

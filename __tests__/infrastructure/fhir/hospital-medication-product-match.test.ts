@@ -50,9 +50,9 @@ it('can suggest a name-only complete product comparison without assigning its cl
   }
 })
 
-it.each(['1 g', '100 g', '1 ml', '100 ml'])('preserves complete topical knowledge comparisons with a numeric denominator: %s', (denominator) => {
+it.each([['mg', '1 g'], ['mg', '100 g'], ['mg', '1 ml'], ['mg', '100 ml'], ['iu', 'g']])('preserves complete topical knowledge comparisons with an explicit concentration: %s/%s', (unit, denominator) => {
   const { knowledge } = fixture()
-  const product = `Synthetic ointment 20 mg/${denominator}`
+  const product = `Synthetic ointment 20 ${unit}/${denominator}`
   knowledge.code.coding[0] = { system: NHI, code: 'SYNTH00001', display: product }
   knowledge.doseForm.text = '軟膏劑'
   const concept = { coding: [{ system: 'urn:oid:vgh.medication.name', code: product, display: product }] }
