@@ -474,7 +474,7 @@ describe('App-side NHI drug terminology enrichment', () => {
       { resourceType: 'Patient', id: 'p1' },
       medicationRequest(),
     )
-    jest.spyOn(LocalBundleService, 'load').mockResolvedValue(stored)
+    await LocalBundleService.save(stored, { importId: 'terminology-upgrade' })
     const save = jest.spyOn(LocalBundleService, 'save').mockResolvedValue()
 
     const parsed = await LocalBundleService.parseStored()
@@ -569,7 +569,7 @@ describe('App-side NHI drug terminology enrichment', () => {
         },
       }),
     })
-    jest.spyOn(LocalBundleService, 'load').mockResolvedValue(stored)
+    await LocalBundleService.save(stored, { importId: 'terminology-policy-upgrade' })
     const save = jest.spyOn(LocalBundleService, 'save').mockResolvedValue()
 
     const parsed = await LocalBundleService.parseStored()

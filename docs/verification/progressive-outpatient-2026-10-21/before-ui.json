@@ -1,0 +1,24 @@
+{
+  "mode": "before",
+  "version": "0.51.0",
+  "viewport": {
+    "width": 1440,
+    "height": 960
+  },
+  "synthetic": true,
+  "externalNetworkBlocked": true,
+  "stages": [
+    {
+      "stage": "cloud",
+      "hasProgressiveStatus": 0
+    },
+    {
+      "stage": "hospital-visits",
+      "hasProgressiveStatus": 0
+    },
+    {
+      "stage": "hospital",
+      "hasProgressiveStatus": 0
+    }
+  ]
+}

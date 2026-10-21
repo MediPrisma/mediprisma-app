@@ -11,6 +11,9 @@
 'use client'
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import type { ImportBundleOptions } from '../hooks/useImportBundle'
+import { runProgressiveImport } from '../services/progressive-import-transaction'
+import { parseProgressiveImportRequest, PROGRESSIVE_REQUEST_ATTRIBUTE } from '@/src/application/stores/progressive-import.store'
 
 /** File types the local-import picker offers. FHIR Bundles and Health Bank SDK
  *  exports are JSON; some sources ship the same JSON with a `.txt` extension,
@@ -28,7 +31,7 @@ interface BundleFileInputProps {
   testId?: string
   /** Import callback from the parent hook instance so loading/errors remain in
    * sync with the visible button or welcome screen. */
-  importFile: (file: File) => Promise<void>
+  importFile: (file: File, options?: ImportBundleOptions) => Promise<void>
 }
 
 export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInputProps>(
@@ -57,8 +60,13 @@ export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInput
     const onChange = useCallback(
       async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
+        const rawRequest = e.currentTarget.getAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE)
+        e.currentTarget.removeAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE)
+        const request = parseProgressiveImportRequest(rawRequest)
         try {
-          if (file) await importFile(file)
+          if (rawRequest && !request) throw new Error('Invalid progressive import request')
+          if (file && request) await runProgressiveImport(request, file, importFile)
+          else if (file) await importFile(file)
         } catch {
           // Error surfaces through the parent hook instance.
         } finally {
@@ -75,6 +83,7 @@ export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInput
       <input
         ref={inputRef}
         data-testid={testId}
+        data-medcloud-progressive={testId ? '1' : undefined}
         type="file"
         accept={BUNDLE_FILE_ACCEPT}
         className="hidden"

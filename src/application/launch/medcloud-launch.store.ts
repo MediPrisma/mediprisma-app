@@ -5,6 +5,9 @@ export interface MedcloudSummaryRequest {
   messageId: string
   /** Exact model selected by the independent site-routing decision. */
   modelId: string
+  /** Ownership of a queued progressive snapshot; absent for ordinary launches. */
+  progressiveRunId?: string
+  progressiveImportId?: string
 }
 
 interface MedcloudLaunchState {

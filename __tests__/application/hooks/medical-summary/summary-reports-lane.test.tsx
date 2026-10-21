@@ -4,7 +4,7 @@
 // prompt), hidden reasoning off on the compact harness, one re-send after a
 // transport failure, and module retries that keep or replace the verified
 // points. Synthetic fixtures only.
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import { buildSourceCatalog } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
@@ -145,6 +145,34 @@ function answerEverything(
 }
 
 const reportsCalls = () => mockStream.mock.calls.filter(([messages]: any[]) => isReportsRequest(messages))
+
+test('an aborted real reports producer cannot publish a late completed report or retry it', async () => {
+  const controller = new AbortController()
+  let finish!: () => void, lateChunk!: () => void, transportSignal!: AbortSignal
+  mockStream.mockImplementation((messages: any[], options: any) => {
+    if (isReportsRequest(messages)) {
+      const reply = reportsReply(listedKeys(messages))
+      transportSignal = options.signal
+      lateChunk = () => options.onChunk(reply)
+      return new Promise<string>(resolve => { finish = () => resolve(reply) })
+    }
+    const reply = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : NARRATIVE_BLOCKS
+    options.onChunk(reply)
+    return Promise.resolve(reply)
+  })
+  renderHook(() => useMedicalSummary())
+  let generation!: Promise<void>
+  act(() => { generation = runGeneration({ signal: controller.signal }) })
+  const rejected = expect(generation).rejects.toMatchObject({ name: 'AbortError' })
+  await waitFor(() => expect(lateChunk).toBeDefined())
+  await waitFor(() => expect(medicalSummaryStore.getState().byKey[SLOT]?.completedCardIds).toContain('problems'))
+  const before = medicalSummaryStore.getState().byKey[SLOT]
+  act(() => { controller.abort(); lateChunk() })
+  expect(transportSignal.aborted).toBe(true)
+  await act(async () => { finish(); await rejected })
+  expect(medicalSummaryStore.getState().byKey[SLOT]).toBe(before)
+  expect(reportsCalls()).toHaveLength(1)
+})
 
 test('a fresh compact-harness run sends ONE reports request with every report, hidden reasoning off', async () => {
   answerEverything()

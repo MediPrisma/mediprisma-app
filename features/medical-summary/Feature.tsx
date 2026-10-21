@@ -201,6 +201,7 @@ export default function MedicalSummaryFeature() {
     setAutoGenerate,
     generate,
     cancelGeneration,
+    generateForLaunch,
     retryFailed,
     isGenerating: isBusy,
     isStopping,
@@ -230,7 +231,7 @@ export default function MedicalSummaryFeature() {
     isRestoring,
     generationSlotKey: summaryGenerationSlotKey,
     modelId: model,
-    generate,
+    generate: generateForLaunch,
   })
   // Mirror the run's start/finish into the workspace-level activity store so a
   // COLLAPSED feature panel can announce a finished summary. Content never

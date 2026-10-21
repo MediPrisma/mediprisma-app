@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { useAiSlotGeneration } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
+import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { ContextOverflowError, type ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import {
   loadEncryptedCache,
@@ -116,6 +117,7 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
 describe('useAiSlotGeneration demo snapshot', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
     mockOpenAiKey = 'user-openai-key'
     mockPatientId = 'demo-patient-1'
     mockClinicalContext = 'demo context'
@@ -131,6 +133,71 @@ describe('useAiSlotGeneration demo snapshot', () => {
     mockOpenAiCompatibleProfiles = null
     mockLocale = 'zh-TW'
     mockAudience = 'patient'
+  })
+
+  it.each(['patient-changed', 'privacy-stale'] as const)('blocks ordinary route background generation after %s before data readiness, while allowing manual generation', async phase => {
+    mockPatientId = 'smart-patient-1'
+    mockClinicalData = { ...mockClinicalData, isFetching: true }
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async () => ({ headline: 'explicit manual result' }))
+    useProgressiveImportStore.setState({ current: { runId: 'background-run', importId: 'cloud-import', phase: 'waiting' } })
+    const { result, rerender } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gpt-5.4-nano', selectedModelId: 'gpt-5.4-nano', autoRunEnabled: true,
+      requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
+    }))
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    act(() => stopProgressiveImport('background-run', phase))
+    mockClinicalData = { ...mockClinicalData, isFetching: false }
+    rerender()
+    await waitFor(() => expect(result.current.dataReady).toBe(true))
+    expect(run).not.toHaveBeenCalled()
+    await act(async () => result.current.generate())
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(result.current.result?.headline).toBe('explicit manual result')
+  })
+
+  it.each(['patient-changed', 'privacy-stale'] as const)('aborts ordinary route automatic generation on %s and rejects its late result and cache write', async phase => {
+    mockPatientId = 'smart-patient-1'
+    let finish!: () => void, signal!: AbortSignal
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn((context) => new Promise<{ headline: string }>(resolve => {
+      store.getState().setResult(context.operationKey, { headline: 'provisional automatic preview' })
+      signal = context.signal
+      finish = () => resolve({ headline: 'late automatic result' })
+    }))
+    useProgressiveImportStore.setState({ current: { runId: 'background-run', importId: 'cloud-import', phase: 'waiting' } })
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gpt-5.4-nano', selectedModelId: 'gpt-5.4-nano', autoRunEnabled: true,
+      retainResultOnModelChange: true,
+      requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
+    }))
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(result.current.result?.headline).toBe('provisional automatic preview'))
+    act(() => stopProgressiveImport('background-run', phase))
+    expect(signal.aborted).toBe(true)
+    expect(mockStopAi).toHaveBeenCalledWith(result.current.slotKey)
+    await act(async () => finish())
+    await waitFor(() => expect(result.current.isRunning).toBe(false))
+    expect(result.current.result).toBeUndefined()
+    expect(saveEncryptedCache).not.toHaveBeenCalled()
+  })
+
+  it('retains an accepted automatic artifact during delayed cache publication after a safety stop', async () => {
+    mockPatientId = 'smart-patient-1'
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async () => ({ headline: 'completed automatic result' }))
+    useProgressiveImportStore.setState({ current: { runId: 'background-run', importId: 'cloud-import', phase: 'waiting' } })
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gpt-5.4-nano', selectedModelId: 'gpt-5.4-nano', autoRunEnabled: true,
+      requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
+    }))
+    await waitFor(() => expect(result.current.result?.headline).toBe('completed automatic result'))
+    await waitFor(() => expect(result.current.isRunning).toBe(false))
+    await act(async () => { await Promise.resolve() })
+    const canPublish = jest.mocked(saveEncryptedCache).mock.calls[0][2]!
+    expect(canPublish()).toBe(true)
+    act(() => stopProgressiveImport('background-run', 'privacy-stale'))
+    expect(canPublish()).toBe(true)
   })
 
   it('blocks an unavailable selected model only when the feature opts out of fallback', async () => {

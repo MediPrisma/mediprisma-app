@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import { useInsightGeneration } from "@/features/clinical-insights/hooks/useInsightGeneration"
 import { useInsightResponsesStore } from "@/features/clinical-insights/hooks/useInsightResponsesStore"
 import { AiError, AiErrorCode } from "@/src/core/errors"
+import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 
 const mockQuery = jest.fn()
 const mockStop = jest.fn()
@@ -31,6 +32,7 @@ jest.mock("@/src/shared/utils/context-budget", () => ({
 
 describe("useInsightGeneration provenance", () => {
   beforeEach(() => {
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
     jest.useFakeTimers()
     jest.setSystemTime(new Date("2026-08-27T06:32:00.000Z"))
     jest.clearAllMocks()
@@ -43,6 +45,65 @@ describe("useInsightGeneration provenance", () => {
 
   afterEach(() => {
     jest.useRealTimers()
+  })
+
+  const safetyOptions = () => ({
+    panels: ['first', 'second'].map(id => ({ id, title: id, prompt: 'synthetic summary', outputFormat: 'plain-text' as const, languagePolicy: 'follow-template' as const })),
+    prompts: {}, context: 'synthetic context', piiLiterals: [], model: 'gpt-5.6-luna', modelName: 'GPT',
+    contextLimit: 120_000, contextAdaptation: null, inputSignature: 'synthetic-input',
+  })
+
+  it.each(['patient-changed', 'privacy-stale'] as const)('stops automatic custom batches on %s without publishing late text or starting another module', async phase => {
+    let finish!: (value: string) => void
+    mockQuery.mockReset().mockImplementationOnce(() => new Promise<string>(resolve => { finish = resolve }))
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'import-a', phase: 'waiting' } })
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let generation!: Promise<void>
+    act(() => { generation = result.current.runPanels(['first', 'second'], { automatic: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1))
+    mockStop.mockClear()
+    act(() => stopProgressiveImport('run-a', phase))
+    expect(mockStop).toHaveBeenCalledTimes(1)
+    await act(async () => { finish('late automatic text'); await generation })
+    expect(useInsightResponsesStore.getState().responses).toEqual({})
+    expect(mockQuery).toHaveBeenCalledTimes(1)
+    mockQuery.mockResolvedValueOnce('explicit manual text')
+    await act(async () => result.current.runPanel('first', { force: true }))
+    expect(useInsightResponsesStore.getState().responses.first.text).toBe('explicit manual text')
+  })
+
+  it('does not cancel a newer explicit manual batch when an older automatic batch receives a safety stop', async () => {
+    let finishAuto!: (value: string) => void, finishManual!: (value: string) => void
+    mockQuery.mockReset()
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishAuto = resolve }))
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishManual = resolve }))
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'import-a', phase: 'waiting' } })
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let automatic!: Promise<void>, manual!: Promise<void>
+    act(() => { automatic = result.current.runPanels(['first'], { automatic: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1))
+    act(() => { manual = result.current.runPanel('first', { force: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(2))
+    mockStop.mockClear()
+    act(() => stopProgressiveImport('run-a', 'privacy-stale'))
+    expect(mockStop).not.toHaveBeenCalled()
+    await act(async () => { finishAuto('old automatic'); finishManual('new manual'); await Promise.all([automatic, manual]) })
+    expect(useInsightResponsesStore.getState().responses.first.text).toBe('new manual')
+  })
+
+  it('discards an uncommitted multi-module batch when stopped after its first staged response', async () => {
+    let finish!: (value: string) => void
+    mockQuery.mockReset().mockResolvedValueOnce('uncommitted first module')
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finish = resolve }))
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'import-a', phase: 'waiting' } })
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let generation!: Promise<void>
+    act(() => { generation = result.current.runPanels(['first', 'second'], { automatic: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(2))
+    expect(useInsightResponsesStore.getState().responses).toEqual({})
+    act(() => stopProgressiveImport('run-a', 'privacy-stale'))
+    await act(async () => { finish('late second module'); await generation })
+    expect(useInsightResponsesStore.getState().responses).toEqual({})
   })
 
   it("captures the immutable model, completion time and request duration per module", async () => {

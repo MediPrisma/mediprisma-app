@@ -47,6 +47,7 @@ import {
   NHI_DRUG_ENRICHMENT_POLICY_VERSION,
 } from './nhi-drug-terminology-enrichment.service'
 import { enrichBundleWithNhiDrugTerminologyOffMainThread } from './nhi-drug-terminology-enrichment.worker-client'
+import { serializeLocalBundleMutation } from './local-bundle-mutation-queue'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   applyUserEnteredPatientProfile,
@@ -62,6 +63,8 @@ import type {
 import {
   getSessionBundleKey,
   rotateSessionBundleKey,
+  prepareSessionBundleKey,
+  BundleSessionStorageError,
   clearSessionBundleKey,
   isEncryptedRecord,
   encryptBytes,
@@ -114,10 +117,12 @@ let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
 let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
 // Only used if persistence fails; Blob keeps source bytes out of the parsed JSON heap.
 let memOriginalFhir: Blob | null = null
+// A storage-restricted first snapshot has no durable predecessor to reopen.
+let memBundleUsesMemoryOnlySession = false
 // A stored bundle can be requested concurrently by the Patient and clinical
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
-const terminologyMigrationByBundle = new WeakMap<object, Promise<object>>()
+const terminologyMigrationByBundle = new WeakMap<object, Promise<object | null>>()
 // Mapping a FHIR Bundle into every domain collection is also expensive and was
 // previously repeated independently by the Patient and clinical-data queries.
 // Cache only the post-storage parse (not the import validator): save() may move
@@ -504,9 +509,9 @@ export function prepareImagesForStorage(
 // import's prior images; another open tab's image records are never touched.
 // When no session key is available the bundle is left untouched (images stay
 // inline); the caller will then also skip persisting the bundle itself.
-async function extractAndStoreImages(bundle: any, importId: string | null): Promise<void> {
+async function extractAndStoreImages(bundle: any, importId: string | null, preparedKey?: CryptoKey): Promise<void> {
   if (typeof indexedDB === 'undefined') return
-  const key = await getSessionBundleKey({ create: true })
+  const key = preparedKey ?? await getSessionBundleKey({ create: true })
   if (!key) return
   const toStore = prepareImagesForStorage(bundle, importId)
   const encrypted: Array<{ id: string; record: unknown }> = []
@@ -1151,6 +1156,8 @@ export const LocalBundleService = {
       sourceMetadata?: ClinicalSourceMetadata
       patientProfile?: UserEnteredPatientProfile | null
       originalFhir?: Blob
+      signal?: AbortSignal
+      beforeCommit?: () => void
     } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
@@ -1163,6 +1170,136 @@ export const LocalBundleService = {
       ? (memBundle !== null ? memBundleImportId : readTabLocalImportId())
       : null
     const isNewImport = Boolean(importId && importId !== activeImportId)
+    if (options.signal) {
+      // Progressive replacements prepare ciphertext in a fresh scope. Until the
+      // last synchronous commit, cancellation leaves the old chart, pointer and
+      // decryption key intact, including across a reload.
+      const signal = options.signal
+      signal.throwIfAborted()
+      if (!isNewImport || !importId) throw new Error('guarded import requires a fresh scope')
+      // Keep attachment metadata, sharing the existing base64 strings rather
+      // than cloning the full chart. Failed image persistence can restore inline
+      // bytes before falling back to the ordinary memory-only import behaviour.
+      const imageBackups = ((bundle as any).entry ?? []).flatMap((entry: any) =>
+        entry?.resource?.resourceType === 'DiagnosticReport' && Array.isArray(entry.resource.presentedForm)
+          ? entry.resource.presentedForm.filter((form: any) => typeof form?.data === 'string'
+            && typeof form.contentType === 'string' && form.contentType.startsWith('image/'))
+            .map((form: any) => ({ form, original: { ...form } })) : [])
+      const restoreInlineImages = () => {
+        for (const { form, original } of imageBackups) {
+          for (const field of Object.keys(form)) delete form[field]
+          Object.assign(form, original)
+        }
+      }
+      const publishInMemory = (originalFhir: Blob | null, memoryOnlySession = false) => {
+        memBundle = bundle
+        memBundleImportId = importId
+        memBundleIsDemo = demo
+        memBundleSourceMetadata = sourceMetadata ?? null
+        memUserEnteredPatientProfile = patientProfile
+        memOriginalFhir = originalFhir
+        memBundleUsesMemoryOnlySession = memoryOnlySession
+      }
+      try {
+        const preparedKey = await prepareSessionBundleKey()
+        let previousMarker: string | null, previousDemo: string | null
+        try {
+          previousMarker = sessionStorage.getItem(STORAGE_KEY)
+          previousDemo = sessionStorage.getItem(DEMO_FLAG_KEY)
+        } catch { throw new BundleSessionStorageError('bundle session storage unavailable') }
+        let published = false
+        let keyCommitted = false
+        let originalPersisted = false
+        let envelopePersisted = false
+        try {
+          try {
+            signal.throwIfAborted()
+            try { await idbSweepExpiredRecords() } catch { /* expiry cleanup is best effort */ }
+            signal.throwIfAborted()
+            try {
+              await extractAndStoreImages(bundle, importId, preparedKey.key)
+            } catch {
+              restoreInlineImages()
+              try { await idbDeleteImagesForImport(importId) } catch { /* best effort */ }
+            }
+            signal.throwIfAborted()
+            const persisted: PersistedBundleEnvelope = {
+              __mediprismaBundle: 1, importId, demo, bundle,
+              ...(sourceMetadata ? { sourceMetadata } : {}),
+              ...(patientProfile ? { patientProfile } : {}),
+            }
+            await idbPut(await encryptJson(preparedKey.key, persisted), bundleRecordKey(importId))
+            envelopePersisted = true
+            signal.throwIfAborted()
+            if (options.originalFhir) {
+              try {
+                await storeOriginalFhir(importId, options.originalFhir, preparedKey.key)
+                originalPersisted = true
+              } catch (error) {
+                try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
+                throw error
+              }
+            }
+          } catch {
+            envelopePersisted = false
+            signal.throwIfAborted()
+            restoreInlineImages()
+            try {
+              await idbDelete(bundleRecordKey(importId))
+              await idbDeleteImagesForImport(importId, true)
+            } catch { /* memory-only fallback, never plaintext at rest */ }
+          }
+          signal.throwIfAborted()
+          options.beforeCommit?.()
+          signal.throwIfAborted()
+          if (!envelopePersisted) {
+            if (activeImportId && !memBundleUsesMemoryOnlySession) throw new Error('院內門診資料暫存失敗，已保留先前病歷。')
+            publishInMemory(options.originalFhir ?? null, true)
+            published = true
+            return
+          }
+          preparedKey.commit()
+          keyCommitted = true
+          try { writeTabBundleScope(importId, demo) }
+          catch { throw new BundleSessionStorageError('bundle session marker unavailable') }
+          // No asynchronous work between the final guard and publication.
+          publishInMemory(originalPersisted ? null : options.originalFhir ?? null)
+          published = true
+        } finally {
+          if (!published) {
+            try { preparedKey.rollback() } catch { /* storage is unavailable; cleanup the unpublished scope */ }
+            if (keyCommitted) {
+              try {
+                if (previousMarker === null) sessionStorage.removeItem(STORAGE_KEY)
+                else sessionStorage.setItem(STORAGE_KEY, previousMarker)
+                if (previousDemo === null) sessionStorage.removeItem(DEMO_FLAG_KEY)
+                else sessionStorage.setItem(DEMO_FLAG_KEY, previousDemo)
+              } catch { /* browser may block all storage; the in-memory chart remains isolated */ }
+            }
+            try {
+              await idbDelete(bundleRecordKey(importId))
+              await idbDeleteImagesForImport(importId, true)
+            } catch { /* best-effort cleanup of the unpublished scope */ }
+          }
+        }
+        // A duplicated tab may still own the previous pointer and key. Keep its
+        // ciphertext until the existing expiry sweep; do not await any cleanup
+        // after publication before the caller can notify the workspace.
+      } catch (error) {
+        if (!(error instanceof BundleSessionStorageError)) throw error
+        restoreInlineImages()
+        signal.throwIfAborted()
+        options.beforeCommit?.()
+        signal.throwIfAborted()
+        // Never acknowledge a memory-only replacement while reload would
+        // silently reopen the older durable snapshot. Keep it and report failure.
+        if (activeImportId && !memBundleUsesMemoryOnlySession) throw error
+        // Persistence is optional; cancellation and ownership checks are not.
+        // No plaintext is persisted, and source/images remain usable in this tab.
+        publishInMemory(options.originalFhir ?? null, true)
+      }
+      return
+    }
     if (typeof window !== 'undefined') {
       if (isNewImport) {
         // A new import is a new patient-workspace encryption boundary. This is
@@ -1178,6 +1315,7 @@ export const LocalBundleService = {
       }
     }
     memBundle = bundle
+    memBundleUsesMemoryOnlySession = false
     memBundleImportId = importId
     memBundleIsDemo = demo
     memBundleSourceMetadata = sourceMetadata ?? null
@@ -1216,8 +1354,10 @@ export const LocalBundleService = {
       // Could not persist ciphertext. Detach only this tab and this import;
       // another MediPrisma tab's Bundle must remain untouched.
       try {
-        await idbDelete(bundleRecordKey(importId))
-        if (importId) await idbDeleteImagesForImport(importId)
+        if (isNewImport) {
+          await idbDelete(bundleRecordKey(importId))
+          if (importId) await idbDeleteImagesForImport(importId)
+        }
       } catch {
         // Best-effort cleanup.
       }
@@ -1243,6 +1383,7 @@ export const LocalBundleService = {
     memBundleSourceMetadata = null
     memUserEnteredPatientProfile = null
     memOriginalFhir = null
+    memBundleUsesMemoryOnlySession = false
     if (typeof window === 'undefined') return
     clearTabBundleScope()
     // Remove only legacy origin-wide markers. New tab-local markers never
@@ -1820,6 +1961,7 @@ export const LocalBundleService = {
     if (!hasNhiDrugTerminologyKnowledge(bundle)) {
       let migration = terminologyMigrationByBundle.get(bundle)
       if (!migration) {
+        const owner = { bundle, importId: memBundleImportId }
         migration = (async () => {
           // Worker-routed: this upgrade runs while the workspace is painting
           // its first patient view, and the terminology snapshot's JSON.parse
@@ -1827,18 +1969,26 @@ export const LocalBundleService = {
           const result = await enrichBundleWithNhiDrugTerminologyOffMainThread(
             bundle as Record<string, unknown>,
           )
+          if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return memBundle
           if (
             result.report.status === 'enriched'
             && result.report.linkedRequestCount > 0
           ) {
-            await this.save(result.bundle, {
-              ...(memBundleImportId ? { importId: memBundleImportId } : {}),
-              demo: memBundleIsDemo,
-              ...(memBundleSourceMetadata
-                ? { sourceMetadata: memBundleSourceMetadata }
-                : {}),
-              patientProfile: memUserEnteredPatientProfile,
-            })
+            // Query refresh may itself be awaited by an import holding this
+            // queue. Return the derived view now; persist it behind that writer
+            // only if its original chart still owns the scope.
+            void serializeLocalBundleMutation(async () => {
+              if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return
+              // Optional enrichment must not turn a memory-only chart into a
+              // purported durable predecessor for the next progressive stage.
+              if (memBundleUsesMemoryOnlySession) return
+              await this.save(result.bundle, {
+                ...(owner.importId ? { importId: owner.importId } : {}),
+                demo: memBundleIsDemo,
+                ...(memBundleSourceMetadata ? { sourceMetadata: memBundleSourceMetadata } : {}),
+                patientProfile: memUserEnteredPatientProfile,
+              })
+            }).catch(() => { /* optional enrichment persistence; original chart remains available */ })
             return result.bundle
           }
           return bundle
@@ -1846,6 +1996,7 @@ export const LocalBundleService = {
         terminologyMigrationByBundle.set(bundle, migration)
       }
       bundle = await migration
+      if (!bundle) return null
     }
 
     const sourceMetadata = memBundleSourceMetadata
@@ -1889,25 +2040,55 @@ export const LocalBundleService = {
       throw new Error('Encrypted browser storage is unavailable')
     }
 
-    const key = await getSessionBundleKey()
+    const owner = { importId: memBundleImportId, demo: memBundleIsDemo,
+      sourceMetadata: memBundleSourceMetadata, originalFhir: memOriginalFhir,
+      recovering: memBundleUsesMemoryOnlySession }
+    const assertOwner = () => {
+      if (memBundle !== bundle || memBundleImportId !== owner.importId) throw new Error('目前病歷已變更，請重新開啟病人資料。')
+    }
+    const key = await getSessionBundleKey({ create: owner.recovering })
     if (!key) throw new Error('Encrypted browser storage is unavailable')
+    assertOwner()
     const persisted = {
       __mediprismaBundle: 1,
-      importId: memBundleImportId,
-      demo: memBundleIsDemo,
-      ...(memBundleSourceMetadata
-        ? { sourceMetadata: memBundleSourceMetadata }
+      importId: owner.importId,
+      demo: owner.demo,
+      ...(owner.sourceMetadata
+        ? { sourceMetadata: owner.sourceMetadata }
         : {}),
       ...(normalized ? { patientProfile: normalized } : {}),
       bundle,
     } satisfies PersistedBundleEnvelope
 
-    // Update in-memory state only after the encrypted IndexedDB write succeeds.
-    await idbPut(
-      await encryptJson(key, persisted),
-      bundleRecordKey(memBundleImportId),
-    )
-    writeTabBundleScope(memBundleImportId, memBundleIsDemo)
-    memUserEnteredPatientProfile = normalized
+    const previousMarker = owner.recovering ? sessionStorage.getItem(STORAGE_KEY) : null
+    const previousDemo = owner.recovering ? sessionStorage.getItem(DEMO_FLAG_KEY) : null
+    try {
+      if (owner.recovering && owner.originalFhir) await storeOriginalFhir(owner.importId, owner.originalFhir, key)
+      assertOwner()
+      const encrypted = await encryptJson(key, persisted)
+      assertOwner()
+      await idbPut(encrypted, bundleRecordKey(owner.importId))
+      assertOwner()
+      try { writeTabBundleScope(owner.importId, owner.demo) }
+      catch (error) {
+        if (owner.recovering) try {
+          for (const [storageKey, value] of [[STORAGE_KEY, previousMarker], [DEMO_FLAG_KEY, previousDemo]] as const) {
+            if (value === null) sessionStorage.removeItem(storageKey)
+            else sessionStorage.setItem(storageKey, value)
+          }
+        } catch { /* browser storage may remain blocked */ }
+        throw error
+      }
+      // Recovery is durable only after both original source and chart are saved.
+      memBundleUsesMemoryOnlySession = false
+      memUserEnteredPatientProfile = normalized
+      if (owner.recovering && owner.originalFhir) memOriginalFhir = null
+    } catch (error) {
+      if (owner.recovering) try {
+        await idbDelete(bundleRecordKey(owner.importId))
+        await idbDeleteImagesForImport(owner.importId, true)
+      } catch { /* unpublished recovery data expires; the original Blob stays in memory */ }
+      throw error
+    }
   },
 }
