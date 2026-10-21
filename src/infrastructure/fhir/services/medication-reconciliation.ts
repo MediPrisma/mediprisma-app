@@ -9,6 +9,9 @@ import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 type Resource = Record<string, any>
 const SOURCE_MODULE = 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module'
 const cloneSource = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
+const hasValue = (value: any): boolean => value !== undefined && value !== null
+  && (typeof value === 'string' ? value.trim().length > 0 : Array.isArray(value) ? value.length > 0
+    : typeof value === 'object' ? Object.keys(value).length > 0 : true)
 
 function conceptKey(concept: any): string | undefined {
   const codes = concept?.coding?.filter((coding: any) => coding?.code)
@@ -149,8 +152,8 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     if (sig(left) && !aRate && bRate || sig(right) && !bRate && aRate) return true
     for (const field of ['route', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method',
       'additionalInstruction', 'patientInstruction', 'maxDosePerAdministration', 'maxDosePerLifetime', 'maxDosePerPeriod']) {
-      if (sig(left) && left[field] === undefined && right[field] !== undefined
-        || sig(right) && right[field] === undefined && left[field] !== undefined) return true
+      if (sig(left) && !hasValue(left[field]) && hasValue(right[field])
+        || sig(right) && !hasValue(right[field]) && hasValue(left[field])) return true
     }
   }
   return false
@@ -336,7 +339,7 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       const preferred = order.dosageInstruction[0], supplement = other.dosageInstruction[0]
       for (const field of ['route', 'timing', 'doseAndRate', 'asNeededBoolean', 'asNeededCodeableConcept', 'site', 'method',
         'additionalInstruction', 'patientInstruction', 'maxDosePerAdministration', 'maxDosePerLifetime', 'maxDosePerPeriod']) {
-        if (preferred[field] === undefined && supplement[field] !== undefined) preferred[field] = cloneSource(supplement[field])
+        if (!hasValue(preferred[field]) && hasValue(supplement[field])) preferred[field] = cloneSource(supplement[field])
       }
     }
   }

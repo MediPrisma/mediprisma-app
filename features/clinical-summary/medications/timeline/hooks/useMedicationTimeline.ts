@@ -36,6 +36,7 @@ export type TimelineAtcLevel = '2' | '4'
 export type TimelinePrescriptionType = 'chronic' | 'non-chronic' | 'unrecorded'
 
 export interface RefillBar {
+  sourceCurrent?: boolean
   sourceComparison?: string
   sourceComparisonUnconfirmed?: boolean
   supplyEndDay?: string
@@ -293,7 +294,7 @@ function countGroup(drugs: TimelineDrug[]) {
 }
 
 export function isTimelineDrugCurrent(drug: TimelineDrug, nowMs: number): boolean {
-  return drug.bars.some((bar) => bar.startMs <= nowMs && bar.endMs >= nowMs)
+  return drug.bars.some((bar) => bar.sourceCurrent ?? (bar.startMs <= nowMs && bar.endMs >= nowMs))
 }
 
 function sortGroups(groups: CategoryGroup[]): CategoryGroup[] {
@@ -423,27 +424,32 @@ export function useMedicationTimeline(
       return { dataOrigin: isVghtpeSource(med) ? 'hospital' : isMedcloudSource(med) ? 'medcloud' : undefined,
         isInactive: !assessment.current, currentnessUncertain: assessment.uncertain }
     })
-    for (const { record: med, sources, ownedIds } of projected) {
+    const intervals = projected.flatMap(item => {
+      if (!item.sources || item.ownedIds?.length !== item.sources.length) return [{ ...item, periodSource: item.record }]
+      // Collapse identical intervals only. A missing interval and a documented
+      // supply are separate evidence, drawn on the same comparison row.
+      const distinct = new Map<string, any>()
+      for (const source of item.sources) {
+        const assessment = assessMedicationCurrentness(source, now)
+        const key = JSON.stringify([medicationClinicalTimestamp(source.authoredOn || source.effectiveDateTime || ''),
+          medicationExpectedEndTimestamp(source), assessment.current, assessment.uncertain])
+        if (!distinct.has(key)) distinct.set(key, source)
+      }
+      return [...distinct.values()].map(periodSource => ({ ...item, periodSource }))
+    })
+    for (const { record: med, sources, periodSource } of intervals) {
       if (!med) continue
       if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(med.status).toLowerCase())) continue
       const clinicalDrugKey = medicationClinicalIdentityKey(med)
       if (!clinicalDrugKey) continue
 
-      // A compact comparison bar uses an actual source interval, never a
-      // fabricated one-day course when a partner recorded a complete supply.
-      const periodSources = sources && ownedIds?.length === sources.length ? sources : [med]
-      const periodSource = periodSources.reduce((best, source) => {
-        const sourceEnd = medicationExpectedEndTimestamp(source)
-        const bestEnd = medicationExpectedEndTimestamp(best)
-        return sourceEnd !== undefined && (bestEnd === undefined || sourceEnd > bestEnd) ? source : best
-      }, med)
       const startIso = periodSource.authoredOn || periodSource.effectiveDateTime
       if (!startIso) continue
       const startMs = medicationClinicalTimestamp(startIso)
       if (Number.isNaN(startMs) || startMs < rangeStart) continue
 
       const supplyEndDay = medicationExpectedEnd(periodSource)
-      const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
+      const dosage = periodSource.dosageInstruction?.[0] || periodSource.dosage?.[0]
       const periodDosage = periodSource.dosageInstruction?.[0] || periodSource.dosage?.[0]
       const reportedDays = durationToDays(periodSource.dispenseRequest?.expectedSupplyDuration, false)
         ?? durationToDays(periodDosage?.timing?.repeat?.boundsDuration, false)
@@ -506,14 +512,15 @@ export function useMedicationTimeline(
         : ''
 
       const bar: RefillBar = {
-        sourceComparison: [sourceComparisonNarrative(med), ...(sources ?? []).map(source =>
-          `${source.id}: ${source.authoredOn || source.effectiveDateTime || '?'} → ${medicationExpectedEnd(source) || 'supply period not provided'}`)].filter(Boolean).join('\n') || undefined,
+        sourceCurrent: assessMedicationCurrentness(periodSource, now).current,
+        sourceComparison: [sourceComparisonNarrative(med), ...(sources ?? []).map((source, index) =>
+          `${isVghtpeSource(source) ? (locale === 'en' ? 'Hospital' : '院內') : (locale === 'en' ? 'MediCloud' : '雲端')} ${index + 1}: ${medicationClinicalDay(source.authoredOn || source.effectiveDateTime) || '?'} → ${medicationExpectedEnd(source) || (locale === 'en' ? 'supply period not provided' : '未提供供藥期間')}`)].filter(Boolean).join('\n') || undefined,
         sourceComparisonUnconfirmed: !!med._sourceRecordComparison && med._sourceRecordComparison.status !== 'confirmed',
         supplyEndDay,
         selfPurchased: sourceSelfPurchase(med) === true,
-        sourceStatus: med.status,
+        sourceStatus: periodSource.status,
         supplyDaysUnrecorded: reportedDays === undefined || exactEnd === undefined,
-        refillId: med.id || `${medicationSourceCode(med) || clinicalDrugKey}-${startIso}`,
+        refillId: periodSource.id || `${medicationSourceCode(med) || clinicalDrugKey}-${startIso}`,
         startMs,
         endMs,
         supplyDays,

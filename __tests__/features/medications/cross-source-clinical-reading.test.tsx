@@ -63,11 +63,12 @@ it('keeps the cloud supply interval when a grouped hospital record has no durati
   const collection = LocalBundleService.parse(input)!.collection
   const { result } = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW'))
   expect(result.current.drugs).toHaveLength(1)
-  const bar = result.current.drugs[0].bars[0]
+  expect(result.current.drugs[0].bars).toHaveLength(2)
+  const bar = result.current.drugs[0].bars.find(bar => bar.supplyDays === 28)!
   expect(bar.supplyDays).toBe(28)
   expect(bar.supplyEndDay).toBe('2026-06-03')
-  expect(bar.sourceComparison).toContain('synthetic-order-a:')
-  expect(bar.sourceComparison).toContain('supply period not provided')
+  expect(bar.sourceComparison).toContain('院內 1:')
+  expect(bar.sourceComparison).toContain('未提供供藥期間')
 })
 
 it('keeps overview and list dates aligned for UTC midnight equivalents and fractional supply', () => {
