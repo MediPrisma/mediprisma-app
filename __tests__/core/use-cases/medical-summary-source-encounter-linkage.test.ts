@@ -19,7 +19,7 @@ function compositionOrganization(resources: any[], currentReference: string, ali
     encounters: retainedRows.map(node => ({
       id: node.resource.id!,
       clinicalSourceNodeKey: node.key,
-      serviceProvider: { display: String(node.resource.serviceProvider?.display ?? '') },
+      serviceProvider: { display: String((node.resource.serviceProvider as { display?: string } | undefined)?.display ?? '') },
       period: { start: '2026-09-17' },
     })) as any,
     compositions: [{
