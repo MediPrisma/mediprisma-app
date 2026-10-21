@@ -1,6 +1,7 @@
 /** @jest-environment node */
 import { reconcileClinicalSources } from '@/src/core/services/clinical-reconciliation'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
+import { clinicalSourceContextIdentity } from '@/src/core/services/clinical-source-context'
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { fhirClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
@@ -25,6 +26,25 @@ it('assigns distinct stable ids to fullUrl-only generic records and keeps anonym
   expect(new Set(encounters.map(node => ids.get(node.key))).size).toBe(2)
   expect(new Set(procedures.map(node => ids.get(node.key))).size).toBe(2)
   expect([...encounters, ...procedures].every(node => /^cs[A-Za-z0-9.-]{16}$/.test(ids.get(node.key) ?? ''))).toBe(true)
+})
+
+it('keeps a fullUrl-only row id stable when a later capture resolves its supporting reference', () => {
+  const encounterCapture = {
+    sourceId: 'smart-session', patientScope: 'patient', generation: 'encounters', restBase: 'https://ehr.example/fhir',
+    resources: [{ resource: { resourceType: 'Encounter', status: 'finished', subject: { reference: 'Patient/patient' } }, fullUrl: 'https://ehr.example/fhir/Encounter/opaque' }],
+  }
+  const before = reconcileClinicalSources([encounterCapture])
+  const after = reconcileClinicalSources([encounterCapture, {
+    sourceId: 'smart-session', patientScope: 'patient', generation: 'patient', restBase: 'https://ehr.example/fhir',
+    resources: [{ resource: { resourceType: 'Patient', id: 'patient' }, fullUrl: 'https://ehr.example/fhir/Patient/patient' }],
+  }])
+  const beforeEncounter = before.graph.nodes.find(node => node.resource.resourceType === 'Encounter')!
+  const afterEncounter = after.graph.nodes.find(node => node.resource.resourceType === 'Encounter')!
+
+  expect(clinicalSourceContextIdentity(before.graph, beforeEncounter)).not.toBe(clinicalSourceContextIdentity(after.graph, afterEncounter))
+  expect(createClinicalSourceProjectionIds(before).get(beforeEncounter.key)).toBe(
+    createClinicalSourceProjectionIds(after).get(afterEncounter.key),
+  )
 })
 
 it('projects SMART fullUrl-only encounters through the aggregate into navigable encounter details', async () => {
