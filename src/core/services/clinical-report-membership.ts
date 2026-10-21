@@ -6,6 +6,7 @@ export function attachReportObservations(
   reports: DiagnosticReportEntity[],
   observations: ObservationEntity[],
   source?: ClinicalReconciliationResult,
+  observationAliases?: ReadonlyMap<string, ObservationEntity>,
 ): DiagnosticReportEntity[] {
   if (reports.length === 0 || observations.length === 0) return reports
 
@@ -14,7 +15,8 @@ export function attachReportObservations(
     const key = 'Observation/' + observation.id
     byId.set(key, [...(byId.get(key) ?? []), observation])
   }
-  const byNodeKey = new Map(observations.filter(row => row.clinicalSourceNodeKey).map(row => [row.clinicalSourceNodeKey!, row]))
+  const byNodeKey = new Map(observationAliases)
+  for (const row of observations) if (row.clinicalSourceNodeKey) byNodeKey.set(row.clinicalSourceNodeKey, row)
   const graphEdges = new Map<string, Array<ClinicalReconciliationResult['graph']['references'][number]>>()
   for (const edge of source?.graph.references ?? []) {
     const edges = graphEdges.get(edge.origin.key) ?? []
@@ -32,18 +34,21 @@ export function attachReportObservations(
       const walk = (origin: string, kind: 'result' | 'hasMember') => {
         for (const edge of graphEdges.get(origin) ?? []) {
           if (edge.status !== 'resolved' || !(kind === 'result' ? /^result\[\d+\]$/ : /^hasMember\[\d+\]$/).test(edge.path)) continue
-          const member = edge.targetKeys.map((key: string) => byNodeKey.get(key)).find(Boolean)
-            ?? edge.targetKeys.map((key: string) => existingByKey.get(key)).find(Boolean)
-          if (!member || visited.has(member.clinicalSourceNodeKey!)) continue
-          visited.add(member.clinicalSourceNodeKey!)
+          const targetKey = edge.targetKeys.find(key => byNodeKey.has(key))
+            ?? (!observationAliases ? edge.targetKeys.find(key => existingByKey.has(key)) : undefined)
+          const member = targetKey ? byNodeKey.get(targetKey) ?? existingByKey.get(targetKey) : undefined
+          const identity = member?.id ?? targetKey!
+          if (!member || visited.has(identity)) continue
+          visited.add(identity)
           members.push(member)
-          walk(member.clinicalSourceNodeKey!, 'hasMember')
+          walk(targetKey!, 'hasMember')
         }
         if (kind === 'hasMember') {
           for (const key of byNodeKey.get(origin)?.clinicalSourceDerivedMemberKeys ?? []) {
             const member = byNodeKey.get(key)
-            if (!member || visited.has(key)) continue
-            visited.add(key)
+            const identity = member?.id ?? key
+            if (!member || visited.has(identity)) continue
+            visited.add(identity)
             members.push(member)
             walk(key, 'hasMember')
           }
@@ -52,8 +57,9 @@ export function attachReportObservations(
       walk(report.clinicalSourceNodeKey, 'result')
       for (const key of report.clinicalSourceDerivedMemberKeys ?? []) {
         const member = byNodeKey.get(key)
-        if (!member || visited.has(key)) continue
-        visited.add(key)
+        const identity = member?.id ?? key
+        if (!member || visited.has(identity)) continue
+        visited.add(identity)
         members.push(member)
         walk(key, 'hasMember')
       }
