@@ -1192,6 +1192,10 @@ export const LocalBundleService = {
         }
       }
       const publishInMemory = (originalFhir: Blob | null, memoryOnlySession = false) => {
+        if (isNewImport) {
+          parsedStoredDataByBundle.delete(bundle)
+          terminologyMigrationByBundle.delete(bundle)
+        }
         memBundle = bundle
         memBundleImportId = importId
         memBundleIsDemo = demo
@@ -1313,6 +1317,10 @@ export const LocalBundleService = {
           // still usable and the viewer falls back to decoding `data` directly.
         }
       }
+    }
+    if (isNewImport) {
+      parsedStoredDataByBundle.delete(bundle)
+      terminologyMigrationByBundle.delete(bundle)
     }
     memBundle = bundle
     memBundleUsesMemoryOnlySession = false
