@@ -73,7 +73,7 @@ export function reconcileClinicalSources(captures: readonly ClinicalSourceCaptur
 export function selectClinicalSourceNodes(result: ClinicalReconciliationResult) {
   const seen = new Set<string>()
   return result.graph.nodes.filter(node => {
-    if (node.isContained) return false
+    if (node.isContained || node.embeddedIn) return false
     if (!node.resource.id && !node.fullUrl) return true
     const identity = canonical([node.sourceId, node.patientScope, node.restBase ?? null, node.fullUrl ?? null, node.resource])
     if (seen.has(identity)) return false
@@ -84,3 +84,4 @@ export function selectClinicalSourceNodes(result: ClinicalReconciliationResult) 
 export function selectClinicalSourceResources(result: ClinicalReconciliationResult) {
   return selectClinicalSourceNodes(result).map(node => node.resource)
 }
+

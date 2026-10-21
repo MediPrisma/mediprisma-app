@@ -390,7 +390,9 @@ export class FhirMapper implements IDataMapper {
         .filter(Boolean)
       
       // Create a map of observations by ID for easy lookup
-      const obsMap = new Map(observations.filter(obs => observations.filter(candidate => candidate.id === obs.id).length === 1).map(obs => [obs.id, obs]))
+      const multiplicity = new Map<string | undefined, number>()
+      observations.forEach(obs => multiplicity.set(obs.id, (multiplicity.get(obs.id) ?? 0) + 1))
+      const obsMap = new Map(observations.filter(obs => multiplicity.get(obs.id) === 1).map(obs => [obs.id, obs]))
       
       // Get the actual observation objects
       const reportObservations = resultIds

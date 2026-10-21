@@ -92,3 +92,9 @@ it('freezes all shared policy and evidence structures', () => {
   expect(Object.isFrozen(model.evidence.sameRecord[0])).toBe(true)
   expect(Object.isFrozen(model.evidence.sameRecord[0].nodeKeys)).toBe(true)
 })
+
+it('retains nested audit Bundle resources only in the source graph', () => {
+  const model = reconcileClinicalSources([capture('nested', [{ resourceType: 'Bundle', id: 'audit', type: 'history', entry: [{ resource: { resourceType: 'Observation', id: 'snapshot' } }] }])])
+  expect(model.graph.nodes.some(node => node.resource.id === 'snapshot')).toBe(true)
+  expect(selectClinicalSourceResources(model).map(resource => resource.resourceType)).toEqual(['Bundle'])
+})

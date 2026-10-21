@@ -1,5 +1,5 @@
 import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
-import { clinicalSourceSession, captureClinicalSource, clearClinicalSourceQuery, forgetClinicalSourceSession } from '../services/clinical-source-session'
+import { clinicalSourceSession, mutableClinicalProjection, captureClinicalSource, clearClinicalSourceQuery, forgetClinicalSourceSession } from '../services/clinical-source-session'
 // FHIR Patient Repository Implementation
 import type { IPatientRepository } from '@/src/core/interfaces/repositories/patient.repository.interface'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
@@ -21,8 +21,8 @@ export class FhirPatientRepository implements IPatientRepository {
     const resources = response.resourceType === 'Patient' ? [response] : (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string')
     const source = captureClinicalSource(session, query, selectedId, resources)
     const nodes = selectClinicalSourceNodes(source)
-    if (response.resourceType === 'Patient') return nodes[0]?.resource ?? response
-    return { ...response, entry: nodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+    if (response.resourceType === 'Patient') return mutableClinicalProjection(nodes[0]?.resource ?? response)
+    return { ...response, entry: nodes.map(node => ({ resource: mutableClinicalProjection(node.resource), fullUrl: node.fullUrl })) }
   }
 
   async getCurrentPatient(): Promise<PatientEntity | null> {

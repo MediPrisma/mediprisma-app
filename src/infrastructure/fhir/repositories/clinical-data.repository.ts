@@ -1,5 +1,5 @@
 import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
-import { captureClinicalSource, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
+import { captureClinicalSource, invalidateClinicalSource, mutableClinicalProjection, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
 // FHIR Clinical Data Repository Implementation
 import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories/clinical-data.repository.interface'
 import type {
@@ -97,10 +97,10 @@ function mapMedicationSearchResponse(
       return resourceType === sourceType || !resourceType
     })
     .map((entry: any) => {
-      const resource = entry.resource
+      const resource = mutableClinicalProjection(entry.resource)
       const source: ClinicalReconciliationResult | undefined = response._clinicalSource
       const edge = source?.graph.references.find(edge =>
-        edge.origin.resource === resource && edge.path === 'medicationReference' && edge.status === 'resolved',
+        edge.origin.resource === entry.resource && edge.path === 'medicationReference' && edge.status === 'resolved',
       )
       const target = edge ? source?.graph.nodes.find(node => node.key === edge.targetKeys[0]) : undefined
       const referencedMedication = target?.resource.resourceType === 'Medication' ? target.resource : undefined
@@ -108,7 +108,7 @@ function mapMedicationSearchResponse(
       return FhirMapper.toMedication({
         ...resource,
         medicationCodeableConcept:
-          resource.medicationCodeableConcept ?? referencedMedication?.code,
+          resource.medicationCodeableConcept ?? mutableClinicalProjection(referencedMedication?.code),
         _sourceResourceType: sourceType,
       })
     })
@@ -117,7 +117,6 @@ function mapMedicationSearchResponse(
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
   private readonly fallbackSessionKey = {}
   private session: ClinicalSourceSession = clinicalSourceSession(this.fallbackSessionKey)
-  private readonly retainedFailures = new Map<string, unknown>()
 
   getClinicalSource(patientId: string): ClinicalReconciliationResult {
     return readClinicalSource(knownClinicalSourceSession(fhirClient) ?? this.session, patientId)
@@ -146,10 +145,14 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl?.replace(/\/+$/, '') !== session.restBase)) throw new Error('FHIR session changed during query')
       const previous = session.successfulResponses.get(cacheKey)
       if (!previous) throw error
-      this.retainedFailures.set(queryType, error)
-      return previous
+      if (shouldRetryBasicFhirSearch(error) && url === logicalSlot) throw error
+      const state = classifyFhirQueryError(error, queryType).state
+      if (state === 'unauthorized' || state === 'forbidden' || error instanceof LocalBundleModeError) {
+        invalidateClinicalSource(session, cacheKey, patientScope)
+        throw error
+      }
+      return { ...previous, _clinicalSource: previous._clinicalSource, _retainedFailure: error }
     }
-    this.retainedFailures.delete(queryType)
     if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl?.replace(/\/+$/, '') !== session.restBase)) throw new Error('FHIR session changed during query')
     const source = captureClinicalSource(session, cacheKey, patientScope,
       (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string'))
@@ -165,8 +168,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   private resourceQueryStatus: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}
 
-  private markQuerySuccess(key: ClinicalDataQueryKey, resourceType: string, count: number) {
-    const retainedFailure = this.retainedFailures.get(resourceType)
+  private markQuerySuccess(key: ClinicalDataQueryKey, resourceType: string, count: number, response?: any) {
+    const retainedFailure = response?._retainedFailure
     this.resourceQueryStatus[key] = retainedFailure ? classifyFhirQueryError(retainedFailure, resourceType) : successfulFhirQueryStatus(resourceType, count)
   }
 
@@ -240,7 +243,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
     // Re-attach observations to DiagnosticReports that _include didn't populate.
     // The bridge may not support _include; this mirrors what local-bundle.service does.
-    const obsMap = new Map(observations.filter(o => observations.filter(candidate => candidate.id === o.id).length === 1).map(o => [o.id, o]))
+    const multiplicity = new Map<string | undefined, number>()
+    observations.forEach(observation => multiplicity.set(observation.id, (multiplicity.get(observation.id) ?? 0) + 1))
+    const obsMap = new Map(observations.filter(observation => multiplicity.get(observation.id) === 1).map(observation => [observation.id, observation]))
     const enrichedDiagnosticReports = diagnosticReports.map(dr => {
       if (Array.isArray((dr as any)._observations) && (dr as any)._observations.length > 0) {
         return dr
@@ -296,11 +301,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const summaries: MedicationRemainingSummaryEntity[] = (response.entry ?? [])
         .map((entry: any) => entry.resource)
         .filter(isMedicationRemainingSummaryBasic)
-        .map((resource: any) => FhirMapper.toMedicationRemainingSummary(resource))
+        .map((resource: any) => FhirMapper.toMedicationRemainingSummary(mutableClinicalProjection(resource)))
       const result = [...new Map(
         summaries.map((summary: MedicationRemainingSummaryEntity) => [summary.id, summary]),
       ).values()]
-      this.markQuerySuccess('Basic', 'Basic', result.length)
+      this.markQuerySuccess('Basic', 'Basic', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Basic', 'Basic', error)
@@ -314,8 +319,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await this.requestSource(
         `Consent?patient=${patientId}&_count=100`
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toConsent(e.resource)) || []
-      this.markQuerySuccess('Consent', 'Consent', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toConsent(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('Consent', 'Consent', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Consent', 'Consent', error)
@@ -329,8 +334,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await this.requestSource(
         `Device?patient=${patientId}&_count=100`
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toDevice(e.resource)) || []
-      this.markQuerySuccess('Device', 'Device', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toDevice(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('Device', 'Device', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Device', 'Device', error)
@@ -345,8 +350,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `CarePlan?patient=${patientId}&_sort=-date&_count=100`,
         `CarePlan?patient=${patientId}&_count=100`,
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toCarePlan(e.resource)) || []
-      this.markQuerySuccess('CarePlan', 'CarePlan', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toCarePlan(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('CarePlan', 'CarePlan', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('CarePlan', 'CarePlan', error)
@@ -361,8 +366,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Immunization?patient=${patientId}&_sort=-date&_count=200`,
         `Immunization?patient=${patientId}&_count=200`,
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toImmunization(e.resource)) || []
-      this.markQuerySuccess('Immunization', 'Immunization', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toImmunization(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('Immunization', 'Immunization', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Immunization', 'Immunization', error)
@@ -377,8 +382,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Condition?patient=${patientId}&_sort=-recorded-date&_count=100`,
         `Condition?patient=${patientId}&_count=100`,
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
-      this.markQuerySuccess('Condition', 'Condition', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toCondition(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('Condition', 'Condition', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Condition', 'Condition', error)
@@ -408,7 +413,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     const results = await Promise.allSettled(
       searches.map(async ({ sourceType, primary, fallback }) => {
         const response = await this.requestWithBasicFallback(primary, fallback)
-        return mapMedicationSearchResponse(response, sourceType)
+        return { medications: mapMedicationSearchResponse(response, sourceType), response }
       }),
     )
 
@@ -416,8 +421,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     results.forEach((result, index) => {
       const sourceType = searches[index].sourceType
       if (result.status === 'fulfilled') {
-        medications.push(...result.value)
-        this.markQuerySuccess(sourceType, sourceType, result.value.length)
+        medications.push(...result.value.medications)
+        this.markQuerySuccess(sourceType, sourceType, result.value.medications.length, result.value.response)
         return
       }
       this.markQueryFailure(sourceType, sourceType, result.reason)
@@ -433,8 +438,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await this.requestSource(
         `AllergyIntolerance?patient=${patientId}&_count=100`
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toAllergy(e.resource)) || []
-      this.markQuerySuccess('AllergyIntolerance', 'AllergyIntolerance', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toAllergy(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('AllergyIntolerance', 'AllergyIntolerance', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('AllergyIntolerance', 'AllergyIntolerance', error)
@@ -457,8 +462,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Observation?patient=${patientId}&_count=500`,
       )
 
-      const result = response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
-      this.markQuerySuccess('Observation', 'Observation', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toObservation(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('Observation', 'Observation', result.length, response)
       this.markDerivedVitalSignsStatus(result)
       return result
     } catch (error) {
@@ -475,6 +480,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
    * search runs any more, so the FHIR issues banner and any consumer keyed on
    * it keep working. */
   private markDerivedVitalSignsStatus(observations: ObservationEntity[]) {
+    const observationStatus = this.resourceQueryStatus.Observation
+    if (observationStatus && observationStatus.state !== 'ok' && observationStatus.state !== 'empty') {
+      this.resourceQueryStatus['Observation:vital-signs'] = { ...observationStatus }
+      return
+    }
     this.markQuerySuccess(
       'Observation:vital-signs',
       'Observation',
@@ -514,12 +524,12 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .filter(edge => edge.origin.resource === origin && path.test(edge.path) && edge.status === 'resolved')
         .flatMap(edge => edge.targetKeys.map(key => observationNodes.get(key)).filter((node): node is NonNullable<typeof node> => Boolean(node)))
       const result = reports.map((report: any) => {
-        const mapped = FhirMapper.toDiagnosticReport(report, [])
+        const mapped = FhirMapper.toDiagnosticReport(mutableClinicalProjection(report), [])
         const members = resolvedObservations(report, /^result\[\d+\]$/).flatMap(node => [node, ...resolvedObservations(node.resource, /^hasMember\[\d+\]$/)])
         const unique = [...new Map(members.map(node => [node.key, node])).values()]
-        return unique.length ? { ...mapped, _observations: unique.map(node => FhirMapper.toObservation(node.resource as any)) } : mapped
+        return unique.length ? { ...mapped, _observations: unique.map(node => FhirMapper.toObservation(mutableClinicalProjection(node.resource) as any)) } : mapped
       })
-      this.markQuerySuccess('DiagnosticReport', 'DiagnosticReport', result.length)
+      this.markQuerySuccess('DiagnosticReport', 'DiagnosticReport', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('DiagnosticReport', 'DiagnosticReport', error)
@@ -532,7 +542,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     const mapResponse = (response: any): ImagingStudyEntity[] =>
       response.entry
         ?.filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.IMAGING_STUDY)
-        .map((e: any) => FhirMapper.toImagingStudy(e.resource)) || []
+        .map((e: any) => FhirMapper.toImagingStudy(mutableClinicalProjection(e.resource))) || []
 
     try {
       const response = await this.requestWithBasicFallback(
@@ -540,7 +550,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `ImagingStudy?patient=${patientId}&_count=200`,
       )
       const result = mapResponse(response)
-      this.markQuerySuccess('ImagingStudy', 'ImagingStudy', result.length)
+      this.markQuerySuccess('ImagingStudy', 'ImagingStudy', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('ImagingStudy', 'ImagingStudy', error)
@@ -566,7 +576,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Basic?subject=Patient/${patientId}&_count=100`,
       )
       return groupSpecialMaterialsByProcedure(
-        (response.entry ?? []).map((entry: any) => entry.resource),
+        (response.entry ?? []).map((entry: any) => mutableClinicalProjection(entry.resource)),
       )
     } catch (error) {
       warnFhirError('Failed to fetch special-material records:', error)
@@ -583,8 +593,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       const specialMaterialsByProcedure = await specialMaterials
       const result = response.entry?.map((e: any) =>
-        FhirMapper.toProcedure(e.resource, specialMaterialsByProcedure)) || []
-      this.markQuerySuccess('Procedure', 'Procedure', result.length)
+        FhirMapper.toProcedure(mutableClinicalProjection(e.resource), specialMaterialsByProcedure)) || []
+      this.markQuerySuccess('Procedure', 'Procedure', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Procedure', 'Procedure', error)
@@ -604,9 +614,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const result = (
         response.entry
           ?.filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.ENCOUNTER)
-          .map((e: any) => FhirMapper.toEncounter(e.resource)) || []
+          .map((e: any) => FhirMapper.toEncounter(mutableClinicalProjection(e.resource))) || []
       )
-      this.markQuerySuccess('Encounter', 'Encounter', result.length)
+      this.markQuerySuccess('Encounter', 'Encounter', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Encounter', 'Encounter', error)
@@ -621,8 +631,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `DocumentReference?patient=${patientId}&_sort=-date&_count=100`,
         `DocumentReference?patient=${patientId}&_count=100`,
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toDocumentReference(e.resource)) || []
-      this.markQuerySuccess('DocumentReference', 'DocumentReference', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toDocumentReference(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('DocumentReference', 'DocumentReference', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('DocumentReference', 'DocumentReference', error)
@@ -637,8 +647,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Composition?patient=${patientId}&_sort=-date&_count=100`,
         `Composition?patient=${patientId}&_count=100`,
       )
-      const result = response.entry?.map((e: any) => FhirMapper.toComposition(e.resource)) || []
-      this.markQuerySuccess('Composition', 'Composition', result.length)
+      const result = response.entry?.map((e: any) => FhirMapper.toComposition(mutableClinicalProjection(e.resource))) || []
+      this.markQuerySuccess('Composition', 'Composition', result.length, response)
       return result
     } catch (error) {
       this.markQueryFailure('Composition', 'Composition', error)

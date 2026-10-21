@@ -52,3 +52,14 @@ export function clearClinicalSourceQuery(session: ClinicalSourceSession, queryKe
     if (capturedQuery === queryKey) captureClinicalSource(session, queryKey, capture.patientScope, [])
   }
 }
+
+/** Mapper projections may be mutable; the source graph remains immutable. */
+export function mutableClinicalProjection<T>(value: T): T {
+  return value == null ? value : JSON.parse(JSON.stringify(value))
+}
+
+export function invalidateClinicalSource(session: ClinicalSourceSession, queryKey: string, patientScope: string): void {
+  session.successfulResponses.delete(queryKey)
+  session.captures.delete(JSON.stringify([patientScope, queryKey]))
+  session.generation++
+}
