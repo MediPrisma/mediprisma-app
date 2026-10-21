@@ -39,8 +39,8 @@ function productDescriptor(value: unknown): { name: string; pack?: string } | un
   const form = name.match(/\b(?:tablet|capsule|injection|inj|cream|ointment|solution|gel|drops|patch(?:es)?|granules)\b/i)
   if (!strength || !form) return undefined
   const productName = name.slice(0, form.index!)
-    .replace(/\d+(?:\.\d+)?\s*(?:(?:mg|mcg|g|ml|iu)\b|%)/g, '')
-    .replace(/\b(?:sugar|film|coated|extended|sustained|modified|controlled|enteric|delayed|release|sc|fc|xr|sr|mr|cr|ec|oral|topical|ophthalmic|sterile|for|use|intravenous|intramuscular|subcutaneous)\b/g, '')
+    .replace(/\d+(?:\.\d+)?/g, ' ')
+    .replace(/\b(?:mg|mcg|g|ml|iu|sugar|film|coated|extended|sustained|modified|controlled|enteric|delayed|release|sc|fc|xr|sr|mr|cr|ec|oral|topical|oph|ophthalmic|sterile|dry|powder|for|use|intravenous|intramuscular|subcutaneous)\b/g, '')
   if (!/\p{L}/u.test(productName)) return undefined
   const topical = /\b(?:cream|ointment|gel)\b/.test(name)
   if (topical && !/\d\s*%|\d\s*(?:mg|mcg|g)\s*\/\s*(?:\d+(?:\.\d+)?\s*)?(?:g|ml)\b/.test(name)) return undefined
