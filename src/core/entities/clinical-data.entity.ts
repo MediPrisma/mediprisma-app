@@ -1202,6 +1202,8 @@ export type ClinicalDataQueryState =
 
 export interface ClinicalDataQueryStatus {
   medicationContentUncertaintyCount?: number
+  /** Only this content projection may recover the incomplete state it created. */
+  medicationContentOnlyIncomplete?: boolean
   resourceType: string
   state: ClinicalDataQueryState
   count?: number

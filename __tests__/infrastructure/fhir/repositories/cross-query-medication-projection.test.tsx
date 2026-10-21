@@ -75,9 +75,10 @@ it('keeps explicit inline code and does not choose an ambiguous Medication revis
 it('clears content-only incompleteness after resolution while preserving independent query failures', () => {
  const rows: any[] = [{ id: 'request', _sourceResourceType: 'MedicationRequest', clinicalMedicationContentUncertainty: { reason: 'ambiguous-reference' } }]
  const pending = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state: 'ok', count: 1 } })
- expect(pending.MedicationRequest).toMatchObject({ state: 'incomplete', medicationContentUncertaintyCount: 1 })
+ expect(pending.MedicationRequest).toMatchObject({ state: 'incomplete', medicationContentUncertaintyCount: 1, medicationContentOnlyIncomplete: true })
  const resolved = [{ id: 'request', _sourceResourceType: 'MedicationRequest' }] as any
  expect(projectClinicalMedicationQueryStatus(resolved, pending).MedicationRequest).toMatchObject({ state: 'ok', count: 1 })
+ expect(projectClinicalMedicationQueryStatus(resolved, pending).MedicationRequest).not.toHaveProperty('medicationContentOnlyIncomplete')
  const network = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state: 'error', httpStatus: 401, message: 'Unauthorized' } })
  expect(projectClinicalMedicationQueryStatus(resolved, network).MedicationRequest).toMatchObject({ state: 'error', httpStatus: 401, message: 'Unauthorized' })
  for (const state of ['pending', 'unauthorized', 'forbidden', 'unsupported'] as const) {
@@ -87,4 +88,20 @@ it('clears content-only incompleteness after resolution while preserving indepen
   const withoutMessage = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state } })
   expect(projectClinicalMedicationQueryStatus(resolved, withoutMessage).MedicationRequest?.state).toBe(state)
  }
+})
+
+it.each(['pending', 'unauthorized', 'forbidden', 'unsupported', 'error', 'incomplete'] as const)('preserves independent %s without a message across repeated projections and content resolution', state => {
+ const rows: any[] = [{ id: 'request', _sourceResourceType: 'MedicationRequest', clinicalMedicationContentUncertainty: { reason: 'ambiguous-reference' } }]
+ const once = projectClinicalMedicationQueryStatus(rows, { MedicationRequest: { resourceType: 'MedicationRequest', state } })
+ const twice = projectClinicalMedicationQueryStatus(rows, once)
+ const third = projectClinicalMedicationQueryStatus(rows, twice)
+ expect(once.MedicationRequest?.state).toBe(state)
+ expect(twice.MedicationRequest?.state).toBe(state)
+ expect(third).toBe(twice)
+ expect(twice).toBe(once)
+ const resolved = projectClinicalMedicationQueryStatus([{ id: 'request', _sourceResourceType: 'MedicationRequest' }] as any, third)
+ expect(resolved.MedicationRequest?.state).toBe(state)
+ expect(resolved.MedicationRequest).not.toHaveProperty('medicationContentUncertaintyCount')
+ expect(resolved.MedicationRequest).not.toHaveProperty('medicationContentOnlyIncomplete')
+ expect(resolved.MedicationRequest?.message).toBeUndefined()
 })

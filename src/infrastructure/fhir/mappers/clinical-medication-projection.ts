@@ -57,9 +57,9 @@ export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], i
     const previous = input[type]
     if (!count) {
       if (!previous?.medicationContentUncertaintyCount) continue
-      const { medicationContentUncertaintyCount: _previousCount, ...rest } = previous
+      const { medicationContentUncertaintyCount: _previousCount, medicationContentOnlyIncomplete: _previousOwnership, ...rest } = previous
       const rowCount = rows.filter(row => (row._sourceResourceType ?? 'MedicationRequest') === type).length
-      const recovered: ClinicalDataQueryStatus = previous.state === 'incomplete' && previous.message === CONTENT_UNCERTAINTY_MESSAGE
+      const recovered: ClinicalDataQueryStatus = previous.state === 'incomplete' && previous.medicationContentOnlyIncomplete === true
         ? { ...rest, count: rowCount, state: rowCount ? 'ok' : 'empty', message: undefined } : rest
       if (result === input) result = { ...input }
       result[type] = recovered
@@ -67,11 +67,13 @@ export function projectClinicalMedicationQueryStatus(rows: MedicationEntity[], i
     }
     // Content completeness is independent of transport success. Preserve a
     // real failure or refresh state, including authorization diagnostics.
-    const preserveQueryState = previous && previous.state !== 'ok' && previous.state !== 'empty'
-      && previous.message !== CONTENT_UNCERTAINTY_MESSAGE
+    const ownsContentState = previous?.state === 'incomplete' && previous.medicationContentOnlyIncomplete === true
+    const preserveQueryState = previous && previous.state !== 'ok' && previous.state !== 'empty' && !ownsContentState
     const status: ClinicalDataQueryStatus = { ...previous, resourceType: type,
       state: preserveQueryState ? previous.state : 'incomplete', medicationContentUncertaintyCount: count,
-      message: preserveQueryState ? previous.message ?? CONTENT_UNCERTAINTY_MESSAGE : CONTENT_UNCERTAINTY_MESSAGE }
+      ...(!preserveQueryState ? { medicationContentOnlyIncomplete: true } : {}),
+      message: preserveQueryState ? previous.message : CONTENT_UNCERTAINTY_MESSAGE }
+    if (preserveQueryState) delete status.medicationContentOnlyIncomplete
     if (JSON.stringify(previous) === JSON.stringify(status)) continue
     if (result === input) result = { ...input }
     result[type] = status
