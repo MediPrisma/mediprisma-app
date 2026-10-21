@@ -570,8 +570,8 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       result.basis.push(blockUsed
         ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不提前停藥」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, not stopped early”.'), G.ehraFig14)
         : line(regimen.perDay === 1
-          ? t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；不提前停藥；距開始不到谷底一半間隔的那一劑不在處置前服用。處置前未服及處置到恢復之間的那一劑，依下方恢復段落的漏服規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); nothing stopped early, but a dose due too close before the start is not taken before it. That dose, and a dose falling between the procedure and the restart follows the missed-dose rule in the restart section below.`)
-          : t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；不提前停藥；距開始不到谷底一半間隔的那一劑不在處置前服用。處置前未服及處置到恢復之間的劑量，依下方恢復段落的規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); nothing stopped early, but a dose due too close before the start is not taken before it. That dose, and doses between the procedure and the restart follow the rule in the restart section below.`),
+          ? t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；不提前停藥；距開始不到谷底一半間隔的那一劑不在處置前服用。處置前未服及處置到恢復之間的那一劑，依下方恢復段落的漏服規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); nothing stopped early, but a dose due too close before the start is not taken before it. That dose and any dose falling between the procedure and the restart follow the missed-dose rule in the restart section below.`)
+          : t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；不提前停藥；距開始不到谷底一半間隔的那一劑不在處置前服用。處置前未服及處置到恢復之間的劑量，依下方恢復段落的規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); nothing stopped early, but a dose due too close before the start is not taken before it. That dose and any doses between the procedure and the restart follow the rule in the restart section below.`),
           G.ehraFig14, G.ehraFig15))
     } else {
       const pair = ehraHours(agent, crclValue)!
@@ -791,7 +791,7 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
         if (result.resume.delayed === result.heldBefore) result.skippedBefore = []
       }
     }
-  } else if (known && surgery && result.state === 'timed') {
+  } else if (known && surgery && (result.state === 'timed' || result.state === 'ablation')) {
     // No restart time yet: still say which doses wait for it, so none is taken at the procedure by habit.
     const next = scheduledDoses(minutes as number[], surgery, addHours(surgery, 24)).find((at) => troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime())
     if (next || result.heldBefore) {

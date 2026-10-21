@@ -303,6 +303,11 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(allText(result)).toContain('恢復時間未定：11-03 08:00 起的劑量先不服')
     expect(allCites(result)).toContain(CITES.apixabanMissed)
   })
+  it('AF ablation: the restart waits on the sheath, and the dose at the start is still named (#review Opus re5 1)', () => {
+    const result = plan({ procedure_kind: 'af-ablation', surgery_end_at: '' })
+    expect(result.resume.earliest).toBeUndefined()
+    expect(allText(result)).toContain('恢復時間未定：11-03 08:00 起的劑量先不服')
+  })
   it('bid: only the procedure day’s morning dose is omitted; a later morning dose follows the label (#review Astra full 1)', () => {
     // dabigatran 150 bid, minor risk 11-03 08:00 to 11-04 04:00: restart 11-04 10:00, next dose 20:00 is 10 h away.
     const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'dabigatran:150:2', surgery_end_at: '2026-11-04T04:00' })
