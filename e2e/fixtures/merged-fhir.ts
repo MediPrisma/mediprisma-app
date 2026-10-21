@@ -75,6 +75,12 @@ export function createMergedFhirFixture() {
         contentType: 'image/svg+xml', width, height,
         data: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="${color}"/></svg>`).toString('base64') })
     }
+    if (source === 'hospital') {
+      // A real 5x4 blue JPEG, generated once; no image library is needed at test time.
+      sourceImages[0] = { source, reportTitle, title: 'same-filename.png',
+        contentType: 'image/jpeg', width: 5, height: 4,
+        data: '/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAEAAUDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAABQj/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCewFIh3//Z' }
+    }
     images.push(...sourceImages)
     local({ resourceType: 'DiagnosticReport', id: `${source}-report`, status: 'final', subject, encounter,
       code: { text: reportTitle }, effectiveDateTime: date,

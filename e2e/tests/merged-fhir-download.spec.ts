@@ -65,6 +65,8 @@ test('merged cloud and hospital originals and every embedded image survive downl
   expect(original.length).toBeGreaterThan(4 * 1024 * 1024)
   expect(images).toHaveLength(4)
   expect(images.map(image => image.source)).toEqual(['cloud', 'cloud', 'hospital', 'hospital'])
+  expect([...new Set(images.map(image => image.contentType))].sort())
+    .toEqual(['image/jpeg', 'image/png', 'image/svg+xml'])
   expect(new Set(images.map(image => image.data)).size).toBe(images.length)
   const evidence: Array<{ stage: string; bytes: number; sha256: string; cloudResources: number; hospitalResources: number; images: number }> = []
   const verifyDownload = async (target: Page, stage: string) => {
