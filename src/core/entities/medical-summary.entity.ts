@@ -347,6 +347,8 @@ export interface SummarySourceCatalogEntry {
   key: string
   resourceType: string
   resourceId: string
+  /** Original FHIR id for unique-only resolution of legacy bundled citations. */
+  sourceId?: string
   display: string
   /** ISO date (YYYY-MM-DD) taken from the resource — never from the AI. */
   date?: string

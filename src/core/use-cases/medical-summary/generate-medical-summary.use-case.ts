@@ -476,7 +476,7 @@ export function buildSourceCatalog(
       // not silently retarget to a different report when containers disappear.
       if (isNhiBridgeSyntheticLabReport(r)) return
       const reportObservations = observationsForReport(r, observationsById)
-      entries.push({
+      const entry: SummarySourceCatalogEntry = {
         key: `L${i + 1}`,
         resourceType: 'DiagnosticReport',
         resourceId: r.id,
@@ -489,13 +489,17 @@ export function buildSourceCatalog(
             ? reportObservations.some(observationSupportsNormalityAssessment)
             : undefined,
         getContentText: () => sourceOwnedContentText({ report: r, observations: reportObservations }),
-      })
+      }
+      if (typeof r.sourceId === 'string' && r.sourceId) {
+        Object.defineProperty(entry, 'sourceId', { value: r.sourceId, enumerable: false })
+      }
+      entries.push(entry)
     })
 
   sortByDateDesc(input.observations ?? [], (observation) => observation.effectiveDateTime)
     .filter((observation): observation is ObservationEntity & { id: string } => !!observation.id)
     .forEach((observation, index) => {
-      entries.push({
+      const entry: SummarySourceCatalogEntry = {
         key: `O${index + 1}`,
         resourceType: 'Observation',
         resourceId: observation.id,
@@ -505,7 +509,11 @@ export function buildSourceCatalog(
         organization: observation.performer?.[0]?.display,
         supportsNormalityAssessment: observationSupportsNormalityAssessment(observation),
         getContentText: () => sourceOwnedContentText(observation),
-      })
+      }
+      if (typeof observation.sourceId === 'string' && observation.sourceId) {
+        Object.defineProperty(entry, 'sourceId', { value: observation.sourceId, enumerable: false })
+      }
+      entries.push(entry)
     })
 
   sortByDateDesc(input.conditions ?? [], (c) => c.recordedDate ?? c.onsetDateTime)
