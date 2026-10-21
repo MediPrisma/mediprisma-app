@@ -647,4 +647,3 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     }
   }
 }
-
