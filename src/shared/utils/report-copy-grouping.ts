@@ -1,7 +1,6 @@
 import type { DiagnosticReport } from '../types/fhir.types'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
-import { getCodeableConceptText } from './fhir-helpers'
-import { getReportInstitution } from './report-institution'
+import { reportNaturalGroupingKey } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
 import {
@@ -86,6 +85,7 @@ function sourceInstant(value: string): number | undefined {
 function examTime(report: Report): string | undefined {
   const header = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/i.exec(sharedReportNarrative(report).normalize('NFKC'))
   const headerTime = header ? sourceInstant(`${header[1].replaceAll('/', '-')}T${header[2]}`) : undefined
+  if (header && headerTime === undefined) return 'conflicting-exam-times'
   const value = report.effectiveDateTime ?? report.effectivePeriod?.start ?? ''
   const clock = /T(\d{2}:\d{2}(?::\d{2})?)/.exec(value)?.[1]
   // Only a date-only value has unknown time. Explicit midnight (including UTC
@@ -110,13 +110,6 @@ export function compareImagingCopies(a: Report, b: Report): number {
     || (a.id ?? '').localeCompare(b.id ?? '')
 }
 
-function naturalGroupKey(report: Report): string {
-  return JSON.stringify([sourceOf(report), report.subject?.reference,
-    (report.effectiveDateTime ?? report.issued ?? '').slice(0, 10),
-    getCodeableConceptText(report.code).trim(),
-    getReportInstitution(report)])
-}
-
 /** Shared grouping projection for rows, tab counts and AI context. Returned
  * keys do not modify source resources. Same-source shared-procedure grouping
  * retains its existing strict boundary; cross-source copies get an additional
@@ -132,8 +125,8 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
   const originalKeys = new Map(keys)
   const naturalGroups = new Map<string, Report[]>()
   for (const report of reports) {
-    if (!report || !sourceOf(report)) continue
-    const key = naturalGroupKey(report)
+    if (!report) continue
+    const key = reportNaturalGroupingKey(report)
     naturalGroups.set(key, [...(naturalGroups.get(key) ?? []), report])
   }
   const buckets = new Map<string, { report: Report; source: Source }[]>()
@@ -179,7 +172,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     const members = new Set(bucket.map(item => item.report))
     // Do not pull a complete report away from a same-source truncated or
     // otherwise related member that the existing natural grouping owns.
-    if (bucket.some(({ report }) => naturalGroups.get(naturalGroupKey(report))?.some(member => !members.has(member)))) continue
+    if (bucket.some(({ report }) => naturalGroups.get(reportNaturalGroupingKey(report))?.some(member => !members.has(member)))) continue
     const memberKeys = new Set(bucket.map(item => originalKeys.get(item.report)).filter(Boolean))
     // Existing shared-procedure groups are atomic. Never strand excluded members.
     if ([...originalKeys].some(([report, originalKey]) => memberKeys.has(originalKey) && !members.has(report))) continue

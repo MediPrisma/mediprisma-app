@@ -1,4 +1,4 @@
-import { getReportInstitution as reportInstitution } from '@/src/shared/utils/report-institution'
+import { getReportInstitution as reportInstitution, getReportDate as reportDate, reportNaturalGroupingKey as reportNaturalKey } from '@/src/shared/utils/report-identity'
 import { isAdultPreventiveHealthExamResource } from '@/src/shared/utils/observation-provenance.utils'
 import { collectAdultPreventiveObservationIds } from './adult-preventive-source'
 import { collectReportMemberIds, referenceId } from '@/src/core/utils/observation-selectors'
@@ -46,10 +46,6 @@ interface CountRow {
 
 const GLUCOSE_KEEP_SEPARATE = new Set(['C-PEPTIDE'])
 
-function reportDate(report: any): string | undefined {
-  return report?.effectiveDateTime || report?.effectivePeriod?.start || report?.issued
-}
-
 function reportObservations(reports: any[]): any[] {
   return reports.flatMap((report) => (
     Array.isArray(report?._observations)
@@ -61,13 +57,6 @@ function reportObservations(reports: any[]): any[] {
 function isAdultReport(report: any): boolean {
   return isAdultPreventiveHealthExamResource(report)
     || (report?._observations ?? []).some(isAdultPreventiveHealthExamResource)
-}
-
-function reportNaturalKey(report: any): string {
-  const title = (getCodeableConceptText(report?.code) || '').trim()
-  const date = (reportDate(report) || '').slice(0, 10)
-  const institution = (reportInstitution(report) || '').trim()
-  return `${title}|${date}|${institution}|${isAdultReport(report) ? 'adult-preventive' : ''}`
 }
 
 function isCtReport(report: any): boolean {

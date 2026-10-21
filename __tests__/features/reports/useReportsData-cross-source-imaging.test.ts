@@ -119,6 +119,24 @@ describe('cross-source imaging reports', () => {
     expect(rows.find(row => row.diagnosticReportIds?.includes('truncated'))?.bridgeDupCount).toBe(1)
   })
 
+  it('preserves natural groups across period dates and missing source tags', () => {
+    const reports = pair()
+    reports[0].effectiveDateTime = undefined
+    reports[0].effectivePeriod = { start: '2026-06-24' }
+    reports[0].issued = '2026-06-25'
+    const truncated = { ...reports[0], id: 'truncated', issued: '2026-06-26', meta: {}, conclusion: reports[0].conclusion.slice(0, 115) }
+    expect(reportDisplayGroupingKeys([...reports, truncated]).size).toBe(0)
+    const rows = buildReportsData([...reports, truncated]).reportRows
+    expect(rows).toHaveLength(2)
+    expect(rows.find(row => row.diagnosticReportIds?.includes('truncated'))?.bridgeDupCount).toBe(1)
+  })
+
+  it('rejects an invalid explicit header time instead of treating it as missing', () => {
+    const reports = pair()
+    reports[0].conclusion = `CT CHEST Date Of Examination:2026/06/24 25:61:00 Date Of RCP:2026/06/24 Impression ${BODY}`
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
   it('retains a trusted legacy NHI viewer while grouping matching reports', () => {
     const reports = pair()
     const url = 'https://medvpnimg.nhi.gov.tw/ZFP?synthetic=1'

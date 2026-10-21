@@ -1,7 +1,7 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
 import { getVghtpeSource } from '../adapters/vghtpe-source-display'
-import { getReportInstitution as getDrInstitution } from '@/src/shared/utils/report-institution'
+import { getReportInstitution as getDrInstitution, getReportDate as getDrDate, isNhiMedicloudReport, isAdultPreventiveReport, reportNaturalGroupingKey } from '@/src/shared/utils/report-identity'
 import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
@@ -38,10 +38,6 @@ import {
   isTrustedLegacyNhiViewerAttachment,
 } from '../utils/nhi-viewer-request'
 import {
-  isAdultPreventiveHealthExamResource,
-  isNhiMedicloudObservation,
-} from '@/src/shared/utils/observation-provenance.utils'
-import {
   qualifyingSharedEchoFamilyKeys,
   reportSource,
   sharedEchoReportFamilyKey,
@@ -72,29 +68,6 @@ function derivePerDrTitle(dr: DiagnosticReport): string {
 
 function deriveGroupTitle(text: string): string {
   return text || 'Unnamed Report'
-}
-
-// Lab DRs carry performer on the linked Observations (bridge convention);
-// imaging DRs typically have no linked Observations and put performer on the
-// DiagnosticReport itself. Fall through both before giving up.
-function isNhiMedicloudReport(dr: any): boolean {
-  const observations = Array.isArray(dr?._observations) ? dr._observations : []
-  return observations.length > 0 && observations.every(isNhiMedicloudObservation)
-}
-
-// Single source of truth for a report's date: prefer effectiveDateTime (the
-// exam/collection date — 檢查日期) over issued (the report-release date —
-// 報告發布日), which can differ by days. Every date use below (grouping key,
-// synthetic summary obs, row display) routes through this so the preference
-// can't drift apart again — a past bug had the row header alone preferring
-// issued, so a report grouped under 6/2 was displayed as 6/5.
-function getDrDate(dr: any): string | undefined {
-  return dr?.effectiveDateTime || dr?.effectivePeriod?.start || dr?.issued
-}
-
-function isAdultPreventiveReport(dr: DiagnosticReport): boolean {
-  return isAdultPreventiveHealthExamResource(dr)
-    || ((dr as any)._observations ?? []).some(isAdultPreventiveHealthExamResource)
 }
 
 function viewerActionIdentity(action: NhiViewerAction): string {
@@ -255,11 +228,6 @@ export function buildReportsData(
     const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
-      const text = (getCodeableConceptText(dr.code) || '').trim()
-      const date = (getDrDate(dr) || '').slice(0, 10)
-      const inst = (getDrInstitution(dr) || '').trim()
-      const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
-      const sourceProvenance = isNhiMedicloudReport(dr) ? 'nhi-medicloud' : ''
       const ownSharedKey = displayGroupingKeys.get(dr)
       const echoFamilyKey = sharedEchoReportFamilyKey(dr)
       const companionSharedKey = !ownSharedKey
@@ -269,7 +237,7 @@ export function buildReportsData(
         : null
       const key = ownSharedKey || companionSharedKey
         ? `shared-report|${ownSharedKey || companionSharedKey}`
-        : `${text}|${date}|${inst}|${sourceProgram}|${sourceProvenance}`
+        : reportNaturalGroupingKey(dr)
       if (!naturalGroups.has(key)) {
         naturalGroups.set(key, [])
         naturalOrder.push(key)
