@@ -189,7 +189,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     }
     this.sourceCaptures.push(capture)
     const source = reconcileClinicalSources([capture])
-    const projected = { ...response, entry: selectClinicalSourceNodes(source).map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+    const includeTypes = queryType === 'DiagnosticReport' ? ['Observation']
+      : queryType === 'MedicationRequest' || queryType === 'MedicationStatement' ? ['Medication'] : []
+    const projected = { ...response, entry: selectClinicalSourceNodes(source)
+      .filter(node => node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType))
+      .map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
     this.successfulResponses.set(cacheKey, projected)
     return projected
   }

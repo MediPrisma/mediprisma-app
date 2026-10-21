@@ -491,7 +491,7 @@ describe('repository source intake', () => {
       { resource: { resourceType: 'Observation', id: 'obs' } },
     ] })
     ;(FhirMapper.toObservation as jest.Mock).mockReturnValue({ id: 'obs' })
-    await repo.fetchObservations('synthetic')
+    expect(await repo.fetchObservations('synthetic')).toEqual([{ id: 'obs' }])
     const source = repo.getClinicalSource('synthetic')
     expect(source.graph.nodes).toHaveLength(2)
     expect(source.graph.nodes.find(node => node.resource.id === 'unknown')?.resource.extension).toEqual([{ url: 'synthetic', valueString: 'preserved' }])
