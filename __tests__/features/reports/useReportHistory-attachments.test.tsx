@@ -10,6 +10,15 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
 const body = 'Synthetic imaging finding: a 4 mm nodule in the left upper lobe is unchanged. No pleural effusion. Follow-up imaging in twelve months is recommended.'
 const attachment = (text: string) => ({ contentType: 'text/plain; charset=utf-8', data: Buffer.from(text).toString('base64') })
 
+it.each([
+  [[{ display: '高雄榮民總醫院' }], '高雄榮民總醫院'],
+  [[null], undefined],
+])('preserves conflicting or malformed source institution evidence in history: %j', (performer, institution) => {
+  mockUseClinicalData.mockReturnValue({ diagnosticReports: [{ id: 'source-history', status: 'final', code: { text: 'CT CHEST' }, category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }], meta: { tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] }, performer, conclusion: body }] })
+  const { result } = renderHook(() => useReportHistory('CT CHEST'))
+  expect(result.current[0].institution).toBe(institution)
+})
+
 it('loads attachment-only histories from both original titles of a merged row', () => {
   const common = { resourceType: 'DiagnosticReport', status: 'final', subject: { reference: 'Patient/synthetic' }, effectiveDateTime: '2026-06-24', category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }], presentedForm: [attachment(body)] }
   const reports = [

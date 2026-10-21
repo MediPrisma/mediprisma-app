@@ -4,7 +4,8 @@ import { canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 import { getCodeableConceptText } from '../utils/fhir-helpers'
 import { sharedReportNarrative } from '@/src/shared/utils/shared-report-grouping'
-import { getImagingCopySource, getReportDate, getReportInstitution } from '@/src/shared/utils/report-identity'
+import { getReportDate, getReportInstitution } from '@/src/shared/utils/report-identity'
+import { imagingCopyInstitution } from '@/src/shared/utils/report-copy-grouping'
 import { inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
 
 export interface ObservationHistoryItem {
@@ -345,6 +346,16 @@ export function useReportHistory(reportCode?: string) {
       const drText = (dr.code?.text || dr.code?.coding?.[0]?.display || dr.code?.coding?.[0]?.code || '').trim().toLowerCase()
       if (!drText || drText !== target) return
 
+      const imaging = inferReportDisplayGroup(dr) === 'imaging'
+      let institution = dr.performer?.[0]?.display
+      if (imaging) {
+        try {
+          institution = imagingCopyInstitution(dr) ?? getReportInstitution(dr)
+        } catch {
+          // Malformed optional provenance retains its original label. Never
+          // infer an institution from a source tag when evidence is invalid.
+        }
+      }
       const conclusion = dr.conclusion?.trim()
       const notes = Array.isArray(dr.note)
         ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
@@ -352,7 +363,7 @@ export function useReportHistory(reportCode?: string) {
       // The source history must retain text supplied only as an attachment,
       // just as the report row and shared-source narrative do. Leave binary
       // and HTML attachments to their existing viewers.
-      const attachmentText = inferReportDisplayGroup(dr) === 'imaging'
+      const attachmentText = imaging
         ? sharedReportNarrative({ presentedForm: dr.presentedForm }) : ''
       if (attachmentText) notes.push(attachmentText)
       if (!conclusion && notes.length === 0) return
@@ -360,15 +371,11 @@ export function useReportHistory(reportCode?: string) {
       items.push({
         id: dr.id || `dr-${dr.issued || dr.effectiveDateTime || index}`,
         date: getReportDate(dr) || '',
-        calendarDate: inferReportDisplayGroup(dr) === 'imaging' ? getReportDate(dr)?.slice(0, 10) : undefined,
+        calendarDate: imaging ? getReportDate(dr)?.slice(0, 10) : undefined,
         conclusion,
         notes,
         status: dr.status,
-        // In-house VGH performers can be legacy DOC physician labels. Use the
-        // known source institution rather than presenting a person as a site.
-        institution: inferReportDisplayGroup(dr) === 'imaging'
-          ? (getImagingCopySource(dr) === 'hospital' ? '臺北榮總' : getReportInstitution(dr))
-          : dr.performer?.[0]?.display,
+        institution,
       })
     })
 
