@@ -1,3 +1,6 @@
+import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
+import { hasMalformedClinicalModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } from '../mappers/clinical-modifier-projection'
 import { createClinicalProjectionContext, projectClinicalReferences, mapProjectedObservation as mapSourceObservation, projectClinicalAggregate, type ClinicalProjectionContext } from '../mappers/clinical-aggregate-projection'
 import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
@@ -112,7 +115,7 @@ function mapMedicationSearchResponse(
         edge.origin.resource === entry.resource && edge.path === 'medicationReference' && edge.status === 'resolved',
       )
       const target = edge ? source?.graph.nodes.find(node => node.key === edge.targetKeys[0]) : undefined
-      const referencedMedication = target?.resource.resourceType === 'Medication' ? target.resource : undefined
+      const referencedMedication = target?.resource.resourceType === 'Medication' && !hasMalformedClinicalModifier(target.resource) ? target.resource : undefined
 
       return { ...bindSourceNode(FhirMapper.toMedication({
         ...resource,
@@ -176,9 +179,12 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       if (reason) exclusionCounts[reason] = (exclusionCounts[reason] ?? 0) + node.occurrences
     }
     const excludedCount = Object.values(exclusionCounts).reduce((sum, count) => sum + count, 0)
+    const invalidModifiers = malformedClinicalProjectionNodes(source)
+    const invalidKeys = new Set(invalidModifiers.map(node => node.key))
     const projected = { ...response, entry: selectClinicalSourceNodes(source)
-      .filter(node => node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType))
+      .filter(node => !invalidKeys.has(node.key) && (node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType)))
       .map(node => ({ resource: node.resource, fullUrl: node.fullUrl, _clinicalSourceNodeKey: node.key })) }
+    Object.defineProperty(projected, '_invalidModifierNodes', { value: invalidModifiers, enumerable: false })
     Object.defineProperty(projected, '_clinicalSource', { value: source, enumerable: false })
     if (excludedCount) {
       Object.defineProperty(projected, '_excludedPatientRows', { value: excludedCount, enumerable: true })
@@ -203,6 +209,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
           ? 'Some returned clinical records have unresolved patient ownership and were excluded. This domain is incomplete; absence cannot be concluded.'
           : 'Some returned clinical records refer to a different patient and were excluded. This domain is incomplete; absence cannot be concluded.',
       } : successfulFhirQueryStatus(resourceType, count)
+    if (response?._clinicalSource && response?._invalidModifierNodes?.length) this.resourceQueryStatus = projectClinicalModifierQueryStatus(this.resourceQueryStatus, response._invalidModifierNodes, response._clinicalSource)
   }
 
   private markQueryFailure(key: ClinicalDataQueryKey, resourceType: string, error: unknown) {
@@ -446,7 +453,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       log(`Failed to fetch ${sourceType} resources:`, result.reason)
     })
 
-    return medications
+    const projected = projectClinicalMedicationContents(medications, this.getClinicalSource(patientId))
+    this.resourceQueryStatus = projectClinicalMedicationQueryStatus(projected, this.resourceQueryStatus)
+    return projected
   }
 
   async fetchAllergies(patientId: string): Promise<AllergyEntity[]> {
@@ -535,7 +544,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const source: ClinicalReconciliationResult = response._clinicalSource
       const graph = source.graph
       const observationNodes = new Map(graph.nodes
-        .filter(node => node.resource.resourceType === 'Observation' && getClinicalSourceNodePatientExclusionReason(node, graph.nodes) === undefined)
+        .filter(node => node.resource.resourceType === 'Observation' && !hasMalformedClinicalModifier(node.resource) && getClinicalSourceNodePatientExclusionReason(node, graph.nodes) === undefined)
         .map(node => [node.key, node]))
       const resolvedObservations = (origin: unknown, path: RegExp) => graph.references
         .filter(edge => edge.origin.resource === origin && path.test(edge.path) && edge.status === 'resolved')

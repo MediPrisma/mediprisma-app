@@ -34,10 +34,16 @@ export function readClinicalMedicationContentModifier(resource: Readonly<Record<
   if (resource.modifierExtension && !Array.isArray(resource.modifierExtension) && (resource.modifierExtension as { url?: unknown }).url === CLINICAL_MEDICATION_CONTENT_EXTENSION) return invalid()
   const modifiers = Array.isArray(resource.modifierExtension) ? resource.modifierExtension.filter(item => item?.url === CLINICAL_MEDICATION_CONTENT_EXTENSION) : []
   if (!modifiers.length) return undefined
+  if (!['MedicationRequest', 'MedicationStatement'].includes(String(resource.resourceType))) return invalid()
   const modifier = modifiers[0]
   if (modifiers.length !== 1 || Object.keys(modifier).some(key => !['url', 'extension', 'id'].includes(key)) || !Array.isArray(modifier.extension) || modifier.extension.length !== 1) return invalid()
   const field = modifier.extension[0]
   if (!field || field.url !== 'reason' || field.extension || Object.keys(field).some(key => !['url', 'id', 'valueCode'].includes(key)) || Object.keys(field).filter(key => key.startsWith('value')).join() !== 'valueCode'
     || !['ambiguous-reference', 'unresolved-reference', 'missing-medication-code'].includes(field.valueCode)) return invalid()
   return { reason: field.valueCode }
+}
+
+/** Safe quarantine predicate for the two recognized application modifiers only. */
+export function hasMalformedClinicalModifier(resource: Readonly<Record<string, unknown>>): boolean {
+  try { readClinicalRecordVariantModifier(resource); readClinicalMedicationContentModifier(resource); return false } catch { return true }
 }

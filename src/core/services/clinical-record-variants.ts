@@ -1,15 +1,43 @@
-import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from './clinical-record-variant-modifier'
+import { isClinicalSourceNodePatientEligible } from './clinical-patient-scope'
+import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier, hasMalformedClinicalModifier } from './clinical-record-variant-modifier'
 import type { ClinicalRecordVariant } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
-import { logicalRestFullUrl } from './clinical-reconciliation'
+import { logicalRestFullUrl, selectClinicalSourceNodes } from './clinical-reconciliation'
 import type { ClinicalSourceNode } from './clinical-source-graph'
 import { clinicalSourceIdentityDigest } from './clinical-source-projection'
 import { clinicalSourceNodesEqualWithContext } from './clinical-source-context'
 import { clinicalSourceRestIdentity } from './clinical-source-rest-identity'
 
+/** Projectable rows plus only graph-proven clinical members/content targets.
+ * Audit/history snapshots and unassessed types never validate as clinical rows. */
+export function selectClinicalModifierNodes(source: ClinicalReconciliationResult, additionalNodeKeys: ReadonlySet<string> = new Set()): readonly ClinicalSourceNode[] {
+  const nodes = new Map(source.graph.nodes.map(node => [node.key, node]))
+  const roots = selectClinicalSourceNodes(source).filter(node => !['Patient', 'Basic'].includes(node.resource.resourceType) && source.policies[node.resource.resourceType]?.strategy === 'preserve-existing-view').map(node => node.key)
+  const pending = [...roots, ...additionalNodeKeys]
+  const selected = new Map<string, ClinicalSourceNode>()
+  const edges = new Map<string, typeof source.graph.references[number][]>()
+  for (const edge of source.graph.references) {
+    if (edge.status !== 'resolved' || !(edge.path === 'medicationReference' || /^(result|hasMember)\[\d+\]$/.test(edge.path))) continue
+    const group = edges.get(edge.origin.key) ?? []; group.push(edge); edges.set(edge.origin.key, group)
+  }
+  for (let index = 0; index < pending.length; index++) {
+    const node = nodes.get(pending[index])
+    if (!node || selected.has(node.key) || node.embeddedIn || !isClinicalSourceNodePatientEligible(node, source.graph.nodes)) continue
+    selected.set(node.key, node)
+    for (const edge of edges.get(node.key) ?? []) for (const key of edge.targetKeys) {
+      const target = nodes.get(key)
+      if (target && (edge.path === 'medicationReference' ? target.resource.resourceType === 'Medication' : target.resource.resourceType === 'Observation')) pending.push(key)
+    }
+  }
+  return [...selected.values()]
+}
+export function scopedImportedClinicalRecordVariant(node: Pick<ClinicalSourceNode, 'sourceId' | 'patientScope'>, variant: ClinicalRecordVariant): ClinicalRecordVariant {
+  return { ...variant, groupId: 'cr' + clinicalSourceIdentityDigest(JSON.stringify([node.sourceId, node.patientScope, variant.groupId])) }
+}
+
 /** Carry already-established source-record ambiguity into every clinical view.
  * No chronology, preferred version, or cross-source equivalence is inferred. */
-export function createClinicalRecordVariants(source: ClinicalReconciliationResult): ReadonlyMap<string, ClinicalRecordVariant> {
+export function createClinicalRecordVariants(source: ClinicalReconciliationResult, options: { additionalNodeKeys?: ReadonlySet<string>; quarantineMalformed?: boolean } = {}): ReadonlyMap<string, ClinicalRecordVariant> {
   const nodes = new Map(source.graph.nodes.map(node => [node.key, node]))
   const parents = new Map<string, string>()
   const find = (key: string): string => {
@@ -63,13 +91,14 @@ export function createClinicalRecordVariants(source: ClinicalReconciliationResul
     }
     for (const key of keys) result.set(key, annotation)
   }
-  for (const node of source.graph.nodes) {
+  for (const node of selectClinicalModifierNodes(source, options.additionalNodeKeys)) {
+    if (options.quarantineMalformed && hasMalformedClinicalModifier(node.resource)) continue
     readClinicalMedicationContentModifier(node.resource)
     const imported = readClinicalRecordVariantModifier(node.resource)
     if (!imported) continue
     const current = result.get(node.key)
     // Imported source ids are audit metadata, never evidence of equivalence.
-    const groupId = current?.groupId ?? 'cr' + clinicalSourceIdentityDigest(JSON.stringify([node.sourceId, node.patientScope, imported.variant.groupId]))
+    const groupId = current?.groupId ?? scopedImportedClinicalRecordVariant(node, imported.variant).groupId
     result.set(node.key, Object.freeze({ ...imported.variant, groupId,
       ...(current ? { classification: current.classification === 'conflict' ? 'conflict' : imported.variant.classification, variantCount: Math.max(current.variantCount, imported.variant.variantCount) } : {}) }))
   }

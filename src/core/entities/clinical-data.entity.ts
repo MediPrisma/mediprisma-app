@@ -1201,6 +1201,9 @@ export type ClinicalDataQueryState =
   | 'error'
 
 export interface ClinicalDataQueryStatus {
+  invalidModifierCount?: number
+  /** Restores only the clean query state this quarantine projection replaced. */
+  invalidModifierPreviousStatus?: { state: 'ok' | 'empty'; message?: string }
   medicationContentUncertaintyCount?: number
   /** Only this content projection may recover the incomplete state it created. */
   medicationContentOnlyIncomplete?: boolean

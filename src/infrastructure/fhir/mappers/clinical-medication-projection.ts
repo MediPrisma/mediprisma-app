@@ -1,4 +1,4 @@
-import { readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { readClinicalMedicationContentModifier, readClinicalRecordVariantModifier, hasMalformedClinicalModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import type { MedicationEntity, ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
@@ -27,7 +27,8 @@ export function projectClinicalMedicationContents(rows: MedicationEntity[], sour
       const targets = edge?.status === 'resolved' ? edge.targetKeys.map(key => nodes.get(key)) : []
       const first = targets[0]
       if (first && targets.every(target => target && target.resource.resourceType === 'Medication' && !target.embeddedIn
-        && isClinicalSourceNodePatientEligible(target, source.graph.nodes)
+        && isClinicalSourceNodePatientEligible(target, source.graph.nodes) && !hasMalformedClinicalModifier(target.resource)
+        && !readClinicalRecordVariantModifier(target.resource) && !readClinicalMedicationContentModifier(target.resource)
         && clinicalSourceResourcesEqual(target.resource, first.resource))) {
         code = first.resource.code as MedicationEntity['medicationCodeableConcept']
       }

@@ -1,3 +1,4 @@
+import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } from './clinical-modifier-projection'
 import { isClinicalSourceRepresentedElsewhere } from './clinical-projection-disposition'
 import { includeCapturedClinicalRows } from './clinical-graph-intake'
 import { getClinicalSourceNodePatientExclusionReason, isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
@@ -134,8 +135,10 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   if (!source?.graph) return input
   input = includeCapturedClinicalRows(input, source)
   const mappedNodeKeys = new Set(Object.values(input).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
+  const invalidModifiers = malformedClinicalProjectionNodes(source, mappedNodeKeys)
+  const invalidModifierKeys = new Set(invalidModifiers.map(node => node.key))
   const context = createClinicalProjectionContext(source, mappedNodeKeys)
-  for (const [key, node] of context.nodes) if (isClinicalSourceRepresentedElsewhere(source, key) || !isClinicalSourceNodePatientEligible(node, source.graph.nodes)) context.nodes.delete(key)
+  for (const [key, node] of context.nodes) if (invalidModifierKeys.has(key) || isClinicalSourceRepresentedElsewhere(source, key) || !isClinicalSourceNodePatientEligible(node, source.graph.nodes)) context.nodes.delete(key)
   const visibleRowIds = new Map<string, string>()
   for (const rows of Object.values(input)) {
     if (!Array.isArray(rows)) continue
@@ -150,14 +153,14 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     }
   }
   context.visibleRowIds = visibleRowIds
-  const variants = createClinicalRecordVariants(source)
+  const variants = createClinicalRecordVariants(source, { additionalNodeKeys: mappedNodeKeys, quarantineMalformed: true })
   const annotate = <R extends { clinicalSourceNodeKey?: string; clinicalRecordVariant?: unknown }>(row: R): R => {
     const variant = row.clinicalSourceNodeKey ? variants.get(row.clinicalSourceNodeKey) : undefined
     if (JSON.stringify(row.clinicalRecordVariant) === JSON.stringify(variant)) return row
     const { clinicalRecordVariant: _previous, ...rest } = row
     return { ...rest, ...(variant ? { clinicalRecordVariant: variant } : {}) } as R
   }
-  const activeNodes = selectClinicalSourceNodes(source).filter(node => !isClinicalSourceRepresentedElsewhere(source, node.key))
+  const activeNodes = selectClinicalSourceNodes(source).filter(node => !invalidModifierKeys.has(node.key) && !isClinicalSourceRepresentedElsewhere(source, node.key))
   const activeKeys = new Set(activeNodes.map(node => node.key))
   const eligible = activeNodes.filter(node => node.resource.resourceType === 'Observation')
   // A resolved clinical member is an active result, including #contained
@@ -334,5 +337,6 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     next.resourceQueryStatus = statuses
   }
   next.resourceQueryStatus = projectClinicalMedicationQueryStatus(next.medications ?? [], next.resourceQueryStatus)
+  next.resourceQueryStatus = projectClinicalModifierQueryStatus(next.resourceQueryStatus, invalidModifiers, source)
   return next as T
 }

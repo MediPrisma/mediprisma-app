@@ -1,4 +1,4 @@
-import { readClinicalRecordVariantModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
 import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
 import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
@@ -6,7 +6,7 @@ import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-sourc
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
 import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
-import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
+import { createClinicalRecordVariants, scopedImportedClinicalRecordVariant } from '@/src/core/services/clinical-record-variants'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -1494,7 +1494,7 @@ export const LocalBundleService = {
       entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
     }, clinicalSource, sourceKeyByResource)
     const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
-    const recordVariants = createClinicalRecordVariants(clinicalSource)
+    const recordVariants = new Map(createClinicalRecordVariants(clinicalSource))
     // Metadata belongs to mutable mapper inputs, never the captured FHIR graph.
     for (const resource of entries) {
       const key = sourceKeyByResource.get(resource)
@@ -1502,8 +1502,10 @@ export const LocalBundleService = {
     }
     const bindMappedResource = <T extends object>(mapped: T, resource: any): T => {
       const key = sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey
-      const variant = key ? recordVariants.get(key) : undefined
+      let variant = key ? recordVariants.get(key) : undefined
       const imported = key ? readClinicalRecordVariantModifier(sourceNodesByKey.get(key)!.resource) : undefined
+      if (key && imported && !variant) { variant = scopedImportedClinicalRecordVariant(sourceNodesByKey.get(key)!, imported.variant); recordVariants.set(key, variant) }
+      if (key) readClinicalMedicationContentModifier(sourceNodesByKey.get(key)!.resource)
       return { ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
         ...(variant ? { clinicalRecordVariant: variant } : {}), ...(imported?.sourceId ? { sourceId: imported.sourceId } : {}), ...(imported?.sourceVersionId ? { sourceVersionId: imported.sourceVersionId } : {}),
         ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }
