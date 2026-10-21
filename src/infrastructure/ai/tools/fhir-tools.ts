@@ -1,3 +1,4 @@
+import { hasClaimEncounterLink } from '@/src/infrastructure/fhir/services/claim-expander'
 import { clinicalEncounterAlias } from '@/src/infrastructure/fhir/mappers/clinical-projection-disposition'
 import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions, outboundClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
@@ -835,7 +836,7 @@ function encounterLinks(collection: ClinicalDataCollection) {
     if (!reference) return undefined
     // Date-inferred local links are explicitly marked by the mapper. Legacy
     // snapshots without a graph may only use a unique, plain relative reference.
-    const id = (!graph || row._encounterInferred) ? /^Encounter\/([^/]+)$/.exec(reference)?.[1] : undefined
+    const id = (!graph || row._encounterInferred || hasClaimEncounterLink(row)) ? /^Encounter\/([^/]+)$/.exec(reference)?.[1] : undefined
     if (id && byId.get(id)?.length === 1) return byId.get(id)![0]
     incomplete = true
     return undefined

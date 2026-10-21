@@ -1,7 +1,7 @@
 import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
 import { hasMalformedClinicalModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { malformedClinicalProjectionNodes, projectClinicalModifierQueryStatus } from '../mappers/clinical-modifier-projection'
-import { createClinicalProjectionContext, projectClinicalReferences, mapProjectedObservation as mapSourceObservation, projectClinicalAggregate, type ClinicalProjectionContext } from '../mappers/clinical-aggregate-projection'
+import { createClinicalProjectionContext, projectClinicalReferences, mapProjectedObservation as mapSourceObservation, projectClinicalAggregate } from '../mappers/clinical-aggregate-projection'
 import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
 import { captureClinicalSource, invalidateClinicalSource, mutableClinicalProjection, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
@@ -56,9 +56,6 @@ function warnFhirError(label: string, error: unknown) {
   console.warn(label, error)
 }
 
-function domainClinicalResource(resource: any, nodeKey: string, context: ClinicalProjectionContext): any {
-  return projectClinicalReferences(mutableClinicalProjection(resource), nodeKey, context)
-}
 function bindSourceNode<T>(row: T, entry: any): T {
   return entry._clinicalSourceNodeKey ? { ...row, clinicalSourceNodeKey: entry._clinicalSourceNodeKey, sourceVersionId: entry.resource?.meta?.versionId } : row
 }
@@ -551,7 +548,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .flatMap(edge => edge.targetKeys.map(key => observationNodes.get(key)).filter((node): node is NonNullable<typeof node> => Boolean(node)))
       const result = reports.map((report: any) => {
         const nodeKey = reportNodeKeys.get(report) as string
-        const mapped = { ...FhirMapper.toDiagnosticReport(domainClinicalResource(report, nodeKey, response._clinicalProjection), []), id: response._clinicalProjection.ids.get(nodeKey) ?? report.id, sourceId: report.id, sourceVersionId: report.meta?.versionId, clinicalSourceNodeKey: nodeKey }
+        const mapped = { ...projectClinicalReferences(FhirMapper.toDiagnosticReport(mutableClinicalProjection(report), []), nodeKey, response._clinicalProjection), id: response._clinicalProjection.ids.get(nodeKey) ?? report.id, sourceId: report.id, sourceVersionId: report.meta?.versionId, clinicalSourceNodeKey: nodeKey }
         const members = resolvedObservations(report, /^result\[\d+\]$/).flatMap(node => [node, ...resolvedObservations(node.resource, /^hasMember\[\d+\]$/)])
         const unique = [...new Map(members.map(node => [node.key, node])).values()]
         return unique.length ? { ...mapped, _observations: unique.map(node => mapSourceObservation(node.resource, node.key, response._clinicalProjection)) } : mapped

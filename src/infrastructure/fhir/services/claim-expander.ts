@@ -32,6 +32,17 @@ import { encodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 // Standard vital-sign LOINC codes — kept in sync with the app's own vitals
 // matcher (features/clinical-summary/vitals/types → LOINC.WEIGHT / .HEIGHT).
 // Hardcoded rather than imported to avoid an infrastructure→feature dependency.
+const claimEncounterLinks = new WeakMap<object, string>()
+const claimEncounterLink = Symbol('claim-derived-encounter-link')
+/** Only the trusted Claim expander can grant this domain-derived link. */
+export function bindClaimEncounterLink<T extends object>(mapped: T, resource: object): T {
+  const reference = claimEncounterLinks.get(resource)
+  return reference ? Object.assign(mapped, { [claimEncounterLink]: reference }) : mapped
+}
+export function hasClaimEncounterLink(row: object & { encounter?: { reference?: string } }): boolean {
+  return Boolean((row as any)[claimEncounterLink] && (row as any)[claimEncounterLink] === row.encounter?.reference)
+}
+
 const LOINC_BODY_WEIGHT = '29463-7'
 const LOINC_BODY_HEIGHT = '8302-2'
 
@@ -254,9 +265,16 @@ export function expandClaimResources(entries: any[]): void {
       const mr = mrId ? medRequestById.get(mrId) : undefined
       if (!mr) continue
       if (!mr.authoredOn && created) mr.authoredOn = created
-      if (!mr.encounter && encounter) mr.encounter = encounter
+      if (!mr.encounter && encounter) {
+        mr.encounter = encounter
+        if (/^Encounter\/[^/]+$/.test(encounter.reference)) claimEncounterLinks.set(mr, encounter.reference)
+      }
     }
   }
 
+  for (const resource of synthesised) {
+    const reference = resource.encounter?.reference
+    if (typeof reference === 'string' && /^Encounter\/[^/]+$/.test(reference)) claimEncounterLinks.set(resource, reference)
+  }
   entries.push(...synthesised)
 }
