@@ -477,7 +477,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
     }
     if (tier === 'minimal') {
       hours = regimen.perDay === 2 ? 12 : 24
-      result.basis.push(line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時），當天或最晚隔天恢復；不跳過劑量。`, `Minor risk: at trough (about ${hours} h after the last dose), resume the same or next day; no dose skipped.`), G.ehraFig14))
+      // With a deep block, ASRA's interval replaces the trough: no 「不跳過劑量」 beside it.
+      result.basis.push(blockUsed
+        ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不跳過劑量」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, no dose skipped”.'), G.ehraFig14)
+        : line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時），當天或最晚隔天恢復；不跳過劑量。`, `Minor risk: at trough (about ${hours} h after the last dose), resume the same or next day; no dose skipped.`), G.ehraFig14))
     } else {
       const pair = ehraHours(agent, crclValue)!
       hours = tier === 'high' ? pair[1] : pair[0]

@@ -117,6 +117,16 @@ describe('neuraxial and deep blocks (ASRA 2025, fifth edition)', () => {
     expect(result).toMatchObject({ tier: 'low', holdHours: 72 })
     expect(allCites(result)).toContain(GUIDELINE_CITES.asraApixabanHigh)
   })
+  it('minor risk with a deep block: ASRA’s 72 h replaces the trough, and nothing says 「不跳過劑量」 (#review Astra 4)', () => {
+    for (const neuraxial of ['plexus', 'plexus-catheter']) {
+      const result = plan({ procedure_kind: 'minimal', neuraxial })
+      expect(result).toMatchObject({ holdHours: 72 })
+      expect(result.troughOnly).toBeUndefined()
+      expect(result.skippedBefore).toHaveLength(6)
+      expect(allText(result)).not.toContain('不跳過劑量。')
+      expect(allText(result)).toContain('不適用「在谷底做、不跳過劑量」')
+    }
+  })
   it('a minor-risk procedure does not skip the neuraxial rules: high tier, 72 h', () => {
     const result = plan({ procedure_kind: 'minimal', neuraxial: 'single' })
     expect(result).toMatchObject({ tier: 'high', holdHours: 72 })
