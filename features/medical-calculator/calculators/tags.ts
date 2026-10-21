@@ -21,6 +21,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'egfr-ckd-epi-2021': { purpose: ['formula'], diseases: [CKD] },
   'kfre-4-variable': { purpose: ['prognosis', 'risk'], diseases: [CKD, { en: 'Kidney failure', zh: '腎衰竭' }] },
   'crcl-cockcroft-gault': { purpose: ['formula'], diseases: [CKD, DOSING] },
+  'doac-dose-nvaf': { purpose: ['treatment'], diseases: [AFIB, DOSING] },
   'meld-na': { purpose: ['prognosis'], diseases: [CIRRHOSIS, { en: 'End-stage liver disease', zh: '末期肝病' }] },
   'child-pugh': { purpose: ['prognosis', 'severity'], diseases: [CIRRHOSIS] },
   'fib-4': { purpose: ['diagnosis'], diseases: [FIBROSIS, HEPATITIS] },
