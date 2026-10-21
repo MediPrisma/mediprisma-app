@@ -1207,6 +1207,7 @@ export interface ClinicalDataQueryStatus {
   invalidModifierCount?: number
   /** Restores only the clean query state this quarantine projection replaced. */
   invalidModifierPreviousStatus?: { state: 'ok' | 'empty'; message?: string }
+  invalidModifierPreviouslyUnreported?: boolean
   medicationContentUncertaintyCount?: number
   /** Only this content projection may recover the incomplete state it created. */
   medicationContentOnlyIncomplete?: boolean
@@ -1217,6 +1218,8 @@ export interface ClinicalDataQueryStatus {
   excludedCount?: number
   exclusionReason?: 'foreign-patient-reference' | 'unresolved-patient-reference'
   exclusionCounts?: Partial<Record<'foreign-patient-reference' | 'unresolved-patient-reference', number>>
+  /** Underlying query/clinical completeness before the ownership overlay. */
+  exclusionPreviousStatus?: ClinicalDataQueryStatus
   httpStatus?: number
   message?: string
   operationOutcome?: {

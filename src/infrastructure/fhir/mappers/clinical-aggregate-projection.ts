@@ -8,7 +8,6 @@ import { getClinicalSourceNodePatientExclusionReason, isClinicalSourceNodePatien
 import { createClinicalRecordResolution, selectAutomaticClinicalRecordRows } from '@/src/core/services/clinical-record-resolution'
 import type { ClinicalDataCollection, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
-import { medicationContentOwnsIncompleteStatus } from '@/src/core/utils/clinical-query-status'
 import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
 import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
 import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
@@ -339,6 +338,12 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
       const counts = exclusions.get(type)
       const excludedCount = Object.values(counts ?? {}).reduce((sum, count) => sum + count, 0)
       if (!excludedCount) {
+        if (status.state === 'error' && status.exclusionReason && (!status.httpStatus || status.httpStatus < 400)) {
+          const { excludedCount: _count, exclusionReason: _reason, exclusionCounts: _counts, exclusionPreviousStatus: previous, message: _message, ...rest } = status
+          if (statuses === input.resourceQueryStatus) statuses = { ...statuses }
+          statuses[key as keyof typeof statuses] = previous ?? { ...rest, state: 'ok', message: undefined }
+          continue
+        }
         if (status.state === 'ok' || status.state === 'empty') {
           const rows = key === 'Observation:vital-signs' ? next.vitalSigns : next[arrayByType[type]]
           if (Array.isArray(rows)) {
@@ -353,11 +358,12 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
         continue
       }
       // Retain real transport/auth failures rather than replacing them with success.
-      if (!status.exclusionReason && status.state !== 'ok' && status.state !== 'empty' && !medicationContentOwnsIncompleteStatus(status)) continue
+      if (!status.exclusionReason && !['ok', 'empty', 'incomplete'].includes(status.state)) continue
       const rows = key === 'Observation:vital-signs' ? next.vitalSigns : next[arrayByType[type]]
       const count = Array.isArray(rows) ? rows.filter((row: any) => !row.clinicalSourceNodeKey || context.nodes.get(row.clinicalSourceNodeKey)?.resource.resourceType === type).length : status.count
       const { excludedCount: _oldCount, exclusionReason: _oldReason, exclusionCounts: _oldCounts, message: _oldMessage, ...rest } = status
       const projectedStatus = { ...rest, count, state: 'error', excludedCount, exclusionCounts: counts,
+        exclusionPreviousStatus: status.exclusionPreviousStatus ?? (!status.exclusionReason ? status : undefined),
         exclusionReason: counts?.['unresolved-patient-reference'] ? 'unresolved-patient-reference' : 'foreign-patient-reference',
         message: 'Some returned clinical records have foreign or unresolved patient ownership and were excluded. This domain is incomplete; absence cannot be concluded.' }
 

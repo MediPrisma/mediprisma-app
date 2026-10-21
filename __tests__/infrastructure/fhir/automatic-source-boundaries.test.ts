@@ -129,6 +129,8 @@ it.each([false,true].flatMap(invalidFirst=>[false,true].map(resolved=>[invalidFi
  const first=stage(invalidFirst?[invalid]:[unknown])
  const mixed=stage([invalid,unknown],first.resourceQueryStatus)
  expect(mixed.resourceQueryStatus.MedicationRequest.invalidModifierCount).toBe(1)
+ expect(mixed.resourceQueryStatus.MedicationRequest.message).toContain('malformed recognized modifiers')
+ expect(mixed.resourceQueryStatus.MedicationRequest.message).toContain('referenced drug content is unavailable')
  expect(isMedicationContentOnlyIncomplete(mixed.resourceQueryStatus.MedicationRequest)).toBe(false)
  const remaining=[unknown,...(resolved?[{resourceType:'Medication',id:'missing',code:{text:'Synthetic resolved medicine'}}]:[])]
  const repaired=stage(remaining,mixed.resourceQueryStatus)
@@ -138,4 +140,34 @@ it.each([false,true].flatMap(invalidFirst=>[false,true].map(resolved=>[invalidFi
   if(resolved)expect(output.resourceQueryStatus.MedicationRequest.state).toBe('ok')
   else expect(isMedicationContentOnlyIncomplete(output.resourceQueryStatus.MedicationRequest)).toBe(true)
  }
+})
+
+it('does not manufacture query success when a modifier was the first status for an unfetched domain',()=>{
+ const invalid={resourceType:'Observation',id:'invalid',status:'final',code:{text:'Synthetic'},modifierExtension:[{url:'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant',extension:[]}]}
+ const source=reconcileClinicalSources([capture('snapshot',[patient,invalid])])
+ const node=source.graph.nodes.find(node=>node.resource.resourceType==='Observation')!
+ const before=projectClinicalAggregate({clinicalSource:source,observations:[{...invalid,clinicalSourceNodeKey:node.key}],resourceQueryStatus:{}} as any)
+ expect(before.resourceQueryStatus.Observation).toMatchObject({state:'incomplete',invalidModifierCount:1,invalidModifierPreviouslyUnreported:true})
+ expect(before.resourceQueryStatus.Observation.invalidModifierPreviousStatus).toBeUndefined()
+ const clean=reconcileClinicalSources([capture('snapshot',[patient])])
+ expect(projectClinicalAggregate(before,clean).resourceQueryStatus.Observation).toBeUndefined()
+ const failed={...before,resourceQueryStatus:{Observation:{...before.resourceQueryStatus.Observation,state:'forbidden',httpStatus:403,message:'Synthetic authorization failure'}}}
+ expect(projectClinicalAggregate(failed,clean).resourceQueryStatus.Observation).toMatchObject({state:'forbidden',httpStatus:403,message:'Synthetic authorization failure'})
+})
+
+it.each([false,true])('keeps ownership errors blocking when content and modifier defects repair together (invalid first=%s)',invalidFirst=>{
+ const unknown={resourceType:'MedicationRequest',id:'unknown',status:'active',medicationReference:{reference:'Medication/missing'}}
+ const invalid={resourceType:'MedicationRequest',id:'invalid',status:'active',medicationCodeableConcept:{text:'Synthetic invalid'},modifierExtension:[{url:'https://mediprisma.app/fhir/StructureDefinition/clinical-record-variant',extension:[]}]}
+ const stage=(resources:any[],status:any={MedicationRequest:{resourceType:'MedicationRequest',state:'ok',count:1}})=>{
+  const source=reconcileClinicalSources([capture('snapshot',[patient,...resources])])
+  return projectClinicalAggregate({clinicalSource:source,medications:source.graph.nodes.filter(node=>node.resource.resourceType==='MedicationRequest').map(node=>({...node.resource,clinicalSourceNodeKey:node.key})),resourceQueryStatus:status} as any)
+ }
+ const first=stage(invalidFirst?[invalid]:[unknown])
+ const mixed=stage([unknown,invalid],first.resourceQueryStatus)
+ const excluded=stage([unknown,{...unknown,id:'foreign',subject:{reference:'Patient/another'}}],mixed.resourceQueryStatus)
+ expect(excluded.resourceQueryStatus.MedicationRequest).toMatchObject({state:'error',excludedCount:1,exclusionReason:'foreign-patient-reference'})
+ expect(excluded.resourceQueryStatus.MedicationRequest.invalidModifierCount).toBeUndefined()
+ expect(isMedicationContentOnlyIncomplete(excluded.resourceQueryStatus.MedicationRequest)).toBe(false)
+ const recovered=stage([unknown],excluded.resourceQueryStatus)
+ expect(isMedicationContentOnlyIncomplete(recovered.resourceQueryStatus.MedicationRequest)).toBe(true)
 })
