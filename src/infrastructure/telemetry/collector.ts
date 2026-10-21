@@ -3,7 +3,7 @@
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
-import { collectorEventV6Schema, collectorEventV7Schema, collectorEventV8Schema, collectorEventV9Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
+import { collectorEventV10Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorEventV10, type CollectorAppSurface, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -47,7 +47,8 @@ const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
 // Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
-type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9
+type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9 | CollectorEventV10
+const isSummaryAttemptEvent = (event: WireEvent) => (event.schema_version === 7 || event.schema_version === 10) && 'summary_attempt' in event.diagnostics
 const pending: Array<{event: WireEvent; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
 const MAX_PENDING = 64
 let failures = 0
@@ -63,6 +64,16 @@ export function isCollectorSite(): boolean {
     const sites = new URL(window.location.href).searchParams.getAll('site')
     return sites.length === 1 && sites[0] === 'vghtpe'
   } catch { return false }
+}
+
+/** Client-claimed deployment entry, used only for encrypted event attribution. */
+export function collectorAppSurface(): CollectorAppSurface {
+  try {
+    const path = new URL(window.location.href).pathname.replace(/\/+$/, '') || '/'
+    if (path === '/app-hmc' || path.startsWith('/app-hmc/')) return 'app-hmc'
+    if (path === '/app' || path.startsWith('/app/')) return 'app'
+  } catch { /* Unknown route is explicitly labeled below. */ }
+  return 'other'
 }
 
 export function configuredEndpoint(): string | null {
@@ -195,17 +206,21 @@ function dispatch(event: WireEvent, owner: number, endpoint: string, auth: Retur
   }
   if (active.size >= MAX_IN_FLIGHT) {
     // An operation event (or summary attempt) is the only record of a user operation and gets the
-    // whole queue; a custom summary request (v9) may use half, and is the first to give way.
+    // whole queue; a custom summary request may use half, and is the first to give way.
     const queued = { event, owner, endpoint, auth }
-    if (event.schema_version === 7 || event.sample_kind === 'feature') {
+    const isAttempt = isSummaryAttemptEvent(event)
+    const isTemplate = (event.schema_version === 9 || event.schema_version === 10) && 'template' in event.diagnostics
+    if (isAttempt || event.sample_kind === 'feature') {
       if (pending.length >= MAX_PENDING) {
-        const v9 = pending.findIndex(item => item.event.schema_version === 9)
-        if (v9 < 0) { dropped++; return }
-        pending.splice(v9, 1)
+        const templateIndex = pending.findIndex(item => item.event.schema_version === 9 ||
+          (item.event.schema_version === 10 && 'template' in item.event.diagnostics))
+        if (templateIndex < 0) { dropped++; return }
+        pending.splice(templateIndex, 1)
         dropped++
       }
       pending.push(queued)
-    } else if (event.schema_version === 9 && pending.filter(item => item.event.schema_version === 9).length < MAX_PENDING / 2 && pending.length < MAX_PENDING) {
+    } else if (isTemplate && pending.filter(item => item.event.schema_version === 9 ||
+      (item.event.schema_version === 10 && 'template' in item.event.diagnostics)).length < MAX_PENDING / 2 && pending.length < MAX_PENDING) {
       pending.push(queued)
     } else dropped++
     return
@@ -300,7 +315,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
         requestCount++
         // Past the detail cap the request is only counted, but a summary attempt is still sent.
         if (requests.length >= MAX_COLLECTOR_REQUEST_DETAILS) return observe({ ...child, operation: undefined }, (event) => {
-          if (event.schema_version === 7) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
+          if (isSummaryAttemptEvent(event)) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
         })
         const index = requests.length
         const childStarted = nowMs()
@@ -309,7 +324,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
         const observation = observe({ ...child, operation: undefined }, (event) => {
           // A summary attempt (v7) is still sent on its own as soon as it ends, so a summary the
           // user abandons keeps its per-attempt diagnostics; the operation names its run (v8).
-          if (event.schema_version === 7) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
+          if (isSummaryAttemptEvent(event)) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
           if (ended) return
           const d = event.diagnostics
           requests[index] = { provider: event.provider, model: event.model, model_source: event.model_source,
@@ -338,10 +353,9 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
           const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
           // v8: a summary operation that knows its run; v6: any other operation; v7/v5: requests.
           const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
-          const version = result.summaryAttempt ? 7 : runId ? 8 : kind === 'feature' ? 6 : template ? 9 : 5
-          const schema = version === 7 ? collectorEventV7Schema : version === 8 ? collectorEventV8Schema : version === 6 ? collectorEventV6Schema : version === 9 ? collectorEventV9Schema : collectorEventV5Schema
-          const parsed = schema.safeParse({
-            schema_version: version, ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
+          const version = 10
+          const parsed = collectorEventV10Schema.safeParse({
+            schema_version: version, app_surface: collectorAppSurface(), ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
             status: result.outcome === 'ok' ? 'completed' : result.outcome === 'aborted' ? 'aborted' : 'error',
@@ -357,7 +371,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
               ...(runId ? { summary_run_id: runId } : {}),
-              ...(version === 9 ? { template } : {}),
+              ...(template ? { template } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
               ...(kind === 'feature' && requestCount > 0 ? { requests: { count: requestCount, omitted: requestCount - requests.length, details: requests } } : {}),
             },

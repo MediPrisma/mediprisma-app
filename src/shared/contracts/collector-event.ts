@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v9 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v10 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -234,6 +234,48 @@ export const collectorEventV9Schema = collectorEventV4BaseSchema.extend({
     ctx.addIssue({ code: 'custom', message: 'Only custom summary requests name a template' })
 })
 export type CollectorEventV9 = z.infer<typeof collectorEventV9Schema>
+
+// v10 adds the client-claimed application surface to every new event while
+// preserving each prior event shape. This is attribution metadata, not an
+// authenticated source of truth; old v1-v9 rows remain readable as unknown.
+export const collectorAppSurfaceSchema = z.enum(['app', 'app-hmc', 'other'])
+export type CollectorAppSurface = z.infer<typeof collectorAppSurfaceSchema>
+const collectorEventV10BaseSchema = collectorEventV4BaseSchema.extend({
+  schema_version: z.literal(10),
+  app_surface: collectorAppSurfaceSchema,
+  diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
+    summary_cards: summaryCardCountsSchema.optional(),
+    requests: operationRequestsSchema.optional(),
+    summary_attempt: summaryAttemptSchema.optional(),
+    summary_run_id: z.string().uuid().optional(),
+    template: summaryTemplateSchema.optional(),
+  }).strict(),
+}).strict()
+export const collectorEventV10Schema = collectorEventV10BaseSchema.superRefine((e, ctx) => {
+  validateOutcome(e, ctx)
+  const { app_surface: _surface, ...base } = e
+  const { summary_attempt, summary_run_id, template, ...diagnostics } = e.diagnostics
+  const checkLegacy = (schema: z.ZodTypeAny, version: number, legacyDiagnostics: Record<string, unknown>) => {
+    const parsed = schema.safeParse({ ...base, schema_version: version, diagnostics: legacyDiagnostics })
+    if (!parsed.success)
+      for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+  }
+  if (summary_attempt) {
+    if (summary_run_id || template || e.sample_kind !== 'request')
+      ctx.addIssue({ code: 'custom', message: 'Summary attempts cannot be combined with other versioned diagnostics' })
+    checkLegacy(collectorEventV7Schema, 7, { ...diagnostics, summary_attempt })
+  } else if (template) {
+    if (summary_run_id) ctx.addIssue({ code: 'custom', message: 'Template requests cannot name a summary run' })
+    checkLegacy(collectorEventV9Schema, 9, { ...diagnostics, template })
+  } else if (summary_run_id) {
+    checkLegacy(collectorEventV8Schema, 8, { ...diagnostics, summary_run_id })
+  } else if (e.sample_kind === 'feature') {
+    checkLegacy(collectorEventV6Schema, 6, diagnostics)
+  } else {
+    checkLegacy(collectorEventV5Schema, 5, diagnostics)
+  }
+})
+export type CollectorEventV10 = z.infer<typeof collectorEventV10Schema>
 
 // Separate, explicitly consented sensitive-content endpoint; never accepted by
 // /events. Prompt includes the clinical context actually sent to the model.
