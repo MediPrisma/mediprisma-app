@@ -74,3 +74,11 @@ it.each(['birthDate','gender','identifier'])('rejects contradictory undated Pati
  const ordered=resources.map((resource:any,index:number)=>({...resource,meta:{lastUpdated:`2026-10-0${index+1}`}}))
  expect(LocalBundleService.parse(input(ordered))!.patient.name).toEqual([{text:'Synthetic correction'}])
 })
+
+it.each([false,true])('accepts compatible identifier additions independent of Patient entry order (reverse=%s)',reverse=>{
+ const one={...patient,name:[{text:'Synthetic patient'}],identifier:[{system:'urn:synthetic:mrn',value:'one'}]}
+ const two={...one,identifier:[...one.identifier,{system:'urn:synthetic:mrn',value:'two'}]}
+ const rows=reverse?[two,one]:[one,two]
+ const parsed=LocalBundleService.parse({resourceType:'Bundle',entry:rows.map(resource=>({resource}))})!
+ expect(parsed.patient.identifier).toHaveLength(2)
+})

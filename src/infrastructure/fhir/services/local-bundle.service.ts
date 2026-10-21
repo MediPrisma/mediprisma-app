@@ -1653,7 +1653,8 @@ export const LocalBundleService = {
       if (a.gender && b.gender && a.gender !== 'unknown' && b.gender !== 'unknown' && a.gender !== b.gender) return true
       return (a.identifier ?? []).some((identifier: any) => identifier.value && identifier.system
         && (b.identifier ?? []).some((other: any) => other.system === identifier.system && other.value)
-        && !(b.identifier ?? []).some((other: any) => other.system === identifier.system && other.value === identifier.value))
+        && !(a.identifier ?? []).some((own: any) => own.system === identifier.system && own.value
+          && (b.identifier ?? []).some((other: any) => other.system === own.system && other.value === own.value)))
     }))
     if (identityConflict) {
       const selected = primaryPatients.find(node => resolution.includes(node.key))
