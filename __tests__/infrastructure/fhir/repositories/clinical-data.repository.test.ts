@@ -2,6 +2,7 @@
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { fhirClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
+import { readClinicalSource } from '@/src/infrastructure/fhir/services/clinical-source-session'
 
 // Mock the dependencies
 jest.mock('@/src/infrastructure/fhir/client/fhir-client.service')
@@ -21,6 +22,27 @@ describe('FhirClinicalDataRepository', () => {
   })
 
   describe('fetchAllClinicalData', () => {
+    it('projects Patient/a query observations only when an explicit subject does not name another patient', async () => {
+      const client = { state: { serverUrl: 'https://ehr.example/fhir' } }
+      mockFhirClient.getClient.mockResolvedValue(client as any)
+      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [
+        { fullUrl: 'urn:uuid:patient-a', resource: { resourceType: 'Patient', id: 'a' } },
+        { fullUrl: 'urn:uuid:patient-b', resource: { resourceType: 'Patient', id: 'b' } },
+        { resource: { resourceType: 'Observation', id: 'foreign', status: 'final', subject: { reference: 'Patient/b' }, valueInteger: 1 } },
+        { resource: { resourceType: 'Observation', id: 'urn-foreign', status: 'final', subject: { reference: 'urn:uuid:patient-b' }, valueInteger: 4 } },
+        { resource: { resourceType: 'Observation', id: 'urn-matching', status: 'final', subject: { reference: 'urn:uuid:patient-a' }, valueInteger: 5 } },
+        { resource: { resourceType: 'Observation', id: 'matching', status: 'final', subject: { reference: 'Patient/a' }, valueInteger: 2 } },
+        { resource: { resourceType: 'Observation', id: 'missing-subject', status: 'final', valueInteger: 3 } },
+      ] })
+      mockMapper.toObservation.mockImplementation((resource: any) => ({ ...resource }))
+
+      const observations = await repository.fetchObservations('a')
+
+      expect(observations.map(row => row.sourceId)).toEqual(['urn-matching', 'matching', 'missing-subject'])
+      const source = readClinicalSource((repository as any).session, 'a')
+      expect(source.graph.nodes.map(node => node.resource.id)).toEqual(['a', 'b', 'foreign', 'urn-foreign', 'urn-matching', 'matching', 'missing-subject'])
+    })
+
     it('should fetch all clinical data types', async () => {
       // Mock all fetch methods
       const mockCondition = { id: 'cond-1', code: { text: 'Diabetes' } }

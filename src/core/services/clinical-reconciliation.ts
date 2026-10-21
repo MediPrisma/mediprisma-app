@@ -1,5 +1,6 @@
 import { buildClinicalSourceGraph, clinicalSourceResourcesEqual, type ClinicalSourceCapture, type ClinicalSourceGraph, type ClinicalSourceNode } from './clinical-source-graph'
 import { clinicalSourceContextIdentity, clinicalSourceNodesEqualWithContext } from './clinical-source-context'
+import { isClinicalSourceNodePatientEligible } from './clinical-patient-scope'
 
 export const CLINICAL_RECONCILIATION_POLICY_VERSION = 'conservative-source-v1'
 export type ClinicalResourcePolicy = { assessment: 'supported' | 'not-assessed'; strategy: 'preserve-existing-view' | 'retain-source-only' }
@@ -81,6 +82,7 @@ export function selectClinicalSourceNodes(result: ClinicalReconciliationResult) 
   const seen = new Map<string, ClinicalSourceNode[]>()
   return result.graph.nodes.filter(node => {
     if (node.isContained || node.embeddedIn) return false
+    if (!isClinicalSourceNodePatientEligible(node, result.graph.nodes)) return false
     if (!node.resource.id && !node.fullUrl) return true
     const identity = recordScopeIdentity(node) + '|' + node.contentHash + '|' + clinicalSourceContextIdentity(result.graph, node)
     const bucket = seen.get(identity) ?? []

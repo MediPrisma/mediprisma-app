@@ -74,6 +74,30 @@ it('does not treat records from distinct REST bases as the same source identity'
   expect(model.evidence.sameRecord).toEqual([])
 })
 
+it('excludes only explicit subject contradictions and retains foreign nodes in the source graph', () => {
+  const source = reconcileClinicalSources([{
+    sourceId: 'ehr', patientScope: 'a', generation: 'query', restBase: 'https://ehr.example/fhir', resources: [
+      { resource: { resourceType: 'Patient', id: 'a' }, fullUrl: 'urn:uuid:patient-a' },
+      { resource: { resourceType: 'Patient', id: 'b' }, fullUrl: 'urn:uuid:patient-b' },
+      { resourceType: 'Observation', id: 'relative-foreign', subject: { reference: 'Patient/b' } },
+      { resourceType: 'Observation', id: 'urn-foreign', subject: { reference: 'urn:uuid:patient-b' } },
+      { resourceType: 'Observation', id: 'other-server', subject: { reference: 'https://other.example/fhir/Patient/a' } },
+      { resourceType: 'Observation', id: 'matching', subject: { reference: 'urn:uuid:patient-a' } },
+      { resourceType: 'Observation', id: 'missing-subject' },
+    ],
+  }])
+  expect(source.graph.nodes.map(node => node.resource.id)).toContain('urn-foreign')
+  expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual(['a', 'matching', 'missing-subject'])
+
+  const unknownBase = reconcileClinicalSources([{
+    sourceId: 'ehr', patientScope: 'a', generation: 'unknown-base', resources: [
+      { resourceType: 'Observation', id: 'same-id-unknown-base', subject: { reference: 'https://unknown.example/fhir/Patient/a' } },
+      { resourceType: 'Observation', id: 'unknown-urn', subject: { reference: 'urn:uuid:unresolved' } },
+    ],
+  }])
+  expect(selectClinicalSourceResources(unknownBase).map(resource => resource.id)).toEqual(['same-id-unknown-base', 'unknown-urn'])
+})
+
 it('uses a compact signature that includes empty-capture generations', () => {
   const first = JSON.stringify(reconcileClinicalSources([capture('1', [])]))
   const second = JSON.stringify(reconcileClinicalSources([capture('2', [])]))

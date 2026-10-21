@@ -39,3 +39,17 @@ it('keeps the Observation included with a report when another query captures a n
   expect(edge.status).toBe('resolved')
   expect(edge.targetKeys).toEqual([includedKey])
 })
+
+it('does not attach an explicitly foreign-patient Observation included with a report', () => {
+  const scope = { sourceId: 'server', patientScope: 'a', restBase: 'https://one.invalid/fhir' }
+  const foreign = { resourceType: 'Observation', id: 'foreign', status: 'final', subject: { reference: 'Patient/b' } }
+  const report = { resourceType: 'DiagnosticReport', id: 'r', result: [{ reference: 'Observation/foreign' }] }
+  const source = reconcileClinicalSources([{ ...scope, generation: 'report-search', resources: [report, foreign] }])
+  const foreignNode = source.graph.nodes.find(node => node.resource.id === 'foreign')!
+  const reportNode = source.graph.nodes.find(node => node.resource.id === 'r')!
+  const row: any = { ...foreign, id: 'foreign-row', clinicalSourceNodeKey: foreignNode.key }
+  const reportRow: any = { ...report, clinicalSourceNodeKey: reportNode.key }
+  const result = attachReportObservations([reportRow], [row], source, new Map([[foreignNode.key, row]]))
+  expect(result[0]._observations).toEqual([])
+  expect(source.graph.nodes).toContain(foreignNode)
+})

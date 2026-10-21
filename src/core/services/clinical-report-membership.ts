@@ -1,6 +1,7 @@
 import type { DiagnosticReportEntity, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
+import { isClinicalSourceNodePatientEligible } from './clinical-patient-scope'
 
 /** Attach only graph-resolved members across progressive query snapshots. */
 export function attachReportObservations(
@@ -18,6 +19,11 @@ export function attachReportObservations(
   }
   const byNodeKey = new Map(observationAliases)
   for (const row of observations) if (row.clinicalSourceNodeKey) byNodeKey.set(row.clinicalSourceNodeKey, row)
+  const graphNodes = new Map((source?.graph.nodes ?? []).map(node => [node.key, node]))
+  const eligibleNodeKey = (key: string) => {
+    const node = graphNodes.get(key)
+    return !!node && node.resource.resourceType === 'Observation' && isClinicalSourceNodePatientEligible(node, source!.graph.nodes)
+  }
   const graphEdges = new Map<string, Array<ClinicalReconciliationResult['graph']['references'][number]>>()
   for (const edge of source?.graph.references ?? []) {
     const edges = graphEdges.get(edge.origin.key) ?? []
@@ -35,8 +41,8 @@ export function attachReportObservations(
       const walk = (origin: string, kind: 'result' | 'hasMember') => {
         for (const edge of graphEdges.get(origin) ?? []) {
           if (edge.status !== 'resolved' || !(kind === 'result' ? /^result\[\d+\]$/ : /^hasMember\[\d+\]$/).test(edge.path)) continue
-          const targetKey = edge.targetKeys.find(key => byNodeKey.has(key))
-            ?? (!observationAliases ? edge.targetKeys.find(key => existingByKey.has(key)) : undefined)
+          const targetKey = edge.targetKeys.find(key => eligibleNodeKey(key) && byNodeKey.has(key))
+            ?? (!observationAliases ? edge.targetKeys.find(key => eligibleNodeKey(key) && existingByKey.has(key)) : undefined)
           const member = targetKey ? byNodeKey.get(targetKey) ?? existingByKey.get(targetKey) : undefined
           const identity = (member ? clinicalRecordKey(member) : undefined) ?? targetKey!
           if (!member || visited.has(identity)) continue
@@ -46,6 +52,7 @@ export function attachReportObservations(
         }
         if (kind === 'hasMember') {
           for (const key of byNodeKey.get(origin)?.clinicalSourceDerivedMemberKeys ?? []) {
+            if (!eligibleNodeKey(key)) continue
             const member = byNodeKey.get(key)
             const identity = (member ? clinicalRecordKey(member) : undefined) ?? key
             if (!member || visited.has(identity)) continue
@@ -57,6 +64,7 @@ export function attachReportObservations(
       }
       walk(report.clinicalSourceNodeKey, 'result')
       for (const key of report.clinicalSourceDerivedMemberKeys ?? []) {
+        if (!eligibleNodeKey(key)) continue
         const member = byNodeKey.get(key)
         const identity = (member ? clinicalRecordKey(member) : undefined) ?? key
         if (!member || visited.has(identity)) continue
