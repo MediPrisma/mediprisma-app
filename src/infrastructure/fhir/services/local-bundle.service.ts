@@ -1799,7 +1799,7 @@ export const LocalBundleService = {
       throw new Error('Encrypted browser storage is unavailable')
     }
 
-    const key = await getSessionBundleKey()
+    const key = await getSessionBundleKey({ create: true })
     if (!key) throw new Error('Encrypted browser storage is unavailable')
     const persisted = {
       __mediprismaBundle: 1,

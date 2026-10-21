@@ -126,7 +126,8 @@ test('a same-run privacy stop aborts a pending import even when the injected can
   expect(mockImportId).toBe('original-import')
 })
 
-test('a terminal notice during the post-commit query refresh survives the final receipt', async () => {
+test.each([['privacy-stale', '隱私設定已變更'], ['patient-changed', '來源病人已變更']] as const)(
+  'a %s notice is visible during post-commit query refresh before the final receipt', async (phase, text) => {
   let refresh!: () => void
   mockInvalidateQueries.mockImplementation(() => new Promise<void>(resolve => { refresh = resolve }))
   useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'original-import', phase: 'reports-pending' } })
@@ -138,10 +139,13 @@ test('a terminal notice during the post-commit query refresh survives the final 
   await waitFor(() => expect(refresh).toBeDefined())
   expect(mockImportId).toBe('new-import')
   act(() => window.dispatchEvent(new MessageEvent('message', { source: window, origin: location.origin,
-    data: { source: 'medcloud2-extension', type: PROGRESSIVE_STATUS_MESSAGE, version: 1, runId: 'run-a', importId: 'original-import', phase: 'privacy-stale' } })))
+    data: { source: 'medcloud2-extension', type: PROGRESSIVE_STATUS_MESSAGE, version: 1, runId: 'run-a', importId: 'original-import', phase } })))
+  expect(screen.getByText(new RegExp(text))).toBeVisible()
+  expect(useProgressiveImportStore.getState().current).toMatchObject({ importId: 'new-import', phase })
+  expect(isProgressiveAutoSummaryBlocked()).toBe(true)
   await act(async () => { refresh() })
-  await screen.findByText(/隱私設定已變更/)
-  expect(useProgressiveImportStore.getState().current).toMatchObject({ importId: 'new-import', phase: 'privacy-stale' })
+  await screen.findByText(new RegExp(text))
+  expect(useProgressiveImportStore.getState().current).toMatchObject({ importId: 'new-import', phase })
   expect(isProgressiveAutoSummaryBlocked()).toBe(true)
 })
 

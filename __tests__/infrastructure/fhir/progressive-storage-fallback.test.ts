@@ -98,10 +98,10 @@ test('a replacement that cannot publish its storage pointer fails instead of ack
   expect(await (await reloaded.loadOriginalFhir())!.text()).toBe(await source.text())
 })
 
-test('a profile write makes a recovered memory-only chart durable before another replacement fails', async () => {
+test.each([false, true])('a profile write recovers memory-only durability (existing key: %s) before another replacement fails', async existingKey => {
   const local = await service()
   const { getSessionBundleKey } = await import('@/src/infrastructure/fhir/services/bundle-crypto')
-  await getSessionBundleKey({ create: true })
+  if (existingKey) await getSessionBundleKey({ create: true })
   const put = FakeObjectStore.prototype.put
   const failure = jest.spyOn(FakeObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, recordKey) {
     if (this.name === 'bundles') throw new DOMException('synthetic quota', 'QuotaExceededError')

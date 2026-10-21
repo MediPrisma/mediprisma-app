@@ -109,6 +109,7 @@ export function useImportBundle(): UseImportBundleReturn {
     patientProfile?: ReturnType<typeof LocalBundleService.getUserEnteredPatientProfile>,
     signal?: AbortSignal,
     beforeCommit?: () => void,
+    onCommitted?: (importId: string) => void,
   ) => {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
@@ -138,6 +139,9 @@ export function useImportBundle(): UseImportBundleReturn {
       ...(signal ? { signal, beforeCommit } : {}),
       ...(patientProfile ? { patientProfile } : {}),
     })
+    // Publish progressive ownership before query refresh can yield to another
+    // browser task, so a terminal safety notice is visible immediately.
+    onCommitted?.(localImportId)
     // Importing NEW data must not leave the PREVIOUS bundle's derived results
     // around, or the render goes inconsistent (old AI summary / safety scan /
     // report interpretation shown against new clinical data — worst when the two
@@ -183,9 +187,8 @@ export function useImportBundle(): UseImportBundleReturn {
         }
         const patientProfile = options?.expectedImportId ? LocalBundleService.getUserEnteredPatientProfile() : undefined
         assertExpectedImport()
-        const importId = await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
-          options?.signal, assertExpectedImport)
-        options?.onCommitted?.(importId)
+        await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
+          options?.signal, assertExpectedImport, options?.onCommitted)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'
