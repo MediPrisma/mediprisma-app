@@ -42,11 +42,11 @@ describe('cross-source imaging reports', () => {
     expect(buildReportsData(reports).reportRows).toHaveLength(1)
   })
 
-  it.each([false, true])('rejects conflicting accession identifiers even with a shared order, typed=%s', typed => {
+  it.each([[false, 'urn:synthetic:exam-identifiers'], [true, 'urn:synthetic:exam-identifiers'], [false, undefined]])('rejects conflicting accession identifiers even with a shared order, typed=%s namespace=%s', (typed, system) => {
     const reports = pair()
     const identifiers = (accession: string) => [
-      { system: 'urn:synthetic:exam-identifiers', value: 'ORDER-A', ...(typed ? { type: { coding: [{ system: 'urn:synthetic:identifier-type', code: 'ORDER' }] } } : {}) },
-      { system: 'urn:synthetic:exam-identifiers', value: accession, ...(typed ? { type: { coding: [{ system: 'urn:synthetic:identifier-type', code: 'ACSN' }] } } : {}) },
+      { system, value: 'ORDER-A', ...(typed ? { type: { coding: [{ system: 'urn:synthetic:identifier-type', code: 'ORDER' }] } } : {}) },
+      { system, value: accession, ...(typed ? { type: { coding: [{ system: 'urn:synthetic:identifier-type', code: 'ACSN' }] } } : {}) },
     ]
     reports[0].identifier = identifiers('ACCESSION-1')
     reports[1].identifier = identifiers('ACCESSION-2')
@@ -214,6 +214,10 @@ describe('cross-source imaging reports', () => {
     const full = [...reports, second]
     const keys = reportDisplayGroupingKeys(full)
     expect(keys.get(reports[0])).toMatch(/^cross-source\|/)
+    const section = imagingReportsCategory.getContextSection(full, { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }, {} as any)
+    expect(JSON.stringify(section)).toContain('Source report (shared narrative)')
+    expect(JSON.stringify(section)).toContain('hospital-procedure-two')
+    expect(JSON.stringify(section)).not.toContain('alternate name')
     const visibleKeys = visibleReportGroupingKeys([reports[0], second], keys)
     expect(visibleKeys.get(reports[0])).toBe(visibleKeys.get(second))
     expect(visibleKeys.get(reports[0])).not.toMatch(/^cross-source\|/)
@@ -737,7 +741,7 @@ describe('cross-source imaging reports', () => {
     const text = section && !Array.isArray(section) ? section.items.join('\n') : ''
     expect(text).toContain('[id: hospital]')
     expect(text).toContain('[id: cloud]')
-    expect(text).toContain('Source copy (alternate name)')
+    expect(text).toContain('Source report (shared narrative)')
     expect(text).not.toContain('CT/SCAN- CHEST +')
     expect(text.match(/\[shared narrative; count once\]/g)).toHaveLength(1)
   })

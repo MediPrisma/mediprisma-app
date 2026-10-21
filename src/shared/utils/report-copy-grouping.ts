@@ -318,10 +318,11 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     for (const { report } of bucket) {
       const bySystem = new Map<string, Set<string>>()
       for (const id of report.identifier ?? []) {
-        if (id.system && id.value) {
+        if (id.value) {
+          const system = id.system ?? ''
           const typeCodes = id.type?.coding?.map(coding => JSON.stringify([coding.system ?? '', coding.code ?? ''])).sort()
           const identity = JSON.stringify([id.value, typeCodes?.length ? typeCodes : id.type?.text ?? null])
-          bySystem.set(id.system, new Set([...(bySystem.get(id.system) ?? []), identity]))
+          bySystem.set(system, new Set([...(bySystem.get(system) ?? []), identity]))
         }
       }
       for (const [system, values] of bySystem) identifiers.set(system, [...(identifiers.get(system) ?? []), values])

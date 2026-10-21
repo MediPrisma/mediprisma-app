@@ -548,7 +548,7 @@ function ReportPanelDetail({
         />
       )}
       {observations.map((obs, i) => (
-        <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
+        <ObservationBlock key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`} observation={obs} />
       ))}
       <SharedReportSources sources={sharedReportSources} />
     </div>
@@ -1491,7 +1491,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (
                 <ObservationBlock
-                  key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
+                  key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`}
                   observation={obs}
                   nested
                 />
