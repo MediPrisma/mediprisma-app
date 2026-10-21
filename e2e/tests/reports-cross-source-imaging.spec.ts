@@ -107,6 +107,11 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
     // a generic NHI title into an inferred cross-anatomy history alias.
     const cloudSource = sources.locator('li').filter({ hasText: 'cloud-imaging-0' })
     await openFeaturePanel(page)
+    const hospitalSource = sources.locator('li').filter({ hasText: 'hospital-imaging-0' })
+    await hospitalSource.getByRole('button', { name: '查看歷史紀錄' }).click()
+    const historyPanel = page.getByRole('region', { name: '功能', exact: true })
+    await expect(historyPanel.getByText('臺北榮總', { exact: true }).filter({ visible: true })).toBeVisible()
+    await expect(historyPanel.getByText('DOC00000 Example', { exact: true }).filter({ visible: true })).toHaveCount(0)
     await cloudSource.getByRole('button', { name: '查看歷史紀錄' }).click()
     await expect(page.getByRole('region', { name: '功能', exact: true }).getByText('Synthetic prior breast report for source-specific history.', { exact: false }).filter({ visible: true })).toBeVisible()
     const popupPromise = context.waitForEvent('page')

@@ -24,6 +24,8 @@ it('loads attachment-only histories from both original titles of a merged row', 
     const { result } = renderHook(() => useReportHistory(source.title))
     expect(result.current.map(item => item.id)).toEqual(source.reportId === 'hospital' ? ['hospital'] : ['cloud', 'cloud-prior'])
     expect(result.current[0].notes.join('\n')).toContain(body)
+    expect(result.current[0].institution).toBe('臺北榮總')
+    expect(result.current[0].institution).not.toContain('DOC00000')
     if (source.reportId === 'cloud') expect(result.current[1].notes.join('\n')).toContain('原始文字附件也必須保留')
   }
 })

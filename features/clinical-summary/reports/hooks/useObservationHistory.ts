@@ -4,7 +4,7 @@ import { canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 import { getCodeableConceptText } from '../utils/fhir-helpers'
 import { sharedReportNarrative } from '@/src/shared/utils/shared-report-grouping'
-import { getReportDate } from '@/src/shared/utils/report-identity'
+import { getImagingCopySource, getReportDate, getReportInstitution } from '@/src/shared/utils/report-identity'
 import { inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
 
 export interface ObservationHistoryItem {
@@ -364,7 +364,11 @@ export function useReportHistory(reportCode?: string) {
         conclusion,
         notes,
         status: dr.status,
-        institution: dr.performer?.[0]?.display,
+        // In-house VGH performers can be legacy DOC physician labels. Use the
+        // known source institution rather than presenting a person as a site.
+        institution: inferReportDisplayGroup(dr) === 'imaging'
+          ? (getImagingCopySource(dr) === 'hospital' ? '臺北榮總' : getReportInstitution(dr))
+          : dr.performer?.[0]?.display,
       })
     })
 
