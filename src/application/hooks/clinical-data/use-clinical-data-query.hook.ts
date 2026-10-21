@@ -117,6 +117,7 @@ interface ClinicalResourceAggregate {
   vitalSigns: ObservationEntity[]
   sourceMetadata?: ClinicalSourceMetadata
   clinicalSource?: ClinicalReconciliationResult
+  readClinicalSource?: () => ClinicalReconciliationResult | undefined
   resourceQueryStatus: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>>
   /** Per type: its own query has settled (or is disabled, matching the
    * all-types behaviour when there is no patient to query for). */
@@ -191,6 +192,7 @@ function buildClinicalResults(
     vitalSigns,
     sourceMetadata,
     clinicalSource,
+    readClinicalSource: results.find(result => result.data?.getClinicalSource)?.data?.getClinicalSource,
     resourceQueryStatus,
     resourceReady,
     anyLoading,
@@ -272,7 +274,13 @@ function useClinicalResourceAggregate() {
     })
   }, [patientId, queryClient])
 
-  return { aggregate: snapshot.aggregate, patientLoading, refetch }
+  // Patient reads share the capture store but need not refetch clinical queries.
+  // Re-read its immutable generation on render so a same-id patient refresh is visible.
+  const clinicalSource = snapshot.aggregate.readClinicalSource?.() ?? snapshot.aggregate.clinicalSource
+  const aggregate = useMemo(() => clinicalSource === snapshot.aggregate.clinicalSource
+    ? snapshot.aggregate
+    : { ...snapshot.aggregate, clinicalSource }, [snapshot, clinicalSource])
+  return { aggregate, patientLoading, refetch }
 }
 
 /**

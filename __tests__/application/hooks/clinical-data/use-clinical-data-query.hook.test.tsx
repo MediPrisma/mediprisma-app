@@ -249,3 +249,20 @@ it('isolates the same patient id across import generations in source and resourc
     else sessionStorage.setItem('fhir_bundle_override', old)
   }
 })
+
+it('refreshes the shared source generation after a same-id patient refresh without refetching clinical rows', async () => {
+  let currentSource = { policyVersion: 'generation-one' }
+  const repository = fakeSmartRepository({ getClinicalSource: () => currentSource })
+  mockGetClinicalDataRepository.mockResolvedValue(repository as any)
+  mockUsePatientQuery.mockReturnValue({ data: { id: 'patient-1' }, isLoading: false, isFetching: false })
+  const { result, rerender } = renderClinicalData()
+  await waitFor(() => expect(result.current.isLoading).toBe(false))
+  const originalRows = result.current.observations
+  expect(result.current.clinicalSource).toBe(currentSource)
+  currentSource = { policyVersion: 'generation-two' }
+  mockUsePatientQuery.mockReturnValue({ data: { id: 'patient-1', name: 'refreshed synthetic patient' }, isLoading: false, isFetching: false })
+  rerender()
+  expect(result.current.clinicalSource).toBe(currentSource)
+  expect(result.current.observations).toBe(originalRows)
+  expect(repository.fetchObservations).toHaveBeenCalledTimes(1)
+})
