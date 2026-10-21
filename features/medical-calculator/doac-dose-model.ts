@@ -168,6 +168,7 @@ export const CITES = {
   apixabanVtepInducer: cite('apixaban', '4.4', 10, 'for the prevention of VTE in elective hip or knee replacement surgery, for the prevention of stroke and systemic embolism in patients with NVAF and for the prevention of recurrent DVT and PE, apixaban should be used with caution;', 'Eliquis 2.5 mg'),
 
   rivaroxabanMissed: cite('rivaroxaban', '4.2', 86, 'If a dose is missed the patient should take Xarelto immediately and continue on the following day with the once daily intake as recommended.'),
+  rivaroxabanMissed10: cite('rivaroxaban', '4.2', 29, 'If a dose is missed the patient should take Xarelto immediately and then continue the following day with once daily intake as before.', 'Xarelto 10 mg'),
   rivaroxabanVteAcute: cite('rivaroxaban', '4.2', 86, 'The recommended dose for the initial treatment of acute DVT or PE is 15 mg twice daily for the first three weeks followed by 20 mg once daily for the continued treatment and prevention of recurrent DVT and PE.'),
   rivaroxabanVteExtended: cite('rivaroxaban', '4.2', 87, 'When extended prevention of recurrent DVT and PE is indicated (following completion of at least 6 months therapy for DVT or PE), the recommended dose is 10 mg once daily.'),
   rivaroxabanVteExtendedHigh: cite('rivaroxaban', '4.2', 87, 'a dose of Xarelto 20 mg once daily should be considered.'),
@@ -195,6 +196,7 @@ export const CITES = {
   dabigatranVte220: cite('dabigatran', '4.2', 34, 'For DVT/PE the recommendation for the use of 220 mg dabigatran etexilate taken as one 110 mg capsule twice daily is based on pharmacokinetic and pharmacodynamic analyses and has not been studied in this clinical setting.'),
   dabigatranSwitch: cite('dabigatran', '4.2', 33, 'The parenteral anticoagulant should be discontinued and dabigatran etexilate should be started 0-2 hours prior to the time that the next dose of the alternate therapy would be due'),
   dabigatranSwitchUfh: cite('dabigatran', '4.2', 33, 'or at the time of discontinuation in case of continuous treatment (e.g. intravenous Unfractionated Heparin (UFH))'),
+  dabigatranMissed: cite('dabigatran', '4.2', 32, 'It is recommended to continue with the remaining daily doses of dabigatran etexilate at the same time of the next day. No double dose should be taken to make up for missed individual doses.'),
   dabigatranVtepTable: cite('dabigatran', '4.2 Table 1', 32, 'Dose recommendations and duration of therapy for primary prevention of VTE in orthopaedic surgery'),
   dabigatranVtepElderly: cite('dabigatran', '4.2 Table 1', 32, 'Patients aged 75 or above'),
   dabigatranVtepHaemostasis: cite('dabigatran', '4.2', 32, 'For both surgeries, if haemostasis is not secured, initiation of treatment should be delayed.'),

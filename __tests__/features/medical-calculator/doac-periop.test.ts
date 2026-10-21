@@ -194,6 +194,16 @@ describe('AF ablation and minor risk keep the last scheduled dose (#review 2)', 
     expect(evening.resume.skippedAfter).toEqual([])
     expect(formatLocal(evening.resume.firstDose!)).toBe('11-03 20:00')
   })
+  it('dabigatran once daily: the dose is not made up, the next day’s follows — its own label (#review final Opus 3)', () => {
+    const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'dabigatran:220:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T09:00' })
+    expect(result.resume.delayed).toBeUndefined()
+    expect(times(result.resume.skippedAfter)).toEqual(['11-03 09:00'])
+    expect(formatLocal(result.resume.firstDose!)).toBe('11-04 09:00')
+    expect(allCites(result)).toContain(CITES.dabigatranMissed)
+    expect(allText(result)).not.toContain('延到恢復時服用')
+    // Rivaroxaban 10 mg quotes the 10 mg SmPC's own missed-dose line.
+    expect(allCites(plan({ procedure_kind: 'minimal', regimen: 'rivaroxaban:10:1', dose_time_2: '' }))).toContain(CITES.rivaroxabanMissed10)
+  })
   it('qd: the day’s dose is taken at the restart instead, the same day (EHRA Figure 15; #review final Opus)', () => {
     // qd 09:00, minor risk 08:00–09:00: the 09:00 dose moves to 15:00, then 09:00 the next day — not a 48 h gap.
     const result = plan({ procedure_kind: 'minimal', haemostasis: 'yes', regimen: 'rivaroxaban:20:1', dose_time_1: '09:00', dose_time_2: '', surgery_end_at: '2026-11-03T09:00' })

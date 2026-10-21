@@ -57,6 +57,10 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
    - AF 消融依 EHRA Fig 16 單獨處理，不走一般高風險流程；極低風險在谷底濃度時做。
    - 照常服用處置前最後一個排定劑量。距離短於谷底時數（消融 12 h；極低風險 bid 12 h、qd 24 h）時，提示調整服藥或處置時間，計算機不替使用者跳過該劑。
    - 例：rivaroxaban 每天 08:00、19:00 消融，最後一劑是當天 08:00（11 h），不是前一天（35 h）。
+   - 極低風險時，處置當下到恢復前的那一劑依各藥仿單的漏服規則處理（EHRA Fig 15）：
+     - bid：不服用、不補服，從下一個排定時間繼續。
+     - rivaroxaban、edoxaban qd：恢復仍在同一天就延到恢復時服用；已跨日則不補服。兩藥仿單都寫「立即服用，隔天照常」。
+     - dabigatran qd：不補服，隔天同一時間繼續（Pradaxa 仿單）。
    - 消融在拔 sheath 後 3–5 h 恢復，恢復前要排除心包填塞。apixaban 另引仿單的「does not need to be interrupted」。
 3. **低／高風險**：分級依 EHRA Table 12，時數依 Fig 14。仿單的時數並列顯示，不參與決定。
 4. **神經軸與深部神經叢／周邊阻斷**（ASRA 2025，第 5 版；取代 2018 年第 4 版）：
@@ -114,7 +118,7 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 
 同一份 PDF 中，其他劑量的 SmPC 會在引文的 `document` 欄位標明，例如 apixaban 髖膝預防的「Eliquis 2.5 mg」（p.2–5、10），以及 rivaroxaban 髖膝預防的「Xarelto 10 mg」（p.29–31）。
 
-每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 123 段：122 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
+每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 127 段：126 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
 
 ### 指引（不是仿單，另列來源與頁碼）
 
