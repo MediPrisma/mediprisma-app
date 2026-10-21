@@ -1,7 +1,7 @@
 import type { CalcInput, CalculatorDef, L } from '../types'
 import { AGE_INPUT, SEX_INPUT, WEIGHT_LOINC } from './_shared'
 import { DOAC_REGIMEN_OPTIONS, type DoacSelectKey } from '../doac-clinical-autofill'
-import { DOAC_RULES_VERSION, calculateDoacDoses, checkRegimen, crclLabel } from '../doac-dose-model'
+import { DOAC_RULES_VERSION, calculateDoacDoses, checkRegimen, crclLabel, regimenDay } from '../doac-dose-model'
 import { calculatePeriop, formatLocal } from '../doac-periop-model'
 
 const YES_NO = [
@@ -74,8 +74,13 @@ export const DOAC_DOSE: CalculatorDef[] = [{
         { value: 'none', label: { en: 'None given', zh: '未使用' } },
       ],
     },
+    {
+      key: 'anticoagulant_switch', type: 'select', label: { en: 'The other anticoagulant is only the acute-VTE parenteral agent, stopped as the oral one starts', zh: '其他抗凝血劑只有急性 VTE 的注射劑，開始口服時停用' }, defaultValue: '',
+      options: [{ value: 'no', label: { en: 'No (warfarin, another DOAC, or kept on)', zh: '否（warfarin、另一種 DOAC，或會繼續用）' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
+    },
     { key: 'pe_unstable', type: 'select', label: { en: 'Haemodynamically unstable PE, or thrombolysis/embolectomy possible (acute VTE)', zh: '血行動力學不穩定 PE，或可能溶栓／取栓（急性 VTE）' }, options: YES_NO, defaultValue: '' },
     { key: 'vte_day', type: 'number', label: { en: 'Day of oral treatment (acute VTE, optional)', zh: '口服治療第幾天（急性 VTE，選填）' }, unit: 'day', optional: true },
+    { key: 'postop_day', type: 'number', label: { en: 'Day after surgery, 0 = day of surgery (hip/knee, optional)', zh: '術後第幾天，手術當天為 0（髖膝預防，選填）' }, unit: 'day', optional: true },
     ...RENAL_INPUTS,
     {
       key: 'liver', type: 'select', label: { en: 'Liver', zh: '肝功能' }, defaultValue: '',
@@ -109,7 +114,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     ddi('ddi_anticoagulant', { en: 'Another anticoagulant (warfarin, heparin, another DOAC)', zh: '其他抗凝血劑（warfarin、heparin、另一種 DOAC）' }),
   ],
   inputGroups: [
-    { key: 'indication', title: { zh: '適應症', en: 'Indication' }, hint: { zh: 'VTE 與髖膝預防各有劑量規則，不套用 NVAF 的減量條件。注射抗凝、不穩定 PE、治療天數只在急性 VTE 判讀。', en: 'VTE and hip/knee prophylaxis have their own dose rules, not NVAF’s reductions. Parenteral anticoagulation, unstable PE and treatment day are read for acute VTE only.' }, keys: ['indication', 'parenteral_lead_in', 'pe_unstable', 'vte_day'] },
+    { key: 'indication', title: { zh: '適應症', en: 'Indication' }, hint: { zh: 'VTE 與髖膝預防各有劑量規則，不套用 NVAF 的減量條件。注射抗凝、注射劑轉換、不穩定 PE、口服第幾天只在急性 VTE 判讀；術後第幾天只在髖膝預防判讀。', en: 'VTE and hip/knee prophylaxis have their own dose rules, not NVAF’s reductions. Parenteral anticoagulation, the parenteral switch, unstable PE and the day of oral treatment are read for acute VTE only; the day after surgery for hip/knee prophylaxis only.' }, keys: ['indication', 'parenteral_lead_in', 'anticoagulant_switch', 'pe_unstable', 'vte_day', 'postop_day'] },
     { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
     { key: 'patient', title: { zh: '肝功能與其他', en: 'Liver and other' }, hint: { zh: 'Child-Pugh 可用 Child-Pugh 計算機；未填視為未知，不當作「無」。', en: 'Use the Child-Pugh calculator if needed; a blank is unknown, not 「no」.' }, keys: ['liver', 'liver_enzymes', 'bilirubin_high', 'pregnancy', 'gi_risk'] },
     { key: 'regimen', title: { zh: '目前處方', en: 'Current prescription' }, keys: ['regimen'] },
@@ -121,8 +126,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
   compute: (values) => {
     const { crcl, results } = calculateDoacDoses(values)
     if (!crcl) return null
-    const day = values.vte_day ? Number(values.vte_day) : undefined
-    const check = checkRegimen(values.regimen, results, day)
+    const check = checkRegimen(values.regimen, results, regimenDay(values))
     const crclText = `CrCl ${crclLabel(crcl.value)}${crcl.source === 'manual' ? '（手動）' : ''}`
     return {
       value: crclLabel(crcl.value),
@@ -162,7 +166,8 @@ export const DOAC_DOSE: CalculatorDef[] = [{
         { value: 'catheter', label: { en: 'Indwelling epidural catheter', zh: '留置硬膜外導管' } },
       ],
     },
-    { key: 'surgery_at', type: 'datetime', label: { en: 'Procedure time', zh: '手術時刻' } },
+    { key: 'surgery_at', type: 'datetime', label: { en: 'Start: anaesthesia or procedure (the neuraxial puncture, if any)', zh: '開始時刻：麻醉或處置（有脊髓／硬膜外時為穿刺時刻）' } },
+    { key: 'surgery_end_at', type: 'datetime', label: { en: 'End of the procedure (restart is counted from it)', zh: '手術結束時刻（術後恢復由此起算）' } },
     { key: 'renal_reliable', type: 'select', label: { en: 'Renal function reliably determined (dabigatran, neuraxial)', zh: '腎功能已可靠評估（dabigatran、神經軸用）' }, options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }], defaultValue: '' },
     { key: 'hypertension', type: 'select', label: { en: 'Hypertension (dabigatran, neuraxial)', zh: '高血壓（dabigatran、神經軸用）' }, options: YES_NO, defaultValue: '' },
     { key: 'antiplatelet', type: 'select', label: { en: 'Antiplatelet drug (dabigatran, neuraxial)', zh: '抗血小板藥（dabigatran、神經軸用）' }, options: YES_NO, defaultValue: '' },
@@ -174,7 +179,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     { key: 'regimen', title: { zh: '目前處方與服藥時刻', en: 'Prescription and dose times' }, hint: { zh: '跳過幾劑要用病人實際服藥的時刻，不用處方預設時間。', en: 'Skipped doses need the times the patient actually takes them.' }, keys: ['regimen', 'dose_time_1', 'dose_time_2'] },
     { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
     { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, hint: { zh: '分級依 EHRA 2021 Table 12；有脊髓／硬膜外麻醉時一律另依 ASRA 2018，不論分級。未填視為未知。', en: 'Tiers follow EHRA 2021 Table 12; spinal/epidural anaesthesia always adds ASRA 2018 whatever the tier. A blank is unknown.' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at', 'renal_reliable', 'hypertension', 'antiplatelet'] },
-    { key: 'after', title: { zh: '術後', en: 'After the procedure' }, keys: ['haemostasis', 'catheter_removed_at', 'traumatic_puncture'] },
+    { key: 'after', title: { zh: '術後', en: 'After the procedure' }, hint: { zh: '術前停藥算到開始時刻，術後恢復從結束時刻起算。', en: 'The interval before runs to the start; the restart is counted from the end.' }, keys: ['surgery_end_at', 'haemostasis', 'catheter_removed_at', 'traumatic_puncture'] },
   ],
   compute: (values) => {
     const plan = calculatePeriop(values)

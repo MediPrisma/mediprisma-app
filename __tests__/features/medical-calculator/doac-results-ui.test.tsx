@@ -32,14 +32,14 @@ describe('DOAC dose results by indication', () => {
 describe('DOAC peri-procedural results', () => {
   const spec: CalcValues = {
     regimen: 'apixaban:5:2', dose_time_1: '08:00', dose_time_2: '20:00', age: '70', sex: 'male', weight: '70', scr: '1.0', crcl_manual: '62', dialysis: 'no',
-    procedure_kind: 'high', neuraxial: 'single', surgery_at: '2026-11-03T08:00', traumatic_puncture: 'no',
+    procedure_kind: 'high', neuraxial: 'single', surgery_at: '2026-11-03T08:00', surgery_end_at: '2026-11-03T10:00', traumatic_puncture: 'no',
   }
   it('shows the interval, the last dose, the skipped doses and the earliest restart', () => {
     render(<DoacPeriopResults values={spec} locale="zh-TW" />)
     expect(screen.getByTestId('doac-periop-hold')).toHaveTextContent('最後一劑距手術 ≥72 小時')
     expect(screen.getByTestId('doac-periop-clock')).toHaveTextContent('最晚服藥：10-31 08:00')
     expect(screen.getByTestId('doac-periop-clock')).toHaveTextContent('跳過 6 劑')
-    expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('最早 11-05 08:00')
+    expect(screen.getByTestId('doac-periop-resume')).toHaveTextContent('最早 11-05 10:00')
     expect(screen.getAllByText('ASRA 2018 7.1 · p.279').length).toBeGreaterThan(0)
   })
   it('CrCl 12: no interval, asked to assess individually', () => {

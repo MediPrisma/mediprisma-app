@@ -140,19 +140,33 @@ describe('dabigatran', () => {
     expect(dose('vtep-knee', { crcl_manual: '70', ddi_amiodarone: 'yes' }, 'dabigatran')).toBe('150x1')
     expect(agent('vtep-knee', { crcl_manual: '70', ddi_amiodarone: '' }, 'dabigatran')).toMatchObject({ verdict: 'missing', missing: expect.arrayContaining(['ddi_amiodarone']) })
   })
+  it('hip prophylaxis is read by the day after surgery: 75 mg on the day of surgery, 150 mg qd from day 1 (#review Astra 3)', () => {
+    const { results } = run('vtep-hip', { age: '76', crcl_manual: '62' })
+    expect(checkRegimen('dabigatran:75:1', results, 0)?.state).toBe('matches')
+    expect(checkRegimen('dabigatran:150:1', results, 0)).toMatchObject({ state: 'differs', text: { zh: expect.stringContaining('術後第 0 天仿單劑量為 75 mg qd') } })
+    expect(checkRegimen('dabigatran:150:1', results, 2)?.state).toBe('matches')
+    expect(checkRegimen('dabigatran:75:1', results)).toMatchObject({ state: 'unsettled', text: { zh: expect.stringContaining('術後第幾天') } })
+    expect(checkRegimen('dabigatran:150:1', results)?.state).toBe('unsettled')
+    const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
+    expect(calc.compute({ ...base, indication: 'vtep-hip', age: '76', crcl_manual: '62', regimen: 'dabigatran:75:1', postop_day: '0' })!.interpretation?.zh).toContain('與仿單劑量一致')
+  })
   it('CrCl 28: contraindicated in every indication', () => {
     for (const indication of ['vte-acute', 'vte-extended', 'vtep-hip']) expect(agent(indication, { crcl_manual: '28' }, 'dabigatran').verdict).toBe('contraindicated')
   })
 })
 
 describe('shared acute-VTE rules', () => {
-  it('a parenteral anticoagulant in the lead-in is the label’s switch, not 「another anticoagulant: contraindicated」', () => {
-    const switching = agent('vte-acute', { ddi_anticoagulant: 'yes' }, 'apixaban')
+  it('the lead-in’s parenteral agent, and only it, stopped as the oral one starts, is the label’s switch', () => {
+    const switching = agent('vte-acute', { ddi_anticoagulant: 'yes', anticoagulant_switch: 'yes' }, 'apixaban')
     expect(switching.verdict).toBe('dose')
     expect(switching.hits.map((h) => h.cite)).toContain(CITES.apixabanSwitch)
-    expect(agent('vte-acute', { ddi_anticoagulant: 'yes', parenteral_lead_in: '' }, 'apixaban')).toMatchObject({ verdict: 'review', missing: expect.arrayContaining(['parenteral_lead_in']) })
-    expect(agent('vte-acute', { ddi_anticoagulant: 'yes', parenteral_lead_in: 'none' }, 'apixaban').verdict).toBe('contraindicated')
-    expect(agent('nvaf', { ddi_anticoagulant: 'yes' }, 'apixaban').verdict).toBe('contraindicated')
+    expect(agent('vte-acute', { ddi_anticoagulant: 'yes' }, 'apixaban')).toMatchObject({ verdict: 'review', missing: expect.arrayContaining(['anticoagulant_switch']) })
+    expect(agent('nvaf', { ddi_anticoagulant: 'yes', anticoagulant_switch: 'yes' }, 'apixaban').verdict).toBe('contraindicated')
+  })
+  it('a completed lead-in does not excuse warfarin or a second DOAC (#review Astra 1)', () => {
+    const { results } = run('vte-acute', { ddi_anticoagulant: 'yes', parenteral_lead_in: 'done', anticoagulant_switch: 'no' })
+    expect(results.find((r) => r.agent === 'apixaban')!.verdict).toBe('contraindicated')
+    expect(checkRegimen('apixaban:5:2', results, 10)?.state).toBe('label-against')
   })
   it('unstable PE: not recommended for apixaban, rivaroxaban and edoxaban; dabigatran’s label is silent — individual review', () => {
     for (const name of ['apixaban', 'rivaroxaban', 'edoxaban'] as const) expect(agent('vte-acute', { pe_unstable: 'yes' }, name).verdict).toBe('not-recommended')

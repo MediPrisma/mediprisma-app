@@ -115,7 +115,7 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
             <div className="mt-1 space-y-0.5 rounded border border-border bg-muted/30 px-2 py-1" data-testid="doac-periop-clock">
               <p className="text-xs leading-snug">{zh ? '最晚服藥：' : 'Last dose by: '}<span className="font-medium tabular-nums">{formatLocal(plan.lastDoseBy)}</span></p>
               {plan.lastDose && <p className="text-xs leading-snug">{zh ? '最後一劑：' : 'Last dose taken: '}<span className="font-medium tabular-nums">{formatLocal(plan.lastDose)}</span></p>}
-              <Times label={zh ? `跳過 ${plan.skippedBefore.length} 劑（至手術時刻）：` : `Skip ${plan.skippedBefore.length} doses (to the procedure): `} dates={plan.skippedBefore} />
+              <Times label={zh ? `跳過 ${plan.skippedBefore.length} 劑（至開始時刻）：` : `Skip ${plan.skippedBefore.length} doses (to the start): `} dates={plan.skippedBefore} />
             </div>
           )}
           <Chips keys={plan.missing} zh={zh} onReviewField={onReviewField} />

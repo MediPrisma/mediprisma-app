@@ -8,6 +8,7 @@ import {
   calculateDoacDoses,
   checkRegimen,
   crclLabel,
+  regimenDay,
   type DoacAgentResult,
   type DoacIndication,
   type DoacRuleHit,
@@ -79,7 +80,7 @@ export function DoacDoseResults({ values, locale, onReviewField }: {
 }) {
   const zh = locale === 'zh-TW'
   const { crcl, indication, results } = calculateDoacDoses(values)
-  const check = checkRegimen(values.regimen, results, values.vte_day ? Number(values.vte_day) : undefined)
+  const check = checkRegimen(values.regimen, results, regimenDay(values))
   return (
     <section aria-label={zh ? 'DOAC 劑量（依仿單）' : 'DOAC dose by label'} className="overflow-hidden rounded-lg border border-border" data-testid="doac-dose-results">
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 border-b bg-muted/40 px-3 py-2">

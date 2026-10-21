@@ -267,7 +267,8 @@ export interface DoacRegimen {
 /**
  * One step of a schedule that changes over time: a loading phase, the dose it
  * steps down to, a parenteral lead-in. `fromDay`/`toDay` count days of oral
- * treatment, so the prescription can be read against the day it is on.
+ * treatment from 1 (acute VTE), or days after surgery from 0, the day of
+ * surgery (hip/knee prophylaxis) — see `regimenDay`.
  */
 export interface DoacStep {
   text: L
@@ -312,7 +313,7 @@ export interface DoacAgentResult {
 
 export type DoacInputKey =
   | 'indication' | 'age' | 'sex' | 'weight' | 'scr' | 'crcl_manual' | 'dialysis' | 'liver' | 'liver_enzymes' | 'bilirubin_high' | 'regimen' | 'gi_risk' | 'pregnancy'
-  | 'parenteral_lead_in' | 'pe_unstable' | 'vte_day'
+  | 'parenteral_lead_in' | 'anticoagulant_switch' | 'pe_unstable' | 'vte_day' | 'postop_day'
   | 'ddi_ketoconazole' | 'ddi_itraconazole' | 'ddi_vori_posaconazole' | 'ddi_hiv_pi' | 'ddi_ciclosporin' | 'ddi_tacrolimus'
   | 'ddi_dronedarone' | 'ddi_verapamil' | 'ddi_amiodarone' | 'ddi_quinidine' | 'ddi_erythromycin' | 'ddi_clarithromycin' | 'ddi_glecaprevir' | 'ddi_inducer' | 'ddi_anticoagulant'
 
@@ -409,12 +410,16 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
     if (dialysis === '') missing.push('dialysis')
     if (yes(values, 'ddi_anticoagulant')) {
       // Acute VTE starts on a parenteral anticoagulant (edoxaban and dabigatran
-      // after ≥5 days of it): that is the label's own switch, not co-therapy.
-      if (acute && (leadIn === 'done' || leadIn === 'ongoing')) {
-        hit('caution', t('其他抗凝血劑為急性 VTE 的注射抗凝：停用注射劑，於下一次預定給藥時間開始口服，兩者不可同時給', 'The other anticoagulant is the acute-VTE parenteral one: stop it and start the oral agent at its next scheduled time, never both'), SWITCH_CITE[agent])
-      } else if (acute && leadIn === '') {
-        hit('review', t('併用其他抗凝血劑：若是急性 VTE 的注射抗凝，依轉換規則；否則禁忌。請填「注射抗凝」', 'Another anticoagulant: if it is the acute-VTE parenteral one, the switch rules apply; otherwise contraindicated. Answer 「parenteral anticoagulation」'), CITES[`${agent}Anticoagulant`])
-        missing.push('parenteral_lead_in')
+      // after ≥5 days of it): that is the label's own switch, not co-therapy —
+      // but only when it is the only other anticoagulant and stops as the oral
+      // one starts. 「Another anticoagulant」 also covers warfarin and a second
+      // DOAC, so that is asked, never inferred from the lead-in.
+      const switching = values.anticoagulant_switch ?? ''
+      if (acute && switching === 'yes') {
+        hit('caution', t('其他抗凝血劑只有急性 VTE 的注射劑：停用注射劑，於下一次預定給藥時間開始口服，兩者不可同時給', 'The only other anticoagulant is the acute-VTE parenteral one: stop it and start the oral agent at its next scheduled time, never both'), SWITCH_CITE[agent])
+      } else if (acute && switching === '') {
+        hit('review', t('併用其他抗凝血劑：若只有急性 VTE 的注射劑且開始口服時停用，依轉換規則；否則禁忌。請填「是否只是注射劑轉換」', 'Another anticoagulant: if it is only the acute-VTE parenteral agent, stopped as the oral one starts, the switch rules apply; otherwise contraindicated. Answer 「only the parenteral switch」'), CITES[`${agent}Anticoagulant`])
+        missing.push('anticoagulant_switch')
       } else {
         hit('contraindicated', t('併用其他抗凝血劑（轉換、維持導管或消融時的 UFH 除外）', 'Another anticoagulant (except switching, catheter-patency or ablation UFH)'), CITES[`${agent}Anticoagulant`])
       }
@@ -618,8 +623,8 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
           reduced = true
           doses = [{ mg: 150, perDay: 1 }]
           schedule.push(
-            { text: t('手術當天、術後 1–4 小時：75 mg 一粒', 'Day of surgery, 1–4 h after: one 75 mg capsule'), regimen: { mg: 75, perDay: 1 }, cite: CITES.dabigatranVtepTable },
-            { text: t('術後第 1 天起：150 mg qd（75 mg 兩粒）', 'From the day after surgery: 150 mg qd (two 75 mg capsules)'), regimen: { mg: 150, perDay: 1 }, cite: CITES.dabigatranVtepTable },
+            { text: t('手術當天、術後 1–4 小時：75 mg 一粒', 'Day of surgery, 1–4 h after: one 75 mg capsule'), regimen: { mg: 75, perDay: 1 }, fromDay: 0, toDay: 0, cite: CITES.dabigatranVtepTable },
+            { text: t('術後第 1 天起：150 mg qd（75 mg 兩粒）', 'From the day after surgery: 150 mg qd (two 75 mg capsules)'), regimen: { mg: 150, perDay: 1 }, fromDay: 1, cite: CITES.dabigatranVtepTable },
           )
           for (const item of reduce) hit('dose', t(`建議減量：${item.text.zh}`, `Reduction recommended: ${item.text.en}`), item.cite)
           if (c <= 50 && yes(values, 'ddi_verapamil')) {
@@ -632,8 +637,8 @@ export function calculateDoacDoses(values: CalcValues): { crcl: DoacCrcl | null;
         } else {
           doses = [{ mg: 220, perDay: 1 }]
           schedule.push(
-            { text: t('手術當天、術後 1–4 小時：110 mg 一粒', 'Day of surgery, 1–4 h after: one 110 mg capsule'), regimen: { mg: 110, perDay: 1 }, cite: CITES.dabigatranVtepTable },
-            { text: t('術後第 1 天起：220 mg qd（110 mg 兩粒）', 'From the day after surgery: 220 mg qd (two 110 mg capsules)'), regimen: { mg: 220, perDay: 1 }, cite: CITES.dabigatranVtepTable },
+            { text: t('手術當天、術後 1–4 小時：110 mg 一粒', 'Day of surgery, 1–4 h after: one 110 mg capsule'), regimen: { mg: 110, perDay: 1 }, fromDay: 0, toDay: 0, cite: CITES.dabigatranVtepTable },
+            { text: t('術後第 1 天起：220 mg qd（110 mg 兩粒）', 'From the day after surgery: 220 mg qd (two 110 mg capsules)'), regimen: { mg: 220, perDay: 1 }, fromDay: 1, cite: CITES.dabigatranVtepTable },
           )
           hit('dose', t('未達減量條件', 'No reduction criterion'), CITES.dabigatranVtepTable)
         }
@@ -721,6 +726,8 @@ export const DOAC_FIELD_LABELS: Record<string, L> = {
   pregnancy: { zh: '懷孕／哺乳', en: 'pregnancy/breast-feeding' },
   gi_risk: { zh: '胃腸出血風險', en: 'GI bleeding risk' },
   parenteral_lead_in: { zh: '注射抗凝', en: 'parenteral anticoagulation' },
+  anticoagulant_switch: { zh: '是否只是注射劑轉換', en: 'only the parenteral switch' },
+  postop_day: { zh: '術後第幾天', en: 'day after surgery' },
   pe_unstable: { zh: '不穩定 PE', en: 'unstable PE' },
   vte_day: { zh: '治療第幾天', en: 'treatment day' },
   ddi_inducer: { zh: '強效誘導劑', en: 'strong inducer' },
@@ -739,6 +746,19 @@ export type RegimenCheck =
   | { state: 'differs'; text: L; cite?: LabelCite }
   | { state: 'label-against'; text: L }
   | { state: 'unsettled'; text: L }
+
+/**
+ * The day the prescription is read on, where the label's dose changes with
+ * time: the day of oral treatment for acute VTE (`vte_day`, from 1), the day
+ * after surgery for hip/knee prophylaxis (`postop_day`, 0 = the day of surgery).
+ */
+export function regimenDay(values: CalcValues): number | undefined {
+  const indication = doacIndication(values)
+  const raw = indication === 'vtep-hip' || indication === 'vtep-knee' ? values.postop_day : indication === 'vte-acute' ? values.vte_day : undefined
+  if (raw === undefined || raw === '') return undefined
+  const day = Number(raw)
+  return Number.isInteger(day) ? day : undefined
+}
 
 const freq = (perDay: number) => (perDay === 2 ? 'bid' : 'qd')
 const regimenText = (dose: DoacRegimen) => `${dose.mg} mg ${freq(dose.perDay)}`
@@ -774,12 +794,14 @@ export function checkRegimen(regimenValue: string | undefined, results: readonly
   // A dose that changes with time: the phase decides which number is the label's.
   let labelDoses = result.doses
   const phased = result.schedule.filter((step): step is DoacStep & { regimen: DoacRegimen; fromDay: number } => !!step.regimen && step.fromDay !== undefined)
-  const known = day !== undefined && Number.isFinite(day) && day >= 1
+  const firstDay = Math.min(...phased.map((step) => step.fromDay))
+  const known = phased.length > 0 && day !== undefined && Number.isFinite(day) && day >= firstDay
   if (phased.length) {
     if (!known) {
       const step = phased.find((item) => same(item.regimen))
       if (step || result.doses.some(same)) {
-        return { state: 'unsettled', text: { zh: `${prescribed}：為${step ? `「${step.text.zh}」` : '維持期'}的劑量，需確認目前是治療第幾天`, en: `${prescribed}: the dose of ${step ? `「${step.text.en}」` : 'the maintenance phase'}; confirm the treatment day` } }
+        const which = firstDay === 0 ? ['術後第幾天', 'the day after surgery'] : ['治療第幾天', 'the treatment day']
+        return { state: 'unsettled', text: { zh: `${prescribed}：為${step ? `「${step.text.zh}」` : '維持期'}的劑量，需確認目前是${which[0]}`, en: `${prescribed}: the dose of ${step ? `「${step.text.en}」` : 'the maintenance phase'}; confirm ${which[1]}` } }
       }
     } else {
       const due = phased.find((item) => day! >= item.fromDay && (item.toDay === undefined || day! <= item.toDay))
@@ -799,7 +821,7 @@ export function checkRegimen(regimenValue: string | undefined, results: readonly
   // Without the day, name every phase's dose rather than the maintenance one alone.
   const named = phased.length && !known ? [...phased.map((step) => step.regimen), ...result.doses] : labelDoses
   const label = [...new Set(named.map(regimenText))].join(' 或 ')
-  const dayText = phased.length && known ? `第 ${day} 天` : ''
+  const dayText = known ? (firstDay === 0 ? `術後第 ${day} 天` : `第 ${day} 天`) : ''
   const extra = regimen.agent === 'edoxaban' && regimen.mg === 15
     ? CITES.edoxaban15
     : regimen.agent === 'dabigatran' && regimen.mg === 75 && regimen.perDay === 2

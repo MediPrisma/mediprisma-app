@@ -16,6 +16,8 @@
  *   none, and the 15–29 row is not borrowed for them.
  * - Restart is the latest of the procedure's own interval, catheter removal
  *   + 6 h and a traumatic puncture's 24 h; haemostasis is always a condition.
+ *   The interval before is counted to the start (the neuraxial puncture when
+ *   there is one), the interval after from the end: they are separate times.
  * - Skipped doses need the times the patient actually takes them.
  * - Anti-Xa is a drug-calibrated level with no accepted threshold; nothing
  *   here says a patient may proceed.
@@ -141,11 +143,11 @@ export interface PeriopResult {
   holdHours?: number
   /** Where the interval came from, and what the label says beside it. */
   basis: PeriopLine[]
-  /** The procedure time less `holdHours`: the latest a last dose may be taken. */
+  /** The start (`surgery_at`, the neuraxial puncture when there is one) less `holdHours`: the latest a last dose may be taken. */
   lastDoseBy?: Date
   /** The last scheduled dose to take, from the patient's own dose times. */
   lastDose?: Date
-  /** Scheduled doses after `lastDose`, up to and including the procedure time. */
+  /** Scheduled doses after `lastDose`, up to and including the start. */
   skippedBefore: Date[]
   resume: {
     lines: PeriopLine[]
@@ -153,7 +155,7 @@ export interface PeriopResult {
     earliest?: Date
     /** The first scheduled dose at or after `earliest`. */
     firstDose?: Date
-    /** Scheduled doses after the procedure and before `firstDose`. */
+    /** Scheduled doses after the start and before `firstDose`. */
     skippedAfter: Date[]
   }
   notes: PeriopLine[]
@@ -165,7 +167,7 @@ export interface PeriopResult {
 
 export type PeriopInputKey =
   | 'regimen' | 'age' | 'sex' | 'weight' | 'scr' | 'crcl_manual' | 'dialysis'
-  | 'procedure_kind' | 'neuraxial' | 'surgery_at' | 'dose_time_1' | 'dose_time_2'
+  | 'procedure_kind' | 'neuraxial' | 'surgery_at' | 'surgery_end_at' | 'dose_time_1' | 'dose_time_2'
   | 'haemostasis' | 'catheter_removed_at' | 'traumatic_puncture' | 'renal_reliable' | 'hypertension' | 'antiplatelet'
 
 /** 「2026-11-03T08:00」 as local time; undefined for anything else. */
@@ -397,8 +399,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   }
   result.notes.push(levelNote(agent), line(t('不以 LMWH／UFH 橋接。', 'No LMWH/UFH bridging.'), G.ehraBridging))
 
-  // Clock times: the procedure, then the patient's own dose times.
+  // Clock times: the start (the puncture, if any) for the interval before, the
+  // end for the interval after, and the patient's own dose times.
   const surgery = parseLocalDateTime(values.surgery_at)
+  const ended = parseLocalDateTime(values.surgery_end_at)
   if (!surgery) result.pending.push('surgery_at')
   const timeKeys = (['dose_time_1', 'dose_time_2'] as const).slice(0, regimen.perDay)
   const minutes = timeKeys.map((key) => parseClock(values[key]))
@@ -421,12 +425,12 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
   } else {
     const after = tier === 'minimal' ? 6 : tier === 'low' ? 24 : 48
     restart.push({
-      at: surgery ? addHours(surgery, after) : undefined,
+      at: ended ? addHours(ended, after) : undefined,
       line: line(t(
-        tier === 'minimal' ? '極低風險：術後 ≥6 小時恢復' : tier === 'low' ? '低風險：術後 24 小時恢復全劑量' : '高風險：術後 48（–72）小時恢復全劑量；其間依院內流程考慮預防劑量 heparin',
-        tier === 'minimal' ? 'Minor risk: restart ≥6 h after' : tier === 'low' ? 'Low risk: full dose 24 h after' : 'High risk: full dose 48 (–72) h after; prophylactic-dose heparin per hospital protocol meanwhile',
+        tier === 'minimal' ? '極低風險：手術結束後 ≥6 小時恢復' : tier === 'low' ? '低風險：手術結束後 24 小時恢復全劑量' : '高風險：手術結束後 48（–72）小時恢復全劑量；其間依院內流程考慮預防劑量 heparin',
+        tier === 'minimal' ? 'Minor risk: restart ≥6 h after the end' : tier === 'low' ? 'Low risk: full dose 24 h after the end' : 'High risk: full dose 48 (–72) h after the end; prophylactic-dose heparin per hospital protocol meanwhile',
       ), G.ehraFig14, G.ehraFig15),
-      key: surgery ? undefined : 'surgery_at',
+      key: ended ? undefined : 'surgery_end_at',
     })
   }
   if (neuraxial === 'catheter') {
@@ -451,8 +455,8 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       restart.push({
         at: surgery ? addHours(surgery, 24) : undefined,
         line: line(t(
-          agent === 'rivaroxaban' ? '穿刺出血：延後 24 小時（以手術時刻為穿刺時刻）' : '穿刺出血：延後 24 小時（rivaroxaban 仿單；本藥仿單未述，請與麻醉科確認；以手術時刻為穿刺時刻）',
-          agent === 'rivaroxaban' ? 'Traumatic puncture: delay 24 h (puncture taken as the procedure time)' : 'Traumatic puncture: delay 24 h (rivaroxaban label; this agent’s label is silent — confirm with anaesthesia; puncture taken as the procedure time)',
+          agent === 'rivaroxaban' ? '穿刺出血：自穿刺起延後 24 小時' : '穿刺出血：自穿刺起延後 24 小時（rivaroxaban 仿單；本藥仿單未述，請與麻醉科確認）',
+          agent === 'rivaroxaban' ? 'Traumatic puncture: delay 24 h from the puncture' : 'Traumatic puncture: delay 24 h from the puncture (rivaroxaban label; this agent’s label is silent — confirm with anaesthesia)',
         ), CITES.rivaroxabanTraumatic),
         key: surgery ? undefined : 'surgery_at',
       })
@@ -490,7 +494,8 @@ export const PERIOP_FIELD_LABELS: Record<string, L> = {
   neuraxial: { zh: '脊髓／硬膜外麻醉', en: 'neuraxial anaesthesia' },
   CrCl: { zh: 'CrCl（年齡、性別、體重、Cr）', en: 'CrCl (age, sex, weight, creatinine)' },
   dialysis: { zh: '透析', en: 'dialysis' },
-  surgery_at: { zh: '手術時刻', en: 'procedure time' },
+  surgery_at: { zh: '開始時刻（穿刺）', en: 'start (puncture) time' },
+  surgery_end_at: { zh: '手術結束時刻', en: 'end time' },
   dose_time_1: { zh: '服藥時刻 1', en: 'dose time 1' },
   dose_time_2: { zh: '服藥時刻 2', en: 'dose time 2' },
   catheter_removed_at: { zh: '拔管時刻', en: 'catheter removal time' },

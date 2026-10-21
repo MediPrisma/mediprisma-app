@@ -9,11 +9,11 @@ import { GUIDELINE_CITES, calculatePeriop, ehraHours, formatLocal, isLabelCite, 
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
 
-/** Apixaban 5 mg bid at 08:00 and 20:00, CrCl 62, no neuraxial, high risk, 2026-11-03 08:00. */
+/** Apixaban 5 mg bid at 08:00 and 20:00, CrCl 62, no neuraxial, high risk, 2026-11-03 08:00 to 10:00. */
 const base: CalcValues = {
   regimen: 'apixaban:5:2', dose_time_1: '08:00', dose_time_2: '20:00',
   age: '70', sex: 'male', weight: '70', scr: '1.0', crcl_manual: '62', dialysis: 'no',
-  procedure_kind: 'high', neuraxial: 'none', surgery_at: '2026-11-03T08:00',
+  procedure_kind: 'high', neuraxial: 'none', surgery_at: '2026-11-03T08:00', surgery_end_at: '2026-11-03T10:00',
   traumatic_puncture: 'no', haemostasis: '',
 }
 const plan = (values: CalcValues = {}) => calculatePeriop({ ...base, ...values })
@@ -21,7 +21,7 @@ const times = (dates: Date[]) => dates.map(formatLocal)
 const allCites = (result: PeriopResult) => [...result.basis, ...result.resume.lines, ...result.notes].flatMap((line) => line.cites)
 const allText = (result: PeriopResult) => [...result.basis, ...result.resume.lines, ...result.notes].map((line) => `${line.text.zh} ${line.text.en}`).join('\n')
 
-describe('the specification’s example: apixaban 5 mg bid, CrCl 62, total knee replacement, spinal anaesthesia, 2026-11-03 08:00', () => {
+describe('the specification’s example: apixaban 5 mg bid, CrCl 62, total knee replacement, spinal anaesthesia at 2026-11-03 08:00, ending 10:00', () => {
   const result = plan({ neuraxial: 'single' })
   it('72 h — ASRA’s neuraxial interval outranks EHRA’s 48 h', () => {
     expect(result).toMatchObject({ state: 'timed', tier: 'high', holdHours: 72 })
@@ -32,10 +32,10 @@ describe('the specification’s example: apixaban 5 mg bid, CrCl 62, total knee 
     expect(formatLocal(result.lastDose!)).toBe('10-31 08:00')
     expect(times(result.skippedBefore)).toEqual(['10-31 20:00', '11-01 08:00', '11-01 20:00', '11-02 08:00', '11-02 20:00', '11-03 08:00'])
   })
-  it('restart from 11-05 08:00 (high risk, 48 h), with haemostasis confirmed first; three more doses skipped', () => {
-    expect(formatLocal(result.resume.earliest!)).toBe('11-05 08:00')
-    expect(formatLocal(result.resume.firstDose!)).toBe('11-05 08:00')
-    expect(times(result.resume.skippedAfter)).toEqual(['11-03 20:00', '11-04 08:00', '11-04 20:00'])
+  it('restart from 11-05 10:00 (high risk, 48 h after the end), with haemostasis confirmed first; the 11-05 20:00 dose is the first back', () => {
+    expect(formatLocal(result.resume.earliest!)).toBe('11-05 10:00')
+    expect(formatLocal(result.resume.firstDose!)).toBe('11-05 20:00')
+    expect(times(result.resume.skippedAfter)).toEqual(['11-03 20:00', '11-04 08:00', '11-04 20:00', '11-05 08:00'])
     expect(allText(result)).toContain('恢復前需確認止血')
   })
   it('the label’s own 48 h stands beside EHRA, and no bridging', () => {
@@ -113,7 +113,7 @@ describe('neuraxial (ASRA 2018)', () => {
     expect(plan({ procedure_kind: 'minimal' }).holdHours).toBe(12)
     const qd = plan({ procedure_kind: 'minimal', regimen: 'edoxaban:60:1', dose_time_2: '' })
     expect(qd.holdHours).toBe(24)
-    expect(formatLocal(qd.resume.earliest!)).toBe('11-03 14:00')
+    expect(formatLocal(qd.resume.earliest!)).toBe('11-03 16:00')
   })
 })
 
@@ -124,8 +124,8 @@ describe('restart: the latest condition', () => {
     expect(result.resume.earliest).toBeUndefined()
     expect(result.pending).toContain('catheter_removed_at')
   })
-  it('removed 11-04 10:00: high-risk 48 h is later (11-05 08:00); removed 11-05 06:00: removal + 6 h is (11-05 12:00)', () => {
-    expect(formatLocal(plan({ ...catheter, catheter_removed_at: '2026-11-04T10:00' }).resume.earliest!)).toBe('11-05 08:00')
+  it('removed 11-04 10:00: high-risk 48 h is later (11-05 10:00); removed 11-05 06:00: removal + 6 h is (11-05 12:00)', () => {
+    expect(formatLocal(plan({ ...catheter, catheter_removed_at: '2026-11-04T10:00' }).resume.earliest!)).toBe('11-05 10:00')
     const late = plan({ ...catheter, catheter_removed_at: '2026-11-05T06:00' })
     expect(formatLocal(late.resume.earliest!)).toBe('11-05 12:00')
     expect(formatLocal(late.resume.firstDose!)).toBe('11-05 20:00')
@@ -135,7 +135,18 @@ describe('restart: the latest condition', () => {
     expect(plan({ neuraxial: 'single', traumatic_puncture: '' }).resume.earliest).toBeUndefined()
     const bloody = plan({ neuraxial: 'single', traumatic_puncture: 'yes' })
     expect(allCites(bloody)).toContain(CITES.rivaroxabanTraumatic)
-    expect(formatLocal(bloody.resume.earliest!)).toBe('11-05 08:00')
+    expect(formatLocal(bloody.resume.earliest!)).toBe('11-05 10:00')
+  })
+  it('the interval before runs to the start, the restart from the end (#review Astra 2)', () => {
+    // A puncture at 07:30 is the start: 72 h before it, not before 08:00.
+    const early = plan({ neuraxial: 'single', surgery_at: '2026-11-03T07:30' })
+    expect(formatLocal(early.lastDoseBy!)).toBe('10-31 07:30')
+    expect(formatLocal(early.lastDose!)).toBe('10-30 20:00')
+    // Ending at 12:00, the 48 h run from 12:00.
+    expect(formatLocal(plan({ surgery_end_at: '2026-11-03T12:00' }).resume.earliest!)).toBe('11-05 12:00')
+    const open = plan({ surgery_end_at: '' })
+    expect(open.resume.earliest).toBeUndefined()
+    expect(open.pending).toContain('surgery_end_at')
   })
   it('haemostasis not yet established: no earliest time', () => {
     expect(plan({ haemostasis: 'no' }).resume.earliest).toBeUndefined()
@@ -224,7 +235,7 @@ describe('sources', () => {
   it('the calculator: listed once, its headline the last dose and the earliest restart', () => {
     const calc = CALCULATORS.filter((c) => c.id === 'doac-periop')
     expect(calc).toHaveLength(1)
-    expect(calc[0]!.compute({ ...base, neuraxial: 'single' })!.interpretation?.zh).toBe('apixaban：最後一劑距手術 ≥72 小時（10-31 08:00 以前）；最早 11-05 08:00 恢復，需確認止血')
+    expect(calc[0]!.compute({ ...base, neuraxial: 'single' })!.interpretation?.zh).toBe('apixaban：最後一劑距手術 ≥72 小時（10-31 08:00 以前）；最早 11-05 10:00 恢復，需確認止血')
     expect(calc[0]!.compute({ ...base, regimen: '' })).toBeNull()
   })
 })
