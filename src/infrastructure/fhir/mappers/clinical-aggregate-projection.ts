@@ -1,3 +1,4 @@
+import { includeCapturedClinicalRows } from './clinical-graph-intake'
 import { getClinicalSourceNodePatientExclusionReason, isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
 import { createClinicalRecordVariants } from '@/src/core/services/clinical-record-variants'
 import type { ClinicalDataCollection, ObservationEntity } from '@/src/core/entities/clinical-data.entity'
@@ -9,7 +10,7 @@ import { attachReportObservations } from '@/src/core/services/clinical-report-me
 import { isVitalObservation } from '@/src/core/utils/observation-selectors'
 import { mutableClinicalProjection } from '../services/clinical-source-session'
 import { FhirMapper } from './fhir.mapper'
-import { projectClinicalMedicationContents } from './clinical-medication-projection'
+import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from './clinical-medication-projection'
 
 type SourceNode = ClinicalReconciliationResult['graph']['nodes'][number]
 type SourceEdge = ClinicalReconciliationResult['graph']['references'][number]
@@ -76,6 +77,7 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
   source: ClinicalReconciliationResult | undefined = input.clinicalSource,
 ): T {
   if (!source?.graph) return input
+  input = includeCapturedClinicalRows(input, source)
   const mappedNodeKeys = new Set(Object.values(input).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
   const context = createClinicalProjectionContext(source, mappedNodeKeys)
   for (const [key, node] of context.nodes) if (!isClinicalSourceNodePatientEligible(node, source.graph.nodes)) context.nodes.delete(key)
@@ -228,7 +230,20 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
       const type = key.split(':')[0]
       const counts = exclusions.get(type)
       const excludedCount = Object.values(counts ?? {}).reduce((sum, count) => sum + count, 0)
-      if (!excludedCount) continue
+      if (!excludedCount) {
+        if (status.state === 'ok' || status.state === 'empty') {
+          const rows = key === 'Observation:vital-signs' ? next.vitalSigns : next[arrayByType[type]]
+          if (Array.isArray(rows)) {
+            const count = rows.filter((row: any) => !row.clinicalSourceNodeKey || context.nodes.get(row.clinicalSourceNodeKey)?.resource.resourceType === type).length
+            const state = count ? 'ok' : 'empty'
+            if (count !== status.count || state !== status.state) {
+              if (statuses === input.resourceQueryStatus) statuses = { ...statuses }
+              statuses[key as keyof typeof statuses] = { ...status, count, state }
+            }
+          }
+        }
+        continue
+      }
       // Retain real transport/auth failures rather than replacing them with success.
       if (!status.exclusionReason && status.state !== 'ok' && status.state !== 'empty') continue
       const rows = key === 'Observation:vital-signs' ? next.vitalSigns : next[arrayByType[type]]
@@ -245,5 +260,6 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     }
     next.resourceQueryStatus = statuses
   }
+  next.resourceQueryStatus = projectClinicalMedicationQueryStatus(next.medications ?? [], next.resourceQueryStatus)
   return next as T
 }

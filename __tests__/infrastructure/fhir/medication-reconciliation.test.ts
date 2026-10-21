@@ -1,3 +1,4 @@
+import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { reconcileMedicationRequests } from '@/src/infrastructure/fhir/services/medication-reconciliation'
 import { renderHook } from '@testing-library/react'
@@ -488,4 +489,18 @@ it('exports uncertain use without rewriting the original source status in proven
   expect(entry.resource.status).toBe('unknown')
   expect(JSON.stringify(entry.resource.note)).toContain('Original source order status: active')
   expect(JSON.stringify(entry.resource.note)).not.toContain('Original source order status: unknown')
+})
+
+it('does not revive locally reconciled source prescriptions during shared aggregate projection', () => {
+  const { cloud, hospital } = fixture()
+  const data = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+    { resource: { resourceType: 'Patient', id: 'synthetic' } },
+    { resource: { resourceType: 'Encounter', id: 'one', subject: { reference: 'Patient/synthetic' } } },
+    { resource: cloud }, { resource: hospital },
+  ] })!.collection
+  expect(data.medications).toHaveLength(1)
+  expect(data.clinicalSource!.graph.nodes.filter(node => node.resource.resourceType === 'MedicationRequest')).toHaveLength(2)
+  const projected = projectClinicalAggregate(data)
+  expect(projected.medications).toHaveLength(1)
+  expect(projected.medications[0].sourcePrescriptions).toEqual(data.medications[0].sourcePrescriptions)
 })

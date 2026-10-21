@@ -10,6 +10,8 @@ export interface ClinicalSourceSession {
   readonly successfulResponses: Map<string, any>
   readonly results: Map<string, { generation: number; result: ClinicalReconciliationResult }>
 }
+const smartSources = new WeakSet<ClinicalReconciliationResult>()
+export const isSmartClinicalSource = (source: ClinicalReconciliationResult): boolean => smartSources.has(source)
 const sessions = new WeakMap<object, Map<string, ClinicalSourceSession>>()
 const bindings = new WeakMap<object, ClinicalSourceSession>()
 const ownerClients = new WeakMap<object, object>()
@@ -65,13 +67,16 @@ export function captureClinicalSource(session: ClinicalSourceSession, queryKey: 
     generation: String(++session.generation), resources: mutableClinicalProjection(resources),
   }
   session.captures.set(JSON.stringify([patientScope, queryKey]), capture)
-  return reconcileClinicalSources([capture])
+  const result = reconcileClinicalSources([capture])
+  smartSources.add(result)
+  return result
 }
 export function readClinicalSource(session: ClinicalSourceSession, patientScope: string): ClinicalReconciliationResult {
   if (session.revoked) return revokedClinicalSource
   const cached = session.results.get(patientScope)
   if (cached?.generation === session.generation) return cached.result
   const result = reconcileClinicalSources([...session.captures.values()].filter(capture => capture.patientScope === patientScope))
+  smartSources.add(result)
   session.results.set(patientScope, { generation: session.generation, result })
   return result
 }
