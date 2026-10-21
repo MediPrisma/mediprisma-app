@@ -1,6 +1,6 @@
 {
   "base": "119d4143be37ff3041d6d358f2c396f58f49721a",
-  "applicationCode": "35318125cb22a3f4b7ea9db0a4ec6e6085495a0e",
+  "applicationCode": "1a4fe2f99edb01f944e72f1b543bc10c54359242",
   "fixtureSHA256": "9a96500d75de65a65fb970ddc9622fea5cfc1895c683730e9b86119541042fb6",
   "identicalFixtures": true,
   "viewports": [
@@ -19,7 +19,7 @@
   "attachmentSourceHistoryTested": true,
   "periodEndAndSourceAssetsTested": true,
   "crossPeriodBoundsTested": true,
-  "negativeTimezoneTests": 133,
+  "negativeTimezoneTests": 134,
   "nhiViewer": {
     "simulatedBridge": true,
     "liveAuthenticatedService": false,
@@ -30,24 +30,24 @@
       "sha256": "63e083207eca81f60760caf44db4dee41ef79142113e3ed7b47a5099eb2cff57"
     },
     "after-1440.png": {
-      "sha256": "20e0a3b4e7a245857ce21190223269973f4ba067645a40d231409a991172554c"
+      "sha256": "eaefbd9288b34ab5e29c085857ee84b0a417f8df109f57918e6c93f74f854b99"
     },
     "before-390.png": {
       "sha256": "e399a1ee3c64c9aac9a9ebc3c6b5d1ad0a93b6bf8996ba942e3182f16e54813e"
     },
     "after-390.png": {
-      "sha256": "72808ce4fd86894d3e2453e912acd70589c38a8cf861550479212ade38eb21d8"
+      "sha256": "bfba9092e69170e48c2fa82b37f4cd9f9b454b15186cb2b2fe5e3a935ef4ce21"
     },
     "after-sources.png": {
-      "sha256": "5c6814b54e532ecc6f9679959e1853459acb60bb450cfd90fc7bc319a811179e"
+      "sha256": "2cdb025682dc4ea44c02ea5a777bdac01c0ed17fc559a550d075c7668603bf84"
     },
     "after-viewer.png": {
       "sha256": "630b6afa1264bf04564352eda6945d83d985e5df6c4b258aeba94d92e335846d"
     }
   },
   "localUnitTests": {
-    "suites": 18,
-    "passed": 310
+    "suites": 85,
+    "passed": 747
   },
   "additionalIntegration": {
     "workerModule": "passed",
