@@ -1,7 +1,7 @@
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
 
-it('carries top-level Condition versions with versioned REST fullUrls into CDSS variant exclusions', () => {
+it('carries top-level Condition versions with versioned REST fullUrls into one automatically selected CDSS fact', () => {
   const parsed = LocalBundleService.parse({ resourceType: 'Bundle', entry: [
     { fullUrl: 'urn:uuid:patient-a', resource: { resourceType: 'Patient', id: 'a' } },
     { fullUrl: 'https://ehr.example/fhir/Condition/heart-failure/_history/1', resource: {
@@ -29,8 +29,9 @@ it('carries top-level Condition versions with versioned REST fullUrls into CDSS 
 
   expect(profile.excludedClinicalRecordVariants).toBeUndefined()
   expect(parsed.collection.conditions).toHaveLength(1)
-  expect(parsed.collection.conditions[0].clinicalStatus).toBe('resolved')
+  expect(parsed.collection.conditions[0].clinicalStatus).toBe('active')
   expect(parsed.collection.medications).toHaveLength(1)
   expect(parsed.collection.clinicalSource?.graph.nodes.map(node => node.fullUrl)).toContain('https://ehr.example/fhir/MedicationRequest/medication/_history/1')
   expect(parsed.collection.clinicalSource?.graph.nodes.map(node => node.fullUrl)).toContain('https://ehr.example/fhir/MedicationRequest/medication/_history/2')
 })
+

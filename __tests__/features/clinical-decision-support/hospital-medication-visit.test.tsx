@@ -130,20 +130,20 @@ describe('an anticoagulant known only from an unconfirmed hospital prescription'
     expect(point.state).not.toBe('done')
     expect(point).toMatchObject({
       state: 'info',
-      headline: 'apixaban 5 mg bid：使用待核對',
-      why: '院內處方（2026-09-25），目前使用待確認；開始或調整抗凝前先核對實際用藥',
+      headline: 'apixaban 5 mg bid：院內紀錄',
+      why: '院內處方（2026-09-25），紀錄未提供使用狀態；已納入用藥與安全判讀',
       actions: [],
-      needsData: ['核對目前用藥'],
+      needsData: undefined,
     })
     expect(point.next).toBeUndefined()
     expect(point.changesIf).toBeUndefined()
     // The agent and dose remain, as information, not as a settled step.
     expect(point.chain).toEqual([
-      { id: 'whether', state: 'current', text: '使用待核對' },
+      { id: 'whether', state: 'current', text: '院內紀錄' },
       { id: 'which', state: 'later', text: 'apixaban 5 mg bid' },
       { id: 'dose', state: 'later', text: '見 DP-09' },
     ])
-    expect(point.scoreTable).toMatchObject({ title: 'CHA₂DS₂-VA', total: 5, verdict: '≥2 建議抗凝 · 院內處方待核對', pending: true })
+    expect(point.scoreTable).toMatchObject({ title: 'CHA₂DS₂-VA', total: 5, verdict: '≥2 建議抗凝 · 院內處方紀錄', pending: true })
 
     // Neither conclusion anywhere on the map: not 「已抗凝」, not 「未用抗凝」, and no OAC to start or choose.
     const text = JSON.stringify(model)
@@ -157,12 +157,12 @@ describe('an anticoagulant known only from an unconfirmed hospital prescription'
     const point = dp07(afPage([unconfirmed('unknown')], 'en').model)
     expect(point).toMatchObject({
       state: 'info',
-      headline: 'apixaban 5 mg bid: use to confirm',
-      why: 'Hospital prescription (2026-09-25); current use needs confirmation. Confirm actual use before starting or changing anticoagulation',
+      headline: 'apixaban 5 mg bid: hospital record',
+      why: 'Hospital prescription (2026-09-25); use status not recorded; available prescription facts are included in medication and safety assessment',
       actions: [],
-      needsData: ['Confirm current medication use'],
+      needsData: undefined,
     })
-    expect(point.scoreTable?.verdict).toBe('≥2: anticoagulation recommended · hospital prescription to confirm')
+    expect(point.scoreTable?.verdict).toBe('≥2: anticoagulation recommended · hospital prescription record')
     expect(point.scoreTable?.verdict).not.toContain('on it')
   })
 
@@ -217,10 +217,10 @@ describe('applyHospitalMedicationVisitReview', () => {
 
   it('holds a folded 「要不要抗凝」 (HF DP-14) and the follow-up status line at 待核對', () => {
     const reviewed = applyHospitalMedicationVisitReview(model([settled]), pending, 'zh-TW')
-    expect(reviewed.headline).toBe('AF 追蹤：warfarin 2.5 mg qd（使用待核對）')
+    expect(reviewed.headline).toBe('AF 追蹤：warfarin 2.5 mg qd（院內紀錄）')
     expect(reviewed.points[0]).toMatchObject({
-      dp: 'DP-14', decisionId: 'af-oac-whether', state: 'info', headline: 'warfarin 2.5 mg qd：使用待核對', actions: [],
-      chain: [{ id: 'whether', state: 'current', text: '使用待核對' }, { id: 'which', state: 'later', text: 'warfarin' }],
+      dp: 'DP-14', decisionId: 'af-oac-whether', state: 'info', headline: 'warfarin 2.5 mg qd：院內紀錄', actions: [],
+      chain: [{ id: 'whether', state: 'current', text: '院內紀錄' }, { id: 'which', state: 'later', text: 'warfarin' }],
     })
   })
 
@@ -270,10 +270,10 @@ describe('決策地圖 v2 with an unconfirmed hospital apixaban order', () => {
     expect(bookMapLine()).not.toHaveTextContent('已定')
     expect(bookEntry()).not.toHaveTextContent('已定')
     const score = within(bookEntry()).getByTestId('cdss-book-score')
-    expect(score).toHaveTextContent('≥2 建議抗凝 · 院內處方待核對')
+    expect(score).toHaveTextContent('≥2 建議抗凝 · 院內處方紀錄')
     expect(score.querySelector('[data-pending]')).not.toBeNull()
     // DP-07 sits beside DP-08 (要不要｜用哪個); its line follows the pair, at full width.
-    expect(document.body).toHaveTextContent('apixaban 5 mg bid：使用待核對 · 院內處方（2026-09-25），目前使用待確認')
+    expect(document.body).toHaveTextContent('apixaban 5 mg bid：院內紀錄 · 院內處方（2026-09-25），紀錄未提供使用狀態')
     expect(document.body).not.toHaveTextContent('已在用')
     expect(document.body).not.toHaveTextContent('已抗凝')
     expect(within(bookEntry()).queryByRole('button', { name: /開始抗凝/ })).toBeNull()

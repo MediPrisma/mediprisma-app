@@ -178,6 +178,11 @@ const sharedAggregates = new WeakMap<object, {
   snapshot: ClinicalSnapshot
 }>()
 const sharedReprojections = new WeakMap<ClinicalSnapshot, WeakMap<ClinicalReconciliationResult, ClinicalResourceAggregate>>()
+// Background refreshes keep one complete, immutable snapshot. Scope changes
+// never reuse it; once all searches settle the new graph and rows replace it
+// together. A newly committed capture must not rewrite the retained snapshot.
+const settledAggregates = new WeakMap<object, { scope: string; aggregate: ClinicalResourceAggregate }>()
+const refreshingAggregates = new WeakMap<ClinicalResourceAggregate, ClinicalResourceAggregate>()
 function reprojectClinicalSnapshot(snapshot: ClinicalSnapshot, source: ClinicalReconciliationResult | undefined): ClinicalResourceAggregate {
   if (!source || source === snapshot.aggregate.clinicalSource) return snapshot.aggregate
   let projections = sharedReprojections.get(snapshot)
@@ -262,6 +267,20 @@ function useClinicalResourceAggregate() {
     return snapshot.aggregate.readClinicalSource?.() ?? snapshot.aggregate.clinicalSource
   }, [snapshot, captureEpoch, patient])
   const aggregate = reprojectClinicalSnapshot(snapshot, clinicalSource)
+  const scope = JSON.stringify([patientId, sourceEpoch])
+  if (aggregate.allSettled && !aggregate.anyFetching && !patientLoading) {
+    settledAggregates.set(queryClient, { scope, aggregate })
+  } else if (aggregate.anyFetching && !aggregate.anyLoading && !patientLoading) {
+    const settled = settledAggregates.get(queryClient)
+    if (settled?.scope === scope) {
+      let refreshing = refreshingAggregates.get(settled.aggregate)
+      if (!refreshing) {
+        refreshing = { ...settled.aggregate, anyFetching: true, readClinicalSource: () => settled.aggregate.clinicalSource }
+        refreshingAggregates.set(settled.aggregate, refreshing)
+      }
+      return { aggregate: refreshing, patientLoading, refetch }
+    }
+  }
   return { aggregate, patientLoading, refetch }
 }
 

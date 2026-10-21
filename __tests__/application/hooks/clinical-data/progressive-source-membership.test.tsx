@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
-import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { useClinicalData, useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { getClinicalDataRepository } from '@/src/application/composition'
 import { fhirClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
@@ -52,3 +52,32 @@ it.each(['absolute', 'urn', 'version'].flatMap(style => ['report-first', 'observ
     expect(members![0].valueQuantity?.value).toBe(7)
   } finally { unmount(); queryClient.clear() }
 })
+
+it('keeps the settled chart and tools available through a background source refresh, then switches atomically',async()=>{
+ jest.clearAllMocks()
+ const refresh=deferred();let refreshing=false
+ jest.mocked(fhirClient.getClient).mockResolvedValue({state:{serverUrl:'https://one.invalid/fhir'}} as any)
+ const report={entry:[{resource:{resourceType:'DiagnosticReport',id:'report',status:'final',code:{text:'Synthetic report'},result:[{reference:'Observation/result'}]}}]}
+ const observation=(value:number)=>({entry:[{resource:{resourceType:'Observation',id:'result',status:'final',code:{text:'Synthetic test'},valueQuantity:{value,unit:'mg'}}}]})
+ jest.mocked(fhirClient.requestAllPages).mockImplementation(async(url:string)=>url.startsWith('DiagnosticReport?')?report:url.startsWith('Observation?')?refreshing?refresh.promise:observation(7):{entry:[]})
+ jest.mocked(getClinicalDataRepository).mockResolvedValue(new FhirClinicalDataRepository())
+ const queryClient=new QueryClient({defaultOptions:{queries:{retry:false}}})
+ const wrapper=({children}:{children:ReactNode})=><QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+ const {result,unmount}=renderHook(()=>({chart:useClinicalData(),tools:useClinicalDataQuery()}),{wrapper})
+ try{
+  await waitFor(()=>expect(result.current.tools.data?.observations[0]?.valueQuantity?.value).toBe(7))
+  const previous=result.current.tools.data!.clinicalSource
+  refreshing=true
+  let pending!:Promise<void>
+  act(()=>{pending=queryClient.invalidateQueries({predicate:query=>query.queryKey.includes('observations')})})
+  await waitFor(()=>expect(result.current.tools.isFetching).toBe(true))
+  expect(result.current.tools.data?.observations[0]?.valueQuantity?.value).toBe(7)
+  expect(result.current.tools.data?.clinicalSource).toBe(previous)
+  expect(result.current.chart.resourceReady.observations).toBe(true)
+  await act(async()=>{refresh.resolve(observation(8));await pending})
+  await waitFor(()=>expect(result.current.tools.isFetching).toBe(false))
+  expect(result.current.tools.data?.observations[0]?.valueQuantity?.value).toBe(8)
+  expect(result.current.tools.data?.diagnosticReports[0]?._observations?.[0]?.valueQuantity?.value).toBe(8)
+ }finally{unmount();queryClient.clear()}
+})
+

@@ -50,9 +50,13 @@ export function projectMedicationComparisons<T extends { id: string }>(
  * Original copies and pairing metadata remain in the source collection/audit;
  * choosing a display/decision source does not assert a shared FHIR identity. */
 export function selectHospitalMedicationComparisons<T extends { id: string; _sourceRecordComparison?: SourceRecordComparison }>(records: T[]): T[] {
-  const projected=projectMedicationComparisons(records, record=>record._sourceRecordComparison, record=>({
+  const projected=projectHospitalMedicationComparisons(records).map(item=>item.record)
+  return projected.length===records.length && projected.every((record,index)=>record===records[index]) ? records : projected
+}
+
+export function projectHospitalMedicationComparisons<T extends { id: string; _sourceRecordComparison?: SourceRecordComparison }>(records: T[]) {
+  return projectMedicationComparisons(records, record=>record._sourceRecordComparison, record=>({
     dataOrigin:isVghtpeSource(record as any) ? 'hospital' : isMedcloudSource(record as any) ? 'medcloud' : undefined,
     isInactive:false,
-  })).map(item=>item.record)
-  return projected.length===records.length && projected.every((record,index)=>record===records[index]) ? records : projected
+  }))
 }

@@ -1,5 +1,6 @@
 import type { ClinicalReconciliationResult } from './clinical-reconciliation'
 import { clinicalEncounterAlias } from './clinical-encounter-alias'
+import { createClinicalRecordResolution } from './clinical-record-resolution'
 import type { EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 
 export type ScopedEncounterReference = { encounterId: string; organization?: string }
@@ -39,8 +40,12 @@ export function graphEncounterReferenceOrganization(
   encounters: readonly EncounterEntity[],
 ): ScopedEncounterReference | undefined {
   if (!reference || !originNodeKey) return undefined
+  const resolution = createClinicalRecordResolution(source, new Set([
+    originNodeKey, ...encounters.flatMap(row => row.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey] : []),
+  ]))
+  const references = source.graph.references.map(edge => resolution.reference(edge))
   const targets = new Map<string, EncounterEntity>()
-  for (const edge of source.graph.references) {
+  for (const edge of references) {
     if (edge.origin.key !== originNodeKey || edge.path !== path || edge.status !== 'resolved') continue
     for (const targetKey of edge.targetKeys) {
       const visibleKey = clinicalEncounterAlias(source, targetKey) ?? targetKey
@@ -51,7 +56,7 @@ export function graphEncounterReferenceOrganization(
   }
   if (targets.size !== 1) return undefined
   const [encounter] = targets.values()
-  const currentReferenceMatches = source.graph.references.some(edge =>
+  const currentReferenceMatches = references.some(edge =>
     edge.origin.key === originNodeKey && edge.path === path && edge.status === 'resolved'
       && edge.targetKeys.some(targetKey => {
         const visibleKey = clinicalEncounterAlias(source, targetKey) ?? targetKey

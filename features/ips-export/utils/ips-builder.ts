@@ -202,10 +202,10 @@ function assembleSection(
 
 export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
   const labels: IpsSectionLabels = { ...DEFAULT_SECTION_LABELS, ...(opts.labels ?? {}) }
-  const medications=selectHospitalMedicationComparisons(opts.data.medications).map(medication=>{
+  const medications=projectHospitalMedicationComparisons(opts.data.medications).map(({record:medication,ownedIds})=>{
     const comparison=medication._sourceRecordComparison
     if(!comparison || comparison.status==='confirmed' || medication._sourcePrescriptionRecords?.length) return medication
-    const sources=opts.data.medications.filter(source=>comparison.references.includes(`${source._sourceResourceType || 'MedicationRequest'}/${source.id}`))
+    const sources=opts.data.medications.filter(source=>ownedIds?.includes(source.id))
     return sources.length<2 ? medication : {...medication,_sourcePrescriptionRecords:sources}
   })
   const data = {...opts.data,medications}
@@ -371,4 +371,4 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
   }
   return bundle
 }
-import { selectHospitalMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { projectHospitalMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'

@@ -98,7 +98,9 @@ export function createClinicalRecordVariants(source: ClinicalReconciliationResul
     if (!imported) continue
     const current = result.get(node.key)
     // Imported source ids are audit metadata, never evidence of equivalence.
-    const groupId = current?.groupId ?? scopedImportedClinicalRecordVariant(node, imported.variant).groupId
+    // An imported label cannot establish equivalence between different logical
+    // records. Only graph evidence may join their versions into one group.
+    const groupId = current?.groupId ?? 'cr' + clinicalSourceIdentityDigest(JSON.stringify([recordIdentity(node), imported.variant.groupId]))
     result.set(node.key, Object.freeze({ ...imported.variant, groupId,
       ...(current ? { classification: current.classification === 'conflict' ? 'conflict' : imported.variant.classification, variantCount: Math.max(current.variantCount, imported.variant.variantCount) } : {}) }))
   }

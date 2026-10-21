@@ -50,9 +50,9 @@ export function applyUnresolvedRecordTherapyReview(result: CdssResult, profile: 
         againstCount: enabled.filter(row => row.direction === 'against').length, unknownCount: items.filter(row => row.direction === 'unknown').length }
     })
     return { ...item, patientEvidence: reconcileEvidence(item.patientEvidence), evidenceTables, status: 'needs-data', visitDecision: undefined,
-      title: label + (item.moduleName ? ': ' + item.moduleName : ''), recommendation: message, rationale: message, nextActions: [message],
-      missingData: [...new Set([...(item.missingData ?? []), label])],
-      clinicalReviewItems: [...new Set([...(item.clinicalReviewItems ?? []), label])],
+      title: label + (item.moduleName ? ': ' + item.moduleName : ''), recommendation: message, rationale: message, nextActions: [],
+      missingData: item.missingData,
+      clinicalReviewItems: item.clinicalReviewItems,
       ...(item.semanticRule ? { semanticRule: { ...item.semanticRule, patientData: reconcileEvidence(item.semanticRule.patientData), decisionLogic: message, clinicalConclusion: message } } : {}) }
   }
   return { ...result, recommendations: result.recommendations.map(adapt), automatedChecks: result.automatedChecks?.map(check => {
@@ -87,13 +87,13 @@ export function applyHospitalMedicationReview(
   }
   if (unresolved.length || unresolvedRecordCount) for (const key of HOSPITAL_MEDICATION_EXPOSURE_FACT_KEYS) pendingKeys.add(key)
   const english = locale === 'en'
-  const label = english ? 'Confirm current medication use' : '核對目前用藥'
+  const label = english ? 'Hospital medication record' : '院內用藥紀錄'
   const message = unresolvedRecordCount ? english
-    ? 'Medication content or source versions are unresolved. Reconcile actual use and dose before deciding a medicine is absent, starting it, or increasing it; other verified evidence remains available.'
-    : '來源用藥內容、版本或衝突尚未釐清，判定未使用、開始或加量前需核對實際用藥與劑量；其他已確認證據仍可使用。'
+    ? 'Medication content is unavailable. Available records remain included in safety checks; missing ingredients or doses are not inferred.'
+    : '藥品內容未提供。系統依可用紀錄進行安全判讀，不推定缺少的成分、劑量或未用藥。'
     : english
-    ? 'Hospital prescriptions may still be in use. Confirm actual use, dose, and stop/hold status before starting or increasing medication; possible exposure remains included in safety checks.'
-    : '院內處方仍可能正在使用。開始或加量前，先核對實際用藥、劑量與停藥／暫停狀態；安全判讀持續納入可能的用藥暴露。'
+    ? 'Hospital prescription status is not fully recorded. Available prescription facts remain included in medication and safety assessment; missing use status is not inferred.'
+    : '院內處方未完整記載使用狀態。系統已依可用處方內容進行用藥與安全判讀，不推定缺少的使用狀態。'
 
   const adapt = (item: CdssRecommendation): CdssRecommendation => {
     let changedTable = false
@@ -116,8 +116,8 @@ export function applyHospitalMedicationReview(
         // finding. Keep its direction and physician override so alerts survive.
         const possibleSafetyExposure = item.domain === 'safety' && row.direction === 'supports'
           && (matching.length > 0 || sourceMatches.length > 0)
-        const useLabel = english ? `Current use needs confirmation${names.length ? `: ${names.join(', ')}` : ''}`
-          : `目前使用待確認${names.length ? `：${names.join('、')}` : ''}`
+        const useLabel = english ? `Hospital prescription record${names.length ? `: ${names.join(', ')}` : ''}`
+          : `院內處方紀錄${names.length ? `：${names.join('、')}` : ''}`
         const rowSources = [...new Map([...(row.sources ?? []), ...sources.map((entry) => entry.source), ...(incompleteMedicationRow ? variantSources : [])]
           .map((source) => [sourceKey(source), source])).values()]
         return { ...row,
@@ -125,10 +125,10 @@ export function applyHospitalMedicationReview(
           defaultEnabled: possibleSafetyExposure ? row.defaultEnabled : false,
           value: possibleSafetyExposure ? [row.value, useLabel].filter(Boolean).join(english ? '; ' : '；')
             : incompleteMedicationRow && !sources.length
-            ? unresolvedRecordCount ? english ? 'Unresolved source-record variants or medication content; reconcile medications first' : '來源用藥內容、版本或衝突未釐清，需先核對用藥'
-              : english ? 'Unresolved hospital ingredients; reconcile medications first' : '院內成分未確認，需先核對用藥'
-            : english ? `Current use needs confirmation${names.length ? `: ${names.join(', ')}` : ''}`
-              : `目前使用待確認${names.length ? `：${names.join('、')}` : ''}`,
+            ? unresolvedRecordCount ? english ? 'Medication content unavailable' : '藥品內容未提供'
+              : english ? 'Hospital ingredient not recorded' : '院內紀錄未提供成分'
+            : english ? `Hospital prescription record${names.length ? `: ${names.join(', ')}` : ''}`
+              : `院內處方紀錄${names.length ? `：${names.join('、')}` : ''}`,
           sources: rowSources.length ? rowSources : row.sources,
         }
       })
@@ -154,16 +154,16 @@ export function applyHospitalMedicationReview(
       recommendation: `${item.recommendation} ${message}`,
       ...(item.visitDecision?.actions.some((action) => action.decisionKind === 'prescribed' || action.decisionKind === 'dose-adjusted')
         ? { visitDecision: undefined } : {}),
-      nextActions: [...item.nextActions, message],
-      clinicalReviewItems: [...new Set([...(item.clinicalReviewItems ?? []), label])],
+      nextActions: item.nextActions,
+      clinicalReviewItems: item.clinicalReviewItems,
     }
     // Maps read visitDecision first. Remove start/titrate actions based on
     // unconfirmed use and retain reconciliation in every layout/copy output.
     return { ...item, evidenceTables, patientEvidence, semanticRule, status: 'needs-data', visitDecision: undefined,
       title: `${label}${english ? ': ' : '：'}${item.moduleName || item.title}`,
-      recommendation: message, rationale: message, nextActions: [message],
-      missingData: [...new Set([...(item.missingData ?? []), label])],
-      clinicalReviewItems: [...new Set([...(item.clinicalReviewItems ?? []), label])],
+      recommendation: message, rationale: message, nextActions: [],
+      missingData: item.missingData,
+      clinicalReviewItems: item.clinicalReviewItems,
     }
   }
   return { ...result,

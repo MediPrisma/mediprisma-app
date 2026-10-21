@@ -82,7 +82,7 @@ it('preserves independent unresolved medication content through export, reimport
  expect(validateIpsBundle(bundle).ok).toBe(true)
  expect(statement.modifierExtension).toContainEqual(expect.objectContaining({ url: CLINICAL_MEDICATION_CONTENT_EXTENSION }))
  expect(statement.modifierExtension).not.toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
- expect((statement.text as any).div).toMatch(/prescription exists.*medication content is unresolved/)
+ expect((statement.text as any).div).toMatch(/prescription exists.*medication content is unavailable/)
  expect((statement.medicationCodeableConcept as any).coding).toBeUndefined()
  const imported = projectClinicalAggregate(LocalBundleService.parse(bundle as any)!.collection)
  expect(imported.medications).toHaveLength(1)

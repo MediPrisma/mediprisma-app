@@ -10,14 +10,12 @@ const STATE_LABELS = {
     forbidden: '沒有讀取權限（403）',
     unsupported: '伺服器不支援',
     error: '查詢失敗',
-    incomplete: '內容尚待核對',
   },
   en: {
     unauthorized: 'Authorization expired (401)',
     forbidden: 'Access forbidden (403)',
     unsupported: 'Not supported by server',
     error: 'Query failed',
-    incomplete: 'Content needs reconciliation',
   },
 } as const
 
@@ -30,14 +28,12 @@ export function FhirDataIssuesBanner() {
     refetch,
   } = useClinicalData()
 
-  if (isLoading || queryIssues.length === 0) return null
+  const visibleIssues = queryIssues.filter(([, status]) => status?.state !== 'incomplete')
+  if (isLoading || visibleIssues.length === 0) return null
 
   const isZh = locale === 'zh-TW'
   const labels = STATE_LABELS[isZh ? 'zh-TW' : 'en']
-  const contentOnly = queryIssues.every(([, status]) => status?.state === 'incomplete')
-  const title = contentOnly
-    ? (isZh ? '部分病歷內容待核對' : 'Some clinical content needs reconciliation')
-    : hasBlockingQueryIssues
+  const title = hasBlockingQueryIssues
     ? (isZh ? '部分病歷資料未載入，畫面可能不完整' : 'Some clinical data did not load; this chart may be incomplete')
     : (isZh ? 'FHIR 伺服器未提供部分選用資料' : 'The FHIR server does not provide some optional data')
 
@@ -52,10 +48,10 @@ export function FhirDataIssuesBanner() {
       <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">{title}</span>
-        <span className="shrink-0 opacity-70">{queryIssues.length}</span>
+        <span className="shrink-0 opacity-70">{visibleIssues.length}</span>
       </summary>
       <div className="mt-2 space-y-1 border-t border-current/15 pt-2">
-        {queryIssues.map(([key, status]) => {
+        {visibleIssues.map(([key, status]) => {
           if (!status) return null
           const stateLabel = labels[status.state as keyof typeof labels] ?? status.state
           return (

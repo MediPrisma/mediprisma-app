@@ -6,6 +6,7 @@ import type { ClinicalSourceGraph, ClinicalSourceNode, ClinicalSourceReference }
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { hasMalformedClinicalModifier } from './clinical-record-variant-modifier'
 import { clinicalSourceContextIdentity } from './clinical-source-context'
+import { isClinicalSourceNodePatientEligible } from './clinical-patient-scope'
 
 /** Application selection policy, independent of the immutable source evidence.
  * Only already-established same-record groups participate. Similar clinical
@@ -34,9 +35,13 @@ function rank(node: ClinicalSourceNode): number[] {
   const resource: any = node.resource
   const status = resource.status ?? (typeof resource.clinicalStatus==='string' ? resource.clinicalStatus
     : resource.clinicalStatus?.coding?.[0]?.code ?? resource.clinicalStatus?.text)
+  const clinicalProblem = ['Condition', 'AllergyIntolerance'].includes(resource.resourceType)
+  const activeProblem = ['active', 'recurrence', 'relapse'].includes(status)
+    || resource.clinicalStatus?.coding?.some((coding: any) => ['active', 'recurrence', 'relapse'].includes(coding.code))
   return [isVghtpeSource(resource) ? 2 : isMedcloudSource(resource) ? 0 : 1,
     status === 'entered-in-error' || resource.verificationStatus?.coding?.some((coding: any) => coding.code === 'entered-in-error') ? 3
-      : ['stopped', 'cancelled', 'not-taken', 'ended', 'completed', 'resolved', 'inactive'].includes(status) ? 2
+      : clinicalProblem ? activeProblem ? 2 : 0
+      : ['stopped', 'cancelled', 'not-taken', 'ended', 'completed', 'finished', 'resolved', 'inactive'].includes(status) ? 2
         : status === 'on-hold' ? 1 : 0,
     ['amended', 'corrected'].includes(resource.status) ? 2 : resource.status==='final' ? 1 : 0,
     completeness(resource)]
@@ -64,7 +69,7 @@ export function createClinicalRecordResolution(source: ClinicalReconciliationRes
   const groups = new Map<string, ClinicalSourceNode[]>()
   for (const [key, variant] of variants) {
     const node = nodes.get(key)
-    if (!node || !active.has(key) || hasMalformedClinicalModifier(node.resource)) continue
+    if (!node || !isClinicalSourceNodePatientEligible(node, source.graph.nodes) || hasMalformedClinicalModifier(node.resource)) continue
     // A relinked/missing encounter does not turn versions into independent
     // facts. Different source record IDs/fullUrls already have distinct groups.
     const groupKey = JSON.stringify([node.sourceId, node.patientScope, node.resource.resourceType, variant.groupId])
@@ -74,8 +79,12 @@ export function createClinicalRecordResolution(source: ClinicalReconciliationRes
   }
   const preferred = new Map<string, string>()
   for (const group of groups.values()) {
-    const sourceTier=Math.max(...group.map(node=>rank(node)[0]))
-    const trusted=group.filter(node=>rank(node)[0]===sourceTier)
+    // Only projectable nodes may win, but every eligible transmission of the
+    // same record must redirect to that winner, including dropped includes.
+    const eligible=group.filter(node=>active.has(node.key))
+    if (!eligible.length) continue
+    const sourceTier=Math.max(...eligible.map(node=>rank(node)[0]))
+    const trusted=eligible.filter(node=>rank(node)[0]===sourceTier)
     const newest=Math.max(...trusted.map(node=>timestamp((node.resource.meta as any)?.lastUpdated)))
     // Remove known older versions as a group. Pairwise comparisons between
     // dated and undated records would be non-transitive and arrival-dependent.

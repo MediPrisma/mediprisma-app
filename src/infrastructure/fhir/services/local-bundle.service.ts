@@ -1646,9 +1646,10 @@ export const LocalBundleService = {
     const resolution = createClinicalRecordResolution(clinicalSource, new Set(), false)
     const projectedNodes = selectClinicalSourceNodes(clinicalSource)
     const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
+    const selectedPatientKeys = new Set(primaryPatients.map(node => resolution.preferred.get(node.key) ?? node.key))
     if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
-      || !clinicalSourceNodesEqualWithContext(clinicalSource.graph, primaryPatients[0], node))) {
-      throw new Error('此資料包含多個不同的病人或病人版本，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+      || selectedPatientKeys.size !== 1 && !clinicalSourceNodesEqualWithContext(clinicalSource.graph, primaryPatients[0], node))) {
+      throw new Error('此資料包含多個不同的病人，無法安全匯入。請提供單一病人的 FHIR Bundle。')
     }
     const sourceKeyByResource = new WeakMap<object, string>()
     let entries: any[] = canonicalizeBundleResources({

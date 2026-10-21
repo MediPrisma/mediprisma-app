@@ -50,10 +50,10 @@ it('uses only a resolved graph Encounter edge for source-backed catalog organiza
   ], `${restBase}/Encounter/visit/_history/1`)).toBeUndefined()
 
   expect(compositionOrganization([
-    { fullUrl: `${restBase}/Encounter/visit/_history/2`, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2' }, serviceProvider: { display: 'Hospital two' } } },
-    { fullUrl: `${restBase}/Encounter/visit/_history/3`, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '3' }, serviceProvider: { display: 'Hospital three' } } },
+    { fullUrl: `${restBase}/Encounter/visit/_history/2`, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2', lastUpdated: '2026-09-16' }, serviceProvider: { display: 'Hospital two' } } },
+    { fullUrl: `${restBase}/Encounter/visit/_history/3`, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '3', lastUpdated: '2026-09-17' }, serviceProvider: { display: 'Hospital three' } } },
     { resourceType: 'Composition', id: 'document', encounter: { reference: 'Encounter/visit' } },
-  ], 'Encounter/visit')).toBeUndefined()
+  ], 'Encounter/visit')).toBe('Hospital three')
 })
 
 it('preserves a confirmed local Encounter alias without trusting a raw source comparison field', () => {

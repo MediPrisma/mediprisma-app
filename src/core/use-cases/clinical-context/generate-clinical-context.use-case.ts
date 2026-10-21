@@ -63,7 +63,7 @@ export class GenerateClinicalContextUseCase {
         if (activeMeds.length > 0) {
           items.push('Active Medications:')
           activeMeds.forEach(m => {
-            const name = m.clinicalMedicationContentUncertainty ? 'Unresolved medication content; reconcile the referenced drug and do not infer medication absence' : pickAiMedicationName(
+            const name = m.clinicalMedicationContentUncertainty ? 'Medication content unavailable; do not infer drug identity, dose or medication absence' : pickAiMedicationName(
               m.medicationCodeableConcept,
               m.medicationReference?.display,
             ) || 'Unknown medication'
@@ -77,7 +77,7 @@ export class GenerateClinicalContextUseCase {
           if (items.length > 0) items.push('') // Add blank line separator
           items.push('Stopped Medications:')
           stoppedMeds.forEach(m => {
-            const name = m.clinicalMedicationContentUncertainty ? 'Unresolved medication content; reconcile the referenced drug and do not infer medication absence' : pickAiMedicationName(
+            const name = m.clinicalMedicationContentUncertainty ? 'Medication content unavailable; do not infer drug identity, dose or medication absence' : pickAiMedicationName(
               m.medicationCodeableConcept,
               m.medicationReference?.display,
             ) || 'Unknown medication'

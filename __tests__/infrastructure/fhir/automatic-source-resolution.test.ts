@@ -197,3 +197,17 @@ it('uses the hospital-primary prescription in AI, CDSS and IPS while keeping ori
   expect(imported.medications).toHaveLength(5)
   expect(data.medications).toHaveLength(6)
 })
+
+it('exports each distinct hospital order without attaching the other hospital order as its source',()=>{
+ const input=JSON.parse(JSON.stringify(crossSource))
+ const original=input.entry.find((entry:any)=>entry.resource?.id==='synthetic-order-a')
+ input.entry.push({...original,resource:{...original.resource,id:'synthetic-order-b'}})
+ const data=LocalBundleService.parse(input)!.collection
+ const bundle=buildIpsBundle({patient:{resourceType:'Patient',id:'synthetic'},data})
+ const roots=bundle.entry.map((entry:any)=>entry.resource).filter((resource:any)=>resource.resourceType==='MedicationStatement'&&/Aromasin/i.test(JSON.stringify(resource.medicationCodeableConcept)))
+ expect(roots).toHaveLength(2)
+ const withCopies=roots.filter((root:any)=>root.contained?.length)
+ expect(withCopies).toHaveLength(1)
+ expect(withCopies[0].contained).toHaveLength(2)
+ expect(withCopies[0].contained.filter((record:any)=>record.note?.some((note:any)=>note.text?.startsWith('Hospital record:')))).toHaveLength(1)
+})

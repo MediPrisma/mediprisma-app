@@ -70,10 +70,14 @@ it.each([
   ['wrong version', `${restBase}/Encounter/visit/_history/1`, [
     { fullUrl: `${restBase}/Encounter/visit/_history/2`, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2' }, serviceProvider: { display: 'Synthetic local hospital' } } },
   ]],
-  ['ambiguous relative id', 'Encounter/visit', [
-    { fullUrl: `${restBase}/Encounter/visit/_history/2`, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '2' }, serviceProvider: { display: 'Synthetic local hospital' } } },
-    { fullUrl: `${restBase}/Encounter/visit/_history/3`, resource: { resourceType: 'Encounter', id: 'visit', meta: { versionId: '3' }, serviceProvider: { display: 'Synthetic other hospital' } } },
-  ]],
+
 ])('does not restore a %s reference through legacy suffix matching after scope', (_case, reference, resources) => {
   expect(catalogAfterAiScope(resources as any[], reference as string)).toBeUndefined()
+})
+
+it('uses the selected same-record encounter version for AI citation organization',()=>{
+ expect(catalogAfterAiScope([
+  {fullUrl:`${restBase}/Encounter/visit/_history/2`,resource:{resourceType:'Encounter',id:'visit',meta:{versionId:'2',lastUpdated:'2026-09-16'},serviceProvider:{display:'Synthetic old hospital'}}},
+  {fullUrl:`${restBase}/Encounter/visit/_history/3`,resource:{resourceType:'Encounter',id:'visit',meta:{versionId:'3',lastUpdated:'2026-09-17'},serviceProvider:{display:'Synthetic current hospital'}}},
+ ],'Encounter/visit')).toBe('Synthetic current hospital')
 })

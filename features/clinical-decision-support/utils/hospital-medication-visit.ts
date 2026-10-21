@@ -24,7 +24,7 @@ function regimenLabel(regimen: HospitalUnconfirmedAnticoagulation['regimens'][nu
  * The AF map settles 「要不要抗凝」 (已抗凝／已定, CHA₂DS₂-VA 「已在用」) from any
  * anticoagulant regimen on the profile. Where every anticoagulant there comes
  * from an unconfirmed hospital prescription, that point stays 待核對: the
- * prescription's agent and dose as information, 核對目前用藥 as what it waits
+ * prescription's agent and dose as information, 院內用藥紀錄 as what it waits
  * on, and no action — neither 「已抗凝」 nor 「開始抗凝」. The regimen itself
  * stays on the profile, so interaction, dose and bleeding checks still read
  * it as possible exposure. Nothing else in the model changes.
@@ -62,13 +62,13 @@ export function applyHospitalMedicationVisitReview(
   const label = first ? regimenLabel(first) : recorded !== undefined ? String(recorded) : 'OAC'
   const date = first?.date ?? pending.sources[0]?.date
   // The same words the result adapter uses for every module it holds back.
-  const reconcile = english ? 'Confirm current medication use' : '核對目前用藥'
-  const verdictSuffix = english ? ' · hospital prescription to confirm' : ' · 院內處方待核對'
+  const reconcile = english ? 'Hospital medication record' : '院內用藥紀錄'
+  const verdictSuffix = english ? ' · hospital prescription record' : ' · 院內處方紀錄'
   const review = (point: DecisionPointView): DecisionPointView => {
     if ((point.decisionId ?? point.semanticId) !== OAC_WHETHER) return point
     const verdict = point.scoreTable?.verdict
     const onIt = verdict !== undefined ? ON_IT_SUFFIXES.find((suffix) => verdict.endsWith(suffix)) : undefined
-    // 「≥2 建議抗凝 · 已在用」 → 「≥2 建議抗凝 · 院內處方待核對」, and not yet the patient's conclusion.
+    // 「≥2 建議抗凝 · 已在用」 → 「≥2 建議抗凝 · 院內處方紀錄」, and not yet the patient's conclusion.
     const scoreTable = point.scoreTable && (onIt || variantPending)
       ? { ...point.scoreTable, ...(onIt ? { verdict: `${verdict!.slice(0, -onIt.length)}${verdictSuffix}` } : {}), pending: true }
       : point.scoreTable
@@ -78,24 +78,24 @@ export function applyHospitalMedicationVisitReview(
     return {
       ...rest,
       state: 'info',
-      headline: variantPending ? english ? 'Medication inventory unresolved' : '來源用藥未釐清' : english ? `${label}: use to confirm` : `${label}：使用待核對`,
+      headline: variantPending ? english ? 'Medication inventory unresolved' : '來源用藥未釐清' : english ? `${label}: hospital record` : `${label}：院內紀錄`,
       why: variantPending ? english ? 'Medication source versions or conflicts are unresolved. Neither anticoagulant use nor absence is established; reconcile before deciding whether to start or change treatment.' : '來源用藥版本或衝突未釐清，尚不能判定已使用或未使用抗凝藥；治療決策前需先核對。' : english
-        ? `Hospital prescription${date ? ` (${date})` : ''}; current use needs confirmation. Confirm actual use before starting or changing anticoagulation`
-        : `院內處方${date ? `（${date}）` : ''}，目前使用待確認；開始或調整抗凝前先核對實際用藥`,
+        ? `Hospital prescription${date ? ` (${date})` : ''}; use status not recorded; available prescription facts are included in medication and safety assessment`
+        : `院內處方${date ? `（${date}）` : ''}，紀錄未提供使用狀態；已納入用藥與安全判讀`,
       ...(point.chain ? {
         chain: point.chain.map((step) => step.id === 'whether'
-          ? { ...step, state: 'current' as const, text: english ? 'Use to confirm' : '使用待核對' }
+          ? { ...step, state: 'current' as const, text: english ? 'Hospital record' : '院內紀錄' }
           : step.state === 'done' ? { ...step, state: 'later' as const } : step),
       } : {}),
       actions: [],
-      needsData: [...new Set([...(point.needsData ?? []), reconcile])],
+      needsData: point.needsData,
       ...(scoreTable ? { scoreTable } : {}),
     }
   }
   const points = model.points.map(review)
   // The AF follow-up status line names the regimen (「AF 追蹤：apixaban 5 mg bid」).
   const headline = model.source === 'af' && first && model.headline.includes(label)
-    ? model.headline.replace(label, english ? `${label} (use to confirm)` : `${label}（使用待核對）`)
+    ? model.headline.replace(label, english ? `${label} (hospital record)` : `${label}（院內紀錄）`)
     : model.headline
   return points.every((point, index) => point === model.points[index]) && headline === model.headline
     ? model
