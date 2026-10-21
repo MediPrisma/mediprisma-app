@@ -13,7 +13,8 @@ import { expandObservationValues, observationDisplayValue } from '@/src/core/uti
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
 import { compareImagingCopies, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
-import { getReportDate } from '@/src/shared/utils/report-identity'
+import { getImagingCopySource, getReportDate } from '@/src/shared/utils/report-identity'
+import { formatDate } from '@/src/shared/utils/fhir-helpers'
 import {
   reportSource,
   sharedReportNarrative,
@@ -307,9 +308,11 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           ?? sources.map((source) => source.title).join(' + ')
         // Existing shared pathology reports already use the examination period.
         // Preserve that contract independently of the ordinary row date fallback.
-        const reportDate = representative.effectiveDateTime || representative.effectivePeriod?.start
+        const isCrossSource = groupingKey.startsWith('cross-source|')
+        const reportDate = isCrossSource ? getReportDate(representative)
+          : representative.effectiveDateTime || representative.effectivePeriod?.start
         const datePart = reportDate
-          ? ` (${new Date(reportDate).toLocaleDateString()})`
+          ? ` (${isCrossSource ? formatDate(reportDate) : new Date(reportDate).toLocaleDateString()})`
           : ''
         const reportStatus = normalizeClinicalStatus(representative.status) || 'unknown'
         items.push(`${groupTitle}${datePart} [status: ${reportStatus}] [shared narrative; count once]`)
@@ -340,7 +343,8 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
       const reportDate = report.effectiveDateTime
         || (inferReportDisplayGroup(report) === 'imaging' ? report.effectivePeriod?.start : undefined)
       const datePart = reportDate
-        ? ` (${new Date(reportDate).toLocaleDateString()})`
+        ? ` (${getImagingCopySource(report) && inferReportDisplayGroup(report) === 'imaging'
+          ? formatDate(getReportDate(report)) : new Date(reportDate).toLocaleDateString()})`
         : ''
       
       const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'

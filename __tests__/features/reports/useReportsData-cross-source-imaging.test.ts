@@ -7,6 +7,7 @@ import { getReportDate } from '@/src/shared/utils/report-identity'
 import { NHI_MEDICLOUD_SOURCE_EXTENSION_URL } from '@/src/shared/utils/observation-provenance.utils'
 import { renderHook } from '@testing-library/react'
 import { useEncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
+import { formatDate } from '@/src/shared/utils/fhir-helpers'
 
 const BODY = 'Synthetic imaging finding: a 4 mm nodule in the left upper lobe is unchanged. No pleural effusion. Follow-up imaging in twelve months is recommended.'
 const FOOTER = ' Reported By Example Radiologist(LicenseRD#:0000) On:2026/06/25(10:30:00),(by Example Radiologist)At:TEST01Positive Rate Evaluation 2'
@@ -86,6 +87,12 @@ describe('cross-source imaging reports', () => {
     const rows = buildReportsData(reports).reportRows
     expect(rows).toHaveLength(1)
     expect(rows[0].effectiveDate?.slice(0, 10)).toBe('2026-06-25')
+    const filters = { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }
+    for (const input of [reports, [reports[0]]]) {
+      const section = imagingReportsCategory.getContextSection(input, filters, {} as any)
+      const heading = section && !Array.isArray(section) ? section.items[0] : ''
+      expect(heading).toContain(formatDate('2026-06-25'))
+    }
   })
 
   it('preserves the source timezone of unrelated imaging reports', () => {
