@@ -570,3 +570,48 @@ it.each(['https://local.example/fhir/Medication/exact', 'Medication/exact/_histo
   ;(FhirMapper.toMedication as jest.Mock).mockImplementation((resource: any) => resource)
   expect((await repo.fetchMedications('exact-medication'))[0].medicationCodeableConcept).toEqual({ text: 'verified code' })
 })
+
+it.each([
+  ['https://reports.example/fhir/Observation/panel', 'https://reports.example/fhir/Observation/member'],
+  ['urn:uuid:panel', 'urn:uuid:member'],
+  ['Observation/panel/_history/2', 'Observation/member/_history/3'],
+])('attaches graph-resolved report members for %s', async (panelReference, memberReference) => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValue({ entry: [
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: panelReference }] } },
+    { fullUrl: panelReference.startsWith('urn:') ? panelReference : 'https://reports.example/fhir/Observation/panel', resource: { resourceType: 'Observation', id: 'panel', meta: { versionId: '2' }, hasMember: [{ reference: memberReference }] } },
+    { fullUrl: memberReference.startsWith('urn:') ? memberReference : 'https://reports.example/fhir/Observation/member', resource: { resourceType: 'Observation', id: 'member', meta: { versionId: '3' }, valueString: 'synthetic' } },
+  ] })
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  expect((await repo.fetchDiagnosticReports('report-synthetic'))[0]._observations?.map(observation => observation.id)).toEqual(['panel', 'member'])
+})
+
+it('does not attach a foreign report reference through a colliding observation id', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValue({ entry: [
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'https://foreign.example/fhir/Observation/collision' }] } },
+    { fullUrl: 'https://local.example/fhir/Observation/collision', resource: { resourceType: 'Observation', id: 'collision' } },
+  ] })
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  expect((await repo.fetchDiagnosticReports('report-synthetic'))[0]._observations).toBeUndefined()
+})
+
+it('shares one active logical slot across optional-query fallback and later primary refresh', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  request.mockRejectedValueOnce(new Error('Sort not supported')).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'old-fallback' } }] })
+  expect(await repo.fetchConditions('logical-slot')).toEqual([{ id: 'old-fallback' }])
+  expect(repo.getClinicalSource('logical-slot').graph.nodes).toHaveLength(1)
+  request.mockResolvedValueOnce({ entry: [] })
+  expect(await repo.fetchConditions('logical-slot')).toEqual([])
+  expect(repo.getClinicalSource('logical-slot').graph.nodes).toEqual([])
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchConditions('logical-slot')).toEqual([])
+  expect(repo.getClinicalSource('logical-slot').graph.nodes).toEqual([])
+})

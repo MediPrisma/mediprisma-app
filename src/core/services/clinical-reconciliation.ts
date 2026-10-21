@@ -2,7 +2,7 @@ import { buildClinicalSourceGraph, type ClinicalSourceCapture, type ClinicalSour
 
 export const CLINICAL_RECONCILIATION_POLICY_VERSION = 'conservative-source-v1'
 export type ClinicalResourcePolicy = { assessment: 'supported' | 'not-assessed'; strategy: 'preserve-existing-view' | 'retain-source-only' }
-const mappedTypes = ['Condition', 'MedicationRequest', 'MedicationStatement', 'AllergyIntolerance', 'Observation', 'DiagnosticReport', 'ImagingStudy', 'Procedure', 'Encounter', 'DocumentReference', 'Composition', 'Immunization', 'Consent', 'Device', 'CarePlan', 'Basic']
+const mappedTypes = ['Patient', 'Condition', 'MedicationRequest', 'MedicationStatement', 'AllergyIntolerance', 'Observation', 'DiagnosticReport', 'ImagingStudy', 'Procedure', 'Encounter', 'DocumentReference', 'Composition', 'Immunization', 'Consent', 'Device', 'CarePlan', 'Basic']
 export const CLINICAL_RESOURCE_POLICIES: Readonly<Record<string, ClinicalResourcePolicy>> = Object.freeze(Object.fromEntries(mappedTypes.map(type => [type, Object.freeze({ assessment: 'supported', strategy: 'preserve-existing-view' })])))
 export type ClinicalReconciliationEvidence = { nodeKeys: readonly string[]; reason: string }
 export interface ClinicalReconciliationResult {

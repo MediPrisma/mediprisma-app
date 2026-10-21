@@ -1,5 +1,5 @@
-import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
-import type { ClinicalSourceCapture } from '@/src/core/services/clinical-source-graph'
+import { selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { captureClinicalSource, clinicalSourceSession, forgetClinicalSourceSession, knownClinicalSourceSession, readClinicalSource, type ClinicalSourceSession } from '../services/clinical-source-session'
 // FHIR Clinical Data Repository Implementation
 import type { IClinicalDataRepository } from '@/src/core/interfaces/repositories/clinical-data.repository.interface'
 import type {
@@ -114,62 +114,52 @@ function mapMedicationSearchResponse(
     })
 }
 
-let repositorySequence = 0
-
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
-  private readonly sourceCaptures = new Map<string, ClinicalSourceCapture>()
-  private readonly successfulResponses = new Map<string, any>()
+  private readonly fallbackSessionKey = {}
+  private session: ClinicalSourceSession = clinicalSourceSession(this.fallbackSessionKey)
   private readonly retainedFailures = new Map<string, unknown>()
-  private generation = 0
-  private readonly sourceResults = new Map<string, { generation: number; result: ClinicalReconciliationResult }>()
-  private readonly sourceId = `smart-repository-${++repositorySequence}`
 
   getClinicalSource(patientId: string): ClinicalReconciliationResult {
-    const cached = this.sourceResults.get(patientId)
-    if (cached?.generation === this.generation) return cached.result
-    const result = reconcileClinicalSources([...this.sourceCaptures.values()].filter(capture => capture.patientScope === patientId))
-    this.sourceResults.set(patientId, { generation: this.generation, result })
-    return result
+    return readClinicalSource(knownClinicalSourceSession(fhirClient) ?? this.session, patientId)
   }
 
   /** Capture complete successful searches before mapping. Each successful query
    * replaces its active snapshot; failed/partial requests retain the previous one. */
-  private async requestSource(url: string): Promise<any> {
+  private async requestSource(url: string, logicalSlot = url): Promise<any> {
     const params = new URLSearchParams(url.split('?')[1] ?? '')
     const patientScope = (params.get('patient') ?? params.get('subject') ?? '').replace(/^Patient\//, '')
-    let restBase: string | undefined
+    let client: any
     try {
-      const client = await fhirClient.getClient()
-      restBase = client?.state?.serverUrl
+      client = await fhirClient.getClient()
     } catch {
       // A completed response remains usable if session metadata is unavailable.
     }
+    const session = client && typeof client === 'object' ? clinicalSourceSession(client, client.state?.serverUrl, fhirClient) : clinicalSourceSession(this.fallbackSessionKey)
+    if (!client) forgetClinicalSourceSession(fhirClient)
+    this.session = session
     const queryType = url.split('?')[0]
-    const cacheKey = JSON.stringify([restBase ?? this.sourceId, patientScope, url])
+    const cacheKey = JSON.stringify([session.sourceId, patientScope, logicalSlot])
     let response: any
     try {
       response = await fhirClient.requestAllPages(url)
     } catch (error) {
-      const previous = this.successfulResponses.get(cacheKey)
+      if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl?.replace(/\/+$/, '') !== session.restBase)) throw new Error('FHIR session changed during query')
+      const previous = session.successfulResponses.get(cacheKey)
       if (!previous) throw error
       this.retainedFailures.set(queryType, error)
       return previous
     }
     this.retainedFailures.delete(queryType)
-    const capture: ClinicalSourceCapture = {
-      sourceId: restBase ? this.sourceId + '|' + restBase : this.sourceId,
-      patientScope, generation: String(++this.generation), restBase,
-      resources: (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string').map((entry: any) => JSON.parse(JSON.stringify(entry))),
-    }
-    this.sourceCaptures.set(cacheKey, capture)
-    const source = reconcileClinicalSources([capture])
+    if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl?.replace(/\/+$/, '') !== session.restBase)) throw new Error('FHIR session changed during query')
+    const source = captureClinicalSource(session, cacheKey, patientScope,
+      (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string'))
     const includeTypes = queryType === 'DiagnosticReport' ? ['Observation']
       : queryType === 'MedicationRequest' || queryType === 'MedicationStatement' ? ['Medication'] : []
     const projected = { ...response, entry: selectClinicalSourceNodes(source)
       .filter(node => node.resource.resourceType === queryType || includeTypes.includes(node.resource.resourceType))
       .map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
     Object.defineProperty(projected, '_clinicalSource', { value: source, enumerable: false })
-    this.successfulResponses.set(cacheKey, projected)
+    session.successfulResponses.set(cacheKey, projected)
     return projected
   }
 
@@ -199,11 +189,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   private async requestWithBasicFallback(primary: string, fallback?: string): Promise<any> {
     try {
-      return await this.requestSource(primary)
+      return await this.requestSource(primary, primary)
     } catch (error) {
       if (!fallback || !shouldRetryBasicFhirSearch(error)) throw error
       warnFhirError('FHIR server rejected optional search features; retrying a basic search:', error)
-      return this.requestSource(fallback)
+      return this.requestSource(fallback, primary)
     }
   }
 
@@ -515,13 +505,20 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.DIAGNOSTIC_REPORT)
         .map((e: any) => e.resource)
 
-      const observations = entries
-        .filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.OBSERVATION)
-        .map((e: any) => FhirMapper.toObservation(e.resource))
-
-      const result = reports.map((report: any) =>
-        FhirMapper.toDiagnosticReport(report, observations)
-      )
+      const source: ClinicalReconciliationResult = response._clinicalSource
+      const graph = source.graph
+      const observationNodes = new Map(graph.nodes
+        .filter(node => node.resource.resourceType === 'Observation')
+        .map(node => [node.key, node]))
+      const resolvedObservations = (origin: unknown, path: RegExp) => graph.references
+        .filter(edge => edge.origin.resource === origin && path.test(edge.path) && edge.status === 'resolved')
+        .flatMap(edge => edge.targetKeys.map(key => observationNodes.get(key)).filter((node): node is NonNullable<typeof node> => Boolean(node)))
+      const result = reports.map((report: any) => {
+        const mapped = FhirMapper.toDiagnosticReport(report, [])
+        const members = resolvedObservations(report, /^result\[\d+\]$/).flatMap(node => [node, ...resolvedObservations(node.resource, /^hasMember\[\d+\]$/)])
+        const unique = [...new Map(members.map(node => [node.key, node])).values()]
+        return unique.length ? { ...mapped, _observations: unique.map(node => FhirMapper.toObservation(node.resource as any)) } : mapped
+      })
       this.markQuerySuccess('DiagnosticReport', 'DiagnosticReport', result.length)
       return result
     } catch (error) {
@@ -650,3 +647,4 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     }
   }
 }
+

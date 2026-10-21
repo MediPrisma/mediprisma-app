@@ -1,3 +1,5 @@
+import { selectClinicalSourceNodes } from '@/src/core/services/clinical-reconciliation'
+import { clinicalSourceSession, captureClinicalSource, clearClinicalSourceQuery, forgetClinicalSourceSession } from '../services/clinical-source-session'
 // FHIR Patient Repository Implementation
 import type { IPatientRepository } from '@/src/core/interfaces/repositories/patient.repository.interface'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
@@ -6,6 +8,23 @@ import { PatientMapper } from '../mappers/patient.mapper'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
 export class FhirPatientRepository implements IPatientRepository {
+  private readonly fallbackSessionKey = {}
+
+  private async capturePatientResponse(client: any, query: string, response: any, patientId?: string, restBase?: string): Promise<any> {
+    if (client && (await fhirClient.getClient() !== client || client.state?.serverUrl !== restBase)) throw new Error('FHIR session changed during patient query')
+    const session = client && typeof client === 'object'
+      ? clinicalSourceSession(client, restBase, fhirClient)
+      : clinicalSourceSession(this.fallbackSessionKey)
+    if (!client) forgetClinicalSourceSession(fhirClient)
+    const selectedId = patientId ?? (response.resourceType === 'Patient' ? response.id : response.entry?.find((entry: any) => entry.resource?.resourceType === 'Patient')?.resource.id)
+    if (!selectedId) { clearClinicalSourceQuery(session, query); return response }
+    const resources = response.resourceType === 'Patient' ? [response] : (response.entry ?? []).filter((entry: any) => typeof entry.resource?.resourceType === 'string')
+    const source = captureClinicalSource(session, query, selectedId, resources)
+    const nodes = selectClinicalSourceNodes(source)
+    if (response.resourceType === 'Patient') return nodes[0]?.resource ?? response
+    return { ...response, entry: nodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })) }
+  }
+
   async getCurrentPatient(): Promise<PatientEntity | null> {
     try {
       // Prefer the patient that fhirclient's SMART session pins to. The
@@ -18,14 +37,15 @@ export class FhirPatientRepository implements IPatientRepository {
       // empty even when real data exists for another patient on the
       // server. Reading by id avoids that.
       const client = await fhirClient.getClient()
+      const restBase = client?.state?.serverUrl
        
       const pinnedId = (client as any)?.patient?.id as string | undefined
       if (pinnedId) {
         const resource = await fhirClient.request(`${FHIR_RESOURCES.PATIENT}/${pinnedId}`)
-        return PatientMapper.toDomain(resource)
+        return PatientMapper.toDomain(await this.capturePatientResponse(client, `Patient/${pinnedId}`, resource, pinnedId, restBase))
       }
       const response = await fhirClient.request(FHIR_RESOURCES.PATIENT)
-      return PatientMapper.fromBundle(response)
+      return PatientMapper.fromBundle(await this.capturePatientResponse(client, 'Patient', response, undefined, restBase))
     } catch (error) {
       // LocalBundleModeError is the "no SMART client" sentinel — expected
       // when callers race against a mode change; not a real failure.
@@ -38,8 +58,10 @@ export class FhirPatientRepository implements IPatientRepository {
 
   async getPatientById(patientId: string): Promise<PatientEntity | null> {
     try {
+      const client = await fhirClient.getClient()
+      const restBase = client?.state?.serverUrl
       const response = await fhirClient.request(`Patient/${patientId}`)
-      return PatientMapper.toDomain(response)
+      return PatientMapper.toDomain(await this.capturePatientResponse(client, `Patient/${patientId}`, response, patientId, restBase))
     } catch (error) {
       if (!(error instanceof LocalBundleModeError)) {
         console.error(`[Patient Repository] Failed to fetch patient ${patientId}:`, error)
