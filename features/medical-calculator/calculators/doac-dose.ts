@@ -47,9 +47,9 @@ const regimenLabel = (value: string): L => {
 const RENAL_INPUTS: CalcInput[] = [
   AGE_INPUT,
   SEX_INPUT,
-  // 90 days, as the CDSS's own window for creatinine: the dose turns on the 60 kg and CrCl cut-offs.
-  { key: 'weight', type: 'number', label: { en: 'Weight (actual)', zh: '體重（實際）' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' }, staleAfterDays: 90 },
-  { key: 'scr', type: 'number', label: { en: 'Creatinine', zh: '肌酸酐' }, unit: 'mg/dL', dimension: 'creatinine', normalRange: { low: 0.6, high: 1.2 }, source: { kind: 'lab', keys: ['CREA'] }, staleAfterDays: 90 },
+  // Older than a year (owner decision 2026-10-22): the dose turns on the 60 kg and CrCl cut-offs.
+  { key: 'weight', type: 'number', label: { en: 'Weight (actual)', zh: '體重（實際）' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' }, staleAfterDays: 365 },
+  { key: 'scr', type: 'number', label: { en: 'Creatinine', zh: '肌酸酐' }, unit: 'mg/dL', dimension: 'creatinine', normalRange: { low: 0.6, high: 1.2 }, source: { kind: 'lab', keys: ['CREA'] }, staleAfterDays: 365 },
   { key: 'crcl_manual', type: 'number', label: { en: 'CrCl override (optional)', zh: 'CrCl 手動覆寫（選填）' }, unit: 'mL/min', optional: true },
   { key: 'dialysis', type: 'select', label: { en: 'On dialysis', zh: '透析中' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_dialysis' } },
 ]
@@ -113,8 +113,8 @@ export const DOAC_DOSE: CalculatorDef[] = [{
         { value: 'coag', label: { en: 'Liver disease with coagulopathy and bleeding risk', zh: '肝病合併凝血異常與出血風險' } },
       ],
     },
-    { key: 'liver_enzymes', type: 'select', label: { en: 'ALT/AST >2×ULN', zh: 'ALT/AST >2×ULN' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_liver_enzymes' }, staleAfterDays: 90 },
-    { key: 'bilirubin_high', type: 'select', label: { en: 'Total bilirubin ≥1.5×ULN', zh: '總膽紅素 ≥1.5×ULN' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_bilirubin_high' }, staleAfterDays: 90 },
+    { key: 'liver_enzymes', type: 'select', label: { en: 'ALT/AST >2×ULN', zh: 'ALT/AST >2×ULN' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_liver_enzymes' }, staleAfterDays: 365 },
+    { key: 'bilirubin_high', type: 'select', label: { en: 'Total bilirubin ≥1.5×ULN', zh: '總膽紅素 ≥1.5×ULN' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_bilirubin_high' }, staleAfterDays: 365 },
     { key: 'pregnancy', type: 'select', label: { en: 'Pregnant or breast-feeding', zh: '懷孕或哺乳' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_pregnancy' } },
     { key: 'gi_risk', type: 'select', label: { en: 'Gastritis, oesophagitis, GERD or other bleeding risk (dabigatran)', zh: '胃炎／食道炎／GERD 或其他出血風險（dabigatran 用）' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_gi_risk' } },
     REGIMEN_INPUT,

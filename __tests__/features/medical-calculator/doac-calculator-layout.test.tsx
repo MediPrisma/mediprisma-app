@@ -165,11 +165,11 @@ describe('DOAC calculators on screen', () => {
     expect(within(screen.getByTestId('calc-group-ddi')).getByText('1 項未填；其餘 12 項無')).toBeInTheDocument()
   })
 
-  it('an old weight keeps its value, with its age beside the date in amber; a recent creatinine does not', () => {
+  it('an old weight keeps its value, with its age beside the date in amber; a creatinine within the year does not', () => {
     jest.useFakeTimers({ now: new Date('2026-10-22T08:00:00+08:00'), doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick', 'setImmediate'] })
     jest.mocked(useLabAutofill).mockReturnValue({
       autofill: {
-        resolve: (source: any) => source?.kind === 'vital' ? { value: 64, unit: 'kg', date: '2026-03-01' } : source?.kind === 'lab' ? { value: 1.1, unit: 'mg/dL', date: '2026-10-01' } : undefined,
+        resolve: (source: any) => source?.kind === 'vital' ? { value: 64, unit: 'kg', date: '2025-03-01' } : source?.kind === 'lab' ? { value: 1.1, unit: 'mg/dL', date: '2026-03-01' } : undefined,
         sex: 'male', clinicalSelects: {},
       },
       isLoading: false, error: null, retry: jest.fn(async () => {}),
@@ -180,7 +180,7 @@ describe('DOAC calculators on screen', () => {
       </LanguageProvider>,
     )
     expect(container.querySelector<HTMLInputElement>('#calc-weight')!.value).toBe('64')
-    expect(screen.getByTestId('calc-stale-weight')).toHaveTextContent('2026-03-01 · 7 個月前')
+    expect(screen.getByTestId('calc-stale-weight')).toHaveTextContent('2025-03-01 · 20 個月前')
     expect(screen.queryByTestId('calc-stale-scr')).toBeNull()
     jest.useRealTimers()
   })
