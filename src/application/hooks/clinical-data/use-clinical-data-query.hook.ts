@@ -123,8 +123,17 @@ function buildClinicalResults(
     const unit = CLINICAL_RESOURCE_UNITS[index]
     const result = results[index]
     writeEntities[unit.id] = result?.data?.entities ?? EMPTY_ARRAY
-    resourceReady[unit.id] = !result?.isLoading
+    resourceReady[unit.id] = !result?.isLoading && !result?.isFetching
     if (result?.data?.status) Object.assign(resourceQueryStatus, result.data.status)
+    // A multi-search unit may have committed one new capture while its cached
+    // rows still belong to the previous result. This is pending, never absence.
+    if (result?.data && result.isFetching) {
+      for (const key of unit.statusKeys) resourceQueryStatus[key] = {
+        ...resourceQueryStatus[key], resourceType: resourceQueryStatus[key]?.resourceType ?? key.split(':')[0],
+        state: 'error', count: undefined,
+        message: 'Clinical records are refreshing. The updated result is not complete; absence cannot be concluded.',
+      }
+    }
     if (result?.data?.vitalSigns) vitalSigns = result.data.vitalSigns
     clinicalSource ??= result?.data?.getClinicalSource?.()
     if (!sourceMetadata && result?.data?.sourceMetadata) {
@@ -133,7 +142,7 @@ function buildClinicalResults(
     if (!error && result?.error) error = result.error as Error
     if (result?.isLoading) anyLoading = true
     if (result?.isFetching) anyFetching = true
-    if (result?.isPending) allSettled = false
+    if (result?.isPending || result?.isFetching) allSettled = false
   }
 
   // Vitals ride along with the Observation query rather than costing a second
