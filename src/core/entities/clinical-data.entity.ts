@@ -1247,6 +1247,9 @@ export interface ClinicalSourceMetadata {
 }
 
 export interface ClinicalRecordVariantExclusion extends ClinicalRecordVariant {
+  analyteKeys?: readonly string[]
+  code?: { coding?: { system?: string; code?: string }[]; text?: string }
+  effectiveDate?: string
   /** Internal opaque evidence identity, removed from outward AI traces. */
   evidenceIdentity?: string
   resourceType: string

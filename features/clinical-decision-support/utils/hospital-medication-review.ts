@@ -27,12 +27,12 @@ export function buildHospitalAwareCdssResult(
 /** No condition/allergy/visit/procedure version is chosen as a contraindication
  * verdict. Preserve verified safety results; defer non-safety treatment actions. */
 export function applyUnresolvedRecordTherapyReview(result: CdssResult, profile: HospitalAwareCdssProfile, locale: CdssLocale): CdssResult {
-  const unresolved = profile.excludedClinicalRecordVariants?.filter(item => ['Condition', 'AllergyIntolerance', 'Encounter', 'Procedure'].includes(item.resourceType)) ?? []
+  const unresolved = profile.excludedClinicalRecordVariants?.filter(item => ['Condition', 'AllergyIntolerance', 'Encounter', 'Procedure', 'Observation', 'DiagnosticReport'].includes(item.resourceType)) ?? []
   if (!unresolved.length) return result
   const label = locale === 'en' ? 'Reconcile unresolved source records' : '核對未決來源紀錄'
   const message = locale === 'en'
-    ? 'Condition, allergy, encounter or procedure source versions are unresolved. Reconcile eligibility and contraindications before starting or adjusting therapy; verified safety evidence remains available.'
-    : '診斷、過敏、就醫或處置來源版本尚未釐清，開始或調整治療前需核對適用條件及禁忌；已確認的安全證據仍可使用。'
+    ? 'Clinical source versions, including measurements and reports, are unresolved. Reconcile eligibility and contraindications before starting or adjusting therapy; verified safety evidence remains available.'
+    : '臨床來源版本（含檢驗及報告）尚未釐清，開始或調整治療前需核對適用條件及禁忌；已確認的安全證據仍可使用。'
   const adapt = (item: CdssRecommendation): CdssRecommendation => {
     const therapy = item.domain === 'medication' || item.presentationType === 'medication'
       || item.visitDecision?.actions.some(action => action.decisionKind === 'prescribed' || action.decisionKind === 'dose-adjusted')
