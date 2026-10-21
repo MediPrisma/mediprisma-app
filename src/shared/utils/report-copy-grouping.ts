@@ -1,5 +1,8 @@
 import type { DiagnosticReport } from '../types/fhir.types'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
+import { getCodeableConceptText } from './fhir-helpers'
+import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
+import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
 import {
   qualifyingSharedReportKeys,
   sharedReportGroupingKey,
@@ -7,6 +10,7 @@ import {
 } from './shared-report-grouping'
 
 type Report = DiagnosticReport & { _observations?: Array<{
+  meta?: DiagnosticReport['meta']
   performer?: Array<{ reference?: string; display?: string }>
   valueString?: string; valueQuantity?: unknown; valueCodeableConcept?: unknown; component?: unknown[]
 }> }
@@ -21,7 +25,7 @@ const EXAM_HEADER = new RegExp(String.raw`^((?:SONO(?:GRAM)?|CHEST|CT(?:/SCAN)?|
  * Only the bridge's recognized administrative wrapper is ignored. Unknown
  * footer formats remain part of the text and therefore fail closed. */
 export function normalizeImagingReportCopy(value: string): string {
-  let text = value.normalize('NFKC').trim()
+  let text = value.normalize('NFKC').trim().replace(EXAM_HEADER, '')
   const signature = SIGNATURE.exec(text)
   if (signature) {
     const body = text.slice(0, signature.index)
@@ -30,7 +34,7 @@ export function normalizeImagingReportCopy(value: string): string {
     // body explicitly contains the same grade. Never discard a conflicting one.
     if (!birads || new RegExp(String.raw`^(?:Impression\s*:?\s*)?BI-RADS\s+(?:category\s+)?${birads}\b`, 'i').test(body)) text = body
   }
-  text = text.replace(EXAM_HEADER, '').replace(/^Impression\s*:?\s*/i, '')
+  text = text.replace(/^Impression\s*:?\s*/i, '')
   return text.toLowerCase().replace(/\s+/g, '')
 }
 
@@ -45,15 +49,14 @@ function sourceOf(report: Report): Source | undefined {
  * person's display as a hospital, or infer the hospital from report contents. */
 export function imagingCopyInstitution(report: Report): string | undefined {
   const performers = [...(report.performer ?? []), ...(report._observations ?? []).flatMap(obs => obs.performer ?? [])]
-  const organizations = performers.filter(p => !p.reference || /(?:^|\/)Organization\//.test(p.reference))
+  const organizations = performers.filter(p => (!p.reference || /(?:^|\/)Organization\//.test(p.reference))
+    && !isNhiAuthorityDisplay(p.display ?? ''))
   // Only the known legacy DOC physician label can be ignored. An unknown
   // organization/name is not evidence that this particular exam was at VGH.
   if (organizations.some(p => !VGH_NAMES.has(p.display?.trim() ?? '')
-    && (p.reference || (p.display?.trim() && !/^DOC[A-Z0-9]+\b/i.test(p.display.trim()))))) return undefined
+    && (p.reference || (p.display?.trim() && !/^DOC\d+[A-Z0-9]*\b/i.test(p.display.trim()))))) return undefined
   if (organizations.some(p => VGH_NAMES.has(p.display?.trim() ?? ''))) return '臺北榮總'
   if (sourceOf(report) === 'hospital') {
-    // Explicit contradictory organization evidence beats the adapter default.
-    if (organizations.some(p => p.reference && p.display?.trim())) return undefined
     return '臺北榮總'
   }
   return undefined
@@ -104,6 +107,13 @@ export function compareImagingCopies(a: Report, b: Report): number {
     || (a.id ?? '').localeCompare(b.id ?? '')
 }
 
+function naturalGroupKey(report: Report): string {
+  return JSON.stringify([sourceOf(report), report.subject?.reference,
+    (report.effectiveDateTime ?? report.issued ?? '').slice(0, 10),
+    getCodeableConceptText(report.code).trim(),
+    report._observations?.[0]?.performer?.[0]?.display ?? report.performer?.[0]?.display])
+}
+
 /** Shared grouping projection for rows, tab counts and AI context. Returned
  * keys do not modify source resources. Same-source shared-procedure grouping
  * retains its existing strict boundary; cross-source copies get an additional
@@ -117,6 +127,12 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     if (key && sharedKeys.has(key)) keys.set(report, key)
   }
   const originalKeys = new Map(keys)
+  const naturalGroups = new Map<string, Report[]>()
+  for (const report of reports) {
+    if (!report || !sourceOf(report)) continue
+    const key = naturalGroupKey(report)
+    naturalGroups.set(key, [...(naturalGroups.get(key) ?? []), report])
+  }
   const buckets = new Map<string, { report: Report; source: Source }[]>()
   for (const report of reports) {
     if (!report || inferReportDisplayGroup(report) !== 'imaging') continue
@@ -130,6 +146,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     // Only text we actually compare and images may accompany this match.
     // HTML, PDFs and unresolved URL-backed reports may contain extra findings.
     if (report.presentedForm?.some(form => {
+      if (isTrustedLegacyNhiViewerAttachment(form) && !form.data) return false
       const type = (form.contentType ?? '').toLowerCase()
       return !type.startsWith('image/') && !(type.startsWith('text/') && !type.includes('html') && form.data)
     })) continue
@@ -139,7 +156,8 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     const day = examDay(report)
     const subject = report.subject?.reference?.trim()
     if (!source || !institution || !method || !day || !subject || !['final', 'amended', 'corrected'].includes(report.status ?? '')) continue
-    if (report.meta?.tag?.some(tag => tag.code === 'adult-preventive')) continue
+    if (isAdultPreventiveHealthExamResource(report)
+      || report._observations?.some(isAdultPreventiveHealthExamResource)) continue
     const raw = sharedReportNarrative(report)
     const headerDay = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})/i.exec(raw.normalize('NFKC'))?.[1].replaceAll('/', '-')
     if (headerDay && headerDay !== day) continue
@@ -156,6 +174,9 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
     const cloud = bucket.filter(item => item.source === 'cloud')
     if (!hospital.length || !cloud.length) continue
     const members = new Set(bucket.map(item => item.report))
+    // Do not pull a complete report away from a same-source truncated or
+    // otherwise related member that the existing natural grouping owns.
+    if (bucket.some(({ report }) => naturalGroups.get(naturalGroupKey(report))?.some(member => !members.has(member)))) continue
     const memberKeys = new Set(bucket.map(item => originalKeys.get(item.report)).filter(Boolean))
     // Existing shared-procedure groups are atomic. Never strand excluded members.
     if ([...originalKeys].some(([report, originalKey]) => memberKeys.has(originalKey) && !members.has(report))) continue

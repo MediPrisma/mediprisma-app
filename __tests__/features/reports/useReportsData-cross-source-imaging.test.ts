@@ -35,6 +35,9 @@ describe('cross-source imaging reports', () => {
     const text = 'BI-RADS category 2. Synthetic benign breast findings with no suspicious mass or calcification. Annual ultrasound follow-up is recommended.'
     const signature = ' Reported By Example(License #:TEST) On:2026/06/25(10:30:00),(by Example)At:TEST01ACR BI-RADS 2'
     expect(normalizeImagingReportCopy(text + signature)).toBe(normalizeImagingReportCopy(text))
+    const breastHeader = 'SONOGRAM BREAST Date Of Examination:2026/06/24 11:30:00 Date Of RCP:2026/06/24 '
+    expect(normalizeImagingReportCopy(breastHeader + text + signature)).toBe(normalizeImagingReportCopy(text))
+    expect(normalizeImagingReportCopy(breastHeader + text + signature.replace('BI-RADS 2', 'BI-RADS 4'))).not.toBe(normalizeImagingReportCopy(text))
     expect(normalizeImagingReportCopy(text + signature.replace('BI-RADS 2', 'BI-RADS 4'))).not.toBe(normalizeImagingReportCopy(text))
     const header = 'SONOGRAM, HEPATOBILIARY SYSTEM Date Of Examination:2026/06/24 14:13:10 Date Of RCP:2026/06/24 '
     expect(normalizeImagingReportCopy(header + BODY)).toBe(normalizeImagingReportCopy(BODY))
@@ -89,6 +92,32 @@ describe('cross-source imaging reports', () => {
     const duplicate = { ...reports[0], id: 'hospital-repeat' }
     expect(reportDisplayGroupingKeys([...reports, duplicate]).size).toBe(0)
     expect(buildReportsData([...reports, duplicate]).reportRows).toHaveLength(2)
+  })
+
+  it.each([0, 1])('does not pull source %s away from an existing truncated copy', index => {
+    const reports = pair()
+    const truncated = { ...reports[index], id: 'truncated', conclusion: reports[index].conclusion.slice(0, 115) }
+    expect(reportDisplayGroupingKeys([...reports, truncated]).size).toBe(0)
+    const rows = buildReportsData([...reports, truncated]).reportRows
+    expect(rows).toHaveLength(2)
+    expect(rows.find(row => row.diagnosticReportIds?.includes('truncated'))?.bridgeDupCount).toBe(1)
+  })
+
+  it('retains a trusted legacy NHI viewer while grouping matching reports', () => {
+    const reports = pair()
+    const url = 'https://medvpnimg.nhi.gov.tw/ZFP?synthetic=1'
+    reports[1].presentedForm = [{ contentType: 'text/html', url }]
+    const rows = buildReportsData(reports).reportRows
+    expect(rows).toHaveLength(1)
+    expect(rows[0].viewerActions).toEqual([{ kind: 'legacy', contentType: 'text/html', url }])
+    reports[1].presentedForm[0].data = btoa('Different HTML clinical content')
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+  })
+
+  it('does not treat the NHI authority as a conflicting performing hospital', () => {
+    const reports = pair()
+    reports[1].performer.push({ display: '衛生福利部中央健康保險署' })
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
   })
 
   it('retains both images and the exact viewer request', () => {
@@ -200,11 +229,12 @@ describe('cross-source imaging reports', () => {
     expect(rows.find(row => row.diagnosticReportIds?.includes('cloud'))?.viewerActions).toHaveLength(1)
   })
 
-  it('keeps counts aligned with nearby same-title reports in either input order', () => {
+  it('does not pick a cross-source pair from nearby same-title exams in either input order', () => {
     const reports = pair()
     const neighbor = { ...reports[0], id: 'neighbor', conclusion: `${BODY} An additional new opacity is present.` }
     for (const input of [[...reports, neighbor], [neighbor, ...reports.slice().reverse()]]) {
-      expect(buildReportsData(input).reportRows).toHaveLength(2)
+      expect(buildReportsData(input).reportRows).toHaveLength(3)
+      expect(calculateReportTabCounts(input).all).toBe(3)
       expect(calculateReportTabCounts(input).imaging).toBe(2)
     }
   })
