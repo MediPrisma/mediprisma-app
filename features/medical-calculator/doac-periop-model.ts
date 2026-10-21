@@ -326,6 +326,47 @@ function traumaticDelay(agent: DoacAgent): number | undefined {
   return agent === 'apixaban' ? 48 : agent === 'rivaroxaban' ? 24 : undefined
 }
 
+const sameDay = (x: Date, y: Date) => x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate()
+
+/**
+ * What happens to a dose that falls between the procedure and the restart:
+ * each label's own missed-dose rule decides whether the last one can still be
+ * taken at the restart; every other is not made up. Twice daily, the morning
+ * dose is not taken — EHRA Figure 15 draws it so for minor risk — although the
+ * apixaban and rivaroxaban 15 mg bid labels would allow it late: the line says
+ * so and the team decides.
+ */
+function missedDoseRule(agent: DoacAgent, regimen: { agent: DoacAgent; mg: number; perDay: number }, minutes: number[]): { takeAtRestart: (dose: Date, restart: Date, next?: Date) => boolean; line: PeriopLine } {
+  const minuteOf = (d: Date) => d.getHours() * 60 + d.getMinutes()
+  if (regimen.perDay === 1) {
+    if (agent === 'dabigatran') {
+      return { takeAtRestart: () => false, line: line(t('處置到恢復之間的那一劑不補服，隔天同一時間繼續（dabigatran 仿單的漏服規則）。', 'A dose between the procedure and the restart is not made up; continue at the same time the next day (the dabigatran label’s missed-dose rule).'), CITES.dabigatranMissed) }
+    }
+    return {
+      takeAtRestart: (dose, restart) => sameDay(dose, restart),
+      line: line(
+        t(`處置到恢復之間的那一劑：恢復仍在同一天就延到恢復時服用；已跨日則不補服，隔天照原時間（${agent} 仿單的漏服規則：不在同一天服兩劑）。`, `A dose between the procedure and the restart: taken at the restart when that is the same day; past midnight it is not made up and the usual time follows (the ${agent} label’s missed-dose rule: never two doses in one day).`),
+        G.ehraFig15, agent === 'edoxaban' ? CITES.edoxabanMissed : regimen.mg === 10 ? CITES.rivaroxabanMissed10 : CITES.rivaroxabanMissed,
+      ),
+    }
+  }
+  const morning = Math.min(...minutes)
+  const labelCite = agent === 'apixaban' ? CITES.apixabanMissed : agent === 'rivaroxaban' ? CITES.rivaroxabanMissed15bid : CITES.dabigatranMissedBid
+  return {
+    takeAtRestart: (dose, restart, next) => {
+      if (minuteOf(dose) === morning) return false
+      if (agent === 'dabigatran') return !!next && (next.getTime() - restart.getTime()) / HOUR >= 6
+      return sameDay(dose, restart)
+    },
+    line: line(
+      agent === 'dabigatran'
+        ? t('處置到恢復之間：早上那一劑不服用、不補服（EHRA Fig 15）；晚上那一劑若恢復時距下一劑仍 ≥6 小時，可在恢復時服用，否則不補服（dabigatran 仿單的漏服規則）。', 'Between the procedure and the restart: the morning dose is not taken nor made up (EHRA Figure 15); the evening dose may be taken at the restart if the next dose is still ≥6 h away, otherwise it is omitted (the dabigatran label’s missed-dose rule).')
+        : t(`處置到恢復之間：早上那一劑不服用、不補服（EHRA Fig 15）；晚上那一劑若恢復仍在當晚，可在恢復時服用，否則不補服。${agent} 仿單允許早上漏服時立即補服（見引文），與 EHRA 不同：計算機依 EHRA，請團隊確認。`, `Between the procedure and the restart: the morning dose is not taken nor made up (EHRA Figure 15); the evening dose may be taken at the restart when that is the same evening, otherwise it is not made up. The ${agent} label allows a missed morning dose late (quoted), unlike EHRA: the calculator follows EHRA; the team confirms.`),
+      G.ehraFig15, labelCite,
+    ),
+  }
+}
+
 interface AsraRule {
   /** Hours before the block; undefined where ASRA advises against it (dabigatran CrCl <30). */
   hours?: number
@@ -520,15 +561,10 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       // With a deep block, ASRA's interval replaces the trough: no 「不提前停藥」 beside it.
       result.basis.push(blockUsed
         ? line(t('極低風險，但有深部神經叢／周邊阻斷：改依下方 ASRA 的停藥時數，不適用「在谷底做、不提前停藥」。', 'Minor risk, but with a deep plexus/peripheral block: ASRA’s interval below applies instead of “at trough, not stopped early”.'), G.ehraFig14)
-        : regimen.perDay === 1 && agent !== 'dabigatran'
-          ? line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。若當天那一劑落在處置到恢復之間：恢復仍在同一天就延到恢復時服用；已跨日則不補服，隔天照原時間（同 ${agent} 仿單的漏服原則，不在同一天服兩劑）。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. If the day’s dose falls between the procedure and the restart: taken at the restart when that is the same day; past midnight it is not made up and the usual time follows (the ${agent} label’s missed-dose rule: never two doses in one day).`),
-            G.ehraFig14, G.ehraFig15, agent === 'edoxaban' ? CITES.edoxabanMissed : regimen.mg === 10 ? CITES.rivaroxabanMissed10 : CITES.rivaroxabanMissed)
-          : regimen.perDay === 1
-            // Dabigatran once daily (hip/knee prophylaxis): its label does not make up a missed dose.
-            ? line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置當下到恢復前的那一劑不補服，隔天照原時間繼續（dabigatran 仿單的漏服原則）。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. A dose falling from the procedure to the restart is not made up; continue at the usual time the next day (the dabigatran label’s missed-dose rule).`),
-              G.ehraFig14, G.ehraFig15, CITES.dabigatranMissed)
-          : line(t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置當下到恢復前的劑量不服用、不補服，恢復後從下一個排定時間繼續。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. Doses from the procedure to the restart are not taken nor made up; resume at the next scheduled time.`),
-            G.ehraFig14, G.ehraFig15))
+        : line(regimen.perDay === 1
+          ? t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置到恢復之間的那一劑，依下方恢復段落的漏服規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. A dose falling between the procedure and the restart follows the missed-dose rule in the restart section below.`)
+          : t(`極低風險：在谷底濃度做（最後一劑後約 ${hours} 小時）；處置前的劑量照常，不提前停藥。處置到恢復之間的劑量，依下方恢復段落的規則處理。`, `Minor risk: at trough (about ${hours} h after the last dose); doses before as usual, none stopped early. Doses between the procedure and the restart follow the rule in the restart section below.`),
+          G.ehraFig14, G.ehraFig15))
     } else {
       const pair = ehraHours(agent, crclValue)!
       hours = tier === 'high' ? pair[1] : pair[0]
@@ -712,16 +748,18 @@ export function calculatePeriop(values: CalcValues): PeriopResult {
       const first = after.find((at) => at.getTime() >= earliest.getTime())
       // With nothing skipped before, a dose due at the start itself is not lost between the two lists.
       const between = after.filter((at) => (troughOnly ? at.getTime() >= surgery.getTime() : at.getTime() > surgery.getTime()) && (!first || at.getTime() < first.getTime()))
-      const sameDay = (x: Date, y: Date) => x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate()
-      if (troughOnly && regimen.perDay === 1 && agent !== 'dabigatran' && between.length === 1 && sameDay(between[0]!, earliest)) {
-        // EHRA Figure 15, minor risk, once daily: the day's dose is taken after the restart — the same day only, as
-        // the label's missed-dose rule; past midnight it is not made up (the else branch).
-        result.resume.delayed = between[0]
+      const rule = missedDoseRule(agent, regimen, minutes as number[])
+      // Only the last dose before the restart can still be taken at it; every earlier one is not made up.
+      const candidate = between[between.length - 1]
+      if (candidate && rule.takeAtRestart(candidate, earliest, first)) {
+        result.resume.delayed = candidate
         result.resume.firstDose = earliest
+        result.resume.skippedAfter = between.slice(0, -1)
       } else {
         if (first) result.resume.firstDose = first
         result.resume.skippedAfter = between
       }
+      if (between.length) result.resume.lines.push(rule.line)
     }
   }
   result.pending = [...new Set(result.pending)]

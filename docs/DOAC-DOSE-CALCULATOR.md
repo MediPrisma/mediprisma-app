@@ -57,10 +57,12 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
    - AF 消融依 EHRA Fig 16 單獨處理，不走一般高風險流程；極低風險在谷底濃度時做。
    - 照常服用處置前最後一個排定劑量。距離短於谷底時數（消融 12 h；極低風險 bid 12 h、qd 24 h）時，提示調整服藥或處置時間，計算機不替使用者跳過該劑。
    - 例：rivaroxaban 每天 08:00、19:00 消融，最後一劑是當天 08:00（11 h），不是前一天（35 h）。
-   - 極低風險時，處置當下到恢復前的那一劑依各藥仿單的漏服規則處理（EHRA Fig 15）：
-     - bid：不服用、不補服，從下一個排定時間繼續。
+   - **處置到恢復之間到期的劑量**（各分級共用）：只有恢復前最後一劑，可依該藥仿單的漏服規則在恢復時服用；更早的都不補服。
      - rivaroxaban、edoxaban qd：恢復仍在同一天就延到恢復時服用；已跨日則不補服。兩藥仿單都寫「立即服用，隔天照常」。
      - dabigatran qd：不補服，隔天同一時間繼續（Pradaxa 仿單）。
+     - bid 早上那一劑：不服用、不補服（EHRA Fig 15）。apixaban 與 rivaroxaban 15 mg bid 的仿單允許早上漏服時立即補服；畫面並列兩者，註明計算機依 EHRA，請團隊確認。
+     - bid 晚上那一劑：apixaban、rivaroxaban 若恢復仍在當晚，可在恢復時服用；dabigatran 需距下一劑 ≥6 h（Pradaxa 仿單），否則不補服。
+   - **依實際服藥時刻多停將近一次給藥間隔時**（例：rivaroxaban 09:00、低風險 08:00，停 47 h）：會提示可提前服用那一劑，或延後處置（EHRA Fig 15），不自動調整。
    - 消融在拔 sheath 後 3–5 h 恢復，恢復前要排除心包填塞。apixaban 另引仿單的「does not need to be interrupted」。
 3. **低／高風險**：分級依 EHRA Table 12，時數依 Fig 14。仿單的時數並列顯示，不參與決定。
 4. **神經軸與深部神經叢／周邊阻斷**（ASRA 2025，第 5 版；取代 2018 年第 4 版）：
@@ -118,7 +120,7 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 
 同一份 PDF 中，其他劑量的 SmPC 會在引文的 `document` 欄位標明，例如 apixaban 髖膝預防的「Eliquis 2.5 mg」（p.2–5、10），以及 rivaroxaban 髖膝預防的「Xarelto 10 mg」（p.29–31）。
 
-每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 127 段：126 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
+每條規則的引文、章節與頁碼都在 `features/medical-calculator/doac-dose-model.ts` 的 `CITES`。2026-10-21 用 `pdftotext -f N -l N` 逐頁核對全部 137 段：136 段程式比對相符；dabigatran Table 2 的「300 mg or 220 mg」一格因表格欄位交錯，以 `-layout` 人工確認。更新 SmPC 時重跑同樣的核對，並提高 `DOAC_RULES_VERSION`。
 
 ### 指引（不是仿單，另列來源與頁碼）
 
@@ -127,7 +129,7 @@ VTE 的三種適應症各有自己的規則（`doac-dose-model.ts`），不呼�
 | 指引 | 文件 | 頁碼依據 |
 |---|---|---|
 | EHRA 2021 | Steffel et al., Europace 2021;23:1612–1676（euab065.pdf，65 頁） | 實體頁 + 1611 = 期刊頁。13 段文字用 pdftotext 逐頁核對，全部相符。Figure 12、14、15、16 是圖片，從渲染後的頁面判讀（p.1641、1643、1647），判讀內容寫在 `figure` 欄位。 |
-| ASRA 2025（第 5 版） | Kopp et al., Reg Anesth Pain Med 2025, doi:10.1136/rapm-2024-105766（2025-01-29 線上） | online first，頁碼 1–29，與 PDF 實體頁相同。32 段用 pdftotext 逐頁核對，全部相符。2018 年第 4 版已被取代，不再引用。 |
+| ASRA 2025（第 5 版） | Kopp et al., Reg Anesth Pain Med 2025, doi:10.1136/rapm-2024-105766（2025-01-29 線上） | online first，頁碼 1–29，與 PDF 實體頁相同。34 段用 pdftotext 逐頁核對，全部相符。2018 年第 4 版已被取代，不再引用。 |
 
 ## 與規格書（2026-10-20）不同之處（依 SmPC 原文）
 

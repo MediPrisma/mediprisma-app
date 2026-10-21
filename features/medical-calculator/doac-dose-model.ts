@@ -153,6 +153,7 @@ export const CITES = {
   dabigatran75: cite('dabigatran', '4.1 (75 mg)', 2, 'Primary prevention of venous thromboembolic events (VTE) in adult patients who have undergone elective total hip replacement surgery or total knee replacement surgery.'),
 
   // VTE treatment, extended prevention and hip/knee prophylaxis.
+  apixabanMissed: cite('apixaban', '4.2', 37, 'A missed morning dose should be taken immediately when it is noticed, and it may be taken together with the evening dose. A missed evening dose can only be taken during the same evening, the patient should not take two doses the next morning.'),
   apixabanVteAcute: cite('apixaban', '4.2', 37, 'The recommended dose of apixaban for the treatment of acute DVT and treatment of PE is 10 mg taken orally twice daily for the first 7 days followed by 5 mg taken orally twice daily.'),
   apixabanVteExtended: cite('apixaban', '4.2', 37, 'the 2.5 mg twice daily dose should be initiated following completion of 6 months of treatment with apixaban 5 mg twice daily or with another anticoagulant'),
   apixabanVteNoAdjust: cite('apixaban', '4.2', 38, 'for the treatment of DVT, treatment of PE and prevention of recurrent DVT and PE (VTEt), no dose adjustment is necessary'),
@@ -169,6 +170,7 @@ export const CITES = {
 
   rivaroxabanMissed: cite('rivaroxaban', '4.2', 86, 'If a dose is missed the patient should take Xarelto immediately and continue on the following day with the once daily intake as recommended.'),
   rivaroxabanMissed10: cite('rivaroxaban', '4.2', 29, 'If a dose is missed the patient should take Xarelto immediately and then continue the following day with once daily intake as before.', 'Xarelto 10 mg'),
+  rivaroxabanMissed15bid: cite('rivaroxaban', '4.2', 87, 'If a dose is missed during the 15 mg twice daily treatment phase (day 1 - 21), the patient should take Xarelto immediately to ensure intake of 30 mg Xarelto per day.'),
   rivaroxabanVteAcute: cite('rivaroxaban', '4.2', 86, 'The recommended dose for the initial treatment of acute DVT or PE is 15 mg twice daily for the first three weeks followed by 20 mg once daily for the continued treatment and prevention of recurrent DVT and PE.'),
   rivaroxabanVteExtended: cite('rivaroxaban', '4.2', 87, 'When extended prevention of recurrent DVT and PE is indicated (following completion of at least 6 months therapy for DVT or PE), the recommended dose is 10 mg once daily.'),
   rivaroxabanVteExtendedHigh: cite('rivaroxaban', '4.2', 87, 'a dose of Xarelto 20 mg once daily should be considered.'),
@@ -197,6 +199,7 @@ export const CITES = {
   dabigatranSwitch: cite('dabigatran', '4.2', 33, 'The parenteral anticoagulant should be discontinued and dabigatran etexilate should be started 0-2 hours prior to the time that the next dose of the alternate therapy would be due'),
   dabigatranSwitchUfh: cite('dabigatran', '4.2', 33, 'or at the time of discontinuation in case of continuous treatment (e.g. intravenous Unfractionated Heparin (UFH))'),
   dabigatranMissed: cite('dabigatran', '4.2', 32, 'It is recommended to continue with the remaining daily doses of dabigatran etexilate at the same time of the next day. No double dose should be taken to make up for missed individual doses.'),
+  dabigatranMissedBid: cite('dabigatran', '4.2', 35, 'A forgotten dabigatran etexilate dose may still be taken up to 6 hours prior to the next scheduled dose. From 6 hours prior to the next scheduled dose on, the missed dose should be omitted.'),
   dabigatranVtepTable: cite('dabigatran', '4.2 Table 1', 32, 'Dose recommendations and duration of therapy for primary prevention of VTE in orthopaedic surgery'),
   dabigatranVtepElderly: cite('dabigatran', '4.2 Table 1', 32, 'Patients aged 75 or above'),
   dabigatranVtepHaemostasis: cite('dabigatran', '4.2', 32, 'For both surgeries, if haemostasis is not secured, initiation of treatment should be delayed.'),
