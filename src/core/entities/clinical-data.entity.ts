@@ -9,6 +9,8 @@ export interface ClinicalSourceRecord {
 }
 
 export interface ConditionEntity extends ClinicalSourceRecord {
+  /** Existing local date-derived link; not a source-confirmed encounter. */
+  _encounterInferred?: boolean
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   id: string
   code?: {
@@ -660,6 +662,8 @@ export interface DiagnosticReportEntity extends ClinicalSourceRecord {
  * fetch DICOM bytes or act as a PACS viewer.
  */
 export interface ImagingStudyEntity extends ClinicalSourceRecord {
+  /** Existing local date-derived link; not a source-confirmed encounter. */
+  _encounterInferred?: boolean
   id: string
   identifier?: Array<{
     system?: string
@@ -724,6 +728,8 @@ export interface ImagingStudyEntity extends ClinicalSourceRecord {
 }
 
 export interface ProcedureEntity extends ClinicalSourceRecord {
+  /** Existing local date-derived link; not a source-confirmed encounter. */
+  _encounterInferred?: boolean
   id: string
   /** Source-derived procedure class from FHIR Procedure.category. */
   category?: {

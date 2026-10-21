@@ -11,6 +11,9 @@ it('retains existing local date/provider inferred visit links through mapping an
     { resource: { resourceType: 'Patient', id: 'patient' } },
     { resource: { resourceType: 'Encounter', id: 'visit', status: 'finished', period: { start: '2026-10-01' }, serviceProvider: { display: 'Synthetic hospital' } } },
     { resource: { resourceType: 'MedicationRequest', id: 'med', authoredOn: '2026-10-01', requester: { display: 'Synthetic hospital' }, medicationCodeableConcept: { text: 'Synthetic medicine' } } },
+    { resource: { resourceType: 'Condition', id: 'condition', recordedDate: '2026-10-01', code: { text: 'Synthetic condition' } } },
+    { resource: { resourceType: 'Procedure', id: 'procedure', performedDateTime: '2026-10-01', code: { text: 'Synthetic procedure' } } },
+    { resource: { resourceType: 'ImagingStudy', id: 'study', started: '2026-10-01', description: 'Synthetic imaging' } },
     { resource: { resourceType: 'Observation', id: 'lab', status: 'final', effectiveDateTime: '2026-10-01', category: [{ coding: [{ code: 'laboratory' }] }], code: { text: 'Synthetic lab' }, valueQuantity: { value: 7 } } },
   ] })!
   const tools = createFhirTools(() => ({ patient: parsed.patient, collection: parsed.collection }))
@@ -19,6 +22,9 @@ it('retains existing local date/provider inferred visit links through mapping an
   const details = await (tools.getEncounterDetails as any).execute({ encounterId: parsed.collection.encounters[0].id })
   expect(details.data.medications).toHaveLength(1)
   expect(details.data.observations).toHaveLength(1)
+  expect(details.data.procedures).toHaveLength(1)
+  expect(details.data.imagingStudies).toHaveLength(1)
+  expect(parsed.collection.conditions[0]._encounterInferred).toBe(true)
 })
 
 async function capturedTools(includeSecondEncounter: boolean) {
