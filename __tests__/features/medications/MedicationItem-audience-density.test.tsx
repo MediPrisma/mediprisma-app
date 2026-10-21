@@ -101,7 +101,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(within(container.querySelector('[data-medication-cell="clinical"]') as HTMLElement)
       .queryByText(/R05CB01/)).not.toBeInTheDocument()
     const tooltip = screen.getByTestId('medication-terminology-tooltip')
-    expect(tooltip).toHaveClass('bg-secondary', 'text-secondary-foreground', 'border-primary/20')
+    expect(tooltip).toHaveClass('bg-popover', 'text-popover-foreground', 'border-border')
     expect(tooltip).not.toHaveClass('bg-foreground', 'text-background')
     expect(within(tooltip).getByText('愛克痰發泡錠600毫克')).toBeInTheDocument()
     expect(within(tooltip).getByText('ACTEIN EFFERVESCENT TABLETS 600MG')).toBeInTheDocument()
@@ -214,7 +214,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
     const row = container.firstElementChild
     const badge = screen.getByText('剩 2 天')
     expect(row).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden')
-    expect(row).toHaveClass('grid', 'bg-muted/40', 'py-1', 'dark:bg-muted/30')
+    expect(row).toHaveClass('grid', 'bg-transparent', 'py-1', 'border-b')
     expect(badge.closest('[data-medication-cell="supply"]')).toHaveClass('w-[4.75rem]')
     expect(badge.parentElement).toHaveClass('w-full')
   })
@@ -246,7 +246,7 @@ describe('MedicationItem audience-aware compact terminology', () => {
     render(<MedicationItem medication={medication} />)
 
     const badge = screen.getByText('已結束').parentElement
-    expect(badge).toHaveClass('bg-muted/25', 'text-muted-foreground')
+    expect(badge).toHaveClass('bg-transparent', 'text-muted-foreground')
     expect(badge).not.toHaveClass('bg-destructive/10', 'text-destructive')
   })
 
@@ -473,10 +473,10 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(clinicalLane).toContainElement(icd)
     const icdTooltip = screen.getByTestId('medication-icd-tooltip')
     expect(icdTooltip).toHaveClass(
-      'border-primary/20',
-      'bg-secondary',
-      'text-secondary-foreground',
-      'shadow-lg',
+      'border-border',
+      'bg-popover',
+      'text-popover-foreground',
+      'shadow-md',
     )
     expect(icdTooltip).not.toHaveClass('bg-foreground', 'text-background')
   })

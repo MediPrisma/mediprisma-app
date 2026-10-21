@@ -59,7 +59,7 @@ describe('VisitItem ICD tooltip', () => {
 
     const badge = screen.getByText(label)
     expect(badge).toHaveAttribute('data-care-discipline', careDiscipline)
-    expect(badge).toHaveClass('bg-muted/60', 'text-muted-foreground')
+    expect(badge).toHaveClass('bg-transparent', 'text-muted-foreground')
   })
 
   it.each([
@@ -122,15 +122,15 @@ describe('VisitItem ICD tooltip', () => {
     )
 
     const row = screen.getByText('示範長青醫院').closest('[data-tour="visit-tour-row"]')
-    expect(row).toHaveClass('bg-muted/40', 'border-border/90')
-    expect(screen.getByText('門診')).toHaveClass('bg-emerald-100', 'text-emerald-700')
-    expect(screen.getByText('示範長青醫院').parentElement).toHaveClass('text-blue-600/80')
+    expect(row).toHaveClass('bg-transparent', 'border-b-border/70')
+    expect(screen.getByText('門診')).toHaveClass('bg-transparent', 'text-muted-foreground')
+    expect(screen.getByText('示範長青醫院').parentElement).toHaveClass('text-muted-foreground')
     const medicationStat = screen.getByLabelText('用藥 1')
     expect(medicationStat).toHaveAttribute('data-visit-stat', 'medications')
     expect(medicationStat).toHaveClass('border-border/60')
     expect(medicationStat.querySelector('svg')).toBeNull()
     expect(within(medicationStat).getByText('用藥')).toHaveClass('text-muted-foreground')
-    expect(within(medicationStat).getByText('1')).toHaveClass('tabular-nums', 'bg-foreground/[0.06]')
+    expect(within(medicationStat).getByText('1')).toHaveClass('tabular-nums', 'text-muted-foreground')
     expect(medicationStat).not.toHaveClass('bg-green-50')
 
     expect(screen.getByLabelText('檢驗 1').querySelector('svg')).toBeNull()
@@ -180,10 +180,10 @@ describe('VisitItem ICD tooltip', () => {
       'I35.9 非風濕性未明示主動脈瓣疾患',
     )
     expect(tooltip).toHaveClass(
-      'border-primary/20',
-      'bg-secondary',
-      'text-secondary-foreground',
-      'shadow-lg',
+      'border-border',
+      'bg-popover',
+      'text-popover-foreground',
+      'shadow-md',
     )
     expect(tooltip).not.toHaveClass('bg-foreground', 'text-background')
   })
@@ -329,8 +329,8 @@ describe('VisitItem ICD tooltip', () => {
     expect(expandButton).toHaveAttribute('aria-expanded', 'false')
     fireEvent.focus(expandButton)
     const preview = await screen.findByTestId('secondary-icd-preview')
-    expect(preview).toHaveClass('bg-secondary', 'text-secondary-foreground', 'border-primary/20', 'shadow-lg')
-    expect(preview).not.toHaveClass('bg-popover', 'bg-foreground', 'text-background')
+    expect(preview).toHaveClass('bg-popover', 'text-popover-foreground', 'border-border', 'shadow-md')
+    expect(preview).not.toHaveClass('bg-foreground', 'text-background')
     expect(preview).toHaveTextContent('K57.10')
     expect(preview).toHaveTextContent('小腸憩室疾病，未伴有穿孔或膿瘍')
     expect(preview).toHaveTextContent('D72.821')
@@ -374,7 +374,7 @@ describe('VisitItem ICD tooltip', () => {
       </LanguageProvider>,
     )
 
-    expect(screen.getByTestId('visit-icd-field-label')).toHaveClass('max-sm:hidden')
+    expect(screen.getByTestId('visit-icd-field-label')).toHaveClass('sr-only')
     expect(screen.getByTestId('visit-channel-label')).toHaveClass('max-sm:hidden')
     expect(screen.getByTestId('visit-primary-metadata')).toHaveClass('max-sm:col-end-3')
     expect(screen.getByTestId('visit-stat-strip')).toHaveClass(
