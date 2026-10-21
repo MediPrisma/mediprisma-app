@@ -12,7 +12,7 @@ import {
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
-import { reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { compareImagingCopies, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import {
   reportSource,
   sharedReportNarrative,
@@ -280,14 +280,16 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         renderedSharedKeys.add(groupingKey)
 
         const groupedReports = sharedGroups.get(groupingKey) ?? [report]
+        const representative = groupingKey.startsWith('cross-source|')
+          ? [...groupedReports].sort(compareImagingCopies)[0] : report
         const sources = groupedReports.map(reportSource)
         const groupTitle = sharedReportTitle(sources, 'en')
           ?? sources.map((source) => source.title).join(' + ')
-        const reportDate = report.effectiveDateTime || report.effectivePeriod?.start
+        const reportDate = representative.effectiveDateTime || representative.effectivePeriod?.start
         const datePart = reportDate
           ? ` (${new Date(reportDate).toLocaleDateString()})`
           : ''
-        const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'
+        const reportStatus = normalizeClinicalStatus(representative.status) || 'unknown'
         items.push(`${groupTitle}${datePart} [status: ${reportStatus}] [shared narrative; count once]`)
 
         groupedReports.forEach((sourceReport) => {
@@ -300,7 +302,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
             .forEach((text) => items.push(`    • ${text}`))
         })
 
-        items.push(`  • Shared narrative: ${sharedReportNarrative(report)}`)
+        items.push(`  • Shared narrative: ${sharedReportNarrative(representative)}`)
         return
       }
 

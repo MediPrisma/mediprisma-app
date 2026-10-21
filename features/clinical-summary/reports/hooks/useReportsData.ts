@@ -1,7 +1,7 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
 import { getVghtpeSource } from '../adapters/vghtpe-source-display'
-import { imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferReportDisplayGroup } from '../utils/grouping-helpers'
@@ -354,7 +354,7 @@ export function buildReportsData(
         const isCrossSource = sharedNarrativeKey.startsWith('cross-source|')
         const contentReports = grp.filter(report => displayGroupingKeys.get(report) === sharedNarrativeKey)
         // Keep the richer original report as the display representative.
-        if (isCrossSource) contentReports.sort((a, b) => sharedReportNarrative(b).length - sharedReportNarrative(a).length)
+        if (isCrossSource) contentReports.sort(compareImagingCopies)
         groups.set(key, contentReports.length > 0 ? contentReports : grp)
         viewerReportsByKey.set(key, grp)
         diagnosticReportIdsByKey.set(

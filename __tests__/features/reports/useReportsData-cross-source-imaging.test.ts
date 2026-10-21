@@ -39,6 +39,9 @@ describe('cross-source imaging reports', () => {
     const header = 'SONOGRAM, HEPATOBILIARY SYSTEM Date Of Examination:2026/06/24 14:13:10 Date Of RCP:2026/06/24 '
     expect(normalizeImagingReportCopy(header + BODY)).toBe(normalizeImagingReportCopy(BODY))
     expect(normalizeImagingReportCopy(BODY.replace('4 mm', '5 mm'))).not.toBe(normalizeImagingReportCopy(BODY))
+    expect(normalizeImagingReportCopy(`${text}${signature} ADDENDUM: new mass.`)).not.toBe(normalizeImagingReportCopy(text))
+    const prior = `Prior examination showed BI-RADS category 2. ${BODY}`
+    expect(normalizeImagingReportCopy(prior + signature)).not.toBe(normalizeImagingReportCopy(prior))
   })
 
   it.each([
@@ -114,6 +117,66 @@ describe('cross-source imaging reports', () => {
       result: [{ reference: 'Observation/loaded' }, { reference: 'Observation/unresolved' }],
       _observations: [{ id: 'loaded', valueString: BODY }],
     })))).toHaveProperty('size', 0)
+    expect(buildReportsData(pair().map((report, index) => ({ ...report,
+      _observations: [{ id: `assessment-${index}`, valueString: `BI-RADS ${index ? 4 : 2}` }],
+    }))).reportRows).toHaveLength(2)
+  })
+
+  it('compares explicit timestamps as instants including their UTC offsets', () => {
+    const reports = pair()
+    reports[0].effectiveDateTime = '2026-06-24T11:30:00+08:00'
+    reports[1].effectiveDateTime = '2026-06-24T11:30:00Z'
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    reports[1].effectiveDateTime = '2026-06-24T03:30:00Z'
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+  })
+
+  it('rejects conflicting explicit encounters and same-system exam identifiers', () => {
+    const reports = pair()
+    reports[0].encounter = { reference: 'Encounter/a' }
+    reports[1].encounter = { reference: 'Encounter/b' }
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    reports[1].encounter = reports[0].encounter
+    reports[0].identifier = [{ system: 'urn:synthetic:accession', value: 'A' }]
+    reports[1].identifier = [{ system: 'urn:synthetic:accession', value: 'B' }]
+    expect(buildReportsData(reports).reportRows).toHaveLength(2)
+    reports[1].identifier = reports[0].identifier
+    expect(buildReportsData(reports).reportRows).toHaveLength(1)
+  })
+
+  it('does not split an existing shared report group if a member is ineligible', () => {
+    const reports = pair()
+    reports[1].encounter = { reference: 'Encounter/cloud' }
+    const companion = { ...reports[1], id: 'cloud-companion', code: { text: 'Another CT procedure' },
+      _observations: [{ id: 'grade', valueString: 'Grade 2' }],
+    }
+    const keys = reportDisplayGroupingKeys([...reports, companion])
+    expect(keys.get(reports[1])).toBe(keys.get(companion))
+    expect(keys.has(reports[0])).toBe(false)
+  })
+
+  it('keeps the established echo family and viewer-only companion together', () => {
+    const reports = pair().map(report => ({ ...report, code: { text: 'Cardiac ultrasound' } }))
+    reports[1].encounter = { reference: 'Encounter/echo' }
+    reports[1].code = { text: 'Cardiac ultrasound', coding: [{ code: '18005C' }] }
+    const doppler = { ...reports[1], id: 'doppler', code: { text: 'Doppler ultrasound', coding: [{ code: '18007C' }] } }
+    const viewer = { ...reports[1], id: 'viewer', conclusion: undefined, extension: [{ url: NHI_VIEWER_REQUEST_EXTENSION_URL, extension: [
+      { url: 'version', valueInteger: 1 }, { url: 'proc-id', valueCode: 'IMUE0130' },
+      { url: 'patient-context-hash', valueString: 'b'.repeat(64) }, { url: 'ipl-case-seq-no', valueString: 'ECHO-SYNTHETIC' },
+    ] }] }
+    const rows = buildReportsData([...reports, doppler, viewer]).reportRows
+    expect(rows).toHaveLength(2)
+    expect(rows.find(row => row.diagnosticReportIds?.includes('cloud'))?.diagnosticReportIds).toEqual(['cloud', 'doppler', 'viewer'])
+    expect(rows.find(row => row.diagnosticReportIds?.includes('cloud'))?.viewerActions).toHaveLength(1)
+  })
+
+  it('keeps counts aligned with nearby same-title reports in either input order', () => {
+    const reports = pair()
+    const neighbor = { ...reports[0], id: 'neighbor', conclusion: `${BODY} An additional new opacity is present.` }
+    for (const input of [[...reports, neighbor], [neighbor, ...reports.slice().reverse()]]) {
+      expect(buildReportsData(input).reportRows).toHaveLength(2)
+      expect(calculateReportTabCounts(input).imaging).toBe(2)
+    }
   })
 
   it.each([

@@ -14,7 +14,7 @@ import {
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
 import { cancerScreeningProgramKey } from './cancer-screening-grouping'
-import { reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
+import { compareImagingCopies, imagingCopyInstitution, reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 
 /**
  * Lightweight counts for the ReportsCard primary tabs.
@@ -161,7 +161,8 @@ function createDiagnosticReportRows(
   }
 
   const toCountRow = (reports: any[]): CountRow => {
-    const head = reports[0]
+    const isCrossSource = sharedKeys.get(reports[0])?.startsWith('cross-source|')
+    const head = isCrossSource ? [...reports].sort(compareImagingCopies)[0] : reports[0]
     const study = (head?.imagingStudy ?? [])
       .map((entry: any) => studiesById.get(referenceId(entry?.reference) || ''))
       .find(Boolean)
@@ -172,7 +173,7 @@ function createDiagnosticReportRows(
       group: inferReportDisplayGroup(head),
       rawTitle,
       effectiveDate: reportDate(head) || study?.started,
-      institution: reportInstitution(head)
+      institution: (isCrossSource ? imagingCopyInstitution(head) : undefined) || reportInstitution(head)
         || (study ? imagingStudyInstitution(study) : undefined),
       observations: reportObservations(reports),
     }
@@ -180,10 +181,7 @@ function createDiagnosticReportRows(
 
   const rows: CountRow[] = []
   for (const reports of groups.values()) {
-    const isSharedReport = reports.length > 1
-      && (() => {
-        return sharedKeys.has(reports[0])
-      })()
+    const isSharedReport = reports.length > 1 && sharedKeys.has(reports[0])
     if (
       !isSharedReport
       &&

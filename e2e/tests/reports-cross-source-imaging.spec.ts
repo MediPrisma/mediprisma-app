@@ -7,7 +7,7 @@ import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '../../features/clinical-summar
 const before = process.env.IMAGING_BEFORE === '1'
 const marker = 'Synthetic imaging comparison'
 const cases = [
-  ['SONOGRAM- BREAST', '乳房超音波', '19014C', `${marker}: BI-RADS category 2. Simple bilateral breast cysts with no suspicious solid mass or architectural distortion. Annual imaging follow-up is recommended.`],
+  ['SONOGRAM- BREAST', '乳房超音波', '19014C', `BI-RADS category 2. ${marker}: Simple bilateral breast cysts with no suspicious solid mass or architectural distortion. Annual imaging follow-up is recommended.`],
   ['SONO- HEPATOBILIARY SYSTEM', 'Ultrasonography, other', '19005C', `${marker}: Mild liver steatosis. A 3 mm gallbladder polyp is unchanged. No biliary dilatation or ascites. The visualized pancreas and spleen are unremarkable.`],
   ['CHEST AP VIEW', '胸腔檢查 (Chest view)', '32001C', `${marker}: Central line tip projects over the superior vena cava. Heart size is normal. No focal consolidation, pneumothorax or pleural effusion. Bones show no acute change.`],
   ['CT/SCAN- CHEST', '電腦斷層造影－有造影劑 (Computed tomography)', '33072B', `${marker}: A 4 mm left upper lobe nodule is unchanged. No enlarged mediastinal lymph node or pleural effusion. Repeat imaging in twelve months is recommended.`],
