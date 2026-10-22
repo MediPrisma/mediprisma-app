@@ -132,6 +132,9 @@ function sharedReportBoundary(report: any): SharedReportBoundary | null {
  * evidence that two separately billed reports came from the same encounter.
  */
 export function sharedReportGroupingKey(report: any): string | null {
+  // Linked studies require resolved study identity, not a common billing
+  // narrative. Keep these radiographs outside this automatic projection.
+  if (isRadiographReport(report) && report.imagingStudy?.length) return null
   const reportGroup = inferReportDisplayGroup(report)
   const boundary = sharedReportBoundary(report)
   const narrative = normalizeSharedReportNarrative(sharedReportNarrative(report))

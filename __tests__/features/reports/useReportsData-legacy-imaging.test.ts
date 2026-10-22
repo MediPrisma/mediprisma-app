@@ -136,6 +136,16 @@ describe('legacy receipt-clock imaging copies', () => {
     reports[1].conclusion = reports[1].conclusion.replace('The visible', 'Segments 1, 5 cm. The visible')
     expect(rows(reports)).toHaveLength(2)
   })
+
+  it.each(['2026-06-24', '2026-06-24T08:00:00+08:00'])('keeps different linked studies separate with date %s', date => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32002C'].map((code, index) => ({ ...template,
+      id: `study-${index}`, effectiveDateTime: date, code: { ...template.code, coding: [{ code }] },
+      imagingStudy: [{ reference: `ImagingStudy/study-${index}` }],
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
 })
 
 

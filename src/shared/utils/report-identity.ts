@@ -64,6 +64,7 @@ export function reportNaturalGroupingKey(report: any): string {
     // previews. A day alone cannot: retain distinct records in that case.
     return `${key}|radiograph:${JSON.stringify([
       clock, headerClock, identifiers,
+      report.imagingStudy ?? null,
       !clock && !headerClock && !identifiers.length ? report.id ?? null : null,
       period ? [period.start, period.end] : null,
     ])}`
