@@ -5,7 +5,7 @@ import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/im
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '../../features/clinical-summary/reports/utils/nhi-viewer-request'
 
 const before = process.env.IMAGING_BEFORE === '1'
-const legacy = process.env.IMAGING_LEGACY !== '0'
+const variants = process.env.IMAGING_LEGACY === undefined ? [false, true] : [process.env.IMAGING_LEGACY !== '0']
 const marker = 'Synthetic imaging comparison'
 const cases = [
   ['SONOGRAM- BREAST', '乳房超音波', '19014C', `BI-RADS category 2. ${marker}: Simple bilateral breast cysts with no suspicious solid mass or architectural distortion. Annual imaging follow-up is recommended.`],
@@ -15,7 +15,7 @@ const cases = [
 ]
 const url = 'https://medvpnimg.nhi.gov.tw/ZFP?synthetic=1'
 
-test('imaging copies retain all sources and open the correct NHI viewer', async ({ page, context }, testInfo) => {
+for (const legacy of variants) test(`imaging copies retain all sources and open the correct NHI viewer (${legacy ? 'legacy receipt' : 'strict'})`, async ({ page, context }, testInfo) => {
   test.setTimeout(180_000)
   await context.route('https://medvpnimg.nhi.gov.tw/**', route => route.fulfill({ contentType: 'text/html', body: '<h1>Synthetic NHI viewer</h1>' }))
   await page.addInitScript((viewerUrl) => {

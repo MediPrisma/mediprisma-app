@@ -44,6 +44,11 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(result.flatMap(row => row.diagnosticReportIds).sort()).toEqual(reports.map(r => r.id).sort())
     expect(result.flatMap(row => row.sharedReportSources?.map(source => source.narrative)).sort()).toEqual(reports.map(r => r.conclusion).sort())
     expect(result.flatMap(row => row.viewerActions)).toHaveLength(4)
+    for (const row of result) {
+      const cloudId = row.diagnosticReportIds?.find(id => id.startsWith('cloud-'))!
+      expect(row.viewerActions).toHaveLength(1)
+      expect(row.viewerActions?.[0]).toMatchObject({ kind: 'live', descriptor: { iplCaseSeqNo: `SYNTHETIC-${cloudId.split('-')[1]}` } })
+    }
     expect(JSON.stringify(reports)).toBe(before)
     expect(imagingReportsCategory.getCount(reports, { imagingReportVersion: 'all', imagingReportTimeRange: 'all' }, {} as any)).toBe(4)
   })
@@ -76,14 +81,15 @@ describe('legacy receipt-clock imaging copies', () => {
 
   it.each(['patient', 'date', 'site', 'findings', 'grade', 'receipt', 'number', 'negation'])('keeps conflicting %s separate', conflict => {
     const reports = fixture().slice(0, 2)
+    expect(rows(reports)).toHaveLength(1)
     if (conflict === 'patient') reports[1].subject = { reference: 'Patient/other' }
     if (conflict === 'date') reports[1].effectiveDateTime = '2026-06-25'
     if (conflict === 'site') reports[1].code.text = '肝臟超音波'
     if (conflict === 'findings') reports[1].conclusion += ' Additional suspicious mass.'
     if (conflict === 'grade') reports[0].conclusion = reports[0].conclusion.replace('ACR BI-RADS 2', 'ACR BI-RADS 4')
     if (conflict === 'receipt') reports[0].extension = []
-    if (conflict === 'number') { reports[0].conclusion += ' 1.2 cm'; reports[1].conclusion += ' 1. 2 cm' }
-    if (conflict === 'negation') { reports[0].conclusion += ' notable'; reports[1].conclusion += ' no table' }
+    if (conflict === 'number') { reports[0].conclusion = reports[0].conclusion.replace(' Reported By', ' 1.2 cm Reported By'); reports[1].conclusion += ' 1. 2 cm' }
+    if (conflict === 'negation') { reports[0].conclusion = reports[0].conclusion.replace(' Reported By', ' notable Reported By'); reports[1].conclusion += ' no table' }
     expect(rows(reports)).toHaveLength(2)
   })
 
@@ -102,7 +108,7 @@ describe('legacy receipt-clock imaging copies', () => {
     expect([...reportDisplayGroupingKeys(reports).values()].some(key => key.startsWith('cross-source|'))).toBe(false)
   })
 
-  it.each(['胸部X光', '胸部Ｘ光', 'CXR', 'ＣＸＲ'])('preserves uncoded serial radiographs named %s', title => {
+  it.each(['胸部X光', '胸部Ｘ光', 'CXR', 'ＣＸＲ', 'CHEST AP', 'CHEST PA', 'Chest PA and Lateral', 'Report'])('preserves uncoded serial radiographs named %s', title => {
     const report = fixture()[4]
     report.code = { text: title }
     const second = JSON.parse(JSON.stringify(report))

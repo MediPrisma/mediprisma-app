@@ -26,8 +26,10 @@ export type ReportDisplayGroup = ReportGroup | 'pathology'
 
 /** Shared label recognition for copy matching and serial radiograph guards. */
 export function isRadiographLabel(label: string): boolean {
-  return /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|\bchest\b.*\bviews?\b|胸腔檢查|[XＸ]光/i.test(label.normalize('NFKC'))
+  return /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|\bchest\b[^.\n]{0,120}\b(?:views?|ap|pa|lateral)\b|胸腔檢查|[XＸ]光/i.test(label.normalize('NFKC'))
 }
+
+export const IMAGING_EXAM_HEADER = /^((?:SONO(?:GRAM)?|CHEST|CT(?:\/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+\d{2}:\d{2}(?::\d{2})?)?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i
 
 export const HEALTH_BANK_SDK_SECTION_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'

@@ -1,5 +1,5 @@
 import type { DiagnosticReport as Report } from '../types/fhir.types'
-import { getNhiReportModality, inferReportDisplayGroup, isRadiographLabel } from './report-grouping-helpers'
+import { getNhiReportModality, inferReportDisplayGroup, isRadiographLabel, IMAGING_EXAM_HEADER as EXAM_HEADER } from './report-grouping-helpers'
 import { getImagingCopySource as sourceOf, reportNaturalGroupingKey } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
@@ -15,7 +15,6 @@ const VGH_NAMES = new Set(['臺北榮總', '台北榮總', '臺北榮民總醫�
 const DATE = String.raw`\d{4}[/-]\d{2}[/-]\d{2}`
 const CLOCK = String.raw`\d{2}:\d{2}(?::\d{2})?`
 const SIGNATURE = new RegExp(String.raw`\s+Reported\s+By\s+(?:(?!\bOn:|Reported\s+By)[^\r\n]){1,180}?\bOn:\s*${DATE}\s*\(${CLOCK}\)\s*,?\s*\(by\s+[^)\r\n]{1,180}\)\s*At:\s*[A-Za-z0-9_-]+?(?:(ACR\s+BI-RADS\s+[0-6])|(Positive\s+Rate\s+Evaluation\s+\d+))?\s*$`, 'i')
-const EXAM_HEADER = new RegExp(String.raw`^((?:SONO(?:GRAM)?|CHEST|CT(?:/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(${DATE})(?:\s+${CLOCK})?\s+Date\s+Of\s+RCP:\s*${DATE}\s*`, 'i')
 
 function foldFullWidthAscii(value: string): string {
   return value.replace(/[\uFF01-\uFF5E]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xfee0)).replace(/\u3000/g, ' ')
@@ -247,31 +246,7 @@ function examQualifiers(report: Report): string[] | null {
 export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Report, string> {
   const originalKeys = new Map<Report, string>()
   try {
-    const strict = calculateReportDisplayGroupingKeys(reports, originalKeys)
-    const legacy = calculateReportDisplayGroupingKeys(reports, originalKeys, true)
-    const strictSnapshot = new Map(strict)
-    const legacyGroups = new Map<string, Report[]>()
-    for (const [report, key] of legacy) if (key.startsWith('cross-source|')) {
-      legacyGroups.set(key, [...(legacyGroups.get(key) ?? []), report])
-    }
-    for (const [key, members] of legacyGroups) {
-      const overlapping = new Set(members.map(report => strictSnapshot.get(report)).filter(value => value?.startsWith('cross-source|')))
-      // The two projections must never join different examinations through a
-      // common date-only cloud report. Decide against the immutable snapshot,
-      // so iteration order cannot turn an ambiguous component into a match.
-      const ambiguous = [...overlapping].some(strictKey => {
-        const existing = [...strictSnapshot].filter(([, value]) => value === strictKey).map(([report]) => report)
-        return existing.length !== members.length || existing.some(report => !members.includes(report))
-      })
-      if (ambiguous) {
-        for (const [report, strictKey] of strictSnapshot) if (overlapping.has(strictKey)) {
-          const original = originalKeys.get(report)
-          if (original) strict.set(report, original)
-          else strict.delete(report)
-        }
-      } else for (const report of members) strict.set(report, key)
-    }
-    return strict
+    return calculateReportDisplayGroupingKeys(reports, originalKeys)
   } catch {
     // Imported FHIR may contain malformed nested elements. Grouping is an
     // optional display projection: uncertainty must keep reports separate,
@@ -280,7 +255,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
   }
 }
 
-function calculateReportDisplayGroupingKeys(reports: readonly Report[], originalKeys: Map<Report, string>, legacy = false): Map<Report, string> {
+function calculateReportDisplayGroupingKeys(reports: readonly Report[], originalKeys: Map<Report, string>): Map<Report, string> {
   const keys = new Map<Report, string>()
   const sharedKeys = qualifyingSharedReportKeys([...reports])
   for (const report of reports) {
@@ -325,13 +300,12 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     const day = examDay(report)
     const subject = report.subject?.reference?.trim()
     if (!source || !institution || !method || !day || !subject || !['final', 'amended', 'corrected'].includes(report.status ?? '')) continue
-    if (legacy && !(source === 'hospital' ? hasReceiptClock(report) : /^\d{4}-\d{2}-\d{2}$/.test(report.effectiveDateTime ?? ''))) continue
     if (isAdultPreventiveHealthExamResource(report)
       || report._observations?.some(isAdultPreventiveHealthExamResource)) continue
     const raw = sharedReportNarrative(report)
     const headerDay = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})/i.exec(raw.normalize('NFKC'))?.[1].replaceAll('/', '-')
     if (headerDay && headerDay !== day) continue
-    const narrative = legacy ? legacyLayoutText(raw) : normalizeImagingReportCopy(raw)
+    const narrative = legacyLayoutText(raw)
     // Short stock phrases and explicitly truncated previews cannot identify an exam.
     if (narrative.length < 80 || /…|\.{3}/.test(raw)) continue
     const qualifiers = examQualifiers(report)
@@ -345,6 +319,8 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     const hospital = bucket.filter(item => item.source === 'hospital')
     const cloud = bucket.filter(item => item.source === 'cloud')
     if (!hospital.length || !cloud.length) continue
+    const legacy = hospital.every(item => hasReceiptClock(item.report))
+      && cloud.every(item => /^\d{4}-\d{2}-\d{2}$/.test(item.report.effectiveDateTime ?? ''))
     const ends = bucket.map(({ report }) => periodEnd(report))
     if (ends.some(end => end === null)
       || new Set(ends.map(end => end?.day).filter(Boolean)).size > 1
@@ -439,4 +415,5 @@ export function visibleReportGroupingKeys(reports: readonly Report[], sourceKeys
   }
   return keys
 }
+
 
