@@ -49,6 +49,10 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'cha2ds2-va', dp: 'DP-14', source: 'af', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
   { id: 'crcl', dp: 'DP-14', source: 'af', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },
   { id: 'has-bled', dp: 'DP-14', source: 'af', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
+  // Label rules the AF dose point leaves to a calculator (owner decision
+  // 2026-10-21: CDSS = guideline, label = calculator); its card names it.
+  { id: 'doac-dose', dp: 'DP-09', source: 'af', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/, needsPoint: true },
+  { id: 'doac-periop', dp: 'DP-09', source: 'af', calculatorId: 'doac-periop', names: /DOAC 手術前後停藥計算機|DOAC peri-procedural calculator/, needsPoint: true },
   { id: 'maggic', dp: 'DP-19', prognosis: 'maggic', names: /MAGGIC/, note: true },
   { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', names: /LIFE[-‐–]Preserved/, note: true },
   { id: 'shfm', dp: 'DP-19', prognosis: 'shfm', names: /SHFM|Seattle Heart Failure Model/ },
@@ -107,7 +111,7 @@ function CalculatorRows({ groups, isEnglish, onChoose }: {
     if (row.fixed || !row.calc) return { status: row.fixed ?? 'data-only' }
     const computed = computeAutofilledResult(row.calc, autofill)
     if (computed) return { status: 'computed', value: `${computed.result.value}${computed.result.unit ? ` ${computed.result.unit}` : ''}` }
-    const empty = row.calc.inputs.filter((input) => !(input.type === 'number' && input.optional) && !resolveInput(input, autofill).filled).length
+    const empty = row.calc.inputs.filter((input) => !input.optional && !resolveInput(input, autofill).filled).length
     // Every input filled from the record, a judgement still the clinician's.
     return empty ? { status: 'to-fill', value: String(empty) } : { status: 'to-confirm' }
   }
@@ -209,6 +213,9 @@ export function VisitCalculatorsProvider({
     points.find((point) => point.dp === dp && point.source === (source ?? sourceOfPage))
   ), [points, sourceOfPage])
   const rows = useMemo(() => HF_VISIT_CALCULATORS.flatMap((entry): CalculatorRow[] => {
+    // The AF page lists AF's own calculators only; the HF page keeps its list,
+    // with AF's where AF's points sit on it.
+    if (sourceOfPage !== 'hf' && (entry.source ?? 'hf') !== sourceOfPage) return []
     const point = pointOf(entry.dp, entry.source)
     if (entry.needsPoint && (!point || ABSENT_STATES.has(point.state))) return []
     // LIFE-Preserved is for HFpEF: offered only on an LVEF known to be 50% or
@@ -221,7 +228,7 @@ export function VisitCalculatorsProvider({
     // GWTG-HF reads the admission's values, never today's chart.
     const fixed: RowStatus | undefined = calc ? undefined : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
     return [{ entry, calc, model, name, fixed }]
-  }), [locale, lvef, pointOf])
+  }), [locale, lvef, pointOf, sourceOfPage])
   const pattern = useMemo(() => (
     rows.length ? new RegExp(rows.map((row) => `(${row.entry.names.source})`).join('|'), 'g') : undefined
   ), [rows])
@@ -374,8 +381,8 @@ export function VisitCalculatorsButton({ chapterOf, goTo }: {
 
 /**
  * A line of the page with each calculator it names underlined, opening that
- * calculator (「CHA₂DS₂-VA ≥2 建議抗凝」). Plain text where the page has no
- * calculators (the AF page) or names none.
+ * calculator (「CHA₂DS₂-VA ≥2 建議抗凝」, 「劑量請用 DOAC 劑量計算機核對」).
+ * Plain text where the page has no calculators or names none.
  */
 export function FormulaText({ text }: { text: string }) {
   const calculators = useContext(VisitCalculatorsContext)

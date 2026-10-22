@@ -1,0 +1,128 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { test, expect } from '../fixtures/test'
+import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/import'
+import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '../../features/clinical-summary/reports/utils/nhi-viewer-request'
+
+const before = process.env.IMAGING_BEFORE === '1'
+const marker = 'Synthetic imaging comparison'
+const cases = [
+  ['SONOGRAM- BREAST', '乳房超音波', '19014C', `BI-RADS category 2. ${marker}: Simple bilateral breast cysts with no suspicious solid mass or architectural distortion. Annual imaging follow-up is recommended.`],
+  ['SONO- HEPATOBILIARY SYSTEM', 'Ultrasonography, other', '19005C', `${marker}: Mild liver steatosis. A 3 mm gallbladder polyp is unchanged. No biliary dilatation or ascites. The visualized pancreas and spleen are unremarkable.`],
+  ['CHEST AP VIEW', '胸腔檢查 (Chest view)', '32001C', `${marker}: Central line tip projects over the superior vena cava. Heart size is normal. No focal consolidation, pneumothorax or pleural effusion. Bones show no acute change.`],
+  ['CT/SCAN- CHEST', '電腦斷層造影－有造影劑 (Computed tomography)', '33072B', `${marker}: A 4 mm left upper lobe nodule is unchanged. No enlarged mediastinal lymph node or pleural effusion. Repeat imaging in twelve months is recommended.`],
+]
+const url = 'https://medvpnimg.nhi.gov.tw/ZFP?synthetic=1'
+
+test('imaging copies retain all sources and open the correct NHI viewer', async ({ page, context }, testInfo) => {
+  test.setTimeout(180_000)
+  await context.route('https://medvpnimg.nhi.gov.tw/**', route => route.fulfill({ contentType: 'text/html', body: '<h1>Synthetic NHI viewer</h1>' }))
+  await page.addInitScript((viewerUrl) => {
+    const target = window as Window & { __viewerRequests: any[] }
+    target.__viewerRequests = []
+    window.addEventListener('message', event => {
+      if (event.source !== window || event.data?.type !== 'MEDIPRISMA_NHI_VIEWER_OPEN_REQUEST') return
+      target.__viewerRequests.push(event.data)
+      window.open(viewerUrl, '_blank')
+      window.postMessage({ source: 'medcloud2-extension', type: 'MEDIPRISMA_NHI_VIEWER_OPEN_RESULT', version: 1, requestId: event.data.requestId, ok: true }, window.location.origin)
+    })
+  }, url)
+  const bundle = JSON.parse(await fs.readFile(SYNTHETIC_BUNDLE, 'utf8'))
+  // Keep the established patient/encounters, replacing reports with synthetic comparisons.
+  bundle.entry = bundle.entry.filter((entry: any) => !['DiagnosticReport', 'Observation', 'ImagingStudy'].includes(entry.resource?.resourceType))
+  for (const [index, [hospitalTitle, cloudTitle, code, body]] of cases.entries()) {
+    const common = { resourceType: 'DiagnosticReport', status: 'final', subject: { reference: 'Patient/test-patient-1' }, effectiveDateTime: '2026-06-24', category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }] }
+    const header = index === 1 ? 'SONOGRAM, HEPATOBILIARY SYSTEM Date Of Examination:2026/06/24 14:13:10 Date Of RCP:2026/06/24 ' : index === 2 ? 'CHEST AP VIEW Date Of Examination:2026/06/24 11:29:54 Date Of RCP:2026/06/24 ' : ''
+    const footer = index === 0 ? ' Reported By Example(License #:TEST) On:2026/06/25(10:30:00),(by Example)At:TEST01ACR BI-RADS 2' : index === 3 ? ' Reported By Example(LicenseRD#:TEST) On:2026/06/24(16:00:00),(by Example)At:TEST01Positive Rate Evaluation 2' : ''
+    bundle.entry.push({ resource: { ...common, id: `hospital-imaging-${index}`, meta: { tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] }, code: { text: hospitalTitle }, performer: [{ display: 'DOC00000 Example' }], conclusion: header + body + footer } })
+    bundle.entry.push({ resource: { ...common, id: `cloud-imaging-${index}`, meta: { source: 'https://medcloud2.nhi.gov.tw/' }, code: { text: cloudTitle, coding: [{ system: 'https://example.test/order', code }] }, performer: [{ display: '臺北榮總' }], conclusion: body,
+      extension: [{ url: NHI_VIEWER_REQUEST_EXTENSION_URL, extension: [
+        { url: 'version', valueInteger: 1 }, { url: 'proc-id', valueCode: 'IMUE0130' }, { url: 'patient-context-hash', valueString: 'b'.repeat(64) }, { url: 'ipl-case-seq-no', valueString: `SYNTHETIC-${index}` },
+      ] }],
+    } })
+  }
+  bundle.entry.push({ resource: {
+    ...bundle.entry.find((entry: any) => entry.resource?.id === 'cloud-imaging-0').resource,
+    id: 'cloud-breast-history', effectiveDateTime: '2026-05-24', extension: [],
+    conclusion: 'Synthetic prior breast report for source-specific history. No suspicious mass. The prior examination is preserved under the original NHI title.',
+  } })
+  if (process.env.IMAGING_TEXT_ATTACHMENTS === '1') {
+    for (const entry of bundle.entry) {
+      if (!['hospital-imaging-0', 'cloud-imaging-0', 'cloud-breast-history'].includes(entry.resource?.id)) continue
+      entry.resource.presentedForm = [{ contentType: 'text/plain; charset=utf-8', data: Buffer.from(entry.resource.conclusion).toString('base64') }]
+      delete entry.resource.conclusion
+    }
+  }
+  const fixture = testInfo.outputPath('synthetic-imaging.json')
+  await fs.mkdir(testInfo.outputDir, { recursive: true })
+  await fs.writeFile(fixture, JSON.stringify(bundle))
+  await importBundle(page, { bundlePath: fixture })
+  await page.getByRole('tab').filter({ hasText: '報告' }).first().click()
+  await page.getByRole('tab').filter({ hasText: /^全部/ }).first().click()
+  await page.getByPlaceholder(/搜尋/).fill(marker)
+  const rows = page.getByRole('tabpanel', { name: /^全部/ }).locator('[data-tour="report-tour-row"], [data-slot="accordion-item"]').filter({ visible: true })
+  await expect(rows).toHaveCount(before ? 8 : 4)
+  // Capture the same explicit state on both revisions, independently of the
+  // app's responsive/default expansion preferences.
+  for (const row of await rows.all()) {
+    const header = row.locator('[aria-expanded]').first()
+    if (await header.getAttribute('aria-expanded') === 'true') await header.press('Enter')
+  }
+  const output = process.env.IMAGING_EVIDENCE_DIR || testInfo.outputDir
+  await fs.mkdir(output, { recursive: true })
+  if (path.resolve(output) !== path.resolve(testInfo.outputDir)) await fs.copyFile(fixture, path.join(output, 'synthetic-imaging.json'))
+  for (const width of [1440, 1024, 768, 430, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+    if (!before) {
+      const source = rows.first().locator('[aria-label^="臺北榮總"]').first()
+      const date = await rows.first().getByText('2026/6/24', { exact: true }).first().boundingBox()
+      const textBoxes = await source.locator('span').evaluateAll(spans => spans.map(span => {
+        const rect = span.getBoundingClientRect()
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height }
+      }).filter(rect => rect.width > 0 && rect.height > 0))
+      expect(date).not.toBeNull()
+      // Attachment panels may wrap metadata onto separate lines. Assert actual
+      // rectangle separation rather than assuming source/date share one row.
+      expect(textBoxes.every(box => box.right <= date!.x + 1 || box.left >= date!.x + date!.width - 1
+        || box.bottom <= date!.y + 1 || box.top >= date!.y + date!.height - 1)).toBe(true)
+    }
+    await page.screenshot({ path: path.join(output, `${before ? 'before' : 'after'}-${width}.png`), fullPage: true })
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  if (!before) {
+    await page.getByPlaceholder(/搜尋/).fill('乳房超音波')
+    await expect(rows.filter({ hasText: 'SONOGRAM- BREAST' })).toHaveCount(1)
+    await page.getByPlaceholder(/搜尋/).fill(marker)
+    const first = rows.filter({ hasText: 'SONOGRAM- BREAST' })
+    const header = first.locator('[aria-expanded]').first()
+    if (await header.getAttribute('aria-expanded') !== 'true') await header.press('Enter')
+    const sources = first.getByTestId('shared-report-sources')
+    await sources.locator('summary').click()
+    await expect(sources).toContainText('hospital-imaging-0')
+    await expect(sources).toContainText('cloud-imaging-0')
+    await expect(sources).toContainText('Reported By Example')
+    await page.screenshot({ path: path.join(output, 'after-sources.png'), fullPage: true })
+    // Keep history entry points for each original title rather than broadening
+    // a generic NHI title into an inferred cross-anatomy history alias.
+    const cloudSource = sources.locator('li').filter({ hasText: 'cloud-imaging-0' })
+    await openFeaturePanel(page)
+    const hospitalSource = sources.locator('li').filter({ hasText: 'hospital-imaging-0' })
+    await hospitalSource.getByRole('button', { name: '查看歷史紀錄' }).click()
+    const historyPanel = page.getByRole('region', { name: '功能', exact: true })
+    await expect(historyPanel.getByText('臺北榮總', { exact: true }).filter({ visible: true })).toBeVisible()
+    await expect(historyPanel.getByText('DOC00000 Example', { exact: true }).filter({ visible: true })).toHaveCount(0)
+    await cloudSource.getByRole('button', { name: '查看歷史紀錄' }).click()
+    await expect(page.getByRole('region', { name: '功能', exact: true }).getByText('Synthetic prior breast report for source-specific history.', { exact: false }).filter({ visible: true })).toBeVisible()
+    const popupPromise = context.waitForEvent('page')
+    await first.getByRole('button', { name: /開啟.*健保影像|DICOM Viewer/ }).first().click()
+    const popup = await popupPromise
+    await expect(popup.getByRole('heading', { name: 'Synthetic NHI viewer' })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => (window as any).__viewerRequests.length)).toBe(1)
+    const request = await page.evaluate(() => (window as any).__viewerRequests[0])
+    expect(request.descriptor.iplCaseSeqNo).toBe('SYNTHETIC-0')
+    expect(request.patientContextHash).toBe('b'.repeat(64))
+    await fs.writeFile(path.join(output, 'viewer-result.json'), JSON.stringify({ request, popupUrl: popup.url(), simulatedBridge: true }, null, 2))
+    await popup.screenshot({ path: path.join(output, 'after-viewer.png') })
+  }
+})

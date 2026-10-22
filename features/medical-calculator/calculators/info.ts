@@ -37,6 +37,15 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'CKD staging (older equation; CKD-EPI 2021 is now preferred).', zh: '慢性腎臟病分期（較舊公式；現以 CKD-EPI 2021 為優先）。' },
     caveats: { en: 'Underestimates GFR above 60; not validated for AKI or extremes of age/body size. Prefer CKD-EPI 2021.', zh: 'GFR > 60 時會低估；未驗證於急性腎損傷或極端年齡／體型。建議改用 CKD-EPI 2021。' },
   },
+  'doac-dose-nvaf': {
+    useWhen: { en: 'Checking a DOAC dose against each agent’s label: adult NVAF, acute DVT/PE, extended VTE prevention, or hip/knee prophylaxis.', zh: '依各藥仿單核對成人 DOAC 劑量：NVAF、急性 DVT／PE、VTE 延長治療、髖膝置換後預防。' },
+    // The full limits and the four labels sit folded under the result; this is the one line read every time.
+    caveats: { en: 'EU SmPC; Taiwan labels pending pharmacy review. A check beside the guideline card, not a change to it.', zh: '依 EU SmPC，臺灣仿單待藥學部核對。只供核對，不改變 CDSS 建議。' },
+  },
+  'doac-periop': {
+    useWhen: { en: 'When to stop a DOAC before an elective procedure, spinal/epidural anaesthesia or AF ablation, and when to restart it.', zh: '擇期手術、脊髓／硬膜外麻醉或 AF 消融前何時停 DOAC、術後何時恢復。' },
+    caveats: { en: 'Intervals are minimums; the surgical and anaesthetic team decides. No bridging.', zh: '時數為最低間隔，由手術與麻醉團隊決定。不橋接。' },
+  },
   'crcl-cockcroft-gault': {
     useWhen: { en: 'Renal drug dosing in stable adults (the equation most drug labels use).', zh: '穩定成人之腎臟藥物劑量調整（多數藥品仿單採用此公式）。' },
     caveats: { en: 'Assumes stable renal function; uses actual body weight — over/underestimates in obesity or edema (consider ideal/adjusted weight). Not for AKI.', zh: '假設腎功能穩定；採實際體重 — 肥胖或水腫時會高／低估（可考慮理想／校正體重）。不適用於急性腎損傷。' },

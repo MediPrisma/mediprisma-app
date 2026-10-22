@@ -1,0 +1,176 @@
+{
+  "commit": "a83629c3a491776d9774222c94189c8fe9bad0f3",
+  "fixture": {
+    "resourceType": "Bundle",
+    "entry": [
+      {
+        "resource": {
+          "resourceType": "Patient",
+          "id": "synthetic-patient"
+        }
+      },
+      {
+        "resource": {
+          "resourceType": "Condition",
+          "id": "hf",
+          "code": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "I50.2"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "resource": {
+          "resourceType": "Condition",
+          "id": "af",
+          "meta": {
+            "versionId": "1"
+          },
+          "code": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "I48.91"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "resource": {
+          "resourceType": "Condition",
+          "id": "af",
+          "meta": {
+            "versionId": "2"
+          },
+          "code": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "I48.91"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "conditionRows": [
+    {
+      "id": "hf",
+      "sourceId": "hf",
+      "code": {
+        "coding": [
+          {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "I50.2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cscd91c62f5b55bda8",
+      "sourceId": "af",
+      "versionId": "1",
+      "code": {
+        "coding": [
+          {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "I48.91"
+          }
+        ]
+      },
+      "variant": {
+        "groupId": "cr48c8c86e23ac5499",
+        "classification": "revision",
+        "variantCount": 2,
+        "reason": "Multiple versions of the same source record are present; their chronological order is not established."
+      }
+    },
+    {
+      "id": "csc3ac5209f3bf7394",
+      "sourceId": "af",
+      "versionId": "2",
+      "code": {
+        "coding": [
+          {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "I48.91"
+          }
+        ]
+      },
+      "variant": {
+        "groupId": "cr48c8c86e23ac5499",
+        "classification": "revision",
+        "variantCount": 2,
+        "reason": "Multiple versions of the same source record are present; their chronological order is not established."
+      }
+    }
+  ],
+  "excluded": [
+    {
+      "groupId": "cr48c8c86e23ac5499",
+      "classification": "revision",
+      "variantCount": 2,
+      "reason": "Multiple versions of the same source record are present; their chronological order is not established.",
+      "evidenceIdentity": "fhir:c516b701c7e15424",
+      "resourceType": "Condition",
+      "resourceId": "cscd91c62f5b55bda8",
+      "code": {
+        "coding": [
+          {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "I48.91"
+          }
+        ]
+      },
+      "sourceId": "af",
+      "versionId": "1"
+    },
+    {
+      "groupId": "cr48c8c86e23ac5499",
+      "classification": "revision",
+      "variantCount": 2,
+      "reason": "Multiple versions of the same source record are present; their chronological order is not established.",
+      "evidenceIdentity": "fhir:26d4d8e0fe8512b5",
+      "resourceType": "Condition",
+      "resourceId": "csc3ac5209f3bf7394",
+      "code": {
+        "coding": [
+          {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "I48.91"
+          }
+        ]
+      },
+      "sourceId": "af",
+      "versionId": "2"
+    }
+  ],
+  "points": [
+    {
+      "semanticId": "hf-af-anticoagulation",
+      "state": "info",
+      "headline": "Diagnosis source records unresolved",
+      "why": "Unresolved source diagnoses cannot establish whether AF is present or absent.",
+      "actions": [],
+      "needsData": [
+        "Reconcile source records"
+      ]
+    },
+    {
+      "semanticId": "hf-af-rate-rhythm",
+      "state": "info",
+      "headline": "Diagnosis source records unresolved",
+      "why": "Unresolved source diagnoses cannot establish whether AF is present or absent.",
+      "actions": [],
+      "needsData": [
+        "Reconcile source records"
+      ]
+    }
+  ]
+}

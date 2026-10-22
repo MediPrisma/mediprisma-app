@@ -60,7 +60,7 @@ export function buildVisitPrimaryDiagnoses(
     }
   }
 
-  const dict = buildIcdDictionary(conditions, locale)
+  const dict = buildIcdDictionary(conditions, locale, encounters)
   const byKey = new Map<string, VisitPrimaryDiagnosis>()
 
   for (const encounter of encounters) {

@@ -3,6 +3,10 @@ import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clini
 import { canonicalTestKeyFromString } from '@voho0000/clinical-lab-normalization/canonical'
 import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 import { getCodeableConceptText } from '../utils/fhir-helpers'
+import { sharedReportNarrative } from '@/src/shared/utils/shared-report-grouping'
+import { getReportDate, getReportInstitution } from '@/src/shared/utils/report-identity'
+import { imagingCopyInstitution } from '@/src/shared/utils/report-copy-grouping'
+import { inferReportDisplayGroup } from '@/src/shared/utils/report-grouping-helpers'
 
 export interface ObservationHistoryItem {
   id: string
@@ -44,6 +48,8 @@ export interface CompositeHistoryItem {
 export interface ReportHistoryItem {
   id: string
   date: string
+  /** Imaging examination day, already projected by the source date policy. */
+  calendarDate?: string
   conclusion?: string
   notes: string[]
   status?: string
@@ -340,19 +346,36 @@ export function useReportHistory(reportCode?: string) {
       const drText = (dr.code?.text || dr.code?.coding?.[0]?.display || dr.code?.coding?.[0]?.code || '').trim().toLowerCase()
       if (!drText || drText !== target) return
 
+      const imaging = inferReportDisplayGroup(dr) === 'imaging'
+      let institution = dr.performer?.[0]?.display
+      if (imaging) {
+        try {
+          institution = imagingCopyInstitution(dr) ?? getReportInstitution(dr)
+        } catch {
+          // Malformed optional provenance retains its original label. Never
+          // infer an institution from a source tag when evidence is invalid.
+        }
+      }
       const conclusion = dr.conclusion?.trim()
       const notes = Array.isArray(dr.note)
         ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
         : []
+      // The source history must retain text supplied only as an attachment,
+      // just as the report row and shared-source narrative do. Leave binary
+      // and HTML attachments to their existing viewers.
+      const attachmentText = imaging
+        ? sharedReportNarrative({ presentedForm: dr.presentedForm }) : ''
+      if (attachmentText) notes.push(attachmentText)
       if (!conclusion && notes.length === 0) return
 
       items.push({
         id: dr.id || `dr-${dr.issued || dr.effectiveDateTime || index}`,
-        date: dr.effectiveDateTime || dr.issued || '',
+        date: getReportDate(dr) || '',
+        calendarDate: imaging ? getReportDate(dr)?.slice(0, 10) : undefined,
         conclusion,
         notes,
         status: dr.status,
-        institution: dr.performer?.[0]?.display,
+        institution,
       })
     })
 

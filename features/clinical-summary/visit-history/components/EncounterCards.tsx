@@ -33,6 +33,9 @@ export function DiagnosisTag({ diagnosis }: { diagnosis: EncounterDiagnosis }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-semibold text-foreground">{diagnosis.title}</span>
+          {diagnosis.originalText && diagnosis.originalText !== diagnosis.title && (
+            <span className="break-words text-xs text-foreground/80">{diagnosis.originalText}</span>
+          )}
           {diagnosis.code && (
             <span className="font-mono text-xs text-muted-foreground">{diagnosis.code}</span>
           )}

@@ -6,8 +6,9 @@ import type {
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import { getAnalyteLabel } from '@voho0000/clinical-lab-normalization/canonical'
-import { collectReportMemberIds, isVitalObservation } from '@/src/core/utils/observation-selectors'
+import { clinicalRecordKey, reportMemberRecordKeys, isVitalObservation } from '@/src/core/utils/observation-selectors'
 import type { FhirResource, IpsBundleEntry } from './ips-types'
+import { CLINICAL_RECORD_VARIANT_EXTENSION, CLINICAL_MEDICATION_CONTENT_EXTENSION } from './ips-constants'
 
 /** Generate a UUID v4. Uses crypto.randomUUID when available, else a fallback. */
 export function uuidv4(): string {
@@ -32,10 +33,31 @@ export function uuidv4(): string {
 export function makeEntry(resource: FhirResource): { entry: IpsBundleEntry; reference: string } {
   const id = resource.id ?? uuidv4()
   const fullUrl = `urn:uuid:${id}`
+  const modifiers = resource.modifierExtension as Array<{ url?: string }> | undefined
+  const hasUnresolvedVariant = modifiers?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION)
+  const hasUnresolvedMedication = modifiers?.some(extension => extension.url === CLINICAL_MEDICATION_CONTENT_EXTENSION)
+  const notice = [hasUnresolvedVariant ? 'Source-record versions retained for audit. Do not treat these variants as concurrent facts, separate events, or independent trend points.' : '', hasUnresolvedMedication ? 'The prescription exists; medication content is unavailable. Do not infer a drug identity, current medication class, or medication absence.' : ''].filter(Boolean).join(' ')
+  // Finalize after each mapper has supplied its complete resource and text.
+  // Modifier meaning must remain visible even when a receiver reads narrative only.
+  const narrative = notice ? {
+    status: 'extensions',
+    div: `<div xmlns="http://www.w3.org/1999/xhtml"><p><strong>${notice}</strong></p>${(resource.text as { div?: string } | undefined)?.div ?? ''}${recordFieldsNarrative(resource)}</div>`,
+  } : undefined
   return {
-    entry: { fullUrl, resource: { ...resource, id } },
+    entry: { fullUrl, resource: { ...resource, id, ...(narrative ? { text: narrative } : {}) } },
     reference: fullUrl,
   }
+}
+
+/** Include the exported clinical fields, not just the ambiguity warning. */
+function recordFieldsNarrative(resource: FhirResource): string {
+  const render = (value: unknown): string => {
+    if (value == null) return ''
+    if (Array.isArray(value)) return `<ul>${value.map(item => `<li>${render(item)}</li>`).join('')}</ul>`
+    if (typeof value === 'object') return `<dl>${Object.entries(value).filter(([key]) => key !== 'data').map(([key, child]) => `<dt>${escapeHtml(key.replace(/([a-z])([A-Z])/g, '$1 $2'))}</dt><dd>${render(child)}</dd>`).join('')}</dl>`
+    return escapeHtml(value)
+  }
+  return render(Object.fromEntries(Object.entries(resource).filter(([key]) => !['text', 'meta', 'modifierExtension'].includes(key))))
 }
 
 /** Escape a string for safe inclusion inside XHTML narrative text nodes. */
@@ -165,8 +187,8 @@ export function orphanResultObservations(
   reports: DiagnosticReportEntity[],
   observations: ObservationEntity[],
 ): ObservationEntity[] {
-  const memberIds = collectReportMemberIds(reports)
+  const memberIds = reportMemberRecordKeys(reports)
   return observations.filter(
-    (o) => !isVitalObservation(o) && !(o.id != null && memberIds.has(o.id)),
+    (o) => !isVitalObservation(o) && !(clinicalRecordKey(o) && memberIds.has(clinicalRecordKey(o)!)),
   )
 }

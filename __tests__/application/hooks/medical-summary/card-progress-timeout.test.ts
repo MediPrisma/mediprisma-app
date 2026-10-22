@@ -8,6 +8,28 @@ describe('streamWithCardProgressTimeout', () => {
   beforeEach(() => jest.useFakeTimers())
   afterEach(() => jest.useRealTimers())
 
+  it('forwards external cancellation and rejects late chunks and a late completed reply', async () => {
+    const controller = new AbortController(), onChunk = jest.fn(() => true)
+    let emit!: (text: string) => void, finish!: (text: string) => void, attempt!: AbortSignal
+    const streaming = streamWithCardProgressTimeout({ signal: controller.signal, onChunk,
+      stream: (signal, chunk) => { attempt = signal; emit = chunk; return new Promise(resolve => { finish = resolve }) },
+    })
+    controller.abort()
+    expect(attempt.aborted).toBe(true)
+    emit('late card')
+    finish('late completed reply')
+    await expect(streaming).rejects.toMatchObject({ name: 'AbortError' })
+    expect(onChunk).not.toHaveBeenCalled()
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('does not start another transport attempt with an already cancelled signal', async () => {
+    const controller = new AbortController(), stream = jest.fn(async () => '')
+    controller.abort()
+    await expect(streamWithCardProgressTimeout({ signal: controller.signal, stream, onChunk: () => false })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(stream).not.toHaveBeenCalled()
+  })
+
   it('aborts the current attempt after 45 seconds without a valid card', async () => {
     let attemptSignal!: AbortSignal
     let emitChunk!: (text: string) => void

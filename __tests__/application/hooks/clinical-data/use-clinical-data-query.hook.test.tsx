@@ -1,7 +1,8 @@
+import { clinicalResourceQueryKey, clinicalDataSourceQueryKey } from '@/src/application/hooks/clinical-data/clinical-data-fetch-plan'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
-import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { useClinicalData, useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { getClinicalDataRepository } from '@/src/application/composition'
 
 jest.mock('@/src/application/composition')
@@ -217,4 +218,93 @@ describe('useClinicalData', () => {
     expect(result.current).toBe(settled)
     expect(result.current.observations).toBe(settled.observations)
   })
+})
+
+ it('shares the same reconciliation result and row arrays across UI and whole-collection AI/CDSS reads', async () => {
+  const { reconcileClinicalSources } = await import('@/src/core/services/clinical-reconciliation')
+  const clinicalSource = reconcileClinicalSources([])
+  const repository = fakeSmartRepository({ getClinicalSource: () => clinicalSource })
+  mockGetClinicalDataRepository.mockResolvedValue(repository as any)
+  mockUsePatientQuery.mockReturnValue({ data: { id: 'patient-1' }, isLoading: false, isFetching: false })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  const { result } = renderHook(() => ({ ui: useClinicalData(), ai: useClinicalDataQuery() }), { wrapper })
+  await waitFor(() => expect(result.current.ai.data).toBeDefined())
+  expect(result.current.ui.clinicalSource).toBe(clinicalSource)
+  expect(result.current.ai.data!.clinicalSource).toBe(result.current.ui.clinicalSource)
+  expect(result.current.ai.data!.observations).toBe(result.current.ui.observations)
+  expect(result.current.ai.data!.medications).toBe(result.current.ui.medications)
+ })
+
+it('isolates the same patient id across import generations in source and resource caches', () => {
+  const old = sessionStorage.getItem('fhir_bundle_override')
+  try {
+    sessionStorage.setItem('fhir_bundle_override', 'import:synthetic-one')
+    const firstSource = clinicalDataSourceQueryKey('same-patient')
+    const firstRows = clinicalResourceQueryKey('same-patient', 'observations')
+    sessionStorage.setItem('fhir_bundle_override', 'import:synthetic-two')
+    expect(clinicalDataSourceQueryKey('same-patient')).not.toEqual(firstSource)
+    expect(clinicalResourceQueryKey('same-patient', 'observations')).not.toEqual(firstRows)
+  } finally {
+    if (old === null) sessionStorage.removeItem('fhir_bundle_override')
+    else sessionStorage.setItem('fhir_bundle_override', old)
+  }
+})
+
+it('refreshes the shared source generation after a same-id patient refresh without refetching clinical rows', async () => {
+  let currentSource = { policyVersion: 'generation-one' }
+  const repository = fakeSmartRepository({ getClinicalSource: () => currentSource })
+  mockGetClinicalDataRepository.mockResolvedValue(repository as any)
+  mockUsePatientQuery.mockReturnValue({ data: { id: 'patient-1' }, isLoading: false, isFetching: false })
+  const { result, rerender } = renderClinicalData()
+  await waitFor(() => expect(result.current.isLoading).toBe(false))
+  const originalRows = result.current.observations
+  expect(result.current.clinicalSource).toBe(currentSource)
+  currentSource = { policyVersion: 'generation-two' }
+  mockUsePatientQuery.mockReturnValue({ data: { id: 'patient-1', name: 'refreshed synthetic patient' }, isLoading: false, isFetching: false })
+  rerender()
+  expect(result.current.clinicalSource).toBe(currentSource)
+  expect(result.current.observations).toBe(originalRows)
+  expect(repository.fetchObservations).toHaveBeenCalledTimes(1)
+})
+
+describe('content-only completeness is not a transport failure',()=>{
+ it('allows the chart consumers to use available facts while retaining missing drug content for safety',async()=>{
+  mockUsePatientQuery.mockReturnValue({data:{id:'patient-1'},isLoading:false,isFetching:false})
+  mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository({
+   fetchMedications:jest.fn(async()=>[{id:'missing-drug',clinicalMedicationContentUncertainty:{reason:'unresolved-reference'}}]),
+   getQueryStatus:jest.fn((key:string)=>key==='MedicationRequest'?{resourceType:key,state:'incomplete',medicationContentOnlyIncomplete:true,medicationContentUncertaintyCount:1}:key==='ImagingStudy'?{resourceType:key,state:'unsupported'}:undefined),
+  }) as any)
+  const{result,unmount,queryClient}=renderClinicalData()
+  try{
+   await waitFor(()=>expect(result.current.isLoading).toBe(false))
+   expect(result.current.resourceQueryStatus.MedicationRequest?.state).toBe('incomplete')
+   expect(result.current.medications[0].clinicalMedicationContentUncertainty).toBeDefined()
+   expect(result.current.queryIssues.map(([key])=>key)).not.toContain('MedicationRequest')
+   expect(result.current.queryIssues.map(([key])=>key)).toContain('ImagingStudy')
+   expect(result.current.hasBlockingQueryIssues).toBe(false)
+  }finally{unmount();queryClient.clear()}
+ })
+})
+
+it('never reuses another local import snapshot with the same patient and lifecycle epoch',async()=>{
+ mockUsePatientQuery.mockReturnValue({data:{id:'patient-1'},isLoading:false,isFetching:false})
+ mockGetClinicalDataRepository.mockResolvedValue(fakeSmartRepository({fetchConditions:jest.fn(async()=>[{id:'import-a-condition'}])}) as any)
+ sessionStorage.setItem('fhir_bundle_override','import:synthetic-a')
+ const{result,rerender,unmount,queryClient}=renderClinicalData()
+ let release!: (value:any)=>void
+ const pending=new Promise<any>(resolve=>{release=resolve})
+ let refreshed:Promise<any>|undefined
+ try{
+  await waitFor(()=>expect(result.current.conditions[0]?.id).toBe('import-a-condition'))
+  const cached=queryClient.getQueriesData({queryKey:['clinical-data','patient-1']})
+  sessionStorage.setItem('fhir_bundle_override','import:synthetic-b')
+  for(const[key,value]of cached){if(key[2]!=='__source'&&value){queryClient.setQueryData(clinicalResourceQueryKey('patient-1',key[2] as any),{...(value as object),entities:key[2]==='conditions'?[{id:'import-b-condition'}]:[]})}}
+  act(()=>{refreshed=queryClient.fetchQuery({queryKey:clinicalResourceQueryKey('patient-1','conditions'),queryFn:()=>pending,staleTime:0})})
+  rerender()
+  await waitFor(()=>expect(result.current.isFetching).toBe(true))
+  expect(result.current.conditions.map(row=>row.id)).toEqual(['import-b-condition'])
+  await act(async()=>{release({entities:[{id:'import-b-refreshed'}],status:{Condition:{resourceType:'Condition',state:'ok',count:1}}});await refreshed})
+  await waitFor(()=>expect(result.current.conditions[0]?.id).toBe('import-b-refreshed'))
+ }finally{release?.({entities:[],status:{}});unmount();queryClient.clear();sessionStorage.removeItem('fhir_bundle_override')}
 })

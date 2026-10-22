@@ -1,6 +1,9 @@
 // Refactored Clinical Context Hook
 "use client"
 
+import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import type { ClinicalRecordVariantExclusion } from '@/src/core/entities/clinical-data.entity'
 import { useCallback, useMemo } from "react"
 import {
   useDataSelection,
@@ -47,6 +50,10 @@ export interface UseClinicalContextOptions {
   /** Already-scoped transient FHIR view used by model-aware record
    * prioritization. The normal query result remains untouched. */
   clinicalDataOverride?: ClinicalData | null
+  /** Internal model-fit input: uncertainty already passed the saved user's
+   * scope before record prioritization removed source identities. Supplying an
+   * ordinary data override alone never bypasses selection of these details. */
+  preScopedVariantExclusions?: readonly ClinicalRecordVariantExclusion[]
   /** Shared maximum for selected document bodies in this generated context. */
   documentTokenBudget?: number
   /** 'first-visit-summary' (初診快覽 only): visits count their medicines
@@ -78,9 +85,9 @@ export function useClinicalContext(
     : options.clinicalDataOverride
   const clinicalData = useMemo(
     () => sourceClinicalData
-      ? filterAiExcludedClinicalDomains(sourceClinicalData as any) as ClinicalData
+      ? excludeUnresolvedDecisionVariants(filterAiExcludedClinicalDomains(sourceClinicalData as any), selectedData) as ClinicalData
       : null,
-    [sourceClinicalData],
+    [sourceClinicalData, selectedData],
   )
 
   // Hook-driven sections (richer formatting than registry can provide)
@@ -262,8 +269,13 @@ export function useClinicalContext(
 
   const getFormattedClinicalContext = useMemo(() => {
     let formatted: string | undefined
-    return () => (formatted ??= formatClinicalContext(getClinicalContext()))
-  }, [getClinicalContext])
+    return () => (formatted ??= [
+      formatClinicalContext(getClinicalContext()),
+      formatClinicalVariantExclusions(options.preScopedVariantExclusions === undefined
+        ? scopeClinicalDataForAi(sourceClinicalData as any ?? {}, selectedData, filters, includedDocumentIds, nowMs)
+        : { clinicalRecordVariantExclusions: options.preScopedVariantExclusions }),
+    ].filter(Boolean).join("\n\n"))
+  }, [getClinicalContext, sourceClinicalData, selectedData, filters, includedDocumentIds, nowMs, options.preScopedVariantExclusions])
 
   const getFullClinicalContext = useMemo(() => {
     let masked: string | undefined

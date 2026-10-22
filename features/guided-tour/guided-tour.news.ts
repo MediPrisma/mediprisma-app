@@ -30,15 +30,4 @@ export const WHATS_NEW: WhatsNewItem[] = [
     anchor: '[data-tour="cumulative-trend-hint"]',
     tourId: 'news-lab-trend-zoom',
   },
-  {
-    id: '2026-10-summary-diagnostics',
-    title: { 'zh-TW': '摘要的 AI 執行紀錄', en: 'The summary’s AI log' },
-    where: { 'zh-TW': '醫療摘要 › 齒輪「設定」', en: 'Medical summary › Settings' },
-    body: {
-      'zh-TW': '齒輪「設定」裡可「查看本次 AI 執行紀錄」，了解這次摘要用了哪些資料與模型。',
-      en: 'Settings now shows this run’s AI log: which data and model the summary used.',
-    },
-    anchor: '[data-tour="medical-summary-settings"]',
-    tourId: 'news-summary-diagnostics',
-  },
 ]

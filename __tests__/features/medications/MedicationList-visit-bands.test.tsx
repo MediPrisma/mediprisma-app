@@ -288,12 +288,12 @@ describe('current medications — visit bands and headers', () => {
     // the two together and drops the end date only when both don't fit —
     // reserving the whole status column dropped it on rows that had room.
     const inline = regimen.querySelector('[data-medication-refill-inline]')!
-    expect(inline.textContent).toContain('累計 2 次')
+    expect(inline.textContent).toContain('2 筆紀錄')
     expect(inline.className).toContain('@min-[456px]:hidden')
     expect(regimen.className).not.toContain('col-span-2')
     // The status-column copy steps aside below 456px.
     const lane = Array.from(row.querySelectorAll('div'))
-      .find((el) => el.textContent === '累計 2 次' && !el.closest('[data-medication-regimen]'))!
+      .find((el) => el.textContent === '2 筆紀錄' && !el.closest('[data-medication-regimen]'))!
     expect(lane.className).toContain('@max-[456px]:hidden')
     expect(layoutOf('SINGLE').querySelector('[data-medication-refill-inline]')).toBeNull()
   })

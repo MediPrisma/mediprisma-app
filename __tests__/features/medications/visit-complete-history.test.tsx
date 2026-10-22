@@ -72,8 +72,8 @@ describe('用藥歷史 lists every drug of each visit', () => {
     expect(sept[0].textContent).toContain('ACETAMINOPHEN')
     // Each row shows its own fill's dates; both keep the drug's refill count.
     expect(within(sept[0] as HTMLElement).getByText(/26\/09\/10/, { selector: '[data-medication-regimen] *' })).toBeInTheDocument()
-    expect(sept[0].textContent).toContain('累計 2 次')
-    expect(july.find((li) => li.textContent?.includes('ACETAMINOPHEN'))!.textContent).toContain('累計 2 次')
+    expect(sept[0].textContent).toContain('2 筆紀錄')
+    expect(july.find((li) => li.textContent?.includes('ACETAMINOPHEN'))!.textContent).toContain('2 筆紀錄')
   })
 
   it('lists a drug still in use at its older visit', () => {
@@ -88,7 +88,7 @@ describe('用藥歷史 lists every drug of each visit', () => {
     // current drugs, and beside this fill's 已結束 it read as a contradiction.
     expect(amlo.querySelector('[data-history-still-in-use]')).toBeNull()
     // Same refill count as the drug's 使用中 row, which counts every fill.
-    expect(amlo.textContent).toContain('累計 2 次')
+    expect(amlo.textContent).toContain('2 筆紀錄')
     // ...and it is still the current row in 使用中.
     const currentList = container.querySelectorAll('ul[data-medication-list-surface="grouped"]')[0]
     expect(currentList.textContent).toContain('AMLODIPINE')
@@ -100,7 +100,7 @@ describe('用藥歷史 lists every drug of each visit', () => {
     const { container } = render(<MedicationList medications={[current, earlier, b, c]} isLoading={false} error={null} />)
     const amlo = visitRows(historyList(container), '26/07/10')
       .find((li) => li.textContent?.includes('AMLODIPINE')) as HTMLElement
-    // 「累計 2 次」 counts the current fill too, so the row opens both.
+    // 「2 筆紀錄」 counts the current fill too, so the row opens both.
     const toggle = within(amlo).getByRole('button', { name: '顯示 AMLODIPINE 的過往用藥紀錄（2）' })
     fireEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')

@@ -7,12 +7,19 @@ import {
 } from "@/src/shared/utils/encounter-type.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
+import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
 
 export interface VisitRecord {
   id: string
+  sourceIds?: string[]
+  sourceComparisonStatus?: 'candidate' | 'ambiguous' | 'confirmed'
+  sourceComparisonWarnings?: string[]
+  sourceRecords?: Array<{ id: string; origin?: 'hospital' | 'medcloud'; date?: string; institution?: string; department?: string; physician?: string; diagnoses: string[] }>
   type: VisitType
   /** Medical system, derived from explicit serviceType codings first. AMB only
    *  identifies an ambulatory encounter and is never evidence of western care. */
@@ -100,7 +107,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
   return useMemo<VisitRecord[]>(() => {
     if (!Array.isArray(encounters)) return []
     
-    return encounters
+    return projectEncounterComparisons(encounters)
       .filter((encounter: any) => {
         const status = encounter.status
         // 'unknown' is included: NHI 健保存摺 IC-card inpatient stays have no
@@ -287,9 +294,25 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           p?.individual?.display || p?.actor?.display
         )
         const physician = participant?.individual?.display || participant?.actor?.display || ''
+        const comparison = encounter._sourceRecordComparison
+        const originalSources = encounter._sourceEncounterRecords ?? encounters
+        const availableSources = comparison?.references.map((reference: string) => originalSources.find((item: any) => `Encounter/${item.id}` === reference)).filter(Boolean)
 
         return {
           id: encounter.id,
+          sourceIds: encounter._comparisonEncounterIds,
+          sourceComparisonStatus: encounter._sourceRecordComparison?.status,
+          sourceComparisonWarnings: comparison ? [...(comparison.warnings ?? []), ...(availableSources.length < comparison.references.length ? ['source-partners-not-in-view'] : [])] : undefined,
+          sourceRecords: availableSources?.map((source: any) => {
+            return { id: source.id, date: medicationClinicalDay(source?.period?.start),
+              origin: isVghtpeSource(source) ? 'hospital' : 'medcloud',
+              institution: getInstitutionName(source?.serviceProvider?.display, locale),
+              department: source?.serviceType?.text || source?.serviceType?.coding?.find((coding: any) => coding.display)?.display,
+              physician: source?.participant?.find((participant: any) => participant.individual?.display)?.individual?.display,
+              diagnoses: (source?.reasonCode ?? []).map((concept: any) => [concept.coding?.[0]?.system?.split('/').pop(), concept.coding?.[0]?.code,
+                concept.text || concept.coding?.[0]?.display].filter(Boolean).join(' ')),
+            }
+          }),
           type,
           careDiscipline,
           date: encounter.period?.start || '',

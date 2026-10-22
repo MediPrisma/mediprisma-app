@@ -45,6 +45,8 @@ import { isMedcloudLaunchRoute } from "@/src/application/launch/medcloud-launch-
 import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/guideline-packs/pilot-gate"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
+import { ProgressiveImportStatus } from "@/features/import-bundle/components/ProgressiveImportStatus"
+import { BUNDLE_CHANGED_EVENT } from "@/src/shared/utils/reset-on-bundle-change"
 import {
   ClinicalMobilePanelSwitcher,
   ClinicalPatientContext,
@@ -497,6 +499,15 @@ function PageContent() {
   useEffect(() => {
     clearDetail()
   }, [patient?.id, clearDetail])
+  useEffect(() => {
+    const clearSnapshotDetail = () => {
+      cancelDeferredDetailClear()
+      setClosingDetailSourceId(null)
+      clearDetail()
+    }
+    window.addEventListener(BUNDLE_CHANGED_EVENT, clearSnapshotDetail)
+    return () => window.removeEventListener(BUNDLE_CHANGED_EVENT, clearSnapshotDetail)
+  }, [cancelDeferredDetailClear, clearDetail])
   // A new patient is a new reading task, so the split goes back to the width
   // the landing view wants — even though importing over an open chart never
   // unmounts the workspace. Without this, one visit to 「回到左右各半」 kept
@@ -642,6 +653,7 @@ function PageContent() {
       <div className="px-3 sm:px-6">
         <EmailVerificationBanner />
         <NetworkStatusBanner />
+        <ProgressiveImportStatus />
       </div>
       
       {/* Onboarding state: replace panels with welcome screen */}
