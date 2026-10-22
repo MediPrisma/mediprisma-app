@@ -301,30 +301,6 @@
    }
   },
   {
-   "fullUrl": "urn:uuid:Observation-p5-wt",
-   "resource": {
-    "resourceType": "Observation",
-    "subject": {
-     "reference": "Patient/sim-p5"
-    },
-    "id": "p5-wt",
-    "status": "final",
-    "effectiveDateTime": "2026-09-27",
-    "code": {
-     "coding": [
-      {
-       "system": "http://loinc.org",
-       "code": "29463-7"
-      }
-     ]
-    },
-    "valueQuantity": {
-     "value": 70,
-     "unit": "kg"
-    }
-   }
-  },
-  {
    "fullUrl": "urn:uuid:Observation-p5-egfr",
    "resource": {
     "resourceType": "Observation",
