@@ -104,6 +104,9 @@ describe('the upper limit read off the report’s range text', () => {
     ['[5-34 U/L][]', 'U/L', 'male', 34],
     ['[0 - 40][]', 'U/L', 'male', 40],
     ['[][＜40]', 'U/L', 'male', 40],
+    ['Male:＜41, Female:＜33', 'U/L', 'female', 33],
+    ['M:＜41; Female:＜33', 'U/L', 'female', 33],
+    ['M:＜21; F:＜18 umol/L', 'umol/L', 'male', 21],
   ])('%s (%s, %s) → %s', (text, unit, sex, expected) => {
     expect(upperLimitFromText(text, unit, sex)).toBe(expected)
   })
@@ -114,6 +117,10 @@ describe('the upper limit read off the report’s range text', () => {
     ['＜1.2 umol/L', 'mg/dL', 'male'],
     ['[＞7 days:0.2-1.2][]', 'mg/dL', 'male'],
     ['', 'U/L', 'male'],
+    // One unit written for both sexes, not the result's (#360 review).
+    ['M:＜21; F:＜18 umol/L', 'mg/dL', 'male'],
+    ['M:＜21; F:＜18 umol/L', 'mg/dL', 'female'],
+    ['M:＜1.2 mg/dL; F:＜18 umol/L', 'mg/dL', 'male'],
   ])('%s (%s, %s) → no limit', (text, unit, sex) => {
     expect(upperLimitFromText(text, unit, sex)).toBeUndefined()
   })
@@ -125,6 +132,14 @@ describe('the upper limit read off the report’s range text', () => {
     })
     expect(out.doac_liver_enzymes).toMatchObject({ value: 'yes', testName: 'AST 90（ULN 32），>2×ULN（請核對）' })
     expect(out.doac_bilirubin_high).toMatchObject({ value: 'no' })
+  })
+  it('a bilirubin range in another unit for both sexes leaves the field blank, not 「no」 (#360 review)', () => {
+    const textOnly: LabObservation = { ...bili(3, undefined), referenceRange: [{ text: 'M:＜21; F:＜18 umol/L' }] }
+    expect(selects({ demographics: { gender: 'male' }, observations: [textOnly] }).doac_bilirubin_high).toBeUndefined()
+  })
+  it('a structured limit in another unit is not replaced by its text (#360 review)', () => {
+    const mixed: LabObservation = { ...alt(1.5, undefined), valueQuantity: { value: 1.5, unit: 'ukat/L' }, referenceRange: [{ high: { value: 40, unit: 'U/L' }, text: '0-40' }] }
+    expect(selects({ demographics: { gender: 'male' }, observations: [mixed, ast(20, 35)] }).doac_liver_enzymes).toBeUndefined()
   })
   it('several ranges are bands, not one limit', () => {
     const multi: LabObservation = { ...alt(30, undefined), referenceRange: [{ text: '0~40' }, { text: '0~35' }] }

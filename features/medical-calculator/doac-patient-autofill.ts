@@ -40,14 +40,19 @@ const unitKey = (unit: string | undefined) => (unit ?? '').toLowerCase().replace
 export function upperLimitFromText(text: string | undefined, unit: string, sex: string | undefined): number | undefined {
   let s = (text ?? '').normalize('NFKC').replace(/≦/g, '<=').replace(/≧/g, '>=').trim()
   if (!s) return undefined
-  const split = /^(?:M|Men|Male)\s*:\s*(.+?)\s*[;,，；]\s*(?:F|Women|Female)\s*:?\s*(.+)$/i.exec(s)
+  // Every unit written anywhere in the range must be the result's own — checked
+  // on the whole text before a sex is chosen, since 「M:＜21; F:＜18 umol/L」
+  // writes one unit for both (#360 review). Then they are removed.
+  const own = unitKey(unit)
+  const UNIT = /([a-zµμ%]+\/[a-z0-9.]+)/gi
+  if ([...s.matchAll(UNIT)].some((match) => unitKey(match[1]) !== own)) return undefined
+  s = s.replace(UNIT, '').replace(/\s+(?=\]|$)/g, '').trim()
+  // Longer labels first, so 「Female」 is not read as 「F」 and 「emale」.
+  const split = /^(?:Male|Men|M)\s*:\s*(.+?)\s*[;,，；]\s*(?:Female|Women|F)\s*:?\s*(.+)$/i.exec(s)
   if (split) {
     if (sex !== 'male' && sex !== 'female') return undefined
     s = (sex === 'male' ? split[1] : split[2])!.trim()
   }
-  // The result's own unit written into the range; another unit is not stripped, so it does not parse.
-  const own = unitKey(unit)
-  if (own) s = s.replace(/\s*([a-zµμ/%0-9.^]+\/[a-z0-9.]+|%)\s*(?=\]|$)/gi, (match, token: string) => (unitKey(token) === own ? '' : match)).trim()
   // One bracket filled and the other empty: the filled one is the range.
   const one = /^\[([^\]]*)\]\s*\[\s*\]$/.exec(s) ?? /^\[\s*\]\s*\[([^\]]*)\]$/.exec(s)
   if (one && /[<>~-]|to/i.test(one[1]!)) s = one[1]!.trim()
@@ -73,8 +78,11 @@ function latest(observations: LabObservation[], key: string, now: Date, sex: str
     // One range only: several are age, sex or specimen bands, and choosing one is not ours to do.
     const range = obs.referenceRange?.length === 1 ? obs.referenceRange[0] : undefined
     const high = range?.high
-    const structured = typeof high?.value === 'number' && high.value > 0 && (!high.unit || unitKey(high.unit) === unitKey(unit)) ? high.value : undefined
-    const fromText = upperLimitFromText(range?.text, unit, sex)
+    // A structured limit in another unit makes the whole range unusable: its text
+    // is not read in its place (#360 review).
+    const foreign = typeof high?.value === 'number' && !!high.unit && unitKey(high.unit) !== unitKey(unit)
+    const structured = !foreign && typeof high?.value === 'number' && high.value > 0 ? high.value : undefined
+    const fromText = foreign ? undefined : upperLimitFromText(range?.text, unit, sex)
     const uln = structured ?? (fromText !== undefined && fromText > 0 ? fromText : undefined)
     best = { value, unit, uln, date, obsId: obs.id, facility: obs.performer?.find((p) => p.display)?.display }
   }
