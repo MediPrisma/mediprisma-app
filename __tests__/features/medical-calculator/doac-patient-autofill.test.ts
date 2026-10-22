@@ -1,4 +1,4 @@
-import { doacPatientSelects, type LabObservation } from '@/features/medical-calculator/doac-patient-autofill'
+import { doacPatientSelects, upperLimitFromText, type LabObservation } from '@/features/medical-calculator/doac-patient-autofill'
 import { buildAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import { resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
@@ -80,5 +80,54 @@ describe('DOAC calculator: the record fills its fields', () => {
     const value = (key: string) => resolveInput(calc.inputs.find((input) => input.key === key)!, autofill).value
     expect([value('liver'), value('liver_enzymes'), value('bilirubin_high'), value('pregnancy'), value('dialysis'), value('gi_risk')])
       .toEqual(['', 'no', 'no', 'no', '', ''])
+  })
+})
+
+// Every range shape the converted real reports carry for ALT, AST and total
+// bilirubin (counted 2026-10-22 across the golden and medcloud bundles; values
+// here are invented). The bridge keeps ranges as text only.
+describe('the upper limit read off the report’s range text', () => {
+  it.each([
+    ['[0][40]', 'U/L', 'male', 40],
+    ['0~40', 'U/L', 'male', 40],
+    ['5-35', 'U/L', 'female', 35],
+    ['M:＜41; F:＜33', 'U/L', 'male', 41],
+    ['M:＜41; F:＜33', 'U/L', 'female', 33],
+    ['M:＜41; F:＜33 U/L', 'U/L', 'female', 33],
+    ['Men:＜41, Women:＜33', 'U/L', 'male', 41],
+    ['Men:＜40, Women＜32', 'U/L', 'female', 32],
+    ['Men:9-50, Women:7-35', 'IU/L', 'female', 35],
+    ['＜=1.2', 'mg/dL', 'male', 1.2],
+    ['＜1.2 mg/dL', 'mg/dL', 'male', 1.2],
+    ['≦1.3', 'mg/dL', 'female', 1.3],
+    ['[＜41 U/L][]', 'U/L', 'male', 41],
+    ['[5-34 U/L][]', 'U/L', 'male', 34],
+    ['[0 - 40][]', 'U/L', 'male', 40],
+    ['[][＜40]', 'U/L', 'male', 40],
+  ])('%s (%s, %s) → %s', (text, unit, sex, expected) => {
+    expect(upperLimitFromText(text, unit, sex)).toBe(expected)
+  })
+  it.each([
+    ['M:＜41; F:＜33', 'U/L', undefined],
+    ['無', 'U/L', 'male'],
+    ['.', 'U/L', 'male'],
+    ['＜1.2 umol/L', 'mg/dL', 'male'],
+    ['[＞7 days:0.2-1.2][]', 'mg/dL', 'male'],
+    ['', 'U/L', 'male'],
+  ])('%s (%s, %s) → no limit', (text, unit, sex) => {
+    expect(upperLimitFromText(text, unit, sex)).toBeUndefined()
+  })
+  it('a text-only range fills the liver tests, as real reports send them', () => {
+    const textOnly = (o: LabObservation, text: string): LabObservation => ({ ...o, referenceRange: [{ text }] })
+    const out = selects({
+      demographics: { gender: 'female', age: 78 },
+      observations: [textOnly(alt(30, undefined), 'M:＜41; F:＜33 U/L'), textOnly(ast(90, undefined), 'Men:＜40, Women＜32'), textOnly(bili(0.9, undefined, '2026-09-01'), '＜1.2 mg/dL')],
+    })
+    expect(out.doac_liver_enzymes).toMatchObject({ value: 'yes', testName: 'AST 90（ULN 32），>2×ULN（請核對）' })
+    expect(out.doac_bilirubin_high).toMatchObject({ value: 'no' })
+  })
+  it('several ranges are bands, not one limit', () => {
+    const multi: LabObservation = { ...alt(30, undefined), referenceRange: [{ text: '0~40' }, { text: '0~35' }] }
+    expect(selects({ demographics: { gender: 'male' }, observations: [multi, ast(20, 35)] }).doac_liver_enzymes).toBeUndefined()
   })
 })

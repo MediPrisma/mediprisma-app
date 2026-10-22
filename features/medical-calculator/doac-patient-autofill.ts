@@ -1,4 +1,5 @@
 import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
+import { parseSimpleReferenceRangeText } from '@voho0000/clinical-lab-normalization/interpretation'
 import type { ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import { diagnosisSelect, type ClinicalSelectValue } from './hfpef-clinical-autofill'
 
@@ -21,7 +22,7 @@ export interface LabObservation {
   valueQuantity?: { value?: number; unit?: string }
   specimen?: { display?: string }
   performer?: Array<{ display?: string }>
-  referenceRange?: Array<{ high?: { value?: number; unit?: string } }>
+  referenceRange?: Array<{ high?: { value?: number; unit?: string }; text?: string }>
 }
 
 interface LabReading { value: number; unit: string; uln?: number; date: string; obsId?: string; facility?: string }
@@ -29,11 +30,36 @@ interface LabReading { value: number; unit: string; uln?: number; date: string; 
 const unitKey = (unit: string | undefined) => (unit ?? '').toLowerCase().replace(/\s/g, '').replace('iu', 'u')
 
 /**
+ * The upper limit a report's own range text gives, for the patient's sex.
+ * The bridge keeps ranges as text only (it never derives low/high), so the
+ * shapes found in real reports are read here — 「[0][40]」「0~40」「＜1.2 mg/dL」
+ * 「M:＜40; F:＜32」「Men:＜40, Women:＜32」 — each through the lab package's
+ * audited parser. Anything else, including a sex-split range for a patient
+ * whose sex is unknown, gives no limit.
+ */
+export function upperLimitFromText(text: string | undefined, unit: string, sex: string | undefined): number | undefined {
+  let s = (text ?? '').normalize('NFKC').replace(/≦/g, '<=').replace(/≧/g, '>=').trim()
+  if (!s) return undefined
+  const split = /^(?:M|Men|Male)\s*:\s*(.+?)\s*[;,，；]\s*(?:F|Women|Female)\s*:?\s*(.+)$/i.exec(s)
+  if (split) {
+    if (sex !== 'male' && sex !== 'female') return undefined
+    s = (sex === 'male' ? split[1] : split[2])!.trim()
+  }
+  // The result's own unit written into the range; another unit is not stripped, so it does not parse.
+  const own = unitKey(unit)
+  if (own) s = s.replace(/\s*([a-zµμ/%0-9.^]+\/[a-z0-9.]+|%)\s*(?=\]|$)/gi, (match, token: string) => (unitKey(token) === own ? '' : match)).trim()
+  // One bracket filled and the other empty: the filled one is the range.
+  const one = /^\[([^\]]*)\]\s*\[\s*\]$/.exec(s) ?? /^\[\s*\]\s*\[([^\]]*)\]$/.exec(s)
+  if (one && /[<>~-]|to/i.test(one[1]!)) s = one[1]!.trim()
+  return parseSimpleReferenceRangeText(s)?.high
+}
+
+/**
  * The latest blood result for the analyte, with the upper limit of the same
  * report. A newest result without a usable limit leaves the limit unknown: an
  * older one is not used in its place.
  */
-function latest(observations: LabObservation[], key: string, now: Date): LabReading | undefined {
+function latest(observations: LabObservation[], key: string, now: Date, sex: string | undefined): LabReading | undefined {
   let best: LabReading | undefined
   for (const obs of observations) {
     if (['entered-in-error', 'cancelled', 'registered', 'preliminary'].includes(obs.status ?? '')) continue
@@ -44,8 +70,12 @@ function latest(observations: LabObservation[], key: string, now: Date): LabRead
     if (getAnalyteCanonicalKey(obs) !== key) continue
     if (best && Date.parse(best.date) >= Date.parse(date)) continue
     const unit = obs.valueQuantity?.unit ?? ''
-    const high = obs.referenceRange?.find((range) => typeof range.high?.value === 'number' && range.high.value > 0)?.high
-    const uln = high && (!high.unit || unitKey(high.unit) === unitKey(unit)) ? high.value : undefined
+    // One range only: several are age, sex or specimen bands, and choosing one is not ours to do.
+    const range = obs.referenceRange?.length === 1 ? obs.referenceRange[0] : undefined
+    const high = range?.high
+    const structured = typeof high?.value === 'number' && high.value > 0 && (!high.unit || unitKey(high.unit) === unitKey(unit)) ? high.value : undefined
+    const fromText = upperLimitFromText(range?.text, unit, sex)
+    const uln = structured ?? (fromText !== undefined && fromText > 0 ? fromText : undefined)
     best = { value, unit, uln, date, obsId: obs.id, facility: obs.performer?.find((p) => p.display)?.display }
   }
   return best
@@ -75,8 +105,8 @@ export function doacPatientSelects(input: {
   const out: Partial<Record<DoacPatientKey, ClinicalSelectValue>> = {}
 
   // ALT/AST: 「>2×ULN」 when either is; 「no」 only when both are known and neither is.
-  const alt = latest(observations, 'ALT', now)
-  const ast = latest(observations, 'AST', now)
+  const alt = latest(observations, 'ALT', now, demographics.gender)
+  const ast = latest(observations, 'AST', now, demographics.gender)
   const high = [alt && ['ALT', alt] as const, ast && ['AST', ast] as const]
     .filter((item): item is readonly ['ALT' | 'AST', LabReading] => !!item && item[1].uln !== undefined && item[1].value > 2 * item[1].uln!)
   if (high.length) {
@@ -85,7 +115,7 @@ export function doacPatientSelects(input: {
   } else if (alt?.uln !== undefined && ast?.uln !== undefined) {
     out.doac_liver_enzymes = { value: 'no', date: older(alt.date, ast.date), testName: `${reading('ALT', alt)}、${reading('AST', ast)}，均 ≤2×ULN`, obsId: alt.obsId, facility: alt.facility, resourceType: 'Observation' }
   }
-  const bili = latest(observations, 'T.BILI', now)
+  const bili = latest(observations, 'T.BILI', now, demographics.gender)
   if (bili?.uln !== undefined) {
     const raised = bili.value >= 1.5 * bili.uln
     out.doac_bilirubin_high = { value: raised ? 'yes' : 'no', date: bili.date, testName: `${reading('總膽紅素', bili)}，${raised ? '≥' : '<'}1.5×ULN`, obsId: bili.obsId, facility: bili.facility, resourceType: 'Observation' }
