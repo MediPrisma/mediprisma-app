@@ -104,6 +104,7 @@ describe('the upper limit read off the report’s range text', () => {
     ['[5-34 U/L][]', 'U/L', 'male', 34],
     ['[0 - 40][]', 'U/L', 'male', 40],
     ['[][＜40]', 'U/L', 'male', 40],
+    ['M:＜41; F:＜33 U / L', 'U/L', 'female', 33],
     ['Male:＜41, Female:＜33', 'U/L', 'female', 33],
     ['M:＜41; Female:＜33', 'U/L', 'female', 33],
     ['M:＜21; F:＜18 umol/L', 'umol/L', 'male', 21],
@@ -121,6 +122,10 @@ describe('the upper limit read off the report’s range text', () => {
     ['M:＜21; F:＜18 umol/L', 'mg/dL', 'male'],
     ['M:＜21; F:＜18 umol/L', 'mg/dL', 'female'],
     ['M:＜1.2 mg/dL; F:＜18 umol/L', 'mg/dL', 'male'],
+    // A unit written with spaces, or in words, is still a unit (#360 re-review).
+    ['M:＜41; F:＜33 U / L', 'ukat/L', 'male'],
+    ['＜41 IU per L', 'ukat/L', 'male'],
+    ['Adult: 0-40', 'U/L', 'male'],
   ])('%s (%s, %s) → no limit', (text, unit, sex) => {
     expect(upperLimitFromText(text, unit, sex)).toBeUndefined()
   })

@@ -44,9 +44,15 @@ export function upperLimitFromText(text: string | undefined, unit: string, sex: 
   // on the whole text before a sex is chosen, since 「M:＜21; F:＜18 umol/L」
   // writes one unit for both (#360 review). Then they are removed.
   const own = unitKey(unit)
+  s = s.replace(/\s*\/\s*/g, '/') // 「U / L」 is 「U/L」
   const UNIT = /([a-zµμ%]+\/[a-z0-9.]+)/gi
   if ([...s.matchAll(UNIT)].some((match) => unitKey(match[1]) !== own)) return undefined
   s = s.replace(UNIT, '').replace(/\s+(?=\]|$)/g, '').trim()
+  // Whatever is left must be numbers, comparators, brackets and the sex labels:
+  // a word we do not read (a unit spelled another way, an age band, a comment)
+  // leaves the limit unknown rather than read past (#360 review).
+  const residue = s.replace(/\b(?:Male|Men|Female|Women|M|F)\b/gi, '').replace(/to|至|到/gi, '')
+  if (/[^\d\s.<>=~\-[\]:;,，；]/.test(residue)) return undefined
   // Longer labels first, so 「Female」 is not read as 「F」 and 「emale」.
   const split = /^(?:Male|Men|M)\s*:\s*(.+?)\s*[;,，；]\s*(?:Female|Women|F)\s*:?\s*(.+)$/i.exec(s)
   if (split) {
