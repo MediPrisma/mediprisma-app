@@ -86,6 +86,21 @@ describe('legacy receipt-clock imaging copies', () => {
     if (conflict === 'negation') { reports[0].conclusion += ' notable'; reports[1].conclusion += ' no table' }
     expect(rows(reports)).toHaveLength(2)
   })
+
+  it('does not bridge two examinations through strict and legacy matches to one cloud report', () => {
+    const reports = fixture().slice(0, 2)
+    const strict = JSON.parse(JSON.stringify(reports[0]))
+    strict.id = 'separate-examination'
+    strict.code.text = 'SONO- BREAST'
+    strict.extension = []
+    strict.encounter = undefined
+    strict.effectiveDateTime = '2026-06-24T10:00:00+08:00'
+    strict.conclusion = reports[1].conclusion
+    reports[1].encounter = undefined
+    reports.push(strict)
+    expect(rows(reports)).toHaveLength(3)
+    expect([...reportDisplayGroupingKeys(reports).values()].some(key => key.startsWith('cross-source|'))).toBe(false)
+  })
 })
 
 

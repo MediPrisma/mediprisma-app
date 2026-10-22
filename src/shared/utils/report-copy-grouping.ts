@@ -78,7 +78,7 @@ function hasReceiptClock(report: Report): boolean {
   return sourceOf(report) === 'hospital'
     && !!report.effectiveDateTime
     && report.extension?.some(extension => extension.url === 'urn:vgh:report:received-at'
-      && extension.valueDateTime === report.effectiveDateTime) === true
+      && 'valueDateTime' in extension && extension.valueDateTime === report.effectiveDateTime) === true
     && EXAM_HEADER.test(sharedReportNarrative(report))
 }
 
@@ -248,7 +248,28 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
   try {
     const strict = calculateReportDisplayGroupingKeys(reports, originalKeys)
     const legacy = calculateReportDisplayGroupingKeys(reports, originalKeys, true)
-    for (const [report, key] of legacy) if (key.startsWith('cross-source|')) strict.set(report, key)
+    const strictSnapshot = new Map(strict)
+    const legacyGroups = new Map<string, Report[]>()
+    for (const [report, key] of legacy) if (key.startsWith('cross-source|')) {
+      legacyGroups.set(key, [...(legacyGroups.get(key) ?? []), report])
+    }
+    for (const [key, members] of legacyGroups) {
+      const overlapping = new Set(members.map(report => strictSnapshot.get(report)).filter(value => value?.startsWith('cross-source|')))
+      // The two projections must never join different examinations through a
+      // common date-only cloud report. Decide against the immutable snapshot,
+      // so iteration order cannot turn an ambiguous component into a match.
+      const ambiguous = [...overlapping].some(strictKey => {
+        const existing = [...strictSnapshot].filter(([, value]) => value === strictKey).map(([report]) => report)
+        return existing.length !== members.length || existing.some(report => !members.includes(report))
+      })
+      if (ambiguous) {
+        for (const [report, strictKey] of strictSnapshot) if (overlapping.has(strictKey)) {
+          const original = originalKeys.get(report)
+          if (original) strict.set(report, original)
+          else strict.delete(report)
+        }
+      } else for (const report of members) strict.set(report, key)
+    }
     return strict
   } catch {
     // Imported FHIR may contain malformed nested elements. Grouping is an
