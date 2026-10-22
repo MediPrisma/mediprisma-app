@@ -22,6 +22,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 const [name, version] = process.argv.slice(2)
 
@@ -39,9 +40,15 @@ function githubToken() {
 }
 
 function registryMetadata() {
+  // Windows cannot exec npm.cmd without a shell; preserve argument boundaries
+  // by using the same npm JS entry point as npm-with-github-packages.mjs.
+  const npmCli = process.platform === 'win32'
+    ? process.env.npm_execpath || join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js')
+    : null
+  const args = ['view', `${name}@${version}`, 'dist.tarball', 'dist.integrity', 'version', '--json']
   const raw = execFileSync(
-    'npm',
-    ['view', `${name}@${version}`, 'dist.tarball', 'dist.integrity', 'version', '--json'],
+    npmCli ? process.execPath : 'npm',
+    npmCli ? [npmCli, ...args] : args,
     { encoding: 'utf8', env: { ...process.env, NODE_AUTH_TOKEN: githubToken() } },
   )
   const parsed = JSON.parse(raw)
