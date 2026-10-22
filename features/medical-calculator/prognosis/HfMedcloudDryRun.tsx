@@ -8,6 +8,8 @@ import { hasHfDiagnosis, summarizeHfInput } from '@/src/core/hf-risk/input-summa
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { HfProvenance, HfResultsView, hfResultText } from './HfPredictionResult'
 import { HfExcludedLabs } from './HfExcludedLabs'
+import { HfProblemReport } from './HfProblemReport'
+import { hfFailureMessage } from '@/src/core/hf-risk/diagnostics'
 
 const GAP: Record<string, [string, string]> = {
   'lab-subject-unlinked': ['檢驗無法核對為本病人，僅計數、不顯示內容或送出', 'Observations not linked to this patient are counted only; details are withheld and not sent'],
@@ -47,21 +49,13 @@ const MODULE: Record<string, [string, string]> = {
 const ERRORS: Record<string, [string, string]> = {
   'physician-diagnosis-rank-conflict': ['診斷順位與既有資料衝突；請核對來源，不自動覆寫原診斷', 'Diagnosis rank conflicts with existing data; review the source record'],
   'physician-diagnosis-invalid': ['請選擇診斷碼、既有就診及有效的診斷順位', 'Select a diagnosis code, existing visits and valid diagnosis ranks'],
-  'preview-fixture-required': ['本機中繼僅接受指定合成病例，這份資料未送出', 'Local relay accepts only pinned synthetic cases; this data was not sent'],
   'duplicate-reference': ['病歷包含重複資源編號，請重新匯入', 'Duplicate resource references; import the record again'],
   'index-encounter-invalid': ['所選門診資料無效，請重新整理輸入', 'Selected visit is invalid; prepare inputs again'],
-  'input-invalid': ['輸入資料不符合模型契約，請核對資料', 'Inputs do not match the model contract; review the data'],
-  'input-too-large': ['整理後資料超過 2 MiB，無法送出', 'Prepared data exceeds the 2 MiB limit'],
-  'response-too-large': ['服務回應超過大小限制，已丟棄', 'Oversized service response discarded'],
   'source-unsupported': ['請匯入雲端、健康或北榮懷爾抓抓的單一患者病歷', 'Import a single-patient cloud, health-bank or TVGH EHR bridge record'],
   'patient-count': ['需要單一患者的原始 Bundle', 'A single-patient source Bundle is required'],
   'bundle-invalid': ['無法讀取原始病歷 Bundle', 'Cannot read the source Bundle'],
   'no-visit': ['找不到院所來源與日期皆可辨識的門診紀錄；送出前需有可核對或醫師確認的診斷', 'No outpatient visit with a known hospital and date; a diagnosis is required before submission'],
   'source-changed': ['資料已切換，請重新整理輸入', 'Record changed; prepare the input again'],
-  'gateway-unauthorized': ['尚未登入或未取得 HF 服務授權', 'Sign-in or HF service authorization required'],
-  'gateway-config': ['院內 HF 檢查服務尚未設定', 'Intranet HF validation service is not configured'],
-  'invalid-prediction-response': ['預測回應不符合模型契約，已丟棄', 'Prediction response does not match the model contract; discarded'],
-  'invalid-dry-run-response': ['服務回應不符合輸入檢查格式，已丟棄', 'Invalid input-validation response discarded'],
 }
 
 const LAB_NAMES: Record<string, string> = {
@@ -89,7 +83,7 @@ function Step({ number, done, active, title, status, children, label }: { number
 
 export function HfMedcloudDetail({ locale, state }: { locale: string; state: ReturnType<typeof useMedcloudHfDryRun> }) {
   const en = locale === 'en'
-  const { current, configured, intranet, busy, runs, message: visibleMessage, recordKey, prepare, select, supplementDiagnosis, predict } = state
+  const { current, configured, intranet, busy, runs, message: visibleMessage, diagnostics, setReportSnapshot, recordKey, prepare, select, supplementDiagnosis, predict } = state
   const [guideOpen, setGuideOpen] = useState(true)
   const [diagnosisOpen, setDiagnosisOpen] = useState(!current?.input.physicianDiagnosis)
   const { copied, copy } = useCopyToClipboard()
@@ -113,8 +107,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
     confirmed: next.code === 'I50.9' && next.encounters.length > 0
       && next.encounters.every(reference => Number.isInteger(next.ranks[reference]) && next.ranks[reference] >= 1 && next.ranks[reference] <= 50),
   })
-  const text = (pair: [string, string]) => pair[en ? 1 : 0]
-  const describeError = (code: string) => code === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(ERRORS[code] ?? ['無法完成檢查，請確認院內連線後重試', 'Unable to validate; check the intranet connection and retry'])
+  const text = (pair: readonly [string, string]) => pair[en ? 1 : 0]
+  const describeError = (code: string) => code === 'gateway-unauthorized' && intranet ? (en ? 'The service denied hospital network access; verify the approved network and ingress settings.' : '院內服務拒絕存取；請確認核准網段與入口設定。') : text(hfFailureMessage(code) ?? ERRORS[code] ?? ['發生未預期錯誤，尚無法確認原因。請重新整理輸入後再試。', 'An unexpected error occurred. Prepare the input again and retry.'])
   const hospital = current ? current.visits.find(visit => visit.reference === current.selection.encounter)?.providerName ?? current.selection.provider : ''
   const confirmed = current?.input.physicianDiagnosis
   const suggestionDates = (suggestion: HfPhysicianDiagnosisDraft | null) => suggestion ? diagnosisVisits.filter(visit => suggestion.encounters.includes(visit.reference))
@@ -166,7 +160,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
       </div>
     </details>
     {process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_HF_LOCAL_PREVIEW_RELAY === 'synthetic' && <p className="text-xs text-muted-foreground">{en ? 'Local preview relay: only the supplied synthetic fixture is accepted. Production browser CORS is not verified by this preview.' : '本機驗收中繼：僅接受指定合成病例；此預覽不代表正式瀏覽器 CORS 已通過。'}</p>}
-    {!configured && <p className="text-sm font-medium">{text(ERRORS['gateway-config'])}</p>}
+    {!configured && <p className="text-sm font-medium">{describeError('gateway-config')}</p>}
     {!current && !visibleMessage && <p className="text-sm text-muted-foreground" role="status">{en ? 'Preparing the record…' : '整理病歷資料中…'}</p>}
     {!current && visibleMessage && <button type="button" className={link} onClick={prepare}>{en ? 'Prepare the record again' : '重新整理病歷資料'}</button>}
 
@@ -261,6 +255,8 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
         </div>}
       </section>}
     </div>
+
+    {current && diagnostics && diagnostics.records.length > 0 && !busy && <HfProblemReport key={diagnostics.runId} runId={diagnostics.runId} records={diagnostics.records} source={current.source} locale={locale} describeError={describeError} snapshot={diagnostics.report ?? null} onSnapshotChange={setReportSnapshot} />}
 
     {current && <details className="group rounded-lg border border-border bg-background">
       <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 px-3 py-2 [&::-webkit-details-marker]:hidden">{chevron}<span className="text-sm font-semibold">{en ? 'Data used' : '本次使用的資料'}</span>
