@@ -49,12 +49,37 @@ export function normalizeImagingReportCopy(value: string): string {
     const birads = signature[1]?.match(/[0-6]$/)?.[0]
     // BI-RADS is clinical content: a trailing grade is redundant ONLY if the
     // body explicitly contains the same grade. Never discard a conflicting one.
-    if (!birads || new RegExp(String.raw`^(?:Impression\s*:?\s*)?BI-RADS\s+(?:category\s+)?${birads}\b`, 'i').test(body)) text = body
+    const grades = [...body.matchAll(/\bBI-RADS\s+(?:category\s+)?([0-6])\b/gi)].map(match => match[1])
+    const assessment = new RegExp(String.raw`(?:^|[>\n])\s*(?:Impression\s*:?\s*)?BI-RADS\s+(?:category\s+)?${birads}\b`, 'i')
+    if (!birads || (assessment.test(body) && grades.every(grade => grade === birads))) text = body
   }
   text = text.replace(/^Impression\b\s*:?\s*/i, '')
   // Keep token boundaries: list item "1. 2 cm" must never equal "1.2 cm".
   // Missing spaces within words are uncertain content, not an automatic match.
   return text.replace(/\s+/g, ' ').trim()
+}
+
+/** Known legacy QEMR exports lost HTML line-break spaces. Repair only bounded,
+ * unambiguous report phrases, never remove all spaces ("no table"/"notable",
+ * numbers, units and negations must remain different). This is a comparison
+ * projection; the original narrative is retained for each source. */
+function legacyLayoutText(value: string): string {
+  const phrases = ['ruled out', 'occupying lesion', 'at bilateral', 'Regular follow',
+    'generally recommended', 'splenic hilum', 'visible pancreas', 'follow-up regularly',
+    'was performed', 'operative change', 'No change', 'Post radiation']
+  let text = normalizeImagingReportCopy(value)
+  for (const phrase of phrases) text = text.replace(new RegExp(String.raw`\b${phrase.replaceAll(' ', '')}\b`, 'g'), phrase)
+  return text.replace(/([,:])\s*(?=[A-Za-z0-9])/g, '$1 ').replace(/\s+/g, ' ').trim()
+}
+
+/** Old QEMR effectiveDateTime is explicitly the receipt instant, not a second
+ * examination clock. Only this evidenced legacy shape permits day matching. */
+function hasReceiptClock(report: Report): boolean {
+  return sourceOf(report) === 'hospital'
+    && !!report.effectiveDateTime
+    && report.extension?.some(extension => extension.url === 'urn:vgh:report:received-at'
+      && extension.valueDateTime === report.effectiveDateTime) === true
+    && EXAM_HEADER.test(sharedReportNarrative(report))
 }
 
 /** This adapter's explicit source tag identifies Taipei VGH. An old hospital
@@ -122,6 +147,7 @@ function examTime(report: Report): string | undefined {
   // Only a date-only value has unknown time. Explicit midnight (including UTC
   // midnight) remains an instant; it must not bypass conflict detection.
   const meaningful = clock ? sourceInstant(value) : undefined
+  if (headerTime !== undefined && hasReceiptClock(report)) return String(headerTime)
   if (headerTime !== undefined && meaningful !== undefined && headerTime !== meaningful) return 'conflicting-exam-times'
   const instant = headerTime ?? meaningful
   return instant === undefined ? undefined : String(instant)
@@ -163,9 +189,11 @@ function parseExamLabel(label: string): string[] | null {
   // This is deliberately a bounded recognizer, not a body-site guesser. A new
   // anatomy/protocol term (e.g. knee/ankle) must fail closed until supported.
   const recognized = label
+    .replace(/其他/g, '')
+    .replace(/\bEcho for others\b/gi, '')
     .replace(/\bc\s*\.\s*t\s*\.?/gi, 'ct')
     .replace(/電腦斷層造影|電腦斷層|磁振造影|磁振|核磁共振|有造影劑|無造影劑|超音波|乳房|胸腔檢查|胸腔|胸部|頭部|頭顱|腦部|頸部|腹部|骨盆|脊椎|左側|右側|雙側|左乳|右乳|雙乳|包括|各種|角度|部位|之/g, '')
-    .replace(/\b(?:ct|scan|computed|tomography|chest|thorax|lungs?|head|brain|cranial|neck|abdomen|abdominal|hepatobiliary|liver|gallbladder|pelvis|pelvic|spine|spinal|breasts?|sono|sonogram|sonography|ultrasound|ultrasonography|mri?|magnetic|resonance|imaging|left|right|lt|rt|bilateral|ap|pa|lateral|oblique|x|ray|radiograph(?:y)?|view|views|contrast|with|without|other|system|including|all|various|angles?|and|parts?|of|the)\b/gi, '')
+    .replace(/\b(?:ct|scan|computed|tomography|chest|thorax|lungs?|head|brain|cranial|neck|abdomen|abdominal|hepatobiliary|liver|gallbladder|pelvis|pelvic|spine|spinal|breasts?|sono|sonogram|sonography|ultrasound|ultrasonography|mri?|magnetic|resonance|imaging|left|right|lt|rt|bilateral|ap|pa|lateral|oblique|xr|x|ray|radiograph(?:y)?|view|views|contrast|with|without|other|system|including|all|various|angles?|and|parts?|of|the|each|film)\b/gi, '')
     .replace(/[\s\p{P}]/gu, '')
   if (recognized) return null
   const left = /\b(?:left|lt)\b|左側|左乳|左肺/i.test(label)
@@ -218,7 +246,10 @@ function examQualifiers(report: Report): string[] | null {
 export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Report, string> {
   const originalKeys = new Map<Report, string>()
   try {
-    return calculateReportDisplayGroupingKeys(reports, originalKeys)
+    const strict = calculateReportDisplayGroupingKeys(reports, originalKeys)
+    const legacy = calculateReportDisplayGroupingKeys(reports, originalKeys, true)
+    for (const [report, key] of legacy) if (key.startsWith('cross-source|')) strict.set(report, key)
+    return strict
   } catch {
     // Imported FHIR may contain malformed nested elements. Grouping is an
     // optional display projection: uncertainty must keep reports separate,
@@ -227,7 +258,7 @@ export function reportDisplayGroupingKeys(reports: readonly Report[]): Map<Repor
   }
 }
 
-function calculateReportDisplayGroupingKeys(reports: readonly Report[], originalKeys: Map<Report, string>): Map<Report, string> {
+function calculateReportDisplayGroupingKeys(reports: readonly Report[], originalKeys: Map<Report, string>, legacy = false): Map<Report, string> {
   const keys = new Map<Report, string>()
   const sharedKeys = qualifyingSharedReportKeys([...reports])
   for (const report of reports) {
@@ -272,12 +303,13 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     const day = examDay(report)
     const subject = report.subject?.reference?.trim()
     if (!source || !institution || !method || !day || !subject || !['final', 'amended', 'corrected'].includes(report.status ?? '')) continue
+    if (legacy && !(source === 'hospital' ? hasReceiptClock(report) : /^\d{4}-\d{2}-\d{2}$/.test(report.effectiveDateTime ?? ''))) continue
     if (isAdultPreventiveHealthExamResource(report)
       || report._observations?.some(isAdultPreventiveHealthExamResource)) continue
     const raw = sharedReportNarrative(report)
     const headerDay = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})/i.exec(raw.normalize('NFKC'))?.[1].replaceAll('/', '-')
     if (headerDay && headerDay !== day) continue
-    const narrative = normalizeImagingReportCopy(raw)
+    const narrative = legacy ? legacyLayoutText(raw) : normalizeImagingReportCopy(raw)
     // Short stock phrases and explicitly truncated previews cannot identify an exam.
     if (narrative.length < 80 || /…|\.{3}/.test(raw)) continue
     const qualifiers = examQualifiers(report)
@@ -314,7 +346,18 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     )
     if (!isOneExam(hospital) || !isOneExam(cloud)) continue
     const encounters = new Set(bucket.flatMap(({ report }) => !report._encounterInferred && report.encounter?.reference ? [report.encounter.reference] : []))
-    if (encounters.size > 1) continue
+    // A cloud claim encounter and a QEMR receipt encounter use source-local
+    // identities. They need not be the same visit for a same-day examination.
+    if (!legacy && encounters.size > 1) continue
+    if (modality(hospital[0].report) === 'XR' && cloud.some(item => !examTime(item.report))) {
+      // Look outside the narrative bucket too: two same-day CXR examinations
+      // with different findings must not each consume the same date-only copy.
+      const sameDay = reports.filter(report => report.subject?.reference?.trim() === hospital[0].report.subject?.reference?.trim()
+        && examDay(report) === examDay(hospital[0].report)
+        && imagingCopyInstitution(report) === imagingCopyInstitution(hospital[0].report)
+        && modality(report) === modality(hospital[0].report))
+      if (sameDay.some(report => !members.has(report))) continue
+    }
     const identifiers = new Map<string, Set<string>[]>()
     for (const { report } of bucket) {
       const bySystem = new Map<string, Set<string>>()
@@ -374,3 +417,4 @@ export function visibleReportGroupingKeys(reports: readonly Report[], sourceKeys
   }
   return keys
 }
+

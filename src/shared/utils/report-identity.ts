@@ -1,6 +1,6 @@
 import { getNhiMedicloudOriginalInstitution, isNhiAuthorityDisplay, isNhiMedicloudObservation, isAdultPreventiveHealthExamResource } from './observation-provenance.utils'
 import { getCodeableConceptText } from './fhir-helpers'
-import { inferReportDisplayGroup } from './report-grouping-helpers'
+import { getNhiReportModality, inferReportDisplayGroup } from './report-grouping-helpers'
 
 export function getImagingCopySource(report: any): 'hospital' | 'cloud' | undefined {
   if (report.meta?.tag?.some((tag: any) => tag?.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')) return 'hospital'
@@ -46,6 +46,17 @@ export function reportNaturalGroupingKey(report: any): string {
   const key = [getCodeableConceptText(report?.code).trim(), (getReportDate(report) ?? '').slice(0, 10),
     (getReportInstitution(report) ?? '').trim(), isAdultPreventiveReport(report) ? 'adult-preventive' : '',
     isNhiMedicloudReport(report) ? 'nhi-medicloud' : ''].join('|')
+  // Serial radiographs can have identical text on the same day. Do not let
+  // the ordinary same-source fallback erase the distinction rejected by the
+  // cross-source matcher. Proven shared billing groups still take precedence.
+  const radiograph = inferReportDisplayGroup(report) === 'imaging' && (
+    report.code?.coding?.some((coding: any) => getNhiReportModality(coding?.code) === 'XR')
+    || /\bXR\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查/i.test(getCodeableConceptText(report.code)))
+  if (radiograph) return `${key}|radiograph:${JSON.stringify([
+    getReportDate(report), report.id ?? null,
+    (report.identifier ?? []).map((id: any) => [id.system, id.value]).sort(),
+    period ? [period.start, period.end] : null,
+  ])}`
   return period ? `${key}|period:${JSON.stringify([period.start ?? '', period.end ?? ''])}` : key
 }
 
@@ -68,3 +79,4 @@ export function getReportInstitution(dr: any): string | undefined {
   if (hasCloudObservation) return cloudInstitution || ordinaryInstitution || reportInstitution
   return ordinaryInstitution || reportInstitution
 }
+
