@@ -55,11 +55,19 @@ export function reportNaturalGroupingKey(report: any): string {
   // Serial radiographs can have identical text on the same day. Do not let
   // the ordinary same-source fallback erase the distinction rejected by the
   // cross-source matcher. Proven shared billing groups still take precedence.
-  if (isRadiographReport(report)) return `${key}|radiograph:${JSON.stringify([
-    getReportDate(report), report.id ?? null,
-    (report.identifier ?? []).map((id: any) => [id.system, id.value]).sort(),
-    period ? [period.start, period.end] : null,
-  ])}`
+  if (isRadiographReport(report)) {
+    const date = getReportDate(report)
+    const clock = date?.includes('T') ? date : undefined
+    const headerClock = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/i.exec(report.conclusion ?? '')?.[1]
+    const identifiers = (report.identifier ?? []).filter((id: any) => id?.value).map((id: any) => [id.system, id.value]).sort()
+    // Exact source clocks or common identifiers can still establish duplicate
+    // previews. A day alone cannot: retain distinct records in that case.
+    return `${key}|radiograph:${JSON.stringify([
+      clock, headerClock, identifiers,
+      !clock && !headerClock && !identifiers.length ? report.id ?? null : null,
+      period ? [period.start, period.end] : null,
+    ])}`
+  }
   return period ? `${key}|period:${JSON.stringify([period.start ?? '', period.end ?? ''])}` : key
 }
 

@@ -122,8 +122,8 @@ describe('legacy receipt-clock imaging copies', () => {
       code: { ...template.code, coding: [{ code }] },
       identifier: evidence === 'unidentified' ? undefined : [{ system: 'urn:synthetic:accession', value: `EXAM-${index}` }],
     })))
-    expect(rows(reports)).toHaveLength(evidence !== 'clock' ? 4 : 2)
-    expect(calculateReportTabCounts(reports).all).toBe(evidence !== 'clock' ? 4 : 2)
+    expect(rows(reports)).toHaveLength(evidence === 'unidentified' ? 4 : 2)
+    expect(calculateReportTabCounts(reports).all).toBe(evidence === 'unidentified' ? 4 : 2)
     for (const row of rows(reports)) {
       const ids = row.diagnosticReportIds ?? []
       expect(ids.every(id => id.includes('08:00')) || ids.every(id => id.includes('16:00'))).toBe(true)
@@ -137,5 +137,6 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(rows(reports)).toHaveLength(2)
   })
 })
+
 
 
