@@ -24,6 +24,11 @@ interface DiagnosticReportLike {
 export type ReportGroup = 'lab' | 'imaging' | 'cancer-screening' | 'procedures' | 'vitals' | 'other'
 export type ReportDisplayGroup = ReportGroup | 'pathology'
 
+/** Shared label recognition for copy matching and serial radiograph guards. */
+export function isRadiographLabel(label: string): boolean {
+  return /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|\bchest\b.*\bviews?\b|胸腔檢查|[XＸ]光/i.test(label.normalize('NFKC'))
+}
+
 export const HEALTH_BANK_SDK_SECTION_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'
 

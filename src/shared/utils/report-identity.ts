@@ -1,6 +1,6 @@
 import { getNhiMedicloudOriginalInstitution, isNhiAuthorityDisplay, isNhiMedicloudObservation, isAdultPreventiveHealthExamResource } from './observation-provenance.utils'
 import { getCodeableConceptText } from './fhir-helpers'
-import { getNhiReportModality, inferReportDisplayGroup } from './report-grouping-helpers'
+import { getNhiReportModality, inferReportDisplayGroup, isRadiographLabel } from './report-grouping-helpers'
 
 export function getImagingCopySource(report: any): 'hospital' | 'cloud' | undefined {
   if (report.meta?.tag?.some((tag: any) => tag?.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement')) return 'hospital'
@@ -38,7 +38,7 @@ export function isAdultPreventiveReport(report: any): boolean {
 export function isRadiographReport(report: any): boolean {
   return inferReportDisplayGroup(report) === 'imaging' && (
     report.code?.coding?.some((coding: any) => getNhiReportModality(coding?.code) === 'XR')
-    || /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i.test(getCodeableConceptText(report.code)))
+    || isRadiographLabel([report.code?.text, ...(report.code?.coding ?? []).map((coding: any) => coding?.display)].filter(Boolean).join(' ')))
 }
 
 /** One natural key for the displayed rows and the cross-source guard. */

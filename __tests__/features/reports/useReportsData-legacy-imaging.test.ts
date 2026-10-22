@@ -102,7 +102,7 @@ describe('legacy receipt-clock imaging copies', () => {
     expect([...reportDisplayGroupingKeys(reports).values()].some(key => key.startsWith('cross-source|'))).toBe(false)
   })
 
-  it.each(['胸部X光', '胸部Ｘ光', 'CXR'])('preserves uncoded serial radiographs named %s', title => {
+  it.each(['胸部X光', '胸部Ｘ光', 'CXR', 'ＣＸＲ'])('preserves uncoded serial radiographs named %s', title => {
     const report = fixture()[4]
     report.code = { text: title }
     const second = JSON.parse(JSON.stringify(report))
@@ -113,21 +113,28 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(calculateReportTabCounts([report, second]).all).toBe(2)
   })
 
-  it.each([false, true])('does not combine two serial examinations with multiple billing codes, date-only=%s', dateOnly => {
+  it.each(['clock', 'date', 'unidentified'])('does not combine two serial examinations with multiple billing codes, evidence=%s', evidence => {
     const template = fixture()[5]
     template.extension = []
     const reports = ['08:00', '16:00'].flatMap((clock, index) => ['32001C', '32002C'].map(code => ({
       ...template, id: `serial-${clock}-${code}`,
-      effectiveDateTime: dateOnly ? '2026-06-24' : `2026-06-24T${clock}:00+08:00`,
+      effectiveDateTime: evidence !== 'clock' ? '2026-06-24' : `2026-06-24T${clock}:00+08:00`,
       code: { ...template.code, coding: [{ code }] },
-      identifier: [{ system: 'urn:synthetic:accession', value: `EXAM-${index}` }],
+      identifier: evidence === 'unidentified' ? undefined : [{ system: 'urn:synthetic:accession', value: `EXAM-${index}` }],
     })))
-    expect(rows(reports)).toHaveLength(dateOnly ? 4 : 2)
-    expect(calculateReportTabCounts(reports).all).toBe(dateOnly ? 4 : 2)
+    expect(rows(reports)).toHaveLength(evidence !== 'clock' ? 4 : 2)
+    expect(calculateReportTabCounts(reports).all).toBe(evidence !== 'clock' ? 4 : 2)
     for (const row of rows(reports)) {
       const ids = row.diagnosticReportIds ?? []
       expect(ids.every(id => id.includes('08:00')) || ids.every(id => id.includes('16:00'))).toBe(true)
     }
+  })
+
+  it('preserves numeric punctuation boundaries in legacy layout comparisons', () => {
+    const reports = fixture().slice(2, 4)
+    reports[0].conclusion = reports[0].conclusion.replace('The visible', 'Segments 1,5 cm. The visible')
+    reports[1].conclusion = reports[1].conclusion.replace('The visible', 'Segments 1, 5 cm. The visible')
+    expect(rows(reports)).toHaveLength(2)
   })
 })
 

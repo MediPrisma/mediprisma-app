@@ -224,7 +224,12 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
     const key = sharedReportGroupingKey(report)
     if (!key) continue
     const identities = sourceIdentities.get(key) ?? new Set<string>()
-    identities.add(sharedReportSourceIdentity(report))
+    const identity = sharedReportSourceIdentity(report)
+    // Repeated billing identities may be serial examinations whose clocks or
+    // accession IDs were omitted. Distinct billing codes alone cannot prove
+    // that this whole bucket describes a single radiograph.
+    if (isRadiographReport(report) && identities.has(identity)) conflicts.add(key)
+    identities.add(identity)
     sourceIdentities.set(key, identities)
     if (isRadiographReport(report)) {
       const namespaces = radiographIdentifiers.get(key) ?? new Map<string, string>()

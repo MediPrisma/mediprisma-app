@@ -5,7 +5,7 @@ import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/im
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '../../features/clinical-summary/reports/utils/nhi-viewer-request'
 
 const before = process.env.IMAGING_BEFORE === '1'
-const legacy = process.env.IMAGING_LEGACY === '1'
+const legacy = process.env.IMAGING_LEGACY !== '0'
 const marker = 'Synthetic imaging comparison'
 const cases = [
   ['SONOGRAM- BREAST', '乳房超音波', '19014C', `BI-RADS category 2. ${marker}: Simple bilateral breast cysts with no suspicious solid mass or architectural distortion. Annual imaging follow-up is recommended.`],

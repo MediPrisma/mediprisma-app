@@ -1,5 +1,5 @@
 import type { DiagnosticReport as Report } from '../types/fhir.types'
-import { getNhiReportModality, inferReportDisplayGroup } from './report-grouping-helpers'
+import { getNhiReportModality, inferReportDisplayGroup, isRadiographLabel } from './report-grouping-helpers'
 import { getImagingCopySource as sourceOf, reportNaturalGroupingKey } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
@@ -69,7 +69,7 @@ function legacyLayoutText(value: string): string {
     'was performed', 'operative change', 'No change', 'Post radiation']
   let text = normalizeImagingReportCopy(value)
   for (const phrase of phrases) text = text.replace(new RegExp(String.raw`\b${phrase.replaceAll(' ', '')}\b`, 'g'), phrase)
-  return text.replace(/([,:])\s*(?=[A-Za-z0-9])/g, '$1 ').replace(/\s+/g, ' ').trim()
+  return text.replace(/([A-Za-z][,:])\s*(?=[A-Za-z0-9])/g, '$1 ').replace(/\s+/g, ' ').trim()
 }
 
 /** Old QEMR effectiveDateTime is explicitly the receipt instant, not a second
@@ -161,9 +161,9 @@ function modality(report: Report): string | undefined {
     ['MR', /magnetic|\bmri?\b|磁振|核磁/i],
     ['CT', /computed tomography|\bct\b|電腦斷層/i],
     ['US', /sono|ultrason|超音波/i],
-    ['XR', /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i],
   ] as const
   const found = new Set<string>(methods.filter(([, pattern]) => pattern.test(title)).map(([method]) => method))
+  if (isRadiographLabel(title)) found.add('XR')
   for (const coding of report.code?.coding ?? []) {
     const codedMethod = getNhiReportModality(coding?.code)
     if (codedMethod) found.add(codedMethod)
