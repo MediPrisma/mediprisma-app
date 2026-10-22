@@ -25,7 +25,7 @@ function fixture(): any[] {
       code: { text: cloudTitle, coding: [{ code }, ...(index === 2 ? [{ system: 'http://loinc.org', code: '30745-4', display: 'XR Chest Views' }] : [])] },
       meta: { source: 'https://medcloud2.nhi.gov.tw/' }, performer: [{ display: '臺北榮總' }],
       encounter: { reference: 'Encounter/cloud-claim' }, conclusion: `Impression ${text}`,
-      extension: [{ url: NHI_VIEWER_REQUEST_EXTENSION_URL, extension: [
+      extension: [{ url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-report-date', valueString: '2026-06-24T12:18:00' }, { url: NHI_VIEWER_REQUEST_EXTENSION_URL, extension: [
         { url: 'version', valueInteger: 1 }, { url: 'proc-id', valueCode: 'IMUE0130' },
         { url: 'patient-context-hash', valueString: 'b'.repeat(64) }, { url: 'ipl-case-seq-no', valueString: `SYNTHETIC-${index}` },
       ] }] }
@@ -58,7 +58,7 @@ describe('legacy receipt-clock imaging copies', () => {
     const secondBilling = JSON.parse(JSON.stringify(reports[5]))
     secondBilling.id = 'cloud-second-billing'
     secondBilling.code.coding[0].code = '32002C'
-    secondBilling.extension = []
+    secondBilling.extension = secondBilling.extension.filter((extension: any) => extension.valueString)
     reports.push(secondBilling)
     expect(rows(reports)).toHaveLength(4)
     expect(rows(reports).flatMap(row => row.diagnosticReportIds)).toHaveLength(9)
@@ -151,6 +151,24 @@ describe('legacy receipt-clock imaging copies', () => {
     }))
     expect(rows(reports)).toHaveLength(2)
     expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
+  it('does not infer a single date-only CXR from different billing codes without report identity', () => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32002C'].map((code, index) => ({ ...template,
+      id: `unknown-${index}`, extension: [], code: { ...template.code, coding: [{ code }] },
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
+  it.each(['Abdomen X-ray', 'KUB'])('does not let a distinct same-day %s block CXR pairing', title => {
+    const reports = fixture().slice(4, 6)
+    const abdomen = JSON.parse(JSON.stringify(reports[1]))
+    abdomen.id = 'abdomen'
+    abdomen.code = { text: title, coding: [{ code: '32006C' }] }
+    abdomen.conclusion = 'Synthetic abdominal radiograph. Bowel gas pattern is unremarkable. No visible dilated bowel loop. This is a separate abdominal examination.'
+    expect(rows([...reports, abdomen])).toHaveLength(2)
   })
 })
 

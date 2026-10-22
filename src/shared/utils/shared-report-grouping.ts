@@ -1,7 +1,7 @@
 import { decodeBase64Utf8 } from './base64.utils'
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
-import { isRadiographReport } from './report-identity'
+import { getImagingCopySource, isRadiographReport } from './report-identity'
 
 export type SharedReportSource = {
   reportId?: string
@@ -18,6 +18,17 @@ export type SharedReportSource = {
 
 function reportExamDate(report: any): string | undefined {
   return report?.effectiveDateTime || report?.effectivePeriod?.start
+}
+
+function radiographClock(report: any): string | undefined {
+  const effective = reportExamDate(report)
+  const published = getImagingCopySource(report) === 'cloud' ? report.extension?.find((extension: any) =>
+    extension?.url === 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-report-date')?.valueString : undefined
+  const timestamp = (value: unknown): value is string => typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && Number.isFinite(Date.parse(value))
+  // NHI can export two billing rows for the same complete report. Its explicit
+  // report timestamp is corroborating report identity, not an exam time.
+  return timestamp(effective) ? `exam:${effective}` : timestamp(published) ? `report:${published}` : undefined
 }
 
 function reportInstitution(report: any): string | undefined {
@@ -153,7 +164,7 @@ export function sharedReportGroupingKey(report: any): string | null {
     boundary.status,
     narrative,
     // A shared billing narrative must not erase known serial X-ray clocks.
-    isRadiographReport(report) ? [reportExamDate(report), report.effectivePeriod?.end] : null,
+    isRadiographReport(report) ? [radiographClock(report), report.effectivePeriod?.end] : null,
   ])
 }
 
@@ -221,6 +232,7 @@ export function sharedReportSourceIdentity(report: any): string {
 export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
   const sourceIdentities = new Map<string, Set<string>>()
   const radiographIdentifiers = new Map<string, Map<string, string>>()
+  const radiographMembers = new Map<string, any[]>()
   const conflicts = new Set<string>()
   for (const report of reports) {
     if (!report) continue
@@ -235,6 +247,7 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
     identities.add(identity)
     sourceIdentities.set(key, identities)
     if (isRadiographReport(report)) {
+      radiographMembers.set(key, [...(radiographMembers.get(key) ?? []), report])
       const namespaces = radiographIdentifiers.get(key) ?? new Map<string, string>()
       const values = new Map<string, string[]>()
       for (const identifier of report.identifier ?? []) if (identifier?.value) {
@@ -248,6 +261,12 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
       }
       radiographIdentifiers.set(key, namespaces)
     }
+  }
+  for (const [key, members] of radiographMembers) {
+    if (members.every(report => radiographClock(report))) continue
+    const common = (members[0].identifier ?? []).filter((id: any) => id?.value).some((id: any) =>
+      members.every(report => report.identifier?.some((candidate: any) => candidate?.value === id.value && candidate.system === id.system)))
+    if (!common) conflicts.add(key)
   }
   return new Set(
     [...sourceIdentities.entries()]

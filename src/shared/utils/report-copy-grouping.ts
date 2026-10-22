@@ -62,12 +62,17 @@ export function normalizeImagingReportCopy(value: string): string {
  * unambiguous report phrases, never remove all spaces ("no table"/"notable",
  * numbers, units and negations must remain different). This is a comparison
  * projection; the original narrative is retained for each source. */
-function legacyLayoutText(value: string): string {
-  const phrases = ['ruled out', 'occupying lesion', 'at bilateral', 'Regular follow',
+const QEMR_LAYOUT_REPAIRS = ['ruled out', 'occupying lesion', 'at bilateral', 'Regular follow',
     'generally recommended', 'splenic hilum', 'visible pancreas', 'follow-up regularly',
     'was performed', 'operative change', 'No change', 'Post radiation']
+  .map(phrase => [new RegExp(String.raw`\b${phrase.replaceAll(' ', '')}\b`, 'g'), phrase] as const)
+
+// Compare both copies through the same projection. This allowlist comes from
+// observed QEMR line-break losses; unknown joins deliberately remain distinct.
+// Add repairs only with a source example and positive/negative regression tests.
+function imagingCopyLayoutText(value: string): string {
   let text = normalizeImagingReportCopy(value)
-  for (const phrase of phrases) text = text.replace(new RegExp(String.raw`\b${phrase.replaceAll(' ', '')}\b`, 'g'), phrase)
+  for (const [pattern, phrase] of QEMR_LAYOUT_REPAIRS) text = text.replace(pattern, phrase)
   return text.replace(/([A-Za-z][,:])\s*(?=[A-Za-z0-9])/g, '$1 ').replace(/\s+/g, ' ').trim()
 }
 
@@ -188,7 +193,7 @@ function parseExamLabel(label: string): string[] | null {
   // This is deliberately a bounded recognizer, not a body-site guesser. A new
   // anatomy/protocol term (e.g. knee/ankle) must fail closed until supported.
   const recognized = label
-    .replace(/\bCXR\b|[XＸ]光/gi, '')
+    .replace(/\b(?:CXR|KUB)\b|[XＸ]光/gi, '')
     .replace(/其他/g, '')
     .replace(/\bEcho for others\b/gi, '')
     .replace(/\bc\s*\.\s*t\s*\.?/gi, 'ct')
@@ -206,7 +211,7 @@ function parseExamLabel(label: string): string[] | null {
     ['head', /\b(?:head|cranial)\b|頭部|頭顱/i],
     ['brain', /\bbrain\b|腦部/i],
     ['neck', /\bneck\b|頸/i],
-    ['abdomen', /\b(?:abdomen|abdominal)\b|腹/i],
+    ['abdomen', /\b(?:abdomen|abdominal|kub)\b|腹/i],
     ['hepatobiliary', /\bhepatobiliary\b/i],
     ['liver', /\bliver\b|肝/i],
     ['gallbladder', /\bgallbladder\b|膽/i],
@@ -305,7 +310,7 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     const raw = sharedReportNarrative(report)
     const headerDay = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})/i.exec(raw.normalize('NFKC'))?.[1].replaceAll('/', '-')
     if (headerDay && headerDay !== day) continue
-    const narrative = legacyLayoutText(raw)
+    const narrative = imagingCopyLayoutText(raw)
     // Short stock phrases and explicitly truncated previews cannot identify an exam.
     if (narrative.length < 80 || /…|\.{3}/.test(raw)) continue
     const qualifiers = examQualifiers(report)
@@ -350,10 +355,13 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     if (modality(hospital[0].report) === 'XR' && cloud.some(item => !examTime(item.report))) {
       // Look outside the narrative bucket too: two same-day CXR examinations
       // with different findings must not each consume the same date-only copy.
-      const sameDay = reports.filter(report => report.subject?.reference?.trim() === hospital[0].report.subject?.reference?.trim()
+      const site = hospital[0].qualifiers[2]
+      const sameDay = reports.filter(report => report.status !== 'entered-in-error'
+        && report.subject?.reference?.trim() === hospital[0].report.subject?.reference?.trim()
         && examDay(report) === examDay(hospital[0].report)
         && imagingCopyInstitution(report) === imagingCopyInstitution(hospital[0].report)
-        && modality(report) === modality(hospital[0].report))
+        && modality(report) === modality(hospital[0].report)
+        && (!site || !examQualifiers(report)?.[2] || examQualifiers(report)?.[2] === site))
       if (sameDay.some(report => !members.has(report))) continue
     }
     const identifiers = new Map<string, Set<string>[]>()
