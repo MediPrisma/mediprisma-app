@@ -47,7 +47,9 @@ export function isRadiographReport(report: any): boolean {
 }
 
 export function typedReportIdentifierValue(identifier: any): string {
-  const types = identifier.type?.coding?.map((coding: any) => JSON.stringify([coding.system ?? '', coding.code ?? ''])).sort()
+  const types = Array.isArray(identifier.type?.coding)
+    ? identifier.type.coding.map((coding: any) => JSON.stringify([coding?.system ?? '', coding?.code ?? ''])).sort()
+    : undefined
   return JSON.stringify([identifier.value, types?.length ? types : identifier.type?.text ?? null])
 }
 
