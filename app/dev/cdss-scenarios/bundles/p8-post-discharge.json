@@ -271,54 +271,6 @@
    }
   },
   {
-   "fullUrl": "urn:uuid:Observation-p8-wt0",
-   "resource": {
-    "resourceType": "Observation",
-    "subject": {
-     "reference": "Patient/sim-p8"
-    },
-    "id": "p8-wt0",
-    "status": "final",
-    "effectiveDateTime": "2026-09-12",
-    "code": {
-     "coding": [
-      {
-       "system": "http://loinc.org",
-       "code": "29463-7"
-      }
-     ]
-    },
-    "valueQuantity": {
-     "value": 71,
-     "unit": "kg"
-    }
-   }
-  },
-  {
-   "fullUrl": "urn:uuid:Observation-p8-wt",
-   "resource": {
-    "resourceType": "Observation",
-    "subject": {
-     "reference": "Patient/sim-p8"
-    },
-    "id": "p8-wt",
-    "status": "final",
-    "effectiveDateTime": "2026-09-27",
-    "code": {
-     "coding": [
-      {
-       "system": "http://loinc.org",
-       "code": "29463-7"
-      }
-     ]
-    },
-    "valueQuantity": {
-     "value": 70,
-     "unit": "kg"
-    }
-   }
-  },
-  {
    "fullUrl": "urn:uuid:Observation-p8-egfr0",
    "resource": {
     "resourceType": "Observation",

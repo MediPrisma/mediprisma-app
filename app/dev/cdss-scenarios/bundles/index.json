@@ -73,7 +73,7 @@
   "title": "HFrEF 鬱血惡化",
   "kind": "follow-up",
   "page": "hf",
-  "oneLine": "69 歲女，喘變差、體重 65→68 kg，NT-proBNP 1200→2600；GDMT 四種都在用",
+  "oneLine": "69 歲女，喘變差、自述體重增加，NT-proBNP 1200→2600；GDMT 四種都在用",
   "visit": {
    "dyspnea": "變差",
    "weight": "增加"
@@ -94,10 +94,10 @@
  },
  {
   "id": "p9-hfpef-af-dose",
-  "title": "HFpEF＋AF，apixaban 劑量要重開",
+  "title": "HFpEF＋AF，apixaban 劑量要核對",
   "kind": "follow-up",
   "page": "hf",
-  "oneLine": "80 歲女，HFpEF＋持續性 AF；apixaban 5 mg bid；體重 61→58 kg，Cr 1.3",
+  "oneLine": "80 歲女，HFpEF＋持續性 AF；apixaban 5 mg bid；Cr 1.3，紀錄沒有體重",
   "visit": {
    "dyspnea": "穩定",
    "weight": "減少"
