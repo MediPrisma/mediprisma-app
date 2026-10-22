@@ -1,3 +1,7 @@
+import { CLINICAL_RECONCILIATION_POLICY_VERSION } from '@/src/core/services/clinical-reconciliation'
+import { getClinicalSourceLifecycleEpoch } from '@/src/infrastructure/fhir/services/clinical-source-session'
+import { localImportScopeSegment } from '@/src/infrastructure/fhir/services/local-bundle-scope'
+import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
 /**
  * Per-resource-type fetch plan for the clinical chart.
  *
@@ -63,6 +67,7 @@ type ClinicalDataFetchers = IClinicalDataRepository & {
   fetchConsents?(patientId: string): Promise<unknown[]>
   fetchDevices?(patientId: string): Promise<unknown[]>
   fetchCarePlans?(patientId: string): Promise<unknown[]>
+  getClinicalSource?(patientId: string): ClinicalReconciliationResult
   getQueryStatus?(key: ClinicalDataQueryKey): ClinicalDataQueryStatus | undefined
 }
 
@@ -113,15 +118,16 @@ export const CLINICAL_DATA_QUERY_ROOT = 'clinical-data'
 /** Third key segment of the shared data-source query. Never a resource id. */
 const SOURCE_KEY_SEGMENT = '__source'
 
-export function clinicalDataSourceQueryKey(patientId: string) {
-  return [CLINICAL_DATA_QUERY_ROOT, patientId, SOURCE_KEY_SEGMENT] as const
+export function clinicalDataSourceQueryKey(patientId: string, sourceEpoch = getClinicalSourceLifecycleEpoch()) {
+  return [CLINICAL_DATA_QUERY_ROOT, patientId, SOURCE_KEY_SEGMENT, localImportScopeSegment(), CLINICAL_RECONCILIATION_POLICY_VERSION, sourceEpoch] as const
 }
 
 export function clinicalResourceQueryKey(
   patientId: string | undefined,
   id: ClinicalResourceId,
+  sourceEpoch = getClinicalSourceLifecycleEpoch(),
 ) {
-  return [CLINICAL_DATA_QUERY_ROOT, patientId, id] as const
+  return [CLINICAL_DATA_QUERY_ROOT, patientId, id, localImportScopeSegment(), CLINICAL_RECONCILIATION_POLICY_VERSION, sourceEpoch] as const
 }
 
 export interface ClinicalDataSource {
@@ -156,6 +162,8 @@ export async function resolveClinicalDataSource(
 }
 
 export interface ClinicalResourceResult {
+  /** Read the shared store after any progressive query settles. */
+  getClinicalSource?: () => ClinicalReconciliationResult | undefined
   entities: unknown[]
   /** Set by the observations unit only — the vitals subset of `entities`. */
   vitalSigns?: ObservationEntity[]
@@ -220,6 +228,7 @@ export async function loadClinicalResource(
         ...(unit.id === OBSERVATIONS_UNIT_ID ? { vitalSigns: collection.vitalSigns } : {}),
         status: collectStatus(unit, (key) => collection.resourceQueryStatus?.[key]),
         sourceMetadata: collection.sourceMetadata,
+        getClinicalSource: () => collection.clinicalSource,
       }
     }
 
@@ -228,6 +237,7 @@ export async function loadClinicalResource(
     const entities = await fetcher.call(repository, patientId)
     return {
       entities,
+      getClinicalSource: repository.getClinicalSource ? () => repository.getClinicalSource!(patientId) : undefined,
       ...(unit.id === OBSERVATIONS_UNIT_ID
         ? { vitalSigns: selectVitalSignObservations(entities as ObservationEntity[]) }
         : {}),

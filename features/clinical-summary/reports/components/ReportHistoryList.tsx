@@ -6,6 +6,7 @@ import { FormattedReportText } from './FormattedReportText'
 import { REPORT_SOURCE_TONE } from './report-color-roles'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
+import { formatDate as formatCalendarDate } from '@/src/shared/utils/fhir-helpers'
 
 interface ReportHistoryListProps {
   data: ReportHistoryItem[]
@@ -35,7 +36,7 @@ export function ReportHistoryList({ data }: ReportHistoryListProps) {
       {data.map((item, i) => (
         <div key={item.id || i} className="rounded-lg border bg-muted/30 p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="font-medium text-foreground">{formatDate(item.date, locale)}</span>
+            <span className="font-medium text-foreground">{item.calendarDate ? formatCalendarDate(item.calendarDate) : formatDate(item.date, locale)}</span>
             {item.institution && (
               <span className={`inline-flex items-center gap-1 ${REPORT_SOURCE_TONE}`}>
                 <Building2 className="h-3 w-3" />

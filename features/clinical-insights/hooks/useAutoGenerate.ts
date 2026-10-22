@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { getUserErrorMessage } from '@/src/core/errors'
 import { isAutoRunEligibleModel } from '@/src/shared/constants/ai-models.constants'
 import { MAX_AUTO_INSIGHT_MODULES } from '@/src/shared/constants/clinical-insights.constants'
+import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 
 interface Panel {
   id: string
@@ -16,7 +17,7 @@ interface UseAutoGenerateProps {
   canGenerate: boolean
   context: string
   modelId: string
-  runPanels: (panelIds: string[]) => Promise<void>
+  runPanels: (panelIds: string[], options?: { automatic?: boolean }) => Promise<void>
   /** Current responses — a panel that already has output (this session OR
    *  restored from cache on reload) is NOT auto-run again. */
   responses?: Record<string, { text?: string } | undefined>
@@ -65,10 +66,11 @@ export function useAutoGenerate({
 }: UseAutoGenerateProps) {
   const autoRunPanels = useRef<Set<string>>(new Set())
   const ownerContext = useRef("")
+  const progressiveBlocked = useProgressiveImportStore(() => isProgressiveAutoSummaryBlocked())
 
   // Auto-run panels with autoGenerate enabled when conditions are met
   useEffect(() => {
-    if (!canGenerate || !context.trim() || panels.length === 0) {
+    if (progressiveBlocked || !canGenerate || !context.trim() || panels.length === 0) {
       return
     }
 
@@ -96,7 +98,7 @@ export function useAutoGenerate({
 
     // The generation hook keeps requests sequential internally, then publishes
     // every completed module in one atomic batch after all calls settle.
-    const autoRun = async () => runPanels(panelIds)
+    const autoRun = async () => runPanels(panelIds, { automatic: true })
 
     autoRun().catch((error) => {
       const errorMessage = getUserErrorMessage(error)
@@ -104,7 +106,7 @@ export function useAutoGenerate({
       // Remove failed panels from the set so they can be retried
       panelIds.forEach((panelId) => autoRunPanels.current.delete(panelId))
     })
-  }, [canGenerate, context, modelId, panelStatus, panels, runPanels, responses, runScope])
+  }, [progressiveBlocked, canGenerate, context, modelId, panelStatus, panels, runPanels, responses, runScope])
 
   return { autoRunPanels }
 }

@@ -1,3 +1,4 @@
+import { excludeUnresolvedGenericVariants } from '@/src/core/utils/clinical-variant-inputs'
 // Use Case: Generate the Medical Summary (醫療摘要) — pure AI narrative +
 // decisions + timeline curation, constrained to a fixed schema and to citing
 // ONLY app-issued source-catalog keys. No state, no framework — unit-testable.
@@ -12,6 +13,8 @@
 //  - Dates / organizations / resource types always come from the bundle.
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type { ClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
+import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { graphEncounterReferenceOrganization, scopedEncounterReferenceOrganization } from '@/src/core/services/clinical-source-catalog-evidence'
 import { getAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
 import { getAnalyteCanonicalKey, TEST_ALIASES } from '@voho0000/clinical-lab-normalization/canonical'
 import { getInterpretationTag, getReferenceRangeComparison, isObservationAbnormal } from '@voho0000/clinical-lab-normalization/interpretation'
@@ -144,6 +147,7 @@ export function normaliseSummarySourceKey(rawKey: string): string {
 export type MedicalSummaryHarnessProfile = 'frontier' | 'local-small'
 
 export interface SummaryCatalogInput {
+  clinicalSource?: ClinicalReconciliationResult
   encounters?: EncounterEntity[]
   medications?: MedicationEntity[]
   observations?: ObservationEntity[]
@@ -351,7 +355,8 @@ const sourceListLine = (c: SummarySourceCatalogEntry, extra: string[] = [], medi
       ? 'normality/reference not supplied'
       : ''
   const orders = c.orderNames?.length ? `ordered tests: ${c.orderNames.join('; ')}` : ''
-  const parts = [c.resourceType, date, c.organization ?? '', c.display, medicationClass ?? '', assessment, orders, ...extra]
+  const variant = c.clinicalRecordVariant ? `SAME-RECORD ${c.clinicalRecordVariant.classification} group=${c.clinicalRecordVariant.groupId}; ${c.clinicalRecordVariant.variantCount} variants; chronology unresolved; do not treat as separate events or trend points; ${c.clinicalRecordVariant.reason}` : ''
+  const parts = [variant, c.resourceType, date, c.organization ?? '', c.display, medicationClass ?? '', assessment, orders, ...extra]
   return `[${c.key}] ${parts.filter(Boolean).join(' | ')}`
 }
 
@@ -403,6 +408,7 @@ export function buildSourceCatalog(
   input: SummaryCatalogInput,
   locale: SummaryLocale = 'zh-TW',
 ): SummarySourceCatalogEntry[] {
+  input = excludeUnresolvedGenericVariants(input)
   const entries: SummarySourceCatalogEntry[] = []
   const observationsById = reportObservationMap(input.observations)
   const encounterOrganizationById = new Map(
@@ -410,9 +416,26 @@ export function buildSourceCatalog(
       .filter((encounter) => encounter.id)
       .map((encounter) => [encounter.id, encounter.serviceProvider?.display?.trim() || undefined]),
   )
-  const linkedEncounterOrganization = (reference?: string): string | undefined => {
-    const id = referenceId(reference)
-    return id ? encounterOrganizationById.get(id) : undefined
+  const linkedEncounterOrganization = (
+    reference: string | undefined,
+    originNodeKey: string | undefined,
+    paths: readonly string[],
+    document: object,
+  ): string | undefined => {
+    const scopedValues = paths.map(path => scopedEncounterReferenceOrganization(document, path))
+    if (scopedValues.some(value => value !== undefined)) {
+      return scopedValues.find(value => value && (input.encounters ?? []).some(row => row.id === value.encounterId))?.organization
+    }
+    const source = input.clinicalSource
+    if (!source?.graph) {
+      const id = referenceId(reference)
+      return id ? encounterOrganizationById.get(id) : undefined
+    }
+    // With a source graph, only an edge that was resolved under the graph's
+    // source/base/version/patient rules can supply a linked organization.
+    if (!reference || !originNodeKey) return undefined
+    const values = paths.map(path => graphEncounterReferenceOrganization(source, originNodeKey, path, reference, input.encounters ?? []))
+    return values.find(Boolean)?.organization
   }
 
   sortByDateDesc(input.encounters ?? [], (e) => e.period?.start)
@@ -476,10 +499,11 @@ export function buildSourceCatalog(
       // not silently retarget to a different report when containers disappear.
       if (isNhiBridgeSyntheticLabReport(r)) return
       const reportObservations = observationsForReport(r, observationsById)
-      entries.push({
+      const entry: SummarySourceCatalogEntry = {
         key: `L${i + 1}`,
         resourceType: 'DiagnosticReport',
         resourceId: r.id,
+        clinicalRecordVariant: r.clinicalRecordVariant,
         display: diagnosticReportText(r, locale),
         orderNames: r.basedOn?.map(order => order.display?.trim()).filter((name): name is string => !!name),
         date: day(r.effectiveDateTime ?? r.issued),
@@ -489,23 +513,32 @@ export function buildSourceCatalog(
             ? reportObservations.some(observationSupportsNormalityAssessment)
             : undefined,
         getContentText: () => sourceOwnedContentText({ report: r, observations: reportObservations }),
-      })
+      }
+      if (typeof r.sourceId === 'string' && r.sourceId) {
+        Object.defineProperty(entry, 'sourceId', { value: r.sourceId, enumerable: false })
+      }
+      entries.push(entry)
     })
 
   sortByDateDesc(input.observations ?? [], (observation) => observation.effectiveDateTime)
     .filter((observation): observation is ObservationEntity & { id: string } => !!observation.id)
     .forEach((observation, index) => {
-      entries.push({
+      const entry: SummarySourceCatalogEntry = {
         key: `O${index + 1}`,
         resourceType: 'Observation',
         resourceId: observation.id,
+        clinicalRecordVariant: observation.clinicalRecordVariant,
         display: codeText(observation.code, locale) ?? 'Observation',
         orderNames: observation.basedOn?.map(order => order.display?.trim()).filter((name): name is string => !!name),
         date: day(observation.effectiveDateTime),
         organization: observation.performer?.[0]?.display,
         supportsNormalityAssessment: observationSupportsNormalityAssessment(observation),
         getContentText: () => sourceOwnedContentText(observation),
-      })
+      }
+      if (typeof observation.sourceId === 'string' && observation.sourceId) {
+        Object.defineProperty(entry, 'sourceId', { value: observation.sourceId, enumerable: false })
+      }
+      entries.push(entry)
     })
 
   sortByDateDesc(input.conditions ?? [], (c) => c.recordedDate ?? c.onsetDateTime)
@@ -620,7 +653,7 @@ export function buildSourceCatalog(
       date: day(document.date),
       organization:
         document.author?.[0]?.display?.trim() ||
-        linkedEncounterOrganization(document.encounter?.reference),
+        linkedEncounterOrganization(document.encounter?.reference, document.clinicalSourceNodeKey, ['encounter'], document),
       getContentText: () => listClinicalDocuments({ compositions: [document] })[0]?.text ?? '',
     })),
     ...(input.documentReferences ?? []).map((document) => ({
@@ -636,7 +669,12 @@ export function buildSourceCatalog(
       date: day(document.context?.period?.start ?? document.date),
       organization:
         document.author?.[0]?.display?.trim() ||
-        linkedEncounterOrganization(document.context?.encounter?.[0]?.reference) ||
+        (document.context?.encounter ?? []).map((encounter, index) => linkedEncounterOrganization(
+          encounter.reference,
+          document.clinicalSourceNodeKey,
+          [`context.encounter[${index}]`],
+          document,
+        )).find(Boolean) ||
         extractInstitutionFromDocumentTitle(document.content?.[0]?.attachment?.title),
       getContentText: () => listClinicalDocuments({ documentReferences: [document] })[0]?.text ?? '',
     })),
@@ -819,8 +857,9 @@ function observationsForReport(
     out.push(obs)
   }
   for (const obs of report._observations ?? []) add(obs)
+  if (report.clinicalSourceNodeKey || report.resolvedReportMembership) return out
   for (const ref of report.result ?? []) {
-    const id = referenceId(ref.reference)
+    const id = ref.reference?.match(/^Observation\/([^/]+)$/)?.[1]
     if (id) add(byObservationId.get(id))
   }
   return out
@@ -851,11 +890,12 @@ function collectLongitudinalLabPoints(
   const byObservationId = reportObservationMap(input.observations)
   const points: LongitudinalLabPoint[] = []
   for (const report of input.diagnosticReports ?? []) {
-    if (inferGroupFromCategory(report.category) !== 'lab') continue
+    if (report.clinicalRecordVariant || inferGroupFromCategory(report.category) !== 'lab') continue
     const reportKey = report.id ? sourceByResourceId.get(report.id)?.key : undefined
     const reportDate = day(report.effectiveDateTime ?? report.issued)
     const observations = observationsForReport(report, byObservationId)
     for (const obs of observations) {
+      if (obs.clinicalRecordVariant) continue
       const value = obsValue(obs)
       const date = obsDate(obs) ?? reportDate
       const observationKey = obs.id ? sourceByResourceId.get(obs.id)?.key : undefined
@@ -884,7 +924,7 @@ function collectLongitudinalImagingPoints(
 ): LongitudinalImagingPoint[] {
   const points: LongitudinalImagingPoint[] = []
   const imagingReports = (input.diagnosticReports ?? [])
-    .filter((report) => inferGroupFromDiagnosticReport(report) === 'imaging')
+    .filter((report) => !report.clinicalRecordVariant && inferGroupFromDiagnosticReport(report) === 'imaging')
   const qualifyingKeys = qualifyingSharedReportKeys(imagingReports)
   const sharedGroups = new Map<string, DiagnosticReportEntity[]>()
   for (const report of imagingReports) {
@@ -1615,7 +1655,7 @@ function composeLabMetric(
   const observationOrder = new Map((clinicalData.observations ?? []).map((observation, index) => [observation.id, index]))
   for (const key of keys) {
     const entry = byKey.get(key)
-    if (!entry) return undefined
+    if (!entry || entry.clinicalRecordVariant) return undefined
     const observations = entry.resourceType === 'Observation'
       ? [observationById.get(entry.resourceId)].filter((obs): obs is ObservationEntity => Boolean(obs))
       : entry.resourceType === 'DiagnosticReport' && reportById.get(entry.resourceId)
@@ -1625,7 +1665,7 @@ function composeLabMetric(
     // result (a culture report's body) is not one test's value: writing it
     // out would put the whole panel or report into the row. The model's own
     // line stays for those.
-    if (observations.length > 1) return undefined
+    if (observations.length > 1 || observations.some(observation => observation.clinicalRecordVariant)) return undefined
     const labValues = observations.flatMap((observation) => {
       // eGFR is always mL/min/1.73m²; in a dense row the unit only takes room,
       // and sources spell it differently ("ml/min/1.7"), which would split

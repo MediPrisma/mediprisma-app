@@ -202,7 +202,18 @@ function assembleSection(
 
 export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
   const labels: IpsSectionLabels = { ...DEFAULT_SECTION_LABELS, ...(opts.labels ?? {}) }
-  const data = opts.data
+  const medications=projectHospitalMedicationComparisons(opts.data.medications).map(({record:medication,ownedIds})=>{
+    const comparison=medication._sourceRecordComparison
+    if(!comparison || comparison.status==='confirmed' || medication._sourcePrescriptionRecords?.length) return medication
+    // Multiple real hospital orders have only group-level correspondence.
+    // Their audit evidence belongs to a Provenance group, not the first order.
+    const hospitalCount=opts.data.medications.filter(source=>comparison.references.includes(`${source._sourceResourceType || 'MedicationRequest'}/${source.id}`)
+      && isVghtpeSource(source)).length
+    if(hospitalCount>1) return medication
+    const sources=opts.data.medications.filter(source=>ownedIds?.includes(source.id))
+    return sources.length<2 ? medication : {...medication,_sourcePrescriptionRecords:sources}
+  })
+  const data = {...opts.data,medications}
   const now = opts.now ?? new Date()
   const timestamp = now.toISOString()
 
@@ -252,7 +263,7 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
     assembleSection(
       IPS_SECTION.medications.loinc,
       labels.medications,
-      mapMedications(data.medications, patientRef),
+      mapMedications(data.medications, patientRef, opts.data.medications),
       narrativeMedications(data.medications, labels.medicationTable),
       { emptyReason: { coding: [SECTION_EMPTY_REASON] }, emptyNarrativeText: labels.noInformation },
     ),
@@ -365,3 +376,5 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
   }
   return bundle
 }
+import { projectHospitalMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'

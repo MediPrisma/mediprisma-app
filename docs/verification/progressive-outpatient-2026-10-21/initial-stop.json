@@ -1,0 +1,12 @@
+{
+  "synthetic": true,
+  "appSourceHead": "89def08ce93a80c2d921c1e953da116de1846a7e",
+  "noChartCommitted": true,
+  "receipt": {
+    "version": 1,
+    "requestId": "early-request",
+    "runId": "early-run",
+    "ok": false,
+    "errorCode": "IMPORT_FAILED"
+  }
+}

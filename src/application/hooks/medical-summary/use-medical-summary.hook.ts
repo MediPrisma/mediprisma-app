@@ -413,6 +413,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const publishProgress = () => {
       const state = medicalSummaryStore.getState()
       if (
+        ctx.signal?.aborted ||
         state.bundleRevision !== bundleRevision ||
         !state.running[ctx.operationKey]
       ) return
@@ -472,6 +473,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         }
       },
       execute: (messages) => streamWithCardProgressTimeout({
+        signal: ctx.signal,
         stream: (signal, streamChunk) => {
           request.onCallStart()
           return ctx.ai.stream(messages, {
@@ -514,6 +516,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       parsed: unknown,
       execution: AiModelExecution,
     ) => {
+      if (ctx.signal?.aborted) return
       cardModelExecutions[card.id] = execution
       progressiveAggregate = card.apply(progressiveAggregate, parsed, ctx.catalog)
       publishedCardIds.add(card.id)

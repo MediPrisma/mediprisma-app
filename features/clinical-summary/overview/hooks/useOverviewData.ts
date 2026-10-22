@@ -18,6 +18,7 @@ import { categorizeObservation, LAB_CATEGORIES } from '@/src/shared/utils/lab-ca
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import type { DisplayLang } from '@voho0000/clinical-lab-normalization/display'
 import { useReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
+import { getReportDate } from '@/src/shared/utils/report-identity'
 import { groupMultiRegionStudies } from '@/features/clinical-summary/reports/utils/multi-region-grouping'
 import { extractReportPreview } from '@/src/shared/utils/report-preview'
 import { decodeReportEntities, separateGluedOrderCode } from '@/src/shared/utils/report-text-format'
@@ -228,7 +229,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   )
   const windowedReports = useMemo(
     () => (Array.isArray(diagnosticReports) ? diagnosticReports : []).filter(
-      (report: any) => isWithinOverviewWindow(report?.effectiveDateTime ?? report?.issued, window),
+      (report: any) => isWithinOverviewWindow(getReportDate(report), window),
     ),
     [diagnosticReports, window],
   )
@@ -361,7 +362,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   }, [audience, categoryLabels, displayLang, locale, observations, pivots, windowedObservations])
 
   // ── 影像／檢查報告 ───────────────────────────────────────────────────────
-  const { reportRows } = useReportsData(windowedReports, windowedStudies)
+  const { reportRows } = useReportsData(windowedReports, windowedStudies, 'standardized', diagnosticReports)
 
   const reports = useMemo<OverviewReportsData>(() => {
     const items: OverviewReportItem[] = []
@@ -439,11 +440,11 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
 
   // ── 就診 ────────────────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
-    clinicalNotes, conditions, locale, audience, medicationRows,
+    clinicalNotes, conditions, locale, audience, medicationRows, icdDict, encounters,
   )
-  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
   const visitHistory = useVisitHistory(encounters, icdDict)
   const visitStats = useVisitStats(encounterDetails)
   const docStrings = useDocumentSummaryStrings()
@@ -451,14 +452,15 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
   const docsByEncounter = useMemo(() => {
     const map = new Map<string, DocumentEntry[]>()
     for (const entry of documentEntries) {
-      const encounterId = entry.encounterRef?.split('/').pop()
+      const sourceId = entry.encounterRef?.split('/').pop()
+      const encounterId = visitHistory.find((visit) => visit.id === sourceId || visit.sourceIds?.includes(sourceId ?? ''))?.id ?? sourceId
       if (!encounterId) continue
       const bucket = map.get(encounterId) ?? []
       bucket.push(entry)
       map.set(encounterId, bucket)
     }
     return map
-  }, [documentEntries])
+  }, [documentEntries, visitHistory])
 
   const visits = useMemo<OverviewVisitsData>(() => {
     const items: OverviewVisitItem[] = []
@@ -498,7 +500,7 @@ export function useOverviewData(window: OverviewWindow): OverviewData {
       if (day && (!latest || day > latest)) latest = day
     }
     for (const observation of observations as any[]) consider(observation?.effectiveDateTime)
-    for (const report of diagnosticReports as any[]) consider(report?.effectiveDateTime ?? report?.issued)
+    for (const report of diagnosticReports as any[]) consider(getReportDate(report))
     for (const medication of medications as any[]) consider(medication?.authoredOn ?? medication?.effectiveDateTime)
     for (const encounter of encounters as any[]) consider(encounter?.period?.start)
     return latest

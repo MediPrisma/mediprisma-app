@@ -1,3 +1,5 @@
+import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
 // Use Case: Generate Clinical Context
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -19,6 +21,8 @@ export class GenerateClinicalContextUseCase {
     options: ClinicalContextOptions
   ): ClinicalContextSection[] {
     const { selection, filters } = options
+    const uncertainty = scopeClinicalDataForAi(clinicalData, selection, filters, [])
+    clinicalData = excludeUnresolvedDecisionVariants(clinicalData, selection)
     const context: ClinicalContextSection[] = []
 
     // Patient Information
@@ -59,7 +63,7 @@ export class GenerateClinicalContextUseCase {
         if (activeMeds.length > 0) {
           items.push('Active Medications:')
           activeMeds.forEach(m => {
-            const name = pickAiMedicationName(
+            const name = m.clinicalMedicationContentUncertainty ? 'Medication content unavailable; do not infer drug identity, dose or medication absence' : pickAiMedicationName(
               m.medicationCodeableConcept,
               m.medicationReference?.display,
             ) || 'Unknown medication'
@@ -73,7 +77,7 @@ export class GenerateClinicalContextUseCase {
           if (items.length > 0) items.push('') // Add blank line separator
           items.push('Stopped Medications:')
           stoppedMeds.forEach(m => {
-            const name = pickAiMedicationName(
+            const name = m.clinicalMedicationContentUncertainty ? 'Medication content unavailable; do not infer drug identity, dose or medication absence' : pickAiMedicationName(
               m.medicationCodeableConcept,
               m.medicationReference?.display,
             ) || 'Unknown medication'
@@ -146,6 +150,8 @@ export class GenerateClinicalContextUseCase {
       context.push(...vitalItems)
     }
 
+    const exclusions = formatClinicalVariantExclusions(uncertainty)
+    if (exclusions) context.push({ title: 'Unresolved source-record variants', items: exclusions.split('\n') })
     return context
   }
 

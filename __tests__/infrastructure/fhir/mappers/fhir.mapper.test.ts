@@ -808,3 +808,15 @@ describe('FhirMapper', () => {
     })
   })
 })
+
+describe('report observation reference scope', () => {
+  it('does not resolve cross-base absolute references by their final id', () => {
+    const report = FhirMapper.toDiagnosticReport({ resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'https://other.example/fhir/Observation/collision' }] } as any, [{ id: 'collision' }] as any)
+    expect(report._observations).toEqual([])
+  })
+
+  it('does not choose an arbitrary observation when a logical id is ambiguous', () => {
+    const report = FhirMapper.toDiagnosticReport({ resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'Observation/collision' }] } as any, [{ id: 'collision', valueString: 'a' }, { id: 'collision', valueString: 'b' }] as any)
+    expect(report._observations).toEqual([])
+  })
+})

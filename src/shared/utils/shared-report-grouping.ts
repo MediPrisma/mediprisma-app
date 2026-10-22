@@ -4,6 +4,8 @@ import { inferReportDisplayGroup } from './report-grouping-helpers'
 
 export type SharedReportSource = {
   reportId?: string
+  /** Original source text retained for cross-source display grouping. */
+  narrative?: string
   title: string
   codes: string[]
   codings: Array<{
@@ -85,6 +87,7 @@ type SharedReportBoundary = {
 }
 
 function sharedReportBoundary(report: any): SharedReportBoundary | null {
+  if (report?.clinicalRecordVariant) return null
   const subject = explicitReference(report?.subject?.reference)
   const encounter = report?._encounterInferred
     ? null

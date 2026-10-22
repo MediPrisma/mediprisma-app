@@ -3,7 +3,7 @@
 // requested on its own, over a reduced evidence set, concurrently with the
 // full lane (problems + safety) — so the first section reaches the screen
 // without waiting for the whole batch.
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
@@ -54,7 +54,7 @@ const isFastLaneRequest = (messages: Array<{ content: string }>) => {
 }
 
 let mockIdentifySummaryRun: jest.Mock | undefined
-const runGeneration = (contextLimit: number) => async () => {
+const runGeneration = (contextLimit: number, signal?: AbortSignal) => async () => {
   mockResult = await mockSlotOptions.run({
     identifySummaryRun: mockIdentifySummaryRun,
     operationKey: SLOT,
@@ -71,6 +71,7 @@ const runGeneration = (contextLimit: number) => async () => {
     piiLiterals: [],
     contextLimit,
     ai: { stream: mockStream },
+    signal,
   })
 }
 
@@ -97,6 +98,28 @@ beforeEach(() => {
 })
 
 afterEach(() => { mockIdentifySummaryRun = undefined; jest.restoreAllMocks() })
+
+test('aborted real narrative producers reject late overview and problem callbacks', async () => {
+  const controller = new AbortController()
+  const late: Array<() => void> = [], finishes: Array<() => void> = [], signals: AbortSignal[] = []
+  mockStream.mockImplementation((messages: any[], options: any) => {
+    const reply = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : FULL_BLOCKS
+    signals.push(options.signal)
+    late.push(() => options.onChunk(reply))
+    return new Promise<string>(resolve => { finishes.push(() => resolve(reply)) })
+  })
+  renderHook(() => useMedicalSummary())
+  let generation!: Promise<void>
+  act(() => { generation = runGeneration(32768, controller.signal)() })
+  const rejected = expect(generation).rejects.toMatchObject({ name: 'AbortError' })
+  await waitFor(() => expect(finishes).toHaveLength(2))
+  const before = medicalSummaryStore.getState().byKey[SLOT]
+  act(() => { controller.abort(); late.forEach(emit => emit()) })
+  expect(signals.every(signal => signal.aborted)).toBe(true)
+  await act(async () => { finishes.forEach(finish => finish()); await rejected })
+  expect(medicalSummaryStore.getState().byKey[SLOT]).toBe(before)
+  expect(mockStream).toHaveBeenCalledTimes(2)
+})
 
 test('the run names the operation with the same random ID every attempt sends', async () => {
   mockIdentifySummaryRun = jest.fn()

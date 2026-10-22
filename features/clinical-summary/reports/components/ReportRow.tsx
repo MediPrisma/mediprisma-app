@@ -241,7 +241,19 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
             key={`${source.reportId ?? 'source'}-${index}`}
             className="grid gap-0.5 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3"
           >
-            <span className="min-w-0 break-words text-foreground/90">{source.title}</span>
+            <span className="flex min-w-0 items-center gap-1 break-words text-foreground/90">
+              {source.title}
+              {source.narrative && (
+                <ObservationLongitudinalAction
+                  observation={{ code: { text: 'Report Summary' }, valueString: source.narrative }}
+                  title={source.title}
+                  sourceId={`report-source-history-${source.reportId ?? index}`}
+                  reportTitle={source.title}
+                  reportLookupTitle={source.title}
+                  stopPropagation
+                />
+              )}
+            </span>
             {source.codes.length > 0 && (
               <span className="break-all tabular-nums">
                 {labels.orderCode}: {source.codes.join(', ')}
@@ -251,6 +263,11 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
               <span className="break-all sm:col-span-2">
                 {labels.recordId}: {source.reportId}
               </span>
+            )}
+            {source.narrative && (
+              <div className="whitespace-pre-wrap break-words text-foreground/90 sm:col-span-2">
+                {source.narrative}
+              </div>
             )}
           </li>
         ))}
@@ -531,7 +548,7 @@ function ReportPanelDetail({
         />
       )}
       {observations.map((obs, i) => (
-        <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
+        <ObservationBlock key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`} observation={obs} />
       ))}
       <SharedReportSources sources={sharedReportSources} />
     </div>
@@ -1474,7 +1491,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (
                 <ObservationBlock
-                  key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
+                  key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`}
                   observation={obs}
                   nested
                 />

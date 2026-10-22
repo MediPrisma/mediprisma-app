@@ -1,0 +1,556 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "identifier": {
+    "value": "SYNTHETIC-CLINICAL-READING-NOT-A-REAL-PATIENT"
+  },
+  "timestamp": "2026-10-20T00:00:00Z",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-clinical-reading",
+        "name": [
+          {
+            "text": "整合檢視範例（合成資料）"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1960-01-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "synthetic-cloud-visit",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "status": "finished",
+        "class": {
+          "code": "AMB"
+        },
+        "period": {
+          "start": "2026-05-07T08:00:00+08:00"
+        },
+        "serviceProvider": {
+          "display": "臺北榮總;門診;0601160016"
+        },
+        "reasonCode": [
+          {
+            "text": "左側女性乳房未明示部位惡性腫瘤",
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "C50.912",
+                "display": "左側女性乳房未明示部位惡性腫瘤"
+              }
+            ]
+          },
+          {
+            "text": "第二型糖尿病，未伴有併發症",
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "E11.9",
+                "display": "第二型糖尿病，未伴有併發症"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "synthetic-hospital-visit",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "status": "finished",
+        "class": {
+          "code": "AMB"
+        },
+        "period": {
+          "start": "2026-05-07T08:00:00+08:00"
+        },
+        "serviceType": {
+          "text": "合成範例門診"
+        },
+        "diagnosis": [
+          {
+            "rank": 1,
+            "condition": {
+              "reference": "Condition/synthetic-cancer"
+            }
+          },
+          {
+            "rank": 2,
+            "condition": {
+              "reference": "Condition/synthetic-diabetes"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-cancer",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-hospital-visit"
+        },
+        "recordedDate": "2026-10-19",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "encounter-diagnosis"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Malignant neoplasm of unspecified site of left female breast",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "C50.912",
+              "display": "Malignant neoplasm of unspecified site of left female breast"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-diabetes",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-hospital-visit"
+        },
+        "recordedDate": "2026-10-19",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "encounter-diagnosis"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Type 2 diabetes mellitus without complications",
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "E11.9",
+              "display": "Type 2 diabetes mellitus without complications"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "synthetic-order-a",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-hospital-visit"
+        },
+        "authoredOn": "2026-05-07",
+        "status": "completed",
+        "intent": "order",
+        "identifier": [
+          {
+            "system": "urn:oid:vgh.medication.order",
+            "value": "SYNTHETIC-ORDER-A"
+          }
+        ],
+        "requester": {
+          "display": "臺北榮總"
+        },
+        "medicationCodeableConcept": {
+          "text": "Aromasin SC tab 25 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.name",
+              "code": "Aromasin SC tab 25 mg",
+              "display": "Aromasin SC tab 25 mg"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "1 TAB PO QDPC",
+            "route": {
+              "text": "PO",
+              "coding": [
+                {
+                  "system": "urn:oid:vgh.medication.route",
+                  "code": "PO"
+                }
+              ]
+            },
+            "timing": {
+              "code": {
+                "text": "QDPC",
+                "coding": [
+                  {
+                    "system": "urn:oid:vgh.medication.frequency",
+                    "code": "QDPC"
+                  }
+                ]
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "TAB"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "note": [
+          {
+            "text": "慢簽(三個月)"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "synthetic-cloud-order-a",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "encounter": {
+          "reference": "Encounter/synthetic-cloud-visit"
+        },
+        "authoredOn": "2026-05-07",
+        "status": "completed",
+        "intent": "order",
+        "requester": {
+          "display": "臺北榮總;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "諾曼癌素 糖衣錠２５毫克",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "BC23097100",
+              "display": "AROMASIN SUGAR COATED TABLETS 25MG"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "QDPC"
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 28
+          },
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "supportingInformation": [
+          {
+            "reference": "MedicationKnowledge/75312913a4637b6014c3a1aead50935b"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:75312913a4637b6014c3a1aead50935b",
+      "resource": {
+        "resourceType": "MedicationKnowledge",
+        "id": "75312913a4637b6014c3a1aead50935b",
+        "meta": {
+          "source": "https://data.gov.tw/dataset/23715",
+          "tag": [
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot",
+              "code": "nhi-drug-terminology-20260728",
+              "display": "NHI drug terminology snapshot"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-master-effective-period",
+              "code": "from:2015-01-01",
+              "display": "Official drug record effective start"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot",
+              "code": "atc-hierarchy-2026",
+              "display": "ATC hierarchy snapshot (levels 2-4)"
+            },
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy",
+              "code": "latest-covered-record-atc-levels-2-4-v5",
+              "display": "Use the latest covered drug record for newer prescriptions"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/drug-terminology-record",
+            "value": "nhi-drug-terminology-20260728:BC23097100:39062"
+          },
+          {
+            "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/nhi-drug-official-url",
+            "value": "https://lmspiq.fda.gov.tw/web/DRPIQ/DRPIQ1000Result?licId=02023097"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "version": "nhi-drug-terminology-20260728",
+              "code": "BC23097100",
+              "display": "AROMASIN SUGAR COATED TABLETS 25MG"
+            }
+          ],
+          "text": "諾曼癌素 糖衣錠２５毫克"
+        },
+        "synonym": [
+          "AROMASIN SUGAR COATED TABLETS 25MG"
+        ],
+        "doseForm": {
+          "text": "糖衣錠"
+        },
+        "ingredient": [
+          {
+            "itemCodeableConcept": {
+              "text": "EXEMESTANE 25 MG"
+            }
+          }
+        ],
+        "medicineClassification": [
+          {
+            "type": {
+              "text": "Anatomical Therapeutic Chemical classification"
+            },
+            "classification": [
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "code": "L02BG06",
+                    "display": "exemestane"
+                  }
+                ],
+                "text": "exemestane"
+              },
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "version": "atc-level2-2026",
+                    "code": "L02",
+                    "display": "ENDOCRINE THERAPY"
+                  }
+                ],
+                "text": "內分泌治療"
+              },
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "version": "atc-hierarchy-2026",
+                    "code": "L02B",
+                    "display": "HORMONE ANTAGONISTS AND RELATED AGENTS"
+                  }
+                ],
+                "text": "HORMONE ANTAGONISTS AND RELATED AGENTS"
+              },
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "version": "atc-hierarchy-2026",
+                    "code": "L02BG",
+                    "display": "Aromatase inhibitors"
+                  }
+                ],
+                "text": "Aromatase（芳香環酶）抑制劑"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:4a4835aa6c71caede8f91d9b4ec8709e",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "4a4835aa6c71caede8f91d9b4ec8709e",
+        "target": [
+          {
+            "reference": "MedicationKnowledge/75312913a4637b6014c3a1aead50935b"
+          }
+        ],
+        "recorded": "2026-10-20T00:00:00Z",
+        "policy": [
+          "https://data.gov.tw/dataset/23715",
+          "https://data.gov.tw/license"
+        ],
+        "activity": {
+          "coding": [
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-activity",
+              "code": "official-drug-master-lookup",
+              "display": "Resolve NHI drug code against a date-effective official snapshot"
+            }
+          ]
+        },
+        "agent": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/provenance-participant-type",
+                  "code": "assembler",
+                  "display": "Assembler"
+                }
+              ]
+            },
+            "who": {
+              "display": "@nhi-fhir-bridge/nhi-drug-terminology nhi-drug-terminology-20260728"
+            }
+          }
+        ],
+        "entity": [
+          {
+            "role": "source",
+            "what": {
+              "identifier": {
+                "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/open-data-resource",
+                "value": "A21030000I-E41001-001"
+              },
+              "display": "健保用藥品項查詢項目檔 (2026-07-28, SHA-256 d41cf7bf91ca1d6997ac751601548f68226a8326452aa5d8befd725e3a8d0158)"
+            }
+          },
+          {
+            "role": "source",
+            "what": {
+              "identifier": {
+                "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/terminology-snapshot",
+                "value": "atc-hierarchy-2026"
+              },
+              "display": "WHO Collaborating Centre for Drug Statistics Methodology, ATC classification index with DDDs, 2026"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "synthetic-cloud-order-a-copy",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-clinical-reading"
+        },
+        "authoredOn": "2026-05-07",
+        "status": "completed",
+        "intent": "order",
+        "requester": {
+          "display": "臺北榮總;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "諾曼癌素 糖衣錠２５毫克",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "BC23097100",
+              "display": "AROMASIN SUGAR COATED TABLETS 25MG"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "QDPC"
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 28
+          },
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "supportingInformation": [
+          {
+            "reference": "MedicationKnowledge/75312913a4637b6014c3a1aead50935b"
+          }
+        ]
+      }
+    }
+  ]
+}

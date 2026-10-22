@@ -341,7 +341,7 @@ export function VisitDecisionScreen({
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-      {...(sourceOfPage === 'hf' ? {
+      {...(sourceOfPage === 'hf' || sourceOfPage === 'af' ? {
         headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
         calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
         onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
@@ -352,7 +352,7 @@ export function VisitDecisionScreen({
 
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      {sourceOfPage === 'hf' ? (
+      {sourceOfPage === 'hf' || sourceOfPage === 'af' ? (
         <VisitCalculatorsProvider
           isEnglish={isEnglish}
           points={model.points}

@@ -1,6 +1,7 @@
 import { webcrypto } from 'crypto'
 import {
   getSessionBundleKey,
+  prepareSessionBundleKey,
   clearSessionBundleKey,
   isEncryptedRecord,
   encryptBytes,
@@ -21,6 +22,26 @@ afterAll(() => {
 describe('bundle-crypto', () => {
   beforeEach(() => {
     sessionStorage.clear()
+  })
+
+  it('prepares a new encryption key without invalidating the active chart until commit', async () => {
+    const oldKey = (await getSessionBundleKey({ create: true }))!
+    const record = await encryptJson(oldKey, { chart: 'previous' })
+    const candidate = await prepareSessionBundleKey()
+    await expect(decryptJson((await getSessionBundleKey())!, record)).resolves.toEqual({ chart: 'previous' })
+    candidate.commit()
+    await expect(decryptJson((await getSessionBundleKey())!, record)).rejects.toBeDefined()
+    candidate.rollback()
+    await expect(decryptJson((await getSessionBundleKey())!, record)).resolves.toEqual({ chart: 'previous' })
+  })
+
+  it('does not publish a prepared key after the active chart key was cleared', async () => {
+    await getSessionBundleKey({ create: true })
+    const candidate = await prepareSessionBundleKey()
+    clearSessionBundleKey()
+    expect(() => candidate.commit()).toThrow('active bundle key changed')
+    candidate.rollback()
+    expect(await getSessionBundleKey()).toBeNull()
   })
 
   describe('getSessionBundleKey', () => {

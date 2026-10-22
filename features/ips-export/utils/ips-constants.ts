@@ -97,3 +97,5 @@ export const SECTION_EMPTY_REASON = {
   code: 'unavailable',
   display: 'Unavailable',
 } as const
+/** Application canonical; not yet published as an externally resolvable definition. */
+export { CLINICAL_RECORD_VARIANT_EXTENSION, CLINICAL_MEDICATION_CONTENT_EXTENSION } from '@/src/core/services/clinical-record-variant-modifier'

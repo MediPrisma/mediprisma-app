@@ -2,6 +2,7 @@
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { fhirClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
+import { readClinicalSource } from '@/src/infrastructure/fhir/services/clinical-source-session'
 
 // Mock the dependencies
 jest.mock('@/src/infrastructure/fhir/client/fhir-client.service')
@@ -17,9 +18,49 @@ describe('FhirClinicalDataRepository', () => {
     mockMapper = FhirMapper as jest.Mocked<typeof FhirMapper>
     repository = new FhirClinicalDataRepository()
     jest.clearAllMocks()
+    mockFhirClient.getClient.mockResolvedValue(undefined as any)
   })
 
   describe('fetchAllClinicalData', () => {
+    it('projects Patient/a query observations only when an explicit subject does not name another patient', async () => {
+      const client = { state: { serverUrl: 'https://ehr.example/fhir' } }
+      mockFhirClient.getClient.mockResolvedValue(client as any)
+      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [
+        { fullUrl: 'urn:uuid:patient-a', resource: { resourceType: 'Patient', id: 'a' } },
+        { fullUrl: 'urn:uuid:patient-b', resource: { resourceType: 'Patient', id: 'b' } },
+        { resource: { resourceType: 'Observation', id: 'foreign', status: 'final', subject: { reference: 'Patient/b' }, valueInteger: 1 } },
+        { resource: { resourceType: 'Observation', id: 'urn-foreign', status: 'final', subject: { reference: 'urn:uuid:patient-b' }, valueInteger: 4 } },
+        { resource: { resourceType: 'Observation', id: 'urn-matching', status: 'final', subject: { reference: 'urn:uuid:patient-a' }, valueInteger: 5 } },
+        { resource: { resourceType: 'Observation', id: 'matching', status: 'final', subject: { reference: 'Patient/a' }, valueInteger: 2 } },
+        { resource: { resourceType: 'Observation', id: 'missing-subject', status: 'final', valueInteger: 3 } },
+      ] })
+      mockMapper.toObservation.mockImplementation((resource: any) => ({ ...resource }))
+
+      const observations = await repository.fetchObservations('a')
+
+      expect(observations.map(row => row.sourceId)).toEqual(['urn-matching', 'matching', 'missing-subject'])
+      const source = readClinicalSource((repository as any).session, 'a')
+      expect(source.graph.nodes.map(node => node.resource.id)).toEqual(['a', 'b', 'foreign', 'urn-foreign', 'urn-matching', 'matching', 'missing-subject'])
+    })
+
+    it('keeps a same-id Patient from another host in the raw graph without trusting its URL', async () => {
+      const client = { state: { serverUrl: 'https://ehr.example/fhir' } }
+      mockFhirClient.getClient.mockResolvedValue(client as any)
+      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [
+        { fullUrl: 'https://other.example/fhir/Patient/a', resource: { resourceType: 'Patient', id: 'a' } },
+        { resource: { resourceType: 'Observation', id: 'foreign-host', status: 'final', subject: { reference: 'https://other.example/fhir/Patient/a' }, valueInteger: 1 } },
+        { fullUrl: 'https://ehr.example/fhir/Patient/a', resource: { resourceType: 'Patient', id: 'a' } },
+        { resource: { resourceType: 'Observation', id: 'legal', status: 'final', subject: { reference: 'https://ehr.example/fhir/Patient/a' }, valueInteger: 2 } },
+      ] })
+      mockMapper.toObservation.mockImplementation((resource: any) => ({ ...resource }))
+
+      const observations = await repository.fetchObservations('a')
+
+      expect(observations.map(row => row.sourceId)).toEqual(['legal'])
+      const source = readClinicalSource((repository as any).session, 'a')
+      expect(source.graph.nodes.map(node => node.resource.id)).toEqual(['a', 'foreign-host', 'a', 'legal'])
+    })
+
     it('should fetch all clinical data types', async () => {
       // Mock all fetch methods
       const mockCondition = { id: 'cond-1', code: { text: 'Diabetes' } }
@@ -39,14 +80,14 @@ describe('FhirClinicalDataRepository', () => {
       const mockEncounter = { id: 'enc-1', status: 'finished' }
 
       mockFhirClient.requestAllPages.mockImplementation((url: string) => {
-        if (url.startsWith('Condition')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('AllergyIntolerance')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('Observation') && url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('Observation') && !url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Condition')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('AllergyIntolerance')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('Observation') && url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
+        if (url.startsWith('Observation') && !url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
         if (url.startsWith('DiagnosticReport')) return Promise.resolve({ entry: [{ resource: { resourceType: 'DiagnosticReport' } }] })
         if (url.startsWith('ImagingStudy')) return Promise.resolve({ entry: [{ resource: { resourceType: 'ImagingStudy' } }] })
-        if (url.startsWith('Procedure')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Procedure')) return Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] })
         if (url.startsWith('Encounter')) return Promise.resolve({ entry: [{ resource: { resourceType: 'Encounter' } }] })
         if (url.startsWith('DocumentReference')) return Promise.resolve({ entry: [] })
         if (url.startsWith('Composition')) return Promise.resolve({ entry: [] })
@@ -79,7 +120,7 @@ describe('FhirClinicalDataRepository', () => {
     // re-downloaded rows the unfiltered Observation search had already
     // returned. They are filtered out of that result instead.
     it('derives vital signs from the Observation result without a second search', async () => {
-      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [{ resource: {} }] })
+      mockFhirClient.requestAllPages.mockImplementation((url: string) => Promise.resolve({ entry: [{ resource: { resourceType: url.split('?')[0] } }] }))
       mockMapper.toObservation.mockReturnValue({
         id: 'vital-1',
         status: 'final',
@@ -157,8 +198,8 @@ describe('FhirClinicalDataRepository', () => {
     it('should fetch conditions successfully', async () => {
       const mockResponse = {
         entry: [
-          { resource: { id: 'cond-1', code: { text: 'Diabetes' } } },
-          { resource: { id: 'cond-2', code: { text: 'Hypertension' } } }
+          { resource: { resourceType: 'Condition', id: 'cond-1', code: { text: 'Diabetes' } } },
+          { resource: { resourceType: 'Condition', id: 'cond-2', code: { text: 'Hypertension' } } }
         ]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
@@ -173,7 +214,7 @@ describe('FhirClinicalDataRepository', () => {
     })
 
     it('should fallback when sort fails', async () => {
-      const mockResponse = { entry: [{ resource: { id: 'cond-1' } }] }
+      const mockResponse = { entry: [{ resource: { resourceType: 'Condition', id: 'cond-1' } }] }
       mockFhirClient.requestAllPages
         .mockRejectedValueOnce(new Error('Sort not supported'))
         .mockResolvedValueOnce(mockResponse)
@@ -227,6 +268,7 @@ describe('FhirClinicalDataRepository', () => {
     })
 
     it('combines statements and resolves included Medication references', async () => {
+      mockFhirClient.getClient.mockResolvedValue({ state: { serverUrl: 'https://ehr.example/fhir' } } as any)
       mockFhirClient.requestAllPages.mockImplementation((url: string) => {
         if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [] })
         return Promise.resolve({
@@ -303,7 +345,7 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchAllergies', () => {
     it('should fetch allergies successfully', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'allergy-1', code: { text: 'Peanuts' } } }]
+        entry: [{ resource: { resourceType: 'AllergyIntolerance', id: 'allergy-1', code: { text: 'Peanuts' } } }]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toAllergy.mockReturnValue({ id: 'allergy-1', code: { text: 'Peanuts' } })
@@ -327,7 +369,7 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchObservations', () => {
     it('should fetch all observations', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'obs-1', code: { text: 'Glucose' } } }]
+        entry: [{ resource: { resourceType: 'Observation', id: 'obs-1', code: { text: 'Glucose' } } }]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toObservation.mockReturnValue({ id: 'obs-1', code: { text: 'Glucose' }, status: 'final' })
@@ -355,8 +397,8 @@ describe('FhirClinicalDataRepository', () => {
     it('filters the unfiltered Observation search instead of searching by category', async () => {
       const mockResponse = {
         entry: [
-          { resource: { id: 'vital-1' } },
-          { resource: { id: 'lab-1' } },
+          { resource: { resourceType: 'Observation', id: 'vital-1' } },
+          { resource: { resourceType: 'Observation', id: 'lab-1' } },
         ]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
@@ -370,7 +412,7 @@ describe('FhirClinicalDataRepository', () => {
 
       const result = await repository.fetchVitalSigns('patient-123')
 
-      expect(result).toEqual([expect.objectContaining({ id: 'vital-1' })])
+      expect(result).toEqual([expect.objectContaining({ sourceId: 'vital-1' })])
       expect(mockFhirClient.requestAllPages).not.toHaveBeenCalledWith(
         expect.stringContaining('category=vital-signs')
       )
@@ -418,7 +460,7 @@ describe('FhirClinicalDataRepository', () => {
 
       const result = await repository.fetchImagingStudies('patient-123')
 
-      expect(result).toEqual([{ id: 'study-1', description: 'Chest CT' }])
+      expect(result).toMatchObject([{ id: 'study-1', description: 'Chest CT' }])
       expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
         expect.stringContaining('ImagingStudy?patient=patient-123'),
       )
@@ -436,7 +478,7 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchProcedures', () => {
     it('should fetch procedures', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'proc-1', code: { text: 'Surgery' } } }]
+        entry: [{ resource: { resourceType: 'Procedure', id: 'proc-1', code: { text: 'Surgery' } } }]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toProcedure.mockReturnValue({ id: 'proc-1', code: { text: 'Surgery' }, status: 'completed' })
@@ -476,8 +518,262 @@ describe('FhirClinicalDataRepository', () => {
 
       const result = await repository.fetchEncounters('patient-123')
 
-      expect(result).toEqual([{ id: 'enc-1', status: 'finished' }])
+      expect(result).toMatchObject([{ id: 'enc-1', status: 'finished' }])
       expect(mockMapper.toEncounter).toHaveBeenCalledTimes(1)
     })
   })
+})
+
+describe('repository source intake', () => {
+  it('captures unknown included resources before mapping and isolates patient snapshots', async () => {
+    const repo = new FhirClinicalDataRepository()
+    const request = fhirClient.requestAllPages as jest.Mock
+    request.mockResolvedValueOnce({ entry: [
+      { fullUrl: 'urn:uuid:unknown', resource: { resourceType: 'UnknownClinicalType', id: 'unknown', extension: [{ url: 'synthetic', valueString: 'preserved' }] } },
+      { resource: { resourceType: 'Observation', id: 'obs' } },
+    ] })
+    ;(FhirMapper.toObservation as jest.Mock).mockReturnValue({ id: 'obs' })
+    expect(await repo.fetchObservations('synthetic')).toMatchObject([{ sourceId: 'obs' }])
+    const source = repo.getClinicalSource('synthetic')
+    expect(source.graph.nodes).toHaveLength(2)
+    expect(source.graph.nodes.find(node => node.resource.id === 'unknown')?.resource.extension).toEqual([{ url: 'synthetic', valueString: 'preserved' }])
+    expect(repo.getClinicalSource('other').graph.nodes).toEqual([])
+    request.mockResolvedValueOnce({ entry: [] })
+    await repo.fetchObservations('synthetic')
+    expect(repo.getClinicalSource('synthetic').graph.nodes).toHaveLength(0)
+  })
+})
+
+it('maps only the current successful refresh while replacing its active source capture', async () => {
+  const repo = new FhirClinicalDataRepository()
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id, valueString: resource.valueString }))
+  const observation = (id: string, valueString = 'first') => ({ resource: { resourceType: 'Observation', id, valueString } })
+  request.mockResolvedValueOnce({ entry: [observation('a'), observation('b')] })
+  expect(await repo.fetchObservations('refresh')).toHaveLength(2)
+  request.mockResolvedValueOnce({ entry: [observation('a', 'revised')] })
+  expect(await repo.fetchObservations('refresh')).toMatchObject([{ sourceId: 'a', valueString: 'revised' }])
+  request.mockResolvedValueOnce({ entry: [] })
+  expect(await repo.fetchObservations('refresh')).toEqual([])
+  expect(repo.getClinicalSource('refresh').graph.nodes).toHaveLength(0)
+})
+
+it('retains prior successful rows on a failed refresh while reporting the failure', async () => {
+  const repo = new FhirClinicalDataRepository()
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  request.mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Observation', id: 'retained' } }] })
+  expect(await repo.fetchObservations('retention')).toMatchObject([{ sourceId: 'retained' }])
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchObservations('retention')).toMatchObject([{ sourceId: 'retained' }])
+  expect(repo.getQueryStatus('Observation')?.state).toBe('error')
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchObservations('different-patient')).toEqual([])
+})
+
+describe('medication graph resolution at intake', () => {
+  it.each([
+    ['https://foreign.example/fhir/Medication/same', [{ fullUrl: 'https://local.example/fhir/Medication/same', resource: { resourceType: 'Medication', id: 'same', code: { text: 'wrong host' } } }]],
+    ['Medication/same/_history/2', [{ resource: { resourceType: 'Medication', id: 'same', meta: { versionId: '1' }, code: { text: 'wrong version' } } }]],
+    ['Medication/same', [{ resource: { resourceType: 'Medication', id: 'same', code: { text: 'first' } } }, { resource: { resourceType: 'Medication', id: 'same', code: { text: 'second' } } }]],
+  ])('does not promote unresolved or ambiguous reference %s', async (reference, included) => {
+    const repo = new FhirClinicalDataRepository()
+    ;(fhirClient.requestAllPages as jest.Mock).mockImplementation((url: string) => Promise.resolve({ entry: url.startsWith('MedicationRequest') ? [
+      { resource: { resourceType: 'MedicationRequest', id: 'order', medicationReference: { reference } } }, ...included,
+    ] : [] }))
+    ;(FhirMapper.toMedication as jest.Mock).mockImplementation((resource: any) => resource)
+    const result = await repo.fetchMedications('synthetic-medication')
+    expect(result).toHaveLength(1)
+    if(reference==='Medication/same') expect(['first','second']).toContain(result[0].medicationCodeableConcept?.text)
+    else expect(result[0].medicationCodeableConcept).toBeUndefined()
+  })
+})
+
+it('replaces only the refreshed query active graph and preserves another resource type', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => resource)
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => resource)
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'condition' } }] })
+  await repo.fetchConditions('active-scope')
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Observation', id: 'lab' } }] })
+  await repo.fetchObservations('active-scope')
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValueOnce({ entry: [] })
+  await repo.fetchObservations('active-scope')
+  expect(repo.getClinicalSource('active-scope').graph.nodes.map(node => node.resource.id)).toEqual(['condition'])
+})
+
+it.each(['https://local.example/fhir/Medication/exact', 'Medication/exact/_history/2'])('promotes an unambiguous graph-verified medication reference %s', async reference => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue({ state: { serverUrl: 'https://local.example/fhir' } })
+  ;(fhirClient.requestAllPages as jest.Mock).mockImplementation((url: string) => Promise.resolve({ entry: url.startsWith('MedicationRequest') ? [
+    { resource: { resourceType: 'MedicationRequest', id: 'order', medicationReference: { reference } } },
+    { fullUrl: 'https://local.example/fhir/Medication/exact', resource: { resourceType: 'Medication', id: 'exact', meta: { versionId: '2' }, code: { text: 'verified code' } } },
+  ] : [] }))
+  ;(FhirMapper.toMedication as jest.Mock).mockImplementation((resource: any) => resource)
+  expect((await repo.fetchMedications('exact-medication'))[0].medicationCodeableConcept).toEqual({ text: 'verified code' })
+})
+
+it.each([
+  ['https://reports.example/fhir/Observation/panel', 'https://reports.example/fhir/Observation/member'],
+  ['urn:uuid:panel', 'urn:uuid:member'],
+  ['Observation/panel/_history/2', 'Observation/member/_history/3'],
+])('attaches graph-resolved report members for %s', async (panelReference, memberReference) => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue({ state: { serverUrl: 'https://reports.example/fhir' } })
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValue({ entry: [
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: panelReference }] } },
+    { fullUrl: panelReference.startsWith('urn:') ? panelReference : 'https://reports.example/fhir/Observation/panel', resource: { resourceType: 'Observation', id: 'panel', meta: { versionId: '2' }, hasMember: [{ reference: memberReference }] } },
+    { fullUrl: memberReference.startsWith('urn:') ? memberReference : 'https://reports.example/fhir/Observation/member', resource: { resourceType: 'Observation', id: 'member', meta: { versionId: '3' }, valueString: 'synthetic' } },
+  ] })
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  expect((await repo.fetchDiagnosticReports('report-synthetic'))[0]._observations?.map(observation => observation.sourceId)).toEqual(['panel', 'member'])
+})
+
+it('does not attach a foreign report reference through a colliding observation id', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValue({ entry: [
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'https://foreign.example/fhir/Observation/collision' }] } },
+    { fullUrl: 'https://local.example/fhir/Observation/collision', resource: { resourceType: 'Observation', id: 'collision' } },
+  ] })
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  expect((await repo.fetchDiagnosticReports('report-synthetic'))[0]._observations).toBeUndefined()
+})
+
+it('shares one active logical slot across optional-query fallback and later primary refresh', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  request.mockRejectedValueOnce(new Error('Sort not supported')).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'old-fallback' } }] })
+  expect(await repo.fetchConditions('logical-slot')).toMatchObject([{ id: 'old-fallback' }])
+  expect(repo.getClinicalSource('logical-slot').graph.nodes).toHaveLength(1)
+  request.mockResolvedValueOnce({ entry: [] })
+  expect(await repo.fetchConditions('logical-slot')).toEqual([])
+  expect(repo.getClinicalSource('logical-slot').graph.nodes).toEqual([])
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchConditions('logical-slot')).toEqual([])
+  expect(repo.getClinicalSource('logical-slot').graph.nodes).toEqual([])
+})
+
+it('still retries an unsupported optional query after a previous success', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  request.mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'old' } }] })
+  await repo.fetchConditions('optional-refresh')
+  request.mockRejectedValueOnce(new Error('Sort not supported')).mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'updated' } }] })
+  expect(await repo.fetchConditions('optional-refresh')).toMatchObject([{ id: 'updated' }])
+  expect(request).toHaveBeenCalledTimes(3)
+  expect(repo.getQueryStatus('Condition')?.state).toBe('ok')
+})
+
+it.each([401, 403])('does not retain clinical rows after HTTP %s', async status => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  request.mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'old' } }] })
+  await repo.fetchConditions('auth-refresh')
+  request.mockRejectedValueOnce(Object.assign(new Error('access denied'), { status }))
+  expect(await repo.fetchConditions('auth-refresh')).toEqual([])
+  expect(repo.getQueryStatus('Condition')?.state).toBe(status === 401 ? 'unauthorized' : 'forbidden')
+  expect(repo.getClinicalSource('auth-refresh').graph.nodes).toEqual([])
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchConditions('auth-refresh')).toEqual([])
+})
+
+it('does not retain another authenticated session response on failure', async () => {
+  const repo = new FhirClinicalDataRepository()
+  let client = { state: { serverUrl: 'https://session.example/fhir' } }
+  ;(fhirClient.getClient as jest.Mock).mockImplementation(async () => client)
+  const request = fhirClient.requestAllPages as jest.Mock
+  request.mockReset()
+  ;(FhirMapper.toCondition as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  request.mockResolvedValueOnce({ entry: [{ resource: { resourceType: 'Condition', id: 'old-session' } }] })
+  await repo.fetchConditions('same-patient')
+  client = { state: { serverUrl: 'https://session.example/fhir' } }
+  request.mockRejectedValueOnce(new Error('network unavailable'))
+  expect(await repo.fetchConditions('same-patient')).toEqual([])
+  expect(repo.getClinicalSource('same-patient').graph.nodes).toEqual([])
+})
+
+it('returns mutable mapped nested arrays without mutating immutable source graph', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValue({ entry: [{ resource: {
+    resourceType: 'Observation', id: 'mutable-view', status: 'final', category: [{ coding: [{ code: 'laboratory' }] }], code: { text: 'synthetic' },
+  } }] })
+  const realMapper = jest.requireActual('@/src/infrastructure/fhir/mappers/fhir.mapper').FhirMapper
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation(realMapper.toObservation)
+  const rows = await repo.fetchObservations('mutable-patient')
+  expect(() => rows[0].category?.[0].coding?.push({ code: 'view-only' })).not.toThrow()
+  const raw = repo.getClinicalSource('mutable-patient').graph.nodes[0].resource as any
+  expect(raw.category[0].coding).toEqual([{ code: 'laboratory' }])
+  expect(Object.isFrozen(raw.category)).toBe(true)
+})
+
+it('keeps enumerable source-node keys on mapped observations and reports', async () => {
+  const repo = new FhirClinicalDataRepository()
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue(undefined)
+  ;(fhirClient.requestAllPages as jest.Mock).mockImplementation(async (url: string) => ({ entry: [{ resource: url.startsWith('Observation')
+    ? { resourceType: 'Observation', id: 'keyed-observation' }
+    : { resourceType: 'DiagnosticReport', id: 'keyed-report' } }] }))
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  const observations = await repo.fetchObservations('node-keys')
+  const reports = await repo.fetchDiagnosticReports('node-keys')
+  const graph = repo.getClinicalSource('node-keys').graph
+  for (const row of [...observations, ...reports]) {
+    expect(JSON.parse(JSON.stringify(row)).clinicalSourceNodeKey).toBe(graph.nodes.find(node => node.resource.id === row.sourceId)?.key)
+  }
+})
+
+it('excludes foreign-patient Observations from direct DiagnosticReport membership while retaining source versions', async () => {
+  const repo = new FhirClinicalDataRepository()
+  const base = 'https://reports.example/fhir'
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue({ state: { serverUrl: base } })
+  ;(fhirClient.requestAllPages as jest.Mock).mockResolvedValue({ entry: [
+    { fullUrl: `${base}/Patient/a`, resource: { resourceType: 'Patient', id: 'a' } },
+    { fullUrl: `${base}/Patient/b`, resource: { resourceType: 'Patient', id: 'b' } },
+    { resource: { resourceType: 'DiagnosticReport', id: 'report', meta: { versionId: 'report-v4' }, result: [
+      { reference: 'Observation/foreign' }, { reference: 'Observation/owned' },
+    ] } },
+    { resource: { resourceType: 'Observation', id: 'foreign', meta: { versionId: 'obs-v8' }, subject: { reference: 'Patient/b' }, valueString: 'foreign' } },
+    { resource: { resourceType: 'Observation', id: 'owned', meta: { versionId: 'obs-v3' }, subject: { reference: 'Patient/a' }, valueString: 'owned' } },
+  ] })
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation((resource: any) => ({ id: resource.id }))
+
+  const [report] = await repo.fetchDiagnosticReports('a')
+
+  expect(report.sourceVersionId).toBe('report-v4')
+  expect(report._observations?.map(observation => [observation.sourceId, observation.sourceVersionId])).toEqual([['owned', 'obs-v3']])
+  expect(repo.getClinicalSource('a').graph.nodes.map(node => node.resource.id)).toContain('foreign')
+})
+
+it.each(['absolute', 'urn', 'version'])('assembles graph-resolved report membership from separate %s searches', async kind => {
+  const repo = new FhirClinicalDataRepository()
+  const base = 'https://cross-query.example/fhir'
+  const reference = kind === 'urn' ? 'urn:uuid:cross-query' : kind === 'version' ? 'Observation/cross-query/_history/2' : base + '/Observation/cross-query'
+  ;(fhirClient.getClient as jest.Mock).mockResolvedValue({ state: { serverUrl: base } })
+  ;(fhirClient.requestAllPages as jest.Mock).mockImplementation(async (url: string) => ({ entry: url.startsWith('Observation?') ? [
+    { fullUrl: kind === 'urn' ? reference : base + '/Observation/cross-query', resource: { resourceType: 'Observation', id: 'cross-query', meta: { versionId: '2' }, status: 'final', code: { text: 'synthetic' } } },
+  ] : url.startsWith('DiagnosticReport?') ? [
+    { resource: { resourceType: 'DiagnosticReport', id: 'cross-report', meta: { versionId: 'report-v5' }, status: 'final', code: { text: 'synthetic report' }, result: [{ reference }] } },
+  ] : [] }))
+  const realMapper = jest.requireActual('@/src/infrastructure/fhir/mappers/fhir.mapper').FhirMapper
+  ;(FhirMapper.toObservation as jest.Mock).mockImplementation(realMapper.toObservation)
+  ;(FhirMapper.toDiagnosticReport as jest.Mock).mockImplementation(realMapper.toDiagnosticReport)
+  const collection = await repo.fetchAllClinicalData('cross-query-patient')
+  expect(collection.diagnosticReports[0]._observations?.map(observation => observation.sourceId)).toEqual(['cross-query'])
+  expect(collection.diagnosticReports[0].sourceVersionId).toBe('report-v5')
+  expect(collection.diagnosticReports[0]._observations?.[0].sourceVersionId).toBe('2')
 })

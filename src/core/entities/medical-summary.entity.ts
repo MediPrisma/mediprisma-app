@@ -341,12 +341,15 @@ export type EncounterClass = 'inpatient' | 'emergency' | 'outpatient'
 
 /** One citable data point, built deterministically from the bundle. */
 export interface SummarySourceCatalogEntry {
+  clinicalRecordVariant?: import('./clinical-data.entity').ClinicalRecordVariant
   /** Recorded order labels resolved from basedOn; never inferred from dates. */
   orderNames?: string[]
   /** Stable prompt key, e.g. "E1" (encounter), "M3" (medication). */
   key: string
   resourceType: string
   resourceId: string
+  /** Original FHIR id for unique-only resolution of legacy bundled citations. */
+  sourceId?: string
   display: string
   /** ISO date (YYYY-MM-DD) taken from the resource — never from the AI. */
   date?: string
