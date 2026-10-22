@@ -203,7 +203,7 @@ function parseExamLabel(label: string): string[] | null {
   const side = /\bbilateral\b|雙側|雙乳/i.test(label) || (left && right) ? 'bilateral' : left ? 'left' : right ? 'right' : ''
   const sites = [
     ['breast', /\bbreasts?\b|乳房|左乳|右乳|雙乳/i],
-    ['chest', /\b(?:chest|thorax)\b|胸/i],
+    ['chest', /\b(?:chest|thorax|cxr)\b|胸/i],
     ['lung', /\blungs?\b|肺/i],
     ['head', /\b(?:head|cranial)\b|頭部|頭顱/i],
     ['brain', /\bbrain\b|腦部/i],
@@ -353,7 +353,7 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
       // Look outside the narrative bucket too: two same-day CXR examinations
       // with different findings must not each consume the same date-only copy.
       const site = hospital[0].qualifiers[2]
-      const sameDay = reports.filter(report => report.status !== 'entered-in-error'
+      const sameDay = reports.filter(report => report && report.status !== 'entered-in-error'
         && report.subject?.reference?.trim() === hospital[0].report.subject?.reference?.trim()
         && examDay(report) === examDay(hospital[0].report)
         && imagingCopyInstitution(report) === imagingCopyInstitution(hospital[0].report)

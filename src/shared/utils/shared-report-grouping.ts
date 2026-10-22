@@ -1,7 +1,7 @@
 import { decodeBase64Utf8 } from './base64.utils'
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
-import { getImagingCopySource, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, typedReportIdentifierValue } from './report-identity'
+import { getImagingCopySource, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, reportIdentifiers, typedReportIdentifierValue } from './report-identity'
 
 export type SharedReportSource = {
   reportId?: string
@@ -250,7 +250,7 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
       radiographMembers.set(key, [...(radiographMembers.get(key) ?? []), report])
       const namespaces = radiographIdentifiers.get(key) ?? new Map<string, string>()
       const values = new Map<string, string[]>()
-      for (const identifier of report.identifier ?? []) if (identifier?.value) {
+      for (const identifier of reportIdentifiers(report)) if (identifier?.value) {
         const system = identifier.system ?? ''
         values.set(system, [...(values.get(system) ?? []), typedReportIdentifierValue(identifier)])
       }
@@ -263,11 +263,19 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
     }
   }
   for (const [key, members] of radiographMembers) {
-    if (members.every(report => radiographClock(report))) continue
-    const common = (members[0].identifier ?? []).filter((id: any) => id?.value).some((id: any) =>
-      members.every(report => report.identifier?.some((candidate: any) => candidate?.value
+    if (members.every(report => radiographClock(report)?.startsWith('exam:'))) continue
+    const common = reportIdentifiers(members[0]).filter((id: any) => id?.value).some((id: any) =>
+      members.every(report => reportIdentifiers(report).some((candidate: any) => candidate?.value
         && typedReportIdentifierValue(candidate) === typedReportIdentifierValue(id) && candidate.system === id.system)))
-    if (!common) conflicts.add(key)
+    // NHI's unnumbered billing copy may accompany a numbered image-case copy.
+    // An exact full narrative + explicit publication instant can attach that
+    // copy to ONE known image case. Publication time alone is never sufficient.
+    const nhiCases = new Set(members.flatMap(report => reportIdentifiers(report)
+      .filter((id: any) => id?.system === 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/medcloud-imaging-case' && id.value)
+      .map(typedReportIdentifierValue)))
+    const numberedNhiReport = nhiCases.size === 1 && members.every(report => getImagingCopySource(report) === 'cloud'
+      && radiographClock(report)?.startsWith('report:'))
+    if (!common && !numberedNhiReport) conflicts.add(key)
   }
   return new Set(
     [...sourceIdentities.entries()]

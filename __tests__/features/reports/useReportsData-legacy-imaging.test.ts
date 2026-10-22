@@ -25,6 +25,7 @@ function fixture(): any[] {
     const cloud = { ...common, id: `cloud-${index}`, effectiveDateTime: '2026-06-24',
       code: { text: cloudTitle, coding: [{ code }, ...(index === 2 ? [{ system: 'http://loinc.org', code: '30745-4', display: 'XR Chest Views' }] : [])] },
       meta: { source: 'https://medcloud2.nhi.gov.tw/' }, performer: [{ display: '臺北榮總' }],
+      identifier: [{ system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/medcloud-imaging-case', value: `SYNTHETIC-${index}` }],
       encounter: { reference: 'Encounter/cloud-claim' }, conclusion: `Impression ${text}`,
       extension: [{ url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-report-date', valueString: '2026-06-24T12:18:00' }, { url: NHI_VIEWER_REQUEST_EXTENSION_URL, extension: [
         { url: 'version', valueInteger: 1 }, { url: 'proc-id', valueCode: 'IMUE0130' },
@@ -59,7 +60,8 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(result.flatMap(row => row.sharedReportSources?.map(source => source.narrative)).sort()).toEqual(reports.map(r => r.conclusion).sort())
     expect(result.flatMap(row => row.viewerActions)).toHaveLength(4)
     for (const row of result) {
-      const cloudId = row.diagnosticReportIds?.find(id => id.startsWith('cloud-'))!
+      const cloudId = (row.diagnosticReportIds ?? []).find(id => id.startsWith('cloud-')) ?? ''
+      expect(cloudId).not.toBe('')
       expect(row.viewerActions).toHaveLength(1)
       expect(row.viewerActions?.[0]).toMatchObject({ kind: 'live', descriptor: { iplCaseSeqNo: `SYNTHETIC-${cloudId.split('-')[1]}` } })
     }
@@ -71,6 +73,7 @@ describe('legacy receipt-clock imaging copies', () => {
     const reports = fixture()
     const secondBilling = JSON.parse(JSON.stringify(reports[5]))
     secondBilling.id = 'cloud-second-billing'
+    secondBilling.identifier = []
     secondBilling.code.coding[0].code = '32002C'
     secondBilling.extension = secondBilling.extension.filter((extension: any) => extension.valueString)
     reports.push(secondBilling)
@@ -98,7 +101,7 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(rows(reports)).toHaveLength(1)
     if (conflict === 'patient') reports[1].subject = { reference: 'Patient/other' }
     if (conflict === 'date') reports[1].effectiveDateTime = '2026-06-25'
-    if (conflict === 'site') reports[1].code.text = '肝臟超音波'
+    if (conflict === 'site') reports[1].code.text = '腹部超音波'
     if (conflict === 'findings') reports[1].conclusion += ' Additional suspicious mass.'
     if (conflict === 'grade') reports[0].conclusion = reports[0].conclusion.replace('ACR BI-RADS 2', 'ACR BI-RADS 4')
     if (conflict === 'receipt') reports[0].extension = []
@@ -170,7 +173,23 @@ describe('legacy receipt-clock imaging copies', () => {
   it('does not infer a single date-only CXR from different billing codes without report identity', () => {
     const template = fixture()[5]
     const reports = ['32001C', '32002C'].map((code, index) => ({ ...template,
-      id: `unknown-${index}`, extension: [], code: { ...template.code, coding: [{ code }] },
+      id: `unknown-${index}`, identifier: [], extension: [], code: { ...template.code, coding: [{ code }] },
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
+  it('tolerates malformed imported CXR identifiers without hiding reports', () => {
+    const reports = fixture().slice(4, 6)
+    reports.forEach(report => { report.identifier = { value: 'malformed' } as any })
+    expect(() => rows(reports)).not.toThrow()
+    expect(() => calculateReportTabCounts(reports)).not.toThrow()
+  })
+
+  it('does not use a common publication time alone as CXR examination identity', () => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32002C'].map((code, index) => ({ ...template,
+      id: `published-${index}`, identifier: [], code: { ...template.code, coding: [{ code }] },
     }))
     expect(rows(reports)).toHaveLength(2)
     expect(calculateReportTabCounts(reports).all).toBe(2)

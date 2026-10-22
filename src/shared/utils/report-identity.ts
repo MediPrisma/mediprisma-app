@@ -46,6 +46,10 @@ export function isRadiographReport(report: any): boolean {
       IMAGING_EXAM_HEADER.exec((typeof report.conclusion === 'string' ? report.conclusion : '').normalize('NFKC'))?.[1]].filter(Boolean).join(' ')))
 }
 
+export function reportIdentifiers(report: any): any[] {
+  return Array.isArray(report?.identifier) ? report.identifier : []
+}
+
 export function typedReportIdentifierValue(identifier: any): string {
   const types = Array.isArray(identifier.type?.coding)
     ? identifier.type.coding.map((coding: any) => JSON.stringify([coding?.system ?? '', coding?.code ?? ''])).sort()
@@ -84,7 +88,7 @@ export function reportNaturalGroupingKey(report: any): string {
     const date = getReportDate(report)
     const clock = date?.includes('T') && !isReportReceiptClock(report) ? date : undefined
     const headerClock = reportExaminationHeaderClock(report)
-    const identifiers = (report.identifier ?? []).filter((id: any) => id?.value).map((id: any) => [id.system, typedReportIdentifierValue(id)]).sort()
+    const identifiers = reportIdentifiers(report).filter((id: any) => id?.value).map((id: any) => [id.system, typedReportIdentifierValue(id)]).sort()
     // Exact source clocks or common identifiers can still establish duplicate
     // previews. A day alone cannot: retain distinct records in that case.
     return `${key}|radiograph:${JSON.stringify([
