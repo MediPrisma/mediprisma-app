@@ -1,6 +1,6 @@
 import type { DiagnosticReport as Report } from '../types/fhir.types'
 import { getNhiReportModality, inferReportDisplayGroup, isRadiographLabel, IMAGING_EXAM_HEADER as EXAM_HEADER } from './report-grouping-helpers'
-import { getImagingCopySource as sourceOf, reportNaturalGroupingKey } from './report-identity'
+import { getImagingCopySource as sourceOf, reportNaturalGroupingKey, isReportReceiptClock, typedReportIdentifierValue } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
 import {
@@ -79,11 +79,7 @@ function imagingCopyLayoutText(value: string): string {
 /** Old QEMR effectiveDateTime is explicitly the receipt instant, not a second
  * examination clock. Only this evidenced legacy shape permits day matching. */
 function hasReceiptClock(report: Report): boolean {
-  return sourceOf(report) === 'hospital'
-    && !!report.effectiveDateTime
-    && report.extension?.some(extension => extension.url === 'urn:vgh:report:received-at'
-      && 'valueDateTime' in extension && extension.valueDateTime === report.effectiveDateTime) === true
-    && EXAM_HEADER.test(sharedReportNarrative(report))
+  return isReportReceiptClock(report) && EXAM_HEADER.test(sharedReportNarrative(report).normalize('NFKC'))
 }
 
 /** This adapter's explicit source tag identifies Taipei VGH. An old hospital
@@ -150,7 +146,7 @@ function examTime(report: Report): string | undefined {
   const clock = /T(\d{2}:\d{2}(?::\d{2})?)/.exec(value)?.[1]
   // Only a date-only value has unknown time. Explicit midnight (including UTC
   // midnight) remains an instant; it must not bypass conflict detection.
-  const meaningful = clock ? sourceInstant(value) : undefined
+  const meaningful = clock && !isReportReceiptClock(report) ? sourceInstant(value) : undefined
   if (headerTime !== undefined && hasReceiptClock(report)) return String(headerTime)
   if (headerTime !== undefined && meaningful !== undefined && headerTime !== meaningful) return 'conflicting-exam-times'
   const instant = headerTime ?? meaningful
@@ -167,7 +163,8 @@ function modality(report: Report): string | undefined {
     ['US', /sono|ultrason|超音波/i],
   ] as const
   const found = new Set<string>(methods.filter(([, pattern]) => pattern.test(title)).map(([method]) => method))
-  if (isRadiographLabel(title)) found.add('XR')
+  if ([report.code?.text, ...(report.code?.coding ?? []).map(coding => coding?.display), header]
+    .some(label => typeof label === 'string' && isRadiographLabel(label))) found.add('XR')
   for (const coding of report.code?.coding ?? []) {
     const codedMethod = getNhiReportModality(coding?.code)
     if (codedMethod) found.add(codedMethod)
@@ -370,8 +367,7 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
       for (const id of report.identifier ?? []) {
         if (id.value) {
           const system = id.system ?? ''
-          const typeCodes = id.type?.coding?.map(coding => JSON.stringify([coding.system ?? '', coding.code ?? ''])).sort()
-          const identity = JSON.stringify([id.value, typeCodes?.length ? typeCodes : id.type?.text ?? null])
+          const identity = typedReportIdentifierValue(id)
           bySystem.set(system, new Set([...(bySystem.get(system) ?? []), identity]))
         }
       }

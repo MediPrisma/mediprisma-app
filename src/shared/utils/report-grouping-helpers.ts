@@ -26,10 +26,16 @@ export type ReportDisplayGroup = ReportGroup | 'pathology'
 
 /** Shared label recognition for copy matching and serial radiograph guards. */
 export function isRadiographLabel(label: string): boolean {
-  return /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|\bchest\b[^.\n]{0,120}\b(?:views?|ap|pa|lateral)\b|胸腔檢查|[XＸ]光/i.test(label.normalize('NFKC'))
+  const normalized = label.normalize('NFKC')
+  const explicit = /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|胸腔檢查|X光/i.test(normalized)
+  if (explicit) return true
+  // PA may mean pulmonary angiography; lateral may describe an ultrasound
+  // site. Projection words alone must not override an explicit modality.
+  if (/\bct\b|computed tomography|\bmri?\b|magnetic resonance|sono|ultrason|電腦斷層|磁振|超音波/i.test(normalized)) return false
+  return /\bchest\b[^.\n]{0,120}\b(?:views?|ap|pa|lateral)\b/i.test(normalized)
 }
 
-export const IMAGING_EXAM_HEADER = /^((?:SONO(?:GRAM)?|CHEST|CT(?:\/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+\d{2}:\d{2}(?::\d{2})?)?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i
+export const IMAGING_EXAM_HEADER = /^((?:SONO(?:GRAM)?|CHEST|CT(?:\/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i
 
 export const HEALTH_BANK_SDK_SECTION_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'

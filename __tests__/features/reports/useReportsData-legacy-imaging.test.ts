@@ -3,6 +3,7 @@ import { calculateReportTabCounts } from '@/features/clinical-summary/reports/ut
 import { reportDisplayGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import { imagingReportsCategory } from '@/src/core/categories/imaging-reports.category'
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '@/features/clinical-summary/reports/utils/nhi-viewer-request'
+import { isRadiographReport } from '@/src/shared/utils/report-identity'
 
 // Fully synthetic findings, preserving the legacy adapter's structural defects.
 function fixture(): any[] {
@@ -35,6 +36,19 @@ function fixture(): any[] {
 
 const rows = (reports: any[]) => buildReportsData(reports).reportRows
 describe('legacy receipt-clock imaging copies', () => {
+  it.each(['CT chest PA angiography', 'SONO- CHEST WALL, LATERAL'])('does not classify another modality as XR: %s', title => {
+    expect(isRadiographReport({ ...fixture()[4], code: { text: title }, conclusion: '' })).toBe(false)
+  })
+
+  it('uses bounded typography comparison for strict source copies too', () => {
+    const reports = fixture().slice(0, 2)
+    reports[0].extension = []
+    reports[0].effectiveDateTime = '2026-06-24T11:29:54+08:00'
+    reports[1].encounter = reports[0].encounter
+    expect(rows(reports)).toHaveLength(1)
+    reports[1].conclusion = reports[1].conclusion.replace('generally recommended', 'not generally recommended')
+    expect(rows(reports)).toHaveLength(2)
+  })
   it('groups eight rows into four with every original narrative, id and viewer action intact', () => {
     const reports = fixture()
     const before = JSON.stringify(reports)
@@ -169,6 +183,17 @@ describe('legacy receipt-clock imaging copies', () => {
     abdomen.code = { text: title, coding: [{ code: '32006C' }] }
     abdomen.conclusion = 'Synthetic abdominal radiograph. Bowel gas pattern is unremarkable. No visible dilated bowel loop. This is a separate abdominal examination.'
     expect(rows([...reports, abdomen])).toHaveLength(2)
+  })
+
+  it.each([false, true])('does not use a batch receipt clock as exam identity, identical findings=%s', identical => {
+    const template = fixture()[4]
+    template.identifier = []
+    template.conclusion = template.conclusion.replace(' 11:29:54', '')
+    const second = JSON.parse(JSON.stringify(template))
+    second.id = 'second-receipt-report'
+    if (!identical) second.conclusion = second.conclusion.replace('no pleural effusion', 'new pleural effusion')
+    expect(rows([template, second])).toHaveLength(2)
+    expect(calculateReportTabCounts([template, second]).all).toBe(2)
   })
 })
 

@@ -36,10 +36,32 @@ export function isAdultPreventiveReport(report: any): boolean {
 }
 
 export function isRadiographReport(report: any): boolean {
+  if (report.code?.coding?.some((coding: any) => {
+    const method = getNhiReportModality(coding?.code)
+    return method && method !== 'XR'
+  })) return false
   return inferReportDisplayGroup(report) === 'imaging' && (
     report.code?.coding?.some((coding: any) => getNhiReportModality(coding?.code) === 'XR')
     || isRadiographLabel([report.code?.text, ...(report.code?.coding ?? []).map((coding: any) => coding?.display),
       IMAGING_EXAM_HEADER.exec((typeof report.conclusion === 'string' ? report.conclusion : '').normalize('NFKC'))?.[1]].filter(Boolean).join(' ')))
+}
+
+export function typedReportIdentifierValue(identifier: any): string {
+  const types = identifier.type?.coding?.map((coding: any) => JSON.stringify([coding.system ?? '', coding.code ?? ''])).sort()
+  return JSON.stringify([identifier.value, types?.length ? types : identifier.type?.text ?? null])
+}
+
+export function isReportReceiptClock(report: any): boolean {
+  return getImagingCopySource(report) === 'hospital' && !!report.effectiveDateTime
+    && report.extension?.some((extension: any) => extension?.url === 'urn:vgh:report:received-at'
+      && extension.valueDateTime === report.effectiveDateTime) === true
+}
+
+export function reportExaminationHeaderClock(report: any): string | undefined {
+  const header = IMAGING_EXAM_HEADER.exec((typeof report.conclusion === 'string' ? report.conclusion : '').normalize('NFKC'))
+  if (!header?.[3]) return undefined
+  const timestamp = `${header[2].replaceAll('/', '-')}T${header[3]}+08:00`
+  return Number.isFinite(Date.parse(timestamp)) ? timestamp : undefined
 }
 
 /** One natural key for the displayed rows and the cross-source guard. */
@@ -58,9 +80,9 @@ export function reportNaturalGroupingKey(report: any): string {
   // cross-source matcher. Proven shared billing groups still take precedence.
   if (isRadiographReport(report)) {
     const date = getReportDate(report)
-    const clock = date?.includes('T') ? date : undefined
-    const headerClock = /Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/i.exec(report.conclusion ?? '')?.[1]
-    const identifiers = (report.identifier ?? []).filter((id: any) => id?.value).map((id: any) => [id.system, id.value]).sort()
+    const clock = date?.includes('T') && !isReportReceiptClock(report) ? date : undefined
+    const headerClock = reportExaminationHeaderClock(report)
+    const identifiers = (report.identifier ?? []).filter((id: any) => id?.value).map((id: any) => [id.system, typedReportIdentifierValue(id)]).sort()
     // Exact source clocks or common identifiers can still establish duplicate
     // previews. A day alone cannot: retain distinct records in that case.
     return `${key}|radiograph:${JSON.stringify([

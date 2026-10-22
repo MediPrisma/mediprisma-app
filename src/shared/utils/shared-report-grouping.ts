@@ -1,7 +1,7 @@
 import { decodeBase64Utf8 } from './base64.utils'
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
-import { getImagingCopySource, isRadiographReport } from './report-identity'
+import { getImagingCopySource, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, typedReportIdentifierValue } from './report-identity'
 
 export type SharedReportSource = {
   reportId?: string
@@ -21,7 +21,7 @@ function reportExamDate(report: any): string | undefined {
 }
 
 function radiographClock(report: any): string | undefined {
-  const effective = reportExamDate(report)
+  const effective = reportExaminationHeaderClock(report) ?? (isReportReceiptClock(report) ? undefined : reportExamDate(report))
   const published = getImagingCopySource(report) === 'cloud' ? report.extension?.find((extension: any) =>
     extension?.url === 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-report-date')?.valueString : undefined
   const timestamp = (value: unknown): value is string => typeof value === 'string'
@@ -252,12 +252,12 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
       const values = new Map<string, string[]>()
       for (const identifier of report.identifier ?? []) if (identifier?.value) {
         const system = identifier.system ?? ''
-        values.set(system, [...(values.get(system) ?? []), identifier.value])
+        values.set(system, [...(values.get(system) ?? []), typedReportIdentifierValue(identifier)])
       }
       for (const [system, ids] of values) {
-        const identity = JSON.stringify([...new Set(ids)].sort())
-        if (namespaces.has(system) && namespaces.get(system) !== identity) conflicts.add(key)
-        namespaces.set(system, identity)
+        const idSet = JSON.stringify([...new Set(ids)].sort())
+        if (namespaces.has(system) && namespaces.get(system) !== idSet) conflicts.add(key)
+        namespaces.set(system, idSet)
       }
       radiographIdentifiers.set(key, namespaces)
     }
@@ -265,7 +265,8 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
   for (const [key, members] of radiographMembers) {
     if (members.every(report => radiographClock(report))) continue
     const common = (members[0].identifier ?? []).filter((id: any) => id?.value).some((id: any) =>
-      members.every(report => report.identifier?.some((candidate: any) => candidate?.value === id.value && candidate.system === id.system)))
+      members.every(report => report.identifier?.some((candidate: any) => candidate?.value
+        && typedReportIdentifierValue(candidate) === typedReportIdentifierValue(id) && candidate.system === id.system)))
     if (!common) conflicts.add(key)
   }
   return new Set(
