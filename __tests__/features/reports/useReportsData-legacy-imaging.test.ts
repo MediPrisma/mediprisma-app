@@ -179,6 +179,19 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(calculateReportTabCounts(reports).all).toBe(2)
   })
 
+  it.each([false, true])('does not use issued as exam identity, identical findings=%s', identical => {
+    const first = fixture()[5]
+    delete first.effectiveDateTime
+    first.identifier = []
+    first.extension = []
+    first.issued = '2026-06-24T12:18:00+08:00'
+    const second = JSON.parse(JSON.stringify(first))
+    second.id = 'second-issued-report'
+    if (!identical) second.conclusion += ' New finding.'
+    expect(rows([first, second])).toHaveLength(2)
+    expect(calculateReportTabCounts([first, second]).all).toBe(2)
+  })
+
   it('tolerates malformed imported CXR identifiers without hiding reports', () => {
     const reports = fixture().slice(4, 6)
     reports.forEach(report => { report.identifier = { value: 'malformed' } as any })

@@ -85,7 +85,7 @@ export function reportNaturalGroupingKey(report: any): string {
   // the ordinary same-source fallback erase the distinction rejected by the
   // cross-source matcher. Proven shared billing groups still take precedence.
   if (isRadiographReport(report)) {
-    const date = getReportDate(report)
+    const date = report.effectiveDateTime || report.effectivePeriod?.start
     const clock = date?.includes('T') && !isReportReceiptClock(report) ? date : undefined
     const headerClock = reportExaminationHeaderClock(report)
     const identifiers = reportIdentifiers(report).filter((id: any) => id?.value).map((id: any) => [id.system, typedReportIdentifierValue(id)]).sort()
