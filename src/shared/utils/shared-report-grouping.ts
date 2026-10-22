@@ -1,6 +1,7 @@
 import { decodeBase64Utf8 } from './base64.utils'
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
+import { isRadiographReport } from './report-identity'
 
 export type SharedReportSource = {
   reportId?: string
@@ -148,6 +149,8 @@ export function sharedReportGroupingKey(report: any): string | null {
     boundary.sourceProgram,
     boundary.status,
     narrative,
+    // A shared billing narrative must not erase known serial X-ray clocks.
+    isRadiographReport(report) ? [reportExamDate(report), report.effectivePeriod?.end] : null,
   ])
 }
 
@@ -214,6 +217,8 @@ export function sharedReportSourceIdentity(report: any): string {
  */
 export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
   const sourceIdentities = new Map<string, Set<string>>()
+  const radiographIdentifiers = new Map<string, Map<string, string>>()
+  const conflicts = new Set<string>()
   for (const report of reports) {
     if (!report) continue
     const key = sharedReportGroupingKey(report)
@@ -221,10 +226,24 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
     const identities = sourceIdentities.get(key) ?? new Set<string>()
     identities.add(sharedReportSourceIdentity(report))
     sourceIdentities.set(key, identities)
+    if (isRadiographReport(report)) {
+      const namespaces = radiographIdentifiers.get(key) ?? new Map<string, string>()
+      const values = new Map<string, string[]>()
+      for (const identifier of report.identifier ?? []) if (identifier?.value) {
+        const system = identifier.system ?? ''
+        values.set(system, [...(values.get(system) ?? []), identifier.value])
+      }
+      for (const [system, ids] of values) {
+        const identity = JSON.stringify([...new Set(ids)].sort())
+        if (namespaces.has(system) && namespaces.get(system) !== identity) conflicts.add(key)
+        namespaces.set(system, identity)
+      }
+      radiographIdentifiers.set(key, namespaces)
+    }
   }
   return new Set(
     [...sourceIdentities.entries()]
-      .filter(([, identities]) => identities.size > 1)
+      .filter(([key, identities]) => identities.size > 1 && !conflicts.has(key))
       .map(([key]) => key),
   )
 }

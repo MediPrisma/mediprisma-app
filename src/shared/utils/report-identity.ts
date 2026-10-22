@@ -35,6 +35,12 @@ export function isAdultPreventiveReport(report: any): boolean {
     || (report?._observations ?? []).some(isAdultPreventiveHealthExamResource)
 }
 
+export function isRadiographReport(report: any): boolean {
+  return inferReportDisplayGroup(report) === 'imaging' && (
+    report.code?.coding?.some((coding: any) => getNhiReportModality(coding?.code) === 'XR')
+    || /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i.test(getCodeableConceptText(report.code)))
+}
+
 /** One natural key for the displayed rows and the cross-source guard. */
 export function reportNaturalGroupingKey(report: any): string {
   if (report?.clinicalRecordVariant) {
@@ -49,10 +55,7 @@ export function reportNaturalGroupingKey(report: any): string {
   // Serial radiographs can have identical text on the same day. Do not let
   // the ordinary same-source fallback erase the distinction rejected by the
   // cross-source matcher. Proven shared billing groups still take precedence.
-  const radiograph = inferReportDisplayGroup(report) === 'imaging' && (
-    report.code?.coding?.some((coding: any) => getNhiReportModality(coding?.code) === 'XR')
-    || /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i.test(getCodeableConceptText(report.code)))
-  if (radiograph) return `${key}|radiograph:${JSON.stringify([
+  if (isRadiographReport(report)) return `${key}|radiograph:${JSON.stringify([
     getReportDate(report), report.id ?? null,
     (report.identifier ?? []).map((id: any) => [id.system, id.value]).sort(),
     period ? [period.start, period.end] : null,

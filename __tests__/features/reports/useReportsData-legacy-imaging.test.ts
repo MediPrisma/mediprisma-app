@@ -112,6 +112,23 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(rows([report, second])).toHaveLength(2)
     expect(calculateReportTabCounts([report, second]).all).toBe(2)
   })
+
+  it.each([false, true])('does not combine two serial examinations with multiple billing codes, date-only=%s', dateOnly => {
+    const template = fixture()[5]
+    template.extension = []
+    const reports = ['08:00', '16:00'].flatMap((clock, index) => ['32001C', '32002C'].map(code => ({
+      ...template, id: `serial-${clock}-${code}`,
+      effectiveDateTime: dateOnly ? '2026-06-24' : `2026-06-24T${clock}:00+08:00`,
+      code: { ...template.code, coding: [{ code }] },
+      identifier: [{ system: 'urn:synthetic:accession', value: `EXAM-${index}` }],
+    })))
+    expect(rows(reports)).toHaveLength(dateOnly ? 4 : 2)
+    expect(calculateReportTabCounts(reports).all).toBe(dateOnly ? 4 : 2)
+    for (const row of rows(reports)) {
+      const ids = row.diagnosticReportIds ?? []
+      expect(ids.every(id => id.includes('08:00')) || ids.every(id => id.includes('16:00'))).toBe(true)
+    }
+  })
 })
 
 
