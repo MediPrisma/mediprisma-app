@@ -101,6 +101,17 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(rows(reports)).toHaveLength(3)
     expect([...reportDisplayGroupingKeys(reports).values()].some(key => key.startsWith('cross-source|'))).toBe(false)
   })
+
+  it.each(['胸部X光', '胸部Ｘ光', 'CXR'])('preserves uncoded serial radiographs named %s', title => {
+    const report = fixture()[4]
+    report.code = { text: title }
+    const second = JSON.parse(JSON.stringify(report))
+    second.id = 'second-radiograph'
+    second.effectiveDateTime = '2026-06-24T17:00:00+08:00'
+    second.identifier[0].value = 'second-accession'
+    expect(rows([report, second])).toHaveLength(2)
+    expect(calculateReportTabCounts([report, second]).all).toBe(2)
+  })
 })
 
 

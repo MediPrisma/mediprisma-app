@@ -161,7 +161,7 @@ function modality(report: Report): string | undefined {
     ['MR', /magnetic|\bmri?\b|磁振|核磁/i],
     ['CT', /computed tomography|\bct\b|電腦斷層/i],
     ['US', /sono|ultrason|超音波/i],
-    ['XR', /x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i],
+    ['XR', /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i],
   ] as const
   const found = new Set<string>(methods.filter(([, pattern]) => pattern.test(title)).map(([method]) => method))
   for (const coding of report.code?.coding ?? []) {
@@ -189,6 +189,7 @@ function parseExamLabel(label: string): string[] | null {
   // This is deliberately a bounded recognizer, not a body-site guesser. A new
   // anatomy/protocol term (e.g. knee/ankle) must fail closed until supported.
   const recognized = label
+    .replace(/\bCXR\b|[XＸ]光/gi, '')
     .replace(/其他/g, '')
     .replace(/\bEcho for others\b/gi, '')
     .replace(/\bc\s*\.\s*t\s*\.?/gi, 'ct')

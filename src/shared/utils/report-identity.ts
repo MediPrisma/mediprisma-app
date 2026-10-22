@@ -51,7 +51,7 @@ export function reportNaturalGroupingKey(report: any): string {
   // cross-source matcher. Proven shared billing groups still take precedence.
   const radiograph = inferReportDisplayGroup(report) === 'imaging' && (
     report.code?.coding?.some((coding: any) => getNhiReportModality(coding?.code) === 'XR')
-    || /\bXR\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查/i.test(getCodeableConceptText(report.code)))
+    || /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|chest.*view|胸腔檢查|[XＸ]光/i.test(getCodeableConceptText(report.code)))
   if (radiograph) return `${key}|radiograph:${JSON.stringify([
     getReportDate(report), report.id ?? null,
     (report.identifier ?? []).map((id: any) => [id.system, id.value]).sort(),
