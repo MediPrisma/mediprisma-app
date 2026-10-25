@@ -28,4 +28,4 @@ export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).
-export const medicalSummaryStore = createAiResultStore<MedicalSummaryResult>()
+export const medicalSummaryStore = createAiResultStore<MedicalSummaryResult>(true)

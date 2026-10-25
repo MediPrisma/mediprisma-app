@@ -5,13 +5,49 @@ import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from '@/src/application/launch/medcl
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { useSummaryVersionsStore } from '@/src/application/hooks/medical-summary/summary-versions.store'
 
 describe('useMedcloudAutoSummary', () => {
   beforeEach(() => {
+    useSummaryVersionsStore.getState().reset()
     useMedcloudLaunchStore.getState().clear()
     useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
   })
   afterEach(() => jest.restoreAllMocks())
+
+  it('consumes a final request without starting AI after the user stops that round', async () => {
+    const generate = jest.fn(async () => undefined)
+    jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('final')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'final', phase: 'loaded' } })
+    useSummaryVersionsStore.setState({ automaticStoppedRunId: 'run-a' })
+    useMedcloudLaunchStore.getState().queueSummary({ messageId: 'final', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'final' })
+    renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+      dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+    await waitFor(() => expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull())
+    expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('finishes the cloud snapshot across supplements and runs only the latest final snapshot afterwards', async () => {
+    const finish: Array<() => void> = []
+    const generate = jest.fn((_signal?: AbortSignal) => new Promise<void>(resolve => finish.push(resolve)))
+    const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud', phase: 'waiting' } })
+    useMedcloudLaunchStore.getState().queueSummary({ messageId: 'cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'cloud' })
+    renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+      dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
+    for (const id of ['visits', 'final']) {
+      active.mockReturnValue(id)
+      act(() => useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: id, phase: id === 'visits' ? 'reports-pending' : 'loaded' } }))
+    }
+    act(() => useMedcloudLaunchStore.getState().queueSummary({ messageId: 'final', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'final' }))
+    expect(generate.mock.calls[0][0]!.aborted).toBe(false)
+    expect(generate).toHaveBeenCalledTimes(1)
+    await act(async () => finish[0]())
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(2))
+    await act(async () => finish[1]())
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  })
 
   it.each(['patient-changed', 'privacy-stale', 'cancelled', 'source-unavailable'] as const)('aborts an already claimed automatic launch on %s', async phase => {
     let finish!: () => void
@@ -242,4 +278,26 @@ describe('useMedcloudAutoSummary', () => {
     expect(generateInitialScope).not.toHaveBeenCalled()
     expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
   })
+})
+
+test('commit-before-receipt keeps an unclaimed same-run authorization until rebind', async () => {
+  jest.useFakeTimers()
+  try {
+  useSummaryVersionsStore.getState().reset()
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'new-import', phase: 'empty' }, stoppedRuns: {} })
+  const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('new-import')
+  const generate = jest.fn(async () => undefined)
+  useMedcloudLaunchStore.getState().queueSummary({ messageId: 'cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run', progressiveImportId: 'old-import' })
+  renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+    dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+  await act(async () => { jest.runOnlyPendingTimers() })
+  expect(useMedcloudLaunchStore.getState().pendingSummary?.messageId).toBe('cloud')
+  expect(generate).not.toHaveBeenCalled()
+  act(() => useMedcloudLaunchStore.getState().queueSummary({ messageId: 'cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run', progressiveImportId: 'new-import' }))
+  await act(async () => { jest.runOnlyPendingTimers() })
+  expect(generate).toHaveBeenCalledTimes(1)
+  } finally {
+    jest.restoreAllMocks()
+    jest.useRealTimers()
+  }
 })
