@@ -539,8 +539,7 @@ export function useMedicalSummaryOrchestrator() {
       const running = history.running[key]
       const pending = useMedcloudLaunchStore.getState().pendingSummary
       if (running?.automatic || history.launchViewKey === key || (running && pending?.progressiveRunId === progressive.runId)) {
-        useSummaryVersionsStore.setState({ automaticStoppedRunId: progressive.runId })
-        const pending = useMedcloudLaunchStore.getState().pendingSummary
+        if (running?.automatic || history.launchViewKey === key) useSummaryVersionsStore.setState({ automaticStoppedRunId: progressive.runId })
         if (pending?.progressiveRunId === progressive.runId) useMedcloudLaunchStore.getState().claimSummary(pending.messageId)
       }
       if (running) cancelSummary(running.slotKey)

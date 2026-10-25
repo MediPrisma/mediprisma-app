@@ -66,6 +66,12 @@ export function useMedcloudAutoSummary({
         return
       }
       if (!isProgressiveSummaryRequestCurrent(request, LocalBundleService.getActiveImportId())) {
+        const current = useProgressiveImportStore.getState().current
+        // Commit publishes the new import before its settled receipt. Keep an
+        // unclaimed same-run authorization until that receipt rebinds it.
+        if (request.progressiveRunId && current?.runId === request.progressiveRunId
+          && current.importId === LocalBundleService.getActiveImportId()
+          && isProgressiveSummaryRequestCurrent({ ...request, progressiveImportId: current.importId }, current.importId)) return
         claimSummary(request.messageId)
         return
       }

@@ -279,3 +279,22 @@ describe('useMedcloudAutoSummary', () => {
     expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
   })
 })
+
+test('commit-before-receipt keeps an unclaimed same-run authorization until rebind', async () => {
+  jest.useFakeTimers()
+  useSummaryVersionsStore.getState().reset()
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'new-import', phase: 'empty' }, stoppedRuns: {} })
+  const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('new-import')
+  const generate = jest.fn(async () => undefined)
+  useMedcloudLaunchStore.getState().queueSummary({ messageId: 'cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run', progressiveImportId: 'old-import' })
+  renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+    dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+  await act(async () => { jest.runOnlyPendingTimers() })
+  expect(useMedcloudLaunchStore.getState().pendingSummary?.messageId).toBe('cloud')
+  expect(generate).not.toHaveBeenCalled()
+  act(() => useMedcloudLaunchStore.getState().queueSummary({ messageId: 'cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run', progressiveImportId: 'new-import' }))
+  await act(async () => { jest.runOnlyPendingTimers() })
+  expect(generate).toHaveBeenCalledTimes(1)
+  active.mockRestore()
+  jest.useRealTimers()
+})
