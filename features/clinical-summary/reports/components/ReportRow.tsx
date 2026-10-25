@@ -1026,14 +1026,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 )}
               </div>
             </div>
-            {row.sharedReportSources && row.sharedReportSources.length > 1 && (
-              <div
-                data-testid="shared-report-summary"
-                className="mt-1 text-xs leading-relaxed text-muted-foreground"
-              >
-                {t.reports.sharedReport.summary.replace('{count}', String(row.sharedReportSources.length))}
-              </div>
-            )}
             {hasText && (
               textExpanded ? (
                 <>
@@ -1479,14 +1471,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               )}
             </div>
           </AccordionTrigger>
-          {row.sharedReportSources && row.sharedReportSources.length > 1 && (
-            <div
-              data-testid="shared-report-summary"
-              className="px-2.5 pb-1.5 text-xs leading-relaxed text-muted-foreground"
-            >
-              {t.reports.sharedReport.summary.replace('{count}', String(row.sharedReportSources.length))}
-            </div>
-          )}
           <AccordionContent className="pb-0">
             <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (
