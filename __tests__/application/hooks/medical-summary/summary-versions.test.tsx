@@ -63,3 +63,13 @@ test('picker does not steal focus or switch when a new version arrives', () => {
   expect(onSelect).not.toHaveBeenCalled()
   expect(screen.getByRole('button', { name: '含院內資料' })).toBeEnabled()
 })
+
+test('cited evidence is immutable after source update/removal and survives serialization', async () => {
+  const { captureSummaryEvidence } = await import('@/src/application/hooks/medical-summary/summary-versions.store')
+  let original = '檢查原文：未見異常'
+  const catalog = [{ key: 'R1', resourceType: 'DiagnosticReport', resourceId: 'same-id', display: '檢查', getContentText: () => original }]
+  const saved = captureSummaryEvidence(catalog, { sourceIndex: [{ key: 'R1' }] } as any)
+  original = '更新後的不同報告'
+  catalog.splice(0)
+  expect(JSON.parse(JSON.stringify(saved))['DiagnosticReport/same-id']).toBe('檢查原文：未見異常')
+})

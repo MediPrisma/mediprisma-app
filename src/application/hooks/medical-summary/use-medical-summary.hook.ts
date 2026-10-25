@@ -1,7 +1,7 @@
 'use client'
 
 import { diagnosticUuid, inspectSummaryBlocks, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
-import { useSummaryVersionsStore, summaryVersionViewKey } from './summary-versions.store'
+import { useSummaryVersionsStore, summaryVersionViewKey, captureSummaryEvidence } from './summary-versions.store'
 import { useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 // Medical Summary hook — thin adapter over the shared AI slot-generation
@@ -1059,7 +1059,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           kind: (current.stage ? ['cloud', 'cloud-only', 'hospital-empty'].includes(current.stage)
             : ['waiting', 'empty', 'failed'].includes(current.phase)) ? 'cloud' : 'hospital',
           completedAt: Date.now(), result,
-          coverage: ctx.clinicalData ? buildCoverageStats(ctx.clinicalData) : null, catalog: ctx.catalog,
+          coverage: ctx.clinicalData ? buildCoverageStats(ctx.clinicalData) : null, catalog: ctx.catalog, evidence: captureSummaryEvidence(ctx.catalog, result),
         }, epoch)
       }
       return result

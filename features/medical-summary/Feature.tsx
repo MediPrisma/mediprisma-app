@@ -1,9 +1,11 @@
+"use client"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 // Medical Summary (醫療摘要) — one feature with two reading modes:
 // 初診快覽 (the fixed first-visit overview) and independently generated custom
 // summaries. Structured AI output (Zod-validated) renders as a single scroll
 // column of fixed sections — never a free-text markdown blob, and no longer a
 // re-orderable card deck. Pluggable via right-panel-registry (enabled flag).
-"use client"
+
 import { SummaryVersionPicker } from './components/SummaryVersionPicker'
 
 import { Button } from "@/components/ui/button"
@@ -222,6 +224,7 @@ export default function MedicalSummaryFeature() {
     safetyGenerationSlotKey,
     summaryVersions,
     selectedSummaryVersionId,
+    selectedSummaryEvidence,
     selectSummaryVersion,
     currentSummaryModelId,
     generationCompletedAt,
@@ -369,9 +372,16 @@ export default function MedicalSummaryFeature() {
   // always works; the pinpoint scroll is best-effort — if no anchor claims
   // the request in time (virtualised list, pivot view without per-resource
   // rows…), say so instead of failing silently.
+  const [versionEvidence, setVersionEvidence] = useState<{ title: string; text: string } | null>(null)
   const navFallbackMsg = ms.navFallback
   const navigateToResource = useCallback(
     (target: ResourceNavTarget) => {
+      if (selectedSummaryVersionId) {
+        const text = selectedSummaryEvidence?.[`${target.resourceType}/${target.resourceId}`]
+        setVersionEvidence({ title: [target.date, target.display].filter(Boolean).join(' ') || (locale === 'en' ? 'Source' : '來源'),
+          text: text?.replaceAll('\n␞\n', '\n\n') || (locale === 'en' ? 'Source text is unavailable in this saved version.' : '此版本未保存來源內文。') })
+        return
+      }
       const store = useResourceNavigationStore.getState()
       // Every citation in this feature (summary sections AND the safety scan)
       // routes through here; a caller that already knows better wins.
@@ -388,7 +398,7 @@ export default function MedicalSummaryFeature() {
         }
       }, NAV_CLAIM_TIMEOUT_MS)
     },
-    [navFallbackMsg],
+    [navFallbackMsg, selectedSummaryVersionId, selectedSummaryEvidence, locale],
   )
 
   // A safety alert's title opens its cited records — the same SourceLink the
@@ -613,6 +623,7 @@ export default function MedicalSummaryFeature() {
     // its retry and model-switch actions (identical errors consolidated) — a
     // per-section error box here would repeat the same failure.
     if (cardErrors[moduleId]) {
+      if (selectedSummaryVersionId && !options.renderOnError) return <section key={moduleId} className="rounded-lg border p-3 text-sm"><h3 className="font-medium">{title}</h3><p className="text-muted-foreground">{locale === 'en' ? 'Not completed in this version' : '此版本未完成'}</p></section>
       return options.renderOnError && content
         ? <div key={moduleId} id={`medical-summary-section-${moduleId}`}>{content}</div>
         : null
@@ -1077,7 +1088,9 @@ export default function MedicalSummaryFeature() {
             { renderOnError: true },
           ) : null}
 
-          {isSafetyGenerating && !safetyResult ? (
+          {selectedSummaryVersionId && cardErrors.safety ? (
+            <section className="rounded-lg border p-3 text-sm"><h3 className="font-medium">{ms.otherAlertsSectionLabel}</h3><p className="text-muted-foreground">{locale === 'en' ? 'Not completed in this version' : '此版本未完成'}</p></section>
+          ) : isSafetyGenerating && !safetyResult ? (
             <SummarySectionPending title={ms.otherAlertsSectionLabel} label={safetyText.scanning} />
           ) : safetyResult ? (
             <MedicationSafetySection
@@ -1150,6 +1163,12 @@ export default function MedicalSummaryFeature() {
           <CustomInsightModulesSection onManage={openCustomManager} />
         </TabsContent>
       </Tabs>
+      <Dialog open={Boolean(versionEvidence)} onOpenChange={open => { if (!open) setVersionEvidence(null) }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>{versionEvidence?.title}</DialogTitle></DialogHeader>
+          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{versionEvidence?.text}</div>
+        </DialogContent>
+      </Dialog>
       <DataSelectionDrawer
         open={dataScopeOpen}
         onOpenChange={setDataScopeOpen}

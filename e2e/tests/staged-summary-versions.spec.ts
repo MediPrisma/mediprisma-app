@@ -138,3 +138,22 @@ test('Stop during manual regeneration also clears the already queued hospital su
   expect(await getChatCallCount(page)).toBe(stoppedCalls)
   await expect(page.getByRole('button', { name: '雲端', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
+
+test('a completed version opens its saved source text after a hospital supplement', async ({ page }, testInfo) => {
+  test.setTimeout(90_000)
+  await prepareMedcloudHandoffPage(page)
+  const citedReply = [block('overview', { headline: '合成病人的用藥摘要', medicationEducation: [{ name: 'Amlodipine', benefit: '控制血壓', attention: '追蹤血壓', sources: ['M1'] }] }),
+    block('problems', { problems: [{ label: '高血壓', basis: '降壓藥物', kind: 'medication', sources: ['M1'] }] }), block('safety', { scannedCount: 0, alerts: [] }), block('reports', { groups: [], unremarkable: [] })].join('\n')
+  await mockAiStream(page, { model: 'gemini-3.1-flash-lite', markdown: citedReply })
+  await page.goto('/dev/summary-versions/flow')
+  const deliver = await createImporter(page)
+  await expect(page.getByTestId('import-bundle-input').first()).toBeAttached()
+  await deliver('cloud', 1)
+  await expect(page.getByRole('button', { name: '雲端', exact: true })).toBeVisible({ timeout: 40_000 })
+  await deliver('hospital', 2)
+  await expect(page.getByRole('button', { name: '含院內資料', exact: true })).toBeEnabled({ timeout: 40_000 })
+  await page.locator('[data-source-link="direct"]').first().click()
+  await expect(page.getByRole('dialog')).toContainText('Amlodipine')
+  await expect(page.getByRole('dialog')).not.toContainText('此版本未保存來源內文')
+  await page.screenshot({ path: testInfo.outputPath('saved-summary-source.png') })
+})

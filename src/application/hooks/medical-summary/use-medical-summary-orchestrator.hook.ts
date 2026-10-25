@@ -1139,6 +1139,7 @@ export function useMedicalSummaryOrchestrator() {
     coverage: selectedVersion ? selectedVersion.coverage : coverage,
     summaryVersions: versions,
     selectedSummaryVersionId: selectedVersion?.id,
+    selectedSummaryEvidence: selectedVersion?.evidence,
     selectSummaryVersion: (id: string) => {
       const version = versions.find(v => v.id === id)
       if (version) versionState.select(version.viewKey, id)
@@ -1190,4 +1191,3 @@ export function useMedicalSummaryOrchestrator() {
     safetyGenerationSlotKey,
   }
 }
-

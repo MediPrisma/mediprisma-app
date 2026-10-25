@@ -16,6 +16,7 @@ export interface SummaryVersion {
   result: MedicalSummaryResult
   coverage: SummaryCoverageStats | null
   catalog: SummarySourceCatalogEntry[]
+  evidence?: Record<string, string>
 }
 
 interface SummaryVersionsState {
@@ -98,4 +99,13 @@ export async function restoreSummaryVersions(runId: string): Promise<void> {
     || LocalBundleService.getActiveImportId() !== importId) return
   persistedImportId = importId
   useSummaryVersionsStore.setState({ versions: saved.versions, selected: saved.selected })
+}
+
+/** Capture only cited evidence while its source-owned decoder still belongs
+ * to the immutable input. Plain strings survive encrypted history reload. */
+export function captureSummaryEvidence(catalog: SummarySourceCatalogEntry[], result: MedicalSummaryResult): Record<string, string> {
+  const cited = JSON.stringify(result)
+  return Object.fromEntries(catalog.filter(entry => cited.includes(JSON.stringify(entry.key))).map(entry => [
+    `${entry.resourceType}/${entry.resourceId}`, entry.getContentText?.() || [entry.date, entry.display, entry.organization].filter(Boolean).join('\n'),
+  ]))
 }

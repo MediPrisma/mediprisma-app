@@ -454,7 +454,7 @@ describe('MedcloudLaunchProvider', () => {
 })
 
 
-test.each(['hospital-empty', 'cloud-only'])('%s transfers only an unclaimed cloud request to the new import', stage => {
+test.each(['hospital-empty', 'cloud-only', 'hospital-visits'])('%s transfers only an unclaimed cloud request to the new import', stage => {
   const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
   useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
   render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
@@ -470,4 +470,3 @@ test.each(['hospital-empty', 'cloud-only'])('%s transfers only an unclaimed clou
   expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
   active.mockRestore()
 })
-

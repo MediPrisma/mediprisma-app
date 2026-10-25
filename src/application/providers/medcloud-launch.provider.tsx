@@ -179,7 +179,7 @@ export function MedcloudLaunchProvider({
       const detail = (event as CustomEvent).detail
       // An empty supplement changes storage ownership without authorizing a
       // second generation. Carry only an unclaimed cloud request forward.
-      if (detail?.version === 1 && detail.ok && !detail.stopped && ['hospital-empty', 'cloud-only'].includes(detail.stage)
+      if (detail?.version === 1 && detail.ok && !detail.stopped && ['hospital-empty', 'cloud-only', 'hospital-visits'].includes(detail.stage)
         && detail.importId === LocalBundleService.getActiveImportId()) {
         const current = useProgressiveImportStore.getState().current
         const pending = useMedcloudLaunchStore.getState().pendingSummary
@@ -344,4 +344,3 @@ export function MedcloudLaunchProvider({
 
   return children
 }
-
