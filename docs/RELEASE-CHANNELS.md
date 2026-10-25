@@ -13,13 +13,12 @@ GitHub Pages（`gh-pages.yml`）只放轉址頁，仍隨 master 自動更新。
 ## 推上正式版
 
 1. 在測試版確認要上線的版本：畫面左下角有「測試版」標示，CDSS 存檔會進測試環境。
-2. 取得該版本的 master commit 完整 SHA：`Sync app to mediprisma.tw/app-staging` 對應那次執行的 head commit。
-3. GitHub → Actions → `Sync app to mediprisma.tw/app` → Run workflow，填入 SHA。
-4. `verify` 會確認三件事，有任何一項不符就停止：
+2. GitHub → Actions → `Sync app to mediprisma.tw/app` → Run workflow。SHA 可留空，代表「推上目前測試版上的版本」；若填寫，必須等於測試版目前的版本。
+3. `verify` 讀取 `https://mediprisma.tw/app-staging/deploy.json`（測試版建置時寫入的實際 commit），並確認三件事，任何一項不符就停止：
+   - 要推的 commit 就是測試版目前提供的版本；
    - 這個 commit 在 master 上；
-   - master 的 CI 對它通過；
-   - 它已經成功發布到 `/app-staging`。
-5. `production` environment 要求核准；核准後才建置並發布 `/app`。
+   - master 的 CI 對它通過。
+4. `production` environment 要求核准；核准後才建置並發布 `/app`。
 
 正式版用的是同一個 commit，以正式設定重新建置；與測試版只差三項：base path（`/app`）、CDSS API 位址、測試版標示。
 

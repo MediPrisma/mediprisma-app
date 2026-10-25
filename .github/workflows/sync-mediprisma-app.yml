@@ -16,8 +16,8 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Full master commit SHA already live on mediprisma.tw/app-staging
-        required: true
+        description: Commit to promote (optional; must equal the commit live on mediprisma.tw/app-staging)
+        required: false
         type: string
 
 permissions:
@@ -35,6 +35,8 @@ jobs:
     permissions:
       contents: read
       actions: read
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
     steps:
       - name: Checkout master history
         uses: actions/checkout@v7
@@ -43,22 +45,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Require a master commit that passed CI and ran on staging
+      - name: Require the commit live on staging, on master, with CI passed
+        id: check
         env:
-          SHA: ${{ inputs.sha }}
+          REQUESTED: ${{ inputs.sha }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then echo "Give the full 40-character commit SHA."; exit 1; fi
-          if ! git merge-base --is-ancestor "$SHA" origin/master; then echo "$SHA is not on master."; exit 1; fi
-          ci="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&branch=master&event=push" \
+          # Written by the staging build itself; the only proof of what testers saw.
+          live="$(curl -fsS --retry 3 "https://mediprisma.tw/app-staging/deploy.json?t=$(date +%s)" | jq -r '.appSha // empty')"
+          if ! [[ "$live" =~ ^[0-9a-f]{40}$ ]]; then echo "/app-staging does not report its commit."; exit 1; fi
+          sha="${REQUESTED:-$live}"
+          if [ "$sha" != "$live" ]; then echo "/app-staging is serving $live, not $sha; test that commit first."; exit 1; fi
+          if ! git merge-base --is-ancestor "$sha" origin/master; then echo "$sha is not on master."; exit 1; fi
+          ci="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&branch=master&event=push&per_page=100" \
             --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')"
-          staged="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/sync-mediprisma-app-staging.yml/runs?head_sha=$SHA" \
-            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')"
-          if [ "$ci" -eq 0 ]; then echo "CI has not passed on master for $SHA."; exit 1; fi
-          if [ "$staged" -eq 0 ]; then echo "$SHA has not been published to /app-staging."; exit 1; fi
-          echo "Promoting $SHA: CI passed and it ran on /app-staging."
+          if [ "$ci" -eq 0 ]; then echo "CI has not passed on master for $sha."; exit 1; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Promoting $sha: live on /app-staging, on master, CI passed."
 
   sync:
     needs: verify
@@ -68,7 +73,7 @@ jobs:
       - name: Checkout the promoted commit
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ needs.verify.outputs.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -130,7 +135,7 @@ jobs:
       - name: Commit & push if changed
         working-directory: docs-site
         env:
-          SHA: ${{ inputs.sha }}
+          SHA: ${{ needs.verify.outputs.sha }}
         run: |
           git config user.name "mediprisma-app-sync[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

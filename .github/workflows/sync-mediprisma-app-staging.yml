@@ -82,6 +82,17 @@ jobs:
           NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
           NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
 
+      # What this build is, served at /app-staging/deploy.json. Promotion to
+      # /app reads it, so only the commit actually live on staging can go out.
+      - name: Record the built commit
+        env:
+          APP_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          jq -n --arg appSha "$APP_SHA" --arg ciRunId "${CI_RUN_ID:-}" \
+            '{channel: "staging", appSha: $appSha, ciRunId: $ciRunId}' > out/deploy.json
+
       - name: Checkout docs site (mediprisma-site)
         uses: actions/checkout@v7
         with:
