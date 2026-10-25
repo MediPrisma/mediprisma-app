@@ -31,7 +31,7 @@ export function isRadiographLabel(label: string): boolean {
   if (explicit) return true
   // PA may mean pulmonary angiography; lateral may describe an ultrasound
   // site. Projection words alone must not override an explicit modality.
-  if (/\bct\b|computed tomography|\bmri?\b|magnetic resonance|sono|ultrason|電腦斷層|磁振|超音波/i.test(normalized)) return false
+  if (/\bct\b|computed tomography|\bmri?\b|magnetic resonance|sono|ultrason|ultrasound|電腦斷層|磁振|超音波/i.test(normalized)) return false
   return /\bchest\b[^.\n]{0,120}\b(?:views?|ap|pa|lateral|portable|film)\b|\bportable\s+chest\b/i.test(normalized)
 }
 
