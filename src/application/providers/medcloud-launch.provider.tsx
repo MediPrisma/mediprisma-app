@@ -159,7 +159,8 @@ export function MedcloudLaunchProvider({
     window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, handleBundleSettled)
     const handleSupplement = (event: Event) => {
       const detail = (event as CustomEvent).detail
-      if (detail?.version !== 1 || !detail.ok || detail.stopped || detail.stage === 'cloud'
+      if (detail?.version !== 1 || !detail.ok || detail.stopped
+        || !['hospital', 'hospital-reports-failed'].includes(detail.stage)
         || detail.importId !== LocalBundleService.getActiveImportId()
         || detail.importId === lastSupplementImportRef.current) return
       lastSupplementImportRef.current = detail.importId

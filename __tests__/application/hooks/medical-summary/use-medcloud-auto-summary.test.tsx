@@ -13,6 +13,28 @@ describe('useMedcloudAutoSummary', () => {
   })
   afterEach(() => jest.restoreAllMocks())
 
+  it('finishes the cloud snapshot across supplements and runs only the latest final snapshot afterwards', async () => {
+    const finish: Array<() => void> = []
+    const generate = jest.fn((_signal?: AbortSignal) => new Promise<void>(resolve => finish.push(resolve)))
+    const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud', phase: 'waiting' } })
+    useMedcloudLaunchStore.getState().queueSummary({ messageId: 'cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'cloud' })
+    renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+      dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
+    for (const id of ['visits', 'final']) {
+      active.mockReturnValue(id)
+      act(() => useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: id, phase: id === 'visits' ? 'reports-pending' : 'loaded' } }))
+    }
+    act(() => useMedcloudLaunchStore.getState().queueSummary({ messageId: 'final', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'final' }))
+    expect(generate.mock.calls[0][0]!.aborted).toBe(false)
+    expect(generate).toHaveBeenCalledTimes(1)
+    await act(async () => finish[0]())
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(2))
+    await act(async () => finish[1]())
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  })
+
   it.each(['patient-changed', 'privacy-stale', 'cancelled', 'source-unavailable'] as const)('aborts an already claimed automatic launch on %s', async phase => {
     let finish!: () => void
     const generate = jest.fn((_signal?: AbortSignal) => new Promise<void>(resolve => { finish = resolve }))

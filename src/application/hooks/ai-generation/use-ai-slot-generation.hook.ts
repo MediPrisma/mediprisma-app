@@ -49,6 +49,7 @@ import { withCollectorOperation } from '@/src/application/telemetry/collector-op
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
 import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { isSummaryContinuation } from '@/src/shared/utils/reset-on-bundle-change'
 import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
 import type {
   AiGenerationIssue,
@@ -731,9 +732,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // after React Query has published the new patient and clinical collection.
   const [bundleTransitionActive, setBundleTransitionActive] = useState(false)
   useEffect(() => {
-    const begin = () => {
-      abortRuns()
-      stopAi()
+    const begin = (event: Event) => {
+      if (!(analyticsSurface === 'summary' && isSummaryContinuation(event))) {
+        abortRuns()
+        stopAi()
+      }
       setBundleTransitionActive(true)
     }
     const settle = () => setBundleTransitionActive(false)
@@ -743,7 +746,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       window.removeEventListener(BUNDLE_CHANGED_EVENT, begin)
       window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
     }
-  }, [abortRuns, stopAi])
+  }, [abortRuns, stopAi, analyticsSurface])
   // Demo bundle: seed the pre-generated snapshot instead of burning an AI call
   // on data whose answer is a constant. It belongs to the feature's canonical
   // default model. With another model selected it may fill an otherwise blank

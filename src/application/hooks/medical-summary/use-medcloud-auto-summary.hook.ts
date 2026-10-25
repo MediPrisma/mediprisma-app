@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { isProgressiveSummaryRequestCurrent, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
@@ -34,6 +34,7 @@ export function useMedcloudAutoSummary({
   const request = useMedcloudLaunchStore((state) => state.pendingSummary)
   const claimSummary = useMedcloudLaunchStore((state) => state.claimSummary)
   const activeLaunches = useRef(new Set<() => void>())
+  const [launchRunning, setLaunchRunning] = useState(false)
   useEffect(() => {
     const launches = activeLaunches.current
     return () => { for (const dispose of launches) dispose() }
@@ -42,6 +43,7 @@ export function useMedcloudAutoSummary({
   useEffect(() => {
     if (
       !request ||
+      launchRunning ||
       authLoading ||
       !hasPatient ||
       !dataReady ||
@@ -73,14 +75,21 @@ export function useMedcloudAutoSummary({
         return
       }
       const controller = new AbortController()
+      setLaunchRunning(true)
       const unsubscribe = useProgressiveImportStore.subscribe(() => {
-        if (!isProgressiveSummaryRequestCurrent(request, LocalBundleService.getActiveImportId())) controller.abort()
+        const current = useProgressiveImportStore.getState().current
+        // A validated supplement changes the import id, but the already-started
+        // request still owns its immutable cloud snapshot for this same run.
+        if (!isProgressiveSummaryRequestCurrent({ ...request,
+          progressiveImportId: current && current.runId === request.progressiveRunId ? current.importId : request.progressiveImportId,
+        }, LocalBundleService.getActiveImportId())) controller.abort()
       })
       const dispose = () => { unsubscribe(); controller.abort(); activeLaunches.current.delete(dispose) }
       activeLaunches.current.add(dispose)
       void generate(controller.signal).catch(() => undefined).finally(() => {
         unsubscribe()
         activeLaunches.current.delete(dispose)
+        setLaunchRunning(false)
       })
     }, 0)
 
@@ -97,5 +106,6 @@ export function useMedcloudAutoSummary({
     modelId,
     request,
     summaryModelId,
+    launchRunning,
   ])
 }

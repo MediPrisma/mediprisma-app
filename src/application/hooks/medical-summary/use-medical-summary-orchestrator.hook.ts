@@ -5,6 +5,7 @@
 import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
+import { useSummaryVersionsStore, summaryVersionViewKey, restoreSummaryVersions } from './summary-versions.store'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
@@ -12,7 +13,7 @@ import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.e
 import { ensureReportHighlights } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
-import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import { BUNDLE_CHANGED_EVENT, isSummaryContinuation } from '@/src/shared/utils/reset-on-bundle-change'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import {
   isOpenAiCompatibleRuntimeReady,
@@ -528,6 +529,14 @@ export function useMedicalSummaryOrchestrator() {
   const generate = useCallback(() => generateForLaunch(), [generateForLaunch])
 
   const cancelGeneration = useCallback(() => {
+    // A cloud run can still own the previous input slot after a validated
+    // hospital supplement. Stop that captured slot, not only the new chart.
+    const progressive = useProgressiveImportStore.getState().current
+    if (progressive) {
+      for (const [view, slot] of Object.entries(useSummaryVersionsStore.getState().running)) {
+        if (view.startsWith(`${progressive.runId}::`)) cancelSummary(slot)
+      }
+    }
     if (!scopeKey) return
     const current = activeBatchRef.current
     if (current?.scopeKey === scopeKey) {
@@ -604,7 +613,8 @@ export function useMedicalSummaryOrchestrator() {
   }, [])
 
   useEffect(() => {
-    const cancelQueuedBundleWork = () => {
+    const cancelQueuedBundleWork = (event: Event) => {
+      if (isSummaryContinuation(event)) return
       const current = activeBatchRef.current
       // The slot hooks abort requests that already own a controller. The
       // orchestrator additionally tombstones EVERY manual batch, including a
@@ -1097,10 +1107,31 @@ export function useMedicalSummaryOrchestrator() {
     [presentedResult, reportDigestInput],
   )
 
+  const progressive = useProgressiveImportStore(state => state.current)
+  useEffect(() => {
+    if (progressive?.runId && !isProgressiveAutoSummaryBlocked()) void restoreSummaryVersions(progressive.runId)
+  }, [progressive?.runId])
+  const versionState = useSummaryVersionsStore()
+  const viewKey = progressive ? summaryVersionViewKey(progressive.runId, summaryGenerationSlotKey) : ''
+  const versions = versionState.versions.filter(version => progressive?.runId === version.runId
+    && (!viewKey || version.viewKey === viewKey))
+  const selectedVersion = versions.find(version => versionState.selected[version.viewKey] === version.id)
+  const versionBusy = !!progressive && Object.keys(versionState.running).some(key => key.startsWith(`${progressive.runId}::`))
+  const visibleCatalog = selectedVersion?.catalog ?? summary.sourceCatalog
+  const resolveVisibleSource = useCallback((key: string) => selectedVersion
+    ? visibleCatalog.find(entry => entry.key === key) : resolveSafetySource(key), [selectedVersion, visibleCatalog, resolveSafetySource])
+
   return {
-    result: presentedResultWithReports,
-    safetyResult: presentedSafetyResult,
-    coverage,
+    result: selectedVersion?.result ?? presentedResultWithReports,
+    safetyResult: selectedVersion ? selectedVersion.result.safety : presentedSafetyResult,
+    coverage: selectedVersion ? selectedVersion.coverage : coverage,
+    summaryVersions: versions,
+    selectedSummaryVersionId: selectedVersion?.id,
+    selectSummaryVersion: (id: string) => {
+      const version = versions.find(v => v.id === id)
+      if (version) versionState.select(version.viewKey, id)
+    },
+    currentSummaryModelId: result?.generation?.modelId ?? null,
     hasPatient,
     dataReady,
     model,
@@ -1112,15 +1143,15 @@ export function useMedicalSummaryOrchestrator() {
     cancelGeneration,
     generateForLaunch,
     retryFailed,
-    isGenerating,
+    isGenerating: isGenerating || versionBusy,
     isStopping: cancellingScopeKey === scopeKey,
     isSummaryGenerating: presentedSummaryGenerating,
-    isSafetyGenerating: presentedSafetyGenerating,
+    isSafetyGenerating: !selectedVersion && presentedSafetyGenerating,
     isRestoring,
     summaryError: presentedSummaryError,
     // A retained coherent summary is presentation-only. Show the attempted
     // model's failures even when its incomplete result cannot replace it.
-    cardErrors: readSummaryGenerationSlot(useCapturedSummaryStatus && scopedBatchStatus
+    cardErrors: selectedVersion ? selectedVersion.result.cardErrors ?? {} : readSummaryGenerationSlot(useCapturedSummaryStatus && scopedBatchStatus
       ? scopedBatchStatus.summarySlotKey
       : summaryGenerationSlotKey).result?.cardErrors ?? {},
     safetyError: presentedSafetyError,
@@ -1128,14 +1159,14 @@ export function useMedicalSummaryOrchestrator() {
     safetyIssue: presentedSafetyIssue,
     contextOverflowIssue,
     contextAdaptation,
-    hasAnyResult: Boolean(presentedResult || presentedSafetyResult),
+    hasAnyResult: Boolean(selectedVersion || presentedResult || presentedSafetyResult),
     hasCompleteResult: Boolean(
       presentedResult &&
       presentedSafetyResult &&
       !hasCardErrors(presentedResult)
     ),
-    resolveSafetySource,
-    safetySourceCatalog: summary.sourceCatalog,
+    resolveSafetySource: resolveVisibleSource,
+    safetySourceCatalog: visibleCatalog,
     activeGeneration: presentedBatch && !presentedBatch.cancelled ? {
       id: presentedBatch.id,
       modelName: presentedBatch.modelName,

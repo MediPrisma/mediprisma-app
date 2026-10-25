@@ -4,6 +4,7 @@
 // column of fixed sections — never a free-text markdown blob, and no longer a
 // re-orderable card deck. Pluggable via right-panel-registry (enabled flag).
 "use client"
+import { SummaryVersionPicker } from './components/SummaryVersionPicker'
 
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -218,6 +219,10 @@ export default function MedicalSummaryFeature() {
     activeGeneration,
     summaryGenerationSlotKey,
     safetyGenerationSlotKey,
+    summaryVersions,
+    selectedSummaryVersionId,
+    selectSummaryVersion,
+    currentSummaryModelId,
   } = useMedicalSummaryOrchestrator()
   useMedcloudAutoSummary({
     authLoading,
@@ -225,7 +230,7 @@ export default function MedicalSummaryFeature() {
     // `result` is already scoped to the current patient, FHIR input signature,
     // locale, audience, and selected model cache slot. Matching provenance
     // therefore proves this patient does not need another launch run.
-    summaryModelId: result?.generation?.modelId ?? null,
+    summaryModelId: currentSummaryModelId,
     dataReady,
     isGenerating: isBusy,
     isRestoring,
@@ -635,7 +640,7 @@ export default function MedicalSummaryFeature() {
         }}
         className="gap-2"
       >
-      <div className="flex flex-nowrap items-center gap-1.5 @max-[19rem]:flex-wrap">
+      <div className="flex flex-wrap items-center gap-1.5">
         <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-primary @max-[32rem]:hidden" />
         <h2 className="shrink-0 text-base font-semibold text-foreground">{ms.title}</h2>
         <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-primary/10 dark:text-primary @max-[32rem]:hidden">
@@ -673,9 +678,11 @@ export default function MedicalSummaryFeature() {
             ) : null}
           </TabsTrigger>
         </TabsList>
+        {activeView === 'standard' ? <SummaryVersionPicker versions={summaryVersions} selectedId={selectedSummaryVersionId}
+          onSelect={selectSummaryVersion} busy={isBusy} locale={locale} /> : null}
         <div
           data-tour="medical-summary-controls"
-          className="ml-auto flex min-w-0 basis-0 flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none"
+          className="ml-auto flex min-w-40 flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none"
         >
           {activeView === "standard" ? (
             <ModelPicker
@@ -872,11 +879,11 @@ export default function MedicalSummaryFeature() {
         <TabsContent value="standard" forceMount className="mt-0 space-y-2">
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">{ms.emptyNoPatient}</div>
-      ) : !dataReady ? (
+      ) : !dataReady && !hasAnyResult ? (
         <div className="py-10 flex justify-center">
           <StreamingIndicator label={ms.loadingData} />
         </div>
-      ) : isRestoring ? (
+      ) : isRestoring && !hasAnyResult ? (
         <div className="py-10 flex justify-center">
           <StreamingIndicator label={ms.loadingSavedSummary} />
         </div>

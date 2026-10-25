@@ -37,6 +37,8 @@ export interface ImportBundleOptions {
   expectedImportId?: string
   requireEmpty?: boolean
   onCommitted?: (importId: string) => void
+  /** Only the validated progressive transaction supplies this ownership. */
+  progressiveRunId?: string
 }
 
 export interface UseImportBundleReturn {
@@ -110,6 +112,7 @@ export function useImportBundle(): UseImportBundleReturn {
     signal?: AbortSignal,
     beforeCommit?: () => void,
     onCommitted?: (importId: string) => void,
+    preserveMedicalSummary = false,
   ) => {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
@@ -153,7 +156,7 @@ export function useImportBundle(): UseImportBundleReturn {
     setHasBundle(true)
     setBundleIsActive(shouldUseLocalBundle())
     setIsDemo(demo)
-    notifyBundleChanged()
+    notifyBundleChanged(preserveMedicalSummary)
     try {
       await queryClient.invalidateQueries()
     } finally {
@@ -188,7 +191,8 @@ export function useImportBundle(): UseImportBundleReturn {
         const patientProfile = options?.expectedImportId ? LocalBundleService.getUserEnteredPatientProfile() : undefined
         assertExpectedImport()
         await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
-          options?.signal, assertExpectedImport, options?.onCommitted)
+          options?.signal, assertExpectedImport, options?.onCommitted,
+          Boolean(options?.progressiveRunId && options.expectedImportId))
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'

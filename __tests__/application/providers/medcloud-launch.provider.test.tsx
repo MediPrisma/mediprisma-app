@@ -136,7 +136,7 @@ describe('MedcloudLaunchProvider', () => {
     expect(useMedcloudLaunchStore.getState().pendingSummary).not.toBeNull()
   })
 
-  it.each(['hospital-visits', 'hospital'] as const)('refreshes automatic summaries once for an accepted %s replacement', stage => {
+  it.each(['hospital-reports-failed', 'hospital'] as const)('refreshes automatic summaries once for an accepted final %s replacement', stage => {
     const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
     useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
     render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
@@ -154,7 +154,7 @@ describe('MedcloudLaunchProvider', () => {
     active.mockRestore()
   })
 
-  it.each([{ stage: 'cloud', stopped: false }, { stage: 'hospital-visits', stopped: true }])('does not requeue a $stage receipt with stopped=$stopped', receipt => {
+  it.each([{ stage: 'cloud', stopped: false }, { stage: 'hospital-visits', stopped: false }, { stage: 'hospital-empty', stopped: false }, { stage: 'hospital-visits', stopped: true }])('does not requeue a $stage receipt with stopped=$stopped', receipt => {
     const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
     render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
     settleImportedBundle()
