@@ -30,8 +30,8 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # Approval gate: required reviewers are set on this environment.
-    environment: production
+    # Promotion runs only from master's copy of this workflow.
+    if: ${{ github.ref == 'refs/heads/master' }}
     permissions:
       contents: read
       actions: read
@@ -65,8 +65,20 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Promoting $sha: live on /app-staging, on master, CI passed."
 
-  sync:
+  # The approval comes after the checks, so the approver sees which commit passed.
+  approve:
     needs: verify
+    runs-on: ubuntu-latest
+    # Required reviewers and a master-only branch policy are set on this environment.
+    environment: production
+    steps:
+      - name: Approved
+        env:
+          SHA: ${{ needs.verify.outputs.sha }}
+        run: echo "Approved promotion of $SHA to /app."
+
+  sync:
+    needs: [verify, approve]
     runs-on: ubuntu-latest
     environment: mediprisma-site-publish
     steps:

@@ -18,9 +18,21 @@ GitHub Pages（`gh-pages.yml`）只放轉址頁，仍隨 master 自動更新。
    - 要推的 commit 就是測試版目前提供的版本；
    - 這個 commit 在 master 上；
    - master 的 CI 對它通過。
-4. `production` environment 要求核准；核准後才建置並發布 `/app`。
+4. 檢查通過後，`approve` 在 `production` environment 等待核准，畫面會顯示通過檢查的 commit；核准後才建置並發布 `/app`。
 
-正式版用的是同一個 commit，以正式設定重新建置；與測試版只差三項：base path（`/app`）、CDSS API 位址、測試版標示。
+前置條件：`production` environment 必須設定 required reviewers，deployment branch 限定 master。workflow 本身無法確認是否已設定；沒有設定時不會要求核准。
+
+只改文件的 commit（CI 的 paths-ignore 會跳過）不會跑 CI，也就不會上測試版或正式版，下一個程式 commit 會一併帶上。
+
+正式版用的是同一個 commit，以正式設定重新建置。與測試版的差異：base path（`/app`）、CDSS API 位址，以及測試版標示、標題與 noindex。
+
+## 測試版仍使用的正式資源
+
+測試版與正式版同在 `https://mediprisma.tw`，除了 CDSS API 之外都沿用正式設定：
+
+- 同源：瀏覽器的 localStorage、IndexedDB、Firebase 登入狀態與 Collector 瀏覽器識別碼兩邊共用。尚未測過的程式若改變本機儲存格式，可能影響同一瀏覽器上的正式版。
+- Firebase、Collector、院內檢驗報告接收端（`NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL`）、AI proxy 都是正式後端；測試版的操作會寫進這些系統。Collector 會把測試版事件標成 `other`。
+- 院內以擴充功能把真實病人資料送到 `/app-staging` 時，CDSS 存檔會進測試 FHIR 環境。該環境同在院內 VM，但沒有正式環境的備份。
 
 ## 測試版的建置差異
 

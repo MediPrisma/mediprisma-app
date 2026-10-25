@@ -27,14 +27,27 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     environment: mediprisma-site-publish
-    # Only run when CI actually succeeded (workflow_run fires on failure too),
-    # or when triggered manually.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Only a successful CI run of a push to this repository's master (workflow_run
+    # also fires for pull requests, including a fork's branch named master), or a
+    # manual run from master. This job builds the commit it is handed, with the
+    # deploy key, so the commit must come from master and nowhere else.
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+      || (github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'master'
+      && github.event.workflow_run.head_repository.full_name == github.repository) }}
     steps:
       - name: Checkout the commit CI tested
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Refuse a commit that is not on master
+        env:
+          APP_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: git merge-base --is-ancestor "$APP_SHA" origin/master
 
       - name: Setup Node
         uses: actions/setup-node@v7
