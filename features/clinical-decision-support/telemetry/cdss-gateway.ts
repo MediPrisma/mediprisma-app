@@ -23,9 +23,11 @@ const active = new Set<AbortController>()
 export function cdssEndpoint(path = '/cdss/v1/saves'): string | null {
   try {
     const origin = new URL(process.env.NEXT_PUBLIC_CDSS_API_ORIGIN || 'http://127.0.0.1:8098')
-    if (origin.username || origin.password || origin.search || origin.hash || origin.pathname !== '/') return null
+    // An origin, optionally with one path segment for a second API behind the same host (e.g. /staging).
+    const prefix = /^\/(?:([a-z0-9-]{1,32})\/?)?$/.exec(origin.pathname)
+    if (origin.username || origin.password || origin.search || origin.hash || !prefix) return null
     if (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname))) return null
-    return `${origin.origin}${path}`
+    return `${origin.origin}${prefix[1] ? `/${prefix[1]}` : ''}${path}`
   } catch { return null }
 }
 
