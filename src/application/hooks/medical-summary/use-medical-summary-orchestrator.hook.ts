@@ -5,6 +5,7 @@
 import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { useSummaryVersionsStore, summaryVersionViewKey, restoreSummaryVersions } from './summary-versions.store'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
@@ -533,6 +534,9 @@ export function useMedicalSummaryOrchestrator() {
     // hospital supplement. Stop that captured slot, not only the new chart.
     const progressive = useProgressiveImportStore.getState().current
     if (progressive) {
+      useSummaryVersionsStore.setState({ automaticStoppedRunId: progressive.runId })
+      const pending = useMedcloudLaunchStore.getState().pendingSummary
+      if (pending?.progressiveRunId === progressive.runId) useMedcloudLaunchStore.getState().claimSummary(pending.messageId)
       for (const [view, slot] of Object.entries(useSummaryVersionsStore.getState().running)) {
         if (view.startsWith(`${progressive.runId}::`)) cancelSummary(slot)
       }
@@ -1109,8 +1113,8 @@ export function useMedicalSummaryOrchestrator() {
 
   const progressive = useProgressiveImportStore(state => state.current)
   useEffect(() => {
-    if (progressive?.runId && !isProgressiveAutoSummaryBlocked()) void restoreSummaryVersions(progressive.runId)
-  }, [progressive?.runId])
+    if (progressive?.runId && !['patient-changed', 'privacy-stale'].includes(progressive.phase)) void restoreSummaryVersions(progressive.runId)
+  }, [progressive?.runId, progressive?.phase])
   const versionState = useSummaryVersionsStore()
   const viewKey = progressive ? summaryVersionViewKey(progressive.runId, summaryGenerationSlotKey) : ''
   const versions = versionState.versions.filter(version => progressive?.runId === version.runId
@@ -1120,6 +1124,8 @@ export function useMedicalSummaryOrchestrator() {
   const visibleCatalog = selectedVersion?.catalog ?? summary.sourceCatalog
   const resolveVisibleSource = useCallback((key: string) => selectedVersion
     ? visibleCatalog.find(entry => entry.key === key) : resolveSafetySource(key), [selectedVersion, visibleCatalog, resolveSafetySource])
+  const generationCardErrors = readSummaryGenerationSlot(useCapturedSummaryStatus && scopedBatchStatus
+    ? scopedBatchStatus.summarySlotKey : summaryGenerationSlotKey).result?.cardErrors ?? {}
 
   return {
     result: selectedVersion?.result ?? presentedResultWithReports,
@@ -1151,9 +1157,8 @@ export function useMedicalSummaryOrchestrator() {
     summaryError: presentedSummaryError,
     // A retained coherent summary is presentation-only. Show the attempted
     // model's failures even when its incomplete result cannot replace it.
-    cardErrors: selectedVersion ? selectedVersion.result.cardErrors ?? {} : readSummaryGenerationSlot(useCapturedSummaryStatus && scopedBatchStatus
-      ? scopedBatchStatus.summarySlotKey
-      : summaryGenerationSlotKey).result?.cardErrors ?? {},
+    cardErrors: selectedVersion ? selectedVersion.result.cardErrors ?? {} : generationCardErrors,
+    generationCardErrors,
     safetyError: presentedSafetyError,
     summaryIssue: presentedSummaryIssue,
     safetyIssue: presentedSafetyIssue,

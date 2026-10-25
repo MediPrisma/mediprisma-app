@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { MedicalSummaryResult, SummaryCoverageStats, SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
 import { useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
-import { aiResultCacheKey, loadEncryptedCache, saveEncryptedCache } from '@/src/infrastructure/cache/encrypted-session-cache'
+import { aiResultCacheKey, loadEncryptedCache, saveEncryptedCache, removeEncryptedCache } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
@@ -23,6 +23,7 @@ interface SummaryVersionsState {
   versions: SummaryVersion[]
   selected: Record<string, string>
   running: Record<string, string>
+  automaticStoppedRunId: string | null
   add: (version: SummaryVersion, epoch: number) => void
   select: (viewKey: string, id: string) => void
   reset: () => void
@@ -31,7 +32,7 @@ interface SummaryVersionsState {
 /** Immutable, page-local reading history. Results and their evidence travel
  * together; a new completed result never changes the reader's selection. */
 export const useSummaryVersionsStore = create<SummaryVersionsState>((set) => ({
-  epoch: 0, versions: [], selected: {}, running: {},
+  epoch: 0, versions: [], selected: {}, running: {}, automaticStoppedRunId: null,
   add: (version, epoch) => set(state => {
     if (state.epoch !== epoch || state.versions.some(v => v.id === version.id)) return state
     return {
@@ -41,14 +42,16 @@ export const useSummaryVersionsStore = create<SummaryVersionsState>((set) => ({
   }),
   select: (viewKey, id) => set(state => state.versions.some(v => v.viewKey === viewKey && v.id === id)
     ? { selected: { ...state.selected, [viewKey]: id } } : state),
-  reset: () => set(state => ({ epoch: state.epoch + 1, versions: [], selected: {}, running: {} })),
+  reset: () => set(state => ({ epoch: state.epoch + 1, versions: [], selected: {}, running: {}, automaticStoppedRunId: null })),
 }))
 
 resetOnBundleChange(() => useSummaryVersionsStore.getState().reset(), true)
 useProgressiveImportStore.subscribe((state, previous) => {
   const current = state.current
-  if (current !== previous.current && current && ['cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'].includes(current.phase)) {
+  if (current !== previous.current && current && ['patient-changed', 'privacy-stale'].includes(current.phase)) {
     useSummaryVersionsStore.getState().reset()
+  } else if (current !== previous.current && current && ['cancelled', 'source-unavailable'].includes(current.phase)) {
+    useSummaryVersionsStore.setState(state => ({ epoch: state.epoch + 1, running: {}, automaticStoppedRunId: current.runId }))
   }
 })
 
@@ -58,17 +61,25 @@ export function summaryVersionViewKey(runId: string, slotKey: string): string {
   return slotKey ? `${runId}::${slotKey.split('::').slice(0, 3).join('::')}` : ''
 }
 
+let persistedImportId: string | null = null
 function persistVersions() {
   const state = useSummaryVersionsStore.getState()
   const importId = LocalBundleService.getActiveImportId()
+  if (persistedImportId && (persistedImportId !== importId || !state.versions.length)) {
+    removeEncryptedCache(aiResultCacheKey('summary-versions-v1', 'history', persistedImportId))
+    persistedImportId = null
+  }
   if (!importId || !state.versions.length) return
+  persistedImportId = importId
   void saveEncryptedCache(aiResultCacheKey('summary-versions-v1', 'history', importId), {
     versions: state.versions, selected: state.selected,
   }, () => useSummaryVersionsStore.getState().versions === state.versions
     && useSummaryVersionsStore.getState().selected === state.selected
     && LocalBundleService.getActiveImportId() === importId)
 }
-useSummaryVersionsStore.subscribe(persistVersions)
+useSummaryVersionsStore.subscribe((state, previous) => {
+  if (state.versions !== previous.versions || state.selected !== previous.selected) persistVersions()
+})
 if (typeof window !== 'undefined') window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, persistVersions)
 
 export async function restoreSummaryVersions(runId: string): Promise<void> {
@@ -82,5 +93,6 @@ export async function restoreSummaryVersions(runId: string): Promise<void> {
     || useSummaryVersionsStore.getState().epoch !== state.epoch
     || useSummaryVersionsStore.getState().versions.length
     || LocalBundleService.getActiveImportId() !== importId) return
+  persistedImportId = importId
   useSummaryVersionsStore.setState({ versions: saved.versions, selected: saved.selected })
 }

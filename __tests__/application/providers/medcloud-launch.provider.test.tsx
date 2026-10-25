@@ -20,7 +20,7 @@ import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
-import { PROGRESSIVE_IMPORT_EVENT, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { PROGRESSIVE_IMPORT_EVENT, stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 const launchHref = 'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
@@ -81,6 +81,17 @@ describe('MedcloudLaunchProvider', () => {
 
   afterEach(() => postMessage.mockRestore())
 
+  it('closes an accepted visits round on transport failure without replaying on status restore', async () => {
+    jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('visits')
+    useProgressiveImportStore.setState({ current: { runId: 'run-failed', importId: 'visits', phase: 'reports-pending' } })
+    render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div /></MedcloudLaunchProvider>)
+    act(() => stopProgressiveImport('run-failed', 'failed'))
+    await waitFor(() => expect(useMedcloudLaunchStore.getState().pendingSummary?.progressiveImportId).toBe('visits'))
+    const request = useMedcloudLaunchStore.getState().pendingSummary!
+    act(() => useMedcloudLaunchStore.getState().claimSummary(request.messageId))
+    act(() => stopProgressiveImport('run-failed', 'failed'))
+    expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  })
   it('binds queued cloud summaries to the active progressive run and import', () => {
     const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
     useProgressiveImportStore.setState({ pendingRunId: 'run-a' })
@@ -441,3 +452,4 @@ describe('MedcloudLaunchProvider', () => {
     expect(postMessage).not.toHaveBeenCalled()
   })
 })
+

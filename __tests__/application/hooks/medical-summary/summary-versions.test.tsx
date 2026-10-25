@@ -4,6 +4,7 @@ import { useSummaryVersionsStore, type SummaryVersion } from '@/src/application/
 import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
+import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 
 const version = (id: string, kind: SummaryVersion['kind']): SummaryVersion => ({
   id, kind, runId: 'run', viewKey: 'run::patient::medical::zh-TW', slotKey: id,
@@ -11,6 +12,18 @@ const version = (id: string, kind: SummaryVersion['kind']): SummaryVersion => ({
 })
 
 beforeEach(() => useSummaryVersionsStore.getState().reset())
+
+test('stopping the source keeps completed reading history but privacy revocation removes it', () => {
+  const state = useSummaryVersionsStore.getState()
+  state.add(version('cloud', 'cloud'), state.epoch)
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'current', phase: 'reports-pending' }, stoppedRuns: {} })
+  stopProgressiveImport('run', 'source-unavailable')
+  expect(useSummaryVersionsStore.getState().versions).toHaveLength(1)
+  state.add(version('late', 'hospital'), state.epoch)
+  expect(useSummaryVersionsStore.getState().versions).toHaveLength(1)
+  stopProgressiveImport('run', 'privacy-stale')
+  expect(useSummaryVersionsStore.getState().versions).toEqual([])
+})
 
 test('background completion preserves selection and immutable cloud content', () => {
   const store = useSummaryVersionsStore.getState()

@@ -8,6 +8,11 @@ import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-m
 import { medicalSummaryStore } from '@/src/application/hooks/medical-summary/medical-summary-store'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 
+import { useSummaryVersionsStore } from '@/src/application/hooks/medical-summary/summary-versions.store'
+import { useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
+
 const SLOT = 'lane-slot'
 
 const CATALOG: SummarySourceCatalogEntry[] = [
@@ -91,6 +96,8 @@ jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience:
 jest.mock('@/src/application/providers/ai-demographics-gate.provider', () => ({ useAiDemographicsGate: () => ({ demographicsReadyForAi: true }) }))
 
 beforeEach(() => {
+  useSummaryVersionsStore.getState().reset()
+  useProgressiveImportStore.setState({ current: null, stoppedRuns: {}, pendingRunId: null })
   mockResult = undefined
   contextLimit = 120_000
   mockStream.mockReset()
@@ -295,4 +302,39 @@ test('a key the fast lane never sent stays unverified, even when the saved catal
   expect(byKey.get('E2')).toBeUndefined()
   expect(byKey.get('E2?')).toEqual(expect.objectContaining({ verified: false }))
   expect(byKey.get('E2?')?.resourceId).toBeUndefined()
+})
+
+
+test('a delayed cloud producer keeps cloud provenance after a hospital supplement', async () => {
+  const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud')
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'cloud', phase: 'waiting' } })
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    const block = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : FULL_BLOCKS
+    options.onChunk(block)
+    return block
+  })
+  renderHook(() => useMedicalSummary())
+  const captured = mockSlotOptions.run
+  active.mockReturnValue('hospital')
+  act(() => useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'hospital', phase: 'reports-pending' } }))
+  await act(async () => {
+    mockSlotOptions = { ...mockSlotOptions, run: captured }
+    await runGeneration(32768)()
+  })
+  expect(useSummaryVersionsStore.getState().versions).toHaveLength(1)
+  expect(useSummaryVersionsStore.getState().versions[0].kind).toBe('cloud')
+  expect(useSummaryVersionsStore.getState().versions[0].catalog).toBe(CATALOG)
+})
+
+test('preference-driven automatic summary waits through visits and stops after a completed stage', () => {
+  useSummaryPrefsStore.setState({ autoGenerate: true })
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'visits', phase: 'reports-pending' } })
+  renderHook(() => useMedicalSummary())
+  expect(mockSlotOptions.autoRunEnabled).toBe(false)
+  act(() => useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'final', phase: 'loaded' } }))
+  expect(mockSlotOptions.autoRunEnabled).toBe(true)
+  act(() => useSummaryVersionsStore.setState({ running: { 'run::patient': 'old-slot' } }))
+  expect(mockSlotOptions.autoRunEnabled).toBe(false)
+  act(() => useSummaryVersionsStore.setState({ running: {}, automaticStoppedRunId: 'run' }))
+  expect(mockSlotOptions.autoRunEnabled).toBe(false)
 })

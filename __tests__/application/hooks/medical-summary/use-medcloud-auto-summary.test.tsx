@@ -5,13 +5,27 @@ import { VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID } from '@/src/application/launch/medcl
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { useSummaryVersionsStore } from '@/src/application/hooks/medical-summary/summary-versions.store'
 
 describe('useMedcloudAutoSummary', () => {
   beforeEach(() => {
+    useSummaryVersionsStore.getState().reset()
     useMedcloudLaunchStore.getState().clear()
     useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
   })
   afterEach(() => jest.restoreAllMocks())
+
+  it('consumes a final request without starting AI after the user stops that round', async () => {
+    const generate = jest.fn(async () => undefined)
+    jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('final')
+    useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'final', phase: 'loaded' } })
+    useSummaryVersionsStore.setState({ automaticStoppedRunId: 'run-a' })
+    useMedcloudLaunchStore.getState().queueSummary({ messageId: 'final', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'final' })
+    renderHook(() => useMedcloudAutoSummary({ authLoading: false, hasPatient: true, summaryModelId: null,
+      dataReady: true, isGenerating: false, isRestoring: false, generationSlotKey: 'slot', modelId: MEDICAL_SUMMARY_MODEL_ID, generate }))
+    await waitFor(() => expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull())
+    expect(generate).not.toHaveBeenCalled()
+  })
 
   it('finishes the cloud snapshot across supplements and runs only the latest final snapshot afterwards', async () => {
     const finish: Array<() => void> = []

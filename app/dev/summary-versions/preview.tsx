@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import bundle from '@/e2e/fixtures/medcloud-no-reports-bundle.json'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
@@ -11,6 +12,7 @@ import { summaryVersionViewKey, type SummaryVersion } from '@/src/application/ho
 /** Synthetic reader preview only. The browser regression separately exercises
  * the real progressive importer and AI transport with mocked responses. */
 export default function Preview() {
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
   async function openPreview() {
     setBusy(true)
@@ -42,7 +44,7 @@ export default function Preview() {
     localStorage.setItem('medical-note-onboarding-v1', '1')
     localStorage.setItem('medical-note-left-browser-tour-v1', '1')
     localStorage.setItem('medical-summary-prefs', JSON.stringify({ state: { autoGenerate: false }, version: 0 }))
-    window.location.assign('/')
+    router.push('/')
   }
   return <main className="mx-auto max-w-xl space-y-4 p-6">
     <h1 className="text-xl font-semibold">摘要版本預覽</h1>

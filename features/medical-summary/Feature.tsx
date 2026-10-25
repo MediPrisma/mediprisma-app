@@ -210,6 +210,7 @@ export default function MedicalSummaryFeature() {
     isRestoring,
     summaryError,
     cardErrors,
+    generationCardErrors,
     safetyError,
     contextOverflowIssue,
     contextAdaptation,
@@ -301,7 +302,7 @@ export default function MedicalSummaryFeature() {
     const failedCards = MEDICAL_SUMMARY_CARD_IDS.flatMap((cardId) => {
       // A legacy/restored safety slot can expose its error outside
       // result.cardErrors; it is the same card, so it is listed once, here.
-      const error = cardId === "safety" ? cardErrors.safety ?? safetyError : cardErrors[cardId]
+      const error = cardId === "safety" ? generationCardErrors.safety ?? safetyError : generationCardErrors[cardId]
       return error ? [{
         label: cardLabels[cardId],
         message: error === "PARSE_FAILED"
@@ -326,7 +327,7 @@ export default function MedicalSummaryFeature() {
       ...genericSummaryError,
     ]
   }, [
-    cardErrors,
+    generationCardErrors,
     cardLabels,
     isPatient,
     ms,
@@ -640,7 +641,7 @@ export default function MedicalSummaryFeature() {
         }}
         className="gap-2"
       >
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className={`flex items-center gap-1.5 ${summaryVersions.length ? 'flex-wrap' : 'flex-nowrap @max-[19rem]:flex-wrap'}`}>
         <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-primary @max-[32rem]:hidden" />
         <h2 className="shrink-0 text-base font-semibold text-foreground">{ms.title}</h2>
         <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-primary/10 dark:text-primary @max-[32rem]:hidden">
@@ -682,7 +683,7 @@ export default function MedicalSummaryFeature() {
           onSelect={selectSummaryVersion} busy={isBusy} locale={locale} /> : null}
         <div
           data-tour="medical-summary-controls"
-          className="ml-auto flex min-w-40 flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none"
+          className={`ml-auto flex flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none ${summaryVersions.length ? 'min-w-40' : 'min-w-0 basis-0'}`}
         >
           {activeView === "standard" ? (
             <ModelPicker

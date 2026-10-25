@@ -151,7 +151,24 @@ export function MedcloudLaunchProvider({
   useEffect(() => {
     if (!launchOptions?.auto || typeof window === 'undefined') return
     retireStoppedAutoLaunch()
-    const unsubscribe = useProgressiveImportStore.subscribe(retireStoppedAutoLaunch)
+    const unsubscribe = useProgressiveImportStore.subscribe((state, previous) => {
+      retireStoppedAutoLaunch()
+      const current = state.current
+      // A transport failure after accepted visits also closes that round.
+      // Restoring a status on reload is not authorization to run again.
+      if (current && previous.current?.runId === current.runId
+        && previous.current.phase !== current.phase
+        && ['reports-failed', 'update-failed'].includes(current.phase)
+        && ['reports-pending', 'reports-pending-partial'].includes(previous.current.phase)
+        && current.importId === LocalBundleService.getActiveImportId()
+        && current.importId !== lastSupplementImportRef.current) {
+        lastSupplementImportRef.current = current.importId
+        launchMessageIdRef.current = `final-${current.importId}`
+        autoSummaryQueuedRef.current = false
+        bundleSettledRef.current = true
+        queueAutoSummaryIfReady()
+      }
+    })
     const handleBundleSettled = () => {
       bundleSettledRef.current = true
       queueAutoSummaryIfReady()
