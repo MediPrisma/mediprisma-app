@@ -158,6 +158,7 @@ export function MedcloudLaunchProvider({
       // Restoring a status on reload is not authorization to run again.
       if (current && previous.current?.runId === current.runId
         && previous.current.phase !== current.phase
+        && previous.current.importId === current.importId
         && ['reports-failed', 'update-failed'].includes(current.phase)
         && ['reports-pending', 'reports-pending-partial'].includes(previous.current.phase)
         && current.importId === LocalBundleService.getActiveImportId()
@@ -176,6 +177,17 @@ export function MedcloudLaunchProvider({
     window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, handleBundleSettled)
     const handleSupplement = (event: Event) => {
       const detail = (event as CustomEvent).detail
+      // An empty supplement changes storage ownership without authorizing a
+      // second generation. Carry only an unclaimed cloud request forward.
+      if (detail?.version === 1 && detail.ok && !detail.stopped && ['hospital-empty', 'cloud-only'].includes(detail.stage)
+        && detail.importId === LocalBundleService.getActiveImportId()) {
+        const current = useProgressiveImportStore.getState().current
+        const pending = useMedcloudLaunchStore.getState().pendingSummary
+        if (current && current.importId === detail.importId && pending?.progressiveRunId === current.runId) {
+          useMedcloudLaunchStore.getState().queueSummary({ ...pending, progressiveImportId: detail.importId })
+        }
+        return
+      }
       if (detail?.version !== 1 || !detail.ok || detail.stopped
         || !['hospital', 'hospital-reports-failed'].includes(detail.stage)
         || detail.importId !== LocalBundleService.getActiveImportId()
@@ -332,3 +344,4 @@ export function MedcloudLaunchProvider({
 
   return children
 }
+

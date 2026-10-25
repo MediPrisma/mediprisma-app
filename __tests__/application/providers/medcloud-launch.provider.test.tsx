@@ -453,3 +453,21 @@ describe('MedcloudLaunchProvider', () => {
   })
 })
 
+
+test.each(['hospital-empty', 'cloud-only'])('%s transfers only an unclaimed cloud request to the new import', stage => {
+  const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
+  useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
+  render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+  act(() => window.dispatchEvent(new Event('mediprisma:bundle-change-settled')))
+  useMedcloudLaunchStore.getState().queueSummary({ messageId: 'pending-cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'cloud-import' })
+  active.mockReturnValue('empty-import')
+  act(() => useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'empty-import', phase: 'empty', stage: 'hospital-empty' } }))
+  const receipt = { version: 1, ok: true, stage, runId: 'run-a', requestId: 'empty', importId: 'empty-import', stopped: false }
+  act(() => window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: receipt })))
+  expect(useMedcloudLaunchStore.getState().pendingSummary).toMatchObject({ messageId: 'pending-cloud', progressiveImportId: 'empty-import' })
+  useMedcloudLaunchStore.getState().claimSummary('pending-cloud')
+  act(() => window.dispatchEvent(new CustomEvent(PROGRESSIVE_IMPORT_EVENT, { detail: receipt })))
+  expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+  active.mockRestore()
+})
+

@@ -20,6 +20,7 @@ export interface SummaryVersion {
 
 interface SummaryVersionsState {
   epoch: number
+  automaticEpoch: number
   versions: SummaryVersion[]
   selected: Record<string, string>
   running: Record<string, { slotKey: string; automatic: boolean }>
@@ -33,7 +34,7 @@ interface SummaryVersionsState {
 /** Immutable, page-local reading history. Results and their evidence travel
  * together; a new completed result never changes the reader's selection. */
 export const useSummaryVersionsStore = create<SummaryVersionsState>((set) => ({
-  epoch: 0, versions: [], selected: {}, running: {}, automaticStoppedRunId: null, launchViewKey: null,
+  epoch: 0, automaticEpoch: 0, versions: [], selected: {}, running: {}, automaticStoppedRunId: null, launchViewKey: null,
   add: (version, epoch) => set(state => {
     if (state.epoch !== epoch || state.versions.some(v => v.id === version.id)) return state
     return {
@@ -43,7 +44,7 @@ export const useSummaryVersionsStore = create<SummaryVersionsState>((set) => ({
   }),
   select: (viewKey, id) => set(state => state.versions.some(v => v.viewKey === viewKey && v.id === id)
     ? { selected: { ...state.selected, [viewKey]: id } } : state),
-  reset: () => set(state => ({ epoch: state.epoch + 1, versions: [], selected: {}, running: {}, automaticStoppedRunId: null, launchViewKey: null })),
+  reset: () => set(state => ({ epoch: state.epoch + 1, automaticEpoch: state.automaticEpoch + 1, versions: [], selected: {}, running: {}, automaticStoppedRunId: null, launchViewKey: null })),
 }))
 
 resetOnBundleChange(() => useSummaryVersionsStore.getState().reset(), true)
@@ -51,8 +52,9 @@ useProgressiveImportStore.subscribe((state, previous) => {
   const current = state.current
   if (current !== previous.current && current && ['patient-changed', 'privacy-stale'].includes(current.phase)) {
     useSummaryVersionsStore.getState().reset()
-  } else if (current !== previous.current && current && ['cancelled', 'source-unavailable'].includes(current.phase)) {
-    useSummaryVersionsStore.setState(state => ({ epoch: state.epoch + 1, running: {}, automaticStoppedRunId: current.runId }))
+  } else if (current !== previous.current && current && ['cancelled', 'source-unavailable'].includes(current.phase)
+    && (previous.current?.runId !== current.runId || !['cancelled', 'source-unavailable'].includes(previous.current.phase))) {
+    useSummaryVersionsStore.setState(state => ({ automaticEpoch: state.automaticEpoch + 1, running: Object.fromEntries(Object.entries(state.running).filter(([, run]) => !run.automatic)), automaticStoppedRunId: current.runId, launchViewKey: null }))
   }
 })
 
@@ -63,7 +65,7 @@ export function summaryVersionViewKey(runId: string, slotKey: string): string {
 }
 
 let persistedImportId: string | null = null
-function persistVersions() {
+export async function persistSummaryVersions() {
   const state = useSummaryVersionsStore.getState()
   const importId = LocalBundleService.getActiveImportId()
   if (persistedImportId && (persistedImportId !== importId || !state.versions.length)) {
@@ -72,16 +74,16 @@ function persistVersions() {
   }
   if (!importId || !state.versions.length) return
   persistedImportId = importId
-  void saveEncryptedCache(aiResultCacheKey('summary-versions-v1', 'history', importId), {
+  await saveEncryptedCache(aiResultCacheKey('summary-versions-v1', 'history', importId), {
     versions: state.versions, selected: state.selected,
   }, () => useSummaryVersionsStore.getState().versions === state.versions
     && useSummaryVersionsStore.getState().selected === state.selected
     && LocalBundleService.getActiveImportId() === importId)
 }
 useSummaryVersionsStore.subscribe((state, previous) => {
-  if (state.versions !== previous.versions || state.selected !== previous.selected) persistVersions()
+  if (state.versions !== previous.versions || state.selected !== previous.selected) void persistSummaryVersions()
 })
-if (typeof window !== 'undefined') window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, persistVersions)
+if (typeof window !== 'undefined') window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, () => { void persistSummaryVersions() })
 
 export async function restoreSummaryVersions(runId: string): Promise<void> {
   const importId = LocalBundleService.getActiveImportId()

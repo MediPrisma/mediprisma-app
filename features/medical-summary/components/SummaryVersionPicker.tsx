@@ -17,7 +17,7 @@ export function SummaryVersionPicker({ versions, selectedId, onSelect, busy, loc
   return <div role="group" aria-label={en ? 'Summary version' : '摘要版本'} className="flex shrink-0 items-center gap-1">
     {(['cloud', 'hospital'] as const).map(kind => {
       const target = latest(kind)
-      const active = selected?.kind === kind
+      const active = selected?.id === target?.id
       return <button key={kind} type="button" disabled={!target} aria-pressed={active}
         onClick={() => target && onSelect(target.id)}
         className={`inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md border px-2 text-xs focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 lg:min-h-8 ${active ? 'border-primary/30 bg-primary/10 text-primary' : 'border-input bg-background text-muted-foreground hover:bg-muted'}`}>

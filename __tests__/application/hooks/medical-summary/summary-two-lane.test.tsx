@@ -327,6 +327,7 @@ test('a delayed cloud producer keeps cloud provenance after a hospital supplemen
 })
 
 test('preference-driven automatic summary waits through visits and stops after a completed stage', () => {
+  jest.spyOn(LocalBundleService, 'getActiveImportId').mockImplementation(() => useProgressiveImportStore.getState().current?.importId ?? null)
   useSummaryPrefsStore.setState({ autoGenerate: true })
   useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'visits', phase: 'reports-pending' } })
   renderHook(() => useMedicalSummary())
@@ -371,4 +372,25 @@ test('a usable cloud overview remains in history when another lane fails', async
   expect(saved.result.headline).toContain('78 歲男性')
   expect(saved.result.cardErrors).toBeDefined()
   expect(saved.catalog).toBe(CATALOG)
+})
+
+
+test('a manual producer survives source loss while its immutable input stays available', async () => {
+  jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud')
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'cloud', phase: 'waiting', stage: 'cloud' } })
+  let release!: () => void
+  const blocked = new Promise<void>(resolve => { release = resolve })
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    await blocked
+    const block = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : FULL_BLOCKS
+    options.onChunk(block)
+    return block
+  })
+  renderHook(() => useMedicalSummary())
+  let pending!: Promise<void>
+  act(() => { pending = runGeneration(32768)() })
+  await waitFor(() => expect(mockStream).toHaveBeenCalled())
+  act(() => useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'cloud', phase: 'source-unavailable', stage: 'cloud' } }))
+  await act(async () => { release(); await pending })
+  expect(useSummaryVersionsStore.getState().versions).toHaveLength(1)
 })

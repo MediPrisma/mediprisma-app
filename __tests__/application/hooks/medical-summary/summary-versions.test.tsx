@@ -19,8 +19,7 @@ test('stopping the source keeps completed reading history but privacy revocation
   useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'current', phase: 'reports-pending' }, stoppedRuns: {} })
   stopProgressiveImport('run', 'source-unavailable')
   expect(useSummaryVersionsStore.getState().versions).toHaveLength(1)
-  state.add(version('late', 'hospital'), state.epoch)
-  expect(useSummaryVersionsStore.getState().versions).toHaveLength(1)
+  expect(useSummaryVersionsStore.getState().automaticEpoch).toBeGreaterThan(state.automaticEpoch)
   stopProgressiveImport('run', 'privacy-stale')
   expect(useSummaryVersionsStore.getState().versions).toEqual([])
 })
@@ -64,5 +63,3 @@ test('picker does not steal focus or switch when a new version arrives', () => {
   expect(onSelect).not.toHaveBeenCalled()
   expect(screen.getByRole('button', { name: '含院內資料' })).toBeEnabled()
 })
-
-

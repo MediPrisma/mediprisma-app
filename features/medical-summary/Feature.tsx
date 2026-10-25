@@ -224,6 +224,7 @@ export default function MedicalSummaryFeature() {
     selectedSummaryVersionId,
     selectSummaryVersion,
     currentSummaryModelId,
+    generationCompletedAt,
   } = useMedicalSummaryOrchestrator()
   useMedcloudAutoSummary({
     authLoading,
@@ -245,7 +246,7 @@ export default function MedicalSummaryFeature() {
   useSummaryActivity({
     busy: isBusy,
     scope: summaryGenerationSlotKey,
-    completedAt: result?.generation?.source === 'live' ? result.generation.completedAt : undefined,
+    completedAt: generationCompletedAt,
     failed: !!summaryError || !!safetyError,
   })
 

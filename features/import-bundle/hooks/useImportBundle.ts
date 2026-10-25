@@ -28,6 +28,7 @@ import {
 import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
 import { prepareLocalImportFile } from '../services/local-import-file.service'
 import { ProgressiveImportError } from '../services/progressive-import-transaction'
+import { persistSummaryVersions } from '@/src/application/hooks/medical-summary/summary-versions.store'
 
 /** Ceiling for pulling the bundled demo chart (~1.7MB) over hospital Wi-Fi. */
 const DEMO_FETCH_TIMEOUT_MS = 30_000
@@ -157,6 +158,9 @@ export function useImportBundle(): UseImportBundleReturn {
     setBundleIsActive(shouldUseLocalBundle())
     setIsDemo(demo)
     notifyBundleChanged(preserveMedicalSummary)
+    // Transfer retained reading history into the committed bundle's encryption
+    // namespace before query refresh can wait on a slow clinical-data fetch.
+    if (preserveMedicalSummary) await persistSummaryVersions()
     try {
       await queryClient.invalidateQueries()
     } finally {

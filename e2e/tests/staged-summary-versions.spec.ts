@@ -118,3 +118,23 @@ test('Stop cancels a cloud run and does not start its queued hospital replacemen
   expect(await getChatCallCount(page)).toBe(stoppedCalls)
 })
 
+
+test('Stop during manual regeneration also clears the already queued hospital summary', async ({ page }) => {
+  test.setTimeout(90_000)
+  await prepareMedcloudHandoffPage(page)
+  await mockAiStream(page, { model: 'gemini-3.1-flash-lite', markdown: reply, chunkSize: 10, delayMs: 60 })
+  await page.goto('/dev/summary-versions/flow')
+  const deliver = await createImporter(page)
+  await expect(page.getByTestId('import-bundle-input').first()).toBeAttached()
+  await deliver('cloud', 1)
+  await expect(page.getByRole('button', { name: '雲端', exact: true })).toBeVisible({ timeout: 40_000 })
+  await page.getByRole('button', { name: '重新產生', exact: true }).click()
+  await expect(page.getByRole('button', { name: '終止', exact: true })).toBeVisible()
+  await deliver('hospital', 2)
+  await page.getByRole('button', { name: '終止', exact: true }).click()
+  const stoppedCalls = await getChatCallCount(page)
+  await expect(page.getByRole('button', { name: '終止', exact: true })).toHaveCount(0)
+  await page.waitForTimeout(1200)
+  expect(await getChatCallCount(page)).toBe(stoppedCalls)
+  await expect(page.getByRole('button', { name: '雲端', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})

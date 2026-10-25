@@ -20,7 +20,7 @@ jest.mock('@/src/infrastructure/fhir/services/local-bundle.service', () => ({ Lo
 } }))
 jest.mock('@/features/import-bundle/services/local-import-file.service', () => ({ prepareLocalImportFile: () => mockPrepare() }))
 jest.mock('@/src/infrastructure/fhir/client/fhir-client.service', () => ({ shouldUseLocalBundle: () => true }))
-jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ purgeAiResultCaches: jest.fn(), purgeExpiredAiResultCaches: jest.fn() }))
+jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ purgeAiResultCaches: jest.fn(), purgeExpiredAiResultCaches: jest.fn(), aiResultCacheKey: (...parts: string[]) => parts.join(':'), saveEncryptedCache: jest.fn(async () => {}), removeEncryptedCache: jest.fn() }))
 jest.mock('@/src/shared/utils/id.utils', () => ({ generateId: () => mockGenerateId() }))
 const bundle = (id = 'patient-a') => ({ resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id } }] })
 beforeEach(() => {
@@ -369,4 +369,23 @@ test('a stopped initial capture shows an empty-workspace notice without claiming
   mockImportId = 'manual-next'; mockBundle = bundle()
   act(() => window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT)))
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+
+test('continuation persists retained history before waiting for query refresh', async () => {
+  const { useSummaryVersionsStore } = await import('@/src/application/hooks/medical-summary/summary-versions.store')
+  const cache = await import('@/src/infrastructure/cache/encrypted-session-cache')
+  useSummaryVersionsStore.getState().reset()
+  useSummaryVersionsStore.getState().add({ id: 'saved-cloud', viewKey: 'run::patient-a::medical::zh-TW', runId: 'run', slotKey: 'cloud', kind: 'cloud', completedAt: 1,
+    result: { headline: 'saved' } as any, coverage: null, catalog: [] }, useSummaryVersionsStore.getState().epoch)
+  let release!: () => void
+  const waiting = new Promise<void>(resolve => { release = resolve })
+  mockInvalidateQueries.mockImplementation(() => waiting)
+  const { result } = renderHook(() => useImportBundle())
+  let importing!: Promise<void>
+  act(() => { importing = result.current.importFile(new File(['{}'], 'supplement.json'), { expectedImportId: 'original-import', progressiveRunId: 'run' }) })
+  await waitFor(() => expect(mockInvalidateQueries).toHaveBeenCalled())
+  expect(cache.saveEncryptedCache).toHaveBeenCalledWith('summary-versions-v1:history:new-import', expect.objectContaining({ versions: expect.arrayContaining([expect.objectContaining({ id: 'saved-cloud' })]) }), expect.any(Function))
+  await act(async () => { release(); await importing })
+  useSummaryVersionsStore.getState().reset()
 })

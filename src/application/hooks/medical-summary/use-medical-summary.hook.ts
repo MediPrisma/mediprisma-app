@@ -1020,7 +1020,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     [],
   )
 
-  const progressive = useProgressiveImportStore(state => state.current)
+  const progressiveState = useProgressiveImportStore(state => state.current)
+  const progressive = progressiveState?.importId === LocalBundleService.getActiveImportId() ? progressiveState : null
   const history = useSummaryVersionsStore()
   const historyBusy = !!progressive && Object.keys(history.running).some(key => key.startsWith(`${progressive.runId}::`))
   const finalHospitalStage = !!progressive && ['loaded', 'partial', 'reports-failed'].includes(progressive.phase)
@@ -1038,9 +1039,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       || ['patient-changed', 'privacy-stale'].includes(live.phase)) return run(ctx)
     const state = useSummaryVersionsStore.getState()
     const epoch = state.epoch
+    const automaticEpoch = state.automaticEpoch
+    const automatic = Boolean(ctx.automatic || state.launchViewKey === summaryVersionViewKey(current.runId, ctx.operationKey))
     const viewKey = summaryVersionViewKey(current.runId, ctx.operationKey)
     useSummaryVersionsStore.setState(s => ({ running: { ...s.running, [viewKey]: {
-      slotKey: ctx.operationKey, automatic: Boolean(ctx.automatic || s.launchViewKey === viewKey),
+      slotKey: ctx.operationKey, automatic,
     } } }))
     const startedAt = nowMs()
     try {
@@ -1048,7 +1051,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       const result = produced?.generation?.source === 'live' ? { ...produced, generation: {
         ...produced.generation, completedAt: Date.now(), durationMs: Math.round(nowMs() - startedAt),
       } } : produced
-      if (result && !ctx.signal?.aborted && (result.completedCardIds?.includes('overview')
+      if (result && !ctx.signal?.aborted && (!automatic || useSummaryVersionsStore.getState().automaticEpoch === automaticEpoch) && (result.completedCardIds?.includes('overview')
         || !Object.values(result.cardErrors ?? {}).some(Boolean))) {
         useSummaryVersionsStore.getState().add({
           id: `${ctx.operationKey}:${result.generation?.source === 'live' ? result.generation.generatedAt : Date.now()}`,

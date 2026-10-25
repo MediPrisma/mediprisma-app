@@ -537,7 +537,8 @@ export function useMedicalSummaryOrchestrator() {
       const key = summaryVersionViewKey(progressive.runId, summary.readingScopeKey)
       const history = useSummaryVersionsStore.getState()
       const running = history.running[key]
-      if (running?.automatic || history.launchViewKey === key) {
+      const pending = useMedcloudLaunchStore.getState().pendingSummary
+      if (running?.automatic || history.launchViewKey === key || (running && pending?.progressiveRunId === progressive.runId)) {
         useSummaryVersionsStore.setState({ automaticStoppedRunId: progressive.runId })
         const pending = useMedcloudLaunchStore.getState().pendingSummary
         if (pending?.progressiveRunId === progressive.runId) useMedcloudLaunchStore.getState().claimSummary(pending.messageId)
@@ -1143,6 +1144,7 @@ export function useMedicalSummaryOrchestrator() {
       if (version) versionState.select(version.viewKey, id)
     },
     currentSummaryModelId: result?.generation?.modelId ?? null,
+    generationCompletedAt: result?.generation?.source === 'live' ? result.generation.completedAt : undefined,
     hasPatient,
     dataReady,
     model,
@@ -1188,3 +1190,4 @@ export function useMedicalSummaryOrchestrator() {
     safetyGenerationSlotKey,
   }
 }
+
