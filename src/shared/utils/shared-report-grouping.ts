@@ -1,7 +1,7 @@
 import { decodeBase64Utf8 } from './base64.utils'
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
-import { getImagingCopySource, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, reportIdentifiers, typedReportIdentifierValue } from './report-identity'
+import { getImagingCopySource, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, reportIdentifiers, reportExaminationIdentifiers, reportClockInstant, typedReportIdentifierValue } from './report-identity'
 
 export type SharedReportSource = {
   reportId?: string
@@ -28,7 +28,7 @@ function radiographClock(report: any): string | undefined {
     && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && Number.isFinite(Date.parse(value))
   // NHI can export two billing rows for the same complete report. Its explicit
   // report timestamp is corroborating report identity, not an exam time.
-  return timestamp(effective) ? `exam:${effective}` : timestamp(published) ? `report:${published}` : undefined
+  return timestamp(effective) ? `exam:${reportClockInstant(effective)}` : timestamp(published) ? `report:${reportClockInstant(published)}` : undefined
 }
 
 function reportInstitution(report: any): string | undefined {
@@ -148,7 +148,7 @@ export function sharedReportGroupingKey(report: any): string | null {
     const effective = reportExamDate(report)
     // A copied header must never override explicit evidence of a different
     // examination. Only a tagged receipt clock is allowed to differ.
-    if (header && effective?.includes('T') && Date.parse(header) !== Date.parse(effective)) return null
+    if (header && effective?.includes('T') && reportClockInstant(header) !== reportClockInstant(effective)) return null
   }
   // Linked studies require resolved study identity, not a common billing
   // narrative. Keep these radiographs outside this automatic projection.
@@ -272,8 +272,8 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
   }
   for (const [key, members] of radiographMembers) {
     const sameExamClock = members.every(report => radiographClock(report)?.startsWith('exam:'))
-    const common = reportIdentifiers(members[0]).filter((id: any) => id?.value).some((id: any) =>
-      members.every(report => reportIdentifiers(report).some((candidate: any) => candidate?.value
+    const common = reportExaminationIdentifiers(members[0]).some((id: any) =>
+      members.every(report => reportExaminationIdentifiers(report).some((candidate: any) => candidate?.value
         && typedReportIdentifierValue(candidate) === typedReportIdentifierValue(id) && candidate.system === id.system)))
     if (repeatedIdentities.has(key) && !sameExamClock && !common) conflicts.add(key)
     if (sameExamClock) continue

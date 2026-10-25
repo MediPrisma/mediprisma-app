@@ -32,7 +32,10 @@ export function isRadiographLabel(label: string): boolean {
   // PA may mean pulmonary angiography; lateral may describe an ultrasound
   // site. Projection words alone must not override an explicit modality.
   if (/\bct\b|computed tomography|\bmri?\b|magnetic resonance|sono|ultrason|ultrasound|電腦斷層|磁振|超音波/i.test(normalized)) return false
-  return /^(?:chest[\s,/-]+(?:(?:\d+|single|two|views?|ap|pa|lateral|portable|film)[\s,/-]*)+|portable\s+chest)$/i.test(normalized.trim())
+  const words = normalized.trim().toLowerCase().split(/[\s,&/-]+/)
+  if (words.length === 2 && words[0] === 'portable' && words[1] === 'chest') return true
+  return words.length > 1 && words[0] === 'chest'
+    && words.slice(1).every(word => /^(?:\d+|single|two|views?|ap|pa|lat(?:eral)?|portable|film|and|frontal|erect|supine|upright)$/.test(word))
 }
 
 export const IMAGING_EXAM_HEADER = /^\s*((?:SONO(?:GRAM)?|CHEST|PORTABLE\s+CHEST|CXR|XR|KUB|CT(?:\/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i

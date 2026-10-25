@@ -37,6 +37,17 @@ function fixture(): any[] {
 
 const rows = (reports: any[]) => buildReportsData(reports).reportRows
 describe('legacy receipt-clock imaging copies', () => {
+  it.each([false, true])('keeps clockless serial CXR with the same request ID, identical findings=%s', identical => {
+    const template = fixture()[4]
+    const reports = ['08', '16'].map((hour, index) => ({ ...template, id: `request-${index}`,
+      effectiveDateTime: `2026-06-24T${hour}:10:00+08:00`,
+      extension: [{ url: 'urn:vgh:report:received-at', valueDateTime: `2026-06-24T${hour}:10:00+08:00` }],
+      conclusion: template.conclusion.replace(' 11:29:54', '') + (index && !identical ? ' New finding.' : ''),
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
   it('retains serial portable reports with a common request identifier and different header times', () => {
     const template = fixture()[4]
     const reports = ['08:00:00', '16:00:00'].map((time, index) => ({ ...template,
@@ -76,7 +87,7 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(calculateReportTabCounts(reports).all).toBe(2)
   })
 
-  it.each(['CXR', 'CHEST AP', 'CHEST PA', 'CHEST PORTABLE', 'Portable chest', 'Chest film', 'CHEST, PORTABLE'])('preserves serial %s without category or coding', title => {
+  it.each(['CXR', 'CHEST AP', 'CHEST PA', 'CHEST PORTABLE', 'Portable chest', 'Chest film', 'CHEST, PORTABLE', 'Chest PA and Lateral', 'Chest PA & LAT'])('preserves serial %s without category or coding', title => {
     const template = fixture()[5]
     const reports = ['08', '16'].map(hour => ({ ...template,
       id: `uncategorized-${hour}`, category: [], identifier: [], extension: [], code: { text: title },
@@ -192,7 +203,7 @@ describe('legacy receipt-clock imaging copies', () => {
       ...template, id: `serial-${clock}-${code}`,
       effectiveDateTime: evidence !== 'clock' ? '2026-06-24' : `2026-06-24T${clock}:00+08:00`,
       code: { ...template.code, coding: [{ code }] },
-      identifier: evidence === 'unidentified' ? undefined : [{ system: 'urn:synthetic:accession', value: `EXAM-${index}` }],
+      identifier: evidence === 'unidentified' ? undefined : [{ system: 'urn:synthetic:accession', value: `EXAM-${index}`, type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'ACSN' }] } }],
     })))
     expect(rows(reports)).toHaveLength(evidence === 'unidentified' ? 4 : 2)
     expect(calculateReportTabCounts(reports).all).toBe(evidence === 'unidentified' ? 4 : 2)

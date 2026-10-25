@@ -52,6 +52,20 @@ export function reportIdentifiers(report: any): any[] {
   return Array.isArray(report?.identifier) ? report.identifier : []
 }
 
+/** Request/order IDs can span serial exams; only examination IDs prove identity. */
+export function reportExaminationIdentifiers(report: any): any[] {
+  return reportIdentifiers(report).filter(id => id?.value && (
+    id.system === 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/medcloud-imaging-case'
+    || (Array.isArray(id.type?.coding) && id.type.coding.some((type: any) =>
+      type?.system === 'http://terminology.hl7.org/CodeSystem/v2-0203' && type.code === 'ACSN'))
+  ))
+}
+
+/** Offset-less source clocks are Taipei local time, independent of runtime timezone. */
+export function reportClockInstant(value: string): number {
+  return Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}+08:00`)
+}
+
 export function typedReportIdentifierValue(identifier: any): string {
   const types = Array.isArray(identifier.type?.coding)
     ? identifier.type.coding.map((coding: any) => JSON.stringify([coding?.system ?? '', coding?.code ?? ''])).sort()
@@ -96,7 +110,7 @@ export function reportNaturalGroupingKey(report: any): string {
     return `${key}|radiograph:${JSON.stringify([
       clock, headerClock, identifiers,
       report.imagingStudy ?? null,
-      !clock && !headerClock && !identifiers.length ? report.id ?? null : null,
+      !clock && !headerClock && !reportExaminationIdentifiers(report).length ? report.id ?? null : null,
       period ? [period.start, period.end] : null,
     ])}`
   }
