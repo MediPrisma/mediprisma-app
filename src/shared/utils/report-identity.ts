@@ -59,7 +59,7 @@ export function typedReportIdentifierValue(identifier: any): string {
 
 export function isReportReceiptClock(report: any): boolean {
   return getImagingCopySource(report) === 'hospital' && !!report.effectiveDateTime
-    && report.extension?.some((extension: any) => extension?.url === 'urn:vgh:report:received-at'
+    && Array.isArray(report.extension) && report.extension.some((extension: any) => extension?.url === 'urn:vgh:report:received-at'
       && extension.valueDateTime === report.effectiveDateTime) === true
 }
 

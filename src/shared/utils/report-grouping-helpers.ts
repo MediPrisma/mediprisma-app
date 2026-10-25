@@ -32,7 +32,7 @@ export function isRadiographLabel(label: string): boolean {
   // PA may mean pulmonary angiography; lateral may describe an ultrasound
   // site. Projection words alone must not override an explicit modality.
   if (/\bct\b|computed tomography|\bmri?\b|magnetic resonance|sono|ultrason|電腦斷層|磁振|超音波/i.test(normalized)) return false
-  return /\bchest\b[^.\n]{0,120}\b(?:views?|ap|pa|lateral)\b/i.test(normalized)
+  return /\bchest\b[^.\n]{0,120}\b(?:views?|ap|pa|lateral|portable|film)\b|\bportable\s+chest\b/i.test(normalized)
 }
 
 export const IMAGING_EXAM_HEADER = /^((?:SONO(?:GRAM)?|CHEST|CT(?:\/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i
@@ -408,7 +408,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
     report.code?.text,
     ...codings.map((coding) => coding?.display),
   ].filter((value): value is string => !!value).join(' ')
-  if (IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
+  if (isRadiographLabel(orderTitle) || IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
     return 'imaging'
   }
 

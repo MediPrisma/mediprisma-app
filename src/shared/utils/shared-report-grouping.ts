@@ -22,7 +22,7 @@ function reportExamDate(report: any): string | undefined {
 
 function radiographClock(report: any): string | undefined {
   const effective = reportExaminationHeaderClock(report) ?? (isReportReceiptClock(report) ? undefined : reportExamDate(report))
-  const published = getImagingCopySource(report) === 'cloud' ? report.extension?.find((extension: any) =>
+  const published = getImagingCopySource(report) === 'cloud' && Array.isArray(report.extension) ? report.extension.find((extension: any) =>
     extension?.url === 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-report-date')?.valueString : undefined
   const timestamp = (value: unknown): value is string => typeof value === 'string'
     && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && Number.isFinite(Date.parse(value))
@@ -143,6 +143,13 @@ function sharedReportBoundary(report: any): SharedReportBoundary | null {
  * evidence that two separately billed reports came from the same encounter.
  */
 export function sharedReportGroupingKey(report: any): string | null {
+  if (isRadiographReport(report) && !isReportReceiptClock(report)) {
+    const header = reportExaminationHeaderClock(report)
+    const effective = reportExamDate(report)
+    // A copied header must never override explicit evidence of a different
+    // examination. Only a tagged receipt clock is allowed to differ.
+    if (header && effective?.includes('T') && Date.parse(header) !== Date.parse(effective)) return null
+  }
   // Linked studies require resolved study identity, not a common billing
   // narrative. Keep these radiographs outside this automatic projection.
   if (isRadiographReport(report) && report.imagingStudy?.length) return null

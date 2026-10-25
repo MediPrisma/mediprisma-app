@@ -37,7 +37,29 @@ function fixture(): any[] {
 
 const rows = (reports: any[]) => buildReportsData(reports).reportRows
 describe('legacy receipt-clock imaging copies', () => {
-  it.each(['CT chest PA angiography', 'SONO- CHEST WALL, LATERAL'])('does not classify another modality as XR: %s', title => {
+  it('keeps billing copies separate when a header conflicts with explicit examination clocks', () => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32002C'].map((code, index) => ({ ...template,
+      id: `conflicting-clock-${index}`, identifier: [], extension: [],
+      code: { text: 'CXR', coding: [{ code }] },
+      effectiveDateTime: `2026-06-24T${index ? '16' : '08'}:00:00+08:00`,
+      conclusion: `CHEST AP VIEW Date Of Examination:2026/06/24 08:00:00 Date Of RCP:2026/06/24 ${template.conclusion}`,
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
+  it.each(['CXR', 'CHEST AP', 'CHEST PA', 'CHEST PORTABLE', 'Portable chest', 'Chest film', 'CHEST, PORTABLE'])('preserves serial %s without category or coding', title => {
+    const template = fixture()[5]
+    const reports = ['08', '16'].map(hour => ({ ...template,
+      id: `uncategorized-${hour}`, category: [], identifier: [], extension: [], code: { text: title },
+      effectiveDateTime: `2026-06-24T${hour}:00:00+08:00`,
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
+  it.each(['CT chest PA angiography', 'SONO- CHEST WALL, LATERAL', 'CT chest portable', 'Portable chest ultrasound'])('does not classify another modality as XR: %s', title => {
     expect(isRadiographReport({ ...fixture()[4], code: { text: title }, conclusion: '' })).toBe(false)
   })
 
@@ -195,6 +217,13 @@ describe('legacy receipt-clock imaging copies', () => {
   it('tolerates malformed imported CXR identifiers without hiding reports', () => {
     const reports = fixture().slice(4, 6)
     reports.forEach(report => { report.identifier = { value: 'malformed' } as any })
+    expect(() => rows(reports)).not.toThrow()
+    expect(() => calculateReportTabCounts(reports)).not.toThrow()
+  })
+
+  it('tolerates malformed extensions on hospital and cloud radiographs', () => {
+    const reports = fixture().slice(4, 6)
+    reports.forEach(report => { report.extension = {} })
     expect(() => rows(reports)).not.toThrow()
     expect(() => calculateReportTabCounts(reports)).not.toThrow()
   })
