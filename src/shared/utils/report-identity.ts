@@ -18,9 +18,9 @@ export function getReportDate(report: any): string | undefined {
   // Grouping and calendar-window consumers must agree on the examination day.
   // Keep the instant, expressed in the Taiwan source timezone, without changing
   // the original FHIR resource or the date projection of other report groups.
-  if (imaging && getImagingCopySource(report) && typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && !value.endsWith('+08:00')) {
-    const instant = Date.parse(value)
-    if (Number.isFinite(instant)) return new Date(instant + 8 * 60 * 60 * 1000).toISOString().replace(/Z$/, '+08:00')
+  if (imaging && getImagingCopySource(report) && typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim()) && !value.endsWith('+08:00')) {
+    const instant = reportClockInstant(value)
+    if (instant !== undefined) return new Date(instant + 8 * 60 * 60 * 1000).toISOString().replace(/Z$/, '+08:00')
   }
   return value
 }
@@ -63,7 +63,7 @@ export function reportExaminationIdentifiers(report: any): any[] {
 
 /** Offset-less source clocks are Taipei local time, independent of runtime timezone. */
 export function reportClockInstant(value: string): number | undefined {
-  const normalized = value.trim()
+  const normalized = value.trim().replace(/z$/i, 'Z').replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
   const instant = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}+08:00`)
   return Number.isFinite(instant) ? instant : undefined
 }

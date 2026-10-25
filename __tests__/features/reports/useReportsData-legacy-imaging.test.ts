@@ -37,6 +37,18 @@ function fixture(): any[] {
 
 const rows = (reports: any[]) => buildReportsData(reports).reportRows
 describe('legacy receipt-clock imaging copies', () => {
+  it.each(['2026-06-23T18:00:00-0600', '2026-06-24T00:00:00z', '2026-06-24T08:00:00+0800 '])('uses one Taipei day and instant for headerless billing copies: %s', effective => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32002C'].map((code, index) => ({ ...template, id: `day-${index}`,
+      code: { text: 'CXR', coding: [{ code }] },
+      effectiveDateTime: index ? effective : '2026-06-24T08:00:00+08:00',
+    }))
+    const result = rows(reports)
+    expect(result).toHaveLength(1)
+    expect(result[0].effectiveDate?.slice(0, 10)).toBe('2026-06-24')
+    expect(calculateReportTabCounts(reports).all).toBe(1)
+  })
+
   it.each(['+0800', 'z', '+08:00 ', 'invalid'])('does not collapse serial clocks with suffix %s', suffix => {
     const template = fixture()[5]
     const reports = ['08', '16'].map((hour, index) => ({ ...template, id: `offset-${index}`,

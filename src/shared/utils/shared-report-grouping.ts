@@ -1,7 +1,7 @@
 import { decodeBase64Utf8 } from './base64.utils'
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
-import { getImagingCopySource, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, reportIdentifiers, reportExaminationIdentifiers, reportClockInstant, typedReportIdentifierValue } from './report-identity'
+import { getImagingCopySource, getReportDate, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, reportIdentifiers, reportExaminationIdentifiers, reportClockInstant, typedReportIdentifierValue } from './report-identity'
 
 export type SharedReportSource = {
   reportId?: string
@@ -106,7 +106,8 @@ function sharedReportBoundary(report: any): SharedReportBoundary | null {
   const encounter = report?._encounterInferred
     ? null
     : explicitReference(report?.encounter?.reference)
-  const dateValue = reportExamDate(report)
+  const examinationDate = reportExamDate(report)
+  const dateValue = examinationDate && isRadiographReport(report) ? getReportDate(report) : examinationDate
   const dateMatch = typeof dateValue === 'string'
     ? /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(dateValue.trim())
     : null
