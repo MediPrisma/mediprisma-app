@@ -24,11 +24,13 @@ function radiographClock(report: any): string | undefined {
   const effective = reportExaminationHeaderClock(report) ?? (isReportReceiptClock(report) ? undefined : reportExamDate(report))
   const published = getImagingCopySource(report) === 'cloud' && Array.isArray(report.extension) ? report.extension.find((extension: any) =>
     extension?.url === 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-report-date')?.valueString : undefined
-  const timestamp = (value: unknown): value is string => typeof value === 'string'
-    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && Number.isFinite(Date.parse(value))
+  const timestamp = (value: unknown): number | undefined => typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) ? reportClockInstant(value) : undefined
   // NHI can export two billing rows for the same complete report. Its explicit
   // report timestamp is corroborating report identity, not an exam time.
-  return timestamp(effective) ? `exam:${reportClockInstant(effective)}` : timestamp(published) ? `report:${reportClockInstant(published)}` : undefined
+  const examInstant = timestamp(effective)
+  const publishedInstant = timestamp(published)
+  return examInstant !== undefined ? `exam:${examInstant}` : publishedInstant !== undefined ? `report:${publishedInstant}` : undefined
 }
 
 function reportInstitution(report: any): string | undefined {

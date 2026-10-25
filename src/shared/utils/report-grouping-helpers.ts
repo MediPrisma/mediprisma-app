@@ -32,7 +32,7 @@ export function isRadiographLabel(label: string): boolean {
   // PA may mean pulmonary angiography; lateral may describe an ultrasound
   // site. Projection words alone must not override an explicit modality.
   if (/\bct\b|computed tomography|\bmri?\b|magnetic resonance|sono|ultrason|ultrasound|電腦斷層|磁振|超音波/i.test(normalized)) return false
-  const words = normalized.trim().toLowerCase().split(/[\s,&/-]+/)
+  const words = normalized.trim().toLowerCase().split(/[\s,&/-]+/).filter(Boolean)
   if (words.length === 2 && words[0] === 'portable' && words[1] === 'chest') return true
   return words.length > 1 && words[0] === 'chest'
     && words.slice(1).every(word => /^(?:\d+|single|two|views?|ap|pa|lat(?:eral)?|portable|film|and|frontal|erect|supine|upright)$/.test(word))

@@ -37,6 +37,34 @@ function fixture(): any[] {
 
 const rows = (reports: any[]) => buildReportsData(reports).reportRows
 describe('legacy receipt-clock imaging copies', () => {
+  it.each(['+0800', 'z', '+08:00 ', 'invalid'])('does not collapse serial clocks with suffix %s', suffix => {
+    const template = fixture()[5]
+    const reports = ['08', '16'].map((hour, index) => ({ ...template, id: `offset-${index}`,
+      code: { text: 'CXR', coding: [{ code: index ? '32002C' : '32001C' }] }, identifier: [], extension: [],
+      effectiveDateTime: `2026-06-24T${hour}:00:00${suffix}`,
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
+  it.each(['2026-06-24T00:00:00Z', '2026-06-24T08:00:00', '2026-06-24T08:00:00+0800'])('recognizes equivalent header/effective clocks: %s', effective => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32002C'].map((code, index) => ({ ...template, id: `equivalent-${index}`,
+      code: { text: 'CXR', coding: [{ code }] }, identifier: [], extension: [],
+      effectiveDateTime: index ? effective : '2026-06-24T08:00:00+08:00',
+      conclusion: `CHEST AP VIEW Date Of Examination:2026/06/24 08:00:00 Date Of RCP:2026/06/24 ${template.conclusion}`,
+    }))
+    expect(rows(reports)).toHaveLength(1)
+  })
+
+  it('does not treat a shared request ID as identity across billing codes', () => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32002C'].map((code, index) => ({ ...template, id: `request-billing-${index}`,
+      code: { text: 'CXR', coding: [{ code }] }, identifier: [{ system: 'urn:request', value: 'common-request' }], extension: [],
+    }))
+    expect(rows(reports)).toHaveLength(2)
+  })
+
   it.each([false, true])('keeps clockless serial CXR with the same request ID, identical findings=%s', identical => {
     const template = fixture()[4]
     const reports = ['08', '16'].map((hour, index) => ({ ...template, id: `request-${index}`,
@@ -87,7 +115,7 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(calculateReportTabCounts(reports).all).toBe(2)
   })
 
-  it.each(['CXR', 'CHEST AP', 'CHEST PA', 'CHEST PORTABLE', 'Portable chest', 'Chest film', 'CHEST, PORTABLE', 'Chest PA and Lateral', 'Chest PA & LAT'])('preserves serial %s without category or coding', title => {
+  it.each(['CXR', 'CHEST AP', 'CHEST PA', 'CHEST PORTABLE', 'Portable chest', 'Chest film', 'CHEST, PORTABLE', 'Chest PA and Lateral', 'Chest PA & LAT', 'CHEST PA,', 'CHEST PA/'])('preserves serial %s without category or coding', title => {
     const template = fixture()[5]
     const reports = ['08', '16'].map(hour => ({ ...template,
       id: `uncategorized-${hour}`, category: [], identifier: [], extension: [], code: { text: title },

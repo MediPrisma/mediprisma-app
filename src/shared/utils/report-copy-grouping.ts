@@ -1,6 +1,6 @@
 import type { DiagnosticReport as Report } from '../types/fhir.types'
 import { getNhiReportModality, inferReportDisplayGroup, isRadiographLabel, IMAGING_EXAM_HEADER as EXAM_HEADER } from './report-grouping-helpers'
-import { getImagingCopySource as sourceOf, reportNaturalGroupingKey, isReportReceiptClock, reportIdentifiers, typedReportIdentifierValue } from './report-identity'
+import { getImagingCopySource as sourceOf, reportNaturalGroupingKey, isReportReceiptClock, reportIdentifiers, reportClockInstant as sourceInstant, typedReportIdentifierValue } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
 import {
@@ -129,13 +129,6 @@ function periodEnd(report: Report): { day: string; instant?: number } | null | u
   const start = period.start?.includes('T') ? sourceInstant(period.start) : undefined
   if (day < (examDay(report) ?? '') || (instant !== undefined && start !== undefined && instant < start)) return null
   return { day, instant }
-}
-
-// This source adapter is Taipei VGH: offset-less source times are UTC+08:00.
-function sourceInstant(value: string): number | undefined {
-  const explicitZone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
-  const instant = Date.parse(explicitZone ? value : `${value}+08:00`)
-  return Number.isFinite(instant) ? instant : undefined
 }
 
 function examTime(report: Report): string | undefined {
