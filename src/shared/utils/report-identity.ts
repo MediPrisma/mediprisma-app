@@ -36,6 +36,7 @@ export function isAdultPreventiveReport(report: any): boolean {
 }
 
 export function isRadiographReport(report: any): boolean {
+  if (!report) return false
   if (report.code?.coding?.some((coding: any) => {
     const method = getNhiReportModality(coding?.code)
     return method && method !== 'XR'

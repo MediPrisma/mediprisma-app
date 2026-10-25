@@ -37,6 +37,23 @@ function fixture(): any[] {
 
 const rows = (reports: any[]) => buildReportsData(reports).reportRows
 describe('legacy receipt-clock imaging copies', () => {
+  it('retains all groups when the imported list contains a null entry', () => {
+    const reports = fixture()
+    expect(rows([null, ...reports])).toHaveLength(4)
+  })
+
+  it.each(['clock', 'identifier'])('merges billing retries with proven common %s', evidence => {
+    const template = fixture()[5]
+    const reports = ['32001C', '32001C', '32002C'].map((code, index) => ({ ...template,
+      id: `retry-${index}`, code: { text: 'CXR', coding: [{ code }] },
+      effectiveDateTime: evidence === 'clock' ? '2026-06-24T08:00:00+08:00' : '2026-06-24',
+      identifier: evidence === 'identifier' ? template.identifier : [],
+    }))
+    expect(rows(reports)).toHaveLength(1)
+    expect(rows(reports)[0].diagnosticReportIds).toHaveLength(3)
+    expect(calculateReportTabCounts(reports).all).toBe(1)
+  })
+
   it('keeps billing copies separate when a header conflicts with explicit examination clocks', () => {
     const template = fixture()[5]
     const reports = ['32001C', '32002C'].map((code, index) => ({ ...template,
@@ -59,7 +76,7 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(calculateReportTabCounts(reports).all).toBe(2)
   })
 
-  it.each(['CT chest PA angiography', 'SONO- CHEST WALL, LATERAL', 'CT chest portable', 'Portable chest ultrasound'])('does not classify another modality as XR: %s', title => {
+  it.each(['CT chest PA angiography', 'SONO- CHEST WALL, LATERAL', 'CT chest portable', 'Portable chest ultrasound', 'Chest tube insertion, lateral approach', 'chest drain (portable)'])('does not classify another modality as XR: %s', title => {
     expect(isRadiographReport({ ...fixture()[4], code: { text: title }, conclusion: '' })).toBe(false)
   })
 

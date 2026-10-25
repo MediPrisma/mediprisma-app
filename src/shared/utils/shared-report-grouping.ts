@@ -241,6 +241,7 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
   const radiographIdentifiers = new Map<string, Map<string, string>>()
   const radiographMembers = new Map<string, any[]>()
   const conflicts = new Set<string>()
+  const repeatedIdentities = new Set<string>()
   for (const report of reports) {
     if (!report) continue
     const key = sharedReportGroupingKey(report)
@@ -250,7 +251,7 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
     // Repeated billing identities may be serial examinations whose clocks or
     // accession IDs were omitted. Distinct billing codes alone cannot prove
     // that this whole bucket describes a single radiograph.
-    if (isRadiographReport(report) && identities.has(identity)) conflicts.add(key)
+    if (isRadiographReport(report) && identities.has(identity)) repeatedIdentities.add(key)
     identities.add(identity)
     sourceIdentities.set(key, identities)
     if (isRadiographReport(report)) {
@@ -270,10 +271,12 @@ export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
     }
   }
   for (const [key, members] of radiographMembers) {
-    if (members.every(report => radiographClock(report)?.startsWith('exam:'))) continue
+    const sameExamClock = members.every(report => radiographClock(report)?.startsWith('exam:'))
     const common = reportIdentifiers(members[0]).filter((id: any) => id?.value).some((id: any) =>
       members.every(report => reportIdentifiers(report).some((candidate: any) => candidate?.value
         && typedReportIdentifierValue(candidate) === typedReportIdentifierValue(id) && candidate.system === id.system)))
+    if (repeatedIdentities.has(key) && !sameExamClock && !common) conflicts.add(key)
+    if (sameExamClock) continue
     // NHI's unnumbered billing copy may accompany a numbered image-case copy.
     // An exact full narrative + explicit publication instant can attach that
     // copy to ONE known image case. Publication time alone is never sufficient.
