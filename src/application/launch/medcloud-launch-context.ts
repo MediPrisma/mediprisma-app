@@ -34,7 +34,8 @@ const AES_256_KEY_LENGTH = 32
 const AES_GCM_IV_LENGTH = 12
 const AES_GCM_AUTH_TAG_LENGTH = 16
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/
-const MEDIPRISMA_APP_PATHS = new Set(['/app/', '/app-hmc/'])
+// Any top-level workspace starting with "app" (/app/, /app-hmc/, /app-staging/, ...), as the 雲端病歷 extension accepts.
+const MEDIPRISMA_APP_PATH = /^\/app[a-z0-9-]*\/$/
 
 export type MedcloudLaunchContext =
   | {
@@ -80,7 +81,7 @@ export function parseMedcloudLaunchOptions(
     const url = value instanceof URL ? value : new URL(value)
     if (
       url.origin !== MEDIPRISMA_PRODUCTION_ORIGIN ||
-      !MEDIPRISMA_APP_PATHS.has(url.pathname) ||
+      !MEDIPRISMA_APP_PATH.test(url.pathname) ||
       url.hash !== ''
     ) return null
 

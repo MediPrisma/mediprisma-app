@@ -10,7 +10,7 @@
 
 export const RAW_CAPTURE_REQUEST = 'MEDIPRISMA_RAW_CAPTURE_REQUEST'
 export const RAW_CAPTURE_RESULT = 'MEDIPRISMA_RAW_CAPTURE_RESULT'
-/** The extension answers only this origin, under /app and /app-hmc. */
+/** The extension answers only this origin, under any /app… workspace (/app, /app-hmc, /app-staging). */
 export const RAW_CAPTURE_ORIGIN = 'https://mediprisma.tw'
 /** The extension gives up after 60 s; a typical capture arrives in a second
  *  or two, so the report waits a bounded time and then sends without it. */

@@ -1,39 +1,74 @@
 name: Sync app to mediprisma.tw/app
 
-# Keeps https://mediprisma.tw/app in lockstep with the GitHub Pages deploy.
-# After CI passes on master, build the static export with basePath /app — using
-# the SAME NEXT_PUBLIC_* secrets as the gh-pages build, so the mirror is feature-
-# identical (AI, Firebase, etc.) — then push it into the docs site repo
-# (MediPrisma/mediprisma-site) at static/app/. That push triggers Cloudflare Pages
-# to redeploy mediprisma.tw/app automatically.
+# Promotes a tested commit to production (docs/RELEASE-CHANNELS.md). master no
+# longer deploys here on its own: every commit first goes to
+# https://mediprisma.tw/app-staging, and this workflow is started by hand with
+# the commit to promote. It must be on master, have passed CI, and have been
+# published to /app-staging; the `production` environment then asks for
+# approval. The build uses the same NEXT_PUBLIC_* settings as before and is
+# pushed into the docs site repo (MediPrisma/mediprisma-site) at static/app/,
+# which Cloudflare Pages serves as mediprisma.tw/app.
 # Publishing uses a write-enabled deploy key stored only in the
 # mediprisma-site-publish environment. That environment accepts protected
 # branches, so pilot branch workflows cannot read the key.
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [master]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full master commit SHA already live on mediprisma.tw/app-staging
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: sync-mediprisma-app
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # Approval gate: required reviewers are set on this environment.
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout master history
+        uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a master commit that passed CI and ran on staging
+        env:
+          SHA: ${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then echo "Give the full 40-character commit SHA."; exit 1; fi
+          if ! git merge-base --is-ancestor "$SHA" origin/master; then echo "$SHA is not on master."; exit 1; fi
+          ci="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&branch=master&event=push" \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')"
+          staged="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/sync-mediprisma-app-staging.yml/runs?head_sha=$SHA" \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')"
+          if [ "$ci" -eq 0 ]; then echo "CI has not passed on master for $SHA."; exit 1; fi
+          if [ "$staged" -eq 0 ]; then echo "$SHA has not been published to /app-staging."; exit 1; fi
+          echo "Promoting $SHA: CI passed and it ran on /app-staging."
+
   sync:
+    needs: verify
     runs-on: ubuntu-latest
     environment: mediprisma-site-publish
-    # Only run when CI actually succeeded (workflow_run fires on failure too),
-    # or when triggered manually.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Checkout app
+      - name: Checkout the promoted commit
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -94,6 +129,8 @@ jobs:
 
       - name: Commit & push if changed
         working-directory: docs-site
+        env:
+          SHA: ${{ inputs.sha }}
         run: |
           git config user.name "mediprisma-app-sync[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -102,13 +139,13 @@ jobs:
             echo "No changes in /app build — nothing to sync."
             exit 0
           fi
-          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          git commit -m "chore: sync /app from mediprisma-app@${SHA:0:7}"
+          git commit -m "chore: promote /app to mediprisma-app@${SHA:0:7}"
 
-          # The HMC preview publishes to this same branch from its own
-          # concurrency group, so the two can be in flight together and this
-          # push can arrive second. It touches static/app and the other touches
-          # static/app-hmc, so replaying on top of it is always clean.
+          # The HMC preview and /app-staging publish to this same branch from
+          # their own concurrency groups, so they can be in flight together and
+          # this push can arrive second. Each touches only its own directory
+          # (static/app, static/app-hmc, static/app-staging), so replaying on top
+          # of whatever landed first is always clean.
           for attempt in 1 2 3; do
             if git push origin main; then
               exit 0
