@@ -22,7 +22,7 @@ import { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store
 import { MEDICAL_SUMMARY_MODEL_ID } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
-import { PROGRESSIVE_IMPORT_EVENT, isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { PROGRESSIVE_IMPORT_EVENT, isProgressiveAutoSummaryBlocked, isProgressiveSummaryRequestCurrent, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 interface MedcloudLaunchProviderProps {
@@ -171,6 +171,15 @@ export function MedcloudLaunchProvider({
       }
     })
     const handleBundleSettled = () => {
+      // A committed supplement may settle even when its receipt is stopped or
+      // refresh rejects. Carry existing authorization; never create another.
+      const current = useProgressiveImportStore.getState().current
+      const pending = useMedcloudLaunchStore.getState().pendingSummary
+      if (current && pending?.progressiveRunId === current.runId
+        && pending.progressiveImportId !== current.importId
+        && isProgressiveSummaryRequestCurrent({ ...pending, progressiveImportId: current.importId }, LocalBundleService.getActiveImportId())) {
+        useMedcloudLaunchStore.getState().queueSummary({ ...pending, progressiveImportId: current.importId })
+      }
       bundleSettledRef.current = true
       queueAutoSummaryIfReady()
     }

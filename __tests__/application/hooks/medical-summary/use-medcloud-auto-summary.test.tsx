@@ -282,6 +282,7 @@ describe('useMedcloudAutoSummary', () => {
 
 test('commit-before-receipt keeps an unclaimed same-run authorization until rebind', async () => {
   jest.useFakeTimers()
+  try {
   useSummaryVersionsStore.getState().reset()
   useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'new-import', phase: 'empty' }, stoppedRuns: {} })
   const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('new-import')
@@ -295,6 +296,8 @@ test('commit-before-receipt keeps an unclaimed same-run authorization until rebi
   act(() => useMedcloudLaunchStore.getState().queueSummary({ messageId: 'cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run', progressiveImportId: 'new-import' }))
   await act(async () => { jest.runOnlyPendingTimers() })
   expect(generate).toHaveBeenCalledTimes(1)
-  active.mockRestore()
-  jest.useRealTimers()
+  } finally {
+    jest.restoreAllMocks()
+    jest.useRealTimers()
+  }
 })

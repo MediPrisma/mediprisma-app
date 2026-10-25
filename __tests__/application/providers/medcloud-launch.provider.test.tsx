@@ -81,6 +81,23 @@ describe('MedcloudLaunchProvider', () => {
 
   afterEach(() => postMessage.mockRestore())
 
+  it.each([undefined, 'failed', 'privacy-stale'] as const)('settled commit carries pending authorization without a successful receipt (stop=%s)', reason => {
+    const active = jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud-import')
+    try {
+      useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'cloud-import', phase: 'waiting' } })
+      render(<MedcloudLaunchProvider launchHref={MEDCLOUD_AUTO_LAUNCH_URL}><div>app</div></MedcloudLaunchProvider>)
+      settleImportedBundle()
+      useMedcloudLaunchStore.getState().queueSummary({ messageId: 'pending-cloud', modelId: MEDICAL_SUMMARY_MODEL_ID, progressiveRunId: 'run-a', progressiveImportId: 'cloud-import' })
+      active.mockReturnValue('visits-import')
+      act(() => useProgressiveImportStore.setState({ current: { runId: 'run-a', importId: 'visits-import', phase: 'reports-pending', stage: 'hospital-visits' }, stoppedRuns: reason ? { 'run-a': reason } : {} }))
+      settleImportedBundle()
+      expect(useMedcloudLaunchStore.getState().pendingSummary).toMatchObject({ messageId: 'pending-cloud', progressiveImportId: reason === 'privacy-stale' ? 'cloud-import' : 'visits-import' })
+      useMedcloudLaunchStore.getState().claimSummary('pending-cloud')
+      settleImportedBundle()
+      expect(useMedcloudLaunchStore.getState().pendingSummary).toBeNull()
+    } finally { active.mockRestore() }
+  })
+
   it('closes an accepted visits round on transport failure without replaying on status restore', async () => {
     jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('visits')
     useProgressiveImportStore.setState({ current: { runId: 'run-failed', importId: 'visits', phase: 'reports-pending' } })
