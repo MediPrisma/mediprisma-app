@@ -37,6 +37,16 @@ function fixture(): any[] {
 
 const rows = (reports: any[]) => buildReportsData(reports).reportRows
 describe('legacy receipt-clock imaging copies', () => {
+  it('retains serial portable reports with a common request identifier and different header times', () => {
+    const template = fixture()[4]
+    const reports = ['08:00:00', '16:00:00'].map((time, index) => ({ ...template,
+      id: `portable-header-${index}`, code: { text: 'PORTABLE CHEST' },
+      conclusion: template.conclusion.replace('CHEST AP VIEW', 'PORTABLE CHEST').replace('11:29:54', time),
+    }))
+    expect(rows(reports)).toHaveLength(2)
+    expect(calculateReportTabCounts(reports).all).toBe(2)
+  })
+
   it('retains all groups when the imported list contains a null entry', () => {
     const reports = fixture()
     expect(rows([null, ...reports])).toHaveLength(4)
@@ -76,7 +86,7 @@ describe('legacy receipt-clock imaging copies', () => {
     expect(calculateReportTabCounts(reports).all).toBe(2)
   })
 
-  it.each(['CT chest PA angiography', 'SONO- CHEST WALL, LATERAL', 'CT chest portable', 'Portable chest ultrasound', 'Chest tube insertion, lateral approach', 'chest drain (portable)'])('does not classify another modality as XR: %s', title => {
+  it.each(['CT chest PA angiography', 'SONO- CHEST WALL, LATERAL', 'CT chest portable', 'Portable chest ultrasound', 'Chest tube insertion, lateral approach', 'chest drain (portable)', 'Chest, lateral wall mass excision', 'Chest PA angiography'])('does not classify another modality as XR: %s', title => {
     expect(isRadiographReport({ ...fixture()[4], code: { text: title }, conclusion: '' })).toBe(false)
   })
 
@@ -232,10 +242,12 @@ describe('legacy receipt-clock imaging copies', () => {
   })
 
   it('tolerates malformed imported CXR identifiers without hiding reports', () => {
-    const reports = fixture().slice(4, 6)
-    reports.forEach(report => { report.identifier = { value: 'malformed' } as any })
-    expect(() => rows(reports)).not.toThrow()
-    expect(() => calculateReportTabCounts(reports)).not.toThrow()
+    const reports = fixture()
+    reports[4].identifier = { value: 'malformed' } as any
+    expect(rows(reports)).toHaveLength(4)
+    expect(rows(reports).flatMap(row => row.diagnosticReportIds).sort()).toEqual(reports.map(report => report.id).sort())
+    expect(rows(reports).flatMap(row => row.viewerActions)).toHaveLength(4)
+    expect(calculateReportTabCounts(reports).all).toBe(4)
   })
 
   it('tolerates malformed extensions on hospital and cloud radiographs', () => {

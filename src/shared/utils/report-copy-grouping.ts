@@ -1,6 +1,6 @@
 import type { DiagnosticReport as Report } from '../types/fhir.types'
 import { getNhiReportModality, inferReportDisplayGroup, isRadiographLabel, IMAGING_EXAM_HEADER as EXAM_HEADER } from './report-grouping-helpers'
-import { getImagingCopySource as sourceOf, reportNaturalGroupingKey, isReportReceiptClock, typedReportIdentifierValue } from './report-identity'
+import { getImagingCopySource as sourceOf, reportNaturalGroupingKey, isReportReceiptClock, reportIdentifiers, typedReportIdentifierValue } from './report-identity'
 import { isTrustedLegacyNhiViewerAttachment } from './nhi-viewer-attachment'
 import { isAdultPreventiveHealthExamResource, isNhiAuthorityDisplay } from './observation-provenance.utils'
 import {
@@ -364,7 +364,7 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     const identifiers = new Map<string, Set<string>[]>()
     for (const { report } of bucket) {
       const bySystem = new Map<string, Set<string>>()
-      for (const id of report.identifier ?? []) {
+      for (const id of reportIdentifiers(report)) {
         if (id.value) {
           const system = id.system ?? ''
           const identity = typedReportIdentifierValue(id)

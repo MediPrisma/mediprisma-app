@@ -43,8 +43,9 @@ export function isRadiographReport(report: any): boolean {
   })) return false
   return inferReportDisplayGroup(report) === 'imaging' && (
     report.code?.coding?.some((coding: any) => getNhiReportModality(coding?.code) === 'XR')
-    || isRadiographLabel([report.code?.text, ...(report.code?.coding ?? []).map((coding: any) => coding?.display),
-      IMAGING_EXAM_HEADER.exec((typeof report.conclusion === 'string' ? report.conclusion : '').normalize('NFKC'))?.[1]].filter(Boolean).join(' ')))
+    || [report.code?.text, ...(report.code?.coding ?? []).map((coding: any) => coding?.display),
+      IMAGING_EXAM_HEADER.exec((typeof report.conclusion === 'string' ? report.conclusion : '').normalize('NFKC'))?.[1]]
+      .filter(Boolean).some((label: string) => isRadiographLabel(label)))
 }
 
 export function reportIdentifiers(report: any): any[] {
