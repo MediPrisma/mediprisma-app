@@ -16,7 +16,7 @@ export function getVghtpeSource(resources: SourceResource[]): HospitalSource | u
   const inHouse = resources.some(resource => resource.meta?.tag?.some(tag =>
     tag.system === 'urn:wildcatch:source' && tag.code === 'vghtpe-outpatient-supplement'))
   const cloud = resources.some(resource => /^https:\/\/medcloud2\.nhi\.gov\.tw(?:\/|$)/.test(resource.meta?.source ?? ''))
-  const merged = resources.some(resource => resource.extension?.some(extension =>
+  const merged = resources.some(resource => Array.isArray(resource.extension) && resource.extension.some(extension =>
     extension.url === 'urn:wildcatch:dedup-method'))
   if (inHouse) return merged || cloud ? 'cloud-and-in-house' : 'in-house'
   return cloud ? 'cloud' : undefined

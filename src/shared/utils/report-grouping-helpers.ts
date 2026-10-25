@@ -24,6 +24,22 @@ interface DiagnosticReportLike {
 export type ReportGroup = 'lab' | 'imaging' | 'cancer-screening' | 'procedures' | 'vitals' | 'other'
 export type ReportDisplayGroup = ReportGroup | 'pathology'
 
+/** Shared label recognition for copy matching and serial radiograph guards. */
+export function isRadiographLabel(label: string): boolean {
+  const normalized = label.normalize('NFKC')
+  const explicit = /\b(?:XR|CXR)\b|x[ -]?ray|radiograph|胸腔檢查|X光/i.test(normalized)
+  if (explicit) return true
+  // PA may mean pulmonary angiography; lateral may describe an ultrasound
+  // site. Projection words alone must not override an explicit modality.
+  if (/\bct\b|computed tomography|\bmri?\b|magnetic resonance|sono|ultrason|ultrasound|電腦斷層|磁振|超音波/i.test(normalized)) return false
+  const words = normalized.trim().toLowerCase().split(/[\s,&/-]+/).filter(Boolean)
+  if (words.length === 2 && words[0] === 'portable' && words[1] === 'chest') return true
+  return words.length > 1 && words[0] === 'chest'
+    && words.slice(1).every(word => /^(?:\d+|single|two|views?|ap|pa|lat(?:eral)?|portable|film|and|frontal|erect|supine|upright)$/.test(word))
+}
+
+export const IMAGING_EXAM_HEADER = /^\s*((?:SONO(?:GRAM)?|CHEST|PORTABLE\s+CHEST|CXR|XR|KUB|CT(?:\/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i
+
 export const HEALTH_BANK_SDK_SECTION_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'
 
@@ -395,7 +411,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
     report.code?.text,
     ...codings.map((coding) => coding?.display),
   ].filter((value): value is string => !!value).join(' ')
-  if (IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
+  if (isRadiographLabel(orderTitle) || IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
     return 'imaging'
   }
 

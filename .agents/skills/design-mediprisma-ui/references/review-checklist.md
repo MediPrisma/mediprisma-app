@@ -12,6 +12,7 @@
 - Remove thick colored card edges or accent stripes; use labels, badges, icons, or restrained backgrounds for meaningful states.
 - Question every card, rounded corner, pill, icon, badge, and shadow.
 - Keep at most one prominent brand expression in a view.
+- Remove slogans, routine reminders, and repeated explanations of normal behavior. Does each remaining message change the next action or interpretation? Keep essential safety, missing-data, error, and sign-in guidance concise and contextual; preserve accessible labels and on-demand source details.
 - Let real clinical content determine the layout rather than filling a generic dashboard grid.
 
 ## Components
