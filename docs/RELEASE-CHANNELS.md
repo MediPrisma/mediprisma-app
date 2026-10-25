@@ -4,7 +4,7 @@
 
 | 管道 | 網址 | 何時更新 | CDSS 存檔送到 |
 | --- | --- | --- | --- |
-| 測試版 | `https://mediprisma.tw/app-staging/` | master 的 CI 通過後**自動**（`Sync app to mediprisma.tw/app-staging`） | 測試環境 `https://fhir.mediprisma.tw/staging`（合成資料、只開放列名測試者） |
+| 測試版 | `https://mediprisma.tw/app-staging/` | master 的 CI 通過後**自動**（`Sync app to mediprisma.tw/app-staging`） | 測試環境 `https://fhir.mediprisma.tw/staging`（只開放列名測試者；院內測試時可能含真實病人資料，無正式備份，見下文） |
 | 正式版 | `https://mediprisma.tw/app/` | 有人**手動推上正式版**（`Sync app to mediprisma.tw/app`），且 `production` environment 核准 | 正式環境 |
 | HMC 預覽 | `https://mediprisma.tw/app-hmc/` | `pilot/hmc` 自己的流程，不受本文件影響 | — |
 
