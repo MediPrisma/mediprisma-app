@@ -19,8 +19,16 @@ on:
 permissions:
   contents: read
 
+# Only eligible runs (the same condition as the job below) share the group, so a
+# fork's or a failed CI's run can never cancel a legitimate staging publish.
 concurrency:
-  group: sync-mediprisma-app-staging
+  group: >-
+    ${{ ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    || (github.event.workflow_run.conclusion == 'success'
+    && github.event.workflow_run.event == 'push'
+    && github.event.workflow_run.head_branch == 'master'
+    && github.event.workflow_run.head_repository.full_name == github.repository))
+    && 'sync-mediprisma-app-staging' || format('sync-mediprisma-app-staging-ignored-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:

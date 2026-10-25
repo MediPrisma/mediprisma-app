@@ -82,6 +82,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: mediprisma-site-publish
     steps:
+      # Staging may have moved on while the approval waited: publish only if it
+      # still serves the approved commit.
+      - name: Recheck that staging still serves the approved commit
+        env:
+          SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          live="$(curl -fsS --retry 3 "https://mediprisma.tw/app-staging/deploy.json?t=$(date +%s)" | jq -r '.appSha // empty')"
+          if [ "$live" != "$SHA" ]; then echo "/app-staging now serves ${live:-nothing}, not $SHA; start a new promotion."; exit 1; fi
+
       - name: Checkout the promoted commit
         uses: actions/checkout@v7
         with:
