@@ -156,4 +156,12 @@ test('a completed version opens its saved source text after a hospital supplemen
   await expect(page.getByRole('dialog')).toContainText('Amlodipine')
   await expect(page.getByRole('dialog')).not.toContainText('此版本未保存來源內文')
   await page.screenshot({ path: testInfo.outputPath('saved-summary-source.png') })
+  await page.evaluate(() => {
+    const importId = (window as Window & { receipt?: { importId: string } }).receipt!.importId
+    window.postMessage({ source: 'medcloud2-extension', type: 'medcloud:outpatient-status', version: 1,
+      runId: 'e2e-summary-run', importId, phase: 'privacy-stale' }, location.origin)
+  })
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '雲端', exact: true })).toHaveCount(0)
 })
+

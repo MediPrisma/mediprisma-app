@@ -372,14 +372,16 @@ export default function MedicalSummaryFeature() {
   // always works; the pinpoint scroll is best-effort — if no anchor claims
   // the request in time (virtualised list, pivot view without per-resource
   // rows…), say so instead of failing silently.
-  const [versionEvidence, setVersionEvidence] = useState<{ title: string; text: string } | null>(null)
+  const [versionEvidence, setVersionEvidence] = useState<{ versionId: string; title: string; resourceKey: string } | null>(null)
+  const visibleVersionEvidence = versionEvidence?.versionId === selectedSummaryVersionId ? versionEvidence : null
+  useEffect(() => { setVersionEvidence(null) }, [selectedSummaryVersionId])
   const navFallbackMsg = ms.navFallback
   const navigateToResource = useCallback(
     (target: ResourceNavTarget) => {
       if (selectedSummaryVersionId) {
-        const text = selectedSummaryEvidence?.[`${target.resourceType}/${target.resourceId}`]
-        setVersionEvidence({ title: [target.date, target.display].filter(Boolean).join(' ') || (locale === 'en' ? 'Source' : '來源'),
-          text: text?.replaceAll('\n␞\n', '\n\n') || (locale === 'en' ? 'Source text is unavailable in this saved version.' : '此版本未保存來源內文。') })
+
+        setVersionEvidence({ versionId: selectedSummaryVersionId, title: [target.date, target.display].filter(Boolean).join(' ') || (locale === 'en' ? 'Source' : '來源'),
+          resourceKey: `${target.resourceType}/${target.resourceId}` })
         return
       }
       const store = useResourceNavigationStore.getState()
@@ -398,7 +400,7 @@ export default function MedicalSummaryFeature() {
         }
       }, NAV_CLAIM_TIMEOUT_MS)
     },
-    [navFallbackMsg, selectedSummaryVersionId, selectedSummaryEvidence, locale],
+    [navFallbackMsg, selectedSummaryVersionId, locale],
   )
 
   // A safety alert's title opens its cited records — the same SourceLink the
@@ -1163,10 +1165,10 @@ export default function MedicalSummaryFeature() {
           <CustomInsightModulesSection onManage={openCustomManager} />
         </TabsContent>
       </Tabs>
-      <Dialog open={Boolean(versionEvidence)} onOpenChange={open => { if (!open) setVersionEvidence(null) }}>
+      <Dialog open={Boolean(visibleVersionEvidence)} onOpenChange={open => { if (!open) setVersionEvidence(null) }}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" aria-describedby={undefined}>
-          <DialogHeader><DialogTitle>{versionEvidence?.title}</DialogTitle></DialogHeader>
-          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{versionEvidence?.text}</div>
+          <DialogHeader><DialogTitle>{visibleVersionEvidence?.title}</DialogTitle></DialogHeader>
+          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{visibleVersionEvidence ? selectedSummaryEvidence?.[visibleVersionEvidence.resourceKey]?.replaceAll('\n␞\n', '\n\n') || (locale === 'en' ? 'Source text is unavailable in this saved version.' : '此版本未保存來源內文。') : null}</div>
         </DialogContent>
       </Dialog>
       <DataSelectionDrawer
