@@ -75,6 +75,7 @@ import { providerClinicalContextSafetyFraction } from './context-window-retry'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
+  automatic?: boolean
   /** Optional terminal measurement; does not change result/cache acceptance. */
   measureResult?: (result: AiGenerationMeasurement) => void
   /** Optional: the random diagnostic run ID, joined to the operation telemetry event. */
@@ -129,6 +130,8 @@ export interface AiSlotDemoContext {
 }
 
 export interface AiSlotGenerationConfig<T> {
+  /** Retain this feature's jobs across a validated same-patient supplement. */
+  preserveAcrossContinuation?: boolean
   /** Feature's free base model used by gateModel as its fallback. */
   defaultModelId: string
   /** User-picked model id from the feature's prefs store (pre-gating). */
@@ -197,6 +200,8 @@ export interface AiSlotGenerationReturn<T> {
    *  locale/exact clinical input. Use this for UI lifecycles that span more
    *  than one model slot. */
   scopeKey: string
+  /** Stable reading identity while clinical input is being refreshed. */
+  readingScopeKey: string
   slotKey: string
   resolvedModelId: string
   resolvedModelName: string
@@ -248,6 +253,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     store,
     cacheKeyFor,
     analyticsSurface,
+    preserveAcrossContinuation = false,
     cacheMaxAgeMs,
     loadCached,
     run,
@@ -612,6 +618,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       readRunMetrics: readRunMetrics ? () => readRunMetrics(slotKey) : undefined,
       produce: (measureResult, identifySummaryRun, operation) =>
         run({
+          automatic,
           measureResult,
           identifySummaryRun,
           clinicalContext,
@@ -733,7 +740,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const [bundleTransitionActive, setBundleTransitionActive] = useState(false)
   useEffect(() => {
     const begin = (event: Event) => {
-      if (!(analyticsSurface === 'summary' && isSummaryContinuation(event))) {
+      if (!(preserveAcrossContinuation && isSummaryContinuation(event))) {
         abortRuns()
         stopAi()
       }
@@ -746,7 +753,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       window.removeEventListener(BUNDLE_CHANGED_EVENT, begin)
       window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
     }
-  }, [abortRuns, stopAi, analyticsSurface])
+  }, [abortRuns, stopAi, preserveAcrossContinuation])
   // Demo bundle: seed the pre-generated snapshot instead of burning an AI call
   // on data whose answer is a constant. It belongs to the feature's canonical
   // default model. With another model selected it may fill an otherwise blank
@@ -834,6 +841,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     hasPatient: !!patientId,
     dataReady,
     scopeKey: resultScope,
+    readingScopeKey: patientId ? [patientId, audience, locale].join('::') : '',
     slotKey,
     resolvedModelId,
     resolvedModelName,

@@ -333,8 +333,42 @@ test('preference-driven automatic summary waits through visits and stops after a
   expect(mockSlotOptions.autoRunEnabled).toBe(false)
   act(() => useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'final', phase: 'loaded' } }))
   expect(mockSlotOptions.autoRunEnabled).toBe(true)
-  act(() => useSummaryVersionsStore.setState({ running: { 'run::patient': 'old-slot' } }))
+  act(() => useSummaryVersionsStore.setState({ running: { 'run::patient': { slotKey: 'old-slot', automatic: true } } }))
   expect(mockSlotOptions.autoRunEnabled).toBe(false)
   act(() => useSummaryVersionsStore.setState({ running: {}, automaticStoppedRunId: 'run' }))
   expect(mockSlotOptions.autoRunEnabled).toBe(false)
+})
+
+
+test.each(['cancelled', 'source-unavailable'] as const)('manual generation after %s remains selectable with cloud provenance', async phase => {
+  jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud')
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'cloud', phase, stage: 'cloud' } })
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    const block = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : FULL_BLOCKS
+    options.onChunk(block)
+    return block
+  })
+  const { result } = renderHook(() => useMedicalSummary())
+  await act(async () => { await result.current.generate() })
+  const history = useSummaryVersionsStore.getState()
+  expect(history.versions).toHaveLength(1)
+  expect(history.versions[0].kind).toBe('cloud')
+  expect(history.selected[history.versions[0].viewKey]).toBe(history.versions[0].id)
+  expect(history.versions[0].result.generation).toEqual(expect.objectContaining({ completedAt: expect.any(Number), durationMs: expect.any(Number) }))
+})
+
+test('a usable cloud overview remains in history when another lane fails', async () => {
+  jest.spyOn(LocalBundleService, 'getActiveImportId').mockReturnValue('cloud')
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'cloud', phase: 'waiting' } })
+  mockStream.mockImplementation(async (messages: any[], options: any) => {
+    const block = isFastLaneRequest(messages) ? OVERVIEW_BLOCK : 'invalid JSON'
+    options.onChunk(block)
+    return block
+  })
+  renderHook(() => useMedicalSummary())
+  await act(async () => { await runGeneration(32768)() })
+  const saved = useSummaryVersionsStore.getState().versions[0]
+  expect(saved.result.headline).toContain('78 歲男性')
+  expect(saved.result.cardErrors).toBeDefined()
+  expect(saved.catalog).toBe(CATALOG)
 })

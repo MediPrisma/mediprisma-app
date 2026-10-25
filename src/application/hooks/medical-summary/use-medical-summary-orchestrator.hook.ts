@@ -534,12 +534,15 @@ export function useMedicalSummaryOrchestrator() {
     // hospital supplement. Stop that captured slot, not only the new chart.
     const progressive = useProgressiveImportStore.getState().current
     if (progressive) {
-      useSummaryVersionsStore.setState({ automaticStoppedRunId: progressive.runId })
-      const pending = useMedcloudLaunchStore.getState().pendingSummary
-      if (pending?.progressiveRunId === progressive.runId) useMedcloudLaunchStore.getState().claimSummary(pending.messageId)
-      for (const [view, slot] of Object.entries(useSummaryVersionsStore.getState().running)) {
-        if (view.startsWith(`${progressive.runId}::`)) cancelSummary(slot)
+      const key = summaryVersionViewKey(progressive.runId, summary.readingScopeKey)
+      const history = useSummaryVersionsStore.getState()
+      const running = history.running[key]
+      if (running?.automatic || history.launchViewKey === key) {
+        useSummaryVersionsStore.setState({ automaticStoppedRunId: progressive.runId })
+        const pending = useMedcloudLaunchStore.getState().pendingSummary
+        if (pending?.progressiveRunId === progressive.runId) useMedcloudLaunchStore.getState().claimSummary(pending.messageId)
       }
+      if (running) cancelSummary(running.slotKey)
     }
     if (!scopeKey) return
     const current = activeBatchRef.current
@@ -561,6 +564,7 @@ export function useMedicalSummaryOrchestrator() {
     safetyGenerationSlotKey,
     scopeKey,
     summaryGenerationSlotKey,
+    summary.readingScopeKey,
   ])
 
   useEffect(() => useAiConfigStore.subscribe((state, previousState) => {
@@ -1116,14 +1120,15 @@ export function useMedicalSummaryOrchestrator() {
     if (progressive?.runId && !['patient-changed', 'privacy-stale'].includes(progressive.phase)) void restoreSummaryVersions(progressive.runId)
   }, [progressive?.runId, progressive?.phase])
   const versionState = useSummaryVersionsStore()
-  const viewKey = progressive ? summaryVersionViewKey(progressive.runId, summaryGenerationSlotKey) : ''
+  const viewKey = progressive && summary.readingScopeKey
+    ? summaryVersionViewKey(progressive.runId, summary.readingScopeKey) : ''
   const versions = versionState.versions.filter(version => progressive?.runId === version.runId
-    && (!viewKey || version.viewKey === viewKey))
+    && version.viewKey === viewKey)
   const selectedVersion = versions.find(version => versionState.selected[version.viewKey] === version.id)
-  const versionBusy = !!progressive && Object.keys(versionState.running).some(key => key.startsWith(`${progressive.runId}::`))
+  const versionBusy = Boolean(versionState.running[viewKey])
   const visibleCatalog = selectedVersion?.catalog ?? summary.sourceCatalog
   const resolveVisibleSource = useCallback((key: string) => selectedVersion
-    ? visibleCatalog.find(entry => entry.key === key) : resolveSafetySource(key), [selectedVersion, visibleCatalog, resolveSafetySource])
+    ? visibleCatalog.find(entry => entry.key === key.trim()) : resolveSafetySource(key), [selectedVersion, visibleCatalog, resolveSafetySource])
   const generationCardErrors = readSummaryGenerationSlot(useCapturedSummaryStatus && scopedBatchStatus
     ? scopedBatchStatus.summarySlotKey : summaryGenerationSlotKey).result?.cardErrors ?? {}
 

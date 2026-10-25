@@ -22,7 +22,8 @@ interface SummaryVersionsState {
   epoch: number
   versions: SummaryVersion[]
   selected: Record<string, string>
-  running: Record<string, string>
+  running: Record<string, { slotKey: string; automatic: boolean }>
+  launchViewKey: string | null
   automaticStoppedRunId: string | null
   add: (version: SummaryVersion, epoch: number) => void
   select: (viewKey: string, id: string) => void
@@ -32,7 +33,7 @@ interface SummaryVersionsState {
 /** Immutable, page-local reading history. Results and their evidence travel
  * together; a new completed result never changes the reader's selection. */
 export const useSummaryVersionsStore = create<SummaryVersionsState>((set) => ({
-  epoch: 0, versions: [], selected: {}, running: {}, automaticStoppedRunId: null,
+  epoch: 0, versions: [], selected: {}, running: {}, automaticStoppedRunId: null, launchViewKey: null,
   add: (version, epoch) => set(state => {
     if (state.epoch !== epoch || state.versions.some(v => v.id === version.id)) return state
     return {
@@ -42,7 +43,7 @@ export const useSummaryVersionsStore = create<SummaryVersionsState>((set) => ({
   }),
   select: (viewKey, id) => set(state => state.versions.some(v => v.viewKey === viewKey && v.id === id)
     ? { selected: { ...state.selected, [viewKey]: id } } : state),
-  reset: () => set(state => ({ epoch: state.epoch + 1, versions: [], selected: {}, running: {}, automaticStoppedRunId: null })),
+  reset: () => set(state => ({ epoch: state.epoch + 1, versions: [], selected: {}, running: {}, automaticStoppedRunId: null, launchViewKey: null })),
 }))
 
 resetOnBundleChange(() => useSummaryVersionsStore.getState().reset(), true)

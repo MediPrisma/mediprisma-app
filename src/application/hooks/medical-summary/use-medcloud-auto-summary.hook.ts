@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { isProgressiveSummaryRequestCurrent, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
-import { useSummaryVersionsStore } from './summary-versions.store'
+import { useSummaryVersionsStore, summaryVersionViewKey } from './summary-versions.store'
 
 interface UseMedcloudAutoSummaryOptions {
   authLoading: boolean
@@ -80,6 +80,8 @@ export function useMedcloudAutoSummary({
         return
       }
       const controller = new AbortController()
+      const launchViewKey = summaryVersionViewKey(request.progressiveRunId, generationSlotKey)
+      useSummaryVersionsStore.setState({ launchViewKey })
       setLaunchRunning(true)
       const unsubscribe = useProgressiveImportStore.subscribe(() => {
         const current = useProgressiveImportStore.getState().current
@@ -92,6 +94,7 @@ export function useMedcloudAutoSummary({
       const dispose = () => { unsubscribe(); controller.abort(); activeLaunches.current.delete(dispose) }
       activeLaunches.current.add(dispose)
       void generate(controller.signal).catch(() => undefined).finally(() => {
+        if (useSummaryVersionsStore.getState().launchViewKey === launchViewKey) useSummaryVersionsStore.setState({ launchViewKey: null })
         unsubscribe()
         activeLaunches.current.delete(dispose)
         setLaunchRunning(false)
