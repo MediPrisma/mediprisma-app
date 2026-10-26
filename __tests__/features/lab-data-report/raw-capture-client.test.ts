@@ -45,10 +45,12 @@ const success = (request: { requestId: string; bundleId: string }, json = '{"end
 })
 
 describe('rawCaptureOrigin', () => {
-  it('serves mediprisma.tw /app and /app-hmc only', () => {
+  it('serves mediprisma.tw /app… workspaces only', () => {
     expect(rawCaptureOrigin({ origin: 'https://mediprisma.tw', pathname: '/app/' })).toBe('https://mediprisma.tw')
     expect(rawCaptureOrigin({ origin: 'https://mediprisma.tw', pathname: '/app-hmc' })).toBe('https://mediprisma.tw')
+    expect(rawCaptureOrigin({ origin: 'https://mediprisma.tw', pathname: '/app-staging/' })).toBe('https://mediprisma.tw')
     expect(rawCaptureOrigin({ origin: 'https://mediprisma.tw', pathname: '/research' })).toBeNull()
+    expect(rawCaptureOrigin({ origin: 'https://mediprisma.tw', pathname: '/App/' })).toBeNull()
     expect(rawCaptureOrigin({ origin: 'https://voho0000.github.io', pathname: '/medical-note-smart-on-fhir/' })).toBeNull()
   })
 

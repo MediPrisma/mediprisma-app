@@ -71,7 +71,8 @@ export function rawCaptureOrigin(location: Pick<Location, 'origin' | 'pathname'>
   typeof window === 'undefined' ? undefined : window.location): string | null {
   if (!location) return null
   if (location.origin === RAW_CAPTURE_ORIGIN) {
-    return /^\/app(?:-hmc)?(?:\/|$)/.test(location.pathname) ? RAW_CAPTURE_ORIGIN : null
+    // Any /app… workspace (/app, /app-hmc, /app-staging), as the 雲端病歷 extension ≥ 0.15.14 accepts.
+    return /^\/app[a-z0-9-]*(?:\/|$)/.test(location.pathname) ? RAW_CAPTURE_ORIGIN : null
   }
   if (process.env.NODE_ENV !== 'production' && LOCAL_ORIGIN.test(location.origin)) return location.origin
   return null
