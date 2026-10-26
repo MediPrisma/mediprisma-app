@@ -108,7 +108,7 @@ jobs:
             echo "result=merged" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Push and build the HMC preview
+      - name: Push the merge
         if: ${{ steps.merge.outputs.result == 'merged' }}
         shell: bash
         run: |
@@ -117,8 +117,24 @@ jobs:
             echo "pilot/hmc moved while syncing; the next master commit, or a manual run of this workflow, will retry."
             exit 1
           fi
-          gh workflow run hmc-build.yml --ref pilot/hmc
-          echo "Merged ${SHA:0:7} into pilot/hmc and started HMC preview build."
+          echo "Merged ${SHA:0:7} into pilot/hmc."
+
+      # Separate from the push so that a re-run after a failed dispatch, which
+      # finds pilot/hmc already current, still gets its build.
+      - name: Build the pilot head unless a build of it exists
+        if: ${{ steps.merge.outputs.result == 'merged' || steps.merge.outputs.result == 'current' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          builds="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
+            --jq '[.workflow_runs[] | select(.status != "completed" or .conclusion == "success")] | length')"
+          if [ "$builds" -gt 0 ]; then
+            echo "pilot/hmc ${head:0:7} already has a build."
+          else
+            gh workflow run hmc-build.yml --ref pilot/hmc
+            echo "Started HMC preview build for pilot/hmc ${head:0:7}."
+          fi
           number="$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
           if [ -n "$number" ]; then
             gh issue close "$number" --comment "master \`${SHA:0:7}\` 已自動同步到 pilot/hmc，這個問題已解除。"
