@@ -43,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body suppressHydrationWarning>
         {IS_STAGING_CHANNEL && (
           <div role="status" className="fixed bottom-2 left-2 z-[9999] pointer-events-none select-none rounded bg-slate-900/85 px-2 py-0.5 text-xs font-semibold text-white shadow">
-            測試版：資料存到測試環境
+            測試版：CDSS 存檔至測試環境
           </div>
         )}
         {children}
