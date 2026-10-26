@@ -55,7 +55,6 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
-      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       ACTOR: ${{ github.event.workflow_run.actor.login || github.actor }}
       ISSUE_TITLE: HMC 自動同步需要處理
     steps:
@@ -64,6 +63,25 @@ jobs:
         with:
           ref: pilot/hmc
           fetch-depth: 0
+
+      # The event only says that master moved. Sync the newest master commit
+      # whose CI passed, chosen now, so a late or re-run event cannot leave a
+      # newer commit out. Merging an older commit than pilot/hmc already has is
+      # a no-op ("current"), so this never moves the pilot back.
+      - name: Choose the master commit to sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sha in $(gh api "repos/$GITHUB_REPOSITORY/commits?sha=master&per_page=30" --jq '.[].sha'); do
+            passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&branch=master&event=push&status=success&per_page=1" --jq '.total_count')"
+            if [ "$passed" -gt 0 ]; then
+              echo "SHA=$sha" >> "$GITHUB_ENV"
+              echo "Syncing $sha, the newest master commit that passed CI."
+              exit 0
+            fi
+          done
+          echo "None of the last 30 master commits has passed CI; nothing to sync."
+          exit 1
 
       - name: Merge the master commit
         id: merge
