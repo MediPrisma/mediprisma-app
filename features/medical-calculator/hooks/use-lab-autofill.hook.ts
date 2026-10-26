@@ -324,6 +324,8 @@ export interface LabAutofillState {
   error: Error | null
   /** Re-run the clinical-data query after a failure. */
   retry: () => Promise<void>
+  /** Whose chart the autofill reads, so a calculator can start over for another patient. */
+  patientId?: string
 }
 
 /** The CDSS's NYHA grading as MAGGIC's option values. */
@@ -388,7 +390,7 @@ export function useLabAutofill(): LabAutofillState {
   )
 
   return useMemo(
-    () => ({ autofill, isLoading: isLoading || isFetching, error, retry: refetch }),
-    [autofill, isLoading, isFetching, error, refetch],
+    () => ({ autofill, isLoading: isLoading || isFetching, error, retry: refetch, patientId }),
+    [autofill, isLoading, isFetching, error, refetch, patientId],
   )
 }

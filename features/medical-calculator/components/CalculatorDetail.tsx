@@ -127,6 +127,7 @@ export function CalculatorDetail({
     isLoading: patientDataLoading,
     error: patientDataError,
     retry: retryPatientData,
+    patientId,
   } = useLabAutofill()
   // Questionnaire-style calculators (GDS-15, PHQ-9…) have no `source` on any
   // input, so a loading chart tells the user nothing — keep their view quiet.
@@ -148,15 +149,22 @@ export function CalculatorDetail({
   // blank for good, with the "Refill" button hidden because nothing was
   // filled. Re-seed the fields the clinician has not typed in when a newer
   // autofill arrives (a weight just added in the CDSS, a chart that finished
-  // loading); what they typed stays. Adjusted during render (not in an
-  // effect) so the values land in the same paint.
+  // loading); what they typed stays — for the same patient only. Another
+  // patient starts over, so no typed value is computed with someone else's
+  // chart. Adjusted during render (not in an effect) so the values land in
+  // the same paint.
   const [edited, setEdited] = useState<ReadonlySet<string>>(() => new Set())
   const [seededFrom, setSeededFrom] = useState(initial)
-  if (initial !== seededFrom) {
+  const [seededFor, setSeededFor] = useState(patientId)
+  if (initial !== seededFrom || patientId !== seededFor) {
+    const samePatient = patientId === seededFor
     setSeededFrom(initial)
+    setSeededFor(patientId)
+    if (!samePatient) setEdited(new Set())
+    const kept = samePatient ? edited : new Set<string>()
     const keep = <T,>(next: Record<string, T>, prev: Record<string, T>) => {
       const out = { ...next }
-      for (const key of edited) {
+      for (const key of kept) {
         if (key in prev) out[key] = prev[key]
         else delete out[key]
       }

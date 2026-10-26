@@ -102,4 +102,25 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
     expect(weightField()).toHaveValue(null)
     expect(screen.getByText('CrCl 未算')).toBeInTheDocument()
   })
+
+  it('starts over when an open calculator moves to another patient, dropping what was typed for the first', () => {
+    const { rerender } = render(detail())
+    fireEvent.change(weightField(), { target: { value: '70' } })
+    fireEvent.change(document.getElementById('calc-age')!, { target: { value: '50' } })
+    // (140 − 50) × 70 / (72 × 1.93) = 45.3, from the first patient's chart and what was typed.
+    expect(screen.getByText('CrCl 45.3 mL/min · Cockcroft–Gault')).toBeInTheDocument()
+
+    // Another chart imported into the same tab, the calculator still open.
+    asPatient('weight-calc-b')
+    setObservations([obs('cr-b', '2160-0', 1.1, 'mg/dL', '2026-10-01')])
+    rerender(detail())
+    expect(weightField()).toHaveValue(null)
+    expect(document.getElementById('calc-age')).toHaveValue(94)
+    expect(document.getElementById('calc-scr')).toHaveValue(1.1)
+    expect(screen.getByText('CrCl 未算')).toBeInTheDocument()
+
+    // The second patient's own weight from the CDSS still fills it.
+    addClinicWeight('weight-calc-b', 64, '2026-10-27')
+    expect(weightField()).toHaveValue(64)
+  })
 })
