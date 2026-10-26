@@ -1,0 +1,149 @@
+name: Sync master into pilot/hmc
+
+# Keeps the HMC preview (mediprisma.tw/app-hmc) on the same code and the same
+# published clinical rules as master, so a merged pull request reaches /app,
+# /app-staging and /app-hmc together (docs/RELEASE-CHANNELS.md).
+#
+# After CI passes on a master push, merge that commit into pilot/hmc, push, and
+# start "HMC preview build"; "Publish HMC pilot preview" then copies the result
+# to /app-hmc as before. pilot/hmc stays its own branch: HMC-only changes are
+# still made there, built and published by the pilot's own workflows.
+#
+# The merge is pushed only when it is routine. It stops and opens an issue
+# instead when:
+#   - the merge conflicts with changes made on pilot/hmc;
+#   - it would delete a file pilot/hmc has;
+#   - it changes .github/workflows (GITHUB_TOKEN may not push workflow files);
+#   - package.json or package-lock.json would differ from master, so the pilot
+#     would run other package versions than the commit it claims to follow.
+# A push made with GITHUB_TOKEN starts no workflows on its own, hence the
+# explicit dispatch of the build.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    ${{ ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    || (github.event.workflow_run.conclusion == 'success'
+    && github.event.workflow_run.event == 'push'
+    && github.event.workflow_run.head_branch == 'master'
+    && github.event.workflow_run.head_repository.full_name == github.repository))
+    && 'sync-pilot-hmc' || format('sync-pilot-hmc-ignored-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+      || (github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'master'
+      && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      ACTOR: ${{ github.event.workflow_run.actor.login || github.actor }}
+      ISSUE_TITLE: HMC 自動同步需要處理
+    steps:
+      - name: Checkout pilot/hmc with master history
+        uses: actions/checkout@v7
+        with:
+          ref: pilot/hmc
+          fetch-depth: 0
+
+      - name: Merge the master commit
+        id: merge
+        shell: bash
+        run: |
+          set -uo pipefail
+          git config user.name "mediprisma-hmc-sync[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --quiet origin master
+          if ! git merge-base --is-ancestor "$SHA" origin/master; then
+            echo "$SHA is not on master."; exit 1
+          fi
+          if git merge-base --is-ancestor "$SHA" HEAD; then
+            echo "pilot/hmc already contains $SHA."
+            echo "result=current" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          before="$(git rev-parse HEAD)"
+          reason=""
+          if ! git merge --no-ff --no-edit -m "Merge master ${SHA:0:7} into pilot/hmc (automatic sync)" "$SHA" > merge.log 2>&1; then
+            files="$(git diff --name-only --diff-filter=U)"
+            git merge --abort
+            reason="合併時與 pilot/hmc 上的修改衝突：
+          $(printf '%s\n' "$files" | sed 's/^/- `/; s/$/`/')"
+          else
+            deleted="$(git diff --diff-filter=D --name-only "$before" HEAD)"
+            workflows="$(git diff --name-only "$before" HEAD -- .github/workflows)"
+            if [ -n "$deleted" ]; then
+              reason="合併會刪除 pilot/hmc 上的檔案：
+          $(printf '%s\n' "$deleted" | sed 's/^/- `/; s/$/`/')"
+            elif [ -n "$workflows" ]; then
+              reason="這次 master 的變更包含 workflow 檔，自動同步沒有權限推送，需要人工合併：
+          $(printf '%s\n' "$workflows" | sed 's/^/- `/; s/$/`/')"
+            elif ! git diff --quiet "$SHA" HEAD -- package.json package-lock.json; then
+              reason="合併後的 package.json 或 package-lock.json 和 master 不同，pilot/hmc 會用到另一組套件版本。請讓 pilot/hmc 的套件版本跟 master 一致。"
+            fi
+          fi
+          if [ -n "$reason" ]; then
+            { echo 'reason<<REASON'; echo "$reason"; echo REASON; } >> "$GITHUB_OUTPUT"
+            echo "result=blocked" >> "$GITHUB_OUTPUT"
+            echo "$reason"
+          else
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push and build the HMC preview
+        if: ${{ steps.merge.outputs.result == 'merged' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git push origin HEAD:pilot/hmc; then
+            echo "pilot/hmc moved while syncing; the next master commit, or a manual run of this workflow, will retry."
+            exit 1
+          fi
+          gh workflow run hmc-build.yml --ref pilot/hmc
+          echo "Merged ${SHA:0:7} into pilot/hmc and started HMC preview build."
+          number="$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue close "$number" --comment "master \`${SHA:0:7}\` 已自動同步到 pilot/hmc，這個問題已解除。"
+          fi
+
+      - name: Ask for a hand
+        if: ${{ steps.merge.outputs.result == 'blocked' }}
+        shell: bash
+        env:
+          REASON: ${{ steps.merge.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          body="master \`${SHA:0:7}\` 沒有自動同步到 pilot/hmc，/app-hmc 仍是舊版本。
+
+          ${REASON}
+
+          處理完後可以在 Actions 手動執行「Sync master into pilot/hmc」，或等下一個 master commit 自動重試。
+
+          執行紀錄：${RUN_URL}"
+          number="$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$body" --assignee "$ACTOR" \
+              || gh issue create --title "$ISSUE_TITLE" --body "$body"
+          fi
+          exit 1

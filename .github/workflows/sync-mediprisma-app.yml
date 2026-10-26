@@ -1,18 +1,27 @@
 name: Sync app to mediprisma.tw/app
 
-# Promotes a tested commit to production (docs/RELEASE-CHANNELS.md). master no
-# longer deploys here on its own: every commit first goes to
-# https://mediprisma.tw/app-staging, and this workflow is started by hand with
-# the commit to promote. It must be on master, have passed CI, and have been
-# published to /app-staging; the `production` environment then asks for
-# approval. The build uses the same NEXT_PUBLIC_* settings as before and is
-# pushed into the docs site repo (MediPrisma/mediprisma-site) at static/app/,
-# which Cloudflare Pages serves as mediprisma.tw/app.
+# Publishes a tested master commit to production (docs/RELEASE-CHANNELS.md).
+#
+# Two modes, chosen by the repository variable PRODUCTION_PROMOTION:
+#   unset / anything else  automatic: every master commit that passes CI goes to
+#                          /app at the same time as /app-staging and /app-hmc.
+#   manual                 promotion by hand: start this workflow with the commit
+#                          live on /app-staging; the `production` environment
+#                          then asks for approval.
+# Switching modes is a variable change, not a code change.
+#
+# The build uses the same NEXT_PUBLIC_* settings as before and is pushed into
+# the docs site repo (MediPrisma/mediprisma-site) at static/app/, which
+# Cloudflare Pages serves as mediprisma.tw/app.
 # Publishing uses a write-enabled deploy key stored only in the
 # mediprisma-site-publish environment. That environment accepts protected
 # branches, so pilot branch workflows cannot read the key.
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
     inputs:
       sha:
@@ -23,20 +32,37 @@ on:
 permissions:
   contents: read
 
+# Ineligible workflow_run events (failed CI, pull requests, manual mode) get a
+# group of their own so they never queue behind or displace a real publish.
 concurrency:
-  group: sync-mediprisma-app
+  group: >-
+    ${{ ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    || (vars.PRODUCTION_PROMOTION != 'manual'
+    && github.event.workflow_run.conclusion == 'success'
+    && github.event.workflow_run.event == 'push'
+    && github.event.workflow_run.head_branch == 'master'
+    && github.event.workflow_run.head_repository.full_name == github.repository))
+    && 'sync-mediprisma-app' || format('sync-mediprisma-app-ignored-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # Promotion runs only from master's copy of this workflow.
-    if: ${{ github.ref == 'refs/heads/master' }}
+    # A manual promotion from master's copy of this workflow, or, in automatic
+    # mode, a successful CI run of a push to this repository's master.
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+      || (vars.PRODUCTION_PROMOTION != 'manual'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'master'
+      && github.event.workflow_run.head_repository.full_name == github.repository) }}
     permissions:
       contents: read
       actions: read
     outputs:
       sha: ${{ steps.check.outputs.sha }}
+      mode: ${{ steps.check.outputs.mode }}
     steps:
       - name: Checkout master history
         uses: actions/checkout@v7
@@ -45,14 +71,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Require the commit live on staging, on master, with CI passed
+      - name: Require the commit on master with CI passed (and, by hand, live on staging)
         id: check
         env:
           REQUESTED: ${{ inputs.sha }}
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$EVENT" = workflow_run ]; then
+            # CI itself passed for this push; staging builds the same commit in parallel.
+            if ! git merge-base --is-ancestor "$CI_SHA" origin/master; then echo "$CI_SHA is not on master."; exit 1; fi
+            echo "sha=$CI_SHA" >> "$GITHUB_OUTPUT"
+            echo "mode=auto" >> "$GITHUB_OUTPUT"
+            echo "Publishing $CI_SHA automatically: on master, CI passed."
+            exit 0
+          fi
+          echo "mode=manual" >> "$GITHUB_OUTPUT"
           # Written by the staging build itself; the only proof of what testers saw.
           live="$(curl -fsS --retry 3 "https://mediprisma.tw/app-staging/deploy.json?t=$(date +%s)" | jq -r '.appSha // empty')"
           if ! [[ "$live" =~ ^[0-9a-f]{40}$ ]]; then echo "/app-staging does not report its commit."; exit 1; fi
@@ -66,8 +103,10 @@ jobs:
           echo "Promoting $sha: live on /app-staging, on master, CI passed."
 
   # The approval comes after the checks, so the approver sees which commit passed.
+  # Automatic mode has no approval step.
   approve:
     needs: verify
+    if: ${{ needs.verify.outputs.mode == 'manual' }}
     runs-on: ubuntu-latest
     # Required reviewers and a master-only branch policy are set on this environment.
     environment: production
@@ -79,12 +118,18 @@ jobs:
 
   sync:
     needs: [verify, approve]
+    # approve is skipped in automatic mode; in manual mode it must have succeeded.
+    if: >-
+      ${{ !cancelled() && needs.verify.result == 'success'
+      && (needs.approve.result == 'success'
+      || (needs.verify.outputs.mode == 'auto' && needs.approve.result == 'skipped')) }}
     runs-on: ubuntu-latest
     environment: mediprisma-site-publish
     steps:
       # Staging may have moved on while the approval waited: publish only if it
       # still serves the approved commit.
       - name: Recheck that staging still serves the approved commit
+        if: ${{ needs.verify.outputs.mode == 'manual' }}
         env:
           SHA: ${{ needs.verify.outputs.sha }}
         run: |
