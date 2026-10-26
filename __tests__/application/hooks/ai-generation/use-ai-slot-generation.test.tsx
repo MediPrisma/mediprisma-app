@@ -395,7 +395,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const cacheKey = `test:${slotKey}`
     window.localStorage.setItem(cacheKey, 'encrypted cancelled half')
     jest.mocked(saveEncryptedCache).mockImplementationOnce(
-      () => new Promise<void>(() => undefined),
+      () => new Promise<boolean>(() => undefined),
     )
     act(() => store.getState().setResult(slotKey, { headline: 'cancelled half' }))
     act(() => result.current.restoreSlot(slotKey, previous))

@@ -125,7 +125,8 @@ interface ClinicalDecisionSupportViewProps {
   layout?: CdssLayout
   /** Vitals the clinician measured in the room this visit; heart-failure board only. */
   clinicVitals?: ClinicVitals
-  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
+  /** May resolve whether the patient's stored copy was written, for a form that reports it. */
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void | Promise<boolean>
   onClearClinicVitals?: () => void
   /**
    * What the clinician answered on a card's structured question — the DP-01

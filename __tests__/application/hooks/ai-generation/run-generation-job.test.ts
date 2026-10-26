@@ -20,8 +20,8 @@ describe('runGenerationJob cache ordering', () => {
   })
 
   it('finishes the visible run without waiting for encryption', async () => {
-    let finishSave!: () => void
-    mockedSaveEncryptedCache.mockImplementationOnce(() => new Promise<void>((resolve) => {
+    let finishSave!: (kept: boolean) => void
+    mockedSaveEncryptedCache.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
       finishSave = resolve
     }))
     const store = createAiResultStore<{ value: string }>()
@@ -36,11 +36,11 @@ describe('runGenerationJob cache ordering', () => {
     expect(generated).toEqual({ value: 'generated' })
     expect(store.getState().running['slot-a']).toBe(false)
     expect(mockedSaveEncryptedCache).toHaveBeenCalledTimes(1)
-    finishSave()
+    finishSave(true)
   })
 
   it('guards a late cache write against a newer result or Bundle revision', async () => {
-    mockedSaveEncryptedCache.mockResolvedValueOnce(undefined)
+    mockedSaveEncryptedCache.mockResolvedValueOnce(true)
     const store = createAiResultStore<{ value: string }>()
 
     const generated = await runGenerationJob({
@@ -63,7 +63,7 @@ describe('runGenerationJob cache ordering', () => {
   })
 
   it('guards encryption that finishes after an already-committed run is cancelled', async () => {
-    mockedSaveEncryptedCache.mockResolvedValueOnce(undefined)
+    mockedSaveEncryptedCache.mockResolvedValueOnce(true)
     const store = createAiResultStore<{ value: string }>()
     let commit = true
 
@@ -163,7 +163,7 @@ describe('runGenerationJob ai_result reporting', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    mockedSaveEncryptedCache.mockResolvedValue(undefined)
+    mockedSaveEncryptedCache.mockResolvedValue(true)
   })
 
   it('reports one ok for a successful run', async () => {

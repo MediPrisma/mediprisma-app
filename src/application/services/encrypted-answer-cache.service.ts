@@ -77,10 +77,11 @@ function nextWriteToken(key: string): number {
 /**
  * Encrypt and write in the background. Returns immediately: the caller's
  * in-memory state is already the answer, and a failed write never reaches it.
+ * The promise says whether it was kept, for a caller that tells the clinician.
  */
-export function persistEncryptedAnswers(key: string, value: unknown): void {
+export function persistEncryptedAnswers(key: string, value: unknown): Promise<boolean> {
   const token = nextWriteToken(key)
-  void saveEncryptedCache(key, value, () => writeTokens.get(key) === token)
+  return saveEncryptedCache(key, value, () => writeTokens.get(key) === token)
 }
 
 /** Remove one patient's stored answers, and cancel any write still in flight. */
