@@ -82,23 +82,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$EVENT" = workflow_run ]; then
-            # CI itself passed for this push; staging builds the same commit in parallel.
-            if ! git merge-base --is-ancestor "$CI_SHA" origin/master; then echo "$CI_SHA is not on master."; exit 1; fi
-            # Runs of this workflow are serialized, so checking here is enough to
-            # keep a late or re-run CI of an older commit from replacing a newer
-            # one: a later master commit whose CI passed has published, or will.
-            # Commits CI skips (docs only) never publish, so they do not count.
-            for newer in $(git rev-list "$CI_SHA..origin/master"); do
-              passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$newer&branch=master&event=push&status=success&per_page=1" --jq '.total_count')"
-              if [ "$passed" -gt 0 ]; then
-                echo "Skipping $CI_SHA: newer master commit $newer already passed CI."
-                echo "mode=superseded" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-            done
-            echo "sha=$CI_SHA" >> "$GITHUB_OUTPUT"
+            # The event only says that master moved. Which commit to publish is
+            # decided in the sync job, at publish time, so no ordering of events,
+            # cancelled runs or re-runs can publish anything but the newest.
             echo "mode=auto" >> "$GITHUB_OUTPUT"
-            echo "Publishing $CI_SHA automatically: on master, CI passed."
+            echo "CI passed for master $CI_SHA; publishing the newest master commit that passed CI."
             exit 0
           fi
           echo "mode=manual" >> "$GITHUB_OUTPUT"
@@ -137,6 +125,9 @@ jobs:
       || (needs.verify.outputs.mode == 'auto' && needs.approve.result == 'skipped')) }}
     runs-on: ubuntu-latest
     environment: mediprisma-site-publish
+    permissions:
+      contents: read
+      actions: read
     steps:
       # Staging may have moved on while the approval waited: publish only if it
       # still serves the approved commit.
@@ -148,10 +139,37 @@ jobs:
           live="$(curl -fsS --retry 3 "https://mediprisma.tw/app-staging/deploy.json?t=$(date +%s)" | jq -r '.appSha // empty')"
           if [ "$live" != "$SHA" ]; then echo "/app-staging now serves ${live:-nothing}, not $SHA; start a new promotion."; exit 1; fi
 
+      # Automatic mode publishes the newest master commit whose CI passed, looked
+      # up now rather than taken from the event, so a late, cancelled or re-run
+      # event (or a re-run of this job) can only publish the current newest.
+      # Commits CI skips (docs only) are passed over; they change nothing in /app.
+      - name: Choose the commit to publish
+        id: target
+        env:
+          MODE: ${{ needs.verify.outputs.mode }}
+          APPROVED: ${{ needs.verify.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = manual ]; then
+            echo "sha=$APPROVED" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          for sha in $(gh api "repos/$GITHUB_REPOSITORY/commits?sha=master&per_page=30" --jq '.[].sha'); do
+            passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&branch=master&event=push&status=success&per_page=1" --jq '.total_count')"
+            if [ "$passed" -gt 0 ]; then
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              echo "Publishing $sha, the newest master commit that passed CI."
+              exit 0
+            fi
+          done
+          echo "None of the last 30 master commits has passed CI; nothing to publish."
+          exit 1
+
       - name: Checkout the promoted commit
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.verify.outputs.sha }}
+          ref: ${{ steps.target.outputs.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -213,7 +231,7 @@ jobs:
       - name: Commit & push if changed
         working-directory: docs-site
         env:
-          SHA: ${{ needs.verify.outputs.sha }}
+          SHA: ${{ steps.target.outputs.sha }}
         run: |
           git config user.name "mediprisma-app-sync[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
