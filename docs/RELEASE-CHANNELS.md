@@ -28,7 +28,7 @@ GitHub Pages（`gh-pages.yml`）只放轉址頁，仍隨 master 自動更新。
 - 合併時與 `pilot/hmc` 上的修改衝突；
 - 合併會刪除 `pilot/hmc` 上的檔案；
 - master 的變更包含 `.github/workflows` 下的檔案（`GITHUB_TOKEN` 沒有推送 workflow 檔的權限），這時以一般帳號開 PR 把 master 合進 `pilot/hmc`；
-- 合併後 `package.json` 或 `package-lock.json` 與 master 不同。`pilot/hmc` 的套件版本必須跟 master 一致，臨床規則版本只在 master 更新。
+- 合併後（或 `pilot/hmc` 早已包含該 commit 時）`package.json` 或 `package-lock.json` 與 master 不同。`pilot/hmc` 的套件版本必須跟 master 一致，臨床規則版本只在 master 更新。
 
 ## 手動模式：推上正式版
 

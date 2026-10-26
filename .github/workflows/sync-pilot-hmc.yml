@@ -94,13 +94,16 @@ jobs:
           if ! git merge-base --is-ancestor "$SHA" origin/master; then
             echo "$SHA is not on master."; exit 1
           fi
-          if git merge-base --is-ancestor "$SHA" HEAD; then
-            echo "pilot/hmc already contains $SHA."
-            echo "result=current" >> "$GITHUB_OUTPUT"; exit 0
-          fi
           before="$(git rev-parse HEAD)"
           reason=""
-          if ! git merge --no-ff --no-edit -m "Merge master ${SHA:0:7} into pilot/hmc (automatic sync)" "$SHA" > merge.log 2>&1; then
+          if git merge-base --is-ancestor "$SHA" HEAD; then
+            # Merged earlier, possibly by hand: still hold it to the package rule.
+            echo "pilot/hmc already contains $SHA."
+            if git diff --quiet "$SHA" HEAD -- package.json package-lock.json; then
+              echo "result=current" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            reason="pilot/hmc 已包含 master \`${SHA:0:7}\`，但 package.json 或 package-lock.json 和 master 不同，pilot/hmc 會用到另一組套件版本。請讓 pilot/hmc 的套件版本跟 master 一致。"
+          elif ! git merge --no-ff --no-edit -m "Merge master ${SHA:0:7} into pilot/hmc (automatic sync)" "$SHA" > merge.log 2>&1; then
             files="$(git diff --name-only --diff-filter=U)"
             git merge --abort
             reason="合併時與 pilot/hmc 上的修改衝突：
