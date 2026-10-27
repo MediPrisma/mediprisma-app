@@ -287,3 +287,21 @@ it('signals source fact conflicts in the existing row button without adding a di
   expect(screen.queryByText('差異',{exact:true})).not.toBeInTheDocument()
  expect(container.querySelector('details')).toBeNull()
 })
+
+it('leaves out the 雲端 tag on a chart with no hospital import, and keeps it beside one', () => {
+  const input: any = JSON.parse(JSON.stringify(copiesFixture))
+  const hospital = LocalBundleService.parse(copiesFixture)!.collection.medications
+    .find((med: any) => med.id === 'synthetic-order-a')
+  input.entry = input.entry.filter((entry: any) => entry.resource.id !== 'synthetic-order-a')
+  const cloudOnly = LocalBundleService.parse(input)!.collection.medications
+
+  const alone = renderHook(() => useMedicationRows(cloudOnly)).result.current
+  expect(alone.every(row => row.dataOrigin === undefined)).toBe(true)
+  const { unmount } = render(<>{alone.map(row => <MedicationItem key={row.id} medication={row} />)}</>)
+  expect(screen.queryByText('雲端', { exact: true })).not.toBeInTheDocument()
+  unmount()
+
+  const beside = renderHook(() => useMedicationRows(cloudOnly, 'medical', 'zh-TW', [...cloudOnly, hospital])).result.current
+  render(<MedicationItem medication={beside[0]} />)
+  expect(screen.getByText('雲端', { exact: true })).toBeInTheDocument()
+})

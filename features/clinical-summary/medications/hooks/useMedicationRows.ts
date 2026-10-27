@@ -441,7 +441,12 @@ export function useMedicationRows(
       reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
       searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
     } : record)
+    // "雲端" only tells rows apart when a hospital import sits beside it; on a
+    // MediCloud-only chart every row would carry the same tag.
+    const hasHospitalSource = enriched.some(row => row.dataOrigin === 'hospital' || row.dataOrigin === 'integrated')
+      || (chronicHistory ?? []).some(med => med && (isVghtpeSource(med) || isHospitalOutpatientMedication(med)))
     return comparisonRows
+      .map(row => !hasHospitalSource && row.dataOrigin === 'medcloud' ? { ...row, dataOrigin: undefined } : row)
       .sort((a: any, b: any) => {
         if (a.isInactive !== b.isInactive) {
           return a.isInactive ? 1 : -1
