@@ -126,12 +126,17 @@ const MICROGRAMS: Record<string, number> = { MG: 1000, MCG: 1, UG: 1 }
 
 /** Every drug amount written in a label or official ingredient text. A pack
  * size (5 g, 3 ml) and a percentage are not amounts; mass per volume or mass
- * keeps its denominator, so 10 mg/1 ml never equals 10 mg. */
-function drugAmounts(text: string): string[] {
+ * keeps its denominator, so 10 mg/1 ml never equals 10 mg. Undefined when the
+ * text also names a quantity in a unit not read here (1 GM, 400 IU, 5%): the
+ * amounts found would not be the whole strength. A bare volume (3 ml) is a
+ * pack size and is let through. */
+function drugAmounts(text: string): string[] | undefined {
   const upper = text.normalize('NFKC').toUpperCase()
     // "25/5 mg" names both ingredients' amounts in the trailing unit.
     .replace(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*(MG|MCG)\b/g, '$1 $3 + $2 $3')
-  return [...upper.matchAll(/(?<![\d.])(\d+(?:\.\d+)?|\.\d+)\s*(MG|MCG|UG)\b(?:\s*\/\s*(\d+(?:\.\d+)?)?\s*(ML|GM|G)\b)?/g)]
+  const pattern = /(?<![\d.])(\d+(?:\.\d+)?|\.\d+)\s*(MG|MCG|UG)\b(?:\s*\/\s*(\d+(?:\.\d+)?)?\s*(ML|GM|G)\b)?/g
+  if (/\d\s*(?:G|GM|IU|U|UNITS?|MEQ|MMOL|%)(?![A-Z])/.test(upper.replace(pattern, ' '))) return undefined
+  return [...upper.matchAll(pattern)]
     .map((match) => {
       const amount = Number(match[1]) * MICROGRAMS[match[2]] / (match[3] ? Number(match[3]) : 1)
       return `${Math.round(amount * 1000) / 1000}${match[4] ? `/${match[4] === 'GM' ? 'G' : match[4]}` : ''}`
@@ -163,21 +168,29 @@ function hospitalBrandMatchesKnowledge(concept: any, knowledge: Resource): boole
   if (names.length !== 1) return false
   const label = names[0].normalize('NFKC').toUpperCase()
   const brand = label.match(/^[A-Z][A-Z-]{3,}/)?.[0]
-  const ingredients = (knowledge.ingredient ?? []).map((item: any) => String(item.itemCodeableConcept?.text ?? '')).join('+')
+  const ingredients: string[] = (knowledge.ingredient ?? []).map((item: any) => String(item.itemCodeableConcept?.text ?? ''))
   const form = String(knowledge.doseForm?.text ?? '')
-  if (!brand || !ingredients || !form) return false
-  const word = new RegExp(`(?<![A-Z])${brand.replace(/-/g, '\\-')}(?![A-Z])`)
+  if (!brand || !ingredients.length || !form) return false
+  const escapedBrand = brand.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')
+  const word = new RegExp(`(?<![A-Z])${escapedBrand}(?![A-Z])`)
   const officialNames = [...(knowledge.code?.coding ?? []).map((coding: any) => coding.display), ...(knowledge.synonym ?? [])]
     .map((name) => String(name ?? '').normalize('NFKC').toUpperCase())
-  if (!officialNames.some((name) => word.test(name)) || word.test(ingredients.toUpperCase())) return false
-  const hospitalAmounts = drugAmounts(label), officialAmounts = drugAmounts(ingredients)
-  if (!hospitalAmounts.length || hospitalAmounts.join() !== officialAmounts.join()) return false
+  if (!officialNames.some((name) => word.test(name)) || ingredients.some((text) => word.test(text.toUpperCase()))) return false
+  // Each official ingredient must contribute a readable amount, so a
+  // combination is compared whole, never by the one part this can read.
+  const ingredientAmounts = ingredients.map(drugAmounts)
+  if (ingredientAmounts.some((amounts) => !amounts?.length)) return false
+  const hospitalAmounts = drugAmounts(label), officialAmounts = ingredientAmounts.flat().sort()
+  if (!hospitalAmounts?.length || hospitalAmounts.join() !== officialAmounts.join()) return false
   // Whole label words only: "Glucophage" must not read as an "oph" product.
   const words = label.split(/[^A-Z]+/)
   const families = FORM_FAMILIES.filter(([labelWord]) => words.some((item) => labelWord.test(item)))
   return families.length === 1 && families[0][1].test(form)
     && FORM_FAMILIES.filter(([, official]) => official.test(form)).length === 1
-    && words.some((item) => MODIFIED_RELEASE_LABEL.test(item)) === MODIFIED_RELEASE_FORM.test(form)
+    // A release marker may sit in the official name (TEGRETOL CR) while the
+    // form reads 膜衣錠, so both count.
+    && words.some((item) => MODIFIED_RELEASE_LABEL.test(item)) === (MODIFIED_RELEASE_FORM.test(form)
+      || officialNames.some((name) => MODIFIED_RELEASE_FORM.test(name) || name.split(/[^A-Z]+/).some((item) => MODIFIED_RELEASE_LABEL.test(item))))
 }
 
 /** Non-destructive comparison only. Complete literal product labels may

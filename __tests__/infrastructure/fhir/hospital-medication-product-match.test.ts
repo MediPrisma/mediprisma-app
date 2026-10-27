@@ -79,6 +79,7 @@ it.each([
   ['Lacoxa SR * tab 400 mg', 'LACOXA SR TABLETS 400MG', 'ETODOLAC 400 MG', '持續性藥效錠'],
   ['Ozempic for inj 1.34 mg/ml 3 ml,', 'Ozempic solution for injection', 'SEMAGLUTIDE 1.34 MG/ML', '注射液劑'],
   ['Senokot * tab 7.5 mg', 'SENOKOT TABLETS', 'SENNOSIDE B 7.5 MG', '錠劑'],
+  ['Tegretol CR tab 400 mg', 'TEGRETOL CR 400MG FILM-COATED TABLETS (DIVISIBLE)', 'CARBAMAZEPINE 400 MG', '膜衣錠'],
 ])('suggests a same-visit comparison for brand, amount and form: %s', (name, display, ingredient, form) => {
   const knowledge = brandKnowledge(display, ingredient, form)
   const concept = hospitalLabel(name)
@@ -102,6 +103,12 @@ it.each([
   ['a percentage-only label', 'Clobesol * cream 0.05% 5 g', 'CLOBESOL CREAM 0.5MG "GENTLE"', 'CLOBETASOL 17-PROPIONATE .5 MG/GM', '軟膏劑'],
   ['a concentration for an amount', 'Sivkort susp. * inj 10 mg/1 ml', 'SIVKORT SUSPENSION', 'TRIAMCINOLONE (ACETONIDE) 10 MG', '注射劑'],
   ['a pack size for an amount', 'Fubifen PAP * patch 40mg/10g(4\'s', 'FUBIFEN PAP "FM"', 'FLURBIPROFEN 40 MG', '藥膠布'],
+  // The release marker is in the official name only; the form reads 膜衣錠.
+  ['a plain label for a CR product', 'Tegretol tab 400 mg', 'TEGRETOL CR 400MG FILM-COATED TABLETS (DIVISIBLE)', 'CARBAMAZEPINE 400 MG', '膜衣錠'],
+  // Every combination ingredient must be read, not only the one in mg.
+  ['a combination ingredient in grams', 'Dipicillin inj 2 g + 500 mg', 'DIPICILLIN INJECTION', 'AMPICILLIN (SODIUM) 1 GM+CLOXACILLIN (SODIUM) 500 MG', '注射劑'],
+  ['a missing combination ingredient', 'Dipicillin inj 500 mg', 'DIPICILLIN INJECTION', 'AMPICILLIN (SODIUM) 1 GM+CLOXACILLIN (SODIUM) 500 MG', '注射劑'],
+  ['a label strength in grams', 'Dipicillin inj 1 g + 500 mg', 'DIPICILLIN INJECTION', 'AMPICILLIN (SODIUM) 1 GM+CLOXACILLIN (SODIUM) 500 MG', '注射劑'],
 ])('keeps %s apart', (_scenario, name, display, ingredient, form) => {
   expect(hospitalProductMayMatchKnowledge(hospitalLabel(name), 'SYNTH00001', brandKnowledge(display, ingredient, form))).toBe(false)
 })
