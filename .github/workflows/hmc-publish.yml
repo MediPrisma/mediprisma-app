@@ -77,19 +77,22 @@ jobs:
             # The newest successful build from any source the publisher accepts
             # (pilot pushes, dispatches, the personalization tag). Only that one
             # may go live; anything older would roll /app-hmc back.
-            newest="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?status=success&per_page=1" \
-              --jq '.workflow_runs[0] // empty')"
+            newest="$(for ref in pilot/hmc hmc-personalization-trigger; do
+                gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?branch=$ref&status=success&per_page=5" \
+                  | jq -c --arg repo "$GITHUB_REPOSITORY" '.workflow_runs[] | select(.head_repository.full_name == $repo)'
+              done | jq -cs 'sort_by(.run_started_at) | last // empty')"
             live="$(curl -fsS https://mediprisma.tw/app-hmc/hmc-build.json || echo '{}')"
             # Whatever started it: a pending event publish this run replaced in
             # the concurrency group is taken over here, not dropped.
             if [ -z "$newest" ]; then
               echo "No successful HMC preview build yet."; exit 0
             fi
-            # The live marker was written while its build ran, so a build created
-            # before that moment is already live or older than what is. (A tag
-            # build's head is not the app commit, so the SHAs cannot be compared.)
+            # The live marker was written while its build ran, so a build whose
+            # latest attempt started before that moment is already live or older
+            # than what is. (A tag build's head is not the app commit, so the SHAs
+            # cannot be compared; run_started_at moves with each re-run.)
             built_at="$(jq -r '.builtAt // ""' <<<"$live")"
-            created_at="$(jq -r .created_at <<<"$newest")"
+            created_at="$(jq -r .run_started_at <<<"$newest")"
             if [ -n "$built_at" ] && [[ ! "$built_at" < "$created_at" ]]; then
               echo "Nothing missed: /app-hmc was built at $built_at, after run $(jq -r .id <<<"$newest") began."; exit 0
             fi
