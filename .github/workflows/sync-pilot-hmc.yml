@@ -189,7 +189,8 @@ jobs:
             completed/*)
               echo "The HMC preview build failed: $(jq -r .html_url <<<"$build")"; exit 1 ;;
             *)
-              echo "Build $id did not finish within an hour: $(jq -r .html_url <<<"$build")"; exit 1 ;;
+              # Not lost: the scheduled run of the publish picks it up once it succeeds.
+              echo "Build $id is still running after an hour; the scheduled publish will take it: $(jq -r .html_url <<<"$build")"; exit 0 ;;
           esac
           if [ "$(jq -r .event <<<"$build")" = workflow_dispatch ]; then
             gh workflow run hmc-publish.yml --ref master -f run_id="$id"
