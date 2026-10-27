@@ -508,3 +508,21 @@ it('does not revive locally reconciled source prescriptions during shared aggreg
   expect(data.medications[0]._sourcePrescriptionRecords).toHaveLength(2)
   expect(projected.medications[0]._sourcePrescriptionRecords).toEqual(data.medications[0]._sourcePrescriptionRecords)
 })
+
+it.each([['20 mg', true], ['10 mg', false]])('compares an uncoded hospital brand label with its same-visit cloud product only at the same amount: %s', (strength, compared) => {
+  const { hospital, cloud } = fixture()
+  delete hospital.identifier; delete cloud.identifier
+  hospital.medicationCodeableConcept = { text: `Lipitor FC * tab ${strength}`, coding: [{ system: 'urn:oid:vgh.medication.product', code: `Lipitor FC * tab ${strength}`, display: `Lipitor FC * tab ${strength}` }] }
+  cloud.medicationCodeableConcept = { text: 'LIPITOR FILM-COATED TABLETS 20MG', coding: [{ system: NHI, code: 'SYNTH00020', display: 'LIPITOR FILM-COATED TABLETS 20MG' }] }
+  cloud.supportingInformation = [{ reference: 'MedicationKnowledge/synthetic-lipitor' }]
+  const knowledge = { resourceType: 'MedicationKnowledge', id: 'synthetic-lipitor',
+    meta: { source: 'https://data.gov.tw/dataset/23715', tag: [{ system: 'https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot', code: 'nhi-drug-terminology-20260728' }] },
+    code: { coding: [{ system: NHI, code: 'SYNTH00020', display: 'LIPITOR FILM-COATED TABLETS 20MG' }] },
+    ingredient: [{ itemCodeableConcept: { text: 'ATORVASTATIN (CALCIUM) 20 MG' } }], doseForm: { text: '膜衣錠' } }
+  const result = reconcileMedicationRequests([hospital, cloud, knowledge])
+  expect(result.filter(resource => resource.resourceType === 'MedicationRequest')).toHaveLength(2)
+  expect(hospital._sourceRecordComparison?.status).toBe(compared ? 'candidate' : undefined)
+  expect(cloud._sourceRecordComparison?.status).toBe(compared ? 'candidate' : undefined)
+  // The hospital label never acquires the cloud code from a name comparison.
+  expect(hospital.medicationCodeableConcept.coding.some((coding: any) => coding.system === NHI)).toBe(false)
+})
