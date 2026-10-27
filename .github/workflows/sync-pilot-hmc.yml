@@ -187,6 +187,11 @@ jobs:
               # own trigger (a push) or the sync run that started it.
               echo "Build $id was cancelled by a newer one; that one publishes."; exit 0 ;;
             completed/*)
+              # The publisher skips a failed build but its report job still tells
+              # the pilot, as it does for a push build that fails.
+              if [ "$(jq -r .event <<<"$build")" = workflow_dispatch ]; then
+                gh workflow run hmc-publish.yml --ref master -f run_id="$id"
+              fi
               echo "The HMC preview build failed: $(jq -r .html_url <<<"$build")"; exit 1 ;;
             *)
               # Not lost: the scheduled run of the publish picks it up once it succeeds.
