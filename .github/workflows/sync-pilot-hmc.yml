@@ -48,7 +48,7 @@ jobs:
       && github.event.workflow_run.head_branch == 'master'
       && github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 75
     permissions:
       contents: write
       actions: write
@@ -142,20 +142,72 @@ jobs:
 
       # Separate from the push so that a re-run after a failed dispatch, which
       # finds pilot/hmc already current, still gets its build.
-      - name: Build the pilot head unless a build of it exists
+      #
+      # A build dispatched with GITHUB_TOKEN raises no workflow_run event, so
+      # "Publish HMC pilot preview" would never hear of it: wait for that build
+      # and hand its run id to the publish directly. A build started by a push
+      # to pilot/hmc publishes through workflow_run as before.
+      - name: Build the pilot head unless a build of it exists, and publish it
         if: ${{ steps.merge.outputs.result == 'merged' || steps.merge.outputs.result == 'current' }}
         shell: bash
         run: |
           set -euo pipefail
           head="$(git rev-parse HEAD)"
-          builds="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
-            --jq '[.workflow_runs[] | select(.status != "completed" or .conclusion == "success")] | length')"
-          if [ "$builds" -gt 0 ]; then
-            echo "pilot/hmc ${head:0:7} already has a build."
+          runs() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
+              --jq '[.workflow_runs[] | select(.status != "completed" or .conclusion == "success")]'
+          }
+          all_runs() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
+              --jq '.workflow_runs'
+          }
+          # Follow one run by id, so a build that fails or is cancelled is seen
+          # as such. hmc-build allows itself 50 minutes; wait a little longer.
+          id="$(runs | jq -r 'sort_by(.created_at) | last | .id // empty')"
+          if [ -n "$id" ]; then
+            echo "pilot/hmc ${head:0:7} already has a build ($id)."
           else
+            # Only a run created after this dispatch is ours: an older failed
+            # one may still be the newest the API lists for a while.
+            before="$(all_runs | jq '[.[].id] | max // 0')"
             gh workflow run hmc-build.yml --ref pilot/hmc
             echo "Started HMC preview build for pilot/hmc ${head:0:7}."
+            for _ in $(seq 1 15); do
+              id="$(all_runs | jq -r --argjson before "$before" '[.[] | select(.id > $before)] | sort_by(.id) | last | .id // empty')"
+              [ -n "$id" ] && break
+              sleep 10
+            done
           fi
+          if [ -z "$id" ]; then
+            echo "Could not find the HMC preview build for ${head:0:7}."; exit 1
+          fi
+          for _ in $(seq 1 180); do
+            build="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id")"
+            [ "$(jq -r .status <<<"$build")" = completed ] && break
+            sleep 20
+          done
+          case "$(jq -r '.status + "/" + (.conclusion // "")' <<<"$build")" in
+            completed/success) ;;
+            completed/cancelled)
+              # Superseded by a newer pilot build, which publishes through its
+              # own trigger (a push) or the sync run that started it.
+              echo "Build $id was cancelled by a newer one; that one publishes."; exit 0 ;;
+            completed/*)
+              # The publisher skips a failed build but its report job still tells
+              # the pilot, as it does for a push build that fails.
+              if [ "$(jq -r .event <<<"$build")" = workflow_dispatch ]; then
+                gh workflow run hmc-publish.yml --ref master -f run_id="$id"
+              fi
+              echo "The HMC preview build failed: $(jq -r .html_url <<<"$build")"; exit 1 ;;
+            *)
+              # Not lost: the scheduled run of the publish picks it up once it succeeds.
+              echo "Build $id is still running after an hour; the scheduled publish will take it: $(jq -r .html_url <<<"$build")"; exit 0 ;;
+          esac
+          if [ "$(jq -r .event <<<"$build")" = workflow_dispatch ]; then
+            gh workflow run hmc-publish.yml --ref master -f run_id="$id"
+            echo "Started the publish of build $id."
+          fi
+
           number="$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
           if [ -n "$number" ]; then
             gh issue close "$number" --comment "master \`${SHA:0:7}\` 已自動同步到 pilot/hmc，這個問題已解除。"
