@@ -8,7 +8,7 @@ import { clinicVitalsStorageKey, useClinicVitals, useClinicVitalsStore } from '@
 import { createMemoryPatientAnswerBacking, patientAnswerBacking, setPatientAnswerBacking } from '@/features/clinical-decision-support/stores/patient-answer-backing'
 import { applyAfCalculatorResults } from '@/features/clinical-decision-support/utils/af-calculators'
 import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
-import { storedCiphertext, until, useRealWebCrypto } from './encrypted-answers.helper'
+import { expectSealedEnvelope, storedCiphertext, until, useRealWebCrypto } from './encrypted-answers.helper'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => ({ diagnosticReports: [] }),
@@ -105,7 +105,8 @@ describe('AF missing-weight recovery', () => {
     fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: '2026-10-01' } })
     fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
     await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')
-    expect(await storedCiphertext(clinicVitalsStorageKey('weight-a'))).not.toContain('68')
+    // Sealed: no plaintext field or date. (A bare '68' can occur in base64 by chance.)
+    expectSealedEnvelope(await storedCiphertext(clinicVitalsStorageKey('weight-a')), ['"bodyWeight"', '"value":68', '2026-10-01'])
     unmount()
 
     // A reload: nothing in memory, the sealed record read back.
