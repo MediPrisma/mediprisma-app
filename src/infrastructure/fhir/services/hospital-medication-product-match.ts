@@ -124,18 +124,19 @@ export function hospitalProductMatchesKnowledge(
 // Micrograms, so 0.25 mg and 250 mcg compare equal.
 const MICROGRAMS: Record<string, number> = { MG: 1000, MCG: 1, UG: 1 }
 
-/** Every drug amount written in a label or official ingredient text. A pack
- * size (5 g, 3 ml) and a percentage are not amounts; mass per volume or mass
- * keeps its denominator, so 10 mg/1 ml never equals 10 mg. Undefined when the
- * text also names a quantity in a unit not read here (1 GM, 400 IU, 5%): the
- * amounts found would not be the whole strength. A bare volume (3 ml) is a
- * pack size and is let through. */
-function drugAmounts(text: string): string[] | undefined {
+/** Every drug amount written in a label or official ingredient text. A
+ * percentage is not an amount; mass per volume or mass keeps its denominator,
+ * so 10 mg/1 ml never equals 10 mg. Undefined when the text also names any
+ * other quantity (1 GM, 400 IU, 500 GAMMA, .48 ML): the amounts found would
+ * not be the whole strength. Only a label may add a bare volume (3 ml), its
+ * pack size. */
+function drugAmounts(text: string, packVolume: boolean): string[] | undefined {
   const upper = text.normalize('NFKC').toUpperCase()
     // "25/5 mg" names both ingredients' amounts in the trailing unit.
     .replace(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*(MG|MCG)\b/g, '$1 $3 + $2 $3')
   const pattern = /(?<![\d.])(\d+(?:\.\d+)?|\.\d+)\s*(MG|MCG|UG)\b(?:\s*\/\s*(\d+(?:\.\d+)?)?\s*(ML|GM|G)\b)?/g
-  if (/\d\s*(?:G|GM|IU|U|UNITS?|MEQ|MMOL|%)(?![A-Z])/.test(upper.replace(pattern, ' '))) return undefined
+  const unread = [...upper.replace(pattern, ' ').matchAll(/(?<![A-Z\d.])(?:\d+(?:\.\d+)?|\.\d+)\s*([A-Z]+|%)/g)]
+  if (unread.some((match) => !(packVolume && match[1] === 'ML'))) return undefined
   return [...upper.matchAll(pattern)]
     .map((match) => {
       const amount = Number(match[1]) * MICROGRAMS[match[2]] / (match[3] ? Number(match[3]) : 1)
@@ -176,11 +177,12 @@ function hospitalBrandMatchesKnowledge(concept: any, knowledge: Resource): boole
   const officialNames = [...(knowledge.code?.coding ?? []).map((coding: any) => coding.display), ...(knowledge.synonym ?? [])]
     .map((name) => String(name ?? '').normalize('NFKC').toUpperCase())
   if (!officialNames.some((name) => word.test(name)) || ingredients.some((text) => word.test(text.toUpperCase()))) return false
-  // Each official ingredient must contribute a readable amount, so a
-  // combination is compared whole, never by the one part this can read.
-  const ingredientAmounts = ingredients.map(drugAmounts)
-  if (ingredientAmounts.some((amounts) => !amounts?.length)) return false
-  const hospitalAmounts = drugAmounts(label), officialAmounts = ingredientAmounts.flat().sort()
+  // Every official component (one ingredient entry may hold several, joined
+  // by "+") must give exactly one readable amount, so a combination is
+  // compared whole, never by the parts this can read.
+  const ingredientAmounts = ingredients.flatMap((text) => text.split('+')).map((part) => drugAmounts(part, false))
+  if (ingredientAmounts.some((amounts) => amounts?.length !== 1)) return false
+  const hospitalAmounts = drugAmounts(label, true), officialAmounts = ingredientAmounts.flat().sort()
   if (!hospitalAmounts?.length || hospitalAmounts.join() !== officialAmounts.join()) return false
   // Whole label words only: "Glucophage" must not read as an "oph" product.
   const words = label.split(/[^A-Z]+/)

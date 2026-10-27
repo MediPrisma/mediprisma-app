@@ -108,6 +108,10 @@ it.each([
   // Every combination ingredient must be read, not only the one in mg.
   ['a combination ingredient in grams', 'Dipicillin inj 2 g + 500 mg', 'DIPICILLIN INJECTION', 'AMPICILLIN (SODIUM) 1 GM+CLOXACILLIN (SODIUM) 500 MG', '注射劑'],
   ['a missing combination ingredient', 'Dipicillin inj 500 mg', 'DIPICILLIN INJECTION', 'AMPICILLIN (SODIUM) 1 GM+CLOXACILLIN (SODIUM) 500 MG', '注射劑'],
+  // One ingredient entry can hold the whole combination; every part counts.
+  ['an unread unit in a combination', 'Swan cap 10 mg + 20 mg', 'SWAN CAPSULES', 'THIAMINE DISULFIDE 10 MG+PYRIDOXAL PHOSPHATE SODIUM 20 MG+HYDROXOCOBALAMIN 500 GAMMA', '膠囊劑'],
+  ['an ingredient measured by volume', 'Cougdau tab 2.5 mg', 'COUGDAU TABLETS', 'OPIUM POWDER 2.5 MG+GLYCYRRHIZA EXTRACT .48 ML', '錠劑'],
+  ['an ingredient volume read as a pack size', 'Cougdau tab 2.5 mg 9 ml', 'COUGDAU TABLETS', 'OPIUM POWDER 2.5 MG+GLYCYRRHIZA EXTRACT .48 ML', '錠劑'],
   ['a label strength in grams', 'Dipicillin inj 1 g + 500 mg', 'DIPICILLIN INJECTION', 'AMPICILLIN (SODIUM) 1 GM+CLOXACILLIN (SODIUM) 500 MG', '注射劑'],
 ])('keeps %s apart', (_scenario, name, display, ingredient, form) => {
   expect(hospitalProductMayMatchKnowledge(hospitalLabel(name), 'SYNTH00001', brandKnowledge(display, ingredient, form))).toBe(false)
