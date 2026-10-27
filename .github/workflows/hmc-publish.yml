@@ -33,8 +33,9 @@ on:
       run_id:
         description: Run id of a completed "HMC preview build"
         required: true
-  # The sync above waits for its build only so long. Whatever it misses, this
-  # finds: the newest dispatched pilot build that /app-hmc is not serving yet.
+  # Whatever the triggers above miss (a sync that stopped waiting, a pending
+  # publish replaced in the concurrency group), this finds: the newest
+  # successful pilot build, when /app-hmc is not serving it yet.
   schedule:
     - cron: '*/15 * * * *'
 
@@ -79,8 +80,10 @@ jobs:
             newest="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?status=success&per_page=1" \
               --jq '.workflow_runs[0] // empty')"
             live="$(curl -fsS https://mediprisma.tw/app-hmc/hmc-build.json | jq -r '.appSha // empty' || true)"
-            if [ -z "$newest" ] || [ "$(jq -r .event <<<"$newest")" != workflow_dispatch ]; then
-              echo "The newest build publishes through its own trigger."; exit 0
+            # Whatever started it: a pending event publish this run replaced in
+            # the concurrency group is taken over here, not dropped.
+            if [ -z "$newest" ]; then
+              echo "No successful HMC preview build yet."; exit 0
             fi
             if [ "$(jq -r .head_sha <<<"$newest")" = "$live" ]; then
               echo "Nothing missed: /app-hmc serves ${live:0:7}."; exit 0
