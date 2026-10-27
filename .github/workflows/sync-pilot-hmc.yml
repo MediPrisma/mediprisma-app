@@ -157,24 +157,27 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
               --jq '[.workflow_runs[] | select(.status != "completed" or .conclusion == "success")]'
           }
-          if [ "$(runs | jq length)" -gt 0 ]; then
-            echo "pilot/hmc ${head:0:7} already has a build."
-          else
-            gh workflow run hmc-build.yml --ref pilot/hmc
-            echo "Started HMC preview build for pilot/hmc ${head:0:7}."
-          fi
-
+          all_runs() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
+              --jq '.workflow_runs'
+          }
           # Follow one run by id, so a build that fails or is cancelled is seen
           # as such. hmc-build allows itself 50 minutes; wait a little longer.
-          id=""
-          for _ in $(seq 1 15); do
-            # Every run of this head, failed ones included, so a build that fails
-            # before it is first seen is still followed and reported.
-            id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
-              --jq '.workflow_runs | sort_by(.created_at) | last | .id // empty')"
-            [ -n "$id" ] && break
-            sleep 10
-          done
+          id="$(runs | jq -r 'sort_by(.created_at) | last | .id // empty')"
+          if [ -n "$id" ]; then
+            echo "pilot/hmc ${head:0:7} already has a build ($id)."
+          else
+            # Only a run created after this dispatch is ours: an older failed
+            # one may still be the newest the API lists for a while.
+            before="$(all_runs | jq '[.[].id] | max // 0')"
+            gh workflow run hmc-build.yml --ref pilot/hmc
+            echo "Started HMC preview build for pilot/hmc ${head:0:7}."
+            for _ in $(seq 1 15); do
+              id="$(all_runs | jq -r --argjson before "$before" '[.[] | select(.id > $before)] | sort_by(.id) | last | .id // empty')"
+              [ -n "$id" ] && break
+              sleep 10
+            done
+          fi
           if [ -z "$id" ]; then
             echo "Could not find the HMC preview build for ${head:0:7}."; exit 1
           fi
