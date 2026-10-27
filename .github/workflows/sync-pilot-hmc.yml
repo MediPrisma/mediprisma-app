@@ -168,7 +168,10 @@ jobs:
           # as such. hmc-build allows itself 50 minutes; wait a little longer.
           id=""
           for _ in $(seq 1 15); do
-            id="$(runs | jq -r 'sort_by(.created_at) | last | .id // empty')"
+            # Every run of this head, failed ones included, so a build that fails
+            # before it is first seen is still followed and reported.
+            id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
+              --jq '.workflow_runs | sort_by(.created_at) | last | .id // empty')"
             [ -n "$id" ] && break
             sleep 10
           done
