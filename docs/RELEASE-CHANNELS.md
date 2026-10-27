@@ -21,7 +21,7 @@ GitHub Pages（`gh-pages.yml`）只放轉址頁，仍隨 master 自動更新。
 
 ## HMC 預覽的自動同步
 
-`Sync master into pilot/hmc` 在 master 的 CI 通過後，把該 commit 合併進 `pilot/hmc`、推送，並啟動 `HMC preview build`，之後由 `Publish HMC pilot preview` 照舊發布到 `/app-hmc`。`pilot/hmc` 仍是獨立分支，HMC 專用的修改照樣直接在上面做。
+`Sync master into pilot/hmc` 在 master 的 CI 通過後，把該 commit 合併進 `pilot/hmc`、推送，並啟動 `HMC preview build`，等建置完成後再啟動 `Publish HMC pilot preview` 發布到 `/app-hmc`（`GITHUB_TOKEN` 啟動的建置不會觸發 workflow_run，所以由同步流程直接把建置的 run id 交給發布）。直接 push 到 `pilot/hmc` 的建置照舊由 workflow_run 發布。`pilot/hmc` 仍是獨立分支，HMC 專用的修改照樣直接在上面做。
 
 遇到下列情況不會推送，而是開一個標題為「HMC 自動同步需要處理」的 issue，處理完手動執行該 workflow，或等下一個 master commit 自動重試：
 
