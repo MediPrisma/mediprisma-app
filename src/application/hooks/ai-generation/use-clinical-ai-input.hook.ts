@@ -219,7 +219,7 @@ export function useClinicalAiInput(
   const clinicalScopeClock = useMemo(
     () => ({
       patient,
-      nowMs: clinicalNowMs(demoDataActive),
+      nowMs: clinicalNowMs(demoDataActive, patient?.id),
     }),
     [demoDataActive, patient],
   )
