@@ -4,10 +4,11 @@ import { createFhirCdssPatientProfile } from '@voho0000/personalized-care-fhir'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import { AfWeightEntry } from '@/features/clinical-decision-support/renderers/AfWeightEntry'
 import { VisitBookChromeContext } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
-import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { clinicVitalsStorageKey, useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { createMemoryPatientAnswerBacking, patientAnswerBacking, setPatientAnswerBacking } from '@/features/clinical-decision-support/stores/patient-answer-backing'
 import { applyAfCalculatorResults } from '@/features/clinical-decision-support/utils/af-calculators'
 import { applyClinicVitals } from '@/features/clinical-decision-support/utils/apply-clinic-vitals'
-import { useRealWebCrypto } from './encrypted-answers.helper'
+import { storedCiphertext, until, useRealWebCrypto } from './encrypted-answers.helper'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => ({ diagnosticReports: [] }),
@@ -52,7 +53,7 @@ describe('AF missing-weight recovery', () => {
     Element.prototype.scrollIntoView = jest.fn()
   })
 
-  it.each(['2026-10-01', '2026-01-01'])('applies a measurement dated %s through the real profile/calculator', measuredOn => {
+  it.each(['2026-10-01', '2026-01-01'])('applies a measurement dated %s through the real profile/calculator', async measuredOn => {
     render(<Reading />)
     const table = screen.getByTestId('cdss-book-dose-table')
     expect(table).toHaveTextContent('缺 CrCl')
@@ -63,14 +64,14 @@ describe('AF missing-weight recovery', () => {
     fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: measuredOn } })
     fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
     expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn })
+    expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
     expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
-    expect(screen.getByText('已套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
     expect(table).toHaveAttribute('aria-label', expect.stringContaining('CrCl 41'))
     expect(table).not.toHaveTextContent('缺 CrCl')
     expect(within(table).getByText('15 mg qd')).toBeInTheDocument()
   })
 
-  it('does not fabricate CrCl or a dose when creatinine is also missing', () => {
+  it('does not fabricate CrCl or a dose when creatinine is also missing', async () => {
     render(<Reading hasCr={false} />)
     fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
     fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
@@ -78,7 +79,7 @@ describe('AF missing-weight recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 Cr（mg/dL）')
-    expect(screen.getByText('已套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
+    expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
   })
 
   it('keeps saved weights and unsaved drafts with their patient', () => {
@@ -95,6 +96,57 @@ describe('AF missing-weight recovery', () => {
     expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
     expect(useClinicVitalsStore.getState().byPatientId['weight-a']?.entries.bodyWeight).toBeUndefined()
     expect(useClinicVitalsStore.getState().byPatientId['weight-b'].entries.bodyWeight?.value).toBe(55)
+  })
+
+  it('keeps the added weight in the patient’s stored CDSS record across a reload of this tab', async () => {
+    const { unmount } = render(<Reading />)
+    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
+    fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
+    fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: '2026-10-01' } })
+    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')
+    expect(await storedCiphertext(clinicVitalsStorageKey('weight-a'))).not.toContain('68')
+    unmount()
+
+    // A reload: nothing in memory, the sealed record read back.
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+    useClinicVitalsStore.getState().hydrate('weight-a')
+    await until(() => Boolean(useClinicVitalsStore.getState().hydratedPatientIds['weight-a']), 'weight hydration')
+    expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-01' })
+    render(<Reading />)
+    expect(screen.getByTestId('cdss-book-dose-table')).toHaveAttribute('aria-label', expect.stringContaining('CrCl 41'))
+    expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
+    // Another chart reads none of it.
+    useClinicVitalsStore.getState().hydrate('weight-b')
+    expect(useClinicVitalsStore.getState().byPatientId['weight-b']?.entries.bodyWeight).toBeUndefined()
+  })
+
+  it('does not report a weight as saved when the stored record cannot be written', async () => {
+    const working = patientAnswerBacking()
+    const save = jest.fn((): Promise<boolean> => Promise.resolve(false))
+    setPatientAnswerBacking({ ...createMemoryPatientAnswerBacking(), save })
+    try {
+      render(<Reading />)
+      fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
+      fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
+      fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: '2026-10-01' } })
+      fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+      expect(await screen.findByText('體重未能儲存，劑量評估未使用這筆體重。請再按「套用體重」重試。')).toBeInTheDocument()
+      expect(screen.queryByText(/已存入 CDSS/)).not.toBeInTheDocument()
+      // Taken back out of the page: nothing is computed from an unsaved weight.
+      expect(useClinicVitalsStore.getState().byPatientId['weight-a']?.entries.bodyWeight).toBeUndefined()
+      expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
+      // What was typed is still there, ready for another try.
+      expect(screen.getByLabelText('體重（kg）')).toHaveValue(68)
+      expect(screen.getByRole('button', { name: '套用體重' })).toHaveFocus()
+
+      save.mockImplementation(() => Promise.resolve(true))
+      fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+      expect(await screen.findByText('已存入 CDSS 並套用體重，請查看下方更新的劑量評估。')).toHaveFocus()
+      expect(useClinicVitalsStore.getState().byPatientId['weight-a'].entries.bodyWeight).toMatchObject({ value: 68, measuredOn: '2026-10-01' })
+    } finally {
+      setPatientAnswerBacking(working)
+    }
   })
 
   it('does not ask again when the record already supplies weight', () => {
