@@ -48,7 +48,7 @@ jobs:
       && github.event.workflow_run.head_branch == 'master'
       && github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       contents: write
       actions: write
@@ -164,23 +164,36 @@ jobs:
             echo "Started HMC preview build for pilot/hmc ${head:0:7}."
           fi
 
-          build=""
-          for _ in $(seq 1 90); do
-            build="$(runs | jq -c 'sort_by(.created_at) | last // empty')"
-            [ -n "$build" ] && [ "$(jq -r .status <<<"$build")" = completed ] && break
+          # Follow one run by id, so a build that fails or is cancelled is seen
+          # as such. hmc-build allows itself 50 minutes; wait a little longer.
+          id=""
+          for _ in $(seq 1 15); do
+            id="$(runs | jq -r 'sort_by(.created_at) | last | .id // empty')"
+            [ -n "$id" ] && break
+            sleep 10
+          done
+          if [ -z "$id" ]; then
+            echo "Could not find the HMC preview build for ${head:0:7}."; exit 1
+          fi
+          for _ in $(seq 1 180); do
+            build="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id")"
+            [ "$(jq -r .status <<<"$build")" = completed ] && break
             sleep 20
           done
-          if [ -z "$build" ] || [ "$(jq -r .status <<<"$build")" != completed ]; then
-            echo "The HMC preview build did not finish in time; publish it by hand once it does."
-            exit 1
-          fi
-          if [ "$(jq -r .conclusion <<<"$build")" != success ]; then
-            echo "The HMC preview build failed: $(jq -r .html_url <<<"$build")"
-            exit 1
-          fi
+          case "$(jq -r '.status + "/" + (.conclusion // "")' <<<"$build")" in
+            completed/success) ;;
+            completed/cancelled)
+              # Superseded by a newer pilot build, which publishes through its
+              # own trigger (a push) or the sync run that started it.
+              echo "Build $id was cancelled by a newer one; that one publishes."; exit 0 ;;
+            completed/*)
+              echo "The HMC preview build failed: $(jq -r .html_url <<<"$build")"; exit 1 ;;
+            *)
+              echo "Build $id did not finish within an hour: $(jq -r .html_url <<<"$build")"; exit 1 ;;
+          esac
           if [ "$(jq -r .event <<<"$build")" = workflow_dispatch ]; then
-            gh workflow run hmc-publish.yml --ref master -f run_id="$(jq -r .id <<<"$build")"
-            echo "Started the publish of build $(jq -r .id <<<"$build")."
+            gh workflow run hmc-publish.yml --ref master -f run_id="$id"
+            echo "Started the publish of build $id."
           fi
 
           number="$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
