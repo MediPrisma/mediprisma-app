@@ -58,11 +58,27 @@ describe('patient-scope parsing on a large import', () => {
     }
   })
 
-  it('keeps answering correctly past the cache limit', () => {
-    // More distinct scopes than one remembered map holds.
-    for (let i = 0; i < 5200; i += 400) {
-      const source = largeImport(1, `scope-${i}`)
-      expect(selectClinicalSourceResources(source).map(resource => resource.id)).toEqual([`scope-${i}`, 'obs-0'])
+  it('keeps answering correctly after the remembered parses are reset', () => {
+    // 5200 distinct foreign references: more distinct inputs than one remembered map holds (5000).
+    const foreign = 5200
+    const source = reconcileClinicalSources([{
+      sourceId: 'ehr', patientScope: 'limit-a', generation: 'limit', restBase: 'https://ehr.example/fhir', resources: [
+        { resource: { resourceType: 'Patient', id: 'limit-a' }, fullUrl: 'https://ehr.example/fhir/Patient/limit-a' },
+        { resourceType: 'Observation', id: 'own', subject: { reference: 'Patient/limit-a' } },
+        { resourceType: 'Observation', id: 'other-server', subject: { reference: 'https://other.example/fhir/Patient/limit-a' } },
+        ...Array.from({ length: foreign }, (_, i) => ({ resourceType: 'Observation', id: `foreign-${i}`, subject: { reference: `Patient/someone-${i}` } })),
+      ],
+    }])
+    const nodes = source.graph.nodes
+    const reason = (id: string) => getClinicalSourceNodePatientExclusionReason(nodes.find(node => node.resource.id === id)!, nodes)
+    const answer = (id: string) => id === 'own' || id === 'limit-a' ? undefined
+      : id === 'other-server' ? 'unresolved-patient-reference' : 'foreign-patient-reference'
+    // Every node, including the one whose parse crosses the limit, on the first
+    // pass and again after the reset.
+    for (let pass = 0; pass < 2; pass++) {
+      const wrong = nodes.filter(node => getClinicalSourceNodePatientExclusionReason(node, nodes) !== answer(node.resource.id!))
+      expect(wrong.map(node => node.resource.id)).toEqual([])
     }
+    expect(reason('own')).toBeUndefined()
   })
 })
