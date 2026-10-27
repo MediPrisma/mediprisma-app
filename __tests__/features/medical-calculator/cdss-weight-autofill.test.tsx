@@ -63,10 +63,10 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
     expect(weightField()).toHaveValue(null)
     expect(screen.getByText('CrCl 未算')).toBeInTheDocument()
 
-    addClinicWeight('weight-calc-a', 60, '2026-10-27')
+    addClinicWeight('weight-calc-a', 60, '2026-10-20')
     expect(weightField()).toHaveValue(60)
     expect(screen.getByText(CDSS_WEIGHT_SOURCE)).toBeInTheDocument()
-    expect(screen.getByText(/2026-10-27/)).toBeInTheDocument()
+    expect(screen.getByText(/2026-10-20/)).toBeInTheDocument()
     // (140 − 94) × 60 / (72 × 1.93) = 19.86
     expect(screen.getByText('CrCl 19.9 mL/min · Cockcroft–Gault')).toBeInTheDocument()
   })
@@ -75,19 +75,19 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
     setObservations([...observations, obs('w-2018', '29463-7', 78, 'kg', '2018-02-12')])
     render(detail())
     expect(weightField()).toHaveValue(78)
-    addClinicWeight('weight-calc-a', 60, '2026-10-27')
+    addClinicWeight('weight-calc-a', 60, '2026-10-20')
     expect(weightField()).toHaveValue(60)
   })
 
   it('updates the fields not typed in, keeps a what-if weight, and never stores it', () => {
     render(detail())
     fireEvent.change(document.getElementById('calc-age')!, { target: { value: '94' } })
-    addClinicWeight('weight-calc-a', 60, '2026-10-27')
+    addClinicWeight('weight-calc-a', 60, '2026-10-20')
     // Another field was edited; the weight was not, so it still refreshes.
     expect(weightField()).toHaveValue(60)
 
     fireEvent.change(weightField(), { target: { value: '70' } })
-    addClinicWeight('weight-calc-a', 62, '2026-10-27')
+    addClinicWeight('weight-calc-a', 62, '2026-10-20')
     expect(weightField()).toHaveValue(70)
     expect(useClinicVitalsStore.getState().byPatientId['weight-calc-a'].entries.bodyWeight?.value).toBe(62)
 
@@ -96,7 +96,7 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
   })
 
   it('does not carry one patient’s weight to another', () => {
-    addClinicWeight('weight-calc-a', 60, '2026-10-27')
+    addClinicWeight('weight-calc-a', 60, '2026-10-20')
     asPatient('weight-calc-b')
     render(detail())
     expect(weightField()).toHaveValue(null)
@@ -120,7 +120,7 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
     expect(screen.getByText('CrCl 未算')).toBeInTheDocument()
 
     // The second patient's own weight from the CDSS still fills it.
-    addClinicWeight('weight-calc-b', 64, '2026-10-27')
+    addClinicWeight('weight-calc-b', 64, '2026-10-20')
     expect(weightField()).toHaveValue(64)
   })
 })
