@@ -3,7 +3,7 @@
  * autofill hook and the patient's clinic-vitals store — one way: what is typed
  * into the calculator never becomes a measurement. Fictional patients only.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { CalculatorDetail } from '@/features/medical-calculator/components/CalculatorDetail'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { CDSS_WEIGHT_SOURCE } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -65,8 +65,9 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
 
     addClinicWeight('weight-calc-a', 60, '2026-10-27')
     expect(weightField()).toHaveValue(60)
-    expect(screen.getByText(CDSS_WEIGHT_SOURCE)).toBeInTheDocument()
-    expect(screen.getByText(/2026-10-27/)).toBeInTheDocument()
+    // The weight's own row: other fields can carry today's date too.
+    const weightRow = screen.getByText(CDSS_WEIGHT_SOURCE).closest('div:has(#calc-weight)') as HTMLElement
+    expect(within(weightRow).getByText('2026-10-27')).toBeInTheDocument()
     // (140 − 94) × 60 / (72 × 1.93) = 19.86
     expect(screen.getByText('CrCl 19.9 mL/min · Cockcroft–Gault')).toBeInTheDocument()
   })
