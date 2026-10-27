@@ -73,18 +73,19 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = schedule ]; then
-            latest="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?branch=pilot/hmc&event=workflow_dispatch&status=success&per_page=1" \
+            # The newest successful build from any source the publisher accepts
+            # (pilot pushes, dispatches, the personalization tag). Only that one
+            # may go live; anything older would roll /app-hmc back.
+            newest="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?status=success&per_page=1" \
               --jq '.workflow_runs[0] // empty')"
             live="$(curl -fsS https://mediprisma.tw/app-hmc/hmc-build.json | jq -r '.appSha // empty' || true)"
-            if [ -z "$latest" ] || [ "$(jq -r .head_sha <<<"$latest")" = "$live" ]; then
+            if [ -z "$newest" ] || [ "$(jq -r .event <<<"$newest")" != workflow_dispatch ]; then
+              echo "The newest build publishes through its own trigger."; exit 0
+            fi
+            if [ "$(jq -r .head_sha <<<"$newest")" = "$live" ]; then
               echo "Nothing missed: /app-hmc serves ${live:0:7}."; exit 0
             fi
-            # Only the newest build counts: an older one must not replace it.
-            newest="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?branch=pilot/hmc&status=success&per_page=1" --jq '.workflow_runs[0].id')"
-            if [ "$newest" != "$(jq -r .id <<<"$latest")" ]; then
-              echo "A newer pilot build published through its own trigger."; exit 0
-            fi
-            RUN_ID="$(jq -r .id <<<"$latest")"
+            RUN_ID="$(jq -r .id <<<"$newest")"
             echo "Publishing missed build $RUN_ID (live: ${live:0:7})."
           fi
           if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
