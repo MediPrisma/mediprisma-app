@@ -37,6 +37,7 @@ interface Props {
   decisions?: PhysicianDecisionMap
   onRecordDecision?: (id: string, input: PhysicianDecisionInput) => void
   onClearDecision?: (id: string) => void
+  doseRecovery?: ReactNode
 }
 const QUESTION_GROUPS = [
   { id: 'screening', zh: '完整 AF 篩檢風險檢核', en: 'Comprehensive AF screening risk review' },
@@ -486,6 +487,7 @@ export function AtrialFibrillationVisitFlow({
   decisions = {},
   onRecordDecision,
   onClearDecision,
+  doseRecovery,
 }: Props) {
   const [strategy, setStrategy] = useState<'rate' | 'rhythm' | null>(null)
   const [vitalsOpen, setVitalsOpen] = useState(false)
@@ -720,6 +722,7 @@ export function AtrialFibrillationVisitFlow({
           ) : null}
         </div>
         <AfRecordMetrics board={board} isEnglish={en} />
+        {doseRecovery}
         {vitalsOpen && onSaveClinicVitals ? (
           <div className="p-3">
             <ClinicVitalsForm

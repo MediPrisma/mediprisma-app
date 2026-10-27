@@ -137,6 +137,7 @@ function arrange({
     hasPatient: true,
     dataReady: true,
     scopeKey: summaryScopeKey,
+    readingScopeKey: summaryScopeKey.split('::').slice(1, 4).join('::'),
     generationSlotKey: summaryGenerationSlotKey,
     isCurrentSlotGenerating: summaryCurrentSlotGenerating,
     readGenerationSlot: readSummaryGenerationSlot,
@@ -1663,5 +1664,31 @@ describe('useMedicalSummaryOrchestrator', () => {
     await waitFor(() => expect(result.current.activeBatchId).toBeNull())
     expect(result.current.result).toEqual({ headline: 'new summary' })
     expect(result.current.safetyResult).toEqual({ alerts: [{ id: 'new' }] })
+  })
+})
+
+test('an empty generation slot never mixes audiences or adopts another view busy state', async () => {
+  const { useSummaryVersionsStore } = await import('@/src/application/hooks/medical-summary/summary-versions.store')
+  jest.clearAllMocks()
+  useSummaryVersionsStore.getState().reset()
+  useProgressiveImportStore.setState({ current: { runId: 'run', importId: 'visits', phase: 'reports-pending' } })
+  const viewKey = 'run::patient-1::medical::zh-TW'
+  useSummaryVersionsStore.getState().add({ id: 'medical', viewKey, runId: 'run', slotKey: 'old-slot', kind: 'cloud', completedAt: 1,
+    result: { headline: 'Clinician only' } as any, coverage: null, catalog: [] }, useSummaryVersionsStore.getState().epoch)
+  useSummaryVersionsStore.setState({ running: { [viewKey]: { slotKey: 'old-slot', automatic: true } } })
+  arrange({ summaryScopeKey: '0::patient-1::patient::zh-TW::input-a', summaryGenerationSlotKey: '', summaryResult: null })
+  const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+  expect(result.current.summaryVersions).toHaveLength(0)
+  expect(result.current.isGenerating).toBe(false)
+  expect(result.current.result?.headline).not.toBe('Clinician only')
+  act(() => result.current.cancelGeneration())
+  expect(useSummaryVersionsStore.getState().automaticStoppedRunId).toBeNull()
+  expect(summaryCancel).not.toHaveBeenCalledWith('old-slot')
+  arrange({ summaryGenerationSlotKey: '', summaryResult: null })
+  rerender()
+  expect(result.current.result?.headline).toBe('Clinician only')
+  act(() => {
+    useSummaryVersionsStore.getState().reset()
+    useProgressiveImportStore.setState({ current: null })
   })
 })

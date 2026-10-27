@@ -1,5 +1,6 @@
 import { currentMedicationRecords, medicationDisplayName } from '@voho0000/personalized-care-fhir'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
+import { resolveHospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
 import type { ClinicalSelectValue } from './hfpef-clinical-autofill'
 
 /**
@@ -81,6 +82,17 @@ function source(med: MedicationEntity, testName: string): ClinicalSelectValue {
   }
 }
 
+/**
+ * A hospital product row whose ingredient nobody has resolved — no official
+ * terminology and no reviewed alias. Its name says nothing about what it is,
+ * so it cannot be the evidence that a DOAC or an interacting drug is absent.
+ */
+function ingredientUnknown(med: MedicationEntity): boolean {
+  if (med.drugTerminology?.ingredientText) return false
+  const name = resolveHospitalMedicationName(med.medicationCodeableConcept)
+  return !!name && name.status !== 'normalized'
+}
+
 /** mg per administration and administrations per day, only where the record states both plainly. */
 function regimenOf(med: MedicationEntity): { mg: number; perDay: number } | undefined {
   const dosage = med.dosageInstruction?.length === 1 ? med.dosageInstruction[0] : undefined
@@ -98,12 +110,15 @@ function regimenOf(med: MedicationEntity): { mg: number; perDay: number } | unde
  * dose in tablets, an unusual dose) is left for the clinician to choose. A
  * drug is 「是」 when a current prescription names it and 「否」 when the
  * record lists current prescriptions and none does; with no current
- * prescriptions nothing is said.
+ * prescriptions nothing is said. A current hospital product with no resolved
+ * ingredient could be any drug: 「否」 and 「無 DOAC」 are then left for the
+ * clinician, while a drug a resolved prescription names is still 「是」.
  */
 export function doacSelects(medications: MedicationEntity[], now: Date): Partial<Record<DoacSelectKey, ClinicalSelectValue>> {
   const taken = new Set(currentMedicationRecords(medications, now))
   const current = medications.filter((med) => taken.has(med) && !LOCAL.test(formText(med)))
   if (!current.length) return {}
+  const absenceKnown = !current.some(ingredientUnknown)
   const out: Partial<Record<DoacSelectKey, ClinicalSelectValue>> = {}
   const doacs = current.flatMap((med) => {
     const agent = DOACS.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(names(med)))
@@ -118,16 +133,15 @@ export function doacSelects(medications: MedicationEntity[], now: Date): Partial
     if (value && (DOAC_REGIMEN_OPTIONS as readonly string[]).includes(value)) {
       out.doacRegimen = { ...source(doacs[0]!.med, `目前處方：${medicationDisplayName(doacs[0]!.med)}（依處方推算，請核對實際服用）`), value }
     }
-  } else if (agents.size === 0) {
+  } else if (agents.size === 0 && absenceKnown) {
     out.doacRegimen = { ...source(current[0]!, '目前有效處方未見 DOAC（依處方推算）'), value: 'none' }
   }
   for (const [key, ingredients] of Object.entries(DDI_INGREDIENTS) as Array<[Exclude<DoacSelectKey, 'doacRegimen'>, readonly string[]]>) {
     // Heparin flushes and catheter locks are not anticoagulation.
     const match = current.find((med) => ingredients.some((name) => new RegExp(`\\b${name}\\b`, 'i').test(names(med)))
       && !(key === 'ddi_anticoagulant' && /flush|lock|沖洗|封管/i.test(formText(med))))
-    out[key] = match
-      ? { ...source(match, `目前處方：${medicationDisplayName(match)}（依處方推算，請核對實際服用）`), value: 'yes' }
-      : { value: 'no', date: now.toISOString().slice(0, 10), testName: '目前有效處方未見（依處方推算，請核對）' }
+    if (match) out[key] = { ...source(match, `目前處方：${medicationDisplayName(match)}（依處方推算，請核對實際服用）`), value: 'yes' }
+    else if (absenceKnown) out[key] = { value: 'no', date: now.toISOString().slice(0, 10), testName: '目前有效處方未見（依處方推算，請核對）' }
   }
   // A DOAC beside another DOAC is also another anticoagulant.
   if (agents.size > 1 && out.ddi_anticoagulant?.value !== 'yes') {

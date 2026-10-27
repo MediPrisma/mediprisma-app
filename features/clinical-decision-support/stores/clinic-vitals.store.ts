@@ -454,12 +454,13 @@ function isEmptyVitals(vitals: ClinicVitals): boolean {
     && !vitals.hfFollowUp?.weightChanges?.length
 }
 
-function writeStoredVitals(patientId: string, vitals: ClinicVitals): void {
+/** Resolves whether the record was kept; a backing that cannot fail counts as kept. */
+function writeStoredVitals(patientId: string, vitals: ClinicVitals): Promise<boolean> {
   if (isEmptyVitals(vitals)) {
     patientAnswerBacking().discard('clinic-vitals', patientId)
-    return
+    return Promise.resolve(true)
   }
-  patientAnswerBacking().save('clinic-vitals', patientId, vitals)
+  return Promise.resolve(patientAnswerBacking().save('clinic-vitals', patientId, vitals) ?? true)
 }
 
 const hydration = createHydrationGuard()
@@ -471,7 +472,8 @@ interface ClinicVitalsState {
   hydratedPatientIds: Readonly<Record<string, true>>
   /** Reads one patient's stored record once; a no-op after that. */
   hydrate: (patientId: string) => void
-  setVitals: (patientId: string, patch: ClinicVitalsPatch, now?: Date) => void
+  /** Applies in memory at once; the promise says whether the stored copy was written too. */
+  setVitals: (patientId: string, patch: ClinicVitalsPatch, now?: Date) => Promise<boolean>
   setCongestionGroup: (
     patientId: string,
     group: CongestionSignsAnswer,
@@ -565,7 +567,9 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
   },
 
   setVitals: (patientId, patch, now = new Date()) => {
-    if (!patientId) return
+    if (!patientId) return Promise.resolve(false)
+    // Nothing new to write leaves the stored copy as it was.
+    let written = Promise.resolve(true)
     set((state) => {
       const current = state.byPatientId[patientId]
       const next = mergeClinicVitals(current, patch, now)
@@ -575,9 +579,10 @@ export const useClinicVitalsStore = create<ClinicVitalsState>()((set, get) => ({
       if (next === current || next === EMPTY_CLINIC_VITALS) return state
       // In memory first; the encryption runs in the background and cannot
       // reach back into what the screen is already showing.
-      writeStoredVitals(patientId, next)
+      written = writeStoredVitals(patientId, next)
       return { byPatientId: { ...state.byPatientId, [patientId]: next } }
     })
+    return written
   },
 
   setCongestionGroup: (patientId, group, value, now = new Date()) => {

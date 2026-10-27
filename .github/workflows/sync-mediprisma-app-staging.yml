@@ -1,0 +1,156 @@
+name: Sync app to mediprisma.tw/app-staging
+
+# The test channel (docs/RELEASE-CHANNELS.md). After CI passes on master, build
+# the exact commit CI tested for https://mediprisma.tw/app-staging — same
+# NEXT_PUBLIC_* settings as production, except that CDSS saves go to the
+# staging FHIR API and the page carries a 測試版 badge — and push it into the
+# docs site repo at static/app-staging/. Production (/app) only changes when
+# "Sync app to mediprisma.tw/app" promotes a commit that already ran here.
+# Publishing uses the deploy key of the mediprisma-site-publish environment,
+# which admits protected branches only.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Only eligible runs (the same condition as the job below) share the group, so a
+# fork's or a failed CI's run can never cancel a legitimate staging publish.
+concurrency:
+  group: >-
+    ${{ ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    || (github.event.workflow_run.conclusion == 'success'
+    && github.event.workflow_run.event == 'push'
+    && github.event.workflow_run.head_branch == 'master'
+    && github.event.workflow_run.head_repository.full_name == github.repository))
+    && 'sync-mediprisma-app-staging' || format('sync-mediprisma-app-staging-ignored-{0}', github.run_id) }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: mediprisma-site-publish
+    # Only a successful CI run of a push to this repository's master (workflow_run
+    # also fires for pull requests, including a fork's branch named master), or a
+    # manual run from master. This job builds the commit it is handed, with the
+    # deploy key, so the commit must come from master and nowhere else.
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+      || (github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'master'
+      && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    steps:
+      - name: Checkout the commit CI tested
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Refuse a commit that is not on master
+        env:
+          APP_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: git merge-base --is-ancestor "$APP_SHA" origin/master
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
+      - name: Build static export for /app-staging (production settings, staging CDSS API)
+        run: npm run build:mediprisma
+        env:
+          MEDIPRISMA_BASE_PATH: /app-staging
+          NEXT_PUBLIC_DEPLOY_CHANNEL: staging
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          # Public origin only (no secrets); baked into /app, not a runtime switch.
+          NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}
+          NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}
+          NEXT_PUBLIC_HF_AUTH_POLICY: ${{ vars.NEXT_PUBLIC_HF_AUTH_POLICY }}
+          NEXT_PUBLIC_CDSS_ADMISSION: ${{ vars.NEXT_PUBLIC_CDSS_ADMISSION }}
+          # The staging FHIR API (synthetic data, listed testers only); never production.
+          NEXT_PUBLIC_CDSS_API_ORIGIN: ${{ vars.NEXT_PUBLIC_CDSS_API_ORIGIN_STAGING || 'https://fhir.mediprisma.tw/staging' }}
+          NEXT_PUBLIC_FHIR_OAUTH_ISSUER: ${{ vars.NEXT_PUBLIC_FHIR_OAUTH_ISSUER }}
+          NEXT_PUBLIC_FHIR_OAUTH_CLIENT_ID: ${{ vars.NEXT_PUBLIC_FHIR_OAUTH_CLIENT_ID }}
+          # Leave unset until the VM lab-report receiver is deployed and verified.
+          # Public endpoint only; no fallback to the usage-event Collector.
+          NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL: ${{ vars.NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL }}
+          NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
+          NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
+          NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
+          NEXT_PUBLIC_CLAUDE_URL: ${{ secrets.NEXT_PUBLIC_CLAUDE_URL }}
+          NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL: ${{ secrets.NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL }}
+          NEXT_PUBLIC_PROXY_KEY: ${{ secrets.NEXT_PUBLIC_PROXY_KEY }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY: ${{ secrets.NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY }}
+          NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
+          NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
+
+      # What this build is, served at /app-staging/deploy.json. Promotion to
+      # /app reads it, so only the commit actually live on staging can go out.
+      - name: Record the built commit
+        env:
+          APP_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          jq -n --arg appSha "$APP_SHA" --arg ciRunId "${CI_RUN_ID:-}" \
+            '{channel: "staging", appSha: $appSha, ciRunId: $ciRunId}' > out/deploy.json
+
+      - name: Checkout docs site (mediprisma-site)
+        uses: actions/checkout@v7
+        with:
+          repository: MediPrisma/mediprisma-site
+          ssh-key: ${{ secrets.MEDIPRISMA_SITE_DEPLOY_KEY }}
+          path: docs-site
+          ref: main
+
+      - name: Copy build into docs static/app-staging
+        run: |
+          rm -rf docs-site/static/app-staging
+          mkdir -p docs-site/static/app-staging
+          cp -r out/. docs-site/static/app-staging/
+
+      - name: Commit & push if changed
+        working-directory: docs-site
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          git config user.name "mediprisma-app-sync[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/app-staging
+          if git diff --cached --quiet; then
+            echo "No changes in /app-staging build — nothing to sync."
+            exit 0
+          fi
+          git commit -m "chore: sync /app-staging from mediprisma-app@${SHA:0:7}"
+
+          # /app and /app-hmc publish to this same branch from their own
+          # concurrency groups; each touches only its own directory, so
+          # replaying on top of whatever landed first is always clean.
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); rebasing onto whatever landed first."
+            git pull --rebase origin main
+          done
+          echo "Could not push /app-staging after three attempts."
+          exit 1

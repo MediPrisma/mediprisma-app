@@ -42,7 +42,7 @@ export async function runProgressiveImport(request: ProgressiveImportRequest, fi
   window.addEventListener('medcloud:progressive-import-cancelled', onCancel)
   try {
     let importId: string | undefined
-    await importFile(file, { signal: cancellation.signal, expectedImportId: request.expectedImportId, requireEmpty: request.stage === 'cloud', onCommitted: id => {
+    await importFile(file, { progressiveRunId: request.runId, signal: cancellation.signal, expectedImportId: request.expectedImportId, requireEmpty: request.stage === 'cloud', onCommitted: id => {
       importId = id
       completeProgressiveImport(request, id)
     } })

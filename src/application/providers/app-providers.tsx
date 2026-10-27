@@ -10,6 +10,8 @@ import { MedcloudLaunchProvider } from './medcloud-launch.provider'
 
 interface AppProvidersProps {
   children: ReactNode
+  /** Explicit launch context for isolated development fixtures. */
+  launchHref?: string
 }
 
 /**
@@ -43,7 +45,7 @@ interface AppProvidersProps {
  * - No unnecessary re-renders
  * - Clean separation of concerns
  */
-export function AppProviders({ children }: AppProvidersProps) {
+export function AppProviders({ children, launchHref }: AppProvidersProps) {
   return (
     <QueryProvider>
       <ThemeProvider>
@@ -52,7 +54,7 @@ export function AppProviders({ children }: AppProvidersProps) {
             <AudienceProvider>
               <AuthProvider>
                 <RightPanelProvider>
-                  <MedcloudLaunchProvider>
+                  <MedcloudLaunchProvider launchHref={launchHref}>
                     {children}
                   </MedcloudLaunchProvider>
                 </RightPanelProvider>

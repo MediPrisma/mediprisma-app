@@ -4,6 +4,7 @@
  * SCr 2.2、CrCl 26」 holds only for a woman (a man's CrCl is 30.9 and keeps 5 mg).
  */
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
+import { resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { RENAL } from '@/features/medical-calculator/calculators/renal'
 import { CITES, calculateDoacDoses, checkRegimen, cockcroftGault, crclLabel, type DoacAgent } from '@/features/medical-calculator/doac-dose-model'
 import { doacSelects } from '@/features/medical-calculator/doac-clinical-autofill'
@@ -272,6 +273,48 @@ describe('autofill from current prescriptions', () => {
   })
   it('reaches the calculator through the shared clinical selects', () => {
     expect(buildClinicalSelects([], [med('rivaroxaban', 15, 1)], now).doacRegimen?.value).toBe('rivaroxaban:15:1')
+  })
+
+  // A fictional hospital product row: only the bridge's product coding, no ingredient.
+  const hospital = (product: string, extra: Partial<MedicationEntity> = {}) => med(product, undefined, undefined, {
+    medicationCodeableConcept: { text: product, coding: [{ system: 'urn:oid:vgh.medication.product', code: product, display: product }] },
+    ...extra,
+  } as Partial<MedicationEntity>)
+
+  it('a current hospital product with no resolved ingredient leaves 「無 DOAC」 and every 「否」 to the clinician', () => {
+    const selects = doacSelects([hospital('Fictiodoac FC tab 2.5 mg'), med('amlodipine', 5, 1)], now)
+    expect(selects.doacRegimen).toBeUndefined()
+    for (const key of DDI_KEYS) expect(selects[key as keyof typeof selects]).toBeUndefined()
+    // And so in the calculator: the selects stay 待填, not 無.
+    const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
+    const autofill = { resolve: () => undefined, clinicalSelects: buildClinicalSelects([], [hospital('Fictiodoac FC tab 2.5 mg')], now) }
+    for (const key of ['regimen', 'ddi_verapamil', 'ddi_anticoagulant']) {
+      const input = calc.inputs.find((i) => i.key === key)!
+      expect(resolveInput(input, autofill)).toMatchObject({ filled: false })
+    }
+  })
+
+  it('a drug a resolved prescription names is still 「是」 beside an unresolved hospital product', () => {
+    const selects = doacSelects([hospital('Fictiodoac FC tab 2.5 mg'), med('verapamil', 120, 2), med('apixaban', 5, 2)], now)
+    expect(selects.doacRegimen?.value).toBe('apixaban:5:2')
+    expect(selects.ddi_verapamil?.value).toBe('yes')
+    expect(selects.ddi_ketoconazole).toBeUndefined()
+  })
+
+  it('a hospital product with a resolved ingredient counts like any other prescription', () => {
+    const resolved = hospital('Fictiodoac FC tab 2.5 mg', { drugTerminology: { ingredientText: 'amlodipine' } } as Partial<MedicationEntity>)
+    const selects = doacSelects([resolved], now)
+    expect(selects.doacRegimen?.value).toBe('none')
+    expect(selects.ddi_verapamil?.value).toBe('no')
+    // A product resolved by the reviewed alias list, with no official terminology.
+    expect(doacSelects([hospital('Aromasin SC tab 25 mg')], now).doacRegimen?.value).toBe('none')
+  })
+
+  it('an unresolved hospital product that is no longer current does not hold anything back', () => {
+    const ended = hospital('Fictiodoac FC tab 2.5 mg', { status: 'completed', authoredOn: '2026-05-01', dispenseRequest: { validityPeriod: { start: '2026-05-01', end: '2026-05-29' } } } as Partial<MedicationEntity>)
+    const selects = doacSelects([ended, med('amlodipine', 5, 1)], now)
+    expect(selects.doacRegimen?.value).toBe('none')
+    expect(selects.ddi_verapamil?.value).toBe('no')
   })
 })
 

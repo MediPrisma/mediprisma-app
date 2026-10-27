@@ -1,6 +1,6 @@
 import type { CdssPatientProfile, CdssResult } from '@voho0000/personalized-care'
 import { createHash, webcrypto } from 'node:crypto'
-import { cancelCdssGatewayRequests, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
+import { cancelCdssGatewayRequests, cdssEndpoint, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
 import { parseStoredCdssSaveV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
@@ -170,6 +170,23 @@ test('rechecks site after preparation and refuses unsafe dedicated FHIR origin',
   window.history.replaceState({}, '', '/app/?site=vghtpe')
   await expect(saveCdssSnapshot(input)).rejects.toThrow('cdss_endpoint_unavailable')
   expect(fetch).not.toHaveBeenCalled()
+})
+
+test('API address may carry one path segment for a second API on the same host', () => {
+  const cases: Array<[string, string | null]> = [
+    ['https://fhir.example.test', 'https://fhir.example.test/cdss/v1/saves'],
+    ['https://fhir.example.test/staging', 'https://fhir.example.test/staging/cdss/v1/saves'],
+    ['https://fhir.example.test/staging/', 'https://fhir.example.test/staging/cdss/v1/saves'],
+    ['https://fhir.example.test/a/b', null],
+    ['https://fhir.example.test/Staging', null],
+    ['https://fhir.example.test/staging?x=1', null],
+    ['https://fhir.example.test/stag%20ing', null],
+    ['http://remote.example/staging', null],
+  ]
+  for (const [value, expected] of cases) {
+    process.env.NEXT_PUBLIC_CDSS_API_ORIGIN = value
+    expect(cdssEndpoint()).toBe(expected)
+  }
 })
 
 test('patient key stays stable when the imported FHIR Patient.id changes', async () => {

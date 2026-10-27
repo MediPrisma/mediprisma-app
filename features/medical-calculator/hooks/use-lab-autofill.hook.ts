@@ -16,7 +16,7 @@ import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinica
 import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue } from '../hfpef-clinical-autofill'
 import { buildEchoAutofill } from '../echo-autofill'
 import { doacPatientSelects, type LabObservation } from '../doac-patient-autofill'
-import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals, type MeasuredEntry } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
 import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
@@ -324,6 +324,8 @@ export interface LabAutofillState {
   error: Error | null
   /** Re-run the clinical-data query after a failure. */
   retry: () => Promise<void>
+  /** Whose chart the autofill reads, so a calculator can start over for another patient. */
+  patientId?: string
 }
 
 /** The CDSS's NYHA grading as MAGGIC's option values. */
@@ -344,6 +346,26 @@ export function withCdssNyha(data: Autofill, answer: ClinicVitals['nyhaClass']):
   }
 }
 
+/** What the weight row's 來源 says for a weight added in the CDSS. */
+export const CDSS_WEIGHT_SOURCE = 'CDSS 門診補登體重'
+
+/**
+ * Offers the weight the clinician added in the CDSS — with the day it was
+ * measured — wherever a calculator reads the actual body weight, so a dose is
+ * not computed without the weight the page already holds. The entry takes the
+ * chart's place exactly as `applyClinicVitals` lets it in the CDSS, so the
+ * dose table and the calculator read one weight. One way only: nothing typed
+ * into a calculator becomes a measurement.
+ */
+export function withCdssWeight(data: Autofill, entry: MeasuredEntry | undefined): Autofill {
+  if (!entry || !Number.isFinite(entry.value) || entry.value <= 0 || !entry.measuredOn) return data
+  const clinic: AutofillValue = { value: entry.value, unit: 'kg', date: entry.measuredOn, testName: CDSS_WEIGHT_SOURCE }
+  return {
+    ...data,
+    resolve: (source) => (source?.kind === 'vital' && source.vital === 'weight' ? clinic : data.resolve(source)),
+  }
+}
+
 export function useLabAutofill(): LabAutofillState {
   const { observations, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, refetch } = useClinicalData()
   const { patient } = usePatient()
@@ -353,20 +375,22 @@ export function useLabAutofill(): LabAutofillState {
   useEffect(() => {
     if (patientId) useClinicVitalsStore.getState().hydrate(patientId)
   }, [patientId])
-  const nyhaAnswer = useClinicVitals(patientId)?.nyhaClass
+  const clinicVitals = useClinicVitals(patientId)
+  const nyhaAnswer = clinicVitals?.nyhaClass
+  const clinicWeight = clinicVitals?.entries.bodyWeight
 
   const autofill = useMemo(
     () => {
       const data = buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }, diagnosticReports, medications, new Date(), conditions, encounters)
       // A partially loaded chart must not infer absence before diagnoses arrive.
       if (isLoading || isFetching || error) data.clinicalSelects = undefined
-      return withCdssNyha(data, nyhaAnswer)
+      return withCdssWeight(withCdssNyha(data, nyhaAnswer), clinicWeight)
     },
-    [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, nyhaAnswer],
+    [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, nyhaAnswer, clinicWeight],
   )
 
   return useMemo(
-    () => ({ autofill, isLoading: isLoading || isFetching, error, retry: refetch }),
-    [autofill, isLoading, isFetching, error, refetch],
+    () => ({ autofill, isLoading: isLoading || isFetching, error, retry: refetch, patientId }),
+    [autofill, isLoading, isFetching, error, refetch, patientId],
   )
 }

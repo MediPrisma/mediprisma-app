@@ -28,6 +28,7 @@ import {
 import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
 import { prepareLocalImportFile } from '../services/local-import-file.service'
 import { ProgressiveImportError } from '../services/progressive-import-transaction'
+import { persistSummaryVersions } from '@/src/application/hooks/medical-summary/summary-versions.store'
 
 /** Ceiling for pulling the bundled demo chart (~1.7MB) over hospital Wi-Fi. */
 const DEMO_FETCH_TIMEOUT_MS = 30_000
@@ -37,6 +38,8 @@ export interface ImportBundleOptions {
   expectedImportId?: string
   requireEmpty?: boolean
   onCommitted?: (importId: string) => void
+  /** Only the validated progressive transaction supplies this ownership. */
+  progressiveRunId?: string
 }
 
 export interface UseImportBundleReturn {
@@ -110,6 +113,7 @@ export function useImportBundle(): UseImportBundleReturn {
     signal?: AbortSignal,
     beforeCommit?: () => void,
     onCommitted?: (importId: string) => void,
+    preserveMedicalSummary = false,
   ) => {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
@@ -153,7 +157,10 @@ export function useImportBundle(): UseImportBundleReturn {
     setHasBundle(true)
     setBundleIsActive(shouldUseLocalBundle())
     setIsDemo(demo)
-    notifyBundleChanged()
+    notifyBundleChanged(preserveMedicalSummary)
+    // Transfer retained reading history into the committed bundle's encryption
+    // namespace before query refresh can wait on a slow clinical-data fetch.
+    if (preserveMedicalSummary) await persistSummaryVersions()
     try {
       await queryClient.invalidateQueries()
     } finally {
@@ -188,7 +195,8 @@ export function useImportBundle(): UseImportBundleReturn {
         const patientProfile = options?.expectedImportId ? LocalBundleService.getUserEnteredPatientProfile() : undefined
         assertExpectedImport()
         await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
-          options?.signal, assertExpectedImport, options?.onCommitted)
+          options?.signal, assertExpectedImport, options?.onCommitted,
+          Boolean(options?.progressiveRunId && options.expectedImportId))
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'
