@@ -37,6 +37,8 @@ export function parseProgressiveImportRequest(raw: string | null): ProgressiveIm
 export interface ProgressiveImportState {
   runId: string
   importId: string
+  /** Last accepted data snapshot; transport termination must not relabel it. */
+  stage?: ProgressiveImportRequest['stage']
   phase: 'waiting' | 'reports-pending' | 'reports-pending-partial' | 'reports-failed' | 'update-failed' | 'loaded' | 'empty' | 'partial' | ProgressiveFailureReason
 }
 
@@ -68,7 +70,8 @@ export function restoreProgressiveImportStatus(activeImportId: string | null): v
   let saved: ProgressiveImportState | null = null
   try {
     const value = JSON.parse(sessionStorage.getItem(STATUS_STORAGE_KEY) ?? 'null')
-    if (value && validId(value.runId) && validId(value.importId) && phases.includes(value.phase)) saved = value
+    if (value && validId(value.runId) && validId(value.importId) && phases.includes(value.phase)
+      && (value.stage === undefined || ['cloud', 'cloud-only', 'hospital-visits', 'hospital', 'hospital-reports-failed', 'hospital-empty'].includes(value.stage))) saved = value
   } catch { /* absent or invalid status is not a work authorization */ }
   if (!saved || saved.importId !== activeImportId) {
     writeStoredStatus(null)
@@ -138,7 +141,7 @@ export function completeProgressiveImport(request: ProgressiveImportRequest, imp
     : request.stage === 'cloud-only' ? 'failed' : request.stage === 'hospital-empty' ? 'empty'
     : request.stage === 'hospital-reports-failed' ? 'reports-failed' : request.partial ? 'partial' : 'loaded'
   useProgressiveImportStore.setState({ current: {
-    runId: request.runId, importId,
+    runId: request.runId, importId, stage: request.stage,
     phase: stopped === 'failed' ? failedPhase(normalPhase) : stopped ?? normalPhase,
   } })
 }

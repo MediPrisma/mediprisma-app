@@ -176,12 +176,11 @@ describe('ReportRow shared report source disclosure', () => {
     expect(within(detailTitle).getByText(row.title)).toHaveClass('select-text')
   })
 
-  it('shows one compact note and reveals every source procedure from a narrative row', () => {
+  it('omits routine grouping reminders and reveals every source procedure on demand', () => {
     const row = sharedRow()
     renderRow(row)
 
-    expect(screen.getByTestId('shared-report-summary'))
-      .toHaveTextContent('2 個檢查項目共用相同報告')
+    expect(screen.queryByTestId('shared-report-summary')).not.toBeInTheDocument()
     expect(screen.getAllByText(row.obs[0].valueString!)).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: 'AI 翻譯解讀' })).toHaveLength(1)
 
@@ -197,11 +196,11 @@ describe('ReportRow shared report source disclosure', () => {
     expect(screen.getAllByRole('button', { name: '複製報告全文' })).toHaveLength(1)
   })
 
-  it('keeps the source note and disclosure when structured results use the accordion layout', () => {
+  it('keeps source disclosure without a routine reminder in the accordion layout', () => {
     const row = sharedRow(true)
     renderRow(row)
 
-    expect(screen.getByTestId('shared-report-summary')).toBeInTheDocument()
+    expect(screen.queryByTestId('shared-report-summary')).not.toBeInTheDocument()
     fireEvent.click(screen.getByText(row.title))
     expect(screen.getByTestId('shared-report-sources')).toBeInTheDocument()
   })

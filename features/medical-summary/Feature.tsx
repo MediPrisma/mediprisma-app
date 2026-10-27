@@ -1,9 +1,12 @@
+"use client"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 // Medical Summary (醫療摘要) — one feature with two reading modes:
 // 初診快覽 (the fixed first-visit overview) and independently generated custom
 // summaries. Structured AI output (Zod-validated) renders as a single scroll
 // column of fixed sections — never a free-text markdown blob, and no longer a
 // re-orderable card deck. Pluggable via right-panel-registry (enabled flag).
-"use client"
+
+import { SummaryVersionPicker } from './components/SummaryVersionPicker'
 
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -209,6 +212,7 @@ export default function MedicalSummaryFeature() {
     isRestoring,
     summaryError,
     cardErrors,
+    generationCardErrors,
     safetyError,
     contextOverflowIssue,
     contextAdaptation,
@@ -218,6 +222,12 @@ export default function MedicalSummaryFeature() {
     activeGeneration,
     summaryGenerationSlotKey,
     safetyGenerationSlotKey,
+    summaryVersions,
+    selectedSummaryVersionId,
+    selectedSummaryEvidence,
+    selectSummaryVersion,
+    currentSummaryModelId,
+    generationCompletedAt,
   } = useMedicalSummaryOrchestrator()
   useMedcloudAutoSummary({
     authLoading,
@@ -225,7 +235,7 @@ export default function MedicalSummaryFeature() {
     // `result` is already scoped to the current patient, FHIR input signature,
     // locale, audience, and selected model cache slot. Matching provenance
     // therefore proves this patient does not need another launch run.
-    summaryModelId: result?.generation?.modelId ?? null,
+    summaryModelId: currentSummaryModelId,
     dataReady,
     isGenerating: isBusy,
     isRestoring,
@@ -239,7 +249,7 @@ export default function MedicalSummaryFeature() {
   useSummaryActivity({
     busy: isBusy,
     scope: summaryGenerationSlotKey,
-    completedAt: result?.generation?.source === 'live' ? result.generation.completedAt : undefined,
+    completedAt: generationCompletedAt,
     failed: !!summaryError || !!safetyError,
   })
 
@@ -296,7 +306,7 @@ export default function MedicalSummaryFeature() {
     const failedCards = MEDICAL_SUMMARY_CARD_IDS.flatMap((cardId) => {
       // A legacy/restored safety slot can expose its error outside
       // result.cardErrors; it is the same card, so it is listed once, here.
-      const error = cardId === "safety" ? cardErrors.safety ?? safetyError : cardErrors[cardId]
+      const error = cardId === "safety" ? generationCardErrors.safety ?? safetyError : generationCardErrors[cardId]
       return error ? [{
         label: cardLabels[cardId],
         message: error === "PARSE_FAILED"
@@ -321,7 +331,7 @@ export default function MedicalSummaryFeature() {
       ...genericSummaryError,
     ]
   }, [
-    cardErrors,
+    generationCardErrors,
     cardLabels,
     isPatient,
     ms,
@@ -362,9 +372,18 @@ export default function MedicalSummaryFeature() {
   // always works; the pinpoint scroll is best-effort — if no anchor claims
   // the request in time (virtualised list, pivot view without per-resource
   // rows…), say so instead of failing silently.
+  const [versionEvidence, setVersionEvidence] = useState<{ versionId: string; title: string; resourceKey: string } | null>(null)
+  const visibleVersionEvidence = versionEvidence?.versionId === selectedSummaryVersionId ? versionEvidence : null
+  useEffect(() => { setVersionEvidence(null) }, [selectedSummaryVersionId])
   const navFallbackMsg = ms.navFallback
   const navigateToResource = useCallback(
     (target: ResourceNavTarget) => {
+      if (selectedSummaryVersionId) {
+
+        setVersionEvidence({ versionId: selectedSummaryVersionId, title: [target.date, target.display].filter(Boolean).join(' ') || (locale === 'en' ? 'Source' : '來源'),
+          resourceKey: `${target.resourceType}/${target.resourceId}` })
+        return
+      }
       const store = useResourceNavigationStore.getState()
       // Every citation in this feature (summary sections AND the safety scan)
       // routes through here; a caller that already knows better wins.
@@ -381,7 +400,7 @@ export default function MedicalSummaryFeature() {
         }
       }, NAV_CLAIM_TIMEOUT_MS)
     },
-    [navFallbackMsg],
+    [navFallbackMsg, selectedSummaryVersionId, locale],
   )
 
   // A safety alert's title opens its cited records — the same SourceLink the
@@ -606,6 +625,7 @@ export default function MedicalSummaryFeature() {
     // its retry and model-switch actions (identical errors consolidated) — a
     // per-section error box here would repeat the same failure.
     if (cardErrors[moduleId]) {
+      if (selectedSummaryVersionId && !options.renderOnError) return <section key={moduleId} className="rounded-lg border p-3 text-sm"><h3 className="font-medium">{title}</h3><p className="text-muted-foreground">{locale === 'en' ? 'Not completed in this version' : '此版本未完成'}</p></section>
       return options.renderOnError && content
         ? <div key={moduleId} id={`medical-summary-section-${moduleId}`}>{content}</div>
         : null
@@ -635,7 +655,7 @@ export default function MedicalSummaryFeature() {
         }}
         className="gap-2"
       >
-      <div className="flex flex-nowrap items-center gap-1.5 @max-[19rem]:flex-wrap">
+      <div className={`flex items-center gap-1.5 ${summaryVersions.length ? 'flex-wrap' : 'flex-nowrap @max-[19rem]:flex-wrap'}`}>
         <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-primary @max-[32rem]:hidden" />
         <h2 className="shrink-0 text-base font-semibold text-foreground">{ms.title}</h2>
         <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-primary/10 dark:text-primary @max-[32rem]:hidden">
@@ -673,9 +693,11 @@ export default function MedicalSummaryFeature() {
             ) : null}
           </TabsTrigger>
         </TabsList>
+        {activeView === 'standard' ? <SummaryVersionPicker versions={summaryVersions} selectedId={selectedSummaryVersionId}
+          onSelect={selectSummaryVersion} busy={isBusy} locale={locale} /> : null}
         <div
           data-tour="medical-summary-controls"
-          className="ml-auto flex min-w-0 basis-0 flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none"
+          className={`ml-auto flex flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none ${summaryVersions.length ? 'min-w-40' : 'min-w-0 basis-0'}`}
         >
           {activeView === "standard" ? (
             <ModelPicker
@@ -872,11 +894,11 @@ export default function MedicalSummaryFeature() {
         <TabsContent value="standard" forceMount className="mt-0 space-y-2">
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">{ms.emptyNoPatient}</div>
-      ) : !dataReady ? (
+      ) : !dataReady && !hasAnyResult ? (
         <div className="py-10 flex justify-center">
           <StreamingIndicator label={ms.loadingData} />
         </div>
-      ) : isRestoring ? (
+      ) : isRestoring && !hasAnyResult ? (
         <div className="py-10 flex justify-center">
           <StreamingIndicator label={ms.loadingSavedSummary} />
         </div>
@@ -1068,7 +1090,9 @@ export default function MedicalSummaryFeature() {
             { renderOnError: true },
           ) : null}
 
-          {isSafetyGenerating && !safetyResult ? (
+          {selectedSummaryVersionId && cardErrors.safety ? (
+            <section className="rounded-lg border p-3 text-sm"><h3 className="font-medium">{ms.otherAlertsSectionLabel}</h3><p className="text-muted-foreground">{locale === 'en' ? 'Not completed in this version' : '此版本未完成'}</p></section>
+          ) : isSafetyGenerating && !safetyResult ? (
             <SummarySectionPending title={ms.otherAlertsSectionLabel} label={safetyText.scanning} />
           ) : safetyResult ? (
             <MedicationSafetySection
@@ -1141,6 +1165,12 @@ export default function MedicalSummaryFeature() {
           <CustomInsightModulesSection onManage={openCustomManager} />
         </TabsContent>
       </Tabs>
+      <Dialog open={Boolean(visibleVersionEvidence)} onOpenChange={open => { if (!open) setVersionEvidence(null) }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>{visibleVersionEvidence?.title}</DialogTitle></DialogHeader>
+          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{visibleVersionEvidence ? selectedSummaryEvidence?.[visibleVersionEvidence.resourceKey]?.replaceAll('\n␞\n', '\n\n') || (locale === 'en' ? 'Source text is unavailable in this saved version.' : '此版本未保存來源內文。') : null}</div>
+        </DialogContent>
+      </Dialog>
       <DataSelectionDrawer
         open={dataScopeOpen}
         onOpenChange={setDataScopeOpen}

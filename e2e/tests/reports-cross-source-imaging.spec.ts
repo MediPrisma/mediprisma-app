@@ -5,6 +5,7 @@ import { importBundle, openFeaturePanel, SYNTHETIC_BUNDLE } from '../fixtures/im
 import { NHI_VIEWER_REQUEST_EXTENSION_URL } from '../../features/clinical-summary/reports/utils/nhi-viewer-request'
 
 const before = process.env.IMAGING_BEFORE === '1'
+const variants = process.env.IMAGING_LEGACY === undefined ? [false, true] : [process.env.IMAGING_LEGACY !== '0']
 const marker = 'Synthetic imaging comparison'
 const cases = [
   ['SONOGRAM- BREAST', '乳房超音波', '19014C', `BI-RADS category 2. ${marker}: Simple bilateral breast cysts with no suspicious solid mass or architectural distortion. Annual imaging follow-up is recommended.`],
@@ -14,7 +15,7 @@ const cases = [
 ]
 const url = 'https://medvpnimg.nhi.gov.tw/ZFP?synthetic=1'
 
-test('imaging copies retain all sources and open the correct NHI viewer', async ({ page, context }, testInfo) => {
+for (const legacy of variants) test(`imaging copies retain all sources and open the correct NHI viewer (${legacy ? 'legacy receipt' : 'strict'})`, async ({ page, context }, testInfo) => {
   test.setTimeout(180_000)
   await context.route('https://medvpnimg.nhi.gov.tw/**', route => route.fulfill({ contentType: 'text/html', body: '<h1>Synthetic NHI viewer</h1>' }))
   await page.addInitScript((viewerUrl) => {
@@ -40,6 +41,19 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
         { url: 'version', valueInteger: 1 }, { url: 'proc-id', valueCode: 'IMUE0130' }, { url: 'patient-context-hash', valueString: 'b'.repeat(64) }, { url: 'ipl-case-seq-no', valueString: `SYNTHETIC-${index}` },
       ] }],
     } })
+  }
+  if (legacy) {
+    for (const entry of bundle.entry) {
+      const report = entry.resource
+      if (!/^(hospital|cloud)-imaging-/.test(report?.id ?? '')) continue
+      report.encounter = { reference: report.id.startsWith('hospital') ? 'Encounter/receipt-visit' : 'Encounter/cloud-claim' }
+      if (report.id.startsWith('hospital')) {
+        report.effectiveDateTime = '2026-06-24T14:21:00+08:00'
+        report.extension = [{ url: 'urn:vgh:report:received-at', valueDateTime: report.effectiveDateTime }]
+        if (!report.conclusion.includes('Date Of Examination:')) report.conclusion = `${report.code.text} Date Of Examination:2026/06/24 14:06:13 Date Of RCP:2026/06/24 ${report.conclusion}`
+        report.conclusion = report.conclusion.replace(/( Reported By|$)/, ' Follow-up is generallyrecommended.$1')
+      } else report.conclusion += ' Follow-up is generally recommended.'
+    }
   }
   bundle.entry.push({ resource: {
     ...bundle.entry.find((entry: any) => entry.resource?.id === 'cloud-imaging-0').resource,
@@ -99,15 +113,18 @@ test('imaging copies retain all sources and open the correct NHI viewer', async 
     if (await header.getAttribute('aria-expanded') !== 'true') await header.press('Enter')
     const sources = first.getByTestId('shared-report-sources')
     await sources.locator('summary').click()
-    await expect(sources).toContainText('hospital-imaging-0')
-    await expect(sources).toContainText('cloud-imaging-0')
+    // The source graph assigns projection IDs on import. Assert both source
+    // entries and their original text instead of assuming raw IDs are UI IDs.
+    await expect(sources.locator('li')).toHaveCount(2)
+    await expect(sources).toContainText('SONOGRAM- BREAST')
+    await expect(sources).toContainText('乳房超音波')
     await expect(sources).toContainText('Reported By Example')
     await page.screenshot({ path: path.join(output, 'after-sources.png'), fullPage: true })
     // Keep history entry points for each original title rather than broadening
     // a generic NHI title into an inferred cross-anatomy history alias.
-    const cloudSource = sources.locator('li').filter({ hasText: 'cloud-imaging-0' })
+    const cloudSource = sources.locator('li').filter({ hasText: '乳房超音波' })
     await openFeaturePanel(page)
-    const hospitalSource = sources.locator('li').filter({ hasText: 'hospital-imaging-0' })
+    const hospitalSource = sources.locator('li').filter({ hasText: 'SONOGRAM- BREAST' })
     await hospitalSource.getByRole('button', { name: '查看歷史紀錄' }).click()
     const historyPanel = page.getByRole('region', { name: '功能', exact: true })
     await expect(historyPanel.getByText('臺北榮總', { exact: true }).filter({ visible: true })).toBeVisible()

@@ -14,6 +14,14 @@ Use this visual hierarchy:
 
 Existing CSS variables and shared components are the implementation source of truth. Do not duplicate their numeric values here until the project has a generated token workflow.
 
+## UI Copy and Attention
+
+- Default to minimal UI copy. Avoid slogans, promotional language, explanatory banners, and routine reminders.
+- Do not repeat normal system behavior on every row or card (for example, “procedures share this report”). Show the clinical content directly; keep source details available on demand.
+- Add a persistent message only when it changes the user's next action or interpretation: a clinical safety issue, missing data that affects interpretation, an actionable error, or a required sign-in.
+- Keep necessary messages brief, specific, and close to the affected action. Deduplicate them and remove them when resolved; avoid stacking banners or repeating the same reminder across surfaces.
+- Preserve clear control labels, accessible names, and essential safety information. Reducing copy must not obscure how to act or what data is missing.
+
 ## Colors
 
 - Use neutral surfaces for the application shell and routine grouping.
