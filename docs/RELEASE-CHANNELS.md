@@ -1,16 +1,36 @@
 # 發布管道：測試版與正式版
 
-新功能先上測試版，確認沒問題才推上正式版。
+目前的設定是 master 的 CI 通過後，三個網址同時更新。正式版可以切回「先上測試版、手動推上正式版」，見〈切換正式版的上線方式〉。
 
 | 管道 | 網址 | 何時更新 | CDSS 存檔送到 |
 | --- | --- | --- | --- |
 | 測試版 | `https://mediprisma.tw/app-staging/` | master 的 CI 通過後**自動**（`Sync app to mediprisma.tw/app-staging`） | 測試環境 `https://fhir.mediprisma.tw/staging`（只開放列名測試者；院內測試時可能含真實病人資料，無正式備份，見下文） |
-| 正式版 | `https://mediprisma.tw/app/` | 有人**手動推上正式版**（`Sync app to mediprisma.tw/app`），且 `production` environment 核准 | 正式環境 |
-| HMC 預覽 | `https://mediprisma.tw/app-hmc/` | `pilot/hmc` 自己的流程，不受本文件影響 | — |
+| 正式版 | `https://mediprisma.tw/app/` | 預設：master 的 CI 通過後**自動**（`Sync app to mediprisma.tw/app`）。手動模式：有人手動推上正式版，且 `production` environment 核准 | 正式環境 |
+| HMC 預覽 | `https://mediprisma.tw/app-hmc/` | master 的 CI 通過後**自動**合併進 `pilot/hmc` 並建置（`Sync master into pilot/hmc`）；直接改 `pilot/hmc` 時也照舊建置 | — |
 
 GitHub Pages（`gh-pages.yml`）只放轉址頁，仍隨 master 自動更新。
 
-## 推上正式版
+## 切換正式版的上線方式
+
+由 repository variable `PRODUCTION_PROMOTION` 決定，不需要改程式：
+
+- 未設定（預設）：自動。master 的 CI 通過就發布 `/app`，不經過 `production` 核准。
+- `manual`：手動。master 只會自動上測試版，正式版照下一節的步驟推送。
+
+設定位置：GitHub → Settings → Secrets and variables → Actions → Variables，或執行 `gh variable set PRODUCTION_PROMOTION --body manual -R MediPrisma/mediprisma-app`。改回自動就刪除這個變數。
+
+## HMC 預覽的自動同步
+
+`Sync master into pilot/hmc` 在 master 的 CI 通過後，把該 commit 合併進 `pilot/hmc`、推送，並啟動 `HMC preview build`，之後由 `Publish HMC pilot preview` 照舊發布到 `/app-hmc`。`pilot/hmc` 仍是獨立分支，HMC 專用的修改照樣直接在上面做。
+
+遇到下列情況不會推送，而是開一個標題為「HMC 自動同步需要處理」的 issue，處理完手動執行該 workflow，或等下一個 master commit 自動重試：
+
+- 合併時與 `pilot/hmc` 上的修改衝突；
+- 合併會刪除 `pilot/hmc` 上的檔案；
+- master 的變更包含 `.github/workflows` 下的檔案（`GITHUB_TOKEN` 沒有推送 workflow 檔的權限），這時以一般帳號開 PR 把 master 合進 `pilot/hmc`；
+- 合併後（或 `pilot/hmc` 早已包含該 commit 時）`package.json` 或 `package-lock.json` 與 master 不同。`pilot/hmc` 的套件版本必須跟 master 一致，臨床規則版本只在 master 更新。
+
+## 手動模式：推上正式版
 
 1. 在測試版確認要上線的版本：畫面左下角有「測試版：CDSS 存檔至測試環境」標示；只有 CDSS 存檔進測試環境，其餘見下文。
 2. GitHub → Actions → `Sync app to mediprisma.tw/app` → Run workflow。SHA 可留空，代表「推上目前測試版上的版本」；若填寫，必須等於測試版目前的版本。
