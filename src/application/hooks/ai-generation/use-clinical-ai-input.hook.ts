@@ -341,6 +341,7 @@ export function useClinicalAiInput(
     documentTokenBudget:
       prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
     contextVariant: options.contextVariant,
+    nowMs: scopeNowMs,
   })
   const { getFormattedClinicalContext, getFullClinicalContext, includedDocumentIds } = contextView
 

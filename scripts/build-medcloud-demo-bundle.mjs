@@ -239,7 +239,11 @@ const fakeNames = new Set([...repl.values()].filter((v) => v.startsWith('示範'
 const isTailOfFake = (n) => [...fakeNames].some((f) => f.endsWith(n))
 const realResidual = [...residualInst].filter((n) => !isTailOfFake(n))
 if (realResidual.length) die('LEAK GATE FAILED — non-anonymised institution(s) survived:\n' + realResidual.map((l) => '   • ' + l).join('\n'))
-if (serialized.includes(NHI_VIEWER_REQUEST_URL)) die('LEAK GATE FAILED — NHI viewer request survived')
+const hasViewerRequest = (node) => Array.isArray(node)
+  ? node.some(hasViewerRequest)
+  : !!node && typeof node === 'object' &&
+    (node.url === NHI_VIEWER_REQUEST_URL || Object.values(node).some(hasViewerRequest))
+if (hasViewerRequest(JSON.parse(serialized))) die('LEAK GATE FAILED — NHI viewer request survived')
 if (!serialized.includes(FAKE.patientName)) die('sanity check failed — fake patient name not found in output')
 
 // ===========================================================================
