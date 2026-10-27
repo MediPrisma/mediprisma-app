@@ -134,8 +134,11 @@ function drugAmounts(text: string, packVolume: boolean): string[] | undefined {
   const upper = text.normalize('NFKC').toUpperCase()
     // "25/5 mg" names both ingredients' amounts in the trailing unit.
     .replace(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*(MG|MCG)\b/g, '$1 $3 + $2 $3')
-  const pattern = /(?<![\d.])(\d+(?:\.\d+)?|\.\d+)\s*(MG|MCG|UG)\b(?:\s*\/\s*(\d+(?:\.\d+)?)?\s*(ML|GM|G)\b)?/g
-  const unread = [...upper.replace(pattern, ' ').matchAll(/(?<![A-Z\d.])(?:\d+(?:\.\d+)?|\.\d+)\s*([A-Z]+|%)/g)]
+  const pattern = /(?<![\d.])(\d+(?:\.\d+)?|\.\d+)\s*(MG|MCG|UG)\b(?:\s*\/\s*(\d+(?:\.\d+)?|\.\d+)?\s*(ML|GM|G)\b)?/g
+  const rest = upper.replace(pattern, ' ')
+  // A slash left over is a denominator this did not read, never a pack size.
+  if (/\/\s*\.?\d/.test(rest)) return undefined
+  const unread = [...rest.matchAll(/(?<![A-Z\d.])(?:\d+(?:\.\d+)?|\.\d+)\s*([A-Z]+|%)/g)]
   if (unread.some((match) => !(packVolume && match[1] === 'ML'))) return undefined
   return [...upper.matchAll(pattern)]
     .map((match) => {

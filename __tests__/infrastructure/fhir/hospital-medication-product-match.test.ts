@@ -112,6 +112,8 @@ it.each([
   ['an unread unit in a combination', 'Swan cap 10 mg + 20 mg', 'SWAN CAPSULES', 'THIAMINE DISULFIDE 10 MG+PYRIDOXAL PHOSPHATE SODIUM 20 MG+HYDROXOCOBALAMIN 500 GAMMA', '膠囊劑'],
   ['an ingredient measured by volume', 'Cougdau tab 2.5 mg', 'COUGDAU TABLETS', 'OPIUM POWDER 2.5 MG+GLYCYRRHIZA EXTRACT .48 ML', '錠劑'],
   ['an ingredient volume read as a pack size', 'Cougdau tab 2.5 mg 9 ml', 'COUGDAU TABLETS', 'OPIUM POWDER 2.5 MG+GLYCYRRHIZA EXTRACT .48 ML', '錠劑'],
+  ['a concentration for an amount', 'Keflodin inj 500 mg/0.5 ml', 'KEFLODIN INJECTION 0.5GM', 'CEPHALORIDINE 500 MG', '乾粉注射劑'],
+  ['a concentration without a leading zero for an amount', 'Keflodin inj 500 mg/.5 ml', 'KEFLODIN INJECTION 0.5GM', 'CEPHALORIDINE 500 MG', '乾粉注射劑'],
   ['a label strength in grams', 'Dipicillin inj 1 g + 500 mg', 'DIPICILLIN INJECTION', 'AMPICILLIN (SODIUM) 1 GM+CLOXACILLIN (SODIUM) 500 MG', '注射劑'],
 ])('keeps %s apart', (_scenario, name, display, ingredient, form) => {
   expect(hospitalProductMayMatchKnowledge(hospitalLabel(name), 'SYNTH00001', brandKnowledge(display, ingredient, form))).toBe(false)
