@@ -7,9 +7,11 @@
 // A clinicalStatus filter (default: Active) keeps the card focused — general
 // FHIR sources carry lots of `resolved` history that would otherwise flood it.
 //
-// Below the conditions, 就醫主診斷 lists each visit's primary ICD-10 claim code
-// (Encounter.reasonCode[0]), one row per code, labelled as unconfirmed. For
-// 雲端病歷 this is the only section: that bridge emits no Condition at all.
+// Visit codes — each claim's primary ICD-10 code (Encounter.reasonCode[0]) and
+// the hospital's own statusless encounter-diagnosis Conditions — merge into
+// one 就診診斷 list, one row per diagnosis. Only the remaining Conditions
+// (重大傷病, statused problem-list items) stay on the recorded list with its
+// status filter; when they are absent, the card is the one visit list.
 "use client"
 
 import { useMemo, useState } from 'react'
@@ -18,8 +20,9 @@ import { FeatureCard } from "@/src/shared/components"
 import { useDiagnosis } from '../diagnosis/hooks/useDiagnosis'
 import { useDiagnosisRows } from '../diagnosis/hooks/useDiagnosisRows'
 import { DiagnosisList } from '../diagnosis/components/DiagnosisList'
-import { useVisitPrimaryDiagnoses } from './hooks/useVisitPrimaryDiagnoses'
-import { VisitPrimaryDiagnosisList } from './components/VisitPrimaryDiagnosisList'
+import { useVisitDiagnoses } from './hooks/useVisitDiagnoses'
+import { VisitDiagnosisList } from './components/VisitDiagnosisList'
+import { isVisitCodeCondition } from './utils/visit-diagnoses'
 import { FilterPills } from './components/FilterPills'
 import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
 
@@ -40,17 +43,18 @@ function matchesFilter(clinicalStatus: string | undefined, filter: StatusFilter)
 export function ProblemListCard() {
   const { t, locale } = useLanguage()
   const { conditions, encounters, isLoading, error } = useDiagnosis()
-  const visitDiagnoses = useVisitPrimaryDiagnoses(conditions)
+  const visitDiagnoses = useVisitDiagnoses(conditions)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
 
   const tt = (t as any).problemList || {}
+  const recordedConditions = useMemo(
+    () => (Array.isArray(conditions) ? conditions.filter((c: any) => !isVisitCodeCondition(c)) : []),
+    [conditions]
+  )
 
   const filteredConditions = useMemo(
-    () =>
-      Array.isArray(conditions)
-        ? conditions.filter((c: any) => matchesFilter(c?.clinicalStatus, statusFilter))
-        : [],
-    [conditions, statusFilter]
+    () => recordedConditions.filter((c: any) => matchesFilter(c?.clinicalStatus, statusFilter)),
+    [recordedConditions, statusFilter]
   )
   const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
   const rows = useDiagnosisRows(filteredConditions, locale, icdDict, encounters)
@@ -61,7 +65,7 @@ export function ProblemListCard() {
     { key: 'all', label: tt.filterAll || 'All' },
   ]
 
-  const hasConditions = Array.isArray(conditions) && conditions.length > 0
+  const hasConditions = recordedConditions.length > 0
   const hasVisitDiagnoses = visitDiagnoses.rows.length > 0
   // With no Condition to show, wait for encounters before calling the card empty.
   const loading = isLoading || (!hasConditions && !visitDiagnoses.isReady)
@@ -103,7 +107,7 @@ export function ProblemListCard() {
               )}
             </section>
           )}
-          {hasVisitDiagnoses && <VisitPrimaryDiagnosisList diagnoses={visitDiagnoses.rows} />}
+          {hasVisitDiagnoses && <VisitDiagnosisList diagnoses={visitDiagnoses.rows} showTitle={hasConditions} />}
         </div>
       </div>
     </FeatureCard>
