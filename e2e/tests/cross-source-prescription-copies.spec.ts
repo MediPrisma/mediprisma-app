@@ -18,7 +18,7 @@ test('one hospital prescription owns the compact row and keeps cloud originals i
   const sources = page.getByRole('dialog', { name: '來源紀錄' })
   await expect(sources).not.toBeVisible()
   await comparison.click()
-  await expect(sources.getByText('以院內紀錄為準；雲端紀錄保留供查閱。')).toBeVisible()
+  await expect(sources.getByText('院內', { exact: true })).toBeVisible()
   await expect(sources.getByText('雲端 1', { exact: true })).toBeVisible()
   await expect(sources.getByText('雲端 2', { exact: true })).toBeVisible()
   await expect(sources.getByText(/總量 28/)).toHaveCount(2)
