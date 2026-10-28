@@ -255,6 +255,27 @@ it('reads a release form written in brackets on either side', () => {
   expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg (Synthetic)', 'SYNTHETICBRAND TABLETS 50MG "MAKER"').status).toBe('candidate')
 })
 
+it('lets no product shortcut skip an official chewable or modified-release form', () => {
+  // Official master metadata, so the reconciler's product-match helpers would accept the pair.
+  const official = (doseForm: string) => {
+    const { resources, hospital, cloud } = fixture()
+    delete (hospital as any).identifier; delete (cloud as any).identifier
+    const order: any = cloudOrder('c-order-1', 'cloud-visit', 'AC00000100', 'SYNTHETICBRAND TABLETS 50MG')
+    order.supportingInformation = [{ reference: 'MedicationKnowledge/official' }]
+    resources.push({ ...hospital, id: 'hospital-second-visit' }, hospitalOrder('h-order-1', 'hospital-visit', 'Syntheticbrand tab 50 mg'), order, {
+      resourceType: 'MedicationKnowledge', id: 'official', doseForm: { text: doseForm },
+      meta: { source: 'https://data.gov.tw/dataset/23715', tag: [{ system: 'https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot', code: '20260728' }] },
+      identifier: [{ system: 'https://nhi-fhir-bridge.github.io/IdentifierSystem/nhi-drug-official-url', value: 'https://lmspiq.fda.gov.tw/web/DRPIQ/DRPIQ1000Result?licId=00000000' }],
+      code: { coding: [{ system: NHI, code: 'AC00000100', display: 'SYNTHETICBRAND TABLETS 50MG' }] },
+    })
+    reconcileOutpatientEncounters(resources)
+    return (hospital as any)._sourceRecordComparison.status
+  }
+  expect(official('咀嚼錠')).toBe('ambiguous')
+  expect(official('持續性藥效錠')).toBe('ambiguous')
+  expect(official('錠劑')).toBe('candidate')
+})
+
 it('never lets the ingredient text stand in for a concentration the product name states', () => {
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')

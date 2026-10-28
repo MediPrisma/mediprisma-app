@@ -3,7 +3,6 @@ import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-so
 import { sharedEncounterIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
-import { hospitalProductMayMatchConcept, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
 type Resource = Record<string, any>
 
 function isVghFacility(reference: Resource | undefined): boolean {
@@ -180,8 +179,7 @@ function samePreparation(hospital: Preparation, cloud: Preparation): boolean {
 }
 
 /** How many of the hospital visit's orders have a like order on the cloud
- *  visit: the product match the medication reconciler accepts, or the same
- *  preparation (a coded hospital row must share the NHI code). A
+ *  visit: the same preparation (a coded hospital row must share the NHI code). A
  *  tie-breaker between same-day candidates only; it never confirms a visit or
  *  an order. */
 function prescriptionOverlap(hospital: Resource[], cloud: Resource[], resources: Map<string, Resource>): number {
@@ -192,8 +190,8 @@ function prescriptionOverlap(hospital: Resource[], cloud: Resource[], resources:
     if (left.length) return left.length === 1 && left[0] === right[0]
     const linked = (other.supportingInformation ?? []).map((reference: Resource) => resources.get(reference.reference))
       .filter((item: Resource | undefined) => item?.resourceType === 'MedicationKnowledge')
-    if (linked.length === 1 && hospitalProductMayMatchKnowledge(concept(order), right[0], linked[0])) return true
-    if (!linked.length && hospitalProductMayMatchConcept(concept(order), concept(other))) return true
+    // Every name-only hospital order goes through the same preparation check:
+    // no product-match shortcut may skip the official form or release form.
     const recorded = preparation(productLabel(concept(order)))
     return !!recorded && cloudPreparations(concept(other), linked).some((item) => samePreparation(recorded, item))
   })).length
