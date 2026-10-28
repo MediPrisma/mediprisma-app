@@ -13,6 +13,7 @@ import { ChevronRight } from 'lucide-react'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { InfoHint } from '@/src/shared/components/InfoHint'
 import { formatDate } from '../../diagnosis/utils/fhir-helpers'
 import type { VisitDiagnosis, VisitDiagnosisVisit } from '../utils/visit-diagnoses'
 import { FilterPills } from './FilterPills'
@@ -159,12 +160,18 @@ export function VisitDiagnosisList({ diagnoses, showTitle }: VisitDiagnosisListP
           value={filter}
           onChange={setFilter}
         />
+        {/* What the list is and how the sources differ, on demand rather than
+            as a standing line above every chart. */}
+        <InfoHint aria-label={tt.visitHelpLabel || 'About visit diagnoses'} className="h-6 w-6" contentClassName="max-w-xs space-y-1">
+          <p>{tt.visitNote}</p>
+          {mixedSources && <p>{tt.visitSourceNote}</p>}
+          <p>{tt.visitChronicityNote}</p>
+        </InfoHint>
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">{tt.visitNote}</p>
       {shown.length === 0 ? (
         <p className="py-2 text-xs text-muted-foreground">{tt.filterNone || 'No items for this filter'}</p>
       ) : (
-        <ul className="@container/dx mt-1 divide-y divide-border text-sm">
+        <ul className="@container/dx mt-1.5 divide-y divide-border text-sm">
           {shown.map((d) => <VisitDiagnosisRow key={d.key} d={d} tt={tt} mixedSources={mixedSources} />)}
         </ul>
       )}

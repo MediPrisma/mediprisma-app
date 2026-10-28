@@ -30,6 +30,15 @@ const medcloudVisits = [
   { id: 'e3', class: { code: 'AMB' }, period: { start: '2026-01-15' }, reasonCode: [{ text: '急性上呼吸道感染', coding: [{ system: ICD, code: 'J06.9' }] }] },
 ]
 
+// jsdom has no ResizeObserver; the ⓘ tooltip (Radix) needs one to open.
+beforeAll(() => {
+  ;(globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+})
+
 describe('ProblemListCard', () => {
   beforeEach(() => {
     jest.mocked(useLanguage).mockReturnValue({ t: zhTW, locale: 'zh-TW' } as any)
@@ -40,9 +49,13 @@ describe('ProblemListCard', () => {
     render(<ProblemListCard />)
 
     const section = screen.getByTestId('visit-diagnoses')
-    // The only list in the card: no section heading, one line saying what it is.
+    // The only list in the card: no section heading, and what it is sits in ⓘ.
     expect(within(section).queryByRole('heading')).not.toBeInTheDocument()
-    expect(within(section).getByText(/非確診/)).toBeInTheDocument()
+    expect(screen.queryByText(/非確診/)).not.toBeInTheDocument()
+    fireEvent.click(within(section).getByRole('button', { name: '就診診斷說明' }))
+    expect(screen.getAllByText(/非確診/).length).toBeGreaterThan(0)
+    // A 雲端-only chart has no hospital records to contrast with.
+    expect(screen.queryByText(/雲端僅主診斷/)).not.toBeInTheDocument()
     const rows = within(section).getAllByRole('button', { expanded: false })
     expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveTextContent('E11.9 第二型糖尿病')
@@ -202,6 +215,11 @@ describe('ProblemListCard', () => {
     expect(within(breast).getByText('院內')).toBeInTheDocument()
     expect(within(rows[1]).getByText('僅次診斷')).toBeInTheDocument()
     expect(within(rows[2]).queryByText('院內')).not.toBeInTheDocument()
+
+    // Both sources: the ⓘ says which one carries secondary diagnoses.
+    expect(screen.queryByText(/雲端僅主診斷/)).not.toBeInTheDocument()
+    fireEvent.click(within(section).getByRole('button', { name: '就診診斷說明' }))
+    expect(screen.getAllByText(/院內含主、次診斷；雲端僅主診斷/).length).toBeGreaterThan(0)
 
     fireEvent.click(breast)
     expect(breast).toHaveAttribute('aria-expanded', 'true')
