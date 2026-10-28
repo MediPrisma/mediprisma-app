@@ -285,6 +285,12 @@ it('reads thousands separators as one number and rejects an unknown denominator'
   expect(oneCloudTwoClinics('Syntheticbrand tab 5 mg/20 mg', 'SYNTHETICBRAND 5MG/20MG TABLET').status).toBe('candidate')
 })
 
+it('never lets the ingredient text revive a strength the name states unusably', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand patch 5 mg', 'SYNTHETICBRAND PATCH 5MG/HR', 'SYNTHETIC 5 MG', '貼片劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand patch 5 mg', 'SYNTHETICBRAND PATCH', 'SYNTHETIC 5 MG', '貼片劑').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand patch 5 mg', 'SYNTHETICBRAND PATCH', 'SYNTHETIC 5 MG/HR', '貼片劑').status).toBe('ambiguous')
+})
+
 it('never lets the ingredient text stand in for a concentration the product name states', () => {
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')

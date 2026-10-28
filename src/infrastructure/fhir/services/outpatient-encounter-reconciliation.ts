@@ -69,15 +69,16 @@ const NUMBER = '(?<![\\d.,])(\\d*\\.?\\d+)'
  *  are read as one number (1,000,000 IU). A combination written '25/5 mg'
  *  reads as 25 mg + 5 mg. Units are never converted: 5 mg/2 ml, 5 mcg and
  *  5 mg/ml all differ; only spellings (UG, GM, puff for dose) are unified. A
- *  denominator outside ml, g and dose leaves no strength at all. */
-function strengths(text: unknown): string[] {
+ *  denominator outside ml, g and dose makes the strength unusable: undefined,
+ *  unlike [] for a label that states none, so nothing may fill it in. */
+function strengths(text: unknown): string[] | undefined {
   const normalized = String(text ?? '').normalize('NFKC').toLowerCase()
     .replace(/(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d,])/g, (number) => number.replace(/,/g, ''))
     .replace(/(?:[μµ]|u)g(?![a-z])/g, 'mcg').replace(/(?<![a-z])gm(?![a-z])/g, 'g')
     .replace(new RegExp(`${NUMBER}\\s*\\/\\s*(\\d*\\.?\\d+)\\s*(mcg|mg|g|iu)(?![a-z])`, 'g'), '$1 $3 + $2 $3')
   const found = [...normalized.matchAll(new RegExp(
     `${NUMBER}\\s*(mcg|mg|g|iu|%)(?![a-z])(?:\\s*\\/\\s*(\\d*\\.?\\d+)?\\s*(?!(?:mcg|mg|iu)(?![a-z]))([a-z]+))?`, 'g'))]
-  if (found.some(([, , , , perUnit]) => perUnit && !PER_UNITS[perUnit])) return []
+  if (found.some(([, , , , perUnit]) => perUnit && !PER_UNITS[perUnit])) return undefined
   return found.map(([, amount, unit, per, perUnit]) =>
     `${Number(amount)}${unit}${perUnit ? `/${Number(per ?? 1)}${PER_UNITS[perUnit]}` : ''}`)
 }
@@ -118,6 +119,7 @@ interface Preparation { name: string; strengths: string; release: string; forms:
  *  B6 TABLETS 50MG'. An injection or inhalation word outranks the vehicle it
  *  names ('solution for injection'). */
 function preparation(label: unknown, amounts = strengths(label)): Preparation | undefined {
+  if (!amounts?.length) return undefined
   const words: string[] = [], forms: string[] = []
   let release = 'immediate', named = false, eye = false
   const asides: string[] = []
@@ -144,7 +146,7 @@ function preparation(label: unknown, amounts = strengths(label)): Preparation | 
   for (const token of tokenize(asides.join(' '))) read(token)
   // A form in brackets only fills one the name itself omits.
   if (statedForms) forms.splice(statedForms)
-  if (!words.length || words[0].length < 3 || !amounts.length) return undefined
+  if (!words.length || words[0].length < 3) return undefined
   let primary = forms.find((form) => form === 'injection') ?? forms.find((form) => form === 'inhalation') ?? forms[0]
   if (eye && ['solution', 'suspension', 'drops'].includes(primary)) primary = 'eye liquid'
   return { name: words.join(' '), strengths: amounts.join('+'), release, forms: primary ? [primary] : [] }
@@ -166,6 +168,7 @@ function cloudPreparations(concept: Resource | undefined, knowledge: Resource[])
   const ingredients = knowledge.flatMap((item) => (item.ingredient ?? []).map((ingredient: Resource) => {
     const text = String(ingredient.itemCodeableConcept?.text ?? '')
     const amounts = strengths(text)
+    if (!amounts) return undefined
     const perUnit = /(?:\/|\b(?:each|per)\b)\s*(?:\d*\.?\d+\s*)?(?:ml|g|gm|dose|actuation|puff)\b/i.test(text)
     return perUnit && amounts.some((amount) => !amount.includes('/')) ? undefined : amounts
   })).filter((amounts): amounts is string[] => !!amounts?.length)
@@ -175,7 +178,8 @@ function cloudPreparations(concept: Resource | undefined, knowledge: Resource[])
   return labels.flatMap((label) => {
     const named = strengths(label)
     // The ingredient text fills a strength the name omits; it never stands in
-    // for one the name states.
+    // for one the name states, nor for one the name states unusably (5MG/HR).
+    if (!named) return []
     return (named.length ? [named] : ingredients.length === 1 ? ingredients : []).map((amounts) => preparation(label, amounts))
   }).filter((item): item is Preparation => !!item)
     .map((item) => ({ ...item,
