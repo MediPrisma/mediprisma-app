@@ -125,7 +125,12 @@ export function assessMedicationCurrentness(
   const status = normalizeClinicalStatus(medication?.status)
   const end = medicationExpectedEnd(medication)
   const endMs = medicationExpectedEndTimestamp(medication)
-  const supplyWindowOpen = endMs !== undefined && nowMs <= endMs
+  // A supply window covers today only once it has begun.
+  const authoredStartMs = medicationExpectedStartTimestamp(medication)
+  const validityStart = medication?.dispenseRequest?.validityPeriod?.start
+  const startMs = Number.isFinite(authoredStartMs) ? authoredStartMs
+    : typeof validityStart === 'string' && isParsableDay(validityStart) ? medicationClinicalTimestamp(validityStart.slice(0, 10)) : NaN
+  const supplyWindowOpen = endMs !== undefined && nowMs <= endMs && !(Number.isFinite(startMs) && nowMs < startMs)
   if (status === 'completed' && (medication?._sourceResourceType === 'MedicationStatement' || medication?.resourceType === 'MedicationStatement')) {
     return { current: false, uncertain: false, basis: 'source-status' }
   }
