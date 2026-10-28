@@ -2,6 +2,8 @@
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { sharedEncounterIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
+import { isNhiDrugCodeSystem } from './nhi-drug-terminology-enrichment.service'
+import { hospitalProductMayMatchConcept, hospitalProductMayMatchKnowledge } from './hospital-medication-product-match'
 type Resource = Record<string, any>
 
 function isVghFacility(reference: Resource | undefined): boolean {
@@ -50,6 +52,56 @@ function physician(encounter: Resource): string | undefined {
     participant.individual?.reference || participant.individual?.display || participant.actor?.display,
   ).filter(Boolean).sort()
   return names.length ? names.join('|') : undefined
+}
+
+function nhiCodes(concept: Resource | undefined): string[] {
+  return [...new Set<string>((concept?.coding ?? []).filter((coding: Resource) => isNhiDrugCodeSystem(coding.system) && coding.code)
+    .map((coding: Resource) => String(coding.code).trim().toUpperCase()))]
+}
+
+/** Leading brand word and every strength number of a recorded product label:
+ *  'Aromasin SC tab 25 mg' and 'AROMASIN SUGAR COATED TABLETS 25MG' agree. */
+function brandAndStrength(concept: Resource | undefined): string | undefined {
+  const label = (concept?.coding ?? []).map((coding: Resource) => coding.display || coding.code)
+    .concat(concept?.text).find((value: unknown) => typeof value === 'string' && /[a-z]{4}/i.test(value))
+  const normalized = String(label ?? '').normalize('NFKC').toLowerCase()
+  const brand = normalized.match(/^[^a-z]*([a-z]{4,})/)?.[1]
+  const strengths = [...normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mg|mcg|g|ml|iu|%)/g)].map((match) => Number(match[1]))
+  return brand && strengths.length ? `${brand}|${strengths.join('/')}` : undefined
+}
+
+/** How many of the hospital visit's orders have a like order on the cloud
+ *  visit: one shared NHI code, the product match the medication reconciler
+ *  accepts, or the same brand word and strength. A tie-breaker between same-day
+ *  candidates only; it never confirms a visit or an order. */
+function prescriptionOverlap(hospital: Resource[], cloud: Resource[], resources: Map<string, Resource>): number {
+  const concept = (order: Resource) => order.medicationCodeableConcept ?? resources.get(order.medicationReference?.reference)?.code
+  return hospital.filter((order) => cloud.some((other) => {
+    const left = nhiCodes(concept(order)), right = nhiCodes(concept(other))
+    if (right.length !== 1) return false
+    if (left.length) return left.length === 1 && left[0] === right[0]
+    const linked = (other.supportingInformation ?? []).map((reference: Resource) => resources.get(reference.reference))
+      .filter((item: Resource | undefined) => item?.resourceType === 'MedicationKnowledge')
+    if (linked.length === 1 && hospitalProductMayMatchKnowledge(concept(order), right[0], linked[0])) return true
+    if (!linked.length && hospitalProductMayMatchConcept(concept(order), concept(other))) return true
+    const recorded = brandAndStrength(concept(order))
+    return !!recorded && recorded === brandAndStrength(concept(other))
+  })).length
+}
+
+/** Pair same-day candidates whose prescriptions point to one another and to
+ *  nobody else: each side's overlap must be strictly higher than with any other
+ *  candidate still open. Ties and zero overlap stay unpaired. */
+function pairByPrescriptions(edges: Array<[Resource, Resource, number]>): Array<[Resource, Resource]> {
+  const pairs: Array<[Resource, Resource]> = []
+  let open = edges.filter(([, , score]) => score > 0)
+  for (;;) {
+    const decisive = open.filter(([hospital, cloud, score]) => open.every(([otherHospital, otherCloud, otherScore]) =>
+      (otherHospital === hospital && otherCloud === cloud) || (otherHospital !== hospital && otherCloud !== cloud) || otherScore < score))
+    if (!decisive.length) return pairs
+    for (const [hospital, cloud] of decisive) pairs.push([hospital, cloud])
+    open = open.filter(([hospital, cloud]) => !decisive.some(([h, c]) => h === hospital || c === cloud))
+  }
 }
 
 /** Reconcile only unique cross-source pairs: same patient, VGH facility,
@@ -105,32 +157,25 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
   const aliases = new Map<string, string>()
   const removed = new Set<Resource>()
   const ambiguousHandled = new Set<Resource>()
-  for (const [visit, matches] of candidates) {
-    if (matches.length !== 1 || reverse.get(matches[0]) !== 1) {
-      if (!matches.length || ambiguousHandled.has(visit)) continue
-      const hospitals = new Set<Resource>([visit]), clouds = new Set<Resource>(), queue = [visit]
-      for (let index = 0; index < queue.length; index++) for (const possible of candidates.get(queue[index]) ?? []) {
-        clouds.add(possible)
-        for (const [other, otherMatches] of candidates) if (!hospitals.has(other) && otherMatches.includes(possible)) {
-          hospitals.add(other); queue.push(other)
-        }
-      }
-      const sources = [...hospitals, ...clouds]
-      const comparison = { status: 'ambiguous', references: sources.map(source => `Encounter/${source.id}`) }
-      sources.forEach(source => { source._sourceRecordComparison = comparison; ambiguousHandled.add(source) })
-      continue
-    }
-    const target = matches[0]
+  const resourcesByReference = new Map(resources.filter((resource) => resource.id)
+    .map((resource) => [`${resource.resourceType}/${resource.id}`, resource]))
+  const ordersByVisit = new Map<string, Resource[]>()
+  for (const resource of resources) {
+    const reference = resource.resourceType === 'MedicationRequest' ? resource.encounter?.reference : undefined
+    if (reference) ordersByVisit.set(reference, [...(ordersByVisit.get(reference) ?? []), resource])
+  }
+  const pair = (visit: Resource, target: Resource, warnings: string[] = []) => {
     const codingSystemsDiffer = icdKey(primaryDiagnosis(visit, conditions)) !== icdKey(primaryDiagnosis(target, conditions))
+    const allWarnings = [...warnings, ...(codingSystemsDiffer ? ['diagnosis-coding-systems-differ'] : [])]
     const comparison = { status: codingSystemsDiffer ? 'ambiguous' : sharedEncounterIdentifier(visit, target) ? 'confirmed' : 'candidate',
       references: [`Encounter/${visit.id}`, `Encounter/${target.id}`],
-      ...(codingSystemsDiffer ? { warnings: ['diagnosis-coding-systems-differ'] } : {}),
+      ...(allWarnings.length ? { warnings: allWarnings } : {}),
     }
     visit._sourceRecordComparison = comparison
     target._sourceRecordComparison = comparison
     // Same-day facility/diagnosis agreement is useful for a comparison card,
     // but cannot establish that two source visits are one clinical event.
-    if (comparison.status !== 'confirmed') continue
+    if (comparison.status !== 'confirmed') return
     target._sourceEncounterRecords = [visit, target].map((source) => {
       const { _sourceRecordComparison, _sourceEncounterRecords, ...record } = source
       return JSON.parse(JSON.stringify(record))
@@ -165,6 +210,43 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
     target.meta = { ...target.meta, tag: union(target.meta?.tag, [{
       system: 'urn:wildcatch:reconciliation', code: 'cloud-vghtpe-outpatient',
     }]) }
+  }
+  for (const [visit, matches] of candidates) {
+    if (matches.length !== 1 || reverse.get(matches[0]) !== 1) {
+      if (!matches.length || ambiguousHandled.has(visit)) continue
+      const hospitals = new Set<Resource>([visit]), clouds = new Set<Resource>(), queue = [visit]
+      for (let index = 0; index < queue.length; index++) for (const possible of candidates.get(queue[index]) ?? []) {
+        clouds.add(possible)
+        for (const [other, otherMatches] of candidates) if (!hospitals.has(other) && otherMatches.includes(possible)) {
+          hospitals.add(other); queue.push(other)
+        }
+      }
+      ;[...hospitals, ...clouds].forEach(source => ambiguousHandled.add(source))
+      // Two same-day clinics with one primary code: the prescriptions decide
+      // which cloud claim belongs to which hospital visit, when they can.
+      const paired = pairByPrescriptions([...hospitals].flatMap((hospital) => (candidates.get(hospital) ?? [])
+        .map((cloud): [Resource, Resource, number] => [hospital, cloud, prescriptionOverlap(
+          ordersByVisit.get(`Encounter/${hospital.id}`) ?? [], ordersByVisit.get(`Encounter/${cloud.id}`) ?? [], resourcesByReference)])))
+      for (const [hospital, cloud] of paired) {
+        pair(hospital, cloud, ['paired-by-prescriptions'])
+        hospitals.delete(hospital); clouds.delete(cloud)
+      }
+      // Whatever the prescriptions could not separate stays one comparison.
+      const linked = (hospital: Resource) => (candidates.get(hospital) ?? []).some((cloud) => clouds.has(cloud))
+      const sources = [...[...hospitals].filter(linked), ...[...clouds].filter((cloud) => [...hospitals].some((hospital) =>
+        candidates.get(hospital)?.includes(cloud)))]
+      if (sources.length < 2) continue
+      // Once the prescriptions separated one pair, a single pair left over
+      // has no rival either.
+      if (paired.length && sources.length === 2) {
+        pair(sources[0], sources[1], ['paired-by-prescriptions'])
+        continue
+      }
+      const comparison = { status: 'ambiguous', references: sources.map(source => `Encounter/${source.id}`) }
+      sources.forEach(source => { source._sourceRecordComparison = comparison })
+      continue
+    }
+    pair(visit, matches[0])
   }
   if (!removed.size) return resources
   const rewrite = (value: any): void => {

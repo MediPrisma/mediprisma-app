@@ -90,6 +90,62 @@ it('still asks for comparison when same-day candidates stay split', () => {
   expect(result.current.every(needsSourceComparison)).toBe(true)
 })
 
+const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
+const hospitalOrder = (id: string, visit: string, name: string) => ({ resourceType: 'MedicationRequest', id, status: 'active',
+  meta: { source: 'https://web9.vghtpe.gov.tw/emr/qemr/', tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] },
+  subject: { reference: 'Patient/synthetic' }, encounter: { reference: `Encounter/${visit}` },
+  medicationCodeableConcept: { text: name, coding: [{ system: 'urn:oid:vgh.medication.name', code: name }] } })
+const cloudOrder = (id: string, visit: string, code: string, display: string) => ({ resourceType: 'MedicationRequest', id, status: 'active',
+  meta: { source: 'https://medcloud2.nhi.gov.tw/' }, subject: { reference: 'Patient/synthetic' }, encounter: { reference: `Encounter/${visit}` },
+  medicationCodeableConcept: { text: display, coding: [{ system: NHI, code, display }] } })
+const AROMASIN = ['Aromasin SC tab 25 mg', 'BC23097100', 'AROMASIN SUGAR COATED TABLETS 25MG'] as const
+const FEMARA = ['Femara FC tab 2.5 mg', 'BC22462100', 'FEMARA FILM-COATED TABLETS 2.5MG'] as const
+
+function twoClinicDay(secondHospitalDrug: typeof AROMASIN | typeof FEMARA) {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  const secondCloud = { ...cloud, id: 'cloud-second-visit' }
+  resources.push(secondHospital, secondCloud,
+    hospitalOrder('h-order-1', 'hospital-visit', AROMASIN[0]), cloudOrder('c-order-1', 'cloud-visit', AROMASIN[1], AROMASIN[2]),
+    hospitalOrder('h-order-2', 'hospital-second-visit', secondHospitalDrug[0]), cloudOrder('c-order-2', 'cloud-second-visit', FEMARA[1], FEMARA[2]))
+  return { resources, hospital, cloud, secondHospital, secondCloud }
+}
+
+it('pairs two same-day, same-code clinics by the prescriptions each one wrote', () => {
+  const { resources, hospital, cloud, secondHospital, secondCloud } = twoClinicDay(FEMARA)
+  reconcileOutpatientEncounters(resources)
+  expect((hospital as any)._sourceRecordComparison).toMatchObject({ status: 'candidate', references: ['Encounter/hospital-visit', 'Encounter/cloud-visit'], warnings: ['paired-by-prescriptions'] })
+  expect((secondHospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-second-visit', 'Encounter/cloud-second-visit'])
+  const visits = resources.filter(resource => resource.resourceType === 'Encounter')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(2)
+  expect(result.current.some(needsSourceComparison)).toBe(false)
+  expect(cloud).not.toBe(secondCloud)
+})
+
+it('keeps same-day clinics with indistinguishable prescriptions for comparison', () => {
+  const { resources, hospital, secondHospital } = twoClinicDay(AROMASIN)
+  // Both clinics wrote Aromasin and both cloud claims carry it: nothing separates them.
+  resources.push(cloudOrder('c-order-3', 'cloud-second-visit', AROMASIN[1], AROMASIN[2]))
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect((hospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+  expect((secondHospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current.every(needsSourceComparison)).toBe(true)
+})
+
+it('pairs the clinic whose prescriptions match the only cloud claim and leaves the other clinic alone', () => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  resources.push(secondHospital,
+    hospitalOrder('h-order-1', 'hospital-second-visit', AROMASIN[0]), cloudOrder('c-order-1', 'cloud-visit', AROMASIN[1], AROMASIN[2]))
+  reconcileOutpatientEncounters(resources)
+  expect((secondHospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-second-visit', 'Encounter/cloud-visit'])
+  expect((hospital as any)._sourceRecordComparison).toBeUndefined()
+})
+
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier
