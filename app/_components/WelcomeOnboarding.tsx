@@ -8,6 +8,7 @@
 import { useCallback, useRef, useState } from 'react'
 import {
   ChevronRight,
+  CloudDownload,
   FileUp,
   FlaskConical,
   Hospital,
@@ -15,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { useImportBundle } from '@/features/import-bundle/hooks/useImportBundle'
+import { useImportBundle, type DemoDataVariant } from '@/features/import-bundle/hooks/useImportBundle'
 import { BundleFileInput, type BundleFileInputHandle } from '@/features/import-bundle/components/BundleFileInput'
 import { Button } from '@/components/ui/button'
 import { getLocaleDisplayName, type Locale } from '@/src/shared/i18n/i18n.config'
@@ -29,6 +30,9 @@ interface WelcomeSourceOptionProps {
   onClick?: () => void
   disabled?: boolean
   testId?: string
+  /** Keeps the phone layout (icon beside the text) at every width, so two
+   *  options can share one column. */
+  compact?: boolean
 }
 
 function WelcomeSourceOption({
@@ -39,13 +43,15 @@ function WelcomeSourceOption({
   onClick,
   disabled,
   testId,
+  compact = false,
 }: WelcomeSourceOptionProps) {
   const interactive = Boolean(onClick)
   const content = (
     <>
       <div
         className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:mb-5',
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+          !compact && 'sm:mb-5',
           tone === 'informational'
             ? 'bg-muted text-muted-foreground'
             : tone === 'featured'
@@ -66,7 +72,8 @@ function WelcomeSourceOption({
       {interactive && (
         <ChevronRight
           className={cn(
-            'h-4 w-4 shrink-0 self-center text-muted-foreground sm:mt-auto sm:self-end sm:pt-4',
+            'h-4 w-4 shrink-0 self-center text-muted-foreground',
+            !compact && 'sm:mt-auto sm:self-end sm:pt-4',
             tone === 'featured'
               ? 'group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
               : 'group-hover:text-primary',
@@ -77,7 +84,8 @@ function WelcomeSourceOption({
     </>
   )
   const className = cn(
-    'group grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-lg border p-4 text-left sm:flex sm:min-h-52 sm:flex-col sm:p-6',
+    'group grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-lg border p-4 text-left',
+    compact ? 'sm:p-5' : 'sm:flex sm:min-h-52 sm:flex-col sm:p-6',
     tone === 'featured' &&
       'border-emerald-300/80 bg-emerald-50/65 hover:border-emerald-500/70 hover:bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/[0.07] dark:hover:border-emerald-400/45 dark:hover:bg-emerald-500/[0.10]',
     tone === 'default' &&
@@ -148,9 +156,9 @@ export function WelcomeOnboarding() {
     e.stopPropagation()
   }, [])
 
-  const handleLoadDemo = useCallback(async () => {
+  const handleLoadDemo = useCallback(async (variant: DemoDataVariant) => {
     try {
-      await loadDemo()
+      await loadDemo(variant)
     } catch {
       // error surfaces via the hook's `error` state
     }
@@ -245,8 +253,10 @@ export function WelcomeOnboarding() {
         )}
 
         {/* The welcome screen is an entry point, not a dense clinical view.
-            Three source options make the available paths understandable at
-            a glance while a shared component keeps their structure aligned. */}
+            The source options make the available paths understandable at a
+            glance while a shared component keeps their structure aligned. The
+            two 試用資料 are the same patient seen through 健康存摺 and through
+            雲端病歷, so they share the middle column as one choice. */}
         <section className="mt-8 grid gap-3 sm:grid-cols-3 lg:gap-4">
           <WelcomeSourceOption
             icon={FileUp}
@@ -256,15 +266,29 @@ export function WelcomeOnboarding() {
             disabled={loading}
           />
 
-          <WelcomeSourceOption
-            icon={FlaskConical}
-            title={w.demoTitle ?? 'Try demo data'}
-            description={w.demoDesc ?? 'Load an anonymised sample patient — explore without importing anything.'}
-            tone="featured"
-            onClick={handleLoadDemo}
-            disabled={loading}
-            testId="welcome-demo-card"
-          />
+          <div className="flex flex-col gap-3 lg:gap-4">
+            <WelcomeSourceOption
+              icon={CloudDownload}
+              title={w.medcloudDemoTitle ?? 'Demo data (NHI MediCloud)'}
+              description={w.medcloudDemoDesc ?? 'The same sample patient as seen in NHI MediCloud — explore without importing anything.'}
+              tone="featured"
+              onClick={() => handleLoadDemo('medcloud')}
+              disabled={loading}
+              testId="welcome-medcloud-demo-card"
+              compact
+            />
+
+            <WelcomeSourceOption
+              icon={FlaskConical}
+              title={w.demoTitle ?? 'Demo data (My Health Bank)'}
+              description={w.demoDesc ?? 'Load an anonymised sample patient — explore without importing anything.'}
+              tone="featured"
+              onClick={() => handleLoadDemo('health-bank')}
+              disabled={loading}
+              testId="welcome-demo-card"
+              compact
+            />
+          </div>
 
           <WelcomeSourceOption
             icon={Hospital}

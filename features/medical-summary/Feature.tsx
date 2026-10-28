@@ -65,6 +65,7 @@ import { currentAnticholinergicMedicines, reviewAnticholinergicAlert } from "@/s
 import { headlineProblemListState, reviewHeadline } from "@/src/core/utils/headline-review.utils"
 import { isDemoDataActive } from "@/src/application/hooks/ai-generation/ai-data-source"
 import { clinicalNowMs } from "@/src/shared/constants/demo-data.constants"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { detectClinicalDataSource } from "@/src/core/utils/clinical-data-source.utils"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { isAiScopeReport } from "@/src/core/utils/report-narrative.utils"
@@ -118,6 +119,8 @@ export default function MedicalSummaryFeature() {
   const { audience } = useAudience()
   const { loading: authLoading } = useAuth()
   const { activeTab: rightPanelTab, setActiveTab } = useRightPanel()
+  const { patient } = usePatient()
+  const demoPatientId = patient?.id
   const base = t.medicalSummary
   const isPatient = audience === "patient"
   // Patient keys override the clinician base set (same pattern as safety).
@@ -440,9 +443,9 @@ export default function MedicalSummaryFeature() {
   // reference date (the demo's own as-of date for demo data), counted the way
   // the prompt counted them.
   const currentAnticholinergics = useMemo(() => {
-    const referenceDay = new Date(clinicalNowMs(isDemoDataActive()) + 8 * 3_600_000).toISOString().slice(0, 10)
+    const referenceDay = new Date(clinicalNowMs(isDemoDataActive(), demoPatientId) + 8 * 3_600_000).toISOString().slice(0, 10)
     return currentAnticholinergicMedicines(safetySourceCatalog ?? [], referenceDay).map(({ ingredient }) => ingredient)
-  }, [safetySourceCatalog])
+  }, [safetySourceCatalog, demoPatientId])
   // 待核對 beside an alert that calls a medicine anticholinergic against its
   // listed mechanism, naming the medicine by its ingredient, or that raises an
   // anticholinergic alert the Beers rules do not support (none supplied, or
@@ -531,9 +534,9 @@ export default function MedicalSummaryFeature() {
   const alertStaleEvidenceDate = useCallback(
     (alert: SafetyAlert) => staleEvidenceDate(
       (alert.sources ?? []).map((key) => resolveSafetySource(key)?.date),
-      clinicalNowMs(isDemoDataActive()),
+      clinicalNowMs(isDemoDataActive(), demoPatientId),
     ),
-    [resolveSafetySource],
+    [resolveSafetySource, demoPatientId],
   )
 
   const [summarySettingsOpen, setSummarySettingsOpen] = useState(false)
