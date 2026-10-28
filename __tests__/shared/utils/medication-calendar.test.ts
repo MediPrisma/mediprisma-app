@@ -48,6 +48,14 @@ it.each(['active', 'unknown'])('does not count a %s order as current before its 
   expect(assessMedicationCurrentness(validityOnly, new Date(2026, 10, 1, 9).getTime()).current).toBe(true)
 })
 
+it.each(['active', 'unknown'])('opens a timed %s interval at its exact start, in its own time zone', (status) => {
+  const timed = { status, dispenseRequest: { validityPeriod: { start: '2026-11-01T15:00:00+08:00', end: '2026-11-30T23:59:59+08:00' } } }
+  expect(assessMedicationCurrentness(timed, Date.parse('2026-11-01T09:00:00+08:00'))).toMatchObject({ current: false, uncertain: false })
+  expect(assessMedicationCurrentness(timed, Date.parse('2026-11-01T06:59:59Z'))).toMatchObject({ current: false, uncertain: false })
+  expect(assessMedicationCurrentness(timed, Date.parse('2026-11-01T07:00:00Z'))).toMatchObject({ current: true, uncertain: false })
+  expect(assessMedicationCurrentness(timed, Date.parse('2026-12-01T00:00:00+08:00')).current).toBe(false)
+})
+
 it.each([{ value: 6, code: 'h', hours: 6, end: '2026-10-19' }, { value: 2.4, code: 'd', hours: 57.6, end: '2026-10-21' }, { value: 30, code: 'min', hours: 0.5, end: '2026-10-19' }])('shares exact coverage for $value $code across dates and currentness', ({ value, code, hours, end }) => {
   const medication = { status: 'unknown', authoredOn: '2026-10-19T00:00:00+08:00', dispenseRequest: { expectedSupplyDuration: { value, code } } }
   const expectedEnd = Date.parse(medication.authoredOn) + hours * 3600000 - 1

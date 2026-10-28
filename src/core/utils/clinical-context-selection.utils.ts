@@ -129,7 +129,7 @@ export function assessMedicationCurrentness(
   const authoredStartMs = medicationExpectedStartTimestamp(medication)
   const validityStart = medication?.dispenseRequest?.validityPeriod?.start
   const startMs = Number.isFinite(authoredStartMs) ? authoredStartMs
-    : typeof validityStart === 'string' && isParsableDay(validityStart) ? medicationClinicalTimestamp(validityStart.slice(0, 10)) : NaN
+    : typeof validityStart === 'string' && isParsableDay(validityStart) ? medicationClinicalTimestamp(validityStart) : NaN
   const supplyWindowOpen = endMs !== undefined && nowMs <= endMs && !(Number.isFinite(startMs) && nowMs < startMs)
   if (status === 'completed' && (medication?._sourceResourceType === 'MedicationStatement' || medication?.resourceType === 'MedicationStatement')) {
     return { current: false, uncertain: false, basis: 'source-status' }
