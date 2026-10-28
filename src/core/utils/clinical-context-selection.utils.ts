@@ -78,7 +78,18 @@ export function medicationExpectedEndTimestamp(medication: any): number | undefi
   const duration = [medication?.dispenseRequest?.expectedSupplyDuration, dosage?.timing?.repeat?.boundsDuration]
     .find(value => durationToDays(value, false) !== undefined)
   const days = durationToDays(duration, false)
-  if (!started || !days) return undefined
+  if (!days) {
+    // With no supply duration, the order's own dated interval is the only
+    // recorded span; the medication list counts its days the same way.
+    const validity = medication?.dispenseRequest?.validityPeriod
+    const end = typeof validity?.end === 'string' && /^\d{4}-\d{2}-\d{2}/.test(validity.end) ? validity.end : undefined
+    const from = started || validity?.start
+    if (!end || !from || !Number.isFinite(Date.parse(end))) return undefined
+    const endMs = end.length === 10 ? calendarEnd(end) : medicationClinicalTimestamp(end)
+    // An interval that ends before the order began records no span at all.
+    return endMs >= medicationClinicalTimestamp(from) ? endMs : undefined
+  }
+  if (!started) return undefined
   if (Number.isInteger(days) && !isElapsedDuration(duration)) {
     const endDay = medicationSupplyEndDay(medicationClinicalDay(started), days)
     return endDay ? calendarEnd(endDay) : undefined

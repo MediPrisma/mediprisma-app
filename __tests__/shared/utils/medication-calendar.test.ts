@@ -24,7 +24,17 @@ it('does not extend seven days of medication supply to the prescription dispensi
   } }
   expect(medicationExpectedEnd(medication)).toBe('2026-10-25')
   expect(assessMedicationCurrentness(medication, new Date(2026, 9, 26).getTime()).current).toBe(false)
-  expect(medicationExpectedEnd({ ...medication, dispenseRequest: { validityPeriod: { end: '2026-12-31' } } })).toBeUndefined()
+})
+
+it('uses the order interval as the supply span when no supply duration is recorded', () => {
+  const medication = { status: 'active', authoredOn: '2024-06-14', dispenseRequest: {
+    validityPeriod: { start: '2024-06-14', end: '2024-07-14' },
+  } }
+  expect(medicationExpectedEnd(medication)).toBe('2024-07-14')
+  expect(assessMedicationCurrentness(medication, new Date(2024, 6, 14, 12).getTime())).toMatchObject({ current: true, uncertain: false })
+  expect(assessMedicationCurrentness(medication, new Date(2026, 9, 1).getTime())).toMatchObject({ current: false, uncertain: false })
+  // An interval ending before the order began is not a span.
+  expect(medicationExpectedEnd({ ...medication, dispenseRequest: { validityPeriod: { end: '2024-06-01' } } })).toBeUndefined()
 })
 
 it.each([{ value: 6, code: 'h', hours: 6, end: '2026-10-19' }, { value: 2.4, code: 'd', hours: 57.6, end: '2026-10-21' }, { value: 30, code: 'min', hours: 0.5, end: '2026-10-19' }])('shares exact coverage for $value $code across dates and currentness', ({ value, code, hours, end }) => {
