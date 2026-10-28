@@ -4,7 +4,7 @@ import { LocalBundleService, canonicalizeBundleResources } from '@/src/infrastru
 import { reconcileOutpatientEncounters } from '@/src/infrastructure/fhir/services/outpatient-encounter-reconciliation'
 import { extractEncounterIcds, buildIcdDictionary, localizedIcdDescription } from '@/src/shared/utils/icd-lookup'
 import { renderHook } from '@testing-library/react'
-import { useVisitHistory } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
+import { useVisitHistory, needsSourceComparison } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
 import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
 
 it('keeps two hospital visits separate when the cloud member of a three-source comparison is outside the view', () => {
@@ -68,6 +68,26 @@ it('marks ambiguous same-day visit sources without mixing their individual detai
   const { result } = renderHook(() => useVisitHistory(visits))
   expect(result.current).toHaveLength(3)
   expect(result.current.every(visit => visit.sourceIds?.length === 1 && visit.sourceIds[0] === visit.id)).toBe(true)
+})
+
+it('shows a unique hospital/cloud pair as one visit without asking the clinician to compare it', () => {
+  // Cloud and North VGH never share a visit identifier, so a real pair is a candidate.
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect(visits.every(visit => visit._sourceRecordComparison?.status === 'candidate')).toBe(true)
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(1)
+  expect(result.current[0].sourceIds).toEqual(['hospital-visit', 'cloud-visit'])
+  expect(needsSourceComparison(result.current[0])).toBe(false)
+})
+
+it('still asks for comparison when same-day candidates stay split', () => {
+  const { resources, hospital } = fixture()
+  resources.push({ ...hospital, id: 'hospital-second-visit' })
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current.every(needsSourceComparison)).toBe(true)
 })
 
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {

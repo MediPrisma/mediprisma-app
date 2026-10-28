@@ -39,6 +39,14 @@ export interface VisitRecord {
   physician?: string
 }
 
+/** The row already shows the hospital and cloud copies as one visit (a
+ *  unique same-day, same-facility, same-ICD pair). Only a row that stays split
+ *  — several same-day candidates — still asks the clinician to compare. */
+export function needsSourceComparison(visit: Pick<VisitRecord, 'sourceComparisonStatus' | 'sourceIds'>): boolean {
+  return !!visit.sourceComparisonStatus && visit.sourceComparisonStatus !== 'confirmed'
+    && (visit.sourceIds?.length ?? 0) < 2
+}
+
 const HL7_SERVICE_TYPE_SYSTEM = 'http://terminology.hl7.org/codesystem/service-type'
 const SNOMED_CT_SYSTEM = 'http://snomed.info/sct'
 const TW_CORE_DEPARTMENT_SYSTEMS = new Set([
