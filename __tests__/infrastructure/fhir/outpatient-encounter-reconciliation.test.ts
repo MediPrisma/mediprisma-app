@@ -146,6 +146,32 @@ it('pairs the clinic whose prescriptions match the only cloud claim and leaves t
   expect((hospital as any)._sourceRecordComparison).toBeUndefined()
 })
 
+it('pairs clinics by recorded product names with hyphenated brands and volume-qualified strengths', () => {
+  const { resources, hospital, secondHospital } = twoClinicDay(FEMARA)
+  for (const resource of resources) if (resource.resourceType === 'MedicationRequest' && resource.id.startsWith('h-order')) {
+    resource.medicationCodeableConcept.coding[0].code = resource.id === 'h-order-1' ? 'Bao-gan * cap 150 mg' : 'Methasone inj 5 mg/1 ml @'
+  }
+  for (const resource of resources) if (resource.resourceType === 'MedicationRequest' && resource.id.startsWith('c-order')) {
+    resource.medicationCodeableConcept.coding[0].display = resource.id === 'c-order-1' ? 'BAO-GAN CAPSULES 150MG' : 'METHASONE INJECTION 5MG/ML'
+  }
+  reconcileOutpatientEncounters(resources)
+  expect((hospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-visit', 'Encounter/cloud-visit'])
+  expect((secondHospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-second-visit', 'Encounter/cloud-second-visit'])
+})
+
+it('does not pair clinics on the same brand at a different strength', () => {
+  const { resources, hospital } = twoClinicDay(FEMARA)
+  resources.find(resource => resource.id === 'h-order-1').medicationCodeableConcept.coding[0].code = 'Aromasin SC tab 10 mg'
+  reconcileOutpatientEncounters(resources)
+  // Clinic two still pairs on Femara; clinic one is the only one left for cloud one.
+  expect((hospital as any)._sourceRecordComparison.warnings).toContain('paired-by-prescriptions')
+  const { resources: tied, hospital: tiedHospital } = twoClinicDay(AROMASIN)
+  tied.find(resource => resource.id === 'h-order-1').medicationCodeableConcept.coding[0].code = 'Aromasin SC tab 10 mg'
+  tied.find(resource => resource.id === 'h-order-2').medicationCodeableConcept.coding[0].code = 'Aromasin SC tab 10 mg'
+  reconcileOutpatientEncounters(tied)
+  expect((tiedHospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+})
+
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier

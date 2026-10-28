@@ -59,20 +59,23 @@ function nhiCodes(concept: Resource | undefined): string[] {
     .map((coding: Resource) => String(coding.code).trim().toUpperCase()))]
 }
 
-/** Leading brand word and every strength number of a recorded product label:
- *  'Aromasin SC tab 25 mg' and 'AROMASIN SUGAR COATED TABLETS 25MG' agree. */
+/** North VGH orders carry only a recorded product name, no NHI code. Compare
+ *  the leading brand word (hyphens dropped) and the first strength:
+ *  'Aromasin SC tab 25 mg' ~ 'AROMASIN SUGAR COATED TABLETS 25MG',
+ *  'Bao-gan * cap 150 mg' ~ 'BAO-GAN CAPSULES 150MG',
+ *  'Methasone inj 5 mg/1 ml @' ~ 'METHASONE INJECTION 5MG/ML'. */
 function brandAndStrength(concept: Resource | undefined): string | undefined {
   const label = (concept?.coding ?? []).map((coding: Resource) => coding.display || coding.code)
-    .concat(concept?.text).find((value: unknown) => typeof value === 'string' && /[a-z]{4}/i.test(value))
+    .concat(concept?.text).find((value: unknown) => typeof value === 'string' && /^[^a-z]*[a-z]/i.test(value))
   const normalized = String(label ?? '').normalize('NFKC').toLowerCase()
-  const brand = normalized.match(/^[^a-z]*([a-z]{4,})/)?.[1]
-  const strengths = [...normalized.matchAll(/(\d+(?:\.\d+)?)\s*(?:mg|mcg|g|ml|iu|%)/g)].map((match) => Number(match[1]))
-  return brand && strengths.length ? `${brand}|${strengths.join('/')}` : undefined
+  const brand = normalized.match(/^[^a-z]*([a-z][a-z-]*[a-z])/)?.[1].replace(/-/g, '')
+  const strength = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mg|mcg|μg|g|iu|%)/)?.[1]
+  return brand && brand.length >= 4 && strength ? `${brand}|${Number(strength)}` : undefined
 }
 
 /** How many of the hospital visit's orders have a like order on the cloud
- *  visit: one shared NHI code, the product match the medication reconciler
- *  accepts, or the same brand word and strength. A tie-breaker between same-day
+ *  visit: the product match the medication reconciler accepts, or the same
+ *  brand word and strength (a coded hospital row must share the NHI code). A tie-breaker between same-day
  *  candidates only; it never confirms a visit or an order. */
 function prescriptionOverlap(hospital: Resource[], cloud: Resource[], resources: Map<string, Resource>): number {
   const concept = (order: Resource) => order.medicationCodeableConcept ?? resources.get(order.medicationReference?.reference)?.code
