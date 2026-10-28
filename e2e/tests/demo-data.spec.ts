@@ -107,16 +107,13 @@ test.describe('demo data (試用資料)', () => {
     await expect(page.getByText('Da-Ming Chen').first()).toBeVisible()
 
     const summaryPanel = page.getByRole('tabpanel', { name: 'Summary', exact: true })
-    await expect(summaryPanel.getByText(
-      '94yo Male: Stage 3b CKD and Multi-morbidity Care',
-      { exact: true },
-    )).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByText(/^94M with CKD 3b, T2DM/)).toBeVisible({ timeout: 20_000 })
 
     const meta = summaryPanel.getByTestId('medical-summary-generation-meta')
-    await expect(meta).toHaveText('Pre-generated·Gemini 3 Flash Preview')
+    await expect(meta).toHaveText('Pre-generated·Gemini 3.8 Flash')
     await expect(meta).toHaveAttribute(
       'aria-label',
-      'Pre-generated summary created with Gemini 3 Flash Preview',
+      'Pre-generated summary created with Gemini 3.8 Flash',
     )
 
     await summaryPanel.getByRole('tab', { name: 'Custom summaries' }).click()
