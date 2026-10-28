@@ -71,10 +71,26 @@ function strengths(text: unknown): string[] {
     .map(([, amount, unit, per, perUnit]) => `${Number(amount)}${unit}${perUnit ? `/${Number(per ?? 1)}${perUnit}` : ''}`)
 }
 
-/** The leading brand word of a product label, hyphens dropped. */
-function brand(text: unknown): string | undefined {
-  const word = String(text ?? '').normalize('NFKC').toLowerCase().match(/^[^a-z]*([a-z][a-z-]*[a-z])/)?.[1].replace(/-/g, '')
-  return word && word.length >= 4 ? word : undefined
+// Release, coating and packaging qualifiers that name no different product.
+const QUALIFIERS = new Set(['sc', 'fc', 'sr', 'pr', 'er', 'od', 'tm', 'ih', 'film', 'coated', 'sugar', 'prolonged',
+  'extended', 'modified', 'release', 'hard', 'soft', 'for', 'oral', 'sterile'])
+// The dosage-form word that ends the product name in both sources' labels.
+const FORM = /^(?:tab|cap|inj|soln?|solution|susp|suspension|cream|oint|ointment|gel|drops?|eye|oph|ophthalmic|patch(?:es)?|granules?|inh|inhalation|syrup|powder|aerosol|spray|chewable|effervescent)/
+
+/** Every word of the product name before its form, strength or a bare number,
+ *  without quoted manufacturers, bracketed text, dotted abbreviations (F.C.)
+ *  or qualifiers: 'Vitamin B1 tab 50 mg' keeps 'vitamin b1', which differs
+ *  from 'VITAMIN B6 TABLETS 50MG'; 'Bao-gan * cap' and 'BAO-GAN CAPSULES'
+ *  both give 'bao gan'. Never just the first word. */
+function productName(text: unknown): string | undefined {
+  const words: string[] = []
+  const tokens = String(text ?? '').normalize('NFKC').toLowerCase()
+    .replace(/"[^"]*"?|\([^)]*\)?/g, ' ').replace(/\b(?:[a-z]\.){2,}/g, ' ').split(/[^a-z0-9.]+/)
+  for (const token of tokens.map((item) => item.replace(/^\.+|\.+$/g, '')).filter(Boolean)) {
+    if (FORM.test(token) || /^\d/.test(token)) break
+    if (!QUALIFIERS.has(token)) words.push(token)
+  }
+  return words.length && words[0].length >= 3 ? words.join(' ') : undefined
 }
 
 function productLabel(concept: Resource | undefined): string | undefined {
@@ -85,11 +101,11 @@ function productLabel(concept: Resource | undefined): string | undefined {
 /** North VGH orders carry only a recorded product name, no NHI code:
  *  'Aromasin SC tab 25 mg', 'Glyxambi FC # tab 25/5 mg'. */
 function hospitalProductKey(concept: Resource | undefined): string | undefined {
-  const label = productLabel(concept), amounts = strengths(label), word = brand(label)
-  return word && amounts.length ? `${word}|${amounts.join('+')}` : undefined
+  const label = productLabel(concept), amounts = strengths(label), name = productName(label)
+  return name && amounts.length ? `${name}|${amounts.join('+')}` : undefined
 }
 
-/** A cloud order's brand with the strength from its NHI product name or, when
+/** A cloud order's product name with the strength from its NHI product name or, when
  *  that name omits it ('CORDARONE TABLETS'), from the linked official
  *  ingredient text ('AMIODARONE HCL 200 MG'). */
 function cloudProductKeys(concept: Resource | undefined, knowledge: Resource[]): Set<string> {
@@ -98,9 +114,9 @@ function cloudProductKeys(concept: Resource | undefined, knowledge: Resource[]):
   const ingredients = knowledge.map((item) => (item.ingredient ?? [])
     .flatMap((ingredient: Resource) => strengths(ingredient.itemCodeableConcept?.text)))
   for (const label of labels) {
-    const word = brand(label)
-    if (!word) continue
-    for (const amounts of [strengths(label), ...ingredients]) if (amounts.length) keys.add(`${word}|${amounts.join('+')}`)
+    const name = productName(label)
+    if (!name) continue
+    for (const amounts of [strengths(label), ...ingredients]) if (amounts.length) keys.add(`${name}|${amounts.join('+')}`)
   }
   return keys
 }

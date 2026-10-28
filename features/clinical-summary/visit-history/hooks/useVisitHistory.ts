@@ -40,11 +40,12 @@ export interface VisitRecord {
 }
 
 /** The row already shows the hospital and cloud copies as one visit (a
- *  unique same-day, same-facility, same-ICD pair). Only a row that stays split
- *  — several same-day candidates — still asks the clinician to compare. */
+ *  unique same-day, same-facility, same-ICD pair). A row that stays split, or
+ *  a pair left ambiguous (e.g. WHO ICD-10 against ICD-10-CM), still asks the
+ *  clinician to compare. */
 export function needsSourceComparison(visit: Pick<VisitRecord, 'sourceComparisonStatus' | 'sourceIds'>): boolean {
-  return !!visit.sourceComparisonStatus && visit.sourceComparisonStatus !== 'confirmed'
-    && (visit.sourceIds?.length ?? 0) < 2
+  if (!visit.sourceComparisonStatus || visit.sourceComparisonStatus === 'confirmed') return false
+  return visit.sourceComparisonStatus !== 'candidate' || (visit.sourceIds?.length ?? 0) < 2
 }
 
 const HL7_SERVICE_TYPE_SYSTEM = 'http://terminology.hl7.org/codesystem/service-type'

@@ -217,6 +217,23 @@ it('reads combination strengths in order and UG as mcg', () => {
   expect(oneCloudTwoClinics('Methycobal * cap 500 mcg', 'METHYCOBAL CAPSULES 500UG "EISAI" (MECOBALAMIN)').status).toBe('candidate')
 })
 
+it('does not pair different products that only share a first word and strength', () => {
+  expect(oneCloudTwoClinics('Vitamin B1 tab 50 mg', 'VITAMIN B6 TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Vitamin B1 tab 50 mg', 'VITAMIN B1 TABLETS 50MG').status).toBe('candidate')
+})
+
+it('still asks for comparison on a pair whose sources declare different ICD coding systems', () => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  ;(cloud as any).reasonCode = [{ text: 'B02.9', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'B02.9' }] }]
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect((hospital as any)._sourceRecordComparison).toMatchObject({ status: 'ambiguous', warnings: ['diagnosis-coding-systems-differ'] })
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(1)
+  expect(result.current[0].sourceIds).toHaveLength(2)
+  expect(needsSourceComparison(result.current[0])).toBe(true)
+})
+
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier
