@@ -4,14 +4,16 @@ import type { ConditionEntity, EncounterEntity } from '@/src/core/entities/clini
 import { diagnosisSelect, type ClinicalSelectValue } from './hfpef-clinical-autofill'
 
 /**
- * The DOAC calculators' patient questions the record can answer: liver
- * enzymes and bilirubin against the reporting lab's own upper limit, dialysis
- * and a recent GI lesion for dabigatran from a code that names them, and
- * pregnancy for a man. A missing code is never read as 「no」: the liver
- * class (Child-Pugh) and dialysis stay blank without positive evidence, as
- * pregnancy does for any woman. Every answer says where it came from.
+ * The DOAC calculators' patient questions the record can answer, pre-filled
+ * wherever the record gives a reading so the clinician only corrects it
+ * (owner decision 2026-10-28, reversing #355's blank-unless-positive rule):
+ * liver enzymes and bilirubin against the reporting lab's own upper limit;
+ * dialysis, a GI lesion and liver disease from codes, with 「no」 read off
+ * what the record does show (a CKD stage or eGFR that is not dialysis,
+ * a year of diagnoses without a GI lesion, normal enzymes without a liver
+ * code); pregnancy for a man. Every answer says where it came from.
  */
-export type DoacPatientKey = 'doac_liver_enzymes' | 'doac_bilirubin_high' | 'doac_dialysis' | 'doac_pregnancy' | 'doac_gi_risk'
+export type DoacPatientKey = 'doac_liver' | 'doac_liver_enzymes' | 'doac_bilirubin_high' | 'doac_dialysis' | 'doac_pregnancy' | 'doac_gi_risk'
 
 /** The fields of an Observation read here; the record's own entity is wider. */
 export interface LabObservation {
@@ -104,6 +106,24 @@ const isDialysisCode = (code: string) => /^(?:Z992|Z49|Z9115|V451|V56)/.test(cod
 /** ICD-10 K20, K21, K25–K29, K92.0–K92.2; ICD-9 530.1, 530.81, 531–535, 578. */
 const isGiLesionCode = (code: string) => /^(?:K2[015-9]|K92[012]|5301|53081|53[1-5]|578)/.test(code)
 
+/** ICD-10 N18.1–N18.4; ICD-9 585.1–585.4: CKD short of stage 5. */
+const isCkdBeforeStage5Code = (code: string) => /^(?:N18[1-4]|585[1-4])/.test(code)
+/** ICD-10 N18.5, N18.6; ICD-9 585.5, 585.6. */
+const isCkdStage5Code = (code: string) => /^(?:N18[56]|585[56])/.test(code)
+/**
+ * ICD-10 K70–K77, B15–B19, C22, I85, Z94.4; ICD-9 070, 155, 456.0–456.2,
+ * 570–573, V42.7: liver disease, viral hepatitis, liver cancer, varices or a
+ * liver transplant.
+ */
+const isLiverDiseaseCode = (code: string) => /^(?:K7[0-7]|B1[5-9]|C22|I85|Z944|070|155|456[0-2]|57[0-3]|V427)/.test(code)
+const anyCode = () => true
+
+/** eGFR this recent, at or above this, is not a patient on dialysis. */
+const EGFR_NOT_DIALYSIS = 30
+const RECENT_DAYS = 365
+/** Adult eGFR keys; the pediatric one is not read here. */
+const EGFR_KEYS = ['EGFR', 'EGFR(EPI)', 'EGFR(M)']
+
 /** A GI lesion this recent counts toward dabigatran's bleeding-risk question. */
 const GI_WINDOW_DAYS = 365
 
@@ -135,15 +155,40 @@ export function doacPatientSelects(input: {
     out.doac_bilirubin_high = { value: raised ? 'yes' : 'no', date: bili.date, testName: `${reading('總膽紅素', bili)}，${raised ? '≥' : '<'}1.5×ULN`, obsId: bili.obsId, facility: bili.facility, resourceType: 'Observation' }
   }
 
-  // Dialysis: a code that names it says yes. No code says nothing — an ESRD
-  // code alone, or a post-dialysis creatinine, would otherwise read as 「no」
-  // (#355 review).
+  // Dialysis: a code that names it says yes. 「No」 when nothing names it and
+  // the last year shows a kidney short of dialysis — a CKD 1–4 code with no
+  // stage 5 code, or an eGFR ≥30 (a post-dialysis creatinine is still far
+  // below that). An ESRD code alone stays blank.
   const dialysis = diagnosisSelect(conditions, encounters, now, isDialysisCode, '透析')
   if (dialysis) out.doac_dialysis = dialysis
-  // Dabigatran's 「gastritis, oesophagitis, GERD」: a recent code says yes; no
-  // code says nothing, since 「other bleeding risk」 is the clinician's call.
+  else {
+    const egfr = EGFR_KEYS.map((key) => latest(observations, key, now, demographics.gender))
+      .filter((lab): lab is LabReading => !!lab && now.getTime() - Date.parse(lab.date) <= RECENT_DAYS * 86_400_000)
+      .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))[0]
+    const ckd = diagnosisSelect(conditions, encounters, now, isCkdBeforeStage5Code, 'CKD', RECENT_DAYS)
+    const stage5 = diagnosisSelect(conditions, encounters, now, isCkdStage5Code, 'CKD', RECENT_DAYS)
+    if (egfr && egfr.value >= EGFR_NOT_DIALYSIS) {
+      out.doac_dialysis = { value: 'no', date: egfr.date, testName: `eGFR ${fmt(egfr.value)}，未見透析診斷碼（請核對）`, obsId: egfr.obsId, facility: egfr.facility, resourceType: 'Observation' }
+    } else if (ckd && !stage5 && !(egfr && egfr.value < 15)) {
+      out.doac_dialysis = { ...ckd, value: 'no', testName: `${ckd.testName.replace(/（.*）$/, '')}，未見透析診斷碼（請核對）` }
+    }
+  }
+  // Dabigatran's 「gastritis, oesophagitis, GERD」: a recent code says yes; a
+  // year of diagnoses without one says no, 「other bleeding risk」 left to the
+  // clinician to change.
   const gi = diagnosisSelect(conditions, encounters, now, isGiLesionCode, '胃食道病灶', GI_WINDOW_DAYS)
   if (gi) out.doac_gi_risk = gi
+  else if (diagnosisSelect(conditions, encounters, now, anyCode, '', GI_WINDOW_DAYS)) {
+    out.doac_gi_risk = { value: 'no', date: today, testName: '近一年就醫診斷未見胃炎／食道炎／GERD／消化道出血（其他出血風險請核對）' }
+  }
+
+  // Liver class: 「no liver disease」 when ALT and AST are both within 2×ULN,
+  // bilirubin is not raised, and no code names liver disease. Child-Pugh A–C
+  // is the clinician's to grade.
+  if (out.doac_liver_enzymes?.value === 'no' && out.doac_bilirubin_high?.value !== 'yes'
+    && !diagnosisSelect(conditions, encounters, now, isLiverDiseaseCode, '肝病')) {
+    out.doac_liver = { ...out.doac_liver_enzymes, value: 'none', testName: `${out.doac_liver_enzymes.testName}，未見肝病診斷碼（請核對）` }
+  }
 
   // Age does not rule out pregnancy or breast-feeding (#355 review): a woman is asked.
   if (demographics.gender === 'male') out.doac_pregnancy = { value: 'no', date: today, testName: '男性' }

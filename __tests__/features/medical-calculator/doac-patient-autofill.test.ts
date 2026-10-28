@@ -17,6 +17,7 @@ function lab(name: string, loinc: string, value: number, high: number | undefine
 const alt = (value: number, high: number | undefined, date = '2026-09-01') => lab('ALT', '1742-6', value, high, date)
 const ast = (value: number, high: number | undefined, date = '2026-09-01') => lab('AST', '1920-8', value, high, date)
 const bili = (value: number, high: number | undefined, date = '2026-09-01') => lab('Total bilirubin', '1975-2', value, high, date, 'mg/dL')
+const egfr = (value: number, date = '2026-09-01') => lab('eGFR', '62238-1', value, undefined, date, 'mL/min/1.73m2')
 
 const condition = (code: string, date = '2026-05-01'): ConditionEntity => ({ id: `c-${code}`, clinicalStatus: 'active', recordedDate: date, code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code }] } } as ConditionEntity)
 const hypertension = condition('I10')
@@ -51,20 +52,34 @@ describe('DOAC calculator: liver tests against the report’s own ULN', () => {
 })
 
 describe('DOAC calculator: diagnoses and demographics', () => {
-  it('dialysis 「yes」 by its code; a missing code, or ESRD alone, is not 「no」 (#355 review)', () => {
+  it('dialysis 「yes」 by its code; an ESRD code alone, or nothing, stays blank', () => {
     expect(selects({ conditions: [condition('Z99.2')] }).doac_dialysis).toMatchObject({ value: 'yes' })
     expect(selects({ conditions: [hypertension] }).doac_dialysis).toBeUndefined()
     expect(selects({ conditions: [condition('N18.6')] }).doac_dialysis).toBeUndefined()
     expect(selects().doac_dialysis).toBeUndefined()
   })
-  it('the liver class is never filled from the record: no code is not 「no liver disease」 (#355 review)', () => {
-    const out = selects({ conditions: [hypertension], observations: [alt(30, 40), ast(20, 35), bili(0.8, 1.2)] }) as Record<string, unknown>
-    expect(out.doac_liver).toBeUndefined()
+  it('dialysis 「no」 from a recent CKD 1–4 code or an eGFR ≥30, with no dialysis code', () => {
+    expect(selects({ conditions: [condition('N18.32')] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'CKD診斷碼：N18.32，未見透析診斷碼（請核對）' })
+    expect(selects({ conditions: [condition('N18.32'), condition('N18.6')] }).doac_dialysis).toBeUndefined()
+    expect(selects({ conditions: [condition('N18.32', '2024-01-01')] }).doac_dialysis).toBeUndefined()
+    expect(selects({ observations: [egfr(42)] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'eGFR 42，未見透析診斷碼（請核對）' })
+    expect(selects({ observations: [egfr(22)] }).doac_dialysis).toBeUndefined()
+    expect(selects({ observations: [egfr(10)], conditions: [condition('N18.4')] }).doac_dialysis).toBeUndefined()
+    expect(selects({ observations: [egfr(42)], conditions: [condition('Z99.2')] }).doac_dialysis).toMatchObject({ value: 'yes' })
   })
-  it('a GI lesion within a year is dabigatran’s 「yes」; an older one or none says nothing', () => {
+  it('liver: 「no liver disease」 from normal enzymes and bilirubin without a liver code', () => {
+    const labs = [alt(30, 40), ast(20, 35), bili(0.8, 1.2)]
+    expect(selects({ conditions: [hypertension], observations: labs }).doac_liver).toMatchObject({ value: 'none' })
+    expect(selects({ conditions: [condition('K74.6')], observations: labs }).doac_liver).toBeUndefined()
+    expect(selects({ observations: [alt(30, 40), ast(20, 35), bili(2.0, 1.2)] }).doac_liver).toBeUndefined()
+    expect(selects({ observations: [alt(130, 40), ast(20, 35)] }).doac_liver).toBeUndefined()
+    expect(selects({ observations: [alt(30, 40)] }).doac_liver).toBeUndefined()
+  })
+  it('GI: a lesion within a year is 「yes」; a year of other diagnoses is 「no」; no diagnoses says nothing', () => {
     expect(selects({ conditions: [condition('K21.9', '2026-03-01')] }).doac_gi_risk).toMatchObject({ value: 'yes' })
-    expect(selects({ conditions: [condition('K21.9', '2024-03-01')] }).doac_gi_risk).toBeUndefined()
-    expect(selects({ conditions: [hypertension] }).doac_gi_risk).toBeUndefined()
+    expect(selects({ conditions: [condition('K21.9', '2024-03-01'), condition('I10', '2024-03-01')] }).doac_gi_risk).toBeUndefined()
+    expect(selects({ conditions: [hypertension] }).doac_gi_risk).toMatchObject({ value: 'no' })
+    expect(selects().doac_gi_risk).toBeUndefined()
   })
   it('pregnancy: 「no」 for a man; a woman of any age is asked (#355 review)', () => {
     expect(selects({ demographics: { gender: 'male', age: 40 } }).doac_pregnancy).toMatchObject({ value: 'no', testName: '男性' })
@@ -79,7 +94,7 @@ describe('DOAC calculator: the record fills its fields', () => {
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
     const value = (key: string) => resolveInput(calc.inputs.find((input) => input.key === key)!, autofill).value
     expect([value('liver'), value('liver_enzymes'), value('bilirubin_high'), value('pregnancy'), value('dialysis'), value('gi_risk')])
-      .toEqual(['', 'no', 'no', 'no', '', ''])
+      .toEqual(['none', 'no', 'no', 'no', '', 'no'])
   })
 })
 

@@ -105,6 +105,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     ...RENAL_INPUTS,
     {
       key: 'liver', type: 'select', label: { en: 'Liver', zh: '肝功能' }, defaultValue: '',
+      source: { kind: 'hfpefClinical', key: 'doac_liver' }, staleAfterDays: 365,
       options: [
         { value: 'none', label: { en: 'No liver disease', zh: '無肝病' } },
         { value: 'A', label: { en: 'Child-Pugh A', zh: 'Child-Pugh A' } },
