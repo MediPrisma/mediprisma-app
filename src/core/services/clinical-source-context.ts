@@ -53,6 +53,10 @@ interface ContextIndex {
   nodes: Map<string, ClinicalSourceNode>
   edges: Map<string, graphReferences[number][]>
   fingerprints: Map<string, string>
+  /** Final identity per root. A root inside a cycle is never in `fingerprints`,
+   * and each projection asks again for every node, so without this a 雲端病歷
+   * MedicationRequest ↔ Basic group was rehashed a dozen times per import. */
+  roots: Map<ClinicalSourceNode, string>
 }
 type graphReferences = ClinicalSourceGraph['references']
 const contextIndexes = new WeakMap<ClinicalSourceGraph, ContextIndex>()
@@ -66,7 +70,7 @@ function indexGraph(graph: ClinicalSourceGraph): ContextIndex {
     const list = edges.get(edge.origin.key) ?? []
     edges.set(edge.origin.key, [...list, edge])
   }
-  const index = { nodes, edges, fingerprints: new Map<string, string>() }
+  const index = { nodes, edges, fingerprints: new Map<string, string>(), roots: new Map<ClinicalSourceNode, string>() }
   contextIndexes.set(graph, index)
   return index
 }
@@ -77,7 +81,9 @@ function indexGraph(graph: ClinicalSourceGraph): ContextIndex {
  * resolved equivalence. Hashes keep nested/cyclic closures bounded in size.
  */
 export function clinicalSourceContextIdentity(graph: ClinicalSourceGraph, node: ClinicalSourceNode): string {
-  const { nodes, edges, fingerprints } = indexGraph(graph)
+  const { nodes, edges, fingerprints, roots } = indexGraph(graph)
+  const known = roots.get(node)
+  if (known !== undefined) return known
   const visit = (current: ClinicalSourceNode, visiting: Set<string>): { value: string; cyclic: boolean } => {
     const cached = fingerprints.get(current.key)
     if (cached) return { value: cached, cyclic: false }
@@ -110,7 +116,11 @@ export function clinicalSourceContextIdentity(graph: ClinicalSourceGraph, node: 
     if (!cyclic) fingerprints.set(current.key, result)
     return { value: result, cyclic }
   }
-  return visit(node, new Set()).value
+  // The graph is frozen and a root's walk always starts from an empty path, so
+  // the result for a given root never changes.
+  const identity = visit(node, new Set()).value
+  roots.set(node, identity)
+  return identity
 }
 
 /** Structural guard used when context digests match, including digest collisions. */
