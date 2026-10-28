@@ -501,3 +501,13 @@ describe('mergeOutpatientPrefs — 用藥複製格式', () => {
     expect(saved.medFormat?.numbering).toBe('dash')
   })
 })
+
+describe('clinician name (上次門診)', () => {
+  it('merges as a single choice: the side that changed it wins', () => {
+    const base = { ...EMPTY_OUTPATIENT_PREFS }
+    const mine = { ...base, clinicianName: '陳怡君' }
+    expect(mergeOutpatientPrefs(base, mine, base, false).clinicianName).toBe('陳怡君')
+    expect(mergeOutpatientPrefs(base, base, mine, true).clinicianName).toBe('陳怡君')
+    expect(mergeOutpatientPrefs(base, mine, { ...base, clinicianName: '李建國' }, false).clinicianName).toBe('李建國')
+  })
+})
