@@ -76,9 +76,15 @@ describe('hospital medications entering CDSS', () => {
     expect(profile.hospitalMedicationEvidence?.find(item=>item.source.resourceId==='ended')?.useState).toBe('not-current')
   })
 
-  it('uses the explicit active hospital status when dispensing validity is not a treatment interval', () => {
-    expect(build([hospital({ dispenseRequest: { validityPeriod: { start: '2026-09-01', end: '2026-12-31' } } })])
-      .medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('confirmed-current')
+  it('judges an order with no supply duration by its dated interval, without a confirmation state', () => {
+    const order = (start: string, end: string) => hospital({ authoredOn: start, dispenseRequest: { validityPeriod: { start, end } } })
+    const within = build([order('2026-09-01', '2026-12-31')])
+    expect(within.medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('confirmed-current')
+    expect(within.hospitalMedicationEvidence?.[0].useState).toBe('confirmed-current')
+    const ended = build([order('2024-06-14', '2024-07-14')])
+    expect(ended.medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('not-found')
+    expect(ended.hospitalMedicationEvidence?.[0].useState).toBe('not-current')
+    expect(ended.facts.currentNsaid).toBeUndefined()
   })
 
   it.each(['cancelled', 'entered-in-error', 'stopped', 'completed', 'not-taken'])('respects the source %s status', (status) => {
