@@ -248,6 +248,13 @@ it('reads dotted release abbreviations and one official dosage form', () => {
   expect(oneCloudTwoClinics('Syntheticbrand chewable tab 50 mg', 'SYNTHETICBRAND 50MG', 'SYNTHETIC 50 MG', '咀嚼錠').status).toBe('candidate')
 })
 
+it('reads a release form written in brackets on either side', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand (SR) tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg', 'SYNTHETICBRAND (EXTENDED RELEASE) TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand SR tab 50 mg', 'SYNTHETICBRAND (EXTENDED RELEASE) TABLETS 50MG').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg (Synthetic)', 'SYNTHETICBRAND TABLETS 50MG "MAKER"').status).toBe('candidate')
+})
+
 it('never lets the ingredient text stand in for a concentration the product name states', () => {
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')

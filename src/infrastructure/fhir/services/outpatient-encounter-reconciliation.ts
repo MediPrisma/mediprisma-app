@@ -102,24 +102,37 @@ interface Preparation { name: string; strengths: string; release: string; forms:
 
 /** A product label read as name, strengths, release form and dosage forms.
  *  The name is every word before the form, strength or a bare number, without
- *  quoted manufacturers, bracketed text or coating words (dotted abbreviations
+ *  quoted or bracketed text (still read for release and form) or coating words (dotted abbreviations
  *  read as words: F.C. as fc, S.R. as sr): 'Vitamin B1 tab 50 mg' keeps 'vitamin b1', unlike 'VITAMIN
  *  B6 TABLETS 50MG'. An injection or inhalation word outranks the vehicle it
  *  names ('solution for injection'). */
 function preparation(label: unknown, amounts = strengths(label)): Preparation | undefined {
   const words: string[] = [], forms: string[] = []
   let release = 'immediate', named = false, eye = false
-  const tokens = String(label ?? '').normalize('NFKC').toLowerCase()
-    .replace(/"[^"]*"?|\([^)]*\)?/g, ' ')
+  const asides: string[] = []
+  const text = String(label ?? '').normalize('NFKC').toLowerCase()
+    .replace(/"[^"]*"?|\([^)]*\)?/g, (aside) => { asides.push(aside); return ' ' })
+  const tokenize = (value: string) => value
     .replace(/\b(?:[a-z]\.){2,}/g, (abbreviation) => ` ${abbreviation.replace(/\./g, '')} `).split(/[^a-z0-9.]+/)
-  for (const token of tokens.map((item) => item.replace(/^\.+|\.+$/g, '')).filter(Boolean)) {
+    .map((item) => item.replace(/^\.+|\.+$/g, '')).filter(Boolean)
+  const read = (token: string) => {
     const form = formOf(token)
     if (form) forms.push(form)
     if (RELEASE[token]) release = RELEASE[token]
     if (['eye', 'oph', 'ophthalmic'].includes(token)) eye = true
+    return form
+  }
+  for (const token of tokenize(text)) {
+    const form = read(token)
     if (form || /^\d/.test(token)) named = true
     if (!named && !RELEASE[token] && !QUALIFIERS.has(token)) words.push(token)
   }
+  // Quoted and bracketed text names no product, but a release or dosage form
+  // written there ('(SR)', '(EXTENDED RELEASE)') still describes it.
+  const statedForms = forms.length
+  for (const token of tokenize(asides.join(' '))) read(token)
+  // A form in brackets only fills one the name itself omits.
+  if (statedForms) forms.splice(statedForms)
   if (!words.length || words[0].length < 3 || !amounts.length) return undefined
   let primary = forms.find((form) => form === 'injection') ?? forms.find((form) => form === 'inhalation') ?? forms[0]
   if (eye && ['solution', 'suspension', 'drops'].includes(primary)) primary = 'eye liquid'
