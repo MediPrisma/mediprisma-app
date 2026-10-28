@@ -127,13 +127,46 @@ let memBundleUsesMemoryOnlySession = false
 const terminologyMigrationByBundle = new WeakMap<object, Promise<object | null>>()
 // Mapping a FHIR Bundle into every domain collection is also expensive and was
 // previously repeated independently by the Patient and clinical-data queries.
-// Cache only the post-storage parse (not the import validator): save() may move
-// inline images out of the Bundle before this path runs, and we must never keep
-// a second parsed copy containing those large base64 payloads alive.
+// The import validator's parse is reused only for a Bundle with no inline
+// images: save() may move inline images out of the Bundle before this path
+// runs, and we must never keep a second parsed copy containing those large
+// base64 payloads alive.
 const parsedStoredDataByBundle = new WeakMap<object, {
   sourceMetadata: ClinicalSourceMetadata | null
   data: LocalBundleData
 }>()
+// The import validator's parse, waiting for save() to publish the same Bundle
+// under the same import id and source metadata it was parsed with.
+const validatedImportByBundle = new WeakMap<object, {
+  importId: string
+  sourceMetadata: ClinicalSourceMetadata | null
+  data: LocalBundleData
+}>()
+
+/** Same test prepareImagesForStorage uses to decide what it moves out. */
+function hasInlineImages(bundle: any): boolean {
+  const entries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
+  return entries.some((entry) => {
+    const resource = entry?.resource
+    return resource?.resourceType === 'DiagnosticReport'
+      && Array.isArray(resource.presentedForm)
+      && resource.presentedForm.some((form: any) =>
+        typeof form?.data === 'string' && form.data.length > 0
+        && typeof form.contentType === 'string' && form.contentType.startsWith('image/'))
+  })
+}
+
+/** A newly published import starts from the validator's parse when it was made
+ * from exactly this Bundle and these arguments; otherwise from nothing. */
+function adoptValidatedImport(bundle: object, importId: string | null, sourceMetadata: ClinicalSourceMetadata | null): void {
+  const validated = validatedImportByBundle.get(bundle)
+  validatedImportByBundle.delete(bundle)
+  if (validated && validated.importId === importId && validated.sourceMetadata === sourceMetadata) {
+    parsedStoredDataByBundle.set(bundle, { sourceMetadata, data: validated.data })
+  } else {
+    parsedStoredDataByBundle.delete(bundle)
+  }
+}
 
 interface PersistedBundleEnvelope {
   __mediprismaBundle: 1
@@ -1202,7 +1235,7 @@ export const LocalBundleService = {
       }
       const publishInMemory = (originalFhir: Blob | null, memoryOnlySession = false) => {
         if (isNewImport) {
-          parsedStoredDataByBundle.delete(bundle)
+          adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
           terminologyMigrationByBundle.delete(bundle)
         }
         memBundle = bundle
@@ -1328,7 +1361,7 @@ export const LocalBundleService = {
       }
     }
     if (isNewImport) {
-      parsedStoredDataByBundle.delete(bundle)
+      adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
       terminologyMigrationByBundle.delete(bundle)
     }
     memBundle = bundle
@@ -1608,6 +1641,26 @@ export const LocalBundleService = {
       }
     }
     return null
+  },
+
+  /**
+   * Import validator: the same parse the workspace will run once the Bundle is
+   * saved under `importId`, so save() can hand it over instead of the
+   * workspace parsing the whole chart a second time.
+   */
+  validateImport(
+    bundle: any,
+    options: { importId: string; sourceMetadata?: ClinicalSourceMetadata },
+  ): LocalBundleData | null {
+    const parsed = this.parse(bundle, options.sourceMetadata, options.importId)
+    if (parsed && bundle && typeof bundle === 'object' && !hasInlineImages(bundle)) {
+      validatedImportByBundle.set(bundle, {
+        importId: options.importId,
+        sourceMetadata: options.sourceMetadata ?? null,
+        data: parsed,
+      })
+    }
+    return parsed
   },
 
   parse(
