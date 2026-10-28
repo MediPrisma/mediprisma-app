@@ -189,6 +189,34 @@ it.each([
   expect(result.current.every(needsSourceComparison)).toBe(true)
 })
 
+function oneCloudTwoClinics(hospitalName: string, cloudName: string, ingredient?: string) {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  const order: any = cloudOrder('c-order-1', 'cloud-visit', 'AC00000100', cloudName)
+  resources.push(secondHospital, hospitalOrder('h-order-1', 'hospital-visit', hospitalName), order)
+  if (ingredient) {
+    order.supportingInformation = [{ reference: 'MedicationKnowledge/official' }]
+    resources.push({ resourceType: 'MedicationKnowledge', id: 'official', code: { coding: [{ system: NHI, code: 'AC00000100', display: cloudName }] },
+      ingredient: [{ itemCodeableConcept: { text: ingredient } }] })
+  }
+  reconcileOutpatientEncounters(resources)
+  return (hospital as any)._sourceRecordComparison
+}
+
+it('reads the strength from the official ingredient text when the NHI product name omits it', () => {
+  expect(oneCloudTwoClinics('Cordarone tab 200 mg', 'CORDARONE TABLETS', 'AMIODARONE HCL 200 MG'))
+    .toMatchObject({ status: 'candidate', warnings: ['paired-by-prescriptions'] })
+  expect(oneCloudTwoClinics('Cordarone tab 100 mg', 'CORDARONE TABLETS', 'AMIODARONE HCL 200 MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Cordarone tab 200 mg', 'CORDARONE TABLETS').status).toBe('ambiguous')
+})
+
+it('reads combination strengths in order and UG as mcg', () => {
+  expect(oneCloudTwoClinics('Glyxambi FC # tab 25/5 mg', 'Glyxambi Film-Coated Tablets 25/5 mg').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Glyxambi FC # tab 25/5 mg', 'Glyxambi Film-Coated Tablets 10/5 mg').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Methycobal * cap 500 mcg', 'METHYCOBAL CAPSULES 500UG "EISAI" (MECOBALAMIN)').status).toBe('candidate')
+})
+
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier

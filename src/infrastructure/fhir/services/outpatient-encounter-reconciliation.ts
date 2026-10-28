@@ -59,27 +59,57 @@ function nhiCodes(concept: Resource | undefined): string[] {
     .map((coding: Resource) => String(coding.code).trim().toUpperCase()))]
 }
 
-/** North VGH orders carry only a recorded product name, no NHI code. Compare
- *  the leading brand word (hyphens dropped) and every strength with its unit
- *  and concentration denominator, a missing denominator count read as 1:
- *  'Aromasin SC tab 25 mg' ~ 'AROMASIN SUGAR COATED TABLETS 25MG',
- *  'Bao-gan * cap 150 mg' ~ 'BAO-GAN CAPSULES 150MG',
- *  'Methasone inj 5 mg/1 ml @' ~ 'METHASONE INJECTION 5MG/ML'.
- *  Units are never converted: 5 mg/2 ml, 5 mcg and 5 mg/ml all differ. */
-function brandAndStrength(concept: Resource | undefined): string | undefined {
-  const label = (concept?.coding ?? []).map((coding: Resource) => coding.display || coding.code)
-    .concat(concept?.text).find((value: unknown) => typeof value === 'string' && /^[^a-z]*[a-z]/i.test(value))
-  const normalized = String(label ?? '').normalize('NFKC').toLowerCase().replace(/[μµ]g/g, 'mcg')
-  const brand = normalized.match(/^[^a-z]*([a-z][a-z-]*[a-z])/)?.[1].replace(/-/g, '')
-  const strengths = [...normalized.matchAll(/(\d+(?:\.\d+)?)\s*(mcg|mg|g|iu|%)(?![a-z])(?:\s*\/\s*(\d+(?:\.\d+)?)?\s*(ml|g)(?![a-z]))?/g)]
+/** Every strength in a label, in order, with its unit and concentration
+ *  denominator (a missing denominator count read as 1). A combination written
+ *  '25/5 mg' reads as 25 mg + 5 mg. Units are never converted: 5 mg/2 ml,
+ *  5 mcg and 5 mg/ml all differ; only spellings (UG, GM) are unified. */
+function strengths(text: unknown): string[] {
+  const normalized = String(text ?? '').normalize('NFKC').toLowerCase()
+    .replace(/(?:[μµ]|u)g(?![a-z])/g, 'mcg').replace(/(?<![a-z])gm(?![a-z])/g, 'g')
+    .replace(/(\d*\.?\d+)\s*\/\s*(\d*\.?\d+)\s*(mcg|mg|g|iu)(?![a-z])/g, '$1 $3 + $2 $3')
+  return [...normalized.matchAll(/(\d*\.?\d+)\s*(mcg|mg|g|iu|%)(?![a-z])(?:\s*\/\s*(\d*\.?\d+)?\s*(ml|g)(?![a-z]))?/g)]
     .map(([, amount, unit, per, perUnit]) => `${Number(amount)}${unit}${perUnit ? `/${Number(per ?? 1)}${perUnit}` : ''}`)
-  return brand && brand.length >= 4 && strengths.length ? `${brand}|${strengths.join('+')}` : undefined
+}
+
+/** The leading brand word of a product label, hyphens dropped. */
+function brand(text: unknown): string | undefined {
+  const word = String(text ?? '').normalize('NFKC').toLowerCase().match(/^[^a-z]*([a-z][a-z-]*[a-z])/)?.[1].replace(/-/g, '')
+  return word && word.length >= 4 ? word : undefined
+}
+
+function productLabel(concept: Resource | undefined): string | undefined {
+  return (concept?.coding ?? []).map((coding: Resource) => coding.display || coding.code)
+    .concat(concept?.text).find((value: unknown) => typeof value === 'string' && /^[^a-z]*[a-z]/i.test(value))
+}
+
+/** North VGH orders carry only a recorded product name, no NHI code:
+ *  'Aromasin SC tab 25 mg', 'Glyxambi FC # tab 25/5 mg'. */
+function hospitalProductKey(concept: Resource | undefined): string | undefined {
+  const label = productLabel(concept), amounts = strengths(label), word = brand(label)
+  return word && amounts.length ? `${word}|${amounts.join('+')}` : undefined
+}
+
+/** A cloud order's brand with the strength from its NHI product name or, when
+ *  that name omits it ('CORDARONE TABLETS'), from the linked official
+ *  ingredient text ('AMIODARONE HCL 200 MG'). */
+function cloudProductKeys(concept: Resource | undefined, knowledge: Resource[]): Set<string> {
+  const keys = new Set<string>()
+  const labels = [productLabel(concept), ...knowledge.map((item) => productLabel(item.code))].filter(Boolean)
+  const ingredients = knowledge.map((item) => (item.ingredient ?? [])
+    .flatMap((ingredient: Resource) => strengths(ingredient.itemCodeableConcept?.text)))
+  for (const label of labels) {
+    const word = brand(label)
+    if (!word) continue
+    for (const amounts of [strengths(label), ...ingredients]) if (amounts.length) keys.add(`${word}|${amounts.join('+')}`)
+  }
+  return keys
 }
 
 /** How many of the hospital visit's orders have a like order on the cloud
  *  visit: the product match the medication reconciler accepts, or the same
- *  brand word and strength (a coded hospital row must share the NHI code). A tie-breaker between same-day
- *  candidates only; it never confirms a visit or an order. */
+ *  brand word and strength (a coded hospital row must share the NHI code). A
+ *  tie-breaker between same-day candidates only; it never confirms a visit or
+ *  an order. */
 function prescriptionOverlap(hospital: Resource[], cloud: Resource[], resources: Map<string, Resource>): number {
   const concept = (order: Resource) => order.medicationCodeableConcept ?? resources.get(order.medicationReference?.reference)?.code
   return hospital.filter((order) => cloud.some((other) => {
@@ -90,8 +120,8 @@ function prescriptionOverlap(hospital: Resource[], cloud: Resource[], resources:
       .filter((item: Resource | undefined) => item?.resourceType === 'MedicationKnowledge')
     if (linked.length === 1 && hospitalProductMayMatchKnowledge(concept(order), right[0], linked[0])) return true
     if (!linked.length && hospitalProductMayMatchConcept(concept(order), concept(other))) return true
-    const recorded = brandAndStrength(concept(order))
-    return !!recorded && recorded === brandAndStrength(concept(other))
+    const recorded = hospitalProductKey(concept(order))
+    return !!recorded && cloudProductKeys(concept(other), linked).has(recorded)
   })).length
 }
 
