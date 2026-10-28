@@ -89,8 +89,10 @@ const FORMS: Array<[RegExp, string]> = [
 ]
 const formOf = (token: string) => FORMS.find(([pattern]) => pattern.test(token))?.[1]
 // The official dose-form text the NHI master gives in Chinese.
+// The master writes eye suspensions and solutions alike as 點眼液劑.
 const OFFICIAL_FORMS: Array<[RegExp, string]> = [
-  [/注射/, 'injection'], [/吸入|噴霧/, 'inhalation'], [/咀嚼/, 'chewable'], [/發泡/, 'effervescent'], [/錠/, 'tablet'],
+  [/注射/, 'injection'], [/(?:點眼|眼用|眼耳|點耳).*膏/, 'ointment'], [/(?:點眼|眼用|眼耳|點耳).*凝膠/, 'gel'],
+  [/點眼|眼用|眼耳|點耳/, 'eye liquid'], [/吸入|噴霧/, 'inhalation'], [/咀嚼/, 'chewable'], [/發泡/, 'effervescent'], [/錠/, 'tablet'],
   [/膠囊/, 'capsule'], [/懸/, 'suspension'], [/軟膏/, 'ointment'], [/乳膏/, 'cream'], [/凝膠/, 'gel'], [/貼/, 'patch'],
   [/顆粒/, 'granules'], [/糖漿/, 'syrup'], [/點眼|點耳|滴/, 'drops'], [/液/, 'solution'],
 ]
@@ -100,24 +102,27 @@ interface Preparation { name: string; strengths: string; release: string; forms:
 
 /** A product label read as name, strengths, release form and dosage forms.
  *  The name is every word before the form, strength or a bare number, without
- *  quoted manufacturers, bracketed text, dotted abbreviations (F.C.) or
- *  coating words: 'Vitamin B1 tab 50 mg' keeps 'vitamin b1', unlike 'VITAMIN
+ *  quoted manufacturers, bracketed text or coating words (dotted abbreviations
+ *  read as words: F.C. as fc, S.R. as sr): 'Vitamin B1 tab 50 mg' keeps 'vitamin b1', unlike 'VITAMIN
  *  B6 TABLETS 50MG'. An injection or inhalation word outranks the vehicle it
  *  names ('solution for injection'). */
 function preparation(label: unknown, amounts = strengths(label)): Preparation | undefined {
   const words: string[] = [], forms: string[] = []
-  let release = 'immediate', named = false
+  let release = 'immediate', named = false, eye = false
   const tokens = String(label ?? '').normalize('NFKC').toLowerCase()
-    .replace(/"[^"]*"?|\([^)]*\)?/g, ' ').replace(/\b(?:[a-z]\.){2,}/g, ' ').split(/[^a-z0-9.]+/)
+    .replace(/"[^"]*"?|\([^)]*\)?/g, ' ')
+    .replace(/\b(?:[a-z]\.){2,}/g, (abbreviation) => ` ${abbreviation.replace(/\./g, '')} `).split(/[^a-z0-9.]+/)
   for (const token of tokens.map((item) => item.replace(/^\.+|\.+$/g, '')).filter(Boolean)) {
     const form = formOf(token)
     if (form) forms.push(form)
     if (RELEASE[token]) release = RELEASE[token]
+    if (['eye', 'oph', 'ophthalmic'].includes(token)) eye = true
     if (form || /^\d/.test(token)) named = true
     if (!named && !RELEASE[token] && !QUALIFIERS.has(token)) words.push(token)
   }
   if (!words.length || words[0].length < 3 || !amounts.length) return undefined
-  const primary = forms.find((form) => form === 'injection') ?? forms.find((form) => form === 'inhalation') ?? forms[0]
+  let primary = forms.find((form) => form === 'injection') ?? forms.find((form) => form === 'inhalation') ?? forms[0]
+  if (eye && ['solution', 'suspension', 'drops'].includes(primary)) primary = 'eye liquid'
   return { name: words.join(' '), strengths: amounts.join('+'), release, forms: primary ? [primary] : [] }
 }
 
@@ -132,16 +137,26 @@ function productLabel(concept: Resource | undefined): string | undefined {
  *  form from the official dose form ('膠囊劑', '持續性藥效錠'). */
 function cloudPreparations(concept: Resource | undefined, knowledge: Resource[]): Preparation[] {
   const labels = [productLabel(concept), ...knowledge.map((item) => productLabel(item.code))].filter(Boolean)
-  const ingredients = knowledge.map((item) => (item.ingredient ?? [])
-    .flatMap((ingredient: Resource) => strengths(ingredient.itemCodeableConcept?.text)))
-  const official = knowledge.map((item) => String(item.doseForm?.text ?? '')).filter(Boolean)
-  const officialForms = official.flatMap((text) => OFFICIAL_FORMS.filter(([pattern]) => pattern.test(text)).map(([, form]) => form))
-  const officialRelease = official.flatMap((text) => OFFICIAL_RELEASE.filter(([pattern]) => pattern.test(text)).map(([, release]) => release))[0]
-  return labels.flatMap((label) => [strengths(label), ...ingredients].map((amounts) => preparation(label, amounts)))
-    .filter((item): item is Preparation => !!item)
+  // An ingredient amount stated per ml or per dose that the parser cannot keep
+  // as a concentration is no strength at all.
+  const ingredients = knowledge.flatMap((item) => (item.ingredient ?? []).map((ingredient: Resource) => {
+    const text = String(ingredient.itemCodeableConcept?.text ?? '')
+    const amounts = strengths(text)
+    const perUnit = /(?:\/|\b(?:each|per)\b)\s*(?:\d*\.?\d+\s*)?(?:ml|g|gm|dose|actuation|puff)\b/i.test(text)
+    return perUnit && amounts.some((amount) => !amount.includes('/')) ? undefined : amounts
+  })).filter((amounts): amounts is string[] => !!amounts?.length)
+  const official = knowledge.map((item) => String(item.doseForm?.text ?? '')).find(Boolean) ?? ''
+  const officialForm = OFFICIAL_FORMS.find(([pattern]) => pattern.test(official))?.[1]
+  const officialRelease = OFFICIAL_RELEASE.find(([pattern]) => pattern.test(official))?.[1]
+  return labels.flatMap((label) => {
+    const named = strengths(label)
+    // The ingredient text fills a strength the name omits; it never stands in
+    // for one the name states.
+    return (named.length ? [named] : ingredients.length === 1 ? ingredients : []).map((amounts) => preparation(label, amounts))
+  }).filter((item): item is Preparation => !!item)
     .map((item) => ({ ...item,
       release: item.release === 'immediate' && officialRelease ? officialRelease : item.release,
-      forms: [...new Set([...item.forms, ...officialForms])] }))
+      forms: officialForm ? [officialForm] : item.forms }))
 }
 
 /** Same name, strengths and release form; the dosage forms must agree when

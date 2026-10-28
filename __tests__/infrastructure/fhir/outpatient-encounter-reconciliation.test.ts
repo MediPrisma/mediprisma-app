@@ -189,7 +189,7 @@ it.each([
   expect(result.current.every(needsSourceComparison)).toBe(true)
 })
 
-function oneCloudTwoClinics(hospitalName: string, cloudName: string, ingredient?: string) {
+function oneCloudTwoClinics(hospitalName: string, cloudName: string, ingredient?: string, doseForm?: string) {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier
   const secondHospital = { ...hospital, id: 'hospital-second-visit' }
@@ -198,7 +198,7 @@ function oneCloudTwoClinics(hospitalName: string, cloudName: string, ingredient?
   if (ingredient) {
     order.supportingInformation = [{ reference: 'MedicationKnowledge/official' }]
     resources.push({ resourceType: 'MedicationKnowledge', id: 'official', code: { coding: [{ system: NHI, code: 'AC00000100', display: cloudName }] },
-      ingredient: [{ itemCodeableConcept: { text: ingredient } }] })
+      ingredient: [{ itemCodeableConcept: { text: ingredient } }], ...(doseForm ? { doseForm: { text: doseForm } } : {}) })
   }
   reconcileOutpatientEncounters(resources)
   return (hospital as any)._sourceRecordComparison
@@ -239,6 +239,19 @@ it('does not pair a different release or dosage form of the same name and streng
   expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg', 'SYNTHETICBRAND INJECTION 50MG').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand SR tab 50 mg', 'SYNTHETICBRAND PROLONGED-RELEASE TABLETS 50MG').status).toBe('candidate')
   expect(oneCloudTwoClinics('Syntheticbrand for inj 1.34 mg/ml 3 ml', 'SYNTHETICBRAND SOLUTION FOR INJECTION 1.34MG/ML').status).toBe('candidate')
+})
+
+it('reads dotted release abbreviations and one official dosage form', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand S.R. tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand F.C. tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg', 'SYNTHETICBRAND 50MG', 'SYNTHETIC 50 MG', '咀嚼錠').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand chewable tab 50 mg', 'SYNTHETICBRAND 50MG', 'SYNTHETIC 50 MG', '咀嚼錠').status).toBe('candidate')
+})
+
+it('never lets the ingredient text stand in for a concentration the product name states', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg/1 ml', 'SYNTHETICBRAND INJECTION', 'SYNTHETIC 5 MG/ML', '注射劑').status).toBe('candidate')
 })
 
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
