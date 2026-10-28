@@ -234,6 +234,13 @@ it('still asks for comparison on a pair whose sources declare different ICD codi
   expect(needsSourceComparison(result.current[0])).toBe(true)
 })
 
+it('does not pair a different release or dosage form of the same name and strength', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand SR tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg', 'SYNTHETICBRAND INJECTION 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand SR tab 50 mg', 'SYNTHETICBRAND PROLONGED-RELEASE TABLETS 50MG').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand for inj 1.34 mg/ml 3 ml', 'SYNTHETICBRAND SOLUTION FOR INJECTION 1.34MG/ML').status).toBe('candidate')
+})
+
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier
