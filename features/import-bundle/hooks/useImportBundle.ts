@@ -127,7 +127,8 @@ export function useImportBundle(): UseImportBundleReturn {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
     }
-    const parsed = LocalBundleService.parse(bundle)
+    const localImportId = generateId()
+    const parsed = LocalBundleService.validateImport(bundle, { importId: localImportId, sourceMetadata })
     if (!parsed) {
       throw new Error('Bundle must contain at least one Patient resource')
     }
@@ -140,7 +141,6 @@ export function useImportBundle(): UseImportBundleReturn {
     // demo we clear it only after React Query has published the audited data;
     // clearing earlier would briefly expose the old real patient under demo's
     // automatic-snapshot policy.
-    const localImportId = generateId()
     // The storage layer checks again after preparing encrypted data, before
     // publishing the new pointer and key.
     signal?.throwIfAborted()
