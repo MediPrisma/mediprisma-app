@@ -172,6 +172,23 @@ it('does not pair clinics on the same brand at a different strength', () => {
   expect((tiedHospital as any)._sourceRecordComparison.status).toBe('ambiguous')
 })
 
+it.each([
+  ['a different concentration denominator', 'Methasone inj 5 mg/2 ml', 'METHASONE INJECTION 5MG/ML'],
+  ['a different unit', 'Synthbrand tab 5 mcg', 'SYNTHBRAND TABLETS 5MG'],
+  ['a missing concentration', 'Methasone inj 5 mg', 'METHASONE INJECTION 5MG/ML'],
+])('does not pair a clinic on the same brand with %s', (_, hospitalName, cloudName) => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  resources.push(secondHospital,
+    hospitalOrder('h-order-1', 'hospital-visit', hospitalName), cloudOrder('c-order-1', 'cloud-visit', 'AC00000100', cloudName))
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect((hospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(3)
+  expect(result.current.every(needsSourceComparison)).toBe(true)
+})
+
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier

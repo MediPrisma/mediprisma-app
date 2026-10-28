@@ -60,17 +60,20 @@ function nhiCodes(concept: Resource | undefined): string[] {
 }
 
 /** North VGH orders carry only a recorded product name, no NHI code. Compare
- *  the leading brand word (hyphens dropped) and the first strength:
+ *  the leading brand word (hyphens dropped) and every strength with its unit
+ *  and concentration denominator, a missing denominator count read as 1:
  *  'Aromasin SC tab 25 mg' ~ 'AROMASIN SUGAR COATED TABLETS 25MG',
  *  'Bao-gan * cap 150 mg' ~ 'BAO-GAN CAPSULES 150MG',
- *  'Methasone inj 5 mg/1 ml @' ~ 'METHASONE INJECTION 5MG/ML'. */
+ *  'Methasone inj 5 mg/1 ml @' ~ 'METHASONE INJECTION 5MG/ML'.
+ *  Units are never converted: 5 mg/2 ml, 5 mcg and 5 mg/ml all differ. */
 function brandAndStrength(concept: Resource | undefined): string | undefined {
   const label = (concept?.coding ?? []).map((coding: Resource) => coding.display || coding.code)
     .concat(concept?.text).find((value: unknown) => typeof value === 'string' && /^[^a-z]*[a-z]/i.test(value))
-  const normalized = String(label ?? '').normalize('NFKC').toLowerCase()
+  const normalized = String(label ?? '').normalize('NFKC').toLowerCase().replace(/[μµ]g/g, 'mcg')
   const brand = normalized.match(/^[^a-z]*([a-z][a-z-]*[a-z])/)?.[1].replace(/-/g, '')
-  const strength = normalized.match(/(\d+(?:\.\d+)?)\s*(?:mg|mcg|μg|g|iu|%)/)?.[1]
-  return brand && brand.length >= 4 && strength ? `${brand}|${Number(strength)}` : undefined
+  const strengths = [...normalized.matchAll(/(\d+(?:\.\d+)?)\s*(mcg|mg|g|iu|%)(?![a-z])(?:\s*\/\s*(\d+(?:\.\d+)?)?\s*(ml|g)(?![a-z]))?/g)]
+    .map(([, amount, unit, per, perUnit]) => `${Number(amount)}${unit}${perUnit ? `/${Number(per ?? 1)}${perUnit}` : ''}`)
+  return brand && brand.length >= 4 && strengths.length ? `${brand}|${strengths.join('+')}` : undefined
 }
 
 /** How many of the hospital visit's orders have a like order on the cloud
