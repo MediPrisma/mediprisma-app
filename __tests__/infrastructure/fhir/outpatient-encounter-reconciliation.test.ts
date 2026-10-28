@@ -276,6 +276,15 @@ it('lets no product shortcut skip an official chewable or modified-release form'
   expect(official('錠劑')).toBe('candidate')
 })
 
+it('reads thousands separators as one number and rejects an unknown denominator', () => {
+  expect(oneCloudTwoClinics('Costim inj 1,000,000 IU', 'COSTIM POWDER FOR INJECTION 2,000,000 IU').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Costim inj 1,000,000 IU', 'COSTIM INJECTION 1000000 IU').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand inhalation 50 mcg/2 dose', 'SYNTHETICBRAND INHALATION 50MCG/DOSE').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand inhalation 50 mcg/puff', 'SYNTHETICBRAND INHALATION 50MCG/DOSE').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg/tab', 'SYNTHETICBRAND TABLETS 50MG/TAB').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 5 mg/20 mg', 'SYNTHETICBRAND 5MG/20MG TABLET').status).toBe('candidate')
+})
+
 it('never lets the ingredient text stand in for a concentration the product name states', () => {
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')

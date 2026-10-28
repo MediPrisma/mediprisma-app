@@ -58,16 +58,28 @@ function nhiCodes(concept: Resource | undefined): string[] {
     .map((coding: Resource) => String(coding.code).trim().toUpperCase()))]
 }
 
+// Concentration denominators a strength may be stated per; any other
+// written denominator makes the label's strengths unusable as evidence.
+const PER_UNITS: Record<string, string> = { ml: 'ml', g: 'g', dose: 'dose', doses: 'dose', puff: 'dose', puffs: 'dose',
+  p: 'dose', actuation: 'dose', actuations: 'dose' }
+const NUMBER = '(?<![\\d.,])(\\d*\\.?\\d+)'
+
 /** Every strength in a label, in order, with its unit and concentration
- *  denominator (a missing denominator count read as 1). A combination written
- *  '25/5 mg' reads as 25 mg + 5 mg. Units are never converted: 5 mg/2 ml,
- *  5 mcg and 5 mg/ml all differ; only spellings (UG, GM) are unified. */
+ *  denominator (a missing denominator count read as 1). Thousands separators
+ *  are read as one number (1,000,000 IU). A combination written '25/5 mg'
+ *  reads as 25 mg + 5 mg. Units are never converted: 5 mg/2 ml, 5 mcg and
+ *  5 mg/ml all differ; only spellings (UG, GM, puff for dose) are unified. A
+ *  denominator outside ml, g and dose leaves no strength at all. */
 function strengths(text: unknown): string[] {
   const normalized = String(text ?? '').normalize('NFKC').toLowerCase()
+    .replace(/(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d,])/g, (number) => number.replace(/,/g, ''))
     .replace(/(?:[μµ]|u)g(?![a-z])/g, 'mcg').replace(/(?<![a-z])gm(?![a-z])/g, 'g')
-    .replace(/(\d*\.?\d+)\s*\/\s*(\d*\.?\d+)\s*(mcg|mg|g|iu)(?![a-z])/g, '$1 $3 + $2 $3')
-  return [...normalized.matchAll(/(\d*\.?\d+)\s*(mcg|mg|g|iu|%)(?![a-z])(?:\s*\/\s*(\d*\.?\d+)?\s*(ml|g)(?![a-z]))?/g)]
-    .map(([, amount, unit, per, perUnit]) => `${Number(amount)}${unit}${perUnit ? `/${Number(per ?? 1)}${perUnit}` : ''}`)
+    .replace(new RegExp(`${NUMBER}\\s*\\/\\s*(\\d*\\.?\\d+)\\s*(mcg|mg|g|iu)(?![a-z])`, 'g'), '$1 $3 + $2 $3')
+  const found = [...normalized.matchAll(new RegExp(
+    `${NUMBER}\\s*(mcg|mg|g|iu|%)(?![a-z])(?:\\s*\\/\\s*(\\d*\\.?\\d+)?\\s*(?!(?:mcg|mg|iu)(?![a-z]))([a-z]+))?`, 'g'))]
+  if (found.some(([, , , , perUnit]) => perUnit && !PER_UNITS[perUnit])) return []
+  return found.map(([, amount, unit, per, perUnit]) =>
+    `${Number(amount)}${unit}${perUnit ? `/${Number(per ?? 1)}${PER_UNITS[perUnit]}` : ''}`)
 }
 
 // Coating, packaging and route words that name no different preparation.
