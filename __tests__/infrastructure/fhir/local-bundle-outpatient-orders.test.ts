@@ -37,3 +37,26 @@ it.each(['relative', 'absolute', 'uuid'])('imports %s references with orders and
   expect(profile.facts.serumCreatinine?.numericValue).toBe(1.2)
   expect(profile.facts.serumCreatinine?.sources?.some(source => source.resourceId === resultId)).toBe(true)
 })
+
+it('keeps the visit of every order a result is basedOn, including a draw shared by two visits', () => {
+  const meta = { tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] }
+  const visit = (id: string, doctor: string) => ({ resourceType: 'Encounter', id, meta, status: 'finished', class: { code: 'AMB' },
+    subject: { reference: 'Patient/patient' }, period: { start: '2026-09-01T09:00:00+08:00' }, participant: [{ individual: { display: doctor } }] })
+  const order = (id: string, encounter: string) => ({ resourceType: 'ServiceRequest', id, meta, status: 'unknown', intent: 'order',
+    code: { text: 'Synthetic TSH order' }, subject: { reference: 'Patient/patient' }, encounter: { reference: `Encounter/${encounter}` } })
+  const lab = (id: string, basedOn: string[]) => ({ resourceType: 'Observation', id, meta, status: 'final', subject: { reference: 'Patient/patient' },
+    category: [{ coding: [{ code: 'laboratory' }] }], effectiveDateTime: '2026-09-01T10:00:00+08:00',
+    code: { coding: [{ system: 'http://loinc.org', code: '3016-3' }], text: 'TSH' }, valueQuantity: { value: 2.2, unit: 'uIU/mL' },
+    basedOn: basedOn.map(ref => ({ reference: `ServiceRequest/${ref}` })) })
+  const resources = [
+    { resourceType: 'Patient', id: 'patient', gender: 'female' },
+    visit('clinic-a', 'Doctor A'), visit('clinic-b', 'Doctor B'),
+    order('order-a', 'clinic-a'), order('order-b', 'clinic-b'),
+    lab('shared', ['order-a', 'order-b']),
+    lab('own', ['order-a']),
+  ]
+  const data = LocalBundleService.parse({ resourceType: 'Bundle', type: 'collection', entry: resources.map(resource => ({ resource })) } as any)!
+  const bySource = new Map(data.collection.observations.map((observation: any) => [observation.sourceId, observation]))
+  expect((bySource.get('shared') as any)?._orderEncounterIds).toEqual(['clinic-a', 'clinic-b'])
+  expect((bySource.get('own') as any)?._orderEncounterIds).toEqual(['clinic-a'])
+})

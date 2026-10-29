@@ -15,12 +15,14 @@ import {
   buildRangeComparisons,
   isHospitalOutpatientEncounter,
   isSameClinician,
-  withSourceEncounterLink,
+  resultsOrderedAt,
   type PriorLabValue,
 } from "../utils/last-outpatient"
 
 export type HospitalOutpatientVisit = {
   id: string
+  /** The visit and the source records it was projected from. */
+  encounterIds: string[]
   date: string
   department?: string
   physician?: string
@@ -45,6 +47,7 @@ function toHospitalVisit(visit: VisitRecord, byId: Map<string, any>): HospitalOu
   const department = typeof copy?.serviceType?.text === 'string' ? copy.serviceType.text : undefined
   return {
     id: visit.id,
+    encounterIds: [visit.id, ...(visit.sourceIds ?? [])],
     date: visit.date,
     department: department || visit.department,
     physician: physician || visit.physician,
@@ -81,18 +84,38 @@ export function useLastOutpatient(selectedVisitId: string | null) {
       && [visit.id, ...(visit.sourceIds ?? [])].some((id) => isHospitalOutpatientEncounter(encounterById.get(id))))
     .map((visit) => toHospitalVisit(visit, encounterById)), [visitHistory, encounterById])
 
-  const linkedReports = useMemo(() => withSourceEncounterLink(diagnosticReports), [diagnosticReports])
-  const linkedObservations = useMemo(() => withSourceEncounterLink(observations), [observations])
-  const details = useEncounterDetails(
-    EMPTY, linkedReports, linkedObservations, EMPTY, EMPTY, EMPTY,
-    locale, audience, EMPTY, icdDict, encounters,
-  )
-  const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
-  const rangeComparisons = useMemo(() => buildRangeComparisons(linkedObservations, linkedReports), [linkedObservations, linkedReports])
-
   const mine = clinicianName ? visits.filter((visit) => isSameClinician(visit.physician, clinicianName)) : []
   const defaultVisit = mine[0] ?? visits[0]
   const visit = (selectedVisitId && visits.find((candidate) => candidate.id === selectedVisitId)) || defaultVisit
+
+  // Only this visit's results, each placed under it: its own source link or an
+  // order of this visit in basedOn (a combined draw belongs to every visit
+  // whose order it served). Import's same-day inference never counts.
+  const ordered = useMemo(() => {
+    if (!visit) return { reports: EMPTY, observations: EMPTY, sharedIds: new Set<string>() }
+    const ids = new Set(visit.encounterIds)
+    const reports = resultsOrderedAt(diagnosticReports, ids, visit.id)
+    const standalone = resultsOrderedAt(observations, ids, visit.id)
+    const sharedIds = new Set([...reports.shared, ...standalone.shared])
+    // A shared panel's results are shared with it.
+    for (const report of reports.results as any[]) {
+      if (!sharedIds.has(report.id)) continue
+      for (const member of report._observations ?? []) if (member?.id) sharedIds.add(member.id)
+    }
+    return { reports: reports.results, observations: standalone.results, sharedIds }
+  }, [visit, diagnosticReports, observations])
+
+  const details = useEncounterDetails(
+    EMPTY, ordered.reports, ordered.observations, EMPTY, EMPTY, EMPTY,
+    locale, audience, EMPTY, icdDict, encounters,
+  )
+  const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
+  const rangeComparisons = useMemo(() => buildRangeComparisons(ordered.observations, ordered.reports), [ordered])
+  const visitDetails = visit ? details.get(visit.id) as EncounterDetails | undefined : undefined
+  const sharedCount = visitDetails
+    ? visitDetails.tests.filter((test) => ordered.sharedIds.has(test.id)).length
+      + visitDetails.reports.filter((report) => report.row.diagnosticReportIds?.some((id) => ordered.sharedIds.has(id))).length
+    : 0
 
   return {
     isLoading,
@@ -101,7 +124,8 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     clinicianMatched: !!clinicianName && mine.length > 0,
     visits,
     visit,
-    details: visit ? details.get(visit.id) as EncounterDetails | undefined : undefined,
+    details: visitDetails,
+    sharedCount,
     priorValues: priorValues as Map<string, PriorLabValue>,
     rangeComparisons,
   }

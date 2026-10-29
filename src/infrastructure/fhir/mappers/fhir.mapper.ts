@@ -356,6 +356,7 @@ export class FhirMapper implements IDataMapper {
       specimen: fhirResource.specimen,
       encounter: fhirResource.encounter,
       _encounterInferred: (fhirResource as Observation & { _encounterInferred?: boolean })._encounterInferred,
+      _orderEncounterIds: fhirResource._orderEncounterIds,
       performer: fhirResource.performer,
       note: fhirResource.note,
       referenceRange: fhirResource.referenceRange,
@@ -387,6 +388,7 @@ export class FhirMapper implements IDataMapper {
       presentedForm: fhirResource.presentedForm,
       encounter: fhirResource.encounter,
       _encounterInferred: fhirResource._encounterInferred,
+      _orderEncounterIds: fhirResource._orderEncounterIds,
       performer: fhirResource.performer,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id

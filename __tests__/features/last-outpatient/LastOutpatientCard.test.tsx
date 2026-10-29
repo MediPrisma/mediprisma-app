@@ -96,6 +96,9 @@ function chart() {
       // Same day, but import only inferred the link: not ordered at this visit.
       lab('glu-inferred', '1558-6', 'Glucose AC', 108, 'mg/dL', '2026-10-09', 'h-mine', { _encounterInferred: true }),
       lab('k-other', '2823-3', 'Potassium', 4.6, 'mmol/L', '2026-10-20', 'h-other'),
+      // A combined draw: one request served both clinics' orders, so the
+      // result carries no single encounter, only its orders' visits.
+      { ...lab('tsh-shared', '3016-3', 'TSH', 2.2, 'uIU/mL', '2026-10-20', 'h-other'), encounter: undefined, _orderEncounterIds: ['h-other', 'h-mine'] },
     ],
     diagnosticReports: [{
       resourceType: 'DiagnosticReport',
@@ -126,6 +129,8 @@ describe('LastOutpatientCard', () => {
     expect(within(card).getByText('腎臟內科')).toBeInTheDocument()
     expect(screen.queryByText('2026/10/25')).not.toBeInTheDocument()
     expect(screen.getByText('4.6 mmol/L')).toBeInTheDocument()
+    // The shared result is under this visit too.
+    expect(screen.getByText('2.2 uIU/mL')).toBeInTheDocument()
   })
 
   it('opens on the clinician’s own last visit and shows what it ordered, including a later echo', () => {
@@ -140,7 +145,9 @@ describe('LastOutpatientCard', () => {
     // Ordered elsewhere, or only date-matched: not part of this visit.
     expect(screen.queryByText('4.6 mmol/L')).not.toBeInTheDocument()
     expect(screen.queryByText('108 mg/dL')).not.toBeInTheDocument()
-    expect(screen.getByText(/開立 4 項/)).toBeInTheDocument()
+    expect(screen.getByText(/開立 5 項/)).toBeInTheDocument()
+    expect(screen.getByText(/1 項與其他門診合併採檢/)).toBeInTheDocument()
+    expect(screen.getByText('2.2 uIU/mL')).toBeInTheDocument()
     // Hb is flagged L by the source: abnormal by its flag, with the code shown.
     expect(screen.getByText('異常 2')).toBeInTheDocument()
     expect(screen.getByText('L')).toBeInTheDocument()

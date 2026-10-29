@@ -1996,6 +1996,7 @@ export const zhTW = {
     setName: '設定我的姓名',
     setNameHint: '設定姓名後，會直接開啟您上次的門診',
     summary: '開立 {count} 項',
+    sharedCount: '{count} 項與其他門診合併採檢',
     abnormalCount: '異常 {count}',
     filterLabel: '檢驗篩選',
     abnormal: '異常',

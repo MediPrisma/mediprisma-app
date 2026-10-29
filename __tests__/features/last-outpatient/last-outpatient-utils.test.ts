@@ -5,7 +5,8 @@ import {
   isHospitalSourcedEncounter,
   isSameClinician,
   normalizeClinicianName,
-  withSourceEncounterLink,
+  orderingVisitIds,
+  resultsOrderedAt,
 } from '@/features/clinical-summary/last-outpatient/utils/last-outpatient'
 
 const HOSPITAL_META = {
@@ -86,14 +87,37 @@ describe('clinician name matching', () => {
 })
 
 describe('result attribution', () => {
-  it('keeps source-linked results and drops date-inferred links', () => {
-    const linked = creatinine('linked', 1.1, '2026-10-09', { encounter: { reference: 'Encounter/hospital-1' } })
-    const inferred = creatinine('inferred', 1.2, '2026-10-09', {
-      encounter: { reference: 'Encounter/hospital-1' },
-      _encounterInferred: true,
-    })
-    const unlinked = creatinine('unlinked', 1.3, '2026-10-09')
-    expect(withSourceEncounterLink([linked, inferred, unlinked]).map((item) => item.id)).toEqual(['linked'])
+  const linked = creatinine('linked', 1.1, '2026-10-09', { encounter: { reference: 'Encounter/hospital-1' } })
+  const inferred = creatinine('inferred', 1.2, '2026-10-09', {
+    encounter: { reference: 'Encounter/hospital-1' },
+    _encounterInferred: true,
+  })
+  const unlinked = creatinine('unlinked', 1.3, '2026-10-09')
+  // A combined draw: one request served two same-day visits' orders.
+  const shared = creatinine('shared', 1.4, '2026-10-09', { _orderEncounterIds: ['hospital-1', 'hospital-2'] })
+
+  it('counts the source link and the orders, never a date-inferred link', () => {
+    expect(orderingVisitIds(linked)).toEqual(['hospital-1'])
+    expect(orderingVisitIds(inferred)).toEqual([])
+    expect(orderingVisitIds(unlinked)).toEqual([])
+    expect(orderingVisitIds(shared)).toEqual(['hospital-1', 'hospital-2'])
+  })
+
+  it('places a shared result under every visit that ordered it, and marks it shared', () => {
+    const first = resultsOrderedAt([linked, inferred, unlinked, shared], new Set(['hospital-1']), 'hospital-1')
+    expect(first.results.map((item) => item.id)).toEqual(['linked', 'shared'])
+    expect([...first.shared]).toEqual(['shared'])
+    expect(first.results.every((item) => item.encounter?.reference === 'Encounter/hospital-1')).toBe(true)
+
+    const second = resultsOrderedAt([linked, inferred, unlinked, shared], new Set(['hospital-2']), 'hospital-2')
+    expect(second.results.map((item) => item.id)).toEqual(['shared'])
+    expect(second.results[0].encounter?.reference).toBe('Encounter/hospital-2')
+  })
+
+  it('treats the source records a visit was projected from as the same visit', () => {
+    const projected = resultsOrderedAt([shared], new Set(['visit', 'hospital-1', 'hospital-2']), 'visit')
+    expect(projected.results.map((item) => item.id)).toEqual(['shared'])
+    expect(projected.shared.size).toBe(0)
   })
 })
 

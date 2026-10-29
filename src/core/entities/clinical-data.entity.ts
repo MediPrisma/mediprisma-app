@@ -419,6 +419,8 @@ export interface ClinicalRecordVariant {
 export interface ObservationEntity extends ClinicalSourceRecord {
   /** Local convenience association by date; not an explicit FHIR encounter link. */
   _encounterInferred?: boolean
+  /** Encounters of the outpatient orders this result is basedOn (local import). */
+  _orderEncounterIds?: string[]
   /** Unresolved variants of one source record, not independent measurements. */
   clinicalRecordVariant?: ClinicalRecordVariant
   /** Opaque identity in the shared source graph; survives query structural sharing. */
@@ -579,6 +581,8 @@ export interface ObservationEntity extends ClinicalSourceRecord {
 }
 
 export interface DiagnosticReportEntity extends ClinicalSourceRecord {
+  /** Encounters of the outpatient orders this report is basedOn (local import). */
+  _orderEncounterIds?: string[]
   /** Unresolved variants of one source record; chronology is not inferred. */
   clinicalRecordVariant?: ClinicalRecordVariant
   /** Opaque identity in the shared source graph; survives query structural sharing. */

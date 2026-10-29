@@ -1987,6 +1987,7 @@ export const en = {
     setName: 'Set my name',
     setNameHint: 'Set your name to open on your own last visit',
     summary: '{count} ordered',
+    sharedCount: '{count} drawn with another visit',
     abnormalCount: '{count} abnormal',
     filterLabel: 'Lab filter',
     abnormal: 'Abnormal',

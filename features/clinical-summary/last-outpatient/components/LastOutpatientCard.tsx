@@ -154,6 +154,7 @@ export function LastOutpatientCard() {
     details,
     priorValues,
     rangeComparisons,
+    sharedCount,
   } = useLastOutpatient(selectedVisitId)
 
   const categoryLabel = (id: string | null): string =>
@@ -240,6 +241,7 @@ export function LastOutpatientCard() {
                       </span>
                     </>
                   )}
+                  {sharedCount > 0 && <> · {fill(strings.sharedCount, { count: sharedCount })}</>}
                   {reportsPending && <> · {strings.reportsPending}</>}
                 </p>
                 {tests.length > 0 && (

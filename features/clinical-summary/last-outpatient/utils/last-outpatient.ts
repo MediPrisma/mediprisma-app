@@ -70,12 +70,41 @@ export function isSameClinician(a: string | null | undefined, b: string | null |
   return left.length > 0 && left === normalizeClinicianName(b)
 }
 
-/** Results this tab may attribute to an encounter: linked by the source, not
- *  by import's same-day inference. */
-export function withSourceEncounterLink<T>(resources: readonly T[] | undefined): T[] {
-  if (!Array.isArray(resources)) return []
-  return resources.filter((resource: any) =>
-    !!getReferenceId(resource?.encounter) && resource?._encounterInferred !== true)
+/** The visits a result was ordered at: the source's own encounter link, plus
+ *  the visit of every outpatient order it is basedOn. One request can serve
+ *  several same-day visits (a combined draw), so a result may belong to more
+ *  than one. Import's same-day inference never counts. */
+export function orderingVisitIds(resource: any): string[] {
+  const visits = new Set<string>()
+  const linked = resource?._encounterInferred === true ? null : getReferenceId(resource?.encounter)
+  if (linked) visits.add(linked)
+  if (Array.isArray(resource?._orderEncounterIds)) {
+    for (const id of resource._orderEncounterIds) if (typeof id === 'string' && id) visits.add(id)
+  }
+  return [...visits]
+}
+
+/**
+ * The results ordered at one visit (any of `visitIds`: the visit and the
+ * source records it was projected from), each returned with its encounter set
+ * to `visitId` so the visit grouping places it there. `shared` holds the ids of
+ * those also ordered at another visit.
+ */
+export function resultsOrderedAt<T>(
+  resources: readonly T[] | undefined,
+  visitIds: ReadonlySet<string>,
+  visitId: string,
+): { results: T[]; shared: Set<string> } {
+  const results: T[] = []
+  const shared = new Set<string>()
+  for (const resource of resources ?? []) {
+    const visits = orderingVisitIds(resource)
+    if (!visits.some((id) => visitIds.has(id))) continue
+    const id = (resource as any)?.id
+    if (typeof id === 'string' && visits.some((other) => !visitIds.has(other))) shared.add(id)
+    results.push({ ...resource, encounter: { reference: `Encounter/${visitId}` }, _encounterInferred: false } as T)
+  }
+  return { results, shared }
 }
 
 export type PriorLabValue = {
