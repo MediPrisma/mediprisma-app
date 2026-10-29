@@ -4,7 +4,7 @@ import { LocalBundleService, canonicalizeBundleResources } from '@/src/infrastru
 import { reconcileOutpatientEncounters } from '@/src/infrastructure/fhir/services/outpatient-encounter-reconciliation'
 import { extractEncounterIcds, buildIcdDictionary, localizedIcdDescription } from '@/src/shared/utils/icd-lookup'
 import { renderHook } from '@testing-library/react'
-import { useVisitHistory } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
+import { useVisitHistory, needsSourceComparison } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
 import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
 
 it('keeps two hospital visits separate when the cloud member of a three-source comparison is outside the view', () => {
@@ -68,6 +68,274 @@ it('marks ambiguous same-day visit sources without mixing their individual detai
   const { result } = renderHook(() => useVisitHistory(visits))
   expect(result.current).toHaveLength(3)
   expect(result.current.every(visit => visit.sourceIds?.length === 1 && visit.sourceIds[0] === visit.id)).toBe(true)
+})
+
+it('shows a unique hospital/cloud pair as one visit without asking the clinician to compare it', () => {
+  // Cloud and North VGH never share a visit identifier, so a real pair is a candidate.
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect(visits.every(visit => visit._sourceRecordComparison?.status === 'candidate')).toBe(true)
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(1)
+  expect(result.current[0].sourceIds).toEqual(['hospital-visit', 'cloud-visit'])
+  expect(needsSourceComparison(result.current[0])).toBe(false)
+})
+
+it('still asks for comparison when same-day candidates stay split', () => {
+  const { resources, hospital } = fixture()
+  resources.push({ ...hospital, id: 'hospital-second-visit' })
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current.every(needsSourceComparison)).toBe(true)
+})
+
+const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
+const hospitalOrder = (id: string, visit: string, name: string) => ({ resourceType: 'MedicationRequest', id, status: 'active',
+  meta: { source: 'https://web9.vghtpe.gov.tw/emr/qemr/', tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] },
+  subject: { reference: 'Patient/synthetic' }, encounter: { reference: `Encounter/${visit}` },
+  medicationCodeableConcept: { text: name, coding: [{ system: 'urn:oid:vgh.medication.name', code: name }] } })
+const cloudOrder = (id: string, visit: string, code: string, display: string) => ({ resourceType: 'MedicationRequest', id, status: 'active',
+  meta: { source: 'https://medcloud2.nhi.gov.tw/' }, subject: { reference: 'Patient/synthetic' }, encounter: { reference: `Encounter/${visit}` },
+  medicationCodeableConcept: { text: display, coding: [{ system: NHI, code, display }] } })
+const AROMASIN = ['Aromasin SC tab 25 mg', 'BC23097100', 'AROMASIN SUGAR COATED TABLETS 25MG'] as const
+const FEMARA = ['Femara FC tab 2.5 mg', 'BC22462100', 'FEMARA FILM-COATED TABLETS 2.5MG'] as const
+
+function twoClinicDay(secondHospitalDrug: typeof AROMASIN | typeof FEMARA) {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  const secondCloud = { ...cloud, id: 'cloud-second-visit' }
+  resources.push(secondHospital, secondCloud,
+    hospitalOrder('h-order-1', 'hospital-visit', AROMASIN[0]), cloudOrder('c-order-1', 'cloud-visit', AROMASIN[1], AROMASIN[2]),
+    hospitalOrder('h-order-2', 'hospital-second-visit', secondHospitalDrug[0]), cloudOrder('c-order-2', 'cloud-second-visit', FEMARA[1], FEMARA[2]))
+  return { resources, hospital, cloud, secondHospital, secondCloud }
+}
+
+it('pairs two same-day, same-code clinics by the prescriptions each one wrote', () => {
+  const { resources, hospital, cloud, secondHospital, secondCloud } = twoClinicDay(FEMARA)
+  reconcileOutpatientEncounters(resources)
+  expect((hospital as any)._sourceRecordComparison).toMatchObject({ status: 'candidate', references: ['Encounter/hospital-visit', 'Encounter/cloud-visit'], warnings: ['paired-by-prescriptions'] })
+  expect((secondHospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-second-visit', 'Encounter/cloud-second-visit'])
+  const visits = resources.filter(resource => resource.resourceType === 'Encounter')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(2)
+  expect(result.current.some(needsSourceComparison)).toBe(false)
+  expect(cloud).not.toBe(secondCloud)
+})
+
+it('keeps same-day clinics with indistinguishable prescriptions for comparison', () => {
+  const { resources, hospital, secondHospital } = twoClinicDay(AROMASIN)
+  // Both clinics wrote Aromasin and both cloud claims carry it: nothing separates them.
+  resources.push(cloudOrder('c-order-3', 'cloud-second-visit', AROMASIN[1], AROMASIN[2]))
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect((hospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+  expect((secondHospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current.every(needsSourceComparison)).toBe(true)
+})
+
+it('pairs the clinic whose prescriptions match the only cloud claim and leaves the other clinic alone', () => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  resources.push(secondHospital,
+    hospitalOrder('h-order-1', 'hospital-second-visit', AROMASIN[0]), cloudOrder('c-order-1', 'cloud-visit', AROMASIN[1], AROMASIN[2]))
+  reconcileOutpatientEncounters(resources)
+  expect((secondHospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-second-visit', 'Encounter/cloud-visit'])
+  expect((hospital as any)._sourceRecordComparison).toBeUndefined()
+})
+
+it('pairs clinics by recorded product names with hyphenated brands and volume-qualified strengths', () => {
+  const { resources, hospital, secondHospital } = twoClinicDay(FEMARA)
+  for (const resource of resources) if (resource.resourceType === 'MedicationRequest' && resource.id.startsWith('h-order')) {
+    resource.medicationCodeableConcept.coding[0].code = resource.id === 'h-order-1' ? 'Bao-gan * cap 150 mg' : 'Methasone inj 5 mg/1 ml @'
+  }
+  for (const resource of resources) if (resource.resourceType === 'MedicationRequest' && resource.id.startsWith('c-order')) {
+    resource.medicationCodeableConcept.coding[0].display = resource.id === 'c-order-1' ? 'BAO-GAN CAPSULES 150MG' : 'METHASONE INJECTION 5MG/ML'
+  }
+  reconcileOutpatientEncounters(resources)
+  expect((hospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-visit', 'Encounter/cloud-visit'])
+  expect((secondHospital as any)._sourceRecordComparison.references).toEqual(['Encounter/hospital-second-visit', 'Encounter/cloud-second-visit'])
+})
+
+it('does not pair clinics on the same brand at a different strength', () => {
+  const { resources, hospital } = twoClinicDay(FEMARA)
+  resources.find(resource => resource.id === 'h-order-1').medicationCodeableConcept.coding[0].code = 'Aromasin SC tab 10 mg'
+  reconcileOutpatientEncounters(resources)
+  // Clinic two still pairs on Femara; clinic one is the only one left for cloud one.
+  expect((hospital as any)._sourceRecordComparison.warnings).toContain('paired-by-prescriptions')
+  const { resources: tied, hospital: tiedHospital } = twoClinicDay(AROMASIN)
+  tied.find(resource => resource.id === 'h-order-1').medicationCodeableConcept.coding[0].code = 'Aromasin SC tab 10 mg'
+  tied.find(resource => resource.id === 'h-order-2').medicationCodeableConcept.coding[0].code = 'Aromasin SC tab 10 mg'
+  reconcileOutpatientEncounters(tied)
+  expect((tiedHospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+})
+
+it.each([
+  ['a different concentration denominator', 'Methasone inj 5 mg/2 ml', 'METHASONE INJECTION 5MG/ML'],
+  ['a different unit', 'Synthbrand tab 5 mcg', 'SYNTHBRAND TABLETS 5MG'],
+  ['a missing concentration', 'Methasone inj 5 mg', 'METHASONE INJECTION 5MG/ML'],
+])('does not pair a clinic on the same brand with %s', (_, hospitalName, cloudName) => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  resources.push(secondHospital,
+    hospitalOrder('h-order-1', 'hospital-visit', hospitalName), cloudOrder('c-order-1', 'cloud-visit', 'AC00000100', cloudName))
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect((hospital as any)._sourceRecordComparison.status).toBe('ambiguous')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(3)
+  expect(result.current.every(needsSourceComparison)).toBe(true)
+})
+
+function oneCloudTwoClinics(hospitalName: string, cloudName: string, ingredient?: string, doseForm?: string) {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const secondHospital = { ...hospital, id: 'hospital-second-visit' }
+  const order: any = cloudOrder('c-order-1', 'cloud-visit', 'AC00000100', cloudName)
+  resources.push(secondHospital, hospitalOrder('h-order-1', 'hospital-visit', hospitalName), order)
+  if (ingredient) {
+    order.supportingInformation = [{ reference: 'MedicationKnowledge/official' }]
+    resources.push({ resourceType: 'MedicationKnowledge', id: 'official', code: { coding: [{ system: NHI, code: 'AC00000100', display: cloudName }] },
+      ingredient: [{ itemCodeableConcept: { text: ingredient } }], ...(doseForm ? { doseForm: { text: doseForm } } : {}) })
+  }
+  reconcileOutpatientEncounters(resources)
+  return (hospital as any)._sourceRecordComparison
+}
+
+it('reads the strength from the official ingredient text when the NHI product name omits it', () => {
+  expect(oneCloudTwoClinics('Cordarone tab 200 mg', 'CORDARONE TABLETS', 'AMIODARONE HCL 200 MG'))
+    .toMatchObject({ status: 'candidate', warnings: ['paired-by-prescriptions'] })
+  expect(oneCloudTwoClinics('Cordarone tab 100 mg', 'CORDARONE TABLETS', 'AMIODARONE HCL 200 MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Cordarone tab 200 mg', 'CORDARONE TABLETS').status).toBe('ambiguous')
+})
+
+it('reads combination strengths in order and UG as mcg', () => {
+  expect(oneCloudTwoClinics('Glyxambi FC # tab 25/5 mg', 'Glyxambi Film-Coated Tablets 25/5 mg').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Glyxambi FC # tab 25/5 mg', 'Glyxambi Film-Coated Tablets 10/5 mg').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Methycobal * cap 500 mcg', 'METHYCOBAL CAPSULES 500UG "EISAI" (MECOBALAMIN)').status).toBe('candidate')
+})
+
+it('does not pair different products that only share a first word and strength', () => {
+  expect(oneCloudTwoClinics('Vitamin B1 tab 50 mg', 'VITAMIN B6 TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Vitamin B1 tab 50 mg', 'VITAMIN B1 TABLETS 50MG').status).toBe('candidate')
+})
+
+it('still asks for comparison on a pair whose sources declare different ICD coding systems', () => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  ;(cloud as any).reasonCode = [{ text: 'B02.9', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'B02.9' }] }]
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  expect((hospital as any)._sourceRecordComparison).toMatchObject({ status: 'ambiguous', warnings: ['diagnosis-coding-systems-differ'] })
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current).toHaveLength(1)
+  expect(result.current[0].sourceIds).toHaveLength(2)
+  expect(needsSourceComparison(result.current[0])).toBe(true)
+})
+
+it('does not pair a different release or dosage form of the same name and strength', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand SR tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg', 'SYNTHETICBRAND INJECTION 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand SR tab 50 mg', 'SYNTHETICBRAND PROLONGED-RELEASE TABLETS 50MG').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand for inj 1.34 mg/ml 3 ml', 'SYNTHETICBRAND SOLUTION FOR INJECTION 1.34MG/ML').status).toBe('candidate')
+})
+
+it('reads dotted release abbreviations and one official dosage form', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand S.R. tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand F.C. tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg', 'SYNTHETICBRAND 50MG', 'SYNTHETIC 50 MG', '咀嚼錠').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand chewable tab 50 mg', 'SYNTHETICBRAND 50MG', 'SYNTHETIC 50 MG', '咀嚼錠').status).toBe('candidate')
+})
+
+it('reads a release form written in brackets on either side', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand (SR) tab 50 mg', 'SYNTHETICBRAND TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg', 'SYNTHETICBRAND (EXTENDED RELEASE) TABLETS 50MG').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand SR tab 50 mg', 'SYNTHETICBRAND (EXTENDED RELEASE) TABLETS 50MG').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg (Synthetic)', 'SYNTHETICBRAND TABLETS 50MG "MAKER"').status).toBe('candidate')
+})
+
+it('lets no product shortcut skip an official chewable or modified-release form', () => {
+  // Official master metadata, so the reconciler's product-match helpers would accept the pair.
+  const official = (doseForm: string) => {
+    const { resources, hospital, cloud } = fixture()
+    delete (hospital as any).identifier; delete (cloud as any).identifier
+    const order: any = cloudOrder('c-order-1', 'cloud-visit', 'AC00000100', 'SYNTHETICBRAND TABLETS 50MG')
+    order.supportingInformation = [{ reference: 'MedicationKnowledge/official' }]
+    resources.push({ ...hospital, id: 'hospital-second-visit' }, hospitalOrder('h-order-1', 'hospital-visit', 'Syntheticbrand tab 50 mg'), order, {
+      resourceType: 'MedicationKnowledge', id: 'official', doseForm: { text: doseForm },
+      meta: { source: 'https://data.gov.tw/dataset/23715', tag: [{ system: 'https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot', code: '20260728' }] },
+      identifier: [{ system: 'https://nhi-fhir-bridge.github.io/IdentifierSystem/nhi-drug-official-url', value: 'https://lmspiq.fda.gov.tw/web/DRPIQ/DRPIQ1000Result?licId=00000000' }],
+      code: { coding: [{ system: NHI, code: 'AC00000100', display: 'SYNTHETICBRAND TABLETS 50MG' }] },
+    })
+    reconcileOutpatientEncounters(resources)
+    return (hospital as any)._sourceRecordComparison.status
+  }
+  expect(official('咀嚼錠')).toBe('ambiguous')
+  expect(official('持續性藥效錠')).toBe('ambiguous')
+  expect(official('錠劑')).toBe('candidate')
+})
+
+it('reads thousands separators as one number and rejects an unknown denominator', () => {
+  expect(oneCloudTwoClinics('Costim inj 1,000,000 IU', 'COSTIM POWDER FOR INJECTION 2,000,000 IU').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Costim inj 1,000,000 IU', 'COSTIM INJECTION 1000000 IU').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand inhalation 50 mcg/2 dose', 'SYNTHETICBRAND INHALATION 50MCG/DOSE').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand inhalation 50 mcg/puff', 'SYNTHETICBRAND INHALATION 50MCG/DOSE').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 50 mg/tab', 'SYNTHETICBRAND TABLETS 50MG/TAB').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand tab 5 mg/20 mg', 'SYNTHETICBRAND 5MG/20MG TABLET').status).toBe('candidate')
+})
+
+it('never lets the ingredient text revive a strength the name states unusably', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand patch 5 mg', 'SYNTHETICBRAND PATCH 5MG/HR', 'SYNTHETIC 5 MG', '貼片劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand patch 5 mg', 'SYNTHETICBRAND PATCH', 'SYNTHETIC 5 MG', '貼片劑').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Syntheticbrand patch 5 mg', 'SYNTHETICBRAND PATCH', 'SYNTHETIC 5 MG/HR', '貼片劑').status).toBe('ambiguous')
+})
+
+it('reads every strength of a three-ingredient combination', () => {
+  expect(oneCloudTwoClinics('Exforge HCT FC tab 5/160/12.5 mg', 'Exforge HCT Film Coated Tablets 10/160/12.5 mg').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Exforge HCT FC tab 5/160/12.5 mg', 'Exforge HCT Film Coated Tablets 5/160/12.5 mg').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Glyxambi FC # tab 25/5 mg', 'Glyxambi Film-Coated Tablets 25/5 mg').status).toBe('candidate')
+})
+
+it('keeps a product number in the name and rejects an amount in an unsupported unit', () => {
+  expect(oneCloudTwoClinics('Mixtard 10 HM inj 100 IU/ml', 'MIXTARD 50 HM PENFILL 100IU/ML', undefined).status).toBe('ambiguous')
+  // A number the reader cannot place ('30 HM') leaves no usable strength at all.
+  expect(oneCloudTwoClinics('Mixtard 30 HM inj 100 IU/ml', 'MIXTARD 30 HM INJECTION 100IU/ML').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Balance 1.5% glucose, 1.75 mmol/L calcium sol', 'BALANCE 1.5% GLUCOSE, 1.25 MMOL/L CALCIUM SOLUTION').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Concor FC * tab 1.25 mg', 'CONCOR 1.25', 'BISOPROLOL FUMARATE 1.25 MG', '膜衣錠').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Nebilet tab 5 mg', 'Nebilet 5 mg').status).toBe('candidate')
+})
+
+it('reads I.U. as IU and keeps the eye route on ointments', () => {
+  expect(oneCloudTwoClinics('Vitamin E cap 200 mg', 'VITAMIN E 200 I.U. SOFT CAPSULES', 'TOCOPHEROL 200 MG', '軟膠囊劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Vitamin E cap 200 IU', 'VITAMIN E 200 I.U. SOFT CAPSULES').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Erythromycin eye oint 10 mg/g', 'ERYTHROMYCIN OINTMENT "SHIONOGI"', 'ERYTHROMYCIN 10 MG/GM', '軟膏劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Erythromycin eye oint 10 mg/g', 'ERYTHROMYCIN EYE OINTMENT', 'ERYTHROMYCIN 10 MG/GM', '點眼膏劑').status).toBe('candidate')
+})
+
+it('uses no strength when the label holds an amount it cannot read', () => {
+  expect(oneCloudTwoClinics('Imukin inj 100 mcg', 'IMUKIN(INTERFERON GAMMA 1B)100UG(3MIU)/0.5ML').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND 5MG (BASE)/2ML INJECTION').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Ozempic for inj 1.34 mg/ml 3 ml,', 'OZEMPIC SOLUTION FOR INJECTION 1.34MG/ML').status).toBe('candidate')
+})
+
+it('never lets the ingredient text stand in for a concentration the product name states', () => {
+  expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg/1 ml', 'SYNTHETICBRAND INJECTION', 'SYNTHETIC 5 MG/ML', '注射劑').status).toBe('candidate')
+})
+
+it('labels a hospital visit with no cloud counterpart only when the chart also holds cloud visits', () => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const lone = { ...hospital, id: 'hospital-lone-visit', period: { start: '2026-09-01T09:00:00+08:00' } }
+  resources.push(lone)
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current.find(visit => visit.id === 'hospital-lone-visit')?.hospitalOnly).toBe(true)
+  expect(result.current.find(visit => visit.sourceIds?.length === 2)?.hospitalOnly).toBeUndefined()
+  const { result: hospitalChart } = renderHook(() => useVisitHistory([lone]))
+  expect(hospitalChart.current[0].hospitalOnly).toBeUndefined()
 })
 
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
