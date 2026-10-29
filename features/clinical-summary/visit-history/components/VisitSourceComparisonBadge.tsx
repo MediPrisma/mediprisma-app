@@ -24,7 +24,11 @@ export function VisitSourceComparisonBadge({ visit }: { visit: VisitRecord }) {
         {record.diagnoses.map((text, index) => <div key={index} className="break-words">{text}</div>)}
       </div>)}
     </div>}>
-    <span tabIndex={0} className="inline-flex shrink-0 cursor-help rounded-sm bg-muted px-1 text-xs font-medium">
+    {/* Only a comparison the clinician must make is a badge; a merged visit's
+        provenance is quiet metadata text. */}
+    <span tabIndex={0} className={compare
+      ? 'inline-flex shrink-0 cursor-help rounded-sm bg-muted px-1 text-xs font-medium'
+      : 'inline-flex shrink-0 cursor-help text-xs text-muted-foreground'}>
       {compare ? (en ? 'Compare sources' : '跨來源待核對') : (en ? 'Hospital + cloud' : '院內＋雲端')}
     </span>
   </TapTooltip>
