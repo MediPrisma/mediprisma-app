@@ -182,7 +182,7 @@ describe('LiveFeature profile wiring', () => {
     expect(input.documentReferences).toEqual([dischargeSummary])
   })
 
-  it('passes hospital ingredient evidence and unconfirmed use through the real feature to the pack', () => {
+  it('passes hospital ingredient evidence through the real feature and ends an order after its dated interval', () => {
     mockUseClinicalData.mockReturnValue({ ...clinicalData(), medications: [{
       id: 'fictional-hospital-order', status: 'active', authoredOn: '2024-06-14',
       medicationCodeableConcept: { coding: [{ system: 'urn:oid:vgh.medication.product', display: 'Meitifen SR FC * tab 75 mg' }] },
@@ -191,10 +191,10 @@ describe('LiveFeature profile wiring', () => {
     render(<LiveClinicalDecisionSupportFeature />)
     const input = createProfileSpy.mock.calls.at(-1)?.[0]
     expect(input.medications[0].drugTerminology).toEqual({ ingredientText: 'Diclofenac sodium' })
-    expect(lastProfile().medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state)
-      .toBe('confirmed-current') // The pack evaluates possible exposure for safety.
-    expect((lastProfile() as HospitalAwareCdssProfile).hospitalMedicationEvidence?.[0].useState).toBe('confirmed-current')
-    expect(lastProfile().facts.hfHarmfulNsaid.zh).not.toContain('院內使用待確認')
+    // A 2024-06-14 → 2024-07-14 order is over; a two-year-old NSAID is not current use.
+    expect(lastProfile().medicationClassContexts?.['nsaid-or-cox2-inhibitor']?.state).toBe('not-found')
+    expect((lastProfile() as HospitalAwareCdssProfile).hospitalMedicationEvidence?.[0].useState).toBe('not-current')
+    expect(lastProfile().facts.hfHarmfulNsaid).toBeUndefined()
     expect(lastProfile().facts['hospitalMedication:MedicationRequest:fictional-hospital-order'].sources?.[0].status).toBe('active')
   })
 

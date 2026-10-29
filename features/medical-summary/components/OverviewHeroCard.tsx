@@ -9,6 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { trackEvent } from "@/src/application/telemetry/usage-analytics"
 import type { MedicalSummaryResult } from "@/src/core/entities/medical-summary.entity"
+import { useOptionalLanguage } from "@/src/application/providers/language.provider"
+import { localizeDemoDisplayText } from "@/src/shared/utils/demo-display"
 
 interface OverviewHeroCardProps {
   result: MedicalSummaryResult
@@ -39,9 +41,12 @@ export function OverviewHeroCard({
   reviewUnavailable = false,
 }: OverviewHeroCardProps) {
   const { copied, copy } = useCopyToClipboard()
+  const locale = useOptionalLanguage()?.locale ?? "zh-TW"
+  // An English run quotes the record's Chinese demo facility names.
+  const headline = localizeDemoDisplayText(result.headline, locale)
 
   const handleCopy = async () => {
-    if (!await copy(result.headline.trim())) {
+    if (!await copy(headline.trim())) {
       toast.error(copyFailedLabel)
       return
     }
@@ -111,7 +116,7 @@ export function OverviewHeroCard({
           </span>
         </div>
         <p className="mt-1.5 text-[length:max(15px,1rem)] font-semibold leading-snug text-foreground">
-          {result.headline}
+          {headline}
         </p>
         {reviewLabel && reviewUnavailable ? (
           <p

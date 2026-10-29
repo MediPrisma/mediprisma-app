@@ -141,7 +141,7 @@
         "subject": {
           "reference": "Patient/fictional-hospital-cdss"
         },
-        "authoredOn": "2024-06-14",
+        "authoredOn": "2026-09-15",
         "medicationCodeableConcept": {
           "text": "Meitifen SR FC * tab 75 mg",
           "coding": [
@@ -154,8 +154,8 @@
         },
         "dispenseRequest": {
           "validityPeriod": {
-            "start": "2024-06-14",
-            "end": "2024-07-14"
+            "start": "2026-09-15",
+            "end": "2026-10-14"
           }
         },
         "dosageInstruction": [
@@ -189,7 +189,7 @@
         "subject": {
           "reference": "Patient/fictional-hospital-cdss"
         },
-        "authoredOn": "2024-06-14",
+        "authoredOn": "2026-09-15",
         "medicationCodeableConcept": {
           "text": "Furosemide tab 40 mg VPP",
           "coding": [
@@ -202,8 +202,8 @@
         },
         "dispenseRequest": {
           "validityPeriod": {
-            "start": "2024-06-14",
-            "end": "2024-07-14"
+            "start": "2026-09-15",
+            "end": "2026-10-14"
           }
         },
         "dosageInstruction": [
@@ -237,7 +237,7 @@
         "subject": {
           "reference": "Patient/fictional-hospital-cdss"
         },
-        "authoredOn": "2024-06-14",
+        "authoredOn": "2026-09-15",
         "medicationCodeableConcept": {
           "text": "Unlisted tablet",
           "coding": [
@@ -250,8 +250,8 @@
         },
         "dispenseRequest": {
           "validityPeriod": {
-            "start": "2024-06-14",
-            "end": "2024-07-14"
+            "start": "2026-09-15",
+            "end": "2026-10-14"
           }
         },
         "dosageInstruction": [
@@ -285,7 +285,7 @@
         "subject": {
           "reference": "Patient/fictional-hospital-cdss"
         },
-        "authoredOn": "2024-06-14",
+        "authoredOn": "2026-09-15",
         "medicationCodeableConcept": {
           "text": "Meitifen SR FC * tab 75 mg",
           "coding": [
@@ -298,8 +298,8 @@
         },
         "dispenseRequest": {
           "validityPeriod": {
-            "start": "2024-06-14",
-            "end": "2024-07-14"
+            "start": "2026-09-15",
+            "end": "2026-10-14"
           }
         },
         "dosageInstruction": [
