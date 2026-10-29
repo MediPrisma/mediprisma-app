@@ -138,6 +138,16 @@ describe('previous lab values', () => {
     expect(prior.has('old')).toBe(false)
   })
 
+  it('takes the earlier day’s latest draw, whatever the input order', () => {
+    const results = [
+      creatinine('afternoon', 1.4, '2026-10-08T16:00:00+08:00'),
+      creatinine('morning', 1.1, '2026-10-08T08:00:00+08:00'),
+      creatinine('now', 1.3, '2026-10-09T09:40:00+08:00'),
+    ]
+    expect(buildPriorLabValues(results, []).get('now')).toEqual({ value: '1.4', date: '2026-10-08' })
+    expect(buildPriorLabValues([...results].reverse(), []).get('now')).toEqual({ value: '1.4', date: '2026-10-08' })
+  })
+
   it('keeps the earlier unit when it differs, rather than set two scales side by side', () => {
     const hb = (id: string, value: number, unit: string, date: string) => ({
       ...creatinine(id, value, date),

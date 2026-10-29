@@ -158,9 +158,13 @@ function analyteKey(observation: any): string | null {
   return getAnalyteCanonicalKey(observation) ?? (getAnalyteLabel(observation) || null)
 }
 
-function observationDay(observation: any): string {
+function observationWhen(observation: any): string {
   const when = observation?.effectiveDateTime ?? observation?.effectivePeriod?.start ?? observation?.issued
-  return typeof when === 'string' ? when.slice(0, 10) : ''
+  return typeof when === 'string' ? when : ''
+}
+
+function observationDay(observation: any): string {
+  return observationWhen(observation).slice(0, 10)
 }
 
 function compactValue(observation: any): string {
@@ -204,20 +208,21 @@ export function buildPriorLabValues(
   reports: readonly any[] | undefined,
 ): Map<string, PriorLabValue> {
   const all = allObservations(observations ?? [], reports ?? [])
-  const byAnalyte = new Map<string, Array<{ day: string; observation: any }>>()
+  const byAnalyte = new Map<string, Array<{ day: string; time: number; observation: any }>>()
   for (const observation of all) {
     if (observation?.status === 'entered-in-error' || observation?.status === 'cancelled') continue
     const key = analyteKey(observation)
     const day = observationDay(observation)
     if (!key || !day || !compactValue(observation)) continue
     const series = byAnalyte.get(key) ?? []
-    series.push({ day, observation })
+    series.push({ day, time: Date.parse(observationWhen(observation)) || 0, observation })
     byAnalyte.set(key, series)
   }
 
   const prior = new Map<string, PriorLabValue>()
   for (const series of byAnalyte.values()) {
-    series.sort((a, b) => a.day.localeCompare(b.day))
+    // Within a day by draw time: the previous value is that day's latest draw.
+    series.sort((a, b) => a.day.localeCompare(b.day) || a.time - b.time)
     let earlier: { day: string; observation: any } | null = null
     let index = 0
     while (index < series.length) {
