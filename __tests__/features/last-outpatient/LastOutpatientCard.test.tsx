@@ -271,6 +271,8 @@ describe('LastOutpatientCard', () => {
     mockClinicalData = { ...chart(), observations: [], diagnosticReports: [] }
     render(<LastOutpatientCard />)
     expect(screen.getByRole('status')).toHaveTextContent(zhTW.lastOutpatient.reportsPending)
+    // Nor does the visit list call any visit empty yet.
+    expect(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
     useProgressiveImportStore.setState({ current: null })
   })
 })

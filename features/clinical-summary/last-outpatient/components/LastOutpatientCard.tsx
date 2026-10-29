@@ -51,7 +51,8 @@ function shortDay(day: string): string {
 }
 
 /** Every hospital outpatient visit, newest first, any physician: pick one to
- *  read what it ordered. A visit with nothing linked yet is muted. */
+ *  read what it ordered. A visit with nothing linked yet is muted, once the
+ *  reports have been imported. */
 function VisitList({
   visits,
   selectedId,
@@ -60,6 +61,7 @@ function VisitList({
   label,
   youTemplate,
   noResults,
+  reportsPending,
   onSelect,
 }: {
   visits: HospitalOutpatientVisit[]
@@ -69,6 +71,8 @@ function VisitList({
   label: string
   youTemplate: string
   noResults: string
+  /** Reports still importing: no visit can be called empty yet. */
+  reportsPending: boolean
   onSelect: (id: string) => void
 }) {
   const selectedRef = useRef<HTMLButtonElement>(null)
@@ -79,7 +83,7 @@ function VisitList({
     <div role="group" aria-label={label} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
       {visits.map((candidate) => {
         const selected = candidate.id === selectedId
-        const empty = !withResults.has(candidate.id)
+        const empty = !reportsPending && !withResults.has(candidate.id)
         const physician = candidate.physician && isSameClinician(candidate.physician, clinicianName)
           ? youTemplate.replace('{name}', candidate.physician)
           : candidate.physician
@@ -310,6 +314,7 @@ export function LastOutpatientCard() {
               label={strings.visitPicker}
               youTemplate={strings.physicianYou}
               noResults={strings.noResults}
+              reportsPending={reportsPending}
               onSelect={setSelectedVisitId}
             />
           )}
