@@ -1,6 +1,8 @@
 export const SMART_CONFIG = {
   trustedIssuerOrigins: [
     'https://launch.smarthealthit.org',
+    // MediPrisma School: de-identified, approved training patients, read-only (MediPrisma/opd-agent-school docs/SCHOOL.md).
+    'https://school.mediprisma.tw',
     'http://localhost',
     'http://127.0.0.1',
   ],
