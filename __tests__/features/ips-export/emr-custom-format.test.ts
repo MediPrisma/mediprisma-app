@@ -11,7 +11,9 @@ import {
   type EmrFormatInputs,
 } from '@/features/ips-export/utils/emr-custom-format'
 import { resolveLatestExams } from '@/features/ips-export/utils/emr-exam-kinds'
+import { describeEmrNote } from '@/features/ips-export/components/emr-format-notes'
 import type { EmrCustomFormat, EmrFormatToken } from '@/src/application/stores/outpatient-prefs.store'
+import { en } from '@/src/shared/i18n/locales/en'
 import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
 import { findPinnableLab, resolvePinnedLab } from '@/src/shared/utils/pinned-labs'
 
@@ -155,6 +157,44 @@ describe('formatEmrDate', () => {
     expect(formatEmrDate('2025-11-02', 'md', NOW)).toBe('2025/11/02')
     expect(formatEmrDate('2026-09-18', 'ymd', NOW)).toBe('2026/09/18')
     expect(formatEmrDate('2026-09-18', 'roc', NOW)).toBe('115/09/18')
+  })
+
+  it('writes month and two-digit year the way a lipid history is hand-written', () => {
+    const months = Array.from({ length: 12 }, (_, i) => formatEmrDate(`2021-${String(i + 1).padStart(2, '0')}-15`, 'monYy', NOW))
+    expect(months).toEqual(["Jan'21", "Feb'21", "Mar'21", "Apr'21", "May'21", "June'21", "July'21", "Aug'21", "Sep'21", "Oct'21", "Nov'21", "Dec'21"])
+    // The year is always there, this year included.
+    expect(formatEmrDate('2026-07-03', 'monYy', NOW)).toBe("July'26")
+    expect(formatEmrDate('2013-06-20', 'monYy', NOW)).toBe("June'13")
+  })
+})
+
+describe('renderEmrCustomFormat — month-only dates', () => {
+  const HISTORY = [
+    obs('CHOL', '2013-06-20', 212, { unit: 'mg/dL' }),
+    obs('TG', '2013-06-20', 80, { unit: 'mg/dL' }),
+    obs('HDL', '2013-06-20', 56, { unit: 'mg/dL' }),
+    obs('TG', '2021-02-03', 107, { unit: 'mg/dL' }),
+    obs('LDL', '2021-02-03', 95, { unit: 'mg/dL' }),
+  ]
+  const tokens = [
+    t('TC/TG/HDL/LDL='), nl,
+    lab('lipid:CHOL', 'value'), t('/'), lab('lipid:TG', 'value'), t('/'), lab('lipid:HDL', 'value'), t('/'), lab('lipid:LDL', 'value'),
+    t(' ('), lab('lipid:TG', 'date'), t(')'),
+  ]
+
+  it('prints the line the clinician writes, missing values included', () => {
+    const result = renderEmrCustomFormat(format(tokens, { dateStyle: 'monYy', missingText: '-' }), inputs(HISTORY))
+    expect(result.text).toBe("TC/TG/HDL/LDL=\n-/107/-/95 (Feb'21)")
+  })
+
+  it('keeps the day in the notes, where a month would hide which draw is meant', () => {
+    const fmt = format(tokens, { dateStyle: 'monYy', missingText: '-' })
+    const result = renderEmrCustomFormat(fmt, inputs(HISTORY))
+    const missingHdl = result.notes.find((n) => n.type === 'labMissing' && n.lab === 'lipid:HDL')!
+    const text = describeEmrNote(missingHdl, en.ipsExport.emrHandoff.custom, (id) => findPinnableLab(id)?.short ?? id, fmt.dateStyle, fmt.missingText, NOW)
+    expect(text).toContain('2021/02/03')
+    expect(text).toContain('2013/06/20')
+    expect(text).not.toContain("Feb'21")
   })
 })
 
