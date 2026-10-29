@@ -27,7 +27,7 @@ const encounter = (id: string, meta: any, overrides: Record<string, unknown> = {
   ...overrides,
 })
 
-const creatinine = (id: string, value: number, date: string, extra: Record<string, unknown> = {}) => ({
+const creatinine = (id: string, value: number, date: string, extra: Record<string, unknown> = {}): any => ({
   resourceType: 'Observation',
   id,
   status: 'final',
