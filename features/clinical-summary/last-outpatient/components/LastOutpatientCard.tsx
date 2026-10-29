@@ -6,6 +6,7 @@ import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
+import { ObservationLongitudinalAction } from "@/features/clinical-summary/reports/components/ObservationLongitudinalAction"
 import type { EncounterObservation } from "@/features/clinical-summary/visit-history/components/EncounterObservationCard"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
@@ -130,8 +131,10 @@ function LabTable({
   comparisons,
   comparisonStrings,
   columns,
+  sourceObservations,
 }: {
   groups: Array<{ categoryId: string | null; tests: EncounterObservation[] }>
+  sourceObservations: Map<string, any>
   categoryLabel: (id: string | null) => string
   priorValues: Map<string, PriorLabValue>
   comparisons: Map<string, 'high' | 'low'>
@@ -157,7 +160,16 @@ function LabTable({
             return (
               <div key={test.id} className="border-b border-border/50 last:border-b-0">
                 <div role="row" className={cn(LAB_GRID, 'px-3 py-1.5')}>
-                  <span role="cell" className={cn(cell, 'font-medium')}>{test.title}</span>
+                  <span role="cell" className={cn(cell, 'flex items-center gap-1 font-medium')}>
+                    <span className="min-w-0 break-words">{test.title}</span>
+                    {/* The reports tab's own trend / history pane for this result. */}
+                    <ObservationLongitudinalAction
+                      observation={sourceObservations.get(test.id)}
+                      title={test.title}
+                      sourceId={`last-outpatient:observation-longitudinal:${test.id}`}
+                      className="shrink-0"
+                    />
+                  </span>
                   <span role="cell" className={cell}>
                     <ValueCell result={test} comparison={comparisons.get(test.id)} comparisonStrings={comparisonStrings} range={rangeText(test.referenceText)} />
                   </span>
@@ -207,6 +219,7 @@ export function LastOutpatientCard() {
     priorValues,
     rangeComparisons,
     sharedCount,
+    sourceObservations,
   } = useLastOutpatient(selectedVisitId)
 
   const categoryLabel = (id: string | null): string =>
@@ -332,6 +345,7 @@ export function LastOutpatientCard() {
                       comparisons={rangeComparisons}
                       comparisonStrings={t.reports.referenceComparison}
                       columns={{ item: strings.labItem, current: strings.labCurrent, range: strings.labRange, previous: strings.previousLabel }}
+                      sourceObservations={sourceObservations}
                     />
                   )}
                 </section>

@@ -3,6 +3,7 @@ import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
 import { LastOutpatientCard } from '@/features/clinical-summary/last-outpatient'
 
 const mockRevealTab = jest.fn()
+const mockShowDetail = jest.fn()
 let mockClinicianName: string | null = null
 let mockClinicalData: Record<string, unknown> = {}
 
@@ -16,6 +17,10 @@ jest.mock('@/src/application/providers/audience.provider', () => ({
 
 jest.mock('@/src/application/providers/right-panel.provider', () => ({
   useRightPanel: () => ({ revealTab: mockRevealTab }),
+}))
+
+jest.mock('@/src/application/providers/right-detail.provider', () => ({
+  useOptionalRightDetail: () => ({ detail: null, showDetail: mockShowDetail }),
 }))
 
 jest.mock('@/src/application/hooks/use-outpatient-prefs.hook', () => ({
@@ -123,6 +128,7 @@ describe('LastOutpatientCard', () => {
     mockClinicianName = null
     mockClinicalData = chart()
     mockRevealTab.mockClear()
+    mockShowDetail.mockClear()
   })
 
   it('opens on the latest hospital outpatient visit, never a newer cloud visit', () => {
@@ -181,6 +187,16 @@ describe('LastOutpatientCard', () => {
     render(<LastOutpatientCard />)
     fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.changeName }))
     expect(mockRevealTab).toHaveBeenCalledWith('settings', { settingsTab: 'display' })
+  })
+
+  it('opens the shared trend pane for a lab result', () => {
+    mockClinicianName = '陳怡君'
+    render(<LastOutpatientCard />)
+    const row = rowWith('1.26')!
+    fireEvent.click(within(row).getByRole('button', { name: '查看趨勢' }))
+    expect(mockShowDetail).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 'last-outpatient:observation-longitudinal:cr-now',
+    }))
   })
 
   it('sends a clinician without a saved name to the setting', () => {

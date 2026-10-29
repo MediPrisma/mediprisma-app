@@ -111,6 +111,15 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     locale, audience, EMPTY, icdDict, encounters,
   )
   const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
+  // The source Observation behind each row, for the shared trend / history pane.
+  const sourceObservations = useMemo(() => {
+    const byId = new Map<string, any>()
+    for (const observation of observations as any[]) if (observation?.id) byId.set(observation.id, observation)
+    for (const report of diagnosticReports as any[]) {
+      for (const member of report?._observations ?? []) if (member?.id && !byId.has(member.id)) byId.set(member.id, member)
+    }
+    return byId
+  }, [observations, diagnosticReports])
   const rangeComparisons = useMemo(() => buildRangeComparisons(ordered.observations, ordered.reports), [ordered])
   const visitDetails = visit ? details.get(visit.id) as EncounterDetails | undefined : undefined
   const sharedCount = visitDetails
@@ -129,5 +138,6 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     sharedCount,
     priorValues: priorValues as Map<string, PriorLabValue>,
     rangeComparisons,
+    sourceObservations,
   }
 }
