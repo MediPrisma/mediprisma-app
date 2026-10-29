@@ -1,16 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
 import { ObservationLongitudinalAction } from "@/features/clinical-summary/reports/components/ObservationLongitudinalAction"
 import type { EncounterObservation } from "@/features/clinical-summary/visit-history/components/EncounterObservationCard"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { ClinicianNamePicker } from "./ClinicianNamePicker"
 import { useLastOutpatient, type HospitalOutpatientVisit } from "../hooks/useLastOutpatient"
 import { isSameClinician, type PriorLabValue } from "../utils/last-outpatient"
 
@@ -47,12 +46,71 @@ function visitDay(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, '/')
 }
 
-function visitLabel(visit: HospitalOutpatientVisit): string {
-  return [visitDay(visit.date), visit.department, visit.physician].filter(Boolean).join(' · ')
-}
-
 function shortDay(day: string): string {
   return day.slice(5).replace('-', '/')
+}
+
+/** Every hospital outpatient visit, newest first, any physician: pick one to
+ *  read what it ordered. A visit with nothing linked yet is muted, once the
+ *  reports have been imported. */
+function VisitList({
+  visits,
+  selectedId,
+  withResults,
+  clinicianName,
+  label,
+  youTemplate,
+  noResults,
+  reportsPending,
+  onSelect,
+}: {
+  visits: HospitalOutpatientVisit[]
+  selectedId: string
+  withResults: Set<string>
+  clinicianName: string | null
+  label: string
+  youTemplate: string
+  noResults: string
+  /** Reports still importing: no visit can be called empty yet. */
+  reportsPending: boolean
+  onSelect: (id: string) => void
+}) {
+  const selectedRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [selectedId])
+  return (
+    <div role="group" aria-label={label} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {visits.map((candidate) => {
+        const selected = candidate.id === selectedId
+        const empty = !reportsPending && !withResults.has(candidate.id)
+        const physician = candidate.physician && isSameClinician(candidate.physician, clinicianName)
+          ? youTemplate.replace('{name}', candidate.physician)
+          : candidate.physician
+        return (
+          <button
+            key={candidate.id}
+            ref={selected ? selectedRef : undefined}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onSelect(candidate.id)}
+            className={cn(
+              'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2.5 py-1.5 text-left transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              selected ? 'border-primary bg-accent text-accent-foreground' : 'border-border hover:bg-muted/60',
+            )}
+          >
+            <span className={cn('text-sm font-semibold tabular-nums', empty && !selected && 'text-muted-foreground')}>
+              {visitDay(candidate.date)}
+            </span>
+            <span className="max-w-[12rem] truncate text-xs text-muted-foreground">
+              {[candidate.department, physician, empty ? noResults : null].filter(Boolean).join(' · ')}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function FlagLabel({ label }: { label?: string }) {
@@ -208,7 +266,6 @@ function LabTable({
 export function LastOutpatientCard() {
   const { t } = useLanguage()
   const strings = t.lastOutpatient
-  const { revealTab } = useRightPanel()
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null)
   const [onlyAbnormal, setOnlyAbnormal] = useState(false)
   const {
@@ -217,6 +274,7 @@ export function LastOutpatientCard() {
     clinicianName,
     clinicianMatched,
     visits,
+    withResults,
     visit,
     details,
     priorValues,
@@ -236,22 +294,6 @@ export function LastOutpatientCard() {
     .filter((group) => group.tests.length > 0)
   const isYours = !!visit && isSameClinician(visit.physician, clinicianName)
 
-  const picker = visits.length > 1 && visit ? (
-    <Select value={visit.id} onValueChange={setSelectedVisitId}>
-      <SelectTrigger size="sm" aria-label={strings.visitPicker} className="h-8 text-xs tabular-nums">
-        {/* The visit's department and physician are in the line below; the
-            closed picker only needs the date, so the card title keeps its row. */}
-        <SelectValue>{visitDay(visit.date)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent align="end">
-        {visits.map((candidate) => (
-          <SelectItem key={candidate.id} value={candidate.id} className="text-xs">
-            {visitLabel(candidate)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  ) : undefined
 
   return (
     <FeatureCard
@@ -260,10 +302,22 @@ export function LastOutpatientCard() {
       isLoading={isLoading}
       isEmpty={!visit}
       emptyMessage={strings.empty}
-      headerAction={picker}
     >
       {visit && (
         <div className="space-y-4" data-testid="last-outpatient">
+          {visits.length > 1 && (
+            <VisitList
+              visits={visits}
+              selectedId={visit.id}
+              withResults={withResults}
+              clinicianName={clinicianName}
+              label={strings.visitPicker}
+              youTemplate={strings.physicianYou}
+              noResults={strings.noResults}
+              reportsPending={reportsPending}
+              onSelect={setSelectedVisitId}
+            />
+          )}
           <div className="space-y-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="text-[max(15px,1rem)] font-semibold tabular-nums">{visitDay(visit.date)}</span>
@@ -278,17 +332,9 @@ export function LastOutpatientCard() {
             {clinicianName && !clinicianMatched && (
               <p className="text-sm text-muted-foreground">{fill(strings.noMatch, { name: clinicianName })}</p>
             )}
-            {/* Always reachable here: set the name, or change it after picking. */}
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="h-auto px-0 py-1 text-sm"
-              title={clinicianName ? undefined : strings.setNameHint}
-              onClick={() => revealTab('settings', { settingsTab: 'display' })}
-            >
-              {clinicianName ? strings.changeName : strings.setName}
-            </Button>
+            {/* Pick the name right here; the same menu is in 設定. A new name
+                opens that clinician's own last visit. */}
+            <ClinicianNamePicker idPrefix="last-outpatient-name" inline onChange={() => setSelectedVisitId(null)} />
           </div>
 
           {tests.length === 0 && reports.length === 0 ? (
