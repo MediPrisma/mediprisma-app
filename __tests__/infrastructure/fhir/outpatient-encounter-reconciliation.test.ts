@@ -305,6 +305,13 @@ it('keeps a product number in the name and rejects an amount in an unsupported u
   expect(oneCloudTwoClinics('Nebilet tab 5 mg', 'Nebilet 5 mg').status).toBe('candidate')
 })
 
+it('reads I.U. as IU and keeps the eye route on ointments', () => {
+  expect(oneCloudTwoClinics('Vitamin E cap 200 mg', 'VITAMIN E 200 I.U. SOFT CAPSULES', 'TOCOPHEROL 200 MG', '軟膠囊劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Vitamin E cap 200 IU', 'VITAMIN E 200 I.U. SOFT CAPSULES').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Erythromycin eye oint 10 mg/g', 'ERYTHROMYCIN OINTMENT "SHIONOGI"', 'ERYTHROMYCIN 10 MG/GM', '軟膏劑').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Erythromycin eye oint 10 mg/g', 'ERYTHROMYCIN EYE OINTMENT', 'ERYTHROMYCIN 10 MG/GM', '點眼膏劑').status).toBe('candidate')
+})
+
 it('never lets the ingredient text stand in for a concentration the product name states', () => {
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')

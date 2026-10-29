@@ -75,13 +75,14 @@ const NUMBER = '(?<![\\d.,])(\\d*\\.?\\d+)'
 function strengths(text: unknown): string[] | undefined {
   const normalized = String(text ?? '').normalize('NFKC').toLowerCase()
     .replace(/(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d,])/g, (number) => number.replace(/,/g, ''))
+    .replace(/(?<![a-z])(?:i\.\s?u\.?|u\.\s?i\.?)(?![a-z])/g, 'iu')
     .replace(/(?:[μµ]|u)g(?![a-z])/g, 'mcg').replace(/(?<![a-z])gm(?![a-z])/g, 'g')
     // Every number before a shared unit, in order: '5/160/12.5 mg' is three.
     .replace(new RegExp(`(?<![\\d.,/])\\d*\\.?\\d+(?:\\s*\\/\\s*\\d*\\.?\\d+)+\\s*(mcg|mg|g|iu)(?![a-z])`, 'g'),
       (run, unit: string) => run.slice(0, run.length - unit.length).split('/').map((amount) => `${amount.trim()} ${unit}`).join(' + '))
   // An amount in a unit this reader cannot compare (1.75 mmol/L, 40 mEq,
   // 100 u/ml) would be dropped silently and leave a partial strength.
-  if (/(?<![\d.,a-z])\d*\.?\d+\s*(?:mmol|meq|mosm|mol|ng|units?|u|kiu|mu|cfu|ppm)(?![a-z])/.test(normalized)) return undefined
+  if (/(?<![\d.,a-z])\d*\.?\d+\s*(?:mmol|meq|mosm|mol|ng|units?|u|kiu|mu|cfu|ppm|mcl|[μµ]l|ul|l|kg|lf|pfu|ccid50)(?![a-z])/.test(normalized)) return undefined
   const found = [...normalized.matchAll(new RegExp(
     `${NUMBER}\\s*(mcg|mg|g|iu|%)(?![a-z])(?:\\s*\\/\\s*(\\d*\\.?\\d+)?\\s*(?!(?:mcg|mg|iu)(?![a-z]))([a-z]+))?`, 'g'))]
   if (found.some(([, , , , perUnit]) => perUnit && !PER_UNITS[perUnit])) return undefined
@@ -91,7 +92,7 @@ function strengths(text: unknown): string[] | undefined {
 
 // Coating, packaging and route words that name no different preparation.
 const QUALIFIERS = new Set(['sc', 'fc', 'tm', 'film', 'coated', 'sugar', 'release', 'hard', 'soft', 'for', 'oral',
-  'sterile', 'eye', 'oph', 'ophthalmic'])
+  'sterile', 'eye', 'oph', 'ophthalmic', 'ear', 'otic'])
 // Release forms are part of the preparation: SR and plain tablets differ.
 const RELEASE: Record<string, string> = Object.fromEntries([
   ...['sr', 'pr', 'er', 'xr', 'xl', 'cr', 'la', 'mr', 'prolonged', 'extended', 'modified', 'controlled', 'sustained', 'retard']
@@ -109,10 +110,10 @@ const formOf = (token: string) => FORMS.find(([pattern]) => pattern.test(token))
 // The official dose-form text the NHI master gives in Chinese.
 // The master writes eye suspensions and solutions alike as 點眼液劑.
 const OFFICIAL_FORMS: Array<[RegExp, string]> = [
-  [/注射/, 'injection'], [/(?:點眼|眼用|眼耳|點耳).*膏/, 'ointment'], [/(?:點眼|眼用|眼耳|點耳).*凝膠/, 'gel'],
-  [/點眼|眼用|眼耳|點耳/, 'eye liquid'], [/吸入|噴霧/, 'inhalation'], [/咀嚼/, 'chewable'], [/發泡/, 'effervescent'], [/錠/, 'tablet'],
+  [/注射/, 'injection'], [/(?:點眼|眼用|眼耳).*膏/, 'eye ointment'], [/(?:點眼|眼用|眼耳).*凝膠/, 'eye gel'],
+  [/點眼|眼用|眼耳/, 'eye liquid'], [/點耳|耳用/, 'ear liquid'], [/吸入|噴霧/, 'inhalation'], [/咀嚼/, 'chewable'], [/發泡/, 'effervescent'], [/錠/, 'tablet'],
   [/膠囊/, 'capsule'], [/懸/, 'suspension'], [/軟膏/, 'ointment'], [/乳膏/, 'cream'], [/凝膠/, 'gel'], [/貼/, 'patch'],
-  [/顆粒/, 'granules'], [/糖漿/, 'syrup'], [/點眼|點耳|滴/, 'drops'], [/液/, 'solution'],
+  [/顆粒/, 'granules'], [/糖漿/, 'syrup'], [/滴/, 'drops'], [/液/, 'solution'],
 ]
 const OFFICIAL_RELEASE: Array<[RegExp, string]> = [[/持續|緩釋|長效|控釋/, 'modified'], [/口溶|口腔崩散/, 'orodispersible'], [/腸溶/, 'enteric']]
 
@@ -127,7 +128,7 @@ interface Preparation { name: string; strengths: string; release: string; forms:
 function preparation(label: unknown, amounts = strengths(label)): Preparation | undefined {
   if (!amounts?.length) return undefined
   const words: string[] = [], forms: string[] = []
-  let release = 'immediate', named = false, eye = false
+  let release = 'immediate', named = false, eye = false, ear = false
   const asides: string[] = []
   const text = String(label ?? '').normalize('NFKC').toLowerCase()
     .replace(/"[^"]*"?|\([^)]*\)?/g, (aside) => { asides.push(aside); return ' ' })
@@ -139,6 +140,7 @@ function preparation(label: unknown, amounts = strengths(label)): Preparation | 
     if (form) forms.push(form)
     if (RELEASE[token]) release = RELEASE[token]
     if (['eye', 'oph', 'ophthalmic'].includes(token)) eye = true
+    if (['ear', 'otic'].includes(token)) ear = true
     return form
   }
   // A bare number ends the name only when it is this label's own strength
@@ -159,7 +161,10 @@ function preparation(label: unknown, amounts = strengths(label)): Preparation | 
   if (statedForms) forms.splice(statedForms)
   if (!words.length || words[0].length < 3) return undefined
   let primary = forms.find((form) => form === 'injection') ?? forms.find((form) => form === 'inhalation') ?? forms[0]
+  // The route is part of the preparation: an eye ointment is not a skin one.
   if (eye && ['solution', 'suspension', 'drops'].includes(primary)) primary = 'eye liquid'
+  else if (eye && ['ointment', 'gel'].includes(primary)) primary = `eye ${primary}`
+  else if (ear && ['solution', 'suspension', 'drops'].includes(primary)) primary = 'ear liquid'
   return { name: words.join(' '), strengths: amounts.join('+'), release, forms: primary ? [primary] : [] }
 }
 
