@@ -32,6 +32,9 @@ jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
   ReportRow: ({ row }: { row: { title: string } }) => <div data-testid="report-row">{row.title}</div>,
 }))
 
+// A lab row of the results table, found by the figure it shows.
+const rowWith = (figure: string) => screen.queryAllByRole('row').find((row) => row.textContent?.includes(figure))
+
 const HOSPITAL_META = {
   source: 'https://web9.vghtpe.gov.tw/emr/qemr/',
   tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }],
@@ -128,9 +131,9 @@ describe('LastOutpatientCard', () => {
     expect(within(card).getByText('2026/10/20')).toBeInTheDocument()
     expect(within(card).getByText('腎臟內科')).toBeInTheDocument()
     expect(screen.queryByText('2026/10/25')).not.toBeInTheDocument()
-    expect(screen.getByText('4.6 mmol/L')).toBeInTheDocument()
+    expect(rowWith('4.6')).toBeTruthy()
     // The shared result is under this visit too.
-    expect(screen.getByText('2.2 uIU/mL')).toBeInTheDocument()
+    expect(rowWith('2.2')).toBeTruthy()
   })
 
   it('opens on the clinician’s own last visit and shows what it ordered, including a later echo', () => {
@@ -139,15 +142,15 @@ describe('LastOutpatientCard', () => {
 
     expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/09')).toBeInTheDocument()
     expect(screen.getByText('陳怡君（您）')).toBeInTheDocument()
-    expect(screen.getByText('1.26 mg/dL')).toBeInTheDocument()
-    expect(screen.getByText('前次 1.12 · 07/10')).toBeInTheDocument()
+    expect(rowWith('1.26')).toBeTruthy()
+    expect(rowWith('1.26')?.textContent).toMatch(/1\.12\s*07\/10/)
     expect(screen.getByTestId('report-row')).toHaveTextContent('Echocardiography')
     // Ordered elsewhere, or only date-matched: not part of this visit.
-    expect(screen.queryByText('4.6 mmol/L')).not.toBeInTheDocument()
-    expect(screen.queryByText('108 mg/dL')).not.toBeInTheDocument()
+    expect(rowWith('4.6')).toBeUndefined()
+    expect(rowWith('108')).toBeUndefined()
     expect(screen.getByText(/開立 5 項/)).toBeInTheDocument()
     expect(screen.getByText(/1 項與其他門診合併採檢/)).toBeInTheDocument()
-    expect(screen.getByText('2.2 uIU/mL')).toBeInTheDocument()
+    expect(rowWith('2.2')).toBeTruthy()
     // Hb is flagged L by the source: abnormal by its flag, with the code shown.
     expect(screen.getByText('異常 2')).toBeInTheDocument()
     expect(screen.getByText('L')).toBeInTheDocument()
@@ -159,10 +162,10 @@ describe('LastOutpatientCard', () => {
     fireEvent.click(screen.getByRole('button', { name: '異常' }))
 
     expect(screen.getByRole('button', { name: '異常' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.queryByText('1.26 mg/dL')).not.toBeInTheDocument()
-    expect(screen.getByText('12.6 g/dL')).toBeInTheDocument()
-    expect(screen.getByText('612 pg/mL')).toBeInTheDocument()
-    expect(screen.getByText(zhTW.reports.referenceComparison.above)).toBeInTheDocument()
+    expect(rowWith('1.26')).toBeUndefined()
+    expect(rowWith('12.6')).toBeTruthy()
+    expect(rowWith('612')).toBeTruthy()
+    expect(screen.getByLabelText(zhTW.reports.referenceComparison.above)).toHaveTextContent('↑')
     expect(screen.getByTestId('report-row')).toBeInTheDocument()
   })
 
@@ -171,6 +174,13 @@ describe('LastOutpatientCard', () => {
     render(<LastOutpatientCard />)
     expect(screen.getByText(zhTW.lastOutpatient.noMatch.replace('{name}', '王志明'))).toBeInTheDocument()
     expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/20')).toBeInTheDocument()
+  })
+
+  it('lets a clinician with a saved name change it from the tab', () => {
+    mockClinicianName = '陳怡君'
+    render(<LastOutpatientCard />)
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.changeName }))
+    expect(mockRevealTab).toHaveBeenCalledWith('settings', { settingsTab: 'display' })
   })
 
   it('sends a clinician without a saved name to the setting', () => {

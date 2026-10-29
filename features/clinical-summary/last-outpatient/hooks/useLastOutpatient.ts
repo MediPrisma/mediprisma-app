@@ -13,6 +13,7 @@ import { useEncounterDetails, type EncounterDetails } from "@/features/clinical-
 import {
   buildPriorLabValues,
   buildRangeComparisons,
+  displayClinicianName,
   isHospitalOutpatientEncounter,
   isSameClinician,
   resultsOrderedAt,
@@ -50,7 +51,7 @@ function toHospitalVisit(visit: VisitRecord, byId: Map<string, any>): HospitalOu
     encounterIds: [visit.id, ...(visit.sourceIds ?? [])],
     date: visit.date,
     department: department || visit.department,
-    physician: physician || visit.physician,
+    physician: displayClinicianName(physician || visit.physician) || undefined,
     institution: visit.institution,
   }
 }

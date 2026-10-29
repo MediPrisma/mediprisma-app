@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
 import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CompactLabResultRow } from "@/features/clinical-summary/components/CompactLabResultRow"
 import { ReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
 import type { EncounterObservation } from "@/features/clinical-summary/visit-history/components/EncounterObservationCard"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -66,74 +65,127 @@ function FlagLabel({ label }: { label?: string }) {
 
 type ComparisonStrings = { above: string; below: string; tooltip: string }
 
-function ResultRow({
+type LabColumns = { item: string; current: string; range: string; previous: string }
+
+// One table for every category, so names, values, ranges and previous results
+// line up down the whole section; a category is a heading row, not a box.
+// A narrow panel drops the range column and shows the range under the value.
+const LAB_GRID = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,0.7fr)] items-baseline gap-x-3 @[36rem]/labs:grid-cols-[minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.85fr)]'
+const RANGE_COLUMN = 'hidden @[36rem]/labs:block'
+
+// "12.6 g/dL" → number and unit, so the unit can recede beside the figure.
+function splitValue(value: string): { figure: string; unit: string } {
+  const match = value.match(/^([<>≤≥]?\s*[-+]?[\d.,]+)\s*(.*)$/)
+  return match ? { figure: match[1].replace(/\s+/g, ''), unit: match[2] } : { figure: value, unit: '' }
+}
+
+// The range as written, without the bracket chrome the source wraps it in.
+function rangeText(text?: string): string {
+  return (text ?? '').replace(/^\[(.*)\]$/, '$1').trim()
+}
+
+function ValueCell({
   result,
   comparison,
   comparisonStrings,
-  trailing,
+  range,
 }: {
-  result: LabResult & { title: string; value: string; referenceText?: string; refRangeUnassessed?: boolean }
+  result: LabResult & { value: string }
+  range: string
   comparison?: 'high' | 'low'
   comparisonStrings: ComparisonStrings
-  trailing?: ReactNode
 }) {
   const abnormal = isAbnormal(result)
-  const flagged = !!result.interpretationLabel && abnormal
+  const { figure, unit } = splitValue(result.value)
+  // Never colour alone: the source's flag, or ↑/↓ when only the range says so.
+  const flag = result.interpretationLabel && abnormal
+    ? <FlagLabel label={result.interpretationLabel} />
+    : !result.interpretationLabel && comparison
+      ? (
+        <span
+          className="text-[0.6875rem] font-semibold text-clinical-abnormal"
+          title={comparisonStrings.tooltip}
+          aria-label={comparison === 'high' ? comparisonStrings.above : comparisonStrings.below}
+        >
+          {comparison === 'high' ? '↑' : '↓'}
+        </span>
+      )
+      : null
   return (
-    <CompactLabResultRow
-      title={result.title}
-      value={result.value}
-      abnormal={abnormal}
-      referenceText={result.referenceText}
-      referenceComparison={!result.interpretationLabel ? comparison : undefined}
-      referenceComparisonLabel={comparison === 'high' ? comparisonStrings.above : comparisonStrings.below}
-      referenceComparisonTooltip={comparisonStrings.tooltip}
-      rangeUnassessed={result.refRangeUnassessed}
-      afterValue={flagged ? <FlagLabel label={result.interpretationLabel} /> : undefined}
-      trailingContent={trailing}
-      adaptivePhoneLayout
-      alignedDesktopColumns
-    />
+    <span className="min-w-0">
+      <span className="whitespace-nowrap">
+        <span className={cn('font-semibold tabular-nums', abnormal ? 'text-clinical-abnormal' : 'text-foreground')}>{figure}</span>
+        {unit && <span className="ml-1 text-xs text-muted-foreground">{unit}</span>}
+        {flag && <span className="ml-1.5">{flag}</span>}
+      </span>
+      {range && <span className="block text-[0.6875rem] tabular-nums text-muted-foreground @[36rem]/labs:hidden">{range}</span>}
+    </span>
   )
 }
 
-function LabRow({
-  test,
-  prior,
-  previousTemplate,
+function LabTable({
+  groups,
+  categoryLabel,
+  priorValues,
   comparisons,
   comparisonStrings,
+  columns,
 }: {
-  test: EncounterObservation
-  prior?: PriorLabValue
-  previousTemplate: string
+  groups: Array<{ categoryId: string | null; tests: EncounterObservation[] }>
+  categoryLabel: (id: string | null) => string
+  priorValues: Map<string, PriorLabValue>
   comparisons: Map<string, 'high' | 'low'>
   comparisonStrings: ComparisonStrings
+  columns: LabColumns
 }) {
+  const cell = 'min-w-0 break-words'
   return (
-    <div>
-      <ResultRow
-        result={test}
-        comparison={comparisons.get(test.id)}
-        comparisonStrings={comparisonStrings}
-        trailing={prior ? (
-          <span className="whitespace-nowrap text-[0.6875rem] tabular-nums text-muted-foreground">
-            {fill(previousTemplate, { value: prior.value, date: shortDay(prior.date) })}
-          </span>
-        ) : undefined}
-      />
-      {test.components.length > 0 && (
-        <div className="ml-4">
-          {test.components.map((component) => (
-            <ResultRow
-              key={component.id}
-              result={component}
-              comparison={comparisons.get(component.id)}
-              comparisonStrings={comparisonStrings}
-            />
-          ))}
+    <div role="table" aria-label={columns.item} className="@container/labs overflow-hidden rounded-md border border-border/80 bg-card text-sm">
+      <div role="row" className={cn(LAB_GRID, 'border-b border-border/80 bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground')}>
+        <span role="columnheader">{columns.item}</span>
+        <span role="columnheader">{columns.current}</span>
+        <span role="columnheader" className={RANGE_COLUMN}>{columns.range}</span>
+        <span role="columnheader">{columns.previous}</span>
+      </div>
+      {groups.map((group, index) => (
+        <div role="rowgroup" key={group.categoryId ?? `other-${index}`}>
+          <div role="row" className="border-b border-border/60 px-3 pb-1 pt-2.5 text-xs font-semibold text-muted-foreground">
+            <span role="cell">{categoryLabel(group.categoryId)}</span>
+          </div>
+          {group.tests.map((test) => {
+            const prior = priorValues.get(test.id)
+            return (
+              <div key={test.id} className="border-b border-border/50 last:border-b-0">
+                <div role="row" className={cn(LAB_GRID, 'px-3 py-1.5')}>
+                  <span role="cell" className={cn(cell, 'font-medium')}>{test.title}</span>
+                  <span role="cell" className={cell}>
+                    <ValueCell result={test} comparison={comparisons.get(test.id)} comparisonStrings={comparisonStrings} range={rangeText(test.referenceText)} />
+                  </span>
+                  <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(test.referenceText)}</span>
+                  <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
+                    {prior && (
+                      <>
+                        <span className="tabular-nums text-foreground/80">{prior.value}</span>
+                        <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(prior.date)}</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                {test.components.map((component) => (
+                  <div role="row" key={component.id} className={cn(LAB_GRID, 'px-3 py-1 pl-6 text-[0.8125rem]')}>
+                    <span role="cell" className={cn(cell, 'text-foreground/90')}>{component.title}</span>
+                    <span role="cell" className={cell}>
+                      <ValueCell result={component} comparison={comparisons.get(component.id)} comparisonStrings={comparisonStrings} range={rangeText(component.referenceText)} />
+                    </span>
+                    <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(component.referenceText)}</span>
+                    <span role="cell" />
+                  </div>
+                ))}
+              </div>
+            )
+          })}
         </div>
-      )}
+      ))}
     </div>
   )
 }
@@ -210,18 +262,17 @@ export function LastOutpatientCard() {
             {clinicianName && !clinicianMatched && (
               <p className="text-sm text-muted-foreground">{fill(strings.noMatch, { name: clinicianName })}</p>
             )}
-            {!clinicianName && (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="h-auto px-0 py-1 text-sm"
-                title={strings.setNameHint}
-                onClick={() => revealTab('settings', { settingsTab: 'display' })}
-              >
-                {strings.setName}
-              </Button>
-            )}
+            {/* Always reachable here: set the name, or change it after picking. */}
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto px-0 py-1 text-sm"
+              title={clinicianName ? undefined : strings.setNameHint}
+              onClick={() => revealTab('settings', { settingsTab: 'display' })}
+            >
+              {clinicianName ? strings.changeName : strings.setName}
+            </Button>
           </div>
 
           {tests.length === 0 && reports.length === 0 ? (
@@ -271,32 +322,17 @@ export function LastOutpatientCard() {
                   <h3 id="last-outpatient-labs" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {strings.labs}
                   </h3>
-                  {/* Two columns only once a row keeps its value, range and previous
-                      result on one line; the split panel stays single-column. */}
                   {groups.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{strings.noAbnormal}</p>
                   ) : (
-                    <div className="grid gap-x-6 gap-y-3 @[72rem]:grid-cols-2">
-                      {groups.map((group, index) => (
-                        <div key={group.categoryId ?? `other-${index}`} className="min-w-0 space-y-1">
-                          <div className="px-0.5 text-[max(12px,0.75rem)] font-medium text-muted-foreground">
-                            {categoryLabel(group.categoryId)}
-                          </div>
-                          <div className="divide-y divide-border/70 rounded-md border border-border/80 bg-card/45 px-2">
-                            {group.tests.map((test) => (
-                              <LabRow
-                                key={test.id}
-                                test={test}
-                                prior={priorValues.get(test.id)}
-                                previousTemplate={strings.previous}
-                                comparisons={rangeComparisons}
-                                comparisonStrings={t.reports.referenceComparison}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <LabTable
+                      groups={groups}
+                      categoryLabel={categoryLabel}
+                      priorValues={priorValues}
+                      comparisons={rangeComparisons}
+                      comparisonStrings={t.reports.referenceComparison}
+                      columns={{ item: strings.labItem, current: strings.labCurrent, range: strings.labRange, previous: strings.previousLabel }}
+                    />
                   )}
                 </section>
               )}

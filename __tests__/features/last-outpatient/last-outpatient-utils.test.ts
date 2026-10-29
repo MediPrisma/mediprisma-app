@@ -6,6 +6,8 @@ import {
   isSameClinician,
   normalizeClinicianName,
   orderingVisitIds,
+  recentHospitalPhysicians,
+  displayClinicianName,
   resultsOrderedAt,
 } from '@/features/clinical-summary/last-outpatient/utils/last-outpatient'
 
@@ -142,5 +144,30 @@ describe('previous lab values', () => {
       { resourceType: 'DiagnosticReport', id: 'dr-new', _observations: [creatinine('b', 1.3, '2026-10-09')] },
     ])
     expect(prior.get('b')).toEqual({ value: '1', date: '2026-07-10' })
+  })
+})
+
+describe('recent hospital physicians', () => {
+  const doctor = (id: string, date: string, name: string, department: string, meta: any = HOSPITAL_META, extra: Record<string, unknown> = {}) =>
+    encounter(id, meta, { period: { start: `${date}T09:00:00+08:00` }, participant: [{ individual: { display: name } }], serviceType: { text: department }, ...extra })
+
+  it('lists this chart\'s hospital physicians of the past year, newest first, without staff codes', () => {
+    const list = recentHospitalPhysicians([
+      doctor('a1', '2026-10-09', '陳怡君 (DOC0001A)', '心臟內科'),
+      doctor('a2', '2026-07-10', '陳怡君(DOC0001A)', '心臟內科'),
+      doctor('b1', '2026-10-20', '李建國 (DOC0002B)', '腎臟內科'),
+      doctor('old', '2025-09-01', '張舊 (DOC0003C)', '家醫科'),
+      doctor('cloud', '2026-10-25', '雲端醫師', '家醫科', CLOUD_META),
+      doctor('imp', '2026-10-01', '住院醫師', '內科', HOSPITAL_META, { class: { code: 'IMP' } }),
+    ], new Date('2026-10-28T00:00:00+08:00'))
+    expect(list).toEqual([
+      { name: '李建國', departments: ['腎臟內科'], visits: 1, lastVisit: '2026-10-20' },
+      { name: '陳怡君', departments: ['心臟內科'], visits: 2, lastVisit: '2026-10-09' },
+    ])
+  })
+
+  it('treats a staff code as part of the record, not of the name', () => {
+    expect(displayClinicianName('王志明 (DOC1234A)')).toBe('王志明')
+    expect(isSameClinician('王志明 (DOC1234A)', '王志明')).toBe(true)
   })
 })

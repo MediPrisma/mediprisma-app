@@ -56,13 +56,52 @@ export function hasHospitalOutpatientVisit(encounters: readonly any[] | undefine
  *  Nothing looser: two different physicians must never match. */
 export function normalizeClinicianName(name: string | null | undefined): string {
   if (!name) return ''
-  return name
+  return displayClinicianName(name)
     .normalize('NFKC')
     .replace(/\s+/g, '')
     .replace(/(醫師|医师|醫生|医生|主任|教授)$/u, '')
     .replace(/^(Dr\.?|Prof\.?)/i, '')
     .replace(/(,?M\.?D\.?|Dr\.?)$/i, '')
     .toLowerCase()
+}
+
+/** The physician as people say it: HIS appends the staff code, 「王志明 (DOC1234A)」. */
+export function displayClinicianName(name: string | null | undefined): string {
+  return (name ?? '').replace(/\s*[(（]\s*DOC[A-Z0-9]+\s*[)）]\s*$/i, '').trim()
+}
+
+export type RecentPhysician = {
+  name: string
+  departments: string[]
+  visits: number
+  lastVisit: string
+}
+
+/**
+ * The physicians of this chart's hospital outpatient visits in the year up to
+ * `now`, newest first: the names the clinician can pick as their own. Read
+ * from the hospital's copy of each visit (a merged visit keeps it).
+ */
+export function recentHospitalPhysicians(encounters: readonly any[] | undefined, now: Date = new Date()): RecentPhysician[] {
+  const since = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const byName = new Map<string, RecentPhysician>()
+  for (const encounter of encounters ?? []) {
+    if (!isHospitalOutpatientEncounter(encounter)) continue
+    const day = encounter.period.start.slice(0, 10)
+    if (day < since) continue
+    const copy = isVghtpeSource(encounter) ? encounter
+      : encounter._sourceEncounterRecords?.find((source: any) => source && isVghtpeSource(source)) ?? encounter
+    const name = displayClinicianName(copy.participant?.find((participant: any) => participant?.individual?.display)?.individual?.display)
+    const key = normalizeClinicianName(name)
+    if (!key) continue
+    const department = typeof copy.serviceType?.text === 'string' ? copy.serviceType.text.trim() : ''
+    const entry: RecentPhysician = byName.get(key) ?? { name, departments: [], visits: 0, lastVisit: day }
+    entry.visits += 1
+    if (day > entry.lastVisit) { entry.lastVisit = day; entry.name = name }
+    if (department && !entry.departments.includes(department)) entry.departments.push(department)
+    byName.set(key, entry)
+  }
+  return [...byName.values()].sort((a, b) => b.lastVisit.localeCompare(a.lastVisit) || a.name.localeCompare(b.name))
 }
 
 export function isSameClinician(a: string | null | undefined, b: string | null | undefined): boolean {
