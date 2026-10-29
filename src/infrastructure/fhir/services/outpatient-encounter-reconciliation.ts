@@ -63,14 +63,18 @@ function nhiCodes(concept: Resource | undefined): string[] {
 const PER_UNITS: Record<string, string> = { ml: 'ml', g: 'g', dose: 'dose', doses: 'dose', puff: 'dose', puffs: 'dose',
   p: 'dose', actuation: 'dose', actuations: 'dose' }
 const NUMBER = '(?<![\\d.,])(\\d*\\.?\\d+)'
+// Counts and volumes that describe the pack, not the strength.
+const PACK_UNITS = new Set(['ml', 'g', 'dose', 'doses', 'p', 'puffs', 'tab', 'tabs', 'tablet', 'tablets', 'cap', 'caps',
+  'capsule', 'capsules', 's', 'x', 'pcs', 'vial', 'vials', 'amp', 'amps', 'ampoule', 'ampoules', 'bottle', 'bottles',
+  'tube', 'tubes', 'sachet', 'sachets', 'pack', 'packs', 'bag', 'bags'])
 
 /** Every strength in a label, in order, with its unit and concentration
  *  denominator (a missing denominator count read as 1). Thousands separators
  *  are read as one number (1,000,000 IU). A combination written '25/5 mg'
  *  reads as 25 mg + 5 mg, and '5/160/12.5 mg' as all three in order. Units are never converted: 5 mg/2 ml, 5 mcg and
  *  5 mg/ml all differ; only spellings (UG, GM, puff for dose) are unified. A
- *  denominator outside ml, g and dose, or an amount in a unit outside mcg, mg,
- *  g, IU and %, makes the strength unusable: undefined,
+ *  denominator outside ml, g and dose, or any other amount left unread,
+ *  makes the strength unusable: undefined,
  *  unlike [] for a label that states none, so nothing may fill it in. */
 function strengths(text: unknown): string[] | undefined {
   const normalized = String(text ?? '').normalize('NFKC').toLowerCase()
@@ -80,12 +84,17 @@ function strengths(text: unknown): string[] | undefined {
     // Every number before a shared unit, in order: '5/160/12.5 mg' is three.
     .replace(new RegExp(`(?<![\\d.,/])\\d*\\.?\\d+(?:\\s*\\/\\s*\\d*\\.?\\d+)+\\s*(mcg|mg|g|iu)(?![a-z])`, 'g'),
       (run, unit: string) => run.slice(0, run.length - unit.length).split('/').map((amount) => `${amount.trim()} ${unit}`).join(' + '))
-  // An amount in a unit this reader cannot compare (1.75 mmol/L, 40 mEq,
-  // 100 u/ml) would be dropped silently and leave a partial strength.
-  if (/(?<![\d.,a-z])\d*\.?\d+\s*(?:mmol|meq|mosm|mol|ng|units?|u|kiu|mu|cfu|ppm|mcl|[μµ]l|ul|l|kg|lf|pfu|ccid50)(?![a-z])/.test(normalized)) return undefined
   const found = [...normalized.matchAll(new RegExp(
     `${NUMBER}\\s*(mcg|mg|g|iu|%)(?![a-z])(?:\\s*\\/\\s*(\\d*\\.?\\d+)?\\s*(?!(?:mcg|mg|iu)(?![a-z]))([a-z]+))?`, 'g'))]
   if (found.some(([, , , , perUnit]) => perUnit && !PER_UNITS[perUnit])) return undefined
+  // Whatever is left must hold no amount this reader skipped: only pack sizes
+  // (3 ml, 60p, 10 tabs) may remain. '3MIU', '1.75 mmol/L', '10 HM' or a
+  // denominator cut off from its amount ('100UG(3MIU)/0.5ML') make the
+  // strength unusable rather than partial.
+  let rest = normalized
+  for (const match of found) rest = rest.slice(0, match.index) + ' '.repeat(match[0].length) + rest.slice(match.index! + match[0].length)
+  const leftovers = [...rest.matchAll(/(?<![\d.,a-z])\d*\.?\d+\s*([a-z%]+)/g)].map(([, unit]) => unit)
+  if (leftovers.some((unit) => !PACK_UNITS.has(unit)) || /\/\s*\d*\.?\d*\s*(?:ml|g|dose)(?![a-z])/.test(rest)) return undefined
   return found.map(([, amount, unit, per, perUnit]) =>
     `${Number(amount)}${unit}${perUnit ? `/${Number(per ?? 1)}${PER_UNITS[perUnit]}` : ''}`)
 }
