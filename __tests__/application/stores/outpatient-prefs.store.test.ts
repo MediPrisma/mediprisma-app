@@ -58,6 +58,13 @@ describe('sanitizeOutpatientPrefs', () => {
     expect(prefs.activeFormatId).toBe('a')
   })
 
+  it('keeps the month-only date style and falls back to md for one it does not know', () => {
+    const prefs = sanitizeOutpatientPrefs({
+      formats: [{ id: 'a', dateStyle: 'monYy', tokens: [] }, { id: 'b', dateStyle: 'mmm', tokens: [] }],
+    })
+    expect(prefs.formats.map((format) => format.dateStyle)).toEqual(['monYy', 'md'])
+  })
+
   it('keeps a 最近 N 次 count only on value/date fields and only 2–5', () => {
     const tokens = sanitizeOutpatientPrefs({
       formats: [{

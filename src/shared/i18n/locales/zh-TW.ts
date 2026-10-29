@@ -954,6 +954,7 @@ export const zhTW = {
         dateMd: '09/18（跨年加年份）',
         dateYmd: '2026/09/18',
         dateRoc: '115/09/18',
+        dateMonYy: "Sep'26（只到月份）",
         previewTitle: '預覽（目前這位病人）',
         startersTitle: '插入範例（放在游標位置，可以疊加；之後每一段都能改）',
         deleteFormat: '刪除這個格式',

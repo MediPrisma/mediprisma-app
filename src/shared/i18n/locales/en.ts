@@ -951,6 +951,7 @@ export const en = {
         dateMd: '09/18 (year added across years)',
         dateYmd: '2026/09/18',
         dateRoc: '115/09/18 (ROC)',
+        dateMonYy: "Sep'26 (month only)",
         previewTitle: 'Preview (current patient)',
         startersTitle: 'Insert an example at the caret (they stack; every piece stays editable)',
         deleteFormat: 'Delete this format',

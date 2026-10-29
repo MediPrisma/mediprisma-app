@@ -53,7 +53,10 @@ export type EmrFormatToken =
 
 /** 同一行的檢驗: all from one collection day, or each its own latest. */
 export type EmrLabRule = 'sameDay' | 'eachLatest'
-export type EmrDateStyle = 'md' | 'ymd' | 'roc'
+/** monYy: month and two-digit year only, "Sep'26" — how clinicians hand-write
+ *  a lipid history. */
+export type EmrDateStyle = 'md' | 'ymd' | 'roc' | 'monYy'
+export const EMR_DATE_STYLES: readonly EmrDateStyle[] = ['md', 'ymd', 'roc', 'monYy']
 /** A line whose every lab has no result at all: leave it out of the paste
  *  (reported under the preview) or print it with the missing text. */
 export type EmrEmptyLines = 'omit' | 'show'
@@ -211,7 +214,7 @@ export function sanitizeEmrFormat(raw: unknown): EmrCustomFormat | null {
     tokens,
     labRule: format.labRule === 'eachLatest' ? 'eachLatest' : 'sameDay',
     missingText: isString(format.missingText) ? format.missingText.slice(0, 40) : '—',
-    dateStyle: format.dateStyle === 'ymd' || format.dateStyle === 'roc' ? format.dateStyle : 'md',
+    dateStyle: EMR_DATE_STYLES.includes(format.dateStyle as EmrDateStyle) ? format.dateStyle as EmrDateStyle : 'md',
     emptyLines: format.emptyLines === 'show' ? 'show' : 'omit',
   }
 }

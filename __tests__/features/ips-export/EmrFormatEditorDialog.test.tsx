@@ -57,4 +57,14 @@ describe('EmrFormatEditorDialog', () => {
       { kind: 'text', text: ' ' },
     ])
   })
+
+  it('saves the month-only date style', () => {
+    const onSave = renderEditor()
+    const monthOnly = screen.getByRole('button', { name: "Sep'26（只到月份）" })
+    fireEvent.click(monthOnly)
+    expect(monthOnly).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存' }))
+    expect(onSave.mock.calls[0]?.[0].dateStyle).toBe('monYy')
+  })
 })
