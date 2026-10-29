@@ -70,6 +70,10 @@ jest.mock('@/features/left-browser-tour', () => ({
   ),
 }))
 
+jest.mock('@/features/clinical-summary/last-outpatient', () => ({
+  useHasHospitalOutpatientVisit: () => false,
+}))
+
 jest.mock('@/features/clinical-summary/components/FhirDataIssuesBanner', () => ({
   FhirDataIssuesBanner: () => <div data-testid="fhir-data-issues-banner" />,
 }))
