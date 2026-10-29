@@ -1982,7 +1982,8 @@ export const en = {
 
   lastOutpatient: {
     title: 'Last hospital outpatient visit',
-    visitPicker: 'Hospital outpatient visit',
+    visitPicker: 'Hospital outpatient visits',
+    noResults: 'no results',
     physicianYou: '{name} (you)',
     noMatch: 'No hospital outpatient visit with {name}; showing the most recent one.',
     summary: '{count} ordered',

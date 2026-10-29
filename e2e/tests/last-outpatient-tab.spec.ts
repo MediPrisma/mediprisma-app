@@ -99,7 +99,7 @@ test('a chart with a hospital outpatient visit lists 上次門診 with everythin
 
   const card = page.getByTestId('last-outpatient')
   await expect(card).toBeVisible({ timeout: 20_000 })
-  await expect(card.getByText('2026/10/09')).toBeVisible()
+  await expect(card.getByRole('group', { name: '院內門診' }).getByRole('button', { pressed: true })).toContainText('2026/10/09')
   await expect(card.getByRole('row').filter({ hasText: '12.6' })).toBeVisible()
   await expect(card.getByRole('row').filter({ hasText: '1.26' })).toContainText('1.12')
   await expect(card.getByText('Echocardiography').first()).toBeVisible()

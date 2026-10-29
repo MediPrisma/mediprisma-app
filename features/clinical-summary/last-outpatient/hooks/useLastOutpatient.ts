@@ -16,6 +16,7 @@ import {
   displayClinicianName,
   isHospitalOutpatientEncounter,
   isSameClinician,
+  orderingVisitIds,
   resultsOrderedAt,
   type PriorLabValue,
 } from "../utils/last-outpatient"
@@ -85,6 +86,15 @@ export function useLastOutpatient(selectedVisitId: string | null) {
       && [visit.id, ...(visit.sourceIds ?? [])].some((id) => isHospitalOutpatientEncounter(encounterById.get(id))))
     .map((visit) => toHospitalVisit(visit, encounterById)), [visitHistory, encounterById])
 
+  // Visits with at least one result of their own, for the visit list.
+  const withResults = useMemo(() => {
+    const ordered = new Set<string>()
+    for (const resource of [...diagnosticReports, ...observations] as any[]) {
+      for (const id of orderingVisitIds(resource)) ordered.add(id)
+    }
+    return new Set(visits.filter((visit) => visit.encounterIds.some((id) => ordered.has(id))).map((visit) => visit.id))
+  }, [visits, diagnosticReports, observations])
+
   const mine = clinicianName ? visits.filter((visit) => isSameClinician(visit.physician, clinicianName)) : []
   const defaultVisit = mine[0] ?? visits[0]
   const visit = (selectedVisitId && visits.find((candidate) => candidate.id === selectedVisitId)) || defaultVisit
@@ -133,6 +143,7 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     clinicianName,
     clinicianMatched: !!clinicianName && mine.length > 0,
     visits,
+    withResults,
     visit,
     details: visitDetails,
     sharedCount,

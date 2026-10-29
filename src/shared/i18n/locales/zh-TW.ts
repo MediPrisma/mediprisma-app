@@ -1992,6 +1992,7 @@ export const zhTW = {
   lastOutpatient: {
     title: '上次院內門診',
     visitPicker: '院內門診',
+    noResults: '無報告',
     physicianYou: '{name}（您）',
     noMatch: '院內資料中沒有 {name} 的門診，先顯示最近一次院內門診。',
     summary: '開立 {count} 項',

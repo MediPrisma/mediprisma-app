@@ -41,6 +41,9 @@ beforeAll(() => {
 })
 const openSelect = (trigger: HTMLElement) => fireEvent.keyDown(trigger, { key: 'Enter' })
 
+// The visit the list has selected.
+const shownVisit = () => within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { pressed: true })
+
 // A lab row of the results table, found by the figure it shows.
 const rowWith = (figure: string) => screen.queryAllByRole('row').find((row) => row.textContent?.includes(figure))
 
@@ -138,7 +141,7 @@ describe('LastOutpatientCard', () => {
   it('opens on the latest hospital outpatient visit, never a newer cloud visit', () => {
     render(<LastOutpatientCard />)
     const card = screen.getByTestId('last-outpatient')
-    expect(within(card).getByText('2026/10/20')).toBeInTheDocument()
+    expect(shownVisit()).toHaveTextContent('2026/10/20')
     expect(within(card).getByText('腎臟內科')).toBeInTheDocument()
     expect(screen.queryByText('2026/10/25')).not.toBeInTheDocument()
     expect(rowWith('4.6')).toBeTruthy()
@@ -150,7 +153,7 @@ describe('LastOutpatientCard', () => {
     mockClinicianName = '陳怡君 醫師'
     render(<LastOutpatientCard />)
 
-    expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/09')).toBeInTheDocument()
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
     expect(screen.getByText('陳怡君（您）')).toBeInTheDocument()
     expect(rowWith('1.26')).toBeTruthy()
     expect(rowWith('1.26')?.textContent).toMatch(/1\.12\s*07\/10/)
@@ -183,7 +186,7 @@ describe('LastOutpatientCard', () => {
     mockClinicianName = '王志明'
     render(<LastOutpatientCard />)
     expect(screen.getByText(zhTW.lastOutpatient.noMatch.replace('{name}', '王志明'))).toBeInTheDocument()
-    expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/20')).toBeInTheDocument()
+    expect(shownVisit()).toHaveTextContent('2026/10/20')
   })
 
   it('picks the name from this patient’s physicians in the tab and opens that clinician’s last visit', () => {
@@ -202,7 +205,7 @@ describe('LastOutpatientCard', () => {
     expect(mockSetClinicianName).toHaveBeenCalledWith('李建國')
 
     rerender(<LastOutpatientCard />)
-    expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/20')).toBeInTheDocument()
+    expect(shownVisit()).toHaveTextContent('2026/10/20')
     expect(screen.getByText('李建國（您）')).toBeInTheDocument()
   })
 
@@ -233,6 +236,33 @@ describe('LastOutpatientCard', () => {
   it('offers the menu to a clinician without a saved name', () => {
     render(<LastOutpatientCard />)
     expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent(zhTW.settings.clinicianNameNone)
+  })
+
+  it('lists every hospital visit, any physician, and switches to one', () => {
+    mockClinicianName = '陳怡君'
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    const visits = within(list).getAllByRole('button').map((button) => button.textContent)
+    expect(visits).toHaveLength(3)
+    expect(visits[0]).toMatch(/2026\/10\/20.*腎臟內科.*李建國/)
+    expect(visits[1]).toMatch(/2026\/10\/09.*陳怡君（您）/)
+    // A visit with no linked result says so.
+    expect(visits[2]).toMatch(/2026\/07\/10/)
+    expect(visits.some((text) => text?.includes('2026/10/25'))).toBe(false)
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+
+    fireEvent.click(within(list).getByRole('button', { name: /2026\/10\/20/ }))
+    expect(shownVisit()).toHaveTextContent('2026/10/20')
+    expect(rowWith('4.6')).toBeTruthy()
+    expect(rowWith('1.26')).toBeUndefined()
+  })
+
+  it('mutes a visit with nothing linked yet', () => {
+    mockClinicalData = { ...chart(), observations: chart().observations.filter((o: any) => o.id !== 'cr-old') }
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    expect(within(list).getByRole('button', { name: /2026\/07\/10/ })).toHaveTextContent(zhTW.lastOutpatient.noResults)
+    expect(within(list).getByRole('button', { name: /2026\/10\/09/ })).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
   })
 
   it('says reports are still loading rather than that nothing was ordered', () => {
