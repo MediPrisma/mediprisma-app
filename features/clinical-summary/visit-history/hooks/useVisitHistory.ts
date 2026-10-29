@@ -8,7 +8,7 @@ import {
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatOrganizationDisplay } from "@/src/shared/utils/organization-display"
 import { projectEncounterComparisons } from '@/src/shared/utils/source-record-comparison'
-import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { isMedcloudSource, isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
@@ -19,6 +19,9 @@ export interface VisitRecord {
   sourceIds?: string[]
   sourceComparisonStatus?: 'candidate' | 'ambiguous' | 'confirmed'
   sourceComparisonWarnings?: string[]
+  /** A North VGH visit with no cloud counterpart, in a chart that also holds
+   *  cloud visits; unset when the whole chart comes from one source. */
+  hospitalOnly?: boolean
   sourceRecords?: Array<{ id: string; origin?: 'hospital' | 'medcloud'; date?: string; institution?: string; department?: string; physician?: string; diagnoses: string[] }>
   type: VisitType
   /** Medical system, derived from explicit serviceType codings first. AMB only
@@ -115,7 +118,10 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
   const { locale } = useLanguage()
   return useMemo<VisitRecord[]>(() => {
     if (!Array.isArray(encounters)) return []
-    
+    // Naming a visit's source only helps when the chart mixes sources.
+    const mixedSources = encounters.some((encounter) => isVghtpeSource(encounter))
+      && encounters.some((encounter) => isMedcloudSource(encounter) && !isVghtpeSource(encounter))
+
     return projectEncounterComparisons(encounters)
       .filter((encounter: any) => {
         const status = encounter.status
@@ -311,6 +317,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           id: encounter.id,
           sourceIds: encounter._comparisonEncounterIds,
           sourceComparisonStatus: encounter._sourceRecordComparison?.status,
+          hospitalOnly: mixedSources && !comparison && isVghtpeSource(encounter) ? true : undefined,
           sourceComparisonWarnings: comparison ? [...(comparison.warnings ?? []), ...(availableSources.length < comparison.references.length ? ['source-partners-not-in-view'] : [])] : undefined,
           sourceRecords: availableSources?.map((source: any) => {
             return { id: source.id, date: medicationClinicalDay(source?.period?.start),

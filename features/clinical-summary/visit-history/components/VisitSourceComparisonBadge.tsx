@@ -6,7 +6,14 @@ import { needsSourceComparison, type VisitRecord } from '../hooks/useVisitHistor
 export function VisitSourceComparisonBadge({ visit }: { visit: VisitRecord }) {
   const { locale } = useLanguage()
   const en = locale === 'en'
-  if (!visit.sourceComparisonStatus) return null
+  if (!visit.sourceComparisonStatus) {
+    return visit.hospitalOnly ? (
+      <span className="inline-flex shrink-0 text-xs text-muted-foreground"
+        title={en ? 'North VGH record only; the cloud has no matching visit' : '僅有北榮院內紀錄，雲端無對應就診'}>
+        {en ? 'Hospital' : '院內'}
+      </span>
+    ) : null
+  }
   const compare = needsSourceComparison(visit)
   return <TapTooltip asChild contentClassName={`${clinicalTooltipSurfaceClass} max-h-[70vh] max-w-[min(90vw,30rem)] overflow-y-auto whitespace-normal text-xs leading-relaxed`}
     content={<div className="space-y-2">

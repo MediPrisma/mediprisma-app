@@ -297,6 +297,19 @@ it('never lets the ingredient text stand in for a concentration the product name
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg/1 ml', 'SYNTHETICBRAND INJECTION', 'SYNTHETIC 5 MG/ML', '注射劑').status).toBe('candidate')
 })
 
+it('labels a hospital visit with no cloud counterpart only when the chart also holds cloud visits', () => {
+  const { resources, hospital, cloud } = fixture()
+  delete (hospital as any).identifier; delete (cloud as any).identifier
+  const lone = { ...hospital, id: 'hospital-lone-visit', period: { start: '2026-09-01T09:00:00+08:00' } }
+  resources.push(lone)
+  const visits = reconcileOutpatientEncounters(resources).filter(resource => resource.resourceType === 'Encounter')
+  const { result } = renderHook(() => useVisitHistory(visits))
+  expect(result.current.find(visit => visit.id === 'hospital-lone-visit')?.hospitalOnly).toBe(true)
+  expect(result.current.find(visit => visit.sourceIds?.length === 2)?.hospitalOnly).toBeUndefined()
+  const { result: hospitalChart } = renderHook(() => useVisitHistory([lone]))
+  expect(hospitalChart.current[0].hospitalOnly).toBeUndefined()
+})
+
 it('keeps a subset of visit comparison sources usable and marks the missing partner', () => {
   const { resources, hospital, cloud } = fixture()
   delete (hospital as any).identifier; delete (cloud as any).identifier
