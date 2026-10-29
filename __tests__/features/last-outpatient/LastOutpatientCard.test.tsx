@@ -33,6 +33,14 @@ jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
   ReportRow: ({ row }: { row: { title: string } }) => <div data-testid="report-row">{row.title}</div>,
 }))
 
+// Radix Select needs these in jsdom.
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false
+  Element.prototype.releasePointerCapture ??= () => {}
+  Element.prototype.scrollIntoView ??= () => {}
+})
+const openSelect = (trigger: HTMLElement) => fireEvent.keyDown(trigger, { key: 'Enter' })
+
 // A lab row of the results table, found by the figure it shows.
 const rowWith = (figure: string) => screen.queryAllByRole('row').find((row) => row.textContent?.includes(figure))
 
@@ -178,31 +186,38 @@ describe('LastOutpatientCard', () => {
     expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/20')).toBeInTheDocument()
   })
 
-  it('changes the name in the tab itself and opens that clinician’s last visit', () => {
+  it('picks the name from this patient’s physicians in the tab and opens that clinician’s last visit', () => {
     mockClinicianName = '陳怡君'
     const { rerender } = render(<LastOutpatientCard />)
-    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.changeName }))
-    const picks = screen.getByRole('group', { name: zhTW.settings.clinicianNamePicks })
-    expect(within(picks).getByRole('button', { name: /陳怡君/ })).toHaveAttribute('aria-pressed', 'true')
+    const menu = screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })
+    expect(menu).toHaveTextContent('陳怡君')
+    // A menu only: no free-text name.
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
 
-    fireEvent.click(within(picks).getByRole('button', { name: /李建國/ }))
+    openSelect(menu)
+    const options = screen.getAllByRole('option').map((option) => option.textContent)
+    expect(options[0]).toBe(zhTW.settings.clinicianNameNone)
+    expect(options.some((text) => text?.startsWith('陳怡君'))).toBe(true)
+    fireEvent.click(screen.getByRole('option', { name: /李建國/ }))
     expect(mockSetClinicianName).toHaveBeenCalledWith('李建國')
+
     rerender(<LastOutpatientCard />)
     expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/20')).toBeInTheDocument()
     expect(screen.getByText('李建國（您）')).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: zhTW.settings.clinicianNamePicks })).not.toBeInTheDocument()
   })
 
-  it('saves a name typed in the tab on Enter', () => {
+  it('clears the name with 不指定', () => {
     mockClinicianName = '陳怡君'
-    const { rerender } = render(<LastOutpatientCard />)
-    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.changeName }))
-    const input = screen.getByLabelText(zhTW.settings.clinicianNameLabel)
-    fireEvent.change(input, { target: { value: '李建國' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(mockSetClinicianName).toHaveBeenCalledWith('李建國')
-    rerender(<LastOutpatientCard />)
-    expect(screen.getByText('李建國（您）')).toBeInTheDocument()
+    render(<LastOutpatientCard />)
+    openSelect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel }))
+    fireEvent.click(screen.getByRole('option', { name: zhTW.settings.clinicianNameNone }))
+    expect(mockSetClinicianName).toHaveBeenCalledWith('')
+  })
+
+  it('keeps a name saved on another chart selectable, with the no-visit note', () => {
+    mockClinicianName = '王志明'
+    render(<LastOutpatientCard />)
+    expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent('王志明')
   })
 
   it('opens the shared trend pane for a lab result', () => {
@@ -215,11 +230,9 @@ describe('LastOutpatientCard', () => {
     }))
   })
 
-  it('offers a clinician without a saved name to set it from the tab', () => {
+  it('offers the menu to a clinician without a saved name', () => {
     render(<LastOutpatientCard />)
-    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.setName }))
-    expect(screen.getByLabelText(zhTW.settings.clinicianNameLabel)).toHaveValue('')
-    expect(screen.getByRole('group', { name: zhTW.settings.clinicianNamePicks })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent(zhTW.settings.clinicianNameNone)
   })
 
   it('says reports are still loading rather than that nothing was ordered', () => {

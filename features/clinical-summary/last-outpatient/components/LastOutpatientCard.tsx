@@ -4,7 +4,6 @@ import { useState } from "react"
 import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
 import { ObservationLongitudinalAction } from "@/features/clinical-summary/reports/components/ObservationLongitudinalAction"
@@ -211,7 +210,6 @@ export function LastOutpatientCard() {
   const strings = t.lastOutpatient
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null)
   const [onlyAbnormal, setOnlyAbnormal] = useState(false)
-  const [namePickerOpen, setNamePickerOpen] = useState(false)
   const {
     isLoading,
     reportsPending,
@@ -279,34 +277,9 @@ export function LastOutpatientCard() {
             {clinicianName && !clinicianMatched && (
               <p className="text-sm text-muted-foreground">{fill(strings.noMatch, { name: clinicianName })}</p>
             )}
-            {/* Set or change the name right here; the same picker is in 設定. */}
-            <Popover open={namePickerOpen} onOpenChange={setNamePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="h-auto px-0 py-1 text-sm"
-                  title={clinicianName ? undefined : strings.setNameHint}
-                >
-                  {clinicianName ? strings.changeName : strings.setName}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                align="start"
-                aria-label={clinicianName ? strings.changeName : strings.setName}
-                className="w-[min(26rem,calc(100vw-2rem))]"
-              >
-                <ClinicianNamePicker
-                  idPrefix="last-outpatient-name"
-                  onChange={() => {
-                    // Open on the (new) clinician's own last visit.
-                    setSelectedVisitId(null)
-                    setNamePickerOpen(false)
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
+            {/* Pick the name right here; the same menu is in 設定. A new name
+                opens that clinician's own last visit. */}
+            <ClinicianNamePicker idPrefix="last-outpatient-name" inline onChange={() => setSelectedVisitId(null)} />
           </div>
 
           {tests.length === 0 && reports.length === 0 ? (
