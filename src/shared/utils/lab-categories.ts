@@ -147,11 +147,11 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // NA·K·CL·CO2 set + magnesium); NT-PROBNP tails with the cardiac markers
     // (heart-failure marker, 生化室 assay). Canonical keys only here — text
     // variants live in `codes` — per feedback_canonical_only_in_preferredorder.
-    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'HS-TROPONIN I', 'HS-TROPONIN T', 'CK', 'CKMB', 'NT-PROBNP'],
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'ICA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'HS-TROPONIN I', 'HS-TROPONIN T', 'CK', 'CKMB', 'NT-PROBNP'],
     // CO2 variants stay TCO2-specific — NOT 'BICARBONATE'/'HCO3', which is the
     // arterial blood-gas analyte (own category). NT-proBNP variants kept
     // distinct from BNP (a different assay we don't fold in here).
-    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', '血中尿素氮', '血尿素氮', '血清尿素氮', '尿素氮', 'BLOOD UREA NITROGEN', 'UREA NITROGEN', '尿素', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', '鈣', '血清鈣', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', '尿酸', '血中尿酸', '血清尿酸', 'URIC ACID', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
+    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', '血中尿素氮', '血尿素氮', '血清尿素氮', '尿素氮', 'BLOOD UREA NITROGEN', 'UREA NITROGEN', '尿素', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', '鈣', '血清鈣', 'ICA', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', '尿酸', '血中尿酸', '血清尿酸', 'URIC ACID', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
     // ships this for NHI 09099C 心肌旋轉蛋白Ｉ.
@@ -175,10 +175,13 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // (CO2 / MG / NT-PROBNP); added here so they categorise into 生化 instead
     // of falling to 其他 (user report 2026-07-07; live loinc.org re-check was
     // classifier-blocked, mappings reused from the verified in-repo table).
-    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '50384-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8', '2028-9', '19123-9', '2601-3', '33762-6', '89579-7', '67151-1', '22763-7'],
+    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '50384-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8', '2028-9', '19123-9', '2601-3', '33762-6', '89579-7', '67151-1', '22763-7',
+      // VGH hospital bridge (verified NLM 2026-10-29): CKD-EPI 2021 eGFR, venous
+      // total CO2 (the CO2 family), ionized calcium.
+      '98979-8', '2027-1', '1994-3'],
     subgroups: [
       { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'UA'] },
-      { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'MG'] },
+      { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CO2', 'CA', 'ICA', 'IP', 'MG'] },
       { id: 'liver',       members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA'] },
       // 發炎/感染 sits to the LEFT of 心肌酵素 (inflam before cardiac) per the
       // user's reading order. CK + CK-MB join TROP under 心肌酵素; NT-proBNP
@@ -287,15 +290,17 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'glucose',
-    preferredOrder: ['GLUCOSE-AC', 'GLUCOSE', 'GLUCOSE-FS', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'C-PEPTIDE'],
+    preferredOrder: ['GLUCOSE-AC', 'GLUCOSE', 'GLUCOSE-FS', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'C-PEPTIDE', 'KETONE-BLOOD'],
     // SUGAR / FINGER SUGAR: some Taiwan clinics use these for blood glucose.
     // Urine dipstick "Sugar" with qualitative value (+, ++, 4+, negative)
     // is routed to urine via the qualitative-value heuristic earlier.
     // 'GLUCOSE-AC' lived in preferredOrder/pinnedColumns but never here, so a
     // source emitting that exact name fell out of 血糖 entirely. Chinese names
     // added alongside it — 健保存摺 and hospital feeds both send them.
-    codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'GLUCOSE-AC', 'GLUCOSE-PC', 'GLU-PC', 'GLUCOSE PC', 'GLUCOSE P.C', 'GLUCOSE P.C.', 'GLUCOSE RANDOM', 'AC-SUG', 'PC-SUG', 'GLUCOSE-FS', 'SUGAR', 'FINGER SUGAR', 'AC SUGAR', 'PC SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE', '葡萄糖', '血糖', '飯前血糖', '飯後血糖', '空腹血糖', '隨機血糖', '糖化血色素'],
-    loincCodes: ['2345-7', '2339-0', '14749-6', '15074-8', '41653-7', '4548-4', '17856-6', '4549-2', '1986-9'],
+    codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'GLUCOSE-AC', 'GLUCOSE-PC', 'GLU-PC', 'GLUCOSE PC', 'GLUCOSE P.C', 'GLUCOSE P.C.', 'GLUCOSE RANDOM', 'AC-SUG', 'PC-SUG', 'GLUCOSE-FS', 'SUGAR', 'FINGER SUGAR', 'AC SUGAR', 'PC SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE', 'KETONE-BLOOD', '葡萄糖', '血糖', '飯前血糖', '飯後血糖', '空腹血糖', '隨機血糖', '糖化血色素'],
+    // 53061-8 Ketones [Moles/volume] in Blood (verified NLM 2026-10-29); the
+    // urine dipstick ketone stays in 尿液.
+    loincCodes: ['2345-7', '2339-0', '14749-6', '15074-8', '41653-7', '4548-4', '17856-6', '4549-2', '1986-9', '53061-8'],
     pinnedColumns: ['GLUCOSE-AC', 'GLUCOSE', 'HBA1C'],
   },
   {
@@ -465,12 +470,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // is a ventilator setting with NO specimen, caught by the LOINC pass.
     // Reading order: gas tensions → acid-base → oxygenation → FiO2 (context).
     hiddenByDefault: true,
-    preferredOrder: ['PH', 'PCO2', 'PO2', 'HCO3', 'BE', 'SO2', 'FIO2'],
+    preferredOrder: ['PH', 'PCO2', 'PO2', 'HCO3', 'HCO3-STD', 'BE', 'SO2', 'FIO2'],
     // Bare 'PH' is deliberately NOT in codes[] — it collides with urinalysis
     // pH; blood-gas pH is resolved via LOINC (Pass 2) + blood specimen (Pass 1).
     // Short codes stay specimen-neutral where possible, with a few arterial/
     // venous text variants for bridges that ship short names without a LOINC.
-    codes: ['PCO2', 'PACO2', 'PVCO2', 'PO2', 'PAO2', 'PVO2', 'HCO3', 'BE', 'SO2', 'SAO2', 'SVO2', 'FIO2'],
+    codes: ['PCO2', 'PACO2', 'PVCO2', 'PO2', 'PAO2', 'PVO2', 'HCO3', 'HCO3-STD', 'BE', 'SO2', 'SAO2', 'SVO2', 'FIO2'],
     loincCodes: [
       // pH: arterial / venous / capillary
       '2744-1', '2746-6', '2745-8',
@@ -480,6 +485,8 @@ export const LAB_CATEGORIES: LabCategory[] = [
       '2703-7', '2705-2', '2704-5',
       // Bicarbonate: arterial / venous
       '1960-4', '14627-4',
+      // Standard bicarbonate: arterial / venous (verified NLM 2026-10-29)
+      '19230-2', '19232-8',
       // Base excess: arterial / venous
       '1925-7', '1927-3',
       // O2 saturation: arterial / venous
