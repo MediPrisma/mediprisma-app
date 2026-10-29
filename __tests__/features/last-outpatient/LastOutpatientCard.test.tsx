@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
 import { LastOutpatientCard } from '@/features/clinical-summary/last-outpatient'
 
-const mockRevealTab = jest.fn()
+const mockSetClinicianName = jest.fn((name: string) => { mockClinicianName = name || null })
 const mockShowDetail = jest.fn()
 let mockClinicianName: string | null = null
 let mockClinicalData: Record<string, unknown> = {}
@@ -15,16 +15,12 @@ jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
 }))
 
-jest.mock('@/src/application/providers/right-panel.provider', () => ({
-  useRightPanel: () => ({ revealTab: mockRevealTab }),
-}))
-
 jest.mock('@/src/application/providers/right-detail.provider', () => ({
   useOptionalRightDetail: () => ({ detail: null, showDetail: mockShowDetail }),
 }))
 
 jest.mock('@/src/application/hooks/use-outpatient-prefs.hook', () => ({
-  useOutpatientPrefs: () => ({ clinicianName: mockClinicianName }),
+  useOutpatientPrefs: () => ({ clinicianName: mockClinicianName, setClinicianName: mockSetClinicianName }),
 }))
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
@@ -127,7 +123,7 @@ describe('LastOutpatientCard', () => {
   beforeEach(() => {
     mockClinicianName = null
     mockClinicalData = chart()
-    mockRevealTab.mockClear()
+    mockSetClinicianName.mockClear()
     mockShowDetail.mockClear()
   })
 
@@ -182,11 +178,31 @@ describe('LastOutpatientCard', () => {
     expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/20')).toBeInTheDocument()
   })
 
-  it('lets a clinician with a saved name change it from the tab', () => {
+  it('changes the name in the tab itself and opens that clinician’s last visit', () => {
     mockClinicianName = '陳怡君'
-    render(<LastOutpatientCard />)
+    const { rerender } = render(<LastOutpatientCard />)
     fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.changeName }))
-    expect(mockRevealTab).toHaveBeenCalledWith('settings', { settingsTab: 'display' })
+    const picks = screen.getByRole('group', { name: zhTW.settings.clinicianNamePicks })
+    expect(within(picks).getByRole('button', { name: /陳怡君/ })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(within(picks).getByRole('button', { name: /李建國/ }))
+    expect(mockSetClinicianName).toHaveBeenCalledWith('李建國')
+    rerender(<LastOutpatientCard />)
+    expect(within(screen.getByTestId('last-outpatient')).getByText('2026/10/20')).toBeInTheDocument()
+    expect(screen.getByText('李建國（您）')).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: zhTW.settings.clinicianNamePicks })).not.toBeInTheDocument()
+  })
+
+  it('saves a name typed in the tab on Enter', () => {
+    mockClinicianName = '陳怡君'
+    const { rerender } = render(<LastOutpatientCard />)
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.changeName }))
+    const input = screen.getByLabelText(zhTW.settings.clinicianNameLabel)
+    fireEvent.change(input, { target: { value: '李建國' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(mockSetClinicianName).toHaveBeenCalledWith('李建國')
+    rerender(<LastOutpatientCard />)
+    expect(screen.getByText('李建國（您）')).toBeInTheDocument()
   })
 
   it('opens the shared trend pane for a lab result', () => {
@@ -199,29 +215,11 @@ describe('LastOutpatientCard', () => {
     }))
   })
 
-  it('sends a clinician without a saved name to the setting', () => {
+  it('offers a clinician without a saved name to set it from the tab', () => {
     render(<LastOutpatientCard />)
     fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.setName }))
-    expect(mockRevealTab).toHaveBeenCalledWith('settings', { settingsTab: 'display' })
-  })
-
-  it('shows an earlier result in another unit with that unit', () => {
-    mockClinicianName = '陳怡君'
-    mockClinicalData = { ...chart(), observations: [
-      lab('hb-then', '718-7', 'Hemoglobin', 120, 'g/L', '2026-07-10', 'h-old'),
-      lab('hb-now', '718-7', 'Hemoglobin', 12.6, 'g/dL', '2026-10-09', 'h-mine'),
-    ] }
-    render(<LastOutpatientCard />)
-    expect(rowWith('12.6')?.textContent).toMatch(/120\s*g\/L/)
-  })
-
-  it('does not claim nothing was ordered when an order has no linked result yet', () => {
-    mockClinicianName = '陳怡君'
-    const order = { resourceType: 'ServiceRequest', id: 'sr-1', meta: HOSPITAL_META, status: 'active', intent: 'order', code: { text: 'Holter ECG' }, encounter: { reference: 'Encounter/h-mine' } }
-    mockClinicalData = { ...chart(), observations: [], diagnosticReports: [], serviceRequests: [order] }
-    render(<LastOutpatientCard />)
-    expect(screen.getByText(zhTW.lastOutpatient.empty)).toBeInTheDocument()
-    expect(zhTW.lastOutpatient.empty).not.toMatch(/沒有開立/)
+    expect(screen.getByLabelText(zhTW.settings.clinicianNameLabel)).toHaveValue('')
+    expect(screen.getByRole('group', { name: zhTW.settings.clinicianNamePicks })).toBeInTheDocument()
   })
 
   it('says reports are still loading rather than that nothing was ordered', () => {

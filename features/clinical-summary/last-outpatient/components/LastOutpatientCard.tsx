@@ -4,13 +4,14 @@ import { useState } from "react"
 import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
 import { ObservationLongitudinalAction } from "@/features/clinical-summary/reports/components/ObservationLongitudinalAction"
 import type { EncounterObservation } from "@/features/clinical-summary/visit-history/components/EncounterObservationCard"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { ClinicianNamePicker } from "./ClinicianNamePicker"
 import { useLastOutpatient, type HospitalOutpatientVisit } from "../hooks/useLastOutpatient"
 import { isSameClinician, type PriorLabValue } from "../utils/last-outpatient"
 
@@ -208,9 +209,9 @@ function LabTable({
 export function LastOutpatientCard() {
   const { t } = useLanguage()
   const strings = t.lastOutpatient
-  const { revealTab } = useRightPanel()
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null)
   const [onlyAbnormal, setOnlyAbnormal] = useState(false)
+  const [namePickerOpen, setNamePickerOpen] = useState(false)
   const {
     isLoading,
     reportsPending,
@@ -278,17 +279,34 @@ export function LastOutpatientCard() {
             {clinicianName && !clinicianMatched && (
               <p className="text-sm text-muted-foreground">{fill(strings.noMatch, { name: clinicianName })}</p>
             )}
-            {/* Always reachable here: set the name, or change it after picking. */}
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="h-auto px-0 py-1 text-sm"
-              title={clinicianName ? undefined : strings.setNameHint}
-              onClick={() => revealTab('settings', { settingsTab: 'display' })}
-            >
-              {clinicianName ? strings.changeName : strings.setName}
-            </Button>
+            {/* Set or change the name right here; the same picker is in 設定. */}
+            <Popover open={namePickerOpen} onOpenChange={setNamePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 py-1 text-sm"
+                  title={clinicianName ? undefined : strings.setNameHint}
+                >
+                  {clinicianName ? strings.changeName : strings.setName}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                aria-label={clinicianName ? strings.changeName : strings.setName}
+                className="w-[min(26rem,calc(100vw-2rem))]"
+              >
+                <ClinicianNamePicker
+                  idPrefix="last-outpatient-name"
+                  onChange={() => {
+                    // Open on the (new) clinician's own last visit.
+                    setSelectedVisitId(null)
+                    setNamePickerOpen(false)
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           {tests.length === 0 && reports.length === 0 ? (
