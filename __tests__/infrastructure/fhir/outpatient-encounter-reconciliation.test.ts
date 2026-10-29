@@ -297,6 +297,14 @@ it('reads every strength of a three-ingredient combination', () => {
   expect(oneCloudTwoClinics('Glyxambi FC # tab 25/5 mg', 'Glyxambi Film-Coated Tablets 25/5 mg').status).toBe('candidate')
 })
 
+it('keeps a product number in the name and rejects an amount in an unsupported unit', () => {
+  expect(oneCloudTwoClinics('Mixtard 10 HM inj 100 IU/ml', 'MIXTARD 50 HM PENFILL 100IU/ML', undefined).status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Mixtard 30 HM inj 100 IU/ml', 'MIXTARD 30 HM INJECTION 100IU/ML').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Balance 1.5% glucose, 1.75 mmol/L calcium sol', 'BALANCE 1.5% GLUCOSE, 1.25 MMOL/L CALCIUM SOLUTION').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Concor FC * tab 1.25 mg', 'CONCOR 1.25', 'BISOPROLOL FUMARATE 1.25 MG', '膜衣錠').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Nebilet tab 5 mg', 'Nebilet 5 mg').status).toBe('candidate')
+})
+
 it('never lets the ingredient text stand in for a concentration the product name states', () => {
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')

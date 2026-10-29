@@ -69,7 +69,8 @@ const NUMBER = '(?<![\\d.,])(\\d*\\.?\\d+)'
  *  are read as one number (1,000,000 IU). A combination written '25/5 mg'
  *  reads as 25 mg + 5 mg, and '5/160/12.5 mg' as all three in order. Units are never converted: 5 mg/2 ml, 5 mcg and
  *  5 mg/ml all differ; only spellings (UG, GM, puff for dose) are unified. A
- *  denominator outside ml, g and dose makes the strength unusable: undefined,
+ *  denominator outside ml, g and dose, or an amount in a unit outside mcg, mg,
+ *  g, IU and %, makes the strength unusable: undefined,
  *  unlike [] for a label that states none, so nothing may fill it in. */
 function strengths(text: unknown): string[] | undefined {
   const normalized = String(text ?? '').normalize('NFKC').toLowerCase()
@@ -78,6 +79,9 @@ function strengths(text: unknown): string[] | undefined {
     // Every number before a shared unit, in order: '5/160/12.5 mg' is three.
     .replace(new RegExp(`(?<![\\d.,/])\\d*\\.?\\d+(?:\\s*\\/\\s*\\d*\\.?\\d+)+\\s*(mcg|mg|g|iu)(?![a-z])`, 'g'),
       (run, unit: string) => run.slice(0, run.length - unit.length).split('/').map((amount) => `${amount.trim()} ${unit}`).join(' + '))
+  // An amount in a unit this reader cannot compare (1.75 mmol/L, 40 mEq,
+  // 100 u/ml) would be dropped silently and leave a partial strength.
+  if (/(?<![\d.,a-z])\d*\.?\d+\s*(?:mmol|meq|mosm|mol|ng|units?|u|kiu|mu|cfu|ppm)(?![a-z])/.test(normalized)) return undefined
   const found = [...normalized.matchAll(new RegExp(
     `${NUMBER}\\s*(mcg|mg|g|iu|%)(?![a-z])(?:\\s*\\/\\s*(\\d*\\.?\\d+)?\\s*(?!(?:mcg|mg|iu)(?![a-z]))([a-z]+))?`, 'g'))]
   if (found.some(([, , , , perUnit]) => perUnit && !PER_UNITS[perUnit])) return undefined
@@ -115,7 +119,7 @@ const OFFICIAL_RELEASE: Array<[RegExp, string]> = [[/持續|緩釋|長效|控釋
 interface Preparation { name: string; strengths: string; release: string; forms: string[] }
 
 /** A product label read as name, strengths, release form and dosage forms.
- *  The name is every word before the form, strength or a bare number, without
+ *  The name is every word before the form or strength, without
  *  quoted or bracketed text (still read for release and form) or coating words (dotted abbreviations
  *  read as words: F.C. as fc, S.R. as sr): 'Vitamin B1 tab 50 mg' keeps 'vitamin b1', unlike 'VITAMIN
  *  B6 TABLETS 50MG'. An injection or inhalation word outranks the vehicle it
@@ -137,9 +141,14 @@ function preparation(label: unknown, amounts = strengths(label)): Preparation | 
     if (['eye', 'oph', 'ophthalmic'].includes(token)) eye = true
     return form
   }
+  // A bare number ends the name only when it is this label's own strength
+  // ('CONCOR 1.25', 'Nebilet 5 mg'); otherwise it names the product
+  // ('Mixtard 10 HM' is not 'Mixtard 50 HM').
+  const amountNumbers = new Set(amounts.flatMap((amount) => (amount.match(/\d*\.?\d+/g) ?? []).map(Number)))
   for (const token of tokenize(text)) {
     const form = read(token)
-    if (form || /^\d/.test(token)) named = true
+    const bare = /^\d*\.?\d+$/.test(token)
+    if (form || (/^\d/.test(token) && !bare) || (bare && amountNumbers.has(Number(token)))) named = true
     if (!named && !RELEASE[token] && !QUALIFIERS.has(token)) words.push(token)
   }
   // Quoted and bracketed text names no product, but a release or dosage form
