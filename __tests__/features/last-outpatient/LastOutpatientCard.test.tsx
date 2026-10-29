@@ -205,6 +205,25 @@ describe('LastOutpatientCard', () => {
     expect(mockRevealTab).toHaveBeenCalledWith('settings', { settingsTab: 'display' })
   })
 
+  it('shows an earlier result in another unit with that unit', () => {
+    mockClinicianName = '陳怡君'
+    mockClinicalData = { ...chart(), observations: [
+      lab('hb-then', '718-7', 'Hemoglobin', 120, 'g/L', '2026-07-10', 'h-old'),
+      lab('hb-now', '718-7', 'Hemoglobin', 12.6, 'g/dL', '2026-10-09', 'h-mine'),
+    ] }
+    render(<LastOutpatientCard />)
+    expect(rowWith('12.6')?.textContent).toMatch(/120\s*g\/L/)
+  })
+
+  it('does not claim nothing was ordered when an order has no linked result yet', () => {
+    mockClinicianName = '陳怡君'
+    const order = { resourceType: 'ServiceRequest', id: 'sr-1', meta: HOSPITAL_META, status: 'active', intent: 'order', code: { text: 'Holter ECG' }, encounter: { reference: 'Encounter/h-mine' } }
+    mockClinicalData = { ...chart(), observations: [], diagnosticReports: [], serviceRequests: [order] }
+    render(<LastOutpatientCard />)
+    expect(screen.getByText(zhTW.lastOutpatient.empty)).toBeInTheDocument()
+    expect(zhTW.lastOutpatient.empty).not.toMatch(/沒有開立/)
+  })
+
   it('says reports are still loading rather than that nothing was ordered', () => {
     const { useProgressiveImportStore } = jest.requireActual('@/src/application/stores/progressive-import.store')
     useProgressiveImportStore.setState({ current: { phase: 'reports-pending' } })

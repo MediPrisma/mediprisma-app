@@ -177,7 +177,10 @@ function LabTable({
                   <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
                     {prior && (
                       <>
-                        <span className="tabular-nums text-foreground/80">{prior.value}</span>
+                        <span className="tabular-nums text-foreground/80">
+                          {prior.value}
+                          {prior.unit && <span className="ml-1 text-xs text-muted-foreground">{prior.unit}</span>}
+                        </span>
                         <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(prior.date)}</span>
                       </>
                     )}

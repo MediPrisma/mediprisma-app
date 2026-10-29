@@ -138,6 +138,21 @@ describe('previous lab values', () => {
     expect(prior.has('old')).toBe(false)
   })
 
+  it('keeps the earlier unit when it differs, rather than set two scales side by side', () => {
+    const hb = (id: string, value: number, unit: string, date: string) => ({
+      ...creatinine(id, value, date),
+      code: { coding: [{ system: 'http://loinc.org', code: '718-7' }], text: 'Hemoglobin' },
+      valueQuantity: { value, unit },
+    })
+    const prior = buildPriorLabValues([
+      hb('then', 120, 'g/L', '2026-07-10T08:00:00+08:00'),
+      hb('now', 12, 'g/dL', '2026-10-09T09:40:00+08:00'),
+      hb('later', 12.4, 'g/dL', '2026-10-20T09:40:00+08:00'),
+    ], [])
+    expect(prior.get('now')).toEqual({ value: '120', date: '2026-07-10', unit: 'g/L' })
+    expect(prior.get('later')).toEqual({ value: '12', date: '2026-10-09' })
+  })
+
   it('reads results held inside a lab report too', () => {
     const prior = buildPriorLabValues([], [
       { resourceType: 'DiagnosticReport', id: 'dr-old', _observations: [creatinine('a', 1.0, '2026-07-10')] },

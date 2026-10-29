@@ -149,6 +149,9 @@ export function resultsOrderedAt<T>(
 export type PriorLabValue = {
   value: string
   date: string
+  /** The earlier result's own unit, set only when it differs from this
+   *  result's: the figures are then on different scales and are not converted. */
+  unit?: string
 }
 
 function analyteKey(observation: any): string | null {
@@ -167,6 +170,12 @@ function compactValue(observation: any): string {
     return `${comparator}${quantity.value}`
   }
   return typeof observation?.valueString === 'string' ? observation.valueString.trim() : ''
+}
+
+function quantityUnit(observation: any): string {
+  const quantity = observation?.valueQuantity
+  const unit = typeof quantity?.unit === 'string' && quantity.unit.trim() ? quantity.unit : quantity?.code
+  return typeof unit === 'string' ? unit.trim() : ''
 }
 
 function allObservations(observations: readonly any[], reports: readonly any[]): any[] {
@@ -218,7 +227,12 @@ export function buildPriorLabValues(
       if (earlier) {
         for (const observation of sameDay) {
           if (typeof observation?.id === 'string' && observation.id) {
-            prior.set(observation.id, { value: compactValue(earlier.observation), date: earlier.day })
+            const unit = quantityUnit(earlier.observation)
+            prior.set(observation.id, {
+              value: compactValue(earlier.observation),
+              date: earlier.day,
+              ...(unit && unit.toLowerCase() !== quantityUnit(observation).toLowerCase() ? { unit } : {}),
+            })
           }
         }
       }

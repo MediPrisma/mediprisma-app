@@ -2002,7 +2002,7 @@ export const en = {
     previousLabel: 'Previous',
     allNormal: 'All within reference range',
     noAbnormal: 'No abnormal lab results at this visit',
-    empty: 'No labs or reports were ordered at this visit.',
+    empty: 'No lab or exam results are linked to this visit yet.',
     reportsPending: 'Test and exam reports are still loading…',
   },
   visitHistory: {
