@@ -45,10 +45,10 @@ export function readRemoteOutpatientPrefs(data: DocumentData | undefined): Remot
  *  round-trip drops any undefined, which Firestore refuses. */
 export function toRemoteOutpatientPrefs(prefs: OutpatientPrefs, updatedAt: number): DocumentData {
   const {
-    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat,
+    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat, clinicianName,
   } = sanitizeOutpatientPrefs(prefs)
   return JSON.parse(JSON.stringify({
-    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat, updatedAt,
+    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat, clinicianName, updatedAt,
   }))
 }
 
@@ -67,7 +67,7 @@ export function mergeOutpatientPrefs(
   theirs: OutpatientPrefs,
   mineIsNewer: boolean,
 ): OutpatientPrefs {
-  const choice = <K extends 'pinnedLabs' | 'labMode' | 'activeFormatId' | 'handoffMode' | 'medFormat'>(key: K): OutpatientPrefs[K] => {
+  const choice = <K extends 'pinnedLabs' | 'labMode' | 'activeFormatId' | 'handoffMode' | 'medFormat' | 'clinicianName'>(key: K): OutpatientPrefs[K] => {
     const mineChanged = !same(mine[key], base[key])
     const theirsChanged = !same(theirs[key], base[key])
     if (mineChanged && theirsChanged) return mineIsNewer ? mine[key] : theirs[key]
@@ -81,6 +81,7 @@ export function mergeOutpatientPrefs(
     handoffMode: choice('handoffMode'),
     // The one 用藥 format is a single choice: whichever side changed it.
     medFormat: choice('medFormat'),
+    clinicianName: choice('clinicianName'),
   })
 }
 

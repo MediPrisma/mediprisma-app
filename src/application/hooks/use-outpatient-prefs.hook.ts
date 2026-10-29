@@ -29,6 +29,8 @@ export interface OutpatientPrefsApi extends OutpatientPrefs {
   saveMedFormat: (format: MedCopyFormat) => void
   /** Back to the default (緊湊) built-in. */
   resetMedFormat: () => void
+  /** The clinician's own name for 上次門診; empty clears it. */
+  setClinicianName: (name: string) => void
 }
 
 export function useOutpatientPrefs(): OutpatientPrefsApi {
@@ -62,6 +64,7 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
 
   const saveMedFormat = useCallback((format: MedCopyFormat) => update(key, { medFormat: format }), [key, update])
   const resetMedFormat = useCallback(() => update(key, { medFormat: null }), [key, update])
+  const setClinicianName = useCallback((name: string) => update(key, { clinicianName: name.trim() || null }), [key, update])
 
   return useMemo(() => ({
     ...prefs,
@@ -73,5 +76,6 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
     setHandoffMode,
     saveMedFormat,
     resetMedFormat,
-  }), [prefs, setPinnedLabs, setLabMode, saveFormat, deleteFormat, setActiveFormat, setHandoffMode, saveMedFormat, resetMedFormat])
+    setClinicianName,
+  }), [prefs, setPinnedLabs, setLabMode, saveFormat, deleteFormat, setActiveFormat, setHandoffMode, saveMedFormat, resetMedFormat, setClinicianName])
 }

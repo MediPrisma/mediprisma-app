@@ -30,6 +30,7 @@ import {
   writePilotPackIds,
 } from '@/features/clinical-decision-support/guideline-packs/pilot-gate'
 import { HOST_CARE_PACKS } from '@/features/clinical-decision-support/guideline-packs/registry'
+import { ClinicianNameSetting } from './ClinicianNameSetting'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
 
@@ -144,6 +145,8 @@ export function DisplaySettings() {
           ))}
         </div>
       </div>
+
+      <ClinicianNameSetting />
 
       {/* Experimental clinical tools are opt-in, and opting in is all it takes:
           no account required (owner decision, 2026-09). Hidden only where no

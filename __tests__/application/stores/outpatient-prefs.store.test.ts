@@ -145,3 +145,13 @@ describe('useOutpatientPrefsStore', () => {
     expect(resolveOutpatientPrefsKey(null, null)).toBe('guest')
   })
 })
+
+describe('clinician name (上次門診)', () => {
+  it('keeps a trimmed name and reads blank or invalid values as unset', () => {
+    expect(sanitizeOutpatientPrefs({ clinicianName: '  陳怡君 ' }).clinicianName).toBe('陳怡君')
+    expect(sanitizeOutpatientPrefs({ clinicianName: '   ' }).clinicianName).toBeNull()
+    expect(sanitizeOutpatientPrefs({ clinicianName: 42 }).clinicianName).toBeNull()
+    expect(sanitizeOutpatientPrefs({}).clinicianName).toBeNull()
+    expect(sanitizeOutpatientPrefs({ clinicianName: 'x'.repeat(80) }).clinicianName).toHaveLength(40)
+  })
+})

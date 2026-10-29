@@ -1837,12 +1837,24 @@ export const LocalBundleService = {
     const orderLabels = new Map(byType('ServiceRequest').map((order: any) => [
       `ServiceRequest/${order.id}`, order.code?.text || order.code?.coding?.find((coding: any) => coding.display)?.display,
     ]))
+    // The visit each order came from (already retargeted to a merged visit).
+    // A result shared by several visits' orders carries no single encounter,
+    // so its visits are kept here for the views that group by visit.
+    const orderEncounters = new Map(byType('ServiceRequest').flatMap((order: any) => {
+      const encounter = typeof order.encounter?.reference === 'string' ? order.encounter.reference.split('/').pop() : ''
+      return encounter ? [[`ServiceRequest/${order.id}`, encounter] as const] : []
+    }))
     for (const result of [...byType('Observation'), ...byType('DiagnosticReport')]) {
       if (!Array.isArray(result.basedOn)) continue
       result.basedOn = result.basedOn.map((reference: any) => {
         const display = orderLabels.get(reference.reference)
         return !reference.display && typeof display === 'string' ? { ...reference, display } : reference
       })
+      const visits = [...new Set(result.basedOn.flatMap((reference: any) => {
+        const encounter = orderEncounters.get(reference?.reference)
+        return encounter ? [encounter] : []
+      }))]
+      if (visits.length) result._orderEncounterIds = visits
     }
 
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }
