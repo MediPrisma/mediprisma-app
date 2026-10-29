@@ -129,6 +129,8 @@ export interface VisitBookLayoutProps {
   /** Notes attached to points from a calculator, listed in 今天的計畫. */
   calculatorNotes?: readonly { key: string; dp: string; source: string; text: string }[]
   onRemoveCalculatorNote?: (key: string) => void
+  /** Missing-dose-input recovery supplied by the host's patient measurement flow. */
+  doseRecovery?: ReactNode
 }
 
 /** What the page hands its head tools. */
@@ -975,9 +977,11 @@ function CoverageLines({ point, isEnglish }: { point: DecisionPointView; isEngli
   )
 }
 
-function DoseTable({ table, isEnglish }: { table: { title: string; rows: OptionRowView[] }; isEnglish: boolean }) {
+function DoseTable({ table, isEnglish, recovery }: { table: { title: string; rows: OptionRowView[] }; isEnglish: boolean; recovery?: ReactNode }) {
   const mark = (met: boolean | undefined) => (met === true ? '✓' : met === false ? '✗' : '？')
   return (
+    <>
+    {recovery}
     <div className={styles.optScroll}>
       <table className={styles.doseTable} aria-label={table.title} data-testid="cdss-book-dose-table">
         <thead>
@@ -1015,6 +1019,7 @@ function DoseTable({ table, isEnglish }: { table: { title: string; rows: OptionR
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
@@ -1077,6 +1082,7 @@ export function VisitBookLayout({
   headTools,
   calculatorNotes,
   onRemoveCalculatorNote,
+  doseRecovery,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const onSaveTarget = chrome?.onSaveTarget
@@ -1667,7 +1673,7 @@ export function VisitBookLayout({
             </div>
           )
         })}
-        {table ? <DoseTable table={table} isEnglish={isEnglish} /> : null}
+        {table ? <DoseTable table={table} isEnglish={isEnglish} recovery={doseRecovery} /> : null}
         {withDecision ? blockDecision(point, entry) : null}
         {/* Optional, and changes nothing today's decision reads: after it. */}
         {more ? (
@@ -1696,7 +1702,7 @@ export function VisitBookLayout({
         {current ? (
           <>
             <BookChainDone steps={decided} isEnglish={isEnglish} {...(onClear ? { onClear } : {})} />
-            {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} /></div> : null}
+            {stepTable ? <div className={styles.boxWide}><DoseTable table={stepTable} isEnglish={isEnglish} recovery={doseRecovery} /></div> : null}
             <p className={styles.boxQuestion} data-visit-headline="">{isEnglish ? 'Today: ' : '今天：'}<FormulaText text={shown.headline ?? shown.label} /></p>
             <BookDecisionControls
               point={shown}

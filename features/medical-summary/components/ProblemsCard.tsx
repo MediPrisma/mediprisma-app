@@ -16,6 +16,8 @@ import type { ResourceNavTarget } from "@/src/application/stores/resource-naviga
 import { SourceLink } from "./SourceLink"
 import { resolveClaimSources } from "../utils/resolve-claim-sources"
 import { keyMentionLanguage, keyMentionsText, resolveKeyMentions } from "@/src/core/utils/key-mentions.utils"
+import { useOptionalLanguage } from "@/src/application/providers/language.provider"
+import { localizeDemoOrganizationDisplay } from "@/src/shared/utils/demo-display"
 
 interface ProblemsCardProps {
   result: MedicalSummaryResult
@@ -97,6 +99,7 @@ export function ProblemsCard({
   sourceTypeMismatchLabel,
   onNavigate,
 }: ProblemsCardProps) {
+  const locale = useOptionalLanguage()?.locale ?? "zh-TW"
   const [showAll, setShowAll] = useState(false)
   const [openMedications, setOpenMedications] = useState<ReadonlySet<number>>(new Set())
   const problems = result.problems ?? []
@@ -197,7 +200,7 @@ export function ProblemsCard({
                 : problem.managedByScope === "inferred"
                   ? `${problem.managedByDate}（${inferredLabel}）`
                   : problem.managedByDate
-            const managedByLine = [problem.managedBy, managedByDate]
+            const managedByLine = [problem.managedBy && localizeDemoOrganizationDisplay(problem.managedBy, locale), managedByDate]
               .filter(Boolean)
               .join(" · ")
             const medicationItems = problem.medicationItems ?? []

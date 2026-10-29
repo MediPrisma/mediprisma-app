@@ -60,6 +60,10 @@ export interface UseClinicalContextOptions {
    *  instead of naming them, check-up vitals say so, and medicine supply is
    *  worded as an estimate, not a stop. Every other consumer keeps 'default'. */
   contextVariant?: 'default' | 'first-visit-summary'
+  /** Reference "now" for medication currency and time filters. A caller that
+   *  scopes the source catalog with its own clock (the demo's as-of date) passes
+   *  the same value so the text and the catalog agree; otherwise the day clock. */
+  nowMs?: number
 }
 
 export function useClinicalContext(
@@ -76,7 +80,8 @@ export function useClinicalContext(
   const firstVisitSummary = options.contextVariant === 'first-visit-summary'
   const filters = profile.filters
   const { patient } = usePatient()
-  const nowMs = useNow()
+  const dayNowMs = useNow()
+  const nowMs = options.nowMs ?? dayNowMs
   const { locale } = useLanguage()
 
   const queriedClinicalData = (useClinicalData() as ClinicalData | null) ?? null

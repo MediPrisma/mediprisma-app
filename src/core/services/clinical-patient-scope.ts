@@ -2,7 +2,28 @@ import type { ClinicalSourceNode } from './clinical-source-graph'
 
 const trimBase = (value: string) => value.replace(/\/+$/, '')
 
-function patientIdFrom(value: string): string | undefined {
+/**
+ * Remembers a pure string parser's answers. Scope checks run for every node
+ * on every projection of an import and re-read the same patient scope, REST
+ * base and references each time; `new URL` throwing on each plain id made
+ * that the ~5 s main-thread stall after a cloud import. Bounded: a large
+ * import starts a fresh map rather than growing without end.
+ */
+function remembered(parse: (value: string) => string | undefined, limit = 5000): (value: string) => string | undefined {
+  let seen = new Map<string, string | undefined>()
+  return value => {
+    if (seen.has(value)) return seen.get(value)
+    const parsed = parse(value)
+    if (seen.size >= limit) seen = new Map()
+    seen.set(value, parsed)
+    return parsed
+  }
+}
+
+const patientIdFrom = remembered(parsePatientId)
+const absoluteBase = remembered(parseAbsoluteBase)
+
+function parsePatientId(value: string): string | undefined {
   if (/^urn:/i.test(value)) return undefined
   const decode = (id: string) => {
     try { return decodeURIComponent(id) } catch { return undefined }
@@ -18,7 +39,7 @@ function patientIdFrom(value: string): string | undefined {
   }
 }
 
-function absoluteBase(value: string): string | undefined {
+function parseAbsoluteBase(value: string): string | undefined {
   try {
     const url = new URL(value)
     if (!/^https?:$/i.test(url.protocol)) return undefined

@@ -78,7 +78,18 @@ export function medicationExpectedEndTimestamp(medication: any): number | undefi
   const duration = [medication?.dispenseRequest?.expectedSupplyDuration, dosage?.timing?.repeat?.boundsDuration]
     .find(value => durationToDays(value, false) !== undefined)
   const days = durationToDays(duration, false)
-  if (!started || !days) return undefined
+  if (!days) {
+    // With no supply duration, the order's own dated interval is the only
+    // recorded span; the medication list counts its days the same way.
+    const validity = medication?.dispenseRequest?.validityPeriod
+    const end = typeof validity?.end === 'string' && /^\d{4}-\d{2}-\d{2}/.test(validity.end) ? validity.end : undefined
+    const from = started || validity?.start
+    if (!end || !from || !Number.isFinite(Date.parse(end))) return undefined
+    const endMs = end.length === 10 ? calendarEnd(end) : medicationClinicalTimestamp(end)
+    // An interval that ends before the order began records no span at all.
+    return endMs >= medicationClinicalTimestamp(from) ? endMs : undefined
+  }
+  if (!started) return undefined
   if (Number.isInteger(days) && !isElapsedDuration(duration)) {
     const endDay = medicationSupplyEndDay(medicationClinicalDay(started), days)
     return endDay ? calendarEnd(endDay) : undefined
@@ -114,7 +125,12 @@ export function assessMedicationCurrentness(
   const status = normalizeClinicalStatus(medication?.status)
   const end = medicationExpectedEnd(medication)
   const endMs = medicationExpectedEndTimestamp(medication)
-  const supplyWindowOpen = endMs !== undefined && nowMs <= endMs
+  // A supply window covers today only once it has begun.
+  const authoredStartMs = medicationExpectedStartTimestamp(medication)
+  const validityStart = medication?.dispenseRequest?.validityPeriod?.start
+  const startMs = Number.isFinite(authoredStartMs) ? authoredStartMs
+    : typeof validityStart === 'string' && isParsableDay(validityStart) ? medicationClinicalTimestamp(validityStart) : NaN
+  const supplyWindowOpen = endMs !== undefined && nowMs <= endMs && !(Number.isFinite(startMs) && nowMs < startMs)
   if (status === 'completed' && (medication?._sourceResourceType === 'MedicationStatement' || medication?.resourceType === 'MedicationStatement')) {
     return { current: false, uncertain: false, basis: 'source-status' }
   }

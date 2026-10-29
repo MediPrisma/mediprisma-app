@@ -53,6 +53,7 @@ export function ClinicVitalsForm({
   const [oxygenSaturation, setOxygenSaturation] = useState(entryOf('oxygenSaturation')?.toString() ?? '')
   const [bodyWeight, setBodyWeight] = useState(entryOf('bodyWeight')?.toString() ?? '')
   const [bodyHeight, setBodyHeight] = useState(entryOf('bodyHeight')?.toString() ?? '')
+  const [edited, setEdited] = useState<ReadonlySet<ClinicVitalsEntryKey>>(new Set())
   const parsed = {
     systolic: parseNumber(systolic),
     diastolic: parseNumber(diastolic),
@@ -102,7 +103,8 @@ export function ClinicVitalsForm({
             if (parsed.systolic === undefined || parsed.diastolic === undefined) continue
           }
           if (value === undefined) continue
-          entries[key] = { value, measuredOn }
+          const previous = initial?.entries[key]
+          entries[key] = { value, measuredOn: key === 'bodyWeight' && !edited.has(key) && previous?.value === value ? previous.measuredOn : measuredOn }
         }
         onSave({ entries })
         onClose()
@@ -110,8 +112,8 @@ export function ClinicVitalsForm({
     >
       <span className="w-full text-xs text-muted-foreground @min-[40rem]:w-auto @min-[40rem]:self-center">
         {isEnglish
-          ? 'Measured in clinic today. Encrypted and kept for this tab session; every module recomputes from it.'
-          : '今日門診量測。加密保存於本分頁的工作階段；各模組會依此重新判定。'}
+          ? 'Measured in clinic today. An unchanged weight keeps its original date. Encrypted and kept for this tab session; every module recomputes from it.'
+          : '今日門診量測；未編輯的體重保留原量測日期。加密保存於本分頁的工作階段；各模組會依此重新判定。'}
       </span>
       {fields.map((field) => (
         <label key={field.key} className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
@@ -123,7 +125,7 @@ export function ClinicVitalsForm({
             min="0"
             step={field.step}
             value={field.value}
-            onChange={(event) => field.set(event.target.value)}
+            onChange={(event) => { field.set(event.target.value); setEdited(old => new Set(old).add(field.key)) }}
             className="h-8 w-20 px-2 text-sm tabular-nums md:text-sm"
             aria-invalid={bpHalfEntered && (field.key === 'systolic' || field.key === 'diastolic') ? true : undefined}
             data-testid={`cdss-hf-clinic-vitals-${field.key}`}

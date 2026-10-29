@@ -68,6 +68,9 @@ export function loadEncryptedAnswers<T>(key: string): Promise<T | null> {
  */
 const writeTokens = new Map<string, number>()
 
+/** The newest write per key, which an overtaken write reports instead of its own. */
+const latestWrites = new Map<string, Promise<boolean>>()
+
 function nextWriteToken(key: string): number {
   const token = (writeTokens.get(key) ?? 0) + 1
   writeTokens.set(key, token)
@@ -77,15 +80,28 @@ function nextWriteToken(key: string): number {
 /**
  * Encrypt and write in the background. Returns immediately: the caller's
  * in-memory state is already the answer, and a failed write never reaches it.
+ * The promise says whether it was kept, for a caller that tells the clinician.
  */
-export function persistEncryptedAnswers(key: string, value: unknown): void {
+export function persistEncryptedAnswers(key: string, value: unknown): Promise<boolean> {
   const token = nextWriteToken(key)
-  void saveEncryptedCache(key, value, () => writeTokens.get(key) === token)
+  let superseded = false
+  const written = saveEncryptedCache(key, value, () => {
+    superseded = writeTokens.get(key) !== token
+    return !superseded
+  }).then(kept => (
+    // A newer write carries this one's answers too, so whether they were kept
+    // is that write's result — not this one's, which never reached storage.
+    superseded ? (latestWrites.get(key) ?? kept) : kept
+  ))
+  latestWrites.set(key, written)
+  return written
 }
 
 /** Remove one patient's stored answers, and cancel any write still in flight. */
 export function discardEncryptedAnswers(key: string): void {
   nextWriteToken(key)
+  // A write overtaken by a clear was meant to go: it counts as settled.
+  latestWrites.set(key, Promise.resolve(true))
   removeEncryptedCache(key)
 }
 

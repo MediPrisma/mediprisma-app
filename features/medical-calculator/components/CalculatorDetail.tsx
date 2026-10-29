@@ -127,6 +127,7 @@ export function CalculatorDetail({
     isLoading: patientDataLoading,
     error: patientDataError,
     retry: retryPatientData,
+    patientId,
   } = useLabAutofill()
   // Questionnaire-style calculators (GDS-15, PHQ-9…) have no `source` on any
   // input, so a loading chart tells the user nothing — keep their view quiet.
@@ -146,20 +147,36 @@ export function CalculatorDetail({
   // Opening a calculator while the chart is still loading used to seed the
   // inputs from an empty autofill and never revisit it — the fields stayed
   // blank for good, with the "Refill" button hidden because nothing was
-  // filled. Re-seed when a newer autofill arrives, but never overwrite what
-  // the clinician has already typed. Adjusted during render (not in an
-  // effect) so the values land in the same paint.
-  const [edited, setEdited] = useState(false)
+  // filled. Re-seed the fields the clinician has not typed in when a newer
+  // autofill arrives (a weight just added in the CDSS, a chart that finished
+  // loading); what they typed stays — for the same patient only. Another
+  // patient starts over, so no typed value is computed with someone else's
+  // chart. Adjusted during render (not in an effect) so the values land in
+  // the same paint.
+  const [edited, setEdited] = useState<ReadonlySet<string>>(() => new Set())
   const [seededFrom, setSeededFrom] = useState(initial)
-  if (!edited && initial !== seededFrom) {
+  const [seededFor, setSeededFor] = useState(patientId)
+  if (initial !== seededFrom || patientId !== seededFor) {
+    const samePatient = patientId === seededFor
     setSeededFrom(initial)
-    setValues(initial.values)
-    setFilled(initial.filled)
-    setDisplayUnits(initial.units)
+    setSeededFor(patientId)
+    if (!samePatient) setEdited(new Set())
+    const kept = samePatient ? edited : new Set<string>()
+    const keep = <T,>(next: Record<string, T>, prev: Record<string, T>) => {
+      const out = { ...next }
+      for (const key of kept) {
+        if (key in prev) out[key] = prev[key]
+        else delete out[key]
+      }
+      return out
+    }
+    setValues((prev) => keep(initial.values, prev))
+    setFilled((prev) => keep(initial.filled, prev))
+    setDisplayUnits((prev) => keep(initial.units, prev))
   }
 
   const setValue = useCallback((key: string, value: string) => {
-    setEdited(true)
+    setEdited((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
     setValues((prev) => ({ ...prev, [key]: value }))
     setFilled((prev) => {
       if (!prev[key]) return prev
@@ -171,7 +188,7 @@ export function CalculatorDetail({
 
   const refill = useCallback(() => {
     const s = seed(calc, autofill)
-    setEdited(false)
+    setEdited(new Set())
     setValues(s.values)
     setFilled(s.filled)
     setDisplayUnits(s.units)

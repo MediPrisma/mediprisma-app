@@ -259,9 +259,9 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
                 {labels.orderCode}: {source.codes.join(', ')}
               </span>
             )}
-            {source.reportId && (
+            {(source.sourceRecordId ?? source.reportId) && (
               <span className="break-all sm:col-span-2">
-                {labels.recordId}: {source.reportId}
+                {labels.recordId}: {source.sourceRecordId ?? source.reportId}
               </span>
             )}
             {source.narrative && (

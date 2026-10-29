@@ -5,6 +5,8 @@ import { getImagingCopySource, getReportDate, isRadiographReport, isReportReceip
 
 export type SharedReportSource = {
   reportId?: string
+  /** The source's own FHIR id, shown as 來源紀錄. reportId is the app's row id. */
+  sourceRecordId?: string
   /** Original source text retained for cross-source display grouping. */
   narrative?: string
   title: string
@@ -223,6 +225,7 @@ export function reportSource(report: any): SharedReportSource {
   const codes = [...new Set<string>(codings.map((coding) => coding.code))]
   return {
     reportId: report?.id || undefined,
+    sourceRecordId: report?.sourceId || report?.id || undefined,
     title,
     codes,
     codings,

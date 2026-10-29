@@ -64,6 +64,7 @@ import { HfPrognosisModels } from '@/features/medical-calculator/prognosis/HfPro
 import { useTodayNow } from '../hooks/use-local-day.hook'
 import { hfPrognosisEvidence } from '../utils/hf-prognosis-evidence'
 import { AtrialFibrillationVisitFlow } from './AtrialFibrillationVisitFlow'
+import { AfWeightEntry } from './AfWeightEntry'
 import { buildDiseaseBoard, AF_BOARD_CONFIG } from './disease-board'
 import type { AfAnswers } from '../stores/af-answers.store'
 import { buildHeartFailureVisitFlow } from './heart-failure-visit-flow'
@@ -124,7 +125,8 @@ interface ClinicalDecisionSupportViewProps {
   layout?: CdssLayout
   /** Vitals the clinician measured in the room this visit; heart-failure board only. */
   clinicVitals?: ClinicVitals
-  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void
+  /** May resolve whether the patient's stored copy was written, for a form that reports it. */
+  onSaveClinicVitals?: (patch: ClinicVitalsPatch) => void | Promise<boolean>
   onClearClinicVitals?: () => void
   /**
    * What the clinician answered on a card's structured question — the DP-01
@@ -2402,6 +2404,8 @@ export function ClinicalDecisionSupportView({
           packVersion={result.packVersion}
           screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
           prognosisEvidence={hfPrognosisEvidence(profileFacts, isEnglish)}
+          doseRecovery={result.packId === AF_BOARD_CONFIG.packId || companionResults?.some(companion => companion.packId === AF_BOARD_CONFIG.packId)
+            ? <AfWeightEntry key={patientId} weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} /> : undefined}
           decisions={physicianDecisions}
           onRecordDecision={onRecordDecision}
           onClearDecision={onClearDecision}
@@ -2591,6 +2595,7 @@ export function ClinicalDecisionSupportView({
         expandedId={expandedId} onToggle={id => setRequestedExpandedId(expandedId === id ? null : id)}
         answers={afAnswers} onAnswer={onAfAnswer} clinicVitals={clinicVitals}
         onSaveClinicVitals={onSaveClinicVitals} onClearClinicVitals={onClearClinicVitals}
+        doseRecovery={<AfWeightEntry key={patientId} weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} />}
         decisions={physicianDecisions} onRecordDecision={onRecordDecision} onClearDecision={onClearDecision}
         renderDetail={recommendation => <RecommendationDetail recommendation={recommendation} isEnglish={isEnglish}
           onNavigate={navigateToResource} label={label} patientId={patientId} copyProvenance={copyProvenance} />}

@@ -27,8 +27,12 @@ test('original FHIR survives processing, reload and repeated local import', asyn
   await importBundle(page, { bundlePath: source })
 
   const openDownloads = async (target = page) => {
-    await openFeaturePanel(target)
-    await target.getByRole('tab', { name: '複製', exact: true }).click()
+    // After a reload of this large chart the workspace can measure late and
+    // fold the panel back to its rail after it first opened; open it again.
+    await expect(async () => {
+      await openFeaturePanel(target)
+      await target.getByRole('tab', { name: '複製', exact: true }).click({ timeout: 5_000 })
+    }).toPass({ timeout: 60_000 })
     await target.getByRole('tab', { name: '下載檔案', exact: true }).click()
   }
   const downloadOriginal = async (filename: string, target = page) => {

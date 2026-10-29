@@ -30,8 +30,16 @@ import { prepareLocalImportFile } from '../services/local-import-file.service'
 import { ProgressiveImportError } from '../services/progressive-import-transaction'
 import { persistSummaryVersions } from '@/src/application/hooks/medical-summary/summary-versions.store'
 
-/** Ceiling for pulling the bundled demo chart (~1.7MB) over hospital Wi-Fi. */
+/** Ceiling for pulling a bundled demo chart (~1.7–2.5MB) over hospital Wi-Fi. */
 const DEMO_FETCH_TIMEOUT_MS = 30_000
+
+/** The two bundled 試用資料 of the same de-identified patient. */
+export type DemoDataVariant = 'health-bank' | 'medcloud'
+
+const DEMO_BUNDLE_PATHS: Record<DemoDataVariant, string> = {
+  'health-bank': '/demo/demo-bundle.json',
+  medcloud: '/demo/demo-medcloud-bundle.json',
+}
 
 export interface ImportBundleOptions {
   signal?: AbortSignal
@@ -46,9 +54,10 @@ export interface UseImportBundleReturn {
   /** Parse + persist a FHIR Bundle file. Throws on validation error;
    *  errors are also captured into the `error` state for UI use. */
   importFile: (file: File, options?: ImportBundleOptions) => Promise<void>
-  /** Fetch + load the bundled demo patient ("試用資料 / 示範病人"). Goes through
-   *  the exact same parse/save/cache-invalidate path as a real import. */
-  loadDemo: () => Promise<void>
+  /** Fetch + load a bundled demo patient ("試用資料 / 示範病人"); defaults to
+   *  the 健康存摺 chart. Goes through the exact same parse/save/cache-invalidate
+   *  path as a real import. */
+  loadDemo: (variant?: DemoDataVariant) => Promise<void>
   /** Wipe the imported bundle from localStorage. */
   clear: () => Promise<void>
   loading: boolean
@@ -118,7 +127,8 @@ export function useImportBundle(): UseImportBundleReturn {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
     }
-    const parsed = LocalBundleService.parse(bundle)
+    const localImportId = generateId()
+    const parsed = LocalBundleService.validateImport(bundle, { importId: localImportId, sourceMetadata })
     if (!parsed) {
       throw new Error('Bundle must contain at least one Patient resource')
     }
@@ -131,7 +141,6 @@ export function useImportBundle(): UseImportBundleReturn {
     // demo we clear it only after React Query has published the audited data;
     // clearing earlier would briefly expose the old real patient under demo's
     // automatic-snapshot policy.
-    const localImportId = generateId()
     // The storage layer checks again after preparing encrypted data, before
     // publishing the new pointer and key.
     signal?.throwIfAborted()
@@ -207,7 +216,7 @@ export function useImportBundle(): UseImportBundleReturn {
     }
   }, [persistBundle])
 
-  const loadDemo = useCallback(async () => {
+  const loadDemo = useCallback(async (variant: DemoDataVariant = 'health-bank') => {
     setLoading(true)
     setError(null)
     try {
@@ -222,7 +231,7 @@ export function useImportBundle(): UseImportBundleReturn {
         const timeoutId = setTimeout(() => controller.abort(), DEMO_FETCH_TIMEOUT_MS)
         let res: Response
         try {
-          res = await fetch(`${base}/demo/demo-bundle.json`, { signal: controller.signal })
+          res = await fetch(`${base}${DEMO_BUNDLE_PATHS[variant]}`, { signal: controller.signal })
         } catch (fetchError) {
           if (controller.signal.aborted) {
             throw new Error('Loading the demo data timed out. Check the connection and try again.')
@@ -233,7 +242,17 @@ export function useImportBundle(): UseImportBundleReturn {
         }
         if (!res.ok) throw new Error(`Failed to load demo data (${res.status})`)
         const originalFhir = await res.blob()
-        await persistBundle(JSON.parse(await originalFhir.text()), true, originalFhir)
+        if (variant === 'medcloud') {
+          // A real 雲端病歷 export is imported as a file, which also runs the
+          // local enrichment step; route the demo through the same converter so
+          // it renders exactly like the user's own MediCloud import would.
+          const prepared = await prepareLocalImportFile(
+            new File([originalFhir], 'demo-medcloud-bundle.json', { type: 'application/json' }),
+          )
+          await persistBundle(prepared.bundle, true, prepared.originalFhir, prepared.sourceMetadata)
+        } else {
+          await persistBundle(JSON.parse(await originalFhir.text()), true, originalFhir)
+        }
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load demo data'

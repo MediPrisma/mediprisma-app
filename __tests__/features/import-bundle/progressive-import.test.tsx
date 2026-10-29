@@ -15,7 +15,7 @@ const mockInvalidateQueries = jest.fn(async () => {})
 jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: () => mockInvalidateQueries() }) }))
 jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage: () => ({ locale: 'zh-TW' }) }))
 jest.mock('@/src/infrastructure/fhir/services/local-bundle.service', () => ({ LocalBundleService: {
-  hasData: () => !!mockBundle, load: async () => mockBundle, parse: () => ({}), save: (bundle: any, options: any) => mockSave(bundle, options),
+  hasData: () => !!mockBundle, load: async () => mockBundle, parse: () => ({}), validateImport: () => ({}), save: (bundle: any, options: any) => mockSave(bundle, options),
   getActiveImportId: () => mockImportId, isDemoData: () => false, getUserEnteredPatientProfile: () => ({ birthDate: '1980-01-01' }),
 } }))
 jest.mock('@/features/import-bundle/services/local-import-file.service', () => ({ prepareLocalImportFile: () => mockPrepare() }))
