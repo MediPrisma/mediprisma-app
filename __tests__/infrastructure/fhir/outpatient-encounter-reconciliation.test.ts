@@ -291,6 +291,12 @@ it('never lets the ingredient text revive a strength the name states unusably', 
   expect(oneCloudTwoClinics('Syntheticbrand patch 5 mg', 'SYNTHETICBRAND PATCH', 'SYNTHETIC 5 MG/HR', '貼片劑').status).toBe('ambiguous')
 })
 
+it('reads every strength of a three-ingredient combination', () => {
+  expect(oneCloudTwoClinics('Exforge HCT FC tab 5/160/12.5 mg', 'Exforge HCT Film Coated Tablets 10/160/12.5 mg').status).toBe('ambiguous')
+  expect(oneCloudTwoClinics('Exforge HCT FC tab 5/160/12.5 mg', 'Exforge HCT Film Coated Tablets 5/160/12.5 mg').status).toBe('candidate')
+  expect(oneCloudTwoClinics('Glyxambi FC # tab 25/5 mg', 'Glyxambi Film-Coated Tablets 25/5 mg').status).toBe('candidate')
+})
+
 it('never lets the ingredient text stand in for a concentration the product name states', () => {
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION 5MG/ML', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')
   expect(oneCloudTwoClinics('Syntheticbrand inj 5 mg', 'SYNTHETICBRAND INJECTION', 'EACH ML CONTAINS SYNTHETIC 5 MG', '注射劑').status).toBe('ambiguous')

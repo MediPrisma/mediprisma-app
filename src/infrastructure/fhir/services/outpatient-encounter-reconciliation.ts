@@ -67,7 +67,7 @@ const NUMBER = '(?<![\\d.,])(\\d*\\.?\\d+)'
 /** Every strength in a label, in order, with its unit and concentration
  *  denominator (a missing denominator count read as 1). Thousands separators
  *  are read as one number (1,000,000 IU). A combination written '25/5 mg'
- *  reads as 25 mg + 5 mg. Units are never converted: 5 mg/2 ml, 5 mcg and
+ *  reads as 25 mg + 5 mg, and '5/160/12.5 mg' as all three in order. Units are never converted: 5 mg/2 ml, 5 mcg and
  *  5 mg/ml all differ; only spellings (UG, GM, puff for dose) are unified. A
  *  denominator outside ml, g and dose makes the strength unusable: undefined,
  *  unlike [] for a label that states none, so nothing may fill it in. */
@@ -75,7 +75,9 @@ function strengths(text: unknown): string[] | undefined {
   const normalized = String(text ?? '').normalize('NFKC').toLowerCase()
     .replace(/(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d,])/g, (number) => number.replace(/,/g, ''))
     .replace(/(?:[μµ]|u)g(?![a-z])/g, 'mcg').replace(/(?<![a-z])gm(?![a-z])/g, 'g')
-    .replace(new RegExp(`${NUMBER}\\s*\\/\\s*(\\d*\\.?\\d+)\\s*(mcg|mg|g|iu)(?![a-z])`, 'g'), '$1 $3 + $2 $3')
+    // Every number before a shared unit, in order: '5/160/12.5 mg' is three.
+    .replace(new RegExp(`(?<![\\d.,/])\\d*\\.?\\d+(?:\\s*\\/\\s*\\d*\\.?\\d+)+\\s*(mcg|mg|g|iu)(?![a-z])`, 'g'),
+      (run, unit: string) => run.slice(0, run.length - unit.length).split('/').map((amount) => `${amount.trim()} ${unit}`).join(' + '))
   const found = [...normalized.matchAll(new RegExp(
     `${NUMBER}\\s*(mcg|mg|g|iu|%)(?![a-z])(?:\\s*\\/\\s*(\\d*\\.?\\d+)?\\s*(?!(?:mcg|mg|iu)(?![a-z]))([a-z]+))?`, 'g'))]
   if (found.some(([, , , , perUnit]) => perUnit && !PER_UNITS[perUnit])) return undefined
