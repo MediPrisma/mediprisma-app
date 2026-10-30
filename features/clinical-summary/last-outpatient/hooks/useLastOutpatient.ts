@@ -116,10 +116,32 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     return { reports: reports.results, observations: standalone.results, sharedIds }
   }, [visit, diagnosticReports, observations])
 
+  // Every visit's results, each copy placed under its visit, so the visit list
+  // can say how many items each one ordered — counted the way the selected
+  // visit's summary counts them.
+  const everyVisit = useMemo(() => {
+    const reports: any[] = []
+    const standalone: any[] = []
+    for (const candidate of visits) {
+      const ids = new Set(candidate.encounterIds)
+      reports.push(...resultsOrderedAt(diagnosticReports, ids, candidate.id).results)
+      standalone.push(...resultsOrderedAt(observations, ids, candidate.id).results)
+    }
+    return { reports, observations: standalone }
+  }, [visits, diagnosticReports, observations])
+
   const details = useEncounterDetails(
-    EMPTY, ordered.reports, ordered.observations, EMPTY, EMPTY, EMPTY,
+    EMPTY, everyVisit.reports, everyVisit.observations, EMPTY, EMPTY, EMPTY,
     locale, audience, EMPTY, icdDict, encounters,
   )
+  const itemCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const candidate of visits) {
+      const entry = details.get(candidate.id) as EncounterDetails | undefined
+      counts.set(candidate.id, entry ? entry.tests.length + entry.reports.length : 0)
+    }
+    return counts
+  }, [visits, details])
   const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
   // The source Observation behind each row, for the shared trend / history pane.
   const sourceObservations = useMemo(() => {
@@ -144,6 +166,7 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     clinicianMatched: !!clinicianName && mine.length > 0,
     visits,
     withResults,
+    itemCounts,
     visit,
     details: visitDetails,
     sharedCount,
