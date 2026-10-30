@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
@@ -50,66 +51,152 @@ function shortDay(day: string): string {
   return day.slice(5).replace('-', '/')
 }
 
+const COLLAPSED_KEY = 'mediprisma:last-outpatient:visit-list-collapsed'
+
+function readCollapsed(): boolean {
+  try { return window.localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false }
+}
+
+function writeCollapsed(collapsed: boolean) {
+  try { window.localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0') } catch { /* private mode */ }
+}
+
+type VisitListStrings = {
+  label: string
+  youTemplate: string
+  noResults: string
+  pending: string
+  itemCount: string
+  visitCount: string
+  visitCountShort: string
+  collapse: string
+  expand: string
+}
+
 /** Every hospital outpatient visit, newest first, any physician: pick one to
- *  read what it ordered. A visit with nothing linked yet is muted, once the
- *  reports have been imported. */
+ *  read what it ordered. In a wide panel it is a column down the left, by
+ *  year, that folds to a narrow rail; in a narrow one it is a row of chips.
+ *  A visit with nothing linked yet is muted, once the reports are imported. */
 function VisitList({
   visits,
   selectedId,
-  withResults,
+  itemCounts,
   clinicianName,
-  label,
-  youTemplate,
-  noResults,
   reportsPending,
+  collapsed,
+  onCollapsedChange,
+  strings,
   onSelect,
 }: {
   visits: HospitalOutpatientVisit[]
   selectedId: string
-  withResults: Set<string>
+  itemCounts: Map<string, number>
   clinicianName: string | null
-  label: string
-  youTemplate: string
-  noResults: string
   /** Reports still importing: no visit can be called empty yet. */
   reportsPending: boolean
+  collapsed: boolean
+  onCollapsedChange: (collapsed: boolean) => void
+  strings: VisitListStrings
   onSelect: (id: string) => void
 }) {
   const selectedRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     selectedRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [selectedId])
+  const countLabel = strings.visitCount.replace('{count}', String(visits.length))
   return (
-    <div role="group" aria-label={label} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-      {visits.map((candidate) => {
-        const selected = candidate.id === selectedId
-        const empty = !reportsPending && !withResults.has(candidate.id)
-        const physician = candidate.physician && isSameClinician(candidate.physician, clinicianName)
-          ? youTemplate.replace('{name}', candidate.physician)
-          : candidate.physician
-        return (
-          <button
-            key={candidate.id}
-            ref={selected ? selectedRef : undefined}
+    <>
+      {/* Folded (wide panels only): a rail that opens the column again. */}
+      {collapsed && (
+        <div className="hidden shrink-0 flex-col items-center gap-2 border-r border-border pr-2 @[44rem]/lo:flex">
+          <Button
             type="button"
-            aria-pressed={selected}
-            onClick={() => onSelect(candidate.id)}
-            className={cn(
-              'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2.5 py-1.5 text-left transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              selected ? 'border-primary bg-accent text-accent-foreground' : 'border-border hover:bg-muted/60',
-            )}
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            aria-label={strings.expand}
+            title={strings.expand}
+            onClick={() => onCollapsedChange(false)}
           >
-            <span className={cn('text-sm font-semibold tabular-nums', empty && !selected && 'text-muted-foreground')}>
-              {visitDay(candidate.date)}
-            </span>
-            <span className="max-w-[12rem] truncate text-xs text-muted-foreground">
-              {[candidate.department, physician, empty ? noResults : null].filter(Boolean).join(' · ')}
-            </span>
-          </button>
-        )
-      })}
-    </div>
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          <span className="whitespace-nowrap text-xs text-muted-foreground">{strings.visitCountShort.replace('{count}', String(visits.length))}</span>
+        </div>
+      )}
+      <nav
+        aria-label={strings.label}
+        className={cn(
+          'min-w-0 @[44rem]/lo:w-60 @[44rem]/lo:shrink-0 @[44rem]/lo:border-r @[44rem]/lo:border-border @[44rem]/lo:pr-3',
+          collapsed && '@[44rem]/lo:hidden',
+        )}
+      >
+        <div className="mb-1 hidden items-center justify-between gap-2 @[44rem]/lo:flex">
+          <span className="text-xs font-semibold text-muted-foreground">{countLabel}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            aria-label={strings.collapse}
+            title={strings.collapse}
+            onClick={() => onCollapsedChange(true)}
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </div>
+        <div
+          role="group"
+          aria-label={strings.label}
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 @[44rem]/lo:mx-0 @[44rem]/lo:max-h-[34rem] @[44rem]/lo:flex-col @[44rem]/lo:gap-0.5 @[44rem]/lo:overflow-y-auto @[44rem]/lo:overflow-x-visible @[44rem]/lo:px-0"
+        >
+          {visits.map((candidate, index) => {
+            const selected = candidate.id === selectedId
+            const count = itemCounts.get(candidate.id) ?? 0
+            const empty = !reportsPending && count === 0
+            const physician = candidate.physician && isSameClinician(candidate.physician, clinicianName)
+              ? strings.youTemplate.replace('{name}', candidate.physician)
+              : candidate.physician
+            const year = candidate.date.slice(0, 4)
+            const newYear = index === 0 || visits[index - 1].date.slice(0, 4) !== year
+            const status = reportsPending && count === 0
+              ? strings.pending
+              : empty ? strings.noResults : strings.itemCount.replace('{count}', String(count))
+            return (
+              <Fragment key={candidate.id}>
+                {newYear && (
+                  <span className="hidden px-1.5 pb-1 pt-2.5 text-xs font-semibold text-muted-foreground @[44rem]/lo:block">
+                    {year}
+                  </span>
+                )}
+                <button
+                  ref={selected ? selectedRef : undefined}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => onSelect(candidate.id)}
+                  className={cn(
+                    'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2.5 py-1.5 text-left transition-colors @[44rem]/lo:w-full',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    selected ? 'border-primary bg-accent text-accent-foreground' : 'border-border hover:bg-muted/60 @[44rem]/lo:border-transparent',
+                  )}
+                >
+                  <span className="flex w-full items-baseline justify-between gap-2">
+                    <span className={cn('text-sm font-semibold tabular-nums', empty && !selected && 'text-muted-foreground')}>
+                      {visitDay(candidate.date)}
+                    </span>
+                    <span className="hidden text-xs text-muted-foreground @[44rem]/lo:inline">{status}</span>
+                  </span>
+                  <span className="max-w-[12rem] truncate text-xs text-muted-foreground @[44rem]/lo:max-w-full">
+                    {[candidate.department, physician].filter(Boolean).join(' · ')}
+                    {/* In the chip row the status shares the second line. */}
+                    {empty && <span className="@[44rem]/lo:hidden">{` · ${strings.noResults}`}</span>}
+                  </span>
+                </button>
+              </Fragment>
+            )
+          })}
+        </div>
+      </nav>
+    </>
   )
 }
 
@@ -268,13 +355,16 @@ export function LastOutpatientCard() {
   const strings = t.lastOutpatient
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null)
   const [onlyAbnormal, setOnlyAbnormal] = useState(false)
+  // Folded or not is remembered per browser. The card renders only once the
+  // chart is loaded in the browser, so storage is there to read.
+  const [listCollapsed, setListCollapsed] = useState(() => typeof window !== 'undefined' && readCollapsed())
   const {
     isLoading,
     reportsPending,
     clinicianName,
     clinicianMatched,
     visits,
-    withResults,
+    itemCounts,
     visit,
     details,
     priorValues,
@@ -304,20 +394,32 @@ export function LastOutpatientCard() {
       emptyMessage={strings.empty}
     >
       {visit && (
-        <div className="space-y-4" data-testid="last-outpatient">
+        <div className="@container/lo" data-testid="last-outpatient">
+        <div className="flex flex-col gap-4 @[44rem]/lo:flex-row @[44rem]/lo:items-start">
           {visits.length > 1 && (
             <VisitList
               visits={visits}
               selectedId={visit.id}
-              withResults={withResults}
+              itemCounts={itemCounts}
               clinicianName={clinicianName}
-              label={strings.visitPicker}
-              youTemplate={strings.physicianYou}
-              noResults={strings.noResults}
               reportsPending={reportsPending}
+              collapsed={listCollapsed}
+              onCollapsedChange={(next) => { setListCollapsed(next); writeCollapsed(next) }}
+              strings={{
+                label: strings.visitPicker,
+                youTemplate: strings.physicianYou,
+                noResults: strings.noResults,
+                pending: strings.visitPending,
+                itemCount: strings.visitItemCount,
+                visitCount: strings.visitCount,
+                visitCountShort: strings.visitCountShort,
+                collapse: strings.collapseVisits,
+                expand: strings.expandVisits,
+              }}
               onSelect={setSelectedVisitId}
             />
           )}
+          <div className="min-w-0 flex-1 space-y-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="text-[max(15px,1rem)] font-semibold tabular-nums">{visitDay(visit.date)}</span>
@@ -416,6 +518,8 @@ export function LastOutpatientCard() {
               )}
             </>
           )}
+          </div>
+        </div>
         </div>
       )}
     </FeatureCard>

@@ -265,6 +265,31 @@ describe('LastOutpatientCard', () => {
     expect(within(list).getByRole('button', { name: /2026\/10\/09/ })).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
   })
 
+  it('counts each visit’s items the way the summary does, and groups visits by year', () => {
+    mockClinicianName = '陳怡君'
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    const mine = within(list).getByRole('button', { name: /2026\/10\/09/ })
+    // 開立 5 項 in the summary is the same count the list shows.
+    expect(screen.getByText(/開立 5 項/)).toBeInTheDocument()
+    expect(mine).toHaveTextContent(zhTW.lastOutpatient.visitItemCount.replace('{count}', '5'))
+    expect(within(list).getAllByText('2026')).toHaveLength(1)
+  })
+
+  it('folds the visit list and remembers it', () => {
+    window.localStorage.removeItem('mediprisma:last-outpatient:visit-list-collapsed')
+    const { unmount } = render(<LastOutpatientCard />)
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.collapseVisits }))
+    expect(screen.getByRole('button', { name: zhTW.lastOutpatient.expandVisits })).toBeInTheDocument()
+    expect(window.localStorage.getItem('mediprisma:last-outpatient:visit-list-collapsed')).toBe('1')
+    unmount()
+
+    render(<LastOutpatientCard />)
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.expandVisits }))
+    expect(window.localStorage.getItem('mediprisma:last-outpatient:visit-list-collapsed')).toBe('0')
+    expect(screen.queryByRole('button', { name: zhTW.lastOutpatient.expandVisits })).not.toBeInTheDocument()
+  })
+
   it('says reports are still loading rather than that nothing was ordered', () => {
     const { useProgressiveImportStore } = jest.requireActual('@/src/application/stores/progressive-import.store')
     useProgressiveImportStore.setState({ current: { phase: 'reports-pending' } })
