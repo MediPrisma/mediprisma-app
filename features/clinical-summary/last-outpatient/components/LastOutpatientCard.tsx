@@ -355,9 +355,9 @@ export function LastOutpatientCard() {
   const strings = t.lastOutpatient
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null)
   const [onlyAbnormal, setOnlyAbnormal] = useState(false)
-  // Folded or not is remembered per browser; read after mount (no storage on the server).
-  const [listCollapsed, setListCollapsed] = useState(false)
-  useEffect(() => { setListCollapsed(readCollapsed()) }, [])
+  // Folded or not is remembered per browser. The card renders only once the
+  // chart is loaded in the browser, so storage is there to read.
+  const [listCollapsed, setListCollapsed] = useState(() => typeof window !== 'undefined' && readCollapsed())
   const {
     isLoading,
     reportsPending,
