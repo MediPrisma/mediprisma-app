@@ -1,3 +1,8 @@
+import { hasClaimEncounterLink, hasUnresolvedClaimEncounter } from '@/src/infrastructure/fhir/services/claim-expander'
+import { clinicalEncounterAlias } from '@/src/infrastructure/fhir/mappers/clinical-projection-disposition'
+import { excludeUnresolvedDecisionVariants, formatClinicalVariantExclusions, outboundClinicalVariantExclusions } from '@/src/core/utils/clinical-variant-inputs'
+import { clinicalRecordKey } from '@/src/core/utils/observation-selectors'
+import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
 // Unified FHIR Tools for AI Agent
 //
 // Single implementation backing BOTH SMART-live mode and local-bundle mode.
@@ -7,6 +12,9 @@
 // Every tool response goes through `scrubPii()` so cloud LLMs never see
 // patient ID, DOB, or provider names.
 import { tool } from 'ai'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
+import { summarizeSourceComparisons } from '@/src/shared/utils/source-record-comparison'
 import type { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -76,15 +84,13 @@ import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documen
 import {
   LAB_CATEGORIES,
   categorizeObservation,
+  getTestDisplayName,
   compareTestsByPreferred,
+  isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
-import {
-  countFractionAwareKey,
-  differentialLoincKey,
-  differentialLoincScale,
-  getLabPivotTestIdentity,
-  isKnownPivotKey,
-} from '@/src/shared/utils/lab-pivot.utils'
+import { getLabPivotTestIdentity, isKnownPivotKey, isUnitlessDifferentialPercent } from '@/src/shared/utils/lab-pivot.utils'
+import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
+import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
 import {
   foldNumericText,
@@ -92,6 +98,8 @@ import {
   NUMERIC_TEXT_RE,
   PERCENT_UNIT_PREFIX_RE,
 } from '@/src/shared/utils/lab-value-grammar'
+import { isParaproteinTextKey, PARAPROTEIN_PREFIX } from '@/src/shared/utils/paraprotein-analytes'
+import { isNhiOrderCodeSystem, meaningfulLocalCode } from '@/src/shared/utils/nhi-order-code'
 import { getLabRowDisplayParts } from '@/src/shared/utils/lab-analyte-display.utils'
 import {
   getAnalyteCanonicalKey,
@@ -235,8 +243,9 @@ function observationConcepts(observation: any): any[] {
 function uniqueObservations(collection: ClinicalDataCollection): any[] {
   const seen = new Set<string>()
   return [...collection.observations, ...collection.vitalSigns].filter((observation: any) => {
-    if (observation.id && seen.has(observation.id)) return false
-    if (observation.id) seen.add(observation.id)
+    const key = clinicalRecordKey(observation)
+    if (key && seen.has(key)) return false
+    if (key) seen.add(key)
     return true
   })
 }
@@ -491,9 +500,25 @@ function selectDiagnosticReportPage(
 }
 
 function labAnalyteKey(observation: any): string {
-  return getAnalyteCanonicalKey(observation)
+  const named = ownCodingFirst(observation)
+  return getAnalyteCanonicalKey(named)
     ?? loincOf(observation?.code)
-    ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
+    ?? getAnalyteLabel(named).normalize('NFKC').toUpperCase()
+}
+
+/**
+ * The label readers take coding[0] as the row's name, but MediCloud writes
+ * the NHI order coding first: under a panel order (08011C "CBC", 06013C) every
+ * analyte would read as the order. When the row has no code.text and a local
+ * code that names the analyte, read that local coding first instead.
+ */
+function ownCodingFirst(observation: any): any {
+  const codings: any[] = Array.isArray(observation?.code?.coding) ? observation.code.coding : []
+  if (observation?.code?.text || !isNhiOrderCodeSystem(codings[0]?.system)) return observation
+  const own = codings.filter((c: any) => !isNhiOrderCodeSystem(c?.system))
+  const named = own.some((c: any) => typeof c?.display === 'string' && c.display.trim()) || !!meaningfulLocalCode(codings)
+  if (!named) return observation
+  return { ...observation, code: { ...observation.code, coding: [...own, ...codings.filter((c: any) => isNhiOrderCodeSystem(c?.system))] } }
 }
 
 export type LabValueFamily = 'quantity' | 'percent' | 'titer' | 'ordinal' | 'text'
@@ -532,16 +557,16 @@ export function labValueFamily(observation: any): LabValueFamily {
 /** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;
  *  undefined when not declared (the value family still separates rows). */
 export function declaredLoincScale(loinc: string): 'Qn' | 'Ord' | 'Titr' | undefined {
-  return differentialLoincScale(loinc)
+  return IMMUNOLOGY_LOINC_SCALE[loinc] ?? THYROID_LOINC_SCALE[loinc]
 }
 
-/** The analyte an explicit LOINC → key mapping assigns to `loinc` (the app's
- *  differential count / percentage map — 711-2 is AEC, not the package's EOS —
- *  then the normalization package's LOINC map). LOINCs mapped to one key are
- *  declared equivalent; nothing else is. */
+/** The analyte an explicit LOINC → key mapping assigns to `loinc` (the
+ *  normalization package's LOINC map, then the app's immunology and thyroid
+ *  maps). LOINCs mapped to one key are declared equivalent; nothing else is. */
 export function declaredLoincAnalyteKey(loinc: string): string | null {
-  return differentialLoincKey(loinc)
-    ?? canonicalKeyFromLoinc({ code: { coding: [{ system: 'http://loinc.org', code: loinc }] } })
+  return canonicalKeyFromLoinc({ code: { coding: [{ system: 'http://loinc.org', code: loinc }] } })
+    ?? IMMUNOLOGY_LOINC_TO_KEY[loinc]
+    ?? THYROID_LOINC_TO_KEY[loinc]
     ?? null
 }
 
@@ -570,13 +595,15 @@ export function labCategoryAnalyte(observation: any, category: string): {
   loinc?: string
   family: LabValueFamily
 } {
-  const family = labValueFamily(observation)
   const loinc = loincOf(observation?.code)
   const identity = getLabPivotTestIdentity(observation, category)
+  // A unitless differential value the cumulative report files as a
+  // percentage (100 or less) is grouped and labelled with the % rows.
+  const family = isUnitlessDifferentialPercent(observation, identity.testKey) ? 'percent' : labValueFamily(observation)
   const known = isKnownPivotKey(identity.testKey)
   const label = known
     ? getLabRowDisplayParts(identity, 'medical', 'en').name
-    : getAnalyteLabel(observation)
+    : getAnalyteLabel(ownCodingFirst(observation))
   if (loinc) {
     const declared = declaredLoincAnalyteKey(loinc)
     const scale = declaredLoincScale(loinc)
@@ -586,6 +613,20 @@ export function labCategoryAnalyte(observation: any, category: string): {
       return { key: `key:${declared}|${scale}`, label, canonicalKey: declared, loinc, family }
     }
     return { key: `loinc:${loinc}`, label, canonicalKey: declared ?? loinc, loinc, family }
+  }
+  // 免疫 電泳／輕鏈 rows keep their specimen-qualified column (a serum and a
+  // urine neutral κ never merge). A report column (IFE / IEP) gathers a
+  // report and its lanes in the cumulative table, but the AI answer gives
+  // each lane its own analyte, so latest-value selection never drops one.
+  if (identity.testKey.startsWith(PARAPROTEIN_PREFIX)) {
+    const columnLabel = getLabRowDisplayParts(identity, 'medical', 'en').name
+    if (isParaproteinTextKey(identity.testKey)) {
+      const own = getTestDisplayName(observation)
+      const lane = own.normalize('NFKC').trim().toUpperCase()
+      const canonicalKey = `${identity.mapKey}:${lane}`
+      return { key: `name:${canonicalKey}|${family}`, label: `${columnLabel} · ${own}`, canonicalKey, family }
+    }
+    return { key: `name:${identity.mapKey}|${family}`, label: columnLabel, canonicalKey: identity.mapKey, family }
   }
   const canonicalKey = known ? identity.mapKey : labAnalyteKey(observation)
   return { key: `${known ? 'name' : 'label'}:${canonicalKey}|${family}`, label, canonicalKey, family }
@@ -762,9 +803,50 @@ function normalizeDiagnosisTerm(value: string): string {
   return value.normalize('NFKC').toLowerCase().replace(/[\s.\-–—_·]/g, '')
 }
 
-function refToId(ref: string | undefined): string | undefined {
-  if (!ref) return undefined
-  return ref.includes('/') ? ref.split('/').pop() : ref
+/** Resolve joins in their captured source scope, never by a URL's final segment. */
+function encounterLinks(collection: ClinicalDataCollection) {
+  const graph = collection.clinicalSource?.graph
+  const resolution = collection.clinicalSource && createClinicalRecordResolution(collection.clinicalSource)
+  const byId = new Map<string, typeof collection.encounters>()
+  for (const encounter of collection.encounters) byId.set(encounter.id, [...(byId.get(encounter.id) ?? []), encounter])
+  const ambiguous = (id: string) => (byId.get(id)?.length ?? 0) > 1
+  const byNode = new Map(collection.encounters.filter(row => row.clinicalSourceNodeKey).map(row => [row.clinicalSourceNodeKey!, row]))
+  const nodes = new Map(graph?.nodes.map(node => [node.key, node]))
+  // MedicationStatement.context is the mapper's explicit source for encounter.
+  // Prefer a supplied encounter edge, matching the mapper's choice order.
+  const references = graph?.references.map(edge => resolution!.reference(edge)) ?? []
+  const edges = new Map(references.filter(edge => edge.path === 'context' && edge.origin.resource.resourceType === 'MedicationStatement').map(edge => [edge.origin.key, edge]))
+  for (const edge of references) if (edge.path === 'encounter') edges.set(edge.origin.key, edge)
+  let incomplete = false
+  const target = (row: { clinicalSourceNodeKey?: string; encounter?: { reference?: string }; _encounterInferred?: boolean }) => {
+    if (hasUnresolvedClaimEncounter(row)) { incomplete = true; return undefined }
+    const edge = row.clinicalSourceNodeKey ? edges.get(row.clinicalSourceNodeKey) : undefined
+    if (graph && edge) {
+      if (edge.status !== 'resolved') { incomplete = true; return undefined }
+      const linked = edge.targetKeys.flatMap(key => {
+        const direct = byNode.get(key) ?? byNode.get(clinicalEncounterAlias(collection.clinicalSource!, key) ?? '')
+        if (direct) return [direct]
+        const node = nodes.get(key)
+        return node ? collection.encounters.filter(encounter => {
+          const candidate = encounter.clinicalSourceNodeKey ? nodes.get(encounter.clinicalSourceNodeKey) : undefined
+          return candidate && clinicalSourceNodesEqualWithContext(graph, node, candidate)
+        }) : []
+      })
+      const distinct = [...new Set(linked)]
+      if (distinct.length === 1) return distinct[0]
+      incomplete = true
+      return undefined
+    }
+    const reference = row.encounter?.reference
+    if (!reference) return undefined
+    // Date-inferred local links are explicitly marked by the mapper. Legacy
+    // snapshots without a graph may only use a unique, plain relative reference.
+    const id = (!graph || row._encounterInferred || hasClaimEncounterLink(row)) ? /^Encounter\/([^/]+)$/.exec(reference)?.[1] : undefined
+    if (id && byId.get(id)?.length === 1) return byId.get(id)![0]
+    incomplete = true
+    return undefined
+  }
+  return { target, ambiguous, get incomplete() { return incomplete } }
 }
 
 function encounterDeptText(enc: any): string {
@@ -852,31 +934,20 @@ function countsAsRefillRecord(medication: MedicationEntity): boolean {
 
 // Compact deduper for repeated refill cycles. `refillPool` may include older
 // completed cycles while `meds` contains only the currently-valid rows.
-function dedupMedicationRecords(
+function annotateMedicationRecordCounts(
   meds: MedicationEntity[],
   refillPool: MedicationEntity[] = meds,
-): Array<MedicationEntity & { refillCount: number }> {
-  const refillCounts = new Map<string, number>()
+): Array<MedicationEntity & { sourceRecordCount: number }> {
+  const sourceRecordCounts = new Map<string, number>()
   for (const medication of refillPool) {
     if (!countsAsRefillRecord(medication)) continue
     const key = medicationRegimenKey(medication)
-    refillCounts.set(key, (refillCounts.get(key) ?? 0) + 1)
+    sourceRecordCounts.set(key, (sourceRecordCounts.get(key) ?? 0) + 1)
   }
 
-  const byRegimen = new Map<string, MedicationEntity & { refillCount: number }>()
-  for (const m of meds) {
-    const key = medicationRegimenKey(m)
-    const existing = byRegimen.get(key)
-    if (!existing) {
-      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
-      continue
-    }
-    if (m.authoredOn && (!existing.authoredOn || m.authoredOn > existing.authoredOn)) {
-      // Keep every displayed field from one newest source row.
-      byRegimen.set(key, { ...m, refillCount: refillCounts.get(key) ?? 1 })
-    }
-  }
-  return Array.from(byRegimen.values())
+  // Product/regimen similarity does not prove prescription identity. The
+  // import graph has already reconciled confirmed copies; retain real orders.
+  return meds.map((m) => ({ ...m, sourceRecordCount: sourceRecordCounts.get(medicationRegimenKey(m)) ?? 1 }))
 }
 
 function medicationNameFields(medication: any): {
@@ -1014,6 +1085,10 @@ function medicationToolFields(
     ...medicationNameFields(medication),
     ...medicationClassificationFields(medication),
     status: medication.status,
+    ...(sourceSelfPurchase(medication) === true ? { selfPurchased: true } : {}),
+    ...(medication._encounterInferred ? { encounterLinkBasis: 'date-and-facility-inferred; not source-confirmed' } : {}),
+    ...(medication._sourceRecordComparison ? { sourceComparison: medication._sourceRecordComparison,
+      sourceComparisonInstruction: sourceComparisonNarrative(medication) } : {}),
     authoredOn: medication.authoredOn,
     ...(dosage ? { [dosageField]: dosage } : {}),
     ...(hasStructuredDosage ? { dosageDetails: structuredDosage } : {}),
@@ -1056,13 +1131,111 @@ function medicationGroundingRules(medications: MedicationEntity[]) {
 
 // ── factory ────────────────────────────────────────────────────────────────
 
-export function createFhirTools(getData: () => AgentDataSource) {
+export function createFhirTools(getRawData: () => AgentDataSource) {
+  const getData = (): AgentDataSource => {
+    const raw = getRawData()
+    return { ...raw, collection: raw.collection ? excludeUnresolvedDecisionVariants(raw.collection) : raw.collection }
+  }
   // Structured scrub (ids / birthDate / provider display) + free-text scrub:
   // discharge summaries and report conclusions carry the patient's name /
   // chart number / 身分證字號 INSIDE the text, so every string is also masked
   // against those patterns and the loaded patient's own name/id literals.
-  const scrub = <T,>(payload: T): T =>
-    scrubPii(payload, buildPatientTextLiterals(getData().patient))
+  const scrub = <T,>(payload: T, resourceTypes?: readonly string[]): T => {
+    const data = getData()
+    const exclusions = data.collection?.clinicalRecordVariantExclusions
+      ?.filter(item => !resourceTypes || resourceTypes.includes(item.resourceType))
+    const annotated = exclusions?.length && payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? { ...payload, incomplete: true, canConcludeAbsence: false, clinicalRecordVariantExclusions: outboundClinicalVariantExclusions(exclusions), sourceRecordUncertainty: formatClinicalVariantExclusions({ clinicalRecordVariantExclusions: exclusions }) } : payload
+    return scrubPii(annotated, buildPatientTextLiterals(data.patient)) as T
+  }
+  const DOMAIN_QUERY_KEYS: Partial<Record<string, ClinicalDataQueryKey[]>> = {
+    Condition: ['Condition'],
+    MedicationRequest: ['MedicationRequest'],
+    MedicationStatement: ['MedicationStatement'],
+    Basic: ['Basic'],
+    AllergyIntolerance: ['AllergyIntolerance'],
+    Observation: ['Observation', 'Observation:vital-signs'],
+    DiagnosticReport: ['DiagnosticReport'],
+    ImagingStudy: ['ImagingStudy'],
+    Procedure: ['Procedure'],
+    Encounter: ['Encounter'],
+    DocumentReference: ['DocumentReference'],
+    Composition: ['Composition'],
+    Immunization: ['Immunization'],
+    Consent: ['Consent'],
+    Device: ['Device'],
+    CarePlan: ['CarePlan'],
+  }
+  const scrubForDomains = (resourceTypes: readonly string[], explicitKeys?: ClinicalDataQueryKey[]) => <T,>(payload: T): T => {
+    const collection = getData().collection
+    const keys = explicitKeys ?? [...new Set(resourceTypes.flatMap(type => DOMAIN_QUERY_KEYS[type] ?? []))]
+    const queryIssues: SafeQueryIssue[] = collection
+      ? queryIssuesFor(collection, keys)
+      : keys.map(resourceType => ({ resourceType, state: 'not-loaded' as ClinicalDataQueryStatus['state'] }))
+    if (queryIssues.length === 0) return scrub(payload, resourceTypes)
+
+    const result = payload as any
+    const count = typeof result?.count === 'number'
+      ? result.count
+      : Array.isArray(result?.data) ? result.data.length : undefined
+    const incomplete = result && typeof result === 'object' && !Array.isArray(result)
+      ? {
+        ...result,
+        ...(count === undefined ? {} : { count }),
+        ...(count === 0 && result.success === true ? { success: false } : {}),
+        incomplete: true,
+        canConcludeAbsence: false,
+        queryIssues,
+        summary: `${result.summary || '無法確認是否有相關臨床資料'}（相關 FHIR 查詢不完整）`,
+      }
+      : { success: false, count: 0, incomplete: true, canConcludeAbsence: false, queryIssues, data: [] }
+    return scrub(incomplete, resourceTypes) as T
+  }
+  const scrubForQueries = (resourceTypes: readonly string[], keys: ClinicalDataQueryKey[], _noun: string) => <T,>(payload: T): T => scrubForDomains(resourceTypes, keys)(payload)
+
+  // A failed name/category/date match is not an empty chart. Give the model
+  // actual values within the requested date/abnormality scope to discover the source's names without another
+  // guessed lookup. Keep matches separate from recovery evidence, and bound
+  // the inventory by analyte rather than letting repeated tests crowd it out.
+  const scrubLabResult = <T extends { success: boolean; count?: number }>(
+    payload: T,
+    filters?: { discovery: boolean; dateFrom?: string; dateTo?: string; abnormalOnly?: boolean },
+  ) => {
+    const scrub = scrubForDomains(['Observation', 'DiagnosticReport'])
+    const collection = getData().collection
+    if (!payload.success || payload.count !== 0 || !collection || !filters?.discovery) return scrub(payload)
+    const observations = uniqueObservations(collection)
+      .flatMap(observation => expandObservationValues(observation))
+      .filter(observation => observation.status !== 'entered-in-error'
+        && (!(filters.dateFrom || filters.dateTo)
+          || isWithinDateRange(observationDate(observation), filters.dateFrom, filters.dateTo))
+        && (!filters.abnormalOnly || isAbnormalObservation(observation)))
+      .sort((a, b) => (observationDate(b) || '').localeCompare(observationDate(a) || ''))
+    const latest = new Map<string, (typeof observations)[number]>()
+    for (const observation of observations) {
+      const key = labAnalyteKey(observation)
+      if (!latest.has(key)) latest.set(key, observation)
+    }
+    if (latest.size === 0) return scrub(payload)
+    const data = [...latest.values()].slice(0, 30).map(observationResult)
+    const queryIssues = queryIssuesFor(collection, ['Observation'])
+    return scrub({
+      ...payload,
+      availableObservationRecovery: {
+        scope: 'Latest value per analyte within the requested date and abnormality filters; name/code/category relaxed. NOT matches for the original query.',
+        dateRange: { from: filters.dateFrom, to: filters.dateTo },
+        abnormalOnly: filters.abnormalOnly ?? false,
+        totalAnalytes: latest.size,
+        returnedAnalytes: data.length,
+        truncated: latest.size > data.length,
+        incomplete: queryIssues.length > 0,
+        canConcludeAbsence: false,
+        queryIssues,
+        instruction: 'The chart contains these observations. Zero matches applies ONLY to the original filters. Do not say all observations are missing. Use these names to query details or trends; do not substitute another analyte or date for the requested result. This inventory is not a complete history and cannot establish absence. Use only supplied normalityStatus and referenceRange.',
+        data,
+      },
+    })
+  }
 
   return {
     // ── Patient ────────────────────────────────────────────────────────────
@@ -1071,6 +1244,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Get anonymized patient demographics (gender + age only). Patient name, ID, and date of birth are intentionally not surfaced.',
       inputSchema: patientInfoSchema,
       execute: async () => {
+        const scrub = scrubForDomains([])
         const { patient } = getData()
         if (!patient) {
           return scrub({ success: false, summary: 'Patient not loaded yet', data: null })
@@ -1116,18 +1290,23 @@ export function createFhirTools(getData: () => AgentDataSource) {
           collection,
           Object.keys(collection.resourceQueryStatus ?? {}) as ClinicalDataQueryKey[],
         )
-        const statusFor = (key: ClinicalDataQueryKey) =>
-          collection.resourceQueryStatus?.[key]
-            ? { queryStatus: collection.resourceQueryStatus[key]?.state }
-            : {}
+        const exclusions = collection.clinicalRecordVariantExclusions ?? []
+        const domainStateFor = (...keys: ClinicalDataQueryKey[]) => {
+          const unresolvedVariantCount = exclusions.filter(item => keys.includes(item.resourceType as ClinicalDataQueryKey)).length
+          const incomplete = unresolvedVariantCount > 0 || queryIssuesFor(collection, keys).length > 0
+          return { incomplete, canConcludeAbsence: !incomplete, unresolvedVariantCount,
+            recordState: unresolvedVariantCount ? 'unresolved-variants' : incomplete ? 'query-incomplete' : 'complete' }
+        }
+        const statusFor = (key: ClinicalDataQueryKey) => ({ ...domainStateFor(key),
+          ...(collection.resourceQueryStatus?.[key] ? { queryStatus: collection.resourceQueryStatus[key]?.state } : {}) })
 
         return scrub({
           success: true,
-          summary: allQueryIssues.length > 0
-            ? 'Data inventory loaded, but one or more FHIR resource queries are incomplete'
+          summary: allQueryIssues.length > 0 || exclusions.length > 0
+            ? 'Data inventory loaded, but resource queries or unresolved source-record variants prevent absence conclusions'
             : 'Data inventory across all resource types',
-          incomplete: allQueryIssues.length > 0,
-          canConcludeAbsence: allQueryIssues.length === 0,
+          incomplete: allQueryIssues.length > 0 || exclusions.length > 0,
+          canConcludeAbsence: allQueryIssues.length === 0 && exclusions.length === 0,
           queryIssues: allQueryIssues,
           data: {
             conditions: {
@@ -1136,6 +1315,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             },
             medications: {
               count: collection.medications.length,
+              ...domainStateFor('MedicationRequest', 'MedicationStatement'),
               range: range(collection.medications, (m) => m.authoredOn),
               medicationRequestQueryStatus:
                 collection.resourceQueryStatus?.MedicationRequest?.state,
@@ -1162,12 +1342,8 @@ export function createFhirTools(getData: () => AgentDataSource) {
               ...statusFor('ImagingStudy'),
             },
             observations: {
-              // Dedup by id — many bridges include vital-signs entries in
-              // both `observations` and `vitalSigns` arrays.
-              count: new Set([
-                ...collection.observations.map((o: any) => o.id).filter(Boolean),
-                ...collection.vitalSigns.map((o: any) => o.id).filter(Boolean),
-              ]).size,
+              // Count source records once when vitals also appear in observations.
+              count: uniqueObservations(collection).length,
               range: range(
                 [...collection.observations, ...collection.vitalSigns],
                 observationDate,
@@ -1238,12 +1414,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const uncertainMedicationRecords = collection.medications.filter((medication) =>
           isMedicationCurrentnessUncertain(medication, nowMs)
         )
-        const allMedications = dedupMedicationRecords(
+        const allMedications = annotateMedicationRecordCounts(
           activeMedicationRecords,
           collection.medications,
         )
           .sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
-        const allUncertainMedications = dedupMedicationRecords(
+        const allUncertainMedications = annotateMedicationRecordCounts(
           uncertainMedicationRecords,
           collection.medications,
         ).sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
@@ -1253,7 +1429,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           return {
             name,
             ...rest,
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           }
         })
         const medicationsWithUncertainStatus = allUncertainMedications
@@ -1265,7 +1441,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
               name,
               ...rest,
               currentness: 'uncertain-source-status',
-              refillCount: medication.refillCount,
+              sourceRecordCount: medication.sourceRecordCount,
             }
           })
         const medicationRules = medicationGroundingRules([
@@ -1279,16 +1455,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         )) {
           if (String(observation?.status ?? '').toLowerCase() === 'entered-in-error') continue
           if (!categorizeObservation(observation) || !isAbnormalObservation(observation)) continue
-          // One latest abnormal row per analyte; a differential count and its
-          // percentage are two analytes (countFractionAwareKey). A LOINC fixes
-          // the analyte whatever the value representation; only a LOINC-less
-          // qualitative / titer / text row is also told apart by value family
-          // (a LOINC-less numeric row is the same analyte as its coded twin).
-          const analyteKey = countFractionAwareKey(observation, labAnalyteKey(observation))
-          const family = labValueFamily(observation)
-          const key = loincOf(observation?.code) || family === 'quantity' || family === 'percent'
-            ? analyteKey
-            : `${analyteKey}|${family}`
+          const key = labAnalyteKey(observation)
           const existing = abnormalByAnalyte.get(key)
           if (!existing || (observationDate(observation) || '') > (observationDate(existing) || '')) {
             abnormalByAnalyte.set(key, observation)
@@ -1355,6 +1522,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: encountersSchema,
       execute: async ({ class: encounterClass, department, institution, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof encountersSchema>) => {
+        const scrub = scrubForQueries(["Encounter","Condition"], ['Encounter'], '就診紀錄')
         const list = getData().collection?.encounters ?? []
         let filtered = list.filter((e: any) =>
           matchEncounterClass(e.class, encounterClass) &&
@@ -1388,6 +1556,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           count: filtered.length,
           data: capped.map((e: any) => ({
             encounterId: e.id,
+            ...(e._sourceRecordComparison ? { sourceComparison: e._sourceRecordComparison } : {}),
             class: e.class?.code || e.class?.coding?.[0]?.code,
             type: pickName(e.type?.[0]),
             department: encounterDeptText(e),
@@ -1403,6 +1572,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Concise summary of the most recent N visits: date, department, primary ICD, and counts of meds/labs/procedures. Use this before drilling into a specific visit with getEncounterDetails.',
       inputSchema: recentVisitsSchema,
       execute: async ({ limit, type }: z.infer<typeof recentVisitsSchema>) => {
+        const scrub = scrubForDomains(['Encounter', 'Condition', 'MedicationRequest', 'MedicationStatement', 'Observation', 'DiagnosticReport', 'Procedure'])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
 
@@ -1414,26 +1584,25 @@ export function createFhirTools(getData: () => AgentDataSource) {
         )
         const top = filtered.slice(0, limit && limit > 0 ? limit : 10)
 
-        const medsByEnc = new Map<string, number>()
-        for (const m of collection.medications) {
-          const id = refToId(m.encounter?.reference)
-          if (id) medsByEnc.set(id, (medsByEnc.get(id) ?? 0) + 1)
+        const links = encounterLinks(collection)
+        const counts = (rows: Array<{ clinicalSourceNodeKey?: string; encounter?: { reference?: string } }>) => {
+          const result = new Map<(typeof collection.encounters)[number], number>()
+          for (const row of rows) {
+            const encounter = links.target(row)
+            if (encounter) result.set(encounter, (result.get(encounter) ?? 0) + 1)
+          }
+          return result
         }
-        const labsByEnc = new Map<string, number>()
-        for (const o of collection.observations) {
-          const id = refToId(o.encounter?.reference)
-          if (id) labsByEnc.set(id, (labsByEnc.get(id) ?? 0) + 1)
-        }
-        const procsByEnc = new Map<string, number>()
-        for (const p of collection.procedures) {
-          const id = refToId(p.encounter?.reference)
-          if (id) procsByEnc.set(id, (procsByEnc.get(id) ?? 0) + 1)
-        }
+        const medsByEnc = counts(collection.medications)
+        const labsByEnc = counts(uniqueObservations(collection))
+        const procsByEnc = counts(collection.procedures)
+        const incompleteLinks = links.incomplete || top.some(e => links.ambiguous(e.id))
 
         return scrub({
           success: true,
           summary: `Top ${top.length} of ${filtered.length} recent visits`,
           count: top.length,
+          ...(incompleteLinks ? { incomplete: true, canConcludeAbsence: false, encounterLinkUncertainty: 'Some encounter links cannot be uniquely resolved in their source scope.' } : {}),
           data: top.map((e: any) => ({
             encounterId: e.id,
             date: encounterDate(e)?.slice(0, 10),
@@ -1441,9 +1610,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
             department: encounterDeptText(e),
             primaryIcd: e.reasonCode?.[0]?.coding?.[0]?.code,
             primaryIcdLabel: pickName(e.reasonCode?.[0]) || e.reasonCode?.[0]?.text,
-            medCount: medsByEnc.get(e.id) ?? 0,
-            labCount: labsByEnc.get(e.id) ?? 0,
-            procedureCount: procsByEnc.get(e.id) ?? 0,
+            medCount: links.ambiguous(e.id) ? null : medsByEnc.get(e) ?? 0,
+            labCount: links.ambiguous(e.id) ? null : labsByEnc.get(e) ?? 0,
+            procedureCount: links.ambiguous(e.id) ? null : procsByEnc.get(e) ?? 0,
           })),
         })
       },
@@ -1453,10 +1622,14 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Drill into one specific visit. Returns all diagnoses (incl. secondary), medications, lab observations, procedures linked to that encounter. Use this when the user asks about a specific visit identified via queryEncounters or getRecentVisits.',
       inputSchema: encounterDetailsSchema,
       execute: async ({ encounterId }: z.infer<typeof encounterDetailsSchema>) => {
+        const scrub = scrubForDomains(['Encounter', 'Condition', 'MedicationRequest', 'MedicationStatement', 'Observation', 'DiagnosticReport', 'Procedure', 'ImagingStudy'])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: null })
 
-        const enc = collection.encounters.find((e: any) => e.id === encounterId)
+        const exactCandidates = collection.encounters.filter((e: any) => e.id === encounterId)
+        const candidates = exactCandidates.length ? exactCandidates : collection.encounters.filter((e: any) => e.sourceId === encounterId)
+        if (candidates.length > 1) return scrub({ success: false, code: 'ambiguous-encounter-identity', incomplete: true, canConcludeAbsence: false, summary: 'Multiple source encounters have this identifier; a unique visit cannot be selected.', data: null })
+        const enc = candidates[0]
         if (!enc) {
           return scrub({
             success: false,
@@ -1465,7 +1638,8 @@ export function createFhirTools(getData: () => AgentDataSource) {
           })
         }
 
-        const matches = (ref: any) => refToId(ref?.reference) === encounterId
+        const links = encounterLinks(collection)
+        const matches = (row: any) => links.target(row) === enc
 
         const diagnoses = (enc.reasonCode ?? []).map((rc: any) => ({
           code: rc.coding?.[0]?.code,
@@ -1473,12 +1647,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
         }))
 
         const nowMs = Date.now()
-        const medicationRecords = collection.medications.filter((m: any) => matches(m.encounter))
+        const medicationRecords = collection.medications.filter(matches)
         const meds = medicationRecords.map((medication) =>
           medicationToolFields(medication, nowMs, 'dosage')
         )
 
-        const obs = uniqueObservations(collection).filter((o: any) => matches(o.encounter)).map((o: any) => ({
+        const obs = uniqueObservations(collection).filter(matches).map((o: any) => ({
           name: pickName(o.code),
           value: o.valueQuantity?.value ?? o.valueString,
           unit: o.valueQuantity?.unit,
@@ -1486,19 +1660,19 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ...observationComponentFields(o),
         }))
 
-        const procs = collection.procedures.filter((p: any) => matches(p.encounter)).map((p: any) => ({
+        const procs = collection.procedures.filter(matches).map((p: any) => ({
           procedure: pickName(p.code),
           status: p.status,
           performedDateTime: p.performedDateTime || p.performedPeriod?.start,
         }))
 
-        const reports = collection.diagnosticReports.filter((r: any) => matches(r.encounter)).map((r: any) => ({
+        const reports = collection.diagnosticReports.filter(matches).map((r: any) => ({
           reportName: pickName(r.code),
           conclusion: r.conclusion,
           effectiveDateTime: r.effectiveDateTime,
         }))
 
-        const imagingStudies = (collection.imagingStudies ?? []).filter((study: any) => matches(study.encounter)).map((study: any) => ({
+        const imagingStudies = (collection.imagingStudies ?? []).filter(matches).map((study: any) => ({
           description: study.description,
           status: study.status,
           started: study.started,
@@ -1517,6 +1691,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         return scrub({
           success: true,
           summary: `Encounter ${encounterId} details`,
+          ...(links.incomplete ? { incomplete: true, canConcludeAbsence: false, encounterLinkUncertainty: 'Some encounter links cannot be uniquely resolved in their source scope.' } : {}),
           data: {
             encounterId,
             date: encounterDate(enc)?.slice(0, 10),
@@ -1539,6 +1714,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'List unique departments / service types the patient has visited. Useful to discover what specialties are represented before filtering queryEncounters by department.',
       inputSchema: listDepartmentsSchema,
       execute: async () => {
+        const scrub = scrubForDomains(["Encounter"])
         const { collection } = getData()
         const list = collection?.encounters ?? []
         const counts = new Map<string, number>()
@@ -1563,6 +1739,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Find every visit whose recorded diagnosis / reason (ICD code or text) matches, across the whole record, oldest first, with the first and latest occurrence. ONE call answers "when did X first appear", "how many visits carried X", "was X ever recorded" — do not page through visits with getEncounterDetails for that. Matching ignores case, dots, spaces and dashes (R350, R35.0 and 頻尿 all work) and a code matches as a prefix. Also returns matching problem-list Conditions. Visit-level codes are billing/reason codes, not confirmed diagnoses.',
       inputSchema: encounterDiagnosisSearchSchema,
       execute: async ({ query, dateFrom, dateTo, limit }: z.infer<typeof encounterDiagnosisSearchSchema>) => {
+        const scrub = scrubForDomains(["Encounter","Condition"])
         const { collection } = getData()
         if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
         const needle = normalizeDiagnosisTerm(query)
@@ -1618,6 +1795,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Query patient conditions/diagnoses (cross-visit). Use this for confirmed clinical conditions, not visit-level billing ICDs.',
       inputSchema: conditionsSchema,
       execute: async ({ category, clinicalStatus, limit }: z.infer<typeof conditionsSchema>) => {
+        const scrub = scrubForQueries(["Condition"], ['Condition'], '診斷或健康問題')
         const list = getData().collection?.conditions ?? []
         const filtered = list.filter((c: any) =>
           matchCategoryCoding(c.category, category) &&
@@ -1652,7 +1830,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '檢驗或觀察數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const list = uniqueObservations(collection!)
 
@@ -1689,7 +1867,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗數據', dateFrom, dateTo)
 
         if (summarize) {
-          return scrub({
+          return scrubLabResult({
             success: true,
             summary,
             count: filtered.length,
@@ -1703,10 +1881,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
               effectiveDateTime: o.effectiveDateTime,
               abnormal: isAbnormalObservation(o),
             })),
-          })
+          }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
         }
 
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary,
           count: filtered.length,
@@ -1724,7 +1902,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             status: o.status,
             ...observationComponentFields(o),
           })),
-        })
+        }, { discovery: Boolean(category || code || codeQuery), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1739,7 +1917,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['DiagnosticReport'],
           '檢驗或診斷報告',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
         // Report names/conclusions remain usable if the separate Observation
         // search failed, but component-result coverage may then be incomplete.
         const queryIssues = queryIssuesFor(collection!, ['Observation'])
@@ -1780,7 +1958,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗報告', dateFrom, dateTo)
 
         if (summarize) {
-          return scrub({
+          return scrubLabResult({
             success: filtered.length > 0 || !incomplete,
             summary,
             count: filtered.length,
@@ -1803,10 +1981,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
               imageAttachmentCount: attachmentDetails(r)
                 .filter((attachment: any) => attachment.kind === 'image').length,
             })),
-          })
+          }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
         }
 
-        return scrub({
+        return scrubLabResult({
           success: filtered.length > 0 || !incomplete,
           summary,
           count: filtered.length,
@@ -1819,7 +1997,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           unmatchedQueryTerms,
           dateRange: { from: dateFrom, to: dateTo },
           data: capped.map(diagnosticReportOutput),
-        })
+        }, { discovery: Boolean(category || query || queries?.length), dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1834,7 +2012,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '指定分類的檢驗數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const categoryDefinition = LAB_CATEGORIES.find(item => item.id === category)!
         const expanded = collection!.observations
@@ -1890,7 +2068,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         const capped = applyLimit(groups, limit, 50)
         const page = paginationMeta(groups.length, capped.length)
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary: groups.length > 0
             ? `Found ${groups.length} analyte(s) in lab category "${category}"`
@@ -1902,6 +2080,18 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ...page,
           incomplete: false,
           canConcludeAbsence: true,
+          ...(category === 'immuno' ? {
+            // Specific-allergen IgE (30022C) is kept out of every lab category,
+            // so this answer says nothing about allergen tests.
+            excludedFromCategory: {
+              specificAllergenIgE: collection!.observations.filter((observation: any) =>
+                String(observation?.status ?? '').toLowerCase() !== 'entered-in-error'
+                && isExcludedFromCumulativeReport(observation)
+                && isWithinDateRange(observationDate(observation), dateFrom, dateTo)
+              ).length,
+              instruction: 'Specific-allergen IgE results are not part of any lab category; canConcludeAbsence does not apply to them. Use searchObservationByName (e.g. the allergen name) or queryObservations to find allergen tests.',
+            },
+          } : {}),
           dateRange: { from: dateFrom, to: dateTo },
           availableAnalytes: groups.map(group => group.analyte),
           groundingRules: {
@@ -1911,7 +2101,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             instruction: 'Do not add customary ranges, diagnose a condition, or infer the cause of an abnormal result.',
           },
           data: capped,
-        })
+        }, { discovery: true, dateFrom, dateTo, abnormalOnly })
       },
     }),
 
@@ -1920,6 +2110,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: imagingRecordsSchema,
       execute: async ({ query, modality, bodySite, status, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof imagingRecordsSchema>) => {
+        const scrub = scrubForDomains(["DiagnosticReport","Observation","ImagingStudy"])
         const collection = getData().collection
         if (!collection) {
           return scrub(unavailableQueryResult(
@@ -2060,7 +2251,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ['Observation'],
           '指定名稱的檢驗或觀察數據',
         )
-        if (unavailable) return scrub(unavailable)
+        if (unavailable) return scrubLabResult(unavailable)
 
         const unique = uniqueObservations(collection!)
 
@@ -2117,7 +2308,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const capped = applyLimit(flat, limit, 50)
         const page = paginationMeta(flat.length, capped.length)
 
-        return scrub({
+        return scrubLabResult({
           success: true,
           summary: matches.length > 0
             ? `Matched ${matches.length} observation(s) across ${byCode.size} code(s) for "${query}"`
@@ -2135,7 +2326,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             abnormal: isAbnormalObservation(obs),
             ...observationComponentFields(obs),
           })),
-        })
+        }, { discovery: Boolean(query) })
       },
     }),
 
@@ -2143,6 +2334,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Query patient procedures (surgeries, interventions).',
       inputSchema: proceduresSchema,
       execute: async ({ status, dateFrom, dateTo, limit }: z.infer<typeof proceduresSchema>) => {
+        const scrub = scrubForQueries(["Procedure"], ['Procedure'], '處置或手術紀錄')
         const list = getData().collection?.procedures ?? []
         let filtered = list.filter((p: any) => matchStatus(p.status, status))
         if (dateFrom || dateTo) {
@@ -2168,6 +2360,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'List distinct observation / lab names the patient has on record, with how many entries exist for each. Useful before using searchObservationByName when you\'re unsure what to search for.',
       inputSchema: listObservationCodesSchema,
       execute: async () => {
+        const scrub = scrubForDomains(['Observation', 'DiagnosticReport'])
         const { collection } = getData()
         const unavailable = unavailableQueryResult(
           collection,
@@ -2205,6 +2398,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: medicationsSchema,
       execute: async ({ query, status, chronic, timeRange, dateFrom, dateTo, limit }:
         z.infer<typeof medicationsSchema>) => {
+        const scrub = scrubForDomains(["MedicationRequest","MedicationStatement","Basic"])
         const { collection } = getData()
         if (!collection) {
           return scrub(unavailableQueryResult(
@@ -2276,9 +2470,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     getActiveMedicationList: tool({
-      description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Refill cycles collapse only when governed product identity, regimen, and source agree. Set chronicOnly to filter to 慢箋.',
+      description: 'Shortcut for "what is the patient currently on?" — uses explicit lifecycle status when usable and a computable supply window when source status is missing or unknown. Only records with neither usable status nor computable supply timing remain uncertain. Every distinct order remains available; sourceComparison marks unconfirmed source copies. Set chronicOnly to filter to 慢箋.',
       inputSchema: activeMedicationsSchema,
       execute: async ({ chronicOnly }: z.infer<typeof activeMedicationsSchema>) => {
+        const scrub = scrubForDomains(["MedicationRequest","MedicationStatement","Basic"])
         const { collection } = getData()
         if (!collection) {
           return scrub(unavailableQueryResult(
@@ -2302,9 +2497,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
           && isMedicationCurrentnessUncertain(m, now)
         )
 
-        const deduped = dedupMedicationRecords(active, list)
+        const deduped = annotateMedicationRecordCounts(active, list)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
-        const uncertainDeduped = dedupMedicationRecords(uncertain, list)
+        const uncertainDeduped = annotateMedicationRecordCounts(uncertain, list)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
         const currentPage = deduped.slice(0, 50)
         const uncertainPage = uncertainDeduped.slice(0, 50)
@@ -2313,10 +2508,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
 
         return scrub({
           success: true,
-          summary: uncertainDeduped.length > 0
-            ? `${deduped.length} current medication(s); ${uncertainDeduped.length} medication group(s) lack both usable lifecycle status and a computable supply window`
-            : `${deduped.length} current medication(s)`,
+          summary: `${deduped.length} current medication records. Hospital records take priority in matched hospital/cloud groups; original source copies remain available for audit.${uncertainDeduped.length ? ` ${uncertainDeduped.length} records have no established current status.` : ''}`,
           count: deduped.length,
+          sourceComparisonCounts: summarizeSourceComparisons(active),
           ...paginationMeta(deduped.length, currentPage.length),
           incomplete,
           canConcludeAbsence,
@@ -2327,12 +2521,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: medicationGroundingRules([...currentPage, ...uncertainPage]),
           data: currentPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
           uncertainData: uncertainPage.map((medication) => ({
             ...medicationToolFields(medication, now, 'dosage'),
             currentness: 'uncertain-source-status',
-            refillCount: medication.refillCount,
+            sourceRecordCount: medication.sourceRecordCount,
           })),
         })
       },
@@ -2342,6 +2536,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Query patient allergies and intolerances. Filter by `severity` (high/moderate/low) to narrow to clinically significant ones.',
       inputSchema: allergiesSchema,
       execute: async ({ type, severity }: z.infer<typeof allergiesSchema>) => {
+        const scrub = scrubForQueries(["AllergyIntolerance"], ['AllergyIntolerance'], '過敏或不耐受紀錄')
         const list = getData().collection?.allergies ?? []
         const filtered = list.filter((a: any) =>
           matchAllergyType(a.type, type) &&
@@ -2365,6 +2560,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       description: 'Query preventive vaccinations (FHIR Immunization). Supports date range.',
       inputSchema: immunizationsSchema,
       execute: async ({ dateFrom, dateTo, limit }: z.infer<typeof immunizationsSchema>) => {
+        const scrub = scrubForQueries(["Immunization"], ['Immunization'], '疫苗接種紀錄')
         const list = getData().collection?.immunizations ?? []
         let filtered = list
         if (dateFrom || dateTo) {
@@ -2389,3 +2585,4 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
   }
 }
+import { createClinicalRecordResolution } from '@/src/core/services/clinical-record-resolution'

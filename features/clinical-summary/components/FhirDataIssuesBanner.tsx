@@ -28,7 +28,8 @@ export function FhirDataIssuesBanner() {
     refetch,
   } = useClinicalData()
 
-  if (isLoading || queryIssues.length === 0) return null
+  const visibleIssues = queryIssues
+  if (isLoading || visibleIssues.length === 0) return null
 
   const isZh = locale === 'zh-TW'
   const labels = STATE_LABELS[isZh ? 'zh-TW' : 'en']
@@ -47,10 +48,10 @@ export function FhirDataIssuesBanner() {
       <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">{title}</span>
-        <span className="shrink-0 opacity-70">{queryIssues.length}</span>
+        <span className="shrink-0 opacity-70">{visibleIssues.length}</span>
       </summary>
       <div className="mt-2 space-y-1 border-t border-current/15 pt-2">
-        {queryIssues.map(([key, status]) => {
+        {visibleIssues.map(([key, status]) => {
           if (!status) return null
           const stateLabel = labels[status.state as keyof typeof labels] ?? status.state
           return (

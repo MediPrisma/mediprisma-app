@@ -202,6 +202,11 @@ export const LEFT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
     icon: LayoutDashboard,
     colorKey: 'clinical',
   },
+  'last-outpatient': {
+    id: 'last-outpatient',
+    icon: ClipboardList,
+    colorKey: 'clinical',
+  },
   'patient': {
     id: 'patient',
     icon: Stethoscope,
@@ -237,6 +242,7 @@ export const LEFT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
 
 export const FEATURE_CARD_THEMES: Record<string, { icon: LucideIcon; colorKey: keyof typeof UI_COLORS }> = {
   'overview': { icon: LayoutDashboard, colorKey: 'clinical' },
+  'last-outpatient': { icon: ClipboardList, colorKey: 'clinical' },
   'patient-info': { icon: User, colorKey: 'clinical' },
   'vitals': { icon: Activity, colorKey: 'clinical' },
   'diagnosis': { icon: ClipboardList, colorKey: 'clinical' },

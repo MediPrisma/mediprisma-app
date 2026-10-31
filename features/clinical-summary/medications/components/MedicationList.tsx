@@ -1,7 +1,7 @@
 // Improved Medication List Component with Collapsible Sections
 "use client"
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, History } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -10,11 +10,23 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationNameMode, MedicationRow } from '../types'
 import { MedicationItem } from './MedicationItem'
+import { VisitBandMarks, VisitHeader } from './VisitBandMarks'
+import {
+  assignRowVisitBands,
+  compareRowsByVisit,
+  rowsPerVisit,
+  startDayOf,
+  visitKeyOfRow,
+  visitBandTintClass,
+} from '../utils/visit-bands'
 import {
   MedicationHistoryDetails,
   MedicationHistoryList,
+  isInjectable,
+  type HistoryListGroup,
 } from './MedicationHistoryList'
 import {
+  medicationGroupKey,
   useGroupedMedications,
   type MedicationHistoryGroup,
 } from '../hooks/useGroupedMedications'
@@ -35,6 +47,9 @@ interface MedicationListProps {
   onNameModeChange?: (mode: MedicationNameMode) => void
   /** Actions about the 使用中 list (複製｜編輯), at the end of its header. */
   activeActions?: ReactNode
+  /** The rows before a search or class filter, when one is on: visit
+   *  headers then compare the matches with the visit's total ("1／3 項"). */
+  unfilteredMedications?: MedicationRow[]
 }
 
 export function MedicationList({
@@ -48,8 +63,9 @@ export function MedicationList({
   showNameModeSwitch = false,
   onNameModeChange,
   activeActions,
+  unfilteredMedications,
 }: MedicationListProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const mt = (t.medications as any)
   const [showActive, setShowActive] = useState(true)
   const [showInactive, setShowInactive] = useState(true)
@@ -64,41 +80,68 @@ export function MedicationList({
     activeHistoryByMedicationId = new Map<string, MedicationHistoryGroup>(),
     inactiveMedicationGroups,
   } = useGroupedMedications(medications)
+  // Display order only: newest visit first, drugs from one visit adjacent so
+  // they can share a band. Overview and copy-text keep the grouped order.
+  const activeByVisit = useMemo(
+    () => [...activeMedications].sort(compareRowsByVisit),
+    [activeMedications],
+  )
+  const activeBands = useMemo(() => assignRowVisitBands(activeByVisit), [activeByVisit])
+  // 用藥歷史 lists every fill under its own visit: stopped drugs, plus the
+  // earlier fills of current drugs, so each visit shows every drug it
+  // prescribed. (No 使用中 badge: the list above already names them.)
+  // Those earlier fills carry the drug's current fills too, so their row opens
+  // every fill its 「累計 n 次」 counts, as a stopped drug's row does.
+  const historyGroups = useMemo(() => {
+    const attached = new Map<string, HistoryListGroup>()
+    for (const group of activeHistoryByMedicationId.values()) {
+      if (attached.has(group.key)) continue
+      const currentFills = medications.filter(
+        (row) => !row.isInactive && medicationGroupKey(row) === group.key,
+      )
+      attached.set(group.key, { ...group, currentFills })
+    }
+    return [...inactiveMedicationGroups, ...attached.values()]
+  }, [activeHistoryByMedicationId, inactiveMedicationGroups, medications])
+  // Totals before the filter, in the unit each list shows (rows): 使用中
+  // counts its current-therapy rows; 用藥歷史 counts every ended fill, one
+  // row each, split as its lists are (injectables apart).
+  const unfilteredGrouped = useGroupedMedications(unfilteredMedications ?? medications)
+  const visitTotals = useMemo(() => {
+    if (!unfilteredMedications) return undefined
+    const pastFills = unfilteredMedications.filter((row) => row.isInactive)
+    const injectableDrugs = new Set(pastFills.filter(isInjectable).map(medicationGroupKey))
+    const isInjectableDrug = (row: MedicationRow) => injectableDrugs.has(medicationGroupKey(row))
+    return {
+      active: rowsPerVisit(unfilteredGrouped.activeMedications),
+      regular: rowsPerVisit(pastFills.filter((row) => !isInjectableDrug(row))),
+      injectable: rowsPerVisit(pastFills.filter(isInjectableDrug)),
+    }
+  }, [unfilteredMedications, unfilteredGrouped])
   const pending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
   useEffect(() => {
     if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
     const targetInActive = activeMedications.some((medication) =>
-      medication.id === pending.resourceId,
+      medication.id === pending.resourceId || medication.reconciledOrderIds?.includes(pending.resourceId),
     )
-    const targetInHistory = inactiveMedicationGroups.some((group) =>
-      group.medications.some((medication) => medication.id === pending.resourceId),
+    // Every earlier fill has its own row in 用藥歷史, under its visit, so a
+    // citation of one opens the history section and lands on that row.
+    const targetInHistory = historyGroups.some((group) =>
+      group.medications.some((medication) => medication.id === pending.resourceId || medication.reconciledOrderIds?.includes(pending.resourceId)),
     )
-    const activeHistoryOwner = [...activeHistoryByMedicationId.entries()].find(
-      ([, group]) => group.medications.some(
-        (medication) => medication.id === pending.resourceId,
-      ),
-    )?.[0]
-    if (!targetInActive && !targetInHistory && !activeHistoryOwner) return
+    if (!targetInActive && !targetInHistory) return
     const timer = window.setTimeout(() => {
-      if (targetInActive || activeHistoryOwner) setShowActive(true)
+      if (targetInActive) setShowActive(true)
       if (targetInHistory) setShowInactive(true)
-      if (activeHistoryOwner) {
-        setOpenActiveHistories((current) => {
-          const next = new Set(current)
-          next.add(activeHistoryOwner)
-          return next
-        })
-      }
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
     pending,
     navSeq,
     activeMedications,
-    activeHistoryByMedicationId,
-    inactiveMedicationGroups,
+    historyGroups,
   ])
 
   if (isLoading) {
@@ -117,7 +160,8 @@ export function MedicationList({
     return <div className="text-sm text-muted-foreground">{mt.noData}</div>
   }
 
-  const totalInactive = inactiveMedicationGroups.reduce((sum, group) => sum + group.count, 0)
+  // Every ended fill the history lists, including earlier fills of current drugs.
+  const totalInactive = historyGroups.reduce((sum, group) => sum + group.count, 0)
   const nameDisplay = mt.nameDisplay ?? {
     label: '藥名顯示方式',
     ingredient: '成分名',
@@ -170,6 +214,9 @@ export function MedicationList({
 
   return (
     <div className="space-y-4">
+      {medications.some(medication => medication.currentnessUncertain) && (
+        <p className="text-xs text-muted-foreground">{locale === 'en' ? 'Some medication status is unconfirmed. These records remain below with an uncertainty or conflict label; neither current use nor stopping is established.' : '有用藥狀態待確認；下方仍保留原始紀錄及狀態差異標示，尚不能直接判定仍在服用或已停用。'}</p>
+      )}
       {/* Nothing running, but the actions still apply — a long-term script
           that just ran out is still 現在用藥 to the copy. */}
       {activeMedications.length === 0 && (nameModeSwitch || activeActions) && (
@@ -211,7 +258,8 @@ export function MedicationList({
               data-medication-list-surface="grouped"
               className="@container divide-y divide-border/70 overflow-hidden rounded-lg border border-border/80 bg-muted/40 dark:bg-muted/30"
             >
-              {activeMedications.map((medication) => {
+              {activeByVisit.map((medication, index) => {
+                const visitBand = activeBands[index]
                 const history = activeHistoryByMedicationId.get(medication.id)
                 const historyOpen = openActiveHistories.has(medication.id)
                 const historyDetailsId = `${activeListId}-${medication.id}-history`
@@ -228,7 +276,20 @@ export function MedicationList({
                 })
 
                 return (
-                  <li key={medication.id} className="min-w-0">
+                  <li
+                    key={medication.id}
+                    className={cn('relative min-w-0', visitBand.band === 1 && visitBandTintClass)}
+                    data-visit-band={visitBand.band}
+                    data-visit-start={visitBand.visitStart || undefined}
+                  >
+                    <VisitBandMarks band={visitBand} />
+                    {visitBand.headerCount > 0 && (
+                      <VisitHeader
+                        rows={activeByVisit.slice(index, index + visitBand.headerCount)}
+                        count={visitBand.headerCount}
+                        total={visitTotals?.active.get(visitKeyOfRow(medication, medication.id || String(index)))}
+                      />
+                    )}
                     <MedicationItem
                       medication={medication}
                       showSourceChip={showSourceChip}
@@ -236,18 +297,13 @@ export function MedicationList({
                       sourceChipStatementTooltip={sourceChipStatementTooltip}
                       nameMode={nameMode}
                       grouped
+                      visitContextInHeader={!!startDayOf(medication)}
                       onRowToggle={history ? toggleHistory : undefined}
-                      resourceNavigationIds={history
-                        ? [
-                            medication.id,
-                            ...history.medications.map((item) => item.id),
-                          ]
-                        : undefined}
+                      // Answers only for its own prescription: earlier fills
+                      // have their own rows in 用藥歷史. A citation asking to
+                      // expand this drug's history still opens it here.
                       onResourceNavigationMatch={history ? ((_sequence, target) => {
-                        const targetsHistoricalFill = history.medications.some(
-                          (item) => item.id === target.resourceId,
-                        )
-                        if (!target.expandMedicationHistory && !targetsHistoricalFill) return
+                        if (!target.expandMedicationHistory) return
                         setShowActive(true)
                         setOpenActiveHistories((current) => {
                           const next = new Set(current)
@@ -256,6 +312,8 @@ export function MedicationList({
                         })
                       }) : undefined}
                       leadingControl={history ? (
+                        // Stretches to the row (44px two-line, 32px when the
+                        // row folds onto one line) so the chevron stays centred.
                         <button
                           type="button"
                           aria-expanded={historyOpen}
@@ -263,7 +321,7 @@ export function MedicationList({
                           aria-label={historyToggleLabel}
                           title={historyToggleLabel}
                           onClick={toggleHistory}
-                          className="inline-flex min-h-11 w-full items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
+                          className="inline-flex w-full self-stretch items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
                         >
                           <ChevronRight
                             className={cn(
@@ -292,7 +350,7 @@ export function MedicationList({
       )}
 
       {/* Inactive Medications - Collapsible */}
-      {totalInactive > 0 && (
+      {historyGroups.length > 0 && (
         <div className="space-y-2">
           <Button
             variant="ghost"
@@ -306,14 +364,18 @@ export function MedicationList({
               {showInactive ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               <History className="h-4 w-4" />
               <span className="text-sm font-semibold">
-                {mt.history} ({totalInactive} {mt.historyStopped})
+                {mt.history} ({totalInactive} {locale === 'en' ? 'records' : '筆紀錄'})
               </span>
             </div>
           </Button>
 
           {showInactive && (
             <div id={inactiveListId}>
-              <MedicationHistoryList groups={inactiveMedicationGroups} nameMode={nameMode} />
+              <MedicationHistoryList
+                groups={historyGroups}
+                visitTotals={visitTotals}
+                nameMode={nameMode}
+              />
             </div>
           )}
         </div>

@@ -64,6 +64,7 @@ export function rowMatchesSearch(row: Row, rawQuery: string): boolean {
         || (coding.system ?? '').toLowerCase().includes(query)
       ))
       || (source.reportId ?? '').toLowerCase().includes(query)
+      || (source.sourceRecordId ?? '').toLowerCase().includes(query)
     )) ?? false)
     || dateSearchTokens(row.effectiveDate).some((value) => value.toLowerCase().includes(query))
     || rowInnerMatch(row, query)

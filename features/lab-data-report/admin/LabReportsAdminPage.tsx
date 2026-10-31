@@ -27,6 +27,7 @@ import { AuthDialog } from "@/features/auth"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { isAllergenName, SPECIFIC_ALLERGEN_NHI_ORDER_CODES } from "@/src/shared/utils/immunology-analytes"
 import type { LabDataReportRawRow, LabDataReportRow } from "../types"
 import { buildReportGrids, cellKey, formatReportValue, type ReportPanelGrid } from "./report-grid"
 import { pairRawRows, type RawPairing } from "./raw-pairing"
@@ -692,8 +693,14 @@ function RawRowsSection({
   ].filter((line): line is string => !!line)
   // Worth a look: rows nothing explains, pairs whose values differ, and
   // pairs made on the order code alone. Merged copies are explained.
+  // Specific-allergen rows (30022C) are left out of the cumulative report on
+  // purpose, so the app sends no converted row for them: not a conversion
+  // error, and not worth a look.
+  const excludedByDesign = (row: LabDataReportRawRow) =>
+    SPECIFIC_ALLERGEN_NHI_ORDER_CODES.includes(row.fields.order_code?.trim().toUpperCase() ?? "")
+    || isAllergenName(row.fields.assay_item_name ?? row.fields.assaY_NAME)
   const shown = unmatchedOnly
-    ? rawRows.filter((row) => (!pairing.convertedByRaw.has(row.ref) && !pairing.mergedInto.has(row.ref))
+    ? rawRows.filter((row) => (!pairing.convertedByRaw.has(row.ref) && !pairing.mergedInto.has(row.ref) && !excludedByDesign(row))
       || pairing.valueDiffers.has(row.ref) || pairing.codeOnly.has(row.ref))
     : rawRows
 
@@ -747,6 +754,7 @@ function RawRowsSection({
               const paired = pairedRef === undefined ? undefined : convertedByRef.get(pairedRef)
               const mergedRef = pairing.mergedInto.get(row.ref)
               const mergedHost = mergedRef === undefined ? undefined : convertedByRef.get(mergedRef)
+              const excluded = !paired && !mergedHost && excludedByDesign(row)
               const value = row.results.assay_value ?? row.results.assaY_VALUE
               const withheld = row.withheld.assay_value ?? row.withheld.assaY_VALUE
               const extra = [
@@ -764,7 +772,7 @@ function RawRowsSection({
                 row.fields.func_type && `dept ${row.fields.func_type}`,
               ].filter(Boolean)
               return (
-                <tr key={row.ref} className={cn('border-t border-border/70 align-top', ((!paired && !mergedHost) || pairing.valueDiffers.has(row.ref)) && 'bg-amber-50 dark:bg-amber-950/30')}>
+                <tr key={row.ref} className={cn('border-t border-border/70 align-top', ((!paired && !mergedHost && !excluded) || pairing.valueDiffers.has(row.ref)) && 'bg-amber-50 dark:bg-amber-950/30')}>
                   <th scope="row" className="sticky left-0 bg-background px-2 py-1 text-left font-normal text-muted-foreground">
                     {row.ref}
                   </th>
@@ -789,6 +797,8 @@ function RawRowsSection({
                           {(mergedHost.app.categoryId ? panelLabels[mergedHost.app.categoryId] ?? mergedHost.app.categoryId : '—')} › {mergedHost.app.column}
                         </span>
                       </>
+                    ) : excluded ? (
+                      <span className="text-muted-foreground">{strings.excludedByDesign}</span>
                     ) : (
                       <span className="font-medium text-amber-700 dark:text-amber-400">{strings.unpaired}</span>
                     )}

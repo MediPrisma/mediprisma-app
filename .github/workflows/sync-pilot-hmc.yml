@@ -1,0 +1,238 @@
+name: Sync master into pilot/hmc
+
+# Keeps the HMC preview (mediprisma.tw/app-hmc) on the same code and the same
+# published clinical rules as master, so a merged pull request reaches /app,
+# /app-staging and /app-hmc together (docs/RELEASE-CHANNELS.md).
+#
+# After CI passes on a master push, merge that commit into pilot/hmc, push, and
+# start "HMC preview build"; "Publish HMC pilot preview" then copies the result
+# to /app-hmc as before. pilot/hmc stays its own branch: HMC-only changes are
+# still made there, built and published by the pilot's own workflows.
+#
+# The merge is pushed only when it is routine. It stops and opens an issue
+# instead when:
+#   - the merge conflicts with changes made on pilot/hmc;
+#   - it would delete a file pilot/hmc has;
+#   - it changes .github/workflows (GITHUB_TOKEN may not push workflow files);
+#   - package.json or package-lock.json would differ from master, so the pilot
+#     would run other package versions than the commit it claims to follow.
+# A push made with GITHUB_TOKEN starts no workflows on its own, hence the
+# explicit dispatch of the build.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    ${{ ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    || (github.event.workflow_run.conclusion == 'success'
+    && github.event.workflow_run.event == 'push'
+    && github.event.workflow_run.head_branch == 'master'
+    && github.event.workflow_run.head_repository.full_name == github.repository))
+    && 'sync-pilot-hmc' || format('sync-pilot-hmc-ignored-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+      || (github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'master'
+      && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ACTOR: ${{ github.event.workflow_run.actor.login || github.actor }}
+      ISSUE_TITLE: HMC 自動同步需要處理
+    steps:
+      - name: Checkout pilot/hmc with master history
+        uses: actions/checkout@v7
+        with:
+          ref: pilot/hmc
+          fetch-depth: 0
+
+      # The event only says that master moved. Sync the newest master commit
+      # whose CI passed, chosen now, so a late or re-run event cannot leave a
+      # newer commit out. Merging an older commit than pilot/hmc already has is
+      # a no-op ("current"), so this never moves the pilot back.
+      - name: Choose the master commit to sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sha in $(gh api "repos/$GITHUB_REPOSITORY/commits?sha=master&per_page=30" --jq '.[].sha'); do
+            passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&branch=master&event=push&status=success&per_page=1" --jq '.total_count')"
+            if [ "$passed" -gt 0 ]; then
+              echo "SHA=$sha" >> "$GITHUB_ENV"
+              echo "Syncing $sha, the newest master commit that passed CI."
+              exit 0
+            fi
+          done
+          echo "None of the last 30 master commits has passed CI; nothing to sync."
+          exit 1
+
+      - name: Merge the master commit
+        id: merge
+        shell: bash
+        run: |
+          set -uo pipefail
+          git config user.name "mediprisma-hmc-sync[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --quiet origin master
+          if ! git merge-base --is-ancestor "$SHA" origin/master; then
+            echo "$SHA is not on master."; exit 1
+          fi
+          before="$(git rev-parse HEAD)"
+          reason=""
+          if git merge-base --is-ancestor "$SHA" HEAD; then
+            # Merged earlier, possibly by hand: still hold it to the package rule.
+            echo "pilot/hmc already contains $SHA."
+            if git diff --quiet "$SHA" HEAD -- package.json package-lock.json; then
+              echo "result=current" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            reason="pilot/hmc 已包含 master \`${SHA:0:7}\`，但 package.json 或 package-lock.json 和 master 不同，pilot/hmc 會用到另一組套件版本。請讓 pilot/hmc 的套件版本跟 master 一致。"
+          elif ! git merge --no-ff --no-edit -m "Merge master ${SHA:0:7} into pilot/hmc (automatic sync)" "$SHA" > merge.log 2>&1; then
+            files="$(git diff --name-only --diff-filter=U)"
+            git merge --abort
+            reason="合併時與 pilot/hmc 上的修改衝突：
+          $(printf '%s\n' "$files" | sed 's/^/- `/; s/$/`/')"
+          else
+            deleted="$(git diff --diff-filter=D --name-only "$before" HEAD)"
+            workflows="$(git diff --name-only "$before" HEAD -- .github/workflows)"
+            if [ -n "$deleted" ]; then
+              reason="合併會刪除 pilot/hmc 上的檔案：
+          $(printf '%s\n' "$deleted" | sed 's/^/- `/; s/$/`/')"
+            elif [ -n "$workflows" ]; then
+              reason="這次 master 的變更包含 workflow 檔，自動同步沒有權限推送，需要人工合併：
+          $(printf '%s\n' "$workflows" | sed 's/^/- `/; s/$/`/')"
+            elif ! git diff --quiet "$SHA" HEAD -- package.json package-lock.json; then
+              reason="合併後的 package.json 或 package-lock.json 和 master 不同，pilot/hmc 會用到另一組套件版本。請讓 pilot/hmc 的套件版本跟 master 一致。"
+            fi
+          fi
+          if [ -n "$reason" ]; then
+            { echo 'reason<<REASON'; echo "$reason"; echo REASON; } >> "$GITHUB_OUTPUT"
+            echo "result=blocked" >> "$GITHUB_OUTPUT"
+            echo "$reason"
+          else
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push the merge
+        if: ${{ steps.merge.outputs.result == 'merged' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git push origin HEAD:pilot/hmc; then
+            echo "pilot/hmc moved while syncing; the next master commit, or a manual run of this workflow, will retry."
+            exit 1
+          fi
+          echo "Merged ${SHA:0:7} into pilot/hmc."
+
+      # Separate from the push so that a re-run after a failed dispatch, which
+      # finds pilot/hmc already current, still gets its build.
+      #
+      # A build dispatched with GITHUB_TOKEN raises no workflow_run event, so
+      # "Publish HMC pilot preview" would never hear of it: wait for that build
+      # and hand its run id to the publish directly. A build started by a push
+      # to pilot/hmc publishes through workflow_run as before.
+      - name: Build the pilot head unless a build of it exists, and publish it
+        if: ${{ steps.merge.outputs.result == 'merged' || steps.merge.outputs.result == 'current' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          runs() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
+              --jq '[.workflow_runs[] | select(.status != "completed" or .conclusion == "success")]'
+          }
+          all_runs() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?head_sha=$head&per_page=20" \
+              --jq '.workflow_runs'
+          }
+          # Follow one run by id, so a build that fails or is cancelled is seen
+          # as such. hmc-build allows itself 50 minutes; wait a little longer.
+          id="$(runs | jq -r 'sort_by(.created_at) | last | .id // empty')"
+          if [ -n "$id" ]; then
+            echo "pilot/hmc ${head:0:7} already has a build ($id)."
+          else
+            # Only a run created after this dispatch is ours: an older failed
+            # one may still be the newest the API lists for a while.
+            before="$(all_runs | jq '[.[].id] | max // 0')"
+            gh workflow run hmc-build.yml --ref pilot/hmc
+            echo "Started HMC preview build for pilot/hmc ${head:0:7}."
+            for _ in $(seq 1 15); do
+              id="$(all_runs | jq -r --argjson before "$before" '[.[] | select(.id > $before)] | sort_by(.id) | last | .id // empty')"
+              [ -n "$id" ] && break
+              sleep 10
+            done
+          fi
+          if [ -z "$id" ]; then
+            echo "Could not find the HMC preview build for ${head:0:7}."; exit 1
+          fi
+          for _ in $(seq 1 180); do
+            build="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id")"
+            [ "$(jq -r .status <<<"$build")" = completed ] && break
+            sleep 20
+          done
+          case "$(jq -r '.status + "/" + (.conclusion // "")' <<<"$build")" in
+            completed/success) ;;
+            completed/cancelled)
+              # Superseded by a newer pilot build, which publishes through its
+              # own trigger (a push) or the sync run that started it.
+              echo "Build $id was cancelled by a newer one; that one publishes."; exit 0 ;;
+            completed/*)
+              # The publisher skips a failed build but its report job still tells
+              # the pilot, as it does for a push build that fails.
+              if [ "$(jq -r .event <<<"$build")" = workflow_dispatch ]; then
+                gh workflow run hmc-publish.yml --ref master -f run_id="$id"
+              fi
+              echo "The HMC preview build failed: $(jq -r .html_url <<<"$build")"; exit 1 ;;
+            *)
+              # Not lost: the scheduled run of the publish picks it up once it succeeds.
+              echo "Build $id is still running after an hour; the scheduled publish will take it: $(jq -r .html_url <<<"$build")"; exit 0 ;;
+          esac
+          if [ "$(jq -r .event <<<"$build")" = workflow_dispatch ]; then
+            gh workflow run hmc-publish.yml --ref master -f run_id="$id"
+            echo "Started the publish of build $id."
+          fi
+
+          number="$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue close "$number" --comment "master \`${SHA:0:7}\` 已自動同步到 pilot/hmc，這個問題已解除。"
+          fi
+
+      - name: Ask for a hand
+        if: ${{ steps.merge.outputs.result == 'blocked' }}
+        shell: bash
+        env:
+          REASON: ${{ steps.merge.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          body="master \`${SHA:0:7}\` 沒有自動同步到 pilot/hmc，/app-hmc 仍是舊版本。
+
+          ${REASON}
+
+          處理完後可以在 Actions 手動執行「Sync master into pilot/hmc」，或等下一個 master commit 自動重試。
+
+          執行紀錄：${RUN_URL}"
+          number="$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$body" --assignee "$ACTOR" \
+              || gh issue create --title "$ISSUE_TITLE" --body "$body"
+          fi
+          exit 1

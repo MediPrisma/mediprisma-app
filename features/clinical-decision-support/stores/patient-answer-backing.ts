@@ -34,6 +34,7 @@ export type PatientAnswerKind =
   | 'visit-answers'
   | 'clinic-vitals'
   | 'af-answers'
+  | 'coronary-phase'
   | 'phenotype-answer'
   | 'hfpef-inputs'
   | 'physician-decisions'
@@ -52,6 +53,7 @@ const STORAGE_PREFIXES: Readonly<Record<PatientAnswerKind, string>> = {
   'visit-answers': 'cdss-visit-answers:',
   'clinic-vitals': 'cdss-clinic-vitals:',
   'af-answers': 'cdss-af-answers:',
+  'coronary-phase': 'cdss-coronary-phase:',
   'phenotype-answer': 'cdss-phenotype-answer:',
   'hfpef-inputs': 'cdss-hfpef-inputs:',
   'physician-decisions': 'cdss-physician-decisions:',
@@ -79,7 +81,8 @@ export interface PatientAnswerBacking {
   has: (kind: PatientAnswerKind, patientId: string) => boolean
   /** What is kept, as stored; the store validates it. Nothing kept is `null` or `undefined`. */
   load: (kind: PatientAnswerKind, patientId: string) => Promise<unknown>
-  save: (kind: PatientAnswerKind, patientId: string, value: unknown) => void
+  /** A promise says whether the value was kept; a backing that cannot fail returns nothing. */
+  save: (kind: PatientAnswerKind, patientId: string, value: unknown) => Promise<boolean> | void
   discard: (kind: PatientAnswerKind, patientId: string) => void
 }
 

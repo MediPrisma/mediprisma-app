@@ -1,3 +1,5 @@
+import { selectCdssClinicalInputs, type ExcludedClinicalRecordVariant } from './clinical-record-inputs'
+import { assessMedicationCurrentness, medicationExpectedStartTimestamp } from '@/src/core/utils/clinical-context-selection.utils'
 import {
   classifyCurrentMedications,
   createFhirCdssPatientProfile,
@@ -37,6 +39,9 @@ export interface HospitalUnconfirmedAnticoagulation {
 }
 
 export type HospitalAwareCdssProfile = CdssPatientProfile & {
+  excludedClinicalRecordVariants?: readonly ExcludedClinicalRecordVariant[]
+  unresolvedClinicalMedicationContents?: readonly { source: CdssFactSource; reason: string }[]
+  hospitalMedicationInventoryUnresolved?: { sources: readonly CdssFactSource[] }
   hospitalMedicationEvidence?: readonly HospitalMedicationEvidence[]
   hospitalMedicationPolicyVersion?: string
   /** Classes with an unconfirmed prescription: eligible for safety exposure checks. */
@@ -48,6 +53,35 @@ export type HospitalAwareCdssProfile = CdssPatientProfile & {
    * the same regimen as a settled anticoagulation decision.
    */
   hospitalMedicationUnconfirmedAnticoagulation?: HospitalUnconfirmedAnticoagulation
+}
+
+/** Quarantined source records cannot establish a negative medication inventory. */
+function withUnresolvedMedicationInventory(profile: HospitalAwareCdssProfile): HospitalAwareCdssProfile {
+  const diagnoses = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'Condition') ?? []
+  if (diagnoses.length) profile = { ...profile, facts: { ...profile.facts, unresolvedDiagnosisRecords: {
+    zh: '診斷內容未提供，無法據此判定沒有疾病',
+    en: 'Diagnosis content is unavailable; unavailable records cannot establish absent disease.',
+    sources: diagnoses.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })),
+  } } }
+  const excluded = profile.excludedClinicalRecordVariants?.filter(item => item.resourceType === 'MedicationRequest' || item.resourceType === 'MedicationStatement') ?? []
+  const contents = profile.unresolvedClinicalMedicationContents ?? []
+  if (!excluded.length && !contents.length) return profile
+  const sources: CdssFactSource[] = [...excluded.map(item => ({ resourceType: item.resourceType as CdssFactSource['resourceType'], resourceId: item.resourceId ?? item.sourceId ?? '' })), ...contents.map(item => item.source)]
+  const uncertainty = { zh: '藥品內容未提供，無法判定藥物種類或未用藥', en: 'Medication content is unavailable; drug identity and medication absence cannot be determined.', sources }
+  const facts = { ...profile.facts }
+  const contexts = { ...profile.medicationClassContexts }
+  for (const [key, context] of Object.entries(contexts)) {
+    if (!context || context.state !== 'not-found') continue
+    contexts[key as CdssMedicationClassId] = { ...context, state: 'uncertain' }
+    // Missing current-class facts must not become truthy exposure assertions.
+    if (!facts[context.factKey]?.sources?.length) delete facts[context.factKey]
+  }
+  facts.medicationInventoryUnresolved = uncertainty
+  const overview = profile.facts.medicationListOverview
+  facts.medicationListOverview = overview && !overview.en.includes(uncertainty.en)
+    ? { ...overview, zh: overview.zh + '；' + uncertainty.zh, en: overview.en + '; ' + uncertainty.en,
+        sources: [...(overview.sources ?? []), ...sources] } : overview ?? uncertainty
+  return { ...profile, facts, medicationClassContexts: contexts, hospitalMedicationInventoryUnresolved: { sources } }
 }
 
 export const HOSPITAL_MEDICATION_POLICY_VERSION = 'vgh-cdss-medications-20261001-v2'
@@ -88,7 +122,7 @@ const ANTICOAGULANT_INGREDIENTS = new Set(['apixaban', 'dabigatran', 'edoxaban',
 const isAnticoagulantRegimen = (regimen: AfMedicationRegimen) => ANTICOAGULANT_INGREDIENTS.has(regimen.ingredient)
 
 /** What the AF visit map reads as 「已抗凝」: an anticoagulant regimen, a current DOAC/VKA class, or a VKA fact. */
-function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMedicationRegimens' | 'medicationClassContexts' | 'facts'>): boolean {
+export function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMedicationRegimens' | 'medicationClassContexts' | 'facts'>): boolean {
   return Boolean(profile.afMedicationRegimens?.some(isAnticoagulantRegimen))
     || (['direct-oral-anticoagulant', 'vitamin-k-antagonist'] as CdssMedicationClassId[])
       .some((classId) => profile.medicationClassContexts?.[classId]?.state === 'confirmed-current')
@@ -97,23 +131,18 @@ function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMedicatio
 
 const ANTICOAGULANT_FACT_KEYS = ['currentDoac', 'currentVitaminKAntagonist', 'currentOralAnticoagulant'] as const
 
-/** A validityPeriod is a dispensing window, not evidence of taking a drug.
- * https://hl7.org/fhir/R4/medicationrequest-definitions.html#MedicationRequest.dispenseRequest.validityPeriod
- * No arbitrary age cutoff or cloud-prescription grace period is applied to an
- * EHR order. An explicit active MedicationStatement can confirm current use. */
+/** Use the hospital's order status and the same supply calculation as the chart.
+ * This is the app's recorded-medication policy, not an assertion of adherence. */
 function hospitalUseState(medication: MedicationEntity, now: Date): HospitalMedicationUseState {
   const status = medication.status?.trim().toLowerCase() ?? ''
   if (EXCLUDED.has(status) || NOT_CURRENT.has(status)) return 'not-current'
   if (status === 'on-hold') return 'on-hold'
-  const written = Date.parse(medication.authoredOn ?? '')
+  const written = medicationExpectedStartTimestamp(medication)
   const future = Number.isFinite(written) && written > now.getTime()
-  if (medication._sourceResourceType === 'MedicationStatement' && status === 'active' && !future) {
-    return 'confirmed-current'
-  }
-  const end = Date.parse(medication.dispenseRequest?.validityPeriod?.end ?? '')
-  return Number.isFinite(end) && end < now.getTime()
-    ? 'historical-record-current-status-unknown'
-    : 'active-order-unconfirmed'
+  if (future) return 'not-current'
+  const assessment = assessMedicationCurrentness(medication, now.getTime())
+  if (assessment.current || status === 'active' && assessment.uncertain) return 'confirmed-current'
+  return assessment.uncertain ? 'active-order-unconfirmed' : 'not-current'
 }
 
 function sourceFor(medication: MedicationEntity, ingredientName?: string): CdssFactSource {
@@ -135,9 +164,9 @@ function sourceFor(medication: MedicationEntity, ingredientName?: string): CdssF
 
 export function hospitalMedicationUseLabel(state: HospitalMedicationUseState, english = false): string {
   const labels: Record<HospitalMedicationUseState, [string, string]> = {
-    'confirmed-current': ['用藥清單確認使用中', 'Current use documented in a medication statement'],
-    'active-order-unconfirmed': ['有開立紀錄，目前使用待確認', 'Prescription recorded; current use needs confirmation'],
-    'historical-record-current-status-unknown': ['歷史處方，目前使用待確認', 'Historical prescription; current use needs confirmation'],
+    'confirmed-current': ['依院內紀錄使用中', 'Current according to the hospital record'],
+    'active-order-unconfirmed': ['院內開立紀錄', 'Hospital prescription record'],
+    'historical-record-current-status-unknown': ['歷史處方', 'Historical prescription'],
     'on-hold': ['來源標示暫停中', 'On hold in the source record'],
     'not-current': ['來源標示已結束／停用', 'Ended or stopped in the source record'],
   }
@@ -149,11 +178,13 @@ export function hospitalMedicationUseLabel(state: HospitalMedicationUseState, en
 export function createHospitalAwareCdssPatientProfile(
   input: Omit<FhirCdssProfileInput, 'medications'> & { medications: MedicationEntity[] },
 ): HospitalAwareCdssProfile {
+  const selected = selectCdssClinicalInputs(input)
   const now = input.now ?? new Date()
   const evidence: HospitalMedicationEvidence[] = []
   const internalStatuses = new Map<string, string | undefined>()
   const internalUseStates = new Map<string, HospitalMedicationUseState>()
-  const medications = input.medications.map((source, index): HostMedication => {
+  const unresolvedContents = input.medications.filter(row => row.clinicalMedicationContentUncertainty).map(row => ({ source: sourceFor(row), reason: row.clinicalMedicationContentUncertainty!.reason }))
+  const medications = selected.input.medications.filter(row => !row.clinicalMedicationContentUncertainty).map((source, index): HostMedication => {
     const name = resolveHospitalMedicationName(source.medicationCodeableConcept)
     if (!name) return source
     const useState = hospitalUseState(source, now)
@@ -183,7 +214,9 @@ export function createHospitalAwareCdssPatientProfile(
       name, useState, ingredientName, classIds, factKey: `hospitalMedication:${source._sourceResourceType ?? 'MedicationRequest'}:${source.id}` })
     return normalized
   })
-  const profile = createFhirCdssPatientProfile({ ...input, medications, now })
+  const profile: HospitalAwareCdssProfile = withUnresolvedMedicationInventory({ ...createFhirCdssPatientProfile({ ...selected.input, medications, now }),
+    ...(selected.excluded.length ? { excludedClinicalRecordVariants: selected.excluded } : {}),
+    ...(unresolvedContents.length ? { unresolvedClinicalMedicationContents: unresolvedContents } : {}) })
   if (!evidence.length) return profile
 
   const facts = { ...profile.facts }
@@ -258,8 +291,8 @@ export function createHospitalAwareCdssPatientProfile(
     const factKey = context.factKey.startsWith('hfHarmful') ? `hospitalMedicationClass:${classId}` : context.factKey
     if (factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass) continue
     facts[factKey] = {
-      zh: `院內處方：${names.join('、')}；目前使用待確認`,
-      en: `Hospital prescription: ${names.join(', ')}; current use needs confirmation`,
+      zh: `院內處方：${names.join('、')}；紀錄未提供使用狀態`,
+      en: `Hospital prescription: ${names.join(', ')}; use status not recorded`,
       sources: matching.map((item) => item.source),
     }
   }
@@ -273,8 +306,8 @@ export function createHospitalAwareCdssPatientProfile(
     contexts[classId as CdssMedicationClassId] = { ...context, state: 'uncertain' }
     if (!context.factKey.startsWith('hfHarmful')
       && !(context.factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass)) facts[context.factKey] = {
-      zh: '院內藥物成分辨識不完整，目前用藥需核對',
-      en: 'Hospital ingredient mapping is incomplete; reconcile current medications',
+      zh: '院內紀錄未提供藥物成分',
+      en: 'Hospital ingredient not recorded',
       sources: unresolved.map((item) => item.source),
     }
   }
@@ -294,7 +327,7 @@ export function createHospitalAwareCdssPatientProfile(
     const status = item.source.status?.trim().toLowerCase() ?? ''
     return status === 'active' || status === 'unknown' || status === ''
   }).map((item) => `${item.source.resourceType}:${item.source.resourceId}`))
-  const exposureProfile = uncertain.length ? createFhirCdssPatientProfile({ ...input, now,
+  const exposureProfile = uncertain.length ? createFhirCdssPatientProfile({ ...selected.input, now,
     medications: medications.map((item) => pendingById.has(`${item._sourceResourceType ?? 'MedicationRequest'}:${item.id}`)
       ? { ...item, status: 'active' } : item),
   }) : profile
@@ -308,8 +341,8 @@ export function createHospitalAwareCdssPatientProfile(
     const pendingSources = fact.sources?.filter((source) => pendingById.has(`${source.resourceType}:${source.resourceId}`)) ?? []
     facts[key] = { ...fact, sources: fact.sources?.map(restoreSource),
       ...(pendingSources.length ? {
-        zh: `用藥暴露紀錄（院內使用待確認）：${fact.zh}`,
-        en: `Medication exposure record (hospital use unconfirmed): ${fact.en}`,
+        zh: `院內用藥暴露紀錄（使用狀態未提供）：${fact.zh}`,
+        en: `Hospital medication exposure record (use status not recorded): ${fact.en}`,
       } : {}),
     }
   }
@@ -341,8 +374,8 @@ export function createHospitalAwareCdssPatientProfile(
         ].filter(isPending).map((source) => [`${source.resourceType}:${source.resourceId}`, source])).values()],
       }
     : undefined
-  return { ...profile, facts, medicationContexts, medicationClassContexts: contexts, hospitalMedicationEvidence: evidence,
+  return withUnresolvedMedicationInventory({ ...profile, facts, medicationContexts, medicationClassContexts: contexts, hospitalMedicationEvidence: evidence,
     hospitalMedicationPolicyVersion: HOSPITAL_MEDICATION_POLICY_VERSION,
     hospitalMedicationPossibleExposureClasses: possibleExposureClasses, afMedicationRegimens,
-    ...(unconfirmedAnticoagulation ? { hospitalMedicationUnconfirmedAnticoagulation: unconfirmedAnticoagulation } : {}) }
+    ...(unconfirmedAnticoagulation ? { hospitalMedicationUnconfirmedAnticoagulation: unconfirmedAnticoagulation } : {}) })
 }

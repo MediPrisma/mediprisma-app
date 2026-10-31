@@ -143,8 +143,7 @@ describe('formatReportText', () => {
       'Method: Axial 5 mm sections.Other Interpretations:1. Normal cerebrum.'
     )
     expect(lines).toEqual([
-      { text: 'Method:', level: 0, heading: true },
-      { text: 'Axial 5 mm sections.', level: 1 },
+      { text: 'Method: Axial 5 mm sections.', level: 0, heading: true, headingLabel: 'Method:' },
       { text: 'Other Interpretations:', level: 0, heading: true },
       { text: 'Normal cerebrum.', level: 1, marker: '1.' },
     ])
@@ -282,5 +281,50 @@ describe('formatReportText', () => {
   it('does not apply microbiology row splitting to an incomplete lookalike', () => {
     const raw = 'Final report (最終報告) : ISOLATE 1 : Example organism'
     expect(formatReportText(raw)).toEqual([{ text: raw, level: 0 }])
+  })
+})
+
+describe('parenthetical section keywords', () => {
+  it('keeps "(Comparison: date)" on one line instead of splitting it into a heading', () => {
+    const lines = formatReportText(
+      'CT of chest without contrast enhancement shows:\n(Comparison: 2026/07/07)\n- Pleura: No pleural effusion.',
+    )
+    expect(lines.map((l) => l.text)).toEqual([
+      'CT of chest without contrast enhancement shows:',
+      '(Comparison: 2026/07/07)',
+      'Pleura: No pleural effusion.',
+    ])
+    expect(lines.some((l) => l.heading)).toBe(false)
+  })
+
+  it('keeps a label heading and its one-line value together', () => {
+    const lines = formatReportText(
+      'History: Lung cancer s/p biopsy(2025/2/21)\nCT of chest shows:\nComparison: CT on 2026-5-19.\n- Pleura: No pleural effusion.',
+    )
+    expect(lines.map((l) => l.text)).toEqual([
+      'History: Lung cancer s/p biopsy(2025/2/21)',
+      'CT of chest shows:',
+      'Comparison: CT on 2026-5-19.',
+      'Pleura: No pleural effusion.',
+    ])
+    expect(lines[2]).toMatchObject({ heading: true, headingLabel: 'Comparison:', level: 0 })
+  })
+
+  it('keeps a long glued narrative under a label heading as its own block', () => {
+    const narrative = 'CT on 2026-5-19. ' + 'The lungs show scattered ground-glass opacities. '.repeat(6)
+    const lines = formatReportText(`Comparison: ${narrative}`)
+    expect(lines[0]).toEqual({ text: 'Comparison:', level: 0, heading: true })
+    expect(lines.slice(1).every((l) => l.level === 1)).toBe(true)
+  })
+
+  it('leaves conclusion-type headings as their own block', () => {
+    const lines = formatReportText('Impression: Mild fatty liver.')
+    expect(lines.map((l) => l.text)).toEqual(['Impression:', 'Mild fatty liver.'])
+    expect(lines[0].headingLabel).toBeUndefined()
+  })
+
+  it('still breaks a heading glued after a word and a space', () => {
+    const lines = formatReportText('Normal colon Impression: no polyp')
+    expect(lines.find((l) => l.heading)?.text).toBe('Impression:')
   })
 })

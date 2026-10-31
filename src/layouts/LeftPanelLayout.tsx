@@ -16,6 +16,7 @@ import { LEFT_PANEL_TAB_THEMES } from "@/src/shared/config/ui-theme.config"
 import { FhirDataIssuesBanner } from "@/features/clinical-summary/components/FhirDataIssuesBanner"
 import { SdkSourceLimitationsBanner } from "@/features/clinical-summary/components/SdkSourceLimitationsBanner"
 import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
+import { useHasHospitalOutpatientVisit } from "@/features/clinical-summary/last-outpatient"
 import {
   ClinicalTabContentFrame,
   ClinicalTabList,
@@ -84,7 +85,10 @@ const TabFeatureContent = memo(function TabFeatureContent({
 export default function ClinicalSummaryFeature() {
   const { t } = useLanguage()
   const { clearDetail } = useRightDetail()
-  const tabs = getEnabledTabs()
+  // 上次門診 is listed only for a chart holding a hospital (院內) outpatient
+  // visit; every other tab is static.
+  const hasHospitalOutpatientVisit = useHasHospitalOutpatientVisit()
+  const tabs = getEnabledTabs({ hasHospitalOutpatientVisit })
   const defaultTab = tabs[0]?.id || 'patient'
 
   // Controlled (was uncontrolled defaultValue) so resource navigation — a
@@ -107,6 +111,17 @@ export default function ClinicalSummaryFeature() {
   // Usage analytics: the active clinical tab, including the default one the
   // panel opens on. `trigger` separates a click from tour / citation navigation.
   useTrackView('left', activeTab)
+
+  // A data-driven tab (上次門診) goes away when the next patient lacks its
+  // data. Return to the landing tab instead of leaving the panel on a tab that
+  // is no longer listed.
+  const activeTabListed = tabs.some((tab) => tab.id === activeTab)
+  useEffect(() => {
+    if (activeTabListed) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveTab(defaultTab)
+    clearDetail()
+  }, [activeTabListed, defaultTab, clearDetail])
 
   // A newly visited tab can contain a large pivot table or clinical list. Mark
   // the tab active first, paint a lightweight loading frame, then mount the
@@ -171,6 +186,8 @@ export default function ClinicalSummaryFeature() {
     if (!tourActive || !tourStep) return
 
     const targetTab = (() => {
+      if (tourStep === 'patient-overview') return 'overview'
+      if (tourStep === 'patient-info') return 'patient'
       if (tourStep === 'visits') return 'visits'
       if (['reports', 'trend', 'imaging-ai'].includes(tourStep)) return 'reports'
       if (['medications', 'medication-timeline', 'right-pane'].includes(tourStep)) return 'meds'

@@ -6,9 +6,10 @@ import {
   type AudienceMode,
   type DisplayLang,
 } from '@voho0000/clinical-lab-normalization/display'
-import { categorizeObservation } from './lab-categories'
+import { categorizeObservation, getTestDisplayName } from './lab-categories'
+import { isParaproteinTextKey, neutralParaproteinDisplay, paraproteinDisplay } from './paraprotein-analytes'
 import {
-  DIFFERENTIAL_COUNT_LABELS,
+  freeTotalOfKey,
   getLabCompatibilityCanonicalDisplay,
   getLabPivotTestIdentity,
   specimenOfKey,
@@ -23,6 +24,10 @@ const SPECIMEN_HINT: Record<string, { zh: string; en: string }> = {
   csf: { zh: 'CSF', en: 'CSF' },
   serum: { zh: '血清', en: 'Serum' },
 }
+const FREE_TOTAL_HINT: Record<string, { zh: string; en: string }> = {
+  free: { zh: '游離', en: 'free' },
+  total: { zh: '總', en: 'total' },
+}
 
 /** The short hint an original-mode column that shares its source label
  *  with another column of the table carries (see assignOriginalHints). */
@@ -35,6 +40,10 @@ function originalHint(row: DisplayRow, audience: AudienceMode, language: Display
     }
     case 'unit':
       return row.unit === '%' ? '%' : '#'
+    case 'freeTotal': {
+      const hint = FREE_TOTAL_HINT[freeTotalOfKey(row.testKey) ?? '']
+      return hint && (zh ? hint.zh : hint.en)
+    }
     case 'standard':
       return getLabRowDisplayParts({ testKey: row.testKey, displayName: row.displayName, displaySource: row.displaySource }, audience, language, 'standardized').name
     default:
@@ -58,18 +67,13 @@ export function getLabRowDisplayParts(
     const hint = originalHint(row, audience, language)
     return { name: hint ? `${row.displayName} (${hint})` : row.displayName, abbr: null }
   }
+  const paraprotein = paraproteinDisplay(row.testKey, language === 'zh-TW' ? 'zh-TW' : 'en')
+  if (paraprotein) return { name: paraprotein, abbr: null }
+  // A neutral κ/λ column is named after its source; a urine or CSF one says so.
+  const neutral = neutralParaproteinDisplay(row.testKey, row.displayName, language === 'zh-TW' ? 'zh-TW' : 'en')
+  if (neutral) return { name: neutral, abbr: null }
   const compatibilityDisplay = getLabCompatibilityCanonicalDisplay(row.testKey)
-  if (compatibilityDisplay) {
-    // Absolute-count columns the app adds (ALC, AMC, …) get the same lay
-    // treatment the package gives ANC: a plain name, the code kept beside it.
-    const lay = audience === 'patient' ? DIFFERENTIAL_COUNT_LABELS[row.testKey] : undefined
-    if (lay) {
-      return language === 'zh-TW'
-        ? { name: lay.zh, abbr: compatibilityDisplay }
-        : { name: lay.en, abbr: null }
-    }
-    return { name: compatibilityDisplay, abbr: null }
-  }
+  if (compatibilityDisplay) return { name: compatibilityDisplay, abbr: null }
   if (CANONICAL_KEYS.has(row.testKey)) {
     return getAnalyteDisplayParts(row.testKey, audience, language)
   }
@@ -93,6 +97,10 @@ export function getAnalyteDisplayForMode(
     return packageDisplayForMode(observation, audience, language, mode)
   }
   const identity = getLabPivotTestIdentity(observation, category.id, mode)
+  // An IEP / IFE report column ("Serum IFE/IEP") gathers a report and its
+  // lanes; one observation shown on its own keeps its own name (IgG, Kappa …)
+  // so the lanes stay distinguishable outside the cumulative table.
+  if (isParaproteinTextKey(identity.testKey)) return getTestDisplayName(observation)
   const { name, abbr } = getLabRowDisplayParts(
     { ...identity, displaySource: observation }, audience, language, mode,
   )

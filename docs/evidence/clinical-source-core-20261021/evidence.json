@@ -1,0 +1,158 @@
+{
+  "base": "0c71c9cdfe62ad12473217af0be030b41b5d4c25",
+  "testedCodeHead": "a83629c3a491776d9774222c94189c8fe9bad0f3",
+  "verification": [
+    {
+      "kind": "jest",
+      "code": 0,
+      "passedTests": 9471,
+      "passedSuites": 774,
+      "pendingTests": 1,
+      "pendingSuites": 1
+    },
+    {
+      "kind": "typecheck",
+      "code": 0
+    },
+    {
+      "kind": "lint",
+      "code": 0,
+      "errors": 0,
+      "warnings": 7
+    },
+    {
+      "kind": "build",
+      "code": 0
+    },
+    {
+      "kind": "source-graph-evidence",
+      "code": 0
+    },
+    {
+      "kind": "source-variant-evidence",
+      "code": 0
+    },
+    {
+      "kind": "import-production",
+      "code": 0
+    }
+  ],
+  "data": "Synthetic data only. Real patient input and local private coverage evidence are excluded.",
+  "scope": "First shared app foundation: all received FHIR resource types captured before mapping, raw source retained, exact-record reconciliation, one common projection for UI/AI/CDSS. Unknown resource types remain source-only; no blanket clinical-event merge.",
+  "transport": "Extension retains faithful transport and origin metadata. App owns reconciliation and projections.",
+  "identity": "Observation and DiagnosticReport projection IDs retain source and result-membership identity. Other mapped clinical domains keep legacy IDs unless independent source records collide or the source id is absent, then receive source-qualified projection IDs with original sourceId retained when present. Fully anonymous records retain capture-occurrence identity. Patient and Organization query identifiers remain unchanged. Fresh login or independent re-import may produce a new scope.",
+  "comparison": {
+    "route": "Local Bundle import → Reports → Laboratory → Glucose",
+    "desktopViewport": {
+      "width": 1440,
+      "height": 1080
+    },
+    "widthsChecked": [
+      1440,
+      1024,
+      768,
+      430,
+      390,
+      320
+    ],
+    "before": "Two identical Glucose results from repeated transport entries.",
+    "after": "One clinical Glucose row; raw occurrences, unknown resource and audit snapshot remain in the source graph.",
+    "emptyOrError": "Ambiguous multi-patient import is rejected before replacing the previously loaded chart.",
+    "clinicalDecisionSupport": "Unresolved versions of the same potassium source record (4.2 and 6.1) remain available in the chart, are excluded from decision inputs with a visible reason, and clear after an authoritative unambiguous re-import. Other clinical inputs remain available.",
+    "hfDecisionModel": "The same synthetic unresolved AF versions are run through the actual HF profile and visit model on base and tested code head. After reconciliation, affected decisions require source confirmation rather than inferring a preferred diagnosis or absence.",
+    "outpatient": {
+      "route": "Local import → Visit history → expand outpatient visit; then Reports → Procedures",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "before": "Foreign Claim-derived Procedure incorrectly appears under a same-id local visit.",
+      "after": "Unproven visit link and inferred date are omitted; the derived Procedure remains available in the global Procedure list.",
+      "beforePassed": 1,
+      "afterPassed": 1,
+      "afterAttempts": [
+        {
+          "attempt": 1,
+          "passed": 0,
+          "failed": 1,
+          "reason": "Transient import readiness timeout while auth restore was still loading; no encounter assertions reached."
+        },
+        {
+          "attempt": 2,
+          "passed": 1,
+          "failed": 0,
+          "duration": "9.6s",
+          "sameTestAndFixture": true
+        }
+      ]
+    }
+  },
+  "regressions": [
+    "Known authenticated REST origin supplies a missing top-level fullUrl consistently; explicit URNs and foreign URLs retain separate source identities.",
+    "Local Roche staging observations already represented in Conditions are not resurrected as independent clinical rows by the aggregate.",
+    "Medication references resolve against the settled source graph; unresolved content stays visible but cannot assert a drug identity or medication-class absence.",
+    "Existing hospital/cloud medication policy code unions survive the common projection; only codes with known graph-reference provenance can be retracted by reference changes.",
+    "All scoped clinical AI tools retain query incompleteness, and requested encounter/time scope also applies to uncertainty metadata.",
+    "Included old Observation and standalone new Observation both appear in the shared superset; report member aliases the same row object.",
+    "Composition and DiagnosticReport references resolve across separately settled queries; foreign, wrong-version and ambiguous references are not guessed.",
+    "Contained audit resources do not become current clinical rows merely because they are referenced.",
+    "Verified Roche identifier result/hasMember derivations survive the common hook.",
+    "Successful empty refresh replaces the capture; failed refresh retains status with last successful data; patient/logout changes revoke old sources.",
+    "A single Patient plus an explicitly foreign clinical subject is rejected without replacing the current chart.",
+    "Identical panel payloads with different resolved member contexts remain distinct; a third capture with multiple contextual targets stays ambiguous.",
+    "Cold concurrent SMART client requests share initialization, and revoked or replaced sources cannot resurrect cached rows of any mapped resource type.",
+    "Unresolved source record variants retain their semantic annotation in AI and IPS export; decision inputs exclude them with a visible reason.",
+    "Legacy demo AI citations resolve only by a unique original sourceId; ambiguous references remain stale.",
+    "Original/merged FHIR and images survive download and clean-context re-import.",
+    "Claim-derived relations require source-graph proof; unresolved relations cannot be reattached by same-day inference. Multiple Claims are evaluated as a set, independent of input order, and original explicit visit information is preserved.",
+    "Confirmed outpatient aliases preserve medication, laboratory, procedure and imaging links. Candidate visits without a shared typed visit identifier remain distinct."
+  ],
+  "limitations": [
+    "Master policies #342 (imaging), #343 (medication/encounter), #344 and #345 (original downloads), #346 (hospital-primary medications), and #347 (progressive cloud/hospital import) are integrated. This foundation does not replace each domain policy with generic heuristic merging.",
+    "Projection identifiers are scoped to the current source session; durable identity across independent re-imports or logins is not promised.",
+    "Unknown proxy ownership remains quarantined with an incomplete domain; source aliases are not guessed.",
+    "The IPS record-variant and medication-content-uncertainty modifier canonicals are not published and full FHIR profile validation has not been performed.",
+    "The graph covers all received resources, not an unbounded fetch of every FHIR endpoint.",
+    "Incremental graph construction for very large progressive SMART payloads is a later optimization.",
+    "Manual candidate/association review UI and field-level provenance for legacy Claim-derived display enrichments are later phases. Source graph and original download retain raw assertions.",
+    "Claim-derived uncertainty and proven visit relations survive the actual React Query structural-sharing cache. Arbitrary serialized calculated snapshots are not a supported persistence contract; raw imports are reprocessed.",
+    "Existing trusted-capture policy retains unmatched opaque patient URNs when no explicit identity contradiction is known. This change propagates existing ownership exclusions; it does not claim universal verification of all opaque patient references."
+  ],
+  "beforeVerificationNote": "The initial progressive import browser case on base 0c71c9cd timed out during a cold compilation. The unchanged original 120-second test passed after warming the route. Initial failure and successful retry are retained in local verification records.",
+  "beforeProgressiveRetry": {
+    "testedHead": "0c71c9cdfe62ad12473217af0be030b41b5d4c25",
+    "test": "progressive snapshots replace one patient chart and preserve late terminal warnings",
+    "testTimeoutMs": 120000,
+    "passed": 1,
+    "failed": 0,
+    "duration": "40.9s"
+  },
+  "files": [
+    "before-1440.png",
+    "after-1440.png",
+    "before-viewport-390.png",
+    "after-viewport-390.png",
+    "after-rejected-import.png",
+    "before.output.json",
+    "after.output.json",
+    "synthetic.bundle.json",
+    "synthetic.multiple-patients.json",
+    "synthetic.variants.bundle.json",
+    "synthetic.resolved-variant.bundle.json",
+    "before-cdss-variants-1440.png",
+    "after-cdss-variants-1440.png",
+    "before-cdss-variants-390.png",
+    "after-cdss-variants-390.png",
+    "after-cdss-variants-resolved.png",
+    "synthetic.decision-variants.bundle.json",
+    "before-decision.output.json",
+    "after-decision.output.json",
+    "before-0c71-hf-model.output.json",
+    "after-hf-model.output.json",
+    "synthetic.crossbase-claim-visit.bundle.json",
+    "before-claim-visit-detail-1440.png",
+    "after-claim-visit-detail-1440.png",
+    "after-claim-procedure-retained-1440.png",
+    "review-summary.json"
+  ]
+}

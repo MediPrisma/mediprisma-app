@@ -7,12 +7,27 @@ export const MEDCLOUD_PROVIDER_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/si
 export const HF_MAX_BYTES = 2 * 1024 * 1024
 export type FhirRecord = Record<string, any>
 export interface HfGap { code: string; count: number }
+/** Browser-only diagnostics. Never put source details in the transport Bundle. */
+export interface HfExcludedLab {
+  row: number
+  name?: string
+  codes: string[]
+  date?: string
+  value?: string
+  unit?: string
+  unitCode?: string
+  status?: string
+  reason: string
+  valueIssue?: 'value-invalid' | 'unit-missing' | 'unit-unsupported' | 'comparator-invalid'
+}
 export interface HfSelection { provider: string; encounter: string; claim: HfDryRunClaim }
 export interface HfInput {
   bundle: FhirRecord
   indexDate: string
   claim: HfDryRunClaim
   gaps: HfGap[]
+  excludedLabs?: HfExcludedLab[]
+  unlinkedObservationCount?: number
   physicianDiagnosis?: HfPhysicianDiagnosis
   indexEncounterReference?: string
   counts: Record<string, number>

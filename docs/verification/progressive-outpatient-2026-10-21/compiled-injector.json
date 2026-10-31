@@ -1,0 +1,98 @@
+{
+  "synthetic": true,
+  "localStaticBuild": true,
+  "appSourceHead": "89def08ce93a80c2d921c1e953da116de1846a7e",
+  "injectorSha256": "b06b98308e12f34831dadbd24739164b6f00f5977e799c395ac01df469f3e203",
+  "cloudVersion": "0.15.9",
+  "receipts": [
+    {
+      "version": 1,
+      "requestId": "request-0",
+      "runId": "synthetic-run",
+      "stage": "cloud",
+      "ok": true,
+      "importId": "4de03094-b0bc-44f7-ac31-fd190d0152a5",
+      "stopped": false
+    },
+    {
+      "version": 1,
+      "requestId": "request-1",
+      "runId": "synthetic-run",
+      "stage": "hospital-visits",
+      "ok": true,
+      "importId": "5fda320f-4730-4546-953f-57a4cb8d2086",
+      "stopped": false
+    },
+    {
+      "version": 1,
+      "requestId": "request-2",
+      "runId": "synthetic-run",
+      "stage": "hospital",
+      "ok": true,
+      "importId": "6526d56a-b924-4d03-a3e0-54a5b231f917",
+      "stopped": false
+    },
+    {
+      "version": 1,
+      "requestId": "request-3",
+      "runId": "synthetic-run",
+      "ok": false,
+      "errorCode": "IMPORT_STALE"
+    },
+    {
+      "version": 1,
+      "requestId": "request-4",
+      "runId": "synthetic-run",
+      "ok": false,
+      "errorCode": "PATIENT_HIS_MISMATCH"
+    }
+  ],
+  "widths": [
+    320,
+    390,
+    430,
+    768,
+    1024,
+    1440
+  ],
+  "soapVisibleBeforeReports": true,
+  "imagingReportVisibleAfterFinalStage": true,
+  "compiledExtensionInjector": true,
+  "extensionReceipts": [
+    {
+      "type": "medcloud:mediprisma-handoff-settled",
+      "runId": "synthetic-run",
+      "handoffToken": "request-0",
+      "ok": true,
+      "importId": "4de03094-b0bc-44f7-ac31-fd190d0152a5"
+    },
+    {
+      "type": "medcloud:mediprisma-handoff-settled",
+      "runId": "synthetic-run",
+      "handoffToken": "request-1",
+      "ok": true,
+      "importId": "5fda320f-4730-4546-953f-57a4cb8d2086"
+    },
+    {
+      "type": "medcloud:mediprisma-handoff-settled",
+      "runId": "synthetic-run",
+      "handoffToken": "request-2",
+      "ok": true,
+      "importId": "6526d56a-b924-4d03-a3e0-54a5b231f917"
+    },
+    {
+      "type": "medcloud:mediprisma-handoff-settled",
+      "runId": "synthetic-run",
+      "handoffToken": "request-3",
+      "ok": false,
+      "errorCode": "IMPORT_FAILED"
+    },
+    {
+      "type": "medcloud:mediprisma-handoff-settled",
+      "runId": "synthetic-run",
+      "handoffToken": "request-4",
+      "ok": false,
+      "errorCode": "IMPORT_FAILED"
+    }
+  ]
+}

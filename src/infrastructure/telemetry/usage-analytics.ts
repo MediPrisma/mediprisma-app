@@ -45,8 +45,28 @@ export type AnalyticsArea =
 
 export type AnalyticsTrigger = 'user' | 'auto'
 
-/** Which guided tour. `custom-summary` is the right tour's deep-dive kind. */
-export type AnalyticsTour = 'left' | 'right' | 'custom-summary'
+/**
+ * Which guided tour: an id from features/guided-tour/guided-tour.tours.ts, or
+ * `custom-summary`, the chaptered guide with its own engine. A test keeps this
+ * list and the tour definitions in step.
+ */
+export const ANALYTICS_TOURS = [
+  'getting-started',
+  'know-patient',
+  'labs-reports',
+  'medications',
+  'split-view',
+  'medical-summary',
+  'custom-summary',
+  'clinical-chat',
+  'export',
+  'calculator',
+  'care-guidance',
+  'education',
+  'settings',
+  'news-lab-trend-zoom',
+] as const
+export type AnalyticsTour = typeof ANALYTICS_TOURS[number]
 
 /** Where the 「AI 翻譯解讀」 entry point was pressed. */
 export type ReportInterpretHost = 'report-row' | 'document-card' | 'document-dialog'
@@ -181,6 +201,11 @@ export interface UsageEventParams {
     outcome: AiOutcome
     model_id: string
     duration_bucket: DurationBucket
+    /** Same banding, applied to the time until the surface showed its FIRST
+     *  section. Only progressive surfaces can measure it; the rest omit it.
+     *  Bucketed for the same reason as `duration_bucket`: a raw millisecond
+     *  timing never leaves the app. */
+    first_card_bucket?: DurationBucket
     /** Estimated tokens of clinical context sent with this call. Optional:
      *  surfaces that have no estimate at the reporting point omit it rather
      *  than reporting a misleading 0. Size only — never the text. */
@@ -223,6 +248,7 @@ const EVENT_PARAM_KEYS: Record<UsageEventName, readonly string[]> = {
     'outcome',
     'model_id',
     'duration_bucket',
+    'first_card_bucket',
     'context_tokens',
     'resource_count',
     'obs_count',
@@ -276,7 +302,7 @@ const ENUM_PARAM_VALUES: Record<string, readonly string[]> = {
   trigger: ['user', 'auto'],
   source: ['typed', 'chip'],
   mode: ['all', 'labs', 'reports'],
-  tour: ['left', 'right', 'custom-summary'],
+  tour: ANALYTICS_TOURS,
   tour_outcome: ['finish', 'abandon'],
   host: ['report-row', 'document-card', 'document-dialog'],
   action: ['open', 'regenerate'],
@@ -287,6 +313,7 @@ const ENUM_PARAM_VALUES: Record<string, readonly string[]> = {
   surface: ['summary', 'safety', 'med_recon', 'insights', 'report_interp', 'chat'],
   outcome: ['ok', 'error', 'timeout', 'aborted', 'context_overflow', 'quota', 'parse_failed'],
   duration_bucket: ['lt5', '5to15', '15to45', 'gt45'],
+  first_card_bucket: ['lt5', '5to15', '15to45', 'gt45'],
   from: ['summary', 'safety', 'chat', 'unknown'],
   block: ['hero', 'custom_module'],
   // Preference user properties (validateValue is shared by both paths).

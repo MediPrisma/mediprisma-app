@@ -3,7 +3,7 @@ import type { VisitAnswers, VisitAsk } from '../../types'
 
 /**
  * What an answer means for the visit: a change that asks for action today
- * (喘變差, 體重增加, 有症狀／出血), no change, a reassuring one (喘進步), and a
+ * (喘變差, 體重增加, 有症狀／出血, 心絞痛更多), no change, a reassuring one (喘進步), and a
  * change that is neither (體重減少 — decongestion, or dehydration and wasting).
  * The label always says the same thing in words; colour never stands alone.
  */
@@ -18,6 +18,8 @@ const VISIT_ANSWER_TONES: { readonly [K in VisitAsk['id']]-?: Readonly<Record<No
   'weight-trend': { up: 'concern', same: 'neutral', down: 'change' },
   'af-symptoms': { yes: 'concern', no: 'neutral' },
   bleeding: { yes: 'concern', no: 'neutral' },
+  // 「更多」 goes to DP-00; 「較少」 and 「沒有」 are improvements, as 喘進步 is.
+  'angina-trend': { more: 'concern', same: 'neutral', less: 'reassuring', none: 'reassuring' },
 }
 
 export function visitAnswerTone(id: VisitAsk['id'], value: string): AnswerTone {

@@ -107,7 +107,9 @@ export const medicationsCategory: DataCategory<MedicationRequest> = {
     if (activeMeds.length > 0) {
       items.push('Active Medications:')
       activeMeds.forEach((m: any) => {
-        const name = pickAiMedicationName(
+        const name = m.clinicalMedicationContentUncertainty
+          ? 'Medication content unavailable; prescription recorded, drug identity, dose and medication absence are not inferred'
+          : pickAiMedicationName(
           m.medicationCodeableConcept,
           m.medicationReference?.display,
         ) || 'Unknown medication'
@@ -123,7 +125,9 @@ export const medicationsCategory: DataCategory<MedicationRequest> = {
       if (items.length > 0) items.push('')
       items.push('Stopped Medications:')
       stoppedMeds.forEach((m: any) => {
-        const name = pickAiMedicationName(
+        const name = m.clinicalMedicationContentUncertainty
+          ? 'Medication content unavailable; prescription recorded, drug identity, dose and medication absence are not inferred'
+          : pickAiMedicationName(
           m.medicationCodeableConcept,
           m.medicationReference?.display,
         ) || 'Unknown medication'

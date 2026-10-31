@@ -3,7 +3,7 @@
 // format editor can never describe the same state differently.
 
 import type { EmrDateStyle, EmrExamKind } from '@/src/application/stores/outpatient-prefs.store'
-import { formatEmrDate, type EmrFormatNote } from '../utils/emr-custom-format'
+import { emrNoteDateStyle, formatEmrDate, type EmrFormatNote } from '../utils/emr-custom-format'
 
 export interface EmrNoteStrings {
   examNames: Record<EmrExamKind, string>
@@ -41,7 +41,7 @@ export function describeEmrNote(
   missingText: string,
   now: Date = new Date(),
 ): string {
-  const date = (iso?: string) => (iso ? formatEmrDate(iso, dateStyle, now) : '')
+  const date = (iso?: string) => (iso ? formatEmrDate(iso, emrNoteDateStyle(dateStyle), now) : '')
   const n = strings.notes
   switch (note.type) {
     case 'labMissing':

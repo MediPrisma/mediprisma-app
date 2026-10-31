@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { useAiSlotGeneration } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
+import { stopProgressiveImport, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { ContextOverflowError, type ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import {
   loadEncryptedCache,
@@ -116,6 +117,7 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
 describe('useAiSlotGeneration demo snapshot', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
     mockOpenAiKey = 'user-openai-key'
     mockPatientId = 'demo-patient-1'
     mockClinicalContext = 'demo context'
@@ -131,6 +133,71 @@ describe('useAiSlotGeneration demo snapshot', () => {
     mockOpenAiCompatibleProfiles = null
     mockLocale = 'zh-TW'
     mockAudience = 'patient'
+  })
+
+  it.each(['patient-changed', 'privacy-stale'] as const)('blocks ordinary route background generation after %s before data readiness, while allowing manual generation', async phase => {
+    mockPatientId = 'smart-patient-1'
+    mockClinicalData = { ...mockClinicalData, isFetching: true }
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async () => ({ headline: 'explicit manual result' }))
+    useProgressiveImportStore.setState({ current: { runId: 'background-run', importId: 'cloud-import', phase: 'waiting' } })
+    const { result, rerender } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gpt-5.4-nano', selectedModelId: 'gpt-5.4-nano', autoRunEnabled: true,
+      requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
+    }))
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    act(() => stopProgressiveImport('background-run', phase))
+    mockClinicalData = { ...mockClinicalData, isFetching: false }
+    rerender()
+    await waitFor(() => expect(result.current.dataReady).toBe(true))
+    expect(run).not.toHaveBeenCalled()
+    await act(async () => result.current.generate())
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(result.current.result?.headline).toBe('explicit manual result')
+  })
+
+  it.each(['patient-changed', 'privacy-stale'] as const)('aborts ordinary route automatic generation on %s and rejects its late result and cache write', async phase => {
+    mockPatientId = 'smart-patient-1'
+    let finish!: () => void, signal!: AbortSignal
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn((context) => new Promise<{ headline: string }>(resolve => {
+      store.getState().setResult(context.operationKey, { headline: 'provisional automatic preview' })
+      signal = context.signal
+      finish = () => resolve({ headline: 'late automatic result' })
+    }))
+    useProgressiveImportStore.setState({ current: { runId: 'background-run', importId: 'cloud-import', phase: 'waiting' } })
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gpt-5.4-nano', selectedModelId: 'gpt-5.4-nano', autoRunEnabled: true,
+      retainResultOnModelChange: true,
+      requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
+    }))
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(result.current.result?.headline).toBe('provisional automatic preview'))
+    act(() => stopProgressiveImport('background-run', phase))
+    expect(signal.aborted).toBe(true)
+    expect(mockStopAi).toHaveBeenCalledWith(result.current.slotKey)
+    await act(async () => finish())
+    await waitFor(() => expect(result.current.isRunning).toBe(false))
+    expect(result.current.result).toBeUndefined()
+    expect(saveEncryptedCache).not.toHaveBeenCalled()
+  })
+
+  it('retains an accepted automatic artifact during delayed cache publication after a safety stop', async () => {
+    mockPatientId = 'smart-patient-1'
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async () => ({ headline: 'completed automatic result' }))
+    useProgressiveImportStore.setState({ current: { runId: 'background-run', importId: 'cloud-import', phase: 'waiting' } })
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gpt-5.4-nano', selectedModelId: 'gpt-5.4-nano', autoRunEnabled: true,
+      requireDataReadyToGenerate: true, store, cacheKeyFor: key => `test:${key}`, cacheMaxAgeMs: 60_000, run,
+    }))
+    await waitFor(() => expect(result.current.result?.headline).toBe('completed automatic result'))
+    await waitFor(() => expect(result.current.isRunning).toBe(false))
+    await act(async () => { await Promise.resolve() })
+    const canPublish = jest.mocked(saveEncryptedCache).mock.calls[0][2]!
+    expect(canPublish()).toBe(true)
+    act(() => stopProgressiveImport('background-run', 'privacy-stale'))
+    expect(canPublish()).toBe(true)
   })
 
   it('blocks an unavailable selected model only when the feature opts out of fallback', async () => {
@@ -328,7 +395,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const cacheKey = `test:${slotKey}`
     window.localStorage.setItem(cacheKey, 'encrypted cancelled half')
     jest.mocked(saveEncryptedCache).mockImplementationOnce(
-      () => new Promise<void>(() => undefined),
+      () => new Promise<boolean>(() => undefined),
     )
     act(() => store.getState().setResult(slotKey, { headline: 'cancelled half' }))
     act(() => result.current.restoreSlot(slotKey, previous))
@@ -753,6 +820,156 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     rerender({ selectedModelId: modelA })
     expect(result.current.result?.headline).toBe('local-model-a:32768')
+  })
+
+  describe('contextTokenBudget (local latency budget)', () => {
+    const onPremEndpoint = (contextWindowTokens: number): OpenAiCompatibleConfig => ({
+      enabled: true,
+      baseUrl: 'https://gateway.example/v1',
+      modelId: 'qwen-standin-local',
+      apiKey: null,
+      transport: 'direct',
+      contextWindowTokens,
+      contextWindowSource: 'manual',
+    })
+    type BudgetRunContext = {
+      clinicalContext: string
+      catalog: Array<{ key: string }>
+      clinicalData: unknown
+      contextAdaptation: {
+        tier: string
+        reason: string
+        targetTokens: number
+        originalTokens: number
+        adaptedTokens: number
+      } | null
+      clinicalContextScope?: { clinicalData: unknown; catalog: Array<{ key: string }> }
+    }
+    const renderBudgetedSlot = (contextTokenBudget?: (limit: number) => number | undefined) => {
+      const store = createAiResultStore<{ headline: string }>()
+      const run = jest.fn(async (ctx: BudgetRunContext) => ({
+        headline: `${ctx.contextAdaptation?.reason ?? 'none'}:${ctx.clinicalContext.slice(0, 7)}`,
+      }))
+      const hook = renderHook(() => useAiSlotGeneration({
+        defaultModelId: 'gemini-3.1-flash-lite',
+        selectedModelId: CUSTOM_OPENAI_MODEL_ID,
+        autoRunEnabled: false,
+        requireDataReadyToGenerate: true,
+        store,
+        cacheKeyFor: (slotKey) => `test:${slotKey}`,
+        cacheMaxAgeMs: 60_000,
+        run,
+        ...(contextTokenBudget ? { contextTokenBudget } : {}),
+      }))
+      return { ...hook, run }
+    }
+    const generateOnce = async (result: { current: { dataReady: boolean; isHydrated: boolean; generate: () => Promise<void> } }) => {
+      await waitFor(() => expect(result.current.dataReady).toBe(true))
+      await waitFor(() => expect(result.current.isHydrated).toBe(true))
+      await act(async () => result.current.generate())
+    }
+
+    beforeEach(() => {
+      mockPatientId = 'smart-patient-1'
+      // A recent encounter survives every fitting tier; it is E1 in both the
+      // saved and the narrowed catalog.
+      mockClinicalData = {
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        encounters: [{ id: 'demo-encounter-1', period: { start: new Date().toISOString() } }],
+      }
+      // ~52K tokens in full; the six-month view is ~1.8K.
+      mockClinicalContextForProfile = (profile) => (
+        profile?.filters?.labDepth === '3'
+          ? `compact-${'record '.repeat(1_000)}`
+          : `full-${'record '.repeat(30_000)}`
+      )
+    })
+
+    it('narrows a chart the 262K window would hold, and reports local-latency', async () => {
+      mockOpenAiCompatible = onPremEndpoint(262_144)
+      const budget = jest.fn((limit: number) => (limit < 500_000 ? 24_000 : undefined))
+      const { result, run } = renderBudgetedSlot(budget)
+      await generateOnce(result)
+
+      expect(budget).toHaveBeenCalledWith(262_144, { selfHosted: true })
+      const ctx = run.mock.calls[0][0]
+      expect(ctx.clinicalContext.startsWith('compact-')).toBe(true)
+      expect(ctx.contextAdaptation).toMatchObject({
+        tier: 'compact',
+        reason: 'local-latency',
+        contextLimit: 262_144,
+        targetTokens: 24_000,
+      })
+      expect(ctx.contextAdaptation!.adaptedTokens).toBeLessThanOrEqual(24_000)
+      // The narrowed records ride beside the saved scope; the catalog the
+      // result is finalised against is the saved scope's.
+      expect(ctx.clinicalContextScope).toBeDefined()
+      expect(ctx.catalog.map((entry) => entry.key)).toEqual(['E1'])
+      expect(ctx.clinicalContextScope!.catalog.map((entry) => entry.key)).toEqual(['E1'])
+      expect(ctx.clinicalContextScope!.clinicalData).not.toBe(ctx.clinicalData)
+      expect(ctx.catalog).toEqual(result.current.catalog)
+      expect(ctx.clinicalData).toEqual(result.current.clinicalData)
+      expect(result.current.contextAdaptation?.reason).toBe('local-latency')
+      expect(result.current.result?.headline).toBe('local-latency:compact')
+    })
+
+    it('changes nothing when the budget returns undefined', async () => {
+      mockOpenAiCompatible = onPremEndpoint(262_144)
+      const { result, run } = renderBudgetedSlot(() => undefined)
+      await generateOnce(result)
+
+      const ctx = run.mock.calls[0][0]
+      expect(ctx.clinicalContext.startsWith('full-')).toBe(true)
+      expect(ctx.contextAdaptation).toBeNull()
+      expect(ctx.clinicalContextScope).toBeUndefined()
+      expect(result.current.contextAdaptation).toBeNull()
+    })
+
+    it('keeps the window as the reason when the window is the tighter limit', async () => {
+      mockOpenAiCompatible = onPremEndpoint(32_768)
+      const { result, run } = renderBudgetedSlot(() => 24_000)
+      await generateOnce(result)
+
+      const ctx = run.mock.calls[0][0]
+      expect(ctx.clinicalContext.startsWith('compact-')).toBe(true)
+      expect(ctx.contextAdaptation).toMatchObject({
+        tier: 'compact',
+        reason: 'context-window',
+        targetTokens: 20_768,
+      })
+      expect(ctx.clinicalContextScope).toBeUndefined()
+    })
+
+    it('hands the run an abort signal that cancel() aborts', async () => {
+      mockOpenAiCompatible = onPremEndpoint(262_144)
+      const store = createAiResultStore<{ headline: string }>()
+      let seenSignal: AbortSignal | undefined
+      const run = jest.fn((ctx: { signal?: AbortSignal }) => new Promise<{ headline: string } | null>((resolve) => {
+        seenSignal = ctx.signal
+        ctx.signal?.addEventListener('abort', () => resolve(null))
+      }))
+      const { result } = renderHook(() => useAiSlotGeneration({
+        defaultModelId: 'gemini-3.1-flash-lite',
+        selectedModelId: CUSTOM_OPENAI_MODEL_ID,
+        autoRunEnabled: false,
+        requireDataReadyToGenerate: true,
+        store,
+        cacheKeyFor: (slotKey) => `test:${slotKey}`,
+        cacheMaxAgeMs: 60_000,
+        run,
+      }))
+      await waitFor(() => expect(result.current.dataReady).toBe(true))
+      await waitFor(() => expect(result.current.isHydrated).toBe(true))
+      let pending!: Promise<void>
+      act(() => { pending = result.current.generate() })
+      await waitFor(() => expect(seenSignal).toBeDefined())
+      expect(seenSignal!.aborted).toBe(false)
+      act(() => result.current.cancel())
+      expect(seenSignal!.aborted).toBe(true)
+      await act(async () => { await pending })
+    })
   })
 
   it('progressively reaches the six-month tier before any text fallback', async () => {

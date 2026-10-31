@@ -8,7 +8,15 @@ import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpe
 import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
-import { buildLabPivots, cellDisplayValue, type LabPivot, type LabRow } from '@/src/shared/utils/lab-pivot.utils'
+import {
+  buildLabPivots,
+  cellDisplayValue,
+  formatLabPivotCell,
+  labPivotColumnLabel,
+  labStatusSuffix,
+  type LabPivot,
+  type LabRow,
+} from '@/src/shared/utils/lab-pivot.utils'
 import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
 import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
 
@@ -143,24 +151,8 @@ const shortDate = (d?: string): string => (d ? d.slice(0, 10) : '')
 
 /** Max analytes in the key-trends appendix. */
 const MAX_KEY_TRENDS = 8
-const UNREMARKABLE_LAB_STATUSES = new Set(['final', 'amended', 'corrected', 'unknown'])
 const UNKNOWN_FINALITY_NOTE =
   'Note: laboratory report finality status is unavailable in the source cloud record.'
-
-function labStatusSuffix(status?: string): string {
-  return status && !UNREMARKABLE_LAB_STATUSES.has(status)
-    ? ` {status:${status}}`
-    : ''
-}
-
-function pivotCellText(row: LabRow, date: string): string {
-  const cell = row.values.get(date)
-  if (!cell) return '-'
-  const status = labStatusSuffix(cell.status)
-  const value = cellDisplayValue(cell)
-  if (!cell.isAbnormal) return `${value}${status}`
-  return `${value} ${cell.interpretationCode || '*'}${status}`
-}
 
 function capPointsPerAnalyte(points: LabPoint[], maxPoints: number): LabPoint[] {
   if (!Number.isFinite(maxPoints)) return points
@@ -186,9 +178,9 @@ function renderPivotTable(pivot: LabPivot): string[] {
   const rows = pivot.rows.filter((r) => r.values.size > 0)
   if (!rows.length) return []
   const dates = pivot.dates.filter((d) => rows.some((r) => r.values.has(d)))
-  const header = `| Date | ${rows.map((r) => (r.unit ? `${r.displayName} (${r.unit})` : r.displayName)).join(' | ')} |`
+  const header = `| Date | ${rows.map(labPivotColumnLabel).join(' | ')} |`
   const sep = `| ${Array(rows.length + 1).fill('---').join(' | ')} |`
-  const body = dates.map((d) => `| ${d} | ${rows.map((r) => pivotCellText(r, d)).join(' | ')} |`)
+  const body = dates.map((d) => `| ${d} | ${rows.map((r) => formatLabPivotCell(r, d)).join(' | ')} |`)
   return [[`[${pivot.category.id}]`, header, sep, ...body].join('\n')]
 }
 
@@ -212,7 +204,7 @@ function renderKeyTrends(pivots: Record<string, LabPivot>, maxTrendPoints: numbe
     const trend = recent
       .map(([date, cell]) => `${cellDisplayValue(cell)}${cell.isAbnormal ? `[${cell.interpretationCode || '*'}]` : ''} (${date})`)
       .join(' → ')
-    const head = row.unit ? `${row.displayName} (${row.unit})` : row.displayName
+    const head = labPivotColumnLabel(row)
     return `${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`
   })
   return ['Key trends (analytes with abnormal values, oldest → newest):', ...lines, '']

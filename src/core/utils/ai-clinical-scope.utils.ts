@@ -1,3 +1,4 @@
+import { excludeUnresolvedDecisionVariants, outboundClinicalVariantExclusions } from './clinical-variant-inputs'
 import type { DataFilters, DataSelection } from '@/src/core/entities/clinical-context.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import {
@@ -12,6 +13,7 @@ import {
   normalizeClinicalStatus,
 } from '@/src/core/utils/clinical-context-selection.utils'
 import {
+  clinicalRecordKey,
   selectLabOrphanObservations,
   selectOtherObservations,
 } from '@/src/core/utils/observation-selectors'
@@ -19,6 +21,31 @@ import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
 import { imagingStudyTitle } from '@/src/shared/utils/imaging-study.utils'
 import { filterAiExcludedClinicalDomains } from '@/src/core/utils/ai-clinical-domain-filter.utils'
+import { floorStartDay, prescribingAnalyteKey } from '@/src/core/utils/first-visit-floors'
+import { AI_REPORT_GROUPS, reportModalityClass } from '@/src/core/utils/report-narrative.utils'
+import { graphEncounterReferenceOrganization, registerScopedEncounterReferenceEvidence, type ScopedEncounterReference } from '@/src/core/services/clinical-source-catalog-evidence'
+
+/** Remove local capture joins from outbound AI data without mutating clinical rows. */
+export function stripClinicalCaptureMetadata<T>(value: T): T {
+  if (!value || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    const next = value.map(stripClinicalCaptureMetadata)
+    return (next.every((item, index) => item === value[index]) ? value : next) as T
+  }
+  const next: Record<string, unknown> = {}
+  let changed = false
+  if ('clinicalSourceNodeKey' in value && '_observations' in value) {
+    next.resolvedReportMembership = true
+    changed = true
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'clinicalRecordVariantExclusions' && Array.isArray(child)) { next[key] = outboundClinicalVariantExclusions(child); changed = true; continue }
+    if (key === 'clinicalSourceProjectedReferences' || key === 'clinicalClaimEncounterRelation' || key === 'clinicalClaimDerivedSource' || key === 'clinicalMedicationCodeProvenance' || key === 'clinicalSourceNodeKey' || key === 'clinicalSourceDerivedMemberKeys' || key === 'clinicalSource') { changed = true; continue }
+    next[key] = stripClinicalCaptureMetadata(child)
+    if (next[key] !== child) changed = true
+  }
+  return (changed ? next : value) as T
+}
 
 const LAB_FALLBACK_SAMPLING_DAYS = 3
 const NHI_VIEWER_REQUEST_EXTENSION_URL =
@@ -65,13 +92,15 @@ function reportObservations(report: any, observationsById: Map<string, any>): an
   const found = new Map<string, any>()
   const withoutId: any[] = []
   for (const observation of report?._observations ?? []) {
-    if (observation?.id) found.set(observation.id, observation)
+    const key = clinicalRecordKey(observation)
+    if (key) found.set(key, observation)
     else withoutId.push(observation)
   }
+  if (report?.clinicalSourceNodeKey || report?.resolvedReportMembership) return [...found.values(), ...withoutId]
   for (const reference of report?.result ?? []) {
-    const id = reference?.reference?.split('/').pop()
+    const id = reference?.reference?.match(/^Observation\/([^/]+)$/)?.[1]
     const observation = id ? observationsById.get(id) : undefined
-    if (observation) found.set(observation.id || id, observation)
+    if (observation) found.set(clinicalRecordKey(observation) ?? 'id:' + id, observation)
   }
   return [...found.values(), ...withoutId]
 }
@@ -126,8 +155,11 @@ function selectLabScope(
   filters: DataFilters,
 ): SelectedLabScope {
   const observationsById = new Map<string, any>()
+  const ambiguousIds = new Set<string>()
   for (const observation of input.observations ?? []) {
-    if (observation.id) observationsById.set(observation.id, observation)
+    if (!observation.id || ambiguousIds.has(observation.id)) continue
+    if (observationsById.has(observation.id)) { observationsById.delete(observation.id); ambiguousIds.add(observation.id) }
+    else observationsById.set(observation.id, observation)
   }
   const reportMembers = new Map<any, any[]>()
   const memberIds = new Set<string>()
@@ -136,7 +168,8 @@ function selectLabScope(
       .filter((observation) => normalizeClinicalStatus(observation?.status) !== 'entered-in-error')
     reportMembers.set(report, members)
     members.forEach((observation) => {
-      if (observation?.id) memberIds.add(observation.id)
+      const key = clinicalRecordKey(observation)
+      if (key) memberIds.add(key)
     })
   }
   const orphanObservations = selectLabOrphanObservations(input)
@@ -199,6 +232,38 @@ function selectLabScope(
       .forEach(({ parent }) => selectedParents.add(parent))
   }
 
+  // Latest-known floor: a prescribing analyte whose newest value fell outside
+  // the saved window (or its panel filter) still contributes that one value
+  // when it is within the floor horizon of the newest lab in the chart. A
+  // quiet six months must not hide an eight-month-old platelet count.
+  const newestLabDay = expanded
+    .map(({ value }) => String(observationDate(value) ?? '').slice(0, 10))
+    .filter(Boolean)
+    .sort()
+    .at(-1)
+  const floorStart = floorStartDay(newestLabDay)
+  if (floorStart) {
+    const coveredAnalytes = new Set<string>()
+    for (const parent of selectedParents) {
+      for (const value of expandObservationValues(parent)) {
+        const key = prescribingAnalyteKey(value)
+        if (key) coveredAnalytes.add(key)
+      }
+    }
+    const latestByAnalyte = new Map<string, { parent: any; date: string }>()
+    for (const { parent, value } of expanded) {
+      const key = prescribingAnalyteKey(value)
+      if (!key || coveredAnalytes.has(key)) continue
+      // A panel the user switched off stays off; the floor widens time, not scope.
+      if (panelIds.size > 0 && !panelIds.has(categorizeObservation(value)?.id ?? '')) continue
+      const date = String(observationDate(value) ?? '').slice(0, 10)
+      if (!date || date < floorStart) continue
+      const current = latestByAnalyte.get(key)
+      if (!current || date > current.date) latestByAnalyte.set(key, { parent, date })
+    }
+    for (const { parent } of latestByAnalyte.values()) selectedParents.add(parent)
+  }
+
   const selectedReports = reports.filter((report) => {
     if ((reportMembers.get(report) ?? []).some((observation) => selectedParents.has(observation))) return true
     return conclusionReports.includes(report) && dateSelected(report.effectiveDateTime || report.issued)
@@ -206,7 +271,7 @@ function selectLabScope(
   return {
     reports: selectedReports,
     observations: [...selectedParents].filter((observation) =>
-      !observation?.id || memberIds.has(observation.id) || orphanObservations.includes(observation),
+      !clinicalRecordKey(observation) || memberIds.has(clinicalRecordKey(observation)!) || orphanObservations.includes(observation),
     ),
   }
 }
@@ -224,10 +289,27 @@ export function scopeClinicalDataForAi(
   includedDocumentIds: string[],
   nowMs = Date.now(),
 ): Partial<ClinicalDataCollection> {
+  return scopeClinicalDataView(input, selection, filters, includedDocumentIds, nowMs, true)
+}
+
+function scopeClinicalDataView(
+  input: Partial<ClinicalDataCollection>, selection: DataSelection, filters: DataFilters,
+  includedDocumentIds: string[], nowMs: number, decisionBoundary: boolean,
+): Partial<ClinicalDataCollection> {
+  const original = input
   // Apply the product-level domain exclusions before any time-window or
   // category scoping. This also keeps excluded records out of citations and
   // structured source catalogs, not only the human-readable prompt text.
-  input = filterAiExcludedClinicalDomains(input)
+  const selectedObservationDomain = selection.labReports || selection.vitalSigns || selection.observations
+  const selectedReportDomain = selection.labReports || selection.imagingReports
+  const selectedInput = {
+    ...filterAiExcludedClinicalDomains(input),
+    // Apply the same decision boundary before latest/window selection, so a
+    // version cannot win a date tie and become an apparently settled fact.
+    ...(!selectedObservationDomain ? { observations: [], vitalSigns: [] } : {}),
+    ...(!selectedReportDomain ? { diagnosticReports: [] } : {}),
+  }
+  input = decisionBoundary ? excludeUnresolvedDecisionVariants(selectedInput, selection) : selectedInput
 
   const encounters = selection.encounters
     ? filterEncounterRecords(input.encounters ?? [], filters.encounterTimeRange, input)
@@ -258,10 +340,14 @@ export function scopeClinicalDataForAi(
     ? selectLabScope(input, availableLabReports, filters)
     : { reports: [], observations: [] }
   const labReports = labScope.reports
+  // Pathology reports ride on the imaging selection: they were reaching no AI
+  // surface at all (the scope kept only the lab and imaging groups), yet a
+  // biopsy result is the one report an oncology second opinion cannot do
+  // without. Same window and same latest-per-name rule as imaging.
   let imagingReports = selection.imagingReports
     ? (input.diagnosticReports ?? []).filter((report) =>
         reportStatusOk(report)
-        && inferGroupFromDiagnosticReport(report) === 'imaging'
+        && AI_REPORT_GROUPS.has(inferGroupFromDiagnosticReport(report))
         && imagingWindow(report.effectiveDateTime || report.issued),
       )
     : []
@@ -291,10 +377,41 @@ export function scopeClinicalDataForAi(
   }
   // Avoid duplicate report objects if a malformed server labels one report as
   // both lab and imaging; the rendered categories use the same classification.
+  // Latest-known floor for reports: the newest report of each modality class
+  // (pathology, CT, MRI, ultrasound, ECG, X-ray…) within the floor horizon
+  // stays in scope even when the saved imaging window is shorter. NHI names
+  // every CT alike, so the class — not the report name — is the unit.
+  if (selection.imagingReports) {
+    const candidates = (input.diagnosticReports ?? []).filter((report) =>
+      reportStatusOk(report) && AI_REPORT_GROUPS.has(inferGroupFromDiagnosticReport(report)))
+    const newestReportDay = candidates
+      .map((report) => String(report.effectiveDateTime || report.issued || '').slice(0, 10))
+      .filter(Boolean)
+      .sort()
+      .at(-1)
+    const floorStart = floorStartDay(newestReportDay)
+    if (floorStart) {
+      const present = new Set(imagingReports)
+      const latestByClass = new Map<string, { report: any; date: string }>()
+      for (const report of candidates) {
+        const date = String(report.effectiveDateTime || report.issued || '').slice(0, 10)
+        if (!date || date < floorStart) continue
+        const group = inferGroupFromDiagnosticReport(report)
+        const { cls } = reportModalityClass(group, codeText(report.code) ?? group)
+        const current = latestByClass.get(cls)
+        if (!current || date > current.date) latestByClass.set(cls, { report, date })
+      }
+      for (const { report } of latestByClass.values()) {
+        if (!present.has(report)) imagingReports.push(report)
+      }
+    }
+  }
+
   const reportById = new Map<string, any>()
   const reportsWithoutId: any[] = []
   for (const report of [...labReports, ...imagingReports]) {
-    if (report.id) reportById.set(report.id, report)
+    const key = clinicalRecordKey(report)
+    if (key) reportById.set(key, report)
     else reportsWithoutId.push(report)
   }
   const linkedImagingStudyIds = new Set(
@@ -333,16 +450,17 @@ export function scopeClinicalDataForAi(
   }
   const observationIds = new Set<string>()
   const observations = selectedObservations.filter((observation) => {
-    if (!observation.id) return true
-    if (observationIds.has(observation.id)) return false
-    observationIds.add(observation.id)
+    const key = clinicalRecordKey(observation)
+    if (!key) return true
+    if (observationIds.has(key)) return false
+    observationIds.add(key)
     return true
   })
 
   const immunizationWindow = makeTimeRangeTest(filters.immunizationTimeRange, input)
   const documentIds = new Set(includedDocumentIds)
 
-  return {
+  const scoped: Partial<ClinicalDataCollection> = {
     encounters,
     medications,
     procedures,
@@ -369,4 +487,50 @@ export function scopeClinicalDataForAi(
     documentReferences: selection.documents ? (input.documentReferences ?? []).filter((document) => documentIds.has(document.id)) : [],
     resourceQueryStatus: input.resourceQueryStatus,
   }
+  if (!decisionBoundary) return scoped
+  if (input.clinicalRecordVariantExclusions?.length) {
+    // Reuse the exact switches, windows, panel and document selectors on the
+    // source rows solely to decide which value-free uncertainty details may
+    // leave the app. These candidate rows never become decision facts.
+    const candidates = scopeClinicalDataView(original, selection, filters, includedDocumentIds, nowMs, false)
+    const evidence = new Set<string>()
+    const key = (row: any) => row.clinicalSourceNodeKey ?? JSON.stringify([row.clinicalRecordVariant?.groupId, row.sourceId ?? row.id, row.sourceVersionId ?? row.meta?.versionId])
+    const visit = (row: any) => {
+      if (row.clinicalRecordVariant) evidence.add(key(row))
+      for (const member of row._observations ?? []) visit(member)
+    }
+    for (const rows of Object.values(candidates)) if (Array.isArray(rows)) rows.forEach(visit)
+    const selectedTypes = new Set([
+      ...(selectedObservationDomain ? ['Observation'] : []), ...(selectedReportDomain ? ['DiagnosticReport'] : []),
+      ...(selection.medications ? ['MedicationRequest', 'MedicationStatement', 'Basic'] : []),
+      ...Object.entries({ Condition: selection.problemList, Encounter: selection.encounters, AllergyIntolerance: selection.allergies, Procedure: selection.procedures, Immunization: selection.immunizations, ImagingStudy: selection.imagingReports, Composition: selection.documents, DocumentReference: selection.documents, Consent: selection.advanceDirectives, Device: selection.medicalDevices, CarePlan: selection.carePlans }).filter(([, selected]) => selected).map(([type]) => type),
+    ])
+    scoped.clinicalRecordVariantExclusions = input.clinicalRecordVariantExclusions.filter(item => selectedTypes.has(item.resourceType)).map(item => {
+      const identity = item.evidenceIdentity ?? JSON.stringify([item.groupId, item.sourceId, item.versionId])
+      if (evidence.has(identity)) return item
+      // Preserve only domain uncertainty outside selected evidence, never its
+      // code, date, identifiers or version details through a metadata side path.
+      return { resourceType: item.resourceType, groupId: item.groupId, classification: item.classification, variantCount: item.variantCount, reason: 'Unresolved source records outside the selected evidence; do not infer absence.' }
+    })
+  }
+  const outbound = stripClinicalCaptureMetadata(scoped)
+  const source = input.clinicalSource
+  if (source?.graph) {
+    const documents = [...(scoped.compositions ?? []), ...(scoped.documentReferences ?? [])]
+    const outboundDocuments = [...(outbound.compositions ?? []), ...(outbound.documentReferences ?? [])]
+    const evidence = documents.map((document: any) => {
+      const paths = new Map<string, ScopedEncounterReference | null>()
+      const nodeKey = document.clinicalSourceNodeKey
+      if ('encounter' in document) {
+        paths.set('encounter', graphEncounterReferenceOrganization(source, nodeKey, 'encounter', document.encounter?.reference, encounters) ?? null)
+      }
+      for (const [index, item] of (document.context?.encounter ?? []).entries()) {
+        const path = `context.encounter[${index}]`
+        paths.set(path, graphEncounterReferenceOrganization(source, nodeKey, path, item?.reference, encounters) ?? null)
+      }
+      return paths
+    })
+    registerScopedEncounterReferenceEvidence(outbound, outboundDocuments, evidence)
+  }
+  return outbound
 }

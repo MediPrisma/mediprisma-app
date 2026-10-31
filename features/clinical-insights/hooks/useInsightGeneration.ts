@@ -21,6 +21,7 @@ import type {
   InsightOutputFormat,
 } from '@/src/shared/constants/clinical-insights.constants'
 import { LOCAL_INSIGHT_MAX_OUTPUT_TOKENS } from '@/src/shared/constants/clinical-insights.constants'
+import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 
 interface Panel {
   id: string
@@ -44,7 +45,7 @@ interface UseInsightGenerationProps {
 
 interface UseInsightGenerationReturn {
   runPanel: (panelId: string, options?: { force?: boolean }) => Promise<void>
-  runPanels: (panelIds: string[], options?: { force?: boolean }) => Promise<void>
+  runPanels: (panelIds: string[], options?: { force?: boolean; automatic?: boolean }) => Promise<void>
   stopPanel: (panelId: string) => void
   stopAll: () => void
   responses: Record<string, ResponseEntry>
@@ -78,7 +79,8 @@ export function useInsightGeneration({
   const runIdRef = useRef(0)
 
   const runPanels = useCallback(
-    async (panelIds: string[], options?: { force?: boolean }) => {
+    async (panelIds: string[], options?: { force?: boolean; automatic?: boolean }) => {
+      if (options?.automatic && isProgressiveAutoSummaryBlocked()) return
       const force = options?.force ?? false
       const uniquePanelIds = [...new Set(panelIds)]
       const prepared = uniquePanelIds.flatMap((panelId) => {
@@ -149,94 +151,103 @@ export function useInsightGeneration({
       const entries: Record<string, ResponseEntry> = {}
       const errors: Record<string, Error> = {}
 
-      // Keep calls sequential to avoid a burst of simultaneous model requests,
-      // but stage every completed result locally. completeBatch publishes the
-      // whole set through one store update only after the final call settles.
-      for (const { panel, messages } of prepared) {
-        if (runIdRef.current !== runId || ownerChanged()) return
-        const startedAt = Date.now()
-        const activeGenerationId = `${runId}:${panel.id}`
-        setPanelStatus((prev) => ({
-          ...prev,
-          [panel.id]: {
-            isLoading: true,
-            error: null,
-            activeGeneration: {
-              id: activeGenerationId,
-              modelName,
-              startedAt,
-              isLocalModel: isCustomOpenAiModelId(model),
-            },
-          },
-        }))
-        try {
-          const overflow = preflightContextWarning(
-            messages.map((message) => message.content).join('\n\n'),
-            model,
-            locale,
-            { selectedContext: context, contextLimit },
-          )
-          if (overflow) throw new Error(overflow)
-          let modelExecution = createModelExecution(model, model, modelName)
-          let outputTruncated = false
-          const fullText = await ai.query(messages, {
-            onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
-            onOutputTruncated: (truncated) => { outputTruncated = truncated },
-            modelId: model,
-            // Apply the documented local-summary output guard. The 262K
-            // context window is input capacity, not a safe output budget;
-            // frontier-provider defaults remain unchanged.
-            ...(isCustomOpenAiModelId(model)
-              ? {
-                temperature: 0,
-                maxTokens: LOCAL_INSIGHT_MAX_OUTPUT_TOKENS,
-                allowTruncatedOutput: true,
-                reasoningEffort: 'low' as const,
-              }
-              : {}),
-            operationKey: `clinical-insight:${owner}:${panel.id}`,
-            diagnosticFeature: 'clinical-insights',
-          })
+      const unsubscribe = options?.automatic ? useProgressiveImportStore.subscribe(() => {
+        if (!isProgressiveAutoSummaryBlocked() || runIdRef.current !== runId) return
+        runIdRef.current += 1
+        ai.stop()
+        setPanelStatus(prev => ({ ...prev, ...Object.fromEntries(activePanelIds.map(id => [id, { isLoading: false, error: null }])) }))
+      }) : undefined
+      try {
+        // Keep calls sequential to avoid a burst of simultaneous model requests,
+        // but stage every completed result locally. completeBatch publishes the
+        // whole set through one store update only after the final call settles.
+        for (const { panel, messages } of prepared) {
           if (runIdRef.current !== runId || ownerChanged()) return
-          const generatedAt = Date.now()
-          entries[panel.id] = {
-            text: fullText,
-            isEdited: false,
-            metadata: {
-              source: 'live',
-              ...generateInsight.buildMetadata(model),
-              modelName: modelExecutionLabel(modelExecution),
-              modelExecution,
-              ...(outputTruncated ? { outputTruncated: true } : {}),
-              generatedAt,
-              durationMs: Math.max(0, generatedAt - startedAt),
-              outputFormat: panel.outputFormat,
-              languagePolicy: panel.languagePolicy,
+          const startedAt = Date.now()
+          const activeGenerationId = `${runId}:${panel.id}`
+          setPanelStatus((prev) => ({
+            ...prev,
+            [panel.id]: {
+              isLoading: true,
+              error: null,
+              activeGeneration: {
+                id: activeGenerationId,
+                modelName,
+                startedAt,
+                isLocalModel: isCustomOpenAiModelId(model),
+              },
             },
-          }
-        } catch (error) {
-          if (runIdRef.current !== runId || ownerChanged()) return
-          const errorMessage = getUserErrorMessage(error)
-          console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
-          // No text is available for this failure; keep its original type for
-          // the localized error message instead of publishing an empty result.
-          errors[panel.id] = error instanceof Error ? error : new Error(errorMessage)
-        } finally {
-          if (runIdRef.current === runId && !ownerChanged()) {
-            setPanelStatus((prev) => {
-              const status = prev[panel.id]
-              if (status?.activeGeneration?.id !== activeGenerationId) return prev
-              return {
-                ...prev,
-                [panel.id]: { isLoading: true, error: null },
-              }
+          }))
+          try {
+            const overflow = preflightContextWarning(
+              messages.map((message) => message.content).join('\n\n'),
+              model,
+              locale,
+              { selectedContext: context, contextLimit },
+            )
+            if (overflow) throw new Error(overflow)
+            let modelExecution = createModelExecution(model, model, modelName)
+            let outputTruncated = false
+            const fullText = await ai.query(messages, {
+              onModelExecution: (execution) => { modelExecution = { ...modelExecution, ...execution } },
+              onOutputTruncated: (truncated) => { outputTruncated = truncated },
+              modelId: model,
+              // Apply the documented local-summary output guard. The 262K
+              // context window is input capacity, not a safe output budget;
+              // frontier-provider defaults remain unchanged.
+              ...(isCustomOpenAiModelId(model)
+                ? {
+                  temperature: 0,
+                  maxTokens: LOCAL_INSIGHT_MAX_OUTPUT_TOKENS,
+                  allowTruncatedOutput: true,
+                  reasoningEffort: 'low' as const,
+                }
+                : {}),
+              operationKey: `clinical-insight:${owner}:${panel.id}`,
+              diagnosticFeature: 'clinical-insights',
+              collectorContext: { template: { id: panel.id, title: panel.title } },
             })
+            if (runIdRef.current !== runId || ownerChanged()) return
+            const generatedAt = Date.now()
+            entries[panel.id] = {
+              text: fullText,
+              isEdited: false,
+              metadata: {
+                source: 'live',
+                ...generateInsight.buildMetadata(model),
+                modelName: modelExecutionLabel(modelExecution),
+                modelExecution,
+                ...(outputTruncated ? { outputTruncated: true } : {}),
+                generatedAt,
+                durationMs: Math.max(0, generatedAt - startedAt),
+                outputFormat: panel.outputFormat,
+                languagePolicy: panel.languagePolicy,
+              },
+            }
+          } catch (error) {
+            if (runIdRef.current !== runId || ownerChanged()) return
+            const errorMessage = getUserErrorMessage(error)
+            console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
+            // No text is available for this failure; keep its original type for
+            // the localized error message instead of publishing an empty result.
+            errors[panel.id] = error instanceof Error ? error : new Error(errorMessage)
+          } finally {
+            if (runIdRef.current === runId && !ownerChanged()) {
+              setPanelStatus((prev) => {
+                const status = prev[panel.id]
+                if (status?.activeGeneration?.id !== activeGenerationId) return prev
+                return {
+                  ...prev,
+                  [panel.id]: { isLoading: true, error: null },
+                }
+              })
+            }
           }
         }
-      }
 
-      if (runIdRef.current !== runId || ownerChanged()) return
-      completeBatch(activePanelIds, entries, errors)
+        if (runIdRef.current !== runId || ownerChanged()) return
+        completeBatch(activePanelIds, entries, errors)
+      } finally { unsubscribe?.() }
     },
     [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, modelName, panels, piiLiterals, prompts, setPanelStatus],
   )

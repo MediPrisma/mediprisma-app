@@ -1,0 +1,129 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-variant-decision",
+        "name": [
+          {
+            "text": "來源版本決策合成測試"
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1947-01-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-af",
+        "subject": {
+          "reference": "Patient/synthetic-variant-decision"
+        },
+        "clinicalStatus": {
+          "coding": [
+            {
+              "code": "active"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I48.91"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "synthetic-anticoagulant",
+        "meta": {
+          "versionId": "1"
+        },
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/synthetic-variant-decision"
+        },
+        "authoredOn": "2026-09-25",
+        "medicationCodeableConcept": {
+          "text": "Apixaban (Eliquis) FC tab 5 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "display": "Apixaban (Eliquis) FC tab 5 mg"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 5,
+                  "unit": "mg"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "synthetic-anticoagulant",
+        "meta": {
+          "versionId": "2"
+        },
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/synthetic-variant-decision"
+        },
+        "authoredOn": "2026-09-25",
+        "medicationCodeableConcept": {
+          "text": "Apixaban (Eliquis) FC tab 5 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "display": "Apixaban (Eliquis) FC tab 5 mg"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 2.5,
+                  "unit": "mg"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

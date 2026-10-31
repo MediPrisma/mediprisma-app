@@ -50,6 +50,11 @@ jest.mock('@/features/feature-request-pool', () => ({
   FeatureRequestPoolDialog: () => null,
 }))
 
+// Reads the open chart's physicians; covered by its own tests.
+jest.mock('@/features/settings/components/ClinicianNameSetting', () => ({
+  ClinicianNameSetting: () => null,
+}))
+
 function renderSettings() {
   return render(
     <LanguageProvider>

@@ -258,3 +258,29 @@ describe('cumulative pivot — counts and percentages never share a column', () 
     expect(series.points.map((point: any) => point.value).sort((a: number, b: number) => a - b)).toEqual([55, 61])
   })
 })
+
+// No unit at all: a white-cell differential above 100 cannot be a percentage,
+// so it is the count; 100 or less stays the percentage. A count-named source
+// keeps its count column, and reticulocytes are not judged by value.
+describe('a differential value with no unit is filed by its size', () => {
+  it.each([
+    ['嗜中性白血球 / Neutrophil', 4100, 'ANC'],
+    ['嗜中性白血球 / Neutrophil', 62, 'NEU'],
+    ['嗜中性白血球 / Neutrophil', 3.9, 'NEU'],
+    ['嗜中性白血球 / Neutrophil', 100, 'NEU'],
+    ['Lymphocyte', 1800, 'ALC'],
+    ['ANC', 3.9, 'ANC'],
+  ])('%s %s → %s', (text, value, key) => {
+    expect(keyOf(obs({ text, value }))).toBe(key)
+  })
+
+  it('reads a bare number written as text the same way', () => {
+    const asText = (value: string) => ({ ...obs({ text: 'Neutrophil', value: 0 }), valueQuantity: undefined, valueString: value })
+    expect(keyOf(asText('4,100'))).toBe('ANC')
+    expect(keyOf(asText('3.9'))).toBe('NEU')
+  })
+
+  it('leaves a unitless reticulocyte value where its name puts it', () => {
+    expect(countFractionAwareKey(obs({ text: 'Retic', value: 62000 }), 'RETIC')).toBe('RETIC')
+  })
+})

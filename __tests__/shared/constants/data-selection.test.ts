@@ -1,6 +1,7 @@
 import {
   DEFAULT_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
+  IPS_DEFAULT_DATA_FILTERS,
   CUSTOM_TEMPLATE_DEFAULT,
   DATA_SELECTION_PRESETS,
   resolveActivePreset,
@@ -77,7 +78,8 @@ describe('data-selection.constants', () => {
       expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('6m')
       expect(DEFAULT_DATA_FILTERS.labDepth).toBe('8')
       expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBe('6m')
-      expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('latest')
+      expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('all')
+      expect(IPS_DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.imagingReportTimeRange).toBe('1y')
       expect(DEFAULT_DATA_FILTERS.vitalSignsVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.vitalSignsTimeRange).toBe('all')

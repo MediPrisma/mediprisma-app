@@ -8,6 +8,7 @@ import { useHfpefInputsStore } from '../stores/hfpef-inputs.store'
 import { usePhenotypeAnswerStore } from '../stores/phenotype-answer.store'
 import { usePhysicianDecisionsStore } from '../stores/physician-decisions.store'
 import { useAfAnswersStore } from '../stores/af-answers.store'
+import { toCoronaryPhaseAnswer, useCoronaryPhaseStore } from '../stores/coronary-phase.store'
 import { useNhiLipidReviewStore } from '../stores/nhi-lipid-review.store'
 import { useVisitAnswersStore, visitAnswersOf } from '../stores/visit-answers.store'
 import { useEvidenceOverridesStore } from '../stores/evidence-overrides.store'
@@ -69,6 +70,8 @@ export function carryableAnswers(patientId: string, now: Date = new Date(), scop
   put('visit:', visitAnswersOf(useVisitAnswersStore.getState().byPatientId[patientId], today))
   const af = useAfAnswersStore.getState(), lipid = useNhiLipidReviewStore.getState(), prevent = usePreventStore.getState()
   put('af:', af.patientId === patientId ? af.answers : undefined)
+  const coronary = useCoronaryPhaseStore.getState()
+  if (coronary.patientId === patientId && coronary.answer) answers['coronary:phase'] = coronary.answer.phase
   put('lipid:', lipid.patientId === patientId ? lipid.answers : undefined)
   put('evidence:', useEvidenceOverridesStore.getState().byPatientId[patientId])
   put('prevent:', prevent.patientId === patientId ? prevent.inputs : undefined)
@@ -92,6 +95,7 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
       || !useHfpefInputsStore.getState().canCarryForward(patientId)
       || !usePhenotypeAnswerStore.getState().canCarryForward(patientId)
       || useAfAnswersStore.getState().hydratedPatientId !== patientId
+      || useCoronaryPhaseStore.getState().hydratedPatientId !== patientId
       || !useVisitAnswersStore.getState().hydratedPatientIds[patientId]
       || !useEvidenceOverridesStore.getState().hydratedPatientIds[patientId]
       || useNhiLipidReviewStore.getState().patientId !== patientId))) throw new Error('cdss_carry_forward_unavailable')
@@ -144,6 +148,10 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
           af.answer(patientId, question.id, old[question.id] as boolean)
       }
     }
+    // CAD DP-01's class, kept with the day it was given: the pack ages it from there.
+    const coronary = useCoronaryPhaseStore.getState()
+    const oldPhase = toCoronaryPhaseAnswer(inputs.coronaryPhaseAnswer)
+    if (oldPhase && oldPhase.answeredOn <= today && !coronary.answer) coronary.setAnswer(patientId, oldPhase)
     const lipid = useNhiLipidReviewStore.getState()
     if (lipid.patientId === patientId) {
       for (const [id, value] of Object.entries(object(inputs.nhiLipidReview))) {

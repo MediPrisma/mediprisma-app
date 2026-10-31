@@ -41,6 +41,11 @@ export interface StreamConfig {
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
+  /** CUSTOM endpoints only: suppress the model's hidden reasoning for this one
+   *  request. The dialect (vLLM `chat_template_kwargs`, gpt-oss's bounded
+   *  `reasoning_effort`, OpenRouter's `reasoning.enabled`) is resolved at the
+   *  transport, because it is a property of the endpoint, not of the caller. */
+  hiddenReasoning?: 'off'
   responseFormat?: 'json'
   /** Optional per-request idle window. Slow local models need longer for the
    *  first token after evaluating a large selected clinical context. */
@@ -83,6 +88,7 @@ export class AiSdkStreamAdapter {
       apiKey: config.apiKey ?? undefined,
       useProxy,
       openAiCompatible: config.openAiCompatible,
+      hiddenReasoning: config.hiddenReasoning,
     })
 
     // Drive the SDK off our OWN controller so the idle watchdog can abort a

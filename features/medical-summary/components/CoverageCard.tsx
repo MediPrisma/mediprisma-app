@@ -27,7 +27,7 @@ export function CoverageCard({ coverage, labels, statsVisible }: CoverageCardPro
   return (
     <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
       {statsVisible ? (
-        <div className="mb-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.6875rem] tabular-nums text-foreground/70">
+        <div className="mb-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[length:max(12px,0.75rem)] tabular-nums text-foreground/70">
           {coverage.start && coverage.end ? (
             <span className="font-medium">
               {labels.range.replace("{start}", coverage.start).replace("{end}", coverage.end)}
@@ -39,7 +39,7 @@ export function CoverageCard({ coverage, labels, statsVisible }: CoverageCardPro
           <span>{fill(labels.labs, coverage.labs)}</span>
         </div>
       ) : null}
-      <p className="text-[0.65rem] leading-snug text-muted-foreground">{labels.boundary}</p>
+      <p className="text-[length:max(12px,0.75rem)] leading-snug text-muted-foreground">{labels.boundary}</p>
     </div>
   )
 }

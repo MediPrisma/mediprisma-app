@@ -19,9 +19,19 @@ export const DEMO_DATA_AS_OF_ISO = '2026-09-03T23:59:59+08:00'
 export const DEMO_DATA_AS_OF_MS = Date.parse(DEMO_DATA_AS_OF_ISO)
 
 /**
+ * The 雲端病歷 demo is the same patient captured from NHI MediCloud on
+ * 2026-10-26, later than the 健康存摺 export, so it carries its own as-of date.
+ * Its Patient id is fixed by scripts/build-medcloud-demo-bundle.mjs.
+ */
+export const MEDCLOUD_DEMO_PATIENT_ID = 'demo-medcloud-patient-1'
+export const MEDCLOUD_DEMO_DATA_AS_OF_ISO = '2026-10-26T23:59:59+08:00'
+export const MEDCLOUD_DEMO_DATA_AS_OF_MS = Date.parse(MEDCLOUD_DEMO_DATA_AS_OF_ISO)
+
+/**
  * Reference "now" for recency rules: the demo's own as-of date for demo data,
  * the real clock for everything else.
  */
-export function clinicalNowMs(isDemoData: boolean): number {
-  return isDemoData ? DEMO_DATA_AS_OF_MS : Date.now()
+export function clinicalNowMs(isDemoData: boolean, patientId?: string | null): number {
+  if (!isDemoData) return Date.now()
+  return patientId === MEDCLOUD_DEMO_PATIENT_ID ? MEDCLOUD_DEMO_DATA_AS_OF_MS : DEMO_DATA_AS_OF_MS
 }

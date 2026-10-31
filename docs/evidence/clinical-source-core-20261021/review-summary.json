@@ -1,0 +1,179 @@
+{
+  "base": "0c71c9cdfe62ad12473217af0be030b41b5d4c25",
+  "head": "a83629c3a491776d9774222c94189c8fe9bad0f3",
+  "description": "OpenAI GPT-6 Astra 與 Anthropic Claude Opus 5.5 分別獨立覆核整合 #347 後的完整 PR diff，再以增量覆核涵蓋最新修正至 tested code head；主 agent 依實際呼叫路徑與測試裁決。兩者均請求 fast；Astra 未回報實際服務速度，Opus metadata 顯示 standard，不能宣稱 fast 已生效。覆核模型僅靜態審查；執行測試與瀏覽器證據另列。",
+  "segments": [
+    {
+      "base": "0c71c9cdfe62ad12473217af0be030b41b5d4c25",
+      "head": "8fe8b3273bd33f213601b9beaba2845536fae44e",
+      "reviewers": [
+        {
+          "name": "astra",
+          "model": "gpt-6-astra",
+          "requestedSpeed": "fast",
+          "actualSpeed": "not reported",
+          "execution": "independent CLI review of supplied code/synthetic packet; no test execution by reviewer"
+        },
+        {
+          "name": "opus",
+          "model": "claude-opus-5-5",
+          "requestedSpeed": "fast",
+          "actualSpeed": "standard",
+          "execution": "independent CLI review of supplied code/synthetic packet; no test execution by reviewer"
+        }
+      ],
+      "findings": [
+        {
+          "id": "A1",
+          "decision": "confirmed-fixed-in-reviewed-follow-up",
+          "evidence": "Claim revision/conflict uncertainty must follow derived Condition, Observation, Procedure and DocumentReference facts. Trusted origin/path metadata preserves separate derived identities, is recomputed against the current graph, and is removed at outbound AI boundaries. Unresolved Claim versions cannot backfill target dates or visit links. Actual parser/aggregate/AI/CDSS and React Query structural-sharing regressions cover the fix.",
+          "fixedHead": "a83629c3a491776d9774222c94189c8fe9bad0f3"
+        },
+        {
+          "id": "A2",
+          "decision": "confirmed-fixed",
+          "evidence": "Generic mapped resources without source IDs now receive projection IDs from reliable fullUrl/source identity or anonymous capture occurrence. Actual SMART repository, aggregate and FHIR tools tests verify two visits and references remain distinguishable; fully anonymous equal events remain separate. Production fix d1f53472."
+        },
+        {
+          "id": "O1",
+          "decision": "confirmed-fixed-in-reviewed-follow-up",
+          "evidence": "Actual result/hasMember-reachable contained clinical members excluded by patient ownership now contribute to domain incompleteness. Local imports reject those clinical-member exclusions atomically. Detached and embedded audit content does not become a clinical membership warning. Shared helper/repository fix b9bfd455 plus follow-up aggregate/local integration.",
+          "fixedHead": "a83629c3a491776d9774222c94189c8fe9bad0f3"
+        },
+        {
+          "id": "O2",
+          "decision": "nonblocking-internal-api-follow-up",
+          "evidence": "Repository-local modifier status can temporarily clear another capture's count, but the sole production getQueryStatus reader is clinical-data-fetch-plan. Both normal buildClinicalResults and snapshot reprojection pass through projectClinicalAggregate, which recomputes modifier quarantine with the full graph. No demonstrated UI/AI/CDSS path consumes the intermediate status directly."
+        },
+        {
+          "id": "O3",
+          "decision": "explicit-scope-limitation",
+          "reason": "Projection identities intentionally include source-session scope. Durable identity across logins or independent re-imports is not promised in this first phase; fresh scope invalidates prior source-bound cached references."
+        },
+        {
+          "id": "O4",
+          "decision": "documented-performance-follow-up",
+          "reason": "Full progressive capture reconciliation can be expensive on very large inputs. Incremental hashing/indexing and batching remain an explicit later optimization; no benchmark is claimed as part of this review."
+        },
+        {
+          "id": "O5",
+          "decision": "nonblocking-maintainability",
+          "reason": "Consolidating legacy source binding and derived provenance is a useful follow-up. This review did not establish an additional current-path defect beyond the separately fixed Claim provenance and contained membership issues."
+        },
+        {
+          "id": "O6",
+          "decision": "nonblocking-wording",
+          "reason": "The banner's error label may describe source quarantine as a query failure, while the domain reason/excluded count still report incomplete content and downstream tools prevent absence conclusions. More specific wording remains a UI follow-up."
+        },
+        {
+          "id": "O7",
+          "decision": "excluded-for-production-caller",
+          "evidence": "The direct GenerateClinicalContextUseCase production caller is demo-example-context.service; that formatter does not include document content. Its empty includedDocumentIds matches its actual evidence. The clinical AI hook passes actual includedDocumentIds through its separate supported path."
+        }
+      ]
+    },
+    {
+      "base": "8fe8b3273bd33f213601b9beaba2845536fae44e",
+      "head": "ea7dd6b3acbe6104ccc90be55b4929bf56cc319d",
+      "reviewers": [
+        {
+          "name": "astra",
+          "model": "gpt-6-astra",
+          "requestedSpeed": "fast",
+          "actualSpeed": "not reported",
+          "execution": "independent CLI review of supplied code/synthetic packet; no test execution by reviewer"
+        },
+        {
+          "name": "opus",
+          "model": "claude-opus-5-5",
+          "requestedSpeed": "fast",
+          "actualSpeed": "standard",
+          "execution": "independent CLI review of supplied code/synthetic packet; no test execution by reviewer"
+        }
+      ],
+      "findings": [
+        {
+          "id": "A1",
+          "decision": "confirmed-fixed",
+          "evidence": "Actual Local parser through aggregate reproduced inferred MedicationRequest.authoredOn and Encounter.period.start when two unresolved versions of Claim A and independent Claim B reference the same targets. The focused regression requires unresolved date authority to block inference regardless of input order while preserving explicit source dates.",
+          "fixedHead": "a83629c3a491776d9774222c94189c8fe9bad0f3",
+          "verification": "Actual Local parser/aggregate regression for both resource targets and both Claim orders; explicit source-date preservation; 5 focused suites/45 tests passed in development checkout. Final full-head QA follows."
+        },
+        {
+          "id": "O1",
+          "decision": "unsupported-roundtrip-follow-up",
+          "reason": "Reviewer caveat: supported export/re-import path for app-owned variant modifiers on raw Claims must be established.",
+          "evidence": "Claim variant modifier lookup is lazy, but the app IPS builder exports mapped clinical domains and no Claim domain. Raw downloads retain original source bytes. No supported app-export-to-Claim-modifier roundtrip is established; expanding external modifier semantics onto raw Claims is a future feature."
+        },
+        {
+          "id": "O2",
+          "decision": "excluded-by-current-ingestion-boundaries",
+          "reason": "Requires a mapper path that copies raw app-owned Claim provenance fields to mapped entities; raw field presence alone does not establish impact.",
+          "evidence": "All relevant FhirMapper.to* methods construct explicit field objects and do not copy raw clinicalClaimDerivedSource or clinicalClaimEncounterRelation. The Local binder obtains origin/link state from private source-object WeakMap/WeakSet only. Thus the hypothesized raw forged-key path does not exist in current consumers."
+        },
+        {
+          "id": "O3",
+          "decision": "nonblocking-maintainability",
+          "reason": "Consolidating mapped Claim relation fields and removing obsolete symbol compatibility would simplify ownership boundaries. Current raw-object authority and mapped-cache metadata have separate purposes; actual React Query structural sharing is covered."
+        },
+        {
+          "id": "O4",
+          "decision": "nonblocking-internal-id-follow-up",
+          "reason": "Check whether synthetic derived entity IDs are passed through to FHIR export before judging an externally observable violation.",
+          "evidence": "IPS Condition/Procedure and other relevant exporters construct resources without the internal entity id; makeEntry supplies UUID identities. Original FHIR download contains raw bytes, not expanded Claim-derived objects. Current external FHIR paths do not expose these internal derived IDs."
+        },
+        {
+          "id": "O5",
+          "decision": "documented-performance-follow-up",
+          "reason": "Repeated graph selection/indexing is extra work; incremental reconciliation performance remains explicitly outside the completed first-phase claim."
+        }
+      ]
+    },
+    {
+      "base": "ea7dd6b3acbe6104ccc90be55b4929bf56cc319d",
+      "head": "a83629c3a491776d9774222c94189c8fe9bad0f3",
+      "reviewers": [
+        {
+          "name": "astra",
+          "model": "gpt-6-astra",
+          "requestedSpeed": "fast",
+          "actualSpeed": "not reported",
+          "execution": "independent CLI review of supplied code/synthetic packet; no test execution by reviewer"
+        },
+        {
+          "name": "opus",
+          "model": "claude-opus-5-5",
+          "requestedSpeed": "fast",
+          "actualSpeed": "standard",
+          "execution": "independent CLI review of supplied code/synthetic packet; no test execution by reviewer"
+        }
+      ],
+      "findings": [
+        {
+          "id": "Astra",
+          "decision": "no-findings",
+          "evidence": "Independent static review found no confirmed regression in this date-authority delta."
+        },
+        {
+          "id": "O1",
+          "decision": "nonblocking-field-provenance-follow-up",
+          "evidence": "The Encounter itself remains an unambiguous source record; uncertainty concerns optional Claim-derived date enrichment. The real visit UI renders a missing date as Unknown; unfiltered queryEncounters/getRecentVisits retain the Encounter without a date. Date filters exclude unknown dates under the existing policy, and the reviewed query path does not assert canConcludeAbsence=true. No false definite date or false explicit absence was established. Raw Claim dates and variants remain in the source graph. Explaining why a particular field was withheld is the explicitly deferred field-level provenance UI."
+        },
+        {
+          "id": "O2",
+          "decision": "nonblocking-narrow-test-gap",
+          "evidence": "The existing claim-expander test directly protects single-known-Claim Encounter date backfill. Existing reverse-order multiple-known-Claim coverage protects MedicationRequest date conflicts; this delta also tests mixed uncertain/known Claims against both Encounter and MedicationRequest dates and preserves explicit dates. A separate multiple-known conflicting-date test for an initially undated Encounter is not present; static set-cardinality gating is clear and no defect was found."
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Manual candidate and unresolved-association review UI is a later phase.",
+    "Typed per-field provenance for legacy Claim display enrichments remains a follow-up; immutable raw source is retained.",
+    "Projection IDs are scoped to source sessions; arbitrary serialized calculated snapshots are not a supported persistence contract.",
+    "Large progressive-payload incremental performance remains to be optimized.",
+    "IPS modifier canonicals are unpublished; full external IPS profile validation was not performed.",
+    "The graph covers all received resource types, not every possible FHIR endpoint."
+  ],
+  "privacy": "Review inputs contain source code and synthetic fixtures only. Real patient input and private coverage evidence are excluded."
+}

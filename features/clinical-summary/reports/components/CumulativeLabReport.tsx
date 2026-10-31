@@ -398,7 +398,7 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
             <CumulativeRangeSelector value={range} onChange={setRange} />
           </div>
         ) : (
-          <span className="hidden min-w-0 max-w-full items-center justify-self-center gap-1 overflow-hidden text-[0.6875rem] text-muted-foreground @min-[390px]:inline-flex">
+          <span data-tour="cumulative-trend-hint" className="hidden min-w-0 max-w-full items-center justify-self-center gap-1 overflow-hidden text-[0.6875rem] text-muted-foreground @min-[390px]:inline-flex">
             {activeIsMicrobiology ? (
               <span className="min-w-0 truncate">
                 {(t.reports as any).microbiologyCumulative?.hint ?? '點列查看完整原文'}

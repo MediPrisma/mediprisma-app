@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getConceptText, formatDate } from '../utils/fhir-helpers'
 import { getProcedureCategoryCode } from '../utils/procedure-category'
+import { isNhiOrderCodeSystem } from '@/src/shared/utils/nhi-order-code'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { ProcedureSpecialMaterialEntity } from "@/src/core/entities/clinical-data.entity"
 
@@ -93,7 +94,8 @@ export function useProcedureRows(procedures: any[]) {
         ? procedure.report.map((ref: any) => ref?.display || ref?.reference).filter(Boolean)
         : []
       const coding: any[] = Array.isArray(procedure?.code?.coding) ? procedure.code.coding : []
-      const nhiCoding = coding.find((c: any) => typeof c?.system === 'string' && c.system.includes('nhi-medical-order-code'))
+      // 健保存摺 and MediCloud (TW Core medical-service-payment-tw) NHI 醫令 alike.
+      const nhiCoding = coding.find((c: any) => isNhiOrderCodeSystem(c?.system))
       const pcsCoding = coding.find((c: any) => {
         if (typeof c?.system !== 'string') return false
         const system = c.system.toLowerCase()

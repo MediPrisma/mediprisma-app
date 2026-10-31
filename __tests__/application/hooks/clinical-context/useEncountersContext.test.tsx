@@ -76,6 +76,27 @@ describe('useEncountersContext medication chronology', () => {
     expect(items.some((item) => item.includes('…and'))).toBe(false)
   })
 
+  it('names no medicine under a visit when asked only for the count (初診快覽)', () => {
+    const clinicalData = {
+      encounters: [{
+        id: 'enc-1',
+        period: { start: '2026-07-01T00:00:00Z' },
+        reasonCode: [{ text: '肺炎' }],
+      }],
+      medications: [activeMedication(1), activeMedication(2)],
+    }
+
+    const { result } = renderHook(
+      () => useEncountersContext(true, clinicalData as any, 'all', { visitMedications: 'count' }),
+      { wrapper: Wrapper },
+    )
+    const context = result.current?.items.join('\n') ?? ''
+
+    expect(context).toContain('Medications prescribed or dispensed at this visit: 2')
+    expect(context).toContain("does not state any medicine's indication")
+    expect(context).not.toContain('Drug 01')
+  })
+
   it('includes every selected encounter instead of silently limiting the export to 10 visits', () => {
     const clinicalData = {
       encounters: Array.from({ length: 29 }, (_, index) => ({

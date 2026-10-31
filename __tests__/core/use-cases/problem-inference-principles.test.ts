@@ -27,7 +27,9 @@ describe('PROBLEM_INFERENCE_SYNTHESIS_RULE — shared prompt semantics', () => {
         locale: 'zh-TW',
         audience,
       })
-      expect(system.content).toContain(`For "problems", ${PROBLEM_INFERENCE_SYNTHESIS_RULE}`)
+      // The 初診快覽 prompt introduces the section by its UI name before the
+      // shared rule; only the rule text itself has to stay verbatim.
+      expect(system.content).toContain(`For "problems" (問題清單與負責院所 — the complete problem list): ${PROBLEM_INFERENCE_SYNTHESIS_RULE}`)
     }
   })
 

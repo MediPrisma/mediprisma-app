@@ -1,9 +1,10 @@
 import { beginCollectorObservation, collectorError, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
-import { collectorEventV5Schema } from '@/src/shared/contracts/collector-event'
+import { collectorEventV10Schema } from '@/src/shared/contracts/collector-event'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
 import { mockCollectorPermission } from '../../helpers/collector-permissions'
+import { collectorAppSurface } from '@/src/infrastructure/telemetry/collector'
 
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ saveEncryptedCache: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('@/src/application/telemetry/usage-analytics', () => ({ trackEvent: jest.fn() }))
@@ -46,11 +47,13 @@ test.each(['/', '/?site=hmc', '/app-hmc/', '/app-hmc/?site=hmc', '/?site=VGHTPE'
 test.each(['/?site=vghtpe', '/app/?site=vghtpe', '/app-hmc/?site=vghtpe'])('automatically sends with existing permission on %s regardless of pathname', async (url) => {
   window.history.replaceState({}, '', url)
   expect(collectorStatus().enabled).toBe(true)
+  expect(collectorAppSurface()).toBe(url.startsWith('/app-hmc') ? 'app-hmc' : url.startsWith('/app/') ? 'app' : 'other')
   start().finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body().site).toBe('vghtpe')
-  expect(collectorEventV5Schema.safeParse(body()).success).toBe(true)
+  expect(body().app_surface).toBe(url.startsWith('/app-hmc') ? 'app-hmc' : url.startsWith('/app/') ? 'app' : 'other')
+  expect(collectorEventV10Schema.safeParse(body()).success).toBe(true)
 })
 
 test.each(['prompt', 'denied'] as const)('permission %s skips telemetry without changing clinical success or cache', async (state) => {
@@ -85,6 +88,8 @@ test.each(['missing API', 'missing query', 'query throws', 'unsupported names', 
 })
 
 test.each([
+  ['https://collector.mediprisma.tw', 'local-network'],
+  ['https://collector.mediprisma.tw:443', 'local-network'],
   ['https://collector.invalid:8787', 'local-network'],
   ['http://127.0.0.1:8787', 'loopback-network'],
   ['http://localhost:8787', 'loopback-network'],
@@ -101,6 +106,19 @@ test.each([
   expect(permission.query).toHaveBeenCalledWith({ name })
   expect(permission.query).toHaveBeenCalledTimes(1)
   expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+test('production Collector URL uses standard HTTPS 443 without changing site gating', async () => {
+  process.env.NEXT_PUBLIC_COLLECTOR_ORIGIN = 'https://collector.mediprisma.tw'
+  window.history.replaceState({}, '', '/app/?site=vghtpe')
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(fetch).toHaveBeenCalledWith('https://collector.mediprisma.tw/collector/v1/events', expect.objectContaining({ method: 'POST' }))
+  jest.mocked(fetch).mockClear()
+  window.history.replaceState({}, '', '/app/?site=hmc')
+  start().finish({ outcome: 'ok' })
+  await settle()
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 test.each(['granted', 'prompt', 'denied'] as const)('uses the legacy descriptor only when split permissions are unsupported (%s)', async (state) => {
@@ -205,8 +223,8 @@ test('exact resource counts and approved model codes leave the browser, once per
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
   const payload = body()
-  expect(collectorEventV5Schema.safeParse(payload).success).toBe(true)
-  expect(payload).toMatchObject({ schema_version: 5, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
+  expect(collectorEventV10Schema.safeParse(payload).success).toBe(true)
+  expect(payload).toMatchObject({ schema_version: 10, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
     diagnostics: { loaded: { total: 8237, medications: 47, encounters: 23, documents: 0, observations: 8121, reports: 19 },
       prepared: { total: 124, medications: 4, encounters: 11, observations: 100, reports: 8, documents: 0 },
       context_tokens_bucket: '32001-128000', context_trimmed: true } })
@@ -228,7 +246,7 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
   expect(payload.diagnostics).not.toHaveProperty('prepared')
   expect(payload.response_complete).toBeNull()
   for (const model of MODEL_CATALOG) {
-    expect(collectorEventV5Schema.safeParse({ ...payload, model: model.provider === 'custom' ? 'custom' : model.id }).success).toBe(true)
+    expect(collectorEventV10Schema.safeParse({ ...payload, model: model.provider === 'custom' ? 'custom' : model.id }).success).toBe(true)
   }
 })
 
@@ -240,7 +258,7 @@ test('invalid counts are omitted, never rounded, made positive or coerced from s
   await settle()
   expect(body().diagnostics).not.toHaveProperty('loaded')
   for (const value of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '12', '11-50', null]) {
-    expect(collectorEventV5Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
+    expect(collectorEventV10Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
   }
 })
 
@@ -250,10 +268,10 @@ test('rejects PHI-shaped fields and arbitrary error/feature strings on the wire'
   await settle()
   const payload = body()
   for (const field of ['prompt', 'response', 'patient_id', 'token', 'url', 'error_message']) {
-    expect(collectorEventV5Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
-    expect(collectorEventV5Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
+    expect(collectorEventV10Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
+    expect(collectorEventV10Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
   }
-  expect(collectorEventV5Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
+  expect(collectorEventV10Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
   expect(collectorFeature('SYNTHETIC-PATIENT-TITLE')).toBe('ai_other')
   expect(collectorFeature('__proto__')).toBe('ai_other')
   expect(collectorError(new Error('SYNTHETIC-SECRET'))).toBe('error')
@@ -290,7 +308,7 @@ test.each([[0, 6], [3, 3], [6, 0], [1, 0]])('summary terminal event measures %i/
   expect(store.getState().running.summary).toBe(false)
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body()).toMatchObject({
-    schema_version: 5, sample_kind: 'feature', status: failed ? 'error' : 'completed',
+    schema_version: 10, sample_kind: 'feature', status: failed ? 'error' : 'completed',
     error_class: failed ? 'parse_failed' : null,
     diagnostics: { summary_cards: { succeeded, failed }, phase: failed ? 'parse' : 'unknown' },
   })
@@ -319,22 +337,58 @@ test.each(['cancelled', 'superseded', 'thrown'] as const)('a %s run overrides pe
   expect(store.getState().byKey.summary).toBeUndefined()
 })
 
+const SYNTHETIC_RUN = '10000000-0000-4000-8000-0000000000aa'
+test.each(['ok', 'parse_failed', 'aborted'] as const)('a summary operation names its diagnostic run as v8 (%s)', async (kind) => {
+  const store = createAiResultStore<object>()
+  let commit = true
+  await runGenerationJob({
+    store, key: 'summary', cacheKey: 'synthetic-summary',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, shouldCommit: () => commit,
+    produce: async (measure, identifySummaryRun) => {
+      identifySummaryRun(SYNTHETIC_RUN)
+      if (kind === 'parse_failed') return null
+      if (kind === 'aborted') { commit = false; return {} }
+      measure({ outcome: 'ok', summaryCards: { succeeded: 6, failed: 0 } })
+      return {}
+    },
+  })
+  await settle()
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(body()).toMatchObject({ schema_version: 10, feature: 'summary', sample_kind: 'feature', diagnostics: { summary_run_id: SYNTHETIC_RUN } })
+  expect(collectorEventV10Schema.safeParse(body()).success).toBe(true)
+})
+
+test('operations without a run, and non-summary features, are v6 operation events without summary_run_id', async () => {
+  const store = createAiResultStore<object>()
+  await runGenerationJob({ store, key: 'summary', cacheKey: 'synthetic-summary',
+    analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, produce: async () => ({}) })
+  await settle()
+  expect(body().schema_version).toBe(10)
+  expect(body().diagnostics).not.toHaveProperty('summary_run_id')
+  await runGenerationJob({ store, key: 'insights', cacheKey: 'synthetic-insights',
+    analytics: { surface: 'insights', modelId: 'gpt-5.4-nano' },
+    produce: async (_measure, identifySummaryRun) => { identifySummaryRun(SYNTHETIC_RUN); return {} } })
+  await settle()
+  expect(body()).toMatchObject({ schema_version: 10, feature: 'insights' })
+  expect(body().diagnostics).not.toHaveProperty('summary_run_id')
+})
+
 test('5-second timeout, bounded concurrency and automatic recovery without eight-hour expiry', async () => {
 
   jest.mocked(fetch).mockImplementation((_url, options) => new Promise((_resolve, reject) => {
     options?.signal?.addEventListener('abort', () => reject(new Error('timeout')), { once: true })
   }))
-  for (let i = 0; i < 20; i++) start().finish({ outcome: 'ok' })
+  for (let i = 0; i < 20; i++) beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(2)
   expect(collectorStatus().in_flight).toBe(2)
   await jest.advanceTimersByTimeAsync(5000)
   expect(collectorStatus().in_flight).toBe(0)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   await jest.advanceTimersByTimeAsync(5000)
   expect(collectorStatus().cooling_down).toBe(true)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(3)
   await jest.advanceTimersByTimeAsync(60_000)
@@ -342,7 +396,7 @@ test('5-second timeout, bounded concurrency and automatic recovery without eight
   await jest.advanceTimersByTimeAsync(8 * 60 * 60 * 1000)
   expect(collectorStatus().enabled).toBe(true)
   jest.mocked(fetch).mockResolvedValue({ status: 201 } as Response)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(4)
 })
@@ -350,11 +404,11 @@ test('5-second timeout, bounded concurrency and automatic recovery without eight
 test.each([401, 403])('credential rejection %i does not require manual reactivation', async (status) => {
 
   jest.mocked(fetch).mockResolvedValue({ status } as Response)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(collectorStatus().enabled).toBe(true)
   jest.mocked(fetch).mockResolvedValue({ status: 201 } as Response)
-  start().finish({ outcome: 'ok' })
+  beginCollectorObservation({feature:'chat', modelId:'gpt-5.4-nano',sampleKind:'request',mode:'stream'}).finish({ outcome: 'ok' })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(2)
 })
@@ -389,7 +443,7 @@ test('automatic collection uses a persistent browser ID, never storing credentia
   expect(JSON.stringify(localStorage)).not.toContain(TOKEN)
   for (const key of ['user_id', 'email', 'source_ip', 'room', 'receipt']) {
     expect(body()).not.toHaveProperty(key)
-    expect(collectorEventV5Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
+    expect(collectorEventV10Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
   }
   localStorage.clear()
   start().finish({ outcome: 'ok' })
@@ -428,4 +482,30 @@ test('navigation during asynchronous credential retrieval prevents transmission'
   resolveToken(TOKEN)
   await settle()
   expect(fetch).not.toHaveBeenCalled()
+})
+
+test('queues concurrent v7 attempts and sends completed-but-unparseable responses', async () => {
+  const releases: Array<() => void> = []
+  jest.mocked(fetch).mockImplementation(() => new Promise(resolve => releases.push(() => resolve({status:201} as Response))))
+  for (let attempt = 1; attempt <= 4; attempt++) beginCollectorObservation({feature:'summary', modelId:'custom', sampleKind:'request', mode:'stream'}).finish({
+    outcome:'parse_failed', responseComplete:true, phase:'parse', summaryAttempt:{
+      run_id:'10000000-0000-4000-8000-000000000001', request_id:'20000000-0000-4000-8000-'+String(attempt).padStart(12,'0'),
+      attempt, lane:'full', output_chars:12, last_chunk_ms:0, parse_state:'invalid',
+    },
+  })
+  start().finish({outcome:'parse_failed',summaryCards:{succeeded:2,failed:2}})
+  await settle()
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(collectorStatus().queued).toBe(3)
+  releases.splice(0).forEach(release => release()); await settle()
+  expect(fetch).toHaveBeenCalledTimes(4)
+  expect(collectorStatus().queued).toBe(1)
+  releases.splice(0).forEach(release => release()); await settle()
+  expect(fetch).toHaveBeenCalledTimes(5)
+  expect(collectorStatus().queued).toBe(0)
+  const sent = jest.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)))
+  expect(sent.slice(0,4).map(e => e.diagnostics.summary_attempt.attempt)).toEqual([1,2,3,4])
+  expect(sent.slice(0,4).every(e => e.response_complete === true && e.error_class === 'parse_failed')).toBe(true)
+  expect(sent[4].diagnostics.summary_cards).toEqual({succeeded:2,failed:2})
+  releases.splice(0).forEach(release => release()); await settle()
 })

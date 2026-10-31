@@ -1,0 +1,21 @@
+{
+  "version": "before",
+  "observations": [
+    {
+      "id": "synthetic-result",
+      "sourceId": "synthetic-result",
+      "value": 91
+    },
+    {
+      "id": "synthetic-result",
+      "sourceId": "synthetic-result",
+      "value": 91
+    }
+  ],
+  "observationCount": 2,
+  "sourceNodeCount": null,
+  "sourceOccurrenceCount": null,
+  "sourceTypes": [],
+  "sameRecordEvidenceCount": null,
+  "originalUnchanged": true
+}

@@ -75,6 +75,39 @@ describe('CumulativeLabReport 直式 (stacked) layout', () => {
     expect(within(section('serology')!).getByRole('heading', { name: /病毒抗原/ })).toBeInTheDocument()
   })
 
+  it('renders 免疫 as two tables, immunoglobulins then autoantibodies, and no allergen anywhere', () => {
+    const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw'
+    const row = (id: string, nhi: string, text: string, value: string | number) => ({
+      id,
+      status: 'final',
+      category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'laboratory' }] }],
+      code: { text, coding: [{ system: NHI, code: nhi }] },
+      effectiveDateTime: '2026-09-30',
+      ...(typeof value === 'number' ? { valueQuantity: { value, unit: 'mg/dL' } } : { valueString: value }),
+    })
+    render(<CumulativeLabReport observations={[
+      row('igg', '12025B', 'IGG', 1000),
+      row('c3', '12034B', 'C3', 100),
+      row('ro52', '12064B', 'Ro52', 'Negative'),
+      row('ssa', '12064B', 'SS-A/Ro Ab', '<1'),
+      row('mold', '30022C', '混合黴菌', '<0.1'),
+    ]} />, { wrapper: TestProviders })
+
+    const immuno = section('immuno')!
+    expect(within(immuno).getByRole('heading', { name: /免疫/ })).toBeInTheDocument()
+    const tables = immuno.querySelectorAll('table')
+    expect(tables).toHaveLength(2)
+    expect(tables[0]).toHaveTextContent('免疫球蛋白／補體')
+    expect(tables[0]).toHaveTextContent('C3')
+    expect(tables[1]).toHaveTextContent('自體抗體')
+    expect(tables[1]).toHaveTextContent('SS-A/Ro')
+    expect(tables[1]).toHaveTextContent('Ro52')
+    // The line-blot Negative does not leak into 尿液, and the 30022C mould
+    // allergen is in no section at all.
+    expect(section('urine')!.querySelector('table')).toBeNull()
+    expect(document.body).not.toHaveTextContent('混合黴菌')
+  })
+
   it('renders a compact expected-columns line for a category with no data', () => {
     render(<CumulativeLabReport observations={crpObservations(5)} />, { wrapper: TestProviders })
 

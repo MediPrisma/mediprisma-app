@@ -31,6 +31,8 @@ export interface ProviderConfig {
   onModelReported?: (modelId: string | null) => void
   onModelUnreported?: () => void
   openAiCompatible?: OpenAiCompatibleConfig | null
+  /** Per-request: turn the endpoint's hidden reasoning off (custom only). */
+  hiddenReasoning?: 'off'
 }
 
 export interface ProviderResult {
@@ -50,7 +52,7 @@ export class AiProviderFactory {
   private createProvider(config: ProviderConfig): ProviderResult {
     const isCustom = isCustomOpenAiModelId(config.modelId)
     if (isCustom) {
-      return this.createOpenAiCompatibleProvider(config.openAiCompatible)
+      return this.createOpenAiCompatibleProvider(config.openAiCompatible, config.hiddenReasoning)
     }
     const definition = getModelDefinitionOrThrow(config.modelId)
 
@@ -149,6 +151,7 @@ export class AiProviderFactory {
 
   private createOpenAiCompatibleProvider(
     config: OpenAiCompatibleConfig | null | undefined,
+    hiddenReasoning?: 'off',
   ): ProviderResult {
     if (!isOpenAiCompatibleRuntimeReady(config)) {
       throw new Error('OpenAI-compatible endpoint is not configured')
@@ -158,7 +161,7 @@ export class AiProviderFactory {
     // the logical sentinel never leaves the browser.
     return {
       model: createOpenAiCompatibleChatModel(config, {
-        fetchImpl: createConfiguredOpenAiCompatibleFetch(config),
+        fetchImpl: createConfiguredOpenAiCompatibleFetch(config, { hiddenReasoning }),
       }),
       isGemini: false,
     }

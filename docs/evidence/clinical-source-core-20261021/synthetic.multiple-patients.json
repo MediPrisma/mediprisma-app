@@ -1,0 +1,202 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "timestamp": "2026-10-21T01:00:00Z",
+  "entry": [
+    {
+      "fullUrl": "https://synthetic.invalid/fhir/Patient/synthetic-patient",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-patient",
+        "name": [
+          {
+            "text": "來源圖合成測試"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1980-01-01"
+      }
+    },
+    {
+      "fullUrl": "https://synthetic.invalid/fhir/Organization/synthetic-hospital",
+      "resource": {
+        "resourceType": "Organization",
+        "id": "synthetic-hospital",
+        "name": "合成測試醫院"
+      }
+    },
+    {
+      "fullUrl": "https://synthetic.invalid/fhir/Observation/synthetic-result",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-result",
+        "status": "final",
+        "subject": {
+          "reference": "Patient/synthetic-patient"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2345-7",
+              "display": "Glucose"
+            }
+          ],
+          "text": "Glucose"
+        },
+        "effectiveDateTime": "2026-10-20T08:00:00+08:00",
+        "valueQuantity": {
+          "value": 91,
+          "unit": "mg/dL",
+          "system": "http://unitsofmeasure.org",
+          "code": "mg/dL"
+        },
+        "referenceRange": [
+          {
+            "low": {
+              "value": 70
+            },
+            "high": {
+              "value": 99
+            }
+          }
+        ],
+        "performer": [
+          {
+            "reference": "Organization/synthetic-hospital"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "https://synthetic.invalid/fhir/Observation/synthetic-result",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "synthetic-result",
+        "status": "final",
+        "subject": {
+          "reference": "Patient/synthetic-patient"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2345-7",
+              "display": "Glucose"
+            }
+          ],
+          "text": "Glucose"
+        },
+        "effectiveDateTime": "2026-10-20T08:00:00+08:00",
+        "valueQuantity": {
+          "value": 91,
+          "unit": "mg/dL",
+          "system": "http://unitsofmeasure.org",
+          "code": "mg/dL"
+        },
+        "referenceRange": [
+          {
+            "low": {
+              "value": 70
+            },
+            "high": {
+              "value": 99
+            }
+          }
+        ],
+        "performer": [
+          {
+            "reference": "Organization/synthetic-hospital"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "synthetic-order",
+        "status": "active",
+        "intent": "order",
+        "subject": {
+          "reference": "Patient/synthetic-patient"
+        },
+        "code": {
+          "text": "Glucose"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "synthetic-audit",
+        "recorded": "2026-10-21T01:00:00Z",
+        "target": [
+          {
+            "reference": "Observation/synthetic-result"
+          }
+        ],
+        "contained": [
+          {
+            "resourceType": "Observation",
+            "id": "synthetic-snapshot",
+            "status": "final",
+            "code": {
+              "text": "AUDIT ONLY"
+            },
+            "valueString": "NOT A CLINICAL ROW"
+          }
+        ],
+        "entity": [
+          {
+            "role": "source",
+            "what": {
+              "reference": "#synthetic-snapshot"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "FutureClinicalType",
+        "id": "synthetic-future",
+        "custom": {
+          "mustBeRetained": true
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-other-patient",
+        "name": [
+          {
+            "text": "合成另一病人"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1980-01-01"
+      }
+    }
+  ]
+}

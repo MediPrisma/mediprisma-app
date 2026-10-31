@@ -597,9 +597,8 @@ export function useAgentChat(
         const latestUserQuestion = [...newMessages]
           .reverse()
           .find((message) => message.role === 'user')
-        const routingQuestion = latestUserQuestion
-          ? formatChatMessageContentForAi(latestUserQuestion)
-          : ''
+        // Route from the new question; quoted history remains in the model messages.
+        const routingQuestion = latestUserQuestion?.content ?? ''
         // The resolved scope filters data sources for every model. Smaller
         // custom models receive an additional relevance pass to reduce schema
         // tokens; frontier models keep all schemas inside the runtime boundary.
@@ -720,7 +719,7 @@ export function useAgentChat(
           messages: apiMessages,
           tools: toolsForTurn,
           initialToolName,
-          preExecuteInitialTool: isCustomEndpoint && shouldPreExecuteLocalAgentTool(initialToolName),
+          preExecuteInitialTool: isCustomEndpoint && !latestUserQuestion?.replyTo && shouldPreExecuteLocalAgentTool(initialToolName),
           preExecuteInitialToolInput: isCustomEndpoint
             ? localAgentPrefetchInput(routingQuestion, initialToolName)
             : undefined,

@@ -34,6 +34,7 @@ import type { Row } from '../types'
 import { formatDate } from '../utils/fhir-helpers'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
+import { ReportPreviewLine } from './ReportPreviewLine'
 import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { NhiViewerActions } from './NhiViewerActions'
 import { ReportTypeBadge } from './ReportTypeBadge'
@@ -308,7 +309,6 @@ function NarrativeSubCard({
   const [expanded, setExpanded] = useState(false)
   const text = getNarrativeText(row)
   const bodyPart = inferBodyPart(text)
-  const firstLine = text.split(/\r?\n/).find((s) => s.trim().length > 0) || text
   const hasText = text.trim().length > 0
   const toggle = () => setExpanded((v) => !v)
 
@@ -386,9 +386,7 @@ function NarrativeSubCard({
             )}
           </div>
           {!expanded && (
-            <div className="mt-0.5 text-[0.6875rem] text-muted-foreground line-clamp-1">
-              {firstLine}
-            </div>
+            <ReportPreviewLine text={text} className="mt-0.5 text-[0.6875rem] text-muted-foreground" />
           )}
         </div>
         {/* AI button hidden while docked to the right pane (which owns the card

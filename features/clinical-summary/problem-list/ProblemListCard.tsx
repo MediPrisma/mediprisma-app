@@ -21,6 +21,7 @@ import { DiagnosisList } from '../diagnosis/components/DiagnosisList'
 import { useVisitPrimaryDiagnoses } from './hooks/useVisitPrimaryDiagnoses'
 import { VisitPrimaryDiagnosisList } from './components/VisitPrimaryDiagnosisList'
 import { FilterPills } from './components/FilterPills'
+import { buildIcdDictionary } from '@/src/shared/utils/icd-lookup'
 
 type StatusFilter = 'active' | 'resolved' | 'all'
 
@@ -37,8 +38,8 @@ function matchesFilter(clinicalStatus: string | undefined, filter: StatusFilter)
 }
 
 export function ProblemListCard() {
-  const { t } = useLanguage()
-  const { conditions, isLoading, error } = useDiagnosis()
+  const { t, locale } = useLanguage()
+  const { conditions, encounters, isLoading, error } = useDiagnosis()
   const visitDiagnoses = useVisitPrimaryDiagnoses(conditions)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
 
@@ -51,7 +52,8 @@ export function ProblemListCard() {
         : [],
     [conditions, statusFilter]
   )
-  const rows = useDiagnosisRows(filteredConditions)
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
+  const rows = useDiagnosisRows(filteredConditions, locale, icdDict, encounters)
 
   const filters: { key: StatusFilter; label: string }[] = [
     { key: 'active', label: tt.filterActive || 'Active' },

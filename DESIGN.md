@@ -14,6 +14,14 @@ Use this visual hierarchy:
 
 Existing CSS variables and shared components are the implementation source of truth. Do not duplicate their numeric values here until the project has a generated token workflow.
 
+## UI Copy and Attention
+
+- Default to minimal UI copy. Avoid slogans, promotional language, explanatory banners, and routine reminders.
+- Do not repeat normal system behavior on every row or card (for example, “procedures share this report”). Show the clinical content directly; keep source details available on demand.
+- Add a persistent message only when it changes the user's next action or interpretation: a clinical safety issue, missing data that affects interpretation, an actionable error, or a required sign-in.
+- Keep necessary messages brief, specific, and close to the affected action. Deduplicate them and remove them when resolved; avoid stacking banners or repeating the same reminder across surfaces.
+- Preserve clear control labels, accessible names, and essential safety information. Reducing copy must not obscure how to act or what data is missing.
+
 ## Colors
 
 - Use neutral surfaces for the application shell and routine grouping.
@@ -29,6 +37,16 @@ Existing CSS variables and shared components are the implementation source of tr
 - Use sentence case and plain clinical language.
 - Establish hierarchy with weight, size, and alignment before adding color or containers.
 - Avoid routine UI text below 12px.
+- 醫療摘要 reads in three layers, each a rem size with a px floor so the
+  clinician phone default (12px root) cannot shrink it: what is read first
+  (headline `max(15px,1rem)`, problem `max(14px,0.9375rem)`, finding
+  `max(14px,0.875rem)`), evidence — metric values and original report quotes
+  (`max(14px,0.875rem)`), and supporting source/basis/date text
+  (`max(14px,0.875rem)`, `text-foreground/80`). Keep clinical values and quotes
+  at least as large as their source/date labels, using weight and stronger
+  foreground colour to distinguish clinical content. Review tags retain
+  `max(13px,0.8125rem)` and section labels retain `max(12px,0.75rem)`.
+  Save space by removing repetition, not by shrinking a layer.
 - Use tabular numbers when scanning laboratories, dates, or counts benefits from alignment.
 
 ## Layout and Spacing

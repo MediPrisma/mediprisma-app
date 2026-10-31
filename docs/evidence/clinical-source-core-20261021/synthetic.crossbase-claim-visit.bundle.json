@@ -1,0 +1,60 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "gender": "unknown",
+        "name": [
+          {
+            "text": "合成跨來源示例"
+          }
+        ],
+        "id": "synthetic-patient"
+      }
+    },
+    {
+      "resource": {
+        "subject": {
+          "reference": "Patient/synthetic-patient"
+        },
+        "resourceType": "Encounter",
+        "class": {
+          "code": "AMB",
+          "display": "門診"
+        },
+        "status": "finished",
+        "id": "visit"
+      },
+      "fullUrl": "https://local.example/fhir/Encounter/visit"
+    },
+    {
+      "resource": {
+        "patient": {
+          "reference": "Patient/synthetic-patient"
+        },
+        "id": "claim",
+        "extension": [
+          {
+            "url": "https://twcore.mohw.gov.tw/ig/pas/StructureDefinition/extension-claim-encounter",
+            "valueReference": {
+              "reference": "Encounter/visit"
+            }
+          }
+        ],
+        "created": "2025-01-01",
+        "procedure": [
+          {
+            "procedureCodeableConcept": {
+              "text": "合成跨來源處置，不應錯接門診"
+            },
+            "sequence": 1
+          }
+        ],
+        "resourceType": "Claim"
+      },
+      "fullUrl": "https://foreign.example/fhir/Claim/claim"
+    }
+  ]
+}

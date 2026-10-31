@@ -1,5 +1,16 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-10-21 owner decision: source reconciliation is automatic on every route.
+The source-version notice and medication comparison/verification prompts are
+removed. Hospital records take priority in the existing cross-source medication
+policy; same-record versions are selected by source priority and valid source
+update time. When update order is unavailable, retracted/stopped medication states take
+priority, followed by final status, completeness and stable content identity.
+Clinical event dates and opaque version IDs are not version clocks. Original source
+payloads remain available for audit. No extra reconciliation action is required
+before UI, AI or CDSS can consume the selected record. Transport failures and
+patient-ownership validation remain distinct from version selection.
+
 2026-10-05 latest owner decision: CDSS save/history must be bound to the signed-in user. On `?site=vghtpe`, Firebase/intranet admission requires a nonanonymous App account; intranet retains the hospital subnet check. Only the original saver may list/read a record. The earlier same-day network-only decision is superseded. Deployment target: `https://fhir.mediprisma.tw`.
 
 Every place the app behaves differently because of *how it was opened* is
@@ -31,6 +42,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 
 | Where | Kind | Behaviour on the route | Owner decision |
 |---|---|---|---|
+| `src/shared/config/feature-registry.ts` (`requires: 'hospital-outpatient'`) / `src/layouts/LeftPanelLayout.tsx` | 不顯示（依資料） | All routes: the new left tab 「上次門診」 is listed only when the loaded chart holds at least one hospital (院內) outpatient Encounter: class `AMB`, hospital source tag or a hospital visit merged into its cloud record. Charts with only cloud data (雲端病歷 / 健康存摺) do not list it. If the next patient lacks such a visit, the panel returns to 總覽. All existing tabs are unchanged. | Explicit owner request in chat, 2026-10-28: 要有院內資料跟院內門診才顯示這個分頁，只有雲端病歷資料不用顯示。 |
 | `patient-identity.ts` / `CdssStorageActions.tsx` | 不顯示（拒絕存讀） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: explicitly de-identified source patients cannot save, list or read CDSS records. The anonymous-name source marker is preserved through local demographic overlays and IPS export/reimport. Switching the same patient between source privacy states clears visible history and cancels pending operations. Show guidance to reimport with 雲抓「去識別化」turned off. Non-de-identified patients with complete identity retain save/history; native masked national IDs using x, X or * remain accepted regardless of mask count. | Explicit owner request in chat, 2026-10-05: CDSS 只接受不選去識別化的病人。 |
 | `features/clinical-decision-support/renderers/CdssStorageActions.tsx` | 不顯示（停用操作） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: guests, anonymous accounts and sessions without an established account UID cannot save or open CDSS history. Signed-in accounts retain these actions, limited to their own server-owned records; logout/account change closes and clears history. Existing site/Beta/role gates still apply. | Explicit owner request in chat, 2026-10-05: 綁定登入 user 才能儲存，僅原儲存者可讀取。 |
 | `features/clinical-decision-support/LiveFeature.tsx` / `CdssStorageActions.tsx` (`offered`) | 不顯示 | On every route that shows CDSS, for every disease: the 「儲存」 and 「紀錄」 toolbar buttons, and with them saving, viewing, carrying forward and deleting CDSS records, are not offered on the 三區塊 layout. They remain on 決策地圖 v2 (panel and full-window `visit=book`) and the lipid NHI table. Switching to 三區塊 keeps the controller mounted, so a pending save is not cancelled and a FHIR grant is not dropped. Answers already carried keep their 「帶入 · 日期」 marks on 三區塊. | Explicit owner request in chat, 2026-10-07: 三區塊先不支援存資料（所有疾病、隱藏按鈕）。 |
@@ -48,6 +60,32 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `features/settings/components/DisplaySettings.tsx` (pilot-pack checkboxes) | 不顯示 | The per-pack 試辦 checkboxes are not shown | 90a3938c — stands, same reason |
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
 | `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
+
+## AI summary · 初診快覽 v3 (all routes; PR #237)
+
+These remove cards from the 醫療摘要 first-visit summary on every route. They
+are not route gates; they are listed here because they take a clinical
+surface away. Nothing below may reach production without the owner's own yes
+(owner, in chat 2026-10-03: the AI summary needs more testing first; owner approved
+production in chat 2026-10-15).
+
+| Surface | Change | Owner decision |
+|---|---|---|
+| 開藥前必看 (overview `mustKnow` grid) | Removed on all routes; the problem list and 開藥注意 carry the content | Owner, in chat 2026-10-02 |
+| 最可能的就診主因 (Focus card) and 最近 90 天 (Recent events card) | Removed on all routes | Owner, in chat 2026-10-02 |
+| Red high-alert banner under the headline | Removed; 開藥注意 is one neutral list ordered by importance, placed under 影像與病理重點 | Owner, in chat 2026-10-02: 「不要有什麼高危的紅色警示…照著重要度排序」 |
+| Headline text-comparison notice in clinician mode | On all routes, ordinary differences from the problem list and mentions of medicines or lab values are available through the neutral 「摘要核對」 button beside 初診快覽, instead of an always-visible warning below the headline. Details explain that a wording mismatch does not establish a clinical error. A failed problem-list generation still shows an inline notice that comparison could not be completed. The comparison logic, summary text, and medication safety alerts are unchanged. | Owner, in chat 2026-10-19: 「好，照你建議修改」 after reviewing the collapsed comparison proposal |
+| 民眾 audience: 最近需要注意的三件事, 就醫歷程 | Not shown (they rode on the removed cards) | Owner, in chat 2026-10-15 |
+| 「雲端無過敏資料，非確認無過敏」 row | Not shown | Owner, in chat 2026-10-15 |
+| AI data scope, every AI surface (醫療摘要, 臨床對話, insights) | Adds, beyond the saved time window, the newest prescribing-relevant lab value and the newest report of each modality class within 730 days, and sends pathology reports with the imaging selection; only the 醫療摘要 data drawer notes it | Owner, in chat 2026-10-15: 「照現狀」 (same as pilot/hmc) |
+| 目前重點 (CurrentPrioritiesCard) | Removed on all routes; the headline replaces it | Owner, in chat 2026-10-13 |
+| 健康提醒／安全警示卡 (CareRemindersSafetyCard) | Removed on all routes; the scan shows as 開藥注意 under 影像與病理重點, with 「未發現明顯安全風險」 when a finished scan found nothing | Owner, in chat 2026-10-13 |
+| 跨院時間軸 (CrossFacilityTimeline) | Removed on all routes | Owner, in chat 2026-10-13 |
+| 關鍵檢驗與檢查趨勢 (InvestigationTrendsCard) and its jump into 累積報告; 民眾: 我的檢驗趨勢 | Removed on all routes; 累積報告 stays on the left panel | Owner, in chat 2026-10-13 |
+| 跨院用藥整合 (MedicationReconciliationCard) | Removed on all routes; 用藥 tab unchanged | Owner, in chat 2026-10-13 |
+| 舊版問題清單 (ProblemListCard) | Replaced on all routes by the new problem list (負責院所與用藥) | Owner, in chat 2026-10-13 |
+| 其他待確認事項 (DecisionList) | Removed; the prompt already returned no decisions | Owner, in chat 2026-10-13 |
+| Card nav and card-layout manager (reorder / hide cards) | Removed on all routes; a saved layout is no longer read | Owner, in chat 2026-10-13 |
 
 ## Prompt Gallery visibility
 
@@ -77,7 +115,7 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 
 | Surface | Compact presentation | Where the full recovery action remains | Owner decision |
 |---|---|---|---|
-| Care reminders and safety card | Do not render an empty card for a failed first scan, and do not repeat its error or retry action inside a card that still has prior successful content. | The Medical Summary error banner lists the safety failure with other failed cards and offers one retry action; that action reruns only failed cards and preserves successful cards. | Explicit Before/After approval in chat, 2026-09-15 |
+| 開藥注意 (the safety scan; was the care reminders and safety card) | Not shown for a failed scan, and its error or retry action is not repeated inside the section. A finished scan with no alert says so instead of disappearing. | The Medical Summary error banner lists the safety failure once, with other failed cards, and offers one retry action; that action reruns only failed cards and preserves successful cards. | Explicit Before/After approval in chat, 2026-09-15; carried to 開藥注意 2026-10-13 |
 
 ## HF visit action list (all launch routes)
 
@@ -157,6 +195,16 @@ HF new-flow clinical information card: owner requested replacing the height tile
 
 AF is listed alongside HF and lipid in the HMC host, including production builds for `/app-hmc/`. The existing Beta and unattended launch rules apply; HF remains the default. Owner authorized AF integration and deployment on 2026-09-19.
 
+## CAD (coronary disease) preview
+
+2026-10-18: the owner asked for the app side of the CAD CDSS (「接著做 app 端」). Coronary disease (`chronic-coronary-disease-cdss`) is listed after AF in the HMC host. The package ships it `enabled: false`, so it shows only under the existing Beta switch and pilot ids, and the unattended Medcloud rule applies as for the other unreleased packs; HF remains the default. No existing clinical surface is removed.
+
+| Surface | Behaviour | Owner decision | Tests |
+|---|---|---|---|
+| 冠心病 in the disease switcher | Listed; visible with Beta or the pilot id, as dyslipidemia and AF | Owner, in chat 2026-10-18: 「接著做 app 端」 | `cad-host` |
+| CAD 決策地圖 v2 asks: 「心絞痛比上次」 (更多／一樣／較少／沒有) and 「出血」 | Asked on the CAD page; the bleeding answer is the one the AF page asks, kept once per patient | Same | `cad-host` |
+| 在地層：健保給付 lines under a point (CAD DP-12's P2Y12 reminder) | Drawn on every route of this host, which runs the Taiwan layer (`setLocaleLayer('taiwan')`); a deployment set to `'none'` draws none and nothing else changes | Owner, in chat 2026-10-18, asked that coverage be separable for deployment in other countries | `cad-host` |
+
 ## Optional private integrations (all routes)
 
 2026-10-04，使用者指定 FHIR 讀寫暫只開放已登入 Firebase 的 CDSS 協作者。site=vghtpe 的有效CDSS結果保留人工儲存／歷史控制，firebase 模式沿用既有登入、由API查UID名單；不顯示額外FHIR登入鈕。只有明確 oauth2 設定提供「登入 FHIR 授權／斷開 FHIR 授權」。其餘臨床surface與既有Beta／院別規則保留，FHIR不經Gateway；詳見CDSS-FHIR-PILOT.md。
@@ -210,3 +258,5 @@ eligibility is preserved. No previously visible clinical surface is removed.
 | HF 「執行 HF 模型預測」 without an HF diagnosis | Disabled when the prepared input has no heart-failure diagnosis code (ICD-10-CM I50.x or ICD-9-CM 428.x), with 「未偵測到心衰診斷，請先在步驟 2 確認心衰病史」 under it; enabled as soon as step 2 supplies I50.9. With an existing HF code, step 2 stays optional and eligibility remains the API’s decision. | Every route where the HF research calculator is available. | Explicit owner request in chat with a screenshot, 2026-10-07 |
 | HF observed-incidence basis (n and 依據族群) | Collapsed by default behind 「依據」 under each horizon; the rate line stays visible as 「同層實際發生率（群體）」 with its CI. One click shows n and the cohort. A toggle, not a tooltip, so it works without hover. | Every route where the HF research calculator is available. | Explicit owner request in chat with a screenshot, 2026-10-07 |
 | HF 「整理模型資料」 button | Replaced by automatic local preparation when the detail opens (no network request) and a 「重新整理」 link in step 1. Nothing is sent until 「執行 HF 模型預測」. | Every route where the HF research calculator is available. | Explicit chat request, 2026-10-07 |
+
+Automatic source resolution also retains active Condition/Allergy evidence when update ordering is absent, never groups different resource identities by imported modifier labels, and redirects duplicate-include references to the selected version. Background refreshes keep the previous complete snapshot within the same patient and lifecycle scope until all updated searches settle. Missing medication content is stated neutrally; it does not create a reconciliation banner or task.

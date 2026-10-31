@@ -5,11 +5,24 @@ import { makeTimeRangeTest } from "@/src/core/utils/date-filter.utils"
 import type { ClinicalData, Observation } from "./types"
 import { expandObservationValues, observationDisplayValue } from "@/src/core/utils/observation-value.utils"
 import { normalizeClinicalStatus } from "@/src/core/utils/clinical-context-selection.utils"
+import { isAdultPreventiveHealthExamResource } from "@/src/shared/utils/observation-provenance.utils"
+
+/** A reading from the adult preventive health check. The MediCloud bridge
+ *  tags most of them with the program, but its blood pressure arrives with
+ *  only the module (imue0140, the HPA check-up feed) — accept either. */
+function isCheckupReading(obs: Observation): boolean {
+  return isAdultPreventiveHealthExamResource(obs as any) ||
+    ((obs as any).meta?.tag ?? []).some((tag: { system?: string; code?: string }) =>
+      tag.code === 'imue0140' && /source-module$/.test(tag.system ?? ''))
+}
 
 export function useVitalSignsContext(
   includeObservations: boolean,
   clinicalData: ClinicalData | null,
-  filters?: DataFilters
+  filters?: DataFilters,
+  /** 初診快覽 only: mark adult preventive check-up readings with their
+   *  program and place. Other consumers keep the unlabelled lines. */
+  labelCheckupReadings = false,
 ): ClinicalContextSection[] {
   return useMemo(() => {
     if (!includeObservations) return []
@@ -103,7 +116,13 @@ export function useVitalSignsContext(
             : `${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Component'}: `
           return [`${label}${display.value}${display.unit ? ` ${display.unit}` : ''}`]
         })
-        if (values.length > 0) items.push(`${values.join(', ')}${date ? ` (${date})` : ''}${statusPart}`)
+        // A check-up reading is a screening measurement, often years old: say
+        // so, and where it was taken, beside the value.
+        const performer = (obs as any).performer?.[0]?.display?.split(/[;；]/)[0]?.trim()
+        const sourcePart = labelCheckupReadings && isCheckupReading(obs)
+          ? ` [adult preventive health check 成人預防保健${performer ? ` · ${performer}` : ''}]`
+          : ''
+        if (values.length > 0) items.push(`${values.join(', ')}${date ? ` (${date})` : ''}${sourcePart}${statusPart}`)
       })
       
       if (items.length > 0) {
@@ -112,5 +131,5 @@ export function useVitalSignsContext(
     })
 
     return sections
-  }, [includeObservations, clinicalData, filters])
+  }, [includeObservations, clinicalData, filters, labelCheckupReadings])
 }

@@ -37,6 +37,8 @@ interface RevealOptions {
   /** With the 複製 tab: which of its sub-tabs to show. Without it the tab
    *  opens on whichever sub-tab the clinician last left it. */
   exportTab?: ExportSubTab
+  /** With the 設定 tab: which of its sub-tabs to show. */
+  settingsTab?: string
 }
 
 interface RightPanelContextType {
@@ -96,7 +98,7 @@ export function RightPanelProvider({ children, defaultTab = 'medical-summary' }:
   const clearSettingsTarget = useCallback(() => setSettingsTarget(null), [])
 
   const revealTab = useCallback((tab: string, options?: RevealOptions) => {
-    setActiveTab(tab)
+    setActiveTab(tab, tab === 'settings' ? options?.settingsTab : undefined)
     if (tab === 'ips-export' && options?.exportTab) setExportTab(options.exportTab)
     setRevealSeq((seq) => seq + 1)
   }, [setActiveTab])

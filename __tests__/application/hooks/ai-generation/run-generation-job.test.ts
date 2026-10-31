@@ -20,8 +20,8 @@ describe('runGenerationJob cache ordering', () => {
   })
 
   it('finishes the visible run without waiting for encryption', async () => {
-    let finishSave!: () => void
-    mockedSaveEncryptedCache.mockImplementationOnce(() => new Promise<void>((resolve) => {
+    let finishSave!: (kept: boolean) => void
+    mockedSaveEncryptedCache.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
       finishSave = resolve
     }))
     const store = createAiResultStore<{ value: string }>()
@@ -36,11 +36,11 @@ describe('runGenerationJob cache ordering', () => {
     expect(generated).toEqual({ value: 'generated' })
     expect(store.getState().running['slot-a']).toBe(false)
     expect(mockedSaveEncryptedCache).toHaveBeenCalledTimes(1)
-    finishSave()
+    finishSave(true)
   })
 
   it('guards a late cache write against a newer result or Bundle revision', async () => {
-    mockedSaveEncryptedCache.mockResolvedValueOnce(undefined)
+    mockedSaveEncryptedCache.mockResolvedValueOnce(true)
     const store = createAiResultStore<{ value: string }>()
 
     const generated = await runGenerationJob({
@@ -63,7 +63,7 @@ describe('runGenerationJob cache ordering', () => {
   })
 
   it('guards encryption that finishes after an already-committed run is cancelled', async () => {
-    mockedSaveEncryptedCache.mockResolvedValueOnce(undefined)
+    mockedSaveEncryptedCache.mockResolvedValueOnce(true)
     const store = createAiResultStore<{ value: string }>()
     let commit = true
 
@@ -103,6 +103,36 @@ describe('runGenerationJob cache ordering', () => {
     expect(mockedSaveEncryptedCache).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])('rolls back provisional cards on cancellation (prior completed artifact: %s)', async hasPrevious => {
+    const store = createAiResultStore<{ value: string }>()
+    const previous = { value: 'accepted previous artifact' }
+    if (hasPrevious) store.getState().setResult('slot-a', previous)
+    let commit = true
+    await runGenerationJob({ store, key: 'slot-a', cacheKey: 'cache-a', shouldCommit: () => commit,
+      produce: async () => {
+        store.getState().setResult('slot-a', { value: 'provisional preview' })
+        commit = false
+        throw new DOMException('cancelled', 'AbortError')
+      },
+    })
+    expect(store.getState().byKey['slot-a']).toBe(hasPrevious ? previous : undefined)
+    expect(store.getState().running['slot-a']).toBe(false)
+    expect(mockedSaveEncryptedCache).not.toHaveBeenCalled()
+  })
+
+  it('never restores a cancelled preview baseline into a different Bundle epoch', async () => {
+    const store = createAiResultStore<{ value: string }>()
+    store.getState().setResult('slot-a', { value: 'old chart artifact' })
+    const next = { value: 'new chart artifact' }
+    await runGenerationJob({ store, key: 'slot-a', cacheKey: 'cache-a', shouldCommit: () => false,
+      produce: async () => {
+        store.setState(state => ({ bundleRevision: state.bundleRevision + 1, byKey: { 'slot-a': next } }))
+        return null
+      },
+    })
+    expect(store.getState().byKey['slot-a']).toBe(next)
+  })
+
   it('does not turn an abort rejection into a generation error', async () => {
     const store = createAiResultStore<{ value: string }>()
     let commit = true
@@ -133,7 +163,7 @@ describe('runGenerationJob ai_result reporting', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    mockedSaveEncryptedCache.mockResolvedValue(undefined)
+    mockedSaveEncryptedCache.mockResolvedValue(true)
   })
 
   it('reports one ok for a successful run', async () => {

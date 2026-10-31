@@ -58,6 +58,7 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
     return { ...EMPTY, value: input.defaultValue ?? input.options[0]?.value ?? '' }
   }
+  if (input.type !== 'number') return { ...EMPTY, value: input.defaultValue ?? '' }
   const expected = input.unit ?? ''
   const hit = autofill.resolve(input.source)
   if (!hit) return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
@@ -115,7 +116,7 @@ const DATA_SOURCE_KINDS: AutofillSource['kind'][] = ['echo', 'bmi', 'natriuretic
  */
 export function isFullyAutofillable(calc: CalculatorDef): boolean {
   return calc.inputs.every((inp) => {
-    if (inp.type === 'number' && inp.optional) return true
+    if (inp.optional) return true
     return !!inp.source && DATA_SOURCE_KINDS.includes(inp.source.kind)
   })
 }
@@ -145,7 +146,7 @@ export function computeAutofilledResult(calc: CalculatorDef, autofill: Autofill)
       // resolved from the patient. If a sourced field fell back to its default
       // (e.g. FiO₂ 21%, or sex when the patient's sex is unknown), the inline
       // card would look auto-computed while resting on an assumption — suppress.
-      const isOptional = inp.type === 'number' && inp.optional
+      const isOptional = !!inp.optional
       if (inp.source && !isOptional && !resolved.filled) return null
     }
     const result = calc.compute(values)
@@ -180,7 +181,7 @@ export function calcReadiness(calc: CalculatorDef, autofill: Autofill): Readines
   for (const inp of calc.inputs) {
     const isData = !!inp.source && LAB_VITAL_KINDS.includes(inp.source.kind)
     if (!isData) continue
-    if (inp.type === 'number' && inp.optional) continue
+    if (inp.optional) continue
     sourced += 1
     if (resolveInput(inp, autofill).filled) filled += 1
   }

@@ -2,6 +2,17 @@
 import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
 
 describe('FhirMapper', () => {
+  it('preserves outpatient order links and source metadata on reports and analytes', () => {
+    const basedOn = [{ reference: 'ServiceRequest/synthetic-order' }]
+    const meta = { source: 'https://web9.vghtpe.gov.tw/emr/qemr/', tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] }
+    const observation = FhirMapper.toObservation({ id: 'result', basedOn, meta, valueQuantity: { value: 7 } })
+    const report = FhirMapper.toDiagnosticReport({ id: 'report', basedOn, meta, result: [{ reference: 'Observation/result' }] }, [observation])
+    expect(observation.basedOn).toEqual(basedOn)
+    expect(report.basedOn).toEqual(basedOn)
+    expect(report._observations?.[0]?.basedOn).toEqual(basedOn)
+    expect(observation.meta).toEqual(meta)
+    expect(report.meta).toEqual(meta)
+  })
   describe('toCondition', () => {
     it('should map FHIR Condition to domain entity', () => {
       const fhirCondition = {
@@ -795,5 +806,17 @@ describe('FhirMapper', () => {
       expect(result.class).toBeUndefined()
       expect(result.type).toBeUndefined()
     })
+  })
+})
+
+describe('report observation reference scope', () => {
+  it('does not resolve cross-base absolute references by their final id', () => {
+    const report = FhirMapper.toDiagnosticReport({ resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'https://other.example/fhir/Observation/collision' }] } as any, [{ id: 'collision' }] as any)
+    expect(report._observations).toEqual([])
+  })
+
+  it('does not choose an arbitrary observation when a logical id is ambiguous', () => {
+    const report = FhirMapper.toDiagnosticReport({ resourceType: 'DiagnosticReport', id: 'report', result: [{ reference: 'Observation/collision' }] } as any, [{ id: 'collision', valueString: 'a' }, { id: 'collision', valueString: 'b' }] as any)
+    expect(report._observations).toEqual([])
   })
 })

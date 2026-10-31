@@ -16,7 +16,7 @@ import {
 } from '@/src/application/telemetry/usage-analytics'
 import { bucketDuration, classifyAiOutcome, nowMs } from '@/src/application/telemetry/ai-outcome'
 import type { AiResultStore } from './create-ai-result-store'
-import { beginCollectorObservation } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, type CollectorOperation } from '@/src/application/telemetry/collector'
 import type { SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 
 /** Per-run measurements only; never stored in the clinical result/cache. */
@@ -48,22 +48,47 @@ export interface AiResultAnalytics {
   fedCounts?: Partial<FedResourceCounts>
 }
 
+/**
+ * Measurements only the producer can take, read back after it settles. They
+ * are separate from `AiResultAnalytics` because the caller cannot know them
+ * before `produce()` has streamed: a surface that publishes progressively
+ * knows when its FIRST section became visible, and on a slow endpoint that is
+ * a different reliability fact from the end-to-end duration.
+ */
+export interface AiRunMetrics {
+  /** Milliseconds from the start of the run to the first published section. */
+  firstCardMs?: number
+}
+
 export async function runGenerationJob<T>(options: {
   store: AiResultStore<T>
   /** Slot key the result / loading / error land under. */
   key: string
   /** Encrypted-session-cache key — each feature keeps its historical format. */
   cacheKey: string
-  /** Streams + parses one reply; null = parse failed (after any internal retry). */
-  produce: (measure: (result: AiGenerationMeasurement) => void) => Promise<T | null>
+  /** Streams + parses one reply; null = parse failed (after any internal retry).
+   *  `identifySummaryRun` names the random diagnostic run so the operation event
+   *  can be joined to its attempt events; it never affects the result. */
+  produce: (
+    measure: (result: AiGenerationMeasurement) => void,
+    identifySummaryRun: (runId: string) => void,
+    /** Scopes this run's AI requests into its one operation event. */
+    operation?: CollectorOperation,
+  ) => Promise<T | null>
   /** A user cancellation invalidates the run without surfacing an error. */
   shouldCommit?: () => boolean
   /** Opt in to the `ai_result` reliability event. Omit and nothing is sent. */
   analytics?: AiResultAnalytics
+  /** Read once, after the run settles, for measurements the producer took. */
+  readRunMetrics?: () => AiRunMetrics | undefined
 }): Promise<T | null> {
-  const { store, key, cacheKey, produce, shouldCommit = () => true, analytics } = options
+  const {
+    store, key, cacheKey, produce, shouldCommit = () => true, analytics, readRunMetrics,
+  } = options
   // Never double-start the same slot's generation.
   if (store.getState().running[key]) return null
+  const previousResult = store.getState().byKey[key]
+  let accepted = false
   const bundleRevision = store.getState().bundleRevision
   const isCurrentBundle = () => store.getState().bundleRevision === bundleRevision
   const {
@@ -84,15 +109,16 @@ export async function runGenerationJob<T>(options: {
     contextTrimmed: analytics.contextTrimmed,
   }) : undefined
   let reported = false
+  let summaryRunId: string | undefined
   const report = (outcome: AiOutcome, summaryCards?: SummaryCardCounts) => {
     if (reported || !analytics) return
     reported = true
-    collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown', summaryCards })
-    reportAiResult(analytics, outcome, nowMs() - startedAt)
+    collector?.finish({ outcome, phase: outcome === 'parse_failed' ? 'parse' : 'unknown', summaryCards, summaryRunId })
+    reportAiResult(analytics, outcome, nowMs() - startedAt, readRunMetrics?.())
   }
   try {
     let measurement: AiGenerationMeasurement | undefined
-    const parsed = await produce((result) => { measurement = result })
+    const parsed = await produce((result) => { measurement = result }, (runId) => { summaryRunId = runId }, collector?.operation)
     // A cancelled or superseded run is not a failure of the model.
     if (!isCurrentBundle() || !shouldCommit()) {
       report('aborted')
@@ -106,6 +132,7 @@ export async function runGenerationJob<T>(options: {
     report(measurement?.outcome ?? 'ok', measurement?.summaryCards)
     // Always commit to THIS run's own slot — even if the user has since
     // switched away, the result is stored and shows when they switch back.
+    accepted = true
     setResult(key, parsed)
     // Encryption is deliberately outside the visible running lifecycle. The
     // post-encryption guard keeps writes ordered without making the user wait:
@@ -123,7 +150,15 @@ export async function runGenerationJob<T>(options: {
     }
     return null
   } finally {
-    if (isCurrentBundle()) setRunning(key, false)
+    if (isCurrentBundle()) {
+      // Producer previews are provisional. A cancelled run must not replace a
+      // previously completed artifact, and cannot restore across Bundle epochs.
+      if (!accepted && !shouldCommit()) {
+        if (previousResult === undefined) store.getState().clear(key)
+        else setResult(key, previousResult)
+      }
+      setRunning(key, false)
+    }
   }
 }
 
@@ -131,12 +166,18 @@ function reportAiResult(
   analytics: AiResultAnalytics,
   outcome: AiOutcome,
   durationMs: number,
+  metrics?: AiRunMetrics,
 ): void {
   trackEvent('ai_result', {
     surface: analytics.surface,
     outcome,
     model_id: analytics.modelId,
     duration_bucket: bucketDuration(durationMs),
+    // Bucketed like every other timing on this event: the same rule that keeps
+    // an exact duration off it applies to the time-to-first-section.
+    ...(typeof metrics?.firstCardMs === 'number'
+      ? { first_card_bucket: bucketDuration(metrics.firstCardMs) }
+      : {}),
     // Spread rather than assigned: an absent measurement must leave the key
     // off the event entirely, not sit on it as `undefined` or 0 — "we could
     // not measure" and "we measured nothing" are different findings.

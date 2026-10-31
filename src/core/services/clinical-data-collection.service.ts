@@ -28,6 +28,9 @@ export class ClinicalDataCollectionService {
     }
 
     return {
+      ...(data.clinicalSource ? { clinicalSource: data.clinicalSource } : {}),
+      ...(data.sourceMetadata ? { sourceMetadata: data.sourceMetadata } : {}),
+      ...(data.resourceQueryStatus ? { resourceQueryStatus: data.resourceQueryStatus } : {}),
       conditions: data.conditions || [],
       medications: data.medications || [],
       medicationRemainingSummaries: data.medicationRemainingSummaries || [],
