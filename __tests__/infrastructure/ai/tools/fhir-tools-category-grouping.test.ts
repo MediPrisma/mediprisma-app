@@ -294,9 +294,23 @@ describe('percent written as text is a percentage', () => {
       { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '60%' },
       { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '58 ％' },
       lab('Neutrophil', undefined, 4.1, '10^3/uL'),
-      { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '3.9' },
+      lab('Neutrophil', undefined, 3900, '/uL'),
     ]).queryLabResultsByCategory as any).execute({ category: 'cbc', withTrend: true })
     expect(result.analyteCount).toBe(2)
     expect(result.data.map((g: any) => g.observationCount).sort()).toEqual([2, 3])
+  })
+
+  // A white-cell differential value with no unit at all: above 100 it cannot
+  // be a percentage (the count); 100 or less is read as the percentage.
+  it('files a unitless differential value by its size', async () => {
+    const result = await (toolsFor([
+      lab('Neutrophil', undefined, 62, '%'),
+      { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '3.9' },
+      lab('Neutrophil', undefined, 3900, '/uL'),
+      { ...lab('Neutrophil', undefined, 0), valueQuantity: undefined, valueString: '4100' },
+    ]).queryLabResultsByCategory as any).execute({ category: 'cbc', withTrend: true })
+    expect(result.analyteCount).toBe(2)
+    const byKey = Object.fromEntries(result.data.map((g: any) => [g.canonicalKey, g.observationCount]))
+    expect(byKey).toEqual({ NEU: 2, ANC: 2 })
   })
 })

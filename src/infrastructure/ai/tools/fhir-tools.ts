@@ -88,7 +88,7 @@ import {
   compareTestsByPreferred,
   isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
-import { getLabPivotTestIdentity, isKnownPivotKey } from '@/src/shared/utils/lab-pivot.utils'
+import { getLabPivotTestIdentity, isKnownPivotKey, isUnitlessDifferentialPercent } from '@/src/shared/utils/lab-pivot.utils'
 import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
 import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
@@ -595,9 +595,11 @@ export function labCategoryAnalyte(observation: any, category: string): {
   loinc?: string
   family: LabValueFamily
 } {
-  const family = labValueFamily(observation)
   const loinc = loincOf(observation?.code)
   const identity = getLabPivotTestIdentity(observation, category)
+  // A unitless differential value the cumulative report files as a
+  // percentage (100 or less) is grouped and labelled with the % rows.
+  const family = isUnitlessDifferentialPercent(observation, identity.testKey) ? 'percent' : labValueFamily(observation)
   const known = isKnownPivotKey(identity.testKey)
   const label = known
     ? getLabRowDisplayParts(identity, 'medical', 'en').name

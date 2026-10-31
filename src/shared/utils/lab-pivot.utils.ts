@@ -45,6 +45,7 @@ import {
   isNhiMedicloudObservation,
 } from '@/src/shared/utils/observation-provenance.utils'
 import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
+import { foldNumericText, NUMBER_PATTERN, valueUnitFamily } from '@/src/shared/utils/lab-value-grammar'
 
 export interface LabCell {
   adultPreventive?: boolean
@@ -376,11 +377,8 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   // the source NAME happened to match an alias — a bilingual "嗜鹼性白血球 /
   // Basophil" or "尿糖 / Glucose" split into a column of its own. Every code
   // verified against NLM Clinical Table Search (LONG_COMMON_NAME quoted).
-  '706-2': 'BASO',   // Basophils/Leukocytes in Blood by Automated count
-  '713-8': 'EOS',    // Eosinophils/Leukocytes in Blood by Automated count
-  '736-9': 'LYM',    // Lymphocytes/Leukocytes in Blood by Automated count
-  '5905-5': 'MONO',  // Monocytes/Leukocytes in Blood by Automated count
-  '770-8': 'NEU',    // Neutrophils/Leukocytes in Blood by Automated count
+  // (The differential percentages 706-2 / 713-8 / 736-9 / 5905-5 / 770-8 now
+  // live in DIFFERENTIAL_LOINC_TO_KEY below, beside their #/volume twins.)
   '18262-6': 'LDL',  // Cholesterol in LDL [Mass/volume] in Serum or Plasma by Direct assay
   '22763-7': 'AMMONIA', // Ammonia [Mass/volume] in Plasma
   // High-sensitivity troponins keep their own rows, never TROP: results from
@@ -403,6 +401,191 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   // Pediatric eGFR is its own formula and column, never EGFR(M) (tx.fhir.org,
   // LOINC 2.82, verified 2026-10-13).
   '50384-7': 'EGFR(PED)', // Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by Creatinine-based formula (Schwartz)/1.73 sq M
+}
+
+// ── Differential: absolute count versus percentage ──────────────────────────
+// A white-cell differential (and the reticulocyte count) is reported two ways:
+// as an absolute count (LOINC property NCnc, units /µL, 10^3/µL, x10^9/L) and
+// as a share of the parent cells (property NFr, unit %). Hospitals send both
+// under ONE label — 「嗜中性白血球 / Neutrophil」 for 751-8 and for 770-8 — so a
+// name-based key put 3.2 (10^3/µL) beside 55 (%) in one column and drew one
+// trend through them. The percentage keeps the established column (NEU, LYM,
+// …); the count goes to its absolute-count column, after the existing ANC.
+
+/** Percentage key → absolute-count key. */
+const COUNT_KEY_FOR_FRACTION_KEY: Readonly<Record<string, string>> = {
+  NEU: 'ANC',
+  LYM: 'ALC',
+  MONO: 'AMC',
+  EOS: 'AEC',
+  BASO: 'ABC',
+  BAND: 'BAND-ABS',
+  BLAST: 'BLAST-ABS',
+  PROMYELOCYTE: 'PROMYELOCYTE-ABS',
+  MYELOCYTE: 'MYELOCYTE-ABS',
+  'META-MYELOCYTE': 'META-MYELOCYTE-ABS',
+  NORMOBLAST: 'NORMOBLAST-ABS',
+  'PLASMA-CELL': 'PLASMA-CELL-ABS',
+  RETIC: 'ARC',
+}
+
+const FRACTION_KEY_FOR_COUNT_KEY: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(COUNT_KEY_FOR_FRACTION_KEY).map(([fraction, count]) => [count, fraction]),
+)
+
+/** Every absolute-count column key (ANC itself comes from the shared package). */
+export const DIFFERENTIAL_COUNT_KEYS: ReadonlySet<string> = new Set(Object.values(COUNT_KEY_FOR_FRACTION_KEY))
+
+/**
+ * LOINC codes whose PROPERTY (NCnc #/volume, NFr fraction) decides the column.
+ * Consulted before the shared package table, which files 711-2 (#/volume)
+ * under EOS and 14196-0 (#/volume) under RETIC. Every code and its property
+ * verified with tx.fhir.org CodeSystem/$lookup (LOINC 2.82), 2026-10-09.
+ */
+const DIFFERENTIAL_LOINC_TO_KEY: Readonly<Record<string, string>> = {
+  // Neutrophils (segmented neutrophils are the same column, as SEG → NEU is)
+  '751-8': 'ANC',    // Neutrophils [#/volume] in Blood by Automated count — NCnc
+  '753-4': 'ANC',    // Neutrophils [#/volume] in Blood by Manual count — NCnc
+  '26499-4': 'ANC',  // Neutrophils [#/volume] in Blood — NCnc
+  '768-2': 'ANC',    // Segmented neutrophils [#/volume] in Blood by Manual count — NCnc
+  '30451-9': 'ANC',  // Segmented neutrophils [#/volume] in Blood — NCnc
+  '770-8': 'NEU',    // Neutrophils/Leukocytes in Blood by Automated count — NFr
+  '23761-0': 'NEU',  // Neutrophils/Leukocytes in Blood by Manual count — NFr
+  '26511-6': 'NEU',  // Neutrophils/Leukocytes in Blood — NFr
+  '769-0': 'NEU',    // Segmented neutrophils/Leukocytes in Blood by Manual count — NFr
+  // Band forms
+  '763-3': 'BAND-ABS',  // Band form neutrophils [#/volume] in Blood by Manual count — NCnc
+  '26507-4': 'BAND-ABS', // Band form neutrophils [#/volume] in Blood — NCnc
+  '764-1': 'BAND',   // Band form neutrophils/Leukocytes in Blood by Manual count — NFr
+  '26508-2': 'BAND', // Band form neutrophils/Leukocytes in Blood — NFr
+  '35332-6': 'BAND', // Band form neutrophils/Leukocytes in Blood by Automated count — NFr
+  // Lymphocytes
+  '731-0': 'ALC',    // Lymphocytes [#/volume] in Blood by Automated count — NCnc
+  '732-8': 'ALC',    // Lymphocytes [#/volume] in Blood by Manual count — NCnc
+  '26474-7': 'ALC',  // Lymphocytes [#/volume] in Blood — NCnc
+  '736-9': 'LYM',    // Lymphocytes/Leukocytes in Blood by Automated count — NFr
+  '737-7': 'LYM',    // Lymphocytes/Leukocytes in Blood by Manual count — NFr
+  '26478-8': 'LYM',  // Lymphocytes/Leukocytes in Blood — NFr
+  // Monocytes
+  '742-7': 'AMC',    // Monocytes [#/volume] in Blood by Automated count — NCnc
+  '743-5': 'AMC',    // Monocytes [#/volume] in Blood by Manual count — NCnc
+  '26484-6': 'AMC',  // Monocytes [#/volume] in Blood — NCnc
+  '5905-5': 'MONO',  // Monocytes/Leukocytes in Blood by Automated count — NFr
+  '744-3': 'MONO',   // Monocytes/Leukocytes in Blood by Manual count — NFr
+  '26485-3': 'MONO', // Monocytes/Leukocytes in Blood — NFr
+  // Eosinophils
+  '711-2': 'AEC',    // Eosinophils [#/volume] in Blood by Automated count — NCnc
+  '712-0': 'AEC',    // Eosinophils [#/volume] in Blood by Manual count — NCnc
+  '26449-9': 'AEC',  // Eosinophils [#/volume] in Blood — NCnc
+  '713-8': 'EOS',    // Eosinophils/Leukocytes in Blood by Automated count — NFr
+  '714-6': 'EOS',    // Eosinophils/Leukocytes in Blood by Manual count — NFr
+  '26450-7': 'EOS',  // Eosinophils/Leukocytes in Blood — NFr
+  // Basophils
+  '704-7': 'ABC',    // Basophils [#/volume] in Blood by Automated count — NCnc
+  '705-4': 'ABC',    // Basophils [#/volume] in Blood by Manual count — NCnc
+  '26444-0': 'ABC',  // Basophils [#/volume] in Blood — NCnc
+  '706-2': 'BASO',   // Basophils/Leukocytes in Blood by Automated count — NFr
+  '707-0': 'BASO',   // Basophils/Leukocytes in Blood by Manual count — NFr
+  '30180-4': 'BASO', // Basophils/Leukocytes in Blood — NFr
+  // Blasts and nucleated red cells
+  '30376-8': 'BLAST-ABS', // Blasts [#/volume] in Blood — NCnc
+  '709-6': 'BLAST',  // Blasts/Leukocytes in Blood by Manual count — NFr
+  '771-6': 'NORMOBLAST-ABS', // Nucleated erythrocytes [#/volume] in Blood by Automated count — NCnc
+  // Reticulocytes
+  '14196-0': 'ARC',  // Reticulocytes [#/volume] in Blood — NCnc
+  '60474-4': 'ARC',  // Reticulocytes [#/volume] in Blood by Automated count — NCnc
+  '17849-1': 'RETIC', // Reticulocytes/Erythrocytes in Blood by Automated count — NFr
+  '4679-7': 'RETIC', // Reticulocytes/Erythrocytes in Blood — NFr
+}
+
+/** Display labels for the absolute-count columns (the header and the picker). */
+export const DIFFERENTIAL_COUNT_LABELS: Readonly<Record<string, { short: string; zh: string; en: string }>> = {
+  ALC: { short: 'ALC', zh: '絕對淋巴球計數', en: 'Absolute lymphocyte count' },
+  AMC: { short: 'AMC', zh: '絕對單核球計數', en: 'Absolute monocyte count' },
+  AEC: { short: 'AEC', zh: '絕對嗜伊紅性白血球計數', en: 'Absolute eosinophil count' },
+  ABC: { short: 'ABC', zh: '絕對嗜鹼性白血球計數', en: 'Absolute basophil count' },
+  'BAND-ABS': { short: 'Band#', zh: '帶狀嗜中性白血球絕對計數', en: 'Absolute band count' },
+  'BLAST-ABS': { short: 'Blast#', zh: '芽細胞絕對計數', en: 'Absolute blast count' },
+  'PROMYELOCYTE-ABS': { short: 'Promyl.#', zh: '前骨髓球絕對計數', en: 'Absolute promyelocyte count' },
+  'MYELOCYTE-ABS': { short: 'Myelo.#', zh: '骨髓球絕對計數', en: 'Absolute myelocyte count' },
+  'META-MYELOCYTE-ABS': { short: 'Meta#', zh: '後骨髓球絕對計數', en: 'Absolute metamyelocyte count' },
+  'NORMOBLAST-ABS': { short: 'Normobl.#', zh: '有核紅血球絕對計數', en: 'Absolute nucleated RBC count' },
+  'PLASMA-CELL-ABS': { short: 'PlasmaCell#', zh: '漿細胞絕對計數', en: 'Absolute plasma cell count' },
+  ARC: { short: 'ARC', zh: '絕對網狀紅血球計數', en: 'Absolute reticulocyte count' },
+}
+
+/** The count / percentage column a differential LOINC declares, if any. */
+export function differentialLoincKey(loinc: string): string | undefined {
+  return DIFFERENTIAL_LOINC_TO_KEY[loinc.trim()]
+}
+
+/** LOINC Scale of a declared differential LOINC: every one is quantitative
+ *  (Qn). Count (NCnc) and fraction (NFr) codes never share a declared key —
+ *  751-8 → ANC, 770-8 → NEU — so one scale cannot merge a count with a %. */
+export function differentialLoincScale(loinc: string): 'Qn' | undefined {
+  return DIFFERENTIAL_LOINC_TO_KEY[loinc.trim()] ? 'Qn' : undefined
+}
+
+function differentialKeyFromLoinc(obs: any): string | undefined {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const coding of codings) {
+    // A system-less coding is read as LOINC, as the shared package reads it.
+    if (typeof coding?.code !== 'string') continue
+    if (coding.system !== undefined && coding.system !== FHIR_SYSTEMS.LOINC) continue
+    const key = DIFFERENTIAL_LOINC_TO_KEY[coding.code.trim()]
+    if (key) return key
+  }
+  return undefined
+}
+
+
+/**
+ * The column a differential result belongs in, given the key its name (or
+ * another table) resolved to. LOINC property first; otherwise the unit
+ * family; otherwise the key unchanged. Exported so callers that start from the
+ * shared package key (calculator autofill) land on the same column.
+ */
+export function countFractionAwareKey(obs: any, key: string): string {
+  const fromLoinc = differentialKeyFromLoinc(obs)
+  if (fromLoinc) return fromLoinc
+  const countKey = COUNT_KEY_FOR_FRACTION_KEY[key]
+  const fractionKey = FRACTION_KEY_FOR_COUNT_KEY[key]
+  if (!countKey && !fractionKey) return key
+  // One grammar with the AI value family: Quantity, Range bounds, or a
+  // number printed as text with its unit; UCUM code first, then unit text.
+  const family = valueUnitFamily(obs)
+  if (family === 'count' && countKey) return countKey
+  if (family === 'fraction' && fractionKey) return fractionKey
+  // No unit at all under a shared name (Neutrophil → NEU): a white-cell
+  // differential value above 100 cannot be a percentage, so it is the count;
+  // 100 or less stays the percentage. A count-named source (ANC) keeps its
+  // count column. Reticulocytes are not judged by value.
+  if (family === null && countKey && key !== 'RETIC' && (unitlessNumber(obs) ?? 0) > 100) return countKey
+  return key
+}
+
+const BARE_NUMBER_RE = new RegExp(String.raw`^\s*(${NUMBER_PATTERN})\s*$`)
+
+/** The value of a result written with no unit at all: a Quantity without
+ *  unit or code, an Integer / Decimal, or text holding only one number. */
+function unitlessNumber(obs: any): number | undefined {
+  const quantity = obs?.valueQuantity
+  if (quantity && typeof quantity.value === 'number') {
+    return !String(quantity.unit ?? '').trim() && !String(quantity.code ?? '').trim() ? quantity.value : undefined
+  }
+  if (typeof obs?.valueInteger === 'number') return obs.valueInteger
+  if (typeof obs?.valueDecimal === 'number') return obs.valueDecimal
+  if (typeof obs?.valueString !== 'string') return undefined
+  const match = foldNumericText(obs.valueString).match(BARE_NUMBER_RE)
+  return match ? Number(match[1].replace(/,/g, '')) : undefined
+}
+
+/** True when a unitless white-cell differential value sits in a percentage
+ *  column (see countFractionAwareKey): the AI groups it with the % rows. */
+export function isUnitlessDifferentialPercent(obs: any, key: string): boolean {
+  if (!COUNT_KEY_FOR_FRACTION_KEY[key] || key === 'RETIC' || valueUnitFamily(obs) !== null) return false
+  const value = unitlessNumber(obs)
+  return value !== undefined && value >= 0 && value <= 100
 }
 
 const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
@@ -578,6 +761,7 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   // 免疫 電泳／輕鏈 fixed columns (English here; getLabRowDisplayParts gives
   // each language its own header via paraproteinDisplay).
   ...Object.fromEntries(PARAPROTEIN_COLUMN_ORDER.map((key) => [key, paraproteinDisplay(key, 'en')!])),
+  ...Object.fromEntries(Object.entries(DIFFERENTIAL_COUNT_LABELS).map(([key, label]) => [key, label.short])),
 }
 
 /** Canonical labels supplied by the app while the shared normalization
@@ -589,7 +773,13 @@ export function getLabCompatibilityCanonicalDisplay(testKey: string): string | u
 
 // Returns the canonical analyte name (alias-resolved display key).
 // Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
+// A differential count and its percentage share one source name, so the key
+// the name resolves to is then split by LOINC property / unit family.
 function canonicalTestKey(obs: any): string {
+  return countFractionAwareKey(obs, sourceAnalyteKey(obs))
+}
+
+function sourceAnalyteKey(obs: any): string {
   // 1. LOINC is the authoritative analyte identifier. Trust whatever the
   //    bridge attaches — if it's wrong, the fix belongs at the bridge layer,
   //    not in app-side display-string heuristics.
