@@ -57,7 +57,7 @@
         "subject": {
           "reference": "Patient/sim-p13"
         },
-        "status": "active",
+        "status": "unknown",
         "intent": "order",
         "medicationCodeableConcept": {
           "text": "amlodipine/valsartan"
@@ -97,7 +97,7 @@
         "subject": {
           "reference": "Patient/sim-p13"
         },
-        "status": "active",
+        "status": "unknown",
         "intent": "order",
         "medicationCodeableConcept": {
           "text": "celecoxib"
@@ -527,6 +527,286 @@
         "valueQuantity": {
           "value": 1.8,
           "unit": "mIU/L"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2025-11-06",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2025-11-06",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2026-01-08",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2026-01-08",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2026-03-05",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2026-03-05",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2026-05-07",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2026-05-07",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2026-07-09",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2026-07-09",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2026-08-06",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2026-08-06",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2026-09-03",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "unknown",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2026-09-03",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
         }
       }
     }
