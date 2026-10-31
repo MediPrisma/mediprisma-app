@@ -59,8 +59,20 @@ const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
   ['hematologic-lymph', /\b(?:lymph(?:\s+nodes?|adenopathy|oma)s?|marrow)\b|淋巴結|骨髓/iu],
 ]
 
+// "No lung lesion." names an organ the finding is not in.
+const NEGATED_CLAUSE = /^(?:(?:no|not|without|negative for|free of|absence of)\b|無|未見|未發現|沒有)/iu
+
+function affirmedClauses(quote: string): string[] {
+  return quote.split(/[.;,。；，\n]+|\bbut\b/iu).map(clause => clause.trim()).filter(Boolean)
+}
+
 export function reportOrganFromQuotes(proposed: ReportOrgan, quotes: readonly string[], sourceNarratives: readonly string[] = []): ReportOrgan {
-  const matches = new Set(ANATOMY.filter(([, pattern]) => quotes.some(quote => pattern.test(quote))).map(([organ]) => organ))
+  const clauses = quotes.flatMap(affirmedClauses)
+  const affirmed = clauses.filter(clause => !NEGATED_CLAUSE.test(clause))
+  const matches = new Set(ANATOMY.filter(([, pattern]) => affirmed.some(clause => pattern.test(clause))).map(([organ]) => organ))
+  // Only negated anatomy: no evidence either way, so the model's grouping stays.
+  if (matches.size === 0 && affirmed.length < clauses.length &&
+    ANATOMY.some(([, pattern]) => clauses.some(clause => NEGATED_CLAUSE.test(clause) && pattern.test(clause)))) return proposed
   if (matches.size === 1) return [...matches][0]
   if (matches.size > 1 && !matches.has(proposed)) return 'other'
   // A short verified quote (e.g. "Fracture") need not repeat the specimen.

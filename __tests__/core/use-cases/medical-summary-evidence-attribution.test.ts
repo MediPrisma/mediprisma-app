@@ -125,3 +125,45 @@ test.each(['local-small', 'frontier'])('uses the same general evidence rule for 
   expect(system).toContain(LAB_SOURCE_EVIDENCE_RULE)
   expect(LAB_SOURCE_EVIDENCE_RULE).not.toMatch(/patient[145]|MINIRIN|1544|1547|OCCULT|urine|thyroid/i)
 })
+
+test('an older panel not covered by the cited Observation keeps its value under review', () => {
+  const history: any = {
+    observations: [
+      { id: 'na-old', code: { text: 'Na' }, valueQuantity: { value: 139, unit: 'mmol/L' }, effectiveDateTime: '2025-07-01' },
+      { id: 'k-old', code: { text: 'K' }, valueQuantity: { value: 4.0, unit: 'mmol/L' }, effectiveDateTime: '2025-07-01' },
+      { id: 'na-new', code: { text: 'Na' }, valueQuantity: { value: 140, unit: 'mmol/L' }, effectiveDateTime: '2026-07-01' },
+    ],
+    diagnosticReports: [{ id: 'old-panel', code: { text: 'Electrolyte panel' }, result: [{ reference: 'Observation/na-old' }, { reference: 'Observation/k-old' }], effectiveDateTime: '2025-07-01' }],
+  }
+  const sources = buildSourceCatalog(history)
+  const k = (id: string) => sources.find(entry => entry.resourceId === id)!.key
+  const result = useCase.finalizeResult({ headline: '', problems: [{ label: 'Finding', metric: 'Na 139 → 140 mmol/L', metricSources: [k('old-panel'), k('na-new')] }] } as any, sources, { clinicalData: history }).problems[0]
+  expect(result.metricNeedsReview).toBe(true)
+  expect(result.metric).toContain('139')
+  expect(result.metric).toContain('140')
+})
+
+test.each([
+  ['different range units', { low: { value: 3, unit: 'µg/L' }, high: { value: 4, unit: 'µg/L' } }, undefined],
+  ['range then quantity in another unit', undefined, { value: 3.5, unit: 'µg/L' }],
+])('does not draw a trend across %s', (_name, laterRange, laterQuantity) => {
+  const history: any = { observations: [
+    { id: 'alb-1', code: { text: 'Albumin' }, valueRange: { low: { value: 1, unit: 'mg/L' }, high: { value: 2, unit: 'mg/L' } }, effectiveDateTime: '2025-07-01' },
+    { id: 'alb-2', code: { text: 'Albumin' }, ...(laterRange ? { valueRange: laterRange } : { valueQuantity: laterQuantity }), effectiveDateTime: '2026-07-01' },
+  ] }
+  const sources = buildSourceCatalog(history)
+  const k = (id: string) => sources.find(entry => entry.resourceId === id)!.key
+  const result = useCase.finalizeResult({ headline: '', problems: [{ label: 'Finding', metric: 'ALB', metricSources: [k('alb-1'), k('alb-2')] }] } as any, sources, { clinicalData: history }).problems[0]
+  expect(result.metric).not.toContain('→')
+  expect(result.metric).toContain('(2025-07-01)')
+})
+
+test('ranges in one unit still form a trend with the unit written once', () => {
+  const history: any = { observations: [
+    { id: 'c-1', code: { text: 'WBC/HPF' }, valueRange: { low: { value: 1, unit: '/HPF' }, high: { value: 2, unit: '/HPF' } }, effectiveDateTime: '2025-07-01' },
+    { id: 'c-2', code: { text: 'WBC/HPF' }, valueRange: { low: { value: 6, unit: '/HPF' }, high: { value: 9, unit: '/HPF' } }, effectiveDateTime: '2026-07-01' },
+  ] }
+  const sources = buildSourceCatalog(history)
+  const result = useCase.finalizeResult({ headline: '', problems: [{ label: 'Finding', metric: 'WBC', metricSources: sources.map(entry => entry.key) }] } as any, sources, { clinicalData: history }).problems[0]
+  expect(result.metric).toMatch(/1–2 → 6–9 \/HPF$/)
+})

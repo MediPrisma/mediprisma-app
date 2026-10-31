@@ -1640,6 +1640,17 @@ function labValueText(observation: ObservationEntity): string | null {
   return obsValue(observation)
 }
 
+/** The unit a value is compared in. A range whose ends disagree has no single unit. */
+function labValueUnit(observation: ObservationEntity): string | undefined {
+  if (typeof observation.valueQuantity?.value === 'number') return observation.valueQuantity.unit?.trim() || undefined
+  const range = observation.valueRange
+  const units = [range?.low, range?.high]
+    .filter(bound => typeof bound?.value === 'number')
+    .map(bound => bound!.unit?.trim() ?? '')
+  if (new Set(units).size > 1) return units.join('–')
+  return units[0] || undefined
+}
+
 /**
  * A short test name for one value in a problem row, and the key its serial
  * values are grouped under. eGFR rows render the record's own long name
@@ -1731,7 +1742,7 @@ function composeLabMetric(
         }).filter(Boolean),
         date: obsDate(observation) ?? entry.date ?? '',
         value,
-        unit: unitless ? undefined : observation.valueQuantity?.unit?.trim() || undefined,
+        unit: unitless ? undefined : labValueUnit(observation),
         id: observation.id ?? `${key}:${label}:${value}`,
         abnormal: observationAbnormality(observation),
         oneADay: unitless,
@@ -2989,7 +3000,15 @@ export class GenerateMedicalSummaryUseCase {
         return report && observationsForReport(report, observationsById).length > 1
       })
       const individualKeys = metricKeys.filter(key => byKey.get(key)?.resourceType === 'Observation')
-      const labKeys = individualKeys.length ? metricKeys.filter(key => !panelKeys.includes(key)) : metricKeys
+      // A panel is redundant only when one of its own results is also cited
+      // individually; an older panel beside a newer single result still holds
+      // a value of its own, so it stays and the metric is marked for review.
+      const citedObservationIds = new Set(individualKeys.map(key => byKey.get(key)?.resourceId))
+      const redundantPanelKeys = panelKeys.filter(key => {
+        const report = reportsById.get(byKey.get(key)?.resourceId ?? '')
+        return report ? observationsForReport(report, observationsById).some(observation => citedObservationIds.has(observation.id)) : false
+      })
+      const labKeys = metricKeys.filter(key => !redundantPanelKeys.includes(key))
       const metricDates = labKeys
         .map((key) => byKey.get(key)?.date)
         .filter((date): date is string => Boolean(date))
@@ -3010,7 +3029,7 @@ export class GenerateMedicalSummaryUseCase {
       // the model copied. Keep the claim visible but unverified until it cites
       // individual Observations; never silently treat a valid panel key as
       // proof of a specific named value.
-      const ambiguousPanelMetric = Boolean(modelMetric) && panelKeys.length > 0 && (!individualKeys.length || !labMetric)
+      const ambiguousPanelMetric = Boolean(modelMetric) && panelKeys.length > 0 && (redundantPanelKeys.length < panelKeys.length || !labMetric)
       const labOnly = resolvedSources.length > 0 && resolvedSources.every(entry => entry.resourceType === 'Observation' || entry.resourceType === 'DiagnosticReport')
       const citedTests = resolvedSources.flatMap(entry => {
         if (entry.resourceType === 'Observation') {

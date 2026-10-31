@@ -139,3 +139,23 @@ test.each([
 ])('does not confuse morphological adjectives with organ identity: %s / %s', (organ, quote) => {
   expect(reportOrganFromQuotes(organ as any, [quote])).toBe(organ)
 })
+
+test.each([
+  ['abdomen-other', 'No lung lesion. Adrenal nodule.'],
+  ['abdomen-other', 'Adrenal nodule, without pleural effusion.'],
+  ['abdomen-other', '未見肺部病灶。腎上腺結節。'],
+])('an organ named only in a negated clause does not regroup the finding: %s / %s', (proposed, quote) => {
+  expect(reportOrganFromQuotes(proposed as any, [quote], ['Lung, adrenal, CT.'])).toBe(proposed)
+})
+
+test('a positive organ beside a negated one still regroups', () => {
+  expect(reportOrganFromQuotes('other', ['No lung lesion. Liver cyst.'])).toBe('abdomen-liver-biliary')
+})
+
+test('the real report finalizer keeps a negated organ from overriding the finding', () => {
+  const data: any = { diagnosticReports: [{ id: 'ct', code: { text: 'CT abdomen' }, category: [{ text: 'imaging' }], conclusion: 'No lung lesion. Adrenal nodule.', effectiveDateTime: '2026-01-01' }] }
+  const catalog = buildSourceCatalog(data)
+  const key = catalog.find(entry => entry.resourceId === 'ct')!.key
+  const result = finalizeReportHighlights({ groups: [{ organ: 'abdomen-other', points: [{ text: 'Adrenal nodule', sources: [key], quotes: [{ source: key, quote: 'No lung lesion. Adrenal nodule.' }] }] }], unremarkable: [] }, data, catalog)
+  expect(result.groups[0].organ).toBe('abdomen-other')
+})
