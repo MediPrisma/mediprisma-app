@@ -1,0 +1,324 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "sim-p14",
+        "name": [
+          {
+            "text": "模擬病人 P14"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1974-05-20"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-bp0",
+        "status": "final",
+        "effectiveDateTime": "2026-09-20",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9"
+            }
+          ]
+        },
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 148,
+              "unit": "mmHg"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 92,
+              "unit": "mmHg"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-bp",
+        "status": "final",
+        "effectiveDateTime": "2026-10-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9"
+            }
+          ]
+        },
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 152,
+              "unit": "mmHg"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 94,
+              "unit": "mmHg"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-hr",
+        "status": "final",
+        "effectiveDateTime": "2026-10-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 78,
+          "unit": "bpm"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-wt",
+        "status": "final",
+        "effectiveDateTime": "2026-10-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 64,
+          "unit": "kg"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-ht",
+        "status": "final",
+        "effectiveDateTime": "2026-09-20",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8302-2"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 160,
+          "unit": "cm"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-k",
+        "status": "final",
+        "effectiveDateTime": "2026-07-02",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2823-3"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 4.1,
+          "unit": "mmol/L"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-na",
+        "status": "final",
+        "effectiveDateTime": "2026-07-02",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2951-2"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 140,
+          "unit": "mmol/L"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-cr",
+        "status": "final",
+        "effectiveDateTime": "2026-07-02",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2160-0"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 0.7,
+          "unit": "mg/dL"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-egfr",
+        "status": "final",
+        "effectiveDateTime": "2026-07-02",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "77147-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 88,
+          "unit": "mL/min/1.73m2"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-a1c",
+        "status": "final",
+        "effectiveDateTime": "2026-07-02",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 5.6,
+          "unit": "%"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p14"
+        },
+        "id": "p14-ldl",
+        "status": "final",
+        "effectiveDateTime": "2026-07-02",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "13457-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 128,
+          "unit": "mg/dL"
+        }
+      }
+    }
+  ]
+}

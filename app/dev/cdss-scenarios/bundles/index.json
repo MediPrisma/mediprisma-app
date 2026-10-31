@@ -138,5 +138,22 @@
    "angina": "較少",
    "bleeding": "無"
   }
+ },
+ {
+  "id": "p13-htn-uncontrolled-home",
+  "title": "高血壓追蹤・院外未控制",
+  "kind": "follow-up",
+  "page": "htn",
+  "oneLine": "58 歲男，高血壓 2024 年確診，ARB＋CCB SPC；門診 126/76 在目標內，居家 146/92（隱蔽型未控制）；09 月曾開 celecoxib 14 天",
+  "visit": {},
+  "previousVisit": "2026-06-12"
+ },
+ {
+  "id": "p14-htn-suspected-untreated",
+  "title": "疑似高血壓・未治療",
+  "kind": "initial",
+  "page": "htn",
+  "oneLine": "52 歲女，兩次門診 148/92、152/94，沒有高血壓診斷碼、沒有降壓藥、沒有居家量測",
+  "visit": {}
  }
 ]

@@ -1,0 +1,534 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "sim-p13",
+        "name": [
+          {
+            "text": "模擬病人 P13"
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1968-03-02"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-I10",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10"
+            }
+          ]
+        },
+        "onsetDateTime": "2024-03-15",
+        "recordedDate": "2024-03-15"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "amlodipine-valsartan-2026-10-02",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "amlodipine/valsartan"
+        },
+        "authoredOn": "2026-10-02",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "tab"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "celecoxib-2026-09-02",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "celecoxib"
+        },
+        "authoredOn": "2026-09-02",
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 200,
+                  "unit": "mg"
+                }
+              }
+            ],
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              }
+            }
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 14,
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-bp0",
+        "status": "final",
+        "effectiveDateTime": "2026-06-12",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9"
+            }
+          ]
+        },
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 138,
+              "unit": "mmHg"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 86,
+              "unit": "mmHg"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-bp1",
+        "status": "final",
+        "effectiveDateTime": "2026-09-15",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9"
+            }
+          ]
+        },
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 132,
+              "unit": "mmHg"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 80,
+              "unit": "mmHg"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-bp",
+        "status": "final",
+        "effectiveDateTime": "2026-10-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9"
+            }
+          ]
+        },
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 126,
+              "unit": "mmHg"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4"
+                }
+              ]
+            },
+            "valueQuantity": {
+              "value": 76,
+              "unit": "mmHg"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-hr",
+        "status": "final",
+        "effectiveDateTime": "2026-10-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 72,
+          "unit": "bpm"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-wt",
+        "status": "final",
+        "effectiveDateTime": "2026-10-30",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 78,
+          "unit": "kg"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-ht",
+        "status": "final",
+        "effectiveDateTime": "2026-06-12",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8302-2"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 172,
+          "unit": "cm"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-k",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2823-3"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 4.3,
+          "unit": "mmol/L"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-na",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2951-2"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 139,
+          "unit": "mmol/L"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-cr",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2160-0"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 1.1,
+          "unit": "mg/dL"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-egfr",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "77147-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 72,
+          "unit": "mL/min/1.73m2"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-uacr",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "9318-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 18,
+          "unit": "mg/g"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-a1c",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 5.8,
+          "unit": "%"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-ldl",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "13457-7"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 112,
+          "unit": "mg/dL"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "subject": {
+          "reference": "Patient/sim-p13"
+        },
+        "id": "p13-tsh",
+        "status": "final",
+        "effectiveDateTime": "2026-08-14",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "3016-3"
+            }
+          ]
+        },
+        "valueQuantity": {
+          "value": 1.8,
+          "unit": "mIU/L"
+        }
+      }
+    }
+  ]
+}

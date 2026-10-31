@@ -12,7 +12,7 @@ export const ANSWER_VALUE = {
 }
 export const VISIT_KEY = { dyspnea: 'dyspnoea-trend', weight: 'weight-trend', afSymptoms: 'af-symptoms', bleeding: 'bleeding', angina: 'angina-trend' }
 // The disease a scenario's `page` opens on; heart failure is the host default.
-export const SCENARIO_PAGE_PACK = { af: 'atrial-fibrillation-cdss', cad: 'chronic-coronary-disease-cdss' }
+export const SCENARIO_PAGE_PACK = { af: 'atrial-fibrillation-cdss', cad: 'chronic-coronary-disease-cdss', htn: 'hypertension-cdss' }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const clean = (t) => (t || '').replace(/\s+/g, ' ').trim()
