@@ -58,6 +58,13 @@ describe('sanitizeOutpatientPrefs', () => {
     expect(prefs.activeFormatId).toBe('a')
   })
 
+  it('keeps the month-only date style and falls back to md for one it does not know', () => {
+    const prefs = sanitizeOutpatientPrefs({
+      formats: [{ id: 'a', dateStyle: 'monYy', tokens: [] }, { id: 'b', dateStyle: 'mmm', tokens: [] }],
+    })
+    expect(prefs.formats.map((format) => format.dateStyle)).toEqual(['monYy', 'md'])
+  })
+
   it('keeps a 最近 N 次 count only on value/date fields and only 2–5', () => {
     const tokens = sanitizeOutpatientPrefs({
       formats: [{
@@ -143,5 +150,15 @@ describe('useOutpatientPrefsStore', () => {
     expect(resolveOutpatientPrefsKey('acct', 'anon')).toBe('acct')
     expect(resolveOutpatientPrefsKey(null, 'anon')).toBe('anon')
     expect(resolveOutpatientPrefsKey(null, null)).toBe('guest')
+  })
+})
+
+describe('clinician name (上次門診)', () => {
+  it('keeps a trimmed name and reads blank or invalid values as unset', () => {
+    expect(sanitizeOutpatientPrefs({ clinicianName: '  陳怡君 ' }).clinicianName).toBe('陳怡君')
+    expect(sanitizeOutpatientPrefs({ clinicianName: '   ' }).clinicianName).toBeNull()
+    expect(sanitizeOutpatientPrefs({ clinicianName: 42 }).clinicianName).toBeNull()
+    expect(sanitizeOutpatientPrefs({}).clinicianName).toBeNull()
+    expect(sanitizeOutpatientPrefs({ clinicianName: 'x'.repeat(80) }).clinicianName).toHaveLength(40)
   })
 })

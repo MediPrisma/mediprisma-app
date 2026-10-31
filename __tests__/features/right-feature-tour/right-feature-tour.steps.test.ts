@@ -1,18 +1,9 @@
 import { getRightTourSteps } from '@/features/right-feature-tour/right-feature-tour.steps'
-import { CUSTOM_SUMMARY_CHAPTERS, isCustomSummaryEditorTourStep } from '@/features/right-feature-tour/right-feature-tour.store'
+import { CUSTOM_SUMMARY_CHAPTERS } from '@/features/right-feature-tour/right-feature-tour.store'
 
 const guest = { medical: true, authenticated: false, betaEnabled: false }
 
-describe('tour catalogue', () => {
-  it('keeps just one custom-summary introduction in Quick tour and never opens its editor', () => {
-    const steps = getRightTourSteps('quick', guest)
-    expect(steps.filter((step) => step.id.startsWith('custom-summary')).map((step) => step.id)).toEqual(['custom-summary'])
-    expect(steps.some((step) => isCustomSummaryEditorTourStep(step.id))).toBe(false)
-    expect(steps[0].id).toBe('overview')
-    expect(steps.at(-1)?.id).toBe('finish')
-    expect(steps.find((step) => step.id === 'custom-summary')?.body['zh-TW']).toContain('專屬導覽')
-  })
-
+describe('custom-summary guide catalogue', () => {
   it('has a valid jump target for each chapter and skips only the signed-in sharing form for guests', () => {
     const guestSteps = getRightTourSteps('custom-summary', guest)
     const signedSteps = getRightTourSteps('custom-summary', { ...guest, authenticated: true })
@@ -40,14 +31,5 @@ describe('tour catalogue', () => {
 
     expect(readResult?.fallbackTarget).toContain('data-result-available="false"')
     expect(readResult?.fallbackGraceAttempts).toBe(0)
-  })
-
-  it('keeps medical-only and opt-in beta tools out of ineligible Quick tours', () => {
-    expect(getRightTourSteps('quick', { ...guest, medical: false }).some((step) => step.medicalOnly)).toBe(false)
-    // Beta needs no account, so neither does the step that points at the tab
-    // Beta reveals — a signed-out visitor with the switch on sees both.
-    expect(getRightTourSteps('quick', { ...guest, betaEnabled: true }).some((step) => step.id === 'guidance')).toBe(true)
-    expect(getRightTourSteps('quick', { ...guest, authenticated: true, betaEnabled: true }).some((step) => step.id === 'guidance')).toBe(true)
-    expect(getRightTourSteps('quick', guest).some((step) => step.betaOnly)).toBe(false)
   })
 })

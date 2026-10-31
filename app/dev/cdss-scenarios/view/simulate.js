@@ -3,13 +3,16 @@
 // the primary button of every point the map marks as today's (following each
 // chain to its next step) and records what was read and pressed. Exposed as
 // window.__cdssSimulate(visit).
-const ANSWER_VALUE = {
+export const ANSWER_VALUE = {
   'dyspnoea-trend': { 變差: 'worse', 穩定: 'stable', 進步: 'better' },
   'weight-trend': { 增加: 'up', 不變: 'same', 減少: 'down' },
   'af-symptoms': { 有: 'yes', 無: 'no' },
   bleeding: { 有: 'yes', 無: 'no' },
+  'angina-trend': { 更多: 'more', 一樣: 'same', 較少: 'less', 沒有: 'none' },
 }
-const VISIT_KEY = { dyspnea: 'dyspnoea-trend', weight: 'weight-trend', afSymptoms: 'af-symptoms', bleeding: 'bleeding' }
+export const VISIT_KEY = { dyspnea: 'dyspnoea-trend', weight: 'weight-trend', afSymptoms: 'af-symptoms', bleeding: 'bleeding', angina: 'angina-trend' }
+// The disease a scenario's `page` opens on; heart failure is the host default.
+export const SCENARIO_PAGE_PACK = { af: 'atrial-fibrillation-cdss', cad: 'chronic-coronary-disease-cdss' }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const clean = (t) => (t || '').replace(/\s+/g, ' ').trim()

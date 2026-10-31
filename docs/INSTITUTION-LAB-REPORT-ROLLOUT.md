@@ -68,7 +68,7 @@ workflow 沒有預設網址或 fallback；變數未設定時，既有 sender 判
    workflow 使用 `mediprisma-site-publish` environment；若該 environment
    有同名變數，先確認它沒有覆蓋 repository 的預期值。
    本次程式修改**不執行**這一步，也不新增 secret。
-5. 重新執行 `Sync app to mediprisma.tw/app` 的 master 發布流程。
+5. 以目前已在 `/app-staging` 的 master commit 執行 `Sync app to mediprisma.tw/app`（推上正式版，見 RELEASE-CHANNELS.md）。
    `NEXT_PUBLIC_*` 在建置時寫入 bundle；只改 GitHub 變數不會改到已發布的頁面。
    確認 workflow 與 mediprisma-site 的發布完成，再重新載入 `/app?site=vghtpe`。
 6. 從另一台院內工作站先選「僅連線測試」：院內應顯示 Connected，

@@ -241,16 +241,33 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
             key={`${source.reportId ?? 'source'}-${index}`}
             className="grid gap-0.5 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3"
           >
-            <span className="min-w-0 break-words text-foreground/90">{source.title}</span>
+            <span className="flex min-w-0 items-center gap-1 break-words text-foreground/90">
+              {source.title}
+              {source.narrative && (
+                <ObservationLongitudinalAction
+                  observation={{ code: { text: 'Report Summary' }, valueString: source.narrative }}
+                  title={source.title}
+                  sourceId={`report-source-history-${source.reportId ?? index}`}
+                  reportTitle={source.title}
+                  reportLookupTitle={source.title}
+                  stopPropagation
+                />
+              )}
+            </span>
             {source.codes.length > 0 && (
               <span className="break-all tabular-nums">
                 {labels.orderCode}: {source.codes.join(', ')}
               </span>
             )}
-            {source.reportId && (
+            {(source.sourceRecordId ?? source.reportId) && (
               <span className="break-all sm:col-span-2">
-                {labels.recordId}: {source.reportId}
+                {labels.recordId}: {source.sourceRecordId ?? source.reportId}
               </span>
+            )}
+            {source.narrative && (
+              <div className="whitespace-pre-wrap break-words text-foreground/90 sm:col-span-2">
+                {source.narrative}
+              </div>
             )}
           </li>
         ))}
@@ -531,7 +548,7 @@ function ReportPanelDetail({
         />
       )}
       {observations.map((obs, i) => (
-        <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
+        <ObservationBlock key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`} observation={obs} />
       ))}
       <SharedReportSources sources={sharedReportSources} />
     </div>
@@ -614,6 +631,7 @@ function VitalReportMetadata({
         {row.institution && (
           <ReportInstitutionLabel
             institution={row.institution}
+            hospitalSource={row.hospitalSource}
             locale={locale}
             className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none @min-[800px]:w-full @min-[800px]:max-w-full"
           />
@@ -821,7 +839,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
         {!hideMeta && (row.sourceProvenance === 'nhi-medicloud' ? (
           <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
         ) : row.institution ? (
-          <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
+          <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
         ) : null)}
         {!hideMeta && (
           <Tooltip>
@@ -1008,14 +1026,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                 )}
               </div>
             </div>
-            {row.sharedReportSources && row.sharedReportSources.length > 1 && (
-              <div
-                data-testid="shared-report-summary"
-                className="mt-1 text-xs leading-relaxed text-muted-foreground"
-              >
-                {t.reports.sharedReport.summary.replace('{count}', String(row.sharedReportSources.length))}
-              </div>
-            )}
             {hasText && (
               textExpanded ? (
                 <>
@@ -1141,7 +1151,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   {row.sourceProvenance === 'nhi-medicloud' ? (
                     <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
                   ) : row.institution ? (
-                    <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
+                    <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
                   ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1398,7 +1408,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     {row.sourceProvenance === 'nhi-medicloud' ? (
                       <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem]" />
                     ) : row.institution ? (
-                      <ReportInstitutionLabel institution={row.institution} locale={locale} className="max-w-[10rem]" />
+                      <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[10rem]" />
                     ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1461,19 +1471,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               )}
             </div>
           </AccordionTrigger>
-          {row.sharedReportSources && row.sharedReportSources.length > 1 && (
-            <div
-              data-testid="shared-report-summary"
-              className="px-2.5 pb-1.5 text-xs leading-relaxed text-muted-foreground"
-            >
-              {t.reports.sharedReport.summary.replace('{count}', String(row.sharedReportSources.length))}
-            </div>
-          )}
           <AccordionContent className="pb-0">
             <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (
                 <ObservationBlock
-                  key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
+                  key={obs.id ? `obs-${obs.id}-${i}` : `obs-${i}`}
                   observation={obs}
                   nested
                 />

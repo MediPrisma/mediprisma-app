@@ -1,3 +1,14 @@
+import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
+import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
+import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from '../mappers/clinical-medication-projection'
+import { reconcileClinicalSources, selectClinicalSourceNodes, type ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { clinicalSourceResourcesEqual } from '@/src/core/services/clinical-source-graph'
+import { clinicalSourceNodesEqualWithContext } from '@/src/core/services/clinical-source-context'
+import { getClinicalSourceNodePatientExclusionReason } from '@/src/core/services/clinical-patient-scope'
+import { createClinicalSourceProjectionIds } from '@/src/core/services/clinical-source-projection'
+import { scopedImportedClinicalRecordVariant } from '@/src/core/services/clinical-record-variants'
+import { createClinicalRecordResolution, selectAutomaticClinicalRecordRows } from '@/src/core/services/clinical-record-resolution'
 // LocalBundleService
 // Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
@@ -28,14 +39,17 @@ import {
   isMedicationRemainingSummaryBasic,
 } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
-import { expandClaimResources } from './claim-expander'
+import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncounterSource, bindClaimDerivedSource, copyClaimDerivedSource } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
+import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
+import { reconcileMedicationRequests } from './medication-reconciliation'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
   NHI_DRUG_ENRICHMENT_POLICY_VERSION,
 } from './nhi-drug-terminology-enrichment.service'
 import { enrichBundleWithNhiDrugTerminologyOffMainThread } from './nhi-drug-terminology-enrichment.worker-client'
+import { serializeLocalBundleMutation } from './local-bundle-mutation-queue'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   applyUserEnteredPatientProfile,
@@ -51,6 +65,8 @@ import type {
 import {
   getSessionBundleKey,
   rotateSessionBundleKey,
+  prepareSessionBundleKey,
+  BundleSessionStorageError,
   clearSessionBundleKey,
   isEncryptedRecord,
   encryptBytes,
@@ -91,6 +107,8 @@ const LEGACY_BUNDLE_KEY = 'current'
 // the bundle/entities stay small and the bytes are fetched on demand (when the
 // user opens the viewer). See ReportImageDialog.
 const IMG_STORE = 'images'
+const ORIGINAL_FHIR_CHUNK_BYTES = 4 * 1024 * 1024
+const originalFhirPrefix = (importId: string) => `original-fhir:${importId}:`
 
 // Session cache: avoids re-reading IndexedDB on every query. Module-level so it
 // is shared across all hook instances in the same tab.
@@ -99,19 +117,56 @@ let memBundleImportId: string | null = null
 let memBundleIsDemo = false
 let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
 let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
+// Only used if persistence fails; Blob keeps source bytes out of the parsed JSON heap.
+let memOriginalFhir: Blob | null = null
+// A storage-restricted first snapshot has no durable predecessor to reopen.
+let memBundleUsesMemoryOnlySession = false
 // A stored bundle can be requested concurrently by the Patient and clinical
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
-const terminologyMigrationByBundle = new WeakMap<object, Promise<object>>()
+const terminologyMigrationByBundle = new WeakMap<object, Promise<object | null>>()
 // Mapping a FHIR Bundle into every domain collection is also expensive and was
 // previously repeated independently by the Patient and clinical-data queries.
-// Cache only the post-storage parse (not the import validator): save() may move
-// inline images out of the Bundle before this path runs, and we must never keep
-// a second parsed copy containing those large base64 payloads alive.
+// The import validator's parse is reused only for a Bundle with no inline
+// images: save() may move inline images out of the Bundle before this path
+// runs, and we must never keep a second parsed copy containing those large
+// base64 payloads alive.
 const parsedStoredDataByBundle = new WeakMap<object, {
   sourceMetadata: ClinicalSourceMetadata | null
   data: LocalBundleData
 }>()
+// The import validator's parse, waiting for save() to publish the same Bundle
+// under the same import id and source metadata it was parsed with.
+const validatedImportByBundle = new WeakMap<object, {
+  importId: string
+  sourceMetadata: ClinicalSourceMetadata | null
+  data: LocalBundleData
+}>()
+
+/** Same test prepareImagesForStorage uses to decide what it moves out. */
+function hasInlineImages(bundle: any): boolean {
+  const entries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
+  return entries.some((entry) => {
+    const resource = entry?.resource
+    return resource?.resourceType === 'DiagnosticReport'
+      && Array.isArray(resource.presentedForm)
+      && resource.presentedForm.some((form: any) =>
+        typeof form?.data === 'string' && form.data.length > 0
+        && typeof form.contentType === 'string' && form.contentType.startsWith('image/'))
+  })
+}
+
+/** A newly published import starts from the validator's parse when it was made
+ * from exactly this Bundle and these arguments; otherwise from nothing. */
+function adoptValidatedImport(bundle: object, importId: string | null, sourceMetadata: ClinicalSourceMetadata | null): void {
+  const validated = validatedImportByBundle.get(bundle)
+  validatedImportByBundle.delete(bundle)
+  if (validated && validated.importId === importId && validated.sourceMetadata === sourceMetadata) {
+    parsedStoredDataByBundle.set(bundle, { sourceMetadata, data: validated.data })
+  } else {
+    parsedStoredDataByBundle.delete(bundle)
+  }
+}
 
 interface PersistedBundleEnvelope {
   __mediprismaBundle: 1
@@ -215,7 +270,22 @@ async function idbSweepExpiredRecords(now = Date.now()): Promise<void> {
             isEncryptedRecord(cursor.value)
             && now - cursor.value.savedAt > MAX_BUNDLE_AGE_MS
           ) {
-            cursor.delete()
+            if (storeName === IMG_STORE && typeof cursor.key === 'string'
+              && cursor.key.startsWith('original-fhir:')) {
+              // Original chunks share the owning chart's lifetime. Profile
+              // edits can refresh that chart without rewriting its backup.
+              const originalKey = cursor.key
+              const importId = originalKey.slice('original-fhir:'.length, originalKey.lastIndexOf(':'))
+              const owner = tx.objectStore(STORE).get(importId)
+              owner.onsuccess = () => {
+                if (!isEncryptedRecord(owner.result) || now - owner.result.savedAt > MAX_BUNDLE_AGE_MS) {
+                  tx.objectStore(IMG_STORE).delete(originalKey)
+                }
+              }
+              owner.onerror = () => reject(owner.error)
+            } else {
+              cursor.delete()
+            }
           }
           cursor.continue()
         }
@@ -306,8 +376,7 @@ async function idbDeleteImages(imageIds: string[]): Promise<void> {
 
 /** Delete only image records owned by one import. Cursor deletion avoids
  * clearing another MediPrisma tab's concurrently-open patient. */
-async function idbDeleteImagesForImport(importId: string): Promise<void> {
-  const prefix = `${importId}:`
+async function idbDeleteBlobPrefixes(prefixes: string[]): Promise<void> {
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
@@ -316,7 +385,7 @@ async function idbDeleteImagesForImport(importId: string): Promise<void> {
       req.onsuccess = () => {
         const cursor = req.result
         if (!cursor) return
-        if (typeof cursor.key === 'string' && cursor.key.startsWith(prefix)) {
+        if (typeof cursor.key === 'string' && prefixes.some(prefix => String(cursor.key).startsWith(prefix))) {
           tx.objectStore(IMG_STORE).delete(cursor.key)
         }
         cursor.continue()
@@ -329,6 +398,13 @@ async function idbDeleteImagesForImport(importId: string): Promise<void> {
   } finally {
     db.close()
   }
+}
+
+function idbDeleteImagesForImport(importId: string, includeOriginal = false): Promise<void> {
+  return idbDeleteBlobPrefixes([
+    `${importId}:`,
+    ...(includeOriginal ? [originalFhirPrefix(importId)] : []),
+  ])
 }
 
 function legacyImageRefsInBundle(bundle: object | null): string[] {
@@ -385,6 +461,44 @@ async function idbGetImage(id: string): Promise<unknown> {
   }
 }
 
+/** Keep peak encryption memory bounded even for large imaging exports. Publish
+ * the encrypted manifest last so a partial write is never offered as complete. */
+async function storeOriginalFhir(importId: string, source: Blob, key: CryptoKey): Promise<void> {
+  const prefix = originalFhirPrefix(importId)
+  const chunks = Math.ceil(source.size / ORIGINAL_FHIR_CHUNK_BYTES)
+  for (let i = 0; i < chunks; i++) {
+    const bytes = await source.slice(i * ORIGINAL_FHIR_CHUNK_BYTES, (i + 1) * ORIGINAL_FHIR_CHUNK_BYTES).arrayBuffer()
+    await idbPutImages([{ id: `${prefix}${i}`, record: await encryptBytes(key, bytes) }])
+  }
+  await idbPutImages([{
+    id: `${prefix}manifest`,
+    record: await encryptJson(key, { chunks, size: source.size }),
+  }])
+}
+
+async function readOriginalFhir(importId: string): Promise<Blob | null> {
+  const prefix = originalFhirPrefix(importId)
+  const stored = await idbGetImage(`${prefix}manifest`)
+  if (!stored) return null
+  const key = await getSessionBundleKey()
+  if (!key || !isEncryptedRecord(stored)) throw new Error('Original FHIR is unavailable')
+  const manifest = await decryptJson<{ chunks: number; size: number }>(key, stored)
+  if (!Number.isSafeInteger(manifest.size) || manifest.size < 0
+    || manifest.chunks !== Math.ceil(manifest.size / ORIGINAL_FHIR_CHUNK_BYTES)) {
+    throw new Error('Invalid original FHIR manifest')
+  }
+  const parts: Blob[] = []
+  for (let i = 0; i < manifest.chunks; i++) {
+    const chunk = await idbGetImage(`${prefix}${i}`)
+    if (!isEncryptedRecord(chunk)) throw new Error('Original FHIR chunk is unavailable')
+    // Blob parts keep already-decrypted chunks off the contiguous JS heap.
+    parts.push(new Blob([await decryptBytes(key, chunk)]))
+  }
+  const result = new Blob(parts, { type: 'application/fhir+json' })
+  if (result.size !== manifest.size) throw new Error('Incomplete original FHIR')
+  return result
+}
+
 // Pure (no IndexedDB): walk a bundle's DiagnosticReports and move every inline
 // base64 image out of `presentedForm[].data`, leaving a `_imageRef` pointer
 // behind. Mutates `bundle` in place so the retained copy (memBundle + the JSON
@@ -430,9 +544,9 @@ export function prepareImagesForStorage(
 // import's prior images; another open tab's image records are never touched.
 // When no session key is available the bundle is left untouched (images stay
 // inline); the caller will then also skip persisting the bundle itself.
-async function extractAndStoreImages(bundle: any, importId: string | null): Promise<void> {
+async function extractAndStoreImages(bundle: any, importId: string | null, preparedKey?: CryptoKey): Promise<void> {
   if (typeof indexedDB === 'undefined') return
-  const key = await getSessionBundleKey({ create: true })
+  const key = preparedKey ?? await getSessionBundleKey({ create: true })
   if (!key) return
   const toStore = prepareImagesForStorage(bundle, importId)
   const encrypted: Array<{ id: string; record: unknown }> = []
@@ -473,6 +587,34 @@ export function idFromFullUrl(fullUrl?: string): string | undefined {
 function cloneResource<T>(resource: T): T {
   if (typeof structuredClone === 'function') return structuredClone(resource)
   return JSON.parse(JSON.stringify(resource))
+}
+
+/** Reject explicit patient identity contradictions, not absent/unresolved context. */
+function assertPatientReferences(resources: any[], patient: { resource: { id?: string }; fullUrl?: string }): void {
+  const patientUrlIdentity = (reference?: string): string | undefined => {
+    if (!reference || !/^https?:\/\//i.test(reference)) return undefined
+    try { return new URL(reference.replace(/\/_history\/[^/]+\/?$/, '').replace(/\/$/, '')).href }
+    catch { return undefined }
+  }
+  const patientUrl = patientUrlIdentity(patient.fullUrl)
+  const knownId = patient.resource.id || (patientUrl ? idFromFullUrl(patientUrl) : undefined)
+  for (const resource of resources) {
+    for (const field of ['subject', 'patient']) {
+      const reference = resource?.[field]?.reference
+      if (typeof reference !== 'string') continue
+      const relative = /^Patient\/([^/]+)(?:\/_history\/[^/]+)?$/.exec(reference)
+      const absolute = /^https?:\/\/.+\/Patient\/([^/]+)(?:\/_history\/[^/]+)?$/i.exec(reference)
+      const id = relative?.[1] ?? absolute?.[1]
+      if (!id) continue
+      const referenceUrl = absolute ? patientUrlIdentity(reference) : undefined
+      if (absolute && !referenceUrl) continue
+      const differentId = knownId && id !== knownId
+      const differentUrl = referenceUrl && patientUrl && referenceUrl !== patientUrl
+      if (differentId || differentUrl) {
+        throw new Error('此資料的病人引用與目前病人不一致，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+      }
+    }
+  }
 }
 
 /** Rewrite every internal `reference` string in-place to `ResourceType/id`. */
@@ -516,25 +658,113 @@ function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void
  *      equivalent `ResourceType/id`) is rewritten to the relative form.
  * References to other servers / unknown targets are left untouched.
  */
-export function canonicalizeBundleResources(bundle: any): any[] {
+export function canonicalizeBundleResources(bundle: any, source?: ClinicalReconciliationResult, sourceKeys?: WeakMap<object, string>): any[] {
   const rawEntries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
   const entries = rawEntries.filter((e) => e?.resource)
+  const sourceNodes = source ? selectClinicalSourceNodes(source) : []
+  if (source && (entries.length !== sourceNodes.length || entries.some((entry, index) =>
+    (entry.fullUrl ?? null) !== (sourceNodes[index].fullUrl ?? null)
+    || !clinicalSourceResourcesEqual(entry.resource, sourceNodes[index].resource),
+  ))) {
+    throw new Error('Clinical source projection input does not match its selected source records')
+  }
+  const projectionIds = new Map(source ? createClinicalSourceProjectionIds(source) : [])
+  const resolution = source && createClinicalRecordResolution(source)
+  for (const [key, preferred] of resolution?.preferred ?? []) {
+    const id = projectionIds.get(preferred)
+    if (id) projectionIds.set(key, id)
+  }
 
   // Pass 1 — assign ids; index every resolvable key to its canonical target.
   const targets = new Map<string, RefTarget>()
+  const ambiguous = new Set<string>()
+  const indexTarget = (alias: string, target: RefTarget) => {
+    if (ambiguous.has(alias)) return
+    const existing = targets.get(alias)
+    if (existing?.resourceType === target.resourceType && existing.id === target.id) return
+    if (existing) {
+      targets.delete(alias)
+      ambiguous.add(alias)
+    } else targets.set(alias, target)
+  }
+  const identityCounts = new Map<string, number>()
+  for (const entry of entries) {
+    const id = entry.resource.id || idFromFullUrl(entry.fullUrl)
+    if (id) {
+      const identity = String(entry.resource.resourceType) + '/' + String(id)
+      identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1)
+    }
+  }
+  const reservedIds = new Set(identityCounts.keys())
   const resources = entries.map((e, index) => {
     const res = cloneResource(e.resource)
     const resourceType: string = res.resourceType ?? 'Resource'
-    const id = String(res.id || idFromFullUrl(e.fullUrl) || `${resourceType}-${index}`)
+    const sourceId = res.id || idFromFullUrl(e.fullUrl)
+    const originalId = String(sourceId || `${resourceType}-${index}`)
+    // Colliding logical ids from distinct fullUrls/versions must not become
+    // one UI key or let a relative reference select an arbitrary source.
+    let id = (identityCounts.get(`${resourceType}/${originalId}`) ?? 0) > 1
+      ? `${originalId}-source-${index}`
+      : originalId
+    if (!sourceId || id !== originalId) {
+      while (reservedIds.has(`${resourceType}/${id}`)) id += '-source'
+    }
+    reservedIds.add(`${resourceType}/${id}`)
+    id = projectionIds.get(sourceNodes[index]?.key) ?? id
     res.id = id
     const target: RefTarget = { resourceType, id }
-    if (e.fullUrl) targets.set(e.fullUrl, target)
-    targets.set(`${resourceType}/${id}`, target)
+    if (e.fullUrl) indexTarget(e.fullUrl, target)
+    const relative = `${resourceType}/${originalId}`
+    indexTarget(relative, target)
+    if (res.meta?.versionId) {
+      indexTarget(`${relative}/_history/${res.meta.versionId}`, target)
+      if (e.fullUrl) indexTarget(`${e.fullUrl}/_history/${res.meta.versionId}`, target)
+    }
     return res
   })
 
   // Pass 2 — rewrite internal references to the relative ResourceType/id form.
-  for (const res of resources) rewriteReferences(res, targets)
+  if (source) {
+    const nodes = selectClinicalSourceNodes(source)
+    const nodesByKey = new Map(source.graph.nodes.map(node => [node.key, node]))
+    const mappedByKey = new Map(nodes.map((node, index) => [node.key, resources[index]]))
+    const childrenByParent = new Map<string, typeof source.graph.nodes[number][]>()
+    for (const node of source.graph.nodes) {
+      if (node.parentKey) childrenByParent.set(node.parentKey, [...(childrenByParent.get(node.parentKey) ?? []), node])
+    }
+    const indexClone = (key: string, resource: any) => {
+      sourceKeys?.set(resource, key)
+      // Hoisted/normalized clinical copies must retain their captured identity.
+      resource.clinicalSourceNodeKey = key
+      const children = childrenByParent.get(key) ?? []
+      for (const child of resource.contained ?? []) {
+        const node = children.find(candidate => clinicalSourceResourcesEqual(candidate.resource, child))
+        if (!node) continue
+        child.id = projectionIds.get(node.key) ?? child.id
+        mappedByKey.set(node.key, child)
+        indexClone(node.key, child)
+      }
+    }
+    for (const node of nodes) indexClone(node.key, mappedByKey.get(node.key))
+    for (const rawEdge of source.graph.references) {
+      const edge = resolution!.reference(rawEdge)
+      if (edge.status !== 'resolved' || !edge.reference) continue
+      const origin = mappedByKey.get(edge.origin.key)
+      const target = mappedByKey.get(edge.targetKeys[0])
+      if (!origin || !target) continue
+      const path = edge.path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
+      let reference = origin
+      for (const part of path) reference = reference?.[part]
+      if (reference?.reference === edge.reference) {
+        const targetNode = nodesByKey.get(edge.targetKeys[0])
+        // Contained resources remain local to their owning resource. A domain
+        // expander may later hoist them and rewrite the fragment explicitly.
+        reference.reference = targetNode?.isContained ? '#' + target.id : target.resourceType + '/' + target.id
+      }
+    }
+  } else {
+    for (const res of resources) rewriteReferences(res, targets)
+  }
   return resources
 }
 
@@ -819,9 +1049,9 @@ function terminologyFromMedicationKnowledge(
 // don't carry a "requester / provider" field, so date alone is the best we
 // have. Multi-encounter same-day collisions take the first match (existing
 // VGH behaviour).
-function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>): any[] {
+function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>, sourceKeys?: WeakMap<object, string>): any[] {
   return resources.map((r) => {
-    if (r.encounter?.reference) return r // already has a reference
+    if (r.encounter?.reference || hasUnresolvedClaimEncounterSource(r)) return r // preserve an explicit unresolved source relation
 
     const dateFields: string[] = [
       r.performedDateTime,    // Procedure
@@ -835,7 +1065,7 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
     for (const d of dateFields) {
       const key = toDateStr(d)
       if (key && encounterDateMap.has(key)) {
-        return {
+        const attached = {
           ...r,
           encounter: { reference: `Encounter/${encounterDateMap.get(key)}` },
           // Preserve the difference between a source encounter reference and
@@ -844,6 +1074,10 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
           // the same encounter.
           _encounterInferred: true,
         }
+        const sourceKey = sourceKeys?.get(r)
+        if (sourceKey) sourceKeys?.set(attached, sourceKey)
+        copyClaimDerivedSource(r, attached)
+        return attached
       }
     }
 
@@ -860,15 +1094,16 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
 function attachEncounterRefsForMeds(
   meds: any[],
   encounterByDateProvider: Map<string, string>,
+  originalResources?: ReadonlyMap<string, object>,
 ): any[] {
   return meds.map((m) => {
-    if (m.encounter?.reference) return m
+    if (m.encounter || hasUnresolvedClaimEncounterSource(m) || hasUnresolvedClaimEncounterSource(originalResources?.get(m.clinicalSourceNodeKey))) return m
     const date = toDateStr(m.authoredOn || m.effectiveDateTime)
     const requester = m.requester?.display?.trim() || ''
     if (!date || !requester) return m
     const id = encounterByDateProvider.get(`${date}|${requester}`)
     if (!id) return m
-    return { ...m, encounter: { reference: `Encounter/${id}` } }
+    return { ...m, encounter: { reference: `Encounter/${id}` }, _encounterInferred: true }
   })
 }
 
@@ -920,6 +1155,33 @@ export const LocalBundleService = {
     }
   },
 
+  /** Check availability without decrypting a potentially large source file. */
+  async hasOriginalFhir(): Promise<boolean> {
+    if (!await this.load()) return false
+    if (memOriginalFhir) return true
+    const importId = memBundleImportId
+    if (!importId || typeof indexedDB === 'undefined') return false
+    const db = await openDb()
+    try {
+      return await new Promise<boolean>((resolve, reject) => {
+        const request = db.transaction(IMG_STORE, 'readonly').objectStore(IMG_STORE)
+          .count(`${originalFhirPrefix(importId)}manifest`)
+        request.onsuccess = () => resolve(request.result > 0)
+        request.onerror = () => reject(request.error)
+      })
+    } finally {
+      db.close()
+    }
+  },
+
+  /** Read the original bytes lazily; never reconstruct from mapped clinical data. */
+  async loadOriginalFhir(): Promise<Blob | null> {
+    if (!await this.load()) return null
+    if (memOriginalFhir) return memOriginalFhir
+    if (!memBundleImportId || typeof indexedDB === 'undefined') return null
+    return readOriginalFhir(memBundleImportId)
+  },
+
   // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
   // Blob store (off-heap) — `extractAndStoreImages` mutates `bundle` in place so
   // the retained copies (memBundle + the JSON in IndexedDB) stay small. Only a
@@ -935,6 +1197,9 @@ export const LocalBundleService = {
       demo?: boolean
       sourceMetadata?: ClinicalSourceMetadata
       patientProfile?: UserEnteredPatientProfile | null
+      originalFhir?: Blob
+      signal?: AbortSignal
+      beforeCommit?: () => void
     } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
@@ -947,6 +1212,140 @@ export const LocalBundleService = {
       ? (memBundle !== null ? memBundleImportId : readTabLocalImportId())
       : null
     const isNewImport = Boolean(importId && importId !== activeImportId)
+    if (options.signal) {
+      // Progressive replacements prepare ciphertext in a fresh scope. Until the
+      // last synchronous commit, cancellation leaves the old chart, pointer and
+      // decryption key intact, including across a reload.
+      const signal = options.signal
+      signal.throwIfAborted()
+      if (!isNewImport || !importId) throw new Error('guarded import requires a fresh scope')
+      // Keep attachment metadata, sharing the existing base64 strings rather
+      // than cloning the full chart. Failed image persistence can restore inline
+      // bytes before falling back to the ordinary memory-only import behaviour.
+      const imageBackups = ((bundle as any).entry ?? []).flatMap((entry: any) =>
+        entry?.resource?.resourceType === 'DiagnosticReport' && Array.isArray(entry.resource.presentedForm)
+          ? entry.resource.presentedForm.filter((form: any) => typeof form?.data === 'string'
+            && typeof form.contentType === 'string' && form.contentType.startsWith('image/'))
+            .map((form: any) => ({ form, original: { ...form } })) : [])
+      const restoreInlineImages = () => {
+        for (const { form, original } of imageBackups) {
+          for (const field of Object.keys(form)) delete form[field]
+          Object.assign(form, original)
+        }
+      }
+      const publishInMemory = (originalFhir: Blob | null, memoryOnlySession = false) => {
+        if (isNewImport) {
+          adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
+          terminologyMigrationByBundle.delete(bundle)
+        }
+        memBundle = bundle
+        memBundleImportId = importId
+        memBundleIsDemo = demo
+        memBundleSourceMetadata = sourceMetadata ?? null
+        memUserEnteredPatientProfile = patientProfile
+        memOriginalFhir = originalFhir
+        memBundleUsesMemoryOnlySession = memoryOnlySession
+      }
+      try {
+        const preparedKey = await prepareSessionBundleKey()
+        let previousMarker: string | null, previousDemo: string | null
+        try {
+          previousMarker = sessionStorage.getItem(STORAGE_KEY)
+          previousDemo = sessionStorage.getItem(DEMO_FLAG_KEY)
+        } catch { throw new BundleSessionStorageError('bundle session storage unavailable') }
+        let published = false
+        let keyCommitted = false
+        let originalPersisted = false
+        let envelopePersisted = false
+        try {
+          try {
+            signal.throwIfAborted()
+            try { await idbSweepExpiredRecords() } catch { /* expiry cleanup is best effort */ }
+            signal.throwIfAborted()
+            try {
+              await extractAndStoreImages(bundle, importId, preparedKey.key)
+            } catch {
+              restoreInlineImages()
+              try { await idbDeleteImagesForImport(importId) } catch { /* best effort */ }
+            }
+            signal.throwIfAborted()
+            const persisted: PersistedBundleEnvelope = {
+              __mediprismaBundle: 1, importId, demo, bundle,
+              ...(sourceMetadata ? { sourceMetadata } : {}),
+              ...(patientProfile ? { patientProfile } : {}),
+            }
+            await idbPut(await encryptJson(preparedKey.key, persisted), bundleRecordKey(importId))
+            envelopePersisted = true
+            signal.throwIfAborted()
+            if (options.originalFhir) {
+              try {
+                await storeOriginalFhir(importId, options.originalFhir, preparedKey.key)
+                originalPersisted = true
+              } catch (error) {
+                try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
+                throw error
+              }
+            }
+          } catch {
+            envelopePersisted = false
+            signal.throwIfAborted()
+            restoreInlineImages()
+            try {
+              await idbDelete(bundleRecordKey(importId))
+              await idbDeleteImagesForImport(importId, true)
+            } catch { /* memory-only fallback, never plaintext at rest */ }
+          }
+          signal.throwIfAborted()
+          options.beforeCommit?.()
+          signal.throwIfAborted()
+          if (!envelopePersisted) {
+            if (activeImportId && !memBundleUsesMemoryOnlySession) throw new Error('院內門診資料暫存失敗，已保留先前病歷。')
+            publishInMemory(options.originalFhir ?? null, true)
+            published = true
+            return
+          }
+          preparedKey.commit()
+          keyCommitted = true
+          try { writeTabBundleScope(importId, demo) }
+          catch { throw new BundleSessionStorageError('bundle session marker unavailable') }
+          // No asynchronous work between the final guard and publication.
+          publishInMemory(originalPersisted ? null : options.originalFhir ?? null)
+          published = true
+        } finally {
+          if (!published) {
+            try { preparedKey.rollback() } catch { /* storage is unavailable; cleanup the unpublished scope */ }
+            if (keyCommitted) {
+              try {
+                if (previousMarker === null) sessionStorage.removeItem(STORAGE_KEY)
+                else sessionStorage.setItem(STORAGE_KEY, previousMarker)
+                if (previousDemo === null) sessionStorage.removeItem(DEMO_FLAG_KEY)
+                else sessionStorage.setItem(DEMO_FLAG_KEY, previousDemo)
+              } catch { /* browser may block all storage; the in-memory chart remains isolated */ }
+            }
+            try {
+              await idbDelete(bundleRecordKey(importId))
+              await idbDeleteImagesForImport(importId, true)
+            } catch { /* best-effort cleanup of the unpublished scope */ }
+          }
+        }
+        // A duplicated tab may still own the previous pointer and key. Keep its
+        // ciphertext until the existing expiry sweep; do not await any cleanup
+        // after publication before the caller can notify the workspace.
+      } catch (error) {
+        if (!(error instanceof BundleSessionStorageError)) throw error
+        restoreInlineImages()
+        signal.throwIfAborted()
+        options.beforeCommit?.()
+        signal.throwIfAborted()
+        // Never acknowledge a memory-only replacement while reload would
+        // silently reopen the older durable snapshot. Keep it and report failure.
+        if (activeImportId && !memBundleUsesMemoryOnlySession) throw error
+        // Persistence is optional; cancellation and ownership checks are not.
+        // No plaintext is persisted, and source/images remain usable in this tab.
+        publishInMemory(options.originalFhir ?? null, true)
+      }
+      return
+    }
     if (typeof window !== 'undefined') {
       if (isNewImport) {
         // A new import is a new patient-workspace encryption boundary. This is
@@ -961,11 +1360,18 @@ export const LocalBundleService = {
         }
       }
     }
+    if (isNewImport) {
+      adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
+      terminologyMigrationByBundle.delete(bundle)
+    }
     memBundle = bundle
+    memBundleUsesMemoryOnlySession = false
     memBundleImportId = importId
     memBundleIsDemo = demo
     memBundleSourceMetadata = sourceMetadata ?? null
     memUserEnteredPatientProfile = patientProfile
+    if (isNewImport || importId !== activeImportId) memOriginalFhir = null
+    if (options.originalFhir) memOriginalFhir = options.originalFhir
     if (typeof window === 'undefined') return
     try {
       const key = await getSessionBundleKey({ create: true })
@@ -982,12 +1388,26 @@ export const LocalBundleService = {
         : bundle
       await idbPut(await encryptJson(key, persisted), bundleRecordKey(importId))
       writeTabBundleScope(importId, demo)
+      if (options.originalFhir && importId) {
+        // Profile/migration writes never copy the source. A quota failure here
+        // must not remove the already-saved chart or extracted images.
+        try {
+          await storeOriginalFhir(importId, options.originalFhir, key)
+          memOriginalFhir = null
+        } catch {
+          // The source remains downloadable from its Blob for this session.
+          // Do not strand partial chunks in a quota-constrained database.
+          try { await idbDeleteBlobPrefixes([originalFhirPrefix(importId)]) } catch { /* best effort */ }
+        }
+      }
     } catch {
       // Could not persist ciphertext. Detach only this tab and this import;
       // another MediPrisma tab's Bundle must remain untouched.
       try {
-        await idbDelete(bundleRecordKey(importId))
-        if (importId) await idbDeleteImagesForImport(importId)
+        if (isNewImport) {
+          await idbDelete(bundleRecordKey(importId))
+          if (importId) await idbDeleteImagesForImport(importId)
+        }
       } catch {
         // Best-effort cleanup.
       }
@@ -1012,6 +1432,8 @@ export const LocalBundleService = {
     memBundleIsDemo = false
     memBundleSourceMetadata = null
     memUserEnteredPatientProfile = null
+    memOriginalFhir = null
+    memBundleUsesMemoryOnlySession = false
     if (typeof window === 'undefined') return
     clearTabBundleScope()
     // Remove only legacy origin-wide markers. New tab-local markers never
@@ -1025,7 +1447,7 @@ export const LocalBundleService = {
       // Best-effort: the marker is already gone, so hasData() is false regardless.
     }
     try {
-      if (activeImportId) await idbDeleteImagesForImport(activeImportId)
+      if (activeImportId) await idbDeleteImagesForImport(activeImportId, true)
       await idbDeleteImages(legacyImageRefs)
     } catch {
       // Best-effort image cleanup.
@@ -1221,34 +1643,183 @@ export const LocalBundleService = {
     return null
   },
 
+  /**
+   * Import validator: the same parse the workspace will run once the Bundle is
+   * saved under `importId`, so save() can hand it over instead of the
+   * workspace parsing the whole chart a second time.
+   */
+  validateImport(
+    bundle: any,
+    options: { importId: string; sourceMetadata?: ClinicalSourceMetadata },
+  ): LocalBundleData | null {
+    const parsed = this.parse(bundle, options.sourceMetadata, options.importId)
+    if (parsed && bundle && typeof bundle === 'object' && !hasInlineImages(bundle)) {
+      validatedImportByBundle.set(bundle, {
+        importId: options.importId,
+        sourceMetadata: options.sourceMetadata ?? null,
+        data: parsed,
+      })
+    }
+    return parsed
+  },
+
   parse(
     bundle: any,
     sourceMetadata?: ClinicalSourceMetadata,
+    captureGeneration?: string,
   ): LocalBundleData | null {
+    // Preserve every source before identity rewriting, expansion or mapping.
+    const rawEntries = Array.isArray(bundle?.entry) ? bundle.entry : []
+    const originalPatient = rawEntries.find((entry: any) => entry?.resource?.resourceType === 'Patient')
+    const generation = captureGeneration ?? (typeof bundle?.timestamp === 'string' ? bundle.timestamp : 'in-memory')
+    const clinicalSource = reconcileClinicalSources([{
+      sourceId: 'local-bundle:' + (captureGeneration ?? 'import'),
+      patientScope: String(originalPatient?.fullUrl ?? originalPatient?.resource?.id ?? 'unknown-patient'),
+      generation,
+      resources: rawEntries.filter((entry: any) => typeof entry?.resource?.resourceType === 'string'),
+    }])
     // Canonicalise identity FIRST: stamp ids onto id-less resources and rewrite
     // urn:uuid / absolute references to the relative ResourceType/id form, so
     // every downstream step (patient-id gate, report-member linking, the inline
     // split('/').pop() resolvers) works regardless of the bundle's reference
     // style. See canonicalizeBundleResources.
-    const entries: any[] = canonicalizeBundleResources(bundle)
+    // Validate the import before the shared selector excludes foreign rows.
+    // Rejected imports must preserve the previously loaded patient and raw file.
+    if (originalPatient?.resource) assertPatientReferences(rawEntries.map((entry: any) => entry?.resource).filter(Boolean), originalPatient)
+    const assertPatientOwnership = (nodes: Iterable<(typeof clinicalSource.graph.nodes)[number]>) => {
+      for (const node of nodes) {
+        if (node.resource.resourceType === 'Patient') continue
+        const reason = getClinicalSourceNodePatientExclusionReason(node, clinicalSource.graph.nodes)
+        if (reason === 'unresolved-patient-reference') throw new Error('部分臨床資料的病人歸屬無法確認，無法安全匯入。請提供具有明確病人引用的 FHIR Bundle。')
+        if (reason === 'foreign-patient-reference') throw new Error('臨床資料的病人引用與目前病人不一致，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+      }
+    }
+    assertPatientOwnership(clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn))
+    assertPatientOwnership(clinicalContainedPatientExclusions(clinicalSource).map(item => item.node))
+    const resolution = createClinicalRecordResolution(clinicalSource, new Set(), false)
+    const projectedNodes = selectClinicalSourceNodes(clinicalSource)
+    const primaryPatients = clinicalSource.graph.nodes.filter(node => !node.isContained && !node.embeddedIn && node.resource.resourceType === 'Patient')
+    const selectedPatientKeys = new Set(primaryPatients.map(node => resolution.preferred.get(node.key) ?? node.key))
+    const identityConflict = primaryPatients.some((left, index) => primaryPatients.slice(index + 1).some(right => {
+      const a: any = left.resource, b: any = right.resource
+      if (a.birthDate && b.birthDate && !a.birthDate.startsWith(b.birthDate) && !b.birthDate.startsWith(a.birthDate)) return true
+      if (a.gender && b.gender && a.gender !== 'unknown' && b.gender !== 'unknown' && a.gender !== b.gender) return true
+      return (a.identifier ?? []).some((identifier: any) => identifier.value && identifier.system
+        && (b.identifier ?? []).some((other: any) => other.system === identifier.system && other.value)
+        && !(a.identifier ?? []).some((own: any) => own.system === identifier.system && own.value
+          && (b.identifier ?? []).some((other: any) => other.system === own.system && other.value === own.value)))
+    }))
+    if (identityConflict) {
+      const selected = primaryPatients.find(node => resolution.includes(node.key))
+      const updated = Date.parse(String((selected?.resource.meta as { lastUpdated?: unknown } | undefined)?.lastUpdated ?? ''))
+      const ordered = Number.isFinite(updated) && primaryPatients.every(node => node.key === selected?.key
+        || (selected && clinicalSourceResourcesEqual(node.resource, selected.resource))
+        || Date.parse(String((node.resource.meta as { lastUpdated?: unknown } | undefined)?.lastUpdated ?? '')) < updated)
+      if (!ordered) throw new Error('此資料包含互相矛盾且無更新順序的病人身分資料，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+    }
+    if (primaryPatients.length > 1 && primaryPatients.some(node => (!node.resource.id && !node.fullUrl)
+      || selectedPatientKeys.size !== 1 && !clinicalSourceNodesEqualWithContext(clinicalSource.graph, primaryPatients[0], node))) {
+      throw new Error('此資料包含多個不同的病人，無法安全匯入。請提供單一病人的 FHIR Bundle。')
+    }
+    const sourceKeyByResource = new WeakMap<object, string>()
+    let entries: any[] = canonicalizeBundleResources({
+      entry: projectedNodes.map(node => ({ resource: node.resource, fullUrl: node.fullUrl })),
+    }, clinicalSource, sourceKeyByResource).filter(resource => resolution.includes(sourceKeyByResource.get(resource)!))
+    const sourceNodesByKey = new Map(clinicalSource.graph.nodes.map(node => [node.key, node]))
+    const recordVariants = new Map([...resolution.variants].filter(([key]) => !resolution.includes(key)))
+    // Metadata belongs to mutable mapper inputs, never the captured FHIR graph.
+    for (const resource of entries) {
+      const key = sourceKeyByResource.get(resource)
+      if (key) resource.clinicalSourceNodeKey = key
+    }
+    const claimEncounterResourcesByKey = new Map<string, object>()
+    const bindMappedResource = <T extends object>(mapped: T, resource: any): T => {
+      const key = sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey
+      let variant = key ? recordVariants.get(key) : undefined
+      const imported = key ? readClinicalRecordVariantModifier(sourceNodesByKey.get(key)!.resource) : undefined
+      if (key && imported && !variant && !resolution.includes(key)) { variant = scopedImportedClinicalRecordVariant(sourceNodesByKey.get(key)!, imported.variant); recordVariants.set(key, variant) }
+      if (key) readClinicalMedicationContentModifier(sourceNodesByKey.get(key)!.resource)
+      return bindClaimDerivedSource(bindClaimEncounterLink({ ...mapped, ...(key ? { clinicalSourceNodeKey: key, sourceId: sourceNodesByKey.get(key)?.resource.id, sourceVersionId: (sourceNodesByKey.get(key)?.resource.meta as any)?.versionId } : {}),
+        ...(variant ? { clinicalRecordVariant: variant } : {}), ...(imported?.sourceId ? { sourceId: imported.sourceId } : {}), ...(imported?.sourceVersionId ? { sourceVersionId: imported.sourceVersionId } : {}),
+        ...(imported?.sourceResourceType && ['MedicationRequest', 'MedicationStatement'].includes(resource.resourceType) && ['MedicationRequest', 'MedicationStatement'].includes(imported.sourceResourceType) ? { _sourceResourceType: imported.sourceResourceType } : {}) }, (key && claimEncounterResourcesByKey.get(key)) || resource), resource, sourceKeyByResource, recordVariants)
+    }
+    const sourceReferencesByPath = new Map(clinicalSource.graph.references.map(rawEdge => { const edge = resolution.reference(rawEdge); return [edge.origin.key + '|' + edge.path, edge] }))
+    const containedIdScopes = new Map<string, Set<string>>()
+    for (const node of clinicalSource.graph.nodes) {
+      if (!node.isContained || typeof node.resource.id !== 'string') continue
+      const scopes = containedIdScopes.get(node.resource.id) ?? new Set<string>()
+      scopes.add(JSON.stringify([node.sourceId, node.patientScope]))
+      containedIdScopes.set(node.resource.id, scopes)
+    }
     if (!entries.length) return null
+
+    // Comparison projections belong to this import, never to the source FHIR.
+    // Recompute them so re-imported exports cannot hide genuine source orders.
+    for (const resource of entries) {
+      for (const key of ['_sourceRecordComparison', '_sourcePrescriptionRecords', '_sourceEncounterRecords',
+        '_reconciledSourceReferences', '_resolvedMedicationCodeableConcept']) delete resource[key]
+    }
 
     // TW-PAS support: unpack any Claim (事前審查申請) into the standard
     // Condition / Procedure / Observation / DocumentReference resources the rest
     // of the pipeline already renders. No-op for non-PAS bundles. Runs before the
     // byType() split below so the synthesised resources flow through unchanged.
-    expandClaimResources(entries)
+    expandClaimResources(entries, (claim, path, resourceType) => {
+      const key = sourceKeyByResource.get(claim)
+      if (!key) return undefined
+      const rawEdge = clinicalSource.graph.references.find(reference => reference.origin.key === key && reference.path === path)
+      const edge = rawEdge && resolution.reference(rawEdge)
+      if (edge?.status !== 'resolved' || edge.targetKeys.length !== 1) return undefined
+      const targets = entries.filter(resource => resource.resourceType === resourceType && sourceKeyByResource.get(resource) === edge.targetKeys[0])
+      return targets.length === 1 ? targets[0] : undefined
+    }, claim => recordVariants.has(sourceKeyByResource.get(claim) ?? ''))
+    for (const resource of entries) {
+      const key = sourceKeyByResource.get(resource)
+      if (key) claimEncounterResourcesByKey.set(key, resource)
+    }
 
     // Roche DIP support: flatten the oncology (mCODE) resources Roche nests
     // inside List.contained and relink its identifier-based references, so the
     // Condition / cancer-staging Observations / treatment Procedures surface and
     // the DiagnosticReports link to the patient. No-op for non-Roche bundles.
-    expandRocheResources(entries)
+    const observationsBeforeExpansion = new Map(entries.filter(resource => resource.resourceType === 'Observation').map(resource => [resource, sourceKeyByResource.get(resource)]))
+    const derivedMembers = new Map<string, string[]>()
+    expandRocheResources(entries, (origin, observation) => {
+      const originKey = sourceKeyByResource.get(origin)
+      const key = sourceKeyByResource.get(observation)
+      if (originKey && key) derivedMembers.set(originKey, [...(derivedMembers.get(originKey) ?? []), key])
+    }, resource => {
+      const key = sourceKeyByResource.get(resource)
+      const sourceNode = key ? sourceNodesByKey.get(key) : undefined
+      const sourceId = sourceNode?.resource.id
+      if (!sourceNode?.isContained || typeof sourceId !== 'string') return undefined
+      return containedIdScopes.get(sourceId)?.size === 1 ? sourceId : undefined
+    })
+    recordClinicalProjectionDisposition(clinicalSource, [...observationsBeforeExpansion].flatMap(([resource, key]) => key && !entries.includes(resource) ? [key] : []))
+    assertPatientOwnership(entries.flatMap(resource => {
+      const node = sourceNodesByKey.get(sourceKeyByResource.get(resource) ?? resource.clinicalSourceNodeKey)
+      return node ? [node] : []
+    }))
+    const primaryPatient = projectedNodes.find(node => node.resource.resourceType === 'Patient')
+    if (primaryPatient) assertPatientReferences(entries, primaryPatient)
 
     // Display canonicalisation: resolve Practitioner / Organization / Location
     // references to human-readable display strings (attending physician,
     // institution) so the UI's `.display`-only renderers can show them.
     attachReferenceDisplays(entries)
+    entries = reconcileOutpatientEncounters(entries)
+    const confirmedEncounterAliases = new Map<string, string>()
+    for (const encounter of entries) {
+      if (encounter.resourceType !== 'Encounter' || encounter._sourceRecordComparison?.status !== 'confirmed') continue
+      const retainedKey = sourceKeyByResource.get(encounter) ?? encounter.clinicalSourceNodeKey
+      if (!retainedKey || !sourceNodesByKey.has(retainedKey)) continue
+      for (const original of encounter._sourceEncounterRecords ?? []) {
+        const originalKey = original.clinicalSourceNodeKey
+        if (originalKey && sourceNodesByKey.has(originalKey)) confirmedEncounterAliases.set(originalKey, retainedKey)
+      }
+    }
+    recordClinicalEncounterAliases(clinicalSource, confirmedEncounterAliases)
+    entries = reconcileMedicationRequests(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
     const sourceCapturedAt = typeof bundle.timestamp === 'string'
@@ -1261,6 +1832,31 @@ export const LocalBundleService = {
     const patient = PatientMapper.toDomain(patientRaw)
     if (!patient) return null
 
+    // Keep the report -> outpatient order edge useful after domain mapping.
+    // The complete ServiceRequest and Provenance remain in the imported Bundle.
+    const orderLabels = new Map(byType('ServiceRequest').map((order: any) => [
+      `ServiceRequest/${order.id}`, order.code?.text || order.code?.coding?.find((coding: any) => coding.display)?.display,
+    ]))
+    // The visit each order came from (already retargeted to a merged visit).
+    // A result shared by several visits' orders carries no single encounter,
+    // so its visits are kept here for the views that group by visit.
+    const orderEncounters = new Map(byType('ServiceRequest').flatMap((order: any) => {
+      const encounter = typeof order.encounter?.reference === 'string' ? order.encounter.reference.split('/').pop() : ''
+      return encounter ? [[`ServiceRequest/${order.id}`, encounter] as const] : []
+    }))
+    for (const result of [...byType('Observation'), ...byType('DiagnosticReport')]) {
+      if (!Array.isArray(result.basedOn)) continue
+      result.basedOn = result.basedOn.map((reference: any) => {
+        const display = orderLabels.get(reference.reference)
+        return !reference.display && typeof display === 'string' ? { ...reference, display } : reference
+      })
+      const visits = [...new Set(result.basedOn.flatMap((reference: any) => {
+        const encounter = orderEncounters.get(reference?.reference)
+        return encounter ? [encounter] : []
+      }))]
+      if (visits.length) result._orderEncounterIds = visits
+    }
+
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }
     // VGH data has one encounter per day per department; use first match if multiple same-day.
     const encounters = byType('Encounter')
@@ -1269,14 +1865,20 @@ export const LocalBundleService = {
     // disambiguate when multiple same-day encounters exist across providers
     // (e.g. ENT clinic + pharmacy refill on the same day).
     const encounterByDateProvider = new Map<string, string>()
+    const ambiguousDateProviders = new Set<string>()
     for (const enc of encounters) {
       const d = toDateStr(enc.period?.start)
       if (d && !encounterDateMap.has(d)) {
         encounterDateMap.set(d, enc.id)
       }
       const provider = enc.serviceProvider?.display?.trim() || ''
-      if (d && provider && !encounterByDateProvider.has(`${d}|${provider}`)) {
-        encounterByDateProvider.set(`${d}|${provider}`, enc.id)
+      const providerKey = `${d}|${provider}`
+      if (d && provider && !ambiguousDateProviders.has(providerKey)) {
+        const previous = encounterByDateProvider.get(providerKey)
+        if (previous && previous !== enc.id) {
+          ambiguousDateProviders.add(providerKey)
+          encounterByDateProvider.delete(providerKey)
+        } else encounterByDateProvider.set(providerKey, enc.id)
       }
     }
 
@@ -1294,16 +1896,22 @@ export const LocalBundleService = {
 
     // Promote a referenced Medication.code into medicationCodeableConcept so the
     // display helpers (which only look at medicationCodeableConcept) find a drug
-    // name. References are already relative post-canonicalisation; referenceId
-    // also tolerates urn-form as a second line of defence.
+    // name. Original records use only graph-confirmed references, including
+    // contained and versioned resources. Derived records use unique relative ids.
     const resolveMedicationCode = <T extends {
       medicationCodeableConcept?: unknown
       medicationReference?: { reference?: string }
     }>(m: T): T => {
       if (m.medicationCodeableConcept || !m.medicationReference?.reference) return m
-      const refId = referenceId(m.medicationReference.reference)
+      const sourceKey = sourceKeyByResource.get(m)
+      if (sourceKey) {
+        const edge = sourceReferencesByPath.get(sourceKey + '|medicationReference')
+        const target = edge?.status === 'resolved' ? sourceNodesByKey.get(edge.targetKeys[0])?.resource : undefined
+        return target?.resourceType === 'Medication' && target.code ? { ...m, medicationCodeableConcept: cloneResource(target.code), _clinicalMedicationCodeProvenance: 'graph-reference' } : m
+      }
+      const refId = /^Medication\/([^/]+)$/.exec(m.medicationReference.reference)?.[1]
       const medResource = refId ? medicationMap.get(refId) : null
-      return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code } : m
+      return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code, _clinicalMedicationCodeProvenance: 'mapped-policy' } : m
     }
 
     // Normalize MedicationStatements to a MedicationRequest-compatible shape so
@@ -1355,13 +1963,14 @@ export const LocalBundleService = {
     const meds = attachEncounterRefsForMeds(
       [...medicationRequests, ...medicationStatements],
       encounterByDateProvider,
+      claimEncounterResourcesByKey,
     )
 
-    const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap)
+    const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap, sourceKeyByResource)
     const reports = byType('DiagnosticReport')
     const imagingStudies = attachEncounterRefsByDate(byType('ImagingStudy'), encounterDateMap)
     const procs  = attachEncounterRefsByDate(byType('Procedure'), encounterDateMap)
-    const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap)
+    const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap, sourceKeyByResource)
     const allerg = byType('AllergyIntolerance')
     const docRefs = byType('DocumentReference')
     const comps  = byType('Composition')
@@ -1389,18 +1998,25 @@ export const LocalBundleService = {
             resource,
             sourceCapturedAt,
           )
-          return [summary.id, summary] as const
+          return [recordVariants.has(sourceKeyByResource.get(resource)!) ? sourceKeyByResource.get(resource)! : summary.id, bindMappedResource(summary, resource)] as const
         }),
     ).values()]
 
     const specialMaterialsByProcedure = groupSpecialMaterialsByProcedure(byType('Basic'))
 
     // Build observation map for DiagnosticReport expansion
-    const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
+    const allObs = obs.map((r: any) => ({ ...bindMappedResource(FhirMapper.toObservation(r), r),
+      ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
+      sourceId: (sourceKeyByResource.has(r) ? readClinicalRecordVariantModifier(sourceNodesByKey.get(sourceKeyByResource.get(r)!)!.resource)?.sourceId ?? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id),
+      ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}),
+      clinicalSourceNodeKey: sourceKeyByResource.get(r) }))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
-    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap).map((r: any) =>
-      FhirMapper.toDiagnosticReport(r, allObs)
+    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap, sourceKeyByResource).map((r: any) =>
+      ({ ...bindMappedResource(FhirMapper.toDiagnosticReport(r, allObs), r), clinicalSourceNodeKey: sourceKeyByResource.get(r),
+        ...(recordVariants.has(sourceKeyByResource.get(r)!) ? { clinicalRecordVariant: recordVariants.get(sourceKeyByResource.get(r)!) } : {}),
+        sourceId: (sourceKeyByResource.has(r) ? readClinicalRecordVariantModifier(sourceNodesByKey.get(sourceKeyByResource.get(r)!)!.resource)?.sourceId ?? sourceNodesByKey.get(sourceKeyByResource.get(r)!)?.resource.id : r.id),
+        ...(derivedMembers.has(sourceKeyByResource.get(r)!) ? { clinicalSourceDerivedMemberKeys: derivedMembers.get(sourceKeyByResource.get(r)!) } : {}) })
     )
 
     // Separate vital signs from other observations
@@ -1411,26 +2027,30 @@ export const LocalBundleService = {
     })
 
     const collection: ClinicalDataCollection = {
-      conditions:       conds.map((r: any) => FhirMapper.toCondition(r)),
-      medications:      meds.map((r: any) => FhirMapper.toMedication(r)),
+      clinicalSource,
+      conditions:       conds.map((r: any) => bindMappedResource(FhirMapper.toCondition(r), r)),
+      medications:      meds.map((r: any) => ({ ...bindMappedResource(FhirMapper.toMedication(r), r), ...(r.medicationCodeableConcept ? { clinicalMedicationCodeProvenance: r._clinicalMedicationCodeProvenance ?? 'mapped-policy' } : {}) })),
       medicationRemainingSummaries,
-      allergies:        allerg.map((r: any) => FhirMapper.toAllergy(r)),
+      allergies:        allerg.map((r: any) => bindMappedResource(FhirMapper.toAllergy(r), r)),
       observations,
       vitalSigns,
       diagnosticReports: processedReports,
-      imagingStudies:    imagingStudies.map((r: any) => FhirMapper.toImagingStudy(r)),
-      procedures:       procs.map((r: any) => FhirMapper.toProcedure(r, specialMaterialsByProcedure)),
-      encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
-      documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
-      compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
-      immunizations:    imms.map((r: any) => FhirMapper.toImmunization(r)),
-      consents:         consents.map((r: any) => FhirMapper.toConsent(r)),
-      devices:          devices.map((r: any) => FhirMapper.toDevice(r)),
-      carePlans:        carePlans.map((r: any) => FhirMapper.toCarePlan(r)),
+      imagingStudies:    imagingStudies.map((r: any) => bindMappedResource(FhirMapper.toImagingStudy(r), r)),
+      procedures:       procs.map((r: any) => bindMappedResource(FhirMapper.toProcedure(r, specialMaterialsByProcedure), r)),
+      encounters:       encounters.map((r: any) => bindMappedResource(FhirMapper.toEncounter(r), r)),
+      documentReferences: docRefs.map((r: any) => bindMappedResource(FhirMapper.toDocumentReference(r), r)),
+      compositions:     comps.map((r: any) => bindMappedResource(FhirMapper.toComposition(r), r)),
+      immunizations:    imms.map((r: any) => bindMappedResource(FhirMapper.toImmunization(r), r)),
+      consents:         consents.map((r: any) => bindMappedResource(FhirMapper.toConsent(r), r)),
+      devices:          devices.map((r: any) => bindMappedResource(FhirMapper.toDevice(r), r)),
+      carePlans:        carePlans.map((r: any) => bindMappedResource(FhirMapper.toCarePlan(r), r)),
       ...(sourceMetadata ? { sourceMetadata } : {}),
     }
 
-    return { patient, collection }
+    collection.medications = projectClinicalMedicationContents(collection.medications, clinicalSource)
+    collection.resourceQueryStatus = projectClinicalMedicationQueryStatus(collection.medications, collection.resourceQueryStatus)
+    const mappedKeys = new Set(Object.values(collection).filter(Array.isArray).flatMap(rows => rows.flatMap((row: any) => row?.clinicalSourceNodeKey ? [row.clinicalSourceNodeKey as string] : [])))
+    return { patient, collection: selectAutomaticClinicalRecordRows(collection, createClinicalRecordResolution(clinicalSource, mappedKeys, false)) }
   },
 
   async parseStored(): Promise<LocalBundleData | null> {
@@ -1445,6 +2065,7 @@ export const LocalBundleService = {
     if (!hasNhiDrugTerminologyKnowledge(bundle)) {
       let migration = terminologyMigrationByBundle.get(bundle)
       if (!migration) {
+        const owner = { bundle, importId: memBundleImportId }
         migration = (async () => {
           // Worker-routed: this upgrade runs while the workspace is painting
           // its first patient view, and the terminology snapshot's JSON.parse
@@ -1452,18 +2073,26 @@ export const LocalBundleService = {
           const result = await enrichBundleWithNhiDrugTerminologyOffMainThread(
             bundle as Record<string, unknown>,
           )
+          if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return memBundle
           if (
             result.report.status === 'enriched'
             && result.report.linkedRequestCount > 0
           ) {
-            await this.save(result.bundle, {
-              ...(memBundleImportId ? { importId: memBundleImportId } : {}),
-              demo: memBundleIsDemo,
-              ...(memBundleSourceMetadata
-                ? { sourceMetadata: memBundleSourceMetadata }
-                : {}),
-              patientProfile: memUserEnteredPatientProfile,
-            })
+            // Query refresh may itself be awaited by an import holding this
+            // queue. Return the derived view now; persist it behind that writer
+            // only if its original chart still owns the scope.
+            void serializeLocalBundleMutation(async () => {
+              if (memBundle !== owner.bundle || memBundleImportId !== owner.importId) return
+              // Optional enrichment must not turn a memory-only chart into a
+              // purported durable predecessor for the next progressive stage.
+              if (memBundleUsesMemoryOnlySession) return
+              await this.save(result.bundle, {
+                ...(owner.importId ? { importId: owner.importId } : {}),
+                demo: memBundleIsDemo,
+                ...(memBundleSourceMetadata ? { sourceMetadata: memBundleSourceMetadata } : {}),
+                patientProfile: memUserEnteredPatientProfile,
+              })
+            }).catch(() => { /* optional enrichment persistence; original chart remains available */ })
             return result.bundle
           }
           return bundle
@@ -1471,13 +2100,14 @@ export const LocalBundleService = {
         terminologyMigrationByBundle.set(bundle, migration)
       }
       bundle = await migration
+      if (!bundle) return null
     }
 
     const sourceMetadata = memBundleSourceMetadata
     const cached = parsedStoredDataByBundle.get(bundle)
     const parsed = cached?.sourceMetadata === sourceMetadata
       ? cached.data
-      : this.parse(bundle, sourceMetadata ?? undefined)
+      : this.parse(bundle, sourceMetadata ?? undefined, memBundleImportId ?? undefined)
     if (!parsed) return null
     if (cached?.sourceMetadata !== sourceMetadata) {
       parsedStoredDataByBundle.set(bundle, { sourceMetadata, data: parsed })
@@ -1514,25 +2144,55 @@ export const LocalBundleService = {
       throw new Error('Encrypted browser storage is unavailable')
     }
 
-    const key = await getSessionBundleKey()
+    const owner = { importId: memBundleImportId, demo: memBundleIsDemo,
+      sourceMetadata: memBundleSourceMetadata, originalFhir: memOriginalFhir,
+      recovering: memBundleUsesMemoryOnlySession }
+    const assertOwner = () => {
+      if (memBundle !== bundle || memBundleImportId !== owner.importId) throw new Error('目前病歷已變更，請重新開啟病人資料。')
+    }
+    const key = await getSessionBundleKey({ create: owner.recovering })
     if (!key) throw new Error('Encrypted browser storage is unavailable')
+    assertOwner()
     const persisted = {
       __mediprismaBundle: 1,
-      importId: memBundleImportId,
-      demo: memBundleIsDemo,
-      ...(memBundleSourceMetadata
-        ? { sourceMetadata: memBundleSourceMetadata }
+      importId: owner.importId,
+      demo: owner.demo,
+      ...(owner.sourceMetadata
+        ? { sourceMetadata: owner.sourceMetadata }
         : {}),
       ...(normalized ? { patientProfile: normalized } : {}),
       bundle,
     } satisfies PersistedBundleEnvelope
 
-    // Update in-memory state only after the encrypted IndexedDB write succeeds.
-    await idbPut(
-      await encryptJson(key, persisted),
-      bundleRecordKey(memBundleImportId),
-    )
-    writeTabBundleScope(memBundleImportId, memBundleIsDemo)
-    memUserEnteredPatientProfile = normalized
+    const previousMarker = owner.recovering ? sessionStorage.getItem(STORAGE_KEY) : null
+    const previousDemo = owner.recovering ? sessionStorage.getItem(DEMO_FLAG_KEY) : null
+    try {
+      if (owner.recovering && owner.originalFhir) await storeOriginalFhir(owner.importId, owner.originalFhir, key)
+      assertOwner()
+      const encrypted = await encryptJson(key, persisted)
+      assertOwner()
+      await idbPut(encrypted, bundleRecordKey(owner.importId))
+      assertOwner()
+      try { writeTabBundleScope(owner.importId, owner.demo) }
+      catch (error) {
+        if (owner.recovering) try {
+          for (const [storageKey, value] of [[STORAGE_KEY, previousMarker], [DEMO_FLAG_KEY, previousDemo]] as const) {
+            if (value === null) sessionStorage.removeItem(storageKey)
+            else sessionStorage.setItem(storageKey, value)
+          }
+        } catch { /* browser storage may remain blocked */ }
+        throw error
+      }
+      // Recovery is durable only after both original source and chart are saved.
+      memBundleUsesMemoryOnlySession = false
+      memUserEnteredPatientProfile = normalized
+      if (owner.recovering && owner.originalFhir) memOriginalFhir = null
+    } catch (error) {
+      if (owner.recovering) try {
+        await idbDelete(bundleRecordKey(owner.importId))
+        await idbDeleteImagesForImport(owner.importId, true)
+      } catch { /* unpublished recovery data expires; the original Blob stays in memory */ }
+      throw error
+    }
   },
 }

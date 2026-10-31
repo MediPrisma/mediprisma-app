@@ -107,6 +107,10 @@ export function IpsExportPreview({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showChecks, setShowChecks] = useState(false)
   const [pendingAction, setPendingAction] = useState<'copy' | 'download' | 'pdf' | null>(null)
+  // A confirmed action waits here until the dialog has finished closing:
+  // print() blocks the page, and a dialog still animating out when it opens
+  // stays on screen afterwards with the page locked behind it.
+  const confirmedActionRef = useRef<typeof pendingAction>(null)
   const printSourceRef = useRef<HTMLDivElement>(null)
   const json = useMemo(() => JSON.stringify(bundle, null, 2), [bundle])
   const markdownBody = useMemo(() => splitFrontmatter(markdown).body, [markdown])
@@ -317,14 +321,20 @@ code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
       </Collapsible>
 
       <AlertDialog open={pendingAction !== null} onOpenChange={(open) => !open && setPendingAction(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          onCloseAutoFocus={() => {
+            const action = confirmedActionRef.current
+            confirmedActionRef.current = null
+            if (action) performAction(action)
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>{x.shareConfirmTitle}</AlertDialogTitle>
             <AlertDialogDescription>{x.shareConfirmDescription}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (pendingAction) performAction(pendingAction); setPendingAction(null) }}>
+            <AlertDialogAction onClick={() => { confirmedActionRef.current = pendingAction; setPendingAction(null) }}>
               {x.shareConfirmAction}
             </AlertDialogAction>
           </AlertDialogFooter>

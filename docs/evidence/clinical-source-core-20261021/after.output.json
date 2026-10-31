@@ -1,0 +1,23 @@
+{
+  "version": "after",
+  "observations": [
+    {
+      "id": "cs38a5fe7c2c9a53a2",
+      "sourceId": "synthetic-result",
+      "value": 91
+    }
+  ],
+  "observationCount": 1,
+  "sourceNodeCount": 7,
+  "sourceOccurrenceCount": 8,
+  "sourceTypes": [
+    "FutureClinicalType",
+    "Observation",
+    "Organization",
+    "Patient",
+    "Provenance",
+    "ServiceRequest"
+  ],
+  "sameRecordEvidenceCount": 1,
+  "originalUnchanged": true
+}

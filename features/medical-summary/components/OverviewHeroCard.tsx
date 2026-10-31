@@ -2,12 +2,15 @@
 // button. Safety alerts live in 開藥注意 after 影像與病理重點.
 "use client"
 
-import { Check, ClipboardList, Copy, Flag } from "lucide-react"
+import { Check, ClipboardList, Copy, Info, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { trackEvent } from "@/src/application/telemetry/usage-analytics"
 import type { MedicalSummaryResult } from "@/src/core/entities/medical-summary.entity"
+import { useOptionalLanguage } from "@/src/application/providers/language.provider"
+import { localizeDemoDisplayText } from "@/src/shared/utils/demo-display"
 
 interface OverviewHeroCardProps {
   result: MedicalSummaryResult
@@ -17,10 +20,12 @@ interface OverviewHeroCardProps {
   copyLabel: string
   copiedLabel: string
   copyFailedLabel: string
-  /** 待核對 beside a headline that does not match the problem list (items it
-   *  names that the list does not, medicines, lab values); labels, never
-   *  rewrites. */
+  /** Text comparison details; a mismatch alone does not establish an error. */
   reviewLabel?: string
+  reviewButtonLabel: string
+  reviewDescription: string
+  /** Failure to generate the comparison list remains visible inline. */
+  reviewUnavailable?: boolean
 }
 
 export function OverviewHeroCard({
@@ -31,11 +36,17 @@ export function OverviewHeroCard({
   copiedLabel,
   copyFailedLabel,
   reviewLabel,
+  reviewButtonLabel,
+  reviewDescription,
+  reviewUnavailable = false,
 }: OverviewHeroCardProps) {
   const { copied, copy } = useCopyToClipboard()
+  const locale = useOptionalLanguage()?.locale ?? "zh-TW"
+  // An English run quotes the record's Chinese demo facility names.
+  const headline = localizeDemoDisplayText(result.headline, locale)
 
   const handleCopy = async () => {
-    if (!await copy(result.headline.trim())) {
+    if (!await copy(headline.trim())) {
       toast.error(copyFailedLabel)
       return
     }
@@ -60,6 +71,29 @@ export function OverviewHeroCard({
           >
             {title}
           </h3>
+          {reviewLabel && !reviewUnavailable ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-[44px] shrink-0 gap-1 px-1.5 text-[length:max(13px,0.8125rem)] text-muted-foreground lg:min-h-8"
+                >
+                  <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                  {reviewButtonLabel}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                aria-label={reviewButtonLabel}
+                className="w-[min(22rem,calc(100vw-2rem))] space-y-2 break-words text-[length:max(13px,0.8125rem)] leading-relaxed"
+              >
+                <p className="font-medium">{reviewLabel}</p>
+                <p className="text-muted-foreground">{reviewDescription}</p>
+              </PopoverContent>
+            </Popover>
+          ) : null}
           <span className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
             {dataRange ? (
               <span className="text-[length:max(14px,0.875rem)] tabular-nums text-foreground/80">{dataRange}</span>
@@ -82,14 +116,15 @@ export function OverviewHeroCard({
           </span>
         </div>
         <p className="mt-1.5 text-[length:max(15px,1rem)] font-semibold leading-snug text-foreground">
-          {result.headline}
+          {headline}
         </p>
-        {reviewLabel ? (
+        {reviewLabel && reviewUnavailable ? (
           <p
             className="mt-1 inline-flex items-center gap-0.5 rounded border border-amber-500/40 px-1 text-[length:max(13px,0.8125rem)] leading-5 text-amber-700 dark:text-amber-300"
             data-headline-review
+            role="status"
           >
-            <Flag className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
+            <TriangleAlert className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-300" aria-hidden="true" />
             {reviewLabel}
           </p>
         ) : null}

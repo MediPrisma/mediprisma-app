@@ -17,6 +17,14 @@ describe('SMART issuer policy', () => {
     })).toBe(true)
   })
 
+  it('trusts the MediPrisma School training server by default, and not look-alikes', () => {
+    const options = { configuredIssuers: '' }
+    expect(isTrustedSmartIssuer('https://school.mediprisma.tw/fhir/RD-0123ABCD', options)).toBe(true)
+    expect(isTrustedSmartIssuer('http://school.mediprisma.tw/fhir/RD-0123ABCD', options)).toBe(false)
+    expect(isTrustedSmartIssuer('https://school.mediprisma.tw.evil.example/fhir/RD-0123ABCD', options)).toBe(false)
+    expect(isTrustedSmartIssuer('https://fhir.mediprisma.tw/cdss/', options)).toBe(false)
+  })
+
   it('does not widen trust for malformed configuration or issuer values', () => {
     expect(isTrustedSmartIssuer('not-a-url', {
       configuredIssuers: 'also-not-a-url',

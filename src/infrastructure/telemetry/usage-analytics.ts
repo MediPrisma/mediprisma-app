@@ -45,8 +45,28 @@ export type AnalyticsArea =
 
 export type AnalyticsTrigger = 'user' | 'auto'
 
-/** Which guided tour. `custom-summary` is the right tour's deep-dive kind. */
-export type AnalyticsTour = 'left' | 'right' | 'custom-summary'
+/**
+ * Which guided tour: an id from features/guided-tour/guided-tour.tours.ts, or
+ * `custom-summary`, the chaptered guide with its own engine. A test keeps this
+ * list and the tour definitions in step.
+ */
+export const ANALYTICS_TOURS = [
+  'getting-started',
+  'know-patient',
+  'labs-reports',
+  'medications',
+  'split-view',
+  'medical-summary',
+  'custom-summary',
+  'clinical-chat',
+  'export',
+  'calculator',
+  'care-guidance',
+  'education',
+  'settings',
+  'news-lab-trend-zoom',
+] as const
+export type AnalyticsTour = typeof ANALYTICS_TOURS[number]
 
 /** Where the 「AI 翻譯解讀」 entry point was pressed. */
 export type ReportInterpretHost = 'report-row' | 'document-card' | 'document-dialog'
@@ -282,7 +302,7 @@ const ENUM_PARAM_VALUES: Record<string, readonly string[]> = {
   trigger: ['user', 'auto'],
   source: ['typed', 'chip'],
   mode: ['all', 'labs', 'reports'],
-  tour: ['left', 'right', 'custom-summary'],
+  tour: ANALYTICS_TOURS,
   tour_outcome: ['finish', 'abandon'],
   host: ['report-row', 'document-card', 'document-dialog'],
   action: ['open', 'regenerate'],

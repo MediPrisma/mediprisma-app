@@ -18,6 +18,7 @@ import { cn } from '@/src/shared/utils/cn.utils'
 import type { LabPivot } from '@/src/shared/utils/lab-pivot.utils'
 import { findPinnableLab, resolvePinnedLab } from '@/src/shared/utils/pinned-labs'
 import {
+  emrNoteDateStyle,
   formatEmrDate,
   newEmrFormat,
   renderEmrCustomFormat,
@@ -219,7 +220,7 @@ export function EmrCustomFormatSection({
                         {pendingExam && (
                           <span className="flex flex-wrap gap-2 pl-5">
                             <Button type="button" size="sm" variant="outline" className="h-7 bg-card text-xs" onClick={() => decide(pendingExam.exam, 'useOlder')}>
-                              {c.notes.examUseOlder.replace('{olderDate}', formatEmrDate(pendingExam.olderDate, format.dateStyle))}
+                              {c.notes.examUseOlder.replace('{olderDate}', formatEmrDate(pendingExam.olderDate, emrNoteDateStyle(format.dateStyle)))}
                             </Button>
                             <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => decide(pendingExam.exam, 'skip')}>
                               {c.notes.examSkip}

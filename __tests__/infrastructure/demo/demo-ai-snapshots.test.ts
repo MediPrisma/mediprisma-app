@@ -410,7 +410,8 @@ describe('demo snapshot citation keys', () => {
       const catalog = getSourceCatalog(scoped, 'zh-TW')
       const resolved = citedKeys().map((key) => {
         const remapped = remapDemoSnapshotSourceKeys({ sources: [key] }, catalog).sources[0]
-        return [key, catalog.find((source) => source.key === remapped)?.resourceId]
+        const source = catalog.find((entry) => entry.key === remapped)
+        return [key, source?.sourceId ?? source?.resourceId]
       })
       if (scope === 'all-data') {
         expect(resolved).toEqual(citedKeys().map((key) => [key, DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key]]))
@@ -427,5 +428,30 @@ describe('demo snapshot citation keys', () => {
     const catalog = [{ key, resourceId: `${resourceId}-other`, resourceType: 'MedicationRequest', display: 'other' }] as any
     const remapped = remapDemoSnapshotSourceKeys({ sources: [key] }, catalog).sources[0]
     expect(catalog.some((source: { key: string }) => source.key === remapped)).toBe(false)
+  })
+
+  it('matches a legacy FHIR id only when sourceId uniquely identifies one row', () => {
+    const [legacyKey, sourceId] = Object.entries(DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY).find(([key]) => key.startsWith('O'))!
+    const catalog = [{ key: 'O-current', resourceType: 'Observation', resourceId: 'cs1234567890abcdef', sourceId, display: 'current row' }] as any
+    expect(remapDemoSnapshotSourceKeys({ sources: [legacyKey] }, catalog).sources).toEqual(['O-current'])
+
+    const ambiguous = [
+      ...catalog,
+      { ...catalog[0], key: 'O-other', resourceId: 'csfedcba0987654321' },
+    ]
+    expect(remapDemoSnapshotSourceKeys({ sources: [legacyKey] }, ambiguous).sources).toEqual([`stale:${legacyKey}`])
+    expect(remapDemoSnapshotSourceKeys({ sources: [legacyKey] }, [{ ...catalog[0], sourceId: undefined }]).sources)
+      .toEqual([`stale:${legacyKey}`])
+  })
+
+  it('resolves a bundled legacy Observation citation against the real stable-ID demo catalog', async () => {
+    const collection = await demoCollection()
+    const catalog = getSourceCatalog(collection, 'zh-TW')
+    const [legacyKey, legacyId] = Object.entries(DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY).find(([key]) => key.startsWith('O'))!
+    const current = catalog.find((entry) => entry.sourceId === legacyId)
+    expect(current).toBeDefined()
+    expect(current!.resourceId).not.toBe(legacyId)
+    expect(Object.keys(current!)).not.toContain('sourceId')
+    expect(remapDemoSnapshotSourceKeys({ sources: [legacyKey] }, catalog).sources).toEqual([current!.key])
   })
 })

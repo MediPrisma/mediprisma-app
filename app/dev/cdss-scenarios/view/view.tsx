@@ -11,7 +11,7 @@ import { AuthProvider } from '@/src/application/providers/auth.provider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useEffect, useSyncExternalStore } from 'react'
 import { installMeasure } from './measure'
-import { installSimulate } from './simulate'
+import { SCENARIO_PAGE_PACK, installSimulate } from './simulate'
 import { getCdssDecisionTimings } from '@/features/clinical-decision-support/stores/cdss-decision-timing.store'
 import index from '../bundles/index.json'
 import { DataSelectionProvider } from '@/src/application/providers/data-selection.provider'
@@ -73,9 +73,10 @@ export default function View() {
     void (async () => {
       for (let i = 0; i < 40 && !document.querySelector('[data-testid^="cdss-section-module-"], [data-testid="cdss-hf-visit-flow"], [data-testid="cdss-af-visit-flow"], [data-testid^="cdss-visit-"]'); i += 1) await sleep(500)
       await sleep(1500)
-      if (scenario?.page === 'af') {
-        const button = [...document.querySelectorAll('button')].find((b) => /心房顫動/.test(b.textContent || ''))
-        button?.click()
+      // Open the scenario's disease; heart failure is already on screen.
+      const packId = SCENARIO_PAGE_PACK[scenario?.page as keyof typeof SCENARIO_PAGE_PACK]
+      if (packId) {
+        document.querySelector<HTMLButtonElement>(`[data-testid="cdss-disease-switch-${packId}"]`)?.click()
         await sleep(2500)
       }
       const result = w.__cdssMeasure()

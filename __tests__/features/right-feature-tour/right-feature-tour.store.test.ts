@@ -5,7 +5,7 @@ import {
   useRightFeatureTourStore,
 } from '@/features/right-feature-tour/right-feature-tour.store'
 
-describe('right feature tour store', () => {
+describe('right panel tour channel', () => {
   it('opens the custom view for every custom step and the editor only for its fields', () => {
     for (const step of ['custom-summary', 'custom-summary-edit', 'custom-summary-generate', 'custom-summary-read-result'] as const) {
       expect(isCustomSummaryTourStep(step)).toBe(true)
@@ -26,25 +26,19 @@ describe('right feature tour store', () => {
       active: false,
       stepId: null,
       session: 0,
-      kind: 'quick',
+      kind: 'scene',
       launcherOpen: false,
     })
   })
 
-  it('starts a new tour session from the overview', () => {
-    useRightFeatureTourStore.getState().start()
-
+  it('shows a scene without starting a tour session', () => {
+    useRightFeatureTourStore.getState().showScene('chat-compose')
     expect(useRightFeatureTourStore.getState()).toMatchObject({
       active: true,
-      stepId: 'overview',
-      session: 1,
+      kind: 'scene',
+      stepId: 'chat-compose',
+      session: 0,
     })
-  })
-
-  it('updates the current step and stops cleanly', () => {
-    useRightFeatureTourStore.getState().start()
-    useRightFeatureTourStore.getState().setStep('chat-compose')
-    expect(useRightFeatureTourStore.getState().stepId).toBe('chat-compose')
 
     useRightFeatureTourStore.getState().stop()
     expect(useRightFeatureTourStore.getState()).toMatchObject({
@@ -61,8 +55,8 @@ describe('right feature tour store', () => {
       active: true, launcherOpen: false, kind: 'custom-summary', stepId: 'custom-summary-library', session: 1,
     })
     useRightFeatureTourStore.getState().stop()
-    useRightFeatureTourStore.getState().start()
-    expect(useRightFeatureTourStore.getState()).toMatchObject({ kind: 'quick', stepId: 'overview', session: 2 })
+    useRightFeatureTourStore.getState().showScene('summary')
+    expect(useRightFeatureTourStore.getState()).toMatchObject({ kind: 'scene', stepId: 'summary', session: 1 })
   })
 
   it('cancels the catalogue without starting a tour', () => {

@@ -1,11 +1,12 @@
 import type { NhiViewerAction, NhiViewerRequestDescriptor } from '../types'
+import { isTrustedLegacyNhiViewerAttachment, type AttachmentLike } from '@/src/shared/utils/nhi-viewer-attachment'
+export { isTrustedLegacyNhiViewerAttachment, MAX_NHI_VIEWER_URL_LENGTH } from '@/src/shared/utils/nhi-viewer-attachment'
 
 export const NHI_VIEWER_REQUEST_EXTENSION_URL =
   'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-nhi-viewer-request'
 export const MEDIPRISMA_ORIGIN = 'https://mediprisma.tw'
 export const MEDIPRISMA_LOCAL_DEV_ORIGIN = 'http://localhost:3001'
 export const NHI_VIEWER_REQUEST_TIMEOUT_MS = 20_000
-export const MAX_NHI_VIEWER_URL_LENGTH = 100_000
 
 type ExtensionLike = {
   url?: unknown
@@ -69,30 +70,6 @@ function requestExtensions(report: DiagnosticReportLike): ExtensionLike[] {
     !!item && typeof item === 'object'
       && (item as ExtensionLike).url === NHI_VIEWER_REQUEST_EXTENSION_URL
   ))
-}
-
-type AttachmentLike = { contentType?: unknown; url?: unknown; title?: unknown }
-
-export function isTrustedLegacyNhiViewerAttachment(
-  attachment: AttachmentLike | null | undefined,
-): boolean {
-  const mediaType = typeof attachment?.contentType === 'string'
-    ? attachment.contentType.split(';', 1)[0].trim().toLowerCase()
-    : ''
-  if (mediaType !== 'text/html') return false
-  const rawUrl = attachment?.url
-  if (typeof rawUrl !== 'string' || rawUrl.length === 0 || rawUrl.length > MAX_NHI_VIEWER_URL_LENGTH) return false
-
-  try {
-    const url = new URL(rawUrl)
-    return url.protocol === 'https:'
-      && url.username === ''
-      && url.password === ''
-      && url.port === ''
-      && (url.hostname === 'nhi.gov.tw' || url.hostname.endsWith('.nhi.gov.tw'))
-  } catch {
-    return false
-  }
 }
 
 /** New extension wins completely. Legacy URLs are exposed only if absent. */

@@ -99,16 +99,27 @@ export function remapDemoSnapshotSourceKeys<T>(
   snapshot: T,
   catalog: SummarySourceCatalogEntry[],
 ): T {
-  const currentKeyByResourceId = new Map(
-    catalog.map((source) => [source.resourceId, source.key]),
-  )
+  const uniqueKeyIndex = (valueOf: (source: SummarySourceCatalogEntry) => string | undefined) => {
+    const index = new Map<string, string | null>()
+    for (const source of catalog) {
+      const value = valueOf(source)
+      if (!value) continue
+      index.set(value, index.has(value) ? null : source.key)
+    }
+    return index
+  }
+  const currentKeyByResourceId = uniqueKeyIndex((source) => source.resourceId)
+  const currentKeyBySourceId = uniqueKeyIndex((source) => source.sourceId)
   // A pinned resource missing from this catalog must not fall back to its
   // old key: after records are added, that key names a different resource.
-  // An unresolvable key surfaces as an unverified citation instead.
+  // Legacy FHIR ids may be used only when sourceId identifies one catalog row;
+  // an ambiguous/missing match surfaces as an unverified citation instead.
   const remapKey = (key: string) => {
     const resourceId = DEMO_SNAPSHOT_RESOURCE_ID_BY_KEY[key]
     if (!resourceId) return key
-    return currentKeyByResourceId.get(resourceId) ?? `stale:${key}`
+    return currentKeyByResourceId.get(resourceId)
+      ?? currentKeyBySourceId.get(resourceId)
+      ?? `stale:${key}`
   }
   const visit = (value: unknown, field?: string): unknown => {
     if (Array.isArray(value)) {

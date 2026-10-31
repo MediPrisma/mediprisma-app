@@ -1,0 +1,1265 @@
+{
+  "version": "before",
+  "medicationRows": [
+    {
+      "id": "synthetic-anticoagulant",
+      "sourceId": "synthetic-anticoagulant",
+      "variant": null
+    },
+    {
+      "id": "synthetic-anticoagulant",
+      "sourceId": "synthetic-anticoagulant",
+      "variant": null
+    }
+  ],
+  "excluded": [],
+  "medicationClasses": {
+    "insulin": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hypoglycemiaRiskMedications",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "insulinAllergy"
+    },
+    "sulfonylurea": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hypoglycemiaRiskMedications",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "sulfonylureaAllergy"
+    },
+    "sglt2-inhibitor": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "sglt2Therapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "sglt2Allergy"
+    },
+    "arni": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "arniTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "hf-evidence-based-beta-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hfEvidenceBetaBlockerTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "loop-diuretic": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "loopDiureticTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "statin": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "statinTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "statinAllergy"
+    },
+    "ezetimibe": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "ezetimibeTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "ezetimibeAllergy"
+    },
+    "pcsk9-inhibitor": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "pcsk9Therapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "pcsk9Allergy"
+    },
+    "bempedoic-acid": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "bempedoicAcidTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "bempedoicAcidAllergy"
+    },
+    "fibrate": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "fibrateTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "fibrateAllergy"
+    },
+    "prescription-omega-3": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "prescriptionOmega3Therapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "prescriptionOmega3Allergy"
+    },
+    "ace-inhibitor-or-arb": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "aceArbTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "aceArbAllergy"
+    },
+    "calcium-channel-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "ccbTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "ccbAllergy"
+    },
+    "ace-inhibitor": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "aceInhibitorTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "angiotensin-receptor-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "arbTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "dihydropyridine-calcium-channel-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "dhpCcbTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "direct-renin-inhibitor": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "directReninInhibitorTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "centrally-acting-antihypertensive": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "centrallyActingAntihypertensiveTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "alpha-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "alphaBlockerTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "hydralazine": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hydralazineTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "potassium-sparing-diuretic": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "potassiumSparingDiureticTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "thiazide-or-thiazide-like-diuretic": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "thiazideTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "thiazideAllergy"
+    },
+    "beta-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "betaBlockerTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "betaBlockerAllergy"
+    },
+    "nonselective-beta-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "nonselectiveBetaBlockerTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "nonselectiveBetaBlockerAllergy"
+    },
+    "mineralocorticoid-receptor-antagonist": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "mraTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "mraAllergy"
+    },
+    "lactulose": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "lactuloseTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "lactuloseAllergy"
+    },
+    "rifaximin": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "rifaximinTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "rifaximinAllergy"
+    },
+    "finerenone": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "finerenoneTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "finerenoneAllergy"
+    },
+    "calcium-based-phosphate-binder": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "calciumPhosphateBinderTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "non-calcium-phosphate-binder": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "nonCalciumPhosphateBinderTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "iron-therapy": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "ironTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "ironTherapyAllergy"
+    },
+    "erythropoiesis-stimulating-agent": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "esaTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": [],
+      "allergyFactKey": "esaAllergy"
+    },
+    "hif-phi": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hifPhiTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "ivabradine": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "ivabradineTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "vericiguat": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "vericiguatTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "hydralazine-isdn": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hydralazineIsdnTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "digoxin": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "digoxinTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "non-dihydropyridine-calcium-channel-blocker": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hfHarmfulNonDhpCcb",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "thiazolidinedione": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hfHarmfulThiazolidinedione",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "saxagliptin": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hfHarmfulSaxagliptin",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "hf-avoided-antiarrhythmic": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hfHarmfulAntiarrhythmic",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "nsaid-or-cox2-inhibitor": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "hfHarmfulNsaid",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25"
+    },
+    "aspirin": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "aspirinTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "p2y12-inhibitor": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "p2y12Therapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "colchicine": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "colchicineTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "cv-benefit-glp1-receptor-agonist": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "cvBenefitGlp1Therapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    },
+    "proton-pump-inhibitor": {
+      "state": "uncertain",
+      "medicationNames": [],
+      "factKey": "protonPumpInhibitorTherapy",
+      "dataWindowStartDate": "2026-09-25",
+      "dataWindowEndDate": "2026-09-25",
+      "allergyState": "not-found",
+      "allergyNames": []
+    }
+  },
+  "anticoagulantFact": {
+    "zh": "用藥暴露紀錄（院內使用待確認）：辨識到直接口服抗凝血劑：Apixaban (Eliquis) FC tab 5 mg、Apixaban (Eliquis) FC tab 5 mg",
+    "en": "Medication exposure record (hospital use unconfirmed): Direct oral anticoagulant record(s): Apixaban (Eliquis) FC tab 5 mg, Apixaban (Eliquis) FC tab 5 mg",
+    "sources": [
+      {
+        "resourceType": "MedicationRequest",
+        "resourceId": "synthetic-anticoagulant",
+        "date": "2026-09-25",
+        "status": "active",
+        "value": "Apixaban (Eliquis) FC tab 5 mg",
+        "coding": [
+          {
+            "system": "urn:oid:vgh.medication.generic",
+            "display": "Apixaban (Eliquis) FC tab 5 mg"
+          }
+        ],
+        "sourceSystem": "fhir"
+      },
+      {
+        "resourceType": "MedicationRequest",
+        "resourceId": "synthetic-anticoagulant",
+        "date": "2026-09-25",
+        "status": "active",
+        "value": "Apixaban (Eliquis) FC tab 5 mg",
+        "coding": [
+          {
+            "system": "urn:oid:vgh.medication.generic",
+            "display": "Apixaban (Eliquis) FC tab 5 mg"
+          }
+        ],
+        "sourceSystem": "fhir"
+      }
+    ]
+  },
+  "regimens": [
+    {
+      "ingredient": "apixaban",
+      "name": "Apixaban (Eliquis) FC tab 5 mg",
+      "doseMg": 5,
+      "timesPerDay": 2,
+      "date": "2026-09-25",
+      "sources": [
+        {
+          "resourceType": "MedicationRequest",
+          "resourceId": "synthetic-anticoagulant",
+          "date": "2026-09-25",
+          "status": "active",
+          "value": "Apixaban (Eliquis) FC tab 5 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "display": "Apixaban (Eliquis) FC tab 5 mg"
+            }
+          ],
+          "sourceSystem": "fhir"
+        }
+      ]
+    },
+    {
+      "ingredient": "apixaban",
+      "name": "Apixaban (Eliquis) FC tab 5 mg",
+      "doseMg": 2.5,
+      "timesPerDay": 2,
+      "date": "2026-09-25",
+      "sources": [
+        {
+          "resourceType": "MedicationRequest",
+          "resourceId": "synthetic-anticoagulant",
+          "date": "2026-09-25",
+          "status": "active",
+          "value": "Apixaban (Eliquis) FC tab 5 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.generic",
+              "display": "Apixaban (Eliquis) FC tab 5 mg"
+            }
+          ],
+          "sourceSystem": "fhir"
+        }
+      ]
+    }
+  ],
+  "recommendation": {
+    "id": "af-anticoagulation-concordance",
+    "clinicalSection": "treatment",
+    "domain": "medication",
+    "status": "needs-data",
+    "priority": "medium",
+    "title": "核對目前用藥：抗凝適應症",
+    "recommendation": "院內處方仍可能正在使用。開始或加量前，先核對實際用藥、劑量與停藥／暫停狀態；安全判讀持續納入可能的用藥暴露。",
+    "rationale": "院內處方仍可能正在使用。開始或加量前，先核對實際用藥、劑量與停藥／暫停狀態；安全判讀持續納入可能的用藥暴露。",
+    "overviewEvidenceFactKeys": [
+      "currentOralAnticoagulant",
+      "currentAntiplatelet"
+    ],
+    "patientEvidence": [
+      {
+        "label": "口服抗凝",
+        "value": "用藥暴露紀錄（院內使用待確認）：辨識到直接口服抗凝血劑：Apixaban (Eliquis) FC tab 5 mg、Apixaban (Eliquis) FC tab 5 mg",
+        "factKeys": [
+          "currentOralAnticoagulant"
+        ],
+        "sources": [
+          {
+            "resourceType": "MedicationRequest",
+            "resourceId": "synthetic-anticoagulant",
+            "date": "2026-09-25",
+            "status": "active",
+            "value": "Apixaban (Eliquis) FC tab 5 mg",
+            "coding": [
+              {
+                "system": "urn:oid:vgh.medication.generic",
+                "display": "Apixaban (Eliquis) FC tab 5 mg"
+              }
+            ],
+            "sourceSystem": "fhir"
+          },
+          {
+            "resourceType": "MedicationRequest",
+            "resourceId": "synthetic-anticoagulant",
+            "date": "2026-09-25",
+            "status": "active",
+            "value": "Apixaban (Eliquis) FC tab 5 mg",
+            "coding": [
+              {
+                "system": "urn:oid:vgh.medication.generic",
+                "display": "Apixaban (Eliquis) FC tab 5 mg"
+              }
+            ],
+            "sourceSystem": "fhir"
+          }
+        ]
+      }
+    ],
+    "evidenceTables": [
+      {
+        "concept": "af-anticoagulation",
+        "items": [
+          {
+            "id": "af-medication:oac",
+            "label": {
+              "zh": "口服抗凝",
+              "en": "Oral anticoagulation"
+            },
+            "category": "medication",
+            "derivability": "record-derived",
+            "direction": "unknown",
+            "value": "目前使用待確認：Apixaban (Eliquis) FC tab 5 mg",
+            "sources": [
+              {
+                "resourceType": "MedicationRequest",
+                "resourceId": "synthetic-anticoagulant",
+                "date": "2026-09-25",
+                "status": "active",
+                "value": "Apixaban (Eliquis) FC tab 5 mg",
+                "coding": [
+                  {
+                    "system": "urn:oid:vgh.medication.generic",
+                    "display": "Apixaban (Eliquis) FC tab 5 mg"
+                  }
+                ],
+                "sourceSystem": "fhir"
+              }
+            ],
+            "defaultEnabled": false
+          },
+          {
+            "id": "af-clinic:activeBleeding",
+            "label": {
+              "zh": "目前活動性出血",
+              "en": "Active bleeding now"
+            },
+            "category": "context",
+            "derivability": "physician-entered",
+            "direction": "unknown",
+            "value": "未取得／未評估",
+            "defaultEnabled": false
+          },
+          {
+            "id": "af-clinic:oacContraindication",
+            "label": {
+              "zh": "長期抗凝不可逆禁忌",
+              "en": "Non-reversible OAC contraindication"
+            },
+            "category": "context",
+            "derivability": "physician-entered",
+            "direction": "unknown",
+            "value": "未取得／未評估",
+            "defaultEnabled": false
+          },
+          {
+            "id": "af-clinic:hcmOrAmyloidosis",
+            "label": {
+              "zh": "HCM／心臟類澱粉沉積",
+              "en": "HCM / cardiac amyloidosis"
+            },
+            "category": "context",
+            "derivability": "physician-entered",
+            "direction": "unknown",
+            "value": "未取得／未評估",
+            "defaultEnabled": false
+          }
+        ],
+        "supportsCount": 0,
+        "againstCount": 0,
+        "unknownCount": 4,
+        "limitations": [],
+        "evidenceReferences": [
+          {
+            "id": "ESC-AF-2024-OAC-INDICATION",
+            "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+            "publisher": "European Society of Cardiology",
+            "version": "2024",
+            "url": "https://doi.org/10.1093/eurheartj/ehae176#page=29",
+            "recommendationId": "Recommendation Table 6 — anticoagulation",
+            "evidenceGrade": "Class I, Level A / Class I, Level B / Class III, Level A",
+            "page": 29,
+            "printedPage": "3342",
+            "locator": "有血栓栓塞風險的臨床 AF 建議口服抗凝；抗血小板不是替代",
+            "summary": "臨床 AF 合併升高的血栓栓塞風險建議口服抗凝（Class I, A）；HCM 或心臟類澱粉沉積症不論分數都建議抗凝（Class I, B）；抗血小板藥不是抗凝的替代方案（Class III, A）。",
+            "citedStatements": [
+              {
+                "label": "Recommendation Table 6 — oral anticoagulation, Class I, Level A",
+                "text": "Oral anticoagulation is recommended in patients with clinical AF at elevated thromboembolic risk to prevent ischaemic stroke and thromboembolism."
+              },
+              {
+                "label": "Recommendation Table 6 — HCM or cardiac amyloidosis, Class I, Level B",
+                "text": "Oral anticoagulation is recommended in all patients with AF and hypertrophic cardiomyopathy or cardiac amyloidosis, regardless of CHA2DS2-VA score, to prevent ischaemic stroke and thromboembolism."
+              },
+              {
+                "label": "Recommendation Table 6 — antiplatelet therapy, Class III, Level A",
+                "text": "Antiplatelet therapy is not recommended as an alternative to anticoagulation in patients with AF to prevent ischaemic stroke and thromboembolism."
+              }
+            ]
+          },
+          {
+            "id": "ESC-AF-2024-FLUTTER",
+            "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+            "publisher": "European Society of Cardiology",
+            "version": "2024",
+            "url": "https://doi.org/10.1093/eurheartj/ehae176#page=58",
+            "recommendationId": "Recommendation Table 30",
+            "evidenceGrade": "Class I, Level B",
+            "page": 58,
+            "printedPage": "3371",
+            "locator": "心房撲動的抗凝與 AF 相同",
+            "summary": "有血栓栓塞風險的心房撲動病人建議口服抗凝（Class I, B）；ICD-10-CM I48.3／I48.4／I48.92 的病人因此走同一條路徑。",
+            "citedStatements": [
+              {
+                "label": "Recommendation Table 30 — Class I, Level B",
+                "text": "Oral anticoagulation is recommended in patients with atrial flutter at elevated thromboembolic risk to prevent ischaemic stroke and thromboembolism."
+              }
+            ]
+          },
+          {
+            "id": "ESC-AF-2024-LAAO",
+            "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+            "publisher": "European Society of Cardiology",
+            "version": "2024",
+            "url": "https://doi.org/10.1093/eurheartj/ehae176#page=34",
+            "recommendationId": "Recommendation Table 10",
+            "evidenceGrade": "Class IIb, Level C",
+            "page": 34,
+            "printedPage": "3347",
+            "locator": "長期抗凝有禁忌時可考慮經皮左心耳封堵",
+            "summary": "長期抗凝有禁忌的 AF 病人可考慮經皮左心耳封堵（Class IIb, C）；「禁忌」是臨床判斷，雲端紀錄判不出來。",
+            "citedStatements": [
+              {
+                "label": "Recommendation Table 10 — Class IIb, Level C",
+                "text": "Percutaneous LAA occlusion may be considered in patients with AF and contraindications for long-term anticoagulant treatment to prevent ischaemic stroke and thromboembolism."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-RISK-BASED-SELECTION",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=31",
+            "recommendationId": "Section 6.2 Recommendation 1",
+            "evidenceGrade": "COR 1, LOE B-R",
+            "page": 31,
+            "printedPage": "e31",
+            "locator": "年風險 ≥2% 時依血栓栓塞風險選擇治療，不分 AF 型態",
+            "summary": "年中風或血栓栓塞風險 ≥2% 的 AF 病人，降低中風風險的治療選擇應依血栓栓塞風險決定，與 paroxysmal、persistent、long-standing persistent 或 permanent 無關。",
+            "citedStatements": [
+              {
+                "label": "Section 6.2 Recommendation 1 — COR 1, LOE B-R",
+                "text": "In patients diagnosed with AF who have an estimated annual risk of stroke or thromboembolic events ≥2%, selection of therapy to reduce the risk of stroke should be based on the risk of thromboembolism, regardless of whether the AF pattern is paroxysmal, persistent, long-standing persistent, or permanent."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-ASPIRIN-NOT-ALTERNATIVE",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=33",
+            "recommendationId": "Section 6.3.1 Recommendations 4 and 5",
+            "evidenceGrade": "COR 3: Harm, LOE B-R / COR 3: No Benefit, LOE B-NR",
+            "page": 33,
+            "printedPage": "e33",
+            "locator": "Aspirin 單獨或合併 clopidogrel 不是抗凝的替代",
+            "summary": "適合抗凝且無抗血小板適應症的病人，以 aspirin 單獨或合併 clopidogrel 取代抗凝為有害（COR 3: Harm）；沒有中風風險因子的病人用 aspirin 單方預防血栓栓塞沒有益處（COR 3: No Benefit）。",
+            "citedStatements": [
+              {
+                "label": "Section 6.3.1 Recommendation 4 — COR 3: Harm, LOE B-R",
+                "text": "In patients with AF who are candidates for anticoagulation and without an indication for antiplatelet therapy, aspirin either alone or in combination with clopidogrel as an alternative to anticoagulation is not recommended to reduce stroke risk."
+              },
+              {
+                "label": "Section 6.3.1 Recommendation 5 — COR 3: No Benefit, LOE B-NR",
+                "text": "In patients with AF without risk factors for stroke, aspirin monotherapy for prevention of thromboembolic events is of no benefit."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-AFL-RISK",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=57",
+            "recommendationId": "Section 6.8.6 Recommendation 1",
+            "evidenceGrade": "COR 1, LOE B-NR",
+            "page": 57,
+            "printedPage": "e57",
+            "locator": "心房撲動的抗凝與 AF 用同一套風險",
+            "summary": "典型心房撲動病人依 AF 的同一套風險評估決定抗凝；I48.3／I48.4／I48.92 的病人因此走同一條路徑。",
+            "citedStatements": [
+              {
+                "label": "Section 6.8.6 Recommendation 1 — COR 1, LOE B-NR",
+                "text": "For patients with AFL, anticoagulant therapy is recommended according to the same risk profile used for AF."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-LAAO",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=42",
+            "recommendationId": "Section 6.5.1 Recommendation 1",
+            "evidenceGrade": "COR 2a, LOE B-NR",
+            "page": 42,
+            "printedPage": "e42",
+            "locator": "不可逆原因禁忌長期抗凝時，經皮左心耳封堵為合理",
+            "summary": "CHA₂DS₂-VASc ≥2 且因不可逆原因（Table 14）禁忌長期口服抗凝的病人，經皮左心耳封堵為合理（COR 2a）。「禁忌」是臨床判斷，雲端紀錄判不出來。",
+            "citedStatements": [
+              {
+                "label": "Section 6.5.1 Recommendation 1 — COR 2a, LOE B-NR",
+                "text": "In patients with AF, a moderate to high risk of stroke (CHA2DS2-VASc score ≥2), and a contraindication (Table 14) to long-term oral anticoagulation due to a nonreversible cause, percutaneous LAAO (pLAAO) is reasonable."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-TABLE-14",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=43",
+            "recommendationId": "Table 14",
+            "page": 43,
+            "printedPage": "e43",
+            "locator": "哪些情況長期抗凝是禁忌、哪些仍合理",
+            "summary": "禁忌：不可逆原因的腸胃道、肺或泌尿生殖道嚴重出血；不可逆原因的自發性顱內／脊髓內出血；原因無法治療的反覆跌倒相關嚴重出血。仍合理：可治療的腸胃道、肺或泌尿生殖道出血；單純外傷出血；手術併發症出血。紀錄裡的出血診斷碼分不出「可逆」與「不可逆」。",
+            "citedStatements": [
+              {
+                "label": "Table 14 — Long-Term Anticoagulation Contraindicated",
+                "text": "Severe bleeding due to a nonreversible cause involving the gastrointestinal, pulmonary, or genitourinary systems · Spontaneous intracranial/intraspinal bleeding due to a nonreversible cause · Serious bleeding related to recurrent falls when cause of falls is not felt to be treatable"
+              },
+              {
+                "label": "Table 14 — Long-Term Anticoagulation Is Still Reasonable",
+                "text": "Bleeding involving the gastrointestinal, pulmonary, or genitourinary systems that is treatable · Bleeding related to isolated trauma · Bleeding related to procedural complications"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "missingData": [
+      "心衰竭／LVEF ≤40%",
+      "高血壓",
+      "核對目前用藥"
+    ],
+    "requirements": [
+      {
+        "kind": "record-input",
+        "label": "心衰竭／LVEF ≤40%"
+      },
+      {
+        "kind": "record-input",
+        "label": "高血壓"
+      },
+      {
+        "kind": "clinical-review",
+        "label": "糖尿病"
+      },
+      {
+        "kind": "clinical-review",
+        "label": "中風／TIA／動脈栓塞"
+      },
+      {
+        "kind": "clinical-review",
+        "label": "血管疾病"
+      },
+      {
+        "kind": "clinical-review",
+        "label": "醫療計算機 CHA₂DS₂-VA 結果"
+      }
+    ],
+    "nextActions": [
+      "院內處方仍可能正在使用。開始或加量前，先核對實際用藥、劑量與停藥／暫停狀態；安全判讀持續納入可能的用藥暴露。"
+    ],
+    "guidelineReferences": [
+      {
+        "id": "ESC-AF-2024-OAC-INDICATION",
+        "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+        "publisher": "European Society of Cardiology",
+        "version": "2024",
+        "url": "https://doi.org/10.1093/eurheartj/ehae176#page=29",
+        "recommendationId": "Recommendation Table 6 — anticoagulation",
+        "evidenceGrade": "Class I, Level A / Class I, Level B / Class III, Level A",
+        "page": 29,
+        "printedPage": "3342",
+        "locator": "有血栓栓塞風險的臨床 AF 建議口服抗凝；抗血小板不是替代",
+        "summary": "臨床 AF 合併升高的血栓栓塞風險建議口服抗凝（Class I, A）；HCM 或心臟類澱粉沉積症不論分數都建議抗凝（Class I, B）；抗血小板藥不是抗凝的替代方案（Class III, A）。",
+        "citedStatements": [
+          {
+            "label": "Recommendation Table 6 — oral anticoagulation, Class I, Level A",
+            "text": "Oral anticoagulation is recommended in patients with clinical AF at elevated thromboembolic risk to prevent ischaemic stroke and thromboembolism."
+          },
+          {
+            "label": "Recommendation Table 6 — HCM or cardiac amyloidosis, Class I, Level B",
+            "text": "Oral anticoagulation is recommended in all patients with AF and hypertrophic cardiomyopathy or cardiac amyloidosis, regardless of CHA2DS2-VA score, to prevent ischaemic stroke and thromboembolism."
+          },
+          {
+            "label": "Recommendation Table 6 — antiplatelet therapy, Class III, Level A",
+            "text": "Antiplatelet therapy is not recommended as an alternative to anticoagulation in patients with AF to prevent ischaemic stroke and thromboembolism."
+          }
+        ]
+      },
+      {
+        "id": "ESC-AF-2024-FLUTTER",
+        "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+        "publisher": "European Society of Cardiology",
+        "version": "2024",
+        "url": "https://doi.org/10.1093/eurheartj/ehae176#page=58",
+        "recommendationId": "Recommendation Table 30",
+        "evidenceGrade": "Class I, Level B",
+        "page": 58,
+        "printedPage": "3371",
+        "locator": "心房撲動的抗凝與 AF 相同",
+        "summary": "有血栓栓塞風險的心房撲動病人建議口服抗凝（Class I, B）；ICD-10-CM I48.3／I48.4／I48.92 的病人因此走同一條路徑。",
+        "citedStatements": [
+          {
+            "label": "Recommendation Table 30 — Class I, Level B",
+            "text": "Oral anticoagulation is recommended in patients with atrial flutter at elevated thromboembolic risk to prevent ischaemic stroke and thromboembolism."
+          }
+        ]
+      },
+      {
+        "id": "ESC-AF-2024-LAAO",
+        "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+        "publisher": "European Society of Cardiology",
+        "version": "2024",
+        "url": "https://doi.org/10.1093/eurheartj/ehae176#page=34",
+        "recommendationId": "Recommendation Table 10",
+        "evidenceGrade": "Class IIb, Level C",
+        "page": 34,
+        "printedPage": "3347",
+        "locator": "長期抗凝有禁忌時可考慮經皮左心耳封堵",
+        "summary": "長期抗凝有禁忌的 AF 病人可考慮經皮左心耳封堵（Class IIb, C）；「禁忌」是臨床判斷，雲端紀錄判不出來。",
+        "citedStatements": [
+          {
+            "label": "Recommendation Table 10 — Class IIb, Level C",
+            "text": "Percutaneous LAA occlusion may be considered in patients with AF and contraindications for long-term anticoagulant treatment to prevent ischaemic stroke and thromboembolism."
+          }
+        ]
+      },
+      {
+        "id": "AHA-AF-2023-RISK-BASED-SELECTION",
+        "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+        "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+        "version": "2023",
+        "url": "https://doi.org/10.1161/CIR.0000000000001193#page=31",
+        "recommendationId": "Section 6.2 Recommendation 1",
+        "evidenceGrade": "COR 1, LOE B-R",
+        "page": 31,
+        "printedPage": "e31",
+        "locator": "年風險 ≥2% 時依血栓栓塞風險選擇治療，不分 AF 型態",
+        "summary": "年中風或血栓栓塞風險 ≥2% 的 AF 病人，降低中風風險的治療選擇應依血栓栓塞風險決定，與 paroxysmal、persistent、long-standing persistent 或 permanent 無關。",
+        "citedStatements": [
+          {
+            "label": "Section 6.2 Recommendation 1 — COR 1, LOE B-R",
+            "text": "In patients diagnosed with AF who have an estimated annual risk of stroke or thromboembolic events ≥2%, selection of therapy to reduce the risk of stroke should be based on the risk of thromboembolism, regardless of whether the AF pattern is paroxysmal, persistent, long-standing persistent, or permanent."
+          }
+        ]
+      },
+      {
+        "id": "AHA-AF-2023-ASPIRIN-NOT-ALTERNATIVE",
+        "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+        "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+        "version": "2023",
+        "url": "https://doi.org/10.1161/CIR.0000000000001193#page=33",
+        "recommendationId": "Section 6.3.1 Recommendations 4 and 5",
+        "evidenceGrade": "COR 3: Harm, LOE B-R / COR 3: No Benefit, LOE B-NR",
+        "page": 33,
+        "printedPage": "e33",
+        "locator": "Aspirin 單獨或合併 clopidogrel 不是抗凝的替代",
+        "summary": "適合抗凝且無抗血小板適應症的病人，以 aspirin 單獨或合併 clopidogrel 取代抗凝為有害（COR 3: Harm）；沒有中風風險因子的病人用 aspirin 單方預防血栓栓塞沒有益處（COR 3: No Benefit）。",
+        "citedStatements": [
+          {
+            "label": "Section 6.3.1 Recommendation 4 — COR 3: Harm, LOE B-R",
+            "text": "In patients with AF who are candidates for anticoagulation and without an indication for antiplatelet therapy, aspirin either alone or in combination with clopidogrel as an alternative to anticoagulation is not recommended to reduce stroke risk."
+          },
+          {
+            "label": "Section 6.3.1 Recommendation 5 — COR 3: No Benefit, LOE B-NR",
+            "text": "In patients with AF without risk factors for stroke, aspirin monotherapy for prevention of thromboembolic events is of no benefit."
+          }
+        ]
+      },
+      {
+        "id": "AHA-AF-2023-AFL-RISK",
+        "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+        "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+        "version": "2023",
+        "url": "https://doi.org/10.1161/CIR.0000000000001193#page=57",
+        "recommendationId": "Section 6.8.6 Recommendation 1",
+        "evidenceGrade": "COR 1, LOE B-NR",
+        "page": 57,
+        "printedPage": "e57",
+        "locator": "心房撲動的抗凝與 AF 用同一套風險",
+        "summary": "典型心房撲動病人依 AF 的同一套風險評估決定抗凝；I48.3／I48.4／I48.92 的病人因此走同一條路徑。",
+        "citedStatements": [
+          {
+            "label": "Section 6.8.6 Recommendation 1 — COR 1, LOE B-NR",
+            "text": "For patients with AFL, anticoagulant therapy is recommended according to the same risk profile used for AF."
+          }
+        ]
+      },
+      {
+        "id": "AHA-AF-2023-LAAO",
+        "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+        "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+        "version": "2023",
+        "url": "https://doi.org/10.1161/CIR.0000000000001193#page=42",
+        "recommendationId": "Section 6.5.1 Recommendation 1",
+        "evidenceGrade": "COR 2a, LOE B-NR",
+        "page": 42,
+        "printedPage": "e42",
+        "locator": "不可逆原因禁忌長期抗凝時，經皮左心耳封堵為合理",
+        "summary": "CHA₂DS₂-VASc ≥2 且因不可逆原因（Table 14）禁忌長期口服抗凝的病人，經皮左心耳封堵為合理（COR 2a）。「禁忌」是臨床判斷，雲端紀錄判不出來。",
+        "citedStatements": [
+          {
+            "label": "Section 6.5.1 Recommendation 1 — COR 2a, LOE B-NR",
+            "text": "In patients with AF, a moderate to high risk of stroke (CHA2DS2-VASc score ≥2), and a contraindication (Table 14) to long-term oral anticoagulation due to a nonreversible cause, percutaneous LAAO (pLAAO) is reasonable."
+          }
+        ]
+      },
+      {
+        "id": "AHA-AF-2023-TABLE-14",
+        "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+        "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+        "version": "2023",
+        "url": "https://doi.org/10.1161/CIR.0000000000001193#page=43",
+        "recommendationId": "Table 14",
+        "page": 43,
+        "printedPage": "e43",
+        "locator": "哪些情況長期抗凝是禁忌、哪些仍合理",
+        "summary": "禁忌：不可逆原因的腸胃道、肺或泌尿生殖道嚴重出血；不可逆原因的自發性顱內／脊髓內出血；原因無法治療的反覆跌倒相關嚴重出血。仍合理：可治療的腸胃道、肺或泌尿生殖道出血；單純外傷出血；手術併發症出血。紀錄裡的出血診斷碼分不出「可逆」與「不可逆」。",
+        "citedStatements": [
+          {
+            "label": "Table 14 — Long-Term Anticoagulation Contraindicated",
+            "text": "Severe bleeding due to a nonreversible cause involving the gastrointestinal, pulmonary, or genitourinary systems · Spontaneous intracranial/intraspinal bleeding due to a nonreversible cause · Serious bleeding related to recurrent falls when cause of falls is not felt to be treatable"
+          },
+          {
+            "label": "Table 14 — Long-Term Anticoagulation Is Still Reasonable",
+            "text": "Bleeding involving the gastrointestinal, pulmonary, or genitourinary systems that is treatable · Bleeding related to isolated trauma · Bleeding related to procedural complications"
+          }
+        ]
+      }
+    ],
+    "safetyBoundary": "供醫師審閱與共同決策；不會自動開立、停用或調整處方。",
+    "sourceAssessments": [
+      {
+        "sourceId": "esc-af-2024",
+        "sourceKind": "guideline",
+        "sourceLabel": "ESC AF 2024",
+        "version": "2024",
+        "effectiveFrom": "2024-08-30",
+        "status": "consider",
+        "summary": "逐項對照本模組的原文與適用範圍；不同指引的門檻分別呈現。",
+        "references": [
+          {
+            "id": "ESC-AF-2024-OAC-INDICATION",
+            "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+            "publisher": "European Society of Cardiology",
+            "version": "2024",
+            "url": "https://doi.org/10.1093/eurheartj/ehae176#page=29",
+            "recommendationId": "Recommendation Table 6 — anticoagulation",
+            "evidenceGrade": "Class I, Level A / Class I, Level B / Class III, Level A",
+            "page": 29,
+            "printedPage": "3342",
+            "locator": "有血栓栓塞風險的臨床 AF 建議口服抗凝；抗血小板不是替代",
+            "summary": "臨床 AF 合併升高的血栓栓塞風險建議口服抗凝（Class I, A）；HCM 或心臟類澱粉沉積症不論分數都建議抗凝（Class I, B）；抗血小板藥不是抗凝的替代方案（Class III, A）。",
+            "citedStatements": [
+              {
+                "label": "Recommendation Table 6 — oral anticoagulation, Class I, Level A",
+                "text": "Oral anticoagulation is recommended in patients with clinical AF at elevated thromboembolic risk to prevent ischaemic stroke and thromboembolism."
+              },
+              {
+                "label": "Recommendation Table 6 — HCM or cardiac amyloidosis, Class I, Level B",
+                "text": "Oral anticoagulation is recommended in all patients with AF and hypertrophic cardiomyopathy or cardiac amyloidosis, regardless of CHA2DS2-VA score, to prevent ischaemic stroke and thromboembolism."
+              },
+              {
+                "label": "Recommendation Table 6 — antiplatelet therapy, Class III, Level A",
+                "text": "Antiplatelet therapy is not recommended as an alternative to anticoagulation in patients with AF to prevent ischaemic stroke and thromboembolism."
+              }
+            ]
+          },
+          {
+            "id": "ESC-AF-2024-FLUTTER",
+            "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+            "publisher": "European Society of Cardiology",
+            "version": "2024",
+            "url": "https://doi.org/10.1093/eurheartj/ehae176#page=58",
+            "recommendationId": "Recommendation Table 30",
+            "evidenceGrade": "Class I, Level B",
+            "page": 58,
+            "printedPage": "3371",
+            "locator": "心房撲動的抗凝與 AF 相同",
+            "summary": "有血栓栓塞風險的心房撲動病人建議口服抗凝（Class I, B）；ICD-10-CM I48.3／I48.4／I48.92 的病人因此走同一條路徑。",
+            "citedStatements": [
+              {
+                "label": "Recommendation Table 30 — Class I, Level B",
+                "text": "Oral anticoagulation is recommended in patients with atrial flutter at elevated thromboembolic risk to prevent ischaemic stroke and thromboembolism."
+              }
+            ]
+          },
+          {
+            "id": "ESC-AF-2024-LAAO",
+            "title": "2024 ESC Guidelines for the management of atrial fibrillation developed in collaboration with the European Association for Cardio-Thoracic Surgery (EACTS)",
+            "publisher": "European Society of Cardiology",
+            "version": "2024",
+            "url": "https://doi.org/10.1093/eurheartj/ehae176#page=34",
+            "recommendationId": "Recommendation Table 10",
+            "evidenceGrade": "Class IIb, Level C",
+            "page": 34,
+            "printedPage": "3347",
+            "locator": "長期抗凝有禁忌時可考慮經皮左心耳封堵",
+            "summary": "長期抗凝有禁忌的 AF 病人可考慮經皮左心耳封堵（Class IIb, C）；「禁忌」是臨床判斷，雲端紀錄判不出來。",
+            "citedStatements": [
+              {
+                "label": "Recommendation Table 10 — Class IIb, Level C",
+                "text": "Percutaneous LAA occlusion may be considered in patients with AF and contraindications for long-term anticoagulant treatment to prevent ischaemic stroke and thromboembolism."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sourceId": "acc-aha-af-2023",
+        "sourceKind": "guideline",
+        "sourceLabel": "ACC/AHA/ACCP/HRS AF 2023",
+        "version": "2023",
+        "effectiveFrom": "2023-11-30",
+        "status": "consider",
+        "summary": "逐項對照本模組的原文與適用範圍；不同指引的門檻分別呈現。",
+        "references": [
+          {
+            "id": "AHA-AF-2023-RISK-BASED-SELECTION",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=31",
+            "recommendationId": "Section 6.2 Recommendation 1",
+            "evidenceGrade": "COR 1, LOE B-R",
+            "page": 31,
+            "printedPage": "e31",
+            "locator": "年風險 ≥2% 時依血栓栓塞風險選擇治療，不分 AF 型態",
+            "summary": "年中風或血栓栓塞風險 ≥2% 的 AF 病人，降低中風風險的治療選擇應依血栓栓塞風險決定，與 paroxysmal、persistent、long-standing persistent 或 permanent 無關。",
+            "citedStatements": [
+              {
+                "label": "Section 6.2 Recommendation 1 — COR 1, LOE B-R",
+                "text": "In patients diagnosed with AF who have an estimated annual risk of stroke or thromboembolic events ≥2%, selection of therapy to reduce the risk of stroke should be based on the risk of thromboembolism, regardless of whether the AF pattern is paroxysmal, persistent, long-standing persistent, or permanent."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-ASPIRIN-NOT-ALTERNATIVE",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=33",
+            "recommendationId": "Section 6.3.1 Recommendations 4 and 5",
+            "evidenceGrade": "COR 3: Harm, LOE B-R / COR 3: No Benefit, LOE B-NR",
+            "page": 33,
+            "printedPage": "e33",
+            "locator": "Aspirin 單獨或合併 clopidogrel 不是抗凝的替代",
+            "summary": "適合抗凝且無抗血小板適應症的病人，以 aspirin 單獨或合併 clopidogrel 取代抗凝為有害（COR 3: Harm）；沒有中風風險因子的病人用 aspirin 單方預防血栓栓塞沒有益處（COR 3: No Benefit）。",
+            "citedStatements": [
+              {
+                "label": "Section 6.3.1 Recommendation 4 — COR 3: Harm, LOE B-R",
+                "text": "In patients with AF who are candidates for anticoagulation and without an indication for antiplatelet therapy, aspirin either alone or in combination with clopidogrel as an alternative to anticoagulation is not recommended to reduce stroke risk."
+              },
+              {
+                "label": "Section 6.3.1 Recommendation 5 — COR 3: No Benefit, LOE B-NR",
+                "text": "In patients with AF without risk factors for stroke, aspirin monotherapy for prevention of thromboembolic events is of no benefit."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-AFL-RISK",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=57",
+            "recommendationId": "Section 6.8.6 Recommendation 1",
+            "evidenceGrade": "COR 1, LOE B-NR",
+            "page": 57,
+            "printedPage": "e57",
+            "locator": "心房撲動的抗凝與 AF 用同一套風險",
+            "summary": "典型心房撲動病人依 AF 的同一套風險評估決定抗凝；I48.3／I48.4／I48.92 的病人因此走同一條路徑。",
+            "citedStatements": [
+              {
+                "label": "Section 6.8.6 Recommendation 1 — COR 1, LOE B-NR",
+                "text": "For patients with AFL, anticoagulant therapy is recommended according to the same risk profile used for AF."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-LAAO",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=42",
+            "recommendationId": "Section 6.5.1 Recommendation 1",
+            "evidenceGrade": "COR 2a, LOE B-NR",
+            "page": 42,
+            "printedPage": "e42",
+            "locator": "不可逆原因禁忌長期抗凝時，經皮左心耳封堵為合理",
+            "summary": "CHA₂DS₂-VASc ≥2 且因不可逆原因（Table 14）禁忌長期口服抗凝的病人，經皮左心耳封堵為合理（COR 2a）。「禁忌」是臨床判斷，雲端紀錄判不出來。",
+            "citedStatements": [
+              {
+                "label": "Section 6.5.1 Recommendation 1 — COR 2a, LOE B-NR",
+                "text": "In patients with AF, a moderate to high risk of stroke (CHA2DS2-VASc score ≥2), and a contraindication (Table 14) to long-term oral anticoagulation due to a nonreversible cause, percutaneous LAAO (pLAAO) is reasonable."
+              }
+            ]
+          },
+          {
+            "id": "AHA-AF-2023-TABLE-14",
+            "title": "2023 ACC/AHA/ACCP/HRS Guideline for the Diagnosis and Management of Atrial Fibrillation",
+            "publisher": "American College of Cardiology / American Heart Association / American College of Clinical Pharmacy / Heart Rhythm Society",
+            "version": "2023",
+            "url": "https://doi.org/10.1161/CIR.0000000000001193#page=43",
+            "recommendationId": "Table 14",
+            "page": 43,
+            "printedPage": "e43",
+            "locator": "哪些情況長期抗凝是禁忌、哪些仍合理",
+            "summary": "禁忌：不可逆原因的腸胃道、肺或泌尿生殖道嚴重出血；不可逆原因的自發性顱內／脊髓內出血；原因無法治療的反覆跌倒相關嚴重出血。仍合理：可治療的腸胃道、肺或泌尿生殖道出血；單純外傷出血；手術併發症出血。紀錄裡的出血診斷碼分不出「可逆」與「不可逆」。",
+            "citedStatements": [
+              {
+                "label": "Table 14 — Long-Term Anticoagulation Contraindicated",
+                "text": "Severe bleeding due to a nonreversible cause involving the gastrointestinal, pulmonary, or genitourinary systems · Spontaneous intracranial/intraspinal bleeding due to a nonreversible cause · Serious bleeding related to recurrent falls when cause of falls is not felt to be treatable"
+              },
+              {
+                "label": "Table 14 — Long-Term Anticoagulation Is Still Reasonable",
+                "text": "Bleeding involving the gastrointestinal, pulmonary, or genitourinary systems that is treatable · Bleeding related to isolated trauma · Bleeding related to procedural complications"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "moduleName": "抗凝適應症",
+    "moduleGroup": "treatment",
+    "moduleOrder": 2,
+    "presentationType": "medication",
+    "clinicalReviewItems": [
+      "糖尿病",
+      "中風／TIA／動脈栓塞",
+      "血管疾病",
+      "醫療計算機 CHA₂DS₂-VA 結果",
+      "核對目前用藥"
+    ],
+    "semanticRule": {
+      "guidelineRecommendation": "臨床 AF 合併升高的血栓栓塞風險建議口服抗凝（Class I, A）；HCM 或心臟類澱粉沉積症不論分數都建議抗凝（Class I, B）；抗血小板藥不是抗凝的替代方案（Class III, A）。",
+      "eligibilityCriteria": [
+        "臨床 AF 合併升高的血栓栓塞風險建議口服抗凝（Class I, A）；HCM 或心臟類澱粉沉積症不論分數都建議抗凝（Class I, B）；抗血小板藥不是抗凝的替代方案（Class III, A）。"
+      ],
+      "patientData": [
+        {
+          "label": "口服抗凝",
+          "value": "用藥暴露紀錄（院內使用待確認）：辨識到直接口服抗凝血劑：Apixaban (Eliquis) FC tab 5 mg、Apixaban (Eliquis) FC tab 5 mg",
+          "factKeys": [
+            "currentOralAnticoagulant"
+          ],
+          "sources": [
+            {
+              "resourceType": "MedicationRequest",
+              "resourceId": "synthetic-anticoagulant",
+              "date": "2026-09-25",
+              "status": "active",
+              "value": "Apixaban (Eliquis) FC tab 5 mg",
+              "coding": [
+                {
+                  "system": "urn:oid:vgh.medication.generic",
+                  "display": "Apixaban (Eliquis) FC tab 5 mg"
+                }
+              ],
+              "sourceSystem": "fhir"
+            },
+            {
+              "resourceType": "MedicationRequest",
+              "resourceId": "synthetic-anticoagulant",
+              "date": "2026-09-25",
+              "status": "active",
+              "value": "Apixaban (Eliquis) FC tab 5 mg",
+              "coding": [
+                {
+                  "system": "urn:oid:vgh.medication.generic",
+                  "display": "Apixaban (Eliquis) FC tab 5 mg"
+                }
+              ],
+              "sourceSystem": "fhir"
+            }
+          ]
+        }
+      ],
+      "decisionLogic": "跨院處方有紀錄視為使用中；療程結束加 30 天緩衝。AF 型態或目前 sinus rhythm 不決定是否抗凝；HCM／心臟類澱粉沉積不以低分排除抗凝。",
+      "clinicalConclusion": "依風險、瓣膜狀態與出血情況討論抗凝；aspirin／clopidogrel 不能替代 AF 抗凝。",
+      "limitations": [
+        "供醫師審閱與共同決策；不會自動開立、停用或調整處方。"
+      ]
+    }
+  }
+}

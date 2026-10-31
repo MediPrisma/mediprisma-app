@@ -14,6 +14,7 @@ import { DocumentSummaryCard } from '@/features/clinical-summary/document-summar
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { VisitHistoryCard } from '@/features/clinical-summary/visit-history'
 import { OverviewCard } from '@/features/clinical-summary/overview'
+import { LastOutpatientCard } from '@/features/clinical-summary/last-outpatient'
 
 // ============================================================================
 // TAB CONFIGURATION - Define available tabs in the left panel
@@ -33,12 +34,27 @@ export interface TabConfig {
    * ScrollArea it has always had.
    */
   fillHeight?: boolean
+  /**
+   * Show the tab only when the loaded chart holds this kind of data.
+   * 'hospital-outpatient': at least one hospital (院內) outpatient visit; a
+   * cloud-only chart (雲端病歷 / 健康存摺) never shows the tab.
+   */
+  requires?: 'hospital-outpatient'
+}
+
+export interface TabVisibilityOptions {
+  /** The chart holds a hospital (院內) outpatient visit. */
+  hasHospitalOutpatientVisit?: boolean
 }
 
 export const LEFT_PANEL_TABS: TabConfig[] = [
   // 總覽 sits first and is therefore the tab a loaded patient opens on. To keep
   // 病人資訊 as the landing tab instead, change this order to 0.5.
   { id: 'overview',  labelKey: 'overview',    order: -1, enabled: true, fillHeight: true },
+  // 上次門診: everything the latest hospital outpatient visit ordered, on one
+  // page. Owner request in chat 2026-10-28: only for charts with hospital
+  // (院內) data and a hospital outpatient visit; cloud-only charts never see it.
+  { id: 'last-outpatient', labelKey: 'lastOutpatient', order: -0.5, enabled: true, requires: 'hospital-outpatient' },
   { id: 'patient',   labelKey: 'patient',     order: 0, enabled: true },
   { id: 'visits',    labelKey: 'visits',      order: 1, enabled: true },
   { id: 'reports',   labelKey: 'reports',     order: 2, enabled: true },
@@ -72,6 +88,14 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
     name: 'Overview',
     component: OverviewCard,
     tab: 'overview',
+    order: 0,
+    enabled: true,
+  },
+  {
+    id: 'last-outpatient',
+    name: 'Last Outpatient Visit',
+    component: LastOutpatientCard,
+    tab: 'last-outpatient',
     order: 0,
     enabled: true,
   },
@@ -188,11 +212,13 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
 ]
 
 /**
- * Get enabled tabs sorted by order
+ * Get enabled tabs sorted by order. A tab with `requires` is listed only when
+ * the chart holds that data.
  */
-export function getEnabledTabs(): TabConfig[] {
+export function getEnabledTabs(options: TabVisibilityOptions = {}): TabConfig[] {
   return LEFT_PANEL_TABS
     .filter(tab => tab.enabled)
+    .filter(tab => tab.requires !== 'hospital-outpatient' || options.hasHospitalOutpatientVisit === true)
     .sort((a, b) => a.order - b.order)
 }
 

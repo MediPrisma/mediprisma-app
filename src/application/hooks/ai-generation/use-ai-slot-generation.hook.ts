@@ -45,8 +45,11 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
 import { runGenerationJob, type AiGenerationMeasurement, type AiRunMetrics } from './run-generation-job'
+import { withCollectorOperation } from '@/src/application/telemetry/collector-operation'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
+import { isProgressiveAutoSummaryBlocked, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { isSummaryContinuation } from '@/src/shared/utils/reset-on-bundle-change'
 import type { AiSurface } from '@/src/application/telemetry/usage-analytics'
 import type {
   AiGenerationIssue,
@@ -72,8 +75,11 @@ import { providerClinicalContextSafetyFraction } from './context-window-retry'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
+  automatic?: boolean
   /** Optional terminal measurement; does not change result/cache acceptance. */
   measureResult?: (result: AiGenerationMeasurement) => void
+  /** Optional: the random diagnostic run ID, joined to the operation telemetry event. */
+  identifySummaryRun?: (runId: string) => void
   /** Exact model-fitted text sent by this run. */
   clinicalContext: string
   /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
@@ -124,6 +130,8 @@ export interface AiSlotDemoContext {
 }
 
 export interface AiSlotGenerationConfig<T> {
+  /** Retain this feature's jobs across a validated same-patient supplement. */
+  preserveAcrossContinuation?: boolean
   /** Feature's free base model used by gateModel as its fallback. */
   defaultModelId: string
   /** User-picked model id from the feature's prefs store (pre-gating). */
@@ -192,6 +200,8 @@ export interface AiSlotGenerationReturn<T> {
    *  locale/exact clinical input. Use this for UI lifecycles that span more
    *  than one model slot. */
   scopeKey: string
+  /** Stable reading identity while clinical input is being refreshed. */
+  readingScopeKey: string
   slotKey: string
   resolvedModelId: string
   resolvedModelName: string
@@ -243,6 +253,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     store,
     cacheKeyFor,
     analyticsSurface,
+    preserveAcrossContinuation = false,
     cacheMaxAgeMs,
     loadCached,
     run,
@@ -434,6 +445,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     }
   }, [])
   const autoTriggeredRef = useRef<string | null>(null)
+  const progressiveAutoBlocked = useProgressiveImportStore(() => isProgressiveAutoSummaryBlocked())
   // An automatic Medcloud launch has its own credential-gated, message-id-scoped
   // runner. Suppress saved background auto-run preferences on this route so a
   // previous public-provider choice cannot send patient data before the
@@ -489,7 +501,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRetainedResultState((current) => {
       if (!allowResultRetention || !resultScope) return null
-      if (exactResultBelongsToSelectedModel) {
+      if (exactResultBelongsToSelectedModel && !isRunning) {
         if (
           current?.scope === resultScope &&
           current.modelId === resolvedModelId &&
@@ -509,7 +521,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       // Legacy builds could seed the Flash-Lite demo snapshot into whichever
       // model happened to be selected. With no current result it is still a
       // useful fallback, but its immutable provenance remains Flash-Lite.
-      if (exactResult !== undefined && exactResultOwnerModelId) {
+      if (!isRunning && exactResult !== undefined && exactResultOwnerModelId) {
         return {
           scope: resultScope,
           modelId: exactResultOwnerModelId,
@@ -521,6 +533,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     })
   }, [
     allowResultRetention,
+    isRunning,
     exactResult,
     exactResultBelongsToSelectedModel,
     exactResultOwnerModelId,
@@ -559,7 +572,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // Guests auto-run too (v0.25.x): callers apply the source-aware real-data
   // consent gate, results are cached 12h per patient, and the 50/day free quota
   // is still enforced server-side.
-  const generate = useCallback(async () => {
+  const generateRun = useCallback(async (automatic: boolean) => {
+    if (automatic && isProgressiveAutoSummaryBlocked()) return
     if (modelUnavailable || !slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
     if (store.getState().running[slotKey]) return
@@ -567,6 +581,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     const fedClinicalData = clinicalContextScope?.clinicalData ?? scopedClinicalData
     const runAbort = new AbortController()
     runAbortControllersRef.current.set(runAbort, slotKey)
+    const unsubscribe = automatic ? useProgressiveImportStore.subscribe(() => {
+      if (!isProgressiveAutoSummaryBlocked()) return
+      runAbort.abort()
+      stopAi(slotKey)
+    }) : undefined
     const generatedResult = await runGenerationJob({
       store,
       key: slotKey,
@@ -594,12 +613,14 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         }
         : undefined,
       shouldCommit: () => (
-        (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
+        !runAbort.signal.aborted && (cancellationEpochsRef.current.get(slotKey) ?? 0) === cancellationEpoch
       ),
       readRunMetrics: readRunMetrics ? () => readRunMetrics(slotKey) : undefined,
-      produce: (measureResult) =>
+      produce: (measureResult, identifySummaryRun, operation) =>
         run({
+          automatic,
           measureResult,
+          identifySummaryRun,
           clinicalContext,
           piiLiterals,
           clinicalData: scopedClinicalData,
@@ -608,7 +629,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           catalog,
           locale,
           audience,
-          ai,
+          ai: withCollectorOperation(ai, operation),
           modelId: resolvedModelId,
           modelName: resolvedModelName,
           requestedModelId: selectedModelId,
@@ -619,6 +640,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           signal: runAbort.signal,
         }),
     }).finally(() => {
+      unsubscribe?.()
       runAbortControllersRef.current.delete(runAbort)
     })
     if (
@@ -633,7 +655,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts, readRunMetrics, patient, clinicalNowMs, clinicalContextScope])
+  }, [stopAi, modelUnavailable, slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, selectedModelId, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, analyticsSurface, patientCounts, readRunMetrics, patient, clinicalNowMs, clinicalContextScope])
+
+  const generate = useCallback(() => generateRun(false), [generateRun])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
@@ -715,9 +739,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // after React Query has published the new patient and clinical collection.
   const [bundleTransitionActive, setBundleTransitionActive] = useState(false)
   useEffect(() => {
-    const begin = () => {
-      abortRuns()
-      stopAi()
+    const begin = (event: Event) => {
+      if (!(preserveAcrossContinuation && isSummaryContinuation(event))) {
+        abortRuns()
+        stopAi()
+      }
       setBundleTransitionActive(true)
     }
     const settle = () => setBundleTransitionActive(false)
@@ -727,7 +753,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       window.removeEventListener(BUNDLE_CHANGED_EVENT, begin)
       window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
     }
-  }, [abortRuns, stopAi])
+  }, [abortRuns, stopAi, preserveAcrossContinuation])
   // Demo bundle: seed the pre-generated snapshot instead of burning an AI call
   // on data whose answer is a constant. It belongs to the feature's canonical
   // default model. With another model selected it may fill an otherwise blank
@@ -792,6 +818,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   useEffect(() => {
     if (!shouldAutoRunSummarySlot({
       enabled: autoRunEnabled &&
+        !progressiveAutoBlocked &&
         !medcloudLaunchOwnsAutoRun &&
         selectedModelReady &&
         !bundleTransitionActive &&
@@ -806,14 +833,15 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       triggeredIdentity: autoTriggeredRef.current,
     })) return
     autoTriggeredRef.current = autoRunIdentity
-    void generate()
-  }, [autoRunEnabled, medcloudLaunchOwnsAutoRun, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generate])
+    void generateRun(true)
+  }, [autoRunEnabled, progressiveAutoBlocked, medcloudLaunchOwnsAutoRun, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generateRun])
 
   return {
     patientId,
     hasPatient: !!patientId,
     dataReady,
     scopeKey: resultScope,
+    readingScopeKey: patientId ? [patientId, audience, locale].join('::') : '',
     slotKey,
     resolvedModelId,
     resolvedModelName,

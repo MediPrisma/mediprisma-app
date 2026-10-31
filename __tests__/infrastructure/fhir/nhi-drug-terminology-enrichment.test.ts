@@ -474,7 +474,7 @@ describe('App-side NHI drug terminology enrichment', () => {
       { resourceType: 'Patient', id: 'p1' },
       medicationRequest(),
     )
-    jest.spyOn(LocalBundleService, 'load').mockResolvedValue(stored)
+    await LocalBundleService.save(stored, { importId: 'terminology-upgrade' })
     const save = jest.spyOn(LocalBundleService, 'save').mockResolvedValue()
 
     const parsed = await LocalBundleService.parseStored()
@@ -533,8 +533,8 @@ describe('App-side NHI drug terminology enrichment', () => {
         'mr-first',
         'mr-last',
       ])
-      expect(result?.collection.observations.map((item) => item.id)).toContain('obs-first')
-      expect(result?.collection.diagnosticReports.map((item) => item.id)).toContain('report-last')
+      expect(result?.collection.observations.map((item) => item.sourceId)).toContain('obs-first')
+      expect(result?.collection.diagnosticReports.map((item) => item.sourceId)).toContain('report-last')
     }
     // Consumers share the immutable mapped collection; the patient overlay is
     // applied separately and therefore cannot thin the AI input.
@@ -569,7 +569,7 @@ describe('App-side NHI drug terminology enrichment', () => {
         },
       }),
     })
-    jest.spyOn(LocalBundleService, 'load').mockResolvedValue(stored)
+    await LocalBundleService.save(stored, { importId: 'terminology-policy-upgrade' })
     const save = jest.spyOn(LocalBundleService, 'save').mockResolvedValue()
 
     const parsed = await LocalBundleService.parseStored()

@@ -3,6 +3,9 @@
 // Explicit lifecycle status is respected; MediCloud unknown/missing status uses
 // a computable source supply window, if present, to resolve currentness.
 import { useMemo, useState } from "react"
+import { sourceComparisonNarrative, summarizeSourceComparisons } from '@/src/shared/utils/source-record-comparison'
+import { sourceSelfPurchase } from '@/src/shared/utils/medication-source-markers'
+import { medicationSupplyDaysRemaining } from '@/src/shared/utils/medication-calendar'
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
@@ -18,6 +21,7 @@ import {
   isMedicationCurrentlyInUse,
   MILESTONE_ENCOUNTER_FLOOR_DAYS,
   normalizeClinicalStatus,
+  medicationExpectedEnd,
   selectMedicationRecords,
 } from "@/src/core/utils/clinical-context-selection.utils"
 
@@ -27,6 +31,8 @@ const RECENTLY_ENDED_WINDOW_DAYS = 90
 const FLOOR_WINDOW_MONTHS = Math.round(MILESTONE_ENCOUNTER_FLOOR_DAYS / 30)
 
 interface MedSummary {
+  sourceComparison?: string
+  selfPurchased?: boolean
   name: string
   dose?: string
   route?: string
@@ -44,8 +50,6 @@ interface MedSummary {
    * up one another's ingredient or ATC classification. */
   drugCode?: string
   drugTerminology?: MedicationEntity['drugTerminology']
-  /** Number of refill cycles collapsed into this row (>=1, only set when >1) */
-  refillCount?: number
   /** Prescribing / dispensing facility (MedicationRequest.requester.display).
    *  A 藥局/藥房 here is a pharmacy that DISPENSED a script, not a prescriber —
    *  formatLine marks it so the AI never counts it as a duplicate source. */
@@ -56,7 +60,9 @@ function summarize(
   med: any,
   nowMs: number,
 ): MedSummary {
-  const name = pickAiMedicationName(
+  const name = med.clinicalMedicationContentUncertainty
+    ? 'Medication content unavailable; prescription recorded, drug identity, dose and medication absence are not inferred'
+    : pickAiMedicationName(
     med.medicationCodeableConcept,
     med.medicationReference?.display,
   )
@@ -77,17 +83,8 @@ function summarize(
   const days = durationToDays(med.dispenseRequest?.expectedSupplyDuration)
     ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
 
-  let endDate: string | undefined
-  let daysRemaining: number | undefined
-  if (startedRaw && days) {
-    const start = new Date(startedRaw)
-    if (!Number.isNaN(start.getTime())) {
-      const end = new Date(start)
-      end.setDate(end.getDate() + days)
-      endDate = end.toISOString().slice(0, 10)
-      daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
-    }
-  }
+  const endDate = medicationExpectedEnd(med)
+  const daysRemaining = endDate ? medicationSupplyDaysRemaining(endDate, nowMs) : undefined
 
   const status = normalizeClinicalStatus(med.status) || 'unknown'
   const current = isMedicationCurrentlyInUse(med, nowMs)
@@ -99,6 +96,8 @@ function summarize(
       : 'other'
 
   return {
+    sourceComparison: sourceComparisonNarrative(med),
+    selfPurchased: sourceSelfPurchase(med) === true,
     name,
     dose,
     route,
@@ -163,6 +162,8 @@ function formatNhiTerminology(m: MedSummary): string | undefined {
 
 function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other' | 'lapsed', neutral = false): string {
   const parts: string[] = [m.isChronic ? `${m.name} [慢箋]` : m.name]
+  if (m.selfPurchased) parts.push('[自費／自購 · self-pay]')
+  if (m.sourceComparison) parts.push(`[${m.sourceComparison}]`)
   const dosing = [m.dose, m.frequency, m.route].filter(Boolean).join(', ')
   if (dosing) parts.push(`(${dosing})`)
   if (mode === 'active') {
@@ -188,9 +189,6 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other' | 'lapsed
     if (m.startedOn) parts.push(`— recorded ${m.startedOn}`)
     if (m.endDate) parts.push(`(calculated supply end ${m.endDate})`)
   }
-  if (m.refillCount && m.refillCount > 1) {
-    parts.push(`(${m.refillCount} refills)`)
-  }
   const terminology = formatNhiTerminology(m)
   if (terminology) parts.push(terminology)
   const statusSemantics = m.status === 'entered-in-error'
@@ -207,46 +205,6 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other' | 'lapsed
     parts.push(isPharmacyOrg(m.org) ? `[藥局領藥 · dispensing, NOT a prescriber: ${m.org}]` : `[開立 by ${m.org}]`)
   }
   return parts.join(' ')
-}
-
-/**
- * Collapse refill cycles of the same drug into one row. NHI 慢箋 medications
- * generate a new MedicationRequest every ~28 days, so a single chronic drug
- * can appear 5-6× in the same 90-day window — looks like the patient is
- * "starting and stopping" when they're actually on a stable regimen.
- *
- * Dedup key: drug + dose + route + schedule + organization + lifecycle status.
- * Keep the latest endDate / daysRemaining; track total refill count to surface
- * as `(N refills)` in the prompt.
- */
-function dedupByDrug(meds: MedSummary[]): MedSummary[] {
-  const byName = new Map<string, MedSummary>()
-  for (const m of meds) {
-    // Same display name is not enough: different strengths, routes, schedules,
-    // facilities or lifecycle statuses may represent a real regimen change.
-    const key = [m.name, m.dose, m.route, m.frequency, m.org, m.status].join('|')
-    const existing = byName.get(key)
-    if (!existing) {
-      byName.set(key, { ...m, refillCount: 1 })
-      continue
-    }
-    existing.refillCount = (existing.refillCount ?? 1) + 1
-    // Prefer the row with the most recent endDate.
-    if (m.endDate && (!existing.endDate || m.endDate > existing.endDate)) {
-      existing.endDate = m.endDate
-      existing.daysRemaining = m.daysRemaining
-      existing.dose = m.dose ?? existing.dose
-      existing.frequency = m.frequency ?? existing.frequency
-      existing.route = m.route ?? existing.route
-      existing.drugCode = m.drugCode ?? existing.drugCode
-      existing.drugTerminology = m.drugTerminology ?? existing.drugTerminology
-    }
-    // Keep earliest startedOn so "since" stays meaningful.
-    if (m.startedOn && (!existing.startedOn || m.startedOn < existing.startedOn)) {
-      existing.startedOn = m.startedOn
-    }
-  }
-  return Array.from(byName.values())
 }
 
 export function useMedicationsContext(
@@ -290,7 +248,7 @@ export function useMedicationsContext(
     if (meds.length === 0 && floor.length === 0) return null
 
     const summaries = meds.map((m: any) => summarize(m, nowMs))
-    const lapsed = dedupByDrug(floor.map((m: any) => summarize(m, nowMs)))
+    const lapsed = floor.map((m: any) => summarize(m, nowMs))
 
     const now = nowMs
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -311,13 +269,11 @@ export function useMedicationsContext(
       }
     }
 
-    // Collapse refill cycles of the same drug — NHI 慢箋 produces a new
-    // MedicationRequest every ~28 days; without dedup a single chronic drug
-    // shows up 5-6× and the AI misreads it as frequent regimen changes.
-    const active = dedupByDrug(activeRaw)
-    const recent = dedupByDrug(recentRaw)
-    const pastUnique = dedupByDrug(pastRaw)
-    const other = dedupByDrug(otherRaw)
+    // Preserve every source order, with explicit cross-source uncertainty.
+    const active = activeRaw
+    const recent = recentRaw
+    const pastUnique = pastRaw
+    const other = otherRaw
 
     if (filters?.medicationStatus === 'active') {
       recent.length = 0
@@ -328,7 +284,10 @@ export function useMedicationsContext(
     const items: string[] = []
 
     if (active.length > 0) {
-      items.push(`Currently in use (${active.length}):`)
+      const comparisonCounts = summarizeSourceComparisons(meds.filter(medication => isMedicationCurrentlyInUse(medication, nowMs)))
+      items.push(comparisonCounts.unconfirmedGroupCount
+        ? `Current medication source records (${active.length} records in ${comparisonCounts.comparisonGroupCount} comparison groups; prescription count unconfirmed):`
+        : `Currently in use (${active.length}):`)
       active.sort((a, b) => (a.daysRemaining ?? Infinity) - (b.daysRemaining ?? Infinity))
       active.forEach((m) => items.push(`  • ${formatLine(m, 'active', neutral)}`))
     }

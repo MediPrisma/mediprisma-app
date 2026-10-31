@@ -43,15 +43,19 @@ function base64ToBytes(b64: string): Uint8Array {
  *  `shouldCommit` is checked after the asynchronous encryption step. Callers
  *  use it to prevent an older result (or a result from a purged Bundle epoch)
  *  from winning a late localStorage write. */
+/**
+ * Encrypt and store `value`. Resolves `true` once it is written — or once a
+ * newer write has taken its place — and `false` when it could not be kept.
+ */
 export async function saveEncryptedCache(
   key: string,
   value: unknown,
   shouldCommit: () => boolean = () => true,
-): Promise<void> {
-  if (typeof window === 'undefined') return
+): Promise<boolean> {
+  if (typeof window === 'undefined') return false
   try {
     const cryptoKey = await getSessionBundleKey({ create: true })
-    if (!cryptoKey) return
+    if (!cryptoKey) return false
     const record = await encryptJson(cryptoKey, value)
     const stored: StoredRecord = {
       v: 1,
@@ -59,10 +63,12 @@ export async function saveEncryptedCache(
       data: bytesToBase64(new Uint8Array(record.data)),
       savedAt: record.savedAt,
     }
-    if (!shouldCommit()) return
+    if (!shouldCommit()) return true
     window.localStorage.setItem(key, JSON.stringify(stored))
+    return true
   } catch {
     // Best-effort cache — never throw into the caller.
+    return false
   }
 }
 

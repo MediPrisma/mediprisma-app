@@ -133,7 +133,7 @@ describe('TW-PAS Claim expander', () => {
     )
     expect(cond).toBeDefined()
     expect(cond!.recordedDate).toBe('2023-05-10')
-    expect(cond!.encounter?.reference).toBe('Encounter/enc-1')
+    expect(cond!.encounter?.reference).toBe(`Encounter/${parsed.collection.encounters[0].id}`)
   })
 
   it('synthesises weight & height vital-sign Observations', () => {
@@ -172,7 +172,7 @@ describe('TW-PAS Claim expander', () => {
       (m) => m.medicationCodeableConcept?.coding?.[0]?.code === 'KC01025219',
     )
     expect(mr?.authoredOn).toBe('2024-11-28')
-    expect(mr?.encounter?.reference).toBe('Encounter/enc-1')
+    expect(mr?.encounter?.reference).toBe(`Encounter/${parsed.collection.encounters[0].id}`)
   })
 
   it('backfills the PAS Encounter visit date from Claim.created', () => {

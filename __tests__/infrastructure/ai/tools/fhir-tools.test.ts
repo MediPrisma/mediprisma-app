@@ -1103,7 +1103,7 @@ describe('createFhirTools (unified)', () => {
           },
           dispenseQuantity: { value: 14, unit: 'tablet' },
           expectedSupplyDuration: { value: 7, unit: 'days', code: 'd' },
-          expectedSupplyEnd: '2026-09-21',
+          expectedSupplyEnd: '2026-09-20',
           current: true,
         })
       } finally {
@@ -1260,10 +1260,10 @@ describe('createFhirTools (unified)', () => {
       expect(r.data.every((m: any) => m.chronic === true)).toBe(true)
     })
 
-    it('tracks refillCount when same drug appears multiple times', async () => {
+    it('tracks sourceRecordCount when same drug appears multiple times', async () => {
       const r = await call('getActiveMedicationList')
       const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
-      expect(sotalol?.refillCount).toBe(2)
+      expect(sotalol?.sourceRecordCount).toBe(2)
       expect(sotalol?.recordedName).toBe('通舒錠')
       expect(sotalol?.status).toBe('active')
     })
@@ -1283,7 +1283,7 @@ describe('createFhirTools (unified)', () => {
       expect(sotalol).toMatchObject({
         status: 'active',
         authoredOn: '2026-04-27T00:00:00+08:00',
-        refillCount: 2,
+        sourceRecordCount: 2,
       })
     })
 
@@ -1347,13 +1347,13 @@ describe('createFhirTools (unified)', () => {
             medication: 'Status-unknown current medicine',
             status: 'unknown',
             current: true,
-            expectedSupplyEnd: '2026-09-14',
+            expectedSupplyEnd: '2026-09-13',
             currentnessBasis: 'supply-window',
           }),
           expect.objectContaining({
             medication: 'Status-missing current medicine',
             current: true,
-            expectedSupplyEnd: '2026-09-14',
+            expectedSupplyEnd: '2026-09-13',
             currentnessBasis: 'supply-window',
           }),
         ]))
@@ -1409,7 +1409,7 @@ describe('createFhirTools (unified)', () => {
         ])
         expect(r.data[0]).toMatchObject({
           current: true,
-          expectedSupplyEnd: '2026-09-17',
+          expectedSupplyEnd: '2026-09-16',
           currentnessBasis: 'source-status-and-supply-window',
         })
       } finally {
@@ -1878,4 +1878,15 @@ describe('createFhirTools (unified)', () => {
       expect(r.data.every((m: any) => m.chronic === true)).toBe(true)
     })
   })
+})
+
+it('keeps distinct reconciled same-id observation values in actual tool output without capture metadata', async () => {
+  const observations = [10, 20].map((value, index) => ({ id: 'same', clinicalSourceNodeKey: 'synthetic-source-' + index, status: 'final', code: { text: 'Synthetic lab' }, effectiveDateTime: '2026-07-02', valueQuantity: { value, unit: 'mg/dL' } }))
+  const collection: any = { ...sampleCollection, observations, vitalSigns: [observations[0]], diagnosticReports: [] }
+  const sourceTools = createFhirTools(() => ({ patient: samplePatient, collection }))
+  const result = await (sourceTools.queryObservations as any).execute({})
+  expect(result.data.map((row: any) => row.value)).toEqual([10, 20])
+  expect(result.count).toBe(2)
+  expect(JSON.stringify(result)).not.toContain('clinicalSource')
+  expect(JSON.stringify(result)).not.toContain('synthetic-source-')
 })

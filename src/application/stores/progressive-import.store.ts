@@ -1,0 +1,147 @@
+import { create } from 'zustand'
+import { useMedcloudLaunchStore, type MedcloudSummaryRequest } from '../launch/medcloud-launch.store'
+
+// Shared transaction protocol for the importer and launch coordinator.
+
+export const PROGRESSIVE_IMPORT_EVENT = 'mediprisma:progressive-import-settled'
+export const PROGRESSIVE_STATUS_MESSAGE = 'medcloud:outpatient-status'
+export const PROGRESSIVE_REQUEST_ATTRIBUTE = 'data-medcloud-progressive-request'
+export type ProgressiveFailureReason = 'failed' | 'cancelled' | 'patient-changed' | 'privacy-stale' | 'source-unavailable'
+export function isProgressiveFailureReason(value: unknown): value is ProgressiveFailureReason {
+  return ['failed', 'cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'].includes(value as string)
+}
+
+export interface ProgressiveImportRequest {
+  version: 1
+  requestId: string
+  runId: string
+  stage: 'cloud' | 'hospital-visits' | 'hospital' | 'hospital-reports-failed' | 'hospital-empty' | 'cloud-only'
+  expectedImportId?: string
+  partial?: boolean
+}
+
+const validId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,128}$/.test(value)
+
+export function parseProgressiveImportRequest(raw: string | null): ProgressiveImportRequest | null {
+  if (!raw || raw.length > 1024) return null
+  try {
+    const value = JSON.parse(raw)
+    if (value?.version !== 1 || !validId(value.requestId) || !validId(value.runId)
+      || !['cloud', 'hospital-visits', 'hospital', 'hospital-reports-failed', 'hospital-empty', 'cloud-only'].includes(value.stage)
+      || (value.stage !== 'cloud' && !validId(value.expectedImportId))
+      || (value.partial !== undefined && typeof value.partial !== 'boolean')) return null
+    return value
+  } catch { return null }
+}
+
+export interface ProgressiveImportState {
+  runId: string
+  importId: string
+  /** Last accepted data snapshot; transport termination must not relabel it. */
+  stage?: ProgressiveImportRequest['stage']
+  phase: 'waiting' | 'reports-pending' | 'reports-pending-partial' | 'reports-failed' | 'update-failed' | 'loaded' | 'empty' | 'partial' | ProgressiveFailureReason
+}
+
+export const useProgressiveImportStore = create<{
+  current: ProgressiveImportState | null
+  initialFailure: { runId: string; importId: null; phase: ProgressiveFailureReason } | null
+  pendingRunId: string | null
+  stoppedRuns: Record<string, ProgressiveFailureReason>
+}>(() => ({ current: null, initialFailure: null, pendingRunId: null, stoppedRuns: {} }))
+
+// Only opaque transaction ids and coverage state survive a tab reload. Never
+// store patient attributes, source data, credentials, or a resumable request.
+const STATUS_STORAGE_KEY = 'mediprisma:progressive-status-v1'
+const phases: ProgressiveImportState['phase'][] = ['waiting', 'reports-pending', 'reports-pending-partial', 'reports-failed', 'update-failed', 'loaded', 'empty', 'partial', 'failed', 'cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable']
+
+function writeStoredStatus(current: ProgressiveImportState | null): void {
+  try {
+    if (current) sessionStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(current))
+    else sessionStorage.removeItem(STATUS_STORAGE_KEY)
+  } catch { /* storage-restricted sessions remain memory-only */ }
+}
+
+useProgressiveImportStore.subscribe((state, previous) => {
+  if (state.current !== previous.current) writeStoredStatus(state.current)
+})
+
+export function restoreProgressiveImportStatus(activeImportId: string | null): void {
+  if (useProgressiveImportStore.getState().current) return
+  let saved: ProgressiveImportState | null = null
+  try {
+    const value = JSON.parse(sessionStorage.getItem(STATUS_STORAGE_KEY) ?? 'null')
+    if (value && validId(value.runId) && validId(value.importId) && phases.includes(value.phase)
+      && (value.stage === undefined || ['cloud', 'cloud-only', 'hospital-visits', 'hospital', 'hospital-reports-failed', 'hospital-empty'].includes(value.stage))) saved = value
+  } catch { /* absent or invalid status is not a work authorization */ }
+  if (!saved || saved.importId !== activeImportId) {
+    writeStoredStatus(null)
+    return
+  }
+  // Reload interrupts the extension's exact-document transport. Preserve known
+  // coverage and safety warnings; never imply an old document is still working.
+  const stoppedRuns = useProgressiveImportStore.getState().stoppedRuns
+  const stopped = stoppedRuns[saved.runId]
+  const phase = stopped === 'failed' ? failedPhase(saved.phase) : stopped
+    ?? (['waiting', 'reports-pending', 'reports-pending-partial'].includes(saved.phase)
+      ? failedPhase(saved.phase) : saved.phase)
+  useProgressiveImportStore.setState({ initialFailure: null, current: { ...saved, phase },
+    ...(isProgressiveFailureReason(phase) ? { stoppedRuns: { ...stoppedRuns, [saved.runId]: phase } } : {}),
+  })
+}
+
+function failedPhase(phase: ProgressiveImportState['phase']): ProgressiveImportState['phase'] {
+  if (['reports-pending', 'reports-pending-partial', 'reports-failed'].includes(phase)) return 'reports-failed'
+  if (['loaded', 'partial', 'update-failed'].includes(phase)) return 'update-failed'
+  return 'failed'
+}
+
+export function stopProgressiveImport(runId: string, phase: ProgressiveFailureReason): void {
+  if (!validId(runId)) return
+  const { current, pendingRunId, stoppedRuns } = useProgressiveImportStore.getState()
+  // Repeated cleanup notifications must neither erase known coverage nor
+  // downgrade an identity/privacy/cancellation stop to a generic failure.
+  const priority: Record<ProgressiveFailureReason, number> = {
+    failed: 0, cancelled: 1, 'source-unavailable': 2, 'privacy-stale': 3, 'patient-changed': 4,
+  }
+  const previous = stoppedRuns[runId]
+  const reason = previous && priority[previous] > priority[phase] ? previous : phase
+  useProgressiveImportStore.setState({
+    ...(!current && pendingRunId === runId ? { initialFailure: { runId, importId: null, phase: reason } } : {}),
+    stoppedRuns: Object.fromEntries([...Object.entries(stoppedRuns).filter(([id]) => id !== runId), [runId, reason]].slice(-100)),
+    ...(current?.runId === runId ? { current: { ...current,
+      phase: reason === 'failed' ? failedPhase(current.phase) : reason,
+    } } : {}),
+  })
+  const queued = useMedcloudLaunchStore.getState().pendingSummary
+  if (reason !== 'failed' && queued?.progressiveRunId === runId) {
+    useMedcloudLaunchStore.setState({ pendingSummary: null })
+  }
+}
+
+/** Check again at the consumer, after data/auth readiness and its timer. */
+export function isProgressiveSummaryRequestCurrent(request: MedcloudSummaryRequest, activeImportId: string | null): boolean {
+  if (!request.progressiveRunId) return true
+  const { current, pendingRunId, stoppedRuns } = useProgressiveImportStore.getState()
+  const stopped = stoppedRuns[request.progressiveRunId]
+  return request.progressiveImportId === activeImportId
+    && (current?.runId === request.progressiveRunId || pendingRunId === request.progressiveRunId)
+    && (!stopped || stopped === 'failed')
+}
+
+export function isProgressiveAutoSummaryBlocked(): boolean {
+  const { current, pendingRunId, stoppedRuns } = useProgressiveImportStore.getState()
+  return (!!pendingRunId && !!stoppedRuns[pendingRunId] && stoppedRuns[pendingRunId] !== 'failed')
+    || !!current && ['cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'].includes(current.phase)
+}
+
+export function completeProgressiveImport(request: ProgressiveImportRequest, importId: string): void {
+  const stopped = useProgressiveImportStore.getState().stoppedRuns[request.runId]
+  const normalPhase = request.stage === 'cloud' ? 'waiting'
+    : request.stage === 'hospital-visits' ? request.partial ? 'reports-pending-partial' : 'reports-pending'
+    : request.stage === 'cloud-only' ? 'failed' : request.stage === 'hospital-empty' ? 'empty'
+    : request.stage === 'hospital-reports-failed' ? 'reports-failed' : request.partial ? 'partial' : 'loaded'
+  useProgressiveImportStore.setState({ current: {
+    runId: request.runId, importId, stage: request.stage,
+    phase: stopped === 'failed' ? failedPhase(normalPhase) : stopped ?? normalPhase,
+  } })
+}

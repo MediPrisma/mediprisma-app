@@ -124,7 +124,11 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
       // This happens per request because one user action can now launch the
       // medical-summary and safety pipelines concurrently.
       const frame = (delta: Record<string, unknown>, finish: string | null = null) =>
-        `data: ${JSON.stringify({
+        `data: ${JSON.stringify(model.startsWith('gemini') ? {
+          candidates: [{ index: 0, content: { role: 'model', parts: [{ text: delta.content ?? '' }] },
+            ...(finish ? { finishReason: 'STOP' } : {}) }],
+          modelVersion: model,
+        } : {
           id: 'chatcmpl-e2e',
           object: 'chat.completion.chunk',
           created: 0,
@@ -137,7 +141,7 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
           frames.push(frame({ content: reply.slice(i, i + chunkSize) }))
         }
         frames.push(frame({}, 'stop'))
-        frames.push('data: [DONE]\n\n')
+        if (!model.startsWith('gemini')) frames.push('data: [DONE]\n\n')
         return frames
       }
 

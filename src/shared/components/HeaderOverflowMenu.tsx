@@ -57,6 +57,7 @@ export function HeaderOverflowMenu({
           <Button
             variant="outline"
             size="icon"
+            data-tour="header-more"
             className="h-[44px] w-[44px] shadow-none hover:shadow-none"
             aria-label={(t.header as any)?.moreMenu ?? '更多'}
           >

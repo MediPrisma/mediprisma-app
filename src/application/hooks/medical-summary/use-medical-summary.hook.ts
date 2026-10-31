@@ -1,3 +1,9 @@
+'use client'
+
+import { diagnosticUuid, inspectSummaryBlocks, type SummaryDiagnosticContext } from '@/src/shared/utils/summary-diagnostics'
+import { useSummaryVersionsStore, summaryVersionViewKey, captureSummaryEvidence } from './summary-versions.store'
+import { useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 // Medical Summary hook — thin adapter over the shared AI slot-generation
 // engine (src/application/hooks/ai-generation/): runs the structured
 // generation on the selected summary model, verifies citations against the
@@ -8,12 +14,11 @@
 // runs once after cache/auth hydration. Changing the picker restores that
 // model's completed version when available; otherwise the current version
 // remains visible until an explicit regeneration succeeds.
-'use client'
 
 import { detectClinicalDataSource } from '@/src/core/utils/clinical-data-source.utils'
 import { createModelExecution, modelExecutionLabel, mergeModelExecutions } from '@/src/shared/utils/ai-model-execution'
 import type { AiModelExecution } from '@/src/core/entities/ai-model-execution.entity'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   isContextOverflowError,
   type ContextOverflowIssue,
@@ -199,6 +204,7 @@ export interface UseMedicalSummaryReturn {
   /** Model-independent Bundle/patient/audience/locale/input identity used by
    *  the summary+safety orchestrator to isolate visible generation batches. */
   scopeKey: string
+  readingScopeKey: string
   /** Exact model/content slot selected for the next generation. */
   generationSlotKey: string
   /** Unlike isGenerating, this identifies whether the currently selected
@@ -284,10 +290,17 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const runStartedAt = nowMs()
     let firstCardMs: number | undefined
     const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
+    const previousAttempts = retryRequest ? useAiExecutionDiagnosticsStore.getState().records
+      .filter(r => r.operationKey === ctx.operationKey && r.technical).map(r => r.technical!) : []
+    const diagnosticRunId = previousAttempts.at(-1)?.run_id ?? diagnosticUuid()
+    let diagnosticAttempt = Math.max(0, ...previousAttempts.map(r => r.attempt))
+
     moduleRetryRequestsRef.current.delete(ctx.operationKey)
     if (!retryRequest) {
       useAiExecutionDiagnosticsStore.getState().clearOperationFeature(ctx.operationKey, 'medical-summary')
     }
+    useAiExecutionDiagnosticsStore.getState().beginSummaryRun(ctx.operationKey, diagnosticRunId)
+    ctx.identifySummaryRun?.(diagnosticRunId)
     runMetricsRef.current.delete(ctx.operationKey)
     const initialExecution = () => createModelExecution(ctx.requestedModelId ?? ctx.modelId, ctx.modelId, ctx.modelName)
     // Provenance fallback for cards no lane managed to attribute. Each lane
@@ -404,6 +417,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const publishProgress = () => {
       const state = medicalSummaryStore.getState()
       if (
+        ctx.signal?.aborted ||
         state.bundleRevision !== bundleRevision ||
         !state.running[ctx.operationKey]
       ) return
@@ -439,7 +453,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
      * reasoning is turned off.
      */
     const streamModelRequest = (request: {
-      laneId: string
+      laneId: SummaryDiagnosticContext['lane']
+      inspect: SummaryDiagnosticContext['inspect']
       clinicalContext: string
       buildMessages: (fittedClinicalContext: string) => AiMessage[]
       hiddenReasoning?: 'off'
@@ -462,12 +477,17 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         }
       },
       execute: (messages) => streamWithCardProgressTimeout({
+        signal: ctx.signal,
         stream: (signal, streamChunk) => {
           request.onCallStart()
           return ctx.ai.stream(messages, {
             modelId: ctx.modelId,
             operationKey: ctx.operationKey,
             diagnosticFeature: 'medical-summary',
+            summaryDiagnostics: {
+              runId: diagnosticRunId, attempt: ++diagnosticAttempt,
+              lane: request.laneId, inspect: request.inspect,
+            },
             requestedModelId: ctx.requestedModelId,
             onModelExecution: request.onModelExecution,
             throwOnAbort: true,
@@ -500,6 +520,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       parsed: unknown,
       execution: AiModelExecution,
     ) => {
+      if (ctx.signal?.aborted) return
       cardModelExecutions[card.id] = execution
       progressiveAggregate = card.apply(progressiveAggregate, parsed, ctx.catalog)
       publishedCardIds.add(card.id)
@@ -526,7 +547,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
      * is recorded per card.
      */
     const runLane = async (
-      laneId: string,
+      laneId: SummaryDiagnosticContext['lane'],
       laneCards: MedicalSummaryCardDefinition[],
       laneInput: GenerateMedicalSummaryInput,
       /** Fast lane only. See the lane list below for why. */
@@ -561,6 +582,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       ) => {
         const outcome = await streamModelRequest({
           laneId,
+          inspect: (text) => inspectSummaryBlocks(text, cards.map(card => ({
+            complete: value => card.hasCompleteBatchBlock(value),
+            parse: value => parseLaneBatch(card, value),
+          }))),
           clinicalContext: transportClinicalContext,
           buildMessages: (fittedClinicalContext) => {
             const fittedPromptInput = {
@@ -733,7 +758,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       )
     }
     const lanes: Array<{
-      id: string
+      id: SummaryDiagnosticContext['lane']
       cards: MedicalSummaryCardDefinition[]
       input: GenerateMedicalSummaryInput
       hiddenReasoning?: 'off'
@@ -803,6 +828,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         let completePoints = 0
         const { value, clinicalContext: sentReportsText } = await streamModelRequest({
           laneId: 'reports',
+          inspect: (text) => card.hasCompleteBatchBlock(text)
+            ? card.parseBatch(text, ctx.catalog) ? 'valid' : 'invalid' : 'incomplete',
           clinicalContext: digest.promptText,
           buildMessages: (reportsText) => generateMedicalSummaryUseCase.buildReportHighlightMessages({
             locale: outputLocale,
@@ -993,22 +1020,76 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     [],
   )
 
+  const progressiveState = useProgressiveImportStore(state => state.current)
+  const progressive = progressiveState?.importId === LocalBundleService.getActiveImportId() ? progressiveState : null
+  const history = useSummaryVersionsStore()
+  const historyBusy = !!progressive && Object.keys(history.running).some(key => key.startsWith(`${progressive.runId}::`))
+  const finalHospitalStage = !!progressive && ['loaded', 'partial', 'reports-failed'].includes(progressive.phase)
+  const automaticStageReady = (!progressive || progressive.phase === 'waiting' || finalHospitalStage)
+    && history.automaticStoppedRunId !== progressive?.runId
+
+  // Capture at the shared producer boundary so manual, retry and automatic
+  // jobs all preserve the exact input/evidence they actually used.
+  const runAndCapture = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
+    // This callback and ctx belong to the same rendered input snapshot, even
+    // when a demographics dialog delays starting until a supplement arrives.
+    const current = progressive
+    const live = useProgressiveImportStore.getState().current
+    if (!current || current.runId !== live?.runId || live.importId !== LocalBundleService.getActiveImportId()
+      || ['patient-changed', 'privacy-stale'].includes(live.phase)) return run(ctx)
+    const state = useSummaryVersionsStore.getState()
+    const epoch = state.epoch
+    const automaticEpoch = state.automaticEpoch
+    const automatic = Boolean(ctx.automatic || state.launchViewKey === summaryVersionViewKey(current.runId, ctx.operationKey))
+    const viewKey = summaryVersionViewKey(current.runId, ctx.operationKey)
+    useSummaryVersionsStore.setState(s => ({ running: { ...s.running, [viewKey]: {
+      slotKey: ctx.operationKey, automatic,
+    } } }))
+    const startedAt = nowMs()
+    try {
+      const produced = await run(ctx)
+      const result = produced?.generation?.source === 'live' ? { ...produced, generation: {
+        ...produced.generation, completedAt: Date.now(), durationMs: Math.round(nowMs() - startedAt),
+      } } : produced
+      if (result && !ctx.signal?.aborted && (!automatic || useSummaryVersionsStore.getState().automaticEpoch === automaticEpoch) && (result.completedCardIds?.includes('overview')
+        || !Object.values(result.cardErrors ?? {}).some(Boolean))) {
+        useSummaryVersionsStore.getState().add({
+          id: `${ctx.operationKey}:${result.generation?.source === 'live' ? result.generation.generatedAt : Date.now()}`,
+          viewKey, runId: current.runId, slotKey: ctx.operationKey,
+          kind: (current.stage ? ['cloud', 'cloud-only', 'hospital-empty'].includes(current.stage)
+            : ['waiting', 'empty', 'failed'].includes(current.phase)) ? 'cloud' : 'hospital',
+          completedAt: Date.now(), result,
+          coverage: ctx.clinicalData ? buildCoverageStats(ctx.clinicalData) : null, catalog: ctx.catalog, evidence: captureSummaryEvidence(ctx.catalog, result),
+        }, epoch)
+      }
+      return result
+    } finally {
+      if (useSummaryVersionsStore.getState().epoch === epoch) {
+        useSummaryVersionsStore.setState(s => {
+          const running = { ...s.running }; delete running[viewKey]
+          return { running }
+        })
+      }
+    }
+  }, [run, progressive])
+
   const slot = useAiSlotGeneration<MedicalSummaryResult>({
     // Summary and the safety scan are produced by ONE generation job, so the
     // reliability event is reported once, as `summary`.
     analyticsSurface: 'summary',
+    preserveAcrossContinuation: true,
     defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
     selectedModelId: modelId,
     // The persisted "自動產生" switch is the single authorization for a
     // background run; it is off by default. Manual generation is unaffected.
-    autoRunEnabled: demographicsReadyForAi && autoGenerate,
+    autoRunEnabled: demographicsReadyForAi && autoGenerate && !historyBusy && automaticStageReady,
     // Even a MANUAL generate waits for the full clinical dataset.
     requireDataReadyToGenerate: true,
     store: medicalSummaryStore,
     cacheKeyFor: summaryCacheKey,
     cacheMaxAgeMs: SUMMARY_CACHE_MAX_AGE_MS,
     loadCached,
-    run,
+    run: runAndCapture,
     readRunMetrics,
     demoSeed,
     resultModelId: medicalSummaryResultModelId,
@@ -1023,6 +1104,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // estimate is worded as one, never as a stop.
     contextVariant: 'first-visit-summary',
   })
+
+  // Clear clinical diagnostic memory before passive auto-generation effects
+  // run for another patient/input scope. Late prior streams are then rejected.
+  useLayoutEffect(() => {
+    useAiExecutionDiagnosticsStore.getState().setSummaryScope(slot.scopeKey)
+  }, [slot.scopeKey])
 
   // Deterministic coverage stats for the coverage card — recomputes only when
   // the bundle changes.
@@ -1061,13 +1148,17 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   }, [setModelId])
 
   const generationSlotKey = slot.slotKey
+  const readingViewKey = progressive && slot.readingScopeKey
+    ? summaryVersionViewKey(progressive.runId, slot.readingScopeKey) : ''
   const runSlotGeneration = slot.generate
   const generate = useCallback(async () => {
+    if (useSummaryVersionsStore.getState().running[readingViewKey]) return
     moduleRetryRequestsRef.current.delete(generationSlotKey)
     await runSlotGeneration()
-  }, [generationSlotKey, runSlotGeneration])
+  }, [generationSlotKey, runSlotGeneration, readingViewKey])
 
   const retryFailedModules = useCallback(async () => {
+    if (useSummaryVersionsStore.getState().running[readingViewKey]) return
     const exactResult = medicalSummaryStore.getState().byKey[generationSlotKey]
     const cardIds = MEDICAL_SUMMARY_CARD_IDS.filter(
       (cardId) => Boolean(exactResult?.cardErrors?.[cardId]),
@@ -1088,7 +1179,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         moduleRetryRequestsRef.current.delete(generationSlotKey)
       }
     }
-  }, [generate, generationSlotKey, runSlotGeneration])
+  }, [generate, generationSlotKey, runSlotGeneration, readingViewKey])
 
   const readGenerationSlot = useCallback((slotKey: string) => {
     const state = medicalSummaryStore.getState()
@@ -1154,6 +1245,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     hasPatient: slot.hasPatient,
     dataReady: slot.dataReady,
     scopeKey: slot.scopeKey,
+    readingScopeKey: slot.readingScopeKey,
     generationSlotKey: slot.slotKey,
     isCurrentSlotGenerating: slot.isRunning,
     readGenerationSlot,

@@ -446,6 +446,24 @@
 
 .rowExtras { padding: 0 10px 12px; }
 
+/* A locale layer's line (CAD core §7.2): dashed off the point, its source as a tag. */
+.coverage { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px dashed var(--box-line); }
+.coverageLine { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 14px; color: var(--ink-2); }
+.coverageLine[data-coverage-status='needs-data'] { color: var(--ink-4); }
+.coverageTag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--box-line);
+  border-radius: 999px;
+  background: var(--sheet);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 @container (max-width: 760px) {
   .thead { display: none; }
   .rowCells { grid-template-columns: minmax(0, 1fr); }

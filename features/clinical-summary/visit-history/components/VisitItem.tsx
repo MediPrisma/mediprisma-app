@@ -32,6 +32,7 @@ import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.h
 import { RIGHT_PANE_ACTION_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { VisitSourceComparisonBadge } from './VisitSourceComparisonBadge'
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
@@ -221,7 +222,7 @@ function VisitItemComponent({
 
   // Resource-navigation anchor: a cited Encounter in the Medical Summary tab
   // scroll-flashes this card.
-  const anchorRef = useResourceAnchor('Encounter', visit.id)
+  const anchorRef = useResourceAnchor('Encounter', visit.sourceIds ?? visit.id)
 
   return (
     <div
@@ -299,6 +300,8 @@ function VisitItemComponent({
                 <span className="tabular-nums">{dateLabel}</span>
               </TooltipContent>
             </Tooltip>
+            {/* After the date, so the type, discipline and facility read first. */}
+            <VisitSourceComparisonBadge visit={visit} />
             {visit.status === "in-progress" && (
               <Badge variant="outline" className="h-5 px-1.5 py-0 text-[0.6875rem] border-green-500 text-green-700 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300">
                 {t.visitHistory.inProgress}

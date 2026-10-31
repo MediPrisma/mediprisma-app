@@ -21,7 +21,7 @@ function refill(id: string, authoredOn: string, chronic: boolean) {
   }
 }
 
-it('keeps a drug 慢箋 when only an older refill outside the window was marked chronic', () => {
+it('does not infer that this order is 慢箋 from another prescription of the same drug', () => {
   const medications = [
     refill('old', '2026-04-20T00:00:00+08:00', true),
     refill('latest', '2026-09-20T00:00:00+08:00', false),
@@ -30,7 +30,7 @@ it('keeps a drug 慢箋 when only an older refill outside the window was marked 
   const current = result.current.meds.items.filter((item) => item.isCurrent)
   expect(current).toHaveLength(1)
   expect(current[0].id).toBe('latest')
-  expect(current[0].isChronic).toBe(true)
+  expect(current[0].isChronic).toBe(false)
 })
 
 // 「用到哪天」 prints the source's own end day: the remaining-day count is
@@ -44,6 +44,7 @@ it('writes the until-date from the source end day, not the rounded-up count', ()
   const { zhTW } = require('@/src/shared/i18n/locales/zh-TW')
   const medication = {
     ...refill('m1', '2026-09-12T09:00:00+08:00', false),
+    dosageInstruction: [{ timing: { repeat: { boundsPeriod: { start: '2026-09-12T09:00:00+08:00', end: '2026-10-10T18:00:00+08:00' } } } }],
     dispenseRequest: { validityPeriod: { start: '2026-09-12T09:00:00+08:00', end: '2026-10-10T18:00:00+08:00' } },
   }
   const { result } = renderHook(() => useOverviewMeds([medication], buildOverviewWindow(3, NOW), 'medical', 'zh-TW'))

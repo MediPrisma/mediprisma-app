@@ -23,7 +23,7 @@ import {
 } from '@/features/clinical-summary/components/clinical-metadata-styles'
 import { VisitDetailContent } from '@/features/clinical-summary/visit-history/components/VisitDetailContent'
 import { ReportInstitutionLabel } from '@/features/clinical-summary/reports/components/ReportInstitutionLabel'
-import type { VisitRecord } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
+import { needsSourceComparison, type VisitRecord } from '@/features/clinical-summary/visit-history/hooks/useVisitHistory'
 import type { OverviewVisitItem, OverviewVisitsData } from '../hooks/useOverviewData'
 import type { OverviewSectionFit } from '../overview.types'
 import { OVERVIEW_SECTION_DOM_ID } from '../overview.types'
@@ -281,6 +281,7 @@ export function OverviewVisitsSection({
                 className={cn('shrink text-[0.6875rem]', compact ? 'max-w-[7rem]' : 'max-w-[9rem]')}
               />
             )}
+            {needsSourceComparison(visit) && <span className="shrink-0 text-xs" title={locale === 'en' ? 'Source visit identity is unconfirmed' : '兩邊原始就診紀錄均保留，尚未確認為同一次就診'}>{locale === 'en' ? 'Compare sources' : '待核對'}</span>}
             <span className={cn(
               'shrink-0 whitespace-nowrap font-medium tabular-nums text-foreground',
               compact ? 'text-xs' : 'text-[0.8125rem]',
@@ -334,7 +335,9 @@ export function OverviewVisitsSection({
       id={OVERVIEW_SECTION_DOM_ID.visits}
       icon={Calendar}
       title={strings.sections.visits}
-      count={strings.counts.visits.replace('{count}', String(data.count))}
+      count={data.items.some((item) => needsSourceComparison(item.visit))
+        ? `${data.count} ${locale === 'en' ? 'record groups' : '組紀錄'}`
+        : strings.counts.visits.replace('{count}', String(data.count))}
       bounded={fit.bounded}
       flash={flash}
       headingRef={headingRef}
@@ -371,7 +374,9 @@ export function OverviewVisitsSection({
               open={listOpen}
               onOpenChange={setListOpen}
               title={strings.sections.visits}
-              subtitle={strings.counts.visits.replace('{count}', String(matched.length))}
+              subtitle={matched.some((item) => needsSourceComparison(item.visit))
+                ? `${matched.length} ${locale === 'en' ? 'record groups' : '組紀錄'}`
+                : strings.counts.visits.replace('{count}', String(matched.length))}
               filters={filterChips}
             >
               {renderRows(matched)}

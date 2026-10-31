@@ -80,6 +80,10 @@ export interface EmrFormatResult {
   notes: EmrFormatNote[]
 }
 
+// "June'13", "Sep'21": the way clinicians write a lipid history by hand. June
+// and July stay whole, as they write them — "Jun" and "Jul" differ by a letter.
+const MONTH_ABBREVIATIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'June', 'July', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 export function formatEmrDate(iso: string, style: EmrDateStyle, now: Date = new Date()): string {
   const y = iso.slice(0, 4)
   const m = iso.slice(5, 7)
@@ -87,10 +91,20 @@ export function formatEmrDate(iso: string, style: EmrDateStyle, now: Date = new 
   if (!y || !m || !d) return iso
   if (style === 'ymd') return `${y}/${m}/${d}`
   if (style === 'roc') return `${Number(y) - 1911}/${m}/${d}`
+  if (style === 'monYy') {
+    const month = MONTH_ABBREVIATIONS[Number(m) - 1]
+    return month ? `${month}'${y.slice(2)}` : iso
+  }
   // Month/day only inside the current year: "11/02" next to "09/18" would read
   // as this November, and a line that ages a result by a year is a clinical
   // error, not a formatting one.
   return y === String(now.getFullYear()) ? `${m}/${d}` : `${y}/${m}/${d}`
+}
+
+/** Notes and buttons name one day ("no LDL on 09/18"). A month-only paste
+ *  style would hide which day, so they keep the day. */
+export function emrNoteDateStyle(style: EmrDateStyle): EmrDateStyle {
+  return style === 'monYy' ? 'md' : style
 }
 
 /** Between the values of a 最近 N 次 field, oldest → newest. */

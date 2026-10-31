@@ -11,6 +11,7 @@ export const HOSPITAL_MEDICATION_NAME_VERSION = 'vgh-recorded-names-20261001-v1'
 export const HOSPITAL_MEDICATION_NAME_REVIEWED_AT = '2026-10-01'
 const GENERIC_SYSTEM = 'urn:oid:vgh.medication.generic'
 const PRODUCT_SYSTEM = 'urn:oid:vgh.medication.product'
+const NAME_SYSTEM = 'urn:oid:vgh.medication.name'
 
 export interface HospitalMedicationName {
   status: 'normalized' | 'unresolved'
@@ -20,6 +21,7 @@ export interface HospitalMedicationName {
   productName?: string
   recordedGenericName?: string
   recordedProductName?: string
+  recordedName?: string
   source?: 'recorded-generic-name' | 'verified-product-alias'
   referenceUrl?: string
   version: string
@@ -132,24 +134,27 @@ const productAliases = new Map<string, ProductAlias>(VERIFIED_PRODUCTS.map(
  * matching, free-text scraping, cross-row propagation or fabricated NHI codes. */
 export function resolveHospitalMedicationName(concept?: Concept): HospitalMedicationName | undefined {
   const codings = concept?.coding?.filter(({ system }) =>
-    system === GENERIC_SYSTEM || system === PRODUCT_SYSTEM) ?? []
+    system === GENERIC_SYSTEM || system === PRODUCT_SYSTEM || system === NAME_SYSTEM) ?? []
   if (!codings.length) return undefined
   const names = (system: string) => [...new Set(codings.filter((c) => c.system === system)
     .map((c) => (c.display || c.code || '').trim()).filter(Boolean))]
   const generics = names(GENERIC_SYSTEM)
   const products = names(PRODUCT_SYSTEM)
+  const recordedNames = names(NAME_SYSTEM)
   const base: HospitalMedicationName = {
     status: 'unresolved',
     recordedGenericName: generics.join(' / ') || undefined,
     recordedProductName: products.join(' / ') || undefined,
-    productName: products[0] || generics[0],
+    recordedName: recordedNames.join(' / ') || undefined,
+    productName: products[0] || generics[0] || recordedNames[0],
     version: HOSPITAL_MEDICATION_NAME_VERSION,
     reviewedAt: HOSPITAL_MEDICATION_NAME_REVIEWED_AT,
   }
   // Differing source codings are ambiguous even if an alias happens to match.
-  if (generics.length > 1 || products.length > 1) return base
+  if (generics.length > 1 || products.length > 1 || recordedNames.length > 1
+    || (recordedNames.length && (generics.length || products.length))) return base
   const generic = generics[0] || ''
-  const product = products[0] || ''
+  const product = products[0] || recordedNames[0] || ''
   const recordedIngredient = genericNames.get(nameKey(generic))
     // Some bridge rows put an explicit chemical name in the product field.
     || (!generic ? genericNames.get(nameKey(product)) : undefined)

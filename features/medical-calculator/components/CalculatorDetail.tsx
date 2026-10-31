@@ -2,8 +2,10 @@
 
 import { ScoreInterpretation } from './ScoreInterpretation'
 import { HpaRiskResults } from './HpaRiskResults'
-import { useMemo, useState, useCallback, useRef } from "react"
-import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
+import { DoacDoseResults } from './DoacDoseResults'
+import { DoacPeriopResults } from './DoacPeriopResults'
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { ArrowLeft, RotateCw, Sparkles, Clock, AlertTriangle, Loader2, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -15,8 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import type { CalculatorDef, CalcValues, Severity } from "../types"
-import { tr, trAlt } from "../types"
+import type { CalculatorDef, CalcResult, CalcValues, Severity } from "../types"
+import { tr, trAlt, inputVisible, visibleValues } from "../types"
 import { useLabAutofill, type Autofill } from "../hooks/use-lab-autofill.hook"
 import { getCalcInfo, getCalcScoring } from "../calculators"
 import type { CalcScoring, ScoringGrid, GridColor } from "../calculators"
@@ -48,6 +50,13 @@ function safeCompute(
     // had filled every field that they hadn't.
     return { result: null, crashed: true }
   }
+}
+
+/** How long ago, in the words a badge has room for: 「45 天前」「5 個月前」「2 年前」. */
+export function agoText(days: number, zh: boolean): string {
+  if (days < 60) return zh ? `${days} 天前` : `${days} d ago`
+  if (days < 730) return zh ? `${Math.floor(days / 30)} 個月前` : `${Math.floor(days / 30)} mo ago`
+  return zh ? `${Math.floor(days / 365)} 年前` : `${Math.floor(days / 365)} y ago`
 }
 
 interface FilledInfo {
@@ -96,6 +105,8 @@ export function CalculatorDetail({
   onBack,
   isFavorite,
   onToggleFavorite,
+  onResult,
+  selectContentClassName,
 }: {
   calc: CalculatorDef
   onBack: () => void
@@ -105,6 +116,10 @@ export function CalculatorDetail({
    *  other on change. */
   isFavorite: boolean
   onToggleFavorite: () => void
+  /** The result as the clinician's inputs stand, for a host that keeps it (the decision map's 附註). */
+  onResult?: (result: CalcResult | null) => void
+  /** For a host that stacks the calculator above another fixed layer: its option lists must open above it too. */
+  selectContentClassName?: string
 }) {
   const { locale } = useLanguage()
   const {
@@ -112,6 +127,7 @@ export function CalculatorDetail({
     isLoading: patientDataLoading,
     error: patientDataError,
     retry: retryPatientData,
+    patientId,
   } = useLabAutofill()
   // Questionnaire-style calculators (GDS-15, PHQ-9…) have no `source` on any
   // input, so a loading chart tells the user nothing — keep their view quiet.
@@ -131,20 +147,36 @@ export function CalculatorDetail({
   // Opening a calculator while the chart is still loading used to seed the
   // inputs from an empty autofill and never revisit it — the fields stayed
   // blank for good, with the "Refill" button hidden because nothing was
-  // filled. Re-seed when a newer autofill arrives, but never overwrite what
-  // the clinician has already typed. Adjusted during render (not in an
-  // effect) so the values land in the same paint.
-  const [edited, setEdited] = useState(false)
+  // filled. Re-seed the fields the clinician has not typed in when a newer
+  // autofill arrives (a weight just added in the CDSS, a chart that finished
+  // loading); what they typed stays — for the same patient only. Another
+  // patient starts over, so no typed value is computed with someone else's
+  // chart. Adjusted during render (not in an effect) so the values land in
+  // the same paint.
+  const [edited, setEdited] = useState<ReadonlySet<string>>(() => new Set())
   const [seededFrom, setSeededFrom] = useState(initial)
-  if (!edited && initial !== seededFrom) {
+  const [seededFor, setSeededFor] = useState(patientId)
+  if (initial !== seededFrom || patientId !== seededFor) {
+    const samePatient = patientId === seededFor
     setSeededFrom(initial)
-    setValues(initial.values)
-    setFilled(initial.filled)
-    setDisplayUnits(initial.units)
+    setSeededFor(patientId)
+    if (!samePatient) setEdited(new Set())
+    const kept = samePatient ? edited : new Set<string>()
+    const keep = <T,>(next: Record<string, T>, prev: Record<string, T>) => {
+      const out = { ...next }
+      for (const key of kept) {
+        if (key in prev) out[key] = prev[key]
+        else delete out[key]
+      }
+      return out
+    }
+    setValues((prev) => keep(initial.values, prev))
+    setFilled((prev) => keep(initial.filled, prev))
+    setDisplayUnits((prev) => keep(initial.units, prev))
   }
 
   const setValue = useCallback((key: string, value: string) => {
-    setEdited(true)
+    setEdited((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
     setValues((prev) => ({ ...prev, [key]: value }))
     setFilled((prev) => {
       if (!prev[key]) return prev
@@ -156,13 +188,18 @@ export function CalculatorDetail({
 
   const refill = useCallback(() => {
     const s = seed(calc, autofill)
-    setEdited(false)
+    setEdited(new Set())
     setValues(s.values)
     setFilled(s.filled)
     setDisplayUnits(s.units)
   }, [calc, autofill])
 
-  const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, values), [calc, values])
+  // What the rules read: an input that does not apply right now is blank.
+  const effective = useMemo(() => visibleValues(calc.inputs, values), [calc, values])
+  const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, effective), [calc, effective])
+  useEffect(() => {
+    onResult?.(computeCrashed ? null : result)
+  }, [computeCrashed, onResult, result])
   const hasAnyAutofill = Object.keys(filled).length > 0
   const info = getCalcInfo(calc.id)
   const scoring = getCalcScoring(calc.id)
@@ -184,6 +221,17 @@ export function CalculatorDetail({
     { key: 'history', title: zh ? '病史與吸菸' : 'History and smoking', hint: zh ? '病史請依曾經確診的情形填寫，不以這次血壓或血糖判定；不確定可先留空。' : 'Use previously diagnosed conditions, not today’s BP or glucose. Leave unknown history unanswered.', keys: ['diabetes', 'hbp', 'smoke', 'prior_cvd'] },
     { key: 'labs', title: zh ? '血壓與檢驗' : 'Blood pressure and labs', hint: zh ? '核對數值、單位與來源日期；血糖請使用空腹檢驗。' : 'Check values, units and source dates; use a fasting glucose result.', keys: ['sbp', 'glu', 'chol', 'tg', 'ldlc', 'hdlc'] },
   ].map((group) => ({ ...group, inputs: group.keys.flatMap((key) => calc.inputs.filter((input) => input.key === key)) }))
+    : calc.inputGroups ? [
+      ...calc.inputGroups.map((group) => ({
+        key: group.key,
+        title: tr(locale, group.title),
+        hint: group.hint ? tr(locale, group.hint) : '',
+        summary: group.summary,
+        inputs: group.keys.flatMap((key) => calc.inputs.filter((input) => input.key === key)),
+      })),
+      // An input no group names still shows, last.
+      { key: 'other', title: '', hint: '', inputs: calc.inputs.filter((input) => !calc.inputGroups!.some((group) => group.keys.includes(input.key))) },
+    ].filter((group) => group.inputs.length)
     : [{ key: 'all', title: '', hint: '', inputs: calc.inputs }]
 
   // Jump to the source report in the left panel (reuses the shared nav store
@@ -203,7 +251,7 @@ export function CalculatorDetail({
   // auto-filled) its source date + report name — for an auditable note.
   const buildFullCopy = useCallback((): string => {
     if (!result) return ""
-    const rows: ClipboardInputRow[] = calc.inputs.map((inp) => {
+    const rows: ClipboardInputRow[] = calc.inputs.filter((inp) => inputVisible(inp, values)).map((inp) => {
       const raw = values[inp.key] ?? ""
       let value = raw
       if (inp.type === "select" && raw !== "") {
@@ -316,8 +364,12 @@ export function CalculatorDetail({
       {/* Result — compact so it doesn't dominate the panel. */}
       {isHpa ? (
         <div ref={hpaResultRef} tabIndex={-1}>
-          <HpaRiskResults values={values} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
+          <HpaRiskResults values={effective} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
         </div>
+      ) : calc.id === 'doac-dose-nvaf' ? (
+        <DoacDoseResults values={effective} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
+      ) : calc.id === 'doac-periop' ? (
+        <DoacPeriopResults values={effective} locale={locale} onReviewField={(key) => detailRef.current?.querySelector<HTMLElement>(`#calc-${key}`)?.focus()} />
       ) : (
       <div className={`relative rounded-lg border border-border px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : ""}`}>
         {result && (
@@ -380,11 +432,11 @@ export function CalculatorDetail({
 
       {/* Inputs */}
       <div className="space-y-3">
-        {inputGroups.map((group) => (
-        <fieldset key={group.key} className="min-w-0 space-y-3">
-          {group.title && <legend className="mb-1 pt-2 text-sm font-semibold">{group.title}</legend>}
-          {group.hint && <p className="text-xs leading-relaxed text-muted-foreground">{group.hint}</p>}
-        {group.inputs.map((input) => {
+        {inputGroups.map((group) => {
+          const inputs = group.inputs.filter((input) => inputVisible(input, values))
+          if (!inputs.length) return null
+          const folded = 'summary' in group && group.summary ? group.summary(effective, inputs.map((input) => input.key)) : undefined
+          const fields = inputs.map((input) => {
           const fill = filled[input.key]
           const expectedUnit = input.type === "number" ? input.unit : undefined
           const unit = input.type === "number" ? (displayUnits[input.key] || input.unit) : undefined
@@ -393,6 +445,8 @@ export function CalculatorDetail({
             ? (zh ? `正常 ${range.low}–${range.high}` : `Normal ${range.low}–${range.high}`)
             : undefined
           const implausible = input.type === "number" && isImplausible(input, values[input.key] ?? "")
+          const ageDays = fill?.date && Number.isFinite(Date.parse(fill.date)) ? Math.floor((Date.now() - Date.parse(fill.date)) / 86_400_000) : undefined
+          const staleDays = input.staleAfterDays !== undefined && ageDays !== undefined && ageDays > input.staleAfterDays ? ageDays : undefined
           return (
             <div key={input.key} className="space-y-1">
               <div className="flex items-center justify-between gap-2">
@@ -408,6 +462,16 @@ export function CalculatorDetail({
                     >
                       <AlertTriangle className="h-3 w-3" />
                       {fill.date ? fill.date.slice(0, 10) : ""} · {fill.sourceUnit}
+                    </span>
+                  ) : staleDays !== undefined ? (
+                    // Used as filled, never withheld: the date turns amber and says how old it is.
+                    <span
+                      className="flex shrink-0 items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400"
+                      title={zh ? `自動帶入的資料已 ${staleDays} 天（超過 ${input.staleAfterDays} 天），建議確認或重新量測` : `Auto-filled from ${staleDays} days ago (over ${input.staleAfterDays}); confirm or re-measure`}
+                      data-testid={`calc-stale-${input.key}`}
+                    >
+                      <Clock className="h-3 w-3" />
+                      {fill.date.slice(0, 10)} · {agoText(staleDays, zh)}
                     </span>
                   ) : (
                     <span
@@ -427,10 +491,10 @@ export function CalculatorDetail({
               </div>
               {input.type === "select" ? (
                 <Select value={values[input.key] ?? ""} onValueChange={(v) => setValue(input.key, v)}>
-                  <SelectTrigger id={`calc-${input.key}`} className={isHpa ? 'min-h-11 w-full sm:min-h-9' : 'h-9'}>
+                  <SelectTrigger id={`calc-${input.key}`} className={isHpa ? 'min-h-11 w-full sm:min-h-9' : 'h-9 max-w-full *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate'}>
                     <SelectValue placeholder={zh ? "請選擇…" : "Select…"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={selectContentClassName}>
                     {input.options.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {tr(locale, opt.label)}
@@ -438,6 +502,14 @@ export function CalculatorDetail({
                     ))}
                   </SelectContent>
                 </Select>
+              ) : input.type === "datetime" || input.type === "time" ? (
+                <Input
+                  id={`calc-${input.key}`}
+                  type={input.type === "datetime" ? "datetime-local" : "time"}
+                  value={values[input.key] ?? ""}
+                  onChange={(e) => setValue(input.key, e.target.value)}
+                  className={isHpa ? 'h-11 sm:h-9' : 'h-9'}
+                />
               ) : (
                 <>
                   <Input
@@ -483,9 +555,28 @@ export function CalculatorDetail({
               )}
             </div>
           )
+        })
+          return folded ? (
+            // Remounted when `open` flips, so a group that now needs the reader opens itself.
+            <details key={`${group.key}:${folded.open}`} open={folded.open} className="group/fold min-w-0 rounded-md border" data-testid={`calc-group-${group.key}`}>
+              <summary className="flex cursor-pointer list-none items-baseline gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                <span className="shrink-0 text-sm font-semibold">{group.title}</span>
+                <span className="min-w-0 flex-1 text-xs text-muted-foreground">{tr(locale, folded.text)}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 self-center text-muted-foreground transition-transform group-open/fold:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="space-y-3 border-t px-3 py-2.5">
+                {group.hint && <p className="text-xs leading-relaxed text-muted-foreground">{group.hint}</p>}
+                {fields}
+              </div>
+            </details>
+          ) : (
+            <fieldset key={group.key} className="min-w-0 space-y-3">
+              {group.title && <legend className="mb-1 pt-2 text-sm font-semibold">{group.title}</legend>}
+              {group.hint && <p className="text-xs leading-relaxed text-muted-foreground">{group.hint}</p>}
+              {fields}
+            </fieldset>
+          )
         })}
-        </fieldset>
-        ))}
       </div>
 
       {isHpa && (
