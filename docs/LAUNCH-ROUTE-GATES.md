@@ -1,5 +1,16 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-10-21 owner decision: source reconciliation is automatic on every route.
+The source-version notice and medication comparison/verification prompts are
+removed. Hospital records take priority in the existing cross-source medication
+policy; same-record versions are selected by source priority and valid source
+update time. When update order is unavailable, retracted/stopped medication states take
+priority, followed by final status, completeness and stable content identity.
+Clinical event dates and opaque version IDs are not version clocks. Original source
+payloads remain available for audit. No extra reconciliation action is required
+before UI, AI or CDSS can consume the selected record. Transport failures and
+patient-ownership validation remain distinct from version selection.
+
 2026-10-05 latest owner decision: CDSS save/history must be bound to the signed-in user. On `?site=vghtpe`, Firebase/intranet admission requires a nonanonymous App account; intranet retains the hospital subnet check. Only the original saver may list/read a record. The earlier same-day network-only decision is superseded. Deployment target: `https://fhir.mediprisma.tw`.
 
 Every place the app behaves differently because of *how it was opened* is
@@ -31,6 +42,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 
 | Where | Kind | Behaviour on the route | Owner decision |
 |---|---|---|---|
+| `src/shared/config/feature-registry.ts` (`requires: 'hospital-outpatient'`) / `src/layouts/LeftPanelLayout.tsx` | 不顯示（依資料） | All routes: the new left tab 「上次門診」 is listed only when the loaded chart holds at least one hospital (院內) outpatient Encounter: class `AMB`, hospital source tag or a hospital visit merged into its cloud record. Charts with only cloud data (雲端病歷 / 健康存摺) do not list it. If the next patient lacks such a visit, the panel returns to 總覽. All existing tabs are unchanged. | Explicit owner request in chat, 2026-10-28: 要有院內資料跟院內門診才顯示這個分頁，只有雲端病歷資料不用顯示。 |
 | `patient-identity.ts` / `CdssStorageActions.tsx` | 不顯示（拒絕存讀） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: explicitly de-identified source patients cannot save, list or read CDSS records. The anonymous-name source marker is preserved through local demographic overlays and IPS export/reimport. Switching the same patient between source privacy states clears visible history and cancels pending operations. Show guidance to reimport with 雲抓「去識別化」turned off. Non-de-identified patients with complete identity retain save/history; native masked national IDs using x, X or * remain accepted regardless of mask count. | Explicit owner request in chat, 2026-10-05: CDSS 只接受不選去識別化的病人。 |
 | `features/clinical-decision-support/renderers/CdssStorageActions.tsx` | 不顯示（停用操作） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: guests, anonymous accounts and sessions without an established account UID cannot save or open CDSS history. Signed-in accounts retain these actions, limited to their own server-owned records; logout/account change closes and clears history. Existing site/Beta/role gates still apply. | Explicit owner request in chat, 2026-10-05: 綁定登入 user 才能儲存，僅原儲存者可讀取。 |
 | `features/clinical-decision-support/LiveFeature.tsx` / `CdssStorageActions.tsx` (`offered`) | 不顯示 | On every route that shows CDSS, for every disease: the 「儲存」 and 「紀錄」 toolbar buttons, and with them saving, viewing, carrying forward and deleting CDSS records, are not offered on the 三區塊 layout. They remain on 決策地圖 v2 (panel and full-window `visit=book`) and the lipid NHI table. Switching to 三區塊 keeps the controller mounted, so a pending save is not cancelled and a FHIR grant is not dropped. Answers already carried keep their 「帶入 · 日期」 marks on 三區塊. | Explicit owner request in chat, 2026-10-07: 三區塊先不支援存資料（所有疾病、隱藏按鈕）。 |
@@ -246,3 +258,5 @@ eligibility is preserved. No previously visible clinical surface is removed.
 | HF 「執行 HF 模型預測」 without an HF diagnosis | Disabled when the prepared input has no heart-failure diagnosis code (ICD-10-CM I50.x or ICD-9-CM 428.x), with 「未偵測到心衰診斷，請先在步驟 2 確認心衰病史」 under it; enabled as soon as step 2 supplies I50.9. With an existing HF code, step 2 stays optional and eligibility remains the API’s decision. | Every route where the HF research calculator is available. | Explicit owner request in chat with a screenshot, 2026-10-07 |
 | HF observed-incidence basis (n and 依據族群) | Collapsed by default behind 「依據」 under each horizon; the rate line stays visible as 「同層實際發生率（群體）」 with its CI. One click shows n and the cohort. A toggle, not a tooltip, so it works without hover. | Every route where the HF research calculator is available. | Explicit owner request in chat with a screenshot, 2026-10-07 |
 | HF 「整理模型資料」 button | Replaced by automatic local preparation when the detail opens (no network request) and a 「重新整理」 link in step 1. Nothing is sent until 「執行 HF 模型預測」. | Every route where the HF research calculator is available. | Explicit chat request, 2026-10-07 |
+
+Automatic source resolution also retains active Condition/Allergy evidence when update ordering is absent, never groups different resource identities by imported modifier labels, and redirects duplicate-include references to the selected version. Background refreshes keep the previous complete snapshot within the same patient and lifecycle scope until all updated searches settle. Missing medication content is stated neutrally; it does not create a reconciliation banner or task.

@@ -27,6 +27,7 @@ Apply the repository's clinical visual language while preserving functionality a
 ## Decision Rules
 
 - Put patient identity, clinical safety, and the current task ahead of branding.
+- Default to minimal copy: avoid slogans, explanatory banners, and repeated routine reminders. Do not annotate every report with normal grouping behavior. Keep details available on demand; retain only concise, actionable messages that affect operation or clinical interpretation, plus accessible control labels.
 - Use neutral surfaces and one interaction color. Reserve semantic colors for meaning.
 - Never identify a feature with a thick colored card border or accent stripe.
 - Prefer sections, rows, lists, and tables over repeated cards.

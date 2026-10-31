@@ -53,7 +53,10 @@ export type EmrFormatToken =
 
 /** 同一行的檢驗: all from one collection day, or each its own latest. */
 export type EmrLabRule = 'sameDay' | 'eachLatest'
-export type EmrDateStyle = 'md' | 'ymd' | 'roc'
+/** monYy: month and two-digit year only, "Sep'26" — how clinicians hand-write
+ *  a lipid history. */
+export type EmrDateStyle = 'md' | 'ymd' | 'roc' | 'monYy'
+export const EMR_DATE_STYLES: readonly EmrDateStyle[] = ['md', 'ymd', 'roc', 'monYy']
 /** A line whose every lab has no result at all: leave it out of the paste
  *  (reported under the preview) or print it with the missing text. */
 export type EmrEmptyLines = 'omit' | 'show'
@@ -151,6 +154,10 @@ export interface OutpatientPrefs {
   /** The clinician's one 用藥 copy format; `null` = the default (緊湊)
    *  built-in. One format only, by decision (2026-10-05). */
   medFormat: MedCopyFormat | null
+  /** The clinician's own name as the hospital records it on an outpatient
+   *  visit, so 上次門診 opens on their last visit with the patient. Their own
+   *  name, never a patient's; `null` = not set. */
+  clinicianName: string | null
 }
 
 export const EMPTY_OUTPATIENT_PREFS: OutpatientPrefs = {
@@ -160,12 +167,14 @@ export const EMPTY_OUTPATIENT_PREFS: OutpatientPrefs = {
   activeFormatId: null,
   handoffMode: null,
   medFormat: null,
+  clinicianName: null,
 }
 
 const MAX_PINNED = 60
 const MAX_FORMATS = 20
 const MAX_TOKENS = 2000
 const MAX_TEXT = 500
+const MAX_CLINICIAN_NAME = 40
 
 function isString(value: unknown): value is string {
   return typeof value === 'string'
@@ -211,7 +220,7 @@ export function sanitizeEmrFormat(raw: unknown): EmrCustomFormat | null {
     tokens,
     labRule: format.labRule === 'eachLatest' ? 'eachLatest' : 'sameDay',
     missingText: isString(format.missingText) ? format.missingText.slice(0, 40) : '—',
-    dateStyle: format.dateStyle === 'ymd' || format.dateStyle === 'roc' ? format.dateStyle : 'md',
+    dateStyle: EMR_DATE_STYLES.includes(format.dateStyle as EmrDateStyle) ? format.dateStyle as EmrDateStyle : 'md',
     emptyLines: format.emptyLines === 'show' ? 'show' : 'omit',
   }
 }
@@ -275,6 +284,7 @@ export function sanitizeOutpatientPrefs(raw: unknown): OutpatientPrefs {
     ? prefs.activeFormatId
     : formats[0]?.id ?? null
   const medFormat = sanitizeMedCopyFormat(prefs.medFormat)
+  const clinicianName = isString(prefs.clinicianName) ? prefs.clinicianName.trim().slice(0, MAX_CLINICIAN_NAME) : ''
   return {
     pinnedLabs,
     labMode: LAB_MODES.includes(prefs.labMode as OverviewLabMode) ? prefs.labMode as OverviewLabMode : null,
@@ -282,6 +292,7 @@ export function sanitizeOutpatientPrefs(raw: unknown): OutpatientPrefs {
     activeFormatId,
     handoffMode: prefs.handoffMode === 'custom' || prefs.handoffMode === 'builtin' ? prefs.handoffMode : null,
     medFormat,
+    clinicianName: clinicianName || null,
   }
 }
 

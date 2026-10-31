@@ -87,6 +87,8 @@ export async function runGenerationJob<T>(options: {
   } = options
   // Never double-start the same slot's generation.
   if (store.getState().running[key]) return null
+  const previousResult = store.getState().byKey[key]
+  let accepted = false
   const bundleRevision = store.getState().bundleRevision
   const isCurrentBundle = () => store.getState().bundleRevision === bundleRevision
   const {
@@ -130,6 +132,7 @@ export async function runGenerationJob<T>(options: {
     report(measurement?.outcome ?? 'ok', measurement?.summaryCards)
     // Always commit to THIS run's own slot — even if the user has since
     // switched away, the result is stored and shows when they switch back.
+    accepted = true
     setResult(key, parsed)
     // Encryption is deliberately outside the visible running lifecycle. The
     // post-encryption guard keeps writes ordered without making the user wait:
@@ -147,7 +150,15 @@ export async function runGenerationJob<T>(options: {
     }
     return null
   } finally {
-    if (isCurrentBundle()) setRunning(key, false)
+    if (isCurrentBundle()) {
+      // Producer previews are provisional. A cancelled run must not replace a
+      // previously completed artifact, and cannot restore across Bundle epochs.
+      if (!accepted && !shouldCommit()) {
+        if (previousResult === undefined) store.getState().clear(key)
+        else setResult(key, previousResult)
+      }
+      setRunning(key, false)
+    }
   }
 }
 

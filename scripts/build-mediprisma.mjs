@@ -13,7 +13,9 @@ import { execSync } from 'node:child_process'
 import { existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 
-const BASE_PATH = '/app'
+// /app is production; the staging channel builds the same tree for /app-staging.
+const BASE_PATH = process.env.MEDIPRISMA_BASE_PATH || '/app'
+if (!['/app', '/app-staging'].includes(BASE_PATH)) throw new Error(`Unsupported MEDIPRISMA_BASE_PATH ${BASE_PATH}`)
 
 const repoRoot = process.cwd()
 const API_DIR = join(repoRoot, 'app', 'api')

@@ -18,6 +18,7 @@ import { MENTAL } from './mental'
 import { GENERAL } from './general'
 import { HPA_RISK } from './hpa-risk'
 import { HEART_FAILURE_PROGNOSIS } from './heart-failure-prognosis'
+import { DOAC_DOSE } from './doac-dose'
 
 export const CALCULATORS: CalculatorDef[] = [
   ...RENAL,
@@ -25,6 +26,7 @@ export const CALCULATORS: CalculatorDef[] = [
   ...GI,
   ...ELECTROLYTE,
   ...CARDIAC,
+  ...DOAC_DOSE,
   PREVENT,
   ...HFPEF,
   ...HEART_FAILURE_PROGNOSIS,

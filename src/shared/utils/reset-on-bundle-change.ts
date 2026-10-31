@@ -8,15 +8,22 @@
 export const BUNDLE_CHANGED_EVENT = 'mediprisma:local-bundle-changed'
 export const BUNDLE_CHANGE_SETTLED_EVENT = 'mediprisma:local-bundle-change-settled'
 
-export function resetOnBundleChange(reset: () => void): void {
+export function isSummaryContinuation(event: Event): boolean {
+  return (event as CustomEvent).detail?.preserveMedicalSummary === true
+}
+
+export function resetOnBundleChange(reset: () => void, preserveSummary = false): void {
   if (typeof window === 'undefined') return
-  window.addEventListener(BUNDLE_CHANGED_EVENT, reset)
+  window.addEventListener(BUNDLE_CHANGED_EVENT, event => {
+    if (preserveSummary && isSummaryContinuation(event)) return
+    reset()
+  })
 }
 
 /** Dispatch the bundle-changed signal (import / demo load / clear / logout wipe). */
-export function notifyBundleChanged(): void {
+export function notifyBundleChanged(preserveMedicalSummary = false): void {
   if (typeof window === 'undefined') return
-  window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT))
+  window.dispatchEvent(new CustomEvent(BUNDLE_CHANGED_EVENT, { detail: { preserveMedicalSummary } }))
 }
 
 /** Signal that React Query has finished publishing the new patient/data. */

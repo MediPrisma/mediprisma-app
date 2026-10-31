@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { CdssRecommendation } from '../../types'
 import type {
   PhysicianDecisionInput,
@@ -86,6 +86,7 @@ export interface VisitDecisionScreenProps {
    * opens one.
    */
   prognosisEvidence?: PrognosisEvidence
+  doseRecovery?: ReactNode
 }
 
 /**
@@ -116,6 +117,7 @@ export function VisitDecisionScreen({
   onPointAnswer,
   onGrade,
   prognosisEvidence,
+  doseRecovery,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -337,11 +339,12 @@ export function VisitDecisionScreen({
       {...(bookChaptersOf(model) ? { chapters: bookChaptersOf(model)! } : {})}
       decided={bookDecided}
       summaryText={summaryText}
+      doseRecovery={doseRecovery}
       // A class chosen in DP-01's table is the answer the diagnosis
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-      {...(sourceOfPage === 'hf' ? {
+      {...(sourceOfPage === 'hf' || sourceOfPage === 'af' ? {
         headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
         calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
         onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
@@ -352,7 +355,7 @@ export function VisitDecisionScreen({
 
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      {sourceOfPage === 'hf' ? (
+      {sourceOfPage === 'hf' || sourceOfPage === 'af' ? (
         <VisitCalculatorsProvider
           isEnglish={isEnglish}
           points={model.points}

@@ -77,7 +77,7 @@ test.describe('demo data (試用資料)', () => {
     await expect(row).toHaveCount(1)
     const title = row.getByText('Echocardiography (including Doppler)', { exact: true })
     await expect(title).toBeVisible()
-    await expect(row.getByTestId('shared-report-summary')).toHaveText('2 個檢查項目共用相同報告')
+    await expect(row.getByTestId('shared-report-summary')).toHaveCount(0)
     const header = row.locator('[role="button"][aria-expanded]').first()
     if (await header.getAttribute('aria-expanded') !== 'true') await title.click()
     await expect(row).toContainText('72.6')
@@ -107,16 +107,13 @@ test.describe('demo data (試用資料)', () => {
     await expect(page.getByText('Da-Ming Chen').first()).toBeVisible()
 
     const summaryPanel = page.getByRole('tabpanel', { name: 'Summary', exact: true })
-    await expect(summaryPanel.getByText(
-      '94yo Male: Stage 3b CKD and Multi-morbidity Care',
-      { exact: true },
-    )).toBeVisible({ timeout: 20_000 })
+    await expect(summaryPanel.getByText(/^94M with CKD 3b, T2DM/)).toBeVisible({ timeout: 20_000 })
 
     const meta = summaryPanel.getByTestId('medical-summary-generation-meta')
-    await expect(meta).toHaveText('Pre-generated·Gemini 3 Flash Preview')
+    await expect(meta).toHaveText('Pre-generated·Gemini 3.8 Flash')
     await expect(meta).toHaveAttribute(
       'aria-label',
-      'Pre-generated summary created with Gemini 3 Flash Preview',
+      'Pre-generated summary created with Gemini 3.8 Flash',
     )
 
     await summaryPanel.getByRole('tab', { name: 'Custom summaries' }).click()

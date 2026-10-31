@@ -103,12 +103,12 @@ export function VisitHistoryCard() {
   // their Encounter links; names, terminology, categories and status display
   // all come from this shared row model.
   const medicationRows = useMedicationRows(medications, audience, locale)
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale, encounters), [conditions, locale, encounters])
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
-    clinicalNotes, conditions, locale, audience, medicationRows,
+    clinicalNotes, conditions, locale, audience, medicationRows, icdDict, encounters,
   )
   // ICD dict prefers Chinese when UI is zh-TW; English coding[].display when UI is en.
-  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
   const visitHistory = useVisitHistory(encounters, icdDict)
   const visitStats = useVisitStats(encounterDetails)
 
@@ -120,14 +120,15 @@ export function VisitHistoryCard() {
   const docsByEncounter = useMemo(() => {
     const map = new Map<string, DocumentEntry[]>()
     for (const e of documentEntries) {
-      const encId = e.encounterRef?.split('/').pop()
+      const sourceId = e.encounterRef?.split('/').pop()
+      const encId = visitHistory.find((visit) => visit.id === sourceId || visit.sourceIds?.includes(sourceId ?? ''))?.id ?? sourceId
       if (!encId) continue
       const arr = map.get(encId) ?? []
       arr.push(e)
       map.set(encId, arr)
     }
     return map
-  }, [documentEntries])
+  }, [documentEntries, visitHistory])
   const hasAnyDischargeSummary = useMemo(
     () => documentEntries.some((e) => e.isDischargeSummary),
     [documentEntries],
@@ -279,7 +280,8 @@ export function VisitHistoryCard() {
   // The same reveal step also makes older Encounter citations navigable when
   // progressive rendering has not mounted their row yet.
   useEffect(() => {
-    const encounterId = navigationEncounterId(pendingNavigation, procedures)
+    const sourceEncounterId = navigationEncounterId(pendingNavigation, procedures)
+    const encounterId = visitHistory.find((visit) => visit.id === sourceEncounterId || visit.sourceIds?.includes(sourceEncounterId ?? ''))?.id ?? sourceEncounterId
     if (!encounterId) return
 
     const navigationVisibleCount = visibleCountForNavigation(

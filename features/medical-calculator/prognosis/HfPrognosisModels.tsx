@@ -58,7 +58,7 @@ export function HfPrognosisModels({ locale, evidence = {}, autofill }: {
         const calc = calcOf(item.calculatorId)
         const computed = calc && autofill ? computeAutofilledResult(calc, autofill) : null
         const empty = calc && autofill
-          ? calc.inputs.filter((input) => !(input.type === 'number' && input.optional) && !resolveInput(input, autofill).filled).length
+          ? calc.inputs.filter((input) => !input.optional && !resolveInput(input, autofill).filled).length
           : undefined
         const status = computed ? (
           <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground" data-testid={`hf-prognosis-result-${item.id}`}>

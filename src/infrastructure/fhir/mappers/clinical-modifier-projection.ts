@@ -1,0 +1,71 @@
+import type { ClinicalDataQueryKey, ClinicalDataQueryStatus } from '@/src/core/entities/clinical-data.entity'
+import type { ClinicalReconciliationResult } from '@/src/core/services/clinical-reconciliation'
+import { selectClinicalModifierNodes } from '@/src/core/services/clinical-record-variants'
+import { hasMalformedClinicalModifier } from '@/src/core/services/clinical-record-variant-modifier'
+import { isClinicalSourceNodePatientEligible } from '@/src/core/services/clinical-patient-scope'
+import { medicationContentOwnsIncompleteStatus, MEDICATION_CONTENT_UNAVAILABLE_MESSAGE } from '@/src/core/utils/clinical-query-status'
+
+type Node = ClinicalReconciliationResult['graph']['nodes'][number]
+const INVALID_MODIFIER_MESSAGE = 'Some clinical records have malformed recognized modifiers and were quarantined. This domain is incomplete; absence cannot be concluded.'
+export function malformedClinicalProjectionNodes(source: ClinicalReconciliationResult, additionalNodeKeys?: ReadonlySet<string>): readonly Node[] {
+  return selectClinicalModifierNodes(source, additionalNodeKeys).filter(node => hasMalformedClinicalModifier(node.resource))
+}
+/** Record-level quarantine is domain incompleteness, never an invented revision. */
+export function projectClinicalModifierQueryStatus(input: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}, invalidNodes: readonly Node[], source: ClinicalReconciliationResult): Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> {
+  const nodes = new Map(source.graph.nodes.map(node => [node.key, node]))
+  const reverse = new Map<string, typeof source.graph.references[number][]>()
+  for (const edge of source.graph.references) {
+    if (edge.status !== 'resolved' || !(edge.path === 'medicationReference' || /^(result|hasMember)\[\d+\]$/.test(edge.path))) continue
+    for (const key of edge.targetKeys) { const list = reverse.get(key) ?? []; list.push(edge); reverse.set(key, list) }
+  }
+  const counts = new Map<string, Set<string>>()
+  for (const invalid of invalidNodes) {
+    const pending = [invalid.key], visited = new Set<string>()
+    for (let index = 0; index < pending.length; index++) {
+      const node = nodes.get(pending[index])
+      if (!node || visited.has(node.key) || node.embeddedIn || !isClinicalSourceNodePatientEligible(node, source.graph.nodes)) continue
+      visited.add(node.key)
+      if (node.resource.resourceType !== 'Patient' && source.policies[node.resource.resourceType]?.strategy === 'preserve-existing-view') {
+        const keys = counts.get(node.resource.resourceType) ?? new Set<string>(); keys.add(invalid.key); counts.set(node.resource.resourceType, keys)
+      }
+      for (const edge of reverse.get(node.key) ?? []) pending.push(edge.origin.key)
+    }
+  }
+  let result = input
+  for (const key of Object.keys(input) as ClinicalDataQueryKey[]) {
+    const previous = input[key]
+    if (!previous?.invalidModifierCount || counts.has(key === 'Observation:vital-signs' ? 'Observation' : key)) continue
+    const { invalidModifierCount: _count, invalidModifierPreviousStatus: prior, invalidModifierPreviouslyUnreported: unreported, ...rest } = previous
+    const canRestore = (prior || unreported) && previous.state === 'incomplete' && !previous.exclusionReason && !(previous.excludedCount && previous.excludedCount > 0)
+      && !Object.values(previous.exclusionCounts ?? {}).some(count => (count ?? 0) > 0)
+    if (canRestore && unreported && !previous.medicationContentUncertaintyCount) {
+      if (result === input) result = { ...input }
+      delete result[key]
+      continue
+    }
+    const status: ClinicalDataQueryStatus = canRestore
+      ? previous.medicationContentUncertaintyCount
+        ? ['MedicationRequest', 'MedicationStatement'].includes(key)
+          ? { ...rest, state: 'incomplete', medicationContentOnlyIncomplete: true, message: MEDICATION_CONTENT_UNAVAILABLE_MESSAGE } : rest
+        : { ...rest, state: prior!.state, message: prior!.message } : rest
+    if (result === input) result = { ...input }
+    result[key] = status
+  }
+  for (const [type, keys] of counts) {
+    for (const key of [type, ...(type === 'Observation' && input['Observation:vital-signs'] ? ['Observation:vital-signs'] : [])] as ClinicalDataQueryKey[]) {
+      const previous = input[key]
+      const preserve = previous && !['ok', 'empty', 'incomplete'].includes(previous.state)
+      const ownsModifierState = !previous || ['ok', 'empty'].includes(previous.state)
+        || previous.invalidModifierPreviousStatus || previous.invalidModifierPreviouslyUnreported || medicationContentOwnsIncompleteStatus(previous)
+      const contentMessage = ['MedicationRequest', 'MedicationStatement'].includes(key) && previous?.medicationContentUncertaintyCount ? ` ${MEDICATION_CONTENT_UNAVAILABLE_MESSAGE}` : ''
+      const status: ClinicalDataQueryStatus = { ...previous, resourceType: previous?.resourceType ?? type, state: preserve ? previous.state : 'incomplete', invalidModifierCount: keys.size,
+        ...(!previous ? { invalidModifierPreviouslyUnreported: true } : {}),
+        ...(previous?.state === 'ok' || previous?.state === 'empty' ? { invalidModifierPreviousStatus: { state: previous.state, message: previous.message } } : {}),
+        message: !preserve && ownsModifierState ? INVALID_MODIFIER_MESSAGE + contentMessage : previous?.message }
+      if (JSON.stringify(previous) === JSON.stringify(status)) continue
+      if (result === input) result = { ...input }
+      result[key] = status
+    }
+  }
+  return result
+}

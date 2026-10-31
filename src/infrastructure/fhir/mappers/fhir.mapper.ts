@@ -186,6 +186,7 @@ export class FhirMapper implements IDataMapper {
   // Static methods for backward compatibility
   static toCondition(fhirResource: Condition): ConditionEntity {
     return {
+      meta: fhirResource.meta,
       id: fhirResource.id || '',
       code: fhirResource.code,
       category: fhirResource.category,
@@ -194,6 +195,7 @@ export class FhirMapper implements IDataMapper {
       recordedDate: fhirResource.recordedDate || fhirResource.dateRecorded,
       onsetDateTime: fhirResource.onsetDateTime,
       encounter: fhirResource.encounter,
+      _encounterInferred: (fhirResource as { _encounterInferred?: boolean })._encounterInferred,
       // mCODE cancer-staging summary stamped by the Roche DIP expander. Must be
       // listed explicitly — the mapper drops any field not named here.
       _cancerStage: (fhirResource as { _cancerStage?: string })._cancerStage,
@@ -221,6 +223,7 @@ export class FhirMapper implements IDataMapper {
     return {
       id: fhirResource.id || '',
       meta: request.meta,
+      identifier: request.identifier,
       medicationCodeableConcept: fhirResource.medicationCodeableConcept,
       medicationReference: fhirResource.medicationReference,
       status: fhirResource.status,
@@ -244,6 +247,10 @@ export class FhirMapper implements IDataMapper {
       ...(atcClassification ? { atcClassification } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       _sourceCapturedAt: request._sourceCapturedAt,
+      _reconciledSourceReferences: request._reconciledSourceReferences,
+      _encounterInferred: request._encounterInferred,
+      _sourceRecordComparison: request._sourceRecordComparison,
+      _sourcePrescriptionRecords: request._sourcePrescriptionRecords,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -321,6 +328,7 @@ export class FhirMapper implements IDataMapper {
 
   static toObservation(fhirResource: Observation): ObservationEntity {
     return {
+      hasMember: fhirResource.hasMember,
       basedOn: fhirResource.basedOn,
       extension: fhirResource.extension,
       method: fhirResource.method,
@@ -347,6 +355,8 @@ export class FhirMapper implements IDataMapper {
       // (`+`, `Negative`) to mis-route to the urinalysis tab.
       specimen: fhirResource.specimen,
       encounter: fhirResource.encounter,
+      _encounterInferred: (fhirResource as Observation & { _encounterInferred?: boolean })._encounterInferred,
+      _orderEncounterIds: fhirResource._orderEncounterIds,
       performer: fhirResource.performer,
       note: fhirResource.note,
       referenceRange: fhirResource.referenceRange,
@@ -378,6 +388,7 @@ export class FhirMapper implements IDataMapper {
       presentedForm: fhirResource.presentedForm,
       encounter: fhirResource.encounter,
       _encounterInferred: fhirResource._encounterInferred,
+      _orderEncounterIds: fhirResource._orderEncounterIds,
       performer: fhirResource.performer,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
@@ -386,11 +397,13 @@ export class FhirMapper implements IDataMapper {
     // Attach related observations with expansion of hasMember
     if (fhirResource.result && observations.length > 0) {
       const resultIds = fhirResource.result
-        .map((ref: Reference) => ref.reference?.split('/').pop())
+        .map((ref: Reference) => ref.reference?.match(/^Observation\/([^/]+)$/)?.[1])
         .filter(Boolean)
       
       // Create a map of observations by ID for easy lookup
-      const obsMap = new Map(observations.map(obs => [obs.id, obs]))
+      const multiplicity = new Map<string | undefined, number>()
+      observations.forEach(obs => multiplicity.set(obs.id, (multiplicity.get(obs.id) ?? 0) + 1))
+      const obsMap = new Map(observations.filter(obs => multiplicity.get(obs.id) === 1).map(obs => [obs.id, obs]))
       
       // Get the actual observation objects
       const reportObservations = resultIds
@@ -403,7 +416,7 @@ export class FhirMapper implements IDataMapper {
         
         const members = obs.hasMember
           .map((m: any) => {
-            const memberId = m.reference?.split('/').pop()
+            const memberId = m.reference?.match(/^Observation\/([^/]+)$/)?.[1]
             return memberId ? obsMap.get(memberId) : null
           })
           .filter(Boolean)
@@ -425,6 +438,7 @@ export class FhirMapper implements IDataMapper {
       modality: fhirResource.modality,
       subject: fhirResource.subject,
       encounter: fhirResource.encounter,
+      _encounterInferred: (fhirResource as { _encounterInferred?: boolean })._encounterInferred,
       started: fhirResource.started,
       basedOn: fhirResource.basedOn,
       referrer: fhirResource.referrer,
@@ -467,6 +481,7 @@ export class FhirMapper implements IDataMapper {
       performedDateTime: fhirResource.performedDateTime,
       performedPeriod: fhirResource.performedPeriod,
       encounter: fhirResource.encounter,
+      _encounterInferred: (fhirResource as { _encounterInferred?: boolean })._encounterInferred,
       // Operating hospital + NHI diagnosis reason (bridge ≥0.18.14). Without
       // these the procedure row showed no performer / reason. ≥0.18.15 moves the
       // reason from a note to a structured (bilingual) reasonCode.
@@ -483,6 +498,9 @@ export class FhirMapper implements IDataMapper {
 
   static toEncounter(fhirResource: any): EncounterEntity {
     return {
+      meta: fhirResource.meta,
+      _sourceRecordComparison: fhirResource._sourceRecordComparison,
+      _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
       id: fhirResource.id || '',
       status: fhirResource.status,
       class: fhirResource.class,

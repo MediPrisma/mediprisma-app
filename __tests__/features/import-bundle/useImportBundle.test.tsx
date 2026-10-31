@@ -83,3 +83,5 @@ describe('useImportBundle initial bundle reconciliation', () => {
     expect(mockLoad).toHaveBeenCalledTimes(1)
   })
 })
+
+jest.mock('@/src/application/hooks/medical-summary/summary-versions.store', () => ({ persistSummaryVersions: jest.fn(async () => {}) }))

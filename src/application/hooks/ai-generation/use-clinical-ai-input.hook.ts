@@ -1,5 +1,6 @@
 'use client'
 
+import { CLINICAL_RECONCILIATION_POLICY_VERSION } from '@/src/core/services/clinical-reconciliation'
 import { DEFAULT_DOCUMENT_MODE } from '@/src/shared/constants/data-selection.constants'
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
@@ -9,7 +10,7 @@ import {
   useDataSelection,
   type DataConsumer,
 } from '@/src/application/providers/data-selection.provider'
-import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import { scopeClinicalDataForAi, stripClinicalCaptureMetadata } from '@/src/core/utils/ai-clinical-scope.utils'
 import { scopeClinicalDataForNhiLipidAi } from '@/src/core/utils/nhi-lipid-ai-scope.utils'
 import {
   buildClinicalContextFitCandidate,
@@ -41,6 +42,8 @@ import { prioritizeClinicalDataForTokenBudget } from '@/src/core/utils/prioritiz
 import type { ClinicalData } from '@/src/application/hooks/clinical-context/types'
 import { isDemoDataActive } from '@/src/application/hooks/ai-generation/ai-data-source'
 import { clinicalNowMs } from '@/src/shared/constants/demo-data.constants'
+
+const EMPTY_VARIANT_EXCLUSIONS = Object.freeze([])
 
 export type ClinicalAiDataInput = SummaryCatalogInput & {
   isLoading?: boolean
@@ -87,12 +90,12 @@ export function clinicalAiSourceSignature(
   catalog: SummarySourceCatalogEntry[],
 ): string {
   return contentSignature([
-    // v3 invalidates summaries generated before exact per-row NHI terminology
-    // was included in the AI medication context and conflict policy.
-    'clinical-ai-source-v3',
+    // Capture-local joins are excluded; clinical values and policy still invalidate.
+    'clinical-ai-source-v4',
+    CLINICAL_RECONCILIATION_POLICY_VERSION,
     JSON.stringify(patient ?? null),
     JSON.stringify(profile),
-    JSON.stringify(clinicalData),
+    JSON.stringify(stripClinicalCaptureMetadata(clinicalData)),
     catalogSignatureText(catalog),
   ].join('\u0000'))
 }
@@ -216,7 +219,7 @@ export function useClinicalAiInput(
   const clinicalScopeClock = useMemo(
     () => ({
       patient,
-      nowMs: clinicalNowMs(demoDataActive),
+      nowMs: clinicalNowMs(demoDataActive, patient?.id),
     }),
     [demoDataActive, patient],
   )
@@ -332,9 +335,13 @@ export function useClinicalAiInput(
     profile: fitCandidate.profile,
     clinicalDataOverride: (prioritizedResult?.data
       ?? (consumer === 'nhiLipid' ? activeClinicalData : undefined)) as ClinicalData | undefined,
+    preScopedVariantExclusions: prioritizedResult
+      ? prioritizedResult.data.clinicalRecordVariantExclusions ?? EMPTY_VARIANT_EXCLUSIONS
+      : undefined,
     documentTokenBudget:
       prioritizedResult?.documentTokenBudget ?? fitCandidate.documentTokenBudget,
     contextVariant: options.contextVariant,
+    nowMs: scopeNowMs,
   })
   const { getFormattedClinicalContext, getFullClinicalContext, includedDocumentIds } = contextView
 

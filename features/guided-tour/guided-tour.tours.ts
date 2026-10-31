@@ -528,25 +528,6 @@ export const GUIDED_TOURS: GuidedTourDefinition[] = [
       },
     ],
   },
-  {
-    id: 'news-summary-diagnostics',
-    icon: 'sparkles',
-    title: { 'zh-TW': '摘要的 AI 執行紀錄', en: 'The summary’s AI log' },
-    description: { 'zh-TW': '醫療摘要 › 齒輪「設定」', en: 'Medical summary › Settings' },
-    steps: [
-      {
-        id: 'summary-settings',
-        scene: { panel: 'right', step: 'summary-settings' },
-        target: '[data-tour="medical-summary-settings"]',
-        fallbackTarget: '[data-tour="medical-summary-controls"]',
-        title: { 'zh-TW': '看這次 AI 怎麼產生摘要', en: 'See how this summary was produced' },
-        body: {
-          'zh-TW': '齒輪「設定」裡可「查看本次 AI 執行紀錄」，了解這次用了哪些資料與模型。',
-          en: 'Settings holds this run’s AI log: which data and model the summary used.',
-        },
-      },
-    ],
-  },
 ]
 
 /** The tours listed in the hub's task section. */

@@ -1,5 +1,7 @@
 import { buildIpsBundle } from '@/features/ips-export/utils/ips-builder'
 import { validateIpsBundle } from '@/features/ips-export/utils/ips-lite-validator'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { CLINICAL_RECORD_VARIANT_EXTENSION } from '@/features/ips-export/utils/ips-constants'
 import {
   COMPOSITION_TYPE_LOINC,
   IPS_PROFILES,
@@ -45,6 +47,31 @@ function sectionByLoinc(bundle: ReturnType<typeof buildIpsBundle>, loinc: string
 }
 
 describe('buildIpsBundle — structure', () => {
+  it('exports automatically selected source versions without a manual reconciliation requirement', async () => {
+    const parsed = await LocalBundleService.parse({ resourceType: 'Bundle', entry: [
+      { resource: PATIENT },
+      ...['1', '2'].flatMap(version => [
+        { resource: { resourceType: 'Observation', id: 'potassium', meta: { versionId: version }, status: 'final', code: { text: 'Potassium' }, effectiveDateTime: '2026-10-01', valueQuantity: { value: version === '1' ? 5 : 6.2, unit: 'mmol/L' } } },
+        { resource: { resourceType: 'Condition', id: 'problem', meta: { versionId: version }, code: { text: version === '1' ? 'First problem' : 'Revised problem' } } },
+      ]),
+    ] })
+    if (!parsed) throw new Error('Synthetic source bundle must parse before export')
+    const bundle = buildIpsBundle({ patient: PATIENT, data: parsed.collection })
+    const resources = bundle.entry.map(entry => entry.resource).filter(resource => ['Observation', 'Condition'].includes(resource.resourceType))
+      expect(resources).toHaveLength(2)
+    for (const resource of resources) {
+        expect(resource.modifierExtension ?? []).not.toContainEqual(expect.objectContaining({ url: CLINICAL_RECORD_VARIANT_EXTENSION }))
+      expect((resource.extension as Array<{ url: string }> | undefined)?.some(extension => extension.url === CLINICAL_RECORD_VARIANT_EXTENSION)).not.toBe(true)
+      const narrative = resource.text as { status: string; div: string }
+        expect(narrative?.div ?? '').not.toContain('Manual reconciliation required')
+        expect(resource.code).toBeDefined()
+      expect(resource).not.toHaveProperty('clinicalRecordVariant')
+    }
+      const observation = resources.find(resource => resource.resourceType === 'Observation')!
+      expect(observation.valueQuantity).toBeDefined()
+    expect(validateIpsBundle(bundle).ok).toBe(true)
+  })
+
   it('produces a document Bundle with a Composition first entry', () => {
     const bundle = buildIpsBundle({ patient: PATIENT, data: emptyCollection() })
     expect(bundle.resourceType).toBe('Bundle')

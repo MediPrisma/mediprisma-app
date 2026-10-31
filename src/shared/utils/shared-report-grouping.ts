@@ -1,9 +1,14 @@
 import { decodeBase64Utf8 } from './base64.utils'
 import { getCodeableConceptText } from './fhir-helpers'
 import { inferReportDisplayGroup } from './report-grouping-helpers'
+import { getImagingCopySource, getReportDate, isRadiographReport, isReportReceiptClock, reportExaminationHeaderClock, reportIdentifiers, reportExaminationIdentifiers, reportClockInstant, typedReportIdentifierValue } from './report-identity'
 
 export type SharedReportSource = {
   reportId?: string
+  /** The source's own FHIR id, shown as 來源紀錄. reportId is the app's row id. */
+  sourceRecordId?: string
+  /** Original source text retained for cross-source display grouping. */
+  narrative?: string
   title: string
   codes: string[]
   codings: Array<{
@@ -15,6 +20,19 @@ export type SharedReportSource = {
 
 function reportExamDate(report: any): string | undefined {
   return report?.effectiveDateTime || report?.effectivePeriod?.start
+}
+
+function radiographClock(report: any): string | undefined {
+  const effective = reportExaminationHeaderClock(report) ?? (isReportReceiptClock(report) ? undefined : reportExamDate(report))
+  const published = getImagingCopySource(report) === 'cloud' && Array.isArray(report.extension) ? report.extension.find((extension: any) =>
+    extension?.url === 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-source-report-date')?.valueString : undefined
+  const timestamp = (value: unknown): number | undefined => typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) ? reportClockInstant(value) : undefined
+  // NHI can export two billing rows for the same complete report. Its explicit
+  // report timestamp is corroborating report identity, not an exam time.
+  const examInstant = timestamp(effective)
+  const publishedInstant = timestamp(published)
+  return examInstant !== undefined ? `exam:${examInstant}` : publishedInstant !== undefined ? `report:${publishedInstant}` : undefined
 }
 
 function reportInstitution(report: any): string | undefined {
@@ -85,11 +103,13 @@ type SharedReportBoundary = {
 }
 
 function sharedReportBoundary(report: any): SharedReportBoundary | null {
+  if (report?.clinicalRecordVariant) return null
   const subject = explicitReference(report?.subject?.reference)
   const encounter = report?._encounterInferred
     ? null
     : explicitReference(report?.encounter?.reference)
-  const dateValue = reportExamDate(report)
+  const examinationDate = reportExamDate(report)
+  const dateValue = examinationDate && isRadiographReport(report) ? getReportDate(report) : examinationDate
   const dateMatch = typeof dateValue === 'string'
     ? /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(dateValue.trim())
     : null
@@ -128,6 +148,16 @@ function sharedReportBoundary(report: any): SharedReportBoundary | null {
  * evidence that two separately billed reports came from the same encounter.
  */
 export function sharedReportGroupingKey(report: any): string | null {
+  if (isRadiographReport(report) && !isReportReceiptClock(report)) {
+    const header = reportExaminationHeaderClock(report)
+    const effective = reportExamDate(report)
+    // A copied header must never override explicit evidence of a different
+    // examination. Only a tagged receipt clock is allowed to differ.
+    if (header && effective?.includes('T') && reportClockInstant(header) !== reportClockInstant(effective)) return null
+  }
+  // Linked studies require resolved study identity, not a common billing
+  // narrative. Keep these radiographs outside this automatic projection.
+  if (isRadiographReport(report) && report.imagingStudy?.length) return null
   const reportGroup = inferReportDisplayGroup(report)
   const boundary = sharedReportBoundary(report)
   const narrative = normalizeSharedReportNarrative(sharedReportNarrative(report))
@@ -145,6 +175,8 @@ export function sharedReportGroupingKey(report: any): string | null {
     boundary.sourceProgram,
     boundary.status,
     narrative,
+    // A shared billing narrative must not erase known serial X-ray clocks.
+    isRadiographReport(report) ? [radiographClock(report), report.effectivePeriod?.end] : null,
   ])
 }
 
@@ -193,6 +225,7 @@ export function reportSource(report: any): SharedReportSource {
   const codes = [...new Set<string>(codings.map((coding) => coding.code))]
   return {
     reportId: report?.id || undefined,
+    sourceRecordId: report?.sourceId || report?.id || undefined,
     title,
     codes,
     codings,
@@ -211,17 +244,58 @@ export function sharedReportSourceIdentity(report: any): string {
  */
 export function qualifyingSharedReportKeys(reports: any[]): Set<string> {
   const sourceIdentities = new Map<string, Set<string>>()
+  const radiographIdentifiers = new Map<string, Map<string, string>>()
+  const radiographMembers = new Map<string, any[]>()
+  const conflicts = new Set<string>()
+  const repeatedIdentities = new Set<string>()
   for (const report of reports) {
     if (!report) continue
     const key = sharedReportGroupingKey(report)
     if (!key) continue
     const identities = sourceIdentities.get(key) ?? new Set<string>()
-    identities.add(sharedReportSourceIdentity(report))
+    const identity = sharedReportSourceIdentity(report)
+    // Repeated billing identities may be serial examinations whose clocks or
+    // accession IDs were omitted. Distinct billing codes alone cannot prove
+    // that this whole bucket describes a single radiograph.
+    if (isRadiographReport(report) && identities.has(identity)) repeatedIdentities.add(key)
+    identities.add(identity)
     sourceIdentities.set(key, identities)
+    if (isRadiographReport(report)) {
+      radiographMembers.set(key, [...(radiographMembers.get(key) ?? []), report])
+      const namespaces = radiographIdentifiers.get(key) ?? new Map<string, string>()
+      const values = new Map<string, string[]>()
+      for (const identifier of reportIdentifiers(report)) if (identifier?.value) {
+        const system = identifier.system ?? ''
+        values.set(system, [...(values.get(system) ?? []), typedReportIdentifierValue(identifier)])
+      }
+      for (const [system, ids] of values) {
+        const idSet = JSON.stringify([...new Set(ids)].sort())
+        if (namespaces.has(system) && namespaces.get(system) !== idSet) conflicts.add(key)
+        namespaces.set(system, idSet)
+      }
+      radiographIdentifiers.set(key, namespaces)
+    }
+  }
+  for (const [key, members] of radiographMembers) {
+    const sameExamClock = members.every(report => radiographClock(report)?.startsWith('exam:'))
+    const common = reportExaminationIdentifiers(members[0]).some((id: any) =>
+      members.every(report => reportExaminationIdentifiers(report).some((candidate: any) => candidate?.value
+        && typedReportIdentifierValue(candidate) === typedReportIdentifierValue(id) && candidate.system === id.system)))
+    if (repeatedIdentities.has(key) && !sameExamClock && !common) conflicts.add(key)
+    if (sameExamClock) continue
+    // NHI's unnumbered billing copy may accompany a numbered image-case copy.
+    // An exact full narrative + explicit publication instant can attach that
+    // copy to ONE known image case. Publication time alone is never sufficient.
+    const nhiCases = new Set(members.flatMap(report => reportIdentifiers(report)
+      .filter((id: any) => id?.system === 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/medcloud-imaging-case' && id.value)
+      .map(typedReportIdentifierValue)))
+    const numberedNhiReport = nhiCases.size === 1 && members.every(report => getImagingCopySource(report) === 'cloud'
+      && radiographClock(report)?.startsWith('report:'))
+    if (!common && !numberedNhiReport) conflicts.add(key)
   }
   return new Set(
     [...sourceIdentities.entries()]
-      .filter(([, identities]) => identities.size > 1)
+      .filter(([key, identities]) => identities.size > 1 && !conflicts.has(key))
       .map(([key]) => key),
   )
 }

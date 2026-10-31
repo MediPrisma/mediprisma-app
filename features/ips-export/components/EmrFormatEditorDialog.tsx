@@ -610,7 +610,7 @@ export function EmrFormatEditorDialog({
               <div className="space-y-1">
                 <span className="text-[0.6875rem] font-semibold">{e.dateStyleLabel}</span>
                 <div role="group" aria-label={e.dateStyleLabel} className="flex flex-wrap gap-1.5">
-                  {([['md', e.dateMd], ['ymd', e.dateYmd], ['roc', e.dateRoc]] as Array<[EmrDateStyle, string]>).map(([style, label]) => (
+                  {([['md', e.dateMd], ['ymd', e.dateYmd], ['roc', e.dateRoc], ['monYy', e.dateMonYy]] as Array<[EmrDateStyle, string]>).map(([style, label]) => (
                     <button key={style} type="button" aria-pressed={dateStyle === style} onClick={() => setDateStyle(style)} className={cn(PILL, dateStyle === style ? PILL_ON : PILL_OFF)}>
                       {label}
                     </button>

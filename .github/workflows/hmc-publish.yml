@@ -26,6 +26,18 @@ on:
       - HMC preview build
     types:
       - completed
+  # A build that `Sync master into pilot/hmc` starts with GITHUB_TOKEN raises no
+  # workflow_run event, so that workflow names the run here once it finishes.
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Run id of a completed "HMC preview build"
+        required: true
+  # Whatever the triggers above miss (a sync that stopped waiting, a pending
+  # publish replaced in the concurrency group), this finds: the newest
+  # successful pilot build, when /app-hmc is not serving it yet.
+  schedule:
+    - cron: '*/15 * * * *'
 
 permissions:
   contents: read
@@ -37,12 +49,78 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Both triggers read the build run from the API, so the checks below see the
+  # same facts whichever one started this.
+  resolve:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      id: ${{ steps.run.outputs.id }}
+      conclusion: ${{ steps.run.outputs.conclusion }}
+      head_sha: ${{ steps.run.outputs.head_sha }}
+      head_branch: ${{ steps.run.outputs.head_branch }}
+      head_repo: ${{ steps.run.outputs.head_repo }}
+      html_url: ${{ steps.run.outputs.html_url }}
+    steps:
+      - name: Identify the build run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            # The newest successful build from any source the publisher accepts
+            # (pilot pushes, dispatches, the personalization tag). Only that one
+            # may go live; anything older would roll /app-hmc back.
+            newest="$(for ref in pilot/hmc hmc-personalization-trigger; do
+                gh api "repos/$GITHUB_REPOSITORY/actions/workflows/hmc-build.yml/runs?branch=$ref&status=success&per_page=5" \
+                  | jq -c --arg repo "$GITHUB_REPOSITORY" '.workflow_runs[] | select(.head_repository.full_name == $repo)'
+              done | jq -cs 'sort_by(.run_started_at) | last // empty')"
+            live="$(curl -fsS https://mediprisma.tw/app-hmc/hmc-build.json || echo '{}')"
+            # Whatever started it: a pending event publish this run replaced in
+            # the concurrency group is taken over here, not dropped.
+            if [ -z "$newest" ]; then
+              echo "No successful HMC preview build yet."; exit 0
+            fi
+            # The live marker was written while its build ran, so a build whose
+            # latest attempt started before that moment is already live or older
+            # than what is. (A tag build's head is not the app commit, so the SHAs
+            # cannot be compared; run_started_at moves with each re-run.)
+            built_at="$(jq -r '.builtAt // ""' <<<"$live")"
+            created_at="$(jq -r .run_started_at <<<"$newest")"
+            if [ -n "$built_at" ] && [[ ! "$built_at" < "$created_at" ]]; then
+              echo "Nothing missed: /app-hmc was built at $built_at, after run $(jq -r .id <<<"$newest") began."; exit 0
+            fi
+            RUN_ID="$(jq -r .id <<<"$newest")"
+            echo "Publishing missed build $RUN_ID (created $created_at; live built ${built_at:-never})."
+          fi
+          if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "run_id must be a number."; exit 1
+          fi
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          if [ "$(jq -r .path <<<"$run")" != '.github/workflows/hmc-build.yml' ] \
+            || [ "$(jq -r .status <<<"$run")" != 'completed' ]; then
+            echo "Run $RUN_ID is not a completed HMC preview build."; exit 1
+          fi
+          {
+            echo "id=$RUN_ID"
+            jq -r '"conclusion=\(.conclusion)", "head_sha=\(.head_sha)", "head_branch=\(.head_branch)",
+              "head_repo=\(.head_repository.full_name)", "html_url=\(.html_url)"' <<<"$run"
+          } >> "$GITHUB_OUTPUT"
+
   publish:
+    needs: resolve
     if: >-
-      ${{ github.event.workflow_run.conclusion == 'success'
-      && github.event.workflow_run.head_repository.full_name == github.repository
-      && (github.event.workflow_run.head_branch == 'pilot/hmc'
-      || github.event.workflow_run.head_branch == 'hmc-personalization-trigger') }}
+      ${{ needs.resolve.outputs.id != ''
+      && needs.resolve.outputs.conclusion == 'success'
+      && needs.resolve.outputs.head_repo == github.repository
+      && (needs.resolve.outputs.head_branch == 'pilot/hmc'
+      || needs.resolve.outputs.head_branch == 'hmc-personalization-trigger') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: mediprisma-site-publish
@@ -59,7 +137,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: hmc-preview
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ needs.resolve.outputs.id }}
           github-token: ${{ github.token }}
           path: incoming
 
@@ -84,11 +162,11 @@ jobs:
       - name: Read what the build says it is
         id: marker
         env:
-          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
           # Through the environment rather than interpolated into the script:
           # a ref name is attacker-shaped data in the general case, even though
           # the job guard above already narrows it to two literals.
-          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_HEAD_BRANCH: ${{ needs.resolve.outputs.head_branch }}
         shell: bash
         run: |
           marker=incoming/app/out/hmc-build.json
@@ -187,16 +265,18 @@ jobs:
     # One issue for three states, kept current with a comment and closed when
     # there is nothing left to say: did not publish, published over a red Jest
     # run, clear.
-    needs: publish
+    needs: [resolve, publish]
     # Deliberately not gated on the build having succeeded: a build that failed
     # is the case most worth reporting, and `publish` is skipped then. The repo
     # and ref guard is repeated here because that one is about trust, not about
     # outcome.
     if: >-
       ${{ always()
-      && github.event.workflow_run.head_repository.full_name == github.repository
-      && (github.event.workflow_run.head_branch == 'pilot/hmc'
-      || github.event.workflow_run.head_branch == 'hmc-personalization-trigger') }}
+      && needs.resolve.result == 'success'
+      && needs.resolve.outputs.id != ''
+      && needs.resolve.outputs.head_repo == github.repository
+      && (needs.resolve.outputs.head_branch == 'pilot/hmc'
+      || needs.resolve.outputs.head_branch == 'hmc-personalization-trigger') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -208,8 +288,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BUILD_URL: ${{ github.event.workflow_run.html_url }}
-          BUILD_RESULT: ${{ github.event.workflow_run.conclusion }}
+          BUILD_URL: ${{ needs.resolve.outputs.html_url }}
+          BUILD_RESULT: ${{ needs.resolve.outputs.conclusion }}
           PUBLISH_RESULT: ${{ needs.publish.result }}
           TESTS_RESULT: ${{ needs.publish.outputs.tests }}
           TEST_SUMMARY: ${{ needs.publish.outputs.test_summary }}

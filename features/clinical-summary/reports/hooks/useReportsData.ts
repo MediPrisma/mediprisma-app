@@ -1,6 +1,8 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
 import { getVghtpeSource } from '../adapters/vghtpe-source-display'
+import { getReportInstitution as getDrInstitution, getReportDate as getDrDate, isNhiMedicloudReport, isAdultPreventiveReport, reportNaturalGroupingKey } from '@/src/shared/utils/report-identity'
+import { compareImagingCopies, imagingCopyInstitution, normalizeImagingClinicalText, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferReportDisplayGroup } from '../utils/grouping-helpers'
@@ -36,17 +38,9 @@ import {
   isTrustedLegacyNhiViewerAttachment,
 } from '../utils/nhi-viewer-request'
 import {
-  getNhiMedicloudOriginalInstitution,
-  isAdultPreventiveHealthExamResource,
-  isNhiAuthorityDisplay,
-  isNhiMedicloudObservation,
-} from '@/src/shared/utils/observation-provenance.utils'
-import {
   qualifyingSharedEchoFamilyKeys,
-  qualifyingSharedReportKeys,
   reportSource,
   sharedEchoReportFamilyKey,
-  sharedReportGroupingKey,
   sharedReportNarrative,
   sharedReportTitle,
   type SharedReportSource,
@@ -76,48 +70,6 @@ function deriveGroupTitle(text: string): string {
   return text || 'Unnamed Report'
 }
 
-// Lab DRs carry performer on the linked Observations (bridge convention);
-// imaging DRs typically have no linked Observations and put performer on the
-// DiagnosticReport itself. Fall through both before giving up.
-function getDrInstitution(dr: any): string | undefined {
-  const observations = Array.isArray(dr?._observations) ? dr._observations : []
-  const hasCloudObservation = observations.some(isNhiMedicloudObservation)
-  const cloudInstitution = observations
-    .map(getNhiMedicloudOriginalInstitution)
-    .find((institution: string | undefined): institution is string => !!institution)
-  const ordinaryInstitution = observations
-    .filter((observation: any) => !isNhiMedicloudObservation(observation))
-    .flatMap((observation: any) => observation?.performer ?? [])
-    .map((performer: any) => performer?.display?.trim())
-    .find((institution: unknown): institution is string => typeof institution === 'string' && !!institution)
-  const reportInstitution = (dr?.performer ?? [])
-    .map((performer: any) => performer?.display?.trim())
-    .find((institution: unknown): institution is string =>
-      typeof institution === 'string' && !!institution && !isNhiAuthorityDisplay(institution))
-  if (hasCloudObservation) return cloudInstitution || ordinaryInstitution || reportInstitution
-  return ordinaryInstitution || reportInstitution
-}
-
-function isNhiMedicloudReport(dr: any): boolean {
-  const observations = Array.isArray(dr?._observations) ? dr._observations : []
-  return observations.length > 0 && observations.every(isNhiMedicloudObservation)
-}
-
-// Single source of truth for a report's date: prefer effectiveDateTime (the
-// exam/collection date — 檢查日期) over issued (the report-release date —
-// 報告發布日), which can differ by days. Every date use below (grouping key,
-// synthetic summary obs, row display) routes through this so the preference
-// can't drift apart again — a past bug had the row header alone preferring
-// issued, so a report grouped under 6/2 was displayed as 6/5.
-function getDrDate(dr: any): string | undefined {
-  return dr?.effectiveDateTime || dr?.issued
-}
-
-function isAdultPreventiveReport(dr: DiagnosticReport): boolean {
-  return isAdultPreventiveHealthExamResource(dr)
-    || ((dr as any)._observations ?? []).some(isAdultPreventiveHealthExamResource)
-}
-
 function viewerActionIdentity(action: NhiViewerAction): string {
   if (action.kind === 'legacy') return `legacy|${action.url}`
   const descriptor = action.descriptor
@@ -139,6 +91,8 @@ function viewerActionIdentity(action: NhiViewerAction): string {
  * Shared DiagnosticReport -> Row projection used by both the Reports page and
  * encounter details. Keep grouping, narrative/image merging, and source ids in
  * this pure builder so every ReportRow consumer receives the same model.
+ * Filtered views must supply grouping keys resolved from the complete source set;
+ * otherwise a hidden repeated examination could incorrectly resolve ambiguity.
  */
 export function buildReportsData(
   diagnosticReports: any[],
@@ -146,6 +100,7 @@ export function buildReportsData(
   nameMode: AnalyteNameMode = 'standardized',
   audience: 'medical' | 'patient' = 'medical',
   locale: Locale = 'en',
+  groupingKeys?: ReadonlyMap<DiagnosticReport, string>,
 ) {
     const rows: Row[] = []
     const seen = new Set() as Set<string>
@@ -187,6 +142,7 @@ export function buildReportsData(
     // Concatenate all available sources so the distinct-narrative check
     // catches dups regardless of which field bridge populated this time.
     const getDrNarrative = (dr: any): string => {
+      if (inferReportDisplayGroup(dr) === 'imaging') return sharedReportNarrative(dr)
       const parts: string[] = []
       if (typeof dr?.conclusion === 'string' && dr.conclusion.trim()) {
         parts.push(dr.conclusion)
@@ -216,6 +172,8 @@ export function buildReportsData(
         .normalize('NFKC')
         .toLowerCase()
         .replace(/\s+/g, '')
+    const normalizedReportNarrative = (dr: DiagnosticReport): string => inferReportDisplayGroup(dr) === 'imaging'
+      ? normalizeImagingClinicalText(getDrNarrative(dr)) : normaliseNarrative(getDrNarrative(dr))
     // Strict-prefix dup test (bridge's "Option 1"): two narratives are
     // considered duplicates only when one's normalised form is an EXACT
     // PREFIX of the other's. Provably safe — if the shorter narrative is a
@@ -230,9 +188,8 @@ export function buildReportsData(
       a.length <= b.length && b.startsWith(a)
     const hasDistinctNarratives = (grp: DiagnosticReport[]): boolean => {
       const norms = grp
-        .map(getDrNarrative)
+        .map(normalizedReportNarrative)
         .filter((t): t is string => t.length > 0)
-        .map(normaliseNarrative)
       if (norms.length < 2) return false
       // Sort longest → shortest; every shorter narrative must be a prefix of
       // the longest for the group to qualify as a single (deduped) report.
@@ -257,12 +214,7 @@ export function buildReportsData(
     const pushAsOwnGroup = (dr: DiagnosticReport) => {
       // Suffix with DR id so each split group gets a distinct key — keeps
       // the map insertion order stable and avoids accidental re-merging.
-      const text = (getCodeableConceptText(dr.code) || '').trim()
-      const date = (getDrDate(dr) || '').slice(0, 10)
-      const inst = (getDrInstitution(dr) || '').trim()
-      const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
-      const sourceProvenance = isNhiMedicloudReport(dr) ? 'nhi-medicloud' : ''
-      const key = `${text}|${date}|${inst}|${sourceProgram}|${sourceProvenance}|${dr.id || `split-${splitGroupIndex++}`}`
+      const key = `${reportNaturalGroupingKey(dr)}|${dr.id || `split-${splitGroupIndex++}`}`
       groups.set(key, [dr])
       diagnosticReportIdsByKey.set(key, dr.id ? [dr.id] : [])
       viewerReportsByKey.set(key, [dr])
@@ -272,19 +224,12 @@ export function buildReportsData(
     // Pass 1: build the natural grouping (as before).
     const naturalGroups = new Map<string, DiagnosticReport[]>()
     const naturalOrder: string[] = []
-    const qualifyingSharedKeys = qualifyingSharedReportKeys(diagnosticReports)
+    const sourceGroupingKeys = groupingKeys ?? reportDisplayGroupingKeys(diagnosticReports)
+    const displayGroupingKeys = visibleReportGroupingKeys(diagnosticReports, sourceGroupingKeys)
     const sharedEchoFamilyOwners = qualifyingSharedEchoFamilyKeys(diagnosticReports)
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
-      const text = (getCodeableConceptText(dr.code) || '').trim()
-      const date = (getDrDate(dr) || '').slice(0, 10)
-      const inst = (getDrInstitution(dr) || '').trim()
-      const sourceProgram = isAdultPreventiveReport(dr) ? 'adult-preventive' : ''
-      const sourceProvenance = isNhiMedicloudReport(dr) ? 'nhi-medicloud' : ''
-      const sharedKey = sharedReportGroupingKey(dr)
-      const ownSharedKey = sharedKey && qualifyingSharedKeys.has(sharedKey)
-        ? sharedKey
-        : null
+      const ownSharedKey = displayGroupingKeys.get(dr)
       const echoFamilyKey = sharedEchoReportFamilyKey(dr)
       const companionSharedKey = !ownSharedKey
         && echoFamilyKey
@@ -293,7 +238,7 @@ export function buildReportsData(
         : null
       const key = ownSharedKey || companionSharedKey
         ? `shared-report|${ownSharedKey || companionSharedKey}`
-        : `${text}|${date}|${inst}|${sourceProgram}|${sourceProvenance}`
+        : reportNaturalGroupingKey(dr)
       if (!naturalGroups.has(key)) {
         naturalGroups.set(key, [])
         naturalOrder.push(key)
@@ -321,7 +266,7 @@ export function buildReportsData(
           imageOnly.push(dr)
           continue
         }
-        withNarr.push({ dr, norm: normaliseNarrative(text) })
+        withNarr.push({ dr, norm: normalizedReportNarrative(dr) })
       }
       // Sort longest-first so the kept member is always the most complete
       // narrative. A shorter member is dropped iff its normalised form is a
@@ -355,9 +300,10 @@ export function buildReportsData(
         // actions and source ids survive, but they do not become duplicate
         // written-report sources or empty clinical-content members.
         const sharedNarrativeKey = key.slice('shared-report|'.length)
-        const contentReports = grp.filter((report) =>
-          sharedReportGroupingKey(report) === sharedNarrativeKey,
-        )
+        const isCrossSource = sharedNarrativeKey.startsWith('cross-source|')
+        const contentReports = grp.filter(report => displayGroupingKeys.get(report) === sharedNarrativeKey)
+        // Keep the richer original report as the display representative.
+        if (isCrossSource) contentReports.sort(compareImagingCopies)
         groups.set(key, contentReports.length > 0 ? contentReports : grp)
         viewerReportsByKey.set(key, grp)
         diagnosticReportIdsByKey.set(
@@ -367,7 +313,10 @@ export function buildReportsData(
         sharedReportKeys.add(key)
         sharedReportSourcesByKey.set(
           key,
-          (contentReports.length > 0 ? contentReports : grp).map(reportSource),
+          (contentReports.length > 0 ? contentReports : grp).map(report => ({
+            ...reportSource(report),
+            ...(isCrossSource ? { narrative: sharedReportNarrative(report) } : {}),
+          })),
         )
         groupOrder.push(key)
         continue
@@ -403,9 +352,13 @@ export function buildReportsData(
       const isSharedReport = sharedReportKeys.has(key)
       const sharedReportSources = sharedReportSourcesByKey.get(key)
       const isMulti = grp.length > 1
+      const allSourceReports = viewerReportsByKey.get(key) ?? grp
+      const isImagingGroup = inferReportDisplayGroup(head) === 'imaging'
+      const sourceReports = isImagingGroup ? allSourceReports : grp
+      const clinicalReports = new Set(grp)
       const linkedStudies: ImagingStudy[] = []
       const rowStudyIds = new Set<string>()
-      for (const dr of grp) {
+      for (const dr of sourceReports) {
         for (const ref of dr.imagingStudy ?? []) {
           const id = referenceId(ref.reference)
           if (!id || rowStudyIds.has(id)) continue
@@ -424,9 +377,8 @@ export function buildReportsData(
         || (linkedStudies[0] ? imagingStudyTitle(linkedStudies[0]) : '')
       const summaryParts: string[] = []
       const attachments: string[] = []
-      const images: ReportImage[] = []
-      const viewerReports = viewerReportsByKey.get(key) ?? grp
-      const viewerEntries = viewerReports.flatMap((report) => (
+      let images: ReportImage[] = []
+      const viewerEntries = allSourceReports.flatMap((report) => (
         getNhiViewerActions(report).map((action) => ({ action, report }))
       ))
       // Exact duplicate extensions are always the same request and are safe to
@@ -460,12 +412,13 @@ export function buildReportsData(
           : uniqueViewerEntries
       ).map(({ action }) => action)
       const allObs: Observation[] = []
+      const seenSourceObservations = new Set<Observation>()
 
-      for (const dr of grp) {
+      for (const dr of sourceReports) {
         // Exact shared-report groups retain every source identity, image, and
         // viewer action, while presenting narrative/observations from one
         // representative. The grouping key proved those full narratives equal.
-        const includeClinicalContent = !isSharedReport || dr === head
+        const includeClinicalContent = clinicalReports.has(dr) && (!isSharedReport || dr === head)
         const obs = Array.isArray((dr as any)._observations)
           ? (dr as any)._observations.filter((o: any): o is Observation => !!o)
           : []
@@ -485,6 +438,7 @@ export function buildReportsData(
         const drTitle = derivePerDrTitle(dr)
         const perTitle = (!isSharedReport && isMulti && drTitle !== groupText) ? drTitle : null
         for (const o of obs) {
+          if (isImagingGroup && seenSourceObservations.has(o)) continue
           const isNarrativeOnlyObservation = (
             typeof o?.valueString === 'string'
             && o.valueString.trim().length > 30
@@ -495,7 +449,33 @@ export function buildReportsData(
           // The exact full narrative is already represented by the head. Keep
           // every structured result from the remaining source procedures so a
           // shared conclusion can never hide a different numeric/coded result.
-          if (!includeClinicalContent && isNarrativeOnlyObservation) continue
+          if (isSharedReport && !includeClinicalContent && isNarrativeOnlyObservation) continue
+          // Dropped natural duplicates may still own distinct clinical
+          // metadata. Suppress their text only when a retained observation
+          // has the same metadata and a complete copy of that narrative.
+          if (!clinicalReports.has(dr) && isNarrativeOnlyObservation) {
+            const metadata = (value: Observation) => JSON.stringify({ ...value, id: undefined, valueString: undefined })
+            const duplicate = grp.some(report => {
+              const matchingObservation = (Array.isArray(report._observations) ? report._observations : []).some(kept =>
+                typeof kept?.valueString === 'string' && metadata(kept) === metadata(o)
+                  && normalizeImagingClinicalText(kept.valueString).startsWith(normalizeImagingClinicalText(o.valueString ?? '')))
+              // Synthetic whole-report observations may use a different text
+              // channel. Every remaining metadata field must also be present
+              // unchanged on the retained report; unknown assessments survive.
+              const wholeReportCode = JSON.stringify(o.code) === JSON.stringify({ text: 'Report Summary' })
+                || JSON.stringify(o.code) === JSON.stringify(report.code)
+              const representedMetadata = Object.entries(o).every(([field, value]) =>
+                ['id', 'resourceType', 'code', 'valueString'].includes(field)
+                  || JSON.stringify(value) === JSON.stringify(Reflect.get(report, field)))
+              return matchingObservation || ((o.resourceType == null || o.resourceType === 'Observation')
+                && wholeReportCode && representedMetadata
+                && normalizedReportNarrative(report).startsWith(normalizeImagingClinicalText(o.valueString ?? '')))
+            })
+            if (duplicate) continue
+          }
+          // Repeated references can resolve to the exact same resource. Do
+          // not deduplicate by id or value: distinct source objects survive.
+          if (isImagingGroup) seenSourceObservations.add(o)
           if (perTitle) {
             allObs.push({
               ...o,
@@ -559,10 +539,10 @@ export function buildReportsData(
             // keeping only the title. (HTML attachments are handled by the
             // document renderer, not here — skip them to avoid raw markup.)
             const ct = (form?.contentType || '').toLowerCase()
-            if (includeClinicalContent && form?.data && ct.startsWith('text/') && !ct.includes('html')) {
+            if (form?.data && ct.startsWith('text/') && !ct.includes('html')) {
               const decoded = decodeBase64Utf8(form.data).trim()
               if (decoded) {
-                summaryParts.push(decoded)
+                if (includeClinicalContent) summaryParts.push(decoded)
                 continue
               }
             }
@@ -570,6 +550,18 @@ export function buildReportsData(
             if (t) attachments.push(t)
           }
         }
+      }
+
+      // Identical descriptors are the same retained asset. Different bytes,
+      // references, content types or source annotations must remain available.
+      if (inferReportDisplayGroup(head) === 'imaging') {
+        const imageDescriptors = new Set<string>()
+        images = images.filter(image => {
+          const descriptor = JSON.stringify(image)
+          if (imageDescriptors.has(descriptor)) return false
+          imageDescriptors.add(descriptor)
+          return true
+        })
       }
 
       // ImagingStudy is study metadata, not a diagnostic conclusion. Append it
@@ -811,7 +803,8 @@ export function buildReportsData(
       // table cells. Here absence is meaningful because it activates the
       // explicit "inferred imaging" / "unclassified" provenance label.
       const category = categoryText === '—' ? '' : categoryText
-      const institution = getDrInstitution(head)
+      const institution = (key.startsWith('shared-report|cross-source|') ? imagingCopyInstitution(head) : undefined)
+        || getDrInstitution(head)
         || (linkedStudies[0] ? imagingStudyInstitution(linkedStudies[0]) : undefined)
       const isLinkedImagingStudy = rowStudyIds.size > 0
       const reportGroup = inferReportDisplayGroup(head)
@@ -847,7 +840,7 @@ export function buildReportsData(
         obs: obsWithSummary,
         group: reportGroup,
         institution,
-        hospitalSource: getVghtpeSource([...grp, ...allObs]),
+        hospitalSource: getVghtpeSource([...sourceReports, ...allObs]),
         sourceProgram: grp.some(isAdultPreventiveReport)
           ? 'adult-preventive'
           : undefined,
@@ -902,11 +895,13 @@ export function useReportsData(
   diagnosticReports: any[],
   imagingStudies: any[] = [],
   nameMode: AnalyteNameMode = 'standardized',
+  groupingReports: any[] = diagnosticReports,
 ) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
+  const groupingKeys = useMemo(() => reportDisplayGroupingKeys(groupingReports), [groupingReports])
   return useMemo(
-    () => buildReportsData(diagnosticReports, imagingStudies, nameMode, audience, locale),
-    [diagnosticReports, imagingStudies, audience, locale, nameMode],
+    () => buildReportsData(diagnosticReports, imagingStudies, nameMode, audience, locale, groupingKeys),
+    [diagnosticReports, imagingStudies, audience, locale, nameMode, groupingKeys],
   )
 }

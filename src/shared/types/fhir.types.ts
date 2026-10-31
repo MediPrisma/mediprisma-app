@@ -36,6 +36,7 @@ export interface Reference {
 }
 
 export interface Identifier {
+  type?: CodeableConcept
   system?: string
   value?: string
   use?: string
@@ -91,6 +92,10 @@ export interface ReferenceRange {
 
 export interface Observation {
   basedOn?: Reference[]
+  /** Internal local-import provenance: the Encounters of the outpatient orders
+   * this result is basedOn, from each ServiceRequest.encounter. Several when one
+   * request served several visits (a combined draw). */
+  _orderEncounterIds?: string[]
   extension?: FhirExtension[]
   id?: string
   resourceType?: string
@@ -140,6 +145,8 @@ export interface DiagnosticReport {
   /** Internal local-import provenance. The source omitted encounter and the
    * app attached one by date for navigation; never treat it as source proof. */
   _encounterInferred?: boolean
+  /** See Observation._orderEncounterIds. */
+  _orderEncounterIds?: string[]
   effectiveDateTime?: string
   effectivePeriod?: Period
   issued?: string
@@ -250,6 +257,7 @@ export interface Duration {
 }
 
 export interface MedicationRequest {
+  identifier?: Identifier[]
   id?: string
   resourceType?: string
   meta?: {
@@ -283,6 +291,11 @@ export interface MedicationRequest {
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
   /** Bundle.timestamp propagated by the local import reader. */
   _sourceCapturedAt?: string
+  /** Original order references retained when verified cross-source copies merge. */
+  _reconciledSourceReferences?: string[]
+  _encounterInferred?: boolean
+  _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
+  _sourcePrescriptionRecords?: any[]
 }
 
 export interface MedicationStatement {
@@ -316,6 +329,7 @@ export interface Medication {
 
 // Condition (Diagnosis) Types
 export interface Condition {
+  meta?: { source?: string; tag?: Coding[] }
   id?: string
   resourceType?: string
   clinicalStatus?: CodeableConcept | string

@@ -40,7 +40,7 @@ export interface AiResultStoreState<T> {
 export type AiResultStore<T> = UseBoundStore<StoreApi<AiResultStoreState<T>>>
 
 /** Create a module-level AI result store wired to reset on bundle change. */
-export function createAiResultStore<T>(): AiResultStore<T> {
+export function createAiResultStore<T>(preserveSummary = false): AiResultStore<T> {
   const store = create<AiResultStoreState<T>>((set) => ({
     bundleRevision: 0,
     byKey: {},
@@ -69,6 +69,6 @@ export function createAiResultStore<T>(): AiResultStore<T> {
     errors: {},
     issues: {},
     hydrated: {},
-  })))
+  })), preserveSummary)
   return store
 }

@@ -42,7 +42,7 @@ test('shared report retains both procedure sources and a single readable narrati
   await expect(header).toHaveAttribute('aria-expanded', expandedBeforeCopy!)
   if (expandedBeforeCopy !== 'true') await row.getByText(clinicianTitle, { exact: true }).click()
   await expect(row.getByRole('button', { name: '複製報告全文', exact: true })).toHaveCount(1)
-  await expect(row.getByTestId('shared-report-summary')).toHaveText('2 個檢查項目共用相同報告')
+  await expect(row.getByTestId('shared-report-summary')).toHaveCount(0)
   const sources = row.getByTestId('shared-report-sources')
   await sources.locator('summary').focus()
   await page.keyboard.press('Enter')
