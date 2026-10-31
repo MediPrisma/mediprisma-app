@@ -144,6 +144,8 @@ test.each([
   ['abdomen-other', 'No lung lesion. Adrenal nodule.'],
   ['abdomen-other', 'Adrenal nodule, without pleural effusion.'],
   ['abdomen-other', '未見肺部病灶。腎上腺結節。'],
+  ['abdomen-other', 'No pleural effusion, pneumothorax or focal lung lesion. Adrenal nodule.'],
+  ['abdomen-other', 'Pleural effusion is not seen. Adrenal nodule.'],
 ])('an organ named only in a negated clause does not regroup the finding: %s / %s', (proposed, quote) => {
   expect(reportOrganFromQuotes(proposed as any, [quote], ['Lung, adrenal, CT.'])).toBe(proposed)
 })
@@ -157,5 +159,16 @@ test('the real report finalizer keeps a negated organ from overriding the findin
   const catalog = buildSourceCatalog(data)
   const key = catalog.find(entry => entry.resourceId === 'ct')!.key
   const result = finalizeReportHighlights({ groups: [{ organ: 'abdomen-other', points: [{ text: 'Adrenal nodule', sources: [key], quotes: [{ source: key, quote: 'No lung lesion. Adrenal nodule.' }] }] }], unremarkable: [] }, data, catalog)
+  expect(result.groups[0].organ).toBe('abdomen-other')
+})
+
+test.each([
+  'No pleural effusion, pneumothorax or focal lung lesion. Adrenal nodule.',
+  'Pleural effusion is not seen. Adrenal nodule.',
+])('the real report finalizer keeps negated list and trailing negation from regrouping: %s', quote => {
+  const data: any = { diagnosticReports: [{ id: 'ct', code: { text: 'CT abdomen' }, category: [{ text: 'imaging' }], conclusion: quote, effectiveDateTime: '2026-01-01' }] }
+  const catalog = buildSourceCatalog(data)
+  const key = catalog.find(entry => entry.resourceId === 'ct')!.key
+  const result = finalizeReportHighlights({ groups: [{ organ: 'abdomen-other', points: [{ text: 'Adrenal nodule', sources: [key], quotes: [{ source: key, quote }] }] }], unremarkable: [] }, data, catalog)
   expect(result.groups[0].organ).toBe('abdomen-other')
 })

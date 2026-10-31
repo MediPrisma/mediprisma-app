@@ -2,7 +2,7 @@ import type { ReportOrgan } from '@/src/core/entities/medical-summary.entity'
 import type { ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 import { getAnalyteCanonicalKey } from '@voho0000/clinical-lab-normalization/canonical'
 import { getOriginalAnalyteDisplayForObs } from '@voho0000/clinical-lab-normalization/display'
-import { verifyReportQuote } from '@/src/core/utils/report-quote.utils'
+import { negatedAround, verifyReportQuote } from '@/src/core/utils/report-quote.utils'
 
 /** Separate from report-digest's last-addendum policy: numbered pathology
  * specimens are independent. This helper never changes excerpts/prompts. */
@@ -59,20 +59,28 @@ const ANATOMY: ReadonlyArray<[ReportOrgan, RegExp]> = [
   ['hematologic-lymph', /\b(?:lymph(?:\s+nodes?|adenopathy|oma)s?|marrow)\b|淋巴結|骨髓/iu],
 ]
 
-// "No lung lesion." names an organ the finding is not in.
-const NEGATED_CLAUSE = /^(?:(?:no|not|without|negative for|free of|absence of)\b|無|未見|未發現|沒有)/iu
-
-function affirmedClauses(quote: string): string[] {
-  return quote.split(/[.;,。；，\n]+|\bbut\b/iu).map(clause => clause.trim()).filter(Boolean)
+// "No pleural effusion or lung lesion." names organs the finding is not in.
+// Uses the same clause-scoped negation as quote verification.
+function organMentions(quotes: readonly string[]): { affirmed: Set<ReportOrgan>; negated: Set<ReportOrgan> } {
+  const affirmed = new Set<ReportOrgan>()
+  const negated = new Set<ReportOrgan>()
+  for (const [organ, pattern] of ANATOMY) {
+    const global = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+    for (const quote of quotes) {
+      for (const match of quote.matchAll(global)) {
+        const start = match.index ?? 0
+        if (negatedAround(quote, start, start + match[0].length)) negated.add(organ)
+        else affirmed.add(organ)
+      }
+    }
+  }
+  return { affirmed, negated }
 }
 
 export function reportOrganFromQuotes(proposed: ReportOrgan, quotes: readonly string[], sourceNarratives: readonly string[] = []): ReportOrgan {
-  const clauses = quotes.flatMap(affirmedClauses)
-  const affirmed = clauses.filter(clause => !NEGATED_CLAUSE.test(clause))
-  const matches = new Set(ANATOMY.filter(([, pattern]) => affirmed.some(clause => pattern.test(clause))).map(([organ]) => organ))
+  const { affirmed: matches, negated } = organMentions(quotes)
   // Only negated anatomy: no evidence either way, so the model's grouping stays.
-  if (matches.size === 0 && affirmed.length < clauses.length &&
-    ANATOMY.some(([, pattern]) => clauses.some(clause => NEGATED_CLAUSE.test(clause) && pattern.test(clause)))) return proposed
+  if (matches.size === 0 && negated.size > 0) return proposed
   if (matches.size === 1) return [...matches][0]
   if (matches.size > 1 && !matches.has(proposed)) return 'other'
   // A short verified quote (e.g. "Fracture") need not repeat the specimen.
