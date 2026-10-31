@@ -9,6 +9,7 @@ export const ANSWER_VALUE = {
   'af-symptoms': { 有: 'yes', 無: 'no' },
   bleeding: { 有: 'yes', 無: 'no' },
   'angina-trend': { 更多: 'more', 一樣: 'same', 較少: 'less', 沒有: 'none' },
+  'home-bp-measured': { 有量: 'yes', 沒有量: 'no' },
 }
 export const VISIT_KEY = { dyspnea: 'dyspnoea-trend', weight: 'weight-trend', afSymptoms: 'af-symptoms', bleeding: 'bleeding', angina: 'angina-trend' }
 // The disease a scenario's `page` opens on; heart failure is the host default.

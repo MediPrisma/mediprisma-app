@@ -111,8 +111,8 @@
   "optionalDependencies": {
     "@voho0000/clinical-lab-normalization": "1.2.0",
     "@voho0000/personalization-sdk": "1.0.0",
-    "@voho0000/personalized-care": "2.20.4",
-    "@voho0000/personalized-care-fhir": "1.12.5",
+    "@voho0000/personalized-care": "2.21.0",
+    "@voho0000/personalized-care-fhir": "1.13.0",
     "@voho0000/personalized-education": "1.4.1"
   }
 }
