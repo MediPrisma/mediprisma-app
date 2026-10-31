@@ -9,7 +9,7 @@ import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { assessMedicationCurrentness, medicationExpectedStartTimestamp, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
-import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { candidateCloudIngredient, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
@@ -471,23 +471,32 @@ export function useMedicationTimeline(
         : locale === 'en'
           ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
           : med.drugTerminology?.officialNameZh
-      const ingredientName = audience === 'medical'
+      const recordedIngredient = audience === 'medical'
         ? med.drugTerminology?.ingredientText?.trim() || hospitalMedicationDisplayName(hospitalMedicationName)
         : undefined
+      // Same as the list: a hospital brand row standing for a candidate
+      // hospital/cloud group uses the paired cloud record's official ingredient.
+      const pairedIngredient = audience === 'medical' && !recordedIngredient && !officialProductName && isVghtpeSource(med)
+        ? candidateCloudIngredient(comparison, sources?.filter((source: any) => source !== med && source.id !== med.id),
+          (source: any) => isMedcloudSource(source), (source: any) => source.drugTerminology?.ingredientText)
+        : undefined
+      const recordedName = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+      const ingredientName = recordedIngredient || pairedIngredient
+      const productName = officialProductName || (pairedIngredient ? recordedName : undefined)
       const drugName = ingredientName
         || officialProductName
-        || pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+        || recordedName
         || clinicalDrugKey
       const drugProductName =
         audience === 'medical'
         && ingredientName
-        && officialProductName
+        && productName
         && ingredientName.localeCompare(
-          officialProductName,
+          productName,
           undefined,
           { sensitivity: 'accent' },
         ) !== 0
-          ? officialProductName
+          ? productName
           : undefined
 
       const category = primaryCategoryOf(

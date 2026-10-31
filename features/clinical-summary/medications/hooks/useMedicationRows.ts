@@ -21,7 +21,7 @@ import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStat
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
-import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { candidateCloudIngredient, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 
 function sourceCalendarDate(value?: string): string {
@@ -433,10 +433,22 @@ export function useMedicationRows(
         row.sourceComparison = { status: 'confirmed', records: med._sourcePrescriptionRecords.map(buildRow) }
       }
     }
+    // A hospital brand row standing for a hospital/cloud candidate group takes
+    // the cloud record's official ingredient in ingredient mode, so the list
+    // does not mix brand and ingredient names; product mode keeps the brand.
+    const pairedIngredientTitle = (record: MedicationRow, comparison: { status: string } | undefined, sources?: MedicationRow[]) => {
+      if (audience !== 'medical' || record.dataOrigin !== 'hospital' || record.secondaryTitle
+        || record.drugTerminology?.ingredientText?.trim() || hospitalMedicationDisplayName(record.hospitalMedicationName)) return {}
+      const ingredient = candidateCloudIngredient(comparison as any, sources?.filter(source => source.id !== record.id),
+        source => source.dataOrigin === 'medcloud', source => source.drugTerminology?.ingredientText)
+      return ingredient && ingredient.localeCompare(record.title, undefined, { sensitivity: 'accent' }) !== 0
+        ? { title: ingredient, secondaryTitle: record.title } : {}
+    }
     const comparisonRows = projectMedicationComparisons(enriched,
       row => (sourceById.get(row.id) as any)?._sourceRecordComparison, row => row,
     ).map(({ record, sources, comparison, ownedIds, warnings }) => comparison ? {
       ...record,
+      ...pairedIngredientTitle(record, comparison, sources),
       sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
       reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
       searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
