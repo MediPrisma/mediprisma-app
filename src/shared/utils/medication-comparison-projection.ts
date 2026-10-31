@@ -60,3 +60,20 @@ export function projectHospitalMedicationComparisons<T extends { id: string; _so
     isInactive:false,
   }))
 }
+
+/** Ingredient name for a hospital row shown in place of a candidate
+ * hospital/cloud group. A hospital brand label has no official ingredient, so
+ * ingredient mode would otherwise print a brand beside ingredient-named rows.
+ * Uses the paired cloud records' official ingredient text only when every one
+ * of them names the same ingredient; display only, never identity. */
+export function candidateCloudIngredient<T>(
+  comparison: SourceRecordComparison | undefined,
+  sources: readonly T[] | undefined,
+  isCloud: (source: T) => boolean,
+  ingredientOf: (source: T) => string | undefined,
+): string | undefined {
+  if (comparison?.status !== 'candidate' || !sources?.length) return undefined
+  const names = sources.filter(isCloud).map(source => ingredientOf(source)?.trim())
+  if (!names.length || names.some(name => !name)) return undefined
+  return new Set(names).size === 1 ? names[0] : undefined
+}

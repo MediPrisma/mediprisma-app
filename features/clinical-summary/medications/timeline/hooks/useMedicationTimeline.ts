@@ -9,7 +9,7 @@ import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { assessMedicationCurrentness, medicationExpectedStartTimestamp, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
-import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { candidateCloudIngredient, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
@@ -471,23 +471,32 @@ export function useMedicationTimeline(
         : locale === 'en'
           ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
           : med.drugTerminology?.officialNameZh
-      const ingredientName = audience === 'medical'
+      const recordedIngredient = audience === 'medical'
         ? med.drugTerminology?.ingredientText?.trim() || hospitalMedicationDisplayName(hospitalMedicationName)
         : undefined
+      // Same as the list: a hospital brand row standing for a candidate
+      // hospital/cloud group uses the paired cloud record's official ingredient.
+      const pairedIngredient = audience === 'medical' && !recordedIngredient && !officialProductName && isVghtpeSource(med)
+        ? candidateCloudIngredient(comparison, sources?.filter((source: any) => source !== med && source.id !== med.id),
+          (source: any) => isMedcloudSource(source), (source: any) => source.drugTerminology?.ingredientText)
+        : undefined
+      const recordedName = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+      const ingredientName = recordedIngredient || pairedIngredient
+      const productName = officialProductName || (pairedIngredient ? recordedName : undefined)
       const drugName = ingredientName
         || officialProductName
-        || pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+        || recordedName
         || clinicalDrugKey
       const drugProductName =
         audience === 'medical'
         && ingredientName
-        && officialProductName
+        && productName
         && ingredientName.localeCompare(
-          officialProductName,
+          productName,
           undefined,
           { sensitivity: 'accent' },
         ) !== 0
-          ? officialProductName
+          ? productName
           : undefined
 
       const category = primaryCategoryOf(
@@ -503,9 +512,17 @@ export function useMedicationTimeline(
         ? `${organization.key}::${clinicalDrugKey}`
         : clinicalDrugKey
 
-      const icdCoding = periodSource.reasonCode?.[0]?.coding?.[0]
+      // A candidate group's hospital row keeps the billing diagnosis its
+      // cloud copy showed when the hospital record has none (same as the list).
+      const cloudReasons = comparison?.status === 'candidate' && !periodSource.reasonCode?.length && isVghtpeSource(med)
+        ? (sources ?? []).filter((source: any) => source !== med && isMedcloudSource(source)).map((source: any) => source.reasonCode?.[0])
+        : []
+      const reasonSource = cloudReasons.length && cloudReasons.every(Boolean)
+        && new Set(cloudReasons.map((reason: any) => JSON.stringify(reason))).size === 1
+        ? { reasonCode: [cloudReasons[0]] } : periodSource
+      const icdCoding = reasonSource.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code as string | undefined
-      const rawIcdText = pickByLocale(periodSource.reasonCode?.[0], locale)
+      const rawIcdText = pickByLocale(reasonSource.reasonCode?.[0], locale)
       const icdText = stripLeadingIcdCode(rawIcdText, icdCode ?? '')
       const frequency = displayDosageInstruction(dosage)
       const requesterDisplay = periodSource.requester?.display

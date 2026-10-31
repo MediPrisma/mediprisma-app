@@ -121,9 +121,87 @@ export function hospitalProductMatchesKnowledge(
       || /\b(?:tablets?|capsules?|injection|solution|cream|ointment|suspension|gel|drops|patch(?:es)?|inhalation|aerosol|suppositor(?:y|ies)|granules|powder)\b/i.test(String(codes[0].display)))
 }
 
+// Micrograms, so 0.25 mg and 250 mcg compare equal.
+const MICROGRAMS: Record<string, number> = { MG: 1000, MCG: 1, UG: 1 }
+
+/** Every drug amount written in a label or official ingredient text. A
+ * percentage is not an amount; mass per volume or mass keeps its denominator,
+ * so 10 mg/1 ml never equals 10 mg. Undefined when the text also names any
+ * other quantity (1 GM, 400 IU, 500 GAMMA, .48 ML): the amounts found would
+ * not be the whole strength. Only a label may add a bare volume (3 ml), its
+ * pack size. */
+function drugAmounts(text: string, packVolume: boolean): string[] | undefined {
+  const upper = text.normalize('NFKC').toUpperCase()
+    // "25/5 mg" names both ingredients' amounts in the trailing unit.
+    .replace(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*(MG|MCG)\b/g, '$1 $3 + $2 $3')
+  const pattern = /(?<![\d.])(\d+(?:\.\d+)?|\.\d+)\s*(MG|MCG|UG)\b(?:\s*\/\s*(\d+(?:\.\d+)?|\.\d+)?\s*(ML|GM|G)\b)?/g
+  const rest = upper.replace(pattern, ' ')
+  // A slash left over is a denominator this did not read, never a pack size.
+  if (/\/\s*\.?\d/.test(rest)) return undefined
+  const unread = [...rest.matchAll(/(?<![A-Z\d.])(?:\d+(?:\.\d+)?|\.\d+)\s*([A-Z]+|%)/g)]
+  if (unread.some((match) => !(packVolume && match[1] === 'ML'))) return undefined
+  return [...upper.matchAll(pattern)]
+    .map((match) => {
+      const amount = Number(match[1]) * MICROGRAMS[match[2]] / (match[3] ? Number(match[3]) : 1)
+      return `${Math.round(amount * 1000) / 1000}${match[4] ? `/${match[4] === 'GM' ? 'G' : match[4]}` : ''}`
+    }).sort()
+}
+
+// [hospital label word, official dose form]. Inhalers, eye and skin products
+// are absent: their labels rarely carry a comparable drug amount.
+const FORM_FAMILIES: Array<[RegExp, RegExp]> = [
+  [/^(?:TAB|TABS|TABLETS?)$/, /錠/],
+  [/^(?:CAP|CAPS|CAPSULES?)$/, /膠囊/],
+  [/^(?:INJ|INJECTION)$/, /注射/],
+  [/^(?:PATCH(?:ES)?|PAP)$/, /貼|膠布/],
+  [/^GRANULES?$/, /顆粒|散/],
+]
+const MODIFIED_RELEASE_LABEL = /^(?:SR|ER|PR|XR|CR|MR|XL|LA|OROS|RETARD)$/
+const MODIFIED_RELEASE_FORM = /持續|緩釋|長效|延長|控釋/
+
+/** Same brand word, the same drug amounts and the same dose-form family, e.g.
+ * Lipitor FC * tab 20 mg ↔ LIPITOR FILM-COATED TABLETS 20MG (膜衣錠). Amounts
+ * come from the official ingredient text because cloud labels often omit
+ * them. A label that starts with an ingredient (Colchicine "Synmosa") has no
+ * brand word and is not compared here. */
+function hospitalBrandMatchesKnowledge(concept: any, knowledge: Resource): boolean {
+  const codings = concept?.coding ?? []
+  if (codings.some((coding: any) => coding.system === GENERIC_SYSTEM)) return false
+  const names = [...new Set(codings.filter((coding: any) => [NAME_SYSTEM, PRODUCT_SYSTEM].includes(coding.system))
+    .flatMap((coding: any) => [coding.code, coding.display]).filter(Boolean))] as string[]
+  if (names.length !== 1) return false
+  const label = names[0].normalize('NFKC').toUpperCase()
+  const brand = label.match(/^[A-Z][A-Z-]{3,}/)?.[0]
+  const ingredients: string[] = (knowledge.ingredient ?? []).map((item: any) => String(item.itemCodeableConcept?.text ?? ''))
+  const form = String(knowledge.doseForm?.text ?? '')
+  if (!brand || !ingredients.length || !form) return false
+  const escapedBrand = brand.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')
+  const word = new RegExp(`(?<![A-Z])${escapedBrand}(?![A-Z])`)
+  const officialNames = [...(knowledge.code?.coding ?? []).map((coding: any) => coding.display), ...(knowledge.synonym ?? [])]
+    .map((name) => String(name ?? '').normalize('NFKC').toUpperCase())
+  if (!officialNames.some((name) => word.test(name)) || ingredients.some((text) => word.test(text.toUpperCase()))) return false
+  // Every official component (one ingredient entry may hold several, joined
+  // by "+") must give exactly one readable amount, so a combination is
+  // compared whole, never by the parts this can read.
+  const ingredientAmounts = ingredients.flatMap((text) => text.split('+')).map((part) => drugAmounts(part, false))
+  if (ingredientAmounts.some((amounts) => amounts?.length !== 1)) return false
+  const hospitalAmounts = drugAmounts(label, true), officialAmounts = ingredientAmounts.flat().sort()
+  if (!hospitalAmounts?.length || hospitalAmounts.join() !== officialAmounts.join()) return false
+  // Whole label words only: "Glucophage" must not read as an "oph" product.
+  const words = label.split(/[^A-Z]+/)
+  const families = FORM_FAMILIES.filter(([labelWord]) => words.some((item) => labelWord.test(item)))
+  return families.length === 1 && families[0][1].test(form)
+    && FORM_FAMILIES.filter(([, official]) => official.test(form)).length === 1
+    // A release marker may sit in the official name (TEGRETOL CR) while the
+    // form reads 膜衣錠, so both count.
+    && words.some((item) => MODIFIED_RELEASE_LABEL.test(item)) === (MODIFIED_RELEASE_FORM.test(form)
+      || officialNames.some((name) => MODIFIED_RELEASE_FORM.test(name) || name.split(/[^A-Z]+/).some((item) => MODIFIED_RELEASE_LABEL.test(item))))
+}
+
 /** Non-destructive comparison only. Complete literal product labels may
- * differ in bridge typography/form abbreviations. Never use ingredient-only
- * similarity, a bare brand, or this predicate to confirm an order merge. */
+ * differ in bridge typography/form abbreviations; a brand word counts only
+ * with its drug amounts and dose form. Never use ingredient-only similarity,
+ * a bare brand, or this predicate to confirm an order merge. */
 export function hospitalProductMayMatchKnowledge(concept: any, cloudCode: string, knowledge: Resource): boolean {
   if (hospitalProductMatchesKnowledge(concept, cloudCode, knowledge)) return true
   if (knowledge.meta?.source !== 'https://data.gov.tw/dataset/23715'
@@ -137,5 +215,5 @@ export function hospitalProductMayMatchKnowledge(concept: any, cloudCode: string
   if (/錠|tablet/i.test(form) && !/tab/i.test(hospitalName)) return false
   if (/膠囊|capsule/i.test(form) && !/cap/i.test(hospitalName)) return false
   if (/注射|injection/i.test(form) && !/inj/i.test(hospitalName)) return false
-  return hospitalProductMayMatchConcept(concept, knowledge.code)
+  return hospitalProductMayMatchConcept(concept, knowledge.code) || hospitalBrandMatchesKnowledge(concept, knowledge)
 }
