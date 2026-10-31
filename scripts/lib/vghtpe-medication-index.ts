@@ -1,30 +1,37 @@
-// Builds the public VGH hospital medication index from the local-only
-// hospital/cloud drug linkage (schema hospital-cloud-drug-linkage-v1).
+// Builds the public VGH hospital medication index from the local-only hospital
+// drug identity table (schema hospital-identity-v2-local). Nothing is added by
+// hand: a name the table cannot resolve to one identity stays out of the index.
 //
-// Output contains only what a public repository may hold: complete hospital
-// product names and the NHI drug-master ingredient (and, for verified items,
-// the official product). Hospital item codes, drug numbers, billing codes,
-// candidate code lists, evidence filenames and local paths are never copied.
+// The index says which drug a complete hospital product name is: its NHI
+// drug-master ingredients and amounts, package quantity where that is part of
+// the product (liquids, creams, eye products, concentrations), dose form and
+// release type, and every NHI code of exactly that identity. A MediCloud
+// record whose code is in that set is the same drug (same ingredients and
+// amounts; a different strength or package is a different drug).
 //
-// An item enters the index when
-//   - verified_product_identity: its verified product, or
-//   - review_required: every review candidate names the same ingredients and
-//     amounts (salt and hydrate spellings aside), e.g. CLINDAMYCIN HCL 150 MG
-//     and CLINDAMYCIN (HCL HYDRATE) 150 MG.
-// insufficient_compatible_evidence items, disagreeing candidates and names
-// claimed by items of different identities are left out and reported.
+// Output holds only what a public repository may: complete hospital names and
+// NHI drug-master facts. Hospital item codes, drug numbers, billing codes,
+// candidate lists, evidence paths and local file names are never copied.
 
 import { createHash } from 'node:crypto'
-import { hospitalMedicationNameKey, ingredientIdentityKey } from '../../src/shared/utils/hospital-medication-index'
+import { hospitalMedicationNameKey } from '../../src/shared/utils/hospital-medication-index'
 
-export const INDEX_SCHEMA_VERSION = 'vghtpe-medication-index-v1'
-const SOURCE_SCHEMA_VERSION = 'hospital-cloud-drug-linkage-v1'
+export const INDEX_SCHEMA_VERSION = 'vghtpe-medication-index-v2'
+const SOURCE_SCHEMA_VERSION = 'hospital-identity-v2-local'
+
+export interface VghtpeMedicationIdentity {
+  ingredients: Array<{ name: string; amount: string }>
+  packageQuantity?: string
+  doseFormFamily: string
+  releaseType: string
+}
 
 export interface VghtpeMedicationIndexItem {
   names: string[]
-  basis: 'verified-product' | 'single-candidate-ingredient'
+  basis: 'dictionary-identity'
   ingredientText: string
-  product?: { licenseId: string; officialProductUrl: string; doseForm: string; nhiCodes: string[] }
+  identity: VghtpeMedicationIdentity
+  nhiCodes: string[]
 }
 
 export interface VghtpeMedicationIndex {
@@ -36,92 +43,97 @@ export interface VghtpeMedicationIndex {
 }
 
 export interface VghtpeMedicationIndexReport {
-  included: { verified: number; singleCandidate: number }
-  excluded: { insufficient: number; noCandidate: number; disagreeingCandidates: number; unreadableIngredient: number; nameCollision: number; duplicate: number }
+  included: { dictionary: number }
+  excluded: { notUnique: number; nameCollision: number; duplicate: number }
   collidingNames: string[]
 }
 
-type Ingredient = string | { text?: string; ingredientText?: string }
-const ingredientText = (value: Ingredient) => (typeof value === 'string' ? value : value?.ingredientText ?? value?.text ?? '').trim()
+type MasterRow = readonly string[]
+const sha256 = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex')
 
-export function buildVghtpeMedicationIndex(linkage: any, sourceBytes: Buffer | string, terminologySnapshotId: string):
-  { index: VghtpeMedicationIndex; report: VghtpeMedicationIndexReport } {
-  if (linkage?.schemaVersion !== SOURCE_SCHEMA_VERSION) throw new Error(`unexpected linkage schema ${linkage?.schemaVersion}`)
-  if (linkage.snapshotId !== terminologySnapshotId) {
-    throw new Error(`linkage snapshot ${linkage.snapshotId} does not match the vendored drug master ${terminologySnapshotId}`)
+export function buildVghtpeMedicationIndex(input: {
+  identity: any; identityBytes: Buffer | string
+  masterRows: readonly MasterRow[]; terminologySnapshotId: string
+}): { index: VghtpeMedicationIndex; report: VghtpeMedicationIndexReport } {
+  const { identity, masterRows, terminologySnapshotId } = input
+  if (identity?.schemaVersion !== SOURCE_SCHEMA_VERSION) throw new Error(`unexpected identity schema ${identity?.schemaVersion}`)
+  if (identity.snapshotId !== terminologySnapshotId) {
+    throw new Error(`identity snapshot ${identity.snapshotId} does not match the vendored drug master ${terminologySnapshotId}`)
   }
-  if (!Array.isArray(linkage.items)) throw new Error('linkage has no items')
-  const products = new Map<string, any>((linkage.verifiedProducts ?? []).map((product: any) => [product.productKey, product]))
+  if (!Array.isArray(identity.items)) throw new Error('identity has no items')
+  const rows = new Map<string, MasterRow>(masterRows.map(row => [String(row[0]), row]))
   const report: VghtpeMedicationIndexReport = {
-    included: { verified: 0, singleCandidate: 0 },
-    excluded: { insufficient: 0, noCandidate: 0, disagreeingCandidates: 0, unreadableIngredient: 0, nameCollision: 0, duplicate: 0 },
-    collidingNames: [],
+    included: { dictionary: 0 }, excluded: { notUnique: 0, nameCollision: 0, duplicate: 0 }, collidingNames: [],
   }
+  const codesOf = (codes: unknown, label: string) => {
+    const list = [...new Set((Array.isArray(codes) ? codes : []).map(code => String(code).trim()).filter(Boolean))].sort()
+    if (!list.length) throw new Error(`${label}: no NHI codes`)
+    for (const code of list) if (!rows.has(code)) throw new Error(`${label}: ${code} is not in the vendored drug master`)
+    return list
+  }
+  const namesOf = (names: unknown) => [...new Set((Array.isArray(names) ? names : []).map(name => String(name ?? '').trim()).filter(Boolean))]
 
-  const candidates: Array<{ item: VghtpeMedicationIndexItem; identity: string }> = []
-  for (const source of linkage.items) {
-    const names = [...new Set<string>((source.names ?? []).map((name: unknown) => String(name ?? '').trim()).filter(Boolean))]
-    if (!names.length) continue
-    if (source.status === 'verified_product_identity') {
-      const product = products.get(source.verifiedProductKey)
-      if (!product || product.evidenceStatus !== 'verified_product_identity') throw new Error(`verified item without its verified product: ${names[0]}`)
-      const identity = ingredientIdentityKey(product.ingredientText ?? '')
-      if (!identity) { report.excluded.unreadableIngredient++; continue }
-      candidates.push({ identity, item: { names, basis: 'verified-product', ingredientText: product.ingredientText.trim(), product: {
-        licenseId: String(product.licenseId), officialProductUrl: String(product.officialProductUrl), doseForm: String(product.doseForm),
-        nhiCodes: [...new Set<string>(product.nhiCodes ?? [])].sort(),
-      } } })
-      continue
+  const candidates: VghtpeMedicationIndexItem[] = []
+  // The bridge records a product name per order, so identity is per name: a
+  // hospital item whose other alias is unresolved still lends a uniquely
+  // resolved name its identity (Lipitor FC * tab 20 mg beside an unresolved
+  // generic alias of the same item code).
+  for (const source of identity.items) {
+    const results = Array.isArray(source.aliasResults) && source.aliasResults.length
+      ? source.aliasResults
+      : namesOf(source.names).map(name => ({ ...source, name }))
+    for (const result of results) {
+      const name = String(result.name ?? '').trim()
+      if (!name) continue
+      if (result.status !== 'unique') { report.excluded.notUnique++; continue }
+      const nhiCodes = codesOf(result.nhiCodes, name)
+      const id = result.identity ?? {}
+      candidates.push({ names: [name], basis: 'dictionary-identity', ingredientText: String(result.ingredientText ?? '').trim(), nhiCodes, identity: {
+        ingredients: (id.ingredients ?? []).map((part: any) => ({ name: String(part.name), amount: String(part.amount) })),
+        ...(id.packageQuantity ? { packageQuantity: String(id.packageQuantity) } : {}),
+        doseFormFamily: String(id.doseFormFamily ?? ''), releaseType: String(id.releaseType ?? ''),
+      } })
     }
-    if (source.status !== 'review_required') { report.excluded.insufficient++; continue }
-    const texts = [...new Set((source.reviewCandidateIngredients ?? []).map(ingredientText).filter(Boolean))] as string[]
-    if (!texts.length) { report.excluded.noCandidate++; continue }
-    const identities = texts.map(ingredientIdentityKey)
-    if (identities.some(identity => !identity)) { report.excluded.unreadableIngredient++; continue }
-    if (new Set(identities).size !== 1) { report.excluded.disagreeingCandidates++; continue }
-    // The shortest spelling is the plainest one ("CLINDAMYCIN HCL 150 MG").
-    const text = [...texts].sort((a, b) => a.length - b.length || a.localeCompare(b))[0]
-    candidates.push({ identity: identities[0]!, item: { names, basis: 'single-candidate-ingredient', ingredientText: text } })
   }
+  // Names of one item with the same identity are listed together.
+  const merged = new Map<string, VghtpeMedicationIndexItem>()
+  for (const item of candidates.splice(0)) {
+    const key = `${item.nhiCodes.join(',')}|${JSON.stringify(item.identity)}`
+    const existing = merged.get(key)
+    if (existing) existing.names.push(...item.names)
+    else merged.set(key, item)
+  }
+  candidates.push(...merged.values())
 
-  // A name that two items of different identity claim is not evidence of
-  // either; both lose that name. Items of the same identity may share it.
-  const identitiesByName = new Map<string, Set<string>>()
-  for (const { item, identity } of candidates) {
+  // A name two different identities claim is evidence for neither; both lose it.
+  const codeSetsByName = new Map<string, Set<string>>()
+  for (const item of candidates) {
     for (const name of item.names) {
       const key = hospitalMedicationNameKey(name)
-      identitiesByName.set(key, (identitiesByName.get(key) ?? new Set()).add(identity))
+      codeSetsByName.set(key, (codeSetsByName.get(key) ?? new Set()).add(item.nhiCodes.join(',')))
     }
   }
-  const colliding = new Set([...identitiesByName].filter(([, identities]) => identities.size > 1).map(([key]) => key))
+  const colliding = new Set([...codeSetsByName].filter(([, sets]) => sets.size > 1).map(([key]) => key))
   const seen = new Set<string>()
   const items: VghtpeMedicationIndexItem[] = []
-  for (const { item } of candidates) {
+  for (const item of candidates) {
     let collided = false
     const names = item.names.filter((name) => {
       const key = hospitalMedicationNameKey(name)
       if (colliding.has(key)) { report.collidingNames.push(name); collided = true; return false }
-      // The same name on another item of the same identity is listed once.
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
     if (!names.length) { report.excluded[collided ? 'nameCollision' : 'duplicate']++; continue }
     items.push({ ...item, names: names.sort() })
-    if (item.basis === 'verified-product') report.included.verified++
-    else report.included.singleCandidate++
+    report.included.dictionary++
   }
-  items.sort((a, b) => a.names[0].localeCompare(b.names[0]) || a.ingredientText.localeCompare(b.ingredientText))
+  items.sort((a, b) => a.names[0].localeCompare(b.names[0]))
   report.collidingNames = [...new Set(report.collidingNames)].sort()
-
   return {
-    index: {
-      schemaVersion: INDEX_SCHEMA_VERSION,
-      sourceSchemaVersion: linkage.schemaVersion,
-      terminologySnapshotId,
-      sourceSha256: createHash('sha256').update(sourceBytes).digest('hex'),
-      items,
-    },
+    index: { schemaVersion: INDEX_SCHEMA_VERSION, sourceSchemaVersion: identity.schemaVersion, terminologySnapshotId,
+      sourceSha256: sha256(input.identityBytes), items },
     report,
   }
 }

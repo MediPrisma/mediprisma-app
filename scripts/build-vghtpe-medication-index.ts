@@ -1,9 +1,10 @@
 #!/usr/bin/env tsx
 // Builds src/infrastructure/fhir/data/vghtpe-medication-index.generated.json
-// from the local-only hospital/cloud drug linkage. The linkage itself (hospital
-// item codes, candidate lists, local evidence) never enters this repository.
+// from the local-only VGH hospital drug identity table. The table itself
+// (hospital item codes, candidate lists, local evidence) never enters this
+// repository.
 //
-//   npx tsx scripts/build-vghtpe-medication-index.ts path/to/hospital-cloud-linkage.local.json
+//   npx tsx scripts/build-vghtpe-medication-index.ts path/to/hospital-identity.local.json
 //
 // See scripts/lib/vghtpe-medication-index.ts for what enters the index.
 
@@ -18,12 +19,15 @@ const MASTER = path.join(ROOT, 'vendor/nhi-fhir-bridge-nhi-drug-terminology/data
 
 const input = process.argv[2]
 if (!input) {
-  console.error('usage: npx tsx scripts/build-vghtpe-medication-index.ts <hospital-cloud-linkage.local.json>')
+  console.error('usage: npx tsx scripts/build-vghtpe-medication-index.ts <hospital-identity.local.json>')
   process.exit(1)
 }
-const bytes = fs.readFileSync(input)
-const snapshotId = JSON.parse(fs.readFileSync(MASTER, 'utf8')).manifest.snapshotId
-const { index, report } = buildVghtpeMedicationIndex(JSON.parse(bytes.toString('utf8')), bytes, snapshotId)
+const identityBytes = fs.readFileSync(input)
+const master = JSON.parse(fs.readFileSync(MASTER, 'utf8'))
+const { index, report } = buildVghtpeMedicationIndex({
+  identity: JSON.parse(identityBytes.toString('utf8')), identityBytes,
+  masterRows: master.rows, terminologySnapshotId: master.manifest.snapshotId,
+})
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
-fs.writeFileSync(OUT, `${JSON.stringify(index, null, 1)}\n`)
-console.log(JSON.stringify({ output: path.relative(ROOT, OUT), ...report, collidingNames: report.collidingNames.length }, null, 2))
+fs.writeFileSync(OUT, `${JSON.stringify(index)}\n`)
+console.log(JSON.stringify({ output: path.relative(ROOT, OUT), bytes: fs.statSync(OUT).size, ...report }, null, 2))
