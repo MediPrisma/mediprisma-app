@@ -1,5 +1,6 @@
 import type { SourceRecordComparison } from './source-record-comparison'
 import { isVghtpeSource, isMedcloudSource } from './clinical-source-identity'
+import { complementHospitalFromCloud } from './medication-source-complement'
 
 type SourceState = { dataOrigin?: string; isInactive: boolean; currentnessUncertain?: boolean }
 
@@ -50,7 +51,7 @@ export function projectMedicationComparisons<T extends { id: string }>(
  * Original copies and pairing metadata remain in the source collection/audit;
  * choosing a display/decision source does not assert a shared FHIR identity. */
 export function selectHospitalMedicationComparisons<T extends { id: string; _sourceRecordComparison?: SourceRecordComparison }>(records: T[]): T[] {
-  const projected=projectHospitalMedicationComparisons(records).map(item=>item.record)
+  const projected=projectHospitalMedicationComparisons(records).map(item=>complementComparisonRecord(item))
   return projected.length===records.length && projected.every((record,index)=>record===records[index]) ? records : projected
 }
 
@@ -59,4 +60,16 @@ export function projectHospitalMedicationComparisons<T extends { id: string; _so
     dataOrigin:isVghtpeSource(record as any) ? 'hospital' : isMedcloudSource(record as any) ? 'medcloud' : undefined,
     isInactive:false,
   }))
+}
+
+/** A hospital record standing for a hospital/MediCloud group keeps the visit
+ * context its cloud copies showed (see complementHospitalFromCloud): an
+ * unconfirmed group reads its cloud partners, a confirmed union its retained
+ * cloud snapshot. Other records are returned unchanged. */
+export function complementComparisonRecord<T extends { id: string }>(item: { record: T; sources?: T[]; comparison?: SourceRecordComparison }): T {
+  const { record, sources, comparison } = item
+  const confirmedSources = (record as any)._sourcePrescriptionRecords as any[] | undefined
+  if (confirmedSources?.length) return complementHospitalFromCloud(record as any, confirmedSources) as T
+  if (!comparison || comparison.status === 'confirmed' || !sources?.length || !isVghtpeSource(record as any)) return record
+  return complementHospitalFromCloud(record as any, sources) as T
 }

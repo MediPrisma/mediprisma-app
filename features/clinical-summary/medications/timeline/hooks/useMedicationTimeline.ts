@@ -9,7 +9,7 @@ import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { assessMedicationCurrentness, medicationExpectedStartTimestamp, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
-import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { complementComparisonRecord, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
@@ -438,7 +438,12 @@ export function useMedicationTimeline(
 
     // Use the same hospital-owned interval and currentness as the list.
     // Cloud intervals remain in sourceIntervalDescription for inspection.
-    const intervals = projected.map(item => ({ ...item, periodSource: item.record }))
+    // A hospital row standing for a hospital/MediCloud group keeps the visit
+    // context (diagnosis, institution) its cloud copy showed, as in the list.
+    const intervals = projected.map(item => {
+      const record = complementComparisonRecord(item)
+      return { ...item, record, periodSource: record }
+    })
     for (const { record: med, sources, periodSource, collapsed, comparison } of intervals) {
       if (!med) continue
       if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(periodSource.status).toLowerCase())) continue
