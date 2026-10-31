@@ -228,7 +228,7 @@ export function OverviewMedsSection({
       )
       const sourceBadge = item.row.selfPurchased && (
         <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-medium">
-          {locale === 'en' ? 'Self-pay' : '自費／自購'}
+          {locale === 'en' ? 'Self-pay' : '自購'}
         </span>
       )
       const daysBadge = daysLeft !== undefined && (
