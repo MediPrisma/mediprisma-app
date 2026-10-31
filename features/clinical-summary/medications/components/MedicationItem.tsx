@@ -444,11 +444,6 @@ export function MedicationItem({
               </span>
             </span>
           </MedicationTerminologyTooltip>
-          {medication.selfPurchased && (
-            <span className="ml-1 shrink-0 rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80">
-              {locale.startsWith('zh') ? '自費／自購' : 'Self-pay'}
-            </span>
-          )}
           {medication.route && routeTitle ? (
             <span
               data-medication-route
@@ -596,6 +591,12 @@ export function MedicationItem({
                   {sourceLabel}
                 </span>
               </TapTooltip>
+            )}
+            {/* Self-pay follows the source tag (院內／雲端) it qualifies. */}
+            {medication.selfPurchased && (
+              <span data-medication-self-pay className="inline-flex shrink-0 items-center rounded-sm bg-muted px-1 text-[max(12px,0.75rem)] font-medium text-foreground/80">
+                {locale.startsWith('zh') ? '自購' : 'Self-pay'}
+              </span>
             )}
             {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
                 the SAME institution is still inside its window and was folded
