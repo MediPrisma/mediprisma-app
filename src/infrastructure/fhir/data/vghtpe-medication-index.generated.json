@@ -1,0 +1,4993 @@
+{
+ "schemaVersion": "vghtpe-medication-index-v1",
+ "sourceSchemaVersion": "hospital-cloud-drug-linkage-v1",
+ "terminologySnapshotId": "nhi-drug-terminology-20260728",
+ "sourceSha256": "e06c3cf11bcdf06af0776d579e2141d04b147dc9ae9d905c239596e7b7a02c41",
+ "items": [
+  {
+   "names": [
+    "ABILIFY * TAB 15 MG \"Otsuka\"",
+    "ARIPIPRAZOLE * TAB 15 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ARIPIPRAZOLE 15 MG"
+  },
+  {
+   "names": [
+    "Abilify * tab 5 mg \"Otsuka\"",
+    "Aripiprazole * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ARIPIPRAZOLE 5 MG"
+  },
+  {
+   "names": [
+    "Abiraterone acetate tab 250 mg",
+    "Zytiga tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Abiraterone Acetate 250 MG"
+  },
+  {
+   "names": [
+    "Abraxane ## * for inj 100 mg",
+    "Paclitaxel-Alb ##* for inj 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PACLITAXEL 100 MG"
+  },
+  {
+   "names": [
+    "Abraxane powder ##* inj 100 mg",
+    "Paclitaxel-Alb Pow. ##*inj 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PACLITAXEL 100 MG"
+  },
+  {
+   "names": [
+    "Acarbose \"Bayer\" # * tab 100 mg",
+    "GLUCOBAY # * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACARBOSE 100 MG"
+  },
+  {
+   "names": [
+    "Acarbose \"Y.C.\" # * tab 100 mg",
+    "Dibose # * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACARBOSE 100 MG"
+  },
+  {
+   "names": [
+    "Aceclofenac tab 100 mg",
+    "Tonec tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACECLOFENAC 100 MG"
+  },
+  {
+   "names": [
+    "Acertil FC * tab 5 mg",
+    "Perindopril FC * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PERINDOPRIL ARGININE 5 MG"
+  },
+  {
+   "names": [
+    "Acetaminophen \"VPP\" tab 500 mg",
+    "Depyretin tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACETAMINOPHEN (=PARACETAMOL) 500 MG"
+  },
+  {
+   "names": [
+    "Acetazolamide \"GCPC\" *tab 250 mg",
+    "Diamox \"GCPC\" * tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACETAZOLAMIDE 250 MG"
+  },
+  {
+   "names": [
+    "Acetazolamide \"VPP\" *tab 250 mg",
+    "Diamox \"VPP\" * tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACETAZOLAMIDE 250 MG"
+  },
+  {
+   "names": [
+    "Acetylcysteine A effe.*tab 600mg",
+    "Fluimucil A effervesc *tab 600mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACETYLCYSTEINE 600 MG"
+  },
+  {
+   "names": [
+    "ACTEMRA for SC * inj 162 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "tocilizumab 162 MG"
+  },
+  {
+   "names": [
+    "Actilyse # inj 50 mg, 50 ml"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PLASMINOGEN ACTIVATOR RECOMBINANT HUMAN TISSUE-TYPE 50 MG"
+  },
+  {
+   "names": [
+    "Actos \"Takeda\" #* tab 30 mg",
+    "Pioglitazone \"Takeda\"#* tab 30mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PIOGLITAZONE 30 MG"
+  },
+  {
+   "names": [
+    "Actos \"TW\" #* tab 30 mg",
+    "Pioglitazone \"TW\"#* tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PIOGLITAZONE 30 MG"
+  },
+  {
+   "names": [
+    "Acyclovir \"CCPC\" * tab 400 mg",
+    "Acylete * tab 400 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACYCLOVIR 400 MG"
+  },
+  {
+   "names": [
+    "Adempas FC * tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIOCIGUAT 2 MG"
+  },
+  {
+   "names": [
+    "ADEMPAS FC * tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIOCIGUAT 2.5 MG"
+  },
+  {
+   "names": [
+    "Advagraf PR * cap 1 mg",
+    "Tacrolimus PR * cap 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TACROLIMUS 1 MG"
+  },
+  {
+   "names": [
+    "Afinitor * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EVEROLIMUS 5 MG"
+  },
+  {
+   "names": [
+    "Aldactone-A tab 25 mg",
+    "Spironolactone tab 25 mg VPP",
+    "Spirotone tab 25 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SPIRONOLACTONE 25 MG"
+  },
+  {
+   "names": [
+    "Alecensa # cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Alectinib HCl 150 MG"
+  },
+  {
+   "names": [
+    "Alimta for ##* inj 100 mg",
+    "Pemetrexed \"Lotus\" ##* inj 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PEMETREXED DISODIUM HEPTAHYDRATE 100 MG"
+  },
+  {
+   "names": [
+    "Allegra * tab 60 mg",
+    "Fexofenadine * tab 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FEXOFENADINE HYDROCHLORIDE 60 MG"
+  },
+  {
+   "names": [
+    "Allopurinol \"S.T.\" * tab 100 mg",
+    "Tonsaric * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ALLOPURINOL 100 MG"
+  },
+  {
+   "names": [
+    "Allopurinol \"Y.S.\" * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ALLOPURINOL 100 MG"
+  },
+  {
+   "names": [
+    "ALUNBRIG FC * TAB 180 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BRIGATINIB 180 MG"
+  },
+  {
+   "names": [
+    "Alunbrig FC * tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BRIGATINIB 30 MG"
+  },
+  {
+   "names": [
+    "Amantadine sulfate\"HCT*cap 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMANTADINE HCL 100 MG"
+  },
+  {
+   "names": [
+    "Amaryl # tab 2 mg",
+    "Glimepiride # tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GLIMEPIRIDE 2 MG"
+  },
+  {
+   "names": [
+    "Ambisome for #* inj 50 mg",
+    "Liposomal amphotericin B #* 50mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMPHOTERICIN B 50 MG"
+  },
+  {
+   "names": [
+    "Ambroxol (Loxol)HCl SR *tab 75mg",
+    "Loxol SR * tab 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMBROXOL HYDROCHLORIDE 75 MG"
+  },
+  {
+   "names": [
+    "Ambroxol (Mubroxol) * tab 30 mg",
+    "Mubroxol * tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMBROXOL HYDROCHLORIDE 30 MG"
+  },
+  {
+   "names": [
+    "Aminophylline-CR tab 225 mg",
+    "Phyllocontin CR tab 225 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMINOPHYLLINE (=COROPHYLLIN) 225 MG"
+  },
+  {
+   "names": [
+    "Amiodarone tab 200 mg",
+    "Cordarone tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMIODARONE HCL 200 MG"
+  },
+  {
+   "names": [
+    "Amisulpride * tab 200 mg",
+    "Solian * tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMISULPRIDE 200 MG"
+  },
+  {
+   "names": [
+    "Amisulpride * tab 50 mg",
+    "Solian * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMISULPRIDE 50 MG"
+  },
+  {
+   "names": [
+    "Amlodipine \"Pfizer\" * tab 5 mg",
+    "Norvasc * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMLODIPINE (BESYLATE) 5 MG"
+  },
+  {
+   "names": [
+    "Amlodipine \"Synmosa\" * tab 5mg",
+    "Nobar * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMLODIPINE (BESYLATE) 5 MG"
+  },
+  {
+   "names": [
+    "Amphotericin B(Fungizone*inj50mg",
+    "Fungizone * inj 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMPHOTERICIN B 50 MG"
+  },
+  {
+   "names": [
+    "Ampicillin sod \"YF\" inj 500 mg",
+    "Ampolin \"YF\" inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMPICILLIN 500 MG"
+  },
+  {
+   "names": [
+    "Anastrozole tab 1 mg",
+    "Arimidex tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ANASTROZOLE 1 MG"
+  },
+  {
+   "names": [
+    "Androcur tab 50 mg",
+    "Cyproterone acetate tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYPROTERONE ACETATE 50 MG"
+  },
+  {
+   "names": [
+    "Anin * tab 5 mg",
+    "Haloperidol (Anin) * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HALOPERIDOL 5 MG"
+  },
+  {
+   "names": [
+    "Anpo tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RITODRINE HCL 10 MG"
+  },
+  {
+   "names": [
+    "Apa-Risdol FC * tab 2 mg",
+    "Risperidone (Apa-Risdol)*tab 2mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RISPERIDONE 2 MG"
+  },
+  {
+   "names": [
+    "Apalutamide FC tab 60 mg",
+    "Erleada FC tab 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "APALUTAMIDE 60 MG"
+  },
+  {
+   "names": [
+    "Apixaban FC #* tab 2.5 mg",
+    "Eliquis FC #* tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Apixaban 2.5 MG"
+  },
+  {
+   "names": [
+    "APIXABAN FC #* tab 5 MG",
+    "ELIQUIS FC #* tab 5 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Apixaban 5 MG"
+  },
+  {
+   "names": [
+    "Apolin * tab 25 mg",
+    "Hydralazine HCl \"Y.S.\"*tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDRALAZINE HCL 25 MG"
+  },
+  {
+   "names": [
+    "ApreSOLINE \"VPP\" * tab 25 mg",
+    "Hydralazine \"VPP\" * tab 25 mg",
+    "Stable * tab 25 mg (Hydralazine)"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDRALAZINE HCL 25 MG"
+  },
+  {
+   "names": [
+    "Aprovel FC * tab 300 mg",
+    "Irbesartan FC * tab 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "IRBESARTAN 300 MG"
+  },
+  {
+   "names": [
+    "Arax tab 25 mg",
+    "Hydroxyzine HCl tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDROXYZINE DIHYDROCHLORIDE 25 MG"
+  },
+  {
+   "names": [
+    "Arcoxia tab 60 mg",
+    "Etoricoxib tab 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ETORICOXIB 60 MG"
+  },
+  {
+   "names": [
+    "Arheuma * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LEFLUNOMIDE 10 MG"
+  },
+  {
+   "names": [
+    "Aricept FC * tab 10 mg",
+    "Donepezil HCl FC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DONEPEZIL HCL 10 MG"
+  },
+  {
+   "names": [
+    "Aricept FC * tab 5 mg",
+    "Donepezil HCl FC * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DONEPEZIL HCL 5 MG"
+  },
+  {
+   "names": [
+    "Aromasin SC tab 25 mg",
+    "Exemestane SC tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EXEMESTANE 25 MG"
+  },
+  {
+   "names": [
+    "Artane tab 2 mg \"CCPC\"",
+    "B.H.L. tab 2 mg \"CCPC\"",
+    "Trihexyphenidyl tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRIHEXYPHENIDYL HCL (=BENZHEXOL HYDROCHLORIDE) 2 MG"
+  },
+  {
+   "names": [
+    "Asparaginase-L \"B##*inj 10000iu",
+    "Oncoginase for ##* inj 10000 iu"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "L-ASPARAGINASE 10000 IU"
+  },
+  {
+   "names": [
+    "Aspirin \"Johnson\" FC *tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ASPIRIN 100 MG"
+  },
+  {
+   "names": [
+    "ATANAAL * CAP 5 MG",
+    "NIFEDIPINE * CAP 5 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NIFEDIPINE 5 MG"
+  },
+  {
+   "names": [
+    "Atorvastatin FC * tab 10 mg",
+    "Lipitor FC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ATORVASTATIN CALCIUM 10 MG"
+  },
+  {
+   "names": [
+    "Atorvastatin FC * tab 20 mg",
+    "Lipitor FC * tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ATORVASTATIN (CALCIUM) 20 MG"
+  },
+  {
+   "names": [
+    "ATORVASTATIN FC * TAB 40 MG",
+    "LIPITOR FC * TAB 40 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ATORVASTATIN CALCIUM 40 MG"
+  },
+  {
+   "names": [
+    "Aubagio FC * tab 14 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Teriflunomide 14 MG"
+  },
+  {
+   "names": [
+    "Augtyro cap 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "REPOTRECTINIB 40 MG"
+  },
+  {
+   "names": [
+    "Avelox FC * tab 400 mg",
+    "Moxifloxacin \"Bayer\"FC*tab 400mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MOXIFLOXACIN HYDROCHLORIDE 400 MG"
+  },
+  {
+   "names": [
+    "Ayvakit FC tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AVAPRITINIB 100 MG"
+  },
+  {
+   "names": [
+    "Azacitidine \"Ger\"for##*inj 100mg",
+    "Vidaza \"Ger\" for ##* inj 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AZACITIDINE 100 MG"
+  },
+  {
+   "names": [
+    "Azacitidine FC # tab 300 mg",
+    "Onureg FC # tab 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AZACITIDINE 300 MG"
+  },
+  {
+   "names": [
+    "Azathioprine (Imuran)#* tab 50mg",
+    "Imuran #* tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AZATHIOPRINE 50 MG"
+  },
+  {
+   "names": [
+    "Azithromycin * tab 250 mg",
+    "Zithromax * tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AZITHROMYCIN 250 MG"
+  },
+  {
+   "names": [
+    "Bacide tab 400 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PIPEMIDIC ACID (TRIHYDRATE) 400 MG"
+  },
+  {
+   "names": [
+    "Baclofen * tab 10 mg \"TW\"",
+    "Baclon * tab 10 mg \"TW\""
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BACLOFEN 10 MG"
+  },
+  {
+   "names": [
+    "Baclofen * tab 5 mg",
+    "Befon * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BACLOFEN 5 MG"
+  },
+  {
+   "names": [
+    "BARACLUDE * TAB 1 MG",
+    "ENTECAVIR * TAB 1 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ENTECAVIR 1 MG"
+  },
+  {
+   "names": [
+    "Benadryl cap 50 mg",
+    "Benamine cap 50 mg VPP",
+    "Diphenhydramine cap 50 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DIPHENHYDRAMINE HCL 50 MG"
+  },
+  {
+   "names": [
+    "Bendamustine HCl ## inj 100 mg",
+    "Innomustine ## inj 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BENDAMUSTINE HYDROCHLORIDE 100 MG"
+  },
+  {
+   "names": [
+    "Benidipine HCl FC tab 4 mg",
+    "Coniel FC tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BENIDIPINE HYDROCHLORIDE 4 MG"
+  },
+  {
+   "names": [
+    "Beniel FC tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BENIDIPINE HYDROCHLORIDE 4 MG"
+  },
+  {
+   "names": [
+    "Benzbromarone (EurICON)*tab 50mg",
+    "EURICON * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BENZBROMARONE 50 MG"
+  },
+  {
+   "names": [
+    "Benzbromarone (Nogout)*tab 100mg",
+    "Nogout * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BENZBROMARONE 100 MG"
+  },
+  {
+   "names": [
+    "Benzoflex \"VPC\" tab 250 mg",
+    "Chlorzoxazone \"VPC\" tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CHLORZOXAZONE 250 MG"
+  },
+  {
+   "names": [
+    "Benzonatate soft cap 100 mg",
+    "Zcough soft cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BENZONATATE 100 MG"
+  },
+  {
+   "names": [
+    "Besponsa for ## inj 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "INOTUZUMAB OZOGAMICIN 1 MG"
+  },
+  {
+   "names": [
+    "Betahistine tab 12 mg",
+    "Merislon tab 12 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BETAHISTINE MESYLATE 12 MG"
+  },
+  {
+   "names": [
+    "Bethanechol \"Y.Y.\" * tab 25 mg",
+    "Wecoli * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BETHANECHOL CHLORIDE 25 MG"
+  },
+  {
+   "names": [
+    "Bicalutamide tab 50 mg",
+    "Casodex tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BICALUTAMIDE 50 MG"
+  },
+  {
+   "names": [
+    "Biperiden (Bipiden) * tab 2 mg",
+    "Bipiden * tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BIPERIDEN HCL 2 MG"
+  },
+  {
+   "names": [
+    "Bisoprolol FC * tab 1.25 mg",
+    "Concor FC * tab 1.25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BISOPROLOL FUMARATE 1.25 MG"
+  },
+  {
+   "names": [
+    "BISOPROLOL FC * TAB 5 MG",
+    "CONCOR FC * TAB 5 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BISOPROLOL 5 MG"
+  },
+  {
+   "names": [
+    "Bleocin for ## inj 15 mg",
+    "Bleomycin for ## inj 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BLEOMYCIN HCL 15 MG"
+  },
+  {
+   "names": [
+    "Blopress tab 8 mg",
+    "Candesartan cilexetil tab 8 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CANDESARTAN CILEXETIL 8 MG"
+  },
+  {
+   "names": [
+    "Bolenic for soln for*inj 4mg,5ml",
+    "Zoledronic acid for*inj 4mg, 5ml"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZOLEDRONIC ACID 4 MG"
+  },
+  {
+   "names": [
+    "Bortezomib \"Francfor##*inj 3.5mg",
+    "Velcade \"France\" for##*inj 3.5mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BORTEZOMIB 3.5 MG"
+  },
+  {
+   "names": [
+    "Bortezomib \"Ital\"for##*inj 3.5mg",
+    "Velcade \"Italy\" for ##*inj 3.5mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BORTEZOMIB 3.5 MG"
+  },
+  {
+   "names": [
+    "Braftovi hard cap 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ENCORAFENIB 75 MG"
+  },
+  {
+   "names": [
+    "Brilinta FC tab 90 mg",
+    "Ticagrelor FC tab 90 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TICAGRELOR 90 MG"
+  },
+  {
+   "names": [
+    "Brintellix FC tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Vortioxetine hydrobromide 10 MG"
+  },
+  {
+   "names": [
+    "Briviact FC tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BRIVARACETAM 100 MG"
+  },
+  {
+   "names": [
+    "Bromazepam \"Italy\" ^* tab 1.5 mg",
+    "Lexotan \"Italy\" ^* tab 1.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BROMAZEPAM 1.5 MG"
+  },
+  {
+   "names": [
+    "Bromocriptine \"Codal\" *tab 2.5mg",
+    "Syntocriptine * tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BROMOCRIPTINE (MESYLATE) 2.5 MG"
+  },
+  {
+   "names": [
+    "Brukinsa cap 80 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZANUBRUTINIB 80 MG"
+  },
+  {
+   "names": [
+    "Bupropion \"Roya\" SR FC*tab 150mg",
+    "Buprotrin SR FC * tab 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BUPROPION HYDROCHLORIDE 150 MG"
+  },
+  {
+   "names": [
+    "Bupropion \"SMK\" SR FC tab 150 mg",
+    "Buprotrin \"SMK\" SR FC *tab 150mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BUPROPION HYDROCHLORIDE 150 MG"
+  },
+  {
+   "names": [
+    "Buscopan \"Italy\" SC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BUTYLSCOPOLAMINE BROMIDE (=HYOSCINE BUTYLBROMIDE) 10 MG"
+  },
+  {
+   "names": [
+    "Cabometyx FC * tab 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CABOZANTINIB (S)-MALATE 60 MG"
+  },
+  {
+   "names": [
+    "Cabudan tab 25 mg",
+    "Captopril \"U.L.\" tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CAPTOPRIL 25 MG"
+  },
+  {
+   "names": [
+    "Calowlin *tab 667mg (Cal.acetate"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CALCIUM ACETATE 667 MG"
+  },
+  {
+   "names": [
+    "Calquence cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACALABRUTINIB 100 MG"
+  },
+  {
+   "names": [
+    "Calquence FC * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACALABRUTINIB 100 MG"
+  },
+  {
+   "names": [
+    "Camzyos \"Free\" * cap 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MAVACAMTEN 2.5 MG"
+  },
+  {
+   "names": [
+    "Camzyos * cap 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MAVACAMTEN 10 MG"
+  },
+  {
+   "names": [
+    "Camzyos * cap 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MAVACAMTEN 15 MG"
+  },
+  {
+   "names": [
+    "Camzyos * cap 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MAVACAMTEN 2.5 MG"
+  },
+  {
+   "names": [
+    "Canagliflozin # tab 100 mg",
+    "Canaglu # tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CANAGLIFLOZIN HYDRATE 100 MG"
+  },
+  {
+   "names": [
+    "Capecitabine tab 500 mg",
+    "Xeloda tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CAPECITABINE 500 MG"
+  },
+  {
+   "names": [
+    "Caphos * tab 667 mg (Cal.acetate"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CALCIUM ACETATE 667 MG"
+  },
+  {
+   "names": [
+    "Captopril \"S.T.\" tab 25 mg",
+    "Ceporin tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CAPTOPRIL 25 MG"
+  },
+  {
+   "names": [
+    "Carbamazepine \"Yushen\"*tab 200mg",
+    "Tegol * tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARBAMAZEPINE 200 MG"
+  },
+  {
+   "names": [
+    "Carbimazole \"GCPC\" * tab 10 mg",
+    "Neo-thyrostat \"GCPC\" * tab 10 mg",
+    "Newmazole *tab 10mg(Carbimazole)"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARBIMAZOLE 10 MG"
+  },
+  {
+   "names": [
+    "Carbimazole \"Y.S.\" * tab 10 mg",
+    "Carbizo * tab 10mg (Carbimazole)",
+    "Neo-thyrostat \"Y.S.\" * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARBIMAZOLE 10 MG"
+  },
+  {
+   "names": [
+    "Carboplatin \"DKSH\"iv##*inj 150mg",
+    "Paraplatin iv ##* inj 150mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARBOPLATIN 150 MG"
+  },
+  {
+   "names": [
+    "Carboplatin \"Sinphar##*inj 150mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARBOPLATIN 150 MG"
+  },
+  {
+   "names": [
+    "CARDILO * TAB 25 MG",
+    "CARVEDILOL (CARDILO) * TAB 25 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARVEDILOL 25 MG"
+  },
+  {
+   "names": [
+    "Cardol tab 160 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SOTALOL HCL 160 MG"
+  },
+  {
+   "names": [
+    "Cardolol * tab 10 mg VPP",
+    "Inderal * tab 10 mg VPP",
+    "Propranolol * tab 10 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PROPRANOLOL HCL 10 MG"
+  },
+  {
+   "names": [
+    "CARDOLOL * TAB 40 MG VPP",
+    "INDERAL * TAB 40 MG",
+    "PROPRANOLOL * TAB 40 MG VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PROPRANOLOL HCL 40 MG"
+  },
+  {
+   "names": [
+    "CARVEDILOL (DILATREND)*TAB 25 MG",
+    "DILATREND * TAB 25 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARVEDILOL 25 MG"
+  },
+  {
+   "names": [
+    "Carvedilol * tab 6.25 mg",
+    "Dilatrend * tab 6.25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CARVEDILOL 6.25 MG"
+  },
+  {
+   "names": [
+    "Catilon tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OTILONIUM BROMIDE 40 MG"
+  },
+  {
+   "names": [
+    "Cefadroxil cap 500 mg",
+    "Cefadroxil cap 500 mg \"ST\""
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CEFADROXIL 500 MG"
+  },
+  {
+   "names": [
+    "Cefazolin (Veterin) *inj 1000 mg",
+    "Veterin  for * inj 1000 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CEFAZOLIN (SODIUM) 1000 MG"
+  },
+  {
+   "names": [
+    "Cefepime powder for inj 500 mg",
+    "Supecef powder for inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CEFEPIME (AS HYDROCHLORIDE) 500 MG"
+  },
+  {
+   "names": [
+    "Ceficin * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CEFIXIME 100 MG"
+  },
+  {
+   "names": [
+    "Cefixmycin * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CEFIXIME 100 MG"
+  },
+  {
+   "names": [
+    "Ceflour FC tab 250 mg",
+    "Cefuroxime \"Y.S.\" FC tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CEFUROXIME (AXETIL) 250 MG"
+  },
+  {
+   "names": [
+    "Celebrex * cap 200 mg",
+    "Celecoxib * cap 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CELECOXIB 200 MG"
+  },
+  {
+   "names": [
+    "Cellcept * cap 250 mg",
+    "Mycophenolate \"Roche\"* cap 250mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MYCOPHENOLATE MOFETIL 250 MG"
+  },
+  {
+   "names": [
+    "Cephendol * tab 25 mg",
+    "Diphenidol (Cephendol) *tab 25mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DIPHENIDOL HCL 25 MG"
+  },
+  {
+   "names": [
+    "Cexime * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CEFIXIME 100 MG"
+  },
+  {
+   "names": [
+    "Chlorambucil #* tab 2 mg",
+    "Leukeran #* tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CHLORAMBUCIL 2 MG"
+  },
+  {
+   "names": [
+    "Chlorpromazine(Morefine)tab100mg",
+    "Morefine FC tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CHLORPROMAZINE (HCL) 100 MG"
+  },
+  {
+   "names": [
+    "Cibinqo FC tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ABROCITINIB 200 MG"
+  },
+  {
+   "names": [
+    "Cilostazol \"BMB\" * tab 100 mg",
+    "Plestar * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CILOSTAZOL 100 MG"
+  },
+  {
+   "names": [
+    "Cilostazol \"Otsuka\" * tab 50 mg",
+    "Pletaal * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CILOSTAZOL 50 MG"
+  },
+  {
+   "names": [
+    "Ciprofloxacin \"Swiss\" *tab 250mg",
+    "Ciprogen FC * tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CIPROFLOXACIN (HCL) 250 MG"
+  },
+  {
+   "names": [
+    "Citao-S FC * tab 10 mg",
+    "Escitalopram \"U-CHIU\"FC*tab 10mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ESCITALOPRAM (AS OXALATE) 10 MG"
+  },
+  {
+   "names": [
+    "Cladribine # tab 10 mg",
+    "Mavenclad # tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLADRIBINE 10 MG"
+  },
+  {
+   "names": [
+    "Clindamycin \"S.T.\" * cap 150 mg",
+    "Lindacin * cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLINDAMYCIN 150 MG"
+  },
+  {
+   "names": [
+    "Clindamycin \"Synmosa\" *cap 150mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLINDAMYCIN 150 MG"
+  },
+  {
+   "names": [
+    "Clindamycin \"YSP\" * cap 150 mg",
+    "Tidact * cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLINDAMYCIN 150 MG"
+  },
+  {
+   "names": [
+    "Clobazam ^ tab 10 mg",
+    "Frisium ^ tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOBAZAM 10 MG"
+  },
+  {
+   "names": [
+    "Clomiphene \"PEILI\" * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOMIPHENE CITRATE 50 MG"
+  },
+  {
+   "names": [
+    "Clomiphene \"Y.C.\" * cap 50 mg",
+    "Clomiphene citrate \"YC\"*cap 50mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOMIPHENE CITRATE 50 MG"
+  },
+  {
+   "names": [
+    "Clomiphene \"YU SHENG\" *cap 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOMIPHENE CITRATE 50 MG"
+  },
+  {
+   "names": [
+    "Clopidogrel FC tab 75 mg",
+    "Plavix FC tab 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOPIDOGREL 75 MG"
+  },
+  {
+   "names": [
+    "CLOPINE * TAB 100 MG",
+    "CLOZAPINE \"Swiss\" * TAB 100 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOZAPINE 100 MG"
+  },
+  {
+   "names": [
+    "Clopine * tab 25 mg",
+    "Clozapine \"Swiss\" * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOZAPINE 25 MG"
+  },
+  {
+   "names": [
+    "Clozapine \"YU SHENG\"* tab 100 mg",
+    "Uspen * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLOZAPINE 100 MG"
+  },
+  {
+   "names": [
+    "Cluvot inj 250 iu",
+    "Factor XIII conc human inj 250iu"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Human coagulation factor XIII 250 IU"
+  },
+  {
+   "names": [
+    "Codeine phosphate #> tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CODEINE PHOSPHATE 30 MG"
+  },
+  {
+   "names": [
+    "Cofarin #* tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "WARFARIN SODIUM 1 MG"
+  },
+  {
+   "names": [
+    "COFARIN #* tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "WARFARIN SODIUM CLATHRATE 5 MG"
+  },
+  {
+   "names": [
+    "Colian * cap 25 mg",
+    "Doxepin \"Johnson\" * cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOXEPIN (HCL) 25 MG"
+  },
+  {
+   "names": [
+    "Comtan FC tab 200 mg",
+    "Entacapone FC tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ENTACAPONE 200 MG"
+  },
+  {
+   "names": [
+    "Concerta ER >* tab 18 mg",
+    "Methylphenidate ER >* tab 18 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPHENIDATE HCL 18 MG"
+  },
+  {
+   "names": [
+    "CONCERTA ER >* TAB 27 MG",
+    "METHYLPHENIDATE ER >* TAB 27 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPHENIDATE HCL 27 MG"
+  },
+  {
+   "names": [
+    "Conquer \"Y.S.\" * tab 100 mg",
+    "Mebendazole (Conquer) *tab 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEBENDAZOLE 100 MG"
+  },
+  {
+   "names": [
+    "Const-K ER tab 750 mg",
+    "Potassium Chloride ER tab 750 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "POTASSIUM CHLORIDE 750 MG"
+  },
+  {
+   "names": [
+    "Convulex soft * cap 300 mg",
+    "Valproic acid soft * cap 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VALPROIC ACID 300 MG"
+  },
+  {
+   "names": [
+    "Coralan FC tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Ivabradine hydrochloride 5 MG"
+  },
+  {
+   "names": [
+    "Cortisone acetate tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CORTISONE ACETATE 25 MG"
+  },
+  {
+   "names": [
+    "Covorin * inj 100 mg/10 ml",
+    "Folinate cal \"Swiss\" * inj 100mg",
+    "Leucovorin cal \"Swiss\"*inj 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FOLINATE CALCIUM 5H2O 100 MG"
+  },
+  {
+   "names": [
+    "Cowbalin \"Kojar\" * tab 100 mg",
+    "Mebendazole (Cowbalin)*tab 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEBENDAZOLE 100 MG"
+  },
+  {
+   "names": [
+    "Cozaar FC * tab 50 mg",
+    "Losartan FC * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LOSARTAN POTASSIUM 50 MG"
+  },
+  {
+   "names": [
+    "Cravit FC * tab 500 mg",
+    "Levofloxacin FC * tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LEVOFLOXACIN 500 MG"
+  },
+  {
+   "names": [
+    "Cresemba cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ISAVUCONAZONIUM SULFATE 100 MG"
+  },
+  {
+   "names": [
+    "Crestor FC * tab 10 mg",
+    "Rosuvastatin FC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ROSUVASTATIN CALCIUM 10 MG"
+  },
+  {
+   "names": [
+    "Cubicin inj 500 mg",
+    "Daptomycin inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DAPTOMYCIN 500 MG"
+  },
+  {
+   "names": [
+    "Cyclobenzaprine ER FC tab 15 mg",
+    "Flexer ER FC tab 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYCLOBENZAPRINE HCL 15 MG"
+  },
+  {
+   "names": [
+    "Cyclobenzaprine HCl tab 5 mg",
+    "Musgud tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYCLOBENZAPRINE HCL 5 MG"
+  },
+  {
+   "names": [
+    "Cyclophosphamide \"Baxter#tab50mg",
+    "Endoxan SC #* tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYCLOPHOSPHAMIDE 50 MG"
+  },
+  {
+   "names": [
+    "Cyclophosphamide ##inj 500 mg",
+    "Endoxan ## inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYCLOPHOSPHAMIDE 500 MG"
+  },
+  {
+   "names": [
+    "CYCLOSPORINE NEORAL * CAP 100 MG",
+    "SANDIMMUN NEORAL * CAP 100 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYCLOSPORINE 100 MG"
+  },
+  {
+   "names": [
+    "Cyclosporine neoral * cap 25 mg",
+    "Sandimmun neoral * cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYCLOSPORINE 25 MG"
+  },
+  {
+   "names": [
+    "Cymbalta * cap 30 mg",
+    "Duloxetine \"Lilly\" * cap 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DULOXETINE( HYDROCHLORIDE) 30 MG"
+  },
+  {
+   "names": [
+    "Cymevene for iv * inj 500 mg",
+    "Ganciclovir for iv * inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GANCICLOVIR 500 MG"
+  },
+  {
+   "names": [
+    "Cyproh * tab 4 mg \"Kojar\"",
+    "Cyproheptadine \"Kojar\" * tab 4mg",
+    "Periactin \"Kojar\" * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYPROHEPTADINE HCL 4 MG"
+  },
+  {
+   "names": [
+    "Cyproheptadine \"Fu.Y.\" * tab 4mg",
+    "Decamin * tab 4 mg",
+    "Periactin \"Fu.Y.\" * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYPROHEPTADINE HCL 4 MG"
+  },
+  {
+   "names": [
+    "Cyproheptadine \"H.S.\" * tab 4 mg",
+    "Huavine * tab 4 mg",
+    "Periactin \"H.S.\" * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYPROHEPTADINE HCL 4 MG"
+  },
+  {
+   "names": [
+    "Cyproheptadine \"Y.K.\" * tab 4 mg",
+    "Pelion * tab 4 mg",
+    "Periactin \"Y.K.\" * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYPROHEPTADINE HCL 4 MG"
+  },
+  {
+   "names": [
+    "Cyproheptadine \"Yung S.\"*tab 4mg",
+    "Periactin \"Yung Shin\" * tab 4 mg",
+    "Pilian * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYPROHEPTADINE HCL 4 MG"
+  },
+  {
+   "names": [
+    "Cytarabine Pfizer ##*inj 500mg",
+    "Cytosar for ##* inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CYTARABINE 500 MG"
+  },
+  {
+   "names": [
+    "Cytotec tab 200 mcg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MISOPROSTOL 200 MCG"
+  },
+  {
+   "names": [
+    "D.M.P. * tab 10 mg",
+    "Domperidone (D.M.P.) * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOMPERIDONE 10 MG"
+  },
+  {
+   "names": [
+    "Dabigatran etexilate #* cap 75mg",
+    "Pradaxa #* cap 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DABIGATRAN ETEXILATE 75 MG"
+  },
+  {
+   "names": [
+    "Dabigatran etexilate #*cap 110mg",
+    "Pradaxa #* cap 110 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DABIGATRAN ETEXILATE 110 MG"
+  },
+  {
+   "names": [
+    "Dabigatran etexilate #*cap 150mg",
+    "Pradaxa #* cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DABIGATRAN ETEXILATE 150 MG"
+  },
+  {
+   "names": [
+    "Dacarbazine ## inj 200 mg \"DBL\""
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DACARBAZINE 200 MG"
+  },
+  {
+   "names": [
+    "Dalmadorm ^* cap 15 mg",
+    "Flurazepam ^* cap 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLURAZEPAM HCL 15 MG"
+  },
+  {
+   "names": [
+    "Danazol (Ectopal) cap 200 mg",
+    "Ectopal cap 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DANAZOL (=CYCLOMEN) 200 MG"
+  },
+  {
+   "names": [
+    "Dapagliflozin FC # tab 10 mg",
+    "Forxiga FC # tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DAPAGLIFLOZIN 10 MG"
+  },
+  {
+   "names": [
+    "Darolutamide FC * tab 300 mg",
+    "Nubeqa FC * tab 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DAROLUTAMIDE 300 MG"
+  },
+  {
+   "names": [
+    "Dasatinib FC * tab 20 mg",
+    "Sprycel FC * tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DASATINIB 20 MG"
+  },
+  {
+   "names": [
+    "Dasatinib FC * tab 50 mg",
+    "Sprycel FC * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DASATINIB 50 MG"
+  },
+  {
+   "names": [
+    "Daunoblastina ## inj 20 mg",
+    "Daunorubicin ## inj 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DAUNORUBICIN HCL 20 MG"
+  },
+  {
+   "names": [
+    "Deferoxamine mesylate inj 500 mg",
+    "Desferrioxamine mesylateinj500mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DESFERRIOXAMINE MESYLATE (=DESFERAL) 500 MG"
+  },
+  {
+   "names": [
+    "Delcopan SR FC * tab 60 mg",
+    "Dextromethorphan \"JCP\" *tab 60mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEXTROMETHORPHAN HBR 60 MG"
+  },
+  {
+   "names": [
+    "Delibs FC tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PINAVERIUM BROMIDE 50 MG"
+  },
+  {
+   "names": [
+    "Denosin FC * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DESLORATADINE 5 MG"
+  },
+  {
+   "names": [
+    "Depakine gastro-resist*tab 200mg",
+    "Valproate sod gastro-r*tab 200mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VALPROATE SODIUM 200 MG"
+  },
+  {
+   "names": [
+    "Detrusitol FC tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOLTERODINE L-TARTRATE 2 MG"
+  },
+  {
+   "names": [
+    "Detrusitol SR * cap 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOLTERODINE L-TARTRATE 4 MG"
+  },
+  {
+   "names": [
+    "Dexamethasone \"Y.C.\" * tab 4 mg",
+    "Limeson * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEXAMETHASONE 4 MG"
+  },
+  {
+   "names": [
+    "Dexamethasone (Dorison) *tab 4mg",
+    "Dorison * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEXAMETHASONE 4 MG"
+  },
+  {
+   "names": [
+    "Dexilant DR cap 60 mg",
+    "Dexlansoprazole DR cap 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEXLANSOPRAZOLE (TAK-390) 60 MG"
+  },
+  {
+   "names": [
+    "Diacomit hard cap 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "STIRIPENTOL 250 MG"
+  },
+  {
+   "names": [
+    "Diamicron MR #* tab 60 mg",
+    "Gliclazide MR #* tab 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GLICLAZIDE 60 MG"
+  },
+  {
+   "names": [
+    "Diamin #* tab 80 mg",
+    "Gliclazide (Diamin) #* tab 80 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GLICLAZIDE 80 MG"
+  },
+  {
+   "names": [
+    "Dichlotride tab 50 mg",
+    "Hydrochlorothiazide tab 50 mg",
+    "Hydrochlorothiazide tab 50mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDROCHLOROTHIAZIDE 50 MG"
+  },
+  {
+   "names": [
+    "Diclocin * cap 250 mg",
+    "Dicloxacillin \"VPP\" * cap 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DICLOXACILLIN (SODIUM) 250 MG"
+  },
+  {
+   "names": [
+    "Diclofenac (Flamquit) * tab 25mg",
+    "Flamquit FC * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DICLOFENAC 25 MG"
+  },
+  {
+   "names": [
+    "Diclofenac(Meitifen) SR*tab 75mg",
+    "Meitifen SR FC * tab 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DICLOFENAC SODIUM 75 MG"
+  },
+  {
+   "names": [
+    "Dicloxacillin  \"Y.S.\" *cap 250mg",
+    "Ziefmycin * cap 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DICLOXACILLIN (SODIUM) 250 MG"
+  },
+  {
+   "names": [
+    "Dienogest tab 2 mg",
+    "Visanne tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DIENOGEST 2 MG"
+  },
+  {
+   "names": [
+    "Dificid FC tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FIDAXOMICIN 200 MG"
+  },
+  {
+   "names": [
+    "Diflucan * cap 150 mg",
+    "Fluconazole * cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUCONAZOLE 150 MG"
+  },
+  {
+   "names": [
+    "Dilantin tab 100 mg",
+    "Phenytoin sod tab 100mg VPP",
+    "Phenytoin tab 100 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PHENYTOIN 100 MG"
+  },
+  {
+   "names": [
+    "Diltiazem HCl * tab 30 mg",
+    "Herbesser * tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DILTIAZEM (HCL) 30 MG"
+  },
+  {
+   "names": [
+    "Dimaval cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SODIUM-2，3-DIMERCAPTO-1-PROPANE SULFONATE (MONOHYDRAT 100 MG"
+  },
+  {
+   "names": [
+    "Dimersu cap 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DIMERCAPTOSUCCINIC ACID 200 MG"
+  },
+  {
+   "names": [
+    "Diovan * tab 80 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VALSARTAN 80 MG"
+  },
+  {
+   "names": [
+    "Diovan FC * tab 160 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VALSARTAN 160 MG"
+  },
+  {
+   "names": [
+    "Diphenidol \"Standard\"SC*tab 25mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DIPHENIDOL HCL 25 MG"
+  },
+  {
+   "names": [
+    "Diphereline PR * inj 11.25 mg",
+    "Triptorelin PR * inj 11.25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRIPTORELIN PAMOATE 11.25 MG"
+  },
+  {
+   "names": [
+    "Dophilin * tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOXAZOSIN (MESYLATE) 2 MG"
+  },
+  {
+   "names": [
+    "Dormicum FC ^* TAB 7.5 mg",
+    "Midazolam FC ^* TAB 7.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MIDAZOLAM 7.5 MG"
+  },
+  {
+   "names": [
+    "Doxaben XL * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOXAZOSIN (METHANESULFONATE) 4 MG"
+  },
+  {
+   "names": [
+    "Doxycycline \"P.L.\" * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOXYCYCLINE (HCL) 100 MG"
+  },
+  {
+   "names": [
+    "Doxycycline \"Swiss\" * cap 100 mg",
+    "Doxynin * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOXYCYCLINE (HCL) 100 MG"
+  },
+  {
+   "names": [
+    "Doxycycline \"Y.C.\" * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOXYCYCLINE (HCL) 100 MG"
+  },
+  {
+   "names": [
+    "Duloxetine \"Hetero\"* cap 30 mg",
+    "Durotine * cap 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DULOXETINE( HYDROCHLORIDE) 30 MG"
+  },
+  {
+   "names": [
+    "Duphaston \"Abbott\" FC * tab 10mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DYDROGESTERONE 10 MG"
+  },
+  {
+   "names": [
+    "E-Butol FC * tab 400 mg",
+    "Ethambutol \"P.L.\" FC * tab 400mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ETHAMBUTOL HCL 400 MG"
+  },
+  {
+   "names": [
+    "Edarbi tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AZILSARTAN MEDOXOMIL 40 MG"
+  },
+  {
+   "names": [
+    "EFFEXOR XR * CAP 75MG",
+    "VENLAFAXINE XR \"Pfizer\"*CAP 75MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VENLAFAXINE (HCL) 75 MG"
+  },
+  {
+   "names": [
+    "Effexor XR SR * cap 37.5 mg",
+    "Venlafaxine XR SR * cap 37.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VENLAFAXINE (HCL) 37.5 MG"
+  },
+  {
+   "names": [
+    "Efient FC * tab 3.75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "prasugrel hydrochloride 3.75 MG"
+  },
+  {
+   "names": [
+    "EFIENT FC * TAB 5 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "prasugrel hydrochloride 5 MG"
+  },
+  {
+   "names": [
+    "Eligard for soln for *inj 22.5mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LEUPRORELIN ACETATE 22.5 MG"
+  },
+  {
+   "names": [
+    "Emend cap 80 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "APREPITANT 80 MG"
+  },
+  {
+   "names": [
+    "Empliciti for # inj 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ELOTUZUMAB 300 MG"
+  },
+  {
+   "names": [
+    "Enhertu powder for ## inj 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRASTUZUMAB DERUXTECAN 100 MG"
+  },
+  {
+   "names": [
+    "Entrectinib hard cap 200 mg",
+    "Rozlytrek hard cap 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ENTRECTINIB 200 MG"
+  },
+  {
+   "names": [
+    "Entyvio soln for * inj 108 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Vedolizumab 108 MG"
+  },
+  {
+   "names": [
+    "Epram * tab 10 mg",
+    "Escitalopram \"Genovate\"*tab 10mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ESCITALOPRAM (AS OXALATE) 10 MG"
+  },
+  {
+   "names": [
+    "Equfina tab 50 mg",
+    "Safinamide tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SAFINAMIDE 50 MG"
+  },
+  {
+   "names": [
+    "Erlotinib \"Italy\" FC * tab 100mg",
+    "Tarceva \"Italy\" FC * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ERLOTINIB HYDROCHLORIDE 100 MG"
+  },
+  {
+   "names": [
+    "Erlotinib \"Italy\" FC * tab 150mg",
+    "Tarceva \"Italy\" FC * tab 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ERLOTINIB HYDROCHLORIDE 150 MG"
+  },
+  {
+   "names": [
+    "Esomeprazole tab 40 mg",
+    "Nexium tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ESOMEPRAZOLE (MAG. TRIHYDRATE) 40 MG"
+  },
+  {
+   "names": [
+    "ESTRADE TAB 2 MG",
+    "Estradiol valerate tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ESTRADIOL VALERATE 2 MG"
+  },
+  {
+   "names": [
+    "Etoposide \"X\" #* cap 50 mg",
+    "Vepesid \"X\" #* cap 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ETOPOSIDE 50 MG"
+  },
+  {
+   "names": [
+    "Etoposide #* cap 50 mg",
+    "Vepesid #* cap 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ETOPOSIDE 50 MG"
+  },
+  {
+   "names": [
+    "Euclidan tab 50 mg",
+    "Nicametate tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NICAMETATE CITRATE 50 MG"
+  },
+  {
+   "names": [
+    "Eurodin ^ tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ESTAZOLAM 2 MG"
+  },
+  {
+   "names": [
+    "Evista FC tab 60 mg",
+    "Raloxifene FC tab 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RALOXIFENE HYDROCHLORIDE 60 MG"
+  },
+  {
+   "names": [
+    "Evoxac \"TW\" * cap 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Cevimeline HCl 30 MG"
+  },
+  {
+   "names": [
+    "Evrysdi FC * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RISDIPLAM 5 MG"
+  },
+  {
+   "names": [
+    "Exelon * cap 3 mg",
+    "Rivastigmine * cap 3 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIVASTIGMINE (HYDROGEN TARTRATE) 3 MG"
+  },
+  {
+   "names": [
+    "Exelon * cap 4.5 mg",
+    "Rivastigmine * cap 4.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIVASTIGMINE (HYDROGEN TARTRATE) 4.5 MG"
+  },
+  {
+   "names": [
+    "Exelon * cap 6 mg",
+    "Rivastigmine * cap 6 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIVASTIGMINE (HYDROGEN TARTRATE) 6 MG"
+  },
+  {
+   "names": [
+    "Exjade dispersible * tab 125 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEFERASIROX 125 MG"
+  },
+  {
+   "names": [
+    "Exmem FC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEMANTINE HYDROCHLORIDE 10 MG"
+  },
+  {
+   "names": [
+    "Ezetimibe * tab 10 mg",
+    "Ezetrol * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EZETIMIBE 10 MG"
+  },
+  {
+   "names": [
+    "Fallep >* tab 2 mg",
+    "Flunitrazepam (Fallep) >*tab 2mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUNITRAZEPAM 2 MG"
+  },
+  {
+   "names": [
+    "Famo FC * tab 20 mg",
+    "Famotidine \"S.T.\" *tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FAMOTIDINE 20 MG"
+  },
+  {
+   "names": [
+    "Famotidine \"VPP\" FC * tab 20 mg",
+    "Supertidine FC * tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FAMOTIDINE 20 MG"
+  },
+  {
+   "names": [
+    "Feburic FC tab 80 mg",
+    "Febuxostat FC tab 80 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Febuxostat 80 MG"
+  },
+  {
+   "names": [
+    "Felodipine (Plendil) ER *tab 5mg",
+    "Plendil ER * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FELODIPINE 5 MG"
+  },
+  {
+   "names": [
+    "Femara FC tab 2.5 mg",
+    "Letrozole FC tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LETROZOLE 2.5 MG"
+  },
+  {
+   "names": [
+    "Fentanyl buccal #> tab 100 mcg",
+    "Fentora buccal #> tab 100 mcg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FENTANYL CITRATE 100 MCG"
+  },
+  {
+   "names": [
+    "Finasteride (Proleak) * tab 5 mg",
+    "Proleak * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FINASTERIDE 5 MG"
+  },
+  {
+   "names": [
+    "Finasteride (Proscar) * tab 5 mg",
+    "Proscar * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FINASTERIDE 5 MG"
+  },
+  {
+   "names": [
+    "Firmagon powder for * inj 120 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Degarelix 120 MG"
+  },
+  {
+   "names": [
+    "Firmagon powder for * inj 80 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Degarelix 80 MG"
+  },
+  {
+   "names": [
+    "Fludara iv ## inj 50 mg",
+    "Fludarabine phosphate ##inj 50mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUDARABINE PHOSPHATE 50 MG"
+  },
+  {
+   "names": [
+    "Flunarizine (Suzin) *cap 5 mg",
+    "Suzin * cap 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUNARIZINE (HCL) 5 MG"
+  },
+  {
+   "names": [
+    "Flunepan >* tab 2 mg",
+    "Flunitrazepam (Flunepan>*tab 2mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUNITRAZEPAM 2 MG"
+  },
+  {
+   "names": [
+    "Flunitrazepam (Modipanol>*tab2mg",
+    "Modipanol >* tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUNITRAZEPAM 2 MG"
+  },
+  {
+   "names": [
+    "Fluoxetine \"CYH\" * cap 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUOXETINE (HCL) 20 MG"
+  },
+  {
+   "names": [
+    "Fluoxetine \"U.L.\" * cap 20 mg",
+    "Juxac * cap 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUOXETINE (HCL) 20 MG"
+  },
+  {
+   "names": [
+    "FluSine tab 500 mg",
+    "Flucytosine tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUCYTOSINE 500 MG"
+  },
+  {
+   "names": [
+    "Flutamide (Fuprostate)*tab 250mg",
+    "Fuprostate * tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLUTAMIDE 250 MG"
+  },
+  {
+   "names": [
+    "Fruzaqla cap 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FRUQUINTINIB 1 MG"
+  },
+  {
+   "names": [
+    "Fuliclin * tab 250 mg",
+    "Metronidazole \"Y.K.\"* tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METRONIDAZOLE 250 MG"
+  },
+  {
+   "names": [
+    "Fungitech * tab 250 mg",
+    "Terbinafine \"SINPHAR\"* tab 250mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TERBINAFINE 250 MG"
+  },
+  {
+   "names": [
+    "Furosemide tab 40 mg VPP",
+    "Lasix tab 40 mg",
+    "Rosis tab 40 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FUROSEMIDE 40 MG"
+  },
+  {
+   "names": [
+    "Fycompa FC tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Perampanel 2 MG"
+  },
+  {
+   "names": [
+    "Galvus # tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VILDAGLIPTIN 50 MG"
+  },
+  {
+   "names": [
+    "Gefitinib tab 250 mg",
+    "Iressa FC tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GEFITINIB 250 MG"
+  },
+  {
+   "names": [
+    "Gemcitabine \"TTY\" ## inj 1000 mg",
+    "Gemmis ## inj 1000 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GEMCITABINE HYDROCHLORIDE 1000 MG"
+  },
+  {
+   "names": [
+    "Gemcitabine \"TTY\" ## inj 200 mg",
+    "Gemmis ## inj 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GEMCITABINE HYDROCHLORIDE 200 MG"
+  },
+  {
+   "names": [
+    "Genclone FC ^ * tab 7.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZOPICLONE 7.5 MG"
+  },
+  {
+   "names": [
+    "Genotropin GoQuick * inj 12 mg",
+    "Somatropin GoQuick * inj 12 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SOMATOTROPIN HUMAN 12 MG"
+  },
+  {
+   "names": [
+    "Genuproxin * tab 250 mg \"GCPC\"",
+    "Naproxen (Genuproxin) *tab 250mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NAPROXEN 250 MG"
+  },
+  {
+   "names": [
+    "GEODON * CAP 60 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZIPRASIDONE HYDROCHLORIDE 60 MG"
+  },
+  {
+   "names": [
+    "Geodon cap 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZIPRASIDONE HYDROCHLORIDE 40 MG"
+  },
+  {
+   "names": [
+    "Gestrin * cap 2.5 mg (8's/bx)",
+    "Gestrinone (Gestrin) *cap 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GESTRINONE 2.5 MG"
+  },
+  {
+   "names": [
+    "Giotrif FC * tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AFATINIB DIMALEATE 30 MG"
+  },
+  {
+   "names": [
+    "Giotrif FC * tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AFATINIB DIMALEATE 40 MG"
+  },
+  {
+   "names": [
+    "Glitis #* tab 30 mg",
+    "Pioglitazone \"CCPC\"#* tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PIOGLITAZONE 30 MG"
+  },
+  {
+   "names": [
+    "Glivec FC #* tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "IMATINIB MESYLATE 100 MG"
+  },
+  {
+   "names": [
+    "Glucagen inj 1 mg,1 ml",
+    "Glucagon inj 1 mg,1 ml"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GLUCAGON (HCL) 1 MG"
+  },
+  {
+   "names": [
+    "Glucophage #* tab 500 mg",
+    "Metformin (Glucophage)#tab 500mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METFORMIN HCL 500 MG"
+  },
+  {
+   "names": [
+    "GLUCOPHAGE #* TAB 850 MG",
+    "METFORMIN (GLUCOPHAGE)#TAB 850MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METFORMIN HCL 850 MG"
+  },
+  {
+   "names": [
+    "Glufast # tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MITIGLINIDE CALCIUM HYDRATE 10 MG"
+  },
+  {
+   "names": [
+    "Glypressin # inj 1 mg, 5 ml"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TERLIPRESSIN-ACETATE (=GLYPRESSIN) 1 MG"
+  },
+  {
+   "names": [
+    "Granisetron \"N.K.\" FC * tab 1mg",
+    "Setron FC * tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GRANISETRON (HCL) 1 MG"
+  },
+  {
+   "names": [
+    "Granisetron \"TPOG(Kytril)tab 1mg",
+    "Kytril \"TPOG\" FC * tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GRANISETRON (HCL) 1 MG"
+  },
+  {
+   "names": [
+    "Griseofulvin * tab 250 mg \"Y.C.\""
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GRISEOFULVIN 250 MG"
+  },
+  {
+   "names": [
+    "Haloperidol (Hopan) * tab 5 mg",
+    "Hopan * tab 5 mg \"Kojar\""
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HALOPERIDOL 5 MG"
+  },
+  {
+   "names": [
+    "Hycamtin \"GSK\" ##* inj 4 mg",
+    "Topotecan \"GSK\" ##* inj 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPOTECAN HYDROCHLORIDE 4 MG"
+  },
+  {
+   "names": [
+    "Hycamtin \"Sandoz\"##* inj 4 mg",
+    "Topotecan \"Sandoz\" ##* inj 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPOTECAN HYDROCHLORIDE 4 MG"
+  },
+  {
+   "names": [
+    "Hydrea # cap 500 mg",
+    "Hydroxyurea # cap 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDROXYUREA 500 MG"
+  },
+  {
+   "names": [
+    "Hydrocortisone sod S *inj 100 mg",
+    "Solu-cortef *inj 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDROCORTISONE (SODIUM SUCCINATE) 100 MG"
+  },
+  {
+   "names": [
+    "Hydroxychloroquine *Sanofi 200mg",
+    "Plaquenil * tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDROXYCHLOROQUINE SULFATE 200 MG"
+  },
+  {
+   "names": [
+    "Hydroxyprogesterone \"T*inj 125mg",
+    "Progeston depot \"T*inj 125mg/1ml"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "HYDROXYPROGESTERONE 17-ALPHA- CAPROATE 125 MG"
+  },
+  {
+   "names": [
+    "Ibrance * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PALBOCICLIB 100 MG"
+  },
+  {
+   "names": [
+    "Ibrance * cap 125 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PALBOCICLIB 125 MG"
+  },
+  {
+   "names": [
+    "Iclusig FC tab 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Ponatinib free base 15 MG"
+  },
+  {
+   "names": [
+    "Imbruvica cap 140 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Ibrutinib 140 MG"
+  },
+  {
+   "names": [
+    "Imigran FDT * tab 50 mg",
+    "Sumatriptan FDT * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SUMATRIPTAN (SUCCINATE) 50 MG"
+  },
+  {
+   "names": [
+    "Imipramine SC tab 10 mg",
+    "Tofranil SC tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "IMIPRAMINE HCL 10 MG"
+  },
+  {
+   "names": [
+    "Imolex * cap 2 mg",
+    "Loperamide HCl \"Sinphar\"*cap 2mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LOPERAMIDE 2 MG"
+  },
+  {
+   "names": [
+    "Imovane ^* tab 7.5  mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZOPICLONE 7.5 MG"
+  },
+  {
+   "names": [
+    "Indalgin cap 25 mg",
+    "Indomethacin \"VPP\" cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "INDOMETHACIN 25 MG"
+  },
+  {
+   "names": [
+    "Indapamide SR tab 1.5 mg",
+    "Natrilix SR FC tab 1.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "INDAPAMIDE 1.5 MG"
+  },
+  {
+   "names": [
+    "Indomethacin \"Kojar\" * cap 25 mg",
+    "Tenton * cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "INDOMETHACIN 25 MG"
+  },
+  {
+   "names": [
+    "Indomethacin \"Standard\" cap 25mg",
+    "Indoy cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "INDOMETHACIN 25 MG"
+  },
+  {
+   "names": [
+    "Inlyta FC * tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AXITINIB 1 MG"
+  },
+  {
+   "names": [
+    "INLYTA FC * TAB 5 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AXITINIB 5 MG"
+  },
+  {
+   "names": [
+    "Inovelon FC tab 200mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Rufinamide 200 MG"
+  },
+  {
+   "names": [
+    "Inrebic cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FEDRATINIB DIHYDROCHLORIDE MONOHYDRATE 100 MG"
+  },
+  {
+   "names": [
+    "Inspra FC tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EPLERENONE 50 MG"
+  },
+  {
+   "names": [
+    "Invega ER * tab 3 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PALIPERIDONE 3 MG"
+  },
+  {
+   "names": [
+    "Invega ER * tab 9 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PALIPERIDONE 9 MG"
+  },
+  {
+   "names": [
+    "Isoniazid \"Johnson\" * tab 100 mg",
+    "Isoniazide \"Johnson\" * tab 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ISONIAZID 100 MG"
+  },
+  {
+   "names": [
+    "Isoptin SR FC * tab 240 mg",
+    "Verapamil SR FC * tab 240 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VERAPAMIL HCL 240 MG"
+  },
+  {
+   "names": [
+    "Isotretinoin  cap 20 mg",
+    "Roaccutane cap 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ISOTRETINOIN 20 MG"
+  },
+  {
+   "names": [
+    "Itraconazole cap 100 mg",
+    "Sporanox cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ITRACONAZOLE 100 MG"
+  },
+  {
+   "names": [
+    "Ixempra for ## inj 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "IXABEPILONE 15 MG"
+  },
+  {
+   "names": [
+    "Jadenu FC * tab 360 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEFERASIROX 360 MG"
+  },
+  {
+   "names": [
+    "JAKAVI * TAB 15 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RUXOLITINIB 15 MG"
+  },
+  {
+   "names": [
+    "Jakavi * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RUXOLITINIB 5 MG"
+  },
+  {
+   "names": [
+    "Januvia FC # tab 100 mg",
+    "Sitagliptin FC # tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SITAGLIPTIN (AS MONOHYDRATE PHOSPHATE SALT) 100 MG"
+  },
+  {
+   "names": [
+    "JARDIANCE FC # TAB 25 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Empagliflozin 25 MG"
+  },
+  {
+   "names": [
+    "Jardiance FC #* tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Empagliflozin 10 MG"
+  },
+  {
+   "names": [
+    "Jinarc * tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "tolvaptan 30 MG"
+  },
+  {
+   "names": [
+    "Jinarc * tab 90 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "tolvaptan 90 MG"
+  },
+  {
+   "names": [
+    "Kelfer * cap 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEFERIPRONE 500 MG"
+  },
+  {
+   "names": [
+    "Keppra FC TAB 500 mg",
+    "Levetiracetam FC TAB 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LEVETIRACETAM 500 MG"
+  },
+  {
+   "names": [
+    "Klaricid * tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLARITHROMYCIN 500 MG"
+  },
+  {
+   "names": [
+    "Koselugo cap 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SELUMETINIB HYD-SULFATE (SELUMETINIB SULFATE) 10 MG"
+  },
+  {
+   "names": [
+    "Kuvan soluble * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Sapropterin【(6R)-L-erythro-tetrahydrobiopterin】dihy 100 MG"
+  },
+  {
+   "names": [
+    "Kyprolis for ## inj 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Carfilzomib 30 MG"
+  },
+  {
+   "names": [
+    "Lacosamide FC tab 100mg",
+    "Vimpat FC tab 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LACOSAMIDE 100 MG"
+  },
+  {
+   "names": [
+    "Laidec FC * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RILUZOLE 50 MG"
+  },
+  {
+   "names": [
+    "LAMICTAL * TAB 100 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LAMOTRIGINE 100 MG"
+  },
+  {
+   "names": [
+    "Lamictal * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LAMOTRIGINE 50 MG"
+  },
+  {
+   "names": [
+    "Lamictal CHEWABLE * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LAMOTRIGINE 5 MG"
+  },
+  {
+   "names": [
+    "Lansoprazole OD tab 30 mg",
+    "Takepron OD tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LANSOPRAZOLE 30 MG"
+  },
+  {
+   "names": [
+    "Latuda tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LURASIDONE HCL 40 MG"
+  },
+  {
+   "names": [
+    "LENVIMA * CAP 10 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Lenvatinib mesilate 10 MG"
+  },
+  {
+   "names": [
+    "Lenvima * cap 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Lenvatinib mesilate 4 MG"
+  },
+  {
+   "names": [
+    "Lercanidipine FC tab 10 mg",
+    "Zanidip FC tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LERCANIDIPINE 10 MG"
+  },
+  {
+   "names": [
+    "Lesiton * cap 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DIHYDROERGOTAMINE METHANESULPHONATE 5 MG"
+  },
+  {
+   "names": [
+    "Leuplin depot 1M SC * inj 3.75mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LEUPRORELIN ACETATE 3.75 MG"
+  },
+  {
+   "names": [
+    "LEUPLIN Depot 3M SC *inj 11.25mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LEUPRORELIN ACETATE 11.25 MG"
+  },
+  {
+   "names": [
+    "Levocetirizine FC tab 5 mg",
+    "Xyzal FC tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LEVOCETIRIZINE DIHYDROCHLORIDE 5 MG"
+  },
+  {
+   "names": [
+    "Licodin FC * tab 100 mg",
+    "Ticlopidine FC * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TICLOPIDINE HCL 100 MG"
+  },
+  {
+   "names": [
+    "LICODIN FC * TAB 250 MG",
+    "TICLOPIDINE FC * TAB 250 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TICLOPIDINE HCL 250 MG"
+  },
+  {
+   "names": [
+    "Lidin * tab 300 mg \"UL\"",
+    "Lithium carbonate \"UL\"*tab 300mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LITHIUM CARBONATE 300 MG"
+  },
+  {
+   "names": [
+    "Ligilin * cap 300 mg",
+    "Lithium carbonate \"Sw *cap 300mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LITHIUM CARBONATE 300 MG"
+  },
+  {
+   "names": [
+    "Lilitin * tab 300 mg \"LITA\"",
+    "Lithium carbonate \"LI *tab 300mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LITHIUM CARBONATE 300 MG"
+  },
+  {
+   "names": [
+    "Linagliptin FC # tab 5 mg",
+    "Trajenta FC # tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LINAGLIPTIN 5 MG"
+  },
+  {
+   "names": [
+    "Linezolid \"Pfizer\" * tab 600 mg",
+    "Zyvox * tab 600 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LINEZOLID 600 MG"
+  },
+  {
+   "names": [
+    "Linton FC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BUTYLSCOPOLAMINE BROMIDE (=HYOSCINE BUTYLBROMIDE) 10 MG"
+  },
+  {
+   "names": [
+    "Livalo FC * tab 2 mg",
+    "Pitavastatin FC * tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PITAVASTATIN CALCIUM 2 MG"
+  },
+  {
+   "names": [
+    "Livtencity FC tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MARIBAVIR 200 MG"
+  },
+  {
+   "names": [
+    "Lixiana FC #* tab 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EDOXABAN 15 MG"
+  },
+  {
+   "names": [
+    "Lixiana FC #* tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EDOXABAN 30 MG"
+  },
+  {
+   "names": [
+    "LIXIANA FC #* tab 60 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EDOXABAN 60 MG"
+  },
+  {
+   "names": [
+    "Lixiana OD #* tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EDOXABAN 30 MG"
+  },
+  {
+   "names": [
+    "Loperamide \"Chen Ta\" * cap 2 mg",
+    "Loperamide HCl \"Chen Ta\"*cap 2mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LOPERAMIDE 2 MG"
+  },
+  {
+   "names": [
+    "Lorviqua FC tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Lorlatinib 25 MG"
+  },
+  {
+   "names": [
+    "Lundbeck Brintellix FC *tab 10mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Vortioxetine hydrobromide 10 MG"
+  },
+  {
+   "names": [
+    "Lynparza FC tab 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OLAPARIB 150 MG"
+  },
+  {
+   "names": [
+    "Lyrica hard cap 75 mg",
+    "Pregabalin hard cap 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PREGABALIN 75 MG"
+  },
+  {
+   "names": [
+    "Lysodren # tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MITOTANE 500 MG"
+  },
+  {
+   "names": [
+    "MACITENTAN (CM) FC * tab 10 mg",
+    "OPSUMIT (CM) FC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MACITENTAN 10 MG"
+  },
+  {
+   "names": [
+    "Macitentan FC * tab 10 mg",
+    "Opsumit FC * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MACITENTAN 10 MG"
+  },
+  {
+   "names": [
+    "Mag. oxide tab 250 mg VPP",
+    "Magnesium oxide tab 250 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MAGNESIUM OXIDE 250 MG"
+  },
+  {
+   "names": [
+    "Meclizine (Semper) * tab 25mg",
+    "Semper * tab 25 mg \"VPP\""
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MECLIZINE HCL 25 MG"
+  },
+  {
+   "names": [
+    "Meclizine HCl \"F.Y.\" * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MECLIZINE HCL 25 MG"
+  },
+  {
+   "names": [
+    "Meclizine HCl \"Johnson\"*tab 25mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MECLIZINE HCL 25 MG"
+  },
+  {
+   "names": [
+    "Mecobalamin * cap 500 mcg",
+    "Methycobal * cap 500 mcg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MECOBALAMIN 500 MCG"
+  },
+  {
+   "names": [
+    "MeDAson for * inj 125 mg",
+    "Methylprednisolone \"NK*inj 125mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPREDNISOLONE 125 MG"
+  },
+  {
+   "names": [
+    "Megejohn * tab 160 mg",
+    "Megestrol (Megejohn) *tab 160 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEGESTROL ACETATE 160 MG"
+  },
+  {
+   "names": [
+    "Mekinist FC tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Trametinib Dimethyl Sulfoxide 2 MG"
+  },
+  {
+   "names": [
+    "Meletin * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEXILETINE HCL 100 MG"
+  },
+  {
+   "names": [
+    "Mepem iv for inj 250 mg",
+    "Meropenem iv for inj 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEROPENEM HYDRATE 250 MG"
+  },
+  {
+   "names": [
+    "Meperidine #> tab 50 mg",
+    "Pethidine #> tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEPERIDINE HCL 50 MG"
+  },
+  {
+   "names": [
+    "Mepolizumab powder for inj 100mg",
+    "Nucala powder for inj 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "mepolizumab 100 MG"
+  },
+  {
+   "names": [
+    "Mepolizumab soln for inj 100 mg",
+    "Nucala soln for inj 100 mg/1 ml"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "mepolizumab 100 MG"
+  },
+  {
+   "names": [
+    "Meptin-mini * tab 25 mcg",
+    "Procaterol * tab 25 mcg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PROCATEROL HYDROCHLORIDE HEMIHYDRATE 25 MCG"
+  },
+  {
+   "names": [
+    "Mercaptopurine \"Korea\"#*tab 50mg",
+    "Purinetone #* tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MERCAPTOPURINE 50 MG"
+  },
+  {
+   "names": [
+    "Mercaptopurine \"Sterim#*tab 50mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MERCAPTOPURINE 50 MG"
+  },
+  {
+   "names": [
+    "Mero * cap 100mg",
+    "Minocycline \"Synmosa\" *cap 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MINOCYCLINE (HCL) 100 MG"
+  },
+  {
+   "names": [
+    "MESTINON * tab 60 mg",
+    "Pyridostigmine \"AUPA\" * tab 60mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PYRIDOSTIGMINE BROMIDE 60 MG"
+  },
+  {
+   "names": [
+    "Mesyrel * tab 50 mg",
+    "Trazodone * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRAZODONE HYDROCHLORIDE 50 MG"
+  },
+  {
+   "names": [
+    "MetaCu * cap 300 mg",
+    "Trientine HCl \"TW\" * cap 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRIENTINE HCL 300 MG"
+  },
+  {
+   "names": [
+    "Methotrexate # tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHOTREXATE 2.5 MG"
+  },
+  {
+   "names": [
+    "Methydur SR >* cap 33 mg",
+    "Methylphenidate HCl SR>*cap 33mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPHENIDATE HCL 33 MG"
+  },
+  {
+   "names": [
+    "Methylone * tab 4 mg",
+    "Methylprednisolone \"HS\" *tab 4mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPREDNISOLONE 4 MG"
+  },
+  {
+   "names": [
+    "Methylphenidate \"Spain>*tab 10mg",
+    "Ritalin \"Spain\" >* tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPHENIDATE HCL 10 MG"
+  },
+  {
+   "names": [
+    "Methylprednisolone \"SD\" *tab 4mg",
+    "Metisone * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPREDNISOLONE 4 MG"
+  },
+  {
+   "names": [
+    "Methylprednisolone * inj 500 mg",
+    "Solu-medrol * inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METHYLPREDNISOLONE 500 MG"
+  },
+  {
+   "names": [
+    "Metoclopramide * tab 5 mg",
+    "Primperan * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METOCLOPRAMIDE HCL 5 MG"
+  },
+  {
+   "names": [
+    "Metronidazole \"YU S.\" *tab 250mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "METRONIDAZOLE 250 MG"
+  },
+  {
+   "names": [
+    "Mevalotin protect * tab 40 mg",
+    "Pravastatin (Mevalotin) * 40mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PRAVASTATIN SODIUM 40 MG"
+  },
+  {
+   "names": [
+    "Micardis * tab 40 mg",
+    "Telmisartan * tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TELMISARTAN 40 MG"
+  },
+  {
+   "names": [
+    "MICARDIS * TAB 80 MG",
+    "TELMISARTAN * TAB 80 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TELMISARTAN 80 MG"
+  },
+  {
+   "names": [
+    "Midodrine HCl(Midorine)tab 2.5mg",
+    "Midorine tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MIDODRINE HCL 2.5 MG"
+  },
+  {
+   "names": [
+    "Midostaurin soft cap 25 mg",
+    "Rydapt soft cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MIDOSTAURIN 25 MG"
+  },
+  {
+   "names": [
+    "Minocycline \"S.T.\" * cap 100 mg",
+    "Minoline * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MINOCYCLINE (HCL) 100 MG"
+  },
+  {
+   "names": [
+    "Mirtapine OD * tab 30 mg",
+    "Mirtazapine OD * tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MIRTAZAPINE 30 MG"
+  },
+  {
+   "names": [
+    "Mirtazapine \"CYH\" FC tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MIRTAZAPINE 30 MG"
+  },
+  {
+   "names": [
+    "Mirtazapine \"Weidar\" FC*tab 30mg",
+    "Mirzapine * FC tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MIRTAZAPINE 30 MG"
+  },
+  {
+   "names": [
+    "Mitomycin C ## inj 10 mg",
+    "Mitonco ## inj 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MITOMYCIN C 10 MG"
+  },
+  {
+   "names": [
+    "Mitomycin C ##* inj 10 mg",
+    "Mitonco ##* inj 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MITOMYCIN C 10 MG"
+  },
+  {
+   "names": [
+    "Mixre * cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ATOMOXETINE (HYDROCHLORIDE) 25 MG"
+  },
+  {
+   "names": [
+    "MIXRE * CAP 40 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ATOMOXETINE (HYDROCHLORIDE) 40 MG"
+  },
+  {
+   "names": [
+    "Momelotinib FC * tab 200 mg",
+    "Omjjara FC * tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MOMELOTINIB DIHYDROCHLORIDE MONOHYDRATE 200 MG"
+  },
+  {
+   "names": [
+    "Montelukast \"Or\"chewable*tab 4mg",
+    "Singulair chewable * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MONTELUKAST (SODIUM) 4 MG"
+  },
+  {
+   "names": [
+    "Montelukast \"Sa\"chewable*tab 4mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MONTELUKAST (SODIUM) 4 MG"
+  },
+  {
+   "names": [
+    "Montelukast * tab 10 mg",
+    "Singulair * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MONTELUKAST (SODIUM) 10 MG"
+  },
+  {
+   "names": [
+    "MONTELUKAST CHEWABLE * TAB 5 MG",
+    "SINGULAIR CHEWABLE * TAB 5 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MONTELUKAST (SODIUM) 5 MG"
+  },
+  {
+   "names": [
+    "Mopride FC tab 5 mg",
+    "Mosapride citrate FC tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MOSAPRIDE （CITRATE DIHYDRATE） 5 MG"
+  },
+  {
+   "names": [
+    "Morphine SR FC #>*tab 30mg \"PPCD",
+    "Morphine sulfate SR #>*tab 30mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MORPHINE SULFATE 30 MG"
+  },
+  {
+   "names": [
+    "Morphine sulfate #>* tab 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MORPHINE SULFATE 15 MG"
+  },
+  {
+   "names": [
+    "Muaction SR #^* tab 100 mg",
+    "Tramadol SR(Muaction#^*tab 100mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRAMADOL HCL 100 MG"
+  },
+  {
+   "names": [
+    "Multaq FC tab 400 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DRONEDARONE HYDROCHLORIDE 400 MG"
+  },
+  {
+   "names": [
+    "Mycobutin cap 150 mg",
+    "Rifabutin cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIFABUTIN 150 MG"
+  },
+  {
+   "names": [
+    "Navelbine soft #* cap 20 mg",
+    "Vinorelbine soft #* cap 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VINORELBINE TARTRATE 20 MG"
+  },
+  {
+   "names": [
+    "Navelbine soft #* cap 30 mg",
+    "Vinorelbine soft #* cap 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VINORELBINE TARTRATE 30 MG"
+  },
+  {
+   "names": [
+    "Nebilet tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NEBIVOLOL 5 MG"
+  },
+  {
+   "names": [
+    "Neomycin \"S.H.\" * cap 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NEOMYCIN (SULFATE) 250 MG"
+  },
+  {
+   "names": [
+    "Neotigason cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ACITRETIN 25 MG"
+  },
+  {
+   "names": [
+    "Nesina FC # tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Alogliptin 25 MG"
+  },
+  {
+   "names": [
+    "Neuquinon SC tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "UBIDECARENONE 10 MG"
+  },
+  {
+   "names": [
+    "Neurontin * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GABAPENTIN 100 MG"
+  },
+  {
+   "names": [
+    "Nifedipine \"CYH\" SRFC *tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NIFEDIPINE 30 MG"
+  },
+  {
+   "names": [
+    "Nimodipine tab 30 mg",
+    "Nimotop tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NIMODIPINE 30 MG"
+  },
+  {
+   "names": [
+    "Nolvadex * tab 10 mg",
+    "Tamoxifen (Nolvadex)* tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TAMOXIFEN CITRATE 10 MG"
+  },
+  {
+   "names": [
+    "Noopol FC * tab 1200 mg",
+    "Piracetam \"N.K.\" FC *tab 1200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PIRACETAM 1200 MG"
+  },
+  {
+   "names": [
+    "Novamin tab 5 mg",
+    "Prochlorperazine tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PROCHLORPERAZINE (MALEATE) 5 MG"
+  },
+  {
+   "names": [
+    "Novonorm # tab 1 mg",
+    "Repaglinide # tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "REPAGLINIDE 1 MG"
+  },
+  {
+   "names": [
+    "Ocillina powder for * inj 500 mg",
+    "Oxacillin \"CCPC\" * inj 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OXACILLIN (SODIUM) 500 MG"
+  },
+  {
+   "names": [
+    "Octreotide LAR for * inj 20 mg",
+    "Sandostatin LAR for * inj 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OCTREOTIDE 20 MG"
+  },
+  {
+   "names": [
+    "OCTREOTIDE LAR FOR * INJ 30 MG",
+    "SANDOSTATIN LAR FOR * INJ 30 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OCTREOTIDE 30 MG"
+  },
+  {
+   "names": [
+    "Ofev soft * cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Nintedanib ethanesulfonate 100 MG"
+  },
+  {
+   "names": [
+    "Ofev soft * cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Nintedanib ethanesulfonate 150 MG"
+  },
+  {
+   "names": [
+    "Olmesartan medoxomil * tab 40 mg",
+    "Olmetec FC * tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OLMESARTAN MEDOXOMIL 40 MG"
+  },
+  {
+   "names": [
+    "Olumiant FC * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Baricitinib 4 MG"
+  },
+  {
+   "names": [
+    "Ongentys hard cap 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OPICAPONE 50 MG"
+  },
+  {
+   "names": [
+    "Onsleep ^ cap 10 mg",
+    "Zaleplon ^ cap 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZALEPLON 10 MG"
+  },
+  {
+   "names": [
+    "Oxalip ##* inj 50 mg/10 ml",
+    "Oxaliplatin (Oxalip##*inj 50mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OXALIPLATIN 50 MG"
+  },
+  {
+   "names": [
+    "Oxbu ER * tab 5 mg",
+    "Oxybutynin \"Synmosa\" ER*tab 5mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OXYBUTYNIN CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG"
+  },
+  {
+   "names": [
+    "Oxycodone HCl IR # > * cap 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OXYCODONE HCL 5 MG"
+  },
+  {
+   "names": [
+    "OxyContin CR #>* tab 10 mg",
+    "Oxycodone HCl CR #>* tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OXYCODONE HCL 10 MG"
+  },
+  {
+   "names": [
+    "OxyNorm IR #>* cap 5 mg",
+    "Oxycodone HCl \"UK\" IR #>*cap 5mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OXYCODONE HCL 5 MG"
+  },
+  {
+   "names": [
+    "PADCEV powder for ## inj 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ENFORTUMAB VEDOTIN 30 MG"
+  },
+  {
+   "names": [
+    "Pamorelin powder for *inj 22.5mg",
+    "Triptorelin powder for*inj22.5mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRIPTORELIN PAMOATE 22.5 MG"
+  },
+  {
+   "names": [
+    "Pariet EC tab 20 mg",
+    "Rabeprazole EC tab 20 mg"
+   ],
+   "basis": "verified-product",
+   "ingredientText": "RABEPRAZOLE SODIUM 20 MG",
+   "product": {
+    "licenseId": "02022782",
+    "officialProductUrl": "https://lmspiq.fda.gov.tw/web/DRPIQ/DRPIQ1000Result?licId=02022782",
+    "doseForm": "腸溶膜衣錠",
+    "nhiCodes": [
+     "B022782100",
+     "BC22782100"
+    ]
+   }
+  },
+  {
+   "names": [
+    "Parkryl tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEPRENYL L- HCL (=SELEGILINE HCL) 5 MG"
+  },
+  {
+   "names": [
+    "Paroxetine FC * tab 20 mg",
+    "Setine FC * tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PAROXETINE HYDROCHLORIDE 20 MG"
+  },
+  {
+   "names": [
+    "Pemazyre tab 13.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PEMIGATINIB 13.5 MG"
+  },
+  {
+   "names": [
+    "Pentoxifylline E. SC * tab 100mg",
+    "Throne Enteric SC * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PENTOXIFYLLINE 100 MG"
+  },
+  {
+   "names": [
+    "Phenbuty * tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SODIUM PHENYLBUTRATE 500 MG"
+  },
+  {
+   "names": [
+    "Phenobarbital \"Y.Y.\"^* tab 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PHENOBARBITAL 30 MG"
+  },
+  {
+   "names": [
+    "Picetam FC * tab 1200 mg",
+    "Piracetam \"Stand\" FC *tab 1200mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PIRACETAM 1200 MG"
+  },
+  {
+   "names": [
+    "Pilocarpine HCl FC tab 5 mg",
+    "Salagen FC tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PILOCARPINE HCL 5 MG"
+  },
+  {
+   "names": [
+    "Pipoxolan FC tab 10 mg",
+    "Rowapraxin FC tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PIPOXOLAN HCL 10 MG"
+  },
+  {
+   "names": [
+    "Piqray FC tab 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ALPELISIB 150 MG"
+  },
+  {
+   "names": [
+    "Pirespa tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "pirfenidone 200 MG"
+  },
+  {
+   "names": [
+    "Pitavastatin * tab 4 mg",
+    "Zulitor * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PITAVASTATIN CALCIUM 4 MG"
+  },
+  {
+   "names": [
+    "Polivy ## * inj 30 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "POLATUZUMAB VEDOTIN 30 MG"
+  },
+  {
+   "names": [
+    "Pomalidomide # cap 4 mg",
+    "Pomalyst # cap 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Pomalidomide 4 MG"
+  },
+  {
+   "names": [
+    "Posanol * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "POSACONAZOLE 100 MG"
+  },
+  {
+   "names": [
+    "Prednisolone \"VPC\" * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PREDNISOLONE 5 MG"
+  },
+  {
+   "names": [
+    "Prevymis FC tab 240 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LETERMOVIR 240 MG"
+  },
+  {
+   "names": [
+    "Progesterone soft cap 200 mg",
+    "Utrogestan soft cap 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PROGESTERONE MICRONIZED 200 MG"
+  },
+  {
+   "names": [
+    "PROGRAF * CAP 1 MG",
+    "TACROLIMUS * CAP 1 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TACROLIMUS 1 MG"
+  },
+  {
+   "names": [
+    "PROMOSTAN inj 20 mcg",
+    "Prostaglandin E1 inj 20 mcg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ALPROSTADIL ALPHA-CYCLODEXTRIN CLATHRATE 20 MCG"
+  },
+  {
+   "names": [
+    "Propafenone * tab 150 mg",
+    "Rytmonorm * tab 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PROPAFENONE HYDROCHLORIDE 150 MG"
+  },
+  {
+   "names": [
+    "Propiverine HCl FC tab 15 mg",
+    "Urotrol FC tab 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PROPIVERINE HCL 15 MG"
+  },
+  {
+   "names": [
+    "Provera * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEDROXYPROGESTERONE ACETATE 5 MG"
+  },
+  {
+   "names": [
+    "Provigil \"X\" ^* tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MODAFINIL 200 MG"
+  },
+  {
+   "names": [
+    "Provigil ^* tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MODAFINIL 200 MG"
+  },
+  {
+   "names": [
+    "Pyrazinamide \"P.L.\" * tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PYRAZINAMIDE 500 MG"
+  },
+  {
+   "names": [
+    "Qinlock tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIPRETINIB 50 MG"
+  },
+  {
+   "names": [
+    "Quetiapine \"SWISS\" FC * tab 25mg",
+    "Utapine FC * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "QUETIAPINE FUMARATE 25 MG"
+  },
+  {
+   "names": [
+    "QUETIAPINE \"Union\" FC *TAB 200MG",
+    "UTAPINE FC * TAB 200 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "QUETIAPINE FUMARATE 200 MG"
+  },
+  {
+   "names": [
+    "Quetiapine * tab 25 mg",
+    "Seroquel * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "QUETIAPINE FUMARATE 25 MG"
+  },
+  {
+   "names": [
+    "QUETIAPINE XR ER * TAB 200 MG",
+    "SEROQUEL XR ER * TAB 200 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "QUETIAPINE FUMARATE 200 MG"
+  },
+  {
+   "names": [
+    "Quinidine \"NYSCO*cap 200mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "QUINIDINE SULFATE 200 MG"
+  },
+  {
+   "names": [
+    "Quinidine \"U-LIANG\" * tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "QUINIDINE SULFATE 200 MG"
+  },
+  {
+   "names": [
+    "Rakinson tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RASAGILINE MESYLATE 1 MG"
+  },
+  {
+   "names": [
+    "Rapamune tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SIROLIMUS NANOSYSTEMS DISPERSION 1 MG"
+  },
+  {
+   "names": [
+    "Raxone FC tab 150 mg (180'S)"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "IDEBENONE 150 MG"
+  },
+  {
+   "names": [
+    "Rebif inj 44 mcg 0.5 ml"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "INTERFERON BETA-1A 44 MCG"
+  },
+  {
+   "names": [
+    "Reblozyl powder for inj 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "luspatercept 25 MG"
+  },
+  {
+   "names": [
+    "Repaglinide \"CYH\" # tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "REPAGLINIDE 1 MG"
+  },
+  {
+   "names": [
+    "Requip PD PR * tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ROPINIROLE HYDROCHLORIDE 2 MG"
+  },
+  {
+   "names": [
+    "Revatio FC * tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SILDENAFIL CITRATE 20 MG"
+  },
+  {
+   "names": [
+    "Revlimid # * cap 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LENALIDOMIDE 10 MG"
+  },
+  {
+   "names": [
+    "Revlimid # * cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LENALIDOMIDE 25 MG"
+  },
+  {
+   "names": [
+    "Revolade FC tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ELTROMBOPAG (OLAMINE, MILLED) 25 MG"
+  },
+  {
+   "names": [
+    "Rexulti FC * tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BREXPIPRAZOLE 1 MG"
+  },
+  {
+   "names": [
+    "REXULTI FC * TAB 2 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BREXPIPRAZOLE 2 MG"
+  },
+  {
+   "names": [
+    "Ribarin * cap 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIBAVIRIN 200 MG"
+  },
+  {
+   "names": [
+    "Rifampicin \"Kojar\" * cap 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIFAMPIN (= RIFAMPICIN) (=RIMACTAN) 300 MG"
+  },
+  {
+   "names": [
+    "Rifampicin * cap 300 mg VPP",
+    "Rifampin * cap 300 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIFAMPIN (= RIFAMPICIN) (=RIMACTAN) 300 MG"
+  },
+  {
+   "names": [
+    "Rifampicin * cap 450 mg VPP",
+    "Rifampin * cap 450 mg VPP"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIFAMPIN (= RIFAMPICIN) (=RIMACTAN) 450 MG"
+  },
+  {
+   "names": [
+    "Rilutek * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RILUZOLE 50 MG"
+  },
+  {
+   "names": [
+    "Rinvoq ER * tab 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "UPADACITINIB HEMIHYDRATE 15 MG"
+  },
+  {
+   "names": [
+    "RINVOQ ER * TAB 45 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "UPADACITINIB HEMIHYDRATE 45 MG"
+  },
+  {
+   "names": [
+    "RIPAM ^ * TAB 2 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLONAZEPAM 2 MG"
+  },
+  {
+   "names": [
+    "Risperdal consta for *inj 37.5mg",
+    "Risperidone consta * inj 37.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RISPERIDONE 37.5 MG"
+  },
+  {
+   "names": [
+    "Risperdal FC * tab 1 mg",
+    "Risperidone FC * tab 1 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RISPERIDONE 1 MG"
+  },
+  {
+   "names": [
+    "Rivaroxaban FC #* tab 10 mg",
+    "Xarelto FC #* tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIVAROXABAN 10 MG"
+  },
+  {
+   "names": [
+    "Rivaroxaban FC #* tab 15 mg",
+    "Xarelto FC #* tab 15 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIVAROXABAN 15 MG"
+  },
+  {
+   "names": [
+    "Rivaroxaban FC #* tab 2.5 mg",
+    "Xarelto FC #* tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIVAROXABAN 2.5 MG"
+  },
+  {
+   "names": [
+    "Rivaroxaban FC #* tab 20 mg",
+    "Xarelto FC #* tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIVAROXABAN 20 MG"
+  },
+  {
+   "names": [
+    "RIVOTRIL \"Spain\" ^* TAB 2 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "CLONAZEPAM 2 MG"
+  },
+  {
+   "names": [
+    "Rizatan tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RIZATRIPTAN (BENZOATE) 5 MG"
+  },
+  {
+   "names": [
+    "Sabril tab 500 mg",
+    "Vigabatrin tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VIGABATRIN 500 MG"
+  },
+  {
+   "names": [
+    "Saizen soln for * inj 12 mg",
+    "Somatropin \"Merck\" for *inj 12mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SOMATOTROPIN HUMAN 12 MG"
+  },
+  {
+   "names": [
+    "Salazine EC * tab 500 mg",
+    "Sulfasalazine \"S.T.\" *tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SULFASALAZINE (=SALAZOSULPHAPYRIDINE) 500 MG"
+  },
+  {
+   "names": [
+    "Scemblix FC tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ASCIMINIB HYDROCHLORIDE 40 MG"
+  },
+  {
+   "names": [
+    "Selinexor FC tab 20 mg",
+    "Xpovio FC tab 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SELINEXOR 20 MG"
+  },
+  {
+   "names": [
+    "Semi-nax FC ^* tab 10 mg",
+    "Zolpidem (Semi-nax) FC^*tab 10mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZOLPIDEM TARTRATE 10 MG"
+  },
+  {
+   "names": [
+    "Senokot * tab 7.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SENNOSIDE B 7.5 MG"
+  },
+  {
+   "names": [
+    "Sigmart * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NICORANDIL 5 MG"
+  },
+  {
+   "names": [
+    "Smyraf FC tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PEFICITINIB HYDROBROMIDE 50 MG"
+  },
+  {
+   "names": [
+    "Solifenacin succinate tab 5 mg",
+    "Vesicare FC tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SOLIFENACIN SUCCINATE 5 MG"
+  },
+  {
+   "names": [
+    "Sotyktu FC tab 6 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DEUCRAVACITINIB 6 MG"
+  },
+  {
+   "names": [
+    "Starlix FC # tab 120 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NATEGLINIDE 120 MG"
+  },
+  {
+   "names": [
+    "STILNOX CR ^* TAB 6.25 MG",
+    "ZOLPIDEM (STILNOX)CR^*TAB 6.25MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZOLPIDEM TARTRATE 6.25 MG"
+  },
+  {
+   "names": [
+    "Stilnox FC ^* tab 10 mg",
+    "Zolpidem (Stilnox) FC ^*tab 10mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZOLPIDEM TARTRATE 10 MG"
+  },
+  {
+   "names": [
+    "Stivarga FC tab 40 mg (28's)"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "REGORAFENIB 40 MG"
+  },
+  {
+   "names": [
+    "Stromectol * tab 3 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "IVERMECTIN 3 MG"
+  },
+  {
+   "names": [
+    "Sulpiride \"Yu Sh\" FC * tab 200mg",
+    "Surin * tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SULPIRIDE 200 MG"
+  },
+  {
+   "names": [
+    "Sulpiride (Sunpylon) * tab 50 mg",
+    "Sunpylon * tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SULPIRIDE 50 MG"
+  },
+  {
+   "names": [
+    "Sunitinib * cap 12.5 mg",
+    "Sutent * cap 12.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SUNITINIB MALATE 12.5 MG"
+  },
+  {
+   "names": [
+    "Sylvant powder for  inj 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SILTUXIMAB 100 MG"
+  },
+  {
+   "names": [
+    "Synagis soln for * inj 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Palivizumab 50 MG"
+  },
+  {
+   "names": [
+    "Tafinlar cap 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Dabrafenib Mesylate (Micronized) 75 MG"
+  },
+  {
+   "names": [
+    "Tagrisso FC # tab 80 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OSIMERTINIB 80 MG"
+  },
+  {
+   "names": [
+    "Taigexyn cap 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Nemonoxacin (Malate Hemihydrate) 250 MG"
+  },
+  {
+   "names": [
+    "Tambocor tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "FLECAINIDE ACETATE 100 MG"
+  },
+  {
+   "names": [
+    "Tamiflu \"CDC\" * cap 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OSELTAMIVIR (PHOSPHATE) 75 MG"
+  },
+  {
+   "names": [
+    "Tamiflu \"France\" * cap 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OSELTAMIVIR (PHOSPHATE) 75 MG"
+  },
+  {
+   "names": [
+    "Tamiflu \"Italy\" * cap 75 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OSELTAMIVIR (PHOSPHATE) 75 MG"
+  },
+  {
+   "names": [
+    "Tamos #* cap 100 mg",
+    "Temozolomide \"LOTUS\"#*cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TEMOZOLOMIDE 100 MG"
+  },
+  {
+   "names": [
+    "Tasigna * cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NILOTINIB HYDROCHLORIDE MONOHYDRATE 150 MG"
+  },
+  {
+   "names": [
+    "TASIGNA * CAP 200 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "NILOTINIB HYDROCHLORIDE MONOHYDRATE 200 MG"
+  },
+  {
+   "names": [
+    "Telowsin * tab 2 mg",
+    "Terazosin (Telowsin) * tab 2 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TERAZOSIN (HCL 2H2O) 2 MG"
+  },
+  {
+   "names": [
+    "Temodal #* cap 100 mg",
+    "Temozolomide \"MSD\" #* cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TEMOZOLOMIDE 100 MG"
+  },
+  {
+   "names": [
+    "Temodal #* cap 20 mg",
+    "Temozolomide #* cap 20 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TEMOZOLOMIDE 20 MG"
+  },
+  {
+   "names": [
+    "Tenofovir alafenamide tab 25 mg",
+    "Vemlidy FC tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "tenofovir alafenamide 25 MG"
+  },
+  {
+   "names": [
+    "Tenofovir disoproxil f.tab 300mg",
+    "Viread tab 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TENOFOVIR DISOPROXIL FUMARATE 300 MG"
+  },
+  {
+   "names": [
+    "Terbinafine \"SWISS\" *tab 250 mg",
+    "Terfung * tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TERBINAFINE 250 MG"
+  },
+  {
+   "names": [
+    "Tetracycline  VPC cap 250mg",
+    "Tetracycline cap 250 mg \"VPC\""
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TETRACYCLINE 250 MG"
+  },
+  {
+   "names": [
+    "Thado # cap 50 mg",
+    "Thalidomide # cap 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "THALIDOMIDE 50 MG"
+  },
+  {
+   "names": [
+    "Tivicay FC tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DOLUTEGRAVIR SODIUM 50 MG"
+  },
+  {
+   "names": [
+    "Topamax FC * tab 100 mg",
+    "Topiramate FC * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPIRAMATE 100 MG"
+  },
+  {
+   "names": [
+    "Topamax FC * tab 25 mg",
+    "Topiramate FC * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPIRAMATE 25 MG"
+  },
+  {
+   "names": [
+    "TOPIRAMATE XR ER * cap 100 MG",
+    "TROKENDI XR ER * cap 100 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPIRAMATE 100 MG"
+  },
+  {
+   "names": [
+    "Topiramate XR ER * cap 200 mg",
+    "Trokendi XR ER * cap 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPIRAMATE 200 MG"
+  },
+  {
+   "names": [
+    "Topiramate XR ER * cap 50 mg",
+    "Trokendi XR ER * cap 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPIRAMATE 50 MG"
+  },
+  {
+   "names": [
+    "Topotecan \"BioPro\" ##* inj 4 mg",
+    "Topotecan HCl \"BioPro\"##*inj 4mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TOPOTECAN HYDROCHLORIDE 4 MG"
+  },
+  {
+   "names": [
+    "Tracleer (CHD) FC * tab 125 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "BOSENTAN 125 MG"
+  },
+  {
+   "names": [
+    "Trand * cap 250 mg",
+    "Tranexamic acid \"Stan\"*cap 250mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRANEXAMIC ACID 250 MG"
+  },
+  {
+   "names": [
+    "Tranexamic acid \"DAII\"*cap 250mg",
+    "Transamin * cap 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRANEXAMIC ACID 250 MG"
+  },
+  {
+   "names": [
+    "Tretinoin soft # cap 10 mg",
+    "Vesanoid soft # cap 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRETINOIN 10 MG"
+  },
+  {
+   "names": [
+    "Trientine HCl * cap 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TRIENTINE HCL 300 MG"
+  },
+  {
+   "names": [
+    "Trileptal FC tab 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OXCARBAZEPINE 300 MG"
+  },
+  {
+   "names": [
+    "TRITACE * TAB 10 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RAMIPRIL 10 MG"
+  },
+  {
+   "names": [
+    "Tritace * tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "RAMIPRIL 2.5 MG"
+  },
+  {
+   "names": [
+    "Trodelvy for ## inj 180 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SACITUZUMAB GOVITECAN 180 MG"
+  },
+  {
+   "names": [
+    "Trolovol FC * tab 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PENICILLAMINE D- 300 MG"
+  },
+  {
+   "names": [
+    "Truqap FC tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "capivasertib 200 MG"
+  },
+  {
+   "names": [
+    "Tygacil for inj 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TIGECYCLINE 50 MG"
+  },
+  {
+   "names": [
+    "Tykerb FC tab 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LAPATINIB( DITOSYLATE MONOHYDRATE ) 250 MG"
+  },
+  {
+   "names": [
+    "Uptravi (CM) FC * tab 200 mcg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Selexipag 200 MCG"
+  },
+  {
+   "names": [
+    "Uptravi (CM) FC * tab 600 MCG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Selexipag 600 MCG"
+  },
+  {
+   "names": [
+    "UPTRAVI (CM) FC * TAB 800 MCG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Selexipag 800 MCG"
+  },
+  {
+   "names": [
+    "Uptravi FC * tab 200 mcg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Selexipag 200 MCG"
+  },
+  {
+   "names": [
+    "Uptravi FC * tab 600 MCG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Selexipag 600 MCG"
+  },
+  {
+   "names": [
+    "UPTRAVI FC * TAB 800 MCG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Selexipag 800 MCG"
+  },
+  {
+   "names": [
+    "Urief FC * tab 4 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SILODOSIN 4 MG"
+  },
+  {
+   "names": [
+    "Urief FC * tab 8 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SILODOSIN 8 MG"
+  },
+  {
+   "names": [
+    "Ursodeoxycholic (Ursolic)* 100mg",
+    "Ursolic * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "URSODEOXYCHOLIC ACID 100 MG"
+  },
+  {
+   "names": [
+    "Uwarin #* tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "WARFARIN SODIUM 5 MG"
+  },
+  {
+   "names": [
+    "Vafseo tab 300 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VADADUSTAT 300 MG"
+  },
+  {
+   "names": [
+    "Valaciclovir tab 500 mg",
+    "Valtrex tab 500 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VALACICLOVIR 500 MG"
+  },
+  {
+   "names": [
+    "Valdoxan FC tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AGOMELATINE 25 MG"
+  },
+  {
+   "names": [
+    "Vancomycin cap 125 mg",
+    "Vancover cap 125 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VANCOMYCIN (HCL) 125 MG"
+  },
+  {
+   "names": [
+    "Venclexta FC # tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VENETOCLAX 100 MG"
+  },
+  {
+   "names": [
+    "Verzenio FC * tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ABEMACICLIB 100 MG"
+  },
+  {
+   "names": [
+    "VERZENIO FC * TAB 150 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ABEMACICLIB 150 MG"
+  },
+  {
+   "names": [
+    "Vfend FC * tab 200 mg",
+    "Voriconazole FC * tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VORICONAZOLE 200 MG"
+  },
+  {
+   "names": [
+    "Vfend for inj 200 mg",
+    "Voriconazole for inj 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VORICONAZOLE 200 MG"
+  },
+  {
+   "names": [
+    "Vincristine sulphate ##* inj 1mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "VINCRISTINE SULFATE 1 MG"
+  },
+  {
+   "names": [
+    "Vitrakvi cap 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "LAROTRECTINIB 100 MG"
+  },
+  {
+   "names": [
+    "Volibris FC tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "AMBRISENTAN 10 MG"
+  },
+  {
+   "names": [
+    "Votrient FC tab 200 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PAZOPANIB HYDROCHLORIDE 200 MG"
+  },
+  {
+   "names": [
+    "Votubia * tab 2.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "EVEROLIMUS 2.5 MG"
+  },
+  {
+   "names": [
+    "VOYDEYA \"Free\" * FC tab 100 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DANICOPAN 100 MG"
+  },
+  {
+   "names": [
+    "Voydeya \"Free\" * FC tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "DANICOPAN 50 MG"
+  },
+  {
+   "names": [
+    "Vyndamax soft cap 61 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "TAFAMIDIS 61 MG"
+  },
+  {
+   "names": [
+    "Wakix FC tab 18 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PITOLISANT HYDROCHLORIDE 18 MG"
+  },
+  {
+   "names": [
+    "Wakix FC tab 4.5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "PITOLISANT HYDROCHLORIDE 4.5 MG"
+  },
+  {
+   "names": [
+    "WINREVAIR OD for inj 45 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Sotatercept 45 MG"
+  },
+  {
+   "names": [
+    "Witgen * tab 10 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "MEMANTINE HYDROCHLORIDE 10 MG"
+  },
+  {
+   "names": [
+    "Xalkori cap 250 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "crizotinib 250 MG"
+  },
+  {
+   "names": [
+    "Xeljanz FC * tab 5 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Tofacitinib 5 MG"
+  },
+  {
+   "names": [
+    "XELJANZ XR ER * TAB 11 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Tofacitinib 11 MG"
+  },
+  {
+   "names": [
+    "Xenazine * tab 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Tetrabenazine 25 MG"
+  },
+  {
+   "names": [
+    "Xolair powder for inj 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "OMALIZUMAB 150 MG"
+  },
+  {
+   "names": [
+    "Xospata FC tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GILTERITINIB 40 MG"
+  },
+  {
+   "names": [
+    "Xtandi FC tab 40 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ENZALUTAMIDE 40 MG"
+  },
+  {
+   "names": [
+    "Zalain VAGINAL TAB 500 MG"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SERTACONAZOLE NITRATE 500 MG"
+  },
+  {
+   "names": [
+    "Zelboraf FC tab 240 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Vemurafenib 240 MG"
+  },
+  {
+   "names": [
+    "Zinc acetate * cap 25 mg",
+    "Zinca * cap 25 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZINC (ACETATE DIHYDRATE) 25 MG"
+  },
+  {
+   "names": [
+    "Zoladex depot * inj 3.6 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "GOSERELIN ACEATE 3.6 MG"
+  },
+  {
+   "names": [
+    "Zoloft FC tab 50 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "SERTRALINE(AS HYDROCHLORIDE) 50 MG"
+  },
+  {
+   "names": [
+    "Zonegran FC tab 100 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "ZONISAMIDE 100 MG"
+  },
+  {
+   "names": [
+    "Zykadia # cap 150 mg"
+   ],
+   "basis": "single-candidate-ingredient",
+   "ingredientText": "Ceritinib 150 MG"
+  }
+ ]
+}
