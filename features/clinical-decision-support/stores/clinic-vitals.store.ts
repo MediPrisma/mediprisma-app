@@ -86,6 +86,10 @@ export const CLINIC_VITALS_ENTRY_KEYS = [
   'sodium',
   'NTproBNP',
   'hemoglobin',
+  // A home average the patient brings, typed as one pair beside the asks
+  // (HTN DP-03). It is never the clinic reading and never averaged with it.
+  'homeSystolic',
+  'homeDiastolic',
 ] as const
 
 export type ClinicVitalsEntryKey = (typeof CLINIC_VITALS_ENTRY_KEYS)[number]

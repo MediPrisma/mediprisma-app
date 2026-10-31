@@ -2447,6 +2447,15 @@ export function ClinicalDecisionSupportView({
               onSaveClinicVitals?.({ nyhaClass: value })
             }
           }}
+          // A home average typed beside DP-03 (HTN) is kept with what was
+          // measured in the room, as its own pair, so it comes back as the
+          // homeBloodPressure fact and never as the clinic reading.
+          onMeasure={(id: string, pair: { systolic: number; diastolic: number } | null) => {
+            if (id !== 'home-bp') return
+            onSaveClinicVitals?.({ entries: pair
+              ? { homeSystolic: { value: pair.systolic }, homeDiastolic: { value: pair.diastolic } }
+              : { homeSystolic: null, homeDiastolic: null } })
+          }}
           modules={visitModules}
         />
       </div>

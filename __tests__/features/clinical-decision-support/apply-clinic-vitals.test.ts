@@ -55,6 +55,24 @@ describe('applyClinicVitals', () => {
     expect(next.freshnessContexts?.bodyWeight).toMatchObject({ intervalDays: 30, state: 'current' })
   })
 
+  it('writes a home average as its own fact, never as the clinic reading', () => {
+    const next = applyClinicVitals(profile, buildClinicVitals({
+      entries: { homeSystolic: { value: 146 }, homeDiastolic: { value: 92 } },
+    }, VISIT))
+    expect(next.facts.homeBloodPressure).toEqual({
+      zh: '146/92 mmHg（居家，2026-09-05 門診輸入）',
+      en: '146/92 mmHg (home, 2026-09-05, entered in clinic)',
+      unit: 'mmHg',
+      date: '2026-09-05',
+    })
+    // The clinic reading is the record's, untouched.
+    expect(next.facts.bloodPressure).toBe(profile.facts.bloodPressure)
+    expect(next.freshnessContexts?.homeBloodPressure).toMatchObject({ intervalDays: 90, state: 'current' })
+    // Half a pair is no reading.
+    const half = applyClinicVitals(profile, buildClinicVitals({ entries: { homeSystolic: { value: 146 } } }, VISIT))
+    expect(half.facts.homeBloodPressure).toBeUndefined()
+  })
+
   it('dates each field by its own measurement day, not by the visit', () => {
     // A weight carried in from last month is a month-old weight, and the
     // 30-day window is what says so. Sharing one visit-level date made every

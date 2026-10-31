@@ -34,7 +34,7 @@ import type {
   VisitAsk,
   VisitDecisionModel,
 } from '../../types'
-import { BookAsks, examAsksOf } from './BookAsks'
+import { BookAsks, examAsksOf, isMeasureAnswered, measureAsksOf } from './BookAsks'
 import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type BookHeadToolsPage, type BookMark } from './VisitBookLayout'
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
@@ -81,6 +81,12 @@ export interface VisitDecisionScreenProps {
    */
   onGrade?: (id: string, value: string | null) => void
   /**
+   * Writes a pair typed beside the asks (the pack's `measureAsks`: HTN's home
+   * blood pressure) where the host keeps what was measured in the room;
+   * `null` withdraws it.
+   */
+  onMeasure?: (id: string, pair: { systolic: number; diastolic: number } | null) => void
+  /**
    * The record's values for the HF prognosis models whose formula is not
    * connected (SHFM, GWTG-HF), shown when the heart-failure page's 計算機
    * opens one.
@@ -116,6 +122,7 @@ export function VisitDecisionScreen({
   coronaryPhase,
   onPointAnswer,
   onGrade,
+  onMeasure,
   prognosisEvidence,
   doseRecovery,
 }: VisitDecisionScreenProps) {
@@ -190,7 +197,11 @@ export function VisitDecisionScreen({
   const lvefValue = Number.parseFloat(model.keyValues.find((item) => item.key === 'LVEF')?.value ?? '')
   const lvef = Number.isFinite(lvefValue) ? lvefValue : undefined
   const basisOf = (point: DecisionPointView) => decisionBasis(point, modules, headedKeys, (date) => displayDate(date, now))
-  const unansweredAsks = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value)
+  const measureAsks = measureAsksOf(model)
+  const unansweredAsks = [
+    ...model.asks.filter((ask) => !effectiveAnswer(ask, answers).value),
+    ...measureAsks.filter((ask) => !isMeasureAnswered(ask, answers)),
+  ]
 
   // The page draws the pack's model in place of the older question cards
   // (owner request 2026-09-30: 「原本的 UI 跟問題那些都廢棄了，包含 DP03」):
@@ -216,6 +227,8 @@ export function VisitDecisionScreen({
       {...(answerSources ? { sources: answerSources } : {})}
       examAsks={examAsksOf(model)}
       {...(onGrade ? { onGrade } : {})}
+      measureAsks={measureAsks}
+      {...(onMeasure ? { onMeasure } : {})}
     />
   )
   // A point answered in its classification table (HF DP-01's phenotype).
