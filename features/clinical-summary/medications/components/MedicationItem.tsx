@@ -377,6 +377,7 @@ export function MedicationItem({
     && !((medication.overlapCount ?? 0) > 0)
     && !showStatementChip
     && !sourceLabel
+    && !medication.selfPurchased
   // A row under a visit header has nothing left in its middle column at
   // desktop widths, so from a 720px list it folds onto one line:
   // name | dates + regimen | class chips | status + refills. Below that it
