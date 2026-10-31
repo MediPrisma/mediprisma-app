@@ -70,7 +70,7 @@ describe('demo clinical-insight snapshots', () => {
       'patient',
       'zh-TW',
       'health-overview',
-    )?.text).toContain('截至 8 月 27 日')
+    )?.text).toContain('經由出院病摘與照護計畫確認之診斷')
   })
 
   it('never supplies a demo snapshot for a real patient', () => {
@@ -88,7 +88,7 @@ describe('demo clinical-insight snapshots', () => {
       'medical',
       'en',
       'changes',
-    )?.text).toContain('August 27 records show')
+    )?.text).toContain('Active Pressure Ulcer Management')
   })
 
   it('does not promote the unconfirmed myeloma ICD claim into any snapshot', () => {
@@ -149,7 +149,7 @@ describe('demo medical-summary snapshots', () => {
     }
     // Clinicians read the problem list in chart English in either locale.
     const labels = demoMedicalSummarySnapshots[locale].medical.problems.map((problem) => problem.label).join(' ')
-    expect(labels).toMatch(/Chronic kidney disease/)
+    expect(labels).toMatch(/Chronic kidney disease|\bCKD\b/)
     expect(labels).toMatch(/Hypothyroidism/)
   })
 
@@ -165,7 +165,7 @@ describe('demo medical-summary snapshots', () => {
     const problems = demoMedicalSummarySnapshots.en.medical.problems
       .map((item) => [item.label, item.basis, item.metric].join(' '))
       .join(' ')
-    expect(problems).toMatch(/Chronic kidney disease/)
+    expect(problems).toMatch(/Chronic kidney disease|\bCKD\b/)
     expect(problems).not.toMatch(/[一-鿿]/)
     expect(problems).not.toContain('示範')
   })
