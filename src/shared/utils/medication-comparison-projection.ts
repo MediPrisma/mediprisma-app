@@ -1,6 +1,7 @@
 import type { SourceRecordComparison } from './source-record-comparison'
 import { isVghtpeSource, isMedcloudSource } from './clinical-source-identity'
-import { complementHospitalFromCloud } from './medication-source-complement'
+import { complementHospitalFromCloud, VISIT_CONTEXT_EXTENSION_URLS } from './medication-source-complement'
+import { hospitalMedicationDisplayRecord } from './medication-hospital-display'
 
 type SourceState = { dataOrigin?: string; isInactive: boolean; currentnessUncertain?: boolean }
 
@@ -69,7 +70,27 @@ export function projectHospitalMedicationComparisons<T extends { id: string; _so
 export function complementComparisonRecord<T extends { id: string }>(item: { record: T; sources?: T[]; comparison?: SourceRecordComparison }): T {
   const { record, sources, comparison } = item
   const confirmedSources = (record as any)._sourcePrescriptionRecords as any[] | undefined
-  if (confirmedSources?.length) return complementHospitalFromCloud(record as any, confirmedSources) as T
+  if (confirmedSources?.length) return withDisplayVisitContext(record)
   if (!comparison || comparison.status === 'confirmed' || !sources?.length || !isVghtpeSource(record as any)) return record
   return complementHospitalFromCloud(record as any, sources) as T
+}
+
+/** A confirmed union keeps its clinical facts, but its visit context
+ * (institution, diagnosis, drug class) is the one the list and timeline show:
+ * the hospital order's own, complemented from the cloud copy only where the
+ * hospital order lacks it. The import-time union of both diagnoses is not what
+ * the merged row displays, so AI and CDSS must not read it either. */
+function withDisplayVisitContext<T extends { id: string }>(record: T): T {
+  const display = hospitalMedicationDisplayRecord(record as any) as any
+  if (display === record) return record
+  const canonical = record as any
+  const isContext = (extension: any) => VISIT_CONTEXT_EXTENSION_URLS.includes(extension?.url)
+  const extension = [
+    ...(canonical.extension ?? []).filter((item: any) => !isContext(item)),
+    ...(display.extension ?? []).filter(isContext),
+  ]
+  const next: any = { ...canonical, requester: display.requester, reasonCode: display.reasonCode, category: display.category }
+  if (extension.length || canonical.extension) next.extension = extension
+  for (const field of ['requester', 'reasonCode', 'category']) if (next[field] === undefined) delete next[field]
+  return next as T
 }

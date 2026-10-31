@@ -17,13 +17,14 @@ const PLAC = { system: 'urn:oid:vgh.medication.order', value: 'SYNTHETIC-ORDER-A
 /** The synthetic Aromasin pair: the hospital order records 臺北榮總 only; its
  * MediCloud copy also records 門診, a billing diagnosis, a drug class and ATC3.
  * Confirmed: the same visit, recorded drug code and prescription identifier. */
-function bundle(confirmed: boolean) {
+function bundle(confirmed: boolean, hospitalReason?: any[]) {
   const input: any = JSON.parse(JSON.stringify(fixture))
   const resource = (id: string) => input.entry.find((entry: any) => entry.resource.id === id).resource
   const cloud = resource('synthetic-cloud-order-a')
   cloud.reasonCode = ICD
   cloud.category = CATEGORY
   cloud.extension = [...(cloud.extension ?? []), { url: MEDCLOUD_ATC_LEVEL_3_URL, valueCoding: { code: 'L02B', display: 'HORMONE ANTAGONISTS' } }]
+  if (hospitalReason) resource('synthetic-order-a').reasonCode = hospitalReason
   if (confirmed) {
     // One shared, confirmed visit (no cross-source visit pairing), the same
     // recorded drug code and a shared prescription identifier.
@@ -72,6 +73,24 @@ describe.each([['candidate', false], ['confirmed', true]])('a %s hospital/MediCl
     expect(record.extension.some((extension: any) => extension.url === MEDCLOUD_ATC_LEVEL_3_URL)).toBe(true)
     expect(record.dosageInstruction[0].text).toBe('1 TAB PO QDPC')
   })
+})
+
+it('gives AI/CDSS the diagnosis the merged row shows when both sources record one', () => {
+  const HOSPITAL_ICD = [{ text: '院內原診斷', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'C50.911', display: '院內原診斷' }] }]
+  const collection = bundle(true, HOSPITAL_ICD)
+  const row = renderHook(() => useMedicationRows(collection.medications)).result.current.find(item => item.id === 'synthetic-order-a')!
+  expect(row.sourceComparison?.status).toBe('confirmed')
+  expect(row).toMatchObject({ icdCode: 'C50.911', pharmacy: '臺北榮總 門診', category: 'HORMONE ANTAGONISTS' })
+  const timeline = renderHook(() => useMedicationTimeline(collection.medications, 'medical', 'all', '其他', 'zh-TW')).result.current
+  const bars = timeline.drugs.flatMap(drug => drug.bars)
+  expect(bars.some(bar => bar.icdCode === 'C50.911')).toBe(true)
+  expect(bars.some(bar => bar.icdCode === 'C50.912')).toBe(false)
+  const record = (excludeUnresolvedDecisionVariants({ medications: collection.medications }).medications as any[])
+    .find(item => item.id === 'synthetic-order-a')
+  expect(record.reasonCode).toEqual(HOSPITAL_ICD)
+  expect(record.requester.display).toBe('臺北榮總;門診')
+  expect(record.extension.some((extension: any) => extension.url === MEDCLOUD_ATC_LEVEL_3_URL)).toBe(true)
+  expect(record.dosageInstruction[0].text).toBe('1 TAB PO QDPC')
 })
 
 it('does not mutate the imported records', () => {

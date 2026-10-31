@@ -9,7 +9,7 @@ import { formatOrganizationDisplay } from './organization-display'
 // Context the MediCloud copy records and the hospital order usually lacks.
 // Clinical facts (status, dates, dosage, supply, quantity, notes, identifiers,
 // drug code) are deliberately absent: the hospital order owns them.
-const CONTEXT_EXTENSION_URLS = [MEDCLOUD_SOURCE_SETTING_URL, MEDCLOUD_ATC_LEVEL_3_URL, MEDCLOUD_SOURCE_DRUG_CLASS_URL]
+export const VISIT_CONTEXT_EXTENSION_URLS: readonly string[] = [MEDCLOUD_SOURCE_SETTING_URL, MEDCLOUD_ATC_LEVEL_3_URL, MEDCLOUD_SOURCE_DRUG_CLASS_URL]
 
 const isEmpty = (value: unknown) => value === undefined || value === null || value === ''
   || (Array.isArray(value) && value.length === 0)
@@ -44,7 +44,7 @@ export function complementHospitalFromCloud<T extends Record<string, any>>(hospi
     patch.requester = requester
   }
 
-  const extensions = CONTEXT_EXTENSION_URLS.flatMap((url) => {
+  const extensions = VISIT_CONTEXT_EXTENSION_URLS.flatMap((url) => {
     if (hospital.extension?.some((extension: any) => extension?.url === url)) return []
     const extension = agreed(cloud, record => record.extension?.find((item: any) => item?.url === url))
     return extension ? [extension] : []
