@@ -18,7 +18,7 @@ import { buildEchoAutofill } from '../echo-autofill'
 import { doacPatientSelects, type LabObservation } from '../doac-patient-autofill'
 import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals, type MeasuredEntry } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
-import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
+import { countFractionAwareKey, isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import type { AutofillSource, VitalKind } from '../types'
 
@@ -167,8 +167,12 @@ export function buildAutofill(
     const { testName, loinc } = readCodeProvenance(holder)
     const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date, viaLoinc, testName, loinc, obsId: meta.obsId, facility: meta.facility }
     // The package keys pediatric eGFR as EGFR(M); keep it out of the adult
-    // keys, as the cumulative report does.
-    const key = isPediatricEgfr(holder) ? 'EGFR(PED)' : getAnalyteCanonicalKey(holder)
+    // keys, as the cumulative report does. Same column as the cumulative
+    // report too: a reticulocyte or differential COUNT (14196-0, 751-8, a /µL
+    // unit) never feeds an input that expects %.
+    const key = isPediatricEgfr(holder)
+      ? 'EGFR(PED)'
+      : countFractionAwareKey(holder, getAnalyteCanonicalKey(holder) ?? '') || null
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
     const spec = normSpecimen(specimenDisplay)
     if (key && spec) {

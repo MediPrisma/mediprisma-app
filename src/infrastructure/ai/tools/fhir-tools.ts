@@ -88,7 +88,14 @@ import {
   compareTestsByPreferred,
   isExcludedFromCumulativeReport,
 } from '@/src/shared/utils/lab-categories'
-import { getLabPivotTestIdentity, isKnownPivotKey, isUnitlessDifferentialPercent } from '@/src/shared/utils/lab-pivot.utils'
+import {
+  countFractionAwareKey,
+  differentialLoincKey,
+  differentialLoincScale,
+  getLabPivotTestIdentity,
+  isKnownPivotKey,
+  isUnitlessDifferentialPercent,
+} from '@/src/shared/utils/lab-pivot.utils'
 import { IMMUNOLOGY_LOINC_SCALE, IMMUNOLOGY_LOINC_TO_KEY } from '@/src/shared/utils/immunology-analytes'
 import { THYROID_LOINC_SCALE, THYROID_LOINC_TO_KEY } from '@/src/shared/utils/thyroid-analytes'
 import { isOrdinalValue } from '@/src/shared/utils/qualitative-value'
@@ -557,14 +564,17 @@ export function labValueFamily(observation: any): LabValueFamily {
 /** LOINC Scale (Qn / Ord / Titr) of a LOINC in the app's declared maps;
  *  undefined when not declared (the value family still separates rows). */
 export function declaredLoincScale(loinc: string): 'Qn' | 'Ord' | 'Titr' | undefined {
-  return IMMUNOLOGY_LOINC_SCALE[loinc] ?? THYROID_LOINC_SCALE[loinc]
+  return differentialLoincScale(loinc) ?? IMMUNOLOGY_LOINC_SCALE[loinc] ?? THYROID_LOINC_SCALE[loinc]
 }
 
-/** The analyte an explicit LOINC → key mapping assigns to `loinc` (the
- *  normalization package's LOINC map, then the app's immunology and thyroid
- *  maps). LOINCs mapped to one key are declared equivalent; nothing else is. */
+/** The analyte an explicit LOINC → key mapping assigns to `loinc` (the app's
+ *  differential count / percentage map — 711-2 is AEC, not the package's EOS —
+ *  then the normalization package's LOINC map, then the app's immunology and
+ *  thyroid maps). LOINCs mapped to one key are declared equivalent; nothing
+ *  else is. */
 export function declaredLoincAnalyteKey(loinc: string): string | null {
-  return canonicalKeyFromLoinc({ code: { coding: [{ system: 'http://loinc.org', code: loinc }] } })
+  return differentialLoincKey(loinc)
+    ?? canonicalKeyFromLoinc({ code: { coding: [{ system: 'http://loinc.org', code: loinc }] } })
     ?? IMMUNOLOGY_LOINC_TO_KEY[loinc]
     ?? THYROID_LOINC_TO_KEY[loinc]
     ?? null
@@ -1455,7 +1465,16 @@ export function createFhirTools(getRawData: () => AgentDataSource) {
         )) {
           if (String(observation?.status ?? '').toLowerCase() === 'entered-in-error') continue
           if (!categorizeObservation(observation) || !isAbnormalObservation(observation)) continue
-          const key = labAnalyteKey(observation)
+          // One latest abnormal row per analyte; a differential count and its
+          // percentage are two analytes (countFractionAwareKey). A LOINC fixes
+          // the analyte whatever the value representation; only a LOINC-less
+          // qualitative / titer / text row is also told apart by value family
+          // (a LOINC-less numeric row is the same analyte as its coded twin).
+          const analyteKey = countFractionAwareKey(observation, labAnalyteKey(observation))
+          const family = labValueFamily(observation)
+          const key = loincOf(observation?.code) || family === 'quantity' || family === 'percent'
+            ? analyteKey
+            : `${analyteKey}|${family}`
           const existing = abnormalByAnalyte.get(key)
           if (!existing || (observationDate(observation) || '') > (observationDate(existing) || '')) {
             abnormalByAnalyte.set(key, observation)
