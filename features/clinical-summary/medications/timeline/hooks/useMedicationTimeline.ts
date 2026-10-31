@@ -512,9 +512,17 @@ export function useMedicationTimeline(
         ? `${organization.key}::${clinicalDrugKey}`
         : clinicalDrugKey
 
-      const icdCoding = periodSource.reasonCode?.[0]?.coding?.[0]
+      // A candidate group's hospital row keeps the billing diagnosis its
+      // cloud copy showed when the hospital record has none (same as the list).
+      const cloudReasons = comparison?.status === 'candidate' && !periodSource.reasonCode?.length && isVghtpeSource(med)
+        ? (sources ?? []).filter((source: any) => source !== med && isMedcloudSource(source)).map((source: any) => source.reasonCode?.[0])
+        : []
+      const reasonSource = cloudReasons.length && cloudReasons.every(Boolean)
+        && new Set(cloudReasons.map((reason: any) => JSON.stringify(reason))).size === 1
+        ? { reasonCode: [cloudReasons[0]] } : periodSource
+      const icdCoding = reasonSource.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code as string | undefined
-      const rawIcdText = pickByLocale(periodSource.reasonCode?.[0], locale)
+      const rawIcdText = pickByLocale(reasonSource.reasonCode?.[0], locale)
       const icdText = stripLeadingIcdCode(rawIcdText, icdCode ?? '')
       const frequency = displayDosageInstruction(dosage)
       const requesterDisplay = periodSource.requester?.display

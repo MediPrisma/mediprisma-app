@@ -18,9 +18,12 @@ function pair(key: string, label: string, code: string, official: string, ingred
     dispenseRequest: { expectedSupplyDuration: { value: 28, unit: 'd', code: 'd' } } }
   return [
     { ...base, id: `hospital-${key}`, meta: { source: 'ehr-fhir-bridge/scraper' }, status: 'active',
+      requester: { display: '臺北榮總' },
       medicationCodeableConcept: { text: label, coding: [{ system: 'urn:oid:vgh.medication.product', code: label, display: label }] },
       dosageInstruction: [{ text: '1 TAB PO QD', doseAndRate: [{ doseQuantity: { value: 1, unit: 'TAB' } }] }] },
     { ...base, id: `cloud-${key}`, meta: { source: 'https://medcloud2.nhi.gov.tw/' }, status: 'unknown',
+      requester: { display: '臺北榮總;門診' },
+      reasonCode: [{ text: '高脂血症', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'E78.5', display: '高脂血症' }] }],
       medicationCodeableConcept: { text: official, coding: [{ system: NHI, code, display: official }] },
       supportingInformation: [{ reference: `MedicationKnowledge/knowledge-${key}` }] },
     { resourceType: 'MedicationKnowledge', id: `knowledge-${key}`,
@@ -40,16 +43,24 @@ function collection() {
   ].map(resource => ('resource' in resource ? resource : { resource }))})!.collection
 }
 
-it('names a hospital brand row of a candidate group by the paired cloud ingredient, keeping the brand for product mode', () => {
+it('keeps the cloud row display on a merged hospital row: ingredient name, institution, diagnosis; product mode keeps the brand', () => {
   const { result } = renderHook(() => useMedicationRows(collection().medications))
   const lipitor = result.current.find(row => row.id === 'hospital-lipitor')!
   expect(result.current.find(row => row.id === 'cloud-lipitor')).toBeUndefined()
   expect(lipitor).toMatchObject({ dataOrigin: 'hospital', title: 'ATORVASTATIN (CALCIUM) 20 MG', secondaryTitle: 'Lipitor FC * tab 20 mg' })
   expect(lipitor.sourceComparison?.status).toBe('candidate')
+  // Merging removes the duplicate row only: the cloud row's institution,
+  // care setting and diagnosis stay on the merged row; the unconfirmed pair
+  // never gives the hospital row the cloud NHI code.
+  expect(lipitor).toMatchObject({ pharmacy: '臺北榮總 門診', icdCode: 'E78.5', icdText: '高脂血症',
+    frequency: '1 TAB PO QD', status: 'active' })
+  expect(lipitor.nhiDrugCode).toBeUndefined()
 
   const crestor = result.current.find(row => row.id === 'hospital-crestor')!
   expect(crestor.title).toBe('Crestor FC * tab 10 mg')
   expect(crestor.secondaryTitle).toBeUndefined()
+  expect(crestor).toMatchObject({ pharmacy: '臺北榮總' })
+  expect(crestor.icdCode).toBeUndefined()
   expect(result.current.find(row => row.id === 'cloud-crestor')?.title).toBe('ROSUVASTATIN CALCIUM 20 MG')
 
   const ingredient = render(<MedicationItem medication={lipitor} nameMode="ingredient" />)
@@ -65,4 +76,6 @@ it('uses the same ingredient name for the candidate group in the timeline', () =
   const names = result.current.drugs.map(drug => [drug.drugName, drug.drugProductName])
   expect(names).toContainEqual(['ATORVASTATIN (CALCIUM) 20 MG', 'Lipitor FC * tab 20 mg'])
   expect(names).toContainEqual(['Crestor FC * tab 10 mg', undefined])
+  const bar = result.current.drugs.find(drug => drug.drugName === 'ATORVASTATIN (CALCIUM) 20 MG')!.bars[0]
+  expect(bar).toMatchObject({ icdCode: 'E78.5', icdText: '高脂血症' })
 })
