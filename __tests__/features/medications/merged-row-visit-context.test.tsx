@@ -105,6 +105,6 @@ describe('complementHospitalFromCloud', () => {
     expect(missing.reasonCode).toBeUndefined()
     const setting = { url: MEDCLOUD_SOURCE_SETTING_URL, valueString: '門診' }
     const agree = complementHospitalFromCloud(hospital, [{ id: 'c1', meta, extension: [setting] }, { id: 'c2', meta, extension: [setting] }])
-    expect(agree.extension).toEqual([setting])
+    expect((agree as any).extension).toEqual([setting])
   })
 })
