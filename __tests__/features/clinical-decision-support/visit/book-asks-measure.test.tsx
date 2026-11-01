@@ -64,4 +64,14 @@ describe('a number typed beside the asks (HTN home BP)', () => {
     fireEvent.blur(input)
     expect(onMeasure).toHaveBeenCalledWith('home-bp', null)
   })
+
+  it('re-sends an unchanged pair on Enter, so a re-measured reading takes today\'s date; leaving the field untouched sends nothing', () => {
+    const onMeasure = jest.fn()
+    render(<BookAsks asks={[]} answers={{}} isEnglish={false} measureAsks={[{ ...homeBp, answer: { systolic: 146, diastolic: 92, basis: '門診輸入 10-29' } }]} onMeasure={onMeasure} />)
+    const input = screen.getByRole('textbox', { name: '居家血壓' })
+    fireEvent.blur(input)
+    expect(onMeasure).not.toHaveBeenCalled()
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onMeasure).toHaveBeenCalledWith('home-bp', { systolic: 146, diastolic: 92 })
+  })
 })

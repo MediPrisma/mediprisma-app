@@ -126,10 +126,15 @@ function MeasureRow({ ask, answers, isEnglish, onMeasure, onAnswer, labelId }: {
   const [draft, setDraft] = useState(shown)
   const noneChosen = Boolean(ask.none && (answers as Record<string, string | undefined>)[ask.none.askId] === ask.none.value)
   const invalid = draft.trim() !== '' && !parseBloodPressurePair(draft)
-  const commit = () => {
+  // Enter is the clinician saying 「this is today's reading」, so it is sent
+  // even when the pair matches the one on file: the store keeps the value and
+  // moves its date to today (a pair re-measured at the next visit, #404
+  // review). Leaving an untouched field sends nothing.
+  const commit = (explicit: boolean) => {
     if (!onMeasure) return
     const trimmed = draft.trim()
-    if (trimmed === shown) return
+    if (!explicit && trimmed === shown) return
+    if (trimmed === '' && shown === '') return
     if (trimmed === '') { onMeasure(ask.id, null); return }
     const pair = parseBloodPressurePair(trimmed)
     if (!pair) return
@@ -150,8 +155,8 @@ function MeasureRow({ ask, answers, isEnglish, onMeasure, onAnswer, labelId }: {
           value={draft}
           disabled={!onMeasure}
           onChange={(event) => setDraft(event.target.value)}
-          onBlur={commit}
-          onKeyDown={(event) => { if (event.key === 'Enter') commit() }}
+          onBlur={() => commit(false)}
+          onKeyDown={(event) => { if (event.key === 'Enter') commit(true) }}
           data-book-measure-input={ask.id}
         />
         <span className={styles.measureUnit}>{ask.unit}</span>
