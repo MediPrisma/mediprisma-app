@@ -420,12 +420,13 @@ describe('Live personalized-guidance pathway list', () => {
     expect(useEvidenceOverridesStore.getState().byPatientId[patientId]).toEqual({ congestion: true })
   })
 
-  it('lists heart failure and lipid while keeping other pathways unlisted', () => {
+  it('lists heart failure, hypertension and lipid while keeping other pathways unlisted', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
     const heartFailureButton = screen.getByTestId('cdss-disease-switch-heart-failure-cdss')
     expect(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss')).toBeInTheDocument()
-    for (const unlisted of ['ckd', 'dm-ckd', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
+    expect(screen.getByTestId('cdss-disease-switch-hypertension-cdss')).toBeInTheDocument()
+    for (const unlisted of ['ckd', 'dm-ckd', 'cirrhosis', 'ckd-anemia']) {
       expect(screen.queryByTestId(`cdss-disease-switch-${unlisted}-cdss`)).not.toBeInTheDocument()
     }
 
