@@ -223,6 +223,19 @@ describe.each([
     expect(within(row).getByTestId('cdss-book-reasoning')).toHaveTextContent('近 6 週內 HF 住院')
   })
 
+  it('看依據 opens only the point clicked, though points share one decision (HTN DP-04/05/06 share an order slip)', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" patch={(model) => ({
+      ...model,
+      points: model.points.map((point) => (point.dp === 'DP-09' || point.dp === 'DP-10' ? { ...point, decisionId: 'shared-slip' } : point)),
+    })} />)
+    fireEvent.click(within(entry('DP-10')).getByRole('button', { name: /看依據/ }))
+    expect(within(entry('DP-10')).getByTestId('cdss-book-reasoning')).toBeInTheDocument()
+    expect(within(entry('DP-09')).queryByTestId('cdss-book-reasoning')).toBeNull()
+    fireEvent.click(within(entry('DP-09')).getByRole('button', { name: /看依據/ }))
+    expect(within(entry('DP-09')).getByTestId('cdss-book-reasoning')).toBeInTheDocument()
+    expect(within(entry('DP-10')).queryByTestId('cdss-book-reasoning')).toBeNull()
+  })
+
   it('opens DP-05 on the medicines ESC names as harmful, class by class, with what the scan covers (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     fireEvent.click(within(entry('DP-05')).getByRole('button', { name: /看依據/ }))

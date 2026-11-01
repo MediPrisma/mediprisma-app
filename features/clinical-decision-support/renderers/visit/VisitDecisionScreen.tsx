@@ -176,11 +176,15 @@ export function VisitDecisionScreen({
     onClearDecision?.(key)
   }
 
+  // 看依據 opens one point's reasoning, keyed by the point itself: points that
+  // share a decision (HTN DP-04, DP-05 and DP-06 on one order slip) share its
+  // record, not their reasoning, so opening DP-05's must not open DP-04's.
+  const reasoningKeyOf = (point: DecisionPointView) => `${point.source ?? ''}:${point.dp}`
   const openPoint = openKey
-    ? model.points.find((point) => visitDecisionKey(point) === openKey)
+    ? model.points.find((point) => reasoningKeyOf(point) === openKey)
     : undefined
   const toggleOpen = (point: DecisionPointView) => {
-    const key = visitDecisionKey(point)
+    const key = reasoningKeyOf(point)
     setOpenKey((current) => (current === key ? null : key))
   }
 
@@ -332,7 +336,7 @@ export function VisitDecisionScreen({
       entryOf={entryOf}
       markOf={markOf}
       isComplex={isComplex}
-      openKeyOf={visitDecisionKey}
+      openKeyOf={reasoningKeyOf}
       openKey={openPoint ? openKey : null}
       onToggle={toggleOpen}
       {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction, queued: boolean) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
