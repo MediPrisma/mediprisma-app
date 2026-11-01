@@ -1,5 +1,7 @@
 'use client'
 
+import { readLocalBundleVersion } from '@/src/infrastructure/fhir/services/local-bundle-version'
+
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
@@ -284,7 +286,8 @@ export function beginCollectorObservation(input: Start): Observation {
   } catch { return NOOP }
 }
 
-function observe(input: Start, collect?: (event: WireEvent) => void): Observation {
+function observe(input: Start, collect?: (event: WireEvent) => void,
+  source = { version: readLocalBundleVersion() }): Observation {
   try {
     if (!isCollectorSite()) return NOOP
     const endpoint = configuredEndpoint()
@@ -316,7 +319,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
         // Past the detail cap the request is only counted, but a summary attempt is still sent.
         if (requests.length >= MAX_COLLECTOR_REQUEST_DETAILS) return observe({ ...child, operation: undefined }, (event) => {
           if (isSummaryAttemptEvent(event)) dispatch(event, owner, endpoint, captureCollectorAuth().catch(() => null))
-        })
+        }, source)
         const index = requests.length
         const childStarted = nowMs()
         requests.push({ ...modelInfo(child.modelId, child.provider), model_source: 'configured', latency_ms: 0,
@@ -332,7 +335,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
             response_complete: event.response_complete, phase: d.phase, mode: d.mode,
             ...(d.first_chunk_ms !== undefined ? { first_chunk_ms: d.first_chunk_ms } : {}),
             ...(d.http_status !== undefined ? { http_status: d.http_status } : {}) }
-        })
+        }, source)
         // A parent may end before a cancelled transport reports; keep an explicit incomplete entry.
         requestSnapshots.push(() => {
           if (requests[index].status === 'incomplete')
@@ -363,6 +366,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void): Observatio
             response_complete: result.responseComplete ?? null,
             app_version: process.env.NEXT_PUBLIC_COLLECTOR_APP_VERSION || '0.0.0',
             build_revision: process.env.NEXT_PUBLIC_COLLECTOR_BUILD_REVISION || 'unknown',
+            ...(source.version ? { medcloud_extension_version: source.version } : {}),
             diagnostics: { phase: result.phase ?? 'unknown', mode,
               ...(loaded ? { loaded } : {}), ...(prepared ? { prepared, prepared_count_basis: 'structured_input_upper_bound' } : {}),
               ...(tokens ? { context_tokens_bucket: tokens } : {}),
