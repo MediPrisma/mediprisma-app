@@ -131,6 +131,21 @@ const isUltrasoundDR = (dr) => {
 const getDate = (r) =>
   r.effectiveDateTime || r.authoredOn || r.date || r.period?.start || r.recordedDate || ''
 const cmpRecent = (a, b) => String(getDate(b)).localeCompare(String(getDate(a)))
+// --latest-only appends what the source holds after the committed demo's newest
+// date for these types: every visit, prescription and report, with the
+// Observations a report points at.
+const LATEST_TYPES = ['Encounter', 'MedicationRequest', 'DiagnosticReport', 'Observation']
+const baseCutoffs = new Map(LATEST_TYPES.map((type) => [
+  type,
+  (baseBundle?.entry || [])
+    .map((e) => e?.resource)
+    .filter((r) => r?.resourceType === type)
+    .map(getDate)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || '',
+]))
+const isAfterBase = (r) => LATEST_TYPES.includes(r.resourceType) && getDate(r) > baseCutoffs.get(r.resourceType)
 const isCat = (r, code) =>
   (r.category || []).some((c) => (c.coding || []).some((x) => x.code === code))
 const isAdultPreventiveComposition = (r) =>
@@ -264,6 +279,31 @@ const collectEnc = (r) => {
 inpatientEnc.forEach((e) => referencedEnc.add(e.id))
 const keptEnc = [...referencedEnc].map((id) => encById.get(id)).filter(Boolean)
 
+// The representative subset above caps prescriptions and skips visits nothing
+// kept points at; an update must not drop the newest of either.
+const latestExtras = []
+if (LATEST_ONLY) {
+  const keptRefs = new Set(
+    [...keptLabDRs, ...keptTextRad, ...keptImageRad, ...keptObs.values(), ...keptMeds, ...keptEnc]
+      .map((r) => `${r.resourceType}/${r.id}`),
+  )
+  const add = (r) => {
+    const ref = `${r.resourceType}/${r.id}`
+    if (keptRefs.has(ref)) return
+    keptRefs.add(ref)
+    latestExtras.push(r)
+  }
+  for (const r of entries.map((e) => e.resource)) {
+    if (r.resourceType === 'Observation' || !isAfterBase(r)) continue
+    add(r)
+    if (r.resourceType !== 'DiagnosticReport') continue
+    ;(r.result || [])
+      .map((ref) => obsById.get(String(ref.reference || '').split('/').pop()))
+      .filter(Boolean)
+      .forEach(add)
+  }
+}
+
 const kept = [
   patient,
   ...keptPreventiveCompositions,
@@ -277,6 +317,7 @@ const kept = [
   ...keptProc,
   ...keptImm,
   ...keptCare,
+  ...latestExtras,
 ]
 
 // Some source exports cross-link analyte-level reports (for example an Hb
@@ -581,7 +622,6 @@ console.log(`   ${bannersCropped} ultrasound banner(s) cropped`)
 let finalResources = out
 let finalEntries = out.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resource: r }))
 if (LATEST_ONLY) {
-  const recentTypes = new Set(['Encounter', 'MedicationRequest'])
   const baseResources = baseBundle.entry.map((e) => e?.resource).filter(Boolean)
   // Keep fixed demo demographics in sync when rebuilding from the committed
   // bundle instead of from the private source export.
@@ -597,20 +637,7 @@ if (LATEST_ONLY) {
       if (identifier.value) identifier.value = FAKE.nationalId
     })
   }
-  const cutoffs = new Map()
-  for (const type of recentTypes) {
-    const dates = baseResources
-      .filter((r) => r.resourceType === type)
-      .map(getDate)
-      .filter(Boolean)
-      .sort()
-    cutoffs.set(type, dates.at(-1) || '')
-  }
-
-  const recentAdditions = out.filter((r) =>
-    recentTypes.has(r.resourceType) &&
-    getDate(r) > cutoffs.get(r.resourceType),
-  )
+  const recentAdditions = out.filter(isAfterBase)
   const preventiveKey = (r) => `${getDate(r)}|${r.type?.coding?.[0]?.code || ''}|${r.title || ''}`
   const existingPreventiveKeys = new Set(
     baseResources.filter(isAdultPreventiveComposition).map(preventiveKey),
@@ -698,7 +725,7 @@ if (LATEST_ONLY) {
     ...baseBundle.entry,
     ...appended.map((r) => ({ fullUrl: `${r.resourceType}/${r.id}`, resource: r })),
   ]
-  console.log(`   latest-only: appended ${appended.filter((r) => r.resourceType === 'Encounter').length} encounters, ${appended.filter((r) => r.resourceType === 'MedicationRequest').length} medications, ${appended.filter((r) => r.resourceType === 'Composition').length} preventive report, and ${appended.filter((r) => r.resourceType === 'Observation').length} report observations`)
+  console.log(`   latest-only: appended ${appended.filter((r) => r.resourceType === 'Encounter').length} encounters, ${appended.filter((r) => r.resourceType === 'MedicationRequest').length} medications, ${appended.filter((r) => r.resourceType === 'DiagnosticReport').length} reports, ${appended.filter((r) => r.resourceType === 'Composition').length} preventive report, and ${appended.filter((r) => r.resourceType === 'Observation').length} report observations`)
 }
 
 // Add the deidentified shared echo/Doppler pair after either full or
