@@ -21,7 +21,7 @@ import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStat
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
-import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { complementComparisonRecord, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 
 function sourceCalendarDate(value?: string): string {
@@ -435,12 +435,23 @@ export function useMedicationRows(
     }
     const comparisonRows = projectMedicationComparisons(enriched,
       row => (sourceById.get(row.id) as any)?._sourceRecordComparison, row => row,
-    ).map(({ record, sources, comparison, ownedIds, warnings }) => comparison ? {
-      ...record,
-      sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
-      reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
-      searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
-    } : record)
+    ).map(({ record, sources, comparison, ownedIds, warnings }, index) => {
+      if (!comparison) return record
+      // The hospital row standing for an unconfirmed group keeps the visit
+      // context its cloud copy showed; the source records stay as recorded.
+      const raw = sourceById.get(record.id) as any
+      const complemented = raw && record.dataOrigin === 'hospital' && comparison.status !== 'confirmed'
+        ? complementComparisonRecord({ record: raw, comparison,
+          sources: (sources ?? []).map(source => sourceById.get(source.id)).filter(Boolean) as any[] })
+        : raw
+      const representative = complemented && complemented !== raw ? buildRow(complemented, index) : record
+      return {
+        ...representative,
+        sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
+        reconciledOrderIds: ownedIds ?? representative.reconciledOrderIds,
+        searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || representative.searchHaystack,
+      }
+    })
     // "雲端" only tells rows apart when a hospital import sits beside it; on a
     // MediCloud-only chart every row would carry the same tag.
     const hasHospitalSource = enriched.some(row => row.dataOrigin === 'hospital' || row.dataOrigin === 'integrated')

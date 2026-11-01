@@ -705,7 +705,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
             <span className="ml-1">{hover.bar.supplyDaysUnrecorded ? (locale === 'en' ? '(no usable period; date marker only)' : '（未提供可用期間，僅標示紀錄日期）')
               : hover.bar.supplyDays < 1 ? `(${Number((hover.bar.supplyDays * 24).toFixed(2))}h)` : `(${Number(hover.bar.supplyDays.toFixed(3))}d)`}</span>
           </div>
-          {hover.bar.selfPurchased && <div>{locale === 'en' ? 'Self-pay' : '自費／自購'}</div>}
+          {hover.bar.selfPurchased && <div>{locale === 'en' ? 'Self-pay' : '自購'}</div>}
           {hover.bar.sourceComparison && <div className="whitespace-normal break-words">{hover.bar.sourceComparison}</div>}
           {hover.bar.sourceStatus && <div>{locale === 'en' ? 'Source status: ' : '來源狀態：'}{hover.bar.sourceStatus}</div>}
           {hover.bar.frequency && (

@@ -18,7 +18,8 @@ it('keeps the initial demo count equal to the rendered All list after adult-exam
  const counts = calculateReportTabCounts(reports, [], observations, procedures, resources.filter(r => r.resourceType === 'Composition'))
  expect(rows.length-grouped.length).toBe(23)
  expect(counts.all).toBe(grouped.length + procedures.length)
- expect(counts.all).toBe(97)
+ // the 2026-10-23 export adds AFP, CEA, CA 19-9 and a chest X-ray on 10/14
+ expect(counts.all).toBe(101)
 })
 
 it('groups composition-linked exams by date and institution without merging ordinary results', () => {
