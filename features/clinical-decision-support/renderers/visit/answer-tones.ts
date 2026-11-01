@@ -20,6 +20,8 @@ const VISIT_ANSWER_TONES: { readonly [K in VisitAsk['id']]-?: Readonly<Record<No
   bleeding: { yes: 'concern', no: 'neutral' },
   // 「更多」 goes to DP-00; 「較少」 and 「沒有」 are improvements, as 喘進步 is.
   'angina-trend': { more: 'concern', same: 'neutral', less: 'reassuring', none: 'reassuring' },
+  // Whether a home reading exists says nothing about control by itself.
+  'home-bp-measured': { yes: 'neutral', no: 'neutral' },
 }
 
 export function visitAnswerTone(id: VisitAsk['id'], value: string): AnswerTone {
