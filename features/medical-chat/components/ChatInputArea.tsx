@@ -281,7 +281,7 @@ export function ChatInputArea({
               {/* Privacy policy lives on GitHub — single source of truth with
                   the markdown rendered there. */}
               <a
-                href="https://github.com/voho0000/medical-note-smart-on-fhir/blob/master/PRIVACY_POLICY.md"
+                href="https://github.com/MediPrisma/mediprisma-app/blob/master/PRIVACY_POLICY.md"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground"
