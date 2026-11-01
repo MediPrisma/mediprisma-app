@@ -17,6 +17,7 @@ import { isVitalObservation } from '@/src/core/utils/observation-selectors'
 import { mutableClinicalProjection } from '../services/clinical-source-session'
 import { FhirMapper } from './fhir.mapper'
 import { projectClinicalMedicationContents, projectClinicalMedicationQueryStatus } from './clinical-medication-projection'
+import { findLabSourcePairs } from '@/src/core/services/lab-source-pairs'
 
 type SourceNode = ClinicalReconciliationResult['graph']['nodes'][number]
 type SourceEdge = ClinicalReconciliationResult['graph']['references'][number]
@@ -24,6 +25,8 @@ const projectedReferenceProvenance = 'clinicalSourceProjectedReferences'
 type ProjectedReferenceProvenance = { path: string; originNodeKey: string; sourceReference: string; projectedReference: string }
 export interface ClinicalProjectionContext {
   ids: ReadonlyMap<string, string>
+  /** Pre-comparison projection IDs, for references already mapped by local import. */
+  previousIds?: ReadonlyMap<string, string>
   /** IDs from actual mapped rows, used when a generic resource has no collision ID. */
   visibleRowIds: ReadonlyMap<string, string>
   nodes: Map<string, SourceNode>
@@ -104,7 +107,9 @@ export function projectClinicalReferences<T>(resource: T, nodeKey: string, conte
     // Domain mapping can reconcile or reorder references after the raw graph
     // was captured. Rewrite only the raw value or a prior value this projector
     // stamped on this exact path; any other value belongs to domain policy.
-    if (current.reference !== edge.reference && !isPriorProjection) continue
+    const wasMappedBeforeComparison = edge.targetKeys.length === 1 && context.previousIds?.get(edge.targetKeys[0]) !== targetIds[0]
+      && current.reference === target.resource.resourceType + '/' + context.previousIds?.get(edge.targetKeys[0])
+    if (current.reference !== edge.reference && !isPriorProjection && !wasMappedBeforeComparison) continue
     writeReference(edge.path, reference)
     if (reference === edge.reference) {
       if (isPriorProjection) provenance.splice(markerIndex, 1)
@@ -216,6 +221,8 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     let node = context.nodes.get(originalKey)
     if (!node && !requireActive) node = eligibleById.get(row.id ?? '')
     if (!node || !resolution.includes(node.key) || node.resource.resourceType !== 'Observation' || node.embeddedIn) return
+    // Rebuild prior comparison projections; a later capture may make a pair ambiguous.
+    if (row.clinicalSourceCopyKeys) row = mapProjectedObservation(node.resource, node.key, { ...context, edges: new Map() })
     const id = context.ids.get(node.key)
     if (!id || (requireActive && node.isContained && !observationsById.has(id))) return
     const projected = row.clinicalSourceNodeKey === node.key && row.id === id
@@ -233,6 +240,24 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     const id = context.ids.get(node.key)!
     if (!observationsById.has(id)) observationsById.set(id, mapProjectedObservation(node.resource, node.key, { ...context, edges: new Map() }))
   }
+  const labPairs = findLabSourcePairs(eligible.filter(node => !resolution.variants.has(node.key)), source.graph)
+  const pairedIds = new Map(context.ids)
+  for (const [cloudKey, hospitalKey] of labPairs) {
+    const cloudId = context.ids.get(cloudKey)!, hospitalId = context.ids.get(hospitalKey)!
+    const cloud = observationsById.get(cloudId), hospital = observationsById.get(hospitalId)
+    if (!cloud || !hospital || cloudId === hospitalId) continue
+    observationsById.set(hospitalId, { ...hospital,
+      referenceRange: hospital.referenceRange ?? cloud.referenceRange,
+      interpretation: hospital.interpretation ?? cloud.interpretation,
+      method: hospital.method ?? cloud.method,
+      note: [...(hospital.note ?? []), ...(cloud.note ?? [])].filter((note, index, all) => all.findIndex(other => JSON.stringify(other) === JSON.stringify(note)) === index),
+      clinicalSourceCopyKeys: [hospitalKey, cloudKey],
+    })
+    observationsById.delete(cloudId)
+    pairedIds.set(cloudKey, hospitalId)
+  }
+  context.previousIds = context.ids
+  context.ids = pairedIds
   const alignRecordId = <R extends { id?: string; sourceId?: string; clinicalSourceNodeKey?: string }>(row: R): R => {
     const key = row.clinicalSourceNodeKey
     const node = key ? context.nodes.get(key) : undefined
