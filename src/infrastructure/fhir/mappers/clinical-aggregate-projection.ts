@@ -221,8 +221,13 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     let node = context.nodes.get(originalKey)
     if (!node && !requireActive) node = eligibleById.get(row.id ?? '')
     if (!node || !resolution.includes(node.key) || node.resource.resourceType !== 'Observation' || node.embeddedIn) return
-    // Rebuild prior comparison projections; a later capture may make a pair ambiguous.
-    if (row.clinicalSourceCopyKeys) row = mapProjectedObservation(node.resource, node.key, { ...context, edges: new Map() })
+    // Undo only fields merged by pairing; retain import-derived visit/order links.
+    if (row.clinicalSourceCopyKeys) {
+      const original = mapProjectedObservation(node.resource, node.key, { ...context, edges: new Map() })
+      const { clinicalSourceCopyKeys: _paired, ...rest } = row
+      row = { ...rest, referenceRange: original.referenceRange, interpretation: original.interpretation,
+        method: original.method, note: original.note }
+    }
     const id = context.ids.get(node.key)
     if (!id || (requireActive && node.isContained && !observationsById.has(id))) return
     const projected = row.clinicalSourceNodeKey === node.key && row.id === id

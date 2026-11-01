@@ -3,6 +3,7 @@ import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clin
 import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
 import { labReportsCategory } from '@/src/core/categories/lab-reports.category'
 import { reconcileClinicalSources } from '@/src/core/services/clinical-reconciliation'
+import { orderingVisitIds, resultsOrderedAt } from '@/features/clinical-summary/last-outpatient/utils/last-outpatient'
 
 const assays = [['FSH', '83098-4', 56.5, 'mIU/mL', 'm[iU]/mL'], ['E2', '83096-8', 13.2, 'pg/mL', 'pg/mL'], ['CA199', '24108-3', 13.62, 'U/mL', 'U/mL']] as const
 function fixture(assay: typeof assays[number] = assays[0]) {
@@ -29,6 +30,31 @@ function bundle(observations: any[]) {
   ] }
 }
 const project = (observations: any[]) => projectClinicalAggregate(LocalBundleService.parse(bundle(observations))!.collection)
+
+test.each([false, true])('reprojection retains imported order/visit links when pairing is withdrawn: %s', withdraw => {
+  const observations = fixture()
+  observations[0].basedOn = [{ reference: 'ServiceRequest/order' }]
+  const input: any = bundle(observations)
+  input.entry.push({ resource: { resourceType: 'Encounter', id: 'visit', status: 'finished',
+    class: { code: 'AMB' }, subject: { reference: 'Patient/test' }, period: { start: '2026-01-16T09:00:00+08:00' } } },
+  { resource: { resourceType: 'ServiceRequest', id: 'order', status: 'completed', intent: 'order',
+    subject: { reference: 'Patient/test' }, encounter: { reference: 'Encounter/visit' }, code: { text: 'FSH order' } } })
+  const first = projectClinicalAggregate(LocalBundleService.parse(input)!.collection)
+  const original = first.observations[0]
+  expect(original.basedOn?.[0].display).toBe('FSH order')
+  expect(original._orderEncounterIds?.length).toBe(1)
+  expect(original.encounter).toBeDefined()
+  if (withdraw) input.entry.push({ resource: { ...observations[0], id: 'second-draw', effectiveDateTime: '2026-01-16T16:00:00+08:00' } })
+  const latest = withdraw ? { ...LocalBundleService.parse(input)!.collection, observations: first.observations } : first
+  const again = projectClinicalAggregate(latest)
+  const retained = again.observations.find(row => row.sourceId === original.sourceId)!
+  expect(retained.encounter).toEqual(original.encounter)
+  expect(retained._encounterInferred).toEqual(original._encounterInferred)
+  expect(retained._orderEncounterIds).toEqual(original._orderEncounterIds)
+  expect(retained.basedOn).toEqual(original.basedOn)
+  expect(resultsOrderedAt([retained], new Set(orderingVisitIds(original)), 'visit').results).toHaveLength(1)
+  expect(retained.clinicalSourceCopyKeys?.length ?? 0).toBe(withdraw ? 0 : 2)
+})
 
 test.each(assays.map(assay => ({ name: assay[0], assay })))('actual import projects $name once and retains both original sources', ({ assay }) => {
   const input = bundle(fixture(assay)), before = JSON.stringify(input)
