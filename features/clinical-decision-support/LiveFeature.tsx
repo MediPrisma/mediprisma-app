@@ -73,8 +73,8 @@ import {
   visitAnswerSourcesOf,
   visitAnswersOf,
 } from './stores/visit-answers.store'
-import { applyFmtIntolerance, applyPreviousVisit, applyVisitAnswers, buildVisitModel, hasVisitMap, visitMapOf } from './renderers/visit/visit-model.source'
-import { intolerantPillars } from './renderers/visit/visit-decisions'
+import { applyFmtIntolerance, applyHtnDiagnosis, applyPreviousVisit, applyVisitAnswers, buildVisitModel, hasVisitMap, visitMapOf } from './renderers/visit/visit-model.source'
+import { htnDiagnosisConfirmed, intolerantPillars } from './renderers/visit/visit-decisions'
 import type { VisitAnswerProvenance } from './renderers/visit/VisitAsks'
 import { useAfAnswers, useAfAnswersHydrated, useAfAnswersStore } from './stores/af-answers.store'
 import { useCoronaryPhaseAnswer, useCoronaryPhaseHydrated, useCoronaryPhaseStore } from './stores/coronary-phase.store'
@@ -540,23 +540,28 @@ export default function LiveClinicalDecisionSupportFeature({
   // The every-visit answers enter last, as the pack's own facts
   // (`applyVisitAnswers`), so 「喘變差」 changes the recommendation it bears on
   // on every layout, not only on the map where it was asked. A pillar the
-  // clinician marked 「不耐受」 travels the same way, for DP-19, and so does a
-  // stored previous visit, which makes this one a follow-up.
+  // clinician marked 「不耐受」 travels the same way, for DP-19, the HTN
+  // diagnosis confirmed at DP-01, and a stored previous visit, which makes
+  // this one a follow-up.
   const intolerant = useMemo(() => intolerantPillars(physicianDecisions), [physicianDecisions])
+  const htnConfirmed = useMemo(() => htnDiagnosisConfirmed(physicianDecisions), [physicianDecisions])
   const profile = useMemo(() => (
     answeredProfile
       ? applyPreviousVisit(
-        applyFmtIntolerance(
-          applyVisitAnswers(
-            applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
-            visitAnswers,
+        applyHtnDiagnosis(
+          applyFmtIntolerance(
+            applyVisitAnswers(
+              applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
+              visitAnswers,
+            ),
+            intolerant,
           ),
-          intolerant,
+          htnConfirmed,
         ),
         previousCdssVisit,
       )
       : null
-  ), [answeredProfile, hfpefReading, intolerant, preventReading, previousCdssVisit, visitAnswers])
+  ), [answeredProfile, hfpefReading, htnConfirmed, intolerant, preventReading, previousCdssVisit, visitAnswers])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
