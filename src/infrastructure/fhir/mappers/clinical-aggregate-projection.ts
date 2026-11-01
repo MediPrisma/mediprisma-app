@@ -240,9 +240,10 @@ export function projectClinicalAggregate<T extends Partial<ClinicalDataCollectio
     const id = context.ids.get(node.key)!
     if (!observationsById.has(id)) observationsById.set(id, mapProjectedObservation(node.resource, node.key, { ...context, edges: new Map() }))
   }
-  const labPairs = findLabSourcePairs(eligible.filter(node => !resolution.variants.has(node.key)), source.graph)
+  const labPairs = findLabSourcePairs(eligible, source.graph)
   const pairedIds = new Map(context.ids)
   for (const [cloudKey, hospitalKey] of labPairs) {
+    if (resolution.variants.has(cloudKey) || resolution.variants.has(hospitalKey)) continue
     const cloudId = context.ids.get(cloudKey)!, hospitalId = context.ids.get(hospitalKey)!
     const cloud = observationsById.get(cloudId), hospital = observationsById.get(hospitalId)
     if (!cloud || !hospital || cloudId === hospitalId) continue

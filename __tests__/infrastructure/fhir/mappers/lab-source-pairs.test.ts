@@ -2,6 +2,7 @@ import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bun
 import { projectClinicalAggregate } from '@/src/infrastructure/fhir/mappers/clinical-aggregate-projection'
 import { buildLabPivots } from '@/src/shared/utils/lab-pivot.utils'
 import { labReportsCategory } from '@/src/core/categories/lab-reports.category'
+import { reconcileClinicalSources } from '@/src/core/services/clinical-reconciliation'
 
 const assays = [['FSH', '83098-4', 56.5, 'mIU/mL', 'm[iU]/mL'], ['E2', '83096-8', 13.2, 'pg/mL', 'pg/mL'], ['CA199', '24108-3', 13.62, 'U/mL', 'U/mL']] as const
 function fixture(assay: typeof assays[number] = assays[0]) {
@@ -29,7 +30,7 @@ function bundle(observations: any[]) {
 }
 const project = (observations: any[]) => projectClinicalAggregate(LocalBundleService.parse(bundle(observations))!.collection)
 
-test.each(assays)('actual import projects %s once and retains both original sources', (...assay) => {
+test.each(assays.map(assay => ({ name: assay[0], assay })))('actual import projects $name once and retains both original sources', ({ assay }) => {
   const input = bundle(fixture(assay)), before = JSON.stringify(input)
   const parsed = LocalBundleService.parse(input)!
   const output = projectClinicalAggregate(parsed.collection)
@@ -93,4 +94,18 @@ test('a progressive additional collection restores both prior copies, with no st
   const output = projectClinicalAggregate({ ...latest, observations: first.observations })
   expect(output.observations).toHaveLength(3)
   expect(output.observations.every(row => !row.clinicalSourceCopyKeys && row.note?.length === 1)).toBe(true)
+})
+
+test('a corrected second hospital collection still prevents pairing the first with cloud', () => {
+  const observations = fixture()
+  const repeat = { ...observations[0], id: 'second-collection', effectiveDateTime: '2026-01-16T16:00:00+08:00', meta: { ...observations[0].meta, versionId: '1' } }
+  const resources = bundle([...observations, repeat]).entry.map(entry => entry.resource)
+  const source = reconcileClinicalSources([
+    { sourceId: 'synthetic', patientScope: 'test', generation: '1', resources },
+    { sourceId: 'synthetic', patientScope: 'test', generation: '2', resources: [{ ...repeat, status: 'corrected', meta: { ...repeat.meta, versionId: '2' } }] },
+  ])
+  const input = LocalBundleService.parse(bundle([...observations, repeat]))!.collection
+  const output = projectClinicalAggregate(input, source)
+  expect(output.observations).toHaveLength(3)
+  expect(output.observations.every(row => !row.clinicalSourceCopyKeys)).toBe(true)
 })
