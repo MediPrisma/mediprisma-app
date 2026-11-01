@@ -111,7 +111,7 @@ type ConnectionState =
   | { status: 'testing' }
   | { status: 'done'; results: Record<LabDataReportDestination, LabDataReportConnectionResult> }
 
-const PRIVACY_POLICY_URL = "https://github.com/voho0000/medical-note-smart-on-fhir/blob/master/PRIVACY_POLICY.md"
+const PRIVACY_POLICY_URL = "https://github.com/MediPrisma/mediprisma-app/blob/master/PRIVACY_POLICY.md"
 /** The preview table stops here; the JSON view always holds every row. */
 const PREVIEW_TABLE_ROWS = 300
 

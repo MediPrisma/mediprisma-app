@@ -124,7 +124,7 @@ async function main() {
   let problems = 0
 
   for (const locale of ['zh-TW', 'en'] as const) {
-    const catalog: Array<{ key: string; resourceId: string; resourceType: string; date?: string }> = getSourceCatalog(scoped, locale)
+    const catalog: Array<{ key: string; resourceId: string; sourceId?: string; resourceType: string; date?: string }> = getSourceCatalog(scoped, locale)
     const byKey = new Map(catalog.map((entry) => [entry.key, entry]))
     medicalSummary[locale] = {}
     safetyScan[locale] = {}
@@ -165,12 +165,16 @@ async function main() {
           console.error(`✗ ${locale}/${audience}: ${key} is ${entry.resourceType} here but ${line?.type ?? 'absent'} in the captured prompt`)
           problems += 1
         }
+        // Rows with a derived stable id (labs, reports) keep their FHIR id in
+        // the non-enumerable `sourceId`; pin that, the id remapDemoSnapshotSourceKeys
+        // matches first.
+        const resourceId = entry.sourceId ?? entry.resourceId
         const known = sourceResourceIds[key]
-        if (known && known !== entry.resourceId) {
-          console.error(`✗ ${key} names ${known} and ${entry.resourceId} in different snapshots`)
+        if (known && known !== resourceId) {
+          console.error(`✗ ${key} names ${known} and ${resourceId} in different snapshots`)
           problems += 1
         }
-        sourceResourceIds[key] = entry.resourceId
+        sourceResourceIds[key] = resourceId
       }
     }
   }

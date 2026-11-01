@@ -8,16 +8,21 @@
 // against the catalog keys that buildSourceCatalog() derives from
 // public/demo/demo-bundle.json.
 //
-// Provenance (refreshed 2026-10-05): 初診快覽 — overview, problems, 開藥注意 and,
-// for clinicians, 影像與病理重點 — generated in the app with Gemini 3.8 Flash
+// Provenance (refreshed 2026-10-28, after the demo gained the 健康存摺 data
+// through 2026-10-23): 初診快覽 — overview, problems, 開藥注意 and, for
+// clinicians, 影像與病理重點 — generated in the app with Gemini 3.8 Flash
 // through the free-tier proxy, one run per locale × audience, over the scope
-// the 初診 defaults give the demo (the record is small, so all of it). Each was
-// the best of two or three runs, read for missed problems, wrong facts and
-// repetition. Two medicines the model attached to a problem they do not treat
-// were removed (artificial tears under glaucoma; acetaminophen under BPH);
-// nothing else was edited. Assembled by scripts/assemble-demo-snapshots.ts,
+// the 初診 defaults give the demo (the record is small, so all of it). Each run
+// was read for missed problems, wrong facts, repetition and medicines attached
+// to a problem they do not treat. The first zh-TW patient run failed the
+// grounding audit and was replaced by a second run; nothing was edited.
+// Assembled by scripts/assemble-demo-snapshots.ts,
 // which also records each cited key's FHIR resource (`sourceResourceIds`).
-// The clinical-insight snapshots are older (Gemini 3 Flash Preview, 2026-09-04).
+// The clinical-insight (自訂摘要) snapshots were regenerated the same day with
+// their original model, Gemini 3 Flash Preview, and the template prompts they
+// were written for; each was checked against the record, and a run that stated
+// a billing code as a confirmed diagnosis or got a fact wrong was replaced by
+// another run.
 // Live patients still use the model-generated path.
 //
 // They deliberately store the RAW pre-parse shape, NOT the finalized result:
