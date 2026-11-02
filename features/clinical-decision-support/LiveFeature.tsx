@@ -538,7 +538,10 @@ export default function LiveClinicalDecisionSupportFeature({
       : undefined
   ), [answeredProfile, autofill, hfpefInputs])
 
-  const smokingCurrent = visitAnswers['smoking-current']
+  // Read by name: the preview typechecks against the published pack, whose
+  // VisitAnswers may not yet name HTN DP-08's 「目前吸菸」 (plan 05 §19).
+  const smokingAnswer = (visitAnswers as Readonly<Record<string, string | undefined>>)['smoking-current']
+  const smokingCurrent = smokingAnswer === 'yes' || smokingAnswer === 'no' ? smokingAnswer : undefined
   const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals, smokingCurrent ? { smokingCurrent } : {}) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals, smokingCurrent])
   // The HPA (國健署) MACE reconstruction for the HTN page's DP-08, read off the
   // same record and the same PREVENT answers (plan 05 §19, owner 2026-11-03).
