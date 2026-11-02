@@ -147,11 +147,11 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // NA·K·CL·CO2 set + magnesium); NT-PROBNP tails with the cardiac markers
     // (heart-failure marker, 生化室 assay). Canonical keys only here — text
     // variants live in `codes` — per feedback_canonical_only_in_preferredorder.
-    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'ICA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'HS-TROPONIN I', 'HS-TROPONIN T', 'CK', 'CKMB', 'NT-PROBNP'],
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'ICA', 'IP', 'MG', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA', 'AMYLASE', 'LIPASE', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'HS-TROPONIN I', 'HS-TROPONIN T', 'CK', 'CKMB', 'NT-PROBNP'],
     // CO2 variants stay TCO2-specific — NOT 'BICARBONATE'/'HCO3', which is the
     // arterial blood-gas analyte (own category). NT-proBNP variants kept
     // distinct from BNP (a different assay we don't fold in here).
-    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'NH3', '血氨', '氨', '09037C', 'BUN', '血中尿素氮', '血尿素氮', '血清尿素氮', '尿素氮', 'BLOOD UREA NITROGEN', 'UREA NITROGEN', '尿素', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', '鈣', '血清鈣', 'ICA', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', '尿酸', '血中尿酸', '血清尿酸', 'URIC ACID', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
+    codes: ['TP', 'TOTAL PROTEIN', 'PROTEIN,TOTAL', 'PROTEIN, TOTAL', '總蛋白', '血清總蛋白', '總蛋白質', '全蛋白', 'ALB', 'AMMONIA', 'AMYLASE', 'LIPASE', 'NH3', '血氨', '氨', '09037C', 'BUN', '血中尿素氮', '血尿素氮', '血清尿素氮', '尿素氮', 'BLOOD UREA NITROGEN', 'UREA NITROGEN', '尿素', 'CREA', 'CREAT', 'CREAT.', 'CRE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CO2', 'TCO2', 'T-CO2', 'TOTAL CO2', '二氧化碳', '二氧化碳總量', 'CA', 'CACAL', '鈣', '血清鈣', 'ICA', 'IP', 'MG', 'MAGNESIUM', '鎂', 'UA', '尿酸', '血中尿酸', '血清尿酸', 'URIC ACID', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'HS-TROPONIN I', 'HS-TROPONIN T', 'HS-CTNI', 'HS-CTNT', '09099C', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'NT-PROBNP', 'NT-PRO-BNP', 'NTPROBNP', 'PROBNP'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
     // ships this for NHI 09099C 心肌旋轉蛋白Ｉ.
@@ -178,11 +178,16 @@ export const LAB_CATEGORIES: LabCategory[] = [
     loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '50384-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8', '2028-9', '19123-9', '2601-3', '33762-6', '89579-7', '67151-1', '22763-7',
       // VGH hospital bridge (verified NLM 2026-10-29): CKD-EPI 2021 eGFR, venous
       // total CO2 (the CO2 family), ionized calcium.
-      '98979-8', '2027-1', '1994-3'],
+      '98979-8', '2027-1', '1994-3',
+      // Amylase and lipase [Enzymatic activity/volume] in Serum or Plasma, as
+      // the bridge ships them for 09017C / 09064C. They fell to 其他, which the
+      // cumulative report never shows (雲端病歷 exports, 2026-11-03).
+      '1798-8', '3040-3'],
     subgroups: [
       { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR(PED)', 'EGFR', 'UA'] },
       { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CO2', 'CA', 'ICA', 'IP', 'MG'] },
       { id: 'liver',       members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'AMMONIA'] },
+      { id: 'pancEnzyme',  members: ['AMYLASE', 'LIPASE'] },
       // 發炎/感染 sits to the LEFT of 心肌酵素 (inflam before cardiac) per the
       // user's reading order. CK + CK-MB join TROP under 心肌酵素; NT-proBNP
       // (heart-failure marker) tails the cardiac group.
@@ -196,7 +201,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // 直式 splits 生化 in two so neither table needs a horizontal scroll on a
     // half-width panel: 腎功能＋電解質 (the routine renal/lyte draw) and
     // 肝功能＋發炎/感染＋心肌酵素 (user request 2026-09-05).
-    stackedPanels: [['renal', 'electrolyte'], ['liver', 'inflam', 'cardiac']],
+    stackedPanels: [['renal', 'electrolyte'], ['liver', 'pancEnzyme', 'inflam', 'cardiac']],
     // CL deliberately not pinned — most ambulatory chem panels don't include
     // chloride, so pinning would create persistent empty columns. When a
     // hospital does report it, the data-presence rule will surface the column.

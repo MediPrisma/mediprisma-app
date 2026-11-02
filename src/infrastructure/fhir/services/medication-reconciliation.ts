@@ -347,14 +347,14 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     // are filled from the complementary source on the canonical order.
     order._sourcePrescriptionRecords = [order, other].map((source) => {
       const { _sourceRecordComparison, _sourcePrescriptionRecords, ...record } = source
-      return cloneSource({ ...record, _resolvedMedicationCodeableConcept: identity(source)?.concept })
+      return cloneSource({ ...record, _resolvedMedicationCodeableConcept: drug(source).concept })
     })
     if ((!order.status || order.status === 'unknown') && other.status && other.status !== 'unknown') order.status = other.status
     if (!order.intent && other.intent) order.intent = other.intent
     // A confirmed source pair can carry the cloud's actually recorded drug
     // code. This is source union, never a code inferred from a hospital name.
-    const hospitalConcept = identity(order)?.concept
-    const cloudConcept = identity(other)?.concept
+    const hospitalConcept = drug(order).concept
+    const cloudConcept = drug(other).concept
     if (hospitalConcept && cloudConcept) {
       order.medicationCodeableConcept = { ...hospitalConcept, coding: union(hospitalConcept.coding, cloudConcept.coding) }
       delete order.medicationReference
