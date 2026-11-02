@@ -468,7 +468,7 @@ export function useMedicationTimeline(
         prescriptionTypesByDrug.get(clinicalDrugKey),
       )
       const hospitalMedicationName = !med.drugTerminology
-        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code)
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code, med)
         : undefined
       const officialProductName = audience === 'medical'
         ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh

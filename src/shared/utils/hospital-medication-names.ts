@@ -1,3 +1,5 @@
+import { vghtpeMedicationIdentityIngredient } from './hospital-medication-index'
+
 /**
  * Ingredient catalogue for the VGH bridge's free-text drug-name systems.
  * These are exact recorded-name aliases, not NHI product-code matches. Never
@@ -22,7 +24,7 @@ export interface HospitalMedicationName {
   recordedGenericName?: string
   recordedProductName?: string
   recordedName?: string
-  source?: 'recorded-generic-name' | 'verified-product-alias'
+  source?: 'vghtpe-medication-index' | 'recorded-generic-name' | 'verified-product-alias'
   referenceUrl?: string
   version: string
   reviewedAt: string
@@ -131,8 +133,10 @@ const productAliases = new Map<string, ProductAlias>(VERIFIED_PRODUCTS.map(
 ))
 
 /** Resolve only the VGH bridge's explicitly named source systems. No fuzzy
- * matching, free-text scraping, cross-row propagation or fabricated NHI codes. */
-export function resolveHospitalMedicationName(concept?: Concept): HospitalMedicationName | undefined {
+ * matching, free-text scraping, cross-row propagation or fabricated NHI codes.
+ * The order's VGH medication index mark, when it names one identity, is the
+ * ingredient source; the recorded-name aliases below cover items outside it. */
+export function resolveHospitalMedicationName(concept?: Concept, order?: { extension?: any[] }): HospitalMedicationName | undefined {
   const codings = concept?.coding?.filter(({ system }) =>
     system === GENERIC_SYSTEM || system === PRODUCT_SYSTEM || system === NAME_SYSTEM) ?? []
   if (!codings.length) return undefined
@@ -149,6 +153,12 @@ export function resolveHospitalMedicationName(concept?: Concept): HospitalMedica
     productName: products[0] || generics[0] || recordedNames[0],
     version: HOSPITAL_MEDICATION_NAME_VERSION,
     reviewedAt: HOSPITAL_MEDICATION_NAME_REVIEWED_AT,
+  }
+  // The index already required the row's names to agree on one identity.
+  const indexed = order && vghtpeMedicationIdentityIngredient(order)
+  if (indexed) return {
+    ...base, status: 'normalized', ingredientName: indexed.ingredientText, source: 'vghtpe-medication-index',
+    ...(indexed.indexSha256 ? { version: `vghtpe-medication-index-${indexed.indexSha256.slice(0, 12)}` } : {}),
   }
   // Differing source codings are ambiguous even if an alias happens to match.
   if (generics.length > 1 || products.length > 1 || recordedNames.length > 1

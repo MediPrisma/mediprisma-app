@@ -185,7 +185,7 @@ export function createHospitalAwareCdssPatientProfile(
   const internalUseStates = new Map<string, HospitalMedicationUseState>()
   const unresolvedContents = input.medications.filter(row => row.clinicalMedicationContentUncertainty).map(row => ({ source: sourceFor(row), reason: row.clinicalMedicationContentUncertainty!.reason }))
   const medications = selected.input.medications.filter(row => !row.clinicalMedicationContentUncertainty).map((source, index): HostMedication => {
-    const name = resolveHospitalMedicationName(source.medicationCodeableConcept)
+    const name = resolveHospitalMedicationName(source.medicationCodeableConcept, source)
     if (!name) return source
     const useState = hospitalUseState(source, now)
     const ingredientName = source.drugTerminology?.ingredientText
@@ -257,8 +257,10 @@ export function createHospitalAwareCdssPatientProfile(
   for (const item of evidence) {
     if (EXCLUDED.has(item.source.status?.trim().toLowerCase() ?? '')) continue
     const originZh = item.fromOfficialTerminology ? '健保藥品主檔'
+      : item.name.source === 'vghtpe-medication-index' ? '北榮院內藥表（健保藥典身分）'
       : item.name.source === 'verified-product-alias' ? '已查證商品成分對照' : '來源藥名明列成分'
     const originEn = item.fromOfficialTerminology ? 'Official NHI drug master'
+      : item.name.source === 'vghtpe-medication-index' ? 'VGH medication index (NHI drug identity)'
       : item.name.source === 'verified-product-alias' ? 'Verified product ingredient alias' : 'Ingredient stated in the source name'
     const name = item.ingredientName || item.name.productName || '未命名藥物'
     facts[item.factKey] = {
