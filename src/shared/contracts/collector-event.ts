@@ -243,6 +243,7 @@ export type CollectorAppSurface = z.infer<typeof collectorAppSurfaceSchema>
 const collectorEventV10BaseSchema = collectorEventV4BaseSchema.extend({
   schema_version: z.literal(10),
   app_surface: collectorAppSurfaceSchema,
+  medcloud_extension_version: z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/).optional(),
   diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
     summary_cards: summaryCardCountsSchema.optional(),
     requests: operationRequestsSchema.optional(),
@@ -253,7 +254,7 @@ const collectorEventV10BaseSchema = collectorEventV4BaseSchema.extend({
 }).strict()
 export const collectorEventV10Schema = collectorEventV10BaseSchema.superRefine((e, ctx) => {
   validateOutcome(e, ctx)
-  const { app_surface: _surface, ...base } = e
+  const { app_surface: _surface, medcloud_extension_version: _extensionVersion, ...base } = e
   const { summary_attempt, summary_run_id, template, ...diagnostics } = e.diagnostics
   const checkLegacy = (schema: z.ZodTypeAny, version: number, legacyDiagnostics: Record<string, unknown>) => {
     const parsed = schema.safeParse({ ...base, schema_version: version, diagnostics: legacyDiagnostics })

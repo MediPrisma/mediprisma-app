@@ -1,3 +1,4 @@
+import { rememberLocalBundleVersion } from './local-bundle-version'
 import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
@@ -113,6 +114,10 @@ const originalFhirPrefix = (importId: string) => `original-fhir:${importId}:`
 // Session cache: avoids re-reading IndexedDB on every query. Module-level so it
 // is shared across all hook instances in the same tab.
 let memBundle: object | null = null
+function cacheBundle(bundle: object | null): void {
+  memBundle = bundle
+  rememberLocalBundleVersion(bundle)
+}
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false
 let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
@@ -1238,7 +1243,7 @@ export const LocalBundleService = {
           adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
           terminologyMigrationByBundle.delete(bundle)
         }
-        memBundle = bundle
+        cacheBundle(bundle)
         memBundleImportId = importId
         memBundleIsDemo = demo
         memBundleSourceMetadata = sourceMetadata ?? null
@@ -1364,7 +1369,7 @@ export const LocalBundleService = {
       adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
       terminologyMigrationByBundle.delete(bundle)
     }
-    memBundle = bundle
+    cacheBundle(bundle)
     memBundleUsesMemoryOnlySession = false
     memBundleImportId = importId
     memBundleIsDemo = demo
@@ -1427,7 +1432,7 @@ export const LocalBundleService = {
       ? memBundleImportId
       : readTabLocalImportId()
     const legacyImageRefs = legacyImageRefsInBundle(memBundle)
-    memBundle = null
+    cacheBundle(null)
     memBundleImportId = null
     memBundleIsDemo = false
     memBundleSourceMetadata = null
@@ -1510,7 +1515,7 @@ export const LocalBundleService = {
               clearTabBundleScope()
               return null
             }
-            memBundle = decrypted.bundle
+            cacheBundle(decrypted.bundle)
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
             memBundleSourceMetadata = decrypted.sourceMetadata ?? null
@@ -1528,7 +1533,7 @@ export const LocalBundleService = {
           }
           const bundle = decrypted as object
           const importId = migratedImportId()
-          memBundle = bundle
+          cacheBundle(bundle)
           memBundleImportId = importId
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           memBundleSourceMetadata = null
@@ -1546,7 +1551,7 @@ export const LocalBundleService = {
         } catch {
           // Never delete an undecryptable scoped record: this tab may have
           // inherited only the pointer while another tab still owns the key.
-          memBundle = null
+          cacheBundle(null)
           memBundleImportId = null
           memBundleIsDemo = false
           memBundleSourceMetadata = null
@@ -1564,7 +1569,7 @@ export const LocalBundleService = {
         // Plaintext bundle written by an older build — serve it this once and
         // immediately re-encrypt in place so it stops existing as plaintext.
         const importId = migratedImportId()
-        memBundle = fromIdb as object
+        cacheBundle(fromIdb as object)
         memBundleImportId = importId
         memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
         memBundleSourceMetadata = null
@@ -1600,7 +1605,7 @@ export const LocalBundleService = {
         const parsed = JSON.parse(raw)
         if (parsed && (parsed.resourceType === 'Bundle' || Array.isArray(parsed.entry))) {
           const importId = migratedImportId()
-          memBundle = parsed
+          cacheBundle(parsed)
           memBundleImportId = importId
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           memBundleSourceMetadata = null

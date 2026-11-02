@@ -5,6 +5,7 @@ import { createAiResultStore } from '@/src/application/hooks/ai-generation/creat
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
 import { mockCollectorPermission } from '../../helpers/collector-permissions'
 import { collectorAppSurface } from '@/src/infrastructure/telemetry/collector'
+import { rememberLocalBundleVersion } from '@/src/infrastructure/fhir/services/local-bundle-version'
 
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ saveEncryptedCache: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('@/src/application/telemetry/usage-analytics', () => ({ trackEvent: jest.fn() }))
@@ -21,6 +22,7 @@ const body = () => JSON.parse(jest.mocked(fetch).mock.calls.at(-1)![1]!.body as 
 let permission: ReturnType<typeof mockCollectorPermission>
 
 beforeEach(() => {
+  rememberLocalBundleVersion(null)
   cancelCollectorRequests()
   jest.useFakeTimers()
   localStorage.clear()
@@ -508,4 +510,22 @@ test('queues concurrent v7 attempts and sends completed-but-unparseable response
   expect(sent.slice(0,4).every(e => e.response_complete === true && e.error_class === 'parse_failed')).toBe(true)
   expect(sent[4].diagnostics.summary_cards).toEqual({succeeded:2,failed:2})
   releases.splice(0).forEach(release => release()); await settle()
+})
+
+test('captures the active Bundle version at operation start and omits it after clearing', async () => {
+ const bundle=(code:string)=>({meta:{tag:[{system:'https://cloud-wildcatch.invalid/fhir/CodeSystem/extension-version',code}]}})
+ rememberLocalBundleVersion(bundle('0.15.17'))
+ const observation=start()
+ rememberLocalBundleVersion(bundle('0.15.18'))
+ observation.finish({outcome:'ok'})
+ await settle()
+ expect(body().medcloud_extension_version).toBe('0.15.17')
+ start().finish({outcome:'ok'});await settle()
+ expect(body().medcloud_extension_version).toBe('0.15.18')
+ rememberLocalBundleVersion(null)
+ start().finish({outcome:'ok'});await settle()
+ expect(body()).not.toHaveProperty('medcloud_extension_version')
+ rememberLocalBundleVersion(bundle('patient text'))
+ start().finish({outcome:'ok'});await settle()
+ expect(body()).not.toHaveProperty('medcloud_extension_version')
 })
