@@ -1076,6 +1076,7 @@ export const zhTW = {
     noData: '無生命徵象資料。',
     homeMeasurement: '居家量測',
     homeMeasurementHint: '在院內居家量測服務開啟這位病人的居家血壓（限院內網路）',
+    homeMeasurementNoReadings: '居家量測服務近 90 天沒有這位病人的血壓（仍可開啟查看）',
     height: '身高',
     weight: '體重',
     bmi: 'BMI',
