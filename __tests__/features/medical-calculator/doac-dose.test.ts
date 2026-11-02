@@ -8,6 +8,7 @@ import { resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { RENAL } from '@/features/medical-calculator/calculators/renal'
 import { CITES, calculateDoacDoses, checkRegimen, cockcroftGault, crclLabel, type DoacAgent } from '@/features/medical-calculator/doac-dose-model'
 import { doacSelects } from '@/features/medical-calculator/doac-clinical-autofill'
+import { vghtpeMedicationIdentityExtension } from '@/src/shared/utils/hospital-medication-index'
 import { buildClinicalSelects } from '@/features/medical-calculator/hfpef-clinical-autofill'
 import { HF_VISIT_CALCULATORS } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
@@ -308,6 +309,15 @@ describe('autofill from current prescriptions', () => {
     expect(selects.ddi_verapamil?.value).toBe('no')
     // A product resolved by the reviewed alias list, with no official terminology.
     expect(doacSelects([hospital('Aromasin SC tab 25 mg')], now).doacRegimen?.value).toBe('none')
+  })
+
+  it('a hospital brand known only through the VGH medication index is matched by that ingredient', () => {
+    const indexed = (product: string, ingredient: string) => hospital(product,
+      { extension: [vghtpeMedicationIdentityExtension('a'.repeat(64), ['SYNTHETIC1'], ingredient)] } as Partial<MedicationEntity>)
+    const selects = doacSelects([indexed('Pradaxa #* cap 110 mg', 'dabigatran etexilate mesilate 110 MG'),
+      indexed('Isoptin SR FC * tab 240 mg', 'VERAPAMIL HCL 240 MG')], now)
+    expect(selects.doacRegimen?.value).not.toBe('none')
+    expect(selects.ddi_verapamil?.value).toBe('yes')
   })
 
   it('an unresolved hospital product that is no longer current does not hold anything back', () => {

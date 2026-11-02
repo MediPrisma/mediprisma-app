@@ -51,8 +51,13 @@ const DDI_INGREDIENTS: Record<Exclude<DoacSelectKey, 'doacRegimen'>, readonly st
 // interaction. 「gel」 as a word only: a hard gelatin capsule is oral.
 const LOCAL = /cream|ointment|\bgel\b|shampoo|topical|ophthalmic|eye\s*drop|otic|乳膏|軟膏|凝膠|洗髮|外用|眼藥|耳滴/i
 
+/** Every name that can show what the drug is, including the hospital ingredient
+ *  that makes ingredientUnknown() false: a row counted as known must be matched
+ *  by that same ingredient (Pradaxa resolves to dabigatran). */
 function names(med: MedicationEntity): string {
-  return [med.drugTerminology?.ingredientText, med.drugTerminology?.officialNameEn, medicationDisplayName(med)].filter(Boolean).join(' ')
+  const hospital = med.drugTerminology?.ingredientText ? undefined : resolveHospitalMedicationName(med.medicationCodeableConcept, med)
+  return [med.drugTerminology?.ingredientText, med.drugTerminology?.officialNameEn,
+    hospital?.status === 'normalized' ? hospital.ingredientName : undefined, medicationDisplayName(med)].filter(Boolean).join(' ')
 }
 
 /**
