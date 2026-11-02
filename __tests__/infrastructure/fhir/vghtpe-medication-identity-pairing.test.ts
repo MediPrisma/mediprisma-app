@@ -113,6 +113,27 @@ describe('pairing a hospital order with its 臺北榮總 cloud claim by index id
     expect(reconcileMedicationRequests([hospital, other, cloud])).toHaveLength(3)
   })
 
+  // MediCloud records only the frequency code, the hospital the full SIG.
+  const sigOrders = (name: string, nhiCode: string, sig: string, frequency: string, cloudSig: string) => [
+    hospitalOrder({ medicationCodeableConcept: { text: name, coding: [{ system: PRODUCT, code: name, display: name }] },
+      dosageInstruction: [{ text: sig, timing: { code: { coding: [{ system: 'urn:oid:vgh.medication.frequency', code: frequency }] } } }] }),
+    cloudOrder({ medicationCodeableConcept: { coding: [{ system: NHI, code: nhiCode }] }, dosageInstruction: [{ text: cloudSig }] }),
+  ]
+
+  it.each([
+    ['QN', 'Progor * cap 120 mg', 'BC23001100', '1 CAP PO QN', 'QN'],
+    ['Q5MPRN', 'Nitrostat tab 0.6 mg', 'BC20802100', 'X25 TAB SL Q5MPRN', 'Q5MPRN'],
+  ])('merges when the cloud records only the same %s frequency', async (_, name, nhiCode, sig, frequency) => {
+    const [hospital, cloud] = await marked(...sigOrders(name, nhiCode, sig, frequency, frequency))
+    expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(1)
+    expect(hospital._sourceRecordComparison).toMatchObject({ status: 'confirmed' })
+  })
+
+  it('keeps both rows when the cloud frequency code differs', async () => {
+    const [hospital, cloud] = await marked(...sigOrders('Progor * cap 120 mg', 'BC23001100', '1 CAP PO QN', 'QN', 'QD'))
+    expect(reconcileMedicationRequests([hospital, cloud])).toHaveLength(2)
+  })
+
   it('does not pair by name when the hospital order has no index mark', () => {
     expect(reconcileMedicationRequests([hospitalOrder(), cloudOrder()])).toHaveLength(2)
   })
