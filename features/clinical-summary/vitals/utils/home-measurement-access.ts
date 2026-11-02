@@ -8,10 +8,10 @@ const PILOT_ACCOUNT_SHA256 = new Set([
   '3eabb4fce9695ea098f36c880cad6996a1b8af04c8b6db7299a424932a78d142',
 ])
 
-export async function isHomeMeasurementPilotUser(user: User | null): Promise<boolean> {
+export async function isHomeMeasurementPilotUser(user: User | null, accounts: ReadonlySet<string> = PILOT_ACCOUNT_SHA256): Promise<boolean> {
   const email = user?.emailVerified ? user.email?.trim().toLowerCase() : ''
   if (!email || !globalThis.crypto?.subtle) return false
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(email))
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
-  return PILOT_ACCOUNT_SHA256.has(hex)
+  return accounts.has(hex)
 }

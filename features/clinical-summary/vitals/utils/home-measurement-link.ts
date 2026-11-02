@@ -4,7 +4,7 @@
 // The patient travels after "#": the browser never sends it to that server or
 // its logs, and the service looks the patient up with a POST.
 import { isVghtpeLaunchUrl } from '@/src/application/launch/medcloud-launch-context'
-import { isDeidentifiedPatient, type PatientEntity } from '@/src/core/entities/patient.entity'
+import type { PatientEntity } from '@/src/core/entities/patient.entity'
 
 export const HEALTH_APP_ORIGIN = 'https://health-app.mediprisma.tw'
 
@@ -12,26 +12,21 @@ export const HEALTH_APP_ORIGIN = 'https://health-app.mediprisma.tw'
 const HOSPITAL_MRN_SYSTEM = 'urn:oid:his.patient.mrn'
 const MASKED_NAME = /[Xx*＊○〇●Ｏ◯]/u
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
-/** The exporter's de-identified 病歷號: 32 hex characters of an HMAC, never a real chart number. */
-const EXPORTER_PSEUDONYM = /^[0-9a-f]{32}$/
 
 /**
  * Hospital data (a 病歷號): open that patient. Cloud data only, in the
  * hospital's own launch (`site=vghtpe`): name and birth date, which the
  * service only offers as candidates to confirm; without a usable name and
- * birth date, the service's home page. Anything else — another site, or a
- * de-identified patient — gets no link.
+ * birth date, the service's home page. Another site without a 病歷號 gets no
+ * link. De-identification is not considered: it matters only for what is sent
+ * to AI, and the doctor opening this service sees the hospital's own records.
  */
 export function homeMeasurementLink(patient: PatientEntity | null, pageUrl: string): string | null {
-  if (!patient || isDeidentifiedPatient(patient)) return null
+  if (!patient) return null
   const names = (patient.name ?? []).map((name) => name.text?.trim()).filter((text): text is string => Boolean(text))
-  // The exporter's de-identification names the patient DEID-… and puts a pseudonym where the 病歷號 was.
-  // A name added later in 補充資料 replaces DEID-…, so the pseudonym itself is checked too.
-  if (names.some((name) => name.startsWith('DEID-'))) return null
 
   const mrn = patient.identifier?.find((identifier) =>
     identifier.system?.trim() === HOSPITAL_MRN_SYSTEM && identifier.value?.trim())?.value?.trim()
-  if (mrn && EXPORTER_PSEUDONYM.test(mrn)) return null
   if (mrn) return `${HEALTH_APP_ORIGIN}/open#${new URLSearchParams({ chart: mrn })}`
 
   if (!isVghtpeLaunchUrl(pageUrl)) return null
