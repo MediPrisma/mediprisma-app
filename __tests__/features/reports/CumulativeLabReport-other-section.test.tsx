@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { fireEvent, render, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { CumulativeLabReport } from '@/features/clinical-summary/reports/components/CumulativeLabReport'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -46,4 +46,14 @@ it('shows 其他 as the last section when it holds a result', () => {
 it('leaves 其他 out when nothing falls there', () => {
   render(<CumulativeLabReport observations={[crp]} />, { wrapper: TestProviders })
   expect(sections()).not.toContain('other')
+})
+
+it('moves 其他 like any other section', () => {
+  render(<CumulativeLabReport observations={[crp, aluminum]} />, { wrapper: TestProviders })
+  const other = document.querySelector<HTMLElement>('[data-cumulative-section="other"]')!
+  const buttons = within(other).getAllByRole('button').filter((button) => /上移|move up/i.test(button.getAttribute('aria-label') ?? ''))
+  expect(buttons).toHaveLength(1)
+  fireEvent.click(buttons[0])
+  const order = sections()
+  expect(order.indexOf('other')).toBe(order.length - 2)
 })

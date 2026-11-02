@@ -15,8 +15,8 @@
 
 import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 
-/** `other` is the catch-all, not a reorderable panel: CumulativeLabReport
- *  appends it last, and only when it holds data. */
+/** `other` is the catch-all, with no expected columns: CumulativeLabReport
+ *  adds it — last by default — only when it holds data. */
 export const CUMULATIVE_REPORT_CATEGORY_IDS: string[] = LAB_CATEGORIES
   .filter((category) => category.id !== 'other')
   .map((category) => category.id)
