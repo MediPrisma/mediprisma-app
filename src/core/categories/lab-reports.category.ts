@@ -5,7 +5,7 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
-import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
+import { selectLabOrphanObservations, clinicalRecordKey } from '@/src/core/utils/observation-selectors'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import {
@@ -94,9 +94,19 @@ function collectLabPoints(
 ): { points: LabPoint[]; conclusions: NarrativeReport[] } {
   const points: LabPoint[] = []
   const conclusions: NarrativeReport[] = []
+  const representedCopies = new Set<string>()
+  const alreadyRepresented = (observation: Observation) => {
+    const row = observation as Observation & { clinicalSourceCopyKeys?: readonly string[] }
+    const key = row.clinicalSourceCopyKeys?.length ? clinicalRecordKey(row) : undefined
+    if (!key) return false
+    if (representedCopies.has(key)) return true
+    representedCopies.add(key)
+    return false
+  }
 
   for (const item of data) {
     if (isObservation(item)) {
+      if (alreadyRepresented(item)) continue
       if (normalizeClinicalStatus((item as any).status) === 'entered-in-error') continue
       for (const valueObservation of expandObservationValues(item)) {
         const p = obsToLabPoint(valueObservation)
@@ -116,6 +126,7 @@ function collectLabPoints(
 
     let added = 0
     for (const o of resolved) {
+      if (alreadyRepresented(o)) continue
       if (normalizeClinicalStatus((o as any).status) === 'entered-in-error') continue
       for (const valueObservation of expandObservationValues(o)) {
         const p = obsToLabPoint(valueObservation)
