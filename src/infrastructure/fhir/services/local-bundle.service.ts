@@ -46,6 +46,7 @@ import { reconcileOutpatientEncounters } from './outpatient-encounter-reconcilia
 import { reconcileMedicationRequests } from './medication-reconciliation'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 import { hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
+import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
@@ -1833,6 +1834,7 @@ export const LocalBundleService = {
     }
     recordClinicalEncounterAliases(clinicalSource, confirmedEncounterAliases)
     entries = reconcileMedicationRequests(entries)
+    entries = complementHospitalOrderVisitContext(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
     const sourceCapturedAt = typeof bundle.timestamp === 'string'
