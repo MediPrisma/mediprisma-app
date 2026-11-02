@@ -5,6 +5,7 @@ import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-gene
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { collectorEventV10Schema, MAX_COLLECTOR_REQUEST_DETAILS } from '@/src/shared/contracts/collector-event'
 import { mockCollectorPermission } from '../../helpers/collector-permissions'
+import { rememberLocalBundleVersion } from '@/src/infrastructure/fhir/services/local-bundle-version'
 
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ saveEncryptedCache: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('@/src/application/telemetry/usage-analytics', () => ({ trackEvent: jest.fn() }))
@@ -20,6 +21,7 @@ const child = (operation: ReturnType<typeof parent>['operation'], modelId = 'gpt
   beginCollectorObservation({ feature: 'summary', modelId, sampleKind: 'request', mode: 'stream', operation })
 let permission: ReturnType<typeof mockCollectorPermission>
 beforeEach(() => {
+  rememberLocalBundleVersion(null)
   cancelCollectorRequests()
   permission = mockCollectorPermission()
   mockCapture.mockClear()
@@ -245,4 +247,16 @@ test('custom summary requests (v9) use at most half the retry queue and give way
   const dropped = collectorStatus().dropped
   parent().finish({ outcome: 'ok' })
   expect(collectorStatus()).toMatchObject({ queued: 64, dropped: dropped + 1 })
+})
+
+test('summary child attempts retain the parent source version after a new Bundle arrives',async()=>{
+ const source=(code:string)=>({meta:{tag:[{system:'https://cloud-wildcatch.invalid/fhir/CodeSystem/extension-version',code}]}})
+ rememberLocalBundleVersion(source('0.15.17'))
+ const operation=parent()
+ rememberLocalBundleVersion(source('0.15.18'))
+ child(operation.operation).finish({outcome:'ok',summaryAttempt:{run_id:'11111111-1111-4111-8111-111111111111',request_id:'22222222-2222-4222-8222-222222222222',attempt:1,lane:'fast',output_chars:10,last_chunk_ms:null,parse_state:'valid'}})
+ operation.finish({outcome:'ok'})
+ await settle()
+ expect(payloads()).toHaveLength(2)
+ expect(payloads().every(e=>e.medcloud_extension_version==='0.15.17')).toBe(true)
 })

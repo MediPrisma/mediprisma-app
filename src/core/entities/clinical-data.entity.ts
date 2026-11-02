@@ -417,6 +417,8 @@ export interface ClinicalRecordVariant {
 }
 
 export interface ObservationEntity extends ClinicalSourceRecord {
+  /** Original graph nodes represented by this app-only cross-source lab row. */
+  clinicalSourceCopyKeys?: readonly string[]
   /** Local convenience association by date; not an explicit FHIR encounter link. */
   _encounterInferred?: boolean
   /** Encounters of the outpatient orders this result is basedOn (local import). */
