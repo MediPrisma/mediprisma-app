@@ -139,6 +139,8 @@ describe('the committed index', () => {
     expect(cream.identity.doseFormFamily).toBe('CREAM')
     expect(cream.nhiCodes.map((code: string) => rows.get(code)![8]).every((form: string) => form.includes('乳膏'))).toBe(true)
     expect(lookup('Bisacodyl EFC * tab 5 mg/PTP VPP').identity.releaseType).toBe('enteric')
+    // A sustained release written SRFC, or stated only in the dictionary's Chinese name (持續性).
+    expect(lookup('Nifedipine "CYH" SRFC *tab 30 mg').identity.releaseType).toBe('modified')
     // A dictionary row whose ingredient field names another ingredient is corrected before use.
     expect(lookup('Aldioxa tab 100 mg').ingredientText).toMatch(/ALDIOXA/)
   })
