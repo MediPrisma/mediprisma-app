@@ -2117,8 +2117,6 @@ export const zhTW = {
     enableBetaFeatures: '開啟 Beta 功能',
     betaFeaturesDescription: '顯示個人化照護指引與個人化衛教等測試中功能。登入後設定隨帳號保存；未登入時保存在此瀏覽器。',
     betaFeaturesSyncError: '目前無法同步 Beta 設定至帳號，暫時只保存在此瀏覽器。請確認連線後再次切換設定。',
-    pilotPacks: '試辦模組',
-    pilotPacksDescription: '尚未正式發布的照護指引路徑。開啟「Beta 功能」會一次顯示全部；此處則是單獨挑一項，只在這台瀏覽器的「個人化指引」中出現，並標示為試辦。',
     theme: '主題',
     clinicianNameSection: '上次門診',
     clinicianNameLabel: '我的醫師姓名',

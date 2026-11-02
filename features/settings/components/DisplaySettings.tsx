@@ -10,10 +10,9 @@
 // surface rather than four different designers.
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Moon, Sun, ExternalLink, Bug, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useTheme } from '@/src/application/providers/theme.provider'
@@ -24,22 +23,9 @@ import { useFhirContext, isLocalBundleFhirUrl } from '@/src/application/hooks/ch
 import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 import { FeatureRequestPoolDialog } from '@/features/feature-request-pool'
 import { useBetaFeatures } from '@/src/application/hooks/use-beta-features.hook'
-import { isMedcloudLaunchRoute } from '@/src/application/launch/medcloud-launch-route'
-import {
-  readPilotPackIds,
-  writePilotPackIds,
-} from '@/features/clinical-decision-support/guideline-packs/pilot-gate'
-import { HOST_CARE_PACKS } from '@/features/clinical-decision-support/guideline-packs/registry'
 import { ClinicianNameSetting } from './ClinicianNameSetting'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
-
-// The unreleased packs this app actually lists. Read from the composition
-// root's own switcher list rather than from every pack the package carries, so
-// this section can never offer a checkbox for a pathway the switcher would not
-// show anyway — and so a newly listed pack is offered here with no second place
-// to update.
-const PILOT_CANDIDATE_PACKS = HOST_CARE_PACKS.filter((pack) => !pack.enabled)
 
 const FONT_SIZE_OPTIONS: Array<{ value: FontSize; labelKey: string; fallback: string; preview: string }> = [
   { value: 'xs', labelKey: 'fontSizeXSmall', fallback: '特小', preview: 'text-[0.625rem]' },
@@ -52,7 +38,7 @@ const FONT_SIZE_OPTIONS: Array<{ value: FontSize; labelKey: string; fallback: st
 export function DisplaySettings() {
   const { theme, setTheme } = useTheme()
   const { fontSize, setFontSize } = useFontSize()
-  const { t, locale } = useLanguage()
+  const { t } = useLanguage()
   const {
     enabled: betaFeaturesEnabled,
     offered: betaFeaturesOffered,
@@ -63,30 +49,6 @@ export function DisplaySettings() {
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [featureRequestsOpen, setFeatureRequestsOpen] = useState(false)
-  // Which route this is and what this browser has stored are both client-only
-  // facts, so the section resolves after hydration rather than during the first
-  // render, which the server also produces. One state object, one commit.
-  const [pilotPacks, setPilotPacks] = useState<{ visible: boolean; ids: readonly string[] }>({
-    visible: false,
-    ids: [],
-  })
-  useEffect(() => {
-    // The unattended Medcloud hand-off shows no opt-in switches at all.
-    if (isMedcloudLaunchRoute()) return
-    // Restoring persisted browser state is exactly what this effect is for; it
-    // cannot run during render without diverging from the server's HTML.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPilotPacks({ visible: PILOT_CANDIDATE_PACKS.length > 0, ids: readPilotPackIds() })
-  }, [])
-
-  const togglePilotPack = (packId: string, on: boolean) => {
-    const next = on
-      ? [...pilotPacks.ids, packId]
-      : pilotPacks.ids.filter((id) => id !== packId)
-    writePilotPackIds(next)
-    setPilotPacks((previous) => ({ ...previous, ids: readPilotPackIds() }))
-  }
-
   const hasConnectionInfo = !!(fhirServerUrl || patientId)
   const isLocalBundle = isLocalBundleFhirUrl(fhirServerUrl)
   const fhirServerDisplay = isLocalBundle
@@ -177,42 +139,6 @@ export function DisplaySettings() {
               aria-describedby="beta-features-description"
               className="mt-0.5"
             />
-          </div>
-        </div>
-      ) : null}
-
-      {/* Pilot modules — a host-side gate over packs the care package ships
-          disabled, so a tester can be shown one without a package release.
-          Also reachable as `?pilotPacks=<id>,<id>`; this is the same store.
-
-          Hidden once Beta features are on, because Beta already shows every
-          unreleased pack: leaving per-pack checkboxes standing there would be
-          controls that cannot change what the tester sees. */}
-      {pilotPacks.visible && !betaFeaturesEnabled && PILOT_CANDIDATE_PACKS.length > 0 ? (
-        <div className="space-y-3" data-testid="pilot-packs-settings">
-          <Label className="text-xs uppercase text-muted-foreground">
-            {t.settings.pilotPacks}
-          </Label>
-          <p id="pilot-packs-description" className="text-xs leading-relaxed text-muted-foreground">
-            {t.settings.pilotPacksDescription}
-          </p>
-          <div className="space-y-2">
-            {PILOT_CANDIDATE_PACKS.map((pack) => {
-              const inputId = `pilot-pack-${pack.id}`
-              return (
-                <div key={pack.id} className="flex items-center gap-2">
-                  <Checkbox
-                    id={inputId}
-                    checked={pilotPacks.ids.includes(pack.id)}
-                    onCheckedChange={(checked) => togglePilotPack(pack.id, checked === true)}
-                    aria-describedby="pilot-packs-description"
-                  />
-                  <Label htmlFor={inputId} className="text-sm font-normal">
-                    {pack.label[locale === 'en' ? 'en' : 'zh']}
-                  </Label>
-                </div>
-              )
-            })}
           </div>
         </div>
       ) : null}

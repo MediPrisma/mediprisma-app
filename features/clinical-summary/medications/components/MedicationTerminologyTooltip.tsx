@@ -29,7 +29,9 @@ export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicati
         ))}
       </dl>
       <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1 text-xs text-secondary-foreground/70">
-        {name.source === 'verified-product-alias'
+        {name.source === 'vghtpe-medication-index'
+          ? (en ? 'VGH medication index (NHI drug identity)' : '北榮院內藥表（健保藥典身分）')
+          : name.source === 'verified-product-alias'
           ? (en ? 'Verified product-name ingredient reference' : '商品名成分對照')
           : name.source === 'recorded-generic-name'
             ? (en ? 'Ingredient explicitly named in the source record' : '來源藥名明列成分')

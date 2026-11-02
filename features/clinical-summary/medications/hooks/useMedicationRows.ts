@@ -172,7 +172,7 @@ export function useMedicationRows(
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const drugTerminology = med.drugTerminology
       const hospitalMedicationName = !drugTerminology || med._reconciledSourceReferences?.length
-        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code) : undefined
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code, med) : undefined
 
       // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
       // localized (zh-TW) name in `.text` and the English name in

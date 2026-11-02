@@ -1,5 +1,6 @@
 import { render, renderHook, screen } from '@testing-library/react'
 import { resolveHospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
+import { vghtpeMedicationIdentityExtension } from '@/src/shared/utils/hospital-medication-index'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { useMedicationTimeline } from '@/features/clinical-summary/medications/timeline/hooks/useMedicationTimeline'
 import { HospitalMedicationNameDetails } from '@/features/clinical-summary/medications/components/MedicationTerminologyTooltip'
@@ -134,6 +135,17 @@ describe('VGH hospital medication ingredient display', () => {
     expect(timeline.result.current.drugs[0]).toMatchObject({
       drugName: 'Trastuzumab emtansine 100 mg', hospitalMedicationName: { status: 'normalized' },
     })
+  })
+
+  it('takes the ingredient from the VGH medication index mark before any recorded-name alias', () => {
+    const marked = { ...medication(undefined, 'Plavix FC tab 75 mg'),
+      extension: [vghtpeMedicationIdentityExtension('a'.repeat(64), ['BC22981100'], 'CLOPIDOGREL 75 MG')] }
+    const { result } = renderHook(() => useMedicationRows([marked], 'medical', 'zh-TW'))
+    expect(result.current[0]).toMatchObject({ title: 'CLOPIDOGREL 75 MG', secondaryTitle: 'Plavix FC tab 75 mg',
+      hospitalMedicationName: { status: 'normalized', source: 'vghtpe-medication-index' } })
+    // An alias-resolved product keeps its alias when the index has no identity for it.
+    const unlisted = { ...medication(undefined, 'Aromasin SC tab 25 mg'), extension: [vghtpeMedicationIdentityExtension('a'.repeat(64), [])] }
+    expect(resolveHospitalMedicationName(unlisted.medicationCodeableConcept, unlisted)).toMatchObject({ source: 'verified-product-alias' })
   })
 
   it('preserves exact official NHI terminology precedence and patient source-language behavior', () => {
