@@ -25,8 +25,7 @@ export function homeMeasurementLink(patient: PatientEntity | null, pageUrl: stri
   if (!patient) return null
   const names = (patient.name ?? []).map((name) => name.text?.trim()).filter((text): text is string => Boolean(text))
 
-  const mrn = patient.identifier?.find((identifier) =>
-    identifier.system?.trim() === HOSPITAL_MRN_SYSTEM && identifier.value?.trim())?.value?.trim()
+  const mrn = hospitalChart(patient)
   if (mrn) return `${HEALTH_APP_ORIGIN}/open#${new URLSearchParams({ chart: mrn })}`
 
   if (!isVghtpeLaunchUrl(pageUrl)) return null
@@ -35,4 +34,10 @@ export function homeMeasurementLink(patient: PatientEntity | null, pageUrl: stri
     return `${HEALTH_APP_ORIGIN}/open#${new URLSearchParams({ name: names[0], birth })}`
   }
   return `${HEALTH_APP_ORIGIN}/`
+}
+
+/** The hospital 病歷號, when the patient came from the hospital's own records. */
+export function hospitalChart(patient: PatientEntity | null): string | null {
+  return patient?.identifier?.find((identifier) =>
+    identifier.system?.trim() === HOSPITAL_MRN_SYSTEM && identifier.value?.trim())?.value?.trim() ?? null
 }
