@@ -49,7 +49,8 @@ describe('LOINC codes the package table lacks', () => {
       obs('U-CRE 尿液肌酸酐', 80, '2161-8'),
       obs('微白蛋白(尿)(半定量)', 30, '14957-5'),
     ])
-    expect(keys(pivots, 'urine').sort()).toEqual(['CREA', 'GLUCOSE', 'KETONE', 'MALB'])
+    // A semi-quantitative (strip) result keeps its own column.
+    expect(keys(pivots, 'urine').sort()).toEqual(['CREA', 'GLUCOSE', 'KETONE', 'MALB-STRIP'])
     expect(keys(pivots, 'glucose')).toEqual([])
   })
 
