@@ -126,6 +126,13 @@ function MeasureRow({ ask, answers, isEnglish, onMeasure, onAnswer, labelId, tra
 }) {
   const shown = ask.answer ? `${ask.answer.systolic}/${ask.answer.diastolic}` : ''
   const [draft, setDraft] = useState(shown)
+  // A new pair from the pack (typed on another page, or withdrawn) starts the
+  // field afresh, adjusted while rendering rather than by remounting the row.
+  const [seen, setSeen] = useState(shown)
+  if (seen !== shown) {
+    setSeen(shown)
+    setDraft(shown)
+  }
   const noneChosen = Boolean(ask.none && (answers as Record<string, string | undefined>)[ask.none.askId] === ask.none.value)
   const invalid = draft.trim() !== '' && !parseBloodPressurePair(draft)
   // Enter is the clinician saying 「this is today's reading」, so it is sent
@@ -254,8 +261,11 @@ export function BookAsks({
     <div className={styles.asks} data-testid="cdss-book-asks">
       {measureAsks.map((ask, index) => (
         <MeasureRow
-          // A new pair from the pack (typed on another page, or withdrawn) starts the field afresh.
-          key={`${ask.id}:${ask.answer ? `${ask.answer.systolic}/${ask.answer.diastolic}` : ''}`}
+          // Keyed by the ask alone: the row also carries the point's decision
+          // (`trailing`), which must stay mounted when a pair typed here is
+          // saved on blur, or the click that blurred the field is lost (#414
+          // review). The field itself starts afresh on a new pair (below).
+          key={ask.id}
           ask={ask}
           answers={answers}
           isEnglish={isEnglish}
