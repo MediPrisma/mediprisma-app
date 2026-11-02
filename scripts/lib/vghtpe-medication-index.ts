@@ -44,12 +44,35 @@ export interface VghtpeMedicationIndex {
 
 export interface VghtpeMedicationIndexReport {
   included: { dictionary: number }
-  excluded: { notUnique: number; nameCollision: number; duplicate: number }
+  excluded: { notUnique: number; nameContradicted: number; nameCollision: number; duplicate: number }
+  contradictedNames: string[]
   collidingNames: string[]
 }
 
 type MasterRow = readonly string[]
 const sha256 = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex')
+
+// What a hospital name states outright, the identity must not deny. A name
+// that lists a second ingredient (Brimonidine+Timolol, Alendronate 70/Vit D3,
+// a bare 10/20 strength pair), a modified-release marker (Doxaben XL) or a
+// suppository (Domperidone supp) keeps its identity only when the identity
+// and every NHI code of it say the same.
+const SECOND_INGREDIENT = /[A-Z]\s*\+\s*[A-Z]|\d\s*\/\s*[A-Z]|\d\s*(?:MG|MCG|UG|IU)?\s*\/\s*\d+(?:\.\d+)?(?!\s*(?:ML|GM?|L|%)\b|[\d.])/
+const RELEASE_MARKER = /(?<![A-Z])(?:XL|XR|SR|CR|ER|LA|OROS|ZOK|PR|MR|CD|LP|UNO|RETARD|CONTINUS|DURULES)(?![A-Z])/
+const MODIFIED_RELEASE_ROW = /持續|緩釋|長效|控釋|延長|徐放|(?<![A-Z])(?:XL|XR|SR|CR|ER|LA|OROS|ZOK|PR|MR|CD|RETARD|CONTINUS|PROLONGED|EXTENDED|SUSTAINED|CONTROLLED|MODIFIED)(?![A-Z])/
+const SUPPOSITORY = /(?<![A-Z])SUPP/
+// A vaginal soft capsule is what the hospital orders as a vaginal supp (Lomexin).
+const SUPPOSITORY_ROW = /栓|陰道/
+const ROW_ZH_NAME = 3, ROW_EN_NAME = 4, ROW_DOSE_FORM = 8
+
+export function hospitalNameContradictsIdentity(name: string, identity: VghtpeMedicationIdentity, rows: readonly MasterRow[]): boolean {
+  const upper = name.normalize('NFKC').toUpperCase()
+  const rowText = (row: MasterRow) => `${row[ROW_ZH_NAME] ?? ''} ${row[ROW_EN_NAME] ?? ''} ${row[ROW_DOSE_FORM] ?? ''}`.toUpperCase()
+  if (SECOND_INGREDIENT.test(upper) && identity.ingredients.length < 2) return true
+  if (RELEASE_MARKER.test(upper) && !rows.every(row => MODIFIED_RELEASE_ROW.test(rowText(row)))) return true
+  if (SUPPOSITORY.test(upper) && !rows.every(row => SUPPOSITORY_ROW.test(String(row[ROW_DOSE_FORM] ?? '')))) return true
+  return false
+}
 
 export function buildVghtpeMedicationIndex(input: {
   identity: any; identityBytes: Buffer | string
@@ -63,7 +86,8 @@ export function buildVghtpeMedicationIndex(input: {
   if (!Array.isArray(identity.items)) throw new Error('identity has no items')
   const rows = new Map<string, MasterRow>(masterRows.map(row => [String(row[0]), row]))
   const report: VghtpeMedicationIndexReport = {
-    included: { dictionary: 0 }, excluded: { notUnique: 0, nameCollision: 0, duplicate: 0 }, collidingNames: [],
+    included: { dictionary: 0 }, excluded: { notUnique: 0, nameContradicted: 0, nameCollision: 0, duplicate: 0 },
+    contradictedNames: [], collidingNames: [],
   }
   const codesOf = (codes: unknown, label: string) => {
     const list = [...new Set((Array.isArray(codes) ? codes : []).map(code => String(code).trim()).filter(Boolean))].sort()
@@ -88,11 +112,17 @@ export function buildVghtpeMedicationIndex(input: {
       if (result.status !== 'unique') { report.excluded.notUnique++; continue }
       const nhiCodes = codesOf(result.nhiCodes, name)
       const id = result.identity ?? {}
-      candidates.push({ names: [name], basis: 'dictionary-identity', ingredientText: String(result.ingredientText ?? '').trim(), nhiCodes, identity: {
+      const parsed: VghtpeMedicationIdentity = {
         ingredients: (id.ingredients ?? []).map((part: any) => ({ name: String(part.name), amount: String(part.amount) })),
         ...(id.packageQuantity ? { packageQuantity: String(id.packageQuantity) } : {}),
         doseFormFamily: String(id.doseFormFamily ?? ''), releaseType: String(id.releaseType ?? ''),
-      } })
+      }
+      if (hospitalNameContradictsIdentity(name, parsed, nhiCodes.map(code => rows.get(code)!))) {
+        report.excluded.nameContradicted++
+        report.contradictedNames.push(name)
+        continue
+      }
+      candidates.push({ names: [name], basis: 'dictionary-identity', ingredientText: String(result.ingredientText ?? '').trim(), nhiCodes, identity: parsed })
     }
   }
   // Names of one item with the same identity are listed together.
@@ -130,6 +160,7 @@ export function buildVghtpeMedicationIndex(input: {
     report.included.dictionary++
   }
   items.sort((a, b) => a.names[0].localeCompare(b.names[0]))
+  report.contradictedNames = [...new Set(report.contradictedNames)].sort()
   report.collidingNames = [...new Set(report.collidingNames)].sort()
   return {
     index: { schemaVersion: INDEX_SCHEMA_VERSION, sourceSchemaVersion: identity.schemaVersion, terminologySnapshotId,

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import index from '@/src/infrastructure/fhir/data/vghtpe-medication-index.generated.json'
-import { buildVghtpeMedicationIndex, INDEX_SCHEMA_VERSION } from '@/scripts/lib/vghtpe-medication-index'
+import { buildVghtpeMedicationIndex, hospitalNameContradictsIdentity, INDEX_SCHEMA_VERSION } from '@/scripts/lib/vghtpe-medication-index'
 import { hospitalMedicationNameKey } from '@/src/shared/utils/hospital-medication-index'
 
 const MASTER_PATH = path.join(process.cwd(), 'vendor/nhi-fhir-bridge-nhi-drug-terminology/data/nhi-drug-terminology-20260728.json')
@@ -51,6 +51,23 @@ describe('buildVghtpeMedicationIndex', () => {
     expect(report.excluded.nameCollision).toBe(2)
   })
 
+  it('drops a name whose stated ingredients, release or form the identity denies', () => {
+    const doxazosin = { ingredients: [{ name: 'DOXAZOSIN', amount: '4MG' }], doseFormFamily: 'TABLET', releaseType: 'immediate' }
+    const resolved = (name: string, codes: string[], identity: any) => ({ names: [name], aliasResults: [{ name, status: 'unique', ingredientText: '', nhiCodes: codes, identity }] })
+    const { index: built, report } = buildVghtpeMedicationIndex({
+      identity: table([
+        resolved('Doxaben XL * tab 4 mg', ['A031966100'], doxazosin),
+        resolved('Doxaben XL tab 4 mg', ['BC23711100'], { ...doxazosin, releaseType: 'extended' }),
+        resolved('Ezetimibe+Atorvastatin tab 10/20', ['B024058100'], { ingredients: [{ name: 'EZETIMIBE', amount: '10MG' }], doseFormFamily: 'TABLET', releaseType: 'immediate' }),
+      ]),
+      identityBytes: '{}', terminologySnapshotId: SNAPSHOT,
+      masterRows: ['A031966100', 'BC23711100', 'B024058100'].map(code => rows.get(code)!),
+    })
+    expect(built.items.map(item => item.names)).toEqual([['Doxaben XL tab 4 mg']])
+    expect(report.excluded.nameContradicted).toBe(2)
+    expect(report.contradictedNames).toEqual(['Doxaben XL * tab 4 mg', 'Ezetimibe+Atorvastatin tab 10/20'])
+  })
+
   it('refuses another schema, another drug master or a code the master lacks', () => {
     expect(() => build(table([], { schemaVersion: 'other' }))).toThrow(/schema/)
     expect(() => build(table([], { snapshotId: 'nhi-drug-terminology-20250101' }))).toThrow(/snapshot/)
@@ -88,6 +105,20 @@ describe('the committed index', () => {
     const crestor = lookup('Crestor FC * tab 10 mg')
     expect(crestor.nhiCodes).toContain('BC24131100')
     expect(crestor.nhiCodes).not.toContain('BC24129100')
+  })
+
+  it('gives no name an identity its own words deny', () => {
+    for (const item of index.items as any[]) {
+      for (const name of item.names) {
+        expect([name, hospitalNameContradictsIdentity(name, item.identity, item.nhiCodes.map((code: string) => rows.get(code)!))]).toEqual([name, false])
+      }
+    }
+    // Combination products are not their single-ingredient parts; a release or form the name states is kept.
+    for (const name of ['Brimonidine+Timolol eye drop 5ml', 'Alendronate 70/Vit D3 5600 * tab', 'Ezetimibe+Atorvastatin tab 10/20',
+      'Latanoprost+Timolol eye sol2.5ml', 'Doxaben XL * tab 4 mg', 'Domperidone "Kojar" * supp 10 mg']) expect(lookup(name)).toBeUndefined()
+    expect(lookup('Ezetrol * tab 10 mg').nhiCodes).toContain('B024058100')
+    expect(lookup('Atozet FC tab 10/20 mg').identity.ingredients).toHaveLength(2)
+    expect(lookup('Lomexin vaginal supp 200 mg')).toBeDefined()
   })
 
   it('holds no hospital item code, candidate list or local evidence', () => {
