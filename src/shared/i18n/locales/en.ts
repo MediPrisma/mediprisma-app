@@ -1686,6 +1686,7 @@ export const en = {
       renal: 'Renal',
       electrolyte: 'Electrolytes',
       liver: 'Liver',
+      pancEnzyme: 'Pancreatic enzymes',
       cardiac: 'Cardiac',
       inflam: 'Inflammation',
       iron: 'Iron Studies',

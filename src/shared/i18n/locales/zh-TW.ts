@@ -1695,6 +1695,7 @@ export const zhTW = {
       renal: '腎功能',
       electrolyte: '電解質',
       liver: '肝功能',
+      pancEnzyme: '胰臟酵素',
       cardiac: '心肌酵素',
       inflam: '發炎/感染',
       iron: '鐵代謝',
