@@ -169,8 +169,10 @@ function DiseaseSwitcher({
           ? `Disease (${applicablePackIds.size} applicable)`
           : `疾病（${applicablePackIds.size} 項適用）`}
       </span>
+      {/* Wraps at a phone's width: with five packs the English labels no
+          longer fit one row at 320–390 px and pushed the page sideways. */}
       <div
-        className="inline-flex rounded-md border border-border bg-muted/30 p-0.5"
+        className="inline-flex max-w-full flex-wrap rounded-md border border-border bg-muted/30 p-0.5"
         role="group"
         aria-label={isEnglish ? 'Select disease guidance' : '選擇疾病指引'}
       >
