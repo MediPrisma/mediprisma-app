@@ -983,6 +983,12 @@ export function buildLabPivots(
         }
         trendUnit = norm?.unit ?? conversionUnit
       }
+      // A total-cholesterol/HDL ratio has no unit, but some hospitals upload it
+      // as mg/dL and the column header repeated that (雲端病歷, 2026-11-03).
+      if (testKey === 'TC/HDL RATIO') {
+        cellUnit = undefined
+        trendUnit = undefined
+      }
 
       // Trend buttons need only a yes/no availability signal while the table
       // is switching categories. Collect it in this existing O(n) pivot pass
