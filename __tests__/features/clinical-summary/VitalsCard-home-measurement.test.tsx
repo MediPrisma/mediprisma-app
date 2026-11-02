@@ -2,6 +2,7 @@ import { webcrypto } from 'node:crypto'
 import { render, screen, waitFor } from '@testing-library/react'
 import { VitalsCard } from '@/features/clinical-summary/vitals/VitalsCard'
 import { homeMeasurementLink } from '@/features/clinical-summary/vitals/utils/home-measurement-link'
+import { applyUserEnteredPatientProfile } from '@/src/core/entities/patient.entity'
 import { isHomeMeasurementPilotUser } from '@/features/clinical-summary/vitals/utils/home-measurement-access'
 
 let mockPatient: any
@@ -73,8 +74,20 @@ describe('homeMeasurementLink', () => {
     expect(homeMeasurementLink(null, HOSPITAL_LAUNCH)).toBeNull()
     expect(homeMeasurementLink({ ...hospitalPatient, deidentified: true } as any, HOSPITAL_LAUNCH)).toBeNull()
     expect(homeMeasurementLink({ ...cloudPatient, name: [{ use: 'anonymous', text: '匿名' }] } as any, HOSPITAL_LAUNCH)).toBeNull()
-    const exporterDeid = { ...hospitalPatient, name: [{ use: 'official', text: 'DEID-1a2b3c4d' }], identifier: [{ system: 'urn:oid:his.patient.mrn', value: '1a2b3c4d5e6f' }] }
+    const pseudonym = '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d'
+    const exporterDeid = { ...hospitalPatient, name: [{ use: 'official', text: 'DEID-1a2b3c4d' }], identifier: [{ system: 'urn:oid:his.patient.mrn', value: pseudonym }] }
     expect(homeMeasurementLink(exporterDeid as any, HOSPITAL_LAUNCH)).toBeNull()
+  })
+
+  it('still gives no link after a name is added to a de-identified export in 補充資料', () => {
+    const exportedDeid = {
+      resourceType: 'Patient', id: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d', name: [{ use: 'official', text: 'DEID-1a2b3c4d' }],
+      identifier: [{ use: 'official', system: 'urn:oid:his.patient.mrn', value: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d' }],
+    }
+    const overlaid = applyUserEnteredPatientProfile(exportedDeid as any, { source: 'user-entered', name: '示範丙', birthDate: '1970-03-03', updatedAt: '2026-11-02T00:00:00.000Z' })
+    expect(overlaid.name?.[0]?.text).toBe('示範丙')
+    expect(homeMeasurementLink(overlaid, APP)).toBeNull()
+    expect(homeMeasurementLink(overlaid, HOSPITAL_LAUNCH)).toBeNull()
   })
 })
 

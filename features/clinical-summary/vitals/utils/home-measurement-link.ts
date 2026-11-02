@@ -12,6 +12,8 @@ export const HEALTH_APP_ORIGIN = 'https://health-app.mediprisma.tw'
 const HOSPITAL_MRN_SYSTEM = 'urn:oid:his.patient.mrn'
 const MASKED_NAME = /[Xx*＊○〇●Ｏ◯]/u
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
+/** The exporter's de-identified 病歷號: 32 hex characters of an HMAC, never a real chart number. */
+const EXPORTER_PSEUDONYM = /^[0-9a-f]{32}$/
 
 /**
  * Hospital data (a 病歷號): open that patient. Cloud data only, in the
@@ -24,10 +26,12 @@ export function homeMeasurementLink(patient: PatientEntity | null, pageUrl: stri
   if (!patient || isDeidentifiedPatient(patient)) return null
   const names = (patient.name ?? []).map((name) => name.text?.trim()).filter((text): text is string => Boolean(text))
   // The exporter's de-identification names the patient DEID-… and puts a pseudonym where the 病歷號 was.
+  // A name added later in 補充資料 replaces DEID-…, so the pseudonym itself is checked too.
   if (names.some((name) => name.startsWith('DEID-'))) return null
 
   const mrn = patient.identifier?.find((identifier) =>
     identifier.system?.trim() === HOSPITAL_MRN_SYSTEM && identifier.value?.trim())?.value?.trim()
+  if (mrn && EXPORTER_PSEUDONYM.test(mrn)) return null
   if (mrn) return `${HEALTH_APP_ORIGIN}/open#${new URLSearchParams({ chart: mrn })}`
 
   if (!isVghtpeLaunchUrl(pageUrl)) return null
