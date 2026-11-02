@@ -24,6 +24,9 @@ export interface VghtpeMedicationIdentity {
   packageQuantity?: string
   doseFormFamily: string
   releaseType: string
+  /** 'lipid' for liposomal and lipid-complex products, which are not
+   *  interchangeable with the conventional formulation (AmBisome vs Fungizone). */
+  formulation?: string
 }
 
 export interface VghtpeMedicationIndexItem {
@@ -116,6 +119,7 @@ export function buildVghtpeMedicationIndex(input: {
         ingredients: (id.ingredients ?? []).map((part: any) => ({ name: String(part.name), amount: String(part.amount) })),
         ...(id.packageQuantity ? { packageQuantity: String(id.packageQuantity) } : {}),
         doseFormFamily: String(id.doseFormFamily ?? ''), releaseType: String(id.releaseType ?? ''),
+        ...(id.formulation ? { formulation: String(id.formulation) } : {}),
       }
       if (hospitalNameContradictsIdentity(name, parsed, nhiCodes.map(code => rows.get(code)!))) {
         report.excluded.nameContradicted++
