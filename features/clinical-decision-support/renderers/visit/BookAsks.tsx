@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { effectiveAnswer } from './visit-decisions'
 import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 import type { VisitAnswerProvenance } from './VisitAsks'
@@ -114,8 +114,10 @@ export function isMeasureAnswered(ask: BookMeasureAsk, answers: VisitAnswers): b
   return Boolean(ask.none && (answers as Record<string, string | undefined>)[ask.none.askId] === ask.none.value)
 }
 
-function MeasureRow({ ask, answers, isEnglish, onMeasure, onAnswer, labelId }: {
+function MeasureRow({ ask, answers, isEnglish, onMeasure, onAnswer, labelId, trailing }: {
   ask: BookMeasureAsk
+  /** The point's own decision, on the field's line at the right (HTN DP-03's 「安排 HBPM 7 天｜暫緩」). */
+  trailing?: ReactNode
   answers: VisitAnswers
   isEnglish: boolean
   onMeasure?: (id: string, pair: { systolic: number; diastolic: number } | null) => void
@@ -124,6 +126,13 @@ function MeasureRow({ ask, answers, isEnglish, onMeasure, onAnswer, labelId }: {
 }) {
   const shown = ask.answer ? `${ask.answer.systolic}/${ask.answer.diastolic}` : ''
   const [draft, setDraft] = useState(shown)
+  // A new pair from the pack (typed on another page, or withdrawn) starts the
+  // field afresh, adjusted while rendering rather than by remounting the row.
+  const [seen, setSeen] = useState(shown)
+  if (seen !== shown) {
+    setSeen(shown)
+    setDraft(shown)
+  }
   const noneChosen = Boolean(ask.none && (answers as Record<string, string | undefined>)[ask.none.askId] === ask.none.value)
   const invalid = draft.trim() !== '' && !parseBloodPressurePair(draft)
   // Enter is the clinician saying 「this is today's reading」, so it is sent
@@ -173,6 +182,7 @@ function MeasureRow({ ask, answers, isEnglish, onMeasure, onAnswer, labelId }: {
             </button>
           </div>
         ) : null}
+        {trailing ? <div className={styles.measureTrailing} data-book-measure-trailing={ask.id}>{trailing}</div> : null}
       </div>
       {invalid ? (
         <span className={styles.askNote} role="alert">{isEnglish ? 'Type it as 146/92' : '請輸入「收縮壓/舒張壓」，例如 146/92'}</span>
@@ -227,6 +237,7 @@ export function BookAsks({
   onGrade,
   measureAsks = [],
   onMeasure,
+  measureTrailing,
 }: {
   asks: readonly VisitAsk[]
   answers: VisitAnswers
@@ -240,20 +251,26 @@ export function BookAsks({
   measureAsks?: readonly BookMeasureAsk[]
   /** Writes a typed pair where the host keeps what was measured in the room; `null` withdraws it. */
   onMeasure?: (id: string, pair: { systolic: number; diastolic: number } | null) => void
+  /** Drawn at the right of the first measure row: the point's own decision beside its field. */
+  measureTrailing?: ReactNode
 }) {
   const idBase = useId()
   const carriedFrom = useCarriedLookup()
   if (asks.length === 0 && examAsks.length === 0 && measureAsks.length === 0) return null
   return (
     <div className={styles.asks} data-testid="cdss-book-asks">
-      {measureAsks.map((ask) => (
+      {measureAsks.map((ask, index) => (
         <MeasureRow
-          // A new pair from the pack (typed on another page, or withdrawn) starts the field afresh.
-          key={`${ask.id}:${ask.answer ? `${ask.answer.systolic}/${ask.answer.diastolic}` : ''}`}
+          // Keyed by the ask alone: the row also carries the point's decision
+          // (`trailing`), which must stay mounted when a pair typed here is
+          // saved on blur, or the click that blurred the field is lost (#414
+          // review). The field itself starts afresh on a new pair (below).
+          key={ask.id}
           ask={ask}
           answers={answers}
           isEnglish={isEnglish}
           labelId={`${idBase}-${ask.id}`}
+          {...(index === 0 && measureTrailing ? { trailing: measureTrailing } : {})}
           {...(onMeasure ? { onMeasure } : {})}
           {...(onAnswer ? { onAnswer } : {})}
         />

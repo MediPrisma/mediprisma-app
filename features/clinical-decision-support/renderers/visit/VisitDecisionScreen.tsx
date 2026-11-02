@@ -222,7 +222,7 @@ export function VisitDecisionScreen({
   const coveringRowOf = (point: DecisionPointView) => allRows.find((row) => row.steps.some((step, index) => (
     index > 0 && samePoint(step.point, point) && !samePoint(step.point, row.steps[0].point)
   )))
-  const bookAsks = (
+  const bookAsksWith = (measureTrailing?: ReactNode) => (
     <BookAsks
       asks={model.asks}
       answers={answers}
@@ -234,8 +234,10 @@ export function VisitDecisionScreen({
       {...(onGrade ? { onGrade } : {})}
       measureAsks={measureAsks}
       {...(onMeasure ? { onMeasure } : {})}
+      {...(measureTrailing ? { measureTrailing } : {})}
     />
   )
+  const bookAsks = bookAsksWith()
   // A point answered in its classification table (HF DP-01's phenotype).
   const answeredInTable = (point: DecisionPointView) => Boolean(
     (point as { classification?: { classes?: { physicianInput?: unknown }[] } }).classification?.classes?.some((item) => item.physicianInput),
@@ -252,7 +254,10 @@ export function VisitDecisionScreen({
       ) : (
         <BookDecisionControls point={step.point} isEnglish={isEnglish} {...(onRecordDecision ? { onDecide: (action: VisitAction) => record(step.key, step.point, action, 'map') } : {})} />
       )
-      return { kind: 'slot', point, content: <>{bookAsks}<div data-book-slot-decision={point.dp}>{controls}</div></> }
+      const decision = <div data-book-slot-decision={point.dp}>{controls}</div>
+      // On the home reading's line at the right when there is one (owner
+      // 2026-11-02: 「放在右邊不要獨立一行」), else under the asks.
+      return { kind: 'slot', point, content: measureAsks.length ? bookAsksWith(decision) : <>{bookAsks}{decision}</> }
     }
     // A point answered in its classification table; a table only to read (AF
     // DP-17's agents by LVEF) sits on the point's own line.
