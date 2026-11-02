@@ -10,6 +10,9 @@ jest.mock('@/src/application/providers/language.provider')
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
   usePatient: () => ({ patient: null, loading: false, error: null }),
 }))
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: null }),
+}))
 
 const vitalCategory = [{ coding: [{ code: 'vital-signs' }] }]
 const adultPreventive = { meta: { tag: [{ system: 'http://nhi-fhir-bridge/source-program', code: 'adult-preventive' }] } }

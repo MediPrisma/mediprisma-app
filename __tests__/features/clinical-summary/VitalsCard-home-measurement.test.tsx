@@ -1,8 +1,15 @@
-import { render, screen } from '@testing-library/react'
+import { webcrypto } from 'node:crypto'
+import { render, screen, waitFor } from '@testing-library/react'
 import { VitalsCard } from '@/features/clinical-summary/vitals/VitalsCard'
 import { homeMeasurementLink } from '@/features/clinical-summary/vitals/utils/home-measurement-link'
+import { isHomeMeasurementPilotUser } from '@/features/clinical-summary/vitals/utils/home-measurement-access'
 
 let mockPatient: any
+let mockUser: any
+
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ user: mockUser }),
+}))
 
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
   usePatient: () => ({ patient: mockPatient, loading: false, error: null }),
@@ -71,19 +78,47 @@ describe('homeMeasurementLink', () => {
   })
 })
 
+const PILOT = { email: 'HaoMin.Cheng0913@gmail.com', emailVerified: true }
+
+// jsdom's crypto has no subtle; the browser's does.
+beforeAll(() => {
+  if (!globalThis.crypto.subtle) {
+    Object.defineProperty(globalThis.crypto, 'subtle', { value: webcrypto.subtle, configurable: true })
+  }
+})
+
+describe('isHomeMeasurementPilotUser', () => {
+  it('lets in only the pilot account, by verified email in any case', async () => {
+    await expect(isHomeMeasurementPilotUser(PILOT as any)).resolves.toBe(true)
+    await expect(isHomeMeasurementPilotUser({ ...PILOT, emailVerified: false } as any)).resolves.toBe(false)
+    await expect(isHomeMeasurementPilotUser({ email: 'voho0000@gmail.com', emailVerified: true } as any)).resolves.toBe(false)
+    await expect(isHomeMeasurementPilotUser(null)).resolves.toBe(false)
+  })
+})
+
 describe('VitalsCard home readings button', () => {
-  it('opens the service in a new tab without sending this page as referrer', () => {
+  beforeEach(() => { mockUser = PILOT })
+
+  it('opens the service in a new tab without sending this page as referrer', async () => {
     mockPatient = hospitalPatient
     render(<VitalsCard />)
-    const link = screen.getByRole('link', { name: /居家量測/ })
+    const link = await screen.findByRole('link', { name: /居家量測/ })
     expect(link).toHaveAttribute('href', 'https://health-app.mediprisma.tw/open#chart=1000001')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('is absent when there is nothing to open', () => {
+  it('is absent when there is nothing to open', async () => {
     mockPatient = cloudPatient
     render(<VitalsCard />)
+    await waitFor(() => expect(screen.queryByRole('link', { name: /居家量測/ })).not.toBeInTheDocument())
+  })
+
+  it('is absent for any other account, even with a patient to open', async () => {
+    mockPatient = hospitalPatient
+    mockUser = { email: 'someone@example.com', emailVerified: true }
+    render(<VitalsCard />)
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(screen.queryByRole('link', { name: /居家量測/ })).not.toBeInTheDocument()
   })
 })
