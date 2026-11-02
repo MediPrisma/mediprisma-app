@@ -1071,6 +1071,7 @@ export const en = {
     noData: 'No vital signs data available.',
     homeMeasurement: 'Home readings',
     homeMeasurementHint: "Open this patient's home blood pressure in the hospital's home-measurement service (hospital network only)",
+    homeMeasurementNoReadings: 'The home-measurement service has no blood pressure for this patient in the last 90 days (you can still open it)',
     height: 'Height',
     weight: 'Weight',
     bmi: 'BMI',
