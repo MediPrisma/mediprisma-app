@@ -6,6 +6,10 @@ import { zhTW } from '@/src/shared/i18n/locales/zh-TW'
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook')
 jest.mock('@/src/application/providers/language.provider')
+// No patient: the home-readings button is covered in VitalsCard-home-measurement.test.tsx.
+jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
+  usePatient: () => ({ patient: null, loading: false, error: null }),
+}))
 
 const vitalCategory = [{ coding: [{ code: 'vital-signs' }] }]
 const adultPreventive = { meta: { tag: [{ system: 'http://nhi-fhir-bridge/source-program', code: 'adult-preventive' }] } }

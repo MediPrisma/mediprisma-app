@@ -1069,6 +1069,8 @@ export const en = {
     respiratoryRate: 'Respiratory Rate',
     oxygenSaturation: 'Oxygen Saturation',
     noData: 'No vital signs data available.',
+    homeMeasurement: 'Home readings',
+    homeMeasurementHint: "Open this patient's home blood pressure in the hospital's home-measurement service (hospital network only)",
     height: 'Height',
     weight: 'Weight',
     bmi: 'BMI',
