@@ -89,7 +89,7 @@ function source(med: MedicationEntity, testName: string): ClinicalSelectValue {
  */
 function ingredientUnknown(med: MedicationEntity): boolean {
   if (med.drugTerminology?.ingredientText) return false
-  const name = resolveHospitalMedicationName(med.medicationCodeableConcept)
+  const name = resolveHospitalMedicationName(med.medicationCodeableConcept, med)
   return !!name && name.status !== 'normalized'
 }
 

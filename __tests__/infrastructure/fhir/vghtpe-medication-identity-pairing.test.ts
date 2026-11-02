@@ -1,7 +1,8 @@
 import { reconcileMedicationRequests } from '@/src/infrastructure/fhir/services/medication-reconciliation'
 import { markVghtpeMedicationIdentities } from '@/src/infrastructure/fhir/services/vghtpe-medication-identity-enrichment'
 import { enrichBundleWithNhiDrugTerminology } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
-import { VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
+import { VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes, vghtpeMedicationIdentityIngredient,
+  vghtpeMedicationIdentityExtension, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
 const PRODUCT = 'urn:oid:vgh.medication.product'
@@ -43,6 +44,16 @@ describe('VGH medication index identity mark', () => {
     expect(vghtpeMedicationIdentityCodes(hospital)?.has('BC24040100')).toBe(false)
     expect(hospital.medicationCodeableConcept.coding).toEqual([{ system: PRODUCT, code: CONCOR, display: CONCOR }])
     expect(cloud.extension).toBeUndefined()
+  })
+
+  it('carries the identity ingredient, and treats an older mark without it as unchecked', async () => {
+    const [hospital] = await marked(hospitalOrder())
+    // The identity's products word the salt two ways; the mark names neither.
+    expect(vghtpeMedicationIdentityIngredient(hospital)?.ingredientText).toBe('BISOPROLOL 1.25 MG')
+    expect(hasVghtpeMedicationIdentityCheck(hospital)).toBe(true)
+    const older = { extension: [{ url: VGHTPE_MEDICATION_IDENTITY_URL, extension: [{ url: 'index', valueString: 'x' }, { url: 'nhiCode', valueCode: 'BC24039100' }] }] }
+    expect(hasVghtpeMedicationIdentityCheck(older)).toBe(false)
+    expect(hasVghtpeMedicationIdentityCheck({ extension: [vghtpeMedicationIdentityExtension('x', [])] })).toBe(true)
   })
 
   it('records an unresolved check without codes and replaces a previous mark', async () => {

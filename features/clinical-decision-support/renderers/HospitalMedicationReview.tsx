@@ -32,6 +32,7 @@ export function HospitalMedicationReview({ evidence, locale }: {
               <p className="text-muted-foreground">
                 {item.fromOfficialTerminology ? (english ? 'Official NHI drug master' : '健保藥品主檔')
                   : !item.ingredientName ? (english ? 'No ingredient mapping applied' : '尚未套用成分對照')
+                    : item.name.source === 'vghtpe-medication-index' ? (english ? 'VGH medication index (NHI drug identity)' : '北榮院內藥表（健保藥典身分）')
                     : item.name.source === 'verified-product-alias' ? (english ? 'Verified product ingredient alias' : '已查證商品成分對照')
                       : (english ? 'Ingredient stated in the source name' : '來源藥名明列成分')}
                 {item.name.referenceUrl && <a className="ml-2 text-primary underline underline-offset-2" href={item.name.referenceUrl} target="_blank" rel="noopener noreferrer">{english ? 'Reference' : '對照來源'}</a>}
