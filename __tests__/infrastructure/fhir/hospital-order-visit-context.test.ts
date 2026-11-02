@@ -1,4 +1,5 @@
 import { complementHospitalOrderVisitContext } from '@/src/infrastructure/fhir/services/hospital-order-visit-context'
+import { MEDCLOUD_SOURCE_SETTING_URL } from '@/src/shared/constants/medcloud.constants'
 
 const HOSPITAL = { source: 'ehr-fhir-bridge/scraper' }
 const CLOUD = { source: 'https://medcloud2.nhi.gov.tw/' }
@@ -24,7 +25,8 @@ describe('hospital order visit context', () => {
   it('takes institution, care setting and diagnosis from the paired MediCloud visit', () => {
     const { order, resources } = graph()
     complementHospitalOrderVisitContext(resources)
-    expect(order.requester.display).toBe('臺北榮總;門診;0601160016')
+    expect(order.requester.display).toBe('臺北榮總')
+    expect(order.extension).toEqual([{ url: MEDCLOUD_SOURCE_SETTING_URL, valueString: '門診' }])
     expect(order.reasonCode).toEqual([I259])
     expect(order.dosageInstruction).toEqual([{ text: 'X90 TAB PO QD' }])
   })
@@ -32,7 +34,8 @@ describe('hospital order visit context', () => {
   it('takes them from its own visit when no cloud visit is paired', () => {
     const { order, resources } = graph(false)
     complementHospitalOrderVisitContext(resources)
-    expect(order.requester.display).toBe('臺北榮總;門診')
+    expect(order.requester.display).toBe('臺北榮總')
+    expect(order.extension).toEqual([{ url: MEDCLOUD_SOURCE_SETTING_URL, valueString: '門診' }])
     expect(order.reasonCode[0].coding[0].code).toBe('I25.9')
   })
 

@@ -1,4 +1,6 @@
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
+import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
+import { MEDCLOUD_SOURCE_SETTING_URL } from '@/src/shared/constants/medcloud.constants'
 
 type Resource = Record<string, any>
 
@@ -30,7 +32,15 @@ export function complementHospitalOrderVisitContext(resources: Resource[]): Reso
     const context = partners.length === 1 ? partners[0] : visit
     if (!order.requester?.display?.trim()) {
       const institution = String(context.serviceProvider?.display ?? visit.serviceProvider?.display ?? '').trim()
-      if (institution) order.requester = { ...order.requester, display: /[;；]/.test(institution) ? institution : `${institution};門診` }
+      // The institution's name as MediCloud orders resolve to it, and the visit's
+      // outpatient setting in the same setting field those orders carry.
+      const name = formatOrganizationDisplay(institution)
+      if (name) {
+        order.requester = { ...order.requester, display: name }
+        if (!order.extension?.some((extension: Resource) => extension?.url === MEDCLOUD_SOURCE_SETTING_URL)) {
+          order.extension = [...(order.extension ?? []), { url: MEDCLOUD_SOURCE_SETTING_URL, valueString: '門診' }]
+        }
+      }
     }
     if (!order.reasonCode?.length) {
       const reason = context.reasonCode?.[0] ?? visit.reasonCode?.[0]
