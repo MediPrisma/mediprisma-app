@@ -202,6 +202,8 @@ const CONCEPT_LABELS: Record<EvidenceTable['concept'] | 'lipid-very-high-risk', 
     en: 'Blood-pressure target individualization',
   },
   'htn-sleep-apnea': { zh: '睡眠呼吸中止', en: 'Sleep apnea' },
+  // The Taiwan 2022 Figure 4 stage DP-08 reads before the target and the start.
+  'htn-taiwan-risk-stage': { zh: '台灣 2022 風險分期（Figure 4）', en: 'Taiwan 2022 risk stage (Figure 4)' },
 }
 
 const DIRECTION_LABELS: Record<EvidenceDirection, { zh: string; en: string }> = {

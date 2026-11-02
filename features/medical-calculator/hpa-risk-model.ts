@@ -27,6 +27,8 @@ export interface HpaRiskResult {
 }
 
 export const HPA_OUTCOMES: HpaOutcome[] = ['chd', 'diabetes', 'hypertension', 'stroke', 'mace']
+/** The frozen coefficient set (scripts/hpa/artifacts/frozen-candidate-v1-2026-09-16.json), named on every result handed to a pack. */
+export const HPA_RECONSTRUCTION_VERSION = 'reconstruction-v1-2026-09-16'
 
 /** Sampling limits, NOT normal ranges or diagnostic thresholds. */
 export const HPA_VALIDATED_RANGES: Readonly<Record<string, readonly [number, number]>> = {

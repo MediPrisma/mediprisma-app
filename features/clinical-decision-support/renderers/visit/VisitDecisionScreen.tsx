@@ -93,8 +93,17 @@ export interface VisitDecisionScreenProps {
    * opens one.
    */
   prognosisEvidence?: PrognosisEvidence
+  /**
+   * The results the host computed for the page's calculators, by entry id,
+   * shown in the 計算機 list's value column (the HTN page's PREVENT-ASCVD and
+   * HPA MACE, `htnCalculatorValues`).
+   */
+  calculatorValues?: Readonly<Record<string, string>>
   doseRecovery?: ReactNode
 }
+
+/** The pages with a 計算機 list (`HF_VISIT_CALCULATORS` names their entries). */
+const CALCULATOR_PAGES: ReadonlySet<string> = new Set(['hf', 'af', 'htn'])
 
 /**
  * The decision map the heart-failure and atrial-fibrillation pages share,
@@ -125,6 +134,7 @@ export function VisitDecisionScreen({
   onGrade,
   onMeasure,
   prognosisEvidence,
+  calculatorValues,
   doseRecovery,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
@@ -379,7 +389,7 @@ export function VisitDecisionScreen({
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-      {...(sourceOfPage === 'hf' || sourceOfPage === 'af' ? {
+      {...(CALCULATOR_PAGES.has(sourceOfPage) ? {
         headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
         calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
         onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
@@ -390,13 +400,14 @@ export function VisitDecisionScreen({
 
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      {sourceOfPage === 'hf' || sourceOfPage === 'af' ? (
+      {CALCULATOR_PAGES.has(sourceOfPage) ? (
         <VisitCalculatorsProvider
           isEnglish={isEnglish}
           points={model.points}
           sourceOfPage={sourceOfPage}
           {...(lvef !== undefined ? { lvef } : {})}
           {...(prognosisEvidence ? { evidence: prognosisEvidence } : {})}
+          {...(calculatorValues ? { values: calculatorValues } : {})}
           attached={new Set(calculatorNotes.map((note) => note.calculatorId))}
           onAttach={(note) => attachCalculatorNote(screenKey, { ...note, at: new Date().toISOString() })}
         >

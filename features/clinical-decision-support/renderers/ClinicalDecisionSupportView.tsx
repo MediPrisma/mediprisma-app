@@ -45,6 +45,7 @@ import { buildRationaleCopyText, type RationaleCopyProvenance } from '../utils/b
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
 import { PreventRiskSummary } from './PreventRiskSummary'
+import { htnCalculatorValues } from '../utils/htn-risk-readings'
 import { NhiLipidCoverageSummary } from './NhiLipidCoverageSummary'
 import { NhiTable1Panel } from './NhiTable1Panel'
 import {
@@ -2390,6 +2391,7 @@ export function ClinicalDecisionSupportView({
   // page, the atrial-fibrillation cards behind DP-14 and DP-28.
   if (isMap && visitModel) {
     const companionModules = (companionResults ?? []).flatMap((companion) => restoreCompletedModules(companion).recommendations)
+    const htnValues = htnCalculatorValues(profileFacts, isEnglish)
     const visitModules = new Map<string, CdssRecommendation>([
       ...companionModules.map((item): [string, CdssRecommendation] => [item.id, item]),
       ...displayRecommendations.map((item): [string, CdssRecommendation] => [item.id, item]),
@@ -2404,6 +2406,7 @@ export function ClinicalDecisionSupportView({
           packVersion={result.packVersion}
           screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
           prognosisEvidence={hfPrognosisEvidence(profileFacts, isEnglish)}
+          {...(htnValues ? { calculatorValues: htnValues } : {})}
           doseRecovery={result.packId === AF_BOARD_CONFIG.packId || companionResults?.some(companion => companion.packId === AF_BOARD_CONFIG.packId)
             ? <AfWeightEntry key={patientId} weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} /> : undefined}
           decisions={physicianDecisions}

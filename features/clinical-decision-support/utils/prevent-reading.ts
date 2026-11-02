@@ -12,7 +12,10 @@ import { convertToBase } from '@/features/medical-calculator/units'
 // marks the same evidence ◐ 須臨床確認.
 const DIABETES_CODE_FACT_KEYS = ['type1DiabetesDiagnosis', 'type2DiabetesDiagnosis', 'otherDiabetesDiagnosis'] as const
 
-export function buildPreventReading(profile: CdssPatientProfile, autofill: Autofill, inputs: CalcValues, vitals?: ClinicVitals) {
+/** Today's every-visit answers PREVENT can read: HTN DP-08's 目前吸菸. */
+export interface PreventVisitAnswers { smokingCurrent?: 'yes' | 'no' }
+
+export function buildPreventReading(profile: CdssPatientProfile, autofill: Autofill, inputs: CalcValues, vitals?: ClinicVitals, visit: PreventVisitAnswers = {}) {
   const values: CalcValues = {}
   const fields = PREVENT_INPUTS.map(input => {
     const resolved = resolveInput(input, autofill)
@@ -36,6 +39,11 @@ export function buildPreventReading(profile: CdssPatientProfile, autofill: Autof
       value = profile.medicationClassContexts.statin.state === 'confirmed-current' ? 'yes' : profile.medicationClassContexts.statin.state === 'not-found' ? 'no' : ''
       source = 'record'
       date = profile.medicationClassContexts.statin.lastPrescriptionDate
+    }
+    // The smoking answer HTN DP-08 asks (Taiwan 2022 Figure 4) fills the same
+    // question here, so the clinician answers once; their own entry still wins.
+    if (!manual && key === 'smoking' && visit.smokingCurrent) {
+      value = visit.smokingCurrent; source = 'record'; date = profile.evaluatedAt?.slice(0, 10)
     }
     if (!manual && key === 'bptreat' && autofill.clinicalSelects?.antihypertensives?.value === 'yes') {
       value = 'yes'; source = 'record'; date = autofill.clinicalSelects.antihypertensives.date

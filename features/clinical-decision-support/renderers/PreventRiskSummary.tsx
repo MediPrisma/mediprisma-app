@@ -6,25 +6,17 @@ import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 import type { CdssRecommendation } from '../types'
 export const PreventReadingContext = createContext<PreventReading | undefined>(undefined)
 interface Summary { title: string; band?: string; recommendation: string; target: string; caveat: string; personalize: string; sourceUrl: string }
-export function PreventRiskSummary({ recommendation, locale, patientId }: { recommendation: CdssRecommendation; locale: string; patientId?: string }) {
-  const reading = useContext(PreventReadingContext)
+/**
+ * The PREVENT inputs with where each came from, editable where the clinician
+ * may answer (the store `usePreventStore`, one per patient). Shared by the
+ * lipid card's 檢核／補齊 and the HTN page's PREVENT panel (plan 05 §19).
+ */
+export function PreventFieldsEditor({ reading, locale, patientId }: { reading: PreventReading; locale: string; patientId?: string }) {
   const setInput = usePreventStore(s => s.setInput)
   const carriedFrom = useCarriedLookup()
   const id = useId()
   const en = locale === 'en'
-  const summary = (recommendation as CdssRecommendation & { preventSummary?: Summary }).preventSummary
-  if (!summary || !reading) return null
-  const r = reading.result
-  return <section className="mt-4 space-y-3 border-t border-border pt-4" aria-label={summary.title}>
-    <h4 className="font-semibold">{summary.title}</h4>
-    <p className="text-sm font-medium" role="status">{r.status === 'ready'
-      ? `${en ? '10-year' : '10 年'} ASCVD ${r.risk10!.toFixed(2)}% · ${summary.band ?? ''} · ${en ? '30-year' : '30 年'} ${r.risk30 === undefined ? '— (30–59)' : `${r.risk30.toFixed(2)}%`}`
-      : r.status === 'ineligible' ? en ? 'Outside eligibility' : '不適用本計算流程' : en ? 'Inputs require verification' : '待核對計算資料'}</p>
-    {r.issues.length > 0 && <p className="text-sm text-muted-foreground">{en ? 'Check: ' : '需確認：'}{r.issues.map(k => reading.fields.find(f => f.input.key === k)?.input.label[en ? 'en' : 'zh'] ?? k).join('、')}</p>}
-    <p className="text-sm leading-relaxed">{summary.recommendation}</p>
-    <p className="text-sm font-medium">{summary.target}</p>
-    <details>
-      <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-primary">{en ? 'Verify PREVENT inputs' : '檢核／補齊 PREVENT 資料'}</summary>
+  return (
       <div className="grid gap-3 @min-[40rem]:grid-cols-2">
         {reading.fields.map(f => <div key={f.input.key} className="min-w-0 space-y-1">
           {f.input.type === 'select' ? <fieldset className="min-w-0 space-y-1.5" disabled={!patientId || f.locked}>
@@ -47,6 +39,25 @@ export function PreventRiskSummary({ recommendation, locale, patientId }: { reco
           {f.source === 'physician' && <button type="button" className="min-h-11 text-xs text-primary underline" onClick={() => patientId && setInput(patientId, f.input.key, undefined)}>{en ? 'Restore record value' : '恢復病歷數值'}</button>}
         </div>)}
       </div>
+  )
+}
+export function PreventRiskSummary({ recommendation, locale, patientId }: { recommendation: CdssRecommendation; locale: string; patientId?: string }) {
+  const reading = useContext(PreventReadingContext)
+  const en = locale === 'en'
+  const summary = (recommendation as CdssRecommendation & { preventSummary?: Summary }).preventSummary
+  if (!summary || !reading) return null
+  const r = reading.result
+  return <section className="mt-4 space-y-3 border-t border-border pt-4" aria-label={summary.title}>
+    <h4 className="font-semibold">{summary.title}</h4>
+    <p className="text-sm font-medium" role="status">{r.status === 'ready'
+      ? `${en ? '10-year' : '10 年'} ASCVD ${r.risk10!.toFixed(2)}% · ${summary.band ?? ''} · ${en ? '30-year' : '30 年'} ${r.risk30 === undefined ? '— (30–59)' : `${r.risk30.toFixed(2)}%`}`
+      : r.status === 'ineligible' ? en ? 'Outside eligibility' : '不適用本計算流程' : en ? 'Inputs require verification' : '待核對計算資料'}</p>
+    {r.issues.length > 0 && <p className="text-sm text-muted-foreground">{en ? 'Check: ' : '需確認：'}{r.issues.map(k => reading.fields.find(f => f.input.key === k)?.input.label[en ? 'en' : 'zh'] ?? k).join('、')}</p>}
+    <p className="text-sm leading-relaxed">{summary.recommendation}</p>
+    <p className="text-sm font-medium">{summary.target}</p>
+    <details>
+      <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-primary">{en ? 'Verify PREVENT inputs' : '檢核／補齊 PREVENT 資料'}</summary>
+      <PreventFieldsEditor reading={reading} locale={locale} {...(patientId ? { patientId } : {})} />
     </details>
     <p className="text-xs leading-relaxed text-muted-foreground">{summary.personalize}</p>
     <p className="text-xs leading-relaxed text-muted-foreground">{summary.caveat}</p>
