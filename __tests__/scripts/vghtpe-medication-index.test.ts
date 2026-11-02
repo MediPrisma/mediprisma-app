@@ -141,6 +141,8 @@ describe('the committed index', () => {
     expect(lookup('Bisacodyl EFC * tab 5 mg/PTP VPP').identity.releaseType).toBe('enteric')
     // A sustained release written SRFC, or stated only in the dictionary's Chinese name (持續性).
     expect(lookup('Nifedipine "CYH" SRFC *tab 30 mg').identity.releaseType).toBe('modified')
+    // A spray the dictionary names for external use (洛黴欣外用噴霧劑) is never an inhalation.
+    expect(lookup('Lomexin nebulizer 2% 15 ml')?.identity.doseFormFamily ?? 'absent').not.toBe('INHALATION')
     // A dictionary row whose ingredient field names another ingredient is corrected before use.
     expect(lookup('Aldioxa tab 100 mg').ingredientText).toMatch(/ALDIOXA/)
   })
