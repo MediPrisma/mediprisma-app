@@ -35,6 +35,7 @@ import type {
   VisitDecisionModel,
 } from '../../types'
 import { BookAsks, examAsksOf, isMeasureAnswered, measureAsksOf } from './BookAsks'
+import { BookDecisionControls } from './BookDecisionControls'
 import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type BookHeadToolsPage, type BookMark } from './VisitBookLayout'
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
@@ -240,7 +241,19 @@ export function VisitDecisionScreen({
     (point as { classification?: { classes?: { physicianInput?: unknown }[] } }).classification?.classes?.some((item) => item.physicianInput),
   )
   const ownEntryOf = (point: DecisionPointView): BookEntry => {
-    if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: bookAsks }
+    if (point.dp === 'DP-03' && point.source === sourceOfPage) {
+      // DP-03 may decide something of its own beside its asks — HTN's
+      // 「安排 HBPM 7 天」 before the diagnosis (owner 2026-11-02: 安排 HBPM
+      // 獨立一個決策點) — drawn under the home reading as any row's buttons.
+      const step = point.actions.length ? pointSteps(point, decisions, now)[0] : undefined
+      if (!step) return { kind: 'slot', point, content: bookAsks }
+      const controls = step.decision ? (
+        <BookDecisionControls point={step.point} decision={step.decision} isEnglish={isEnglish} {...(onClearDecision ? { onClear: () => clear(step.key) } : {})} />
+      ) : (
+        <BookDecisionControls point={step.point} isEnglish={isEnglish} {...(onRecordDecision ? { onDecide: (action: VisitAction) => record(step.key, step.point, action, 'map') } : {})} />
+      )
+      return { kind: 'slot', point, content: <>{bookAsks}<div data-book-slot-decision={point.dp}>{controls}</div></> }
+    }
     // A point answered in its classification table; a table only to read (AF
     // DP-17's agents by LVEF) sits on the point's own line.
     if (answeredInTable(point)) return { kind: 'slot', point, content: null }
