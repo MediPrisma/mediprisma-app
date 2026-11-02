@@ -498,10 +498,44 @@ const URINE_SPELLINGS: Readonly<Record<string, string>> = {
   'LEUKOCYTE ESTERASE': 'LE',
   PRO: 'PROT',
   BIL: 'BILI',
-  // Semi-quantitative strip results, same columns as their LOINC-coded twins.
+  // Semi-quantitative strip names, folded to the analyte here; urineStripKey
+  // then gives every strip result its own column.
   '肌酸酐(尿液)(半定量)': 'CREA',
   '微白蛋白(尿)(半定量)': 'MALB',
   '微白蛋白/肌酐酸比值(半定量)': 'ACR',
+}
+
+/**
+ * Urine-strip results keep their own columns. A urinalysis strip (06012C)
+ * grades albumin, creatinine and their ratios into categories (ACR 10 / 30 /
+ * 80 / 150 / 300 …); beside a quantitative ACR or UPCR on one trend line a
+ * category step read as a measured change (owner decision 2026-11-03).
+ */
+const URINE_STRIP_KEYS: Readonly<Record<string, string>> = {
+  ACR: 'ACR-STRIP',
+  'PROT/CR RATIO': 'UPCR-STRIP',
+  ALB: 'ALB-STRIP',
+  MALB: 'MALB-STRIP',
+  CREA: 'CREA-STRIP',
+}
+const URINE_STRIP_DISPLAY: Readonly<Record<string, { zh: string; en: string }>> = {
+  'ACR-STRIP': { zh: 'ACR (試紙)', en: 'ACR (strip)' },
+  'UPCR-STRIP': { zh: 'UPCR (試紙)', en: 'UPCR (strip)' },
+  'ALB-STRIP': { zh: 'ALB (試紙)', en: 'ALB (strip)' },
+  'MALB-STRIP': { zh: 'MALB (試紙)', en: 'MALB (strip)' },
+  'CREA-STRIP': { zh: 'CREA (試紙)', en: 'CREA (strip)' },
+}
+
+function urineStripKey(obs: any, testKey: string): string | undefined {
+  const stripKey = URINE_STRIP_KEYS[testKey]
+  if (!stripKey) return undefined
+  return nhiOrderCode(obs) === '06012C' || /半定量/.test(getTestDisplayName(obs)) ? stripKey : undefined
+}
+
+/** The header of a urine-strip column, or undefined for any other key. */
+export function urineStripDisplay(testKey: string, language: 'zh-TW' | 'en'): string | undefined {
+  const label = URINE_STRIP_DISPLAY[testKey]
+  return label && (language === 'zh-TW' ? label.zh : label.en)
 }
 
 /**
@@ -739,6 +773,14 @@ export function getLabPivotTestIdentity(
     const dual = dualSpecimenAnalyte(obs)
     if (dual && !isKnownPivotKey(testKey)) testKey = dual
     if (dual && (testKey === 'PROTEIN' || testKey === 'PROT')) testKey = dual
+  }
+
+  if (categoryId === 'urine') {
+    const stripKey = urineStripKey(obs, testKey)
+    if (stripKey) {
+      testKey = stripKey
+      displayOverride = urineStripDisplay(stripKey, 'en')
+    }
   }
 
   if (categoryId === 'endocrine') {

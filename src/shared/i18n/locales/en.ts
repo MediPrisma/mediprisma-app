@@ -1698,6 +1698,7 @@ export const en = {
       pituitary: 'Pituitary/GH',
       physical: 'Physical',
       chemical: 'Chemistry',
+      strip: 'Test strip',
       micro: 'Microscopy',
       ratio: 'Spot Ratios',
       bacteriology: 'Bacteriology',

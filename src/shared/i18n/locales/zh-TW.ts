@@ -1707,6 +1707,7 @@ export const zhTW = {
       pituitary: '生長激素',
       physical: '物理性狀',
       chemical: '化學分析',
+      strip: '試紙半定量',
       micro: '顯微鏡檢',
       ratio: '尿蛋白/肌酸酐比值',
       bacteriology: '一般細菌',

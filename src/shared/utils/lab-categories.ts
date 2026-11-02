@@ -408,6 +408,9 @@ export const LAB_CATEGORIES: LabCategory[] = [
       'NITRITE', 'NITRIT',
       'LE',
       'OCCULT', 'OCCULT BLOOD', 'BLOOD',
+      // Strip albumin / creatinine / ratios — graded, never the quantitative
+      // columns below (lab-pivot urineStripKey).
+      'ALB-STRIP', 'MALB-STRIP', 'CREA-STRIP', 'ACR-STRIP', 'UPCR-STRIP',
       // ── Microscopic ─────────────────────────────────────────
       'WBC', 'WBCPUS', 'WBC/HPF',
       'RBC', 'RBC/HPF',
@@ -450,10 +453,13 @@ export const LAB_CATEGORIES: LabCategory[] = [
     subgroups: [
       { id: 'physical',  members: ['COLOR', 'APPEARANCE', 'TURBIDITY', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PH'] },
       { id: 'chemical',  members: ['PROT', 'PROTEIN', 'GLUCOSE', 'SUGAR', 'KETONE', 'KETON', 'BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRITE', 'NITRIT', 'LE', 'OCCULT', 'BLOOD'] },
+      { id: 'strip',     members: ['ALB-STRIP', 'MALB-STRIP', 'CREA-STRIP', 'ACR-STRIP', 'UPCR-STRIP'] },
       { id: 'micro',     members: ['WBC', 'WBCPUS', 'WBC/HPF', 'RBC', 'RBC/HPF', 'EPITH', 'EPITH CELL', 'SQUAMOUS EPI', 'UROTHELIUM EPI', 'RTE-RENAL TUBE', 'CAST1', 'CAST2', 'CAST3', 'CASTS', 'CRYS1', 'CRYS2', 'CRYS3', 'CRYSTAL', 'BACTERIA', 'MUCUS'] },
       { id: 'ratio',     members: ['MALB', 'MALB(U)', 'CREA', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR'] },
     ],
-    stackedPanels: [['physical', 'chemical'], ['micro', 'ratio']],
+    // The strip ratios get a table of their own: beside the dipstick pads the
+    // first table needed a horizontal scroll on a half-width panel.
+    stackedPanels: [['physical', 'chemical'], ['strip'], ['micro', 'ratio']],
     pinnedColumns: ['COLOR', 'PH', 'GRAVIT', 'PROT', 'GLUCOSE', 'KETONE', 'BILI', 'UROBI', 'NITRITE', 'OCCULT'],
   },
   {
