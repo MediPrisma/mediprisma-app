@@ -703,6 +703,8 @@
 .askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
 /* A number typed beside the asks (HTN's home blood pressure): one field for the pair, its unit, and 「沒有量」. */
 .measureBody { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+/* The point's own decision on the field's line, pushed to the right (owner 2026-11-02: 「放在右邊不要獨立一行」). */
+.measureTrailing { margin-left: auto; }
 .measureInput {
   width: 7.5em;
   min-height: 44px;

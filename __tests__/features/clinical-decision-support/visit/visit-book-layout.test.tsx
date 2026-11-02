@@ -250,6 +250,19 @@ describe.each([
     expect(within(document.querySelector<HTMLElement>('[data-book-slot-decision="DP-03"]')!).getByText(/安排 HBPM 7 天/)).toBeInTheDocument()
   })
 
+  it('draws DP-03\'s decision on the home reading\'s line, at its right, when DP-03 asks a number', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" patch={(model) => ({
+      ...model,
+      measureAsks: [{ id: 'home-bp', label: '居家血壓', unit: 'mmHg', placeholder: '146/92' }],
+      points: model.points.map((point) => (point.dp === 'DP-03'
+        ? { ...point, actions: [{ id: 'dp03-order', label: '安排 HBPM 7 天', decisionKind: 'ordered' as const, primary: true }] }
+        : point)),
+    } as typeof model)} />)
+    const line = document.querySelector<HTMLElement>('[data-book-measure-ask="home-bp"]')!
+    const trailing = within(line).getByRole('button', { name: '安排 HBPM 7 天' }).closest('[data-book-measure-trailing]')
+    expect(trailing).not.toBeNull()
+  })
+
   it('opens DP-05 on the medicines ESC names as harmful, class by class, with what the scan covers (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     fireEvent.click(within(entry('DP-05')).getByRole('button', { name: /看依據/ }))
