@@ -383,6 +383,7 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   '770-8': 'NEU',    // Neutrophils/Leukocytes in Blood by Automated count
   '18262-6': 'LDL',  // Cholesterol in LDL [Mass/volume] in Serum or Plasma by Direct assay
   '22763-7': 'AMMONIA', // Ammonia [Mass/volume] in Plasma
+  '1798-8': 'AMYLASE', // Amylase [Enzymatic activity/volume] in Serum or Plasma
   // High-sensitivity troponins keep their own rows, never TROP: results from
   // different troponin assays must not be compared (see lab-categories chem).
   '89579-7': 'HS-TROPONIN I', // Troponin I.cardiac [Mass/volume] in Serum or Plasma by High sensitivity method
@@ -571,6 +572,7 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   'PROT/CR RATIO': 'UPCR',
   'TC/HDL RATIO': 'TC/HDL',
   'EGFR(PED)': 'eGFR (PED)',
+  AMYLASE: 'Amylase',
   // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).
   ...IMMUNOLOGY_DISPLAY,
   // 內分泌 thyroid columns keyed by LOINC (thyroid-analytes.ts).
