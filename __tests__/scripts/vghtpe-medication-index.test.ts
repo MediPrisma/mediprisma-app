@@ -115,10 +115,32 @@ describe('the committed index', () => {
     }
     // Combination products are not their single-ingredient parts; a release or form the name states is kept.
     for (const name of ['Brimonidine+Timolol eye drop 5ml', 'Alendronate 70/Vit D3 5600 * tab', 'Ezetimibe+Atorvastatin tab 10/20',
-      'Latanoprost+Timolol eye sol2.5ml', 'Doxaben XL * tab 4 mg', 'Domperidone "Kojar" * supp 10 mg']) expect(lookup(name)).toBeUndefined()
+      'Latanoprost+Timolol eye sol2.5ml']) expect(lookup(name)).toBeUndefined()
+    expect(lookup('Doxaben XL * tab 4 mg')?.identity.releaseType ?? 'absent').not.toBe('immediate')
+    expect(lookup('Domperidone "Kojar" * supp 10 mg')?.identity.doseFormFamily ?? 'absent').not.toBe('TABLET')
     expect(lookup('Ezetrol * tab 10 mg').nhiCodes).toContain('B024058100')
     expect(lookup('Atozet FC tab 10/20 mg').identity.ingredients).toHaveLength(2)
     expect(lookup('Lomexin vaginal supp 200 mg')).toBeDefined()
+  })
+
+  it('keeps clinically different formulations, forms and releases apart', () => {
+    // A plain quetiapine tablet is not the extended-release one.
+    expect(lookup('QUETIAPINE "Union" FC *TAB 200MG').identity.releaseType).toBe('immediate')
+    // Conventional amphotericin B is not a liposomal or lipid-complex product.
+    const fungizone = lookup('Fungizone * inj 50 mg'), ambisome = lookup('Ambisome for #* inj 50 mg')
+    expect(ambisome.identity.formulation).toBe('lipid')
+    expect(fungizone.identity.formulation).toBeUndefined()
+    expect(fungizone.nhiCodes.some((code: string) => ambisome.nhiCodes.includes(code))).toBe(false)
+    // Ampicillin alone is not UNASYN (ampicillin + sulbactam), whose dictionary rows omit sulbactam.
+    expect(lookup('Ampolin "YF" inj 500 mg').nhiCodes).not.toEqual(expect.arrayContaining(['B020144289']))
+    expect(lookup('Ampolin "YF" inj 500 mg').nhiCodes).not.toEqual(expect.arrayContaining(['BC20144289']))
+    // A cream is not an ointment.
+    const cream = lookup('Elomet cream 5g 0.1%')
+    expect(cream.identity.doseFormFamily).toBe('CREAM')
+    expect(cream.nhiCodes.map((code: string) => rows.get(code)![8]).every((form: string) => form.includes('乳膏'))).toBe(true)
+    expect(lookup('Bisacodyl EFC * tab 5 mg/PTP VPP').identity.releaseType).toBe('enteric')
+    // A dictionary row whose ingredient field names another ingredient is corrected before use.
+    expect(lookup('Aldioxa tab 100 mg').ingredientText).toMatch(/ALDIOXA/)
   })
 
   it('holds no hospital item code, candidate list or local evidence', () => {
