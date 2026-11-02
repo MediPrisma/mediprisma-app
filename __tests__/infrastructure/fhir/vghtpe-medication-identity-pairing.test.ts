@@ -95,6 +95,10 @@ describe('pairing a hospital order with its 臺北榮總 cloud claim by index id
     expect(hospital.reasonCode[0].coding[0].code).toBe('I10')
     expect(hospital.dosageInstruction[0].text).toBe('1 TAB PO QD')
     expect(hospital._sourcePrescriptionRecords).toHaveLength(2)
+    // With no visit link the merged row still carries the cloud's recorded NHI code.
+    expect(hospital.encounter).toBeUndefined()
+    expect(hospital.medicationCodeableConcept.coding.map((coding: any) => coding.code)).toContain('BC24039100')
+    expect(hospital._sourcePrescriptionRecords[1]._resolvedMedicationCodeableConcept.coding[0].code).toBe('BC24039100')
   })
 
   it.each([
