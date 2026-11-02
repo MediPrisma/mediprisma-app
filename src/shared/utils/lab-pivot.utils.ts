@@ -383,6 +383,7 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   '770-8': 'NEU',    // Neutrophils/Leukocytes in Blood by Automated count
   '18262-6': 'LDL',  // Cholesterol in LDL [Mass/volume] in Serum or Plasma by Direct assay
   '22763-7': 'AMMONIA', // Ammonia [Mass/volume] in Plasma
+  '1798-8': 'AMYLASE', // Amylase [Enzymatic activity/volume] in Serum or Plasma
   // High-sensitivity troponins keep their own rows, never TROP: results from
   // different troponin assays must not be compared (see lab-categories chem).
   '89579-7': 'HS-TROPONIN I', // Troponin I.cardiac [Mass/volume] in Serum or Plasma by High sensitivity method
@@ -497,10 +498,44 @@ const URINE_SPELLINGS: Readonly<Record<string, string>> = {
   'LEUKOCYTE ESTERASE': 'LE',
   PRO: 'PROT',
   BIL: 'BILI',
-  // Semi-quantitative strip results, same columns as their LOINC-coded twins.
+  // Semi-quantitative strip names, folded to the analyte here; urineStripKey
+  // then gives every strip result its own column.
   '肌酸酐(尿液)(半定量)': 'CREA',
   '微白蛋白(尿)(半定量)': 'MALB',
   '微白蛋白/肌酐酸比值(半定量)': 'ACR',
+}
+
+/**
+ * Urine-strip results keep their own columns. A urinalysis strip (06012C)
+ * grades albumin, creatinine and their ratios into categories (ACR 10 / 30 /
+ * 80 / 150 / 300 …); beside a quantitative ACR or UPCR on one trend line a
+ * category step read as a measured change (owner decision 2026-11-03).
+ */
+const URINE_STRIP_KEYS: Readonly<Record<string, string>> = {
+  ACR: 'ACR-STRIP',
+  'PROT/CR RATIO': 'UPCR-STRIP',
+  ALB: 'ALB-STRIP',
+  MALB: 'MALB-STRIP',
+  CREA: 'CREA-STRIP',
+}
+const URINE_STRIP_DISPLAY: Readonly<Record<string, { zh: string; en: string }>> = {
+  'ACR-STRIP': { zh: 'ACR (試紙)', en: 'ACR (strip)' },
+  'UPCR-STRIP': { zh: 'UPCR (試紙)', en: 'UPCR (strip)' },
+  'ALB-STRIP': { zh: 'ALB (試紙)', en: 'ALB (strip)' },
+  'MALB-STRIP': { zh: 'MALB (試紙)', en: 'MALB (strip)' },
+  'CREA-STRIP': { zh: 'CREA (試紙)', en: 'CREA (strip)' },
+}
+
+function urineStripKey(obs: any, testKey: string): string | undefined {
+  const stripKey = URINE_STRIP_KEYS[testKey]
+  if (!stripKey) return undefined
+  return nhiOrderCode(obs) === '06012C' || /半定量/.test(getTestDisplayName(obs)) ? stripKey : undefined
+}
+
+/** The header of a urine-strip column, or undefined for any other key. */
+export function urineStripDisplay(testKey: string, language: 'zh-TW' | 'en'): string | undefined {
+  const label = URINE_STRIP_DISPLAY[testKey]
+  return label && (language === 'zh-TW' ? label.zh : label.en)
 }
 
 /**
@@ -576,6 +611,7 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   'PROT/CR RATIO': 'UPCR',
   'TC/HDL RATIO': 'TC/HDL',
   'EGFR(PED)': 'eGFR (PED)',
+  AMYLASE: 'Amylase',
   // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).
   ...IMMUNOLOGY_DISPLAY,
   // 內分泌 thyroid columns keyed by LOINC (thyroid-analytes.ts).
@@ -737,6 +773,14 @@ export function getLabPivotTestIdentity(
     const dual = dualSpecimenAnalyte(obs)
     if (dual && !isKnownPivotKey(testKey)) testKey = dual
     if (dual && (testKey === 'PROTEIN' || testKey === 'PROT')) testKey = dual
+  }
+
+  if (categoryId === 'urine') {
+    const stripKey = urineStripKey(obs, testKey)
+    if (stripKey) {
+      testKey = stripKey
+      displayOverride = urineStripDisplay(stripKey, 'en')
+    }
   }
 
   if (categoryId === 'endocrine') {
