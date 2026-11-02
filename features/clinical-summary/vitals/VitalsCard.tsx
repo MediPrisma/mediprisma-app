@@ -16,7 +16,7 @@ import { useVitalsView } from './hooks/useVitalsView'
 import { VitalsGrid } from './components/VitalsGrid'
 import { homeMeasurementLink, hospitalChart } from './utils/home-measurement-link'
 import { isHomeMeasurementPilotUser } from './utils/home-measurement-access'
-import { currentIdToken, fetchHomeReadings, type HomeReadings } from './utils/home-measurement-readings'
+import { currentIdToken, fetchHomeReadings, type HomeLookup } from './utils/home-measurement-readings'
 
 // The check is async (hashing); the answer counts only for the account it was made for.
 function useHomeMeasurementPilot(): boolean {
@@ -31,15 +31,15 @@ function useHomeMeasurementPilot(): boolean {
 }
 
 // Asked once per patient; the answer counts only for the chart it was asked about.
-function useHomeReadings(chart: string | null): HomeReadings {
-  const [answer, setAnswer] = useState<{ chart: string; readings: HomeReadings } | null>(null)
+function useHomeReadings(chart: string | null): HomeLookup {
+  const [answer, setAnswer] = useState<{ chart: string; lookup: HomeLookup } | null>(null)
   useEffect(() => {
     if (!chart) return
     let current = true
-    void fetchHomeReadings(chart, currentIdToken).then((readings) => { if (current) setAnswer({ chart, readings }) })
+    void fetchHomeReadings(chart, currentIdToken).then((lookup) => { if (current) setAnswer({ chart, lookup }) })
     return () => { current = false }
   }, [chart])
-  return answer?.chart === chart ? answer.readings : 'unknown'
+  return answer?.chart === chart ? answer.lookup : { readings: 'unknown', bp: null }
 }
 
 export function VitalsCard() {
@@ -49,8 +49,8 @@ export function VitalsCard() {
   const { patient } = usePatient()
   const pilot = useHomeMeasurementPilot()
   const homeLink = pilot ? homeMeasurementLink(patient, typeof window === 'undefined' ? '' : window.location.href) : null
-  const readings = useHomeReadings(homeLink ? hospitalChart(patient) : null)
-  const noReadings = readings === 'none'
+  const home = useHomeReadings(homeLink ? hospitalChart(patient) : null)
+  const noReadings = home.readings === 'none'
 
   return (
     <FeatureCard
@@ -70,7 +70,7 @@ export function VitalsCard() {
         </Button>
       ) : undefined}
     >
-      <VitalsGrid vitals={vitals} />
+      <VitalsGrid vitals={vitals} homeBp={home.bp} />
     </FeatureCard>
   )
 }
