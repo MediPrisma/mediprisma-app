@@ -44,6 +44,8 @@ import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncount
 import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
 import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
 import {
   isNhiDrugCodeSystem,
@@ -861,6 +863,12 @@ const NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM =
   'https://nhi-fhir-bridge.github.io/IdentifierSystem/nhi-drug-official-url'
 const ATC_HIERARCHY_TAG_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
+
+function hasUncheckedVghtpeMedication(bundle: object): boolean {
+  const entries = Array.isArray((bundle as { entry?: unknown }).entry) ? (bundle as { entry: any[] }).entry : []
+  return entries.some((entry: any) => entry?.resource?.resourceType === 'MedicationRequest'
+    && isVghtpeSource(entry.resource) && !hasVghtpeMedicationIdentityCheck(entry.resource))
+}
 
 function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {
   const entries = Array.isArray((bundle as { entry?: unknown }).entry)
@@ -2069,7 +2077,10 @@ export const LocalBundleService = {
     // current policy tag. Upgrade them once locally, then re-encrypt the
     // enriched FHIR under the same import id. The raw SDK JSON is neither
     // needed nor recovered.
-    if (!hasNhiDrugTerminologyKnowledge(bundle)) {
+    // A chart saved before the VGH medication index also gets its hospital
+    // orders checked once, so their same-day cloud copies can merge.
+    const uncheckedHospitalOrders = hasUncheckedVghtpeMedication(bundle)
+    if (!hasNhiDrugTerminologyKnowledge(bundle) || uncheckedHospitalOrders) {
       let migration = terminologyMigrationByBundle.get(bundle)
       if (!migration) {
         const owner = { bundle, importId: memBundleImportId }
@@ -2084,6 +2095,7 @@ export const LocalBundleService = {
           if (
             result.report.status === 'enriched'
             && result.report.linkedRequestCount > 0
+            || uncheckedHospitalOrders && !hasUncheckedVghtpeMedication(result.bundle)
           ) {
             // Query refresh may itself be awaited by an import holding this
             // queue. Return the derived view now; persist it behind that writer

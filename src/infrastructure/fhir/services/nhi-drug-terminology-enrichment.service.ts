@@ -14,6 +14,7 @@ import type {
 } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/types'
 
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
+import { markVghtpeMedicationIdentities } from './vghtpe-medication-identity-enrichment'
 export { isNhiDrugCodeSystem, NHI_DRUG_CODE_SYSTEMS } from '@/src/shared/utils/nhi-drug-code-system'
 const WHO_ATC_CODE_SYSTEM = 'http://www.whocc.no/atc'
 
@@ -237,6 +238,9 @@ export async function enrichBundleWithNhiDrugTerminology(
   bundle: Record<string, unknown>,
   options: { recordedAt?: string } = {},
 ): Promise<NhiDrugTerminologyEnrichmentResult> {
+  // VGH hospital orders get their index identity first; every result below
+  // derives from this marked Bundle.
+  bundle = await markVghtpeMedicationIdentities(bundle)
   const entries = asEntries(bundle)
   const medicationRequests = entries
     .map((entry, entryIndex) => ({ entry, entryIndex }))
