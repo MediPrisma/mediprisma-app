@@ -44,6 +44,7 @@ import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncount
 import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
+import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
@@ -1825,6 +1826,7 @@ export const LocalBundleService = {
     }
     recordClinicalEncounterAliases(clinicalSource, confirmedEncounterAliases)
     entries = reconcileMedicationRequests(entries)
+    entries = complementHospitalOrderVisitContext(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
     const sourceCapturedAt = typeof bundle.timestamp === 'string'
