@@ -6,6 +6,7 @@ import { fetchHomeReadings } from '@/features/clinical-summary/vitals/utils/home
 
 let mockPatient: any
 let mockUser: any
+let mockGridProps: any
 
 // The card tests stand in a synthetic pilot account; the real check is tested below with its own hash set.
 jest.mock('@/features/clinical-summary/vitals/utils/home-measurement-access', () => ({
@@ -35,7 +36,7 @@ jest.mock('@/features/clinical-summary/vitals/hooks/useVitalsView', () => ({
 }))
 
 jest.mock('@/features/clinical-summary/vitals/components/VitalsGrid', () => ({
-  VitalsGrid: () => null,
+  VitalsGrid: (props: any) => { mockGridProps = props; return null },
 }))
 
 jest.mock('@/src/application/providers/language.provider', () => ({
@@ -118,7 +119,7 @@ const token = async () => 'synthetic-token'
 describe('fetchHomeReadings', () => {
   it('asks the service by 病歷號 with the doctor’s sign-in', async () => {
     const fetchImpl = answer({ matches: [{ readingDays: 3 }] })
-    await expect(fetchHomeReadings('1000001', token, fetchImpl)).resolves.toBe('some')
+    await expect(fetchHomeReadings('1000001', token, fetchImpl)).resolves.toMatchObject({ readings: 'some' })
     const [url, init] = (fetchImpl as unknown as jest.Mock).mock.calls[0]
     expect(url).toBe('https://health-app.mediprisma.tw/api/patient-lookup')
     expect(init.method).toBe('POST')
@@ -127,18 +128,36 @@ describe('fetchHomeReadings', () => {
   })
 
   it('says "none" when the patient has no readings there, or is on no list it keeps', async () => {
-    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: 0 }] }))).resolves.toBe('none')
-    await expect(fetchHomeReadings('1000001', token, answer({ matches: [] }))).resolves.toBe('none')
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: 0 }] }))).resolves.toMatchObject({ readings: 'none' })
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [] }))).resolves.toMatchObject({ readings: 'none' })
   })
 
   it('says "unknown" when it cannot get an answer: off the hospital network, signed out, refused, or an older service', async () => {
     const offline = jest.fn(async () => { throw new TypeError('Failed to fetch') }) as unknown as typeof fetch
-    await expect(fetchHomeReadings('1000001', token, offline)).resolves.toBe('unknown')
-    await expect(fetchHomeReadings('1000001', async () => null, answer({ matches: [{ readingDays: 3 }] }))).resolves.toBe('unknown')
-    await expect(fetchHomeReadings('1000001', token, answer({ error: 'forbidden' }, 403))).resolves.toBe('unknown')
-    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ listId: 'x' }] }))).resolves.toBe('unknown')
+    await expect(fetchHomeReadings('1000001', token, offline)).resolves.toMatchObject({ readings: 'unknown' })
+    await expect(fetchHomeReadings('1000001', async () => null, answer({ matches: [{ readingDays: 3 }] }))).resolves.toMatchObject({ readings: 'unknown' })
+    await expect(fetchHomeReadings('1000001', token, answer({ error: 'forbidden' }, 403))).resolves.toMatchObject({ readings: 'unknown' })
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ listId: 'x' }] }))).resolves.toMatchObject({ readings: 'unknown' })
     // The service could not tell whose readings they are (identity still to be confirmed).
-    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: null }] }))).resolves.toBe('unknown')
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: null }] }))).resolves.toMatchObject({ readings: 'unknown' })
+  })
+})
+
+const HOME_BP = { ruleVersion: 'hbpm-722-v0', start: '2026-10-24', end: '2026-10-30', systolic: 128, diastolic: 78, heartRate: 70, days: 5, sessions: 9, sufficient: true, complete: false, dataComplete: true }
+
+describe('fetchHomeReadings: the 722 summary', () => {
+  it('passes on the service’s 722 week with the answer', async () => {
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: 5, homeBp: HOME_BP }] }))).resolves.toEqual({
+      readings: 'some',
+      bp: { start: '2026-10-24', end: '2026-10-30', systolic: 128, diastolic: 78, heartRate: 70, days: 5, sessions: 9, sufficient: true, dataComplete: true },
+    })
+  })
+
+  it('has no numbers without readings, or when the summary is missing or malformed', async () => {
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: 0, homeBp: HOME_BP }] }))).resolves.toEqual({ readings: 'none', bp: null })
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: 5, homeBp: null }] }))).resolves.toEqual({ readings: 'some', bp: null })
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: 5, homeBp: { ...HOME_BP, systolic: '128' } }] }))).resolves.toEqual({ readings: 'some', bp: null })
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: null, homeBp: HOME_BP }] }))).resolves.toEqual({ readings: 'unknown', bp: null })
   })
 })
 
@@ -170,6 +189,19 @@ describe('VitalsCard home readings button', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
     expect(link).not.toHaveClass('opacity-50')
     expect(link).toHaveAttribute('title', '限院內網路')
+  })
+
+  it('hands the 722 week to the grid, and nothing when the service cannot answer', async () => {
+    mockPatient = hospitalPatient
+    global.fetch = answer({ matches: [{ readingDays: 5, homeBp: HOME_BP }] })
+    const { unmount } = render(<VitalsCard />)
+    await waitFor(() => expect(mockGridProps.homeBp).toMatchObject({ systolic: 128, diastolic: 78, end: '2026-10-30' }))
+    unmount()
+    global.fetch = jest.fn(async () => { throw new TypeError('Failed to fetch') }) as unknown as typeof fetch
+    render(<VitalsCard />)
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(mockGridProps.homeBp).toBeNull()
   })
 
   it('asks nothing without a 病歷號, or for any other account', async () => {
