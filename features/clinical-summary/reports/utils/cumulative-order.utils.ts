@@ -15,7 +15,8 @@
 
 import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 
-/** `other` is a catch-all for visit details / exports, not a report panel. */
+/** `other` is the catch-all, with no expected columns: CumulativeLabReport
+ *  adds it — last by default — only when it holds data. */
 export const CUMULATIVE_REPORT_CATEGORY_IDS: string[] = LAB_CATEGORIES
   .filter((category) => category.id !== 'other')
   .map((category) => category.id)
