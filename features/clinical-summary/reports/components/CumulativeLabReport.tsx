@@ -143,9 +143,14 @@ export const CumulativeLabReport = memo(function CumulativeLabReport({
   // what's expected to be there. Ordering is the clinician's (persisted).
   const nonEmpty = useMemo(() => {
     const available = DEFAULT_CUMULATIVE_CATEGORY_ORDER.filter((id) => !!pivots[id])
-    return resolveCumulativeCategoryOrder(persistedOrder, available)
+    const ordered = resolveCumulativeCategoryOrder(persistedOrder, available)
       .map((id) => pivots[id])
       .filter((p): p is LabPivot => !!p)
+    // 其他 holds laboratory results that fit none of the panels above. It has
+    // no expected columns, so it comes last and only when it holds data;
+    // otherwise those results were nowhere in this report.
+    const other = pivots.other
+    return other && other.rows.length > 0 ? [...ordered, other] : ordered
   }, [persistedOrder, pivots])
 
   // Split into primary categories and hiddenByDefault ones (blood gas, and
