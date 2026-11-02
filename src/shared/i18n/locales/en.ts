@@ -2108,8 +2108,6 @@ export const en = {
     enableBetaFeatures: 'Enable Beta features',
     betaFeaturesDescription: 'Show experimental tools such as personalised care guidance and education. When signed in, this setting is saved to your account; otherwise it is saved in this browser.',
     betaFeaturesSyncError: 'Beta settings could not sync to your account and are saved only in this browser for now. Check your connection, then toggle the setting again.',
-    pilotPacks: 'Pilot modules',
-    pilotPacksDescription: 'Care-guidance pathways that have not been released yet. Turning on Beta features shows all of them; here you can pick a single one, which appears in Personalised guidance for this browser only, marked as a pilot.',
     theme: 'Theme',
     clinicianNameSection: 'Last visit',
     clinicianNameLabel: 'My name as physician',
