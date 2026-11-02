@@ -137,6 +137,8 @@ describe('fetchHomeReadings', () => {
     await expect(fetchHomeReadings('1000001', async () => null, answer({ matches: [{ readingDays: 3 }] }))).resolves.toBe('unknown')
     await expect(fetchHomeReadings('1000001', token, answer({ error: 'forbidden' }, 403))).resolves.toBe('unknown')
     await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ listId: 'x' }] }))).resolves.toBe('unknown')
+    // The service could not tell whose readings they are (identity still to be confirmed).
+    await expect(fetchHomeReadings('1000001', token, answer({ matches: [{ readingDays: null }] }))).resolves.toBe('unknown')
   })
 })
 
