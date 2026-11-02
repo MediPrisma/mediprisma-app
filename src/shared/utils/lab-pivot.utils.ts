@@ -414,6 +414,11 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   'EGFR-PED': 'EGFR(PED)',
   'EGFR (SCHWARTZ)': 'EGFR(PED)',
   'EGFR-SCHWARTZ': 'EGFR(PED)',
+  // Hospital shorthands for CKD-EPI eGFR without a LOINC (雲端病歷,
+  // 2026-11-03). The same parenthetical stripping keyed them as EGFR(M), so a
+  // CKD-EPI value sat in the MDRD column and trend.
+  'E-GFR(EPI)': 'EGFR(EPI)',
+  'EPI-EGFR': 'EGFR(EPI)',
   'PROTEIN,TOTAL': 'TP',
   '總蛋白': 'TP',
   '血清總蛋白': 'TP',
