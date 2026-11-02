@@ -236,6 +236,20 @@ describe.each([
     expect(within(entry('DP-10')).queryByTestId('cdss-book-reasoning')).toBeNull()
   })
 
+  it('draws a decision DP-03 makes of its own under its asks, and records it (HTN 安排 HBPM)', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" patch={(model) => ({
+      ...model,
+      points: model.points.map((point) => (point.dp === 'DP-03'
+        ? { ...point, actions: [{ id: 'dp03-order', label: '安排 HBPM 7 天', decisionKind: 'ordered' as const, primary: true }] }
+        : point)),
+    })} />)
+    const slot = document.querySelector<HTMLElement>('[data-book-slot-decision="DP-03"]')!
+    fireEvent.click(within(slot).getByRole('button', { name: '安排 HBPM 7 天' }))
+    const recorded = Object.values(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {})
+    expect(recorded.map((decision) => decision.actionId)).toContain('dp03-order')
+    expect(within(document.querySelector<HTMLElement>('[data-book-slot-decision="DP-03"]')!).getByText(/安排 HBPM 7 天/)).toBeInTheDocument()
+  })
+
   it('opens DP-05 on the medicines ESC names as harmful, class by class, with what the scan covers (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     fireEvent.click(within(entry('DP-05')).getByRole('button', { name: /看依據/ }))
