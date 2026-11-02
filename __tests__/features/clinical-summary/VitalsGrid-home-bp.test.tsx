@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { VitalsGrid } from '@/features/clinical-summary/vitals/components/VitalsGrid'
+import { formatDate } from '@/src/shared/utils/fhir-helpers'
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
@@ -24,7 +25,8 @@ describe('VitalsGrid: home 722 line', () => {
     expect(line).toHaveTextContent('居家血壓 722')
     expect(line).toHaveTextContent('128/78 mmHg')
     expect(line).toHaveTextContent('心率70 bpm')
-    expect(line).toHaveTextContent('2026/10/24–2026/10/30')
+    // Dates follow the browser's locale, as the clinic readings above do.
+    expect(line).toHaveTextContent(`${formatDate('2026-10-24')}–${formatDate('2026-10-30')}`)
     expect(line).toHaveTextContent('5 天 9/14 時段')
     expect(line).not.toHaveTextContent('資料不足')
     expect(line).toHaveAttribute('title', '只顯示')
