@@ -37,20 +37,24 @@ function frequencyConflicts(left: string, right: string): boolean {
   return a[0] !== b[0] || !!a[1] && !!b[1] && a[1] !== b[1]
 }
 
+// A frequency is one code word: the timing code itself, or a SIG field that
+// holds nothing else (MediCloud records "QN" where the hospital records
+// "1 CAP PO QN"). Decided by shape, not by a list of known codes, so every
+// frequency the sources use compares the same way. Anything else is a SIG.
+const frequencyCode = (value: unknown) => typeof value === 'string'
+  && /^(?=.*[A-Z])[A-Z0-9]+$/i.test(value.trim()) ? value.trim().toUpperCase() : undefined
+
 function frequencyKey(dosage: any): string | undefined {
-  const knownFrequency = (value: unknown) => typeof value === 'string'
-    && /^(?:QD|BID|TID|QID)(?:AC|PC|CC)?$|^(?:Q\d+H|QOD|QW|QHS|HS|PRN|STAT|ASORDER)$/i.test(value.trim())
-    ? value.trim().toUpperCase() : undefined
   const codes = [...new Set((dosage?.timing?.code?.coding ?? [])
-    .map((coding: any) => knownFrequency(coding.code)).filter(Boolean))]
+    .map((coding: any) => frequencyCode(coding.code)).filter(Boolean))]
   const repeat = dosage?.timing?.repeat
   let repeatCode: string | undefined
   if (repeat?.period === 1 && repeat.periodUnit === 'd') repeatCode = ({ 1: 'QD', 2: 'BID', 3: 'TID', 4: 'QID' } as Record<number, string>)[repeat.frequency]
   if (repeat?.frequency === 1 && repeat.periodUnit === 'h' && repeat.period > 0) repeatCode = `Q${repeat.period}H`
   if (!repeatCode && repeat?.frequency > 0 && repeat?.period > 0 && repeat.periodUnit) repeatCode = `repeat:${repeat.frequency}/${repeat.period}${repeat.periodUnit}`
   if (repeatCode && repeat.when?.length === 1 && ['AC', 'PC'].includes(repeat.when[0])) repeatCode += repeat.when[0]
-  const values = [...new Set([...codes, repeatCode, knownFrequency(dosage?.timing?.code?.text),
-    knownFrequency(dosage?.text), knownFrequency(extractFrequencyFromText(dosage?.text))].filter(Boolean))] as string[]
+  const values = [...new Set([...codes, repeatCode, frequencyCode(dosage?.timing?.code?.text),
+    frequencyCode(dosage?.text), frequencyCode(extractFrequencyFromText(dosage?.text))].filter(Boolean))] as string[]
   return values.some(left => values.some(right => frequencyConflicts(left, right)))
     ? '!conflicting-source-frequency!' : values.find(value => /(?:AC|PC|CC)$/.test(value)) ?? values[0]
 }
@@ -141,7 +145,7 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     // MediCloud may record only "QDPC" where the hospital records
     // "1 TAB PO QDPC". Compare that frequency with the structured frequency,
     // rather than treating the short frequency as a contradictory full SIG.
-    const sig = (dose: any) => typeof dose.text === 'string' && !/^(?:QD|BID|TID|QID)(?:AC|PC|CC)?$|^(?:Q\d+H|QOD|QW|QHS|HS|PRN|STAT|ASORDER)$/i.test(dose.text.trim())
+    const sig = (dose: any) => typeof dose.text === 'string' && !frequencyCode(dose.text)
       && !/^\s*(?:給藥總量|給藥日數|平均每日)/.test(dose.text)
       ? dose.text.trim() : undefined
     if (sig(left) && sig(right) && sig(left) !== sig(right)) return true
