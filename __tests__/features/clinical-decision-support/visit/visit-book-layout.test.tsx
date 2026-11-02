@@ -250,6 +250,44 @@ describe.each([
     expect(within(document.querySelector<HTMLElement>('[data-book-slot-decision="DP-03"]')!).getByText(/安排 HBPM 7 天/)).toBeInTheDocument()
   })
 
+  it('draws DP-03\'s decision on the home reading\'s line, at its right, when DP-03 asks a number', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" patch={(model) => ({
+      ...model,
+      measureAsks: [{ id: 'home-bp', label: '居家血壓', unit: 'mmHg', placeholder: '146/92' }],
+      points: model.points.map((point) => (point.dp === 'DP-03'
+        ? { ...point, actions: [{ id: 'dp03-order', label: '安排 HBPM 7 天', decisionKind: 'ordered' as const, primary: true }] }
+        : point)),
+    } as typeof model)} />)
+    const line = document.querySelector<HTMLElement>('[data-book-measure-ask="home-bp"]')!
+    const trailing = within(line).getByRole('button', { name: '安排 HBPM 7 天' }).closest('[data-book-measure-trailing]')
+    expect(trailing).not.toBeNull()
+  })
+
+  it('keeps DP-03\'s button mounted while a pair typed beside it is saved, so the click that left the field records (#414 review)', () => {
+    render(<BookPage id="p9-hfpef-af-dose" page="hf" patch={(model) => {
+      // The ask reads back what was saved, as the pack's does.
+      const entries = useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.entries
+      const answer = entries?.homeSystolic && entries.homeDiastolic ? { systolic: entries.homeSystolic.value, diastolic: entries.homeDiastolic.value, basis: '居家' } : undefined
+      return {
+        ...model,
+        measureAsks: [{ id: 'home-bp', label: '居家血壓', unit: 'mmHg', placeholder: '146/92', ...(answer ? { answer } : {}) }],
+        points: model.points.map((point) => (point.dp === 'DP-03'
+          ? { ...point, actions: [{ id: 'dp03-order', label: '安排 HBPM 7 天', decisionKind: 'ordered' as const, primary: true }] }
+          : point)),
+      } as typeof model
+    }} />)
+    const input = document.querySelector<HTMLInputElement>('[data-book-measure-input="home-bp"]')!
+    const button = screen.getByRole('button', { name: '安排 HBPM 7 天' })
+    fireEvent.change(input, { target: { value: '148/94' } })
+    fireEvent.blur(input)
+    expect(useClinicVitalsStore.getState().byPatientId?.[PATIENT]?.entries?.homeSystolic?.value).toBe(148)
+    expect(button.isConnected).toBe(true)
+    fireEvent.click(button)
+    const recorded = Object.values(usePhysicianDecisionsStore.getState().byPatientId[PATIENT] ?? {})
+    expect(recorded.map((decision) => decision.actionId)).toContain('dp03-order')
+    expect(document.querySelector<HTMLInputElement>('[data-book-measure-input="home-bp"]')!.value).toBe('148/94')
+  })
+
   it('opens DP-05 on the medicines ESC names as harmful, class by class, with what the scan covers (P9)', () => {
     render(<BookPage id="p9-hfpef-af-dose" page="hf" />)
     fireEvent.click(within(entry('DP-05')).getByRole('button', { name: /看依據/ }))
