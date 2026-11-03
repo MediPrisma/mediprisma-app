@@ -120,10 +120,17 @@ describe('HTN baseline-risk facts for the pack', () => {
     })
     // The list's HTN entries open at DP-08 and only where the HTN page has it.
     const entries = HF_VISIT_CALCULATORS.filter((entry) => entry.source === 'htn')
-    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['prevent-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true]])
-    expect(entries[0]!.names.test('PREVENT-ASCVD 9.2%｜國健署心血管風險預測 8.1%（低）')).toBe(true)
-    expect(entries[1]!.names.test('PREVENT-ASCVD 9.2%｜國健署心血管風險預測 8.1%（低）')).toBe(true)
-    expect(entries[1]!.names.test('HPA cardiovascular risk prediction 8.1% (low)')).toBe(true)
-    expect(entries.every((entry) => entry.note)).toBe(true)
+    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['risk-inputs', 'DP-08', true], ['prevent-ascvd', 'DP-08', true], ['pce-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true], ['stop-bang', 'DP-07', true]])
+    const line = 'PREVENT-ASCVD 9.2%｜ACC/AHA PCE 5.4%｜國健署心血管風險預測 8.1%（低）'
+    const byId = Object.fromEntries(entries.map((entry) => [entry.id, entry]))
+    expect(byId['prevent-ascvd']!.names.test(line)).toBe(true)
+    expect(byId['pce-ascvd']!.names.test(line)).toBe(true)
+    expect(byId['hpa-mace']!.names.test(line)).toBe(true)
+    expect(byId['hpa-mace']!.names.test('HPA cardiovascular risk prediction 8.1% (low)')).toBe(true)
+    expect(byId['stop-bang']!.names.test('STOP-Bang：四題問診（已知 2 分）')).toBe(true)
+    // The shared-inputs row opens a panel, not a calculator; every calculator row may be attached as a note.
+    expect(entries.filter((entry) => entry.calculatorId).every((entry) => entry.note)).toBe(true)
+    expect(byId['risk-inputs']!.panel).toBe('risk-inputs')
+    expect(byId['risk-inputs']!.calculatorId).toBeUndefined()
   })
 })

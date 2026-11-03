@@ -2,8 +2,8 @@
 
 import { usePreventInputs, usePreventStore } from './stores/prevent-inputs.store'
 import { buildPreventReading, applyPreventReading } from './utils/prevent-reading'
-import { applyHtnRiskReadings, buildHpaReading } from './utils/htn-risk-readings'
-import { HpaReadingContext } from './renderers/visit/HtnRiskPanels'
+import { applyHtnRiskReadings, buildHpaReading, buildPceReading } from './utils/htn-risk-readings'
+import { HpaReadingContext, PceReadingContext } from './renderers/visit/HtnRiskPanels'
 import { PreventReadingContext } from './renderers/PreventRiskSummary'
 
 
@@ -546,6 +546,8 @@ export default function LiveClinicalDecisionSupportFeature({
   // The HPA (國健署) MACE reconstruction for the HTN page's DP-08, read off the
   // same record and the same PREVENT answers (plan 05 §19, owner 2026-11-03).
   const hpaReading = useMemo(() => answeredProfile ? buildHpaReading(answeredProfile, autofill, preventReading, clinicVitals) : undefined, [answeredProfile, autofill, preventReading, clinicVitals])
+  // The ACC/AHA Pooled Cohort Equations off the same shared inputs (owner 2026-11-03).
+  const pceReading = useMemo(() => buildPceReading(preventReading), [preventReading])
   // The every-visit answers enter last, as the pack's own facts
   // (`applyVisitAnswers`), so 「喘變差」 changes the recommendation it bears on
   // on every layout, not only on the map where it was asked. A pillar the
@@ -560,7 +562,7 @@ export default function LiveClinicalDecisionSupportFeature({
         applyHtnDiagnosis(
           applyFmtIntolerance(
             applyVisitAnswers(
-              applyAfCalculatorResults(applyHtnRiskReadings(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading), preventReading, hpaReading)),
+              applyAfCalculatorResults(applyHtnRiskReadings(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading), preventReading, hpaReading, pceReading)),
               visitAnswers,
             ),
             intolerant,
@@ -570,7 +572,7 @@ export default function LiveClinicalDecisionSupportFeature({
         previousCdssVisit,
       )
       : null
-  ), [answeredProfile, hfpefReading, hpaReading, htnConfirmed, intolerant, preventReading, previousCdssVisit, visitAnswers])
+  ), [answeredProfile, hfpefReading, hpaReading, htnConfirmed, intolerant, pceReading, preventReading, previousCdssVisit, visitAnswers])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -898,6 +900,7 @@ export default function LiveClinicalDecisionSupportFeature({
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
       <HpaReadingContext.Provider value={hpaReading}>
+      <PceReadingContext.Provider value={pceReading}>
       {/* The decision map (決策地圖 v2, the pocket-handbook page) stays in this
           panel, under the header above. Opened by `?visit=book`, or 全螢幕
           from the panel, it draws its own header over the whole window, and
@@ -966,6 +969,7 @@ export default function LiveClinicalDecisionSupportFeature({
       />
       </CarriedAnswerContext.Provider>
       </VisitBookChromeContext.Provider>
+      </PceReadingContext.Provider>
       </HpaReadingContext.Provider>
       </PreventReadingContext.Provider>
       {/* On the map, the reset sits at the foot, after today's plan: it clears

@@ -17,6 +17,8 @@ const HEART_FAILURE: L = { en: 'Heart failure', zh: '心衰竭' }
 const HFPEF_DISEASE: L = { en: 'HFpEF', zh: '射出分率保留型心衰竭' }
 
 export const CALC_TAGS: Record<string, CalcTags> = {
+  'pce-ascvd': { purpose: ['risk', 'prognosis'], diseases: [{ en: 'ASCVD prevention', zh: 'ASCVD 預防' }, { en: 'Hypertension', zh: '高血壓' }, { en: 'Dyslipidemia', zh: '血脂異常' }] },
+  'stop-bang': { purpose: ['screening', 'risk'], diseases: [{ en: 'Obstructive sleep apnea', zh: '阻塞型睡眠呼吸中止' }, { en: 'Hypertension', zh: '高血壓' }] },
   'prevent-ascvd': { purpose: ['risk', 'prognosis'], diseases: [{ en: 'Dyslipidemia', zh: '血脂異常' }, { en: 'ASCVD prevention', zh: 'ASCVD 預防' }] },
   'egfr-ckd-epi-2021': { purpose: ['formula'], diseases: [CKD] },
   'kfre-4-variable': { purpose: ['prognosis', 'risk'], diseases: [CKD, { en: 'Kidney failure', zh: '腎衰竭' }] },

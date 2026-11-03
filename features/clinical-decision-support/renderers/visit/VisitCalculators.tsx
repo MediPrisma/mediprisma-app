@@ -15,7 +15,7 @@ import { tr, type CalcResult, type CalculatorDef } from '@/features/medical-calc
 import type { DecisionPointView } from '../../types'
 import type { VisitCalculatorNote } from '../../stores/visit-calculator-notes.store'
 import { ABSENT_STATES } from './visit-decisions'
-import { HpaVisitPanel, PreventVisitPanel } from './HtnRiskPanels'
+import { HpaVisitPanel, PceVisitPanel, PreventVisitPanel, RiskInputsPanel } from './HtnRiskPanels'
 import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import styles from './VisitCalculators.module.css'
 
@@ -42,7 +42,7 @@ interface VisitCalculatorEntry {
    * page's PREVENT (bound to the answers the pack's facts are built from) and
    * HPA (the host's reading of the record).
    */
-  panel?: 'prevent-visit' | 'hpa-visit'
+  panel?: 'prevent-visit' | 'pce-visit' | 'hpa-visit' | 'risk-inputs'
   /** The name the list and the panel show, where the calculator's own is not it (「國健署心血管風險預測公式」). */
   title?: { zh: string; en: string }
 }
@@ -76,13 +76,26 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // reference with no guideline threshold.
   // Both may be attached to the plan as a note (owner 2026-11-03), the way the
   // HF prognosis models are; the row stays open when the model does not apply.
+  // One set of inputs for the three (owner 2026-11-03: 「提供一個 common 的輸入
+  // 面板…套用多項公式」): filled from the record, ICD codes, the host's rules
+  // and today's answers, confirmed once for all of them.
+  { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, needsPoint: true, panel: 'risk-inputs',
+    title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
   { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?:[-‐–](?:ASCVD|CVD))?/, needsPoint: true, panel: 'prevent-visit', note: true,
     title: { zh: 'PREVENT 心血管風險', en: 'PREVENT cardiovascular risk' } },
+  // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
+  // 「包括 ACC/AHA 的 Multicohort CV risk calculators」), a reference the pack shows.
+  { id: 'pce-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'pce-ascvd', names: /ACC\/AHA PCE|Pooled Cohort|PCE/, needsPoint: true, panel: 'pce-visit', note: true,
+    title: { zh: 'ACC/AHA Pooled Cohort（PCE）', en: 'ACC/AHA Pooled Cohort Equations' } },
   { id: 'hpa-mace', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署心血管風險預測(?:公式)?|國健署 MACE|HPA MACE|HPA cardiovascular risk prediction|國健署五項慢性病風險/, needsPoint: true, panel: 'hpa-visit', note: true,
     title: { zh: '國健署心血管風險預測公式', en: 'HPA cardiovascular risk prediction' } },
+  // DP-07's STOP-Bang (owner 2026-11-03: 「Stop-bang 應該也要列入計算機」): the
+  // generic form, P, A, G and B prefilled from the record; S, T, O and N are
+  // the four questions DP-07 itself asks.
+  { id: 'stop-bang', dp: 'DP-07', source: 'htn', calculatorId: 'stop-bang', names: /STOP[-‐–]Bang/, needsPoint: true, note: true },
 ]
 
-type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable' | 'inapplicable'
+type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable' | 'inapplicable' | 'inputs'
 
 /** A model's acronym where its full name carries one (「…（SHFM）」). */
 function shortName(name: string): string {
@@ -151,6 +164,7 @@ function CalculatorRows({ groups, isEnglish, values, onChoose }: {
     if (status === 'to-confirm') return isEnglish ? 'To confirm' : '待確認'
     if (status === 'data-only') return isEnglish ? 'Data only' : '僅資料'
     if (status === 'inapplicable') return isEnglish ? 'Not applicable' : '不適用'
+    if (status === 'inputs') return isEnglish ? 'Inputs' : '輸入'
     return isEnglish ? 'Admission only' : '住院時適用'
   }
   return (
@@ -262,7 +276,7 @@ export function VisitCalculatorsProvider({
     // A prognosis model by its own name (「MAGGIC」), not the calculator's longer one.
     const name = entry.title ? (locale === 'en' ? entry.title.en : entry.title.zh) : shortName(model?.name ?? (calc ? tr(locale, calc.name) : entry.id))
     // GWTG-HF reads the admission's values, never today's chart.
-    const fixed: RowStatus | undefined = calc ? undefined : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
+    const fixed: RowStatus | undefined = calc ? undefined : entry.panel === 'risk-inputs' ? 'inputs' : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
     return [{ entry, calc, model, name, fixed }]
   }), [locale, lvef, pointOf, sourceOfPage])
   const pattern = useMemo(() => (
@@ -312,8 +326,12 @@ export function VisitCalculatorsProvider({
               <DialogTitle className="text-lg">{open.entry.title ? (isEnglish ? open.entry.title.en : open.entry.title.zh) : open.calc ? tr(locale, open.calc.name) : open.model?.name}</DialogTitle>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              {open.entry.panel === 'prevent-visit' ? (
+              {open.entry.panel === 'risk-inputs' ? (
+                <RiskInputsPanel isEnglish={isEnglish} />
+              ) : open.entry.panel === 'prevent-visit' ? (
                 <PreventVisitPanel isEnglish={isEnglish} onResult={setResult} />
+              ) : open.entry.panel === 'pce-visit' ? (
+                <PceVisitPanel isEnglish={isEnglish} onResult={setResult} />
               ) : open.entry.panel === 'hpa-visit' ? (
                 <HpaVisitPanel isEnglish={isEnglish} onResult={setResult} />
               ) : open.calc ? (

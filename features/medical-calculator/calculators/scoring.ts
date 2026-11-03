@@ -61,6 +61,23 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'pce-ascvd': {
+    formula: { zh: '10 年風險 = 1 − S₀^exp(Σβᵢxᵢ − 群組平均)。四組（白人／非裔 × 女／男）各有係數：ln 年齡、ln 總膽固醇、ln HDL、ln 收縮壓（治療中／未治療分開）、吸菸、糖尿病及其與 ln 年齡的交互作用。', en: '10-year risk = 1 − S₀^exp(Σβᵢxᵢ − group mean). Four groups (White/African American × female/male) with coefficients for ln age, ln total cholesterol, ln HDL, ln SBP (treated and untreated separately), smoking, diabetes and their ln-age interactions.' },
+    note: { zh: '2018 ACC/AHA 血脂指引風險帶：<5% 低、5–<7.5% 邊緣、7.5–<20% 中等、≥20% 高。其他族裔用白人係數（指引建議），僅供參考。', en: '2018 ACC/AHA cholesterol-guideline bands: <5% low, 5–<7.5% borderline, 7.5–<20% intermediate, ≥20% high. Other groups use the White equations as the guideline advises; reference only.' },
+  },
+  'stop-bang': {
+    factors: [
+      { label: { en: 'S Loud snoring', zh: 'S 大聲打鼾' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'T Tired in the daytime', zh: 'T 白天疲倦、嗜睡' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'O Observed apnoea', zh: 'O 目擊呼吸停止' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'P High blood pressure', zh: 'P 高血壓' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'B BMI >35', zh: 'B BMI >35' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'A Age >50', zh: 'A 年齡 >50' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'N Neck >40 cm', zh: 'N 頸圍 >40 cm' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'G Male', zh: 'G 男性' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+    ],
+    note: { en: 'Chung 2016: 0–2 low, 3–4 intermediate, 5–8 high; STOP ≥2 plus male, BMI >35 or neck >40 cm also counts as high.', zh: 'Chung 2016：0–2 低、3–4 中、5–8 高；STOP ≥2 加男性、BMI >35 或頸圍 >40 cm 亦為高風險。' },
+  },
   'hpa-chronic-risk-reconstruction': {
     formula: { en: 'Approximation: risk (%) ≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]. Separate sex-specific fits for each of five outcomes; not the published official coefficients.', zh: '近似式：風險（%）≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]。五項結果各依性別重建；β 不是官方公布係數。' },
     note: { en: 'The attached 2022 IJERPH paper has CHD, stroke and MACE coefficients, but omits the other two diseases and does not specify all baseline survival terms; its MACE predictors differ from the current public V4 form. See the reconstruction note for the holdout audit.', zh: '所附 2022 年論文有冠心病、中風及 MACE 係數，但沒有另外兩病及全部基準存活率；MACE 變項也與目前公開 V4 表單不同。留出樣本驗算見重建說明。' },
