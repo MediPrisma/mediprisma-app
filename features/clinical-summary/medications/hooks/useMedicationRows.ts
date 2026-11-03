@@ -16,7 +16,7 @@ import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
-import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
+import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays, medicationRefillDispenseDay } from '@/src/core/utils/clinical-context-selection.utils'
 import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
@@ -239,6 +239,8 @@ export function useMedicationRows(
       })
 
       const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start
+      // The row stays with the visit that wrote it; a later fill shows its own supply.
+      const refillDispenseDay = medicationRefillDispenseDay(med)
       const stopDateRaw = statusInactive
         ? medicationRecordedTreatmentEnd(med)
         : undefined
@@ -368,6 +370,7 @@ export function useMedicationRows(
         totalQuantity,                               // 藥品總量
         remainingDisplay.sourceDays,
         ...dateSearchTokens(startDateRaw),           // 日期 西元 + 民國
+        ...dateSearchTokens(refillDispenseDay),
         ...dateSearchTokens(refillAgg?.firstDate),
       ].filter(Boolean).join(' ').toLowerCase()
 
@@ -396,6 +399,7 @@ export function useMedicationRows(
         frequency: frequencySummary || undefined,
         totalQuantity,
         startedOn: sourceCalendarDate(startDateRaw),
+        dispensedOn: refillDispenseDay ? sourceCalendarDate(refillDispenseDay) : undefined,
         stoppedOn: stopDateRaw ? sourceCalendarDate(stopDateRaw) : undefined,
         durationDays,
         endDate: endDate ? sourceCalendarDate(endDate) : undefined,

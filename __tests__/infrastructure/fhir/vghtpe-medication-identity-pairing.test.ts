@@ -3,6 +3,7 @@ import { markVghtpeMedicationIdentities } from '@/src/infrastructure/fhir/servic
 import { enrichBundleWithNhiDrugTerminology } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
 import { VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes, vghtpeMedicationIdentityIngredient,
   vghtpeMedicationIdentityExtension, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
+import { MEDCLOUD_REFILL_DISPENSE_DAY_URL } from '@/src/shared/constants/medcloud.constants'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
 const PRODUCT = 'urn:oid:vgh.medication.product'
@@ -120,6 +121,16 @@ describe('pairing a hospital order with its 臺北榮總 cloud claim by index id
       cloudOrder({ id: 'cloud-med-2', medicationCodeableConcept: { coding: [{ system: NHI, code: 'B024039100' }] } }))
     expect(reconcileMedicationRequests([hospital, cloud, second])).toHaveLength(3)
     expect(hospital._sourceRecordComparison.status).toBe('ambiguous')
+  })
+
+  it('pairs with the visit claim while a later 慢連箋 fill listed under the same visit keeps its own row', async () => {
+    const [hospital, cloud, later] = await marked(hospitalOrder(), cloudOrder(), cloudOrder({ id: 'cloud-med-refill',
+      extension: [{ url: MEDCLOUD_REFILL_DISPENSE_DAY_URL, valueString: '2026-10-15T00:00:00' }] }))
+    const result = reconcileMedicationRequests([hospital, cloud, later])
+    expect(result).toHaveLength(2)
+    expect(hospital._sourceRecordComparison).toMatchObject({ status: 'confirmed' })
+    expect(hospital._sourceRecordComparison.references).not.toContain('MedicationRequest/cloud-med-refill')
+    expect(later._sourceRecordComparison).toBeUndefined()
   })
 
   it('keeps every row when two same-day hospital orders share the identity', async () => {
