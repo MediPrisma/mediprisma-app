@@ -22,6 +22,7 @@ import {
   MILESTONE_ENCOUNTER_FLOOR_DAYS,
   normalizeClinicalStatus,
   medicationExpectedEnd,
+  medicationSupplyStart,
   selectMedicationRecords,
 } from "@/src/core/utils/clinical-context-selection.utils"
 
@@ -79,7 +80,7 @@ function summarize(
     ? `${dosage.doseAndRate[0].doseQuantity.value} ${dosage.doseAndRate[0].doseQuantity.unit || ''}`.trim()
     : undefined
 
-  const startedRaw = med.authoredOn || med.effectiveDateTime
+  const startedRaw = medicationSupplyStart(med)
   const days = durationToDays(med.dispenseRequest?.expectedSupplyDuration)
     ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
 
