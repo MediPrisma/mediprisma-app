@@ -29,6 +29,19 @@ export const HTN_HPA_MACE_FACT = 'hpaMaceRisk10y'
 /** The 計算機 list's entries these results stand beside (`HF_VISIT_CALCULATORS`). */
 export const HTN_PREVENT_CALCULATOR_ENTRY = 'prevent-ascvd'
 export const HTN_HPA_CALCULATOR_ENTRY = 'hpa-mace'
+/** The host's own assessment of the HPA MACE estimate (status and what blocks it), beside the value fact. */
+export const HTN_HPA_ASSESSMENT_FACT = 'hpaMaceAssessment'
+
+/**
+ * Where a calculator the host runs stands for this patient, for the 計算機
+ * list's status column: computed (with the figure), inputs to fill (how many),
+ * or not applicable (an exclusion, an age outside the model). The row stays
+ * open either way (owner 2026-11-03: 「不適用還是開放點選」).
+ */
+export interface HostCalculatorState {
+  status: 'computed' | 'to-fill' | 'inapplicable'
+  value?: string
+}
 
 type FieldSource = 'physician' | 'record' | 'none'
 export interface HpaField {
@@ -117,9 +130,19 @@ export function applyHtnRiskReadings(profile: CdssPatientProfile, prevent?: Prev
   const facts: Record<string, Fact> = { ...profile.facts }
   delete facts[HTN_PREVENT_ASCVD_FACT]
   delete facts[HTN_HPA_MACE_FACT]
+  delete facts[HTN_HPA_ASSESSMENT_FACT]
   const at = profile.evaluatedAt
   if (!at) return { ...profile, facts }
   const day = at.slice(0, 10)
+  if (hpa?.mace) {
+    // Status first, then the inputs that block it — the same shape as PREVENT's
+    // `preventAssessment`, read by `htnCalculatorValues` for the list.
+    facts[HTN_HPA_ASSESSMENT_FACT] = {
+      zh: hpa.mace.status,
+      en: hpa.mace.status,
+      textEvidence: { direction: 'unknown', matchedTerms: [hpa.mace.status, ...(hpa.mace.missing ?? []), ...(hpa.mace.outside ?? [])] },
+    }
+  }
   if (prevent?.result.status === 'ready' && prevent.result.risk10 !== undefined) {
     const value = prevent.result.risk10
     const inputs: CalculatorInput[] = prevent.fields.map((field) => ({
@@ -160,15 +183,26 @@ export function applyHtnRiskReadings(profile: CdssPatientProfile, prevent?: Prev
 
 const LEVEL_ZH: Readonly<Record<string, string>> = { low: '低', moderate: '中', high: '高' }
 
-/** The 計算機 list's value column for the two results, by entry id; absent where nothing was computed. */
-export function htnCalculatorValues(facts: Facts | undefined, isEnglish: boolean): Readonly<Record<string, string>> | undefined {
-  const out: Record<string, string> = {}
+/**
+ * The 計算機 list's status column for the two calculators, by entry id, read
+ * off the facts the host wrote: the figure where there is one, otherwise the
+ * assessment facts (`preventAssessment`, `hpaMaceAssessment`) say whether
+ * inputs are missing or the model does not apply. Absent where the host has
+ * not read the patient at all.
+ */
+export function htnCalculatorValues(facts: Facts | undefined, isEnglish: boolean): Readonly<Record<string, HostCalculatorState>> | undefined {
+  const out: Record<string, HostCalculatorState> = {}
   const prevent = facts?.[HTN_PREVENT_ASCVD_FACT]
-  if (prevent?.numericValue !== undefined) out[HTN_PREVENT_CALCULATOR_ENTRY] = `${prevent.numericValue.toFixed(1)}%`
+  const preventAssessment = facts?.preventAssessment
+  if (prevent?.numericValue !== undefined) out[HTN_PREVENT_CALCULATOR_ENTRY] = { status: 'computed', value: `${prevent.numericValue.toFixed(1)}%` }
+  else if (preventAssessment?.zh === 'ineligible') out[HTN_PREVENT_CALCULATOR_ENTRY] = { status: 'inapplicable' }
+  else if (preventAssessment?.zh === 'needs-data') out[HTN_PREVENT_CALCULATOR_ENTRY] = { status: 'to-fill', value: String(Math.max(0, (preventAssessment.textEvidence?.matchedTerms.length ?? 1) - 1)) }
   const mace = facts?.[HTN_HPA_MACE_FACT]
+  const maceAssessment = facts?.[HTN_HPA_ASSESSMENT_FACT]
   if (mace?.numericValue !== undefined) {
     const level = mace.textEvidence?.matchedTerms.find((term) => term.startsWith('level:'))?.slice('level:'.length)
-    out[HTN_HPA_CALCULATOR_ENTRY] = `${mace.numericValue}%${level ? (isEnglish ? ` ${level}` : `（${LEVEL_ZH[level] ?? level}）`) : ''}`
-  }
+    out[HTN_HPA_CALCULATOR_ENTRY] = { status: 'computed', value: `${mace.numericValue}%${level ? (isEnglish ? ` ${level}` : `（${LEVEL_ZH[level] ?? level}）`) : ''}` }
+  } else if (maceAssessment?.zh === 'outside' || maceAssessment?.zh === 'existing') out[HTN_HPA_CALCULATOR_ENTRY] = { status: 'inapplicable' }
+  else if (maceAssessment?.zh === 'missing') out[HTN_HPA_CALCULATOR_ENTRY] = { status: 'to-fill', value: String(Math.max(0, (maceAssessment.textEvidence?.matchedTerms.length ?? 1) - 1)) }
   return Object.keys(out).length ? out : undefined
 }

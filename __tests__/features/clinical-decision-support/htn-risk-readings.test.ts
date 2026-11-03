@@ -104,14 +104,26 @@ describe('HTN baseline-risk facts for the pack', () => {
     const prevent = buildPreventReading(p, record, answers)
     const facts = applyHtnRiskReadings(p, prevent, buildHpaReading(p, record, prevent)).facts
     const values = htnCalculatorValues(facts, false)!
-    expect(values['prevent-ascvd']).toMatch(/^\d+\.\d%$/)
-    expect(values['hpa-mace']).toMatch(/^\d+(\.\d+)?%（[低中高]）$/)
+    expect(values['prevent-ascvd']).toEqual({ status: 'computed', value: expect.stringMatching(/^\d+\.\d%$/) })
+    expect(values['hpa-mace']).toEqual({ status: 'computed', value: expect.stringMatching(/^\d+(\.\d+)?%（[低中高]）$/) })
     expect(htnCalculatorValues({}, false)).toBeUndefined()
+    // Not applicable and inputs-to-fill are said, and the rows stay open.
+    const excluded = buildPreventReading(p, record, { ...answers, cvd: 'yes' })
+    const excludedFacts = applyHtnRiskReadings(p, excluded, buildHpaReading(p, record, excluded)).facts
+    expect(htnCalculatorValues({ ...excludedFacts, preventAssessment: { zh: 'ineligible', en: 'ineligible', textEvidence: { direction: 'supports', matchedTerms: ['ineligible', 'cvd'] } } }, false)).toEqual({ 'prevent-ascvd': { status: 'inapplicable' }, 'hpa-mace': { status: 'inapplicable' } })
+    const blank = buildPreventReading(p, record, {})
+    const blankFacts = applyHtnRiskReadings(p, blank, buildHpaReading(p, record, blank)).facts
+    expect(htnCalculatorValues({ ...blankFacts, preventAssessment: { zh: 'needs-data', en: 'needs-data', textEvidence: { direction: 'supports', matchedTerms: ['needs-data', ...blank.result.issues] } } }, false)).toEqual({
+      'prevent-ascvd': { status: 'to-fill', value: String(blank.result.issues.length) },
+      // Female MACE waits for the PREVENT form's prior-CVD and smoking answers.
+      'hpa-mace': { status: 'to-fill', value: '2' },
+    })
     // The list's HTN entries open at DP-08 and only where the HTN page has it.
     const entries = HF_VISIT_CALCULATORS.filter((entry) => entry.source === 'htn')
     expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['prevent-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true]])
-    expect(entries[0]!.names.test('PREVENT-ASCVD 9.2%｜國健署 MACE 8.1%（低）')).toBe(true)
-    expect(entries[1]!.names.test('PREVENT-ASCVD 9.2%｜國健署 MACE 8.1%（低）')).toBe(true)
-    expect(entries[1]!.names.test('HPA MACE 8.1% (low)')).toBe(true)
+    expect(entries[0]!.names.test('PREVENT-ASCVD 9.2%｜國健署心血管風險預測 8.1%（低）')).toBe(true)
+    expect(entries[1]!.names.test('PREVENT-ASCVD 9.2%｜國健署心血管風險預測 8.1%（低）')).toBe(true)
+    expect(entries[1]!.names.test('HPA cardiovascular risk prediction 8.1% (low)')).toBe(true)
+    expect(entries.every((entry) => entry.note)).toBe(true)
   })
 })

@@ -35,14 +35,17 @@ describe('HTN DP-08 panels', () => {
 
   it('shows the PREVENT ASCVD result with the host caveat and writes an answer to the PREVENT store', () => {
     const reading = buildPreventReading(profile, record, answered)
+    const onResult = jest.fn()
     render(
       <PreventReadingContext.Provider value={reading}>
-        <PreventVisitPanel isEnglish={false} />
+        <PreventVisitPanel isEnglish={false} onResult={onResult} />
       </PreventReadingContext.Provider>,
     )
     const panel = screen.getByTestId('cdss-htn-prevent-panel')
-    expect(within(panel).getByRole('status')).toHaveTextContent(/10 年 ASCVD \d+\.\d%/)
+    expect(within(panel).getByTestId('cdss-htn-prevent-headline')).toHaveTextContent(/10 年 ASCVD 風險（PREVENT 基礎模型）\d+\.\d%/)
     expect(panel).toHaveTextContent('AHA 2025 的 7.5% 門檻讀的是 total CVD')
+    // The result goes up to the panel's owner, for the 附註 to today's plan.
+    expect(onResult).toHaveBeenLastCalledWith(expect.objectContaining({ unit: '%', value: reading.result.risk10!.toFixed(1), interpretation: expect.objectContaining({ zh: '10 年 ASCVD（PREVENT 基礎模型）' }) }))
     // The 既有心血管疾病 answer changes the store the pack's facts are built from.
     const cvd = within(panel).getByRole('group', { name: /既有心血管疾病/ })
     fireEvent.click(within(cvd).getByRole('button', { name: /是/ }))
@@ -57,21 +60,23 @@ describe('HTN DP-08 panels', () => {
       </PreventReadingContext.Provider>,
     )
     const panel = screen.getByTestId('cdss-htn-prevent-panel')
-    expect(within(panel).getByRole('status')).toHaveTextContent('輸入尚待核對')
-    expect(panel).toHaveTextContent(/需確認：.*既有心血管疾病/)
+    expect(within(panel).getByTestId('cdss-htn-prevent-headline')).toHaveTextContent(/—.*待核對：.*既有心血管疾病/)
   })
 
   it('shows the HPA MACE estimate with its level, the five outcomes and where each input came from', () => {
     const prevent = buildPreventReading(profile, record, answered)
     const hpa = buildHpaReading(profile, record, prevent)
+    const onResult = jest.fn()
     render(
       <HpaReadingContext.Provider value={hpa}>
-        <HpaVisitPanel isEnglish={false} />
+        <HpaVisitPanel isEnglish={false} onResult={onResult} />
       </HpaReadingContext.Provider>,
     )
     const panel = screen.getByTestId('cdss-htn-hpa-panel')
-    expect(within(panel).getByRole('status')).toHaveTextContent(/10 年 MACE \d+(\.\d+)?%（[低中高]）/)
+    expect(within(panel).getByTestId('cdss-htn-hpa-headline')).toHaveTextContent(/10 年重大心血管事件（MACE）風險\d+(\.\d+)?%[低中高]風險/)
+    expect(panel).toHaveTextContent('國健署心血管風險預測公式')
     expect(panel).toHaveTextContent('非官方係數')
+    expect(onResult).toHaveBeenLastCalledWith(expect.objectContaining({ unit: '%', value: String(hpa.mace!.risk), severity: hpa.mace!.level }))
     expect(panel).toHaveTextContent('重大心血管事件')
     fireEvent.click(within(panel).getByText('讀到的輸入'))
     expect(panel).toHaveTextContent(/腰圍：85 cm · 病歷 · 2026-10-20/)
@@ -88,7 +93,6 @@ describe('HTN DP-08 panels', () => {
       </HpaReadingContext.Provider>,
     )
     const panel = screen.getByTestId('cdss-htn-hpa-panel')
-    expect(within(panel).getByRole('status')).toHaveTextContent('MACE 目前無法估計')
-    expect(panel).toHaveTextContent(/腰圍/)
+    expect(within(panel).getByTestId('cdss-htn-hpa-headline')).toHaveTextContent(/—.*待填：腰圍/)
   })
 })

@@ -16,6 +16,7 @@ import type { DecisionPointView } from '../../types'
 import type { VisitCalculatorNote } from '../../stores/visit-calculator-notes.store'
 import { ABSENT_STATES } from './visit-decisions'
 import { HpaVisitPanel, PreventVisitPanel } from './HtnRiskPanels'
+import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import styles from './VisitCalculators.module.css'
 
 /**
@@ -42,6 +43,8 @@ interface VisitCalculatorEntry {
    * HPA (the host's reading of the record).
    */
   panel?: 'prevent-visit' | 'hpa-visit'
+  /** The name the list and the panel show, where the calculator's own is not it (「國健署心血管風險預測公式」). */
+  title?: { zh: string; en: string }
 }
 
 /**
@@ -71,11 +74,15 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // (`applyHtnRiskReadings`); DP-08's line names them. PREVENT here is the
   // ASCVD base model, shown only; the HPA reconstruction is a Taiwanese
   // reference with no guideline threshold.
-  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?:[-‐–](?:ASCVD|CVD))?/, needsPoint: true, panel: 'prevent-visit' },
-  { id: 'hpa-mace', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署 MACE|HPA MACE|國健署五項慢性病風險/, needsPoint: true, panel: 'hpa-visit' },
+  // Both may be attached to the plan as a note (owner 2026-11-03), the way the
+  // HF prognosis models are; the row stays open when the model does not apply.
+  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?:[-‐–](?:ASCVD|CVD))?/, needsPoint: true, panel: 'prevent-visit', note: true,
+    title: { zh: 'PREVENT 心血管風險', en: 'PREVENT cardiovascular risk' } },
+  { id: 'hpa-mace', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署心血管風險預測(?:公式)?|國健署 MACE|HPA MACE|HPA cardiovascular risk prediction|國健署五項慢性病風險/, needsPoint: true, panel: 'hpa-visit', note: true,
+    title: { zh: '國健署心血管風險預測公式', en: 'HPA cardiovascular risk prediction' } },
 ]
 
-type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable'
+type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable' | 'inapplicable'
 
 /** A model's acronym where its full name carries one (「…（SHFM）」). */
 function shortName(name: string): string {
@@ -120,8 +127,8 @@ interface CalculatorRow {
 function CalculatorRows({ groups, isEnglish, values, onChoose }: {
   groups: readonly (readonly [string, readonly CalculatorRow[]])[]
   isEnglish: boolean
-  /** Results the host already computed for the page, by entry id. */
-  values?: Readonly<Record<string, string>>
+  /** Where the calculators the host runs stand for this patient, by entry id. */
+  values?: Readonly<Record<string, HostCalculatorState>>
   onChoose: (row: CalculatorRow) => void
 }) {
   const { autofill } = useLabAutofill()
@@ -130,8 +137,8 @@ function CalculatorRows({ groups, isEnglish, values, onChoose }: {
     // A result the host computed from the record and the clinician's answers
     // (the HTN page's PREVENT and HPA MACE) outranks the list's own estimate,
     // which reads the record alone.
-    const computedByHost = values?.[row.entry.id]
-    if (computedByHost) return { status: 'computed', value: computedByHost }
+    const host = values?.[row.entry.id]
+    if (host) return host.value !== undefined ? { status: host.status, value: host.value } : { status: host.status }
     const computed = computeAutofilledResult(row.calc, autofill)
     if (computed) return { status: 'computed', value: `${computed.result.value}${computed.result.unit ? ` ${computed.result.unit}` : ''}` }
     const empty = row.calc.inputs.filter((input) => !input.optional && !resolveInput(input, autofill).filled).length
@@ -143,6 +150,7 @@ function CalculatorRows({ groups, isEnglish, values, onChoose }: {
     if (status === 'to-fill') return isEnglish ? `${value} to fill` : `待填 ${value}`
     if (status === 'to-confirm') return isEnglish ? 'To confirm' : '待確認'
     if (status === 'data-only') return isEnglish ? 'Data only' : '僅資料'
+    if (status === 'inapplicable') return isEnglish ? 'Not applicable' : '不適用'
     return isEnglish ? 'Admission only' : '住院時適用'
   }
   return (
@@ -158,7 +166,7 @@ function CalculatorRows({ groups, isEnglish, values, onChoose }: {
                   <button
                     type="button"
                     onClick={() => onChoose(row)}
-                    className={`grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-border px-4 py-1.5 text-left text-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${status === 'not-applicable' ? 'text-muted-foreground' : 'text-foreground'}`}
+                    className={`grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-border px-4 py-1.5 text-left text-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${status === 'not-applicable' || status === 'inapplicable' ? 'text-muted-foreground' : 'text-foreground'}`}
                     data-testid={`cdss-book-calculator-${row.entry.id}`}
                     data-status={status}
                   >
@@ -185,8 +193,8 @@ interface VisitCalculatorsValue {
   isEnglish: boolean
   /** The page's calculators, in the order of its chapters. */
   rows: readonly CalculatorRow[]
-  /** Results the host already computed for the page, by entry id. */
-  values?: Readonly<Record<string, string>>
+  /** Where the calculators the host runs stand for this patient, by entry id. */
+  values?: Readonly<Record<string, HostCalculatorState>>
   /**
    * Opens a calculator's panel; `from` is the control that opened it, where
    * focus goes back when the panel closes.
@@ -222,8 +230,8 @@ export function VisitCalculatorsProvider({
   lvef?: number
   /** The record's values for a model whose formula is not connected. */
   evidence?: PrognosisEvidence
-  /** Results the host already computed for the page, by entry id (the HTN page's PREVENT and HPA MACE). */
-  values?: Readonly<Record<string, string>>
+  /** Where the calculators the host runs stand for this patient, by entry id (the HTN page's PREVENT and HPA). */
+  values?: Readonly<Record<string, HostCalculatorState>>
   /** The calculators already attached today. */
   attached: ReadonlySet<string>
   onAttach?: (note: Omit<VisitCalculatorNote, 'at'>) => void
@@ -252,7 +260,7 @@ export function VisitCalculatorsProvider({
     const model = entry.prognosis ? HF_PROGNOSIS_MODELS.find((item) => item.id === entry.prognosis) : undefined
     const calc: CalculatorDef | undefined = CALCULATORS.find((item) => item.id === (entry.calculatorId ?? model?.calculatorId))
     // A prognosis model by its own name (「MAGGIC」), not the calculator's longer one.
-    const name = shortName(model?.name ?? (calc ? tr(locale, calc.name) : entry.id))
+    const name = entry.title ? (locale === 'en' ? entry.title.en : entry.title.zh) : shortName(model?.name ?? (calc ? tr(locale, calc.name) : entry.id))
     // GWTG-HF reads the admission's values, never today's chart.
     const fixed: RowStatus | undefined = calc ? undefined : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
     return [{ entry, calc, model, name, fixed }]
@@ -301,13 +309,13 @@ export function VisitCalculatorsProvider({
               <DialogDescription className="text-xs">
                 {open.entry.source && open.entry.source !== sourceOfPage ? `${open.entry.source.toUpperCase()} ` : ''}{open.entry.dp}{dpLabel(open.entry) ? ` ${dpLabel(open.entry)}` : ''}
               </DialogDescription>
-              <DialogTitle className="text-lg">{open.calc ? tr(locale, open.calc.name) : open.model?.name}</DialogTitle>
+              <DialogTitle className="text-lg">{open.entry.title ? (isEnglish ? open.entry.title.en : open.entry.title.zh) : open.calc ? tr(locale, open.calc.name) : open.model?.name}</DialogTitle>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               {open.entry.panel === 'prevent-visit' ? (
-                <PreventVisitPanel isEnglish={isEnglish} />
+                <PreventVisitPanel isEnglish={isEnglish} onResult={setResult} />
               ) : open.entry.panel === 'hpa-visit' ? (
-                <HpaVisitPanel isEnglish={isEnglish} />
+                <HpaVisitPanel isEnglish={isEnglish} onResult={setResult} />
               ) : open.calc ? (
                 <CalculatorDetail
                   calc={open.calc}

@@ -41,6 +41,7 @@ import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
 import { displayDate, visitStatusSentence, VisitStatusLine } from './VisitStatusHeader'
 import { VisitCalculatorsButton, VisitCalculatorsProvider } from './VisitCalculators'
+import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
 import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
 
@@ -98,7 +99,7 @@ export interface VisitDecisionScreenProps {
    * shown in the 計算機 list's value column (the HTN page's PREVENT-ASCVD and
    * HPA MACE, `htnCalculatorValues`).
    */
-  calculatorValues?: Readonly<Record<string, string>>
+  calculatorValues?: Readonly<Record<string, HostCalculatorState>>
   doseRecovery?: ReactNode
 }
 
