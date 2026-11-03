@@ -208,7 +208,7 @@ export function MedicationItem({
 
   const { regimenRef, compactEndDate } = useMedicationEndDateFit(
     Boolean(durationLabel && !medication.isInactive && !executionPeriods?.length),
-    [locale, medication.startedOn, medication.endDate, durationSuffix,
+    [locale, medication.dispensedOn ?? medication.startedOn, medication.endDate, durationSuffix,
       medication.dose, medication.frequency, medication.totalQuantity].join('|'),
   )
 
@@ -253,9 +253,12 @@ export function MedicationItem({
     // Generic medication list: keep supply days attached to the coverage
     // window. Inpatient execution dates use the branch above because they are
     // administration windows, not supply coverage.
-    const displayStart = compactMedicationDate(medication.startedOn, locale)
+    // A later 慢連箋 fill's supply starts on the day it was dispensed.
+    const dispensedPrefix = medication.dispensedOn ? `${mt.dispensedOn ?? '領藥'} ` : ''
+    const supplyStart = medication.dispensedOn ?? medication.startedOn
+    const displayStart = supplyStart ? `${dispensedPrefix}${compactMedicationDate(supplyStart, locale)}` : ''
     const displayEnd = compactMedicationDate(medication.endDate, locale)
-    const titleStart = fullMedicationDate(medication.startedOn, locale)
+    const titleStart = supplyStart ? `${dispensedPrefix}${fullMedicationDate(supplyStart, locale)}` : ''
     const titleEnd = fullMedicationDate(medication.endDate, locale)
     if (displayStart || displayEnd) {
       const fullDateLabel = titleStart && titleEnd

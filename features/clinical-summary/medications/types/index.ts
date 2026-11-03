@@ -64,6 +64,9 @@ export interface MedicationRow {
    *  shows the numeric value only, matching the NHI cloud medication layout. */
   totalQuantity?: number
   startedOn?: string
+  /** A later 慢連箋 fill's dispense day. `startedOn` stays the visit that
+   *  wrote it; the supply window (`endDate`) runs from this day. */
+  dispensedOn?: string
   stoppedOn?: string
   durationDays?: number
   /** Computed end date: startedOn + durationDays (ISO date) */
