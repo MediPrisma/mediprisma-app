@@ -1334,6 +1334,7 @@ export const zhTW = {
     daysLeft: '剩 {n} 天',
     endedPrefix: '結束於',
     executionPeriod: '執行',
+    dispensedOn: '領藥',
     // 用藥歷史內的注射劑分流子區塊
     injectablesHeader: '注射／點滴用藥',
     injectablesTooltip: '依給藥途徑（靜脈／肌肉／皮下注射）分出，多為住院或急性期給藥，與口服常規用藥分開顯示。注意：此為途徑判斷，不代表一定為住院。',

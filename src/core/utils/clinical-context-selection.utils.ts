@@ -3,6 +3,7 @@ import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
 import { floorStartDay } from '@/src/core/utils/first-visit-floors'
 import { medicationSupplyEndDay, medicationClinicalTimestamp, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { MEDCLOUD_REFILL_DISPENSE_DAY_URL } from '@/src/shared/constants/medcloud.constants'
 
 
 export type MedicationCurrentnessBasis =
@@ -49,10 +50,24 @@ export function medicationRecordedTreatmentEnd(medication: any): string | undefi
     .find(end => typeof end === 'string' && /^\d{4}-\d{2}-\d{2}/.test(end) && Number.isFinite(Date.parse(end)))
 }
 
+/** A later 慢連箋 fill's dispense day: MediCloud lists the fill under the
+ * visit that wrote it (authoredOn), and its supply runs from this day. */
+export function medicationRefillDispenseDay(medication: any): string | undefined {
+  const value = (medication?.extension ?? []).find((extension: any) => extension?.url === MEDCLOUD_REFILL_DISPENSE_DAY_URL)?.valueString
+  const day = typeof value === 'string' && isParsableDay(value) ? value.slice(0, 10) : undefined
+  const prescribed = medicationClinicalDay(medication?.authoredOn)
+  return day && prescribed && day > prescribed ? day : undefined
+}
+
+/** When a record's supply starts: a refill's dispense day, else when it was written. */
+export function medicationSupplyStart(medication: any): string | undefined {
+  return medicationRefillDispenseDay(medication) ?? (medication?.authoredOn || medication?.effectiveDateTime)
+}
+
 const isElapsedDuration = (duration: any) => /^(?:h|hr|hours?|min|minutes?|s|sec|seconds?|24h|小時|分|分鐘|秒)$/.test(String(duration?.code || duration?.unit || '').toLowerCase())
 
 export function medicationExpectedStartTimestamp(medication: any): number {
-  const start = medication?.authoredOn || medication?.effectiveDateTime
+  const start = medicationSupplyStart(medication)
   if (!start) return NaN
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const duration = [medication?.dispenseRequest?.expectedSupplyDuration, dosage?.timing?.repeat?.boundsDuration]
@@ -68,7 +83,7 @@ export function medicationExpectedStartTimestamp(medication: any): number {
 export function medicationExpectedEndTimestamp(medication: any): number | undefined {
   const dosage = medication?.dosageInstruction?.[0] || medication?.dosage?.[0]
   const explicitEnd = medicationRecordedTreatmentEnd(medication)
-  const started = medication?.authoredOn || medication?.effectiveDateTime
+  const started = medicationSupplyStart(medication)
   const calendarEnd = (day: string) => {
     return medicationClinicalTimestamp(day.slice(0, 10)) + 86400000 - 1
   }

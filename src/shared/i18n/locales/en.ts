@@ -1328,6 +1328,7 @@ export const en = {
     daysLeft: '{n}d left',
     endedPrefix: 'ended',
     executionPeriod: 'Order period',
+    dispensedOn: 'Filled',
     // Injectable sub-group inside the medication history
     injectablesHeader: 'Injectable / infusion meds',
     injectablesTooltip: 'Grouped by administration route (IV/IM/SC injection) — typically inpatient or acute-phase dosing, shown separately from regular oral medications. Note: route-based, not a definitive inpatient flag.',

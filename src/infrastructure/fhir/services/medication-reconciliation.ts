@@ -5,6 +5,7 @@ import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge, hosp
 import { sharedPrescriptionIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
+import { medicationRefillDispenseDay } from '@/src/core/utils/clinical-context-selection.utils'
 import { vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
 
 type Resource = Record<string, any>
@@ -203,6 +204,8 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
   const outpatientDay = (order: Resource) => {
     if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference) return undefined
     if (order.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0120')) return undefined
+    // A later 慢連箋 fill carries the visit's date but is not the visit's order.
+    if (medicationRefillDispenseDay(order)) return undefined
     const visit = encounters.get(order.encounter?.reference)
     if (visit?.class?.code && visit.class.code !== 'AMB') return undefined
     return typeof order.authoredOn === 'string' ? medicationClinicalDay(order.authoredOn) : undefined
