@@ -5,7 +5,7 @@ export interface PatientInfo {
   id?: string
   // Extended demographics — surfaced behind a "更多資料" toggle in
   // PatientInfoDisplay. Empty array = nothing to show.
-  identifiers?: Array<{ label: string; value: string }>
+  identifiers?: Array<{ label: string; value: string; primary?: boolean }>
   birthDate?: string
   telecom?: Array<{ label: string; value: string }>
   addresses?: string[]
