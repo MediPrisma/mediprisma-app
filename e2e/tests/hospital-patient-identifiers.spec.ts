@@ -9,7 +9,7 @@ test('hospital patient identifiers stay visible after real bundle import', async
     resourceType: 'Patient', id: 'synthetic-identity', name: [{ text: '測試甲' }], gender: 'male', birthDate: '1991-01-01',
     identifier: [
       { system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id', value: 'A123456789' },
-      { system: 'urn:oid:his.patient.mrn', value: '00123456' },
+      { system: 'urn:oid:his.patient.mrn', value: '7654321' },
     ],
   } }] }))
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -17,7 +17,7 @@ test('hospital patient identifiers stay visible after real bundle import', async
   await openPatientTab(page)
   if (process.env.IDENTITY_BEFORE !== '1') {
     await expect(page.getByText('A123456789', { exact: true })).toBeVisible()
-    await expect(page.getByText('00123456', { exact: true })).toBeVisible()
+    await expect(page.getByText('7654321', { exact: true })).toBeVisible()
   }
   if (process.env.IDENTITY_SHOTS) for (const width of [320, 390, 430, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 })

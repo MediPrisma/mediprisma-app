@@ -11,12 +11,12 @@ it.each([
 ])('shows name, national ID and MRN without expanding details for %s', system => {
   const identifiers = formatIdentifiers({ identifier: [
     { system, value: 'A123456789' },
-    { system: 'urn:oid:his.patient.mrn', value: '00123456' },
+    { system: 'urn:oid:his.patient.mrn', value: '7654321' },
   ] }, labels)
   render(<LanguageProvider><PatientInfoDisplay patientInfo={{ name: '測試甲', gender: '男性', age: '35', identifiers }} /></LanguageProvider>)
   expect(screen.getByText('測試甲')).toBeVisible()
   expect(screen.getByText('A123456789')).toBeVisible()
-  expect(screen.getByText('00123456')).toBeVisible()
+  expect(screen.getByText('7654321')).toBeVisible()
   expect(screen.getByText('身分證字號：')).toBeVisible()
   expect(screen.getByText('病歷號：')).toBeVisible()
 })
