@@ -31,7 +31,7 @@ import {
 import { useCompactLayout } from '@/src/shared/hooks/layout/use-compact-layout.hook'
 import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
-import { FormattedReportText } from './FormattedReportText'
+import { FormattedReportText, REPORT_BODY_TEXT_CLASSES } from './FormattedReportText'
 import { ReportPreviewLine } from './ReportPreviewLine'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
 import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
@@ -1029,7 +1029,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             {hasText && (
               textExpanded ? (
                 <>
-                  <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
+                  <FormattedReportText text={fullText} className={REPORT_BODY_TEXT_CLASSES} />
                   <SharedReportSources sources={row.sharedReportSources} />
                 </>
               ) : (
