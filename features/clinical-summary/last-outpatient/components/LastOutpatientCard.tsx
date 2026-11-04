@@ -510,7 +510,7 @@ export function LastOutpatientCard() {
                   <div className="grid min-w-0 max-w-full gap-0 overflow-hidden">
                     {reports.map((report) => (
                       <div key={report.id} className="min-w-0 max-w-full overflow-hidden">
-                        <ReportRow row={report.row} defaultOpen={[]} />
+                        <ReportRow row={report.row} defaultOpen={[report.row.id]} />
                       </div>
                     ))}
                   </div>
