@@ -28,9 +28,11 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
 }))
 
 // The report row is the reports tab's own component; here it only has to show
-// which report landed under the visit.
+// which report landed under the visit and whether it starts open.
 jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
-  ReportRow: ({ row }: { row: { title: string } }) => <div data-testid="report-row">{row.title}</div>,
+  ReportRow: ({ row, defaultOpen }: { row: { id: string; title: string }; defaultOpen: string[] }) => (
+    <div data-testid="report-row" data-open={String(defaultOpen.includes(row.id))}>{row.title}</div>
+  ),
 }))
 
 // Radix Select needs these in jsdom.
@@ -158,6 +160,7 @@ describe('LastOutpatientCard', () => {
     expect(rowWith('1.26')).toBeTruthy()
     expect(rowWith('1.26')?.textContent).toMatch(/1\.12\s*07\/10/)
     expect(screen.getByTestId('report-row')).toHaveTextContent('Echocardiography')
+    expect(screen.getByTestId('report-row')).toHaveAttribute('data-open', 'true')
     // Ordered elsewhere, or only date-matched: not part of this visit.
     expect(rowWith('4.6')).toBeUndefined()
     expect(rowWith('108')).toBeUndefined()
