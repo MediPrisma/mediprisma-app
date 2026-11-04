@@ -11,6 +11,14 @@ interface FormattedReportTextProps {
   className?: string
 }
 
+/**
+ * Body size for a report read inside a list card. DESIGN.md's evidence layer
+ * (original report quotes): 14px on desktop, and a 14px floor so the clinician
+ * phone default (12px root) does not shrink a multi-line echo/Holter report
+ * to 9px. Measurement grids, tables and the raw report inherit this size.
+ */
+export const REPORT_BODY_TEXT_CLASSES = 'text-[length:max(14px,0.875rem)] leading-relaxed text-foreground/90'
+
 // Indentation per nesting level. Headings (level 0 + heading) stay flush-left;
 // items/sub-items step in. Kept modest so deeply-nested reports don't run off
 // the right edge in the narrow card/dialog widths.
@@ -41,7 +49,8 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
             measurements.push(lines[j].measurement!)
           }
           return (
-            <dl key={i} className="grid grid-cols-1 gap-x-6 gap-y-0.5 text-sm leading-5 tabular-nums @min-[36rem]/report:grid-cols-2">
+            // Font size follows the caller; 1.43 keeps the former text-sm/leading-5 rhythm.
+            <dl key={i} className="grid grid-cols-1 gap-x-6 gap-y-0.5 leading-[1.43] tabular-nums @min-[36rem]/report:grid-cols-2">
               {measurements.map((measurement, index) => (
                 <div key={index} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-x-2 py-0.5">
                   <dt className="min-w-0 break-words font-medium text-foreground">{measurement.label}</dt>
@@ -76,7 +85,7 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
                 <span className="shrink-0 tabular-nums text-muted-foreground">{line.marker}</span>
               )}
               <div className="min-w-0 flex-1 overflow-x-auto rounded-md border border-border">
-                <table className="w-full min-w-max border-collapse text-sm tabular-nums">
+                <table className="w-full min-w-max border-collapse tabular-nums">
                   <tbody>
                     <tr className="divide-x divide-border">
                       {line.tableCells.map((cell, cellIndex) => cellIndex === 0 ? (
@@ -116,7 +125,7 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
           <span className="hidden group-open/raw:inline">收起原始報告</span>
         </summary>
         <div role="region" aria-label="原始報告" className="mt-2 min-w-0 rounded-md border border-border bg-muted/30 p-3">
-          <pre className="m-0 whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">{text}</pre>
+          <pre className="m-0 whitespace-pre-wrap font-mono text-[length:inherit] leading-relaxed text-foreground [overflow-wrap:anywhere]">{text}</pre>
         </div>
       </details>
     </div>

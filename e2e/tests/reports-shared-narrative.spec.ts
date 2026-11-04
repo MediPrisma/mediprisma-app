@@ -65,6 +65,8 @@ test('shared report retains both procedure sources and a single readable narrati
     // Responsive hooks update after the viewport event, so check settled layout.
     await expect.poll(() => row.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+    // The report body stays readable at every width, including the 12px clinician phone root.
+    await expect.poll(() => row.getByText('Synthetic shared narrative.', { exact: true }).evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14)
     await page.screenshot({ path: testInfo.outputPath(`shared-report-${width}.png`), fullPage: true })
   }
   await page.getByRole('button', { name: '使用身份' }).click()
