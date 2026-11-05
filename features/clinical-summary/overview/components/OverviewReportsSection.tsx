@@ -176,6 +176,37 @@ export function OverviewReportsSection({
     : opened?.fullText
       ? [{ id: opened.id, text: opened.fullText }]
       : []
+  // A single report's copy button sits on the date row: on a row of its own
+  // it left a blank line between the date and the narrative.
+  const renderCopyButton = (report: { id: string, text: string }) => (
+    <button
+      type="button"
+      onClick={async () => {
+        // The clipboard gets the SAME formatting pass as the
+        // 報告 tab, so text pasted into a note matches
+        // whichever surface it was copied from.
+        setCopiedId(report.id)
+        if (!await copyToClipboard(formatReportTextForClipboard(report.text))) {
+          toast.error(t.common.copyFailed)
+        }
+      }}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border bg-card/95 px-1.5 py-0.5 text-xs text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary"
+      aria-label={t.reports.copyFullReport}
+    >
+      {copied && copiedId === report.id ? (
+        <>
+          <Check className="h-3 w-3" aria-hidden="true" />
+          {t.common.copied}
+        </>
+      ) : (
+        <>
+          <Copy className="h-3 w-3" aria-hidden="true" />
+          {t.common.copy}
+        </>
+      )}
+    </button>
+  )
+
   const groupLabel = (value: ReportGroup): string =>
     badgeLabels[value === 'cancer-screening' ? 'cancerScreening' : value] ?? value
 
@@ -363,6 +394,9 @@ export function OverviewReportsSection({
                       back to the list to find the images again would undo
                       exactly what the dialog is for. */}
                   <NhiViewerActions actions={opened?.viewerActions} />
+                  {openedReports.length === 1 && (
+                    <span className="ml-auto">{renderCopyButton(openedReports[0])}</span>
+                  )}
                 </div>
               </DialogHeader>
               {/* The narrative is the reason the dialog exists: it scrolls
@@ -382,41 +416,16 @@ export function OverviewReportsSection({
                     // covering everything, which is not what was reported.
                     className={cn(index > 0 && 'border-t border-border/60 pt-4')}
                   >
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      {openedReports.length > 1 ? (
+                    {openedReports.length > 1 && (
+                      <div className="mb-1 flex items-center justify-between gap-2">
                         <span className="text-xs font-medium text-muted-foreground">
                           {strings.reports.reportIndex
                             .replace('{index}', String(index + 1))
                             .replace('{total}', String(openedReports.length))}
                         </span>
-                      ) : <span />}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          // The clipboard gets the SAME formatting pass as the
-                          // 報告 tab, so text pasted into a note matches
-                          // whichever surface it was copied from.
-                          setCopiedId(report.id)
-                          if (!await copyToClipboard(formatReportTextForClipboard(report.text))) {
-                            toast.error(t.common.copyFailed)
-                          }
-                        }}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md border bg-card/95 px-1.5 py-0.5 text-xs text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary"
-                        aria-label={t.reports.copyFullReport}
-                      >
-                        {copied && copiedId === report.id ? (
-                          <>
-                            <Check className="h-3 w-3" aria-hidden="true" />
-                            {t.common.copied}
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3 w-3" aria-hidden="true" />
-                            {t.common.copy}
-                          </>
-                        )}
-                      </button>
-                    </div>
+                        {renderCopyButton(report)}
+                      </div>
+                    )}
                     <FormattedReportText
                       text={report.text}
                       className="text-sm leading-relaxed text-foreground/90"
