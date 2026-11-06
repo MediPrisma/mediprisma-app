@@ -285,7 +285,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'lipid',
-    preferredOrder: ['CHOL', 'TG', 'HDL', 'LDL', 'LDL(計算值)', 'RISKF', 'TC/HDL RATIO', 'VLDL', 'NON-HDL', 'APO-A1', 'APO-B', 'LP(A)'],
+    preferredOrder: ['CHOL', 'TG', 'HDL', 'LDL', 'LDL(計算值)', 'RISKF', 'TC/HDL', 'VLDL', 'NON-HDL', 'APO-A1', 'APO-B', 'LP(A)'],
     codes: ['CHOL', 'CHOL.', 'CHOLESTEROL', 'TG', 'TRIG', 'TRIGLYCERIDE', 'HDLC', 'HDL', 'HDL-C', 'HDLC.', 'LDLC', 'LDL', 'LDL-C', 'LDLC.', 'LDL(計算值)', 'RISKF', 'VLDL', 'VLDLC', 'VLDL-C', 'NON-HDLC', 'NON-HDL', 'NON-HDL-C', 'APO-A', 'APO-A1', 'APOA1', 'APO-B', 'APOB', 'LP(A)'],
     loincCodes: ['2093-3', '14647-2', '14646-4', '2571-8', '3043-7', '2085-9', '2086-7', '14646-4', '2089-1', '13457-7', '2090-9', '13457-7', '43396-1', '13458-5', '11054-4', '2089-1', '13457-7', '18261-8', '18262-6', '10835-7',
       // 9830-1 = Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or
