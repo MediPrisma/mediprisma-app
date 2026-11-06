@@ -98,6 +98,17 @@ export interface MedicationAtcClassification {
   atcHierarchySnapshotId: string
 }
 
+export interface HospitalMedicationAtcClassification {
+  source: 'vghtpe-identity-nhi-atc'
+  atcCode: string
+  atcNameEn?: string
+  atcNameZh?: string
+  atcLevel2Code?: string
+  atcLevel2NameEn?: string
+  atcLevel2NameZh?: string
+  snapshotId: string
+}
+
 export interface ClinicalFhirExtension {
   valueUri?: string
   url?: string
@@ -298,6 +309,13 @@ export interface MedicationEntity extends ClinicalSourceRecord {
    * hierarchy; free-text drug/category labels are never guessed or translated.
    */
   atcClassification?: MedicationAtcClassification
+  /**
+   * Display-only ATC for a VGH hospital order: every NHI product of its one
+   * index identity that the drug master resolves on the order date carries
+   * this same full ATC code. No product is claimed, and list grouping, AI and
+   * calculators do not read it.
+   */
+  hospitalAtcClassification?: HospitalMedicationAtcClassification
   /**
    * Originating FHIR resource type. 'MedicationRequest' = 醫師處方/健保開立紀錄
    * (bridge default); 'MedicationStatement' = 病人目前服用中的藥物清單 (IPS

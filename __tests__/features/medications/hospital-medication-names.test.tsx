@@ -170,4 +170,17 @@ describe('VGH hospital medication ingredient display', () => {
     expect(screen.getByText('成分未確認')).toBeInTheDocument()
     expect(screen.getByText('Unknown brand')).toBeInTheDocument()
   })
+
+  it('shows the shared identity ATC and its level-2 group beside the original names', () => {
+    const name = resolveHospitalMedicationName(concept(undefined, 'Concor FC * tab 1.25 mg'))!
+    const atc = { source: 'vghtpe-identity-nhi-atc' as const, atcCode: 'C07AB07', atcNameEn: 'bisoprolol',
+      atcLevel2Code: 'C07', atcLevel2NameEn: 'BETA BLOCKING AGENTS', atcLevel2NameZh: 'β 受體阻斷劑', snapshotId: 'nhi-drug-terminology-20260728' }
+    const view = render(<HospitalMedicationNameDetails name={name} atc={atc} />)
+    expect(screen.getByText('C07AB07 · bisoprolol')).toBeInTheDocument()
+    expect(screen.getByText('C07 · β 受體阻斷劑')).toBeInTheDocument()
+    expect(screen.getByText('Concor FC * tab 1.25 mg')).toBeInTheDocument()
+    expect(screen.getByText(/對照之健保品項在健保藥典中皆為此分類/)).toBeInTheDocument()
+    view.rerender(<HospitalMedicationNameDetails name={name} />)
+    expect(screen.queryByText('C07AB07 · bisoprolol')).not.toBeInTheDocument()
+  })
 })

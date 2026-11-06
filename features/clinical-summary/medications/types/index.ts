@@ -103,6 +103,8 @@ export interface MedicationRow {
   drugTerminology?: MedicationEntity['drugTerminology']
   /** Display-only hospital names; never an exact NHI product identity. */
   hospitalMedicationName?: HospitalMedicationName
+  /** Display-only ATC shared by the hospital identity's NHI products. */
+  hospitalAtcClassification?: MedicationEntity['hospitalAtcClassification']
   // ── Refill-history aggregate (derived across all MedicationRequests for
   //    this drug). Lets a single row surface compliance / adherence info
   //    without forcing the user to expand the per-drug accordion in the

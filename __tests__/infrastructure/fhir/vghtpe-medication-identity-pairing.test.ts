@@ -2,7 +2,8 @@ import { reconcileMedicationRequests } from '@/src/infrastructure/fhir/services/
 import { markVghtpeMedicationIdentities } from '@/src/infrastructure/fhir/services/vghtpe-medication-identity-enrichment'
 import { enrichBundleWithNhiDrugTerminology } from '@/src/infrastructure/fhir/services/nhi-drug-terminology-enrichment.service'
 import { VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes, vghtpeMedicationIdentityIngredient,
-  vghtpeMedicationIdentityExtension, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
+  vghtpeMedicationIdentityExtension, hasVghtpeMedicationIdentityCheck, hasVghtpeMedicationAtcCheck } from '@/src/shared/utils/hospital-medication-index'
+import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
 import { MEDCLOUD_REFILL_DISPENSE_DAY_URL } from '@/src/shared/constants/medcloud.constants'
 
 const NHI = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw'
@@ -81,6 +82,47 @@ describe('VGH medication index identity mark', () => {
   it('is applied by the drug terminology enrichment even when no cloud order needs terminology', async () => {
     const result = await enrichBundleWithNhiDrugTerminology({ resourceType: 'Bundle', entry: [{ resource: hospitalOrder() }] })
     expect(vghtpeMedicationIdentityCodes((result.bundle.entry as any[])[0].resource)?.has('BC24039100')).toBe(true)
+  })
+})
+
+describe('display-only ATC for a hospital order from its identity NHI codes', () => {
+  async function enriched(resource: any): Promise<any> {
+    const result = await enrichBundleWithNhiDrugTerminology({ resourceType: 'Bundle', entry: [{ resource }] })
+    return (result.bundle.entry as any[]).find(entry => entry.resource.id === resource.id).resource
+  }
+
+  it('attaches the ATC every resolved product of the identity shares, without claiming a product', async () => {
+    const hospital = await enriched(hospitalOrder())
+    expect(hospital.hospitalAtcClassification).toMatchObject({
+      source: 'vghtpe-identity-nhi-atc', atcCode: 'C07AB07', atcLevel2Code: 'C07', atcLevel2NameZh: 'β 受體阻斷劑',
+    })
+    expect(hospital.medicationCodeableConcept.coding).toEqual([{ system: PRODUCT, code: CONCOR, display: CONCOR }])
+    expect(hospital.drugTerminology).toBeUndefined()
+    expect(hospital.supportingInformation).toBeUndefined()
+    expect(hasVghtpeMedicationAtcCheck(hospital)).toBe(true)
+    expect(FhirMapper.toMedication(hospital).hospitalAtcClassification?.atcCode).toBe('C07AB07')
+  })
+
+  it('gives no ATC when the identity products disagree, and drops an earlier one', async () => {
+    // Aspirin 100 mg products are coded N02BA01 (analgesic) and B01AC06
+    // (antiplatelet) in the drug master; neither may be chosen.
+    const aspirin = 'Aspirin "Johnson" FC *tab 100 mg'
+    const hospital = await enriched(hospitalOrder({
+      medicationCodeableConcept: { coding: [{ system: PRODUCT, code: aspirin, display: aspirin }] },
+      hospitalAtcClassification: { source: 'vghtpe-identity-nhi-atc', atcCode: 'N02BA01', snapshotId: 'old' },
+    }))
+    expect(vghtpeMedicationIdentityCodes(hospital)?.size).toBeGreaterThan(1)
+    expect(hospital.hospitalAtcClassification).toBeUndefined()
+    expect(hasVghtpeMedicationAtcCheck(hospital)).toBe(true)
+  })
+
+  it('gives no ATC to a drug missing from the index, and treats an older mark as unchecked', async () => {
+    const hospital = await enriched(hospitalOrder({
+      medicationCodeableConcept: { coding: [{ system: PRODUCT, code: 'Synthetic unlisted tab 5 mg' }] },
+    }))
+    expect(hospital.hospitalAtcClassification).toBeUndefined()
+    const [olderMark] = await marked(hospitalOrder())
+    expect(hasVghtpeMedicationAtcCheck(olderMark)).toBe(false)
   })
 })
 

@@ -6,14 +6,30 @@ import { clinicalTooltipSurfaceClass } from '@/features/clinical-summary/compone
 import { useLanguage } from '@/src/application/providers/language.provider'
 import type { MedicationRow } from '../types'
 import type { HospitalMedicationName } from '@/src/shared/utils/hospital-medication-names'
+import type { HospitalMedicationAtcClassification } from '@/src/core/entities/clinical-data.entity'
 import { SourcePrescriptionComparison } from './SourcePrescriptionComparison'
 
 /** Same provenance in list, overview, timeline label, and timeline fill detail. */
-export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicationName }) {
-  const { locale } = useLanguage()
+export function HospitalMedicationNameDetails({ name, atc }: {
+  name: HospitalMedicationName
+  /** ATC shared by every NHI product of the order's index identity; it names
+   *  a class, never which product was dispensed. */
+  atc?: HospitalMedicationAtcClassification
+}) {
+  const { t, locale } = useLanguage()
+  const mt = (t.medications as any)
   const en = locale === 'en'
+  const atcNames = [atc?.atcNameEn, atc?.atcNameZh].filter((value, index, values): value is string =>
+    Boolean(value) && values.indexOf(value) === index)
+  const level2Name = en
+    ? atc?.atcLevel2NameEn || atc?.atcLevel2NameZh
+    : atc?.atcLevel2NameZh || atc?.atcLevel2NameEn
   const rows = [
     [en ? 'Ingredient' : '成分名', name.ingredientName || (en ? 'Ingredient unconfirmed' : '成分未確認')],
+    [mt.terminologyAtcLabel ?? 'ATC class',
+      atc ? `${atc.atcCode}${atcNames.length > 0 ? ` · ${atcNames.join('／')}` : ''}` : undefined],
+    [mt.terminologyAtcLevel2Label ?? 'ATC therapeutic subgroup',
+      atc?.atcLevel2Code ? `${atc.atcLevel2Code} · ${level2Name || atc.atcLevel2Code}` : undefined],
     [en ? 'Recorded generic name' : '原始學名欄位', name.recordedGenericName],
     [en ? 'Recorded product name' : '原始商品名', name.recordedProductName],
     [en ? 'Recorded name' : '院內原始藥名', name.recordedName],
@@ -38,6 +54,13 @@ export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicati
             : (en ? 'Hospital source record' : '院內原始紀錄')}
         {' · '}{en ? 'Reviewed' : '核對日期'} {name.reviewedAt}
         <div>{en ? 'Strength and formulation: see the original name.' : '含量與劑型請依原始藥名核對。'}</div>
+        {atc && (
+          <div>
+            {en
+              ? `ATC: shared by every matched NHI product in the NHI drug master · Version: ${atc.snapshotId}`
+              : `ATC：對照之健保品項在健保藥典中皆為此分類 · 版本：${atc.snapshotId}`}
+          </div>
+        )}
         {name.referenceUrl && (
           <a href={name.referenceUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">
             {en ? 'Ingredient reference' : '成分對照來源'}
@@ -49,7 +72,7 @@ export function HospitalMedicationNameDetails({ name }: { name: HospitalMedicati
 }
 
 interface MedicationTerminologyTooltipProps {
-  medication: Pick<MedicationRow, 'drugTerminology' | 'hospitalMedicationName' | 'nhiDrugCode' | 'reconciledOrderIds' | 'sourceOrderIdentifiers' | 'sourceComparison' | 'dataOrigin'>
+  medication: Pick<MedicationRow, 'drugTerminology' | 'hospitalMedicationName' | 'hospitalAtcClassification' | 'nhiDrugCode' | 'reconciledOrderIds' | 'sourceOrderIdentifiers' | 'sourceComparison' | 'dataOrigin'>
   enabled: boolean
   /** Facts about THIS prescription — dose, frequency, days supplied — shown
    *  under the drug-master rows. The card above describes the drug; this
@@ -136,7 +159,7 @@ export function MedicationTerminologyTooltip({
               </div>
             ))}
           </dl>
-          {hospitalName && <HospitalMedicationNameDetails name={hospitalName} />}
+          {hospitalName && <HospitalMedicationNameDetails name={hospitalName} atc={terminology ? undefined : medication.hospitalAtcClassification} />}
           {medication.sourceComparison && <SourcePrescriptionComparison comparison={medication.sourceComparison} displayOrigin={medication.dataOrigin} />}
           {integrated && !medication.sourceComparison && (
             <div className="mt-1.5 border-t border-secondary-foreground/15 pt-1.5">
