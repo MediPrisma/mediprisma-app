@@ -99,8 +99,10 @@ describe('organ enum', () => {
       { organ: 'chest-lung', points: [point('疑似肺癌 cT1bN0', [CT], [[CT, 'Suspect primary lung cancer, cT1bN0.']])] },
       { organ: 'abdomen-other', points: [point('管狀腺瘤', [PATH], [[PATH, '管狀腺瘤，低度分化不良。']])] },
       { organ: 'chest-lung', points: [point('疑似支氣管擴張', [XR], [[XR, 'Suspicious for bronchiectasis over bilateral lower lung field.']])] },
+      { organ: 'other', points: [point('No definite mediastinal lymphadenopathy', [CT], [[CT, 'No definite evidence of mediastinal lymphadenopathy.']])] },
     ]))
     expect(highlights.groups.map((group) => [group.organ, group.label, group.points.length])).toEqual([
+      ['abdomen-liver-biliary', 'Liver & biliary', 1],
       ['chest-lung', 'Lungs', 2],
       ['abdomen-other', 'Abdomen', 1],
       ['other', 'Other', 1],
