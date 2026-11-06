@@ -95,6 +95,7 @@ describe('display-only ATC for a hospital order from its identity NHI codes', ()
     const hospital = await enriched(hospitalOrder())
     expect(hospital.hospitalAtcClassification).toMatchObject({
       source: 'vghtpe-identity-nhi-atc', atcCode: 'C07AB07', atcLevel2Code: 'C07', atcLevel2NameZh: 'β 受體阻斷劑',
+      atcLevel4Code: 'C07AB',
     })
     expect(hospital.medicationCodeableConcept.coding).toEqual([{ system: PRODUCT, code: CONCOR, display: CONCOR }])
     expect(hospital.drugTerminology).toBeUndefined()
@@ -123,6 +124,9 @@ describe('display-only ATC for a hospital order from its identity NHI codes', ()
     expect(hospital.hospitalAtcClassification).toBeUndefined()
     const [olderMark] = await marked(hospitalOrder())
     expect(hasVghtpeMedicationAtcCheck(olderMark)).toBe(false)
+    const olderCheck = { extension: [{ url: VGHTPE_MEDICATION_IDENTITY_URL, extension: [
+      { url: 'nhiCode', valueCode: 'BC24039100' }, { url: 'atcCheck', valueString: 'nhi-drug-terminology-20260728' }] }] }
+    expect(hasVghtpeMedicationAtcCheck(olderCheck)).toBe(false)
   })
 })
 

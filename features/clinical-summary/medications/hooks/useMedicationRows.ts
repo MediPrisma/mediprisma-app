@@ -323,7 +323,15 @@ export function useMedicationRows(
       // technical pharmacology name like the drug itself).
       const sourceCategory = localizedMedicationCategory(med?.category?.[0], locale)
       const cloudAtc3Category = localizedMedcloudAtc3Category(med, locale)
-      const category = cloudAtc3Category || sourceCategory || undefined
+      // A hospital order's shared identity ATC names the same governed level-2
+      // group a cloud prescription of that class shows.
+      const hospitalAtc = drugTerminology ? undefined : med.hospitalAtcClassification
+      const hospitalAtcCategory = (locale === 'en'
+        ? hospitalAtc?.atcLevel2NameEn || hospitalAtc?.atcLevel2NameZh
+        : hospitalAtc?.atcLevel2NameZh || hospitalAtc?.atcLevel2NameEn) ?? ''
+      const category = cloudAtc3Category || sourceCategory
+        || (hospitalAtcCategory ? localizedMedicationCategory({ text: hospitalAtcCategory }, locale) : '')
+        || undefined
       const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code || undefined
       // ICD descriptions follow UI locale, NOT audience: medical users on a
@@ -419,8 +427,7 @@ export function useMedicationRows(
         category,
         drugTerminology,
         hospitalMedicationName,
-        ...(!drugTerminology && med.hospitalAtcClassification
-          ? { hospitalAtcClassification: med.hospitalAtcClassification } : {}),
+        ...(hospitalAtc ? { hospitalAtcClassification: hospitalAtc } : {}),
         pharmacy,
         icdCode,
         icdText,
