@@ -41,6 +41,13 @@ export function hasVghtpeMedicationIdentityCheck(order: { extension?: any[] }): 
   return !!mark && (!markPart(mark, 'nhiCode') || !!markPart(mark, 'ingredient'))
 }
 
+/** An identity mark whose NHI codes were already checked for one shared ATC
+ * code (see the drug terminology enrichment). Marks without codes need none. */
+export function hasVghtpeMedicationAtcCheck(order: { extension?: any[] }): boolean {
+  const mark = identityMark(order)
+  return !mark || !markPart(mark, 'nhiCode') || !!markPart(mark, 'atcCheck')
+}
+
 export function vghtpeMedicationIdentityIngredient(order: { extension?: any[] }): { ingredientText: string; indexSha256?: string } | undefined {
   const mark = identityMark(order)
   const ingredientText = markPart(mark, 'ingredient')?.valueString?.trim()

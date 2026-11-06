@@ -57,6 +57,7 @@ interface HoverState {
   drugProductName?: string
   drugTerminology?: TimelineDrug['drugTerminology']
   hospitalMedicationName?: TimelineDrug['hospitalMedicationName']
+  hospitalAtcClassification?: TimelineDrug['hospitalAtcClassification']
   xPx: number
   yPx: number
   containerLeftPx: number
@@ -435,7 +436,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                 height={ROW_HEIGHT}
               >
                 <MedicationTerminologyTooltip
-                  medication={{ drugTerminology: drug.drugTerminology, hospitalMedicationName: drug.hospitalMedicationName }}
+                  medication={{ drugTerminology: drug.drugTerminology, hospitalMedicationName: drug.hospitalMedicationName, hospitalAtcClassification: drug.hospitalAtcClassification }}
                   enabled
                 >
                   <div
@@ -489,6 +490,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                     drugProductName: drug.drugProductName,
                     drugTerminology: drug.drugTerminology,
                     hospitalMedicationName: drug.hospitalMedicationName,
+                    hospitalAtcClassification: drug.hospitalAtcClassification,
                     xPx: rect.left + rect.width / 2,
                     yPx: rect.top + rect.height / 2,
                     containerLeftPx: containerRect?.left ?? 0,
@@ -592,7 +594,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
             </div>
           )}
           {!hover.drugTerminology && hover.hospitalMedicationName && (
-            <HospitalMedicationNameDetails name={hover.hospitalMedicationName} />
+            <HospitalMedicationNameDetails name={hover.hospitalMedicationName} atc={hover.hospitalAtcClassification} />
           )}
           {hover.drugTerminology && (
             <dl className="mt-1 grid grid-cols-[minmax(6.5rem,2fr)_minmax(0,3fr)] gap-x-2 gap-y-0.5 border-t pt-1 text-[0.6875rem]">
