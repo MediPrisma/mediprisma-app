@@ -47,6 +47,23 @@ function visitDay(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, '/')
 }
 
+function resultDay(result: { effectiveDateTime?: string }): string {
+  return result.effectiveDateTime?.slice(0, 10) ?? ''
+}
+
+/** The day most of this visit's results were drawn on: one 採檢 date for the
+ *  whole table instead of the same date under every value. */
+function mostCommonDay(results: Array<{ effectiveDateTime?: string }>): string {
+  const counts = new Map<string, number>()
+  for (const result of results) {
+    const day = resultDay(result)
+    if (day) counts.set(day, (counts.get(day) ?? 0) + 1)
+  }
+  let best = ''
+  for (const [day, count] of counts) if (count > (counts.get(best) ?? 0)) best = day
+  return best
+}
+
 function shortDay(day: string): string {
   return day.slice(5).replace('-', '/')
 }
@@ -277,8 +294,10 @@ function LabTable({
   comparisonStrings,
   columns,
   sourceObservations,
+  mainDay,
 }: {
   groups: Array<{ categoryId: string | null; tests: EncounterObservation[] }>
+  mainDay: string
   sourceObservations: Map<string, any>
   categoryLabel: (id: string | null) => string
   priorValues: Map<string, PriorLabValue>
@@ -317,10 +336,10 @@ function LabTable({
                   </span>
                   <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
                     <ValueCell result={test} comparison={comparisons.get(test.id)} comparisonStrings={comparisonStrings} range={rangeText(test.referenceText)} />
-                    {/* A result ordered at this visit may be drawn on another
-                        day; show when, as the 前次 column does. */}
-                    {test.effectiveDateTime && (
-                      <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(test.effectiveDateTime.slice(0, 10))}</span>
+                    {/* The heading names the visit's usual draw day; only a
+                        result drawn on another day carries its own. */}
+                    {resultDay(test) && resultDay(test) !== mainDay && (
+                      <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(resultDay(test))}</span>
                     )}
                   </span>
                   <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(test.referenceText)}</span>
@@ -388,6 +407,7 @@ export function LastOutpatientCard() {
     .map((group) => ({ ...group, tests: onlyAbnormal ? group.tests.filter(hasAbnormal) : group.tests }))
     .filter((group) => group.tests.length > 0)
   const isYours = !!visit && isSameClinician(visit.physician, clinicianName)
+  const mainDay = mostCommonDay(tests)
 
 
   return (
@@ -490,6 +510,9 @@ export function LastOutpatientCard() {
                 <section className="space-y-2" aria-labelledby="last-outpatient-labs">
                   <h3 id="last-outpatient-labs" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {strings.labs}
+                    {mainDay && (
+                      <span className="ml-2 font-normal normal-case tracking-normal tabular-nums">{strings.collectedOn.replace('{date}', shortDay(mainDay))}</span>
+                    )}
                   </h3>
                   {groups.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{strings.noAbnormal}</p>
@@ -502,6 +525,7 @@ export function LastOutpatientCard() {
                       comparisonStrings={t.reports.referenceComparison}
                       columns={{ item: strings.labItem, current: strings.labCurrent, range: strings.labRange, previous: strings.previousLabel }}
                       sourceObservations={sourceObservations}
+                      mainDay={mainDay}
                     />
                   )}
                 </section>
