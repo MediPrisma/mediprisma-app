@@ -58,8 +58,28 @@ function clinicLabel(department: string | undefined): string {
   return match?.[1] || department.trim()
 }
 
+function resultDay(result: { effectiveDateTime?: string }): string {
+  return result.effectiveDateTime?.slice(0, 10) ?? ''
+}
+
+/** The day most of these results fall on, so a column names it once in its
+ *  heading instead of repeating it under every value. */
+function mostCommonDay(days: string[]): string {
+  const counts = new Map<string, number>()
+  for (const day of days) if (day) counts.set(day, (counts.get(day) ?? 0) + 1)
+  let best = ''
+  for (const [day, count] of counts) if (count > (counts.get(best) ?? 0)) best = day
+  return best
+}
+
+/** MM/DD for this year; YY/MM/DD for any other, as the overview does. */
+function OtherDay({ day }: { day: string }) {
+  return <span className="whitespace-nowrap text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(day)}</span>
+}
+
 function shortDay(day: string): string {
-  return day.slice(5).replace('-', '/')
+  const monthDay = day.slice(5).replace('-', '/')
+  return day.slice(0, 4) === String(new Date().getFullYear()) ? monthDay : `${day.slice(2, 4)}/${monthDay}`
 }
 
 const COLLAPSED_KEY = 'mediprisma:last-outpatient:visit-list-collapsed'
@@ -289,8 +309,12 @@ function LabTable({
   comparisonStrings,
   columns,
   sourceObservations,
+  mainDay,
+  mainPriorDay,
 }: {
   groups: Array<{ categoryId: string | null; tests: EncounterObservation[] }>
+  mainDay: string
+  mainPriorDay: string
   sourceObservations: Map<string, any>
   categoryLabel: (id: string | null) => string
   priorValues: Map<string, PriorLabValue>
@@ -303,9 +327,15 @@ function LabTable({
     <div role="table" aria-label={columns.item} className="@container/labs overflow-hidden rounded-md border border-border/80 bg-card text-sm">
       <div role="row" className={cn(LAB_GRID, 'border-b border-border/80 bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground')}>
         <span role="columnheader">{columns.item}</span>
-        <span role="columnheader">{columns.current}</span>
+        <span role="columnheader">
+          {columns.current}
+          {mainDay && <span className="ml-1.5 font-normal tabular-nums">{shortDay(mainDay)}</span>}
+        </span>
         <span role="columnheader" className={RANGE_COLUMN}>{columns.range}</span>
-        <span role="columnheader">{columns.previous}</span>
+        <span role="columnheader">
+          {columns.previous}
+          {mainPriorDay && <span className="ml-1.5 font-normal tabular-nums">{shortDay(mainPriorDay)}</span>}
+        </span>
       </div>
       {groups.map((group, index) => (
         <div role="rowgroup" key={group.categoryId ?? `other-${index}`}>
@@ -327,18 +357,21 @@ function LabTable({
                       className="shrink-0"
                     />
                   </span>
-                  <span role="cell" className={cell}>
+                  <span role="cell" className={cn(cell, 'flex flex-wrap items-baseline gap-x-1.5')}>
                     <ValueCell result={test} comparison={comparisons.get(test.id)} comparisonStrings={comparisonStrings} range={rangeText(test.referenceText)} />
+                    {/* The headings name the usual day; only a result from
+                        another day carries its own, on the same line. */}
+                    {resultDay(test) && resultDay(test) !== mainDay && <OtherDay day={resultDay(test)} />}
                   </span>
                   <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(test.referenceText)}</span>
-                  <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
+                  <span role="cell" className={cn(cell, 'flex flex-wrap items-baseline gap-x-1.5')}>
                     {prior && (
                       <>
                         <span className="tabular-nums text-foreground/80">
                           {prior.value}
                           {prior.unit && <span className="ml-1 text-xs text-muted-foreground">{prior.unit}</span>}
                         </span>
-                        <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(prior.date)}</span>
+                        {prior.date !== mainPriorDay && <OtherDay day={prior.date} />}
                       </>
                     )}
                   </span>
@@ -395,6 +428,8 @@ export function LastOutpatientCard() {
     .map((group) => ({ ...group, tests: onlyAbnormal ? group.tests.filter(hasAbnormal) : group.tests }))
     .filter((group) => group.tests.length > 0)
   const isYours = !!visit && isSameClinician(visit.physician, clinicianName)
+  const mainDay = mostCommonDay(tests.map(resultDay))
+  const mainPriorDay = mostCommonDay(tests.map((test) => priorValues.get(test.id)?.date ?? ''))
 
 
   return (
@@ -509,6 +544,8 @@ export function LastOutpatientCard() {
                       comparisonStrings={t.reports.referenceComparison}
                       columns={{ item: strings.labItem, current: strings.labCurrent, range: strings.labRange, previous: strings.previousLabel }}
                       sourceObservations={sourceObservations}
+                      mainDay={mainDay}
+                      mainPriorDay={mainPriorDay}
                     />
                   )}
                 </section>
