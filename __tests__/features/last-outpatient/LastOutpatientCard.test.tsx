@@ -260,6 +260,23 @@ describe('LastOutpatientCard', () => {
     expect(rowWith('1.26')).toBeUndefined()
   })
 
+  it('names only the clinic in the visit list and keeps the room code and session in the header', () => {
+    const data = chart()
+    mockClinicalData = {
+      ...data,
+      encounters: data.encounters.map((e: any) => e.id === 'h-other' ? { ...e, serviceType: { text: '003(心臟內科上午)' } } : e),
+    }
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    const chip = within(list).getByRole('button', { name: /2026\/10\/20/ })
+    expect(chip).toHaveTextContent('心臟內科 · 李建國')
+    expect(chip).not.toHaveTextContent('003')
+    expect(chip).toHaveAttribute('title', '2026/10/20 · 003(心臟內科上午) · 李建國')
+
+    fireEvent.click(chip)
+    expect(screen.getAllByText('003(心臟內科上午)').length).toBeGreaterThan(0)
+  })
+
   it('mutes a visit with nothing linked yet', () => {
     mockClinicalData = { ...chart(), observations: chart().observations.filter((o: any) => o.id !== 'cr-old') }
     render(<LastOutpatientCard />)
