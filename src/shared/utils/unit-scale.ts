@@ -222,7 +222,7 @@ export function normalizeAnalyteUnit(
   // A total-cholesterol/HDL ratio has no unit, but some hospitals upload it as
   // mg/dL (雲端病歷, 2026-11-03). The cumulative column and its trend both
   // read this, so neither repeats the source unit.
-  if (testKey.toUpperCase() === 'TC/HDL RATIO') return { value: tidy(value), unit: '' }
+  if (testKey.toUpperCase() === 'TC/HDL') return { value: tidy(value), unit: '' }
 
   // Percent is dimensionless. NFKC folding in percentScale makes the ASCII
   // percent sign and its full-width presentation form one display unit for any

@@ -121,7 +121,7 @@ describe('names that used to fall to 其他 or split the urine panel (2026-09-27
       obs('Total Cholesterol/HDL-C Ratio', 3.8, '9830-1'),
     ])
     expect(keys(pivots, 'chem')).toEqual(['CREA'])
-    expect(keys(pivots, 'lipid')).toEqual(['TC/HDL RATIO'])
+    expect(keys(pivots, 'lipid')).toEqual(['TC/HDL'])
   })
 
   it('folds the urinalysis names seen in a clinic screenshot', () => {

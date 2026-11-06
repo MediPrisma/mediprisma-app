@@ -400,7 +400,7 @@ const APP_LOINC_TO_CANONICAL: Readonly<Record<string, string>> = {
   '2890-2': 'PROT/CR RATIO', // Protein/Creatinine [Mass Ratio] in Urine
   // Its own column — not folded into RISKF, whose exact ratio definition at
   // the source hospital is unverified.
-  '9830-1': 'TC/HDL RATIO', // Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or Plasma
+  '9830-1': 'TC/HDL', // Cholesterol.total/Cholesterol in HDL [Mass Ratio] in Serum or Plasma
   // Pediatric eGFR is its own formula and column, never EGFR(M) (tx.fhir.org,
   // LOINC 2.82, verified 2026-10-13).
   '50384-7': 'EGFR(PED)', // Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by Creatinine-based formula (Schwartz)/1.73 sq M
@@ -466,7 +466,7 @@ const APP_TEXT_TO_CANONICAL: Readonly<Record<string, string>> = {
   'GLUCOSE PC': 'GLUCOSE',
   'GLUCOSE P.C': 'GLUCOSE',
   'GLUCOSE RANDOM': 'GLUCOSE',
-  'TOTAL CHOLESTEROL/HDL-C RATIO': 'TC/HDL RATIO',
+  'TOTAL CHOLESTEROL/HDL-C RATIO': 'TC/HDL',
 }
 
 /**
@@ -609,7 +609,7 @@ const APP_CANONICAL_DISPLAY: Readonly<Record<string, string>> = {
   VLDL: 'VLDL-C',
   CASTS: 'Casts',
   'PROT/CR RATIO': 'UPCR',
-  'TC/HDL RATIO': 'TC/HDL',
+  'TC/HDL': 'TC/HDL',
   'EGFR(PED)': 'eGFR (PED)',
   AMYLASE: 'Amylase',
   // 免疫 columns (IgG / IgA / IgM / ANA already have package labels).

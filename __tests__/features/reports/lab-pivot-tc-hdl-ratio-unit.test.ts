@@ -19,7 +19,8 @@ it('shows the TC/HDL ratio without the source mass unit', () => {
     lipid('Total Cholesterol/HDL-C Ratio', '9830-1', 3.6, 'mg/dL', '2026-01-04'),
     lipid('HDL-C', '2085-9', 52, 'mg/dL'),
   ]).lipid.rows
-  const ratio = rows.find(r => r.testKey === 'TC/HDL RATIO')!
+  const ratio = rows.find(r => r.testKey === 'TC/HDL')!
+  expect(ratio.displayName).toBe('TC/HDL')
   expect(ratio.unit).toBeUndefined()
   expect(ratio.values.get('2026-04-04')?.value).toBe('3.2')
   expect(ratio.values.get('2026-04-04')?.unit).toBeFalsy()
@@ -33,7 +34,7 @@ it('draws the ratio trend without a unit, even when only some rows carry mg/dL',
     lipid('Total Cholesterol/HDL-C Ratio', '9830-1', 3.2, 'mg/dL'),
     lipid('Total Cholesterol/HDL-C Ratio', '9830-1', 3.6, undefined, '2026-01-04'),
   ]
-  const ratio = buildLabPivots(rows).lipid.rows.find(r => r.testKey === 'TC/HDL RATIO')!
+  const ratio = buildLabPivots(rows).lipid.rows.find(r => r.testKey === 'TC/HDL')!
   expect(ratio.trendChartable).toBe(true)
   const series = buildLabTrendSeries(rows, {
     categoryId: 'lipid', mapKey: ratio.mapKey, testKey: ratio.testKey, displayName: ratio.displayName, nameMode: 'standardized',
