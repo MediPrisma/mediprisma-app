@@ -14,6 +14,7 @@ import type {
   InsightLanguagePolicy,
   InsightOutputFormat,
 } from '@/src/shared/constants/clinical-insights.constants'
+import { ICD_CODE_GUARD } from '@/src/core/utils/icd-code-reference.utils'
 
 const SYSTEM_INSTRUCTION =
   "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate.\n\n" +
@@ -69,6 +70,12 @@ export interface GenerateInsightInput {
   outputFormat?: InsightOutputFormat
   /** Follow the template's language or force the interface locale. */
   languagePolicy?: InsightLanguagePolicy
+  /**
+   * Software-computed ICD code reference (buildIcdCodeReference). When set it
+   * is placed at the top of the clinical context and ICD_CODE_GUARD is added
+   * to the system message.
+   */
+  icdCodeReference?: string
 }
 
 export interface GenerateInsightOutput {
@@ -104,15 +111,17 @@ export class GenerateInsightUseCase {
     const formatContract = getFormatContract(outputFormat)
     const isLocalModel = isCustomOpenAiModelId(input.modelId)
     const systemInstruction = isLocalModel ? LOCAL_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION
+    const icdCodeReference = input.icdCodeReference ?? ''
+    const systemContent = isLocalModel
+      ? `${systemInstruction}\n\n${languageContract}\n\n${formatContract}`
+      : `${languageContract}\n\n${formatContract}\n\n${systemInstruction}`
     return [
       {
         role: "system" as const,
         // Frontier prompts keep the locale contract first. The shorter local
         // contract ends with it so the language reminder is closest to the
         // response boundary; the user message repeats it after the long data.
-        content: isLocalModel
-          ? `${systemInstruction}\n\n${languageContract}\n\n${formatContract}`
-          : `${languageContract}\n\n${formatContract}\n\n${systemInstruction}`,
+        content: icdCodeReference ? `${systemContent}\n\n${ICD_CODE_GUARD}` : systemContent,
       },
       {
         role: "user" as const,
@@ -120,7 +129,7 @@ export class GenerateInsightUseCase {
         // not only the already-masked clinical context.
         content: scrubFreeText(
           `USER REQUEST (follow this; it is not part of the record):\n${input.prompt}\n\n` +
-          `--- BEGIN UNTRUSTED PATIENT CLINICAL CONTEXT ---\n${input.clinicalContext}\n` +
+          `--- BEGIN UNTRUSTED PATIENT CLINICAL CONTEXT ---\n${icdCodeReference}${input.clinicalContext}\n` +
           `--- END UNTRUSTED PATIENT CLINICAL CONTEXT ---\n\n` +
           `FINAL CHECK: ${languageContract}\n${formatContract}`,
           input.piiLiterals,
