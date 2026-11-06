@@ -47,6 +47,17 @@ function visitDay(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, '/')
 }
 
+/**
+ * The visit list only needs the clinic itself: 北榮 sends 「003(心臟內科上午)」,
+ * and the room code and session would otherwise take most of a chip. The full
+ * text stays in the chip's tooltip and in the selected visit's header.
+ */
+function clinicLabel(department: string | undefined): string {
+  if (!department) return ''
+  const match = department.trim().match(/^[0-9A-Za-z]+\s*[(（]\s*(.+?)\s*(?:上午|下午|晚上|夜間)?\s*[)）]$/)
+  return match?.[1] || department.trim()
+}
+
 function shortDay(day: string): string {
   return day.slice(5).replace('-', '/')
 }
@@ -172,9 +183,10 @@ function VisitList({
                   ref={selected ? selectedRef : undefined}
                   type="button"
                   aria-pressed={selected}
+                  title={[visitDay(candidate.date), candidate.department, physician].filter(Boolean).join(' · ')}
                   onClick={() => onSelect(candidate.id)}
                   className={cn(
-                    'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2.5 py-1.5 text-left transition-colors @[44rem]/lo:w-full',
+                    'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2 py-1 text-left transition-colors @[44rem]/lo:w-full @[44rem]/lo:px-2.5 @[44rem]/lo:py-1.5',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     selected ? 'border-primary bg-accent text-accent-foreground' : 'border-border hover:bg-muted/60 @[44rem]/lo:border-transparent',
                   )}
@@ -185,8 +197,8 @@ function VisitList({
                     </span>
                     <span className="hidden text-xs text-muted-foreground @[44rem]/lo:inline">{status}</span>
                   </span>
-                  <span className="max-w-[12rem] truncate text-xs text-muted-foreground @[44rem]/lo:max-w-full">
-                    {[candidate.department, physician].filter(Boolean).join(' · ')}
+                  <span className="max-w-[7.5rem] truncate text-xs text-muted-foreground @[44rem]/lo:max-w-full">
+                    {[clinicLabel(candidate.department), physician].filter(Boolean).join(' · ')}
                     {/* In the chip row the status shares the second line. */}
                     {empty && <span className="@[44rem]/lo:hidden">{` · ${strings.noResults}`}</span>}
                   </span>
