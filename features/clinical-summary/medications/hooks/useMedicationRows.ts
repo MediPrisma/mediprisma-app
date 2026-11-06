@@ -419,6 +419,8 @@ export function useMedicationRows(
         category,
         drugTerminology,
         hospitalMedicationName,
+        ...(!drugTerminology && med.hospitalAtcClassification
+          ? { hospitalAtcClassification: med.hospitalAtcClassification } : {}),
         pharmacy,
         icdCode,
         icdText,

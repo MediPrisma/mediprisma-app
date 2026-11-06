@@ -45,7 +45,7 @@ import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
-import { hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
+import { hasVghtpeMedicationAtcCheck, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
 import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
 import {
   isNhiDrugCodeSystem,
@@ -867,7 +867,8 @@ const ATC_HIERARCHY_TAG_SYSTEM =
 function hasUncheckedVghtpeMedication(bundle: object): boolean {
   const entries = Array.isArray((bundle as { entry?: unknown }).entry) ? (bundle as { entry: any[] }).entry : []
   return entries.some((entry: any) => entry?.resource?.resourceType === 'MedicationRequest'
-    && isVghtpeSource(entry.resource) && !hasVghtpeMedicationIdentityCheck(entry.resource))
+    && isVghtpeSource(entry.resource)
+    && (!hasVghtpeMedicationIdentityCheck(entry.resource) || !hasVghtpeMedicationAtcCheck(entry.resource)))
 }
 
 function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {

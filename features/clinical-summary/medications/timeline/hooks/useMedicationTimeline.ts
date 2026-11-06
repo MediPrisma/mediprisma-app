@@ -74,6 +74,7 @@ export interface TimelineDrug {
   drugProductName?: string
   drugTerminology?: MedicationEntity['drugTerminology']
   hospitalMedicationName?: HospitalMedicationName
+  hospitalAtcClassification?: MedicationEntity['hospitalAtcClassification']
   prescriptionType: TimelinePrescriptionType
   categoryKey: string
   categoryLabel: string
@@ -559,6 +560,7 @@ export function useMedicationTimeline(
           existing.drugProductName = drugProductName
           existing.drugTerminology = med.drugTerminology
           existing.hospitalMedicationName = hospitalMedicationName
+          existing.hospitalAtcClassification = hospitalMedicationName ? med.hospitalAtcClassification : undefined
           existing.categoryKey = category.key
           existing.categoryLabel = category.label
           existing.atcLevel2 = atcLevel2
@@ -574,6 +576,7 @@ export function useMedicationTimeline(
           drugProductName,
           drugTerminology: med.drugTerminology,
           hospitalMedicationName,
+          hospitalAtcClassification: hospitalMedicationName ? med.hospitalAtcClassification : undefined,
           prescriptionType,
           categoryKey: category.key,
           categoryLabel: category.label,
