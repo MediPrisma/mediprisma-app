@@ -241,6 +241,19 @@ describe('LastOutpatientCard', () => {
     expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent(zhTW.settings.clinicianNameNone)
   })
 
+  it('dates each current result, so a draw after the visit day is visible', () => {
+    const data = chart()
+    mockClinicalData = {
+      ...data,
+      observations: data.observations.map((o: any) => o.id === 'cr-now' ? { ...o, effectiveDateTime: '2026-10-12T08:10:00+08:00' } : o),
+    }
+    mockClinicianName = '陳怡君'
+    render(<LastOutpatientCard />)
+    const cells = within(rowWith('1.26')!).getAllByRole('cell')
+    expect(cells[1]).toHaveTextContent(/1\.26.*10\/12/)
+    expect(within(rowWith('12.6')!).getAllByRole('cell')[1]).toHaveTextContent('10/09')
+  })
+
   it('lists every hospital visit, any physician, and switches to one', () => {
     mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)

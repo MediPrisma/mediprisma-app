@@ -315,8 +315,13 @@ function LabTable({
                       className="shrink-0"
                     />
                   </span>
-                  <span role="cell" className={cell}>
+                  <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
                     <ValueCell result={test} comparison={comparisons.get(test.id)} comparisonStrings={comparisonStrings} range={rangeText(test.referenceText)} />
+                    {/* A result ordered at this visit may be drawn on another
+                        day; show when, as the 前次 column does. */}
+                    {test.effectiveDateTime && (
+                      <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(test.effectiveDateTime.slice(0, 10))}</span>
+                    )}
                   </span>
                   <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(test.referenceText)}</span>
                   <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
