@@ -47,25 +47,39 @@ function visitDay(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, '/')
 }
 
+/**
+ * The visit list only needs the clinic itself: 北榮 sends 「003(心臟內科上午)」,
+ * and the room code and session would otherwise take most of a chip. The full
+ * text stays in the chip's tooltip and in the selected visit's header.
+ */
+function clinicLabel(department: string | undefined): string {
+  if (!department) return ''
+  const match = department.trim().match(/^[0-9A-Za-z]+\s*[(（]\s*(.+?)\s*(?:上午|下午|晚上|夜間)?\s*[)）]$/)
+  return match?.[1] || department.trim()
+}
+
 function resultDay(result: { effectiveDateTime?: string }): string {
   return result.effectiveDateTime?.slice(0, 10) ?? ''
 }
 
-/** The day most of this visit's results were drawn on: one 採檢 date for the
- *  whole table instead of the same date under every value. */
-function mostCommonDay(results: Array<{ effectiveDateTime?: string }>): string {
+/** The day most of these results fall on, so a column names it once in its
+ *  heading instead of repeating it under every value. */
+function mostCommonDay(days: string[]): string {
   const counts = new Map<string, number>()
-  for (const result of results) {
-    const day = resultDay(result)
-    if (day) counts.set(day, (counts.get(day) ?? 0) + 1)
-  }
+  for (const day of days) if (day) counts.set(day, (counts.get(day) ?? 0) + 1)
   let best = ''
   for (const [day, count] of counts) if (count > (counts.get(best) ?? 0)) best = day
   return best
 }
 
+/** MM/DD for this year; YY/MM/DD for any other, as the overview does. */
+function OtherDay({ day }: { day: string }) {
+  return <span className="whitespace-nowrap text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(day)}</span>
+}
+
 function shortDay(day: string): string {
-  return day.slice(5).replace('-', '/')
+  const monthDay = day.slice(5).replace('-', '/')
+  return day.slice(0, 4) === String(new Date().getFullYear()) ? monthDay : `${day.slice(2, 4)}/${monthDay}`
 }
 
 const COLLAPSED_KEY = 'mediprisma:last-outpatient:visit-list-collapsed'
@@ -189,9 +203,10 @@ function VisitList({
                   ref={selected ? selectedRef : undefined}
                   type="button"
                   aria-pressed={selected}
+                  title={[visitDay(candidate.date), candidate.department, physician].filter(Boolean).join(' · ')}
                   onClick={() => onSelect(candidate.id)}
                   className={cn(
-                    'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2.5 py-1.5 text-left transition-colors @[44rem]/lo:w-full',
+                    'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2 py-1 text-left transition-colors @[44rem]/lo:w-full @[44rem]/lo:px-2.5 @[44rem]/lo:py-1.5',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     selected ? 'border-primary bg-accent text-accent-foreground' : 'border-border hover:bg-muted/60 @[44rem]/lo:border-transparent',
                   )}
@@ -202,8 +217,8 @@ function VisitList({
                     </span>
                     <span className="hidden text-xs text-muted-foreground @[44rem]/lo:inline">{status}</span>
                   </span>
-                  <span className="max-w-[12rem] truncate text-xs text-muted-foreground @[44rem]/lo:max-w-full">
-                    {[candidate.department, physician].filter(Boolean).join(' · ')}
+                  <span className="max-w-[7.5rem] truncate text-xs text-muted-foreground @[44rem]/lo:max-w-full">
+                    {[clinicLabel(candidate.department), physician].filter(Boolean).join(' · ')}
                     {/* In the chip row the status shares the second line. */}
                     {empty && <span className="@[44rem]/lo:hidden">{` · ${strings.noResults}`}</span>}
                   </span>
@@ -295,9 +310,11 @@ function LabTable({
   columns,
   sourceObservations,
   mainDay,
+  mainPriorDay,
 }: {
   groups: Array<{ categoryId: string | null; tests: EncounterObservation[] }>
   mainDay: string
+  mainPriorDay: string
   sourceObservations: Map<string, any>
   categoryLabel: (id: string | null) => string
   priorValues: Map<string, PriorLabValue>
@@ -310,9 +327,15 @@ function LabTable({
     <div role="table" aria-label={columns.item} className="@container/labs overflow-hidden rounded-md border border-border/80 bg-card text-sm">
       <div role="row" className={cn(LAB_GRID, 'border-b border-border/80 bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground')}>
         <span role="columnheader">{columns.item}</span>
-        <span role="columnheader">{columns.current}</span>
+        <span role="columnheader">
+          {columns.current}
+          {mainDay && <span className="ml-1.5 font-normal tabular-nums">{shortDay(mainDay)}</span>}
+        </span>
         <span role="columnheader" className={RANGE_COLUMN}>{columns.range}</span>
-        <span role="columnheader">{columns.previous}</span>
+        <span role="columnheader">
+          {columns.previous}
+          {mainPriorDay && <span className="ml-1.5 font-normal tabular-nums">{shortDay(mainPriorDay)}</span>}
+        </span>
       </div>
       {groups.map((group, index) => (
         <div role="rowgroup" key={group.categoryId ?? `other-${index}`}>
@@ -334,23 +357,21 @@ function LabTable({
                       className="shrink-0"
                     />
                   </span>
-                  <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
+                  <span role="cell" className={cn(cell, 'flex flex-wrap items-baseline gap-x-1.5')}>
                     <ValueCell result={test} comparison={comparisons.get(test.id)} comparisonStrings={comparisonStrings} range={rangeText(test.referenceText)} />
-                    {/* The heading names the visit's usual draw day; only a
-                        result drawn on another day carries its own. */}
-                    {resultDay(test) && resultDay(test) !== mainDay && (
-                      <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(resultDay(test))}</span>
-                    )}
+                    {/* The headings name the usual day; only a result from
+                        another day carries its own, on the same line. */}
+                    {resultDay(test) && resultDay(test) !== mainDay && <OtherDay day={resultDay(test)} />}
                   </span>
                   <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(test.referenceText)}</span>
-                  <span role="cell" className={cn(cell, 'flex flex-col leading-tight')}>
+                  <span role="cell" className={cn(cell, 'flex flex-wrap items-baseline gap-x-1.5')}>
                     {prior && (
                       <>
                         <span className="tabular-nums text-foreground/80">
                           {prior.value}
                           {prior.unit && <span className="ml-1 text-xs text-muted-foreground">{prior.unit}</span>}
                         </span>
-                        <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{shortDay(prior.date)}</span>
+                        {prior.date !== mainPriorDay && <OtherDay day={prior.date} />}
                       </>
                     )}
                   </span>
@@ -407,7 +428,8 @@ export function LastOutpatientCard() {
     .map((group) => ({ ...group, tests: onlyAbnormal ? group.tests.filter(hasAbnormal) : group.tests }))
     .filter((group) => group.tests.length > 0)
   const isYours = !!visit && isSameClinician(visit.physician, clinicianName)
-  const mainDay = mostCommonDay(tests)
+  const mainDay = mostCommonDay(tests.map(resultDay))
+  const mainPriorDay = mostCommonDay(tests.map((test) => priorValues.get(test.id)?.date ?? ''))
 
 
   return (
@@ -510,9 +532,6 @@ export function LastOutpatientCard() {
                 <section className="space-y-2" aria-labelledby="last-outpatient-labs">
                   <h3 id="last-outpatient-labs" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {strings.labs}
-                    {mainDay && (
-                      <span className="ml-2 font-normal normal-case tracking-normal tabular-nums">{strings.collectedOn.replace('{date}', shortDay(mainDay))}</span>
-                    )}
                   </h3>
                   {groups.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{strings.noAbnormal}</p>
@@ -526,6 +545,7 @@ export function LastOutpatientCard() {
                       columns={{ item: strings.labItem, current: strings.labCurrent, range: strings.labRange, previous: strings.previousLabel }}
                       sourceObservations={sourceObservations}
                       mainDay={mainDay}
+                      mainPriorDay={mainPriorDay}
                     />
                   )}
                 </section>

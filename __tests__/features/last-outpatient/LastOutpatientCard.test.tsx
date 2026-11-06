@@ -35,6 +35,18 @@ jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
   ),
 }))
 
+// Days show their year only when it is not this year; pin "today" so the
+// fixture's 2026 days read as this year. Only Date is faked.
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: new Date('2026-11-07T12:00:00+08:00'),
+    doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate',
+      'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback',
+      'cancelIdleCallback', 'hrtime', 'performance'],
+  })
+})
+afterAll(() => jest.useRealTimers())
+
 // Radix Select needs these in jsdom.
 beforeAll(() => {
   Element.prototype.hasPointerCapture ??= () => false
@@ -158,7 +170,7 @@ describe('LastOutpatientCard', () => {
     expect(shownVisit()).toHaveTextContent('2026/10/09')
     expect(screen.getByText('陳怡君（您）')).toBeInTheDocument()
     expect(rowWith('1.26')).toBeTruthy()
-    expect(rowWith('1.26')?.textContent).toMatch(/1\.12\s*07\/10/)
+    expect(rowWith('1.26')?.textContent).toMatch(/1\.12/)
     expect(screen.getByTestId('report-row')).toHaveTextContent('Echocardiography')
     expect(screen.getByTestId('report-row')).toHaveAttribute('data-open', 'true')
     // Ordered elsewhere, or only date-matched: not part of this visit.
@@ -241,12 +253,13 @@ describe('LastOutpatientCard', () => {
     expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent(zhTW.settings.clinicianNameNone)
   })
 
-  it('names the draw day once, and dates only a result drawn on another day', () => {
+  it('names the usual 本次 and 前次 days in the column headings, and dates only a result from another day', () => {
     mockClinicianName = '陳怡君'
     const { unmount } = render(<LastOutpatientCard />)
-    expect(screen.getByRole('heading', { name: /檢驗/ })).toHaveTextContent('採檢 10/09')
+    const headers = () => screen.getAllByRole('columnheader').map((header) => header.textContent)
+    expect(headers()).toEqual(expect.arrayContaining(['本次10/09', '前次07/10']))
     expect(within(rowWith('1.26')!).getAllByRole('cell')[1]).not.toHaveTextContent('10/09')
-    expect(within(rowWith('12.6')!).getAllByRole('cell')[1]).not.toHaveTextContent('10/09')
+    expect(within(rowWith('1.26')!).getAllByRole('cell')[3]).toHaveTextContent(/^1\.12$/)
     unmount()
 
     const data = chart()
@@ -255,9 +268,20 @@ describe('LastOutpatientCard', () => {
       observations: data.observations.map((o: any) => o.id === 'cr-now' ? { ...o, effectiveDateTime: '2026-10-12T08:10:00+08:00' } : o),
     }
     render(<LastOutpatientCard />)
-    expect(screen.getByRole('heading', { name: /檢驗/ })).toHaveTextContent('採檢 10/09')
+    expect(headers()).toEqual(expect.arrayContaining(['本次10/09']))
     expect(within(rowWith('1.26')!).getAllByRole('cell')[1]).toHaveTextContent(/1\.26.*10\/12/)
     expect(within(rowWith('12.6')!).getAllByRole('cell')[1]).not.toHaveTextContent('10/09')
+  })
+
+  it('adds the year to a day from another year', () => {
+    const data = chart()
+    mockClinicalData = {
+      ...data,
+      observations: data.observations.map((o: any) => o.id === 'cr-old' ? { ...o, effectiveDateTime: '2025-12-10T08:10:00+08:00' } : o),
+    }
+    mockClinicianName = '陳怡君'
+    render(<LastOutpatientCard />)
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual(expect.arrayContaining(['前次25/12/10']))
   })
 
   it('lists every hospital visit, any physician, and switches to one', () => {
@@ -277,6 +301,23 @@ describe('LastOutpatientCard', () => {
     expect(shownVisit()).toHaveTextContent('2026/10/20')
     expect(rowWith('4.6')).toBeTruthy()
     expect(rowWith('1.26')).toBeUndefined()
+  })
+
+  it('names only the clinic in the visit list and keeps the room code and session in the header', () => {
+    const data = chart()
+    mockClinicalData = {
+      ...data,
+      encounters: data.encounters.map((e: any) => e.id === 'h-other' ? { ...e, serviceType: { text: '003(心臟內科上午)' } } : e),
+    }
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    const chip = within(list).getByRole('button', { name: /2026\/10\/20/ })
+    expect(chip).toHaveTextContent('心臟內科 · 李建國')
+    expect(chip).not.toHaveTextContent('003')
+    expect(chip).toHaveAttribute('title', '2026/10/20 · 003(心臟內科上午) · 李建國')
+
+    fireEvent.click(chip)
+    expect(screen.getAllByText('003(心臟內科上午)').length).toBeGreaterThan(0)
   })
 
   it('mutes a visit with nothing linked yet', () => {

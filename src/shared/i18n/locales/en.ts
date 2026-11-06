@@ -2016,7 +2016,6 @@ export const en = {
     labCurrent: 'This visit',
     labRange: 'Reference',
     previousLabel: 'Previous',
-    collectedOn: 'Collected {date}',
     allNormal: 'All within reference range',
     noAbnormal: 'No abnormal lab results at this visit',
     empty: 'No lab or exam results are linked to this visit yet.',
