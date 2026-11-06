@@ -70,6 +70,16 @@ test('confirmed carry-forward retains dates, fills gaps, marks what it carried a
   expect(JSON.stringify(saved)).toBe(original)
 })
 
+test('HTN: DP-02 and DP-03 every-visit answers are asked afresh; the family history carries', () => {
+  const saved = record()
+  ;(saved.save.physician_inputs as Record<string, unknown>).visitAnswers = {
+    'missed-antihypertensive': 'no', 'postural-symptoms': 'no', 'home-bp-measured': 'no',
+    'family-primary-aldosteronism': 'no', 'family-early-onset-hypertension': 'yes',
+  }
+  carryForwardCdss('p', saved, 'synthetic', '1', { id: 'p', facts: {} }, { inputs: true, decisions: false })
+  expect(Object.keys(useVisitAnswersStore.getState().byPatientId.p).sort()).toEqual(['family-early-onset-hypertension', 'family-primary-aldosteronism'])
+})
+
 test('current edits win even if entered after the history dialog opened; a second carry-forward is a no-op', () => {
   usePhysicianDecisionsStore.getState().recordDecision('p', 'synthetic', { decision: 'ordered', packVersion: '1' })
   useClinicVitalsStore.getState().setVitals('p', { entries: { bodyWeight: { value: 70, measuredOn: '2026-10-01' } } })
