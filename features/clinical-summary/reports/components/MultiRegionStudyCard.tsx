@@ -33,7 +33,7 @@ import { formatOrganizationDisplay } from '@/src/shared/utils/organization-displ
 import type { Row } from '../types'
 import { formatDate } from '../utils/fhir-helpers'
 import { ReportImageDialog } from './ReportImageDialog'
-import { FormattedReportText } from './FormattedReportText'
+import { FormattedReportText, REPORT_BODY_TEXT_CLASSES } from './FormattedReportText'
 import { ReportPreviewLine } from './ReportPreviewLine'
 import { ReportInterpretationLauncher, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { NhiViewerActions } from './NhiViewerActions'
@@ -428,8 +428,8 @@ function NarrativeSubCard({
       </div>
       {/* Expanded full report body */}
       {expanded && (
-        <div className="px-2.5 pb-2.5 pt-0.5 text-xs border-t border-border/40">
-          <FormattedReportText text={text} />
+        <div className="px-2.5 pb-2.5 pt-0.5 border-t border-border/40">
+          <FormattedReportText text={text} className={REPORT_BODY_TEXT_CLASSES} />
         </div>
       )}
     </div>
