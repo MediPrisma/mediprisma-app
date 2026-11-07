@@ -143,9 +143,13 @@ const ATC_LEVEL_ONE_CODES = new Set([
 type MedicationAtcData =
   | NonNullable<MedicationEntity['drugTerminology']>
   | NonNullable<MedicationEntity['atcClassification']>
+  | NonNullable<MedicationEntity['hospitalAtcClassification']>
 
+/** ATC for grouping. A hospital order's shared identity ATC comes last: it
+ * stands in only where no product-level classification exists. */
 function medicationAtcData(medication: any): MedicationAtcData | undefined {
   return medication?.drugTerminology ?? medication?.atcClassification
+    ?? medication?.hospitalAtcClassification
 }
 
 function recordedPrescriptionType(medication: any): TimelinePrescriptionType {

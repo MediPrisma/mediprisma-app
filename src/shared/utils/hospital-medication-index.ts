@@ -41,11 +41,15 @@ export function hasVghtpeMedicationIdentityCheck(order: { extension?: any[] }): 
   return !!mark && (!markPart(mark, 'nhiCode') || !!markPart(mark, 'ingredient'))
 }
 
+/** Version of the shared-ATC check; a mark from an older check is checked
+ * again so every chart carries the same ATC levels. */
+export const VGHTPE_MEDICATION_ATC_CHECK = 'shared-atc-levels-2-4-v2'
+
 /** An identity mark whose NHI codes were already checked for one shared ATC
  * code (see the drug terminology enrichment). Marks without codes need none. */
 export function hasVghtpeMedicationAtcCheck(order: { extension?: any[] }): boolean {
   const mark = identityMark(order)
-  return !mark || !markPart(mark, 'nhiCode') || !!markPart(mark, 'atcCheck')
+  return !mark || !markPart(mark, 'nhiCode') || markPart(mark, 'atcCheck')?.valueString === VGHTPE_MEDICATION_ATC_CHECK
 }
 
 export function vghtpeMedicationIdentityIngredient(order: { extension?: any[] }): { ingredientText: string; indexSha256?: string } | undefined {
