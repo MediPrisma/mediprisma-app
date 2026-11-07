@@ -3,6 +3,7 @@ import { resolveHospitalMedicationName } from '@/src/shared/utils/hospital-medic
 import { vghtpeMedicationIdentityExtension } from '@/src/shared/utils/hospital-medication-index'
 import { useMedicationRows } from '@/features/clinical-summary/medications/hooks/useMedicationRows'
 import { useMedicationTimeline } from '@/features/clinical-summary/medications/timeline/hooks/useMedicationTimeline'
+import { isCoagulationOrSurgeryRelevant } from '@/features/clinical-summary/medications/utils/medication-category-priority'
 import { HospitalMedicationNameDetails } from '@/features/clinical-summary/medications/components/MedicationTerminologyTooltip'
 
 jest.mock('@/src/application/providers/language.provider', () => ({
@@ -182,5 +183,30 @@ describe('VGH hospital medication ingredient display', () => {
     expect(screen.getByText(/對照之健保品項在健保藥典中皆為此分類/)).toBeInTheDocument()
     view.rerender(<HospitalMedicationNameDetails name={name} />)
     expect(screen.queryByText('C07AB07 · bisoprolol')).not.toBeInTheDocument()
+  })
+
+  it('files a hospital order with a shared identity ATC under its level-2 class in the list and timeline', () => {
+    const atc = { source: 'vghtpe-identity-nhi-atc' as const, atcCode: 'C07AB07', atcLevel2Code: 'C07',
+      atcLevel2NameEn: 'BETA BLOCKING AGENTS', atcLevel2NameZh: 'β 受體阻斷劑',
+      atcLevel4Code: 'C07AB', atcLevel4NameEn: 'Beta blocking agents, selective', snapshotId: 's' }
+    const hospital = { ...medication(undefined, 'Concor FC * tab 1.25 mg'), hospitalAtcClassification: atc }
+    const rows = renderHook(() => useMedicationRows([hospital, medication(undefined, 'Unknown brand', 'med-2')], 'medical', 'zh-TW'))
+    expect(rows.result.current.find(row => row.id === 'med-1')?.category).toBe('β 受體阻斷劑')
+    expect(rows.result.current.find(row => row.id === 'med-2')?.category).toBeUndefined()
+    const timeline = renderHook(() => useMedicationTimeline([hospital], 'medical', 'all', '其他'))
+    expect(timeline.result.current.categories[0]).toMatchObject({ key: 'atc-level2:C07', label: 'β 受體阻斷劑' })
+    expect(timeline.result.current.categories[0].children?.[0]).toMatchObject({ code: 'C07AB' })
+    // Official drug-master terminology keeps precedence over the hospital class.
+    const official = { ...hospital, drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's',
+      atcCode: 'A10BF01', atcLevel2Code: 'A10', atcLevel2NameZh: '糖尿病用藥', atcLevel2NameEn: 'DRUGS USED IN DIABETES' } }
+    const officialTimeline = renderHook(() => useMedicationTimeline([official], 'medical', 'all', '其他'))
+    expect(officialTimeline.result.current.categories[0].key).toBe('atc-level2:A10')
+  })
+
+  it('puts a hospital antiplatelet with a shared ATC in the coagulation priority group', () => {
+    const atc = { source: 'vghtpe-identity-nhi-atc' as const, atcCode: 'B01AC04', atcLevel2Code: 'B01', snapshotId: 's' }
+    expect(isCoagulationOrSurgeryRelevant({ category: '抗血栓劑', hospitalAtcClassification: atc })).toBe(true)
+    expect(isCoagulationOrSurgeryRelevant({ category: 'β 受體阻斷劑',
+      hospitalAtcClassification: { ...atc, atcCode: 'C07AB07', atcLevel2Code: 'C07' } })).toBe(false)
   })
 })

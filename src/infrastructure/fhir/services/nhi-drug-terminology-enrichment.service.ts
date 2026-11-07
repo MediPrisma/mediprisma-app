@@ -15,7 +15,7 @@ import type {
 
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
-import { VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
+import { VGHTPE_MEDICATION_ATC_CHECK, VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
 import type { HospitalMedicationAtcClassification } from '@/src/core/entities/clinical-data.entity'
 import { markVghtpeMedicationIdentities } from './vghtpe-medication-identity-enrichment'
 export { isNhiDrugCodeSystem, NHI_DRUG_CODE_SYSTEMS } from '@/src/shared/utils/nhi-drug-code-system'
@@ -185,7 +185,8 @@ function prescriptionDate(request: FhirResource): string | null {
  * two different codes, or none, give no class. */
 function sharedIdentityAtc(
   records: ReadonlyArray<{ atcCode?: string; atcNameEn?: string; atcNameZh?: string;
-    atcLevel2?: { code: string; nameEn: string; nameZh?: string }; snapshotId: string }>,
+    atcLevel2?: { code: string; nameEn: string; nameZh?: string }
+    atcLevel4?: { code: string; nameEn: string; nameZh?: string }; snapshotId: string }>,
 ): HospitalMedicationAtcClassification | undefined {
   const coded = records.filter((record) => record.atcCode?.trim())
   const codes = new Set(coded.map((record) => record.atcCode!.trim().toUpperCase()))
@@ -203,16 +204,23 @@ function sharedIdentityAtc(
           ...(record.atcLevel2.nameZh ? { atcLevel2NameZh: record.atcLevel2.nameZh } : {}),
         }
       : {}),
+    ...(record.atcLevel4
+      ? {
+          atcLevel4Code: record.atcLevel4.code,
+          atcLevel4NameEn: record.atcLevel4.nameEn,
+          ...(record.atcLevel4.nameZh ? { atcLevel4NameZh: record.atcLevel4.nameZh } : {}),
+        }
+      : {}),
     snapshotId: record.snapshotId,
   }
 }
 
 /** Record on the identity mark that its codes were checked for a shared ATC. */
-function withAtcCheck(extensions: unknown, snapshotId: string): unknown[] {
+function withAtcCheck(extensions: unknown): unknown[] {
   return (Array.isArray(extensions) ? extensions : []).map((extension: any) =>
     extension?.url === VGHTPE_MEDICATION_IDENTITY_URL
       ? { ...extension, extension: [...(extension.extension ?? []).filter((part: any) => part?.url !== 'atcCheck'),
-          { url: 'atcCheck', valueString: snapshotId }] }
+          { url: 'atcCheck', valueString: VGHTPE_MEDICATION_ATC_CHECK }] }
       : extension)
 }
 
@@ -553,7 +561,6 @@ export async function enrichBundleWithNhiDrugTerminology(
       sourceAtcFallbackCount += 1
     }
 
-    const snapshotId = terminology.NHI_DRUG_TERMINOLOGY_MANIFEST.snapshotId
     for (const candidate of hospitalAtcCandidates) {
       const current = nextEntries[candidate.entryIndex]
       const { hospitalAtcClassification: _previous, ...resource } = current.resource as FhirResource
@@ -569,7 +576,7 @@ export async function enrichBundleWithNhiDrugTerminology(
         ...current,
         resource: {
           ...resource,
-          extension: withAtcCheck(resource.extension, snapshotId),
+          extension: withAtcCheck(resource.extension),
           ...(hospitalAtcClassification ? { hospitalAtcClassification } : {}),
         },
       }

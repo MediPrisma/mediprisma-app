@@ -106,6 +106,9 @@ export interface HospitalMedicationAtcClassification {
   atcLevel2Code?: string
   atcLevel2NameEn?: string
   atcLevel2NameZh?: string
+  atcLevel4Code?: string
+  atcLevel4NameEn?: string
+  atcLevel4NameZh?: string
   snapshotId: string
 }
 
@@ -312,8 +315,8 @@ export interface MedicationEntity extends ClinicalSourceRecord {
   /**
    * Display-only ATC for a VGH hospital order: every NHI product of its one
    * index identity that the drug master resolves on the order date carries
-   * this same full ATC code. No product is claimed, and list grouping, AI and
-   * calculators do not read it.
+   * this same full ATC code. No product is claimed. The hover card and the
+   * 藥理類別 filter and grouping read it; AI and calculators do not.
    */
   hospitalAtcClassification?: HospitalMedicationAtcClassification
   /**
