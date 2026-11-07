@@ -145,8 +145,10 @@ function PhysicianFilter({
           aria-label={strings.filterLabel}
           className={cn('h-8 min-w-0 gap-1.5 text-xs @[44rem]/lo:flex-1', current && 'border-primary text-primary')}
         >
-          <Filter className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <SelectValue>{current ? label(current) : strings.filterAll}</SelectValue>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+            <Filter className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <SelectValue>{current ? label(current) : strings.filterAll}</SelectValue>
+          </span>
         </SelectTrigger>
         <SelectContent align="start">
           <SelectItem value={ALL_PHYSICIANS} textValue={strings.filterAll}>
