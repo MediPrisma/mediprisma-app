@@ -1,16 +1,16 @@
 "use client"
 
-import { Fragment, useEffect, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { ChevronLeft, ChevronRight, Filter, X } from "lucide-react"
 import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
 import { ObservationLongitudinalAction } from "@/features/clinical-summary/reports/components/ObservationLongitudinalAction"
 import type { EncounterObservation } from "@/features/clinical-summary/visit-history/components/EncounterObservationCard"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { ClinicianNamePicker } from "./ClinicianNamePicker"
 import { useLastOutpatient, type HospitalOutpatientVisit } from "../hooks/useLastOutpatient"
 import { isSameClinician, type PriorLabValue } from "../utils/last-outpatient"
 
@@ -102,6 +102,80 @@ type VisitListStrings = {
   visitCountShort: string
   collapse: string
   expand: string
+  filterLabel: string
+  filterAll: string
+  filterClear: string
+}
+
+type PhysicianOption = { name: string; visits: number; yours: boolean }
+
+/** Each physician on the list once, with how many visits: the clinician's own
+ *  name first, then by visits, most first. */
+function physicianOptions(visits: HospitalOutpatientVisit[], clinicianName: string | null): PhysicianOption[] {
+  const counts = new Map<string, number>()
+  for (const visit of visits) if (visit.physician) counts.set(visit.physician, (counts.get(visit.physician) ?? 0) + 1)
+  return [...counts]
+    .map(([name, count]) => ({ name, visits: count, yours: isSameClinician(name, clinicianName) }))
+    .sort((a, b) => Number(b.yours) - Number(a.yours) || b.visits - a.visits)
+}
+
+const ALL_PHYSICIANS = '__all__'
+
+/** Narrows the visit list to one physician; every visit shows by default. */
+function PhysicianFilter({
+  options,
+  value,
+  totalVisits,
+  strings,
+  onChange,
+}: {
+  options: PhysicianOption[]
+  value: string | null
+  totalVisits: number
+  strings: VisitListStrings
+  onChange: (physician: string | null) => void
+}) {
+  const label = (option: PhysicianOption) => option.yours ? strings.youTemplate.replace('{name}', option.name) : option.name
+  const current = options.find((option) => option.name === value)
+  return (
+    <div className="flex shrink-0 items-center gap-1 @[44rem]/lo:mb-1.5 @[44rem]/lo:w-full">
+      <Select value={current?.name ?? ALL_PHYSICIANS} onValueChange={(next) => onChange(next === ALL_PHYSICIANS ? null : next)}>
+        <SelectTrigger
+          size="sm"
+          aria-label={strings.filterLabel}
+          className={cn('h-8 min-w-0 gap-1.5 text-xs @[44rem]/lo:flex-1', current && 'border-primary text-primary')}
+        >
+          <Filter className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <SelectValue>{current ? label(current) : strings.filterAll}</SelectValue>
+        </SelectTrigger>
+        <SelectContent align="start">
+          <SelectItem value={ALL_PHYSICIANS} textValue={strings.filterAll}>
+            <span>{strings.filterAll}</span>
+            <span className="ml-2 text-xs tabular-nums text-muted-foreground">{totalVisits}</span>
+          </SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option.name} value={option.name} textValue={option.name}>
+              <span>{label(option)}</span>
+              <span className="ml-2 text-xs tabular-nums text-muted-foreground">{option.visits}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {current && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          aria-label={strings.filterClear}
+          title={strings.filterClear}
+          onClick={() => onChange(null)}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      )}
+    </div>
+  )
 }
 
 /** Every hospital outpatient visit, newest first, any physician: pick one to
@@ -110,6 +184,10 @@ type VisitListStrings = {
  *  A visit with nothing linked yet is muted, once the reports are imported. */
 function VisitList({
   visits,
+  totalVisits,
+  physicians,
+  physician,
+  onPhysicianChange,
   selectedId,
   itemCounts,
   clinicianName,
@@ -119,7 +197,12 @@ function VisitList({
   strings,
   onSelect,
 }: {
+  /** The visits listed: every one, or one physician's. */
   visits: HospitalOutpatientVisit[]
+  totalVisits: number
+  physicians: PhysicianOption[]
+  physician: string | null
+  onPhysicianChange: (physician: string | null) => void
   selectedId: string
   itemCounts: Map<string, number>
   clinicianName: string | null
@@ -134,7 +217,7 @@ function VisitList({
   useEffect(() => {
     selectedRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [selectedId])
-  const countLabel = strings.visitCount.replace('{count}', String(visits.length))
+  const countLabel = strings.visitCount.replace('{count}', String(totalVisits))
   return (
     <>
       {/* Folded (wide panels only): a rail that opens the column again. */}
@@ -151,7 +234,7 @@ function VisitList({
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <span className="whitespace-nowrap text-xs text-muted-foreground">{strings.visitCountShort.replace('{count}', String(visits.length))}</span>
+          <span className="whitespace-nowrap text-xs text-muted-foreground">{strings.visitCountShort.replace('{count}', String(totalVisits))}</span>
         </div>
       )}
       <nav
@@ -175,10 +258,20 @@ function VisitList({
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
+        <div className="flex items-start gap-2 @[44rem]/lo:block">
+        {physicians.length > 1 && (
+          <PhysicianFilter
+            options={physicians}
+            value={physician}
+            totalVisits={totalVisits}
+            strings={strings}
+            onChange={onPhysicianChange}
+          />
+        )}
         <div
           role="group"
           aria-label={strings.label}
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 @[44rem]/lo:mx-0 @[44rem]/lo:max-h-[34rem] @[44rem]/lo:flex-col @[44rem]/lo:gap-0.5 @[44rem]/lo:overflow-y-auto @[44rem]/lo:overflow-x-visible @[44rem]/lo:px-0"
+          className="-mx-1 flex min-w-0 flex-1 gap-2 overflow-x-auto px-1 pb-1 @[44rem]/lo:mx-0 @[44rem]/lo:max-h-[34rem] @[44rem]/lo:flex-col @[44rem]/lo:gap-0.5 @[44rem]/lo:overflow-y-auto @[44rem]/lo:overflow-x-visible @[44rem]/lo:px-0"
         >
           {visits.map((candidate, index) => {
             const selected = candidate.id === selectedId
@@ -226,6 +319,7 @@ function VisitList({
               </Fragment>
             )
           })}
+        </div>
         </div>
       </nav>
     </>
@@ -399,6 +493,8 @@ export function LastOutpatientCard() {
   const { t } = useLanguage()
   const strings = t.lastOutpatient
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null)
+  // Every physician's visits by default; not remembered across charts.
+  const [physician, setPhysician] = useState<string | null>(null)
   const [onlyAbnormal, setOnlyAbnormal] = useState(false)
   // Folded or not is remembered per browser. The card renders only once the
   // chart is loaded in the browser, so storage is there to read.
@@ -407,8 +503,8 @@ export function LastOutpatientCard() {
     isLoading,
     reportsPending,
     clinicianName,
-    clinicianMatched,
     visits,
+    listedVisits,
     itemCounts,
     visit,
     details,
@@ -416,7 +512,7 @@ export function LastOutpatientCard() {
     rangeComparisons,
     sharedCount,
     sourceObservations,
-  } = useLastOutpatient(selectedVisitId)
+  } = useLastOutpatient(selectedVisitId, physician)
 
   const categoryLabel = (id: string | null): string =>
     (t.reports.cumulativeCategories as Record<string, string>)[id ?? 'other'] || id || ''
@@ -430,6 +526,7 @@ export function LastOutpatientCard() {
   const isYours = !!visit && isSameClinician(visit.physician, clinicianName)
   const mainDay = mostCommonDay(tests.map(resultDay))
   const mainPriorDay = mostCommonDay(tests.map((test) => priorValues.get(test.id)?.date ?? ''))
+  const physicians = useMemo(() => physicianOptions(visits, clinicianName), [visits, clinicianName])
 
 
   return (
@@ -445,7 +542,11 @@ export function LastOutpatientCard() {
         <div className="flex flex-col gap-4 @[44rem]/lo:flex-row @[44rem]/lo:items-start">
           {visits.length > 1 && (
             <VisitList
-              visits={visits}
+              visits={listedVisits}
+              totalVisits={visits.length}
+              physicians={physicians}
+              physician={listedVisits.length < visits.length ? physician : null}
+              onPhysicianChange={setPhysician}
               selectedId={visit.id}
               itemCounts={itemCounts}
               clinicianName={clinicianName}
@@ -462,6 +563,9 @@ export function LastOutpatientCard() {
                 visitCountShort: strings.visitCountShort,
                 collapse: strings.collapseVisits,
                 expand: strings.expandVisits,
+                filterLabel: strings.physicianFilter,
+                filterAll: strings.physicianFilterAll,
+                filterClear: strings.physicianFilterClear,
               }}
               onSelect={setSelectedVisitId}
             />
@@ -478,12 +582,6 @@ export function LastOutpatientCard() {
               )}
               {visit.institution && <span className="text-sm text-muted-foreground">{visit.institution}</span>}
             </div>
-            {clinicianName && !clinicianMatched && (
-              <p className="text-sm text-muted-foreground">{fill(strings.noMatch, { name: clinicianName })}</p>
-            )}
-            {/* Pick the name right here; the same menu is in 設定. A new name
-                opens that clinician's own last visit. */}
-            <ClinicianNamePicker idPrefix="last-outpatient-name" inline onChange={() => setSelectedVisitId(null)} />
           </div>
 
           {tests.length === 0 && reports.length === 0 ? (

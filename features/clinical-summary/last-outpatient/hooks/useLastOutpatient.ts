@@ -15,7 +15,6 @@ import {
   buildRangeComparisons,
   displayClinicianName,
   isHospitalOutpatientEncounter,
-  isSameClinician,
   orderingVisitIds,
   resultsOrderedAt,
   type PriorLabValue,
@@ -57,7 +56,9 @@ function toHospitalVisit(visit: VisitRecord, byId: Map<string, any>): HospitalOu
   }
 }
 
-export function useLastOutpatient(selectedVisitId: string | null) {
+/** `physician` narrows the visit list to one physician's visits; null lists
+ *  them all. The selected visit is always one the list shows. */
+export function useLastOutpatient(selectedVisitId: string | null, physician: string | null = null) {
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const { clinicianName } = useOutpatientPrefs()
@@ -95,9 +96,12 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     return new Set(visits.filter((visit) => visit.encounterIds.some((id) => ordered.has(id))).map((visit) => visit.id))
   }, [visits, diagnosticReports, observations])
 
-  const mine = clinicianName ? visits.filter((visit) => isSameClinician(visit.physician, clinicianName)) : []
-  const defaultVisit = mine[0] ?? visits[0]
-  const visit = (selectedVisitId && visits.find((candidate) => candidate.id === selectedVisitId)) || defaultVisit
+  // A physician no longer on this chart lists every visit.
+  const listedVisits = useMemo(() => {
+    const narrowed = physician ? visits.filter((visit) => visit.physician === physician) : visits
+    return narrowed.length > 0 ? narrowed : visits
+  }, [visits, physician])
+  const visit = (selectedVisitId && listedVisits.find((candidate) => candidate.id === selectedVisitId)) || listedVisits[0]
 
   // Only this visit's results, each placed under it: its own source link or an
   // order of this visit in basedOn (a combined draw belongs to every visit
@@ -163,8 +167,8 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     isLoading,
     reportsPending: progressivePhase === 'reports-pending' || progressivePhase === 'reports-pending-partial',
     clinicianName,
-    clinicianMatched: !!clinicianName && mine.length > 0,
     visits,
+    listedVisits,
     withResults,
     itemCounts,
     visit,
