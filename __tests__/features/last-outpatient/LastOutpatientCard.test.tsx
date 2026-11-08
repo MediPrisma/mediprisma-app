@@ -242,6 +242,23 @@ describe('LastOutpatientCard', () => {
     expect(shownVisit()).toHaveTextContent('2026/07/10')
   })
 
+  it('follows the shown visit across filter changes, not an earlier pick', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/07/10')
+    openSelect(physicianFilter())
+    fireEvent.click(screen.getByRole('option', { name: /李建國/ }))
+    expect(shownVisit()).toHaveTextContent('2026/10/20')
+
+    // The 07/10 pick is gone: back on 陳怡君, her latest visit opens.
+    openSelect(physicianFilter())
+    fireEvent.click(screen.getByRole('option', { name: /陳怡君/ }))
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+
+    // Clearing the filter keeps the visit on screen.
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.physicianFilterClear }))
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+  })
+
   it('lists the clinician first in the filter, marked as theirs', () => {
     mockClinicianName = '李建國'
     render(<LastOutpatientCard />)

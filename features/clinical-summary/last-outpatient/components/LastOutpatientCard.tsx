@@ -548,7 +548,12 @@ export function LastOutpatientCard() {
               totalVisits={visits.length}
               physicians={physicians}
               physician={listedVisits.length < visits.length ? physician : null}
-              onPhysicianChange={setPhysician}
+              onPhysicianChange={(next) => {
+                // Keep the visit on screen when the new list still shows it;
+                // otherwise open that list's newest visit.
+                setSelectedVisitId(!next || visit.physician === next ? visit.id : null)
+                setPhysician(next)
+              }}
               selectedId={visit.id}
               itemCounts={itemCounts}
               clinicianName={clinicianName}
