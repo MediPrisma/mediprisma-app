@@ -60,6 +60,27 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
             </dl>
           )
         }
+        if (line.columnCells) {
+          // Consecutive column rows are one source table; render it once.
+          if (lines[i - 1]?.columnCells) return null
+          const rows: string[][] = []
+          for (let j = i; j < lines.length && lines[j].columnCells; j++) rows.push(lines[j].columnCells!)
+          return (
+            <div key={i} className={cn('min-w-0 overflow-x-auto rounded-md border border-border', INDENT_BY_LEVEL[line.level])}>
+              <table className="w-full min-w-max border-collapse tabular-nums">
+                <tbody className="divide-y divide-border">
+                  {rows.map((cells, r) => (
+                    <tr key={r} className="divide-x divide-border">
+                      {cells.map((cell, c) => (
+                        <td key={c} className="px-2.5 py-1 text-left align-top text-foreground">{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
         if (line.heading) {
           // first:mt-0 so the very first heading doesn't add a leading gap.
           return (
