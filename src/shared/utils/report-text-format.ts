@@ -79,7 +79,11 @@ function markColumnTables(lines: ReportLine[]): ReportLine[] {
       if (!cells || cells.length !== first.length) break
       run.push(cells)
     }
-    if (run.length >= 3 || (run.length === 2 && first.length >= 3)) {
+    // A column that is "( )" on every row is an unfilled template field, and
+    // such grouped panels (B-/T-LYMPHOID ...) carry a group label on only the
+    // first row of each group — gridding them would regroup the values.
+    const emptyColumn = first.some((_, c) => run.every((cells) => cells[c] === '( )'))
+    if (!emptyColumn && (run.length >= 3 || (run.length === 2 && first.length >= 3))) {
       run.forEach((cells, k) => { lines[i + k] = { ...lines[i + k], columnCells: cells } })
     }
     i = j
