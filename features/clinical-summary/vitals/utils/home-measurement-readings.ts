@@ -1,4 +1,5 @@
-// Whether the home-measurement service holds readings for a 病歷號, asked from
+// Whether the home-measurement service holds readings for a 病歷號 (or, before
+// the hospital's records give one, a name and birth date), asked from
 // the doctor's browser with their own sign-in (both apps share the Firebase
 // project). The service is reachable only on the hospital network, so anything
 // short of an answer is "unknown" and must not read as "no readings".
@@ -6,7 +7,7 @@
 // With an answer comes the service's 722 summary (its patient page heading),
 // shown on the vitals card as home readings only: it never joins the
 // Observations the decision rules read.
-import { HEALTH_APP_ORIGIN } from './home-measurement-link'
+import { HEALTH_APP_ORIGIN, type HomeLookupQuery } from './home-measurement-link'
 
 export type HomeReadings = 'some' | 'none' | 'unknown'
 
@@ -48,7 +49,7 @@ function homeBpOf(x: unknown): HomeBp | null {
 }
 
 export async function fetchHomeReadings(
-  chart: string,
+  query: HomeLookupQuery,
   getToken: () => Promise<string | null>,
   fetchImpl: typeof fetch = fetch,
 ): Promise<HomeLookup> {
@@ -58,7 +59,7 @@ export async function fetchHomeReadings(
     const res = await fetchImpl(`${HEALTH_APP_ORIGIN}/api/patient-lookup`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ chart }),
+      body: JSON.stringify(query),
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return UNKNOWN
@@ -66,6 +67,8 @@ export async function fetchHomeReadings(
     if (!Array.isArray(matches)) return UNKNOWN
     // Not on any clinic list kept there: the service has nothing to show either.
     if (matches.length === 0) return { readings: 'none', bp: null }
+    // By name: several people share it, so none of them can be said to be this patient.
+    if (matches.length > 1 && !('chart' in query)) return UNKNOWN
     const days = matches[0]?.readingDays
     if (typeof days !== 'number') return UNKNOWN
     return { readings: days > 0 ? 'some' : 'none', bp: days > 0 ? homeBpOf(matches[0]?.homeBp) : null }
