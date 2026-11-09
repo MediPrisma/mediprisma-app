@@ -1,6 +1,6 @@
 "use client"
 
-import { Building2 } from 'lucide-react'
+import { Building2, UserRound } from 'lucide-react'
 import { TapTooltip } from '@/src/shared/components/TapTooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { formatOrganizationDisplay } from '@/src/shared/utils/organization-display'
@@ -19,12 +19,15 @@ export const formatReportInstitution = formatOrganizationDisplay
 export function ReportInstitutionLabel({
   institution,
   hospitalSource,
+  interpreter,
   className,
   stopPropagation = true,
   locale = 'zh-TW',
 }: {
   institution: string
   hospitalSource?: HospitalSource
+  /** Reporting physician, shown after the institution ("・判讀 …"). */
+  interpreter?: string
   className?: string
   /** Keep the default tooltip-only tap in ordinary report rows. Group-header
    *  buttons can opt out so the institution still toggles the whole row. */
@@ -32,7 +35,8 @@ export function ReportInstitutionLabel({
   locale?: string
 }) {
   const { name: institutionName, suffix: sourceSuffix, label: displayInstitution } = sourceInstitutionDisplay(institution, hospitalSource, locale)
-  return (
+  const interpreterLabel = interpreter ? `${locale === 'en' ? 'Read by' : '判讀'} ${interpreter}` : ''
+  const institutionLabel = (
     <TapTooltip
       side="top"
       aria-label={displayInstitution}
@@ -49,5 +53,23 @@ export function ReportInstitutionLabel({
       <span className="truncate">{institutionName}</span>
       {sourceSuffix && <span className="min-w-0 truncate">{sourceSuffix}</span>}
     </TapTooltip>
+  )
+  if (!interpreterLabel) return institutionLabel
+  // Its own element, so the caller's institution width cap never hides it.
+  return (
+    <>
+      {institutionLabel}
+      <TapTooltip
+        side="top"
+        aria-label={interpreterLabel}
+        contentClassName="max-w-sm break-words text-left"
+        content={interpreterLabel}
+        stopPropagation={stopPropagation}
+        className={cn('inline-flex min-w-0 max-w-[11rem] items-center gap-1 text-xs', REPORT_SOURCE_TONE)}
+      >
+        <UserRound className="h-3 w-3 shrink-0" aria-hidden />
+        <span className="truncate">{interpreterLabel}</span>
+      </TapTooltip>
+    </>
   )
 }
