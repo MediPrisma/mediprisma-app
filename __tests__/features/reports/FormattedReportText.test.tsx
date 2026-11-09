@@ -63,4 +63,16 @@ describe('original report disclosure', () => {
     expect(label.parentElement?.textContent).toBe('Comparison: CT on 2026-5-19.')
     expect(label.parentElement).not.toHaveClass('font-semibold')
   })
+
+  it('renders a space-separated source table as one table', () => {
+    const raw = [
+      'SPEED/GRADE(NPH/%)  MINUTES  BLOOD PRESSURE',
+      "(1.7/10)  ( 3' 0'' )  ( 140 / 70 )",
+      "(2.5/12)  ( 3' 0'' )  ( 160 / 72 )",
+    ].join('\n')
+    const { container } = render(<FormattedReportText text={raw} />)
+    expect(container.querySelectorAll('table')).toHaveLength(1)
+    expect(container.querySelectorAll('tr')).toHaveLength(3)
+    expect(screen.getByRole('cell', { name: '( 160 / 72 )' })).toBeInTheDocument()
+  })
 })
