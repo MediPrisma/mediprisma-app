@@ -377,7 +377,53 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     if (ends.some(end => end?.instant !== undefined && times.some(time => Number(time) > end.instant!))) continue
     for (const { report } of bucket) keys.set(report, `cross-source|${key}`)
   }
+  pairByVghRequestNumber(reports, keys)
   return keys
+}
+
+// VGH copies its own report header into the copy it uploads to the NHI cloud
+// ("申請序號 / 工作號：C3PN9NH/"); the in-house capture carries the same
+// request number as an identifier. Cardiac, pathology and endoscopy reports
+// (non-radiology formats) have no other reliable cross-source match: titles,
+// dates and whitespace all differ. Radiology copies carry no header and keep
+// the narrative path above.
+const VGH_REQUEST_SYSTEM = 'urn:oid:vgh.report.request'
+const VGH_CLOUD_REQUEST_HEADER = /申請序號\s*\/\s*工作號\s*[:：]\s*([0-9A-Z]{5,12})\s*\//
+
+function vghRequestNumber(report: Report, source: Source | undefined): string | undefined {
+  if (source === 'hospital') {
+    const value = reportIdentifiers(report).find(id => id.system === VGH_REQUEST_SYSTEM)?.value?.trim()
+    return value ? value.toUpperCase() : undefined
+  }
+  if (source === 'cloud') return VGH_CLOUD_REQUEST_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1].toUpperCase()
+  return undefined
+}
+
+function pairByVghRequestNumber(reports: readonly Report[], keys: Map<Report, string>) {
+  const buckets = new Map<string, { report: Report; source: Source }[]>()
+  for (const report of reports) {
+    if (!report || report.status === 'entered-in-error') continue
+    // Lab panels carry results and are merged at import; only narratives here.
+    if (report.result?.length || report._observations?.length) continue
+    const source = sourceOf(report)
+    const number = vghRequestNumber(report, source)
+    const subject = report.subject?.reference?.trim()
+    if (!source || !number || !subject) continue
+    const key = JSON.stringify([subject, number])
+    buckets.set(key, [...(buckets.get(key) ?? []), { report, source }])
+  }
+  for (const [key, bucket] of buckets) {
+    const hospital = bucket.filter(item => item.source === 'hospital')
+    const cloud = bucket.filter(item => item.source === 'cloud')
+    // One in-house report per request number; the cloud may bill it as
+    // several lines (e.g. M-mode + Doppler) that all quote the same header.
+    if (hospital.length !== 1 || !cloud.length) continue
+    const members = new Set(bucket.map(item => item.report))
+    // Re-key an existing shared group only as a whole, never split it.
+    const existing = new Set(bucket.map(item => keys.get(item.report)).filter(Boolean))
+    if ([...keys].some(([report, existingKey]) => existing.has(existingKey) && !members.has(report))) continue
+    for (const { report } of bucket) keys.set(report, `cross-source|vgh-request|${key}`)
+  }
 }
 
 /** Preserve full-set ambiguity decisions, but never describe a lone source or
