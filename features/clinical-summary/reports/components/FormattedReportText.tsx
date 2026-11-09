@@ -61,10 +61,12 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
           )
         }
         if (line.columnCells) {
-          // Consecutive column rows are one source table; render it once.
-          if (lines[i - 1]?.columnCells) return null
-          const rows: string[][] = []
-          for (let j = i; j < lines.length && lines[j].columnCells; j++) rows.push(lines[j].columnCells!)
+          // Consecutive column rows are one source table; render it once. A
+          // list marker ("6.") always opens a new table, so adjacent numbered
+          // blocks stay separate and keep their own marker.
+          if (lines[i - 1]?.columnCells && !line.marker) return null
+          const rows: string[][] = [line.columnCells]
+          for (let j = i + 1; j < lines.length && lines[j].columnCells && !lines[j].marker; j++) rows.push(lines[j].columnCells!)
           return (
             <div key={i} className={cn('flex min-w-0 gap-1.5', INDENT_BY_LEVEL[line.level])}>
               {line.marker && (
