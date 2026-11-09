@@ -375,6 +375,37 @@ describe('formatReportText column tables', () => {
     expect(formatReportText(raw).filter((l) => l.marker).every((l) => !l.columnCells)).toBe(true)
   })
 
+  it('grids tab-delimited source rows exactly, including "*"-wrapped values and dash cells', () => {
+    const raw = [
+      'IMP:',
+      'RIGHT\t VENOUS REFLUX (PPG)\t LEFT',
+      '* 3.0 *\t WITHOUT CUFFS\t * 4.0 *',
+      '----\t return time(sec)\t ----',
+      'R+:',
+      'Synthetic finding.',
+    ].join('\n')
+    const lines = formatReportText(raw)
+    expect(lines.filter((l) => l.columnCells).map((l) => l.columnCells)).toEqual([
+      ['RIGHT', 'VENOUS REFLUX (PPG)', 'LEFT'],
+      ['* 3.0 *', 'WITHOUT CUFFS', '* 4.0 *'],
+      ['----', 'return time(sec)', '----'],
+    ])
+    expect(lines.some((l) => l.marker === '*')).toBe(false)
+    expect(formatReportTextForClipboard(raw)).toContain('* 3.0 *\t WITHOUT CUFFS\t * 4.0 *')
+  })
+
+  it('keeps an empty leading tab cell in its column', () => {
+    const raw = 'B-LYMPHOID\tCD19 ( 10 )\t( )\n\tCD22 ( 4 )\t( )'
+    expect(formatReportText(raw).map((l) => l.columnCells)).toEqual([
+      ['B-LYMPHOID', 'CD19 ( 10 )', '( )'],
+      ['', 'CD22 ( 4 )', '( )'],
+    ])
+  })
+
+  it('leaves a single tab row as text', () => {
+    expect(formatReportText('MEDICATIONS:\tDATE\tTIME\nSynthetic note.').some((l) => l.columnCells)).toBe(false)
+  })
+
   it('leaves grouped panels with an all-empty column as text', () => {
     const raw = 'B-LYMPHOID  CD19 ( 10 )  (    )\n  CD22 ( 4 )  (    )\n  CD10 ( 1 )  (    )\n  cCD79a (    )  (    )'
     expect(columnRows(raw)).toEqual([])
