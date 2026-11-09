@@ -839,7 +839,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
         {!hideMeta && (row.sourceProvenance === 'nhi-medicloud' ? (
           <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
         ) : row.institution ? (
-          <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} interpreter={row.interpreter} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
+          <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[6rem] flex-1 sm:max-w-[10rem] sm:flex-none" />
         ) : null)}
         {!hideMeta && (
           <Tooltip>
@@ -1029,7 +1029,15 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             {hasText && (
               textExpanded ? (
                 <>
-                  <FormattedReportText text={fullText} className={REPORT_BODY_TEXT_CLASSES} />
+                  <FormattedReportText
+                    text={fullText}
+                    className={REPORT_BODY_TEXT_CLASSES}
+                    footer={row.interpreter ? (
+                      <p className="pt-2 text-muted-foreground">
+                        {locale === 'en' ? 'Interpreted by: ' : '判讀醫師：'}{row.interpreter}
+                      </p>
+                    ) : undefined}
+                  />
                   <SharedReportSources sources={row.sharedReportSources} />
                 </>
               ) : (
@@ -1151,7 +1159,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                   {row.sourceProvenance === 'nhi-medicloud' ? (
                     <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem] flex-1 sm:flex-none" />
                   ) : row.institution ? (
-                    <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} interpreter={row.interpreter} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
+                    <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[5rem] flex-1 min-[430px]:max-w-[7rem] sm:max-w-[9rem] sm:flex-none" />
                   ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1408,7 +1416,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
                     {row.sourceProvenance === 'nhi-medicloud' ? (
                       <NhiMedicloudSourceIndicator institution={row.institution} className="max-w-[15rem]" />
                     ) : row.institution ? (
-                      <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} interpreter={row.interpreter} locale={locale} className="max-w-[10rem]" />
+                      <ReportInstitutionLabel institution={row.institution} hospitalSource={row.hospitalSource} locale={locale} className="max-w-[10rem]" />
                     ) : null}
                     <Tooltip>
                       <TooltipTrigger asChild>
