@@ -262,6 +262,25 @@ function rangeText(text?: string): string {
   return (text ?? '').replace(/^\[(.*)\]$/, '$1').trim()
 }
 
+// A multi-clause range ("<0.03:normal;0.03~0.3:microalbuminuria;>0.3:overt
+// proteinuria", "Healthy: 4.8~5.9% , Diabetes: >=6.5%") has no spaces to wrap
+// at, so the narrow column split it mid-token. Break it at the source's own
+// clause separators instead: ";" and a comma that starts the next "label:".
+function rangeClauses(text: string): string[] {
+  return text
+    // Never the ";" that ends an HTML entity ("&lt;") older bundles still carry.
+    .split(/(?<!&(?:[a-z]+|#\d+|#x[\da-f]+))\s*;\s*/i)
+    .flatMap((part) => part.split(/\s*,\s*(?=[A-Za-z一-鿿][^,;:：]{0,30}[:：])/))
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function RangeText({ text }: { text: string }) {
+  const clauses = rangeClauses(text)
+  if (clauses.length < 2) return <>{text}</>
+  return <>{clauses.map((clause, i) => <span key={i} className="block">{clause}</span>)}</>
+}
+
 function ValueCell({
   result,
   comparison,
@@ -296,7 +315,7 @@ function ValueCell({
         {unit && <span className="ml-1 text-xs text-muted-foreground">{unit}</span>}
         {flag && <span className="ml-1.5">{flag}</span>}
       </span>
-      {range && <span className="block text-[0.6875rem] tabular-nums text-muted-foreground @[36rem]/labs:hidden">{range}</span>}
+      {range && <span className="block text-[0.6875rem] tabular-nums text-muted-foreground @[36rem]/labs:hidden"><RangeText text={range} /></span>}
     </span>
   )
 }
@@ -363,7 +382,7 @@ function LabTable({
                         another day carries its own, on the same line. */}
                     {resultDay(test) && resultDay(test) !== mainDay && <OtherDay day={resultDay(test)} />}
                   </span>
-                  <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(test.referenceText)}</span>
+                  <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}><RangeText text={rangeText(test.referenceText)} /></span>
                   <span role="cell" className={cn(cell, 'flex flex-wrap items-baseline gap-x-1.5')}>
                     {prior && (
                       <>
@@ -382,7 +401,7 @@ function LabTable({
                     <span role="cell" className={cell}>
                       <ValueCell result={component} comparison={comparisons.get(component.id)} comparisonStrings={comparisonStrings} range={rangeText(component.referenceText)} />
                     </span>
-                    <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}>{rangeText(component.referenceText)}</span>
+                    <span role="cell" className={cn(cell, RANGE_COLUMN, 'text-xs tabular-nums text-muted-foreground')}><RangeText text={rangeText(component.referenceText)} /></span>
                     <span role="cell" />
                   </div>
                 ))}
