@@ -45,6 +45,8 @@ export interface ReportLine {
    * table; `text` stays the source row so AI/clipboard output is unchanged.
    */
   columnCells?: string[]
+  /** The source left a blank line before this line (a paragraph break). */
+  gapBefore?: boolean
 }
 
 // A source table cell: short, not prose, not a bare separator, not a
@@ -480,24 +482,40 @@ export function formatReportText(raw: string): ReportLine[] {
 
   // 2) Split, trim, drop blank lines (this also collapses the verbose blank
   //    runs the bridge pads reports with).
-  const splitLines = broken
-    .split(/\r?\n/)
+  const splitLines: string[] = []
+  // Index (into splitLines) of each line the source preceded with a blank line.
+  let gapLines = new Set<number>()
+  let blankPending = false
+  for (const source of broken.split(/\r?\n/)) {
     // A tab is a source cell boundary (the bridge writes one between table
     // cells), so keep a leading tab: it is an empty first cell, not padding.
-    .map((l) => (l.includes('\t') ? l.replace(/^ +| +$/g, '') : l.trim()))
-    .filter((l) => l.trim().length > 0)
+    const l = source.includes('\t') ? source.replace(/^ +| +$/g, '') : source.trim()
+    if (!l.trim()) { blankPending = splitLines.length > 0; continue }
+    if (blankPending) gapLines.add(splitLines.length)
+    blankPending = false
+    splitLines.push(l)
+  }
+  // Blank lines after most lines are padding (some sources double-space every
+  // line), not paragraph breaks: then show none.
+  if (gapLines.size > (splitLines.length - 1) / 2) gapLines = new Set()
 
   if (isMicrobiologyBlob) return formatMicrobiologyLines(splitLines)
 
   // Heading detection may insert a break after a source list marker. Reattach
   // only a marker-only line to its heading; never consume adjacent findings.
   const rawLines: string[] = []
-  for (const line of splitLines) {
+  const rawGaps: boolean[] = []
+  for (const [index, line] of splitLines.entries()) {
     const previous = rawLines.at(-1)
     if (previous && /^(?:\d{1,2}\.|\(?[0-9]{1,2}\))$/.test(previous) && HEADING_LINE_RE.test(line)) {
       rawLines[rawLines.length - 1] = `${previous} ${line}`
-    } else rawLines.push(line)
+    } else {
+      rawLines.push(line)
+      rawGaps.push(gapLines.has(index))
+    }
   }
+  // Output index of the first line pushed after each source paragraph break.
+  const gapAt = new Set<number>()
 
   const lines: ReportLine[] = []
   let inEchoMeasurements = isDopplerEcho(raw)
@@ -513,7 +531,8 @@ export function formatReportText(raw: string): ReportLine[] {
     lines.push(item)
     numberedContinuation = numberedEndoscopy ? item : undefined
   }
-  for (const line of rawLines) {
+  for (const [rawIndex, line] of rawLines.entries()) {
+    if (rawGaps[rawIndex]) gapAt.add(lines.length)
     if (/^Carotid Sonographic Data:/.test(line)) inCarotidTable = true
     else if (inCarotidTable && /^Diam:/.test(line)) inCarotidTable = false
     else if (inCarotidTable) {
@@ -610,6 +629,7 @@ export function formatReportText(raw: string): ReportLine[] {
     pushBody(lines, line, bodyLevel)
   }
 
+  for (const index of gapAt) if (lines[index]) lines[index] = { ...lines[index], gapBefore: true }
   return markColumnTables(lines)
 }
 

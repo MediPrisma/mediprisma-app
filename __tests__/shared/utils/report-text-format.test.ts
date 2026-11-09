@@ -402,6 +402,18 @@ describe('formatReportText column tables', () => {
     ])
   })
 
+  it('marks a source blank line as a paragraph gap before the next line', () => {
+    const raw = '*Basic rhythm:\nSynthetic sinus rhythm.\n\n*Supraventricular tachycardia:\nThere was no episode of SVT.\n\n*Suggests:\nSynthetic follow-up.'
+    const lines = formatReportText(raw)
+    expect(lines.filter((l) => l.gapBefore).map((l) => l.text)).toEqual(['*Supraventricular tachycardia:', '*Suggests:'])
+    expect(lines[0].gapBefore).toBeUndefined()
+  })
+
+  it('ignores blank lines that pad every line', () => {
+    const raw = 'Line one.\n\nLine two.\n\nLine three.\n\nLine four.'
+    expect(formatReportText(raw).some((l) => l.gapBefore)).toBe(false)
+  })
+
   it('leaves a single tab row as text', () => {
     expect(formatReportText('MEDICATIONS:\tDATE\tTIME\nSynthetic note.').some((l) => l.columnCells)).toBe(false)
   })
