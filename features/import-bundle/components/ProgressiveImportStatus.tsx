@@ -8,7 +8,9 @@ import type { HospitalUnavailableReason } from '@/src/application/stores/progres
 const REASON_TEXT: Record<HospitalUnavailableReason, { zh: string; en: string }> = {
   HIS_LOGIN_REQUIRED: { zh: '北榮登入可能過期，請重新登入北榮後再取得', en: 'the hospital (VGHTPE) login may have expired; sign in again, then capture again' },
   HIS_SESSION_BLOCKED: { zh: '北榮連線被拒絕，請重新登入北榮後再取得', en: 'the hospital session was refused; sign in again, then capture again' },
-  HIS_BUSY: { zh: '北榮懷爾抓抓正在執行其他工作，請稍候再取得', en: 'the hospital extension was busy with another task; capture again shortly' },
+  // HIS_BUSY also covers an identity check HIS could not complete (unmatched identity, 429/5xx, not on the chart page).
+  HIS_BUSY: { zh: '北榮暫時無法完成病人身分核對，請稍後重新取得', en: 'the hospital could not verify the patient identity right now; capture again shortly' },
+  HIS_PATIENT_SELECTION_REQUIRED: { zh: '北榮查不到相符的病人或有多筆，請在北榮手動選定病人後再取得', en: 'HIS found no matching patient or more than one; select the patient in HIS, then capture again' },
   PATIENT_HIS_MISMATCH: { zh: '北榮選定的病人與雲端不一致，請確認北榮病人後再取得', en: 'the patient selected in HIS does not match the cloud patient; check HIS, then capture again' },
   OUTPATIENT_CAPTURE_FAILED: { zh: '北榮院內資料擷取失敗，請確認北榮病歷頁後再取得', en: 'hospital capture failed; check the HIS chart page, then capture again' },
   HIS_TIMEOUT: { zh: '北榮擷取逾時，請確認北榮病歷頁已就緒後再取得', en: 'hospital capture timed out; check that the HIS chart page is ready, then capture again' },
