@@ -15,6 +15,8 @@ const CATEGORY: Record<string, [string, string]> = {
 const KIND: Record<string, [string, string]> = {
   timeout: ['北榮回應逾時', 'HIS timed out'], his_busy: ['北榮忙碌', 'HIS busy'], http_error: ['北榮回應錯誤', 'HIS error'],
   parse_failed: ['頁面無法解析', 'page could not be read'], login_or_network: ['北榮登入可能過期或網路中斷', 'HIS login expired or network lost'],
+  login_expired: ['北榮登入已過期，請重新登入北榮後再取得', 'HIS login expired; sign in to HIS again'],
+  network: ['無法連到北榮（網路中斷或北榮沒有回應）', 'could not reach HIS (network down or no response)'],
   unknown: ['原因不明', 'unknown cause'],
 }
 
@@ -26,7 +28,7 @@ export function HospitalCaptureReasons() {
   const en = locale === 'en' ? 1 : 0
   const items = capture.failures.map(f => {
     const detail = [f.status ? `HTTP ${f.status}` : null, f.count > 1 ? (en ? `${f.count} times` : `${f.count} 次`) : null].filter(Boolean).join(en ? ', ' : '，')
-    return `${CATEGORY[f.category][en]}${en ? ': ' : '－'}${KIND[f.kind][en]}${detail ? (en ? ` (${detail})` : `（${detail}）`) : ''}`
+    return `${CATEGORY[f.category][en]}${en ? ': ' : '－'}${(KIND[f.kind] ?? KIND.unknown)[en]}${detail ? (en ? ` (${detail})` : `（${detail}）`) : ''}`
   })
   const text = capture.incompleteWithoutReason
     ? (en ? 'Some hospital records were not captured (no reason recorded). Check HIS.' : '部分院內資料未取得（未記錄原因）；請核對 HIS。')

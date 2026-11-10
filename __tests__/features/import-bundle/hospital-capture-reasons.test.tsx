@@ -34,6 +34,16 @@ test('older partial captures without reasons still say data is missing; complete
   expect(screen.queryByRole('status')).toBeNull()
 })
 
+test('an expired HIS login and a lost connection are named separately', () => {
+  render(<HospitalCaptureReasons />)
+  act(() => rememberLocalBundleCapture(bundle([
+    { system: FAILURE, code: 'reports:login_expired', display: '2' },
+    { system: FAILURE, code: 'medications:network', display: '1' },
+  ])))
+  expect(screen.getByRole('status')).toHaveTextContent(
+    '院內資料未取得：檢查驗報告－北榮登入已過期，請重新登入北榮後再取得（2 次）；用藥－無法連到北榮（網路中斷或北榮沒有回應）。請核對 HIS。')
+})
+
 test('English wording', () => {
   mockLocale = 'en'
   render(<HospitalCaptureReasons />)
