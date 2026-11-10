@@ -405,7 +405,7 @@ describe('cloud-only reason', () => {
     expect(screen.getByRole('status')).toHaveTextContent('雲端資料可繼續使用；院內門診資料未載入。（北榮登入可能過期，請重新登入北榮後再取得）')
   })
 
-  test.each(['HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH', 'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT'])('%s has its own explanation', reason => {
+  test.each(['HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH', 'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT', 'HIS_PATIENT_SELECTION_REQUIRED'])('%s has its own explanation', reason => {
     completeProgressiveImport(parseProgressiveImportRequest(request({ reason }))!, 'original-import')
     render(<ProgressiveImportStatus />)
     expect(screen.getByRole('status').textContent).toMatch(/^雲端資料可繼續使用；院內門診資料未載入。（.+）$/)
@@ -415,6 +415,15 @@ describe('cloud-only reason', () => {
     const parsed = parseProgressiveImportRequest(request({ reason }))
     expect(parsed).toMatchObject({ stage: 'cloud-only' })
     expect(parsed).not.toHaveProperty('reason')
+  })
+
+  test.each([
+    ['HIS_PATIENT_SELECTION_REQUIRED', '（北榮查不到相符的病人或有多筆，請在北榮手動選定病人後再取得）'],
+    ['HIS_BUSY', '（北榮暫時無法完成病人身分核對，請稍後重新取得）'],
+  ])('%s explains what to do', (reason, text) => {
+    completeProgressiveImport(parseProgressiveImportRequest(request({ reason }))!, 'original-import')
+    render(<ProgressiveImportStatus />)
+    expect(screen.getByRole('status')).toHaveTextContent(`雲端資料可繼續使用；院內門診資料未載入。${text}`)
   })
 
   test('a reason on a non-cloud-only stage is dropped', () => {

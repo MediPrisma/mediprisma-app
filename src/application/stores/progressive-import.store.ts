@@ -16,7 +16,7 @@ export function isProgressiveFailureReason(value: unknown): value is Progressive
  * 北榮懷爾抓抓 peer error; never free text. Older extensions omit it.
  */
 export const HOSPITAL_UNAVAILABLE_REASONS = ['HIS_LOGIN_REQUIRED', 'HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH',
-  'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT'] as const
+  'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT', 'HIS_PATIENT_SELECTION_REQUIRED'] as const
 export type HospitalUnavailableReason = typeof HOSPITAL_UNAVAILABLE_REASONS[number]
 export function isHospitalUnavailableReason(value: unknown): value is HospitalUnavailableReason {
   return (HOSPITAL_UNAVAILABLE_REASONS as readonly unknown[]).includes(value)
