@@ -1,6 +1,6 @@
 import type { CalcInput, CalcValues, CalculatorDef, L } from '../types'
 import { AGE_INPUT, SEX_INPUT, WEIGHT_LOINC } from './_shared'
-import { DOAC_REGIMEN_OPTIONS, type DoacSelectKey } from '../doac-clinical-autofill'
+import { DOAC_REGIMEN_OPTIONS, DOAC_UNRESOLVED_MARK, type DoacSelectKey } from '../doac-clinical-autofill'
 import { DOAC_FIELD_LABELS, DOAC_RULES_VERSION, calculateDoacDoses, checkRegimen, crclLabel, parseRegimen, regimenDay } from '../doac-dose-model'
 import { calculatePeriop, formatLocal, hoursText } from '../doac-periop-model'
 
@@ -24,9 +24,11 @@ const hipKnee = (values: CalcValues) => values.indication === 'vtep-hip' || valu
 
 /**
  * The co-medications folded to one line: those on the current prescriptions
- * named, the blanks counted, and the group open while any is blank.
+ * named, the blanks counted, and the group open while any is blank. A 「無」
+ * filled beside current products with no resolved ingredient names them here,
+ * so they are seen while the group is folded.
  */
-const ddiSummary = (values: CalcValues, keys: string[]): { text: L; open: boolean } => {
+const ddiSummary = (values: CalcValues, keys: string[], captions: Record<string, string | undefined> = {}): { text: L; open: boolean } => {
   const name = (key: string) => DOAC_FIELD_LABELS[key]?.zh ?? key
   const nameEn = (key: string) => DOAC_FIELD_LABELS[key]?.en ?? key
   const yes = keys.filter((key) => values[key] === 'yes')
@@ -34,7 +36,14 @@ const ddiSummary = (values: CalcValues, keys: string[]): { text: L; open: boolea
   const no = keys.length - yes.length - blank.length
   const zh = [yes.length ? `有 ${yes.map(name).join('、')}` : '', blank.length ? `${blank.length} 項未填` : '', no ? `${yes.length || blank.length ? '其餘 ' : ''}${no} 項無` : ''].filter(Boolean).join('；')
   const en = [yes.length ? `On ${yes.map(nameEn).join(', ')}` : '', blank.length ? `${blank.length} unanswered` : '', no ? `${yes.length || blank.length ? 'the other ' : ''}${no} none` : ''].filter(Boolean).join('; ')
-  return { text: { zh, en }, open: blank.length > 0 }
+  const caption = keys.map((key) => values[key] === 'no' ? captions[key] : undefined).find((text) => text?.includes(DOAC_UNRESOLVED_MARK))
+  const unresolved = caption?.split(DOAC_UNRESOLVED_MARK)[1]?.replace(/（[^（]*$/, '')
+  return {
+    text: unresolved
+      ? { zh: `${zh}；未對到成分：${unresolved}，請核對`, en: `${en}; unresolved products: ${unresolved}, please check` }
+      : { zh, en },
+    open: blank.length > 0,
+  }
 }
 
 const regimenLabel = (value: string): L => {
