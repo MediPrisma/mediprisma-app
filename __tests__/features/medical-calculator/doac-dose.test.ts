@@ -7,7 +7,7 @@ import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { RENAL } from '@/features/medical-calculator/calculators/renal'
 import { CITES, calculateDoacDoses, checkRegimen, cockcroftGault, crclLabel, type DoacAgent } from '@/features/medical-calculator/doac-dose-model'
-import { doacSelects } from '@/features/medical-calculator/doac-clinical-autofill'
+import { DOAC_UNRESOLVED_MARK, doacSelects } from '@/features/medical-calculator/doac-clinical-autofill'
 import { vghtpeMedicationIdentityExtension } from '@/src/shared/utils/hospital-medication-index'
 import { buildClinicalSelects } from '@/features/medical-calculator/hfpef-clinical-autofill'
 import { HF_VISIT_CALCULATORS } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
@@ -282,24 +282,47 @@ describe('autofill from current prescriptions', () => {
     ...extra,
   } as Partial<MedicationEntity>)
 
-  it('a current hospital product with no resolved ingredient leaves 「無 DOAC」 and every 「否」 to the clinician', () => {
+  it('a current hospital product with no resolved ingredient leaves 「無 DOAC」 to the clinician but fills each 「否」 naming it', () => {
     const selects = doacSelects([hospital('Fictiodoac FC tab 2.5 mg'), med('amlodipine', 5, 1)], now)
     expect(selects.doacRegimen).toBeUndefined()
-    for (const key of DDI_KEYS) expect(selects[key as keyof typeof selects]).toBeUndefined()
-    // And so in the calculator: the selects stay 待填, not 無.
+    for (const key of DDI_KEYS) {
+      const hit = selects[key as keyof typeof selects]
+      expect(hit?.value).toBe('no')
+      expect(hit?.testName).toContain(`${DOAC_UNRESOLVED_MARK}Fictiodoac FC tab 2.5 mg`)
+    }
+    // In the calculator: the regimen stays 待填, the co-medications are 無, and
+    // the folded co-medication line names the unresolved product.
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
     const autofill = { resolve: () => undefined, clinicalSelects: buildClinicalSelects([], [hospital('Fictiodoac FC tab 2.5 mg')], now) }
-    for (const key of ['regimen', 'ddi_verapamil', 'ddi_anticoagulant']) {
-      const input = calc.inputs.find((i) => i.key === key)!
-      expect(resolveInput(input, autofill)).toMatchObject({ filled: false })
+    expect(resolveInput(calc.inputs.find((i) => i.key === 'regimen')!, autofill)).toMatchObject({ filled: false })
+    const values: Record<string, string> = {}, captions: Record<string, string | undefined> = {}
+    for (const key of DDI_KEYS) {
+      const resolved = resolveInput(calc.inputs.find((i) => i.key === key)!, autofill)
+      expect(resolved).toMatchObject({ filled: true, value: 'no' })
+      values[key] = resolved.value
+      captions[key] = resolved.source?.testName
     }
+    const group = calc.inputGroups!.find((g) => g.key === 'ddi')!
+    const folded = group.summary!(values, DDI_KEYS, captions)
+    expect(folded.open).toBe(false)
+    expect(folded.text.zh).toContain('未對到成分：Fictiodoac FC tab 2.5 mg，請核對')
+  })
+
+  it('with every ingredient resolved the co-medication line names nothing unresolved', () => {
+    const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
+    const group = calc.inputGroups!.find((g) => g.key === 'ddi')!
+    const selects = doacSelects([med('amlodipine', 5, 1)], now)
+    const values = Object.fromEntries(DDI_KEYS.map((key) => [key, selects[key as keyof typeof selects]!.value]))
+    const captions = Object.fromEntries(DDI_KEYS.map((key) => [key, selects[key as keyof typeof selects]!.testName]))
+    expect(group.summary!(values, DDI_KEYS, captions).text.zh).not.toContain('未對到成分')
   })
 
   it('a drug a resolved prescription names is still 「是」 beside an unresolved hospital product', () => {
     const selects = doacSelects([hospital('Fictiodoac FC tab 2.5 mg'), med('verapamil', 120, 2), med('apixaban', 5, 2)], now)
     expect(selects.doacRegimen?.value).toBe('apixaban:5:2')
     expect(selects.ddi_verapamil?.value).toBe('yes')
-    expect(selects.ddi_ketoconazole).toBeUndefined()
+    expect(selects.ddi_ketoconazole?.value).toBe('no')
+    expect(selects.ddi_ketoconazole?.testName).toContain(`${DOAC_UNRESOLVED_MARK}Fictiodoac FC tab 2.5 mg`)
   })
 
   it('a hospital product with a resolved ingredient counts like any other prescription', () => {

@@ -435,7 +435,8 @@ export function CalculatorDetail({
         {inputGroups.map((group) => {
           const inputs = group.inputs.filter((input) => inputVisible(input, values))
           if (!inputs.length) return null
-          const folded = 'summary' in group && group.summary ? group.summary(effective, inputs.map((input) => input.key)) : undefined
+          const folded = 'summary' in group && group.summary ? group.summary(effective, inputs.map((input) => input.key),
+            Object.fromEntries(inputs.map((input) => [input.key, filled[input.key]?.source?.testName]))) : undefined
           const fields = inputs.map((input) => {
           const fill = filled[input.key]
           const expectedUnit = input.type === "number" ? input.unit : undefined
