@@ -98,6 +98,7 @@ type VisitListStrings = {
   noResults: string
   pending: string
   itemCount: string
+  awaitingCount: string
   visitCount: string
   visitCountShort: string
   collapse: string
@@ -192,6 +193,7 @@ function VisitList({
   onPhysicianChange,
   selectedId,
   itemCounts,
+  awaitingCounts,
   clinicianName,
   reportsPending,
   collapsed,
@@ -207,6 +209,8 @@ function VisitList({
   onPhysicianChange: (physician: string | null) => void
   selectedId: string
   itemCounts: Map<string, number>
+  /** Orders with no report yet, by visit. */
+  awaitingCounts: Map<string, number>
   clinicianName: string | null
   /** Reports still importing: no visit can be called empty yet. */
   reportsPending: boolean
@@ -278,7 +282,9 @@ function VisitList({
           {visits.map((candidate, index) => {
             const selected = candidate.id === selectedId
             const count = itemCounts.get(candidate.id) ?? 0
-            const empty = !reportsPending && count === 0
+            const awaiting = awaitingCounts.get(candidate.id) ?? 0
+            // Nothing back yet, but the visit did order something.
+            const empty = !reportsPending && count === 0 && awaiting === 0
             const physician = candidate.physician && isSameClinician(candidate.physician, clinicianName)
               ? strings.youTemplate.replace('{name}', candidate.physician)
               : candidate.physician
@@ -286,7 +292,9 @@ function VisitList({
             const newYear = index === 0 || visits[index - 1].date.slice(0, 4) !== year
             const status = reportsPending && count === 0
               ? strings.pending
-              : empty ? strings.noResults : strings.itemCount.replace('{count}', String(count))
+              : empty ? strings.noResults
+                : count === 0 ? strings.awaitingCount.replace('{count}', String(awaiting))
+                  : strings.itemCount.replace('{count}', String(count))
             return (
               <Fragment key={candidate.id}>
                 {newYear && (
@@ -527,6 +535,7 @@ export function LastOutpatientCard() {
     visits,
     listedVisits,
     itemCounts,
+    awaitingOrders,
     visit,
     details,
     priorValues,
@@ -548,6 +557,11 @@ export function LastOutpatientCard() {
   const mainDay = mostCommonDay(tests.map(resultDay))
   const mainPriorDay = mostCommonDay(tests.map((test) => priorValues.get(test.id)?.date ?? ''))
   const physicians = useMemo(() => physicianOptions(visits, clinicianName), [visits, clinicianName])
+  const awaiting = (visit && awaitingOrders.get(visit.id)) || []
+  const awaitingCounts = useMemo(
+    () => new Map([...awaitingOrders].map(([id, orders]) => [id, orders.length])),
+    [awaitingOrders],
+  )
 
 
   return (
@@ -575,6 +589,7 @@ export function LastOutpatientCard() {
               }}
               selectedId={visit.id}
               itemCounts={itemCounts}
+              awaitingCounts={awaitingCounts}
               clinicianName={clinicianName}
               reportsPending={reportsPending}
               collapsed={listCollapsed}
@@ -585,6 +600,7 @@ export function LastOutpatientCard() {
                 noResults: strings.noResults,
                 pending: strings.visitPending,
                 itemCount: strings.visitItemCount,
+                awaitingCount: strings.visitAwaitingCount,
                 visitCount: strings.visitCount,
                 visitCountShort: strings.visitCountShort,
                 collapse: strings.collapseVisits,
@@ -611,9 +627,12 @@ export function LastOutpatientCard() {
           </div>
 
           {tests.length === 0 && reports.length === 0 ? (
-            <p className="text-sm text-muted-foreground" role={reportsPending ? 'status' : undefined}>
-              {reportsPending ? strings.reportsPending : strings.empty}
-            </p>
+            // With orders still awaiting a report, that section says why the visit is empty.
+            (reportsPending || awaiting.length === 0) && (
+              <p className="text-sm text-muted-foreground" role={reportsPending ? 'status' : undefined}>
+                {reportsPending ? strings.reportsPending : strings.empty}
+              </p>
+            )
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -690,6 +709,30 @@ export function LastOutpatientCard() {
                 </section>
               )}
             </>
+          )}
+
+          {awaiting.length > 0 && (
+            <section className="space-y-2" aria-labelledby="last-outpatient-awaiting" data-testid="last-outpatient-awaiting">
+              <h3 id="last-outpatient-awaiting" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {strings.awaitingTitle}
+                <span className="ml-1.5 font-normal tabular-nums">{fill(strings.awaitingCount, { count: awaiting.length })}</span>
+              </h3>
+              <div className="rounded-md border border-border/80 bg-card px-3 py-2.5">
+                <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+                  {awaiting.map((order) => (
+                    <li key={order.id} className="flex min-w-0 items-baseline gap-1.5">
+                      <span className="min-w-0 break-words">{order.label}</span>
+                      {order.appointment && (
+                        <span className="shrink-0 rounded-sm border border-border px-1 text-[0.6875rem] text-muted-foreground">
+                          {strings.awaitingAppointment}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-muted-foreground">{strings.awaitingNote}</p>
+              </div>
+            </section>
           )}
           </div>
         </div>
