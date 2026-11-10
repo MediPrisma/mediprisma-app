@@ -148,6 +148,12 @@ export class OpenAiService {
         ? data.openAiResponse
         : data
       const text = this.extractOpenAiContent(data, shouldUseProxy, isResponsesApi)
+      const outputTruncated = intranet && upstreamData.status === 'incomplete'
+        && upstreamData.incomplete_details?.reason === 'max_output_tokens'
+      if (outputTruncated && (!request.allowTruncatedOutput || !text.trim())) {
+        throw new AiError('院內模型輸出達到上限，回應尚未完成', AiErrorCode.OUTPUT_TRUNCATED,
+          { modelId: request.modelId })
+      }
 
       const modelExecution = typeof upstreamData.model === 'string'
         ? reportModelExecution(createModelExecution(request.modelId), upstreamData.model)
@@ -159,6 +165,7 @@ export class OpenAiService {
           modelExecution,
           provider: 'openai',
           tokensUsed: upstreamData.usage?.total_tokens,
+          ...(outputTruncated ? { outputTruncated: true } : {}),
         },
       }
     } finally {
