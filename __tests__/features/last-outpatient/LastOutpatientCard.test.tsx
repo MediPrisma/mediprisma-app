@@ -58,6 +58,14 @@ const openSelect = (trigger: HTMLElement) => fireEvent.keyDown(trigger, { key: '
 // The visit the list has selected.
 const shownVisit = () => within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { pressed: true })
 
+// Pick a visit from the list by its day.
+const openVisit = (day: string) => fireEvent.click(
+  within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { name: new RegExp(day) }),
+)
+
+// The physician filter above the visit list.
+const physicianFilter = () => screen.getByRole('combobox', { name: zhTW.lastOutpatient.physicianFilter })
+
 // A lab row of the results table, found by the figure it shows.
 const rowWith = (figure: string) => screen.queryAllByRole('row').find((row) => row.textContent?.includes(figure))
 
@@ -163,9 +171,12 @@ describe('LastOutpatientCard', () => {
     expect(rowWith('2.2')).toBeTruthy()
   })
 
-  it('opens on the clinician’s own last visit and shows what it ordered, including a later echo', () => {
+  it('shows what the picked visit ordered, including a later echo, and marks the clinician’s own visit', () => {
     mockClinicianName = '陳怡君 醫師'
     render(<LastOutpatientCard />)
+    // Still the newest visit first, whoever saw the patient.
+    expect(shownVisit()).toHaveTextContent('2026/10/20')
+    openVisit('2026/10/09')
 
     expect(shownVisit()).toHaveTextContent('2026/10/09')
     expect(screen.getByText('陳怡君（您）')).toBeInTheDocument()
@@ -187,6 +198,7 @@ describe('LastOutpatientCard', () => {
   it('filters labs to abnormal results and keeps the free-text reports', () => {
     mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     fireEvent.click(screen.getByRole('button', { name: '異常' }))
 
     expect(screen.getByRole('button', { name: '異常' })).toHaveAttribute('aria-pressed', 'true')
@@ -197,50 +209,74 @@ describe('LastOutpatientCard', () => {
     expect(screen.getByTestId('report-row')).toBeInTheDocument()
   })
 
-  it('says when the clinician has no hospital visit with this patient', () => {
-    mockClinicianName = '王志明'
+  it('lists every physician by default and narrows the list to one physician', () => {
     render(<LastOutpatientCard />)
-    expect(screen.getByText(zhTW.lastOutpatient.noMatch.replace('{name}', '王志明'))).toBeInTheDocument()
-    expect(shownVisit()).toHaveTextContent('2026/10/20')
-  })
+    expect(physicianFilter()).toHaveTextContent(zhTW.lastOutpatient.physicianFilterAll)
+    // The tab no longer asks for the clinician's name.
+    expect(screen.queryByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).not.toBeInTheDocument()
 
-  it('picks the name from this patient’s physicians in the tab and opens that clinician’s last visit', () => {
-    mockClinicianName = '陳怡君'
-    const { rerender } = render(<LastOutpatientCard />)
-    const menu = screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })
-    expect(menu).toHaveTextContent('陳怡君')
-    // A menu only: no free-text name.
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-
-    openSelect(menu)
+    openSelect(physicianFilter())
     const options = screen.getAllByRole('option').map((option) => option.textContent)
-    expect(options[0]).toBe(zhTW.settings.clinicianNameNone)
-    expect(options.some((text) => text?.startsWith('陳怡君'))).toBe(true)
+    expect(options).toEqual([`${zhTW.lastOutpatient.physicianFilterAll}3`, '陳怡君2', '李建國1'])
+    fireEvent.click(screen.getByRole('option', { name: /陳怡君/ }))
+
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    expect(within(list).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      expect.stringMatching(/2026\/10\/09/),
+      expect.stringMatching(/2026\/07\/10/),
+    ])
+    // The shown visit moves to that physician's latest.
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+    expect(rowWith('1.26')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.physicianFilterClear }))
+    expect(within(list).getAllByRole('button')).toHaveLength(3)
+    expect(physicianFilter()).toHaveTextContent(zhTW.lastOutpatient.physicianFilterAll)
+  })
+
+  it('keeps the picked visit when the filter still lists it', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/07/10')
+    openSelect(physicianFilter())
+    fireEvent.click(screen.getByRole('option', { name: /陳怡君/ }))
+    expect(shownVisit()).toHaveTextContent('2026/07/10')
+  })
+
+  it('follows the shown visit across filter changes, not an earlier pick', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/07/10')
+    openSelect(physicianFilter())
     fireEvent.click(screen.getByRole('option', { name: /李建國/ }))
-    expect(mockSetClinicianName).toHaveBeenCalledWith('李建國')
-
-    rerender(<LastOutpatientCard />)
     expect(shownVisit()).toHaveTextContent('2026/10/20')
-    expect(screen.getByText('李建國（您）')).toBeInTheDocument()
+
+    // The 07/10 pick is gone: back on 陳怡君, her latest visit opens.
+    openSelect(physicianFilter())
+    fireEvent.click(screen.getByRole('option', { name: /陳怡君/ }))
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+
+    // Clearing the filter keeps the visit on screen.
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.physicianFilterClear }))
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
   })
 
-  it('clears the name with 不指定', () => {
-    mockClinicianName = '陳怡君'
+  it('lists the clinician first in the filter, marked as theirs', () => {
+    mockClinicianName = '李建國'
     render(<LastOutpatientCard />)
-    openSelect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel }))
-    fireEvent.click(screen.getByRole('option', { name: zhTW.settings.clinicianNameNone }))
-    expect(mockSetClinicianName).toHaveBeenCalledWith('')
+    openSelect(physicianFilter())
+    const options = screen.getAllByRole('option').map((option) => option.textContent)
+    expect(options.slice(1)).toEqual(['李建國（您）1', '陳怡君2'])
   })
 
-  it('keeps a name saved on another chart selectable, with the no-visit note', () => {
-    mockClinicianName = '王志明'
+  it('hides the filter when every visit has the same physician', () => {
+    const data = chart()
+    mockClinicalData = { ...data, encounters: data.encounters.filter((e: any) => e.id !== 'h-other') }
     render(<LastOutpatientCard />)
-    expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent('王志明')
+    expect(screen.queryByRole('combobox', { name: zhTW.lastOutpatient.physicianFilter })).not.toBeInTheDocument()
   })
 
   it('opens the shared trend pane for a lab result', () => {
-    mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     const row = rowWith('1.26')!
     fireEvent.click(within(row).getByRole('button', { name: '查看趨勢' }))
     expect(mockShowDetail).toHaveBeenCalledWith(expect.objectContaining({
@@ -248,14 +284,9 @@ describe('LastOutpatientCard', () => {
     }))
   })
 
-  it('offers the menu to a clinician without a saved name', () => {
-    render(<LastOutpatientCard />)
-    expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent(zhTW.settings.clinicianNameNone)
-  })
-
   it('names the usual 本次 and 前次 days in the column headings, and dates only a result from another day', () => {
-    mockClinicianName = '陳怡君'
     const { unmount } = render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     const headers = () => screen.getAllByRole('columnheader').map((header) => header.textContent)
     expect(headers()).toEqual(expect.arrayContaining(['本次10/09', '前次07/10']))
     expect(within(rowWith('1.26')!).getAllByRole('cell')[1]).not.toHaveTextContent('10/09')
@@ -268,6 +299,7 @@ describe('LastOutpatientCard', () => {
       observations: data.observations.map((o: any) => o.id === 'cr-now' ? { ...o, effectiveDateTime: '2026-10-12T08:10:00+08:00' } : o),
     }
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     expect(headers()).toEqual(expect.arrayContaining(['本次10/09']))
     expect(within(rowWith('1.26')!).getAllByRole('cell')[1]).toHaveTextContent(/1\.26.*10\/12/)
     expect(within(rowWith('12.6')!).getAllByRole('cell')[1]).not.toHaveTextContent('10/09')
@@ -279,8 +311,8 @@ describe('LastOutpatientCard', () => {
       ...data,
       observations: data.observations.map((o: any) => o.id === 'cr-old' ? { ...o, effectiveDateTime: '2025-12-10T08:10:00+08:00' } : o),
     }
-    mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual(expect.arrayContaining(['前次25/12/10']))
   })
 
@@ -295,12 +327,12 @@ describe('LastOutpatientCard', () => {
     // A visit with no linked result says so.
     expect(visits[2]).toMatch(/2026\/07\/10/)
     expect(visits.some((text) => text?.includes('2026/10/25'))).toBe(false)
-    expect(shownVisit()).toHaveTextContent('2026/10/09')
-
-    fireEvent.click(within(list).getByRole('button', { name: /2026\/10\/20/ }))
     expect(shownVisit()).toHaveTextContent('2026/10/20')
-    expect(rowWith('4.6')).toBeTruthy()
-    expect(rowWith('1.26')).toBeUndefined()
+
+    fireEvent.click(within(list).getByRole('button', { name: /2026\/10\/09/ }))
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+    expect(rowWith('1.26')).toBeTruthy()
+    expect(rowWith('4.6')).toBeUndefined()
   })
 
   it('names only the clinic in the visit list and keeps the room code and session in the header', () => {
@@ -329,8 +361,8 @@ describe('LastOutpatientCard', () => {
   })
 
   it('counts each visit’s items the way the summary does, and groups visits by year', () => {
-    mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
     const mine = within(list).getByRole('button', { name: /2026\/10\/09/ })
     // 開立 5 項 in the summary is the same count the list shows.
