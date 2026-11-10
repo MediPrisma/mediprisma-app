@@ -65,6 +65,25 @@ export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
  */
 export const MODEL_CATALOG = [
   {
+    id: 'gpt-6-luna',
+    label: 'GPT-6 Luna（院內）',
+    descriptions: {
+      en: 'Taipei Veterans staging gateway; up to 2,048 output tokens per step',
+      'zh-TW': '北榮院內測試；每步最多輸出 2,048 tokens',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'proxy-or-key',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: process.env.NEXT_PUBLIC_DEPLOY_CHANNEL === 'staging' && Boolean(process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN),
+    providerBase: false,
+    autoRunEligible: false,
+    roles: [],
+  },
+  {
     id: 'gpt-5.4-nano',
     label: 'GPT-5.4 Nano',
     descriptions: {
