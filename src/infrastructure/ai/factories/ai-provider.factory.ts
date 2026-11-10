@@ -4,6 +4,8 @@
  */
 
 import { withModelReporting } from '../streaming/model-reporting.middleware'
+import { createIntranetProvider } from './intranet-provider'
+import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '../interceptors/intranet-fetch'
 import { withOpenAiStatelessResponses } from '../streaming/openai-stateless.middleware'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
@@ -50,6 +52,7 @@ export class AiProviderFactory {
   }
 
   private createProvider(config: ProviderConfig): ProviderResult {
+    if (config.modelId === INTRANET_LUNA_ID) return createIntranetProvider()
     const isCustom = isCustomOpenAiModelId(config.modelId)
     if (isCustom) {
       return this.createOpenAiCompatibleProvider(config.openAiCompatible, config.hiddenReasoning)
@@ -171,6 +174,9 @@ export class AiProviderFactory {
    * Validate proxy availability
    */
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
+    if (modelId === INTRANET_LUNA_ID) return intranetGatewayAvailable()
+      ? { available: true }
+      : { available: false, error: '院內 GPT 僅供北榮 app-staging 使用' }
     let definition: ModelDefinition
     try {
       definition = getModelDefinitionOrThrow(modelId)

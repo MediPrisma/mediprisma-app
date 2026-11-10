@@ -91,6 +91,12 @@ describe('ID Utilities', () => {
       })
     })
 
+    it('keeps eight characters when random produces a short fraction', () => {
+      const random = jest.spyOn(Math, 'random').mockReturnValue(0.5)
+      try { expect(generateShortId()).toHaveLength(8) }
+      finally { random.mockRestore() }
+    })
+
     it('should generate different IDs in rapid succession', () => {
       const ids = new Set()
       for (let i = 0; i < 100; i++) {
