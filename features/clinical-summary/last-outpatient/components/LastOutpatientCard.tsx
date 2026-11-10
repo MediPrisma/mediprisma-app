@@ -717,21 +717,20 @@ export function LastOutpatientCard() {
                 {strings.awaitingTitle}
                 <span className="ml-1.5 font-normal tabular-nums">{fill(strings.awaitingCount, { count: awaiting.length })}</span>
               </h3>
-              <div className="rounded-md border border-border/80 bg-card px-3 py-2.5">
-                <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
-                  {awaiting.map((order) => (
-                    <li key={order.id} className="flex min-w-0 items-baseline gap-1.5">
-                      <span className="min-w-0 break-words">{order.label}</span>
-                      {order.appointment && (
-                        <span className="shrink-0 rounded-sm border border-border px-1 text-[0.6875rem] text-muted-foreground">
-                          {strings.awaitingAppointment}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-xs text-muted-foreground">{strings.awaitingNote}</p>
-              </div>
+              {/* One order per row, like the lab table above it. */}
+              <ul className="overflow-hidden rounded-md border border-border/80 bg-card text-sm">
+                {awaiting.map((order) => (
+                  <li key={order.id} className="flex min-w-0 items-baseline gap-2 border-b border-border/50 px-3 py-1.5 last:border-b-0">
+                    <span className="min-w-0 break-words font-medium">{order.label}</span>
+                    {order.appointment && (
+                      <span className="shrink-0 rounded-sm border border-border px-1 text-[0.6875rem] text-muted-foreground">
+                        {strings.awaitingAppointment}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">{strings.awaitingNote}</p>
             </section>
           )}
           </div>
