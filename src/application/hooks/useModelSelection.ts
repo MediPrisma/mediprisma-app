@@ -19,6 +19,7 @@ import { ENV_CONFIG, hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/
 import { useOpenAiCompatibleProfiles } from '@/src/application/stores/ai-config.store'
 import { isOpenAiCompatibleReady, isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
+import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
 
 export interface ModelEntry {
   id: string
@@ -159,6 +160,15 @@ export function useModelSelection(
     const definition = getModelDefinition(candidate)
     if (!definition) return
 
+    if (candidate === INTRANET_LUNA_ID) {
+      if (!intranetGatewayAvailable()) {
+        toast.error('院內 GPT 僅供北榮 app-staging 使用')
+        return
+      }
+      setModel(candidate)
+      return
+    }
+
     if (definition.provider === 'custom') {
       const customProfile = customProfileForModel(candidate)
       if (!isOpenAiCompatibleRuntimeReady(customProfile)) {
@@ -213,6 +223,7 @@ export function useModelSelection(
   }
 
   const getModelStatus = (definition: ModelDefinition) => {
+    if (definition.id === INTRANET_LUNA_ID) return '北榮院內 Azure；每月共用 US$100 額度'
     if (definition.status === 'disabled') return t.settings.modelUnavailable
 
     if (definition.provider === 'custom') {
