@@ -55,6 +55,18 @@ test('only finished progressive stages report, with the outcome the stage implie
   expect(summarizeHospitalCapture(relayed([], 0), 'cloud-only')?.outcome).toBe('failed')
 })
 
+test('login_expired and network are kept apart; the older login_or_network still parses', () => {
+  expect(summarizeHospitalCapture(oneClick([
+    { system: FAILURE, code: 'reports:login_expired', display: '2' },
+    { system: FAILURE, code: 'medications:network', display: '1' },
+    { system: FAILURE, code: 'vitals:login_or_network', display: '1' },
+  ]))?.failures).toEqual([
+    { category: 'reports', kind: 'login_expired', count: 2 },
+    { category: 'medications', kind: 'network', count: 1 },
+    { category: 'vitals', kind: 'login_or_network', count: 1 },
+  ])
+})
+
 test('malformed or identifying tags are dropped', () => {
   const summary = summarizeHospitalCapture(oneClick([
     { system: FAILURE, code: 'reports:timeout:504:TEST-1', display: '1' },
