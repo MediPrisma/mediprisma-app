@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v10 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v10, the hospital-capture event, plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -277,6 +277,39 @@ export const collectorEventV10Schema = collectorEventV10BaseSchema.superRefine((
   }
 })
 export type CollectorEventV10 = z.infer<typeof collectorEventV10Schema>
+
+// Hospital-capture outcome: MediPrisma relays what 北榮懷爾抓抓 tagged on the Bundle it
+// delivered (category, failure kind, HTTP status, count). Its own endpoint and table,
+// never accepted by /events. Metadata only: no chart numbers, dates, URLs or free text.
+export const hospitalCaptureCategorySchema = z.enum([
+  'patient', 'allergies', 'vitals', 'conditions', 'encounters', 'orders', 'admissions', 'emergency',
+  'operations', 'medications', 'reports', 'discharge_summaries', 'implants', 'chemotherapy', 'careplans', 'other',
+])
+export const hospitalCaptureFailureKindSchema = z.enum([
+  'timeout', 'his_busy', 'http_error', 'parse_failed', 'login_or_network', 'unknown',
+])
+const extensionVersion = z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/)
+export const hospitalCaptureEventSchema = z.object({
+  schema_version: z.literal(1), event_id: z.string().uuid(),
+  occurred_at: z.string().datetime({ offset: true }), site: z.literal('vghtpe'),
+  app_surface: collectorAppSurfaceSchema,
+  app_version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  build_revision: z.string().regex(/^(?:[a-f0-9]{7,40}|unknown)$/),
+  // one_click: 北榮懷爾抓抓 imported directly; medcloud_relay: via 雲端懷爾抓抓 progressive import.
+  path: z.enum(['one_click', 'medcloud_relay']),
+  // empty = the capture finished without hospital resources; failed = no hospital data reached the app.
+  outcome: z.enum(['complete', 'partial', 'empty', 'failed']),
+  hospital_extension_version: extensionVersion.optional(),
+  medcloud_extension_version: extensionVersion.optional(),
+  hospital_resources: resourceBucketSchema.optional(),
+  failures: z.array(z.object({
+    category: hospitalCaptureCategorySchema, kind: hospitalCaptureFailureKindSchema,
+    status: z.number().int().min(100).max(599).optional(), count: z.number().int().min(1).max(99_999),
+  }).strict()).max(40),
+}).strict().superRefine((e, ctx) => {
+  if (e.outcome === 'complete' && e.failures.length) ctx.addIssue({ code: 'custom', path: ['failures'], message: 'A complete capture has no failures' })
+})
+export type HospitalCaptureEvent = z.infer<typeof hospitalCaptureEventSchema>
 
 // Separate, explicitly consented sensitive-content endpoint; never accepted by
 // /events. Prompt includes the clinical context actually sent to the model.
