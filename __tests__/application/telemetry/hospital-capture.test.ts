@@ -119,3 +119,10 @@ test('a cloud-only end carries only a closed unavailable reason', async () => {
   expect(sentBody()).toMatchObject({ outcome: 'complete' })
   expect(sentBody()).not.toHaveProperty('unavailable_reason')
 })
+
+test('a patient-selection cloud-only end is logged with its reason', async () => {
+  reportHospitalCapture(relayed([], 0), 'cloud-only', 'HIS_PATIENT_SELECTION_REQUIRED')
+  await settle()
+  expect(sentBody()).toMatchObject({ outcome: 'failed', unavailable_reason: 'HIS_PATIENT_SELECTION_REQUIRED' })
+  expect(hospitalCaptureEventSchema.safeParse(sentBody()).success).toBe(true)
+})

@@ -292,6 +292,7 @@ export const hospitalCaptureFailureKindSchema = z.enum([
 // 北榮懷爾抓抓 peer error (or its own timeout/validation failure) to this closed set.
 export const hospitalUnavailableReasonSchema = z.enum([
   'HIS_LOGIN_REQUIRED', 'HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH', 'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT',
+  'HIS_PATIENT_SELECTION_REQUIRED',
 ])
 const extensionVersion = z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/)
 export const hospitalCaptureEventSchema = z.object({
