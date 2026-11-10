@@ -268,8 +268,10 @@ describe('autofill from current prescriptions', () => {
     const selects = doacSelects([med('Pradaxa dabigatran', 110, 2, { drugTerminology: { doseForm: 'hard gelatin capsule' } } as Partial<MedicationEntity>)], now)
     expect(selects.doacRegimen?.value).toBe('dabigatran:110:2')
   })
-  it('no current prescription says nothing; none of them a DOAC says 「無」', () => {
-    expect(doacSelects([], now)).toEqual({})
+  it('no current prescription is 「無」 everywhere by default; none of them a DOAC says 「無」', () => {
+    const empty = doacSelects([], now)
+    expect(empty.doacRegimen).toMatchObject({ value: 'none', testName: '未見目前有效處方，預設無（請核對）' })
+    for (const key of DDI_KEYS) expect(empty[key as keyof typeof empty]).toMatchObject({ value: 'no', testName: '未見目前有效處方，預設無（請核對）' })
     expect(doacSelects([med('amlodipine', 5, 1)], now).doacRegimen?.value).toBe('none')
   })
   it('reaches the calculator through the shared clinical selects', () => {
@@ -284,17 +286,17 @@ describe('autofill from current prescriptions', () => {
 
   it('a current hospital product with no resolved ingredient leaves 「無 DOAC」 to the clinician but fills each 「否」 naming it', () => {
     const selects = doacSelects([hospital('Fictiodoac FC tab 2.5 mg'), med('amlodipine', 5, 1)], now)
-    expect(selects.doacRegimen).toBeUndefined()
+    expect(selects.doacRegimen).toMatchObject({ value: 'none', testName: `目前有效處方未見 DOAC；另有${DOAC_UNRESOLVED_MARK}Fictiodoac FC tab 2.5 mg（請核對是否為 DOAC）` })
     for (const key of DDI_KEYS) {
       const hit = selects[key as keyof typeof selects]
       expect(hit?.value).toBe('no')
       expect(hit?.testName).toContain(`${DOAC_UNRESOLVED_MARK}Fictiodoac FC tab 2.5 mg`)
     }
-    // In the calculator: the regimen stays 待填, the co-medications are 無, and
+    // In the calculator: the regimen and the co-medications are 無, and
     // the folded co-medication line names the unresolved product.
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
     const autofill = { resolve: () => undefined, clinicalSelects: buildClinicalSelects([], [hospital('Fictiodoac FC tab 2.5 mg')], now) }
-    expect(resolveInput(calc.inputs.find((i) => i.key === 'regimen')!, autofill)).toMatchObject({ filled: false })
+    expect(resolveInput(calc.inputs.find((i) => i.key === 'regimen')!, autofill)).toMatchObject({ filled: true, value: 'none' })
     const values: Record<string, string> = {}, captions: Record<string, string | undefined> = {}
     for (const key of DDI_KEYS) {
       const resolved = resolveInput(calc.inputs.find((i) => i.key === key)!, autofill)
