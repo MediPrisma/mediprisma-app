@@ -190,7 +190,9 @@ export function doacPatientSelects(input: {
     out.doac_liver = { ...out.doac_liver_enzymes, value: 'none', testName: `${out.doac_liver_enzymes.testName}，未見肝病診斷碼（請核對）` }
   }
 
-  // Age does not rule out pregnancy or breast-feeding (#355 review): a woman is asked.
-  if (demographics.gender === 'male') out.doac_pregnancy = { value: 'no', date: today, testName: '男性' }
+  // Owner decision 2026-11-10: 「無」 for everyone; the clinician changes it to
+  // 「有」 for a pregnant or breast-feeding woman. Age does not rule it out
+  // (#355 review), so a woman's caption asks for that check.
+  out.doac_pregnancy = { value: 'no', date: today, testName: demographics.gender === 'male' ? '男性' : '預設無；懷孕或哺乳請改為「有」' }
   return out
 }

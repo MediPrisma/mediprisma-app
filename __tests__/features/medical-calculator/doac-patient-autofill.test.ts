@@ -81,10 +81,11 @@ describe('DOAC calculator: diagnoses and demographics', () => {
     expect(selects({ conditions: [hypertension] }).doac_gi_risk).toMatchObject({ value: 'no' })
     expect(selects().doac_gi_risk).toBeUndefined()
   })
-  it('pregnancy: 「no」 for a man; a woman of any age is asked (#355 review)', () => {
+  it('pregnancy: 「no」 for everyone; the caption for a woman asks the clinician to change it if pregnant or breast-feeding', () => {
     expect(selects({ demographics: { gender: 'male', age: 40 } }).doac_pregnancy).toMatchObject({ value: 'no', testName: '男性' })
-    expect(selects({ demographics: { gender: 'female', age: 72 } }).doac_pregnancy).toBeUndefined()
-    expect(selects({ demographics: { gender: 'female', age: 38 } }).doac_pregnancy).toBeUndefined()
+    for (const age of [72, 38]) {
+      expect(selects({ demographics: { gender: 'female', age } }).doac_pregnancy).toMatchObject({ value: 'no', testName: '預設無；懷孕或哺乳請改為「有」' })
+    }
   })
 })
 
