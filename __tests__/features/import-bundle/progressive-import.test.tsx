@@ -3,7 +3,7 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-li
 import { useImportBundle } from '@/features/import-bundle/hooks/useImportBundle'
 import { BundleFileInput } from '@/features/import-bundle/components/BundleFileInput'
 import { ProgressiveImportStatus } from '@/features/import-bundle/components/ProgressiveImportStatus'
-import { PROGRESSIVE_IMPORT_EVENT, PROGRESSIVE_REQUEST_ATTRIBUTE, PROGRESSIVE_STATUS_MESSAGE, useProgressiveImportStore, completeProgressiveImport, stopProgressiveImport, isProgressiveAutoSummaryBlocked, restoreProgressiveImportStatus } from '@/src/application/stores/progressive-import.store'
+import { PROGRESSIVE_IMPORT_EVENT, PROGRESSIVE_REQUEST_ATTRIBUTE, PROGRESSIVE_STATUS_MESSAGE, useProgressiveImportStore, completeProgressiveImport, stopProgressiveImport, isProgressiveAutoSummaryBlocked, restoreProgressiveImportStatus, parseProgressiveImportRequest } from '@/src/application/stores/progressive-import.store'
 
 let mockImportId: string | null = null
 let mockBundle: any
@@ -388,4 +388,59 @@ test('continuation persists retained history before waiting for query refresh', 
   expect(cache.saveEncryptedCache).toHaveBeenCalledWith('summary-versions-v1:history:new-import', expect.objectContaining({ versions: expect.arrayContaining([expect.objectContaining({ id: 'saved-cloud' })]) }), expect.any(Function))
   await act(async () => { release(); await importing })
   useSummaryVersionsStore.getState().reset()
+})
+
+describe('cloud-only reason', () => {
+  const request = (extra: Record<string, unknown>) => JSON.stringify({ version: 1, requestId: 'final', runId: 'run-a', stage: 'cloud-only', expectedImportId: 'original-import', partial: true, ...extra })
+
+  test('an older extension without a reason keeps the generic cloud-only text', () => {
+    completeProgressiveImport(parseProgressiveImportRequest(request({}))!, 'original-import')
+    render(<ProgressiveImportStatus />)
+    expect(screen.getByRole('status')).toHaveTextContent(/^雲端資料可繼續使用；院內門診資料未載入。$/)
+  })
+
+  test('a known reason is shown after the cloud-only text', () => {
+    completeProgressiveImport(parseProgressiveImportRequest(request({ reason: 'HIS_LOGIN_REQUIRED' }))!, 'original-import')
+    render(<ProgressiveImportStatus />)
+    expect(screen.getByRole('status')).toHaveTextContent('雲端資料可繼續使用；院內門診資料未載入。（北榮登入可能過期，請重新登入北榮後再取得）')
+  })
+
+  test.each(['HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH', 'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT'])('%s has its own explanation', reason => {
+    completeProgressiveImport(parseProgressiveImportRequest(request({ reason }))!, 'original-import')
+    render(<ProgressiveImportStatus />)
+    expect(screen.getByRole('status').textContent).toMatch(/^雲端資料可繼續使用；院內門診資料未載入。（.+）$/)
+  })
+
+  test.each([['unknown code', 'HIS_SOMETHING_NEW'], ['free text', '北榮登入過期'], ['non-string', 7]])('an %s reason is dropped without rejecting the import', (_label, reason) => {
+    const parsed = parseProgressiveImportRequest(request({ reason }))
+    expect(parsed).toMatchObject({ stage: 'cloud-only' })
+    expect(parsed).not.toHaveProperty('reason')
+  })
+
+  test('a reason on a non-cloud-only stage is dropped', () => {
+    expect(parseProgressiveImportRequest(request({ stage: 'hospital', reason: 'HIS_TIMEOUT' }))).not.toHaveProperty('reason')
+  })
+
+  test('a request over 1024 characters is rejected', () => {
+    expect(parseProgressiveImportRequest(request({ reason: 'HIS_TIMEOUT', pad: 'x'.repeat(1024) }))).toBeNull()
+  })
+
+  test('the reason survives a reload, and a later stop shows the stop text instead', () => {
+    completeProgressiveImport(parseProgressiveImportRequest(request({ reason: 'HIS_TIMEOUT' }))!, 'original-import')
+    const saved = sessionStorage.getItem('mediprisma:progressive-status-v1')!
+    useProgressiveImportStore.setState({ current: null, pendingRunId: null, stoppedRuns: {} })
+    sessionStorage.setItem('mediprisma:progressive-status-v1', saved)
+    const { unmount } = render(<ProgressiveImportStatus />)
+    expect(screen.getByRole('status')).toHaveTextContent('（北榮擷取逾時')
+    unmount()
+    act(() => stopProgressiveImport('run-a', 'patient-changed'))
+    render(<ProgressiveImportStatus />)
+    expect(screen.getByRole('alert')).not.toHaveTextContent('北榮擷取逾時')
+  })
+
+  test('a tampered stored reason is discarded on reload', () => {
+    sessionStorage.setItem('mediprisma:progressive-status-v1', JSON.stringify({ runId: 'run-a', importId: 'original-import', stage: 'cloud-only', phase: 'failed', reason: '<b>x</b>' }))
+    render(<ProgressiveImportStatus />)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
 })

@@ -3,6 +3,17 @@
 import { AlertTriangle, CheckCircle2, LoaderCircle } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useProgressiveImportStatus } from '@/src/application/hooks/use-progressive-import.hook'
+import type { HospitalUnavailableReason } from '@/src/application/stores/progressive-import.store'
+
+const REASON_TEXT: Record<HospitalUnavailableReason, { zh: string; en: string }> = {
+  HIS_LOGIN_REQUIRED: { zh: '北榮登入可能過期，請重新登入北榮後再取得', en: 'the hospital (VGHTPE) login may have expired; sign in again, then capture again' },
+  HIS_SESSION_BLOCKED: { zh: '北榮連線被拒絕，請重新登入北榮後再取得', en: 'the hospital session was refused; sign in again, then capture again' },
+  HIS_BUSY: { zh: '北榮懷爾抓抓正在執行其他工作，請稍候再取得', en: 'the hospital extension was busy with another task; capture again shortly' },
+  PATIENT_HIS_MISMATCH: { zh: '北榮選定的病人與雲端不一致，請確認北榮病人後再取得', en: 'the patient selected in HIS does not match the cloud patient; check HIS, then capture again' },
+  OUTPATIENT_CAPTURE_FAILED: { zh: '北榮院內資料擷取失敗，請確認北榮病歷頁後再取得', en: 'hospital capture failed; check the HIS chart page, then capture again' },
+  HIS_TIMEOUT: { zh: '北榮擷取逾時，請確認北榮病歷頁已就緒後再取得', en: 'hospital capture timed out; check that the HIS chart page is ready, then capture again' },
+  INVALID_HIS_RESULT: { zh: '北榮資料傳輸或驗證未通過，請重新取得', en: 'hospital data failed transfer or validation; capture again' },
+}
 
 export function ProgressiveImportStatus() {
   const { locale } = useLanguage()
@@ -30,8 +41,11 @@ export function ProgressiveImportStatus() {
     partial: english ? 'Some hospital outpatient records loaded. Check HIS for missing records.' : '已載入部分院內門診資料，請核對 HIS。',
     failed: english ? 'Cloud records are available. Hospital outpatient records were not loaded.' : '雲端資料可繼續使用；院內門診資料未載入。',
   }[current.phase]
+  const reason = current.importId !== null && current.phase === 'failed' && current.stage === 'cloud-only' && current.reason
+    ? REASON_TEXT[current.reason] : undefined
+  const message = reason ? english ? `${text} (${reason.en[0].toUpperCase()}${reason.en.slice(1)}.)` : `${text}（${reason.zh}）` : text
   return <div key={alert ? 'alert' : 'status'} role={alert ? 'alert' : 'status'} aria-live={alert ? 'assertive' : 'polite'} className={`flex shrink-0 items-center gap-2 border-b px-3 py-2 text-sm ${warning ? 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100' : waiting ? 'bg-muted/50 text-muted-foreground' : 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'}`}>
     <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${waiting ? 'animate-spin motion-reduce:animate-none' : ''}`} />
-    <span>{text}</span>
+    <span>{message}</span>
   </div>
 }

@@ -11,6 +11,17 @@ export function isProgressiveFailureReason(value: unknown): value is Progressive
   return ['failed', 'cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'].includes(value as string)
 }
 
+/**
+ * Why 雲端懷爾抓抓 delivered cloud records only. A closed code set mapped from the
+ * 北榮懷爾抓抓 peer error; never free text. Older extensions omit it.
+ */
+export const HOSPITAL_UNAVAILABLE_REASONS = ['HIS_LOGIN_REQUIRED', 'HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH',
+  'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT'] as const
+export type HospitalUnavailableReason = typeof HOSPITAL_UNAVAILABLE_REASONS[number]
+export function isHospitalUnavailableReason(value: unknown): value is HospitalUnavailableReason {
+  return (HOSPITAL_UNAVAILABLE_REASONS as readonly unknown[]).includes(value)
+}
+
 export interface ProgressiveImportRequest {
   version: 1
   requestId: string
@@ -18,6 +29,8 @@ export interface ProgressiveImportRequest {
   stage: 'cloud' | 'hospital-visits' | 'hospital' | 'hospital-reports-failed' | 'hospital-empty' | 'cloud-only'
   expectedImportId?: string
   partial?: boolean
+  /** Only on cloud-only. */
+  reason?: HospitalUnavailableReason
 }
 
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,128}$/.test(value)
@@ -30,7 +43,10 @@ export function parseProgressiveImportRequest(raw: string | null): ProgressiveIm
       || !['cloud', 'hospital-visits', 'hospital', 'hospital-reports-failed', 'hospital-empty', 'cloud-only'].includes(value.stage)
       || (value.stage !== 'cloud' && !validId(value.expectedImportId))
       || (value.partial !== undefined && typeof value.partial !== 'boolean')) return null
-    return value
+    // A code this build does not know (or one on another stage) only loses the
+    // explanation; the import itself stays valid.
+    const { reason, ...request } = value
+    return value.stage === 'cloud-only' && isHospitalUnavailableReason(reason) ? { ...request, reason } : request
   } catch { return null }
 }
 
@@ -39,6 +55,8 @@ export interface ProgressiveImportState {
   importId: string
   /** Last accepted data snapshot; transport termination must not relabel it. */
   stage?: ProgressiveImportRequest['stage']
+  /** Why hospital records were not loaded; only with stage cloud-only. */
+  reason?: HospitalUnavailableReason
   phase: 'waiting' | 'reports-pending' | 'reports-pending-partial' | 'reports-failed' | 'update-failed' | 'loaded' | 'empty' | 'partial' | ProgressiveFailureReason
 }
 
@@ -71,7 +89,8 @@ export function restoreProgressiveImportStatus(activeImportId: string | null): v
   try {
     const value = JSON.parse(sessionStorage.getItem(STATUS_STORAGE_KEY) ?? 'null')
     if (value && validId(value.runId) && validId(value.importId) && phases.includes(value.phase)
-      && (value.stage === undefined || ['cloud', 'cloud-only', 'hospital-visits', 'hospital', 'hospital-reports-failed', 'hospital-empty'].includes(value.stage))) saved = value
+      && (value.stage === undefined || ['cloud', 'cloud-only', 'hospital-visits', 'hospital', 'hospital-reports-failed', 'hospital-empty'].includes(value.stage))
+      && (value.reason === undefined || value.stage === 'cloud-only' && isHospitalUnavailableReason(value.reason))) saved = value
   } catch { /* absent or invalid status is not a work authorization */ }
   if (!saved || saved.importId !== activeImportId) {
     writeStoredStatus(null)
@@ -142,6 +161,7 @@ export function completeProgressiveImport(request: ProgressiveImportRequest, imp
     : request.stage === 'hospital-reports-failed' ? 'reports-failed' : request.partial ? 'partial' : 'loaded'
   useProgressiveImportStore.setState({ current: {
     runId: request.runId, importId, stage: request.stage,
+    ...(request.stage === 'cloud-only' && request.reason ? { reason: request.reason } : {}),
     phase: stopped === 'failed' ? failedPhase(normalPhase) : stopped ?? normalPhase,
   } })
 }
