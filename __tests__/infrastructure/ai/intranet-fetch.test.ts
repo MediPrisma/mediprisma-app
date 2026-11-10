@@ -5,6 +5,7 @@ import { createIntranetFetch, intranetGatewayAvailable } from '@/src/infrastruct
 import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
+import { getUserErrorMessage } from '@/src/core/errors'
 
 const origin = 'https://ai-vghtpe.mediprisma.tw'
 const href = 'https://mediprisma.tw/app-staging/?site=vghtpe'
@@ -91,4 +92,8 @@ test.each([429, 503])('real stream adapter and SDK send only one request on HTTP
   })).rejects.toThrow()
   expect(send).toHaveBeenCalledTimes(1)
   expect(String(send.mock.calls[0][0])).toBe(`${origin}/v1/responses`)
+})
+
+test('monthly budget denial gives a specific message instead of suggesting a retry', () => {
+  expect(getUserErrorMessage(new Error('429 monthly_budget_exhausted'))).toBe('院內 AI 本月 US$100 額度已用完，本次請求未送往 Azure。')
 })

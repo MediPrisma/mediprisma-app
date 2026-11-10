@@ -32,6 +32,14 @@ const CONTEXT_WINDOW_EXCEEDED_PATTERN = /ContextWindowExceededError|maximum cont
 
 const ERROR_MAPPINGS: ErrorMapping[] = [
   {
+    pattern: /monthly_budget_exhausted/i,
+    message: '院內 AI 本月 US$100 額度已用完，本次請求未送往 Azure。'
+  },
+  {
+    pattern: /budget_unavailable/i,
+    message: '院內 AI 額度設定暫時無法使用，本次請求未送往 Azure。請聯絡管理者。'
+  },
+  {
     pattern: /AI_OUTPUT_TRUNCATED|OpenAI-compatible local model output limit reached/i,
     message: '地端模型已達輸出長度上限，摘要尚未完成。請縮小「資料選擇」範圍或精簡自訂提示詞後重試。'
   },
