@@ -93,7 +93,6 @@ export class OpenAiService {
 
     if (intranet) {
       body.store = false
-      body.max_output_tokens = Math.min(request.maxTokens ?? 2048, 2048)
     }
 
     if (shouldUseProxy) {

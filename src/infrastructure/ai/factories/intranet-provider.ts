@@ -32,7 +32,6 @@ export function createIntranetProvider() {
         },
         transformParams: async ({ params }) => ({
           ...params,
-          maxOutputTokens: Math.min(params.maxOutputTokens ?? 2048, 2048),
           providerOptions: {
             ...params.providerOptions,
             openai: { ...params.providerOptions?.openai, store: false },

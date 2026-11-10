@@ -75,7 +75,7 @@ test('non-streaming service ignores personal keys and stays on the bounded hospi
   const [url, init] = send.mock.calls[0]
   expect(String(url)).toBe(`${origin}/v1/responses`)
   expect(init.headers.get('Authorization')).toBe('Bearer synthetic-firebase-token')
-  expect(JSON.parse(init.body)).toMatchObject({ store: false, max_output_tokens: 2048 })
+  expect(JSON.parse(init.body)).toMatchObject({ store: false, max_output_tokens: 10000 })
   expect(send).toHaveBeenCalledTimes(1)
   process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'production'
   await expect(new OpenAiService('synthetic-personal-key').query({ modelId: 'gpt-6-luna', messages: [] })).rejects.toThrow('app-staging')
@@ -121,6 +121,7 @@ test.each([true, false])('actual SDK stream preserves text and reports length tr
   else await expect(stream).resolves.toBeUndefined()
   expect(onChunk).toHaveBeenLastCalledWith('Synthetic partial answer')
   expect(send).toHaveBeenCalledTimes(1)
+  expect(JSON.parse(send.mock.calls[0][1].body).max_output_tokens).toBeUndefined()
 })
 
 test.each([
