@@ -53,7 +53,7 @@ export function useModelSelection(
   const { locale, t } = useLanguage()
   const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
   const gptModels = useMemo(() => {
-    return GPT_MODELS.map((entry): ModelEntry => {
+    return GPT_MODELS.filter(entry => entry.id !== INTRANET_LUNA_ID || intranetGatewayAvailable()).map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
       const isLocked = definition?.status === 'disabled' || (modelRequiresUserKey(entry.id) && !apiKey)
       return {
@@ -162,7 +162,7 @@ export function useModelSelection(
 
     if (candidate === INTRANET_LUNA_ID) {
       if (!intranetGatewayAvailable()) {
-        toast.error('院內 GPT 僅供北榮 app-staging 使用')
+        toast.error('院內 GPT 僅供北榮院內入口使用')
         return
       }
       setModel(candidate)

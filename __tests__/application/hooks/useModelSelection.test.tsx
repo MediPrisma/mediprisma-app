@@ -34,16 +34,19 @@ describe('useModelSelection', () => {
     const previousOrigin = process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
     process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'staging'
     process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = 'https://ai-vghtpe.mediprisma.tw'
-    window.history.replaceState({}, '', '/app-staging/?site=vghtpe')
+    window.history.replaceState({}, '', '/app/?site=vghtpe')
     try {
       const setModel = jest.fn()
       const { result } = renderHook(() => useModelSelection(null, null, null, 'gemini-3-flash-preview', setModel), { wrapper })
+      expect(result.current.gptModels.some(entry => entry.id === 'gpt-6-luna')).toBe(true)
       act(() => result.current.handleSelectModel('gpt-6-luna'))
       expect(setModel).toHaveBeenCalledWith('gpt-6-luna')
-      window.history.replaceState({}, '', '/app/?site=vghtpe')
+      window.history.replaceState({}, '', '/app/')
       setModel.mockClear()
       act(() => result.current.handleSelectModel('gpt-6-luna'))
       expect(setModel).not.toHaveBeenCalled()
+      const hidden = renderHook(() => useModelSelection(null, null, null, 'gemini-3-flash-preview', setModel), { wrapper })
+      expect(hidden.result.current.gptModels.some(entry => entry.id === 'gpt-6-luna')).toBe(false)
     } finally {
       if (previousChannel === undefined) delete process.env.NEXT_PUBLIC_DEPLOY_CHANNEL
       else process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = previousChannel

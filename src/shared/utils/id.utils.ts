@@ -7,5 +7,5 @@ export function generateId(): string {
 }
 
 export function generateShortId(): string {
-  return Math.random().toString(36).slice(2, 10).padEnd(8, '0')
+  return Math.random().toString(36).slice(2, 10)
 }

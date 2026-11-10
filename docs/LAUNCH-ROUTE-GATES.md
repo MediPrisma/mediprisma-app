@@ -1,5 +1,12 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-11-11 owner decision: the GPT-6 Luna（院內） option is visible only on
+`/app` and `/app-staging` with exactly one `site=vghtpe` query parameter and
+the hospital Gateway build origin configured. Other sites, missing/duplicate
+site parameters, and `/app-hmc` hide it. Factory and non-streaming service
+enforce the same gate before sending. The query parameter is a UI routing
+selector; hospital network ACL and Firebase authentication enforce access.
+
 2026-10-21 owner decision: source reconciliation is automatic on every route.
 The source-version notice and medication comparison/verification prompts are
 removed. Hospital records take priority in the existing cross-source medication

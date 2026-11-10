@@ -19,12 +19,14 @@ beforeEach(() => {
   jest.mocked(getProxyIdToken).mockResolvedValue('synthetic-firebase-token')
 })
 
-test('permits only the staging vghtpe route', () => {
+test('permits production and staging only with exactly one vghtpe site parameter', () => {
   expect(intranetGatewayAvailable(href)).toBe(true)
-  for (const url of [href.replace('/app-staging/', '/app/'), href.replace('vghtpe', 'hmc'), `${href}&site=hmc`]) {
+  for (const url of [href.replace('/app-staging/', '/app-hmc/'), href.replace('vghtpe', 'hmc'), `${href}&site=hmc`, `${href}&site=vghtpe`, href.split('?')[0]]) {
     expect(intranetGatewayAvailable(url)).toBe(false)
   }
   process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'production'
+  expect(intranetGatewayAvailable(href.replace('/app-staging/', '/app/'))).toBe(true)
+  delete process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
   expect(intranetGatewayAvailable(href)).toBe(false)
 })
 
@@ -77,8 +79,8 @@ test('non-streaming service ignores personal keys and stays on the bounded hospi
   expect(init.headers.get('Authorization')).toBe('Bearer synthetic-firebase-token')
   expect(JSON.parse(init.body)).toMatchObject({ store: false, max_output_tokens: 10000 })
   expect(send).toHaveBeenCalledTimes(1)
-  process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'production'
-  await expect(new OpenAiService('synthetic-personal-key').query({ modelId: 'gpt-6-luna', messages: [] })).rejects.toThrow('app-staging')
+  window.location.href = 'https://mediprisma.tw/app/'
+  await expect(new OpenAiService('synthetic-personal-key').query({ modelId: 'gpt-6-luna', messages: [] })).rejects.toThrow('院內入口')
   expect(send).toHaveBeenCalledTimes(1)
 })
 

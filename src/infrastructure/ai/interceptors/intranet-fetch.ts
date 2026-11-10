@@ -7,10 +7,10 @@ export function intranetMaxRetries(model: string | { modelId: string }): 0 | und
 }
 
 export function intranetGatewayAvailable(href = typeof window === 'undefined' ? '' : window.location.href): boolean {
-  if (process.env.NEXT_PUBLIC_DEPLOY_CHANNEL !== 'staging' || !process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN) return false
+  if (!process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN) return false
   try {
     const url = new URL(href)
-    return (url.pathname === '/app-staging' || url.pathname.startsWith('/app-staging/')) &&
+    return ['/app', '/app-staging'].some(path => url.pathname === path || url.pathname.startsWith(`${path}/`)) &&
       url.searchParams.getAll('site').length === 1 && url.searchParams.get('site') === 'vghtpe'
   } catch { return false }
 }

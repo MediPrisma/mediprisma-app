@@ -4,7 +4,7 @@ import { AiError, AiErrorCode } from '@/src/core/errors'
 import { createIntranetFetch, intranetGatewayAvailable, INTRANET_LUNA_ID } from '../interceptors/intranet-fetch'
 
 export function createIntranetProvider() {
-  if (!intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮 app-staging 使用')
+  if (!intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮院內入口使用')
   const origin = process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN!
   const sdk = createOpenAI({ baseURL: `${origin}/v1`, apiKey: 'intranet-session', fetch: createIntranetFetch(origin) })
   return {

@@ -28,7 +28,7 @@ export class OpenAiService {
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
     const intranet = request.modelId === INTRANET_LUNA_ID
-    if (intranet && !intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮 app-staging 使用')
+    if (intranet && !intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮院內入口使用')
     const modelDef = getModelDefinitionOrThrow(request.modelId)
     if (modelDef.provider !== 'openai') {
       throw new Error(`Model ${request.modelId} is not an OpenAI model`)
