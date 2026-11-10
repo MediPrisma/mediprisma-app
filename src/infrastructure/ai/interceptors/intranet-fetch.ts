@@ -1,0 +1,43 @@
+import { getProxyIdToken } from '../utils/proxy-auth'
+
+export const INTRANET_LUNA_ID = 'gpt-6-luna'
+
+export function intranetGatewayAvailable(href = typeof window === 'undefined' ? '' : window.location.href): boolean {
+  if (process.env.NEXT_PUBLIC_DEPLOY_CHANNEL !== 'staging' || !process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN) return false
+  try {
+    const url = new URL(href)
+    return (url.pathname === '/app-staging' || url.pathname.startsWith('/app-staging/')) &&
+      url.searchParams.getAll('site').length === 1 && url.searchParams.get('site') === 'vghtpe'
+  } catch { return false }
+}
+
+/** Firebase authenticates the user; only the hospital VM holds the Azure key.
+ * No retry/fallback: a lost response may already have incurred a charge. */
+export function createIntranetFetch(
+  origin: string,
+  fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
+): typeof fetch {
+  const base = new URL(origin)
+  if (base.protocol !== 'https:' || base.origin !== origin || base.username || base.password) {
+    throw new Error('院內 AI 入口設定錯誤')
+  }
+  return async (input, init) => {
+    if (!intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮 app-staging 使用')
+    const request = input instanceof Request ? input : undefined
+    const url = new URL(request?.url ?? String(input))
+    if (url.origin !== base.origin || url.pathname !== '/v1/responses' || url.search || url.hash) {
+      throw new Error('院內 AI 請求路徑不符')
+    }
+    const token = await getProxyIdToken()
+    if (!token) throw new Error('請先登入或等待訪客登入完成')
+    // SDK headers, including its dummy key, never reach the server.
+    const headers = new Headers({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` })
+    return fetchImpl(url, {
+      ...init,
+      method: init?.method ?? request?.method ?? 'POST',
+      body: init?.body ?? (request ? await request.text() : undefined),
+      signal: init?.signal ?? request?.signal,
+      headers, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer',
+    })
+  }
+}
