@@ -176,7 +176,7 @@ export class AiProviderFactory {
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
     if (modelId === INTRANET_LUNA_ID) return intranetGatewayAvailable()
       ? { available: true }
-      : { available: false, error: '院內 GPT 僅供北榮 app-staging 使用' }
+      : { available: false, error: '院內 GPT 僅供北榮院內入口使用' }
     let definition: ModelDefinition
     try {
       definition = getModelDefinitionOrThrow(modelId)

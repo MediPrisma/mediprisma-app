@@ -26,7 +26,7 @@ export function createIntranetFetch(
     throw new Error('院內 AI 入口設定錯誤')
   }
   return async (input, init) => {
-    if (!intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮 app-staging 使用')
+    if (!intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮院內入口使用')
     const request = typeof Request !== 'undefined' && input instanceof Request ? input : undefined
     const url = new URL(request?.url ?? String(input))
     if (url.origin !== base.origin || url.pathname !== '/v1/responses' || url.search || url.hash) {
