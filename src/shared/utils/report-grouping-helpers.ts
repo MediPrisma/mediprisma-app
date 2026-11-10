@@ -38,7 +38,7 @@ export function isRadiographLabel(label: string): boolean {
     && words.slice(1).every(word => /^(?:\d+|single|two|views?|ap|pa|lat(?:eral)?|portable|film|and|frontal|erect|supine|upright)$/.test(word))
 }
 
-export const IMAGING_EXAM_HEADER = /^\s*((?:SONO(?:GRAM)?|CHEST|PORTABLE\s+CHEST|CXR|XR|KUB|CT(?:\/SCAN)?|MRI|RADIOGRAPH)[^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i
+export const IMAGING_EXAM_HEADER = /^\s*([^\s:.<>][^\r\n:.<>]{0,120}\s+)?Date\s+Of\s+Examination:\s*(\d{4}[/-]\d{2}[/-]\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?\s+Date\s+Of\s+RCP:\s*\d{4}[/-]\d{2}[/-]\d{2}\s*/i
 
 export const HEALTH_BANK_SDK_SECTION_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'
