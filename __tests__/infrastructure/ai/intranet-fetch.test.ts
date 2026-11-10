@@ -95,7 +95,7 @@ test.each([429, 503])('real stream adapter and SDK send only one request on HTTP
 })
 
 test('monthly budget denial gives a specific message instead of suggesting a retry', () => {
-  expect(getUserErrorMessage(new Error('429 monthly_budget_exhausted'))).toBe('院內 AI 本月 US$100 額度已用完，本次請求未送往 Azure。')
+  expect(getUserErrorMessage(new Error('429 monthly_budget_exhausted'))).toBe('院內 AI 本月 US$200 額度已用完，本次請求未送往 Azure。')
 })
 
 test.each([true, false])('actual SDK stream preserves text and reports length truncation: %s', async truncated => {

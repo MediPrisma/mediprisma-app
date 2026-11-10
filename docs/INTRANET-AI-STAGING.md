@@ -7,7 +7,7 @@
 
 在 `/app-staging/?site=vghtpe` 選擇「GPT-6 Luna（院內）」。不另加 2048 tokens 限制；
 未指定長度時由 Gateway 使用 GPT-6 Luna 原生 128,000 輸出上限，明確指定長度則沿用請求值。
-Gateway 仍按輸出上限先預留費用，再依實際用量結算，月額度維持 US$100。
+Gateway 仍按輸出上限先預留費用，再依實際用量結算，月額度維持 US$200。
 沿用 Firebase 匿名或登入使用者 token，直接呼叫院內 Gateway `/v1/responses`，store=false。
 入口的 nginx 必須限制院內來源；瀏覽器 site 參數不構成安全邊界。
 所有錯誤原路回傳，不做自動重試或 Firebase fallback，避免重複付費或繞過月額度。

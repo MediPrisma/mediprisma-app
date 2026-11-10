@@ -33,7 +33,7 @@ const CONTEXT_WINDOW_EXCEEDED_PATTERN = /ContextWindowExceededError|maximum cont
 const ERROR_MAPPINGS: ErrorMapping[] = [
   {
     pattern: /monthly_budget_exhausted/i,
-    message: '院內 AI 本月 US$100 額度已用完，本次請求未送往 Azure。'
+    message: '院內 AI 本月 US$200 額度已用完，本次請求未送往 Azure。'
   },
   {
     pattern: /budget_unavailable/i,

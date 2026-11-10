@@ -223,7 +223,7 @@ export function useModelSelection(
   }
 
   const getModelStatus = (definition: ModelDefinition) => {
-    if (definition.id === INTRANET_LUNA_ID) return '北榮院內 Azure；每月共用 US$100 額度'
+    if (definition.id === INTRANET_LUNA_ID) return '北榮院內 Azure；每月共用 US$200 額度'
     if (definition.status === 'disabled') return t.settings.modelUnavailable
 
     if (definition.provider === 'custom') {
