@@ -363,4 +363,29 @@ describe('LastOutpatientCard', () => {
     expect(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
     useProgressiveImportStore.setState({ current: null })
   })
+
+  it('breaks a multi-clause reference range at its own separators, not mid-token', () => {
+    mockClinicalData = {
+      ...chart(),
+      observations: [
+        ...chart().observations,
+        // Fictional values; text shaped like a hospital urine ACR range.
+        lab('acr', '9318-7', 'Malb/Ucre', 0.05, '', '2026-10-20', 'h-other', {
+          referenceRange: [{ text: '<0.03:normal;0.03~0.3:microalbuminuria;>0.3:overt proteinuria' }],
+        }),
+        lab('alt', '1742-6', 'ALT', 20, 'U/L', '2026-10-20', 'h-other', {
+          referenceRange: [{ text: 'M:&lt;41; F:&lt;33 U/L' }],
+        }),
+        lab('a1c', '4548-4', 'HbA1c', 6.1, '%', '2026-10-20', 'h-other', {
+          referenceRange: [{ text: 'Healthy: 4.8~5.9% , Prediabetes: 5.7-6.4% , Diabetes: >=6.5%' }],
+        }),
+      ],
+    }
+    render(<LastOutpatientCard />)
+    for (const clause of ['<0.03:normal', '0.03~0.3:microalbuminuria', '>0.3:overt proteinuria', 'Healthy: 4.8~5.9%', 'Prediabetes: 5.7-6.4%', 'Diabetes: >=6.5%', 'M:&lt;41', 'F:&lt;33 U/L']) {
+      const shown = screen.getAllByText(clause)
+      expect(shown.length).toBeGreaterThan(0)
+      shown.forEach((el) => expect(el).toHaveClass('block'))
+    }
+  })
 })
