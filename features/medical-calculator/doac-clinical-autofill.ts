@@ -128,7 +128,13 @@ function regimenOf(med: MedicationEntity): { mg: number; perDay: number } | unde
 export function doacSelects(medications: MedicationEntity[], now: Date): Partial<Record<DoacSelectKey, ClinicalSelectValue>> {
   const taken = new Set(currentMedicationRecords(medications, now))
   const current = medications.filter((med) => taken.has(med) && !LOCAL.test(formText(med)))
-  if (!current.length) return {}
+  // Owner decision 2026-11-10 (「醫師零自選」): with no current prescription
+  // the usual answers are filled — no DOAC and none of the interacting drugs.
+  if (!current.length) {
+    const date = now.toISOString().slice(0, 10), testName = '未見目前有效處方，預設無（請核對）'
+    return Object.fromEntries([['doacRegimen', { value: 'none', date, testName }],
+      ...Object.keys(DDI_INGREDIENTS).map((key) => [key, { value: 'no', date, testName }])])
+  }
   const unresolved = [...new Set(current.filter(ingredientUnknown).map(medicationDisplayName).filter(Boolean))]
   const absenceKnown = !unresolved.length
   const out: Partial<Record<DoacSelectKey, ClinicalSelectValue>> = {}
@@ -145,8 +151,11 @@ export function doacSelects(medications: MedicationEntity[], now: Date): Partial
     if (value && (DOAC_REGIMEN_OPTIONS as readonly string[]).includes(value)) {
       out.doacRegimen = { ...source(doacs[0]!.med, `目前處方：${medicationDisplayName(doacs[0]!.med)}（依處方推算，請核對實際服用）`), value }
     }
-  } else if (agents.size === 0 && absenceKnown) {
-    out.doacRegimen = { ...source(current[0]!, '目前有效處方未見 DOAC（依處方推算）'), value: 'none' }
+  } else if (agents.size === 0) {
+    // Beside an unresolved product (which could itself be a DOAC) 「無」 is
+    // still filled and the product named, as for the co-medications.
+    out.doacRegimen = { ...source(current[0]!, absenceKnown ? '目前有效處方未見 DOAC（依處方推算）'
+      : `目前有效處方未見 DOAC；另有${DOAC_UNRESOLVED_MARK}${unresolved.join('、')}（請核對是否為 DOAC）`), value: 'none' }
   }
   for (const [key, ingredients] of Object.entries(DDI_INGREDIENTS) as Array<[Exclude<DoacSelectKey, 'doacRegimen'>, readonly string[]]>) {
     // Heparin flushes and catheter locks are not anticoagulation.
