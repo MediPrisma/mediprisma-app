@@ -98,6 +98,31 @@ test('monthly budget denial gives a specific message instead of suggesting a ret
   expect(getUserErrorMessage(new Error('429 monthly_budget_exhausted'))).toBe('院內 AI 本月 US$100 額度已用完，本次請求未送往 Azure。')
 })
 
+test.each([true, false])('actual SDK stream preserves text and reports length truncation: %s', async truncated => {
+  const events = [
+    { type: 'response.output_item.added', output_index: 0, item: { type: 'message', id: 'm1' } },
+    { type: 'response.output_text.delta', item_id: 'm1', delta: 'Synthetic partial answer' },
+    { type: 'response.output_item.done', output_index: 0, item: { type: 'message', id: 'm1' } },
+    { type: truncated ? 'response.incomplete' : 'response.completed', response: {
+      incomplete_details: truncated ? { reason: 'max_output_tokens' } : null,
+      usage: { input_tokens: 5, output_tokens: 2048, total_tokens: 2053 },
+    } },
+  ]
+  const send = jest.fn().mockResolvedValue(new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), {
+    headers: { 'Content-Type': 'text/event-stream' },
+  }))
+  globalThis.fetch = send
+  const onChunk = jest.fn()
+  const stream = new AiSdkStreamAdapter(new AiProviderFactory()).stream({
+    model: 'gpt-6-luna', apiKey: null, signal: new AbortController().signal,
+    messages: [{ role: 'user', content: 'Synthetic question' }], onChunk,
+  })
+  if (truncated) await expect(stream).rejects.toMatchObject({ code: AiErrorCode.OUTPUT_TRUNCATED })
+  else await expect(stream).resolves.toBeUndefined()
+  expect(onChunk).toHaveBeenLastCalledWith('Synthetic partial answer')
+  expect(send).toHaveBeenCalledTimes(1)
+})
+
 test.each([
   [false, 'Synthetic partial answer', false],
   [true, '', false],
