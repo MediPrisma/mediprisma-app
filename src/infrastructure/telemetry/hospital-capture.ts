@@ -1,6 +1,6 @@
 'use client'
 
-import { hospitalCaptureCategorySchema, hospitalCaptureEventSchema, hospitalCaptureFailureKindSchema, type HospitalCaptureEvent } from '@/src/shared/contracts/collector-event'
+import { hospitalCaptureCategorySchema, hospitalCaptureEventSchema, hospitalCaptureFailureKindSchema, hospitalUnavailableReasonSchema, type HospitalCaptureEvent } from '@/src/shared/contracts/collector-event'
 import { captureCollectorAuth } from './collector-auth'
 import { collectorAppSurface, collectorNetworkPermission, configuredEndpoint, isCollectorSite } from './collector'
 
@@ -69,7 +69,7 @@ function bucket(n: number): HospitalCaptureEvent['hospital_resources'] {
 }
 
 /** Fire-and-forget; the clinical import never waits on or fails because of this. */
-export function reportHospitalCapture(bundle: unknown, stage?: string): void {
+export function reportHospitalCapture(bundle: unknown, stage?: string, reason?: string): void {
   try {
     if (!isCollectorSite()) return
     const summary = summarizeHospitalCapture(bundle, stage)
@@ -84,6 +84,9 @@ export function reportHospitalCapture(bundle: unknown, stage?: string): void {
       ...(summary.hospitalVersion ? { hospital_extension_version: summary.hospitalVersion } : {}),
       ...(summary.medcloudVersion ? { medcloud_extension_version: summary.medcloudVersion } : {}),
       hospital_resources: bucket(summary.hospitalResources),
+      // Only a cloud-only end carries 雲端懷爾抓抓's closed reason code; anything else is dropped.
+      ...(stage === 'cloud-only' && summary.outcome === 'failed' && hospitalUnavailableReasonSchema.safeParse(reason).success
+        ? { unavailable_reason: reason } : {}),
     })
     if (!event.success) return
     const endpoint = base.replace(/\/collector\/v1\/events$/, '/collector/v1/capture-events')

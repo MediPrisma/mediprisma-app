@@ -288,6 +288,11 @@ export const hospitalCaptureCategorySchema = z.enum([
 export const hospitalCaptureFailureKindSchema = z.enum([
   'timeout', 'his_busy', 'http_error', 'parse_failed', 'login_or_network', 'unknown',
 ])
+// Why no hospital data reached the app (outcome failed only). 雲端懷爾抓抓 maps the
+// 北榮懷爾抓抓 peer error (or its own timeout/validation failure) to this closed set.
+export const hospitalUnavailableReasonSchema = z.enum([
+  'HIS_LOGIN_REQUIRED', 'HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH', 'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT',
+])
 const extensionVersion = z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/)
 export const hospitalCaptureEventSchema = z.object({
   schema_version: z.literal(1), event_id: z.string().uuid(),
@@ -299,6 +304,7 @@ export const hospitalCaptureEventSchema = z.object({
   path: z.enum(['one_click', 'medcloud_relay']),
   // empty = the capture finished without hospital resources; failed = no hospital data reached the app.
   outcome: z.enum(['complete', 'partial', 'empty', 'failed']),
+  unavailable_reason: hospitalUnavailableReasonSchema.optional(),
   hospital_extension_version: extensionVersion.optional(),
   medcloud_extension_version: extensionVersion.optional(),
   hospital_resources: resourceBucketSchema.optional(),
@@ -308,6 +314,7 @@ export const hospitalCaptureEventSchema = z.object({
   }).strict()).max(40),
 }).strict().superRefine((e, ctx) => {
   if (e.outcome === 'complete' && e.failures.length) ctx.addIssue({ code: 'custom', path: ['failures'], message: 'A complete capture has no failures' })
+  if (e.unavailable_reason && e.outcome !== 'failed') ctx.addIssue({ code: 'custom', path: ['unavailable_reason'], message: 'Only a failed capture has an unavailable reason' })
 })
 export type HospitalCaptureEvent = z.infer<typeof hospitalCaptureEventSchema>
 
