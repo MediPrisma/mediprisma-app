@@ -18,7 +18,7 @@ const REQUEST_TIMEOUT_MS = 5_000
 
 /** Progressive stages that end a hospital capture; intermediate stages are not reported. */
 export type HospitalCaptureStage = 'hospital' | 'hospital-reports-failed' | 'hospital-empty' | 'cloud-only'
-type Tag = { system?: unknown; code?: unknown; display?: unknown }
+export type Tag = { system?: unknown; code?: unknown; display?: unknown }
 
 export interface HospitalCaptureSummary {
   path: HospitalCaptureEvent['path']
@@ -29,7 +29,7 @@ export interface HospitalCaptureSummary {
   hospitalResources: number
 }
 
-function failureFromTag(tag: Tag): HospitalCaptureEvent['failures'][number] | null {
+export function failureFromTag(tag: Tag): HospitalCaptureEvent['failures'][number] | null {
   if (tag.system !== FAILURE_SYSTEM || typeof tag.code !== 'string' || typeof tag.display !== 'string') return null
   const [category, kind, status, extra] = tag.code.split(':')
   const count = /^[1-9]\d{0,4}$/.test(tag.display) ? Number(tag.display) : NaN

@@ -1,4 +1,5 @@
 import { rememberLocalBundleVersion } from './local-bundle-version'
+import { rememberLocalBundleCapture } from './local-bundle-capture'
 import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
@@ -120,6 +121,7 @@ let memBundle: object | null = null
 function cacheBundle(bundle: object | null): void {
   memBundle = bundle
   rememberLocalBundleVersion(bundle)
+  rememberLocalBundleCapture(bundle)
 }
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false

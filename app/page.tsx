@@ -46,6 +46,7 @@ import { applyPilotPackIdsFromUrl } from "@/features/clinical-decision-support/g
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
 import { ProgressiveImportStatus } from "@/features/import-bundle/components/ProgressiveImportStatus"
+import { HospitalCaptureReasons } from "@/features/import-bundle/components/HospitalCaptureReasons"
 import { BUNDLE_CHANGED_EVENT } from "@/src/shared/utils/reset-on-bundle-change"
 import {
   ClinicalMobilePanelSwitcher,
@@ -654,6 +655,7 @@ function PageContent() {
         <EmailVerificationBanner />
         <NetworkStatusBanner />
         <ProgressiveImportStatus />
+        <HospitalCaptureReasons />
       </div>
       
       {/* Onboarding state: replace panels with welcome screen */}
