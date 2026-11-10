@@ -10,6 +10,7 @@
 入口的 nginx 必須限制院內來源；瀏覽器 site 參數不構成安全邊界。
 所有錯誤原路回傳，不做自動重試或 Firebase fallback，避免重複付費或繞過月額度。
 Gateway 使用同一持久 SQLite 帳本，缺價格、價格過期或餘額不足會在呼叫 Azure 前拒絕。
+既有 Collector v10 尚未列入 GPT-6 Luna；沿用其 `unknown` 模型值，不為本次試接修改 Collector 契約。
 
 部署只更新 mediprisma-site 的 `static/app-staging`；發布前比對 `static/app` 與
 `static/app-hmc` 的 Git tree，兩者必須不變。發布後驗證實際網站 chunk 和 deploy.json。
