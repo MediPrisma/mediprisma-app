@@ -360,6 +360,21 @@ describe('formatReportText column tables', () => {
     expect(columnRows(raw)).toHaveLength(2)
   })
 
+  it('grids two labelled "LABEL: value" columns and keeps the list marker on the table', () => {
+    const raw = '5. TOTAL TIME: ( 10 / 10 ) MIN:SEC  MAX ACHIEVED RATE: ( 160 )\nMAX PREDICATED RATE: ( 180 )  PREDICATED RATE: ( 153 )'
+    const lines = formatReportText(raw)
+    expect(lines.map((l) => l.columnCells)).toEqual([
+      ['TOTAL TIME: ( 10 / 10 ) MIN:SEC', 'MAX ACHIEVED RATE: ( 160 )'],
+      ['MAX PREDICATED RATE: ( 180 )', 'PREDICATED RATE: ( 153 )'],
+    ])
+    expect(lines[0].marker).toBe('5.')
+  })
+
+  it('never pulls a later numbered item into a table', () => {
+    const raw = 'A: ( 1 )  B: ( 2 )\nC: ( 3 )  D: ( 4 )\n6. E: ( 5 )  F: ( 6 )'
+    expect(formatReportText(raw).filter((l) => l.marker).every((l) => !l.columnCells)).toBe(true)
+  })
+
   it('leaves grouped panels with an all-empty column as text', () => {
     const raw = 'B-LYMPHOID  CD19 ( 10 )  (    )\n  CD22 ( 4 )  (    )\n  CD10 ( 1 )  (    )\n  cCD79a (    )  (    )'
     expect(columnRows(raw)).toEqual([])

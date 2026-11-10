@@ -61,23 +61,30 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
           )
         }
         if (line.columnCells) {
-          // Consecutive column rows are one source table; render it once.
-          if (lines[i - 1]?.columnCells) return null
-          const rows: string[][] = []
-          for (let j = i; j < lines.length && lines[j].columnCells; j++) rows.push(lines[j].columnCells!)
+          // Consecutive column rows are one source table; render it once. A
+          // list marker ("6.") always opens a new table, so adjacent numbered
+          // blocks stay separate and keep their own marker.
+          if (lines[i - 1]?.columnCells && !line.marker) return null
+          const rows: string[][] = [line.columnCells]
+          for (let j = i + 1; j < lines.length && lines[j].columnCells && !lines[j].marker; j++) rows.push(lines[j].columnCells!)
           return (
-            <div key={i} className={cn('min-w-0 overflow-x-auto rounded-md border border-border', INDENT_BY_LEVEL[line.level])}>
-              <table className="w-full min-w-max border-collapse tabular-nums">
-                <tbody className="divide-y divide-border">
-                  {rows.map((cells, r) => (
-                    <tr key={r} className="divide-x divide-border">
-                      {cells.map((cell, c) => (
-                        <td key={c} className="px-2.5 py-1 text-left align-top text-foreground">{cell}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div key={i} className={cn('flex min-w-0 gap-1.5', INDENT_BY_LEVEL[line.level])}>
+              {line.marker && (
+                <span className="shrink-0 pt-1 tabular-nums text-muted-foreground">{line.marker}</span>
+              )}
+              <div className="min-w-0 flex-1 overflow-x-auto rounded-md border border-border">
+                <table className="w-full min-w-max border-collapse tabular-nums">
+                  <tbody className="divide-y divide-border">
+                    {rows.map((cells, r) => (
+                      <tr key={r} className="divide-x divide-border">
+                        {cells.map((cell, c) => (
+                          <td key={c} className="px-2.5 py-1 text-left align-top text-foreground">{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )
         }
