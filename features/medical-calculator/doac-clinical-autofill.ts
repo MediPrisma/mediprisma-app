@@ -29,6 +29,10 @@ export const DOAC_REGIMEN_OPTIONS = [
 
 const DOACS = ['apixaban', 'rivaroxaban', 'edoxaban', 'dabigatran'] as const
 
+/** Marks a 「否」 caption that names the current products with no resolved
+ *  ingredient; the co-medication summary lists the names that follow it. */
+export const DOAC_UNRESOLVED_MARK = '未對到成分的品項：'
+
 const DDI_INGREDIENTS: Record<Exclude<DoacSelectKey, 'doacRegimen'>, readonly string[]> = {
   ddi_ketoconazole: ['ketoconazole'],
   ddi_itraconazole: ['itraconazole'],
@@ -116,14 +120,17 @@ function regimenOf(med: MedicationEntity): { mg: number; perDay: number } | unde
  * drug is 「是」 when a current prescription names it and 「否」 when the
  * record lists current prescriptions and none does; with no current
  * prescriptions nothing is said. A current hospital product with no resolved
- * ingredient could be any drug: 「否」 and 「無 DOAC」 are then left for the
- * clinician, while a drug a resolved prescription names is still 「是」.
+ * ingredient could be any drug: 「無 DOAC」 is then left for the clinician, and
+ * each 「否」 is still filled (owner decision 2026-11-10) but its caption names
+ * those products so the clinician checks them; a drug a resolved prescription
+ * names is still 「是」.
  */
 export function doacSelects(medications: MedicationEntity[], now: Date): Partial<Record<DoacSelectKey, ClinicalSelectValue>> {
   const taken = new Set(currentMedicationRecords(medications, now))
   const current = medications.filter((med) => taken.has(med) && !LOCAL.test(formText(med)))
   if (!current.length) return {}
-  const absenceKnown = !current.some(ingredientUnknown)
+  const unresolved = [...new Set(current.filter(ingredientUnknown).map(medicationDisplayName).filter(Boolean))]
+  const absenceKnown = !unresolved.length
   const out: Partial<Record<DoacSelectKey, ClinicalSelectValue>> = {}
   const doacs = current.flatMap((med) => {
     const agent = DOACS.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(names(med)))
@@ -146,7 +153,9 @@ export function doacSelects(medications: MedicationEntity[], now: Date): Partial
     const match = current.find((med) => ingredients.some((name) => new RegExp(`\\b${name}\\b`, 'i').test(names(med)))
       && !(key === 'ddi_anticoagulant' && /flush|lock|沖洗|封管/i.test(formText(med))))
     if (match) out[key] = { ...source(match, `目前處方：${medicationDisplayName(match)}（依處方推算，請核對實際服用）`), value: 'yes' }
-    else if (absenceKnown) out[key] = { value: 'no', date: now.toISOString().slice(0, 10), testName: '目前有效處方未見（依處方推算，請核對）' }
+    else out[key] = { value: 'no', date: now.toISOString().slice(0, 10), testName: absenceKnown
+      ? '目前有效處方未見（依處方推算，請核對）'
+      : `目前有效處方未見；另有${DOAC_UNRESOLVED_MARK}${unresolved.join('、')}（請核對是否為此藥）` }
   }
   // A DOAC beside another DOAC is also another anticoagulant.
   if (agents.size > 1 && out.ddi_anticoagulant?.value !== 'yes') {
