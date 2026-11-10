@@ -2,11 +2,15 @@
 jest.mock('@/src/infrastructure/ai/utils/proxy-auth', () => ({ getProxyIdToken: jest.fn() }))
 import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
 import { createIntranetFetch, intranetGatewayAvailable } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
+import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
+import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
+import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
 
 const origin = 'https://ai-vghtpe.mediprisma.tw'
 const href = 'https://mediprisma.tw/app-staging/?site=vghtpe'
 const originalEnv = { ...process.env }
-afterEach(() => { process.env = { ...originalEnv }; Reflect.deleteProperty(globalThis, 'window') })
+const originalFetch = globalThis.fetch
+afterEach(() => { globalThis.fetch = originalFetch; process.env = { ...originalEnv }; Reflect.deleteProperty(globalThis, 'window') })
 beforeEach(() => {
   process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'staging'
   process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = origin
@@ -56,4 +60,35 @@ test('missing auth or foreign URL never sends a request', async () => {
   jest.mocked(getProxyIdToken).mockResolvedValue(null)
   await expect(send(`${origin}/v1/responses`)).rejects.toThrow('登入')
   expect(fetchImpl).not.toHaveBeenCalled()
+})
+
+test('non-streaming service ignores personal keys and stays on the bounded hospital route', async () => {
+  const send = jest.fn().mockResolvedValue(Response.json({ model: 'gpt-6-luna', output: [
+    { type: 'message', content: [{ type: 'output_text', text: 'Synthetic answer' }] },
+  ], usage: { total_tokens: 5 } }))
+  globalThis.fetch = send
+  const result = await new OpenAiService('synthetic-personal-key').query({
+    modelId: 'gpt-6-luna', messages: [{ role: 'user', content: 'Synthetic question' }], maxTokens: 10000,
+  })
+  expect(result.text).toBe('Synthetic answer')
+  const [url, init] = send.mock.calls[0]
+  expect(String(url)).toBe(`${origin}/v1/responses`)
+  expect(init.headers.get('Authorization')).toBe('Bearer synthetic-firebase-token')
+  expect(JSON.parse(init.body)).toMatchObject({ store: false, max_output_tokens: 2048 })
+  expect(send).toHaveBeenCalledTimes(1)
+  process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'production'
+  await expect(new OpenAiService('synthetic-personal-key').query({ modelId: 'gpt-6-luna', messages: [] })).rejects.toThrow('app-staging')
+  expect(send).toHaveBeenCalledTimes(1)
+})
+
+test.each([429, 503])('real stream adapter and SDK send only one request on HTTP %i', async status => {
+  const send = jest.fn().mockImplementation(async () => Response.json({ error: { message: 'synthetic rejection' } }, { status }))
+  globalThis.fetch = send
+  const adapter = new AiSdkStreamAdapter(new AiProviderFactory())
+  await expect(adapter.stream({
+    model: 'gpt-6-luna', apiKey: null, signal: new AbortController().signal,
+    messages: [{ role: 'user', content: 'Synthetic question' }], onChunk: () => {},
+  })).rejects.toThrow()
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(String(send.mock.calls[0][0])).toBe(`${origin}/v1/responses`)
 })

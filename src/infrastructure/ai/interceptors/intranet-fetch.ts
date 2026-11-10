@@ -2,6 +2,10 @@ import { getProxyIdToken } from '../utils/proxy-auth'
 
 export const INTRANET_LUNA_ID = 'gpt-6-luna'
 
+export function intranetMaxRetries(model: string | { modelId: string }): 0 | undefined {
+  return (typeof model === 'string' ? model : model.modelId) === INTRANET_LUNA_ID ? 0 : undefined
+}
+
 export function intranetGatewayAvailable(href = typeof window === 'undefined' ? '' : window.location.href): boolean {
   if (process.env.NEXT_PUBLIC_DEPLOY_CHANNEL !== 'staging' || !process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN) return false
   try {
@@ -23,7 +27,7 @@ export function createIntranetFetch(
   }
   return async (input, init) => {
     if (!intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮 app-staging 使用')
-    const request = input instanceof Request ? input : undefined
+    const request = typeof Request !== 'undefined' && input instanceof Request ? input : undefined
     const url = new URL(request?.url ?? String(input))
     if (url.origin !== base.origin || url.pathname !== '/v1/responses' || url.search || url.hash) {
       throw new Error('院內 AI 請求路徑不符')

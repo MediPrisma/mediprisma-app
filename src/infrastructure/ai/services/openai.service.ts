@@ -11,6 +11,7 @@ import {
 } from '@/src/shared/constants/ai-models.constants'
 import { AiError, AiErrorCode } from '@/src/core/errors'
 import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
+import { INTRANET_LUNA_ID, createIntranetFetch, intranetGatewayAvailable } from '../interceptors/intranet-fetch'
 
 export class OpenAiService {
   readonly name = 'openai'
@@ -22,10 +23,12 @@ export class OpenAiService {
   }
 
   isAvailable(): boolean {
-    return Boolean(this.apiKey || ENV_CONFIG.hasChatProxy)
+    return Boolean(this.apiKey || ENV_CONFIG.hasChatProxy || intranetGatewayAvailable())
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
+    const intranet = request.modelId === INTRANET_LUNA_ID
+    if (intranet && !intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮 app-staging 使用')
     const modelDef = getModelDefinitionOrThrow(request.modelId)
     if (modelDef.provider !== 'openai') {
       throw new Error(`Model ${request.modelId} is not an OpenAI model`)
@@ -36,9 +39,9 @@ export class OpenAiService {
     ) {
       throw new Error(`OpenAI model ${request.modelId} has incompatible API surface ${modelDef.apiSurface}`)
     }
-    const shouldUseProxy = !this.apiKey && isProxyEligibleModel(modelDef) && ENV_CONFIG.hasChatProxy
+    const shouldUseProxy = !intranet && !this.apiKey && isProxyEligibleModel(modelDef) && ENV_CONFIG.hasChatProxy
 
-    if (!shouldUseProxy && !this.apiKey) {
+    if (!intranet && !shouldUseProxy && !this.apiKey) {
       if (modelRequiresUserKey(modelDef)) {
         throw new AiError(
           'This model requires a personal OpenAI API key',
@@ -55,7 +58,7 @@ export class OpenAiService {
 
     // The API surface comes from the manifest. This keeps non-streaming calls
     // aligned with the SDK factory used by streaming and Agent chat.
-    const targetUrl = shouldUseProxy
+    const targetUrl = intranet ? `${process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN}/v1/responses` : shouldUseProxy
       ? ENV_CONFIG.chatProxyUrl
       : modelDef.apiSurface === 'openai-responses'
         ? CLOUD_AI_ENDPOINTS.openAiResponses
@@ -88,6 +91,11 @@ export class OpenAiService {
             : {}),
         }
 
+    if (intranet) {
+      body.store = false
+      body.max_output_tokens = Math.min(request.maxTokens ?? 2048, 2048)
+    }
+
     if (shouldUseProxy) {
       if (ENV_CONFIG.proxyClientKey) {
         headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
@@ -95,7 +103,7 @@ export class OpenAiService {
       // Proxy requires a signed-in user — Authorization carries the Firebase
       // ID token here (the user's own OpenAI key is the direct branch below)
       Object.assign(headers, await getProxyAuthHeaders())
-    } else if (this.apiKey) {
+    } else if (!intranet && this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`
     }
 
@@ -106,7 +114,8 @@ export class OpenAiService {
     else request.signal?.addEventListener('abort', forwardAbort, { once: true })
 
     try {
-      const response = await fetch(targetUrl, {
+      const send = intranet ? createIntranetFetch(process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN!) : fetch
+      const response = await send(targetUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),

@@ -21,6 +21,7 @@
  */
 
 import { streamText, stepCountIs, type LanguageModel, type ModelMessage, type StopCondition, type ToolSet } from "ai"
+import { intranetMaxRetries } from '../interceptors/intranet-fetch'
 import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-agent-stream.use-case"
 import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
 import { withIdleTimeout } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
@@ -312,6 +313,7 @@ _${note}_` : text
     const repeatStop = repeatedToolCallIs(3)
     const result = await streamText({
       model,
+      maxRetries: intranetMaxRetries(model),
       messages: messages as ModelMessage[],
       tools,
       stopWhen: [
@@ -448,6 +450,7 @@ _${note}_` : text
         const repeatStop = repeatedToolCallIs(3)
         const followUpResult = await streamText({
           model,
+          maxRetries: intranetMaxRetries(model),
           messages: followUpMessages as ModelMessage[],
           tools: canContinueTools ? tools : undefined,
           stopWhen: [stepCountIs(Math.max(1, remainingSteps)), (context) => {
@@ -536,6 +539,7 @@ _${note}_` : text
 
       const finalResult = await streamText({
         model,
+        maxRetries: intranetMaxRetries(model),
         messages: finalMessages as ModelMessage[],
         ...reasoningOptions,
         abortSignal: abortController.signal,
