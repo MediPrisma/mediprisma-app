@@ -24,6 +24,7 @@ import { SAFETY_ALERTS_MODEL_ID } from '@/src/core/use-cases/safety-alerts/gener
 import { BUNDLE_CHANGE_SETTLED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { PROGRESSIVE_IMPORT_EVENT, isProgressiveAutoSummaryBlocked, isProgressiveSummaryRequestCurrent, useProgressiveImportStore } from '@/src/application/stores/progressive-import.store'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { INTRANET_LUNA_ID, intranetLunaIsLaunchDefault } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
 
 interface MedcloudLaunchProviderProps {
   children: ReactNode
@@ -234,7 +235,11 @@ export function MedcloudLaunchProvider({
       useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile(
         createVghtpeTvghbrainRuntimeProfile(apiKey),
       )
-      const modelId = VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID
+      // tvghbrain stays installed and selectable either way; only the model
+      // the launch starts on differs.
+      const modelId = launchOptions.auto && intranetLunaIsLaunchDefault(resolvedLaunchHref)
+        ? INTRANET_LUNA_ID
+        : VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID
       useMedcloudLaunchStore.getState().setRuntimeModelId(modelId)
       summaryModelId = modelId
     } else {
@@ -258,7 +263,7 @@ export function MedcloudLaunchProvider({
       processed.delete(oldest)
     }
     acknowledge(context.messageId)
-  }, [acknowledge, launchOptions, queueAutoSummaryIfReady])
+  }, [acknowledge, launchOptions, queueAutoSummaryIfReady, resolvedLaunchHref])
 
   const processContext = useCallback(async (context: MedcloudLaunchContext) => {
     if (processedMessageIdsRef.current.has(context.messageId)) {

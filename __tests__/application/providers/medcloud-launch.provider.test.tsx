@@ -1,9 +1,11 @@
 import { webcrypto } from 'crypto'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { MedcloudLaunchProvider } from '@/src/application/providers/medcloud-launch.provider'
 import {
   MEDCLOUD_AUTO_LAUNCH_URL,
   MEDCLOUD_LAUNCH_CONTEXT_ACK_TYPE,
+  VGTPE_HMC_MEDCLOUD_LAUNCH_URL,
+  VGTPE_HMC_SITE_LAUNCH_URL,
   VGTPE_SITE_LAUNCH_URL,
   VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
   VGTPE_TVGHBRAIN_PROFILE_ID,
@@ -235,6 +237,44 @@ describe('MedcloudLaunchProvider', () => {
     unmount()
     expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
     expect(useMedcloudLaunchStore.getState().runtimeModelId).toBeNull()
+  })
+
+  describe('HMC preview hospital launch', () => {
+    const previousOrigin = process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
+    afterEach(() => {
+      if (previousOrigin === undefined) delete process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
+      else process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = previousOrigin
+    })
+    const launch = async (href: string, messageId: string) => {
+      render(<MedcloudLaunchProvider launchHref={href}><div>app</div></MedcloudLaunchProvider>)
+      act(() => window.dispatchEvent(extensionMessage(messageId)))
+      await waitFor(() => expect(useAiConfigStore.getState().openAiCompatibleProfiles[0])
+        .toMatchObject({ profileId: VGTPE_TVGHBRAIN_PROFILE_ID, runtimeOnly: true }))
+    }
+
+    it('starts the automatic launch on the intranet Luna and keeps tvghbrain installed', async () => {
+      process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = 'https://ai-vghtpe.mediprisma.tw'
+      await launch(VGTPE_HMC_MEDCLOUD_LAUNCH_URL, 'message-hmc-auto')
+      expect(useMedcloudLaunchStore.getState().runtimeModelId).toBe('gpt-6-luna')
+      settleImportedBundle()
+      await waitFor(() => expect(useMedcloudLaunchStore.getState().pendingSummary)
+        .toEqual({ messageId: 'message-hmc-auto', modelId: 'gpt-6-luna' }))
+    })
+
+    it('stays on tvghbrain when the build has no intranet gateway', async () => {
+      delete process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
+      await launch(VGTPE_HMC_MEDCLOUD_LAUNCH_URL, 'message-hmc-no-gateway')
+      expect(useMedcloudLaunchStore.getState().runtimeModelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+    })
+
+    it('stays on tvghbrain for a site-only HMC launch and for the production automatic launch', async () => {
+      process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = 'https://ai-vghtpe.mediprisma.tw'
+      await launch(VGTPE_HMC_SITE_LAUNCH_URL, 'message-hmc-site')
+      expect(useMedcloudLaunchStore.getState().runtimeModelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+      cleanup()
+      await launch(launchHref, 'message-app-auto')
+      expect(useMedcloudLaunchStore.getState().runtimeModelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+    })
   })
 
   it('uses the ordinary default model for an external auto launch without installing VGH runtime', async () => {

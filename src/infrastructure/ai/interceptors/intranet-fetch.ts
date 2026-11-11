@@ -10,13 +10,21 @@ export function intranetGatewayAvailable(href = typeof window === 'undefined' ? 
   if (!process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN) return false
   try {
     const url = new URL(href)
-    return ['/app', '/app-staging'].some(path => url.pathname === path || url.pathname.startsWith(`${path}/`)) &&
+    return ['/app', '/app-staging', '/app-hmc'].some(path => url.pathname === path || url.pathname.startsWith(`${path}/`)) &&
       url.searchParams.getAll('site').length === 1 && url.searchParams.get('site') === 'vghtpe'
   } catch { return false }
 }
 
 /** Firebase authenticates the user; only the hospital VM holds the Azure key.
  * No retry/fallback: a lost response may already have incurred a charge. */
+/** The HMC preview hands a 北榮 launch to the intranet Luna instead of
+ * tvghbrain (owner, 2026-11-11). Every other workspace keeps tvghbrain. */
+export function intranetLunaIsLaunchDefault(href: string): boolean {
+  if (!intranetGatewayAvailable(href)) return false
+  const { pathname } = new URL(href)
+  return pathname === '/app-hmc' || pathname.startsWith('/app-hmc/')
+}
+
 export function createIntranetFetch(
   origin: string,
   fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
