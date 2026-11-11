@@ -74,9 +74,12 @@ export function useInsightGeneration({
   const panelStatus = useInsightResponsesStore((s) => s.panelStatus)
   const setPanelStatus = useInsightResponsesStore((s) => s.setPanelStatus)
   const completeBatch = useInsightResponsesStore((s) => s.completeBatch)
-  // Incremented for every new batch and cancellation. A superseded request may
-  // still finish at the transport layer, but it can never publish stale data.
   const runIdRef = useRef(0)
+  // Which run owns each module right now. Modules are independent: starting or
+  // stopping one never touches another module's request. A run that no longer
+  // owns a module may still finish at the transport layer, but it can never
+  // publish stale data for it.
+  const panelOwnersRef = useRef(new Map<string, number>())
 
   const runPanels = useCallback(
     async (panelIds: string[], options?: { force?: boolean; automatic?: boolean }) => {
@@ -126,23 +129,27 @@ export function useInsightGeneration({
       // to and drop every write once the owner changes.
       const owner = useInsightResponsesStore.getState().ownerPatientId
       const ownerChanged = () => useInsightResponsesStore.getState().ownerPatientId !== owner
-      // Custom summaries are intentionally single-batch. Starting another run
-      // cancels the prior transport and invalidates every pending write.
-      ai.stop()
       const runId = ++runIdRef.current
       const activePanelIds = prepared.map(({ panel }) => panel.id)
-      useAiExecutionDiagnosticsStore.getState().clearFeature('clinical-insights')
+      const owners = panelOwnersRef.current
+      const operationKey = (panelId: string) => `clinical-insight:${owner}:${panelId}`
+      const ownedByThisRun = (panelId: string) => owners.get(panelId) === runId
+      const owns = (panelId: string) => ownedByThisRun(panelId) && !ownerChanged()
+      if (owners.size === 0) {
+        useAiExecutionDiagnosticsStore.getState().clearFeature('clinical-insights')
+      }
+      // A new run replaces only an earlier run of the SAME module. Modules the
+      // user started separately keep generating side by side.
+      for (const panelId of activePanelIds) {
+        if (owners.has(panelId)) ai.stop(operationKey(panelId))
+        owners.set(panelId, runId)
+      }
 
       // Keep any previous complete result in place while regenerating. For a
       // first run the cards show only a loading state. No partial response is
       // written at any point.
       setPanelStatus((prev) => ({
-        ...Object.fromEntries(
-          Object.entries(prev).map(([id, status]) => [
-            id,
-            status.isLoading ? { ...status, isLoading: false } : status,
-          ]),
-        ),
+        ...prev,
         ...Object.fromEntries(
           activePanelIds.map((panelId) => [panelId, { isLoading: true, error: null }]),
         ),
@@ -150,19 +157,24 @@ export function useInsightGeneration({
 
       const entries: Record<string, ResponseEntry> = {}
       const errors: Record<string, Error> = {}
+      let inFlightPanelId: string | null = null
 
       const unsubscribe = options?.automatic ? useProgressiveImportStore.subscribe(() => {
-        if (!isProgressiveAutoSummaryBlocked() || runIdRef.current !== runId) return
-        runIdRef.current += 1
-        ai.stop()
-        setPanelStatus(prev => ({ ...prev, ...Object.fromEntries(activePanelIds.map(id => [id, { isLoading: false, error: null }])) }))
+        if (!isProgressiveAutoSummaryBlocked()) return
+        const mine = activePanelIds.filter(ownedByThisRun)
+        if (mine.length === 0) return
+        for (const panelId of mine) owners.delete(panelId)
+        if (inFlightPanelId && mine.includes(inFlightPanelId)) ai.stop(operationKey(inFlightPanelId))
+        setPanelStatus(prev => ({ ...prev, ...Object.fromEntries(mine.map(id => [id, { isLoading: false, error: null }])) }))
       }) : undefined
       try {
-        // Keep calls sequential to avoid a burst of simultaneous model requests,
-        // but stage every completed result locally. completeBatch publishes the
-        // whole set through one store update only after the final call settles.
+        // Keep the calls of ONE batch sequential to avoid a burst of
+        // simultaneous model requests, but stage every completed result
+        // locally. completeBatch publishes the whole set through one store
+        // update only after the final call settles.
         for (const { panel, messages } of prepared) {
-          if (runIdRef.current !== runId || ownerChanged()) return
+          if (!owns(panel.id)) continue
+          inFlightPanelId = panel.id
           const startedAt = Date.now()
           const activeGenerationId = `${runId}:${panel.id}`
           setPanelStatus((prev) => ({
@@ -203,11 +215,11 @@ export function useInsightGeneration({
                   reasoningEffort: 'low' as const,
                 }
                 : {}),
-              operationKey: `clinical-insight:${owner}:${panel.id}`,
+              operationKey: operationKey(panel.id),
               diagnosticFeature: 'clinical-insights',
               collectorContext: { template: { id: panel.id, title: panel.title } },
             })
-            if (runIdRef.current !== runId || ownerChanged()) return
+            if (!owns(panel.id)) continue
             const generatedAt = Date.now()
             entries[panel.id] = {
               text: fullText,
@@ -225,14 +237,15 @@ export function useInsightGeneration({
               },
             }
           } catch (error) {
-            if (runIdRef.current !== runId || ownerChanged()) return
+            if (!owns(panel.id)) continue
             const errorMessage = getUserErrorMessage(error)
             console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
             // No text is available for this failure; keep its original type for
             // the localized error message instead of publishing an empty result.
             errors[panel.id] = error instanceof Error ? error : new Error(errorMessage)
           } finally {
-            if (runIdRef.current === runId && !ownerChanged()) {
+            inFlightPanelId = null
+            if (owns(panel.id)) {
               setPanelStatus((prev) => {
                 const status = prev[panel.id]
                 if (status?.activeGeneration?.id !== activeGenerationId) return prev
@@ -245,9 +258,14 @@ export function useInsightGeneration({
           }
         }
 
-        if (runIdRef.current !== runId || ownerChanged()) return
-        completeBatch(activePanelIds, entries, errors)
-      } finally { unsubscribe?.() }
+        const finished = activePanelIds.filter(owns)
+        if (finished.length > 0) completeBatch(finished, entries, errors)
+      } finally {
+        unsubscribe?.()
+        for (const panelId of activePanelIds) {
+          if (ownedByThisRun(panelId)) owners.delete(panelId)
+        }
+      }
     },
     [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, modelName, panels, piiLiterals, prompts, setPanelStatus],
   )
@@ -258,16 +276,16 @@ export function useInsightGeneration({
   )
 
   const stopPanel = useCallback(
-    (_panelId: string) => {
-      // Unified AI cancellation is batch-wide; invalidate every pending write
-      // and clear every loading indicator together.
-      runIdRef.current += 1
-      ai.stop()
-      setPanelStatus((prev) => Object.fromEntries(
-        Object.entries(prev).map(([id, status]) => [
-          id,
-          status.isLoading ? { isLoading: false, error: null } : status,
-        ]),
+    (panelId: string) => {
+      // Stop only this module: drop its pending write, abort its request and
+      // clear its loading indicator. Other modules keep generating.
+      panelOwnersRef.current.delete(panelId)
+      const owner = useInsightResponsesStore.getState().ownerPatientId
+      ai.stop(`clinical-insight:${owner}:${panelId}`)
+      setPanelStatus((prev) => (
+        prev[panelId]?.isLoading
+          ? { ...prev, [panelId]: { isLoading: false, error: null } }
+          : prev
       ))
     },
     [ai, setPanelStatus]
@@ -276,7 +294,7 @@ export function useInsightGeneration({
   // Abort every in-flight request (patient switch: its output must not reach
   // the next patient's panels, and the tokens are wasted anyway).
   const stopAll = useCallback(() => {
-    runIdRef.current += 1
+    panelOwnersRef.current.clear()
     ai.stop()
   }, [ai])
 

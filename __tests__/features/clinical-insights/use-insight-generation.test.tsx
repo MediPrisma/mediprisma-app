@@ -91,6 +91,54 @@ describe("useInsightGeneration provenance", () => {
     expect(useInsightResponsesStore.getState().responses.first.text).toBe('new manual')
   })
 
+  it('keeps the first module generating when the user starts a second module', async () => {
+    let finishFirst!: (value: string) => void, finishSecond!: (value: string) => void
+    mockQuery.mockReset()
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishFirst = resolve }))
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishSecond = resolve }))
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let first!: Promise<void>, second!: Promise<void>
+    act(() => { first = result.current.runPanel('first', { force: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1))
+    act(() => { second = result.current.runPanel('second', { force: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(2))
+
+    expect(mockStop).not.toHaveBeenCalled()
+    const running = useInsightResponsesStore.getState().panelStatus
+    expect(running.first).toMatchObject({ isLoading: true, activeGeneration: { id: '1:first' } })
+    expect(running.second).toMatchObject({ isLoading: true, activeGeneration: { id: '2:second' } })
+
+    await act(async () => { finishSecond('second text'); await second })
+    expect(useInsightResponsesStore.getState().responses.second.text).toBe('second text')
+    expect(useInsightResponsesStore.getState().panelStatus.first.isLoading).toBe(true)
+    await act(async () => { finishFirst('first text'); await first })
+    expect(useInsightResponsesStore.getState().responses.first.text).toBe('first text')
+    expect(useInsightResponsesStore.getState().panelStatus.first).toEqual({ isLoading: false, error: null })
+  })
+
+  it('stops only the module whose stop button was pressed', async () => {
+    let finishFirst!: (value: string) => void, finishSecond!: (value: string) => void
+    mockQuery.mockReset()
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishFirst = resolve }))
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishSecond = resolve }))
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let first!: Promise<void>, second!: Promise<void>
+    act(() => { first = result.current.runPanel('first', { force: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1))
+    act(() => { second = result.current.runPanel('second', { force: true }) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(2))
+
+    act(() => result.current.stopPanel('first'))
+    expect(mockStop).toHaveBeenCalledTimes(1)
+    expect(mockStop).toHaveBeenCalledWith('clinical-insight:patient-1:first')
+    expect(useInsightResponsesStore.getState().panelStatus.first).toEqual({ isLoading: false, error: null })
+    expect(useInsightResponsesStore.getState().panelStatus.second.isLoading).toBe(true)
+
+    await act(async () => { finishFirst('late stopped text'); finishSecond('second text'); await Promise.all([first, second]) })
+    expect(useInsightResponsesStore.getState().responses.first).toBeUndefined()
+    expect(useInsightResponsesStore.getState().responses.second.text).toBe('second text')
+  })
+
   it('discards an uncommitted multi-module batch when stopped after its first staged response', async () => {
     let finish!: (value: string) => void
     mockQuery.mockReset().mockResolvedValueOnce('uncommitted first module')
