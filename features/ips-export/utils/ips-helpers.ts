@@ -71,11 +71,18 @@ export function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
-/** Format an ISO-ish date string to YYYY-MM-DD; returns '' on bad input. */
+/**
+ * Format an ISO-ish date string to YYYY-MM-DD; returns '' on bad input.
+ *
+ * A FHIR date or dateTime keeps the calendar day its source wrote, the same
+ * contract as the on-screen `formatDate` in `src/shared/utils/fhir-helpers.ts`.
+ * Converting through UTC moved every `T00:00:00+08:00` stamp (all 健康存摺
+ * rows) to the day before, so the export disagreed with the screen.
+ */
 export function formatDate(value?: string): string {
   if (!value) return ''
-  // Already a plain date.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const sourceDay = /^(\d{4}-\d{2}-\d{2})(?=$|T)/.exec(value.trim())
+  if (sourceDay) return sourceDay[1]
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value // leave as-is rather than drop data
   return d.toISOString().slice(0, 10)
