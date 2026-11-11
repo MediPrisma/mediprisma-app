@@ -69,6 +69,10 @@ const physicianFilter = () => screen.getByRole('combobox', { name: zhTW.lastOutp
 // A lab row of the results table, found by the figure it shows.
 const rowWith = (figure: string) => screen.queryAllByRole('row').find((row) => row.textContent?.includes(figure))
 
+// The fold button on the category heading above a lab row.
+const categoryHeading = (figure: string) =>
+  rowWith(figure)!.closest('[role="rowgroup"]')!.querySelector('button[aria-expanded]') as HTMLElement
+
 const HOSPITAL_META = {
   source: 'https://web9.vghtpe.gov.tw/emr/qemr/',
   tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }],
@@ -207,6 +211,39 @@ describe('LastOutpatientCard', () => {
     expect(rowWith('612')).toBeTruthy()
     expect(screen.getByLabelText(zhTW.reports.referenceComparison.above)).toHaveTextContent('↑')
     expect(screen.getByTestId('report-row')).toBeInTheDocument()
+  })
+
+  it('opens every lab category, and folds one from its heading without losing its counts', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
+    const table = screen.getByRole('table')
+    const headings = within(table).getAllByRole('button', { expanded: true })
+    expect(headings.length).toBeGreaterThan(0)
+    expect(within(table).queryByRole('button', { expanded: false })).not.toBeInTheDocument()
+
+    const heading = categoryHeading('12.6')
+    fireEvent.click(heading)
+    expect(heading).toHaveAttribute('aria-expanded', 'false')
+    expect(rowWith('12.6')).toBeUndefined()
+    // The folded heading still says how many results it holds and how many are abnormal.
+    expect(heading.textContent).toMatch(/\d+ 項/)
+    expect(heading.textContent).toMatch(/異常 \d+/)
+    // The visit's own total is untouched.
+    expect(screen.getByText('異常 2')).toBeInTheDocument()
+
+    fireEvent.click(heading)
+    expect(heading).toHaveAttribute('aria-expanded', 'true')
+    expect(rowWith('12.6')).toBeTruthy()
+  })
+
+  it('opens every category again on another visit', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
+    fireEvent.click(categoryHeading('12.6'))
+    expect(rowWith('12.6')).toBeUndefined()
+    openVisit('2026/10/20')
+    openVisit('2026/10/09')
+    expect(rowWith('12.6')).toBeTruthy()
   })
 
   it('lists every physician by default and narrows the list to one physician', () => {
