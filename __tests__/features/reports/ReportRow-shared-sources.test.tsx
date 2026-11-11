@@ -176,6 +176,17 @@ describe('ReportRow shared report source disclosure', () => {
     expect(within(detailTitle).getByText(row.title)).toHaveClass('select-text')
   })
 
+  it('shows the 判讀醫師 sign-off under the report in both the inline and right-pane views', () => {
+    const row = { ...sharedRow(), interpreter: 'Dr. Example' }
+    renderRow(row)
+
+    fireEvent.click(screen.getByText(row.title))
+    expect(screen.getByText(/判讀醫師：Dr\. Example/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '在右側面板展開全文' }))
+    expect(within(screen.getByTestId('right-detail-node')).getByText(/判讀醫師：Dr\. Example/)).toBeInTheDocument()
+  })
+
   it('omits routine grouping reminders and reveals every source procedure on demand', () => {
     const row = sharedRow()
     renderRow(row)
