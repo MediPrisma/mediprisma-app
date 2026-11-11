@@ -495,7 +495,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             signal,
             ...(isCustomEndpoint
               ? { temperature: 0, reasoningEffort: 'low' as const }
-              : {}),
+              // Unset, the intranet Luna reasons at medium: the first card
+              // took 40-72 s and the run could time out. Low kept the same
+              // cards and problem list in 11-14 s (2026-11-11, demo patient).
+              : ctx.modelId === 'gpt-6-luna'
+                ? { reasoningEffort: 'low' as const }
+                : {}),
             ...(request.hiddenReasoning ? { hiddenReasoning: request.hiddenReasoning } : {}),
             onChunk: streamChunk,
           })
