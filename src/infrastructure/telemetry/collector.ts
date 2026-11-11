@@ -172,7 +172,7 @@ function modelInfo(id: string, provider?: Start['provider']) {
 }
 
 /** Read existing browser consent only. Never probe the network to request it. */
-async function collectorNetworkPermission(endpoint: string): Promise<PermissionStatus | null> {
+export async function collectorNetworkPermission(endpoint: string): Promise<PermissionStatus | null> {
   try {
     if (typeof navigator === 'undefined' || !navigator.permissions?.query) return null
     const host = new URL(endpoint).hostname

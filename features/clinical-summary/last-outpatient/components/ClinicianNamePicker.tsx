@@ -3,7 +3,8 @@
 // The clinician's own name, picked from the open chart's hospital physicians of
 // the past year — never typed, so it always matches how the hospital records
 // the visit physician. Saved with the other 門診偏好 (and to the signed-in
-// account). Shared by 上次門診 itself and 設定 › 顯示與關於.
+// account). Set in 設定 › 顯示與關於; 上次門診 marks this clinician's visits
+// and lists them first in its physician filter.
 
 import { useMemo } from 'react'
 import { Label } from '@/components/ui/label'
@@ -21,15 +22,9 @@ const fill = (template: string, values: Record<string, string | number>) =>
 
 export function ClinicianNamePicker({
   idPrefix,
-  inline = false,
-  onChange,
   className,
 }: {
   idPrefix: string
-  /** Label and menu on one line, without the description (the tab header). */
-  inline?: boolean
-  /** After the saved name changed. */
-  onChange?: () => void
   className?: string
 }) {
   const { t } = useLanguage()
@@ -46,7 +41,7 @@ export function ClinicianNamePicker({
   const savedElsewhere = clinicianName && !current ? clinicianName : null
 
   if (physicians.length === 0 && !clinicianName) {
-    return inline ? null : (
+    return (
       <div className={cn('space-y-1.5', className)}>
         <p className="text-sm font-medium">{strings.clinicianNameLabel}</p>
         <p className="text-xs leading-relaxed text-muted-foreground">{strings.clinicianNameNoChart}</p>
@@ -57,16 +52,12 @@ export function ClinicianNamePicker({
   const menu = (
     <Select
       value={current?.name ?? savedElsewhere ?? NONE}
-      onValueChange={(value) => {
-        setClinicianName(value === NONE ? '' : value)
-        onChange?.()
-      }}
+      onValueChange={(value) => setClinicianName(value === NONE ? '' : value)}
     >
       <SelectTrigger
         id={`${idPrefix}-select`}
-        size={inline ? 'sm' : 'default'}
-        aria-describedby={inline ? undefined : `${idPrefix}-description`}
-        className={cn(inline ? 'h-8 min-w-36 text-sm' : 'h-[44px] w-full max-w-xs')}
+        aria-describedby={`${idPrefix}-description`}
+        className="h-[44px] w-full max-w-xs"
       >
         <SelectValue placeholder={strings.clinicianNamePlaceholder}>
           {current?.name ?? savedElsewhere ?? strings.clinicianNameNone}
@@ -92,17 +83,6 @@ export function ClinicianNamePicker({
       </SelectContent>
     </Select>
   )
-
-  if (inline) {
-    return (
-      <div className={cn('flex flex-wrap items-center gap-2', className)}>
-        <Label htmlFor={`${idPrefix}-select`} className="text-sm text-muted-foreground">
-          {strings.clinicianNameLabel}
-        </Label>
-        {menu}
-      </div>
-    )
-  }
 
   return (
     <div className={cn('space-y-1.5', className)}>

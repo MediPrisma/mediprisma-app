@@ -63,4 +63,30 @@ describe('original report disclosure', () => {
     expect(label.parentElement?.textContent).toBe('Comparison: CT on 2026-5-19.')
     expect(label.parentElement).not.toHaveClass('font-semibold')
   })
+
+  it('keeps adjacent numbered column blocks as separate tables with their markers', () => {
+    const raw = [
+      '5. TOTAL TIME: ( 10 / 10 ) MIN:SEC  MAX ACHIEVED RATE: ( 160 )',
+      'MAX PREDICATED RATE: ( 180 )  PREDICATED RATE: ( 153 )',
+      '6. REST RATE: ( 80 )  PEAK RATE: ( 160 )',
+      'REST PRESSURE: ( 120 / 80 )  PEAK PRESSURE: ( 160 / 80 )',
+    ].join('\n')
+    const { container } = render(<FormattedReportText text={raw} />)
+    expect(container.querySelectorAll('table')).toHaveLength(2)
+    expect(screen.getByText('5.')).toBeInTheDocument()
+    expect(screen.getByText('6.')).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'PEAK PRESSURE: ( 160 / 80 )' })).toBeInTheDocument()
+  })
+
+  it('renders a space-separated source table as one table', () => {
+    const raw = [
+      'SPEED/GRADE(NPH/%)  MINUTES  BLOOD PRESSURE',
+      "(1.7/10)  ( 3' 0'' )  ( 140 / 70 )",
+      "(2.5/12)  ( 3' 0'' )  ( 160 / 72 )",
+    ].join('\n')
+    const { container } = render(<FormattedReportText text={raw} />)
+    expect(container.querySelectorAll('table')).toHaveLength(1)
+    expect(container.querySelectorAll('tr')).toHaveLength(3)
+    expect(screen.getByRole('cell', { name: '( 160 / 72 )' })).toBeInTheDocument()
+  })
 })

@@ -12,6 +12,12 @@ import { diagnosisSelect, type ClinicalSelectValue } from './hfpef-clinical-auto
  * what the record does show (a CKD stage or eGFR that is not dialysis,
  * a year of diagnoses without a GI lesion, normal enzymes without a liver
  * code); pregnancy for a man. Every answer says where it came from.
+ *
+ * Owner decision 2026-11-10 (「醫師零自選」): a question the record cannot
+ * answer is filled with its usual answer (「無」) and says so, for the
+ * clinician to change. Only what cannot be guessed stays blank: the
+ * Child-Pugh class of a patient whose record shows liver disease, and a liver
+ * test whose result is there but cannot be compared with a limit.
  */
 export type DoacPatientKey = 'doac_liver' | 'doac_liver_enzymes' | 'doac_bilirubin_high' | 'doac_dialysis' | 'doac_pregnancy' | 'doac_gi_risk'
 
@@ -97,8 +103,26 @@ function latest(observations: LabObservation[], key: string, now: Date, sex: str
   return best
 }
 
+/**
+ * The usual adult upper limits, used only when the report gives none, so a
+ * result is still compared rather than assumed normal (owner decision
+ * 2026-11-10). Each applies only to a result in its own unit.
+ */
+const USUAL_ULN: Record<string, { uln: number; unit: RegExp }> = {
+  ALT: { uln: 40, unit: /^u\/l$/ },
+  AST: { uln: 40, unit: /^u\/l$/ },
+  'T.BILI': { uln: 1.2, unit: /^mg\/dl$/ },
+}
+type Reading = LabReading & { usual?: boolean }
+/** The lab with its own limit, or the usual one when it has none (marked `usual`). */
+function withUln(lab: LabReading | undefined, key: string): Reading | undefined {
+  if (!lab || lab.uln !== undefined) return lab
+  const usual = USUAL_ULN[key]
+  return usual && usual.unit.test(unitKey(lab.unit)) ? { ...lab, uln: usual.uln, usual: true } : undefined
+}
+
 const fmt = (n: number) => String(Math.round(n * 10) / 10)
-const reading = (name: string, lab: LabReading) => `${name} ${fmt(lab.value)}${lab.uln !== undefined ? `（ULN ${fmt(lab.uln)}）` : ''}`
+const reading = (name: string, lab: Reading) => `${name} ${fmt(lab.value)}${lab.uln !== undefined ? `（${lab.usual ? '報告未附上限，以常用 ' : ''}ULN ${fmt(lab.uln)}）` : ''}`
 const older = (...dates: string[]) => dates.sort((a, b) => Date.parse(a) - Date.parse(b))[0]!
 
 /** ICD-10 Z99.2, Z49, Z91.15; ICD-9 V45.1, V56. */
@@ -139,8 +163,12 @@ export function doacPatientSelects(input: {
   const out: Partial<Record<DoacPatientKey, ClinicalSelectValue>> = {}
 
   // ALT/AST: 「>2×ULN」 when either is; 「no」 only when both are known and neither is.
-  const alt = latest(observations, 'ALT', now, demographics.gender)
-  const ast = latest(observations, 'AST', now, demographics.gender)
+  const rawAlt = latest(observations, 'ALT', now, demographics.gender)
+  const rawAst = latest(observations, 'AST', now, demographics.gender)
+  const alt = withUln(rawAlt, 'ALT'), ast = withUln(rawAst, 'AST')
+  // A result that is there but cannot be compared (an unusual unit) could be
+  // raised: that question stays blank rather than defaulting to 「無」.
+  const enzymesUncomparable = (!!rawAlt && !alt) || (!!rawAst && !ast)
   const high = [alt && ['ALT', alt] as const, ast && ['AST', ast] as const]
     .filter((item): item is readonly ['ALT' | 'AST', LabReading] => !!item && item[1].uln !== undefined && item[1].value > 2 * item[1].uln!)
   if (high.length) {
@@ -148,11 +176,19 @@ export function doacPatientSelects(input: {
     out.doac_liver_enzymes = { value: 'yes', date: lab.date, testName: `${reading(name, lab)}，>2×ULN（請核對）`, obsId: lab.obsId, facility: lab.facility, resourceType: 'Observation' }
   } else if (alt?.uln !== undefined && ast?.uln !== undefined) {
     out.doac_liver_enzymes = { value: 'no', date: older(alt.date, ast.date), testName: `${reading('ALT', alt)}、${reading('AST', ast)}，均 ≤2×ULN`, obsId: alt.obsId, facility: alt.facility, resourceType: 'Observation' }
+  } else if (!enzymesUncomparable) {
+    const one = alt ? ['ALT', alt] as const : ast ? ['AST', ast] as const : undefined
+    out.doac_liver_enzymes = one
+      ? { value: 'no', date: one[1].date, testName: `${reading(one[0], one[1])}，≤2×ULN；${one[0] === 'ALT' ? 'AST' : 'ALT'} 未見，預設無（請核對）`, obsId: one[1].obsId, facility: one[1].facility, resourceType: 'Observation' }
+      : { value: 'no', date: today, testName: '未見 ALT／AST 檢驗，預設無（請核對）' }
   }
-  const bili = latest(observations, 'T.BILI', now, demographics.gender)
+  const rawBili = latest(observations, 'T.BILI', now, demographics.gender)
+  const bili = withUln(rawBili, 'T.BILI')
   if (bili?.uln !== undefined) {
     const raised = bili.value >= 1.5 * bili.uln
     out.doac_bilirubin_high = { value: raised ? 'yes' : 'no', date: bili.date, testName: `${reading('總膽紅素', bili)}，${raised ? '≥' : '<'}1.5×ULN`, obsId: bili.obsId, facility: bili.facility, resourceType: 'Observation' }
+  } else if (!rawBili) {
+    out.doac_bilirubin_high = { value: 'no', date: today, testName: '未見總膽紅素檢驗，預設無（請核對）' }
   }
 
   // Dialysis: a code that names it says yes. 「No」 when nothing names it and
@@ -171,6 +207,11 @@ export function doacPatientSelects(input: {
       out.doac_dialysis = { value: 'no', date: egfr.date, testName: `eGFR ${fmt(egfr.value)}，未見透析診斷碼（請核對）`, obsId: egfr.obsId, facility: egfr.facility, resourceType: 'Observation' }
     } else if (ckd && !stage5 && !(egfr && egfr.value < 15)) {
       out.doac_dialysis = { ...ckd, value: 'no', testName: `${ckd.testName.replace(/（.*）$/, '')}，未見透析診斷碼（請核對）` }
+    } else {
+      const low = egfr ? `eGFR ${fmt(egfr.value)}，` : stage5 ? 'CKD 第 5 期，' : ''
+      out.doac_dialysis = egfr
+        ? { value: 'no', date: egfr.date, testName: `${low}未見透析診斷碼，預設無（請核對）`, obsId: egfr.obsId, facility: egfr.facility, resourceType: 'Observation' }
+        : { value: 'no', date: today, testName: `${low}未見透析診斷碼，預設無（請核對）` }
     }
   }
   // Dabigatran's 「gastritis, oesophagitis, GERD」: a recent code says yes; a
@@ -180,17 +221,21 @@ export function doacPatientSelects(input: {
   if (gi) out.doac_gi_risk = gi
   else if (diagnosisSelect(conditions, encounters, now, anyCode, '', GI_WINDOW_DAYS)) {
     out.doac_gi_risk = { value: 'no', date: today, testName: '近一年就醫診斷未見胃炎／食道炎／GERD／消化道出血（其他出血風險請核對）' }
+  } else {
+    out.doac_gi_risk = { value: 'no', date: today, testName: '近一年未見就醫診斷，預設無（請核對）' }
   }
 
-  // Liver class: 「no liver disease」 when ALT and AST are both within 2×ULN,
-  // bilirubin is not raised, and no code names liver disease. Child-Pugh A–C
-  // is the clinician's to grade.
-  if (out.doac_liver_enzymes?.value === 'no' && out.doac_bilirubin_high?.value !== 'yes'
+  // Liver class: 「no liver disease」 when neither liver test is raised and no
+  // code names liver disease. Child-Pugh A–C is the clinician's to grade, so
+  // a raised test or a liver code leaves it blank.
+  if (out.doac_liver_enzymes?.value === 'no' && out.doac_bilirubin_high?.value === 'no'
     && !diagnosisSelect(conditions, encounters, now, isLiverDiseaseCode, '肝病')) {
-    out.doac_liver = { ...out.doac_liver_enzymes, value: 'none', testName: `${out.doac_liver_enzymes.testName}，未見肝病診斷碼（請核對）` }
+    out.doac_liver = { ...out.doac_liver_enzymes, value: 'none', testName: `${out.doac_liver_enzymes.testName.replace(/（請核對）$/, '')}，未見肝病診斷碼（請核對）` }
   }
 
-  // Age does not rule out pregnancy or breast-feeding (#355 review): a woman is asked.
-  if (demographics.gender === 'male') out.doac_pregnancy = { value: 'no', date: today, testName: '男性' }
+  // Owner decision 2026-11-10: 「無」 for everyone; the clinician changes it to
+  // 「有」 for a pregnant or breast-feeding woman. Age does not rule it out
+  // (#355 review), so a woman's caption asks for that check.
+  out.doac_pregnancy = { value: 'no', date: today, testName: demographics.gender === 'male' ? '男性' : '預設無；懷孕或哺乳請改為「有」' }
   return out
 }

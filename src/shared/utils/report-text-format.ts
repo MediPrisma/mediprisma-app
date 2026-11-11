@@ -39,6 +39,63 @@ export interface ReportLine {
   tableCells?: string[]
   /** Source label and its entire value/reference text; blanks stay blank. */
   measurement?: { label: string; value: string }
+  /**
+   * One row of a source table whose cells the bridge kept apart with 2+
+   * spaces (e.g. a treadmill STAGE table). Consecutive rows render as one
+   * table; `text` stays the source row so AI/clipboard output is unchanged.
+   */
+  columnCells?: string[]
+}
+
+// A source table cell: short, not prose, not a bare separator, not a
+// "label:" half of a key-value pair. Kept strict so free-text reports with
+// stray double spaces (common in NHI MediCloud text) never turn into tables.
+function isColumnCell(cell: string): boolean {
+  // Parenthesised source values ("( 9 / 32 )") count as one word.
+  if (cell.length > 40 || cell.replace(/\([^()]*\)/g, '()').split(/\s+/).length > 6) return false
+  if (/^[=/\-:|.,>]+$/.test(cell)) return false
+  if (/[a-z]{2,}\.(?:\s|$)/.test(cell)) return false
+  if (/^[:：]/.test(cell) || /[:：]$/.test(cell)) return false
+  return true
+}
+
+function columnCellsOf(line: ReportLine): string[] | undefined {
+  if (line.heading || line.measurement || line.tableCells || line.monospace || line.separator) return undefined
+  // "(    )" is an empty source field, not a column gap.
+  const text = line.text.replace(/\(\s+\)/g, '( )')
+  if (!/\S {2,}\S/.test(text)) return undefined
+  const cells = text.trim().split(/ {2,}/)
+  return cells.length >= 2 && cells.length <= 8 && cells.every(isColumnCell) ? cells : undefined
+}
+
+// Mark runs of same-width column rows: 3+ rows, or 2 rows with 3+ columns
+// (or two labelled "LABEL: value" columns).
+function markColumnTables(lines: ReportLine[]): ReportLine[] {
+  for (let i = 0; i < lines.length;) {
+    const first = columnCellsOf(lines[i])
+    if (!first) { i++; continue }
+    const run = [first]
+    let j = i + 1
+    for (; j < lines.length; j++) {
+      // A list marker ("5.") may only open a table, never sit inside one.
+      const cells = lines[j].marker ? undefined : columnCellsOf(lines[j])
+      if (!cells || cells.length !== first.length) break
+      run.push(cells)
+    }
+    // A column that is "( )" on every row is an unfilled template field, and
+    // such grouped panels (B-/T-LYMPHOID ...) carry a group label on only the
+    // first row of each group — gridding them would regroup the values.
+    const emptyColumn = first.some((_, c) => run.every((cells) => cells[c] === '( )'))
+    // Two-column pairs only when every cell is a "LABEL: value" field (the
+    // treadmill TOTAL TIME / MAX ACHIEVED RATE block); bare two-word pairs
+    // like "mmHg PPG  mmHg MPG" stay text.
+    const labelledPairs = first.length === 2 && run.every((cells) => cells.every((cell) => /[:：]\s*\S/.test(cell)))
+    if (!emptyColumn && (run.length >= 3 || (run.length === 2 && (first.length >= 3 || labelledPairs)))) {
+      run.forEach((cells, k) => { lines[i + k] = { ...lines[i + k], columnCells: cells } })
+    }
+    i = j
+  }
+  return lines
 }
 
 // Section headings commonly seen in TW hospital endoscopy / imaging / ECG /
@@ -521,7 +578,7 @@ export function formatReportText(raw: string): ReportLine[] {
     pushBody(lines, line, bodyLevel)
   }
 
-  return lines
+  return markColumnTables(lines)
 }
 
 /** Serialize the display parser's hierarchy without changing clinical words. */
