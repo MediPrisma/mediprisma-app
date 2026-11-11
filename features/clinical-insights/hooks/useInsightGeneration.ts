@@ -259,7 +259,12 @@ export function useInsightGeneration({
         }
 
         const finished = activePanelIds.filter(owns)
-        if (finished.length > 0) completeBatch(finished, entries, errors)
+        // A module stopped or restarted after its result was staged must not
+        // be published by this batch: completeBatch merges every entry given.
+        const pick = <T,>(staged: Record<string, T>) => Object.fromEntries(
+          finished.filter((panelId) => panelId in staged).map((panelId) => [panelId, staged[panelId]]),
+        )
+        if (finished.length > 0) completeBatch(finished, pick(entries), pick(errors))
       } finally {
         unsubscribe?.()
         for (const panelId of activePanelIds) {

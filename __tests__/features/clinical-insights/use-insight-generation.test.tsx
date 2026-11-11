@@ -139,6 +139,39 @@ describe("useInsightGeneration provenance", () => {
     expect(useInsightResponsesStore.getState().responses.second.text).toBe('second text')
   })
 
+  it('does not publish a staged batch result for a module stopped and regenerated meanwhile', async () => {
+    let finishSecond!: (value: string) => void
+    mockQuery.mockReset().mockResolvedValueOnce('staged first text')
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishSecond = resolve }))
+      .mockResolvedValueOnce('regenerated first text')
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let batch!: Promise<void>
+    act(() => { batch = result.current.runPanels(['first', 'second']) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(2))
+
+    act(() => result.current.stopPanel('first'))
+    await act(async () => result.current.runPanel('first', { force: true }))
+    expect(useInsightResponsesStore.getState().responses.first.text).toBe('regenerated first text')
+
+    await act(async () => { finishSecond('second text'); await batch })
+    expect(useInsightResponsesStore.getState().responses.first.text).toBe('regenerated first text')
+    expect(useInsightResponsesStore.getState().responses.second.text).toBe('second text')
+  })
+
+  it('does not publish a staged batch result for a module stopped before the batch ends', async () => {
+    let finishSecond!: (value: string) => void
+    mockQuery.mockReset().mockResolvedValueOnce('staged first text')
+      .mockImplementationOnce(() => new Promise<string>(resolve => { finishSecond = resolve }))
+    const { result } = renderHook(() => useInsightGeneration(safetyOptions()))
+    let batch!: Promise<void>
+    act(() => { batch = result.current.runPanels(['first', 'second']) })
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(2))
+    act(() => result.current.stopPanel('first'))
+    await act(async () => { finishSecond('second text'); await batch })
+    expect(useInsightResponsesStore.getState().responses.first).toBeUndefined()
+    expect(useInsightResponsesStore.getState().responses.second.text).toBe('second text')
+  })
+
   it('discards an uncommitted multi-module batch when stopped after its first staged response', async () => {
     let finish!: (value: string) => void
     mockQuery.mockReset().mockResolvedValueOnce('uncommitted first module')
