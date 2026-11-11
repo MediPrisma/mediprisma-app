@@ -1,7 +1,7 @@
 /** @jest-environment node */
 jest.mock('@/src/infrastructure/ai/utils/proxy-auth', () => ({ getProxyIdToken: jest.fn() }))
 import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
-import { createIntranetFetch, intranetGatewayAvailable } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
+import { createIntranetFetch, intranetGatewayAvailable, intranetLunaIsLaunchDefault } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
 import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
@@ -19,9 +19,10 @@ beforeEach(() => {
   jest.mocked(getProxyIdToken).mockResolvedValue('synthetic-firebase-token')
 })
 
-test('permits production and staging only with exactly one vghtpe site parameter', () => {
+test('permits production, staging and the HMC preview only with exactly one vghtpe site parameter', () => {
   expect(intranetGatewayAvailable(href)).toBe(true)
-  for (const url of [href.replace('/app-staging/', '/app-hmc/'), href.replace('vghtpe', 'hmc'), `${href}&site=hmc`, `${href}&site=vghtpe`, href.split('?')[0]]) {
+  expect(intranetGatewayAvailable(href.replace('/app-staging/', '/app-hmc/'))).toBe(true)
+  for (const url of [href.replace('/app-staging/', '/app-other/'), href.replace('vghtpe', 'hmc'), `${href}&site=hmc`, `${href}&site=vghtpe`, href.split('?')[0]]) {
     expect(intranetGatewayAvailable(url)).toBe(false)
   }
   process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'production'
@@ -141,4 +142,14 @@ test.each([
   } else {
     await expect(query).rejects.toMatchObject({ code: AiErrorCode.OUTPUT_TRUNCATED })
   }
+})
+
+test('only the HMC preview starts a hospital launch on the intranet Luna', () => {
+  const hmc = 'https://mediprisma.tw/app-hmc/?medcloud2=auto&site=vghtpe'
+  expect(intranetLunaIsLaunchDefault(hmc)).toBe(true)
+  expect(intranetLunaIsLaunchDefault(hmc.replace('/app-hmc/', '/app/'))).toBe(false)
+  expect(intranetLunaIsLaunchDefault(hmc.replace('/app-hmc/', '/app-staging/'))).toBe(false)
+  expect(intranetLunaIsLaunchDefault(hmc.replace('&site=vghtpe', ''))).toBe(false)
+  delete process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
+  expect(intranetLunaIsLaunchDefault(hmc)).toBe(false)
 })

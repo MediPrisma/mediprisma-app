@@ -1,5 +1,13 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-11-11 owner decision (later the same day, supersedes the `/app-hmc`
+exclusion below): the GPT-6 Luna（院內） option is also offered on `/app-hmc`
+under the same conditions, and the hospital automatic launch
+(`/app-hmc/?medcloud2=auto&site=vghtpe`) starts on it instead of tvghbrain.
+tvghbrain stays installed and selectable there. `/app` and `/app-staging`
+launches, and a site-only `/app-hmc` launch, still start on tvghbrain. An HMC
+build without `NEXT_PUBLIC_INTRANET_AI_ORIGIN` keeps the previous behaviour.
+
 2026-11-11 owner decision: the GPT-6 Luna（院內） option is visible only on
 `/app` and `/app-staging` with exactly one `site=vghtpe` query parameter and
 the hospital Gateway build origin configured. Other sites, missing/duplicate
