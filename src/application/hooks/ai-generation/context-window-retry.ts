@@ -16,6 +16,7 @@ export interface ContextWindowRetryRequest<TRequest, TResult> {
   clinicalContext: string
   contextLimit: number
   modelId: string
+  allowProviderRetry?: boolean
   modelName: string
   locale: string
   buildRequest: (clinicalContext: string) => {
@@ -105,7 +106,7 @@ export async function runWithContextWindowRetry<TRequest, TResult>(
       }
     } catch (error) {
       if (
-        isProviderContextWindowExceededError(error) &&
+        options.allowProviderRetry !== false && isProviderContextWindowExceededError(error) &&
         reduceClinicalContext()
       ) {
         options.onRetry?.('provider-overflow', retryCount)
