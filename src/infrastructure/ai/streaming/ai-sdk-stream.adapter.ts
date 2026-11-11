@@ -10,7 +10,7 @@
 import type { AiModelExecution } from "@/src/core/entities/ai-model-execution.entity"
 import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from "@/src/shared/utils/ai-model-execution"
 import { Output, streamText, type ModelMessage } from "ai"
-import { intranetMaxRetries } from '../interceptors/intranet-fetch'
+import { INTRANET_LUNA_ID, intranetMaxRetries } from '../interceptors/intranet-fetch'
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
   getModelDefinitionOrThrow,
@@ -114,9 +114,19 @@ export class AiSdkStreamAdapter {
       abortSignal: controller.signal,
       ...(temperature !== undefined ? { temperature } : {}),
       ...(config.maxTokens !== undefined ? { maxOutputTokens: config.maxTokens } : {}),
-      ...(isCustom && config.reasoningEffort !== undefined &&
-        /^gpt-oss(?::|-)/i.test(config.openAiCompatible?.modelId.trim() ?? '')
-        ? { providerOptions: { openai: { reasoningEffort: config.reasoningEffort } } }
+      // The intranet Luna defaults to medium reasoning when none is sent; a
+      // caller that asks for less must reach it (measured 2026-11-11: 49-79 s
+      // at the default, 11-14 s at low, on the demo summary).
+      ...(config.reasoningEffort !== undefined && (
+        modelId === INTRANET_LUNA_ID ||
+        (isCustom && /^gpt-oss(?::|-)/i.test(config.openAiCompatible?.modelId.trim() ?? ''))
+      )
+        ? { providerOptions: { openai: {
+            reasoningEffort: config.reasoningEffort,
+            // The SDK does not know this deployment name and would drop the
+            // effort without saying so.
+            ...(modelId === INTRANET_LUNA_ID ? { forceReasoning: true } : {}),
+          } } }
         : {}),
       ...(config.responseFormat === 'json' ? { output: Output.json() } : {}),
       onError: ({ error }) => { streamError = error },

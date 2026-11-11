@@ -159,6 +159,19 @@ test.each(['Network error', '503 Service Unavailable', 'monthly_budget_exhausted
   expect(mockResult.cardErrors).toHaveProperty('problems')
 })
 
+test('hospital Luna summary asks for low reasoning on every request; other built-in models send none', async () => {
+  renderHook(() => useMedicalSummary())
+  answerEverything()
+  await act(async () => runGeneration({ modelId: 'gpt-6-luna', requestedModelId: 'gpt-6-luna' }))
+  expect(mockStream.mock.calls.length).toBeGreaterThan(1)
+  mockStream.mock.calls.forEach(([, options]) => expect(options.reasoningEffort).toBe('low'))
+
+  mockStream.mockClear()
+  await act(async () => runGeneration())
+  expect(mockStream.mock.calls.length).toBeGreaterThan(1)
+  mockStream.mock.calls.forEach(([, options]) => expect(options).not.toHaveProperty('reasoningEffort'))
+})
+
 test('an aborted real reports producer cannot publish a late completed report or retry it', async () => {
   const controller = new AbortController()
   let finish!: () => void, lateChunk!: () => void, transportSignal!: AbortSignal
