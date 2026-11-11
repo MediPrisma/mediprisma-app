@@ -2031,6 +2031,11 @@ export const zhTW = {
     noAbnormal: '這次門診沒有異常的檢驗',
     empty: '目前沒有可歸屬這次門診的檢驗或檢查報告。',
     reportsPending: '檢查驗報告擷取中…',
+    awaitingTitle: '已開立，尚無報告',
+    awaitingCount: '{count} 項',
+    awaitingNote: 'HIS 還沒有這些醫囑的報告：可能尚未執行，或報告尚未發出。',
+    awaitingAppointment: '已預約',
+    visitAwaitingCount: '待報告 {count} 項',
   },
   visitHistory: {
     badges: {

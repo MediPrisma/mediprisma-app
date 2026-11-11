@@ -8,6 +8,7 @@ import { useOutpatientPrefs } from "@/src/application/hooks/use-outpatient-prefs
 import { useProgressiveImportStore } from "@/src/application/stores/progressive-import.store"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { isVghtpeSource } from "@/src/shared/utils/clinical-source-identity"
+import type { AwaitingOrder } from "@/src/shared/utils/awaiting-order"
 import { useVisitHistory, type VisitRecord } from "@/features/clinical-summary/visit-history/hooks/useVisitHistory"
 import { useEncounterDetails, type EncounterDetails } from "@/features/clinical-summary/visit-history/hooks/useEncounterDetails"
 import {
@@ -146,6 +147,18 @@ export function useLastOutpatient(selectedVisitId: string | null, physician: str
     }
     return counts
   }, [visits, details])
+  // Orders each visit wrote that HIS has no request or report for yet.
+  const awaitingOrders = useMemo(() => {
+    const byVisit = new Map<string, AwaitingOrder[]>()
+    for (const candidate of visits) {
+      const seen = new Set<string>()
+      const orders = candidate.encounterIds
+        .flatMap((id) => (encounterById.get(id)?._awaitingOrders ?? []) as AwaitingOrder[])
+        .filter((order) => !seen.has(order.id) && !!seen.add(order.id))
+      if (orders.length > 0) byVisit.set(candidate.id, orders)
+    }
+    return byVisit
+  }, [visits, encounterById])
   const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
   // The source Observation behind each row, for the shared trend / history pane.
   const sourceObservations = useMemo(() => {
@@ -171,6 +184,7 @@ export function useLastOutpatient(selectedVisitId: string | null, physician: str
     listedVisits,
     withResults,
     itemCounts,
+    awaitingOrders,
     visit,
     details: visitDetails,
     sharedCount,

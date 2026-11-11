@@ -420,4 +420,42 @@ describe('LastOutpatientCard', () => {
       shown.forEach((el) => expect(el).toHaveClass('block'))
     }
   })
+
+  it('lists the orders a visit wrote that have no report yet, and marks a booked examination', () => {
+    const data = chart()
+    data.encounters = data.encounters.map((visit: any) => visit.id === 'h-other' ? {
+      ...visit,
+      _awaitingOrders: [
+        { id: 'o-bnp', label: 'NT-pro-BNP', appointment: false },
+        { id: 'o-echo', label: 'COLOR, ECHOCARDIOGRAM', appointment: true },
+      ],
+    } : visit)
+    mockClinicalData = data
+    render(<LastOutpatientCard />)
+    const section = screen.getByTestId('last-outpatient-awaiting')
+    expect(section).toHaveTextContent(zhTW.lastOutpatient.awaitingTitle)
+    expect(section).toHaveTextContent('2 項')
+    expect(within(section).getByText('NT-pro-BNP').closest('li')).not.toHaveTextContent(zhTW.lastOutpatient.awaitingAppointment)
+    expect(within(section).getByText('COLOR, ECHOCARDIOGRAM').closest('li')).toHaveTextContent(zhTW.lastOutpatient.awaitingAppointment)
+    expect(section).toHaveTextContent(zhTW.lastOutpatient.awaitingNote)
+    // Another visit's orders stay with that visit.
+    openVisit('2026/10/09')
+    expect(screen.queryByTestId('last-outpatient-awaiting')).not.toBeInTheDocument()
+  })
+
+  it('says a visit with only unreported orders is awaiting reports, not empty', () => {
+    const data = chart()
+    data.observations = data.observations.filter((o: any) => o.id !== 'cr-old')
+    data.encounters = data.encounters.map((visit: any) => visit.id === 'h-old'
+      ? { ...visit, _awaitingOrders: [{ id: 'o-cbc', label: 'CBC', appointment: false }] } : visit)
+    mockClinicalData = data
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    const chip = within(list).getByRole('button', { name: /2026\/07\/10/ })
+    expect(chip).toHaveTextContent('待報告 1 項')
+    expect(chip).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
+    openVisit('2026/07/10')
+    expect(screen.getByTestId('last-outpatient-awaiting')).toHaveTextContent('CBC')
+    expect(screen.queryByText(zhTW.lastOutpatient.empty)).not.toBeInTheDocument()
+  })
 })
