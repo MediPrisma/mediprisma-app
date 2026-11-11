@@ -32,11 +32,10 @@
     "loop:gate": "node scripts/loop/gate.mjs",
     "loop:dashboard": "node scripts/loop/dashboard.mjs",
     "loop:log": "node scripts/loop/log.mjs",
-    "version": "node scripts/write-version.mjs && git add public/version.json",
     "lint": "eslint .",
     "dev:af": "node scripts/dev-af.mjs",
     "typecheck": "node scripts/typecheck.mjs",
-    "test:optional": "node --test scripts/__tests__/optional-install.test.mjs"
+    "test:optional": "node --test scripts/__tests__/optional-install.test.mjs scripts/__tests__/app-version.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.84",

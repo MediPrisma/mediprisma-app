@@ -1,10 +1,8 @@
 // Fetches the deployed app version from /version.json at runtime.
 //
-// version.json is regenerated from package.json by scripts/write-version.mjs
-// (wired via the "version" npm-script hook). Runtime fetch — instead of
-// build-time env inlining — means version changes pick up on hard refresh
-// without restarting the dev server, since Next.js serves public/ files
-// fresh on every request.
+// version.json is generated when Next loads its config (next.config.ts →
+// scripts/app-version.mjs): the date of the commit being built, as YYYY.M.D.
+// It is not committed.
 //
 // Returns `null` until the fetch resolves, then the version string. Stays
 // null forever on fetch error (offline, missing file) — caller should treat

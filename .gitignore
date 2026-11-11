@@ -77,3 +77,4 @@ docs/TVGHBRAIN-*.md
 
 # HMC build records the installed published packages during export.
 /public/hmc-build.json
+/public/version.json
