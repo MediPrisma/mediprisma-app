@@ -88,6 +88,23 @@ describe('buildIpsMarkdown', () => {
     expect(md).toContain('| 2024-03-01 | 99 |')
   })
 
+  it('writes a +08:00 midnight onset on the day the source recorded', () => {
+    const data = emptyCollection()
+    data.conditions = [
+      {
+        id: 'dm',
+        clinicalStatus: 'active',
+        code: { text: 'Type 2 diabetes mellitus', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9' }] },
+        onsetDateTime: '2026-10-23T00:00:00+08:00',
+      },
+    ]
+
+    const md = buildIpsMarkdown({ patient: PATIENT, data, generatedAt: new Date('2026-10-24T00:00:00Z') })
+
+    expect(md).toContain('2026-10-23')
+    expect(md).not.toContain('2026-10-22')
+  })
+
   it('can mask direct patient identifiers and states the masking limit', () => {
     const md = buildIpsMarkdown({
       patient: {
