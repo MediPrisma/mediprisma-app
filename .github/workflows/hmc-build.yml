@@ -145,6 +145,9 @@ jobs:
         env:
           DEPLOY_BASE_PATH: "/app-hmc"
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          # Public entry of the 北榮 intranet AI gateway (same value as /app and
+          # /app-staging). Offers GPT-6 Luna（院內） on ?site=vghtpe only.
+          NEXT_PUBLIC_INTRANET_AI_ORIGIN: https://ai-vghtpe.mediprisma.tw
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}
           NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}
           NEXT_PUBLIC_HF_AUTH_POLICY: ${{ vars.NEXT_PUBLIC_HF_AUTH_POLICY }}
