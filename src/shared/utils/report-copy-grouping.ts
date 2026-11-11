@@ -146,6 +146,15 @@ function examTime(report: Report): string | undefined {
   return instant === undefined ? undefined : String(instant)
 }
 
+/** VGH radiograph titles name only the body part and projection ("PELVIS &
+ * RT HIP LAT", "KUB, PLAIN"), and its 8-digit order codes are not NHI codes.
+ * A projection word counts only when no other imaging method is named. */
+function isVghRadiographTitle(label: string): boolean {
+  const normalized = label.normalize('NFKC')
+  if (/\bct\b|computed|tomograph|\bmri?\b|magnetic|sono|ultras|echo|doppler|dopscan|mammo|dexa|scan|angio|guid|fluoro|超音波|斷層|磁振|乳房/i.test(normalized)) return false
+  return /\b(?:ap|pa|lat|lateral|oblique|views?|plain)\b/i.test(normalized)
+}
+
 function modality(report: Report): string | undefined {
   const header = EXAM_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1]
   const title = [report.code?.text, ...(report.code?.coding ?? []).map(c => c.display), header].filter(Boolean).join(' ').normalize('NFKC')
@@ -157,7 +166,8 @@ function modality(report: Report): string | undefined {
   ] as const
   const found = new Set<string>(methods.filter(([, pattern]) => pattern.test(title)).map(([method]) => method))
   if ([report.code?.text, ...(report.code?.coding ?? []).map(coding => coding?.display), header]
-    .some(label => typeof label === 'string' && isRadiographLabel(label))) found.add('XR')
+    .some(label => typeof label === 'string'
+      && (isRadiographLabel(label) || (sourceOf(report) === 'hospital' && isVghRadiographTitle(label))))) found.add('XR')
   for (const coding of report.code?.coding ?? []) {
     const codedMethod = getNhiReportModality(coding?.code)
     if (codedMethod) found.add(codedMethod)
@@ -187,8 +197,8 @@ function parseExamLabel(label: string): string[] | null {
     .replace(/其他/g, '')
     .replace(/\bEcho for others\b/gi, '')
     .replace(/\bc\s*\.\s*t\s*\.?/gi, 'ct')
-    .replace(/電腦斷層造影|電腦斷層|磁振造影|磁振|核磁共振|有造影劑|無造影劑|超音波|乳房|胸腔檢查|胸腔|胸部|頭部|頭顱|腦部|頸部|腹部|骨盆|脊椎|左側|右側|雙側|左乳|右乳|雙乳|包括|各種|角度|部位|之/g, '')
-    .replace(/\b(?:ct|scan|computed|tomography|chest|thorax|lungs?|head|brain|cranial|neck|abdomen|abdominal|hepatobiliary|liver|gallbladder|pelvis|pelvic|spine|spinal|breasts?|sono|sonogram|sonography|ultrasound|ultrasonography|mri?|magnetic|resonance|imaging|left|right|lt|rt|bilateral|ap|pa|lateral|oblique|xr|x|ray|radiograph(?:y)?|view|views|contrast|with|without|other|system|including|all|various|angles?|and|parts?|of|the|each|film)\b/gi, '')
+    .replace(/有\s*\/\s*無造影劑|電腦斷層造影|電腦斷層|磁振造影|磁振|核磁共振|有造影劑|無造影劑|超音波|乳房|胸腔檢查|胸腔|胸部|頭部|頭顱|腦部|頸部|腹部|骨盆|脊椎|左側|右側|雙側|左乳|右乳|雙乳|包括|各種|角度|部位|髖關節|關節|檢查|之|及|與/g, '')
+    .replace(/\b(?:ct|scan|computed|tomography|chest|thorax|lungs?|head|brain|cranial|neck|abdomen|abdominal|abd|upper|lower|hepatobiliary|liver|gallbladder|spleen|biliary|ducts?|pelvis|pelvic|hips?|joints?|thr|plain|side|spine|spinal|breasts?|sono|sonogram|sonography|ultrasound|ultrasonography|mri?|magnetic|resonance|imaging|left|right|lt|rt|bilateral|ap|pa|lat|lateral|oblique|xr|x|ray|radiograph(?:y)?|view|views|contrast|with|without|other|system|including|all|various|angles?|and|parts?|of|the|each|film)\b/gi, '')
     .replace(/[\s\p{P}]/gu, '')
   if (recognized) return null
   const left = /\b(?:left|lt)\b|左側|左乳|左肺/i.test(label)
@@ -201,18 +211,25 @@ function parseExamLabel(label: string): string[] | null {
     ['head', /\b(?:head|cranial)\b|頭部|頭顱/i],
     ['brain', /\bbrain\b|腦部/i],
     ['neck', /\bneck\b|頸/i],
-    ['abdomen', /\b(?:abdomen|abdominal|kub)\b|腹/i],
+    ['abdomen', /\b(?:abdomen|abdominal|abd|kub)\b|腹/i],
+    // Upper and lower abdomen are different examinations, not one region.
+    ['upper', /\bupper\b/i],
+    ['lower', /\blower\b/i],
     ['hepatobiliary', /\bhepatobiliary\b/i],
     ['liver', /\bliver\b|肝/i],
     ['gallbladder', /\bgallbladder\b|膽/i],
+    ['spleen', /\bspleen\b|脾/i],
+    ['biliary', /\bbiliary\b/i],
     ['pelvis', /\bpelvi[cs]\b|骨盆/i],
+    ['hip', /\bhips?\b|髖/i],
     ['spine', /\b(?:spine|spinal)\b|脊椎/i],
   ] as const
   const site = sites.filter(([, pattern]) => pattern.test(label)).map(([name]) => name).join(',')
-  const withContrast = (/\bcontrast\b/i.test(label) && /\bwith\b/i.test(label)) || /有造影劑/.test(label)
+  const withContrast = (/\bcontrast\b/i.test(label) && /\bwith\b/i.test(label)) || /有(?:\s*\/\s*無)?造影劑/.test(label)
   const withoutContrast = (/\bcontrast\b/i.test(label) && /\bwithout\b/i.test(label)) || /無造影劑/.test(label)
   const contrast = [withContrast && 'with', withoutContrast && 'without'].filter(Boolean).join(',')
-  const view = ['ap', 'pa', 'lateral', 'oblique'].filter(value => new RegExp(`\\b${value}\\b`, 'i').test(label)).join(',')
+  const views = [['ap', /\bap\b/i], ['pa', /\bpa\b/i], ['lateral', /\blat(?:eral)?\b/i], ['oblique', /\boblique\b/i]] as const
+  const view = views.filter(([, pattern]) => pattern.test(label)).map(([value]) => value).join(',')
   return [side, site, contrast, view]
 }
 
@@ -377,7 +394,53 @@ function calculateReportDisplayGroupingKeys(reports: readonly Report[], original
     if (ends.some(end => end?.instant !== undefined && times.some(time => Number(time) > end.instant!))) continue
     for (const { report } of bucket) keys.set(report, `cross-source|${key}`)
   }
+  pairByVghRequestNumber(reports, keys)
   return keys
+}
+
+// VGH copies its own report header into the copy it uploads to the NHI cloud
+// ("申請序號 / 工作號：C3PN9NH/"); the in-house capture carries the same
+// request number as an identifier. Cardiac, pathology and endoscopy reports
+// (non-radiology formats) have no other reliable cross-source match: titles,
+// dates and whitespace all differ. Radiology copies carry no header and keep
+// the narrative path above.
+const VGH_REQUEST_SYSTEM = 'urn:oid:vgh.report.request'
+const VGH_CLOUD_REQUEST_HEADER = /申請序號\s*\/\s*工作號\s*[:：]\s*([0-9A-Z]{5,12})\s*\//
+
+function vghRequestNumber(report: Report, source: Source | undefined): string | undefined {
+  if (source === 'hospital') {
+    const value = reportIdentifiers(report).find(id => id.system === VGH_REQUEST_SYSTEM)?.value?.trim()
+    return value ? value.toUpperCase() : undefined
+  }
+  if (source === 'cloud') return VGH_CLOUD_REQUEST_HEADER.exec(sharedReportNarrative(report).normalize('NFKC'))?.[1].toUpperCase()
+  return undefined
+}
+
+function pairByVghRequestNumber(reports: readonly Report[], keys: Map<Report, string>) {
+  const buckets = new Map<string, { report: Report; source: Source }[]>()
+  for (const report of reports) {
+    if (!report || report.status === 'entered-in-error') continue
+    // Lab panels carry results and are merged at import; only narratives here.
+    if (report.result?.length || report._observations?.length) continue
+    const source = sourceOf(report)
+    const number = vghRequestNumber(report, source)
+    const subject = report.subject?.reference?.trim()
+    if (!source || !number || !subject) continue
+    const key = JSON.stringify([subject, number])
+    buckets.set(key, [...(buckets.get(key) ?? []), { report, source }])
+  }
+  for (const [key, bucket] of buckets) {
+    const hospital = bucket.filter(item => item.source === 'hospital')
+    const cloud = bucket.filter(item => item.source === 'cloud')
+    // One in-house report per request number; the cloud may bill it as
+    // several lines (e.g. M-mode + Doppler) that all quote the same header.
+    if (hospital.length !== 1 || !cloud.length) continue
+    const members = new Set(bucket.map(item => item.report))
+    // Re-key an existing shared group only as a whole, never split it.
+    const existing = new Set(bucket.map(item => keys.get(item.report)).filter(Boolean))
+    if ([...keys].some(([report, existingKey]) => existing.has(existingKey) && !members.has(report))) continue
+    for (const { report } of bucket) keys.set(report, `cross-source|vgh-request|${key}`)
+  }
 }
 
 /** Preserve full-set ambiguity decisions, but never describe a lone source or

@@ -1,7 +1,7 @@
 'use client'
 
-// 上次門診 opens on the clinician's own last visit with the patient when the
-// visit physician matches this name. The same picker is in the tab itself.
+// 上次門診 marks the clinician's own visits and lists them first in its
+// physician filter when the visit physician matches this name.
 
 import { Label } from '@/components/ui/label'
 import { useLanguage } from '@/src/application/providers/language.provider'

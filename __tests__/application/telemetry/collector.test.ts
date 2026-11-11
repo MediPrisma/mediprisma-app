@@ -248,7 +248,10 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
   expect(payload.diagnostics).not.toHaveProperty('prepared')
   expect(payload.response_complete).toBeNull()
   for (const model of MODEL_CATALOG) {
-    expect(collectorEventV10Schema.safeParse({ ...payload, model: model.provider === 'custom' ? 'custom' : model.id }).success).toBe(true)
+    beginCollectorObservation({ feature: 'summary', modelId: model.id, sampleKind: 'feature', mode: 'structured' }).finish({ outcome: 'ok' })
+    await settle()
+    expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id === 'gpt-6-luna' ? 'unknown' : model.id)
+    expect(collectorEventV10Schema.safeParse(body()).success).toBe(true)
   }
 })
 
