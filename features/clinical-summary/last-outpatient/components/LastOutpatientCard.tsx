@@ -11,7 +11,7 @@ import { ObservationLongitudinalAction } from "@/features/clinical-summary/repor
 import type { EncounterObservation } from "@/features/clinical-summary/visit-history/components/EncounterObservationCard"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { useLastOutpatient, type HospitalOutpatientVisit } from "../hooks/useLastOutpatient"
+import { useLastOutpatient, type HospitalOutpatientVisit, type VisitScope } from "../hooks/useLastOutpatient"
 import { isSameClinician, type PriorLabValue } from "../utils/last-outpatient"
 
 type LabResult = { interpretationLabel?: string; refRangeAbnormal?: boolean }
@@ -96,6 +96,7 @@ type VisitListStrings = {
   label: string
   youTemplate: string
   noResults: string
+  noOrders: string
   pending: string
   itemCount: string
   awaitingCount: string
@@ -192,8 +193,10 @@ function VisitList({
   physician,
   onPhysicianChange,
   selectedId,
+  gatheredIds,
   itemCounts,
   awaitingCounts,
+  withoutOrders,
   clinicianName,
   reportsPending,
   collapsed,
@@ -208,9 +211,13 @@ function VisitList({
   physician: string | null
   onPhysicianChange: (physician: string | null) => void
   selectedId: string
+  /** Visits whose results the selected own visit is showing with its own. */
+  gatheredIds: ReadonlySet<string>
   itemCounts: Map<string, number>
   /** Orders with no report yet, by visit. */
   awaitingCounts: Map<string, number>
+  /** Visits that wrote no examination order: empty, not missing a report. */
+  withoutOrders: ReadonlySet<string>
   clinicianName: string | null
   /** Reports still importing: no visit can be called empty yet. */
   reportsPending: boolean
@@ -290,9 +297,10 @@ function VisitList({
               : candidate.physician
             const year = candidate.date.slice(0, 4)
             const newYear = index === 0 || visits[index - 1].date.slice(0, 4) !== year
+            const emptyLabel = withoutOrders.has(candidate.id) ? strings.noOrders : strings.noResults
             const status = reportsPending && count === 0
               ? strings.pending
-              : empty ? strings.noResults
+              : empty ? emptyLabel
                 : count === 0 ? strings.awaitingCount.replace('{count}', String(awaiting))
                   : strings.itemCount.replace('{count}', String(count))
             return (
@@ -306,12 +314,15 @@ function VisitList({
                   ref={selected ? selectedRef : undefined}
                   type="button"
                   aria-pressed={selected}
+                  data-gathered={gatheredIds.has(candidate.id) || undefined}
                   title={[visitDay(candidate.date), candidate.department, physician].filter(Boolean).join(' · ')}
                   onClick={() => onSelect(candidate.id)}
                   className={cn(
                     'flex min-h-[44px] shrink-0 flex-col items-start rounded-md border px-2 py-1 text-left transition-colors @[44rem]/lo:w-full @[44rem]/lo:px-2.5 @[44rem]/lo:py-1.5',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    selected ? 'border-primary bg-accent text-accent-foreground' : 'border-border hover:bg-muted/60 @[44rem]/lo:border-transparent',
+                    selected ? 'border-primary bg-accent text-accent-foreground'
+                      : gatheredIds.has(candidate.id) ? 'border-border bg-accent/40 hover:bg-accent/60 @[44rem]/lo:border-transparent'
+                        : 'border-border hover:bg-muted/60 @[44rem]/lo:border-transparent',
                   )}
                 >
                   <span className="flex w-full items-baseline justify-between gap-2">
@@ -323,7 +334,7 @@ function VisitList({
                   <span className="max-w-[7.5rem] truncate text-xs text-muted-foreground @[44rem]/lo:max-w-full">
                     {[clinicLabel(candidate.department), physician].filter(Boolean).join(' · ')}
                     {/* In the chip row the status shares the second line. */}
-                    {empty && <span className="@[44rem]/lo:hidden">{` · ${strings.noResults}`}</span>}
+                    {empty && <span className="@[44rem]/lo:hidden">{` · ${emptyLabel}`}</span>}
                   </span>
                 </button>
               </Fragment>
@@ -525,6 +536,8 @@ export function LastOutpatientCard() {
   // Every physician's visits by default; not remembered across charts.
   const [physician, setPhysician] = useState<string | null>(null)
   const [onlyAbnormal, setOnlyAbnormal] = useState(false)
+  // What an own visit shows; kept while moving between visits.
+  const [scope, setScope] = useState<VisitScope>('since-all')
   // Folded or not is remembered per browser. The card renders only once the
   // chart is loaded in the browser, so storage is there to read.
   const [listCollapsed, setListCollapsed] = useState(() => typeof window !== 'undefined' && readCollapsed())
@@ -536,13 +549,15 @@ export function LastOutpatientCard() {
     listedVisits,
     itemCounts,
     awaitingOrders,
+    withoutOrders,
     visit,
+    sinceVisits,
     details,
     priorValues,
     rangeComparisons,
     sharedCount,
     sourceObservations,
-  } = useLastOutpatient(selectedVisitId, physician)
+  } = useLastOutpatient(selectedVisitId, physician, scope)
 
   const categoryLabel = (id: string | null): string =>
     (t.reports.cumulativeCategories as Record<string, string>)[id ?? 'other'] || id || ''
@@ -557,7 +572,14 @@ export function LastOutpatientCard() {
   const mainDay = mostCommonDay(tests.map(resultDay))
   const mainPriorDay = mostCommonDay(tests.map((test) => priorValues.get(test.id)?.date ?? ''))
   const physicians = useMemo(() => physicianOptions(visits, clinicianName), [visits, clinicianName])
-  const awaiting = (visit && awaitingOrders.get(visit.id)) || []
+  const gathered = sinceVisits.length > 1
+  const gatheredIds = useMemo(() => new Set(gathered ? sinceVisits.map((candidate) => candidate.id) : []), [gathered, sinceVisits])
+  // Each order with the visit that wrote it, named only when several are shown.
+  const awaiting = (gathered ? sinceVisits : visit ? [visit] : []).flatMap((candidate) =>
+    (awaitingOrders.get(candidate.id) ?? []).map((order) => ({
+      order,
+      from: gathered ? [clinicLabel(candidate.department), shortDay(candidate.date.slice(0, 10))].filter(Boolean).join(' · ') : '',
+    })))
   const awaitingCounts = useMemo(
     () => new Map([...awaitingOrders].map(([id, orders]) => [id, orders.length])),
     [awaitingOrders],
@@ -588,8 +610,10 @@ export function LastOutpatientCard() {
                 setPhysician(next)
               }}
               selectedId={visit.id}
+              gatheredIds={gatheredIds}
               itemCounts={itemCounts}
               awaitingCounts={awaitingCounts}
+              withoutOrders={withoutOrders}
               clinicianName={clinicianName}
               reportsPending={reportsPending}
               collapsed={listCollapsed}
@@ -598,6 +622,7 @@ export function LastOutpatientCard() {
                 label: strings.visitPicker,
                 youTemplate: strings.physicianYou,
                 noResults: strings.noResults,
+                noOrders: strings.noOrders,
                 pending: strings.visitPending,
                 itemCount: strings.visitItemCount,
                 awaitingCount: strings.visitAwaitingCount,
@@ -624,6 +649,31 @@ export function LastOutpatientCard() {
               )}
               {visit.institution && <span className="text-sm text-muted-foreground">{visit.institution}</span>}
             </div>
+            {isYours && visits.length > 1 && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
+                <div className="flex gap-1" role="group" aria-label={strings.scopeLabel}>
+                  {([['since-all', strings.scopeSinceAll], ['since-own', strings.scopeSinceOwn], ['single', strings.scopeSingle]] as const).map(([value, label]) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-pressed={scope === value}
+                      onClick={() => setScope(value)}
+                      className={cn(
+                        'h-8 rounded-full px-3 text-xs',
+                        scope === value && 'border-primary bg-accent text-accent-foreground hover:bg-accent',
+                      )}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                {gathered && (
+                  <span className="text-xs text-muted-foreground">{fill(strings.scopeGathered, { count: sinceVisits.length })}</span>
+                )}
+              </div>
+            )}
           </div>
 
           {tests.length === 0 && reports.length === 0 ? (
@@ -719,9 +769,10 @@ export function LastOutpatientCard() {
               </h3>
               {/* One order per row, like the lab table above it. */}
               <ul className="overflow-hidden rounded-md border border-border/80 bg-card text-sm">
-                {awaiting.map((order) => (
+                {awaiting.map(({ order, from }) => (
                   <li key={order.id} className="flex min-w-0 items-baseline gap-2 border-b border-border/50 px-3 py-1.5 last:border-b-0">
                     <span className="min-w-0 break-words font-medium">{order.label}</span>
+                    {from && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{from}</span>}
                     {order.appointment && (
                       <span className="shrink-0 rounded-sm border border-border px-1 text-[0.6875rem] text-muted-foreground">
                         {strings.awaitingAppointment}

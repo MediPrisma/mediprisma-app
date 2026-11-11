@@ -154,7 +154,7 @@ export type PriorLabValue = {
   unit?: string
 }
 
-function analyteKey(observation: any): string | null {
+export function analyteKey(observation: any): string | null {
   return getAnalyteCanonicalKey(observation) ?? (getAnalyteLabel(observation) || null)
 }
 
@@ -272,4 +272,65 @@ export function buildRangeComparisons(
     }
   }
   return comparisons
+}
+
+/** The clinician's own most recent visit before `today` (YYYY-MM-DD): the
+ *  visit "since I last saw this patient" starts from. Today's visit is the one
+ *  in progress, not the last one. `visits` are newest first. */
+export function lastOwnVisitBefore<T extends { date: string; physician?: string }>(
+  visits: readonly T[],
+  clinicianName: string | null | undefined,
+  today: string,
+): T | undefined {
+  return visits.find((visit) => visit.date.slice(0, 10) < today && isSameClinician(visit.physician, clinicianName))
+}
+
+type MergeableTest = { id: string; effectiveDateTime?: string }
+type MergeableDetails<T extends MergeableTest, R extends { id: string; row: { diagnosticReportIds?: string[] } }> = {
+  tests: T[]
+  testGroups: Array<{ categoryId: string | null; tests: T[] }>
+  reports: R[]
+}
+
+/**
+ * Several visits' results as one list. An analyte ordered at more than one
+ * visit shows once, as its most recent result (the earlier ones are its
+ * "previous" value and its trend); a combined draw listed under two visits
+ * shows once. Results with no analyte identity are all kept. `details` are
+ * newest visit first, and categories keep their first-seen order.
+ */
+export function mergeVisitDetails<T extends MergeableTest, R extends { id: string; row: { diagnosticReportIds?: string[] } }>(
+  details: ReadonlyArray<MergeableDetails<T, R>>,
+  sourceObservations: ReadonlyMap<string, any>,
+): MergeableDetails<T, R> {
+  const latest = new Map<string, T>()
+  for (const entry of details) {
+    for (const test of entry.tests) {
+      const source = sourceObservations.get(test.id)
+      const key = (source && analyteKey(source)) || `id:${test.id}`
+      const kept = latest.get(key)
+      if (!kept || (test.effectiveDateTime ?? '') > (kept.effectiveDateTime ?? '')) latest.set(key, test)
+    }
+  }
+  const keep = new Set([...latest.values()].map((test) => test.id))
+  const placed = new Set<string>()
+  const groups = new Map<string | null, T[]>()
+  for (const entry of details) {
+    for (const group of entry.testGroups) {
+      const tests = groups.get(group.categoryId) ?? []
+      for (const test of group.tests) {
+        if (!keep.has(test.id) || placed.has(test.id)) continue
+        placed.add(test.id)
+        tests.push(test)
+      }
+      groups.set(group.categoryId, tests)
+    }
+  }
+  const seenReports = new Set<string>()
+  const reports = details.flatMap((entry) => entry.reports).filter((report) => {
+    const key = report.row.diagnosticReportIds?.length ? report.row.diagnosticReportIds.join('|') : report.id
+    return !seenReports.has(key) && !!seenReports.add(key)
+  })
+  const testGroups = [...groups].map(([categoryId, tests]) => ({ categoryId, tests })).filter((group) => group.tests.length > 0)
+  return { tests: testGroups.flatMap((group) => group.tests), testGroups, reports }
 }

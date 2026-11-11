@@ -4,6 +4,8 @@ import {
   isHospitalOutpatientEncounter,
   isHospitalSourcedEncounter,
   isSameClinician,
+  lastOwnVisitBefore,
+  mergeVisitDetails,
   normalizeClinicianName,
   orderingVisitIds,
   recentHospitalPhysicians,
@@ -194,5 +196,50 @@ describe('recent hospital physicians', () => {
   it('treats a staff code as part of the record, not of the name', () => {
     expect(displayClinicianName('王志明 (DOC1234A)')).toBe('王志明')
     expect(isSameClinician('王志明 (DOC1234A)', '王志明')).toBe(true)
+  })
+})
+
+describe('lastOwnVisitBefore', () => {
+  const visits = [
+    { date: '2026-11-07T09:00:00+08:00', physician: '陳怡君' },
+    { date: '2026-10-20T09:00:00+08:00', physician: '李建國' },
+    { date: '2026-10-09T09:00:00+08:00', physician: '陳怡君 醫師' },
+  ]
+  it('is the clinician’s newest visit before today', () => {
+    expect(lastOwnVisitBefore(visits, '陳怡君', '2026-11-07')).toBe(visits[2])
+    expect(lastOwnVisitBefore(visits, '陳怡君', '2026-11-08')).toBe(visits[0])
+  })
+  it('is nothing without a name or an own visit', () => {
+    expect(lastOwnVisitBefore(visits, null, '2026-11-07')).toBeUndefined()
+    expect(lastOwnVisitBefore(visits, '王志明', '2026-11-07')).toBeUndefined()
+  })
+})
+
+describe('mergeVisitDetails', () => {
+  const test = (id: string, effectiveDateTime: string) => ({ id, effectiveDateTime })
+  const source = new Map<string, any>([
+    ['cr-new', creatinine('cr-new', 1.41, '2026-10-20')],
+    ['cr-old', creatinine('cr-old', 1.26, '2026-10-09')],
+  ])
+  const report = (id: string, ids?: string[]) => ({ id, row: { diagnosticReportIds: ids } })
+
+  it('keeps an analyte’s latest result, a combined draw once, and every result with no identity', () => {
+    const newer = {
+      tests: [test('cr-new', '2026-10-20T09:00:00+08:00'), test('shared', '2026-10-20T09:00:00+08:00'), test('free-1', '2026-10-20')],
+      testGroups: [{ categoryId: 'chem', tests: [test('cr-new', '2026-10-20T09:00:00+08:00'), test('shared', '2026-10-20T09:00:00+08:00')] }, { categoryId: null, tests: [test('free-1', '2026-10-20')] }],
+      reports: [report('r1', ['dr-1'])],
+    }
+    const older = {
+      tests: [test('cr-old', '2026-10-09T09:00:00+08:00'), test('shared', '2026-10-20T09:00:00+08:00'), test('free-2', '2026-10-09')],
+      testGroups: [{ categoryId: null, tests: [test('free-2', '2026-10-09')] }, { categoryId: 'chem', tests: [test('cr-old', '2026-10-09T09:00:00+08:00'), test('shared', '2026-10-20T09:00:00+08:00')] }],
+      reports: [report('r1-copy', ['dr-1']), report('r2')],
+    }
+    const merged = mergeVisitDetails([newer, older], source)
+    expect(merged.testGroups.map((group) => [group.categoryId, group.tests.map((item) => item.id)])).toEqual([
+      ['chem', ['cr-new', 'shared']],
+      [null, ['free-1', 'free-2']],
+    ])
+    expect(merged.tests.map((item) => item.id)).toEqual(['cr-new', 'shared', 'free-1', 'free-2'])
+    expect(merged.reports.map((item) => item.id)).toEqual(['r1', 'r2'])
   })
 })

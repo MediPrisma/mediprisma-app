@@ -1995,6 +1995,7 @@ export const en = {
     title: 'Last hospital outpatient visit',
     visitPicker: 'Hospital outpatient visits',
     noResults: 'no results',
+    noOrders: 'no orders',
     visitPending: 'results loading',
     visitItemCount: '{count} items',
     visitCount: 'Hospital visits · {count}',
@@ -2027,6 +2028,11 @@ export const en = {
     awaitingNote: 'HIS has no report for these orders yet: they may not have been done, or the report is not out.',
     awaitingAppointment: 'Booked',
     visitAwaitingCount: '{count} awaiting report',
+    scopeLabel: 'Show',
+    scopeSinceAll: 'Since this visit · all',
+    scopeSinceOwn: 'Since this visit · mine',
+    scopeSingle: 'This visit only',
+    scopeGathered: '{count} visits combined; a repeated item shows its latest result',
   },
   visitHistory: {
     badges: {

@@ -849,6 +849,9 @@ export interface EncounterEntity extends ClinicalSourceRecord {
   _sourceEncounterRecords?: any[]
   /** Orders written at this visit that HIS has no request or report for yet. */
   _awaitingOrders?: import('@/src/shared/utils/awaiting-order').AwaitingOrder[]
+  /** How many examination orders this visit wrote, reported or not; unset
+   *  when the bundle does not say (an earlier import, a source without orders). */
+  _orderCount?: number
   id: string
   status?: string
   class?: {
