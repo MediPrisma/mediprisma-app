@@ -25,18 +25,20 @@ export function homeMeasurementLink(patient: PatientEntity | null, pageUrl: stri
   if (!patient) return null
   const query = homeLookupQuery(patient, pageUrl)
   if (query && 'chart' in query) return `${HEALTH_APP_ORIGIN}/open#${new URLSearchParams({ chart: query.chart })}`
-  if (query) return `${HEALTH_APP_ORIGIN}/open#${new URLSearchParams({ name: query.name, birth: query.birthDate })}`
+  // The service's page offers name matches only with a birth date to check them by.
+  if (query?.birthDate) return `${HEALTH_APP_ORIGIN}/open#${new URLSearchParams({ name: query.name, birth: query.birthDate })}`
   return isVghtpeLaunchUrl(pageUrl) ? `${HEALTH_APP_ORIGIN}/` : null
 }
 
-/** Who to ask the service about: the 病歷號, or, as for the link, name and birth date. */
-export type HomeLookupQuery = { chart: string } | { name: string; birthDate: string }
+/** Who to ask the service about: the 病歷號, or the name with the birth date when there is one. */
+export type HomeLookupQuery = { chart: string; birthDate?: undefined } | { name: string; birthDate?: string }
 
 /**
  * The 病歷號 when the hospital's records are in. Before they are (they arrive
  * after the cloud data, often after the visit has started), in the hospital's
- * own launch only: an unmasked single name and the birth date. The service
- * answers a name with readings only when it leads to one 病歷號 on its lists.
+ * own launch only: an unmasked single name, and the birth date if any. The
+ * service answers a name with readings only when it leads to one 病歷號 on its
+ * lists; a repeated name is left to the doctor (user, 2026-11-10).
  */
 export function homeLookupQuery(patient: PatientEntity | null, pageUrl: string): HomeLookupQuery | null {
   if (!patient) return null
@@ -45,7 +47,8 @@ export function homeLookupQuery(patient: PatientEntity | null, pageUrl: string):
   if (!isVghtpeLaunchUrl(pageUrl)) return null
   const names = (patient.name ?? []).map((name) => name.text?.trim()).filter((text): text is string => Boolean(text))
   const birth = patient.birthDate?.trim() ?? ''
-  return names.length === 1 && !MASKED_NAME.test(names[0]) && BIRTH_DATE.test(birth) ? { name: names[0], birthDate: birth } : null
+  if (names.length !== 1 || MASKED_NAME.test(names[0])) return null
+  return BIRTH_DATE.test(birth) ? { name: names[0], birthDate: birth } : { name: names[0] }
 }
 
 /** The hospital 病歷號, when the patient came from the hospital's own records. */

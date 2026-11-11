@@ -240,6 +240,31 @@ describe('VitalsCard home readings button', () => {
     }
   })
 
+  it('without a birth date either, asks by the name alone', async () => {
+    mockHospitalLaunch = true
+    try {
+      mockPatient = { ...cloudPatient, birthDate: undefined }
+      global.fetch = answer({ matches: [{ chart: '1000002', readingDays: 5, homeBp: HOME_BP }] })
+      render(<VitalsCard />)
+      await waitFor(() => expect(mockGridProps.homeBp).toMatchObject({ systolic: 128 }))
+      expect(JSON.parse((global.fetch as unknown as jest.Mock).mock.calls[0][1].body)).toEqual({ name: '示範乙' })
+    } finally {
+      mockHospitalLaunch = undefined
+    }
+  })
+
+  it('asks nothing for a masked name', async () => {
+    mockHospitalLaunch = true
+    try {
+      mockPatient = { ...cloudPatient, name: [{ text: '示○乙' }] }
+      render(<VitalsCard />)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(global.fetch).not.toHaveBeenCalled()
+    } finally {
+      mockHospitalLaunch = undefined
+    }
+  })
+
   it('asks nothing without a 病歷號 outside the hospital launch, or for any other account', async () => {
     mockPatient = { ...cloudPatient }
     render(<VitalsCard />)

@@ -115,3 +115,26 @@ test('a rejected or failing request never throws into the import', async () => {
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
 })
+
+test('a cloud-only end carries only a closed unavailable reason', async () => {
+  reportHospitalCapture(relayed([], 0), 'cloud-only', 'HIS_LOGIN_REQUIRED')
+  await settle()
+  expect(sentBody()).toMatchObject({ outcome: 'failed', failures: [], unavailable_reason: 'HIS_LOGIN_REQUIRED' })
+  expect(hospitalCaptureEventSchema.safeParse(sentBody()).success).toBe(true)
+  for (const reason of [undefined, '北榮登入過期', 'HIS_PEER_NOT_CONFIGURED']) {
+    reportHospitalCapture(relayed([], 0), 'cloud-only', reason)
+    await settle()
+    expect(sentBody()).not.toHaveProperty('unavailable_reason')
+  }
+  reportHospitalCapture(relayed([]), 'hospital', 'HIS_TIMEOUT')
+  await settle()
+  expect(sentBody()).toMatchObject({ outcome: 'complete' })
+  expect(sentBody()).not.toHaveProperty('unavailable_reason')
+})
+
+test('a patient-selection cloud-only end is logged with its reason', async () => {
+  reportHospitalCapture(relayed([], 0), 'cloud-only', 'HIS_PATIENT_SELECTION_REQUIRED')
+  await settle()
+  expect(sentBody()).toMatchObject({ outcome: 'failed', unavailable_reason: 'HIS_PATIENT_SELECTION_REQUIRED' })
+  expect(hospitalCaptureEventSchema.safeParse(sentBody()).success).toBe(true)
+})
