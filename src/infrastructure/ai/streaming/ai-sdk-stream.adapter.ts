@@ -8,6 +8,8 @@
 // mode share one path.
 
 import type { AiModelExecution } from "@/src/core/entities/ai-model-execution.entity"
+import type { AiTokenUsage } from "@/src/core/entities/ai.entity"
+import { readTokenUsage } from "@/src/shared/utils/ai-token-usage"
 import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from "@/src/shared/utils/ai-model-execution"
 import { Output, streamText, type ModelMessage } from "ai"
 import { INTRANET_LUNA_ID, intranetMaxRetries } from '../interceptors/intranet-fetch'
@@ -39,6 +41,8 @@ export interface StreamConfig {
   onChunk: (content: string) => void
   requestedModelId?: string
   onModelExecution?: (execution: AiModelExecution) => void
+  /** Token counts the service reported for this stream; called once after it completes, if any. */
+  onUsage?: (usage: AiTokenUsage) => void
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
@@ -176,6 +180,14 @@ export class AiSdkStreamAdapter {
     // without throwing). Aborts are intentional and stay silent.
     if (streamError && !config.signal.aborted) {
       throw streamError
+    }
+
+    // Diagnostics only: a missing or failed usage report never fails a completed stream.
+    if (config.onUsage && !config.signal.aborted) {
+      try {
+        const usage = readTokenUsage(await result.usage)
+        if (usage) config.onUsage(usage)
+      } catch { /* usage is optional */ }
     }
   }
 

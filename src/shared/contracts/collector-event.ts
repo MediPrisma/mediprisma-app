@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v10, the hospital-capture event, plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v11, the hospital-capture event, plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -277,6 +277,33 @@ export const collectorEventV10Schema = collectorEventV10BaseSchema.superRefine((
   }
 })
 export type CollectorEventV10 = z.infer<typeof collectorEventV10Schema>
+
+// v11: the token counts the AI provider reported for one request. Exact numbers, never an
+// estimate; a side the provider did not report is left out, and an event without any is unchanged.
+export const tokenUsageSchema = z.object({
+  input_tokens: resourceCountSchema.optional(), output_tokens: resourceCountSchema.optional(),
+}).strict().refine(u => u.input_tokens !== undefined || u.output_tokens !== undefined, 'Token usage needs at least one count')
+export type TokenUsage = z.infer<typeof tokenUsageSchema>
+const collectorRequestV11Schema = requestBaseSchema.extend({ usage: tokenUsageSchema.optional() }).strict()
+export type CollectorRequestV11 = z.infer<typeof collectorRequestV11Schema>
+export const collectorEventV11Schema = collectorEventV10BaseSchema.extend({
+  schema_version: z.literal(11),
+  diagnostics: collectorEventV10BaseSchema.shape.diagnostics.extend({
+    usage: tokenUsageSchema.optional(),
+    requests: z.object({
+      count: resourceCountSchema, omitted: resourceCountSchema,
+      details: z.array(collectorRequestV11Schema).max(MAX_COLLECTOR_REQUEST_DETAILS),
+    }).strict().optional(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v10 invariant rather than maintaining another copy.
+  const { usage: _usage, requests, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV10Schema.safeParse({ ...e, schema_version: 10, diagnostics: { ...diagnostics,
+    ...(requests ? { requests: { ...requests, details: requests.details.map(({ usage: _requestUsage, ...request }) => request) } } : {}) } })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+})
+export type CollectorEventV11 = z.infer<typeof collectorEventV11Schema>
 
 // Hospital-capture outcome: MediPrisma relays what 北榮懷爾抓抓 tagged on the Bundle it
 // delivered (category, failure kind, HTTP status, count). Its own endpoint and table,

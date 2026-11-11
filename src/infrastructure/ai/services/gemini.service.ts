@@ -1,3 +1,4 @@
+import { readTokenUsage } from '@/src/shared/utils/ai-token-usage'
 import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 // Gemini Service Implementation
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
@@ -111,6 +112,7 @@ export class GeminiService {
           modelExecution,
           provider: 'gemini',
           tokensUsed: upstreamData.usageMetadata?.totalTokenCount || data.usage?.total_tokens,
+          usage: readTokenUsage(upstreamData.usageMetadata) ?? readTokenUsage(data.usage),
         },
       }
     } finally {

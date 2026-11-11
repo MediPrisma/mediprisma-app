@@ -26,6 +26,8 @@ AI、Whisper、文獻搜尋使用原本 endpoint、身份與額度流程；紀�
 
 筆電預設 endpoint 為 `http://127.0.0.1:8787/collector/v1/events`。其他主機由建置設定 `NEXT_PUBLIC_COLLECTOR_ORIGIN=https://<核准主機>:8787` 指定，只接受 origin，不接受帳密、path、query 或 fragment。HTTP 僅限 loopback，其他主機要求 HTTPS。不從 `gw=`、launch URL、localStorage 或任意 runtime endpoint 讀取收件位置。
 
+2026-11-11 起事件為 schema_version=11：AI 服務有回報時，每次 AI 請求附上實際的輸入／輸出 token 數（`diagnostics.usage`，功能操作事件則在各筆請求明細內）；只轉述服務回報的數字，沒回報就不送，不估算。Collector 必須先部署支援 v11 的版本。
+
 既有 Firebase session（含匿名）提供憑證，直接送原 POST API；Gateway 驗證 project、簽章、issuer/audience 與有效期限。不新增 token 發放端點、不把共用 ingest secret 放進公開 build。原本的 SDK 負責 token 更新；Collector 不另存 token。觀察所捕捉帳號在送件前若已切換／登出，就丟棄該紀錄，避免誤記到另一帳號。沒有 Firebase session 時只漏記，不跳登入視窗。
 
 只有唯讀的診斷介面，無 enable/disable 操作需求：

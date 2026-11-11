@@ -1,3 +1,4 @@
+import { readTokenUsage } from '@/src/shared/utils/ai-token-usage'
 import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { AiError, AiErrorCode } from '@/src/core/errors'
@@ -118,7 +119,7 @@ export class OpenAiCompatibleService {
       const data = await response.json() as {
         model?: string
         choices?: Array<{ message?: { content?: string }; finish_reason?: string | null }>
-        usage?: { total_tokens?: number }
+        usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number }
       }
       const choice = data.choices?.[0]
       const outputTruncated = choice?.finish_reason === 'length'
@@ -140,6 +141,7 @@ export class OpenAiCompatibleService {
           modelExecution,
           provider: 'custom',
           tokensUsed: data.usage?.total_tokens,
+          usage: readTokenUsage(data.usage),
           ...(outputTruncated ? { outputTruncated: true } : {}),
         },
       }
