@@ -73,6 +73,7 @@ jobs:
         env:
           MEDIPRISMA_BASE_PATH: /app-staging
           NEXT_PUBLIC_DEPLOY_CHANNEL: staging
+          NEXT_PUBLIC_INTRANET_AI_ORIGIN: https://ai-vghtpe.mediprisma.tw
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
           # Public origin only (no secrets); baked into /app, not a runtime switch.
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}

@@ -467,6 +467,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       clinicalContext: request.clinicalContext,
       contextLimit: ctx.contextLimit,
       modelId: ctx.modelId,
+      allowProviderRetry: ctx.modelId !== 'gpt-6-luna',
       modelName: ctx.modelName,
       locale: ctx.locale,
       buildRequest: (fittedClinicalContext) => {
@@ -699,6 +700,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       }
 
       await runAttempt(1, laneCards)
+      if (ctx.modelId === 'gpt-6-luna') return outcomes
       // Retry every remaining failed card in ONE progressively smaller batch.
       // Successful cards remain visible and are never regenerated. Attempts are
       // capped at three total calls per lane (initial + two combined retries).
@@ -876,7 +878,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         try {
           reply = await requestOnce()
         } catch (error) {
-          if (!isRetryableReportsError(error)) throw error
+          if (ctx.modelId === 'gpt-6-luna' || !isRetryableReportsError(error)) throw error
           // One re-send for a failed request; a rate limit is usually gone a
           // moment later.
           if (process.env.NODE_ENV !== 'production') {

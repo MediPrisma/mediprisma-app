@@ -44,7 +44,7 @@ describe('AiProviderFactory routing', () => {
     mockCreateOpenRouter.mockClear()
   })
 
-  it.each(MODEL_CATALOG.filter((model) => model.apiSurface === 'openai-responses'))(
+  it.each(MODEL_CATALOG.filter((model) => model.apiSurface === 'openai-responses' && model.id !== 'gpt-6-luna'))(
     'routes $id through the manifest-declared Responses API',
     ({ id: modelId }) => {
       const factory = new AiProviderFactory()

@@ -453,3 +453,13 @@ describe('cloud-only reason', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 })
+
+test('the cloud-only reason is handed to the import for capture telemetry', async () => {
+  const importFile = jest.fn(async (_file, options) => options.onCommitted('new-import'))
+  render(<BundleFileInput importFile={importFile} />)
+  const input = document.querySelector('input')!
+  input.setAttribute(PROGRESSIVE_REQUEST_ATTRIBUTE, JSON.stringify({ version: 1, requestId: 'request-a', runId: 'run-a', stage: 'cloud-only', expectedImportId: 'original-import', reason: 'HIS_BUSY' }))
+  fireEvent.change(input, { target: { files: [new File(['{}'], 'cloud.json')] } })
+  await waitFor(() => expect(importFile).toHaveBeenCalled())
+  expect(importFile.mock.calls[0][1]).toMatchObject({ progressiveStage: 'cloud-only', progressiveReason: 'HIS_BUSY' })
+})

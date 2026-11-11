@@ -51,6 +51,8 @@ export interface ImportBundleOptions {
   progressiveRunId?: string
   /** The progressive stage, so a finished 北榮 capture can be logged (no clinical effect). */
   progressiveStage?: string
+  /** Why a cloud-only stage has no hospital data (closed code from the progressive request). */
+  progressiveReason?: string
 }
 
 export interface UseImportBundleReturn {
@@ -209,7 +211,7 @@ export function useImportBundle(): UseImportBundleReturn {
         await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
           options?.signal, assertExpectedImport, options?.onCommitted,
           Boolean(options?.progressiveRunId && options.expectedImportId))
-        reportHospitalCapture(prepared.bundle, options?.progressiveStage)
+        reportHospitalCapture(prepared.bundle, options?.progressiveStage, options?.progressiveReason)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'

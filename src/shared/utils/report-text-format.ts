@@ -59,8 +59,18 @@ function isColumnCell(cell: string): boolean {
   return true
 }
 
+// Cells of a tab-delimited source row: the boundaries are the source's own,
+// so no content heuristics apply; empty cells keep their column.
+function tabCellsOf(line: ReportLine): string[] | undefined {
+  if (line.heading || line.measurement || line.tableCells || line.monospace || line.separator) return undefined
+  if (!line.text.includes('\t')) return undefined
+  const cells = line.text.split('\t').map((cell) => cell.trim())
+  return cells.filter(Boolean).length >= 2 && cells.length <= 8 ? cells : undefined
+}
+
 function columnCellsOf(line: ReportLine): string[] | undefined {
   if (line.heading || line.measurement || line.tableCells || line.monospace || line.separator) return undefined
+  if (line.text.includes('\t')) return undefined
   // "(    )" is an empty source field, not a column gap.
   const text = line.text.replace(/\(\s+\)/g, '( )')
   if (!/\S {2,}\S/.test(text)) return undefined
@@ -72,6 +82,19 @@ function columnCellsOf(line: ReportLine): string[] | undefined {
 // (or two labelled "LABEL: value" columns).
 function markColumnTables(lines: ReportLine[]): ReportLine[] {
   for (let i = 0; i < lines.length;) {
+    const tabFirst = tabCellsOf(lines[i])
+    if (tabFirst) {
+      const run = [tabFirst]
+      let j = i + 1
+      for (; j < lines.length; j++) {
+        const cells = lines[j].marker ? undefined : tabCellsOf(lines[j])
+        if (!cells || cells.length !== tabFirst.length) break
+        run.push(cells)
+      }
+      if (run.length >= 2) run.forEach((cells, k) => { lines[i + k] = { ...lines[i + k], columnCells: cells } })
+      i = j
+      continue
+    }
     const first = columnCellsOf(lines[i])
     if (!first) { i++; continue }
     const run = [first]
@@ -336,6 +359,12 @@ function segmentFindings(body: string): string[] {
  * "Conclusion:" heading, so segmentation must reach there too.
  */
 function pushBody(lines: ReportLine[], body: string, baseLevel: 0 | 1) {
+  // A tab-delimited table row is kept whole: its leading "*" is a cell value
+  // and a leading tab is an empty first cell, so no bullet or sentence split.
+  if (body.includes('\t')) {
+    lines.push({ text: body, level: baseLevel })
+    return
+  }
   const bullet = BULLET_RE.exec(body)
   if (bullet) {
     lines.push({ text: bullet[2].trim(), level: 1, marker: bullet[1] })
@@ -453,8 +482,10 @@ export function formatReportText(raw: string): ReportLine[] {
   //    runs the bridge pads reports with).
   const splitLines = broken
     .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
+    // A tab is a source cell boundary (the bridge writes one between table
+    // cells), so keep a leading tab: it is an empty first cell, not padding.
+    .map((l) => (l.includes('\t') ? l.replace(/^ +| +$/g, '') : l.trim()))
+    .filter((l) => l.trim().length > 0)
 
   if (isMicrobiologyBlob) return formatMicrobiologyLines(splitLines)
 
@@ -559,8 +590,9 @@ export function formatReportText(raw: string): ReportLine[] {
       continue
     }
 
-    // Bullet "-" / "*" / "•".
-    const b = BULLET_RE.exec(line) ?? (numberedEndoscopy ? /^([*])(?=\S)([\s\S]*)$/.exec(line) : null)
+    // Bullet "-" / "*" / "•". Not in a tab-delimited table row: there "* 3.4 *"
+    // is a cell value (PPG return time), not a list item.
+    const b = line.includes('\t') ? null : BULLET_RE.exec(line) ?? (numberedEndoscopy ? /^([*])(?=\S)([\s\S]*)$/.exec(line) : null)
     if (b) {
       numberedContinuation = undefined
       lines.push({ text: b[2].trim(), level: 1, marker: b[1] })
