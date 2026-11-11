@@ -65,6 +65,25 @@ export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
  */
 export const MODEL_CATALOG = [
   {
+    id: 'gpt-6-luna',
+    label: 'GPT-6 Luna（院內）',
+    descriptions: {
+      en: 'Taipei Veterans intranet Azure; shared US$200 monthly budget',
+      'zh-TW': '北榮院內 Azure；每月共用 US$200 額度',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'proxy-or-key',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: false,
+    roles: [],
+  },
+  {
     id: 'gpt-5.4-nano',
     label: 'GPT-5.4 Nano',
     descriptions: {

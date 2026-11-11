@@ -10,6 +10,7 @@
 import type { AiModelExecution } from "@/src/core/entities/ai-model-execution.entity"
 import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from "@/src/shared/utils/ai-model-execution"
 import { Output, streamText, type ModelMessage } from "ai"
+import { intranetMaxRetries } from '../interceptors/intranet-fetch'
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
   getModelDefinitionOrThrow,
@@ -108,6 +109,7 @@ export class AiSdkStreamAdapter {
     const temperature = resolveModelTemperature(definition, config.temperature)
     const result = streamText({
       model,
+      maxRetries: intranetMaxRetries(model),
       messages: this.toSdkMessages(config.messages),
       abortSignal: controller.signal,
       ...(temperature !== undefined ? { temperature } : {}),

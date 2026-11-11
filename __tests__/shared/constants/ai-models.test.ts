@@ -97,6 +97,7 @@ describe('MODEL_CATALOG contract', () => {
 
   it('keeps the requested GPT rollout, free Luna access, and Fable availability', () => {
     expect(GPT_MODELS.map((model) => model.id)).toEqual([
+      'gpt-6-luna',
       'gpt-5.4-nano',
       'gpt-5.6-luna',
       'gpt-5.6-terra',
