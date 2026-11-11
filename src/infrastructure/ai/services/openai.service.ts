@@ -1,3 +1,4 @@
+import { readTokenUsage } from '@/src/shared/utils/ai-token-usage'
 import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 // OpenAI Service Implementation
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
@@ -164,6 +165,7 @@ export class OpenAiService {
           modelExecution,
           provider: 'openai',
           tokensUsed: upstreamData.usage?.total_tokens,
+          usage: readTokenUsage(upstreamData.usage),
           ...(outputTruncated ? { outputTruncated: true } : {}),
         },
       }

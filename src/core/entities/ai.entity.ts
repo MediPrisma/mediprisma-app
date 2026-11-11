@@ -44,6 +44,12 @@ export interface AiQueryRequest {
   responseFormat?: 'json'
 }
 
+/** Token counts the AI service reported for one request; a side it did not report is absent. */
+export interface AiTokenUsage {
+  inputTokens?: number
+  outputTokens?: number
+}
+
 export interface AiQueryResponse {
   text: string
   metadata: {
@@ -51,6 +57,7 @@ export interface AiQueryResponse {
     modelId: string
     provider: AiProvider
     tokensUsed?: number
+    usage?: AiTokenUsage
     /** The returned text is partial because generation hit an output limit. */
     outputTruncated?: boolean
   }
