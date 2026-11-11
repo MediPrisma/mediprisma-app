@@ -48,6 +48,7 @@ import { reconcileMedicationRequests } from './medication-reconciliation'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 import { hasVghtpeMedicationAtcCheck, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
 import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
+import { toAwaitingOrder, type AwaitingOrder } from '@/src/shared/utils/awaiting-order'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
@@ -1873,6 +1874,20 @@ export const LocalBundleService = {
         return encounter ? [encounter] : []
       }))]
       if (visits.length) result._orderEncounterIds = visits
+    }
+
+    // Orders the hospital bridge marks as written but without a request or
+    // report in HIS yet, kept on their visit for the last-outpatient tab.
+    const awaitingByEncounter = new Map<string, AwaitingOrder[]>()
+    for (const order of byType('ServiceRequest') as any[]) {
+      const awaiting = toAwaitingOrder(order)
+      const encounter = orderEncounters.get(`ServiceRequest/${order.id}`)
+      if (!awaiting || !encounter) continue
+      awaitingByEncounter.set(encounter, [...(awaitingByEncounter.get(encounter) ?? []), awaiting])
+    }
+    for (const encounter of byType('Encounter') as any[]) {
+      const awaiting = awaitingByEncounter.get(encounter.id)
+      if (awaiting) encounter._awaitingOrders = awaiting
     }
 
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }

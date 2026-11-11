@@ -2022,6 +2022,11 @@ export const en = {
     noAbnormal: 'No abnormal lab results at this visit',
     empty: 'No lab or exam results are linked to this visit yet.',
     reportsPending: 'Test and exam reports are still loading…',
+    awaitingTitle: 'Ordered, no report yet',
+    awaitingCount: '{count} items',
+    awaitingNote: 'HIS has no report for these orders yet: they may not have been done, or the report is not out.',
+    awaitingAppointment: 'Booked',
+    visitAwaitingCount: '{count} awaiting report',
   },
   visitHistory: {
     badges: {
