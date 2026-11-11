@@ -351,10 +351,18 @@ describe('LastOutpatientCard', () => {
 
   it('mutes a visit with nothing linked yet, and says whether it ordered anything', () => {
     const data = { ...chart(), observations: chart().observations.filter((o: any) => o.id !== 'cr-old') }
+    const oldVisit = () => within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { name: /2026\/07\/10/ })
+    // No order count (an earlier import): unknown, so only "no results".
     mockClinicalData = data
+    const first = render(<LastOutpatientCard />)
+    expect(oldVisit()).toHaveTextContent(zhTW.lastOutpatient.noResults)
+    expect(oldVisit()).not.toHaveTextContent(zhTW.lastOutpatient.noOrders)
+    first.unmount()
+
+    // A recorded count of zero: it ordered nothing.
+    mockClinicalData = { ...data, encounters: data.encounters.map((visit: any) => visit.id === 'h-old' ? { ...visit, _orderCount: 0 } : visit) }
     const { unmount } = render(<LastOutpatientCard />)
-    expect(within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { name: /2026\/07\/10/ }))
-      .toHaveTextContent(zhTW.lastOutpatient.noOrders)
+    expect(oldVisit()).toHaveTextContent(zhTW.lastOutpatient.noOrders)
     unmount()
 
     // It wrote an order, and nothing has come back for it.

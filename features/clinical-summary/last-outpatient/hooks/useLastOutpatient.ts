@@ -181,9 +181,13 @@ export function useLastOutpatient(selectedVisitId: string | null, physician: str
     }
     return byVisit
   }, [visits, encounterById])
-  // Visits that wrote no examination order at all.
+  // Visits known to have written no examination order: a count of zero, never
+  // a missing count (a chart imported before visits carried one).
   const withoutOrders = useMemo(() => new Set(visits
-    .filter((candidate) => !candidate.encounterIds.some((id) => encounterById.get(id)?._orderCount))
+    .filter((candidate) => {
+      const counts = candidate.encounterIds.map((id) => encounterById.get(id)?._orderCount)
+      return counts.includes(0) && !counts.some((count) => !!count)
+    })
     .map((candidate) => candidate.id)), [visits, encounterById])
   const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
   // The source Observation behind each row, for the shared trend / history pane.

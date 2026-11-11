@@ -83,6 +83,10 @@ it('keeps orders the bridge marks as awaiting a report on their visit', () => {
     { id: 'echo', label: 'Synthetic echocardiogram', appointment: true },
   ])
   expect((byId.get('earlier') as any)?._awaitingOrders).toBeUndefined()
-  // Every order counts toward its visit, reported or not; a visit with none has no count.
-  expect(['latest', 'earlier', 'plain'].map((id) => (byId.get(id) as any)?._orderCount)).toEqual([2, 1, undefined])
+  // Every order counts toward its visit, reported or not; a hospital visit with none is a known zero.
+  expect(['latest', 'earlier', 'plain'].map((id) => (byId.get(id) as any)?._orderCount)).toEqual([2, 1, 0])
+  // A bundle with no visit orders at all says nothing about any visit.
+  const bare = LocalBundleService.parse({ resourceType: 'Bundle', type: 'collection',
+    entry: resources.filter(resource => resource.resourceType !== 'ServiceRequest').map(resource => ({ resource })) } as any)!
+  expect(bare.collection.encounters.map((encounter: any) => encounter._orderCount)).toEqual([undefined, undefined, undefined])
 })

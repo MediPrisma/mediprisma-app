@@ -1886,7 +1886,9 @@ export const LocalBundleService = {
       awaitingByEncounter.set(encounter, [...(awaitingByEncounter.get(encounter) ?? []), awaiting])
     }
     // How many orders each visit wrote, so a visit with none is not read as
-    // one whose reports are missing.
+    // one whose reports are missing. Zero is recorded only for a hospital
+    // visit in a bundle that carries visit orders at all; without them the
+    // count stays unset, which means unknown.
     const orderCounts = new Map<string, number>()
     for (const encounter of orderEncounters.values()) orderCounts.set(encounter, (orderCounts.get(encounter) ?? 0) + 1)
     for (const encounter of byType('Encounter') as any[]) {
@@ -1894,6 +1896,8 @@ export const LocalBundleService = {
       if (awaiting) encounter._awaitingOrders = awaiting
       const orders = orderCounts.get(encounter.id)
       if (orders) encounter._orderCount = orders
+      else if (orderCounts.size > 0 && (isVghtpeSource(encounter)
+        || encounter._sourceEncounterRecords?.some((source: any) => source && isVghtpeSource(source)))) encounter._orderCount = 0
     }
 
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }
