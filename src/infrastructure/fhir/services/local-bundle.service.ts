@@ -1885,9 +1885,15 @@ export const LocalBundleService = {
       if (!awaiting || !encounter) continue
       awaitingByEncounter.set(encounter, [...(awaitingByEncounter.get(encounter) ?? []), awaiting])
     }
+    // How many orders each visit wrote, so a visit with none is not read as
+    // one whose reports are missing.
+    const orderCounts = new Map<string, number>()
+    for (const encounter of orderEncounters.values()) orderCounts.set(encounter, (orderCounts.get(encounter) ?? 0) + 1)
     for (const encounter of byType('Encounter') as any[]) {
       const awaiting = awaitingByEncounter.get(encounter.id)
       if (awaiting) encounter._awaitingOrders = awaiting
+      const orders = orderCounts.get(encounter.id)
+      if (orders) encounter._orderCount = orders
     }
 
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }

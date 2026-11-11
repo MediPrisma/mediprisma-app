@@ -2004,6 +2004,7 @@ export const zhTW = {
     title: '上次院內門診',
     visitPicker: '院內門診',
     noResults: '無報告',
+    noOrders: '無檢查驗醫囑',
     visitPending: '報告擷取中',
     visitItemCount: '{count} 項',
     visitCount: '院內門診 · {count} 次',
@@ -2036,6 +2037,11 @@ export const zhTW = {
     awaitingNote: 'HIS 還沒有這些醫囑的報告：可能尚未執行，或報告尚未發出。',
     awaitingAppointment: '已預約',
     visitAwaitingCount: '待報告 {count} 項',
+    scopeLabel: '顯示範圍',
+    scopeSinceAll: '這次之後・全部',
+    scopeSinceOwn: '這次之後・自己',
+    scopeSingle: '只看這次',
+    scopeGathered: '合併 {count} 次門診，重複的項目只列最新一筆',
   },
   visitHistory: {
     badges: {

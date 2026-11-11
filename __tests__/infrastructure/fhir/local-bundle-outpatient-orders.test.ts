@@ -71,7 +71,7 @@ it('keeps orders the bridge marks as awaiting a report on their visit', () => {
     subject: { reference: 'Patient/patient' }, encounter: { reference: `Encounter/${encounter}` }, orderDetail: [{ text: `頻次：${frequency}` }] })
   const resources = [
     { resourceType: 'Patient', id: 'patient', gender: 'female' },
-    visit('earlier', '2026-09-01'), visit('latest', '2026-10-06'),
+    visit('plain', '2026-08-01'), visit('earlier', '2026-09-01'), visit('latest', '2026-10-06'),
     order('done', 'Synthetic TSH', 'earlier', false),
     order('lab', '*CBC,', 'latest', true),
     order('echo', 'Synthetic echocardiogram', 'latest', true, 'APPOINT'),
@@ -83,4 +83,6 @@ it('keeps orders the bridge marks as awaiting a report on their visit', () => {
     { id: 'echo', label: 'Synthetic echocardiogram', appointment: true },
   ])
   expect((byId.get('earlier') as any)?._awaitingOrders).toBeUndefined()
+  // Every order counts toward its visit, reported or not; a visit with none has no count.
+  expect(['latest', 'earlier', 'plain'].map((id) => (byId.get(id) as any)?._orderCount)).toEqual([2, 1, undefined])
 })
