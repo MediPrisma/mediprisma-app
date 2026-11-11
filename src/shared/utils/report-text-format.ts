@@ -463,6 +463,14 @@ export function separateGluedOrderCode(raw: string): string {
   ))
 }
 
+// Private-use character standing in for a source blank-line run while the
+// text is reflowed. It never occurs in report text and no reflow pattern
+// matches it, so it rides along with the line the source put after the gap.
+const GAP_MARK = '\uE000'
+// A non-blank line followed by one or more blank lines. Leading blank lines
+// are left alone so start-anchored report-type checks still see the text.
+const SOURCE_GAP_RE = /(\S)[ \t]*\n(?:[ \t]*\n)+/g
+
 export function formatReportText(raw: string): ReportLine[] {
   if (!raw || !raw.trim()) return []
 
@@ -476,7 +484,12 @@ export function formatReportText(raw: string): ReportLine[] {
   // 1) Force every section heading onto its own line, then break apart numbered
   //    findings the bridge ran together. Both heal glued concatenations so a
   //    plain line-split doesn't bury "Impression:" / "2." mid-sentence.
-  const broken = reflowMicrobiologyBlob(isMicrobiologyBlob ? raw.replace(/\r\n?/g, '\n') : reflowReportLayout(raw))
+  // Mark each source blank-line run on the line it precedes BEFORE any reflow:
+  // the reflow and heading passes below insert their own line breaks, and a
+  // blank line they leave behind is not a paragraph break the source wrote.
+  const normalized = raw.replace(/\r\n?/g, '\n')
+  const marked = normalized.replace(SOURCE_GAP_RE, `$1\n${GAP_MARK}`)
+  const broken = reflowMicrobiologyBlob(isMicrobiologyBlob ? marked : reflowReportLayout(marked))
     .replace(KEYWORD_COLON_RE, (_m, kw, colon) => `\n${kw}${colon}`)
     .replace(GLUED_NUM_RE, (_m, before, marker) => `${before}\n${marker}`)
 
@@ -485,19 +498,26 @@ export function formatReportText(raw: string): ReportLine[] {
   const splitLines: string[] = []
   // Index (into splitLines) of each line the source preceded with a blank line.
   let gapLines = new Set<number>()
-  let blankPending = false
+  let gapPending = false
   for (const source of broken.split(/\r?\n/)) {
+    // Only a mark at the start of a line is a source paragraph break; one a
+    // reflow pass glued mid-line is dropped without marking a gap.
+    if (source.startsWith(GAP_MARK)) gapPending = splitLines.length > 0
+    const unmarked = source.split(GAP_MARK).join('')
     // A tab is a source cell boundary (the bridge writes one between table
     // cells), so keep a leading tab: it is an empty first cell, not padding.
-    const l = source.includes('\t') ? source.replace(/^ +| +$/g, '') : source.trim()
-    if (!l.trim()) { blankPending = splitLines.length > 0; continue }
-    if (blankPending) gapLines.add(splitLines.length)
-    blankPending = false
+    const l = unmarked.includes('\t') ? unmarked.replace(/^ +| +$/g, '') : unmarked.trim()
+    if (!l.trim()) continue
+    if (gapPending) gapLines.add(splitLines.length)
+    gapPending = false
     splitLines.push(l)
   }
-  // Blank lines after most lines are padding (some sources double-space every
-  // line), not paragraph breaks: then show none.
-  if (gapLines.size > (splitLines.length - 1) / 2) gapLines = new Set()
+  // Blank lines after most source lines are padding (some sources double-space
+  // every line), not paragraph breaks: then show none. Counted on the source,
+  // so reflowed line breaks neither add gaps nor dilute the ratio.
+  const sourceLineCount = normalized.split('\n').filter((l) => l.trim()).length
+  const sourceGapCount = marked.split(GAP_MARK).length - 1
+  if (sourceGapCount > (sourceLineCount - 1) / 2) gapLines = new Set()
 
   if (isMicrobiologyBlob) return formatMicrobiologyLines(splitLines)
 
