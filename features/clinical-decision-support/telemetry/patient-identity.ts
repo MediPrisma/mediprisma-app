@@ -1,4 +1,5 @@
 import { isDeidentifiedPatient, type PatientEntity } from '@/src/core/entities/patient.entity'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 const MASK = /[Xx*＊○〇●Ｏ◯]/u
 const NAME_MASK = /[Xx○〇●Ｏ◯]/u
@@ -87,7 +88,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
   const birthDate = patient.birthDate?.trim() ?? ''
   const parsedBirthDate = Date.parse(birthDate)
   if (!BIRTH_DATE.test(birthDate) || Number.isNaN(parsedBirthDate)
-    || new Date(parsedBirthDate).toISOString().slice(0, 10) !== birthDate) {
+    || utcDay(parsedBirthDate) !== birthDate) {
     throw new Error('cdss_identity_unavailable')
   }
   const identifier = nationalId(patient)

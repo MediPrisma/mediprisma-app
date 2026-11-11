@@ -32,6 +32,7 @@ import {
   type MedCopyFieldId,
   type MedCopyFormat,
 } from '@/src/application/stores/outpatient-prefs.store'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 /** What one medication contributes. Mapped from the overview's item so this
  *  module does not depend on the overview hook's shape. */
@@ -245,7 +246,7 @@ function formatDay(day: string | undefined, style: string, today: string): strin
  *  count is rounded up, so the source's own day comes first. */
 function dayFromToday(today: string, offset: number): string {
   const [y, m, d] = today.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + offset)).toISOString().slice(0, 10)
+  return utcDay(Date.UTC(y, m - 1, d + offset))
 }
 
 /** The pieces a cloud 頻次 is glued from (「QDACPO」 = QD + AC + PO), longest

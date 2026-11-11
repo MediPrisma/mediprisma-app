@@ -1,4 +1,5 @@
 import type { HfPhysicianDiagnosis } from './physician-diagnosis'
+import { utcDay } from '@/src/core/utils/calendar-day'
 /** Shared outpatient input and dry-run contracts; scoring uses a separate validated result DTO. */
 export const HF_DRY_RUN_CLAIMS = ['P1_CD_mortality_1m', 'P1_CD_mortality_3m'] as const
 export type HfDryRunClaim = typeof HF_DRY_RUN_CLAIMS[number]
@@ -44,7 +45,7 @@ export function fhirDay(value: unknown): string | undefined {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value)) return
   const day = value.slice(0, 10)
   const parsed = new Date(day + 'T00:00:00Z')
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== day) return
+  if (!Number.isFinite(parsed.getTime()) || utcDay(parsed) !== day) return
   if (value.length > 10 && !Number.isFinite(Date.parse(value))) return
   return day
 }

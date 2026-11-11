@@ -101,6 +101,7 @@ import { measureSummaryCardOutcomes } from './summary-result-measurement'
 import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import type { AiRunMetrics } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { nowMs } from '@/src/application/telemetry/ai-outcome'
+import { taipeiDay } from '@/src/core/utils/calendar-day'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -253,9 +254,9 @@ export interface UseMedicalSummaryReturn {
 
 /** The clinical clock's day in Taiwan (the records' own time zone). No valid
  *  clock means no reference date, never a failed run. */
-function taipeiDay(nowMs: number | undefined): string | undefined {
+function clinicalClockDay(nowMs: number | undefined): string | undefined {
   return typeof nowMs === 'number' && Number.isFinite(nowMs)
-    ? new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10)
+    ? taipeiDay(nowMs)
     : undefined
 }
 
@@ -349,7 +350,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const isCustomEndpoint = isCustomOpenAiModelId(ctx.modelId)
     const promptInput: GenerateMedicalSummaryInput = {
       clinicalContext,
-      ...(taipeiDay(ctx.clinicalNowMs) ? { referenceDate: taipeiDay(ctx.clinicalNowMs) } : {}),
+      ...(clinicalClockDay(ctx.clinicalNowMs) ? { referenceDate: clinicalClockDay(ctx.clinicalNowMs) } : {}),
       dataSource: detectClinicalDataSource(ctx.clinicalData as Parameters<typeof detectClinicalDataSource>[0]),
       piiLiterals: ctx.piiLiterals,
       catalog: contextScope.catalog,

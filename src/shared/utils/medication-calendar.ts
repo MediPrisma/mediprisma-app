@@ -1,3 +1,4 @@
+import { utcDay } from '@/src/core/utils/calendar-day'
 const DAY_MS = 86400000
 
 /** This Taiwan clinical application presents medication dates in Taipei. */
@@ -11,7 +12,7 @@ export function medicationClinicalDay(value: string | number | undefined): strin
   const stamp = typeof value === 'number' ? value : medicationClinicalTimestamp(value)
   const date = new Date(stamp + 8 * 3600000)
   return Number.isFinite(date.getTime()) && date.getUTCFullYear() >= 1 && date.getUTCFullYear() <= 9999
-    ? date.toISOString().slice(0, 10) : undefined
+    ? utcDay(date) : undefined
 }
 export function medicationSupplyEndDay(start: string | undefined, days: number | undefined): string | undefined {
   const match = start?.match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -19,7 +20,7 @@ export function medicationSupplyEndDay(start: string | undefined, days: number |
   const [, y, m, d] = match
   const end = new Date(Date.UTC(+y, +m - 1, +d + days - 1))
   return Number.isFinite(end.getTime()) && end.getUTCFullYear() >= 1 && end.getUTCFullYear() <= 9999
-    ? end.toISOString().slice(0, 10) : undefined
+    ? utcDay(end) : undefined
 }
 
 /** Inclusive calendar days of the documented/estimated supply, not adherence. */

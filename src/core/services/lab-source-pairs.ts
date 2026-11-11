@@ -1,6 +1,7 @@
 import type { ClinicalSourceNode, ClinicalSourceGraph } from './clinical-source-graph'
 import { clinicalSourceResourcesEqual } from './clinical-source-graph'
 import { isMedcloudSource, isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { taipeiDay, utcDay } from '@/src/core/utils/calendar-day'
 
 type Resource = Record<string, any>
 const aliases: Record<string, string> = { FSH: '83098-4', E2: '83096-8' }
@@ -20,11 +21,11 @@ function day(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const instant = Date.parse(value)
-    return Number.isFinite(instant) && new Date(instant).toISOString().slice(0, 10) === value ? value : undefined
+    return Number.isFinite(instant) && utcDay(instant) === value ? value : undefined
   }
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return undefined
   const instant = Date.parse(value)
-  return Number.isFinite(instant) ? new Date(instant + 8 * 3600000).toISOString().slice(0, 10) : undefined
+  return Number.isFinite(instant) ? taipeiDay(instant) : undefined
 }
 function unit(resource: Resource): string {
   const q = resource.valueQuantity
