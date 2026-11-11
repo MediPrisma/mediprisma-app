@@ -28,6 +28,6 @@ describe('DOAC calculator on the 雲端病歷 demo patient', () => {
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
     const value = (key: string) => resolveInput(calc.inputs.find((input) => input.key === key)!, autofill).value
     expect(Object.fromEntries(['dialysis', 'liver', 'liver_enzymes', 'bilirubin_high', 'pregnancy', 'gi_risk', 'regimen'].map((key) => [key, value(key)])))
-      .toEqual({ dialysis: 'no', liver: 'none', liver_enzymes: 'no', bilirubin_high: '', pregnancy: 'no', gi_risk: 'no', regimen: 'none' })
+      .toEqual({ dialysis: 'no', liver: 'none', liver_enzymes: 'no', bilirubin_high: 'no', pregnancy: 'no', gi_risk: 'no', regimen: 'none' })
   })
 })

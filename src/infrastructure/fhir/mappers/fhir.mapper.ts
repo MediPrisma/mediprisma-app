@@ -507,6 +507,7 @@ export class FhirMapper implements IDataMapper {
       meta: fhirResource.meta,
       _sourceRecordComparison: fhirResource._sourceRecordComparison,
       _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
+      _awaitingOrders: fhirResource._awaitingOrders,
       id: fhirResource.id || '',
       status: fhirResource.status,
       class: fhirResource.class,

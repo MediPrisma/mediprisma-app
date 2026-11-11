@@ -60,3 +60,27 @@ it('keeps the visit of every order a result is basedOn, including a draw shared 
   expect((bySource.get('shared') as any)?._orderEncounterIds).toEqual(['clinic-a', 'clinic-b'])
   expect((bySource.get('own') as any)?._orderEncounterIds).toEqual(['clinic-a'])
 })
+
+it('keeps orders the bridge marks as awaiting a report on their visit', () => {
+  const meta = { tag: [{ system: 'urn:wildcatch:source', code: 'vghtpe-outpatient-supplement' }] }
+  const awaitingTag = { system: 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/order-report-state', code: 'awaiting-report' }
+  const visit = (id: string, date: string) => ({ resourceType: 'Encounter', id, meta, status: 'finished', class: { code: 'AMB' },
+    subject: { reference: 'Patient/patient' }, period: { start: `${date}T09:00:00+08:00` }, participant: [{ individual: { display: 'Doctor A' } }] })
+  const order = (id: string, text: string, encounter: string, awaiting: boolean, frequency = 'REGULAR') => ({ resourceType: 'ServiceRequest', id,
+    meta: awaiting ? { tag: [...meta.tag, awaitingTag] } : meta, status: 'unknown', intent: 'order', code: { text },
+    subject: { reference: 'Patient/patient' }, encounter: { reference: `Encounter/${encounter}` }, orderDetail: [{ text: `頻次：${frequency}` }] })
+  const resources = [
+    { resourceType: 'Patient', id: 'patient', gender: 'female' },
+    visit('earlier', '2026-09-01'), visit('latest', '2026-10-06'),
+    order('done', 'Synthetic TSH', 'earlier', false),
+    order('lab', '*CBC,', 'latest', true),
+    order('echo', 'Synthetic echocardiogram', 'latest', true, 'APPOINT'),
+  ]
+  const data = LocalBundleService.parse({ resourceType: 'Bundle', type: 'collection', entry: resources.map(resource => ({ resource })) } as any)!
+  const byId = new Map(data.collection.encounters.map((encounter: any) => [encounter.sourceId ?? encounter.id, encounter]))
+  expect((byId.get('latest') as any)?._awaitingOrders).toEqual([
+    { id: 'lab', label: '*CBC', appointment: false },
+    { id: 'echo', label: 'Synthetic echocardiogram', appointment: true },
+  ])
+  expect((byId.get('earlier') as any)?._awaitingOrders).toBeUndefined()
+})

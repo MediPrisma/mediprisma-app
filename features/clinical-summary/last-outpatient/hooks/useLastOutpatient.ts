@@ -8,6 +8,7 @@ import { useOutpatientPrefs } from "@/src/application/hooks/use-outpatient-prefs
 import { useProgressiveImportStore } from "@/src/application/stores/progressive-import.store"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { isVghtpeSource } from "@/src/shared/utils/clinical-source-identity"
+import type { AwaitingOrder } from "@/src/shared/utils/awaiting-order"
 import { useVisitHistory, type VisitRecord } from "@/features/clinical-summary/visit-history/hooks/useVisitHistory"
 import { useEncounterDetails, type EncounterDetails } from "@/features/clinical-summary/visit-history/hooks/useEncounterDetails"
 import {
@@ -15,7 +16,6 @@ import {
   buildRangeComparisons,
   displayClinicianName,
   isHospitalOutpatientEncounter,
-  isSameClinician,
   orderingVisitIds,
   resultsOrderedAt,
   type PriorLabValue,
@@ -57,7 +57,9 @@ function toHospitalVisit(visit: VisitRecord, byId: Map<string, any>): HospitalOu
   }
 }
 
-export function useLastOutpatient(selectedVisitId: string | null) {
+/** `physician` narrows the visit list to one physician's visits; null lists
+ *  them all. The selected visit is always one the list shows. */
+export function useLastOutpatient(selectedVisitId: string | null, physician: string | null = null) {
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const { clinicianName } = useOutpatientPrefs()
@@ -95,9 +97,12 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     return new Set(visits.filter((visit) => visit.encounterIds.some((id) => ordered.has(id))).map((visit) => visit.id))
   }, [visits, diagnosticReports, observations])
 
-  const mine = clinicianName ? visits.filter((visit) => isSameClinician(visit.physician, clinicianName)) : []
-  const defaultVisit = mine[0] ?? visits[0]
-  const visit = (selectedVisitId && visits.find((candidate) => candidate.id === selectedVisitId)) || defaultVisit
+  // A physician no longer on this chart lists every visit.
+  const listedVisits = useMemo(() => {
+    const narrowed = physician ? visits.filter((visit) => visit.physician === physician) : visits
+    return narrowed.length > 0 ? narrowed : visits
+  }, [visits, physician])
+  const visit = (selectedVisitId && listedVisits.find((candidate) => candidate.id === selectedVisitId)) || listedVisits[0]
 
   // Only this visit's results, each placed under it: its own source link or an
   // order of this visit in basedOn (a combined draw belongs to every visit
@@ -142,6 +147,18 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     }
     return counts
   }, [visits, details])
+  // Orders each visit wrote that HIS has no request or report for yet.
+  const awaitingOrders = useMemo(() => {
+    const byVisit = new Map<string, AwaitingOrder[]>()
+    for (const candidate of visits) {
+      const seen = new Set<string>()
+      const orders = candidate.encounterIds
+        .flatMap((id) => (encounterById.get(id)?._awaitingOrders ?? []) as AwaitingOrder[])
+        .filter((order) => !seen.has(order.id) && !!seen.add(order.id))
+      if (orders.length > 0) byVisit.set(candidate.id, orders)
+    }
+    return byVisit
+  }, [visits, encounterById])
   const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
   // The source Observation behind each row, for the shared trend / history pane.
   const sourceObservations = useMemo(() => {
@@ -163,10 +180,11 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     isLoading,
     reportsPending: progressivePhase === 'reports-pending' || progressivePhase === 'reports-pending-partial',
     clinicianName,
-    clinicianMatched: !!clinicianName && mine.length > 0,
     visits,
+    listedVisits,
     withResults,
     itemCounts,
+    awaitingOrders,
     visit,
     details: visitDetails,
     sharedCount,

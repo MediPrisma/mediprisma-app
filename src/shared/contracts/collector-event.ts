@@ -285,8 +285,10 @@ export const hospitalCaptureCategorySchema = z.enum([
   'patient', 'allergies', 'vitals', 'conditions', 'encounters', 'orders', 'admissions', 'emergency',
   'operations', 'medications', 'reports', 'discharge_summaries', 'implants', 'chemotherapy', 'careplans', 'other',
 ])
+// login_or_network: extensions before D080 could not tell an expired HIS login from a lost
+// connection. Newer ones report login_expired (HIS redirected) or network (no response) instead.
 export const hospitalCaptureFailureKindSchema = z.enum([
-  'timeout', 'his_busy', 'http_error', 'parse_failed', 'login_or_network', 'unknown',
+  'timeout', 'his_busy', 'http_error', 'parse_failed', 'login_or_network', 'login_expired', 'network', 'unknown',
 ])
 // Why no hospital data reached the app (outcome failed only). 雲端懷爾抓抓 maps the
 // 北榮懷爾抓抓 peer error (or its own timeout/validation failure) to this closed set.

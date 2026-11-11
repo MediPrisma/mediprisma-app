@@ -847,6 +847,8 @@ export interface EncounterEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
   _sourceEncounterRecords?: any[]
+  /** Orders written at this visit that HIS has no request or report for yet. */
+  _awaitingOrders?: import('@/src/shared/utils/awaiting-order').AwaitingOrder[]
   id: string
   status?: string
   class?: {
