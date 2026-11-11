@@ -225,7 +225,7 @@ export interface CalculatorDef {
     hint?: L
     keys: string[]
     /** Folds the group to one line while nothing in it needs the reader; `open` while something does. */
-    summary?: (values: CalcValues, shownKeys: string[]) => { text: L; open: boolean }
+    summary?: (values: CalcValues, shownKeys: string[], captions?: Record<string, string | undefined>) => { text: L; open: boolean }
   }[]
 }
 

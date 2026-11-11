@@ -1,4 +1,5 @@
 import { rememberLocalBundleVersion } from './local-bundle-version'
+import { rememberLocalBundleCapture } from './local-bundle-capture'
 import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
@@ -47,6 +48,7 @@ import { reconcileMedicationRequests } from './medication-reconciliation'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 import { hasVghtpeMedicationAtcCheck, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
 import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
+import { toAwaitingOrder, type AwaitingOrder } from '@/src/shared/utils/awaiting-order'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
@@ -120,6 +122,7 @@ let memBundle: object | null = null
 function cacheBundle(bundle: object | null): void {
   memBundle = bundle
   rememberLocalBundleVersion(bundle)
+  rememberLocalBundleCapture(bundle)
 }
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false
@@ -1871,6 +1874,20 @@ export const LocalBundleService = {
         return encounter ? [encounter] : []
       }))]
       if (visits.length) result._orderEncounterIds = visits
+    }
+
+    // Orders the hospital bridge marks as written but without a request or
+    // report in HIS yet, kept on their visit for the last-outpatient tab.
+    const awaitingByEncounter = new Map<string, AwaitingOrder[]>()
+    for (const order of byType('ServiceRequest') as any[]) {
+      const awaiting = toAwaitingOrder(order)
+      const encounter = orderEncounters.get(`ServiceRequest/${order.id}`)
+      if (!awaiting || !encounter) continue
+      awaitingByEncounter.set(encounter, [...(awaitingByEncounter.get(encounter) ?? []), awaiting])
+    }
+    for (const encounter of byType('Encounter') as any[]) {
+      const awaiting = awaitingByEncounter.get(encounter.id)
+      if (awaiting) encounter._awaitingOrders = awaiting
     }
 
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }
