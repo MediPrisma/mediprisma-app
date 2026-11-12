@@ -28,6 +28,20 @@ export function resolveOutpatientPrefsKey(
 export type OverviewLabMode = 'abnormal' | 'pinned' | 'mine' | 'all'
 const LAB_MODES: OverviewLabMode[] = ['abnormal', 'pinned', 'mine', 'all']
 
+/** 總覽's remembered view choices. The same values the overview's own chips
+ *  offer; kept here because this store is what decides what may be stored. */
+export const OVERVIEW_RANGE_PREFS = [1, 3, 6, 12] as const
+export type OverviewRangePref = typeof OVERVIEW_RANGE_PREFS[number]
+export const OVERVIEW_MED_FILTERS = ['current', 'changed', 'all'] as const
+export type OverviewMedFilter = typeof OVERVIEW_MED_FILTERS[number]
+export const OVERVIEW_VISIT_FILTERS = ['all', 'emergency', 'inpatient', 'outpatient'] as const
+export type OverviewVisitFilter = typeof OVERVIEW_VISIT_FILTERS[number]
+/** 全部 plus the report groups the overview's chips offer. */
+export const OVERVIEW_REPORT_GROUPS = [
+  'all', 'imaging', 'pathology', 'procedures', 'cancer-screening', 'vitals', 'other',
+] as const
+export type OverviewReportGroupPref = typeof OVERVIEW_REPORT_GROUPS[number]
+
 export type EmrHandoffMode = 'custom' | 'builtin'
 
 export type EmrLabField = 'name' | 'value' | 'unit' | 'date' | 'flag'
@@ -148,6 +162,13 @@ export interface OutpatientPrefs {
   /** Last overview lab mode chosen, so 「自訂」 is what the next patient
    *  opens with. */
   labMode: OverviewLabMode | null
+  /** The 總覽 window the clinician last picked, in months. `null` = never
+   *  picked: three months, widened while no common lab falls inside. */
+  overviewRange: OverviewRangePref | null
+  /** Last 用藥 / 就醫 / 報告 filter picked on 總覽. `null` = the default. */
+  overviewMedFilter: OverviewMedFilter | null
+  overviewVisitFilter: OverviewVisitFilter | null
+  overviewReportGroup: OverviewReportGroupPref | null
   formats: EmrCustomFormat[]
   activeFormatId: string | null
   handoffMode: EmrHandoffMode | null
@@ -163,6 +184,10 @@ export interface OutpatientPrefs {
 export const EMPTY_OUTPATIENT_PREFS: OutpatientPrefs = {
   pinnedLabs: null,
   labMode: null,
+  overviewRange: null,
+  overviewMedFilter: null,
+  overviewVisitFilter: null,
+  overviewReportGroup: null,
   formats: [],
   activeFormatId: null,
   handoffMode: null,
@@ -229,6 +254,10 @@ function pick<T extends string>(value: unknown, allowed: readonly T[], fallback:
   return allowed.includes(value as T) ? value as T : fallback
 }
 
+function pickOrNull<T extends string | number>(value: unknown, allowed: readonly T[]): T | null {
+  return allowed.includes(value as T) ? value as T : null
+}
+
 export function sanitizeMedCopyFormat(raw: unknown): MedCopyFormat | null {
   if (!raw || typeof raw !== 'object') return null
   const format = raw as Record<string, unknown>
@@ -288,6 +317,10 @@ export function sanitizeOutpatientPrefs(raw: unknown): OutpatientPrefs {
   return {
     pinnedLabs,
     labMode: LAB_MODES.includes(prefs.labMode as OverviewLabMode) ? prefs.labMode as OverviewLabMode : null,
+    overviewRange: pickOrNull(prefs.overviewRange, OVERVIEW_RANGE_PREFS),
+    overviewMedFilter: pickOrNull(prefs.overviewMedFilter, OVERVIEW_MED_FILTERS),
+    overviewVisitFilter: pickOrNull(prefs.overviewVisitFilter, OVERVIEW_VISIT_FILTERS),
+    overviewReportGroup: pickOrNull(prefs.overviewReportGroup, OVERVIEW_REPORT_GROUPS),
     formats,
     activeFormatId,
     handoffMode: prefs.handoffMode === 'custom' || prefs.handoffMode === 'builtin' ? prefs.handoffMode : null,
