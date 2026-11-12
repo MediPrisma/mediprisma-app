@@ -244,8 +244,23 @@ test.each([
   expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
 })
 
+test('a card-login full ID from the bridge is saved masked, under the same key as the masked page header', async () => {
+  const system = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id'
+  const patient = { ...input.patient, identifier: [{ system, value: 'B123456789' }] }
+  await saveCdssSnapshot({ ...input, patient })
+  const sent = jest.mocked(fetch).mock.calls[0][1]?.body as string
+  const body = JSON.parse(sent)
+  expect(sent).not.toContain('B123456789')
+  expect(body.patient_identity.identifier_masked).toBe('B123***789')
+  expect(() => parseStoredCdssSaveV2(body)).not.toThrow()
+  expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+  expect(body.patient_key_sha256).toBe((await cdssPatientIdentity({ ...patient,
+    identifier: [{ system, value: 'B123***789' }] })).patient_key_sha256)
+})
+
 test.each([
-  ['source-medcloud-patient-id', 'B123456789'],
+  ['masked-tw-national-id', 'B123456789'],
+  ['source-medcloud-patient-id', 'B823456789'],
   ['source-medcloud-patient-id', 'B823***789'],
   ['source-medcloud-patient-id', '123***789'],
   ['unrecognized-system', 'B123***789'],
