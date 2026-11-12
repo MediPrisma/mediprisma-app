@@ -102,6 +102,28 @@ describe('useInteractionReview', () => {
     expect(JSON.parse(init.body)).toEqual({ medications: [{ drugName: 'Isosorbide dinitrate' }, { drugName: 'Sildenafil' }] })
   })
 
+  it('asks again when the same drugs arrive in another order', async () => {
+    process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN = 'https://ddi.example.test'
+    const codes: Record<string, [string, string]> = {
+      'Isosorbide dinitrate': ['01669', 'isosorbide dinitrate'],
+      Sildenafil: ['02602', 'Sildenafil citrate (sildenafil)'],
+    }
+    fetchMock.mockImplementation(async (_url: string, init: { body: string }) => ({
+      ok: true,
+      json: async () => ({
+        alerts: answer.alerts,
+        resolvedMedications: JSON.parse(init.body).medications.map((m: { drugName: string }, inputIndex: number) =>
+          ({ inputIndex, udCode: codes[m.drugName]![0], genericName: codes[m.drugName]![1] })),
+      }),
+    }))
+    const { result, rerender } = renderHook(({ list }) => useInteractionReview(list, true), { initialProps: { list: pair } })
+    await waitFor(() => expect(result.current?.findings).toHaveLength(1))
+    rerender({ list: [...pair].reverse() })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(result.current?.findings).toHaveLength(1))
+    expect(result.current?.uncheckedRowIds).toEqual([])
+  })
+
   it('shows nothing when the service cannot be reached, for another audience, or for one drug', async () => {
     process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN = 'https://ddi.example.test'
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))

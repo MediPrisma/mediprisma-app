@@ -21,9 +21,10 @@ const TIMEOUT_MS = 8000
 export function useInteractionReview(rows: MedicationRow[], enabled: boolean): InteractionReview | null {
   const origin = process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN ?? ''
   const plan = useMemo(() => planInteractionCheck(rows), [rows])
-  // Re-ask only when the set of ingredients changes, not on every re-render
-  // of the same list.
-  const key = plan.items.map(item => item.query.toLowerCase()).sort().join('|')
+  // Re-ask whenever the plan changes, not on every re-render of the same
+  // list. The answer is indexed by request position and read back against row
+  // ids, so a reordered or regrouped plan must never reuse an older answer.
+  const key = JSON.stringify(plan.items)
   const [result, setResult] = useState<{ key: string; response: unknown } | null>(null)
 
   useEffect(() => {
