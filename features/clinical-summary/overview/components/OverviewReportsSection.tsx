@@ -6,6 +6,8 @@
 // so the title, the type badge and the institution label are identical; only
 // the density differs (one line in the 2×2 layout, two lines when stacked).
 import { useMemo, useState, type Ref } from 'react'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import { OVERVIEW_REPORT_GROUPS, type OverviewReportGroupPref } from '@/src/application/stores/outpatient-prefs.store'
 import { Check, ChevronRight, Copy, ExternalLink, Loader2, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
 import { FormattedReportText } from '@/features/clinical-summary/reports/components/FormattedReportText'
@@ -126,7 +128,15 @@ export function OverviewReportsSection({
   const { t, locale } = useLanguage()
   const strings = t.overview
   const navigateTo = useOverviewNavigate()
-  const [group, setGroup] = useState<ReportGroup | 'all'>('all')
+  // The last group picked is remembered; one this chart has no report of
+  // reads as 全部 below, and the choice is kept for the next chart.
+  const { overviewReportGroup, setOverviewReportGroup } = useOutpatientPrefs()
+  const group: ReportGroup | 'all' = overviewReportGroup ?? 'all'
+  const setGroup = (next: ReportGroup | 'all') => {
+    if ((OVERVIEW_REPORT_GROUPS as readonly string[]).includes(next)) {
+      setOverviewReportGroup(next as OverviewReportGroupPref)
+    }
+  }
   // The 2×2 card has room for exactly one open narrative, so expansion is
   // single-select there; the stacked layout keeps the same rule for symmetry.
   // A report opens in a dialog rather than expanding in place. The bounded

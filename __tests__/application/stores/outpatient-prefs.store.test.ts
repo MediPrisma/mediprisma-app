@@ -162,3 +162,20 @@ describe('clinician name (上次門診)', () => {
     expect(sanitizeOutpatientPrefs({ clinicianName: 'x'.repeat(80) }).clinicianName).toHaveLength(40)
   })
 })
+
+describe('總覽 view choices', () => {
+  it('keeps the choices the overview offers and reads anything else as unset', () => {
+    expect(sanitizeOutpatientPrefs({
+      overviewRange: 6, overviewMedFilter: 'all', overviewVisitFilter: 'inpatient', overviewReportGroup: 'imaging',
+    })).toMatchObject({
+      overviewRange: 6, overviewMedFilter: 'all', overviewVisitFilter: 'inpatient', overviewReportGroup: 'imaging',
+    })
+    expect(sanitizeOutpatientPrefs({
+      overviewRange: 9, overviewMedFilter: 'stopped', overviewVisitFilter: 7, overviewReportGroup: 'lab',
+    })).toMatchObject({
+      overviewRange: null, overviewMedFilter: null, overviewVisitFilter: null, overviewReportGroup: null,
+    })
+    // Settings saved before these existed.
+    expect(sanitizeOutpatientPrefs({ labMode: 'mine' })).toMatchObject({ labMode: 'mine', overviewRange: null })
+  })
+})

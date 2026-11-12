@@ -26,9 +26,12 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { formatDate } from '@/src/shared/utils/date.utils'
 import { LoadingSkeleton } from '@/src/shared/components/LoadingSkeleton'
 import { ErrorMessage } from '@/src/shared/components/ErrorMessage'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { useHydrated } from '@/src/shared/hooks/use-hydrated.hook'
 import { useOverviewWindow } from './hooks/useOverviewWindow'
 import { useOverviewData } from './hooks/useOverviewData'
-import type { OverviewRangeMonths } from './utils/overview-selectors'
+import { OVERVIEW_RANGE_MONTHS, type OverviewRangeMonths } from './utils/overview-selectors'
 import { OverviewHeader } from './components/OverviewHeader'
 import { OverviewNavTiles } from './components/OverviewNavTiles'
 import { OverviewLabsSection } from './components/OverviewLabsSection'
@@ -54,9 +57,16 @@ const SECTION_IDS: OverviewSectionId[] = ['labs', 'reports', 'meds', 'visits']
 export function OverviewCard() {
   const { t, locale } = useLanguage()
   const strings = t.overview
-  const { window: overviewWindow, setMonths } = useOverviewWindow()
+  const prefs = useOutpatientPrefs()
+  const { patient } = usePatient()
+  // Stored on this computer, so the server HTML cannot know it: the remembered
+  // range joins once hydrated, before any chart data has loaded.
+  const hydrated = useHydrated()
+  const rememberedRange = hydrated ? prefs.overviewRange : null
+  const {
+    window: overviewWindow, setMonths, widenTo, chosenForChart,
+  } = useOverviewWindow(rememberedRange, patient?.id ?? null)
   const data = useOverviewData(overviewWindow)
-  const rangeChosenByUserRef = useRef(false)
 
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cellRefs = useRef<Partial<Record<OverviewSectionId, HTMLDivElement | null>>>({})
@@ -64,25 +74,30 @@ export function OverviewCard() {
   const [cellHeights, setCellHeights] = useState<Partial<Record<OverviewSectionId, number>>>({})
   const [flashed, setFlashed] = useState<OverviewSectionId | null>(null)
 
-  // Start with the compact three-month view when it contains any of the
-  // clinician's common analytes. Otherwise widen progressively to six months,
-  // then one year, stopping as soon as a common result appears. A later
-  // explicit range choice is authoritative despite an empty 常用 set.
+  // The chart opens on the range the clinician last picked. When this patient
+  // has nothing at all inside it, widen one step at a time (… 6 個月, 1 年)
+  // until something shows — for this chart only; the remembered range stays.
+  // A clinician who never picked one starts at three months and is widened
+  // while none of their common analytes falls inside. A range picked on this
+  // chart is authoritative, empty or not.
+  const { setOverviewRange } = prefs
   useEffect(() => {
-    if (
-      rangeChosenByUserRef.current
-      || data.isLoading
-      || data.error
-      || data.labs.pinnedRowCount > 0
-    ) return
-    if (overviewWindow.months === 3) setMonths(6)
-    else if (overviewWindow.months === 6) setMonths(12)
-  }, [data.error, data.isLoading, data.labs.pinnedRowCount, overviewWindow.months, setMonths])
+    if (chosenForChart || data.isLoading || data.error) return
+    const hasWhatTheWindowIsFor = rememberedRange === null
+      ? data.labs.pinnedRowCount > 0
+      : !data.isEmpty
+    if (hasWhatTheWindowIsFor) return
+    const wider = OVERVIEW_RANGE_MONTHS.find((months) => months > overviewWindow.months)
+    if (wider) widenTo(wider)
+  }, [
+    chosenForChart, data.error, data.isEmpty, data.isLoading, data.labs.pinnedRowCount,
+    overviewWindow.months, rememberedRange, widenTo,
+  ])
 
   const handleRangeChange = useCallback((months: OverviewRangeMonths) => {
-    rangeChosenByUserRef.current = true
     setMonths(months)
-  }, [setMonths])
+    setOverviewRange(months)
+  }, [setMonths, setOverviewRange])
 
   useIsomorphicLayoutEffect(() => {
     const element = rootRef.current

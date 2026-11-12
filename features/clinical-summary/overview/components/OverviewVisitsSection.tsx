@@ -3,6 +3,8 @@
 // 就診 — the same VisitRecord + EncounterDetails model the 就診紀錄 tab uses,
 // drawn as one dense line per visit under a month-scaled timeline.
 import { useMemo, useState, type Ref } from 'react'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import type { OverviewVisitFilter } from '@/src/application/stores/outpatient-prefs.store'
 import { Calendar, PanelRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -43,7 +45,7 @@ import {
 } from './overview-styles'
 import { VisitTimeline } from './VisitTimeline'
 
-type VisitFilter = 'all' | 'emergency' | 'inpatient' | 'outpatient'
+type VisitFilter = OverviewVisitFilter
 
 /** Single-line row: 26px of content, the row's 2px border, the 4px stack gap. */
 /** Compact timeline strip (32px) plus the 8px gap that follows it. */
@@ -103,7 +105,14 @@ export function OverviewVisitsSection({
   const { t, locale } = useLanguage()
   const strings = t.overview
   const rightDetail = useOptionalRightDetail()
-  const [filter, setFilter] = useState<VisitFilter>('all')
+  // The last filter picked is remembered; a kind this chart has no visit of
+  // reads as 全部 here, and the choice is kept for the next chart.
+  const { overviewVisitFilter, setOverviewVisitFilter: setFilter } = useOutpatientPrefs()
+  const filter: VisitFilter = (overviewVisitFilter === 'emergency' && data.emergencyCount > 0)
+    || (overviewVisitFilter === 'inpatient' && data.inpatientCount > 0)
+    || (overviewVisitFilter === 'outpatient' && data.outpatientCount > 0)
+    ? overviewVisitFilter
+    : 'all'
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const badges = t.visitHistory.badges as Record<string, string>
