@@ -250,7 +250,7 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
   for (const model of MODEL_CATALOG) {
     beginCollectorObservation({ feature: 'summary', modelId: model.id, sampleKind: 'feature', mode: 'structured' }).finish({ outcome: 'ok' })
     await settle()
-    expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id === 'gpt-6-luna' ? 'unknown' : model.id)
+    expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id)
     expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
   }
 })
@@ -531,4 +531,20 @@ test('captures the active Bundle version at operation start and omits it after c
  rememberLocalBundleVersion(bundle('patient text'))
  start().finish({outcome:'ok'});await settle()
  expect(body()).not.toHaveProperty('medcloud_extension_version')
+})
+
+test('the intranet Azure Luna keeps its name when the service reports a dated revision or nothing at all', async () => {
+  const run = async (reported?: string) => {
+    beginCollectorObservation({ feature: 'chat', modelId: 'gpt-6-luna', provider: 'openai', sampleKind: 'request', mode: 'stream' })
+      .finish({ outcome: 'ok', ...(reported ? { modelId: reported, modelSource: 'reported' as const } : {}) })
+    await settle()
+    expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
+    return body()
+  }
+  expect(await run()).toMatchObject({ model: 'gpt-6-luna', provider: 'openai', model_source: 'configured' })
+  expect(await run('gpt-6-luna')).toMatchObject({ model: 'gpt-6-luna', model_source: 'reported' })
+  expect(await run('gpt-6-luna-2026-10-01')).toMatchObject({ model: 'gpt-6-luna', model_source: 'reported' })
+  // A different model than the one selected is still reported as what it is.
+  expect(await run('gpt-5.6-terra')).toMatchObject({ model: 'gpt-5.6-terra', model_source: 'reported' })
+  expect(await run('synthetic-other-model')).toMatchObject({ model: 'unknown', model_source: 'reported' })
 })
