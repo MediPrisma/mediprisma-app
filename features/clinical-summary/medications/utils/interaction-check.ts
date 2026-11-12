@@ -42,12 +42,16 @@ export interface InteractionReview {
   uncheckedRowIds: string[]
 }
 
+// A strength is a number with a unit. A number inside the name stays:
+// "ISOSORBIDE 5-MONONITRATE 20 MG" is not "ISOSORBIDE".
+const STRENGTH = /\s\.?\d[\d.,]*\s*(?:mg|mcg|ug|gm?|ml|l|iu|u|units?|meq|mmol|%)(?![a-z]).*$/i
+
 // "TRAMADOL HCL 37.5 MG+ACETAMINOPHEN (=PARACETAMOL) 325 MG" and
 // "Netupitant / Palonosetron" both name two ingredients.
 function ingredientNames(text: string | undefined): string[] {
   if (!text) return []
   return text.split(/\+|\s\/\s/)
-    .map(part => part.replace(/\([^)]*\)/g, ' ').replace(/\s\.?\d.*$/, '').replace(/\s+/g, ' ').trim())
+    .map(part => part.replace(/\([^)]*\)/g, ' ').replace(STRENGTH, '').replace(/\s+/g, ' ').trim())
     .filter(Boolean)
 }
 
@@ -80,18 +84,19 @@ export function interactionCheckBody(plan: InteractionCheckPlan) {
 }
 
 const words = (text: string) => text.toLowerCase().match(/[a-z][a-z-]+/g) ?? []
-// A leading cation names the salt, not the drug: "sodium chloride" must not
-// be accepted as "potassium chloride" on the strength of one shared word.
-const CATIONS = new Set(['sodium', 'potassium', 'calcium', 'magnesium', 'ferrous', 'ferric', 'zinc', 'aluminum', 'aluminium', 'lithium'])
+// Salt and hydrate words that may follow the drug's own name. Only these may
+// be missing from the service's name, and never the first word: "trastuzumab
+// emtansine" is not "trastuzumab", "sodium chloride" is not "potassium chloride".
+const SALT_SUFFIXES = new Set(['hcl', 'hydrochloride', 'hbr', 'hydrobromide', 'sodium', 'potassium', 'calcium',
+  'magnesium', 'maleate', 'citrate', 'sulfate', 'sulphate', 'phosphate', 'acetate', 'besylate', 'besilate',
+  'mesylate', 'tartrate', 'fumarate', 'succinate', 'bromide', 'nitrate', 'anhydrous', 'monohydrate', 'dihydrate'])
 
 function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
   if (String(resolved.udCode ?? '').startsWith('RAW-') || !resolved.udCode) return false
   const known = new Set(words(`${resolved.genericName ?? ''} ${resolved.englishName ?? ''}`))
   const asked = words(query)
-  const first = asked[0]
-  if (!first) return false
-  if (asked.every(word => known.has(word))) return true
-  return first.length >= 5 && !CATIONS.has(first) && known.has(first)
+  return asked.length > 0
+    && asked.every((word, index) => known.has(word) || (index > 0 && SALT_SUFFIXES.has(word)))
 }
 
 const AVOID = /不可併用|禁止併用|避免併用|禁忌/

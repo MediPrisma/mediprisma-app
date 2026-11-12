@@ -42,6 +42,12 @@ describe('planInteractionCheck', () => {
     expect(plan.items).toEqual([{ query: 'WARFARIN SODIUM', rowIds: ['c1', 'c2'] }])
   })
 
+  it('keeps a number that is part of the ingredient name', () => {
+    // Recorded as-is (typo included) in the hospital medication index.
+    const plan = planInteractionCheck([cloud('c1', 'ISOSORBIDE 5-MONONITRTATE 20 MG'), cloud('c2', 'TAURINE .5 MG/ML')])
+    expect(plan.items.map(item => item.query)).toEqual(['ISOSORBIDE 5-MONONITRTATE', 'TAURINE'])
+  })
+
   it('lists a current row with no ingredient name as unnamed', () => {
     const plan = planInteractionCheck([
       row('x', { dataOrigin: 'hospital', hospitalMedicationName: { status: 'unresolved', version: 'v', reviewedAt: 'd' } }),
@@ -104,6 +110,23 @@ describe('interpretInteractionCheck', () => {
       resolvedMedications: [resolved(0, '01725', 'potassium chloride (Pot. chloride-SR)', 'Slow-K tab 600 mg')],
     })
     expect(review.uncheckedRowIds).toEqual(['nacl'])
+  })
+
+  it('does not accept a different drug that shares the first word', () => {
+    const list = [hospital('tdm1', 'Trastuzumab emtansine'), cloud('ismn', 'ISOSORBIDE 5-MONONITRATE 20 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, {
+      resolvedMedications: [resolved(0, '05001', 'Trastuzumab'), resolved(1, '01669', 'isosorbide dinitrate')],
+    })
+    expect(review.uncheckedRowIds.sort()).toEqual(['ismn', 'tdm1'])
+    expect(review.checkedRowIds).toEqual([])
+  })
+
+  it('accepts a trailing salt the service leaves out', () => {
+    const list = [cloud('warf', 'WARFARIN SODIUM 1 MG'), cloud('diclo', 'DICLOFENAC SODIUM 25 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, {
+      resolvedMedications: [resolved(0, '03951', 'Warfarin'), resolved(1, '03868', 'diclofenac')],
+    })
+    expect(review.checkedRowIds.sort()).toEqual(['diclo', 'warf'])
   })
 
   it('treats everything as unchecked when the response is unusable', () => {
