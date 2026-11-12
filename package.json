@@ -108,10 +108,10 @@
     "typescript": "^6.0.3"
   },
   "optionalDependencies": {
-    "@voho0000/clinical-lab-normalization": "1.4.0",
+    "@voho0000/clinical-lab-normalization": "1.5.0",
     "@voho0000/personalization-sdk": "1.0.0",
     "@voho0000/personalized-care": "2.27.6",
-    "@voho0000/personalized-care-fhir": "1.17.11",
+    "@voho0000/personalized-care-fhir": "1.17.12",
     "@voho0000/personalized-education": "1.4.1"
   }
 }
