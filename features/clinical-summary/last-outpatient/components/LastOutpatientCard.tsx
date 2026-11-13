@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, Filter, X } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight, Filter, X } from "lucide-react"
 import { isAbnormalInterpretationLabel } from "@voho0000/clinical-lab-normalization/interpretation"
 import { FeatureCard } from "@/src/shared/components"
 import { Button } from "@/components/ui/button"
@@ -445,8 +445,10 @@ function LabTable({
   sourceObservations,
   mainDay,
   mainPriorDay,
+  countStrings,
 }: {
   groups: Array<{ categoryId: string | null; tests: EncounterObservation[] }>
+  countStrings: { items: string; abnormal: string }
   mainDay: string
   mainPriorDay: string
   sourceObservations: Map<string, any>
@@ -457,6 +459,14 @@ function LabTable({
   columns: LabColumns
 }) {
   const cell = 'min-w-0 break-words'
+  // Every category starts open; a folded one keeps its counts on the heading
+  // so an abnormal result is never hidden without a trace.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set())
+  const toggle = (key: string) => setFolded((current) => {
+    const next = new Set(current)
+    if (!next.delete(key)) next.add(key)
+    return next
+  })
   return (
     <div role="table" aria-label={columns.item} className="@container/labs overflow-hidden rounded-md border border-border/80 bg-card text-sm">
       <div role="row" className={cn(LAB_GRID, 'border-b border-border/80 bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground')}>
@@ -471,12 +481,38 @@ function LabTable({
           {mainPriorDay && <span className="ml-1.5 font-normal tabular-nums">{shortDay(mainPriorDay)}</span>}
         </span>
       </div>
-      {groups.map((group, index) => (
-        <div role="rowgroup" key={group.categoryId ?? `other-${index}`}>
-          <div role="row" className="border-b border-border/60 px-3 pb-1 pt-2.5 text-xs font-semibold text-muted-foreground">
-            <span role="cell">{categoryLabel(group.categoryId)}</span>
+      {groups.map((group, index) => {
+        const key = group.categoryId ?? `other-${index}`
+        const isFolded = folded.has(key)
+        const abnormal = group.tests.filter(hasAbnormal).length
+        const Chevron = isFolded ? ChevronRight : ChevronDown
+        return (
+        <div role="rowgroup" key={key} className={cn(isFolded && 'border-b border-border/60 last:border-b-0')}>
+          <div role="row" className={cn('text-xs font-semibold text-muted-foreground', !isFolded && 'border-b border-border/60')}>
+            <span role="cell" className="block">
+              <button
+                type="button"
+                aria-expanded={!isFolded}
+                onClick={() => toggle(key)}
+                className="flex w-full items-center gap-1 px-2 pb-1.5 pt-2.5 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                <Chevron className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{categoryLabel(group.categoryId)}</span>
+                {isFolded && (
+                  <span className="ml-1.5 font-normal tabular-nums">
+                    {fill(countStrings.items, { count: group.tests.length })}
+                    {abnormal > 0 && (
+                      <>
+                        {' · '}
+                        <span className="font-medium text-clinical-abnormal">{fill(countStrings.abnormal, { count: abnormal })}</span>
+                      </>
+                    )}
+                  </span>
+                )}
+              </button>
+            </span>
           </div>
-          {group.tests.map((test) => {
+          {!isFolded && group.tests.map((test) => {
             const prior = priorValues.get(test.id)
             return (
               <div key={test.id} className="border-b border-border/50 last:border-b-0">
@@ -524,7 +560,8 @@ function LabTable({
             )
           })}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -730,6 +767,9 @@ export function LastOutpatientCard() {
                     <p className="text-sm text-muted-foreground">{strings.noAbnormal}</p>
                   ) : (
                     <LabTable
+                      // Another visit opens with every category unfolded again.
+                      key={visit.id}
+                      countStrings={{ items: strings.visitItemCount, abnormal: strings.abnormalCount }}
                       groups={groups}
                       categoryLabel={categoryLabel}
                       priorValues={priorValues}
