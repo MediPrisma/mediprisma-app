@@ -29,6 +29,12 @@ Complete birth date and recorded male/female sex are required by the model; a ma
 
 ## HTTPS SaMD contract
 
+### Failure diagnostics and consented reports
+
+Each explicit run retains at most four request diagnostics in page memory (input check and prediction for each horizon). Failures distinguish browser transport, the 15-second deadline, rejected input, missing routes, rate limiting, interrupted/empty bodies, invalid JSON and invalid prediction contracts. The UI shows stage, HTTP status, duration and the generated request ID. A browser transport error does not assert that either the network or patient data is the cause. Raw exception and response text are not retained.
+
+`回報 HF 問題` previews a frozen snapshot before explicit consent and submission. It reuses the existing `/collector/v1/ai-reports` v1 envelope: each execution's `prompt` is structured JSON labeled `kind: hf-samd` containing the validated model projection and claim, and `output` is allowlisted technical diagnostics. The `batch` lane identifies this multi-horizon operation; no summary or automatic usage event is emitted. Repeated identical inputs reference the first request ID. Invalid or oversized input attachments are explicitly omitted, never silently truncated. The full preview remains downloadable when submission is unavailable; retries reuse the same submission ID. The receiver's existing authentication, encryption, deduplication, retention and administrative read path apply without a backend schema change. No patient identifiers, excluded source observations, source Bundle, credential, URL query or raw response is added. Preparing a new input/run or changing the active record clears the prior diagnostics and report dialog.
+
 Build-time public settings:
 ```
 NEXT_PUBLIC_HF_GATEWAY_ORIGIN=https://samd.mediprisma.tw
