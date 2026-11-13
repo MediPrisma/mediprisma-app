@@ -1,6 +1,6 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
-import { getVghtpeSource } from '../adapters/vghtpe-source-display'
+import { getVghtpeSource, vghtpeReportPeople } from '../adapters/vghtpe-source-display'
 import { getReportInstitution as getDrInstitution, getReportDate as getDrDate, isNhiMedicloudReport, isAdultPreventiveReport, reportNaturalGroupingKey } from '@/src/shared/utils/report-identity'
 import { compareImagingCopies, imagingCopyInstitution, normalizeImagingClinicalText, reportDisplayGroupingKeys, visibleReportGroupingKeys } from '@/src/shared/utils/report-copy-grouping'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
@@ -803,9 +803,11 @@ export function buildReportsData(
       // table cells. Here absence is meaningful because it activates the
       // explicit "inferred imaging" / "unclassified" provenance label.
       const category = categoryText === '—' ? '' : categoryText
-      const institution = (key.startsWith('shared-report|cross-source|') ? imagingCopyInstitution(head) : undefined)
+      const hospitalSource = getVghtpeSource([...sourceReports, ...allObs])
+      const people = vghtpeReportPeople(head, (key.startsWith('shared-report|cross-source|') ? imagingCopyInstitution(head) : undefined)
         || getDrInstitution(head)
-        || (linkedStudies[0] ? imagingStudyInstitution(linkedStudies[0]) : undefined)
+        || (linkedStudies[0] ? imagingStudyInstitution(linkedStudies[0]) : undefined), hospitalSource)
+      const institution = people.institution
       const isLinkedImagingStudy = rowStudyIds.size > 0
       const reportGroup = inferReportDisplayGroup(head)
       const sourceProvenance = reportGroup === 'lab' && grp.every(isNhiMedicloudReport)
@@ -840,7 +842,8 @@ export function buildReportsData(
         obs: obsWithSummary,
         group: reportGroup,
         institution,
-        hospitalSource: getVghtpeSource([...sourceReports, ...allObs]),
+        hospitalSource,
+        ...(people.interpreter ? { interpreter: people.interpreter } : {}),
         sourceProgram: grp.some(isAdultPreventiveReport)
           ? 'adult-preventive'
           : undefined,

@@ -89,4 +89,11 @@ describe('original report disclosure', () => {
     expect(container.querySelectorAll('tr')).toHaveLength(3)
     expect(screen.getByRole('cell', { name: '( 160 / 72 )' })).toBeInTheDocument()
   })
+
+  it('renders a footer under the report body, above the raw-report toggle', () => {
+    render(<FormattedReportText text="Synthetic finding." footer={<p>判讀醫師：DOC0002B 林判讀</p>} />)
+    const footer = screen.getByText('判讀醫師：DOC0002B 林判讀')
+    const toggle = screen.getByText('顯示原始報告')
+    expect(footer.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
 })

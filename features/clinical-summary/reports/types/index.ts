@@ -71,6 +71,8 @@ export type Row = {
   institution?: string
   /** Display-only provenance; raw institution remains the grouping identity. */
   hospitalSource?: import('../adapters/vghtpe-source-display').HospitalSource
+  /** Reporting / interpreting physician (DiagnosticReport.resultsInterpreter). */
+  interpreter?: string
   /** Explicit source-program provenance supplied by the source resource.
    *  Never infer this from the analyte name or value. */
   sourceProgram?: ReportSourceProgram
