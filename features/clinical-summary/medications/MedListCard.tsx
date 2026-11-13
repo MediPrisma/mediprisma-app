@@ -33,6 +33,8 @@ import { useResourceNavigationStore } from '@/src/application/stores/resource-na
 import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
 import { markUserTrigger, trackEvent, useTrackView } from '@/src/application/telemetry/usage-analytics'
 import { MedicationList } from './components/MedicationList'
+import { InteractionSummary } from './components/InteractionSummary'
+import { useInteractionReview } from './hooks/useInteractionReview'
 import { MedCopyButtons, MedCopyDialogs, useMedCopyActions } from './components/MedCopyActions'
 import { useCurrentMedCopySources } from '@/features/clinical-summary/overview/hooks/useCurrentMedCopySources'
 import { MedicationRemainingSupplyList } from './components/MedicationRemainingSupplyList'
@@ -86,6 +88,9 @@ export function MedListCard() {
   const copySources = useCurrentMedCopySources(prescriptionMedications, audience, locale, canCopy)
   const copyState = useMedCopyActions(copySources, 'meds_tab')
   const sourceMix = useMedicationSourceMix(rows)
+  // 交互作用 covers the whole current list, whatever the search or 藥理類別
+  // filter shows — a hidden drug still interacts. Medical view only.
+  const interactionReview = useInteractionReview(rows, audience === 'medical')
   const vaccines = useVaccineRows(immunizations, audience, locale)
   const activeAllergies = useActiveAllergies(allergies)
 
@@ -432,6 +437,9 @@ export function MedListCard() {
               <Info className="h-3.5 w-3.5 shrink-0 mt-[1px]" aria-hidden />
               <span>{sourceHintStatement}</span>
             </div>
+          )}
+          {view === 'list' && interactionReview && (
+            <InteractionSummary review={interactionReview} rows={rows} />
           )}
           {hasMedicationFilters && (
             view === 'remaining'
