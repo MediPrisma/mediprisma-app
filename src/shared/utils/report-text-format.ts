@@ -45,6 +45,8 @@ export interface ReportLine {
    * table; `text` stays the source row so AI/clipboard output is unchanged.
    */
   columnCells?: string[]
+  /** The source left a blank line before this line (a paragraph break). */
+  gapBefore?: boolean
 }
 
 // A source table cell: short, not prose, not a bare separator, not a
@@ -461,6 +463,14 @@ export function separateGluedOrderCode(raw: string): string {
   ))
 }
 
+// Private-use character standing in for a source blank-line run while the
+// text is reflowed. It never occurs in report text and no reflow pattern
+// matches it, so it rides along with the line the source put after the gap.
+const GAP_MARK = '\uE000'
+// A non-blank line followed by one or more blank lines. Leading blank lines
+// are left alone so start-anchored report-type checks still see the text.
+const SOURCE_GAP_RE = /(\S)[ \t]*\n(?:[ \t]*\n)+/g
+
 export function formatReportText(raw: string): ReportLine[] {
   if (!raw || !raw.trim()) return []
 
@@ -474,30 +484,58 @@ export function formatReportText(raw: string): ReportLine[] {
   // 1) Force every section heading onto its own line, then break apart numbered
   //    findings the bridge ran together. Both heal glued concatenations so a
   //    plain line-split doesn't bury "Impression:" / "2." mid-sentence.
-  const broken = reflowMicrobiologyBlob(isMicrobiologyBlob ? raw.replace(/\r\n?/g, '\n') : reflowReportLayout(raw))
+  // Mark each source blank-line run on the line it precedes BEFORE any reflow:
+  // the reflow and heading passes below insert their own line breaks, and a
+  // blank line they leave behind is not a paragraph break the source wrote.
+  const normalized = raw.replace(/\r\n?/g, '\n')
+  const marked = normalized.replace(SOURCE_GAP_RE, `$1\n${GAP_MARK}`)
+  const broken = reflowMicrobiologyBlob(isMicrobiologyBlob ? marked : reflowReportLayout(marked))
     .replace(KEYWORD_COLON_RE, (_m, kw, colon) => `\n${kw}${colon}`)
     .replace(GLUED_NUM_RE, (_m, before, marker) => `${before}\n${marker}`)
 
   // 2) Split, trim, drop blank lines (this also collapses the verbose blank
   //    runs the bridge pads reports with).
-  const splitLines = broken
-    .split(/\r?\n/)
+  const splitLines: string[] = []
+  // Index (into splitLines) of each line the source preceded with a blank line.
+  let gapLines = new Set<number>()
+  let gapPending = false
+  for (const source of broken.split(/\r?\n/)) {
+    // Only a mark at the start of a line is a source paragraph break; one a
+    // reflow pass glued mid-line is dropped without marking a gap.
+    if (source.startsWith(GAP_MARK)) gapPending = splitLines.length > 0
+    const unmarked = source.split(GAP_MARK).join('')
     // A tab is a source cell boundary (the bridge writes one between table
     // cells), so keep a leading tab: it is an empty first cell, not padding.
-    .map((l) => (l.includes('\t') ? l.replace(/^ +| +$/g, '') : l.trim()))
-    .filter((l) => l.trim().length > 0)
+    const l = unmarked.includes('\t') ? unmarked.replace(/^ +| +$/g, '') : unmarked.trim()
+    if (!l.trim()) continue
+    if (gapPending) gapLines.add(splitLines.length)
+    gapPending = false
+    splitLines.push(l)
+  }
+  // Blank lines after most source lines are padding (some sources double-space
+  // every line), not paragraph breaks: then show none. Counted on the source,
+  // so reflowed line breaks neither add gaps nor dilute the ratio.
+  const sourceLineCount = normalized.split('\n').filter((l) => l.trim()).length
+  const sourceGapCount = marked.split(GAP_MARK).length - 1
+  if (sourceGapCount > (sourceLineCount - 1) / 2) gapLines = new Set()
 
   if (isMicrobiologyBlob) return formatMicrobiologyLines(splitLines)
 
   // Heading detection may insert a break after a source list marker. Reattach
   // only a marker-only line to its heading; never consume adjacent findings.
   const rawLines: string[] = []
-  for (const line of splitLines) {
+  const rawGaps: boolean[] = []
+  for (const [index, line] of splitLines.entries()) {
     const previous = rawLines.at(-1)
     if (previous && /^(?:\d{1,2}\.|\(?[0-9]{1,2}\))$/.test(previous) && HEADING_LINE_RE.test(line)) {
       rawLines[rawLines.length - 1] = `${previous} ${line}`
-    } else rawLines.push(line)
+    } else {
+      rawLines.push(line)
+      rawGaps.push(gapLines.has(index))
+    }
   }
+  // Output index of the first line pushed after each source paragraph break.
+  const gapAt = new Set<number>()
 
   const lines: ReportLine[] = []
   let inEchoMeasurements = isDopplerEcho(raw)
@@ -513,7 +551,8 @@ export function formatReportText(raw: string): ReportLine[] {
     lines.push(item)
     numberedContinuation = numberedEndoscopy ? item : undefined
   }
-  for (const line of rawLines) {
+  for (const [rawIndex, line] of rawLines.entries()) {
+    if (rawGaps[rawIndex]) gapAt.add(lines.length)
     if (/^Carotid Sonographic Data:/.test(line)) inCarotidTable = true
     else if (inCarotidTable && /^Diam:/.test(line)) inCarotidTable = false
     else if (inCarotidTable) {
@@ -610,6 +649,7 @@ export function formatReportText(raw: string): ReportLine[] {
     pushBody(lines, line, bodyLevel)
   }
 
+  for (const index of gapAt) if (lines[index]) lines[index] = { ...lines[index], gapBefore: true }
   return markColumnTables(lines)
 }
 
