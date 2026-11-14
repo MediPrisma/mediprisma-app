@@ -51,6 +51,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `mobile-report-row-layout.spec.ts` | Compact lab row keeps value and source metadata legible from 320 to 1440px |
 | `mobile-visit-layout.spec.ts` | Visit row statistics at phone and desktop widths |
 | `mobile-back-gesture.spec.ts` | Android back／iOS edge swipe closes the top phone layer instead of the app |
+| `last-outpatient-physicians.spec.ts` | 上次門診 with two physicians: all physicians by default, the physician filter narrows visits and results together, orders with no report yet, and every physician's results since the clinician's own last visit (none from before) |
 | `firebase-isolation.spec.ts` | The anonymous session is served locally, never from the production project |
 
 Auth-gated Firestore history, real SMART redirects and real provider answers are not part of the main suite.
