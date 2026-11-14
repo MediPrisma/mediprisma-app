@@ -51,6 +51,8 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `mobile-report-row-layout.spec.ts` | Compact lab row keeps value and source metadata legible from 320 to 1440px |
 | `mobile-visit-layout.spec.ts` | Visit row statistics at phone and desktop widths |
 | `mobile-back-gesture.spec.ts` | Android back／iOS edge swipe closes the top phone layer instead of the app |
+| `reports-vgh-cloud-pairing.spec.ts` | A 北榮 report and its NHI cloud copy: one row with both sources when the request number matches, two rows when it differs; a 北榮 radiograph title pairs with its cloud copy |
+| `hospital-capture-reasons.spec.ts` | Import names each 北榮 category not captured and why (or 未記錄原因); a cloud-only progressive import shows 雲端懷爾抓抓's reason, across a reload, and drops an unknown code |
 | `firebase-isolation.spec.ts` | The anonymous session is served locally, never from the production project |
 
 Auth-gated Firestore history, real SMART redirects and real provider answers are not part of the main suite.
