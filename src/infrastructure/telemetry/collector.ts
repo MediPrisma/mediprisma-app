@@ -4,6 +4,7 @@ import { readLocalBundleVersion } from '@/src/infrastructure/fhir/services/local
 
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { sameModelVersion } from '@/src/shared/utils/ai-model-execution'
 import { captureCollectorAuth } from './collector-auth'
 import { collectorEventV11Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorEventV10, type CollectorEventV11, type CollectorAppSurface, type CollectorRequestV11 as CollectorRequest, type SummaryAttempt, type TokenUsage } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -362,7 +363,9 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
           ended = true
           if (generation !== owner || !isCollectorSite()) return
           for (const snapshot of requestSnapshots) snapshot()
-          const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
+          // A dated revision of the selected model is that model, not an unknown one.
+          const measured = configured.provider === 'custom' || !result.modelId || sameModelVersion(input.modelId, result.modelId)
+            ? configured : modelInfo(result.modelId, provider)
           // v8: a summary operation that knows its run; v6: any other operation; v7/v5: requests.
           const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
           const version = 11
