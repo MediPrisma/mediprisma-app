@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import {
   localizeDemoDisplayText,
   localizeDemoOrganizationDisplay,
@@ -23,6 +25,17 @@ describe('demo display localization', () => {
     expect(localizeDemoOrganizationDisplay('示範康健診所', 'en'))
       .toBe('E Clinic')
   })
+
+  it.each(['demo-bundle.json', 'demo-medcloud-bundle.json'])(
+    'has an English label for every demo organization in %s',
+    (file) => {
+      const bundle = readFileSync(path.join(__dirname, '../../../public/demo', file), 'utf8')
+      const names = [...new Set(bundle.match(/示範[\u4e00-\u9fff]+/g) ?? [])]
+      expect(names.length).toBeGreaterThan(0)
+      const missing = names.filter((name) => localizeDemoOrganizationDisplay(name, 'en') === name)
+      expect(missing).toEqual([])
+    },
+  )
 
   it('does not rewrite non-demo imported names', () => {
     expect(localizeDemoOrganizationDisplay('Taipei City Hospital', 'en'))
