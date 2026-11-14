@@ -51,6 +51,8 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `mobile-report-row-layout.spec.ts` | Compact lab row keeps value and source metadata legible from 320 to 1440px |
 | `mobile-visit-layout.spec.ts` | Visit row statistics at phone and desktop widths |
 | `mobile-back-gesture.spec.ts` | Android back／iOS edge swipe closes the top phone layer instead of the app |
+| `calculator-serum-creatinine.spec.ts` | CrCl and eGFR fill an unmarked serum creatinine, never a newer urine creatinine |
+| `doac-dose-from-af.spec.ts` | DOAC dose calculator opened from the AF dose point (scenario harness): latest weight, unanswered yes/no questions and co-medications default to 無, label doses per agent |
 | `firebase-isolation.spec.ts` | The anonymous session is served locally, never from the production project |
 
 Auth-gated Firestore history, real SMART redirects and real provider answers are not part of the main suite.
