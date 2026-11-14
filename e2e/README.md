@@ -52,6 +52,8 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `mobile-visit-layout.spec.ts` | Visit row statistics at phone and desktop widths |
 | `mobile-back-gesture.spec.ts` | Android back／iOS edge swipe closes the top phone layer instead of the app |
 | `last-outpatient-physicians.spec.ts` | 上次門診 with two physicians: all physicians by default, the physician filter narrows visits and results together, orders with no report yet, and every physician's results since the clinician's own last visit (none from before) |
+| `calculator-serum-creatinine.spec.ts` | CrCl and eGFR fill an unmarked serum creatinine, never a newer urine creatinine |
+| `doac-dose-from-af.spec.ts` | DOAC dose calculator opened from the AF dose point (scenario harness): latest weight, unanswered yes/no questions and co-medications default to 無, label doses per agent |
 | `firebase-isolation.spec.ts` | The anonymous session is served locally, never from the production project |
 
 Auth-gated Firestore history, real SMART redirects and real provider answers are not part of the main suite.

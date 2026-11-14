@@ -170,7 +170,7 @@ function DiseaseSwitcher({
           : `疾病（${applicablePackIds.size} 項適用）`}
       </span>
       <div
-        className="inline-flex rounded-md border border-border bg-muted/30 p-0.5"
+        className="inline-flex max-w-full flex-wrap rounded-md border border-border bg-muted/30 p-0.5"
         role="group"
         aria-label={isEnglish ? 'Select disease guidance' : '選擇疾病指引'}
       >
@@ -276,7 +276,7 @@ function LayoutSwitcher({
         {isEnglish ? 'View' : '畫面'}
       </span>
       <div
-        className="inline-flex rounded-md border border-border bg-muted/30 p-0.5"
+        className="inline-flex max-w-full flex-wrap rounded-md border border-border bg-muted/30 p-0.5"
         role="group"
         aria-label={isEnglish ? 'Choose the guidance layout' : '選擇指引畫面'}
       >
