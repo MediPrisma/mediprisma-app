@@ -4,10 +4,9 @@
 // reading years old can still reach the model, and a model may read it as
 // current ("Hypertension uncontrolled" on a 2022 BP).
 
-const DAY_MS = 86_400_000
+import { taipeiDay } from '@/src/core/utils/calendar-day'
 
-/** The Taipei calendar day of an instant. */
-const taipeiDay = (ms: number): string => new Date(ms + 8 * 3_600_000).toISOString().slice(0, 10)
+const DAY_MS = 86_400_000
 
 /**
  * The newest cited date when every cited record is dated and that newest one

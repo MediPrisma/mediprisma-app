@@ -5,6 +5,8 @@
 // telecom, address, contact, communication) that the legacy 4-field display
 // dropped. The display layer opts in to extra fields via a "show more"
 // toggle so existing callers (medical-chat header, IPS export) stay quiet.
+import { utcDay } from '@/src/core/utils/calendar-day'
+
 export interface PatientEntity {
   id: string
   resourceType: 'Patient'
@@ -106,7 +108,7 @@ export function isValidPatientBirthDate(
   if (!FHIR_FULL_DATE_PATTERN.test(value)) return false
   const parsed = new Date(`${value}T00:00:00Z`)
   if (Number.isNaN(parsed.getTime())) return false
-  if (parsed.toISOString().slice(0, 10) !== value) return false
+  if (utcDay(parsed) !== value) return false
   return value <= localDateString(today)
 }
 
