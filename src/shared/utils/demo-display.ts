@@ -12,6 +12,11 @@ const DEMO_ORGANIZATION_ENGLISH: Record<string, string> = {
   '示範安心耳鼻喉科診所': 'C Clinic',
   '示範祥安診所': 'D Clinic',
   '示範康健診所': 'E Clinic',
+  '示範仁心外科診所': 'F Clinic',
+  '示範微笑牙醫診所': 'G Clinic',
+  '示範慶安藥局': 'D Pharmacy',
+  '示範樂活藥局': 'E Pharmacy',
+  '示範德安藥局': 'F Pharmacy',
 }
 
 const DEMO_TEXT_ENGLISH: Record<string, string> = {
