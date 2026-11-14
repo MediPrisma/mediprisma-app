@@ -168,14 +168,15 @@ test('a recent hospital apixaban order reaches AF reconciliation without an abse
   await page.screenshot({ path: test.info().outputPath('hospital-af-oac-review.png') })
 })
 
-test('Conlifu copies without medication knowledge use a hospital row and a toolbar review with a named product',async({page})=>{
+test('Conlifu copies use one hospital row named by the hospital index ingredient and a toolbar review with a named product',async({page})=>{
   // Inside the 2026-05-07 order's 7-day supply: an ended supply is not current.
   await page.clock.setFixedTime(new Date('2026-05-10T04:00:00Z'))
   await page.setViewportSize({width:1440,height:1000})
   await importBundle(page,{bundlePath:path.join(__dirname,'../fixtures/topical-source-comparison.json')})
   const panel=await openLeftTab(page,/^用藥$/)
   await expect(panel.locator('[data-medication-list-surface] li')).toHaveCount(1)
-  await expect(panel.getByText('Conlifu * oint 2% 5 g',{exact:true})).toBeVisible()
+  // The 北榮院內藥表 (#422) names the row by its 健保藥典 ingredient.
+  await expect(panel.getByText('FUSIDATE SODIUM 20 MG/GM',{exact:true})).toBeVisible()
   await panel.getByRole('button',{name:'院內：查看來源紀錄'}).click()
   const sources=page.getByRole('dialog',{name:'來源紀錄'})
   await expect(sources.getByText(/^CONLIFU OINTMENT 2[%％]$/)).toBeVisible()
