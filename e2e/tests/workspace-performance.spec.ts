@@ -181,6 +181,13 @@ test.describe('clinical workspace performance contract', () => {
     expect(nodeCountAfterCycles).toBeLessThanOrEqual(nodeCountAfterWarmup + 150)
 
     await switchLeftTab(page, '報告')
+    // The chart is a lazily loaded chunk; on `next dev` its first open also
+    // compiles it. Open and close one trend unmeasured so the budget below
+    // measures the warm open a clinician repeats, not the one-off chunk load.
+    await page.getByRole('button', { name: '查看 WBC 趨勢', exact: true }).click()
+    await expect(page.getByTestId('cumulative-trend-detail')).toBeVisible()
+    await page.getByRole('button', { name: '關閉', exact: true }).click()
+    await expect(page.getByTestId('cumulative-trend-detail')).toBeHidden()
     const trendOpenDurations: number[] = []
     const trendCloseDurations: number[] = []
     for (const analyte of ['WBC', 'RBC', 'Hb', 'PLT', 'NEU']) {

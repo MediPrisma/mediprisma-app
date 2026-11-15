@@ -682,6 +682,8 @@ export interface DiagnosticReportEntity extends ClinicalSourceRecord {
   /** True only when local import inferred encounter by calendar date. */
   _encounterInferred?: boolean
   performer?: Array<{ display?: string; reference?: string }>
+  /** Reporting / interpreting physician. */
+  resultsInterpreter?: Array<{ display?: string; reference?: string }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

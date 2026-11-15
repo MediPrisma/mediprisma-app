@@ -39,3 +39,29 @@ export function vghtpeSourceDisplay(
     : `(${merged ? '院內+雲端' : '院內'})`
   return { name, suffix, label: `${name}${locale === 'en' ? ' ' : ''}${suffix}` }
 }
+
+type ReportPeople = SourceResource & {
+  performer?: Array<{ display?: string }>
+  resultsInterpreter?: Array<{ display?: string }>
+}
+
+// The VGH bridge files a narrative report's 開醫囑者 (a "DOC1234A 姓名" staff
+// code) under DiagnosticReport.performer, which the report row otherwise shows
+// as the performing institution. For in-house rows, show the hospital there
+// and name the reporting physician (resultsInterpreter) as the interpreter.
+const VGH_STAFF_CODE = /^DOC[0-9A-Z]{4,}\b/
+
+export function vghtpeReportPeople(
+  report: ReportPeople,
+  institution: string | undefined,
+  source: HospitalSource | undefined,
+): { institution: string | undefined; interpreter?: string } {
+  if (source !== 'in-house' && source !== 'cloud-and-in-house') return { institution }
+  const interpreter = report.resultsInterpreter?.map(person => person.display?.trim()).find(Boolean)
+  const orderedByStaff = !!institution && VGH_STAFF_CODE.test(institution.trim())
+    && report.performer?.some(person => person.display?.trim() === institution.trim())
+  return {
+    institution: orderedByStaff ? '臺北榮民總醫院' : institution,
+    ...(interpreter ? { interpreter } : {}),
+  }
+}

@@ -255,6 +255,14 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
   }
 })
 
+test('the hospital Azure Luna is sent as gpt-6-luna, not unknown', async () => {
+  beginCollectorObservation({ feature: 'chat', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' }).finish({ outcome: 'ok' })
+  await settle()
+  const payload = body()
+  expect(payload).toMatchObject({ model: 'gpt-6-luna', provider: 'openai' })
+  expect(collectorEventV11Schema.safeParse(payload).success).toBe(true)
+})
+
 test('invalid counts are omitted, never rounded, made positive or coerced from strings', async () => {
   const invalidCounts = { resource_count: Number.MAX_SAFE_INTEGER + 1, encounter_count: -23, med_count: 1.5,
     obs_count: Number.NaN, report_count: Number.POSITIVE_INFINITY, doc_count: '12' } as unknown as Parameters<typeof beginCollectorObservation>[0]['counts']

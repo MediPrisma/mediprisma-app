@@ -396,6 +396,7 @@ export class FhirMapper implements IDataMapper {
       _encounterInferred: fhirResource._encounterInferred,
       _orderEncounterIds: fhirResource._orderEncounterIds,
       performer: fhirResource.performer,
+      resultsInterpreter: fhirResource.resultsInterpreter,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }

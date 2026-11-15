@@ -203,8 +203,8 @@ export const MODEL_CATALOG = [
     roles: ['default'],
   },
   {
-    id: 'gemini-3.8-flash',
-    label: 'Gemini 3.8 Flash',
+    id: 'gemini-4-hydrogen',
+    label: 'Gemini 4 Hydrogen',
     descriptions: {
       en: 'Next-gen fast model',
       'zh-TW': '新一代快速模型',

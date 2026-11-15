@@ -125,7 +125,7 @@ describe('MODEL_CATALOG contract', () => {
     expect(GEMINI_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
       'gemini-3.1-pro-preview',
     ])
-    expect(getModelDefinition('gemini-3.8-flash')).toMatchObject({
+    expect(getModelDefinition('gemini-4-hydrogen')).toMatchObject({
       provider: 'gemini',
       access: 'proxy-or-key',
       apiSurface: 'gemini-generate-content',
