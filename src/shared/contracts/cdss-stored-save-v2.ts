@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 // Frozen historical reader, aligned with mediprisma-fhir-server/src/contract-v2.mjs.
 // Do not derive this from the current writer: future writer changes must not
@@ -15,7 +16,7 @@ export const storedTimestampV2 = z.string().refine(value =>
   z.string().datetime({ offset: true }).safeParse(storedTimestampForDisplay(value)).success &&
   !Number.isNaN(Date.parse(storedTimestampForDisplay(value))))
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value =>
-  !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value)
+  !Number.isNaN(Date.parse(value)) && utcDay(Date.parse(value)) === value)
 const json: z.ZodType<unknown> = z.lazy(() => z.union([
   z.string(), z.number().finite(), z.boolean(), z.null(), z.array(json), z.record(z.string(), json),
 ]))
