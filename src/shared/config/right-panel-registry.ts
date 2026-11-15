@@ -3,8 +3,10 @@
 import { CDSS_AVAILABLE } from './optional-capabilities'
 import { CLINICAL_DECISION_SUPPORT_MODULE } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_MODULE } from '@/features/personalized-education/module'
+import { MEDICATION_SAFETY_MODULE } from '@/features/medication-safety/module'
 
 import type { RightPanelScrollMode } from '@/src/shared/config/right-panel-scroll'
+import type { RightPanelTabState } from '@/src/shared/config/right-panel-tab-state'
 
 export interface RightPanelFeatureConfig {
   id: string
@@ -52,6 +54,13 @@ export interface RightPanelFeatureConfig {
    * self: the feature scrolls its own regions internally (chat).
    */
   scrollMode?: RightPanelScrollMode
+  /**
+   * Optional live state for this feature's tab: hide it, grey it, or add a
+   * status and a count. A React hook; RightPanelLayout calls every registered
+   * one on each render, enabled or not, so it must be cheap and must not
+   * assume its tab is showing.
+   */
+  useTabState?: () => RightPanelTabState
 }
 
 /**
@@ -98,17 +107,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
   },
   PERSONALIZED_EDUCATION_MODULE.rightPanel,
   { ...CLINICAL_DECISION_SUPPORT_MODULE.rightPanel, enabled: CDSS_AVAILABLE },
-  {
-    // 安全: the hospital drug-interaction check. Only builds with the service
-    // have it; RightPanelLayout further hides it away from the hospital
-    // (useMedicationSafetyTab).
-    id: 'medication-safety',
-    name: 'Medication Safety',
-    tabLabel: 'medicationSafety',
-    order: 5.5,
-    enabled: Boolean(process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN),
-    audiences: ['medical'],
-  },
+  MEDICATION_SAFETY_MODULE.rightPanel,
   {
     id: 'ips-export',
     name: 'IPS Export',
@@ -167,6 +166,10 @@ export function getEnabledRightPanelFeatures(
 /**
  * Get right panel feature by ID
  */
+/** Every registered tab-state hook, in a fixed order (see `useTabState`). */
+export const RIGHT_PANEL_TAB_STATE_HOOKS: ReadonlyArray<readonly [string, () => RightPanelTabState]> =
+  RIGHT_PANEL_FEATURES.flatMap(feature => feature.useTabState ? [[feature.id, feature.useTabState] as const] : [])
+
 export function getRightPanelFeatureById(id: string): RightPanelFeatureConfig | undefined {
   return RIGHT_PANEL_FEATURES.find(feature => feature.id === id)
 }

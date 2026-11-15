@@ -21,7 +21,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
-import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import { getEnabledRightPanelFeatures, RIGHT_PANEL_TAB_STATE_HOOKS, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import type { RightPanelTabState } from "@/src/shared/config/right-panel-tab-state"
 import { resolveScrollMode, tabPanelClasses } from "@/src/shared/config/right-panel-scroll"
 import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
 import { useBetaFeatures } from "@/src/application/hooks/use-beta-features.hook"
@@ -33,8 +34,7 @@ import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
 import { useRightFeatureTourStore } from '@/features/right-feature-tour/right-feature-tour.store'
-import { MEDICATION_SAFETY_FEATURE_ID, useMedicationSafetyTab, type MedicationSafetyTab } from '@/features/medication-safety/useMedicationSafetyTab'
-import { cn } from '@/src/shared/utils/cn.utils'
+import { MEDICATION_SAFETY_FEATURE_ID } from '@/features/medication-safety/useMedicationSafetyTab'
 import {
   ClinicalTabContentFrame,
   ClinicalTabList,
@@ -224,13 +224,13 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
 // ============================================================================
 
 function RightPanelContentInner() {
-  const { t, locale } = useLanguage()
+  const { t } = useLanguage()
   const { audience } = useAudience()
   const { enabled: betaFeaturesEnabled } = useBetaFeatures()
-  const safetyTab = useMedicationSafetyTab()
-  // 安全 exists only on a hospital workstation; everything else is build-time.
+  const tabStates = useRightPanelTabStates()
+  // Build-time registry, then any feature that reports its tab hidden right now.
   const features = getEnabledRightPanelFeatures(audience, { betaFeaturesEnabled })
-    .filter(feature => feature.id !== MEDICATION_SAFETY_FEATURE_ID || safetyTab.visible)
+    .filter(feature => !tabStates[feature.id]?.hidden)
   const { activeTab, setActiveTab } = useRightPanel()
   const tourActive = useRightFeatureTourStore((state) => state.active)
   const tourStep = useRightFeatureTourStore((state) => state.stepId)
@@ -348,8 +348,8 @@ function RightPanelContentInner() {
     const theme = getTabTheme(feature.id)
     const Icon = theme.icon
     const label = getTabLabel(feature)
-    const safety = feature.id === MEDICATION_SAFETY_FEATURE_ID ? safetyTab : null
-    const status = safety ? safetyTabStatus(safety, locale) : feature.badge
+    const live = tabStates[feature.id]
+    const status = live?.status ?? feature.badge
     const accessibleLabel = status ? `${label} · ${status}` : label
     return (
       <ClinicalTabTrigger
@@ -362,8 +362,8 @@ function RightPanelContentInner() {
         labelVisibility={feature.iconOnly ? "never" : "always"}
         title={accessibleLabel}
         aria-label={accessibleLabel}
-        className={safety?.unreachable ? '!text-muted-foreground/60 data-[state=active]:after:!bg-muted-foreground/50' : undefined}
-        suffix={safety ? <SafetyTabCount tab={safety} /> : feature.badge ? (
+        className={live?.dimmed ? '!text-muted-foreground/60 data-[state=active]:after:!bg-muted-foreground/50' : undefined}
+        suffix={live?.suffix ? <span aria-hidden="true">{live.suffix}</span> : feature.badge ? (
           <Badge
             variant="outline"
             className="border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
@@ -496,33 +496,15 @@ function RightPanelContentInner() {
   )
 }
 
-/** Spoken and hovered status of the 安全 tab, e.g. 「需注意 3 項，另有 1 項未檢核」. */
-function safetyTabStatus(tab: MedicationSafetyTab, locale: string): string | undefined {
-  const en = locale === 'en'
-  if (tab.unreachable) return en ? 'not checked: hospital service unreachable' : '未檢核：連不上院內服務'
-  if (tab.count === null) return en ? 'checking' : '檢核中'
-  const main = en ? `${tab.count} to review` : `需注意 ${tab.count} 項`
-  const rest = tab.unchecked ? (en ? `, ${tab.unchecked} not checked` : `，另有 ${tab.unchecked} 項未檢核`) : ''
-  return main + rest
-}
-
-/** The 安全 tab's count: 0 means nothing to open; a dot means some drugs were
- *  not checked, so 0 does not mean "all clear". */
-function SafetyTabCount({ tab }: { tab: MedicationSafetyTab }) {
-  if (tab.count === null) return null
-  return (
-    <span className="inline-flex shrink-0 items-center gap-0.5" aria-hidden="true">
-      <span
-        className={cn(
-          'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.6875rem] font-semibold leading-none tabular-nums',
-          tab.avoid > 0
-            ? 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100'
-            : 'bg-muted text-muted-foreground',
-        )}
-      >
-        {tab.count}
-      </span>
-      {tab.unchecked > 0 && <span className="h-1 w-1 rounded-full bg-muted-foreground" />}
-    </span>
-  )
+/** Live tab state from every feature that registers `useTabState`. The list is
+ *  a module constant, so the hooks run in the same order on every render. */
+function useRightPanelTabStates(): Record<string, RightPanelTabState | undefined> {
+  const states: Record<string, RightPanelTabState | undefined> = {}
+  for (const [id, useTabState] of RIGHT_PANEL_TAB_STATE_HOOKS) {
+    // Safe: the list never changes after module load, so every render calls
+    // the same hooks in the same order.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    states[id] = useTabState()
+  }
+  return states
 }
