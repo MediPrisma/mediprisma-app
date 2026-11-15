@@ -2,7 +2,7 @@
 
 import { readLocalBundleVersion } from '@/src/infrastructure/fhir/services/local-bundle-version'
 
-import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
+import { collectorModelSchema, featureSchema, isCollectorModelName, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { sameModelVersion } from '@/src/shared/utils/ai-model-execution'
 import { captureCollectorAuth } from './collector-auth'
@@ -145,8 +145,7 @@ function tokenBucket(n: number | undefined): Diagnostics['context_tokens_bucket'
 }
 type CollectorModel = ReturnType<typeof collectorModelSchema.parse>
 // Endpoint profiles the hospital provisions (through the authenticated Extension) and the one
-// model each serves. Only these fixed codes leave the browser; a user-defined endpoint's
-// profile ID, name, URL or reported model never does, so it stays 'custom'.
+// model each serves. They report this fixed code, whatever their profile says.
 export const INSTITUTION_ENDPOINT_MODELS: Readonly<Record<string, CollectorModel>> = Object.freeze({
   [customOpenAiModelIdForProfile('vghtpe-tvghbrain')]: 'tvghbrain3.5',
 })
@@ -172,12 +171,28 @@ function templateLabel(input: CollectorContext['template']): { id: string; title
   title = title.trim()
   return title ? { id, title } : undefined
 }
+// D089: a user-defined endpoint reports the model name its profile sets, and a model missing from
+// the contract list reports its own ID, when either fits the contract's format. Otherwise the event
+// says 'custom' or 'unknown'. The profile's ID, display name, URL and key never leave the browser.
+// The application layer supplies the lookup, since profiles live in its store.
+let customEndpointModelName: (modelId: string) => string | null | undefined = () => undefined
+export function setCollectorCustomModelNameResolver(resolve: (modelId: string) => string | null | undefined): void {
+  customEndpointModelName = resolve
+}
+function wireModelName(name: unknown): string | undefined {
+  const value = typeof name === 'string' ? name.trim() : ''
+  return value && isCollectorModelName(value) ? value : undefined
+}
 function modelInfo(id: string, provider?: Start['provider']) {
-  if (isCustomOpenAiModelId(id) || id === 'custom')
-    return { model: Object.hasOwn(INSTITUTION_ENDPOINT_MODELS, id) ? INSTITUTION_ENDPOINT_MODELS[id] : 'custom' as const, provider: 'custom' as const }
+  if (isCustomOpenAiModelId(id) || id === 'custom') {
+    if (Object.hasOwn(INSTITUTION_ENDPOINT_MODELS, id)) return { model: INSTITUTION_ENDPOINT_MODELS[id], provider: 'custom' as const }
+    let named: string | undefined
+    try { named = wireModelName(customEndpointModelName(id)) } catch { named = undefined }
+    return { model: named ?? 'custom', provider: 'custom' as const }
+  }
   const model = collectorModelSchema.safeParse(id)
   const definition = getModelDefinition(id)
-  return { model: model.success ? model.data : 'unknown' as const,
+  return { model: model.success ? model.data : wireModelName(id) ?? 'unknown',
     provider: provider ?? (definition?.provider === 'claude' ? 'anthropic' : definition?.provider ?? 'unknown') }
 }
 
