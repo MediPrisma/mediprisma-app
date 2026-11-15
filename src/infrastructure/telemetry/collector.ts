@@ -5,6 +5,7 @@ import { readLocalBundleVersion } from '@/src/infrastructure/fhir/services/local
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
+import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
 import { collectorEventV11Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorEventV10, type CollectorEventV11, type CollectorAppSurface, type CollectorRequestV11 as CollectorRequest, type SummaryAttempt, type TokenUsage } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
@@ -180,22 +181,7 @@ function modelInfo(id: string, provider?: Start['provider']) {
 }
 
 /** Read existing browser consent only. Never probe the network to request it. */
-export async function collectorNetworkPermission(endpoint: string): Promise<PermissionStatus | null> {
-  try {
-    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return null
-    const host = new URL(endpoint).hostname
-    const name = ['localhost', '127.0.0.1', '[::1]'].includes(host) ? 'loopback-network' : 'local-network'
-    try {
-      // Chromium 145+ splits local and loopback permissions; lib.dom may lag it.
-      return await navigator.permissions.query({ name: name as PermissionName })
-    } catch (error) {
-      // Older Chromium only knows the combined descriptor. Never override a
-      // returned prompt/denied state with a different permission's grant.
-      if (!(error instanceof TypeError)) return null
-      return await navigator.permissions.query({ name: 'local-network-access' as PermissionName })
-    }
-  } catch { return null }
-}
+export const collectorNetworkPermission = localNetworkPermission
 
 /** Map only source-code labels; arbitrary panel titles and operation keys never pass through. */
 export function collectorFeature(label?: string): Start['feature'] {

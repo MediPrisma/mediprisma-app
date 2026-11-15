@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { InteractionSummary } from '@/features/clinical-summary/medications/components/InteractionSummary'
-import { useInteractionReview } from '@/features/clinical-summary/medications/hooks/useInteractionReview'
+import { useRunInteractionCheck } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 import type { InteractionReview } from '@/features/clinical-summary/medications/utils/interaction-check'
 
@@ -69,7 +69,7 @@ describe('InteractionSummary', () => {
   })
 })
 
-describe('useInteractionReview', () => {
+describe('useRunInteractionCheck', () => {
   const pair = rows.slice(0, 2)
   const answer = {
     resolvedMedications: [
@@ -78,32 +78,54 @@ describe('useInteractionReview', () => {
     ],
     alerts: [{ alertId: 'x', type: 'DRUG_INTERACTION', severity: 'low', drugA: { udCode: '02602' }, drugB: { udCode: '01669' }, nursingAction: '絕對不可併用。' }],
   }
+  const on = { enabled: true, ready: true }
+  const run = (list: MedicationRow[], options = on) => renderHook(() => useRunInteractionCheck(list, options))
   const fetchMock = jest.fn()
+  const originalPermissions = Object.getOwnPropertyDescriptor(navigator, 'permissions')
+  function permission(state: PermissionState) {
+    const listeners: Array<() => void> = []
+    const status = { state, addEventListener: (_: string, fn: () => void) => listeners.push(fn), removeEventListener: jest.fn() }
+    Object.defineProperty(navigator, 'permissions', { configurable: true, value: { query: jest.fn(async () => status) } })
+    return { status, change: (next: PermissionState) => { status.state = next; listeners.forEach(fn => fn()) } }
+  }
   beforeEach(() => {
     fetchMock.mockReset()
     global.fetch = fetchMock as unknown as typeof fetch
+    process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN = 'https://ddi.example.test'
   })
-  afterEach(() => { delete process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN })
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN
+    if (originalPermissions) Object.defineProperty(navigator, 'permissions', originalPermissions)
+    else delete (navigator as { permissions?: unknown }).permissions
+  })
 
-  it('stays off without a configured service', () => {
-    const { result } = renderHook(() => useInteractionReview(pair, true))
-    expect(result.current).toBeNull()
+  it('is off without a configured service or outside the medical view', () => {
+    delete process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN
+    expect(run(pair).result.current.state).toEqual({ status: 'off' })
+    process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN = 'https://ddi.example.test'
+    expect(run(pair, { enabled: false, ready: true }).result.current.state).toEqual({ status: 'off' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('waits for the list, then says when there are too few ingredients to check', () => {
+    expect(run(pair, { enabled: true, ready: false }).result.current.state).toEqual({ status: 'loading' })
+    expect(run(pair.slice(0, 1)).result.current.state).toEqual({ status: 'too-few' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('sends ingredient names only and returns the graded review', async () => {
-    process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN = 'https://ddi.example.test'
     fetchMock.mockResolvedValue({ ok: true, json: async () => answer })
-    const { result } = renderHook(() => useInteractionReview(pair, true))
-    await waitFor(() => expect(result.current?.findings).toHaveLength(1))
-    expect(result.current?.findings[0]?.tier).toBe('avoid')
+    const { result } = run(pair)
+    expect(result.current.state).toEqual({ status: 'loading' })
+    await waitFor(() => expect(result.current.state.status).toBe('ok'))
+    const state = result.current.state as Extract<typeof result.current.state, { status: 'ok' }>
+    expect(state.review.findings[0]?.tier).toBe('avoid')
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('https://ddi.example.test/api/ddi-check')
     expect(JSON.parse(init.body)).toEqual({ medications: [{ drugName: 'Isosorbide dinitrate' }, { drugName: 'Sildenafil' }] })
   })
 
   it('asks again when the same drugs arrive in another order', async () => {
-    process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN = 'https://ddi.example.test'
     const codes: Record<string, [string, string]> = {
       'Isosorbide dinitrate': ['01669', 'isosorbide dinitrate'],
       Sildenafil: ['02602', 'Sildenafil citrate (sildenafil)'],
@@ -116,23 +138,34 @@ describe('useInteractionReview', () => {
           ({ inputIndex, udCode: codes[m.drugName]![0], genericName: codes[m.drugName]![1] })),
       }),
     }))
-    const { result, rerender } = renderHook(({ list }) => useInteractionReview(list, true), { initialProps: { list: pair } })
-    await waitFor(() => expect(result.current?.findings).toHaveLength(1))
+    const { result, rerender } = renderHook(({ list }) => useRunInteractionCheck(list, on), { initialProps: { list: pair } })
+    await waitFor(() => expect(result.current.state.status).toBe('ok'))
     rerender({ list: [...pair].reverse() })
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(result.current?.findings).toHaveLength(1))
-    expect(result.current?.uncheckedRowIds).toEqual([])
+    await waitFor(() => expect(result.current.state.status).toBe('ok'))
+    const state = result.current.state as Extract<typeof result.current.state, { status: 'ok' }>
+    expect(state.review.findings).toHaveLength(1)
+    expect(state.review.uncheckedRowIds).toEqual([])
   })
 
-  it('shows nothing when the service cannot be reached, for another audience, or for one drug', async () => {
-    process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN = 'https://ddi.example.test'
-    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
-    const failed = renderHook(() => useInteractionReview(pair, true))
-    await act(async () => { await Promise.resolve() })
-    expect(failed.result.current).toBeNull()
-    fetchMock.mockClear()
-    expect(renderHook(() => useInteractionReview(pair, false)).result.current).toBeNull()
-    expect(renderHook(() => useInteractionReview(pair.slice(0, 1), true)).result.current).toBeNull()
+  it('reports an unreachable service and checks again on retry', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const { result } = run(pair)
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'unreachable', reason: 'network' }))
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 })
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'unreachable', reason: 'http' }))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not ask while Chrome blocks the hospital network, and asks once access is granted', async () => {
+    const { change } = permission('denied')
+    fetchMock.mockResolvedValue({ ok: true, json: async () => answer })
+    const { result } = run(pair)
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'blocked' }))
     expect(fetchMock).not.toHaveBeenCalled()
+    act(() => change('granted'))
+    await waitFor(() => expect(result.current.state.status).toBe('ok'))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
