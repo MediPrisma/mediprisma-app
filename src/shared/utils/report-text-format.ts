@@ -467,9 +467,11 @@ export function separateGluedOrderCode(raw: string): string {
 // text is reflowed. It never occurs in report text and no reflow pattern
 // matches it, so it rides along with the line the source put after the gap.
 const GAP_MARK = '\uE000'
-// A non-blank line followed by one or more blank lines. Leading blank lines
-// are left alone so start-anchored report-type checks still see the text.
-const SOURCE_GAP_RE = /(\S)[ \t]*\n(?:[ \t]*\n)+/g
+// A non-blank line followed by one or more blank lines and then more content.
+// Leading blank lines are left alone so start-anchored report-type checks still
+// see the text; trailing ones have no next paragraph, so they are not a gap.
+// The line's own trailing tabs are kept: they are empty table cells.
+const SOURCE_GAP_RE = /(\S[ \t]*)\n(?:[ \t]*\n)+(?=[^\n]*\S)/g
 
 export function formatReportText(raw: string): ReportLine[] {
   if (!raw || !raw.trim()) return []

@@ -419,6 +419,21 @@ describe('formatReportText column tables', () => {
     expect(formatReportText(raw).filter((l) => l.gapBefore).map((l) => l.text)).toEqual(['Recommendation:'])
   })
 
+  it('keeps an empty last cell on a table row followed by a blank line', () => {
+    const raw = 'Synthetic title\nA\tB\t\n\nC\tD\t\nE\tF\t\nSynthetic end'
+    const withoutGap = raw.replace('\n\n', '\n')
+    expect(formatReportText(raw).map((l) => l.columnCells)).toEqual(formatReportText(withoutGap).map((l) => l.columnCells))
+    expect(formatReportText(raw).find((l) => l.text.startsWith('A'))?.columnCells).toEqual(['A', 'B', ''])
+    expect(formatReportTextForClipboard(raw)).toBe(formatReportTextForClipboard(withoutGap))
+  })
+
+  it('does not count trailing blank lines as paragraph gaps', () => {
+    const raw = 'Synthetic title\nSynthetic finding.\n\nImpression:\nSynthetic impression.'
+    const gaps = (text: string) => formatReportText(text).filter((l) => l.gapBefore).map((l) => l.text)
+    expect(gaps(raw)).toEqual(['Impression:'])
+    expect(gaps(`${raw}\n\n`)).toEqual(['Impression:'])
+  })
+
   it('ignores blank lines that pad every line', () => {
     const raw = 'Line one.\n\nLine two.\n\nLine three.\n\nLine four.'
     expect(formatReportText(raw).some((l) => l.gapBefore)).toBe(false)
