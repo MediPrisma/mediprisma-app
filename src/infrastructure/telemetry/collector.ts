@@ -2,7 +2,7 @@
 
 import { readLocalBundleVersion } from '@/src/infrastructure/fhir/services/local-bundle-version'
 
-import { collectorEventV5Schema, collectorModelSchema, featureSchema, isCollectorModelName, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
+import { collectorModelSchema, featureSchema, isCollectorModelName, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { captureCollectorAuth } from './collector-auth'
 import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
