@@ -33,6 +33,8 @@ import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
 import { useRightFeatureTourStore } from '@/features/right-feature-tour/right-feature-tour.store'
+import { MEDICATION_SAFETY_FEATURE_ID, useMedicationSafetyTab, type MedicationSafetyTab } from '@/features/medication-safety/useMedicationSafetyTab'
+import { cn } from '@/src/shared/utils/cn.utils'
 import {
   ClinicalTabContentFrame,
   ClinicalTabList,
@@ -77,6 +79,10 @@ const PersonalizedEducationFeature = dynamic(() => import("@/features/personaliz
   ssr: false,
   loading: FeatureLoading,
 })
+const MedicationSafetyFeature = dynamic(() => import("@/features/medication-safety/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
 const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
   ssr: false,
   loading: FeatureLoading,
@@ -103,6 +109,7 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'medical-calculator': MedicalCalculatorFeature,
   [PERSONALIZED_EDUCATION_FEATURE_ID]: PersonalizedEducationFeature,
   [CLINICAL_DECISION_SUPPORT_FEATURE_ID]: PersonalizedGuidanceFeature,
+  [MEDICATION_SAFETY_FEATURE_ID]: MedicationSafetyFeature,
   'settings': SettingsFeature,
 }
 
@@ -217,10 +224,13 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
 // ============================================================================
 
 function RightPanelContentInner() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const { enabled: betaFeaturesEnabled } = useBetaFeatures()
+  const safetyTab = useMedicationSafetyTab()
+  // 安全 exists only on a hospital workstation; everything else is build-time.
   const features = getEnabledRightPanelFeatures(audience, { betaFeaturesEnabled })
+    .filter(feature => feature.id !== MEDICATION_SAFETY_FEATURE_ID || safetyTab.visible)
   const { activeTab, setActiveTab } = useRightPanel()
   const tourActive = useRightFeatureTourStore((state) => state.active)
   const tourStep = useRightFeatureTourStore((state) => state.stepId)
@@ -338,7 +348,9 @@ function RightPanelContentInner() {
     const theme = getTabTheme(feature.id)
     const Icon = theme.icon
     const label = getTabLabel(feature)
-    const accessibleLabel = feature.badge ? `${label} · ${feature.badge}` : label
+    const safety = feature.id === MEDICATION_SAFETY_FEATURE_ID ? safetyTab : null
+    const status = safety ? safetyTabStatus(safety, locale) : feature.badge
+    const accessibleLabel = status ? `${label} · ${status}` : label
     return (
       <ClinicalTabTrigger
         key={feature.id}
@@ -350,7 +362,8 @@ function RightPanelContentInner() {
         labelVisibility={feature.iconOnly ? "never" : "always"}
         title={accessibleLabel}
         aria-label={accessibleLabel}
-        suffix={feature.badge ? (
+        className={safety?.unreachable ? '!text-muted-foreground/60 data-[state=active]:after:!bg-muted-foreground/50' : undefined}
+        suffix={safety ? <SafetyTabCount tab={safety} /> : feature.badge ? (
           <Badge
             variant="outline"
             className="border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
@@ -480,5 +493,36 @@ function RightPanelContentInner() {
         </TabsContent>
       ))}
     </Tabs>
+  )
+}
+
+/** Spoken and hovered status of the 安全 tab, e.g. 「需注意 3 項，另有 1 項未檢核」. */
+function safetyTabStatus(tab: MedicationSafetyTab, locale: string): string | undefined {
+  const en = locale === 'en'
+  if (tab.unreachable) return en ? 'not checked: hospital service unreachable' : '未檢核：連不上院內服務'
+  if (tab.count === null) return en ? 'checking' : '檢核中'
+  const main = en ? `${tab.count} to review` : `需注意 ${tab.count} 項`
+  const rest = tab.unchecked ? (en ? `, ${tab.unchecked} not checked` : `，另有 ${tab.unchecked} 項未檢核`) : ''
+  return main + rest
+}
+
+/** The 安全 tab's count: 0 means nothing to open; a dot means some drugs were
+ *  not checked, so 0 does not mean "all clear". */
+function SafetyTabCount({ tab }: { tab: MedicationSafetyTab }) {
+  if (tab.count === null) return null
+  return (
+    <span className="inline-flex shrink-0 items-center gap-0.5" aria-hidden="true">
+      <span
+        className={cn(
+          'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.6875rem] font-semibold leading-none tabular-nums',
+          tab.avoid > 0
+            ? 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100'
+            : 'bg-muted text-muted-foreground',
+        )}
+      >
+        {tab.count}
+      </span>
+      {tab.unchecked > 0 && <span className="h-1 w-1 rounded-full bg-muted-foreground" />}
+    </span>
   )
 }

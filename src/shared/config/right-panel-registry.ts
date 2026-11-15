@@ -99,6 +99,17 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
   PERSONALIZED_EDUCATION_MODULE.rightPanel,
   { ...CLINICAL_DECISION_SUPPORT_MODULE.rightPanel, enabled: CDSS_AVAILABLE },
   {
+    // 安全: the hospital drug-interaction check. Only builds with the service
+    // have it; RightPanelLayout further hides it away from the hospital
+    // (useMedicationSafetyTab).
+    id: 'medication-safety',
+    name: 'Medication Safety',
+    tabLabel: 'medicationSafety',
+    order: 5.5,
+    enabled: Boolean(process.env.NEXT_PUBLIC_DDI_SERVICE_ORIGIN),
+    audiences: ['medical'],
+  },
+  {
     id: 'ips-export',
     name: 'IPS Export',
     tabLabel: 'ipsExport',

@@ -111,6 +111,7 @@ export const en = {
     medicalSummary: 'Summary',
     ipsExport: 'Copy',
     medicalCalculator: 'Calculator',
+    medicationSafety: 'Safety',
     personalizedEducation: 'Education',
     personalizedGuidance: 'Care guidance',
     settings: 'Settings',

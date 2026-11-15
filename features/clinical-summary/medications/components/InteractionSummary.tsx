@@ -7,7 +7,7 @@ import { AlertTriangle, Ban, ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { MedicationRow } from '../types'
-import type { InteractionFinding, InteractionReview } from '../utils/interaction-check'
+import { attentionFindings, type InteractionFinding, type InteractionReview } from '../utils/interaction-check'
 
 interface InteractionSummaryProps {
   review: InteractionReview
@@ -32,8 +32,8 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
     : row.dataOrigin === 'medcloud' ? (en ? 'MediCloud' : '雲端')
       : row.dataOrigin === 'integrated' ? (en ? 'Hospital + cloud' : '院內＋雲端') : ''
 
-  const primary = review.findings.filter(f => f.tier !== 'note' && !f.samePrescription)
-  const rest = review.findings.filter(f => f.tier === 'note' || f.samePrescription)
+  const primary = attentionFindings(review)
+  const rest = review.findings.filter(f => !primary.includes(f))
   const unchecked = sides(review.uncheckedRowIds)
   const avoid = primary.filter(f => f.tier === 'avoid').length
   const act = primary.length - avoid
