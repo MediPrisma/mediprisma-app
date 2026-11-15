@@ -250,9 +250,17 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
   for (const model of MODEL_CATALOG) {
     beginCollectorObservation({ feature: 'summary', modelId: model.id, sampleKind: 'feature', mode: 'structured' }).finish({ outcome: 'ok' })
     await settle()
-    expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id === 'gpt-6-luna' ? 'unknown' : model.id)
+    expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id)
     expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
   }
+})
+
+test('the hospital Azure Luna is sent as gpt-6-luna, not unknown', async () => {
+  beginCollectorObservation({ feature: 'chat', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' }).finish({ outcome: 'ok' })
+  await settle()
+  const payload = body()
+  expect(payload).toMatchObject({ model: 'gpt-6-luna', provider: 'openai' })
+  expect(collectorEventV11Schema.safeParse(payload).success).toBe(true)
 })
 
 test('invalid counts are omitted, never rounded, made positive or coerced from strings', async () => {
