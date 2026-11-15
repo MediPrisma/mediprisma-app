@@ -7,6 +7,7 @@ import { withModelReporting } from '../streaming/model-reporting.middleware'
 import { createIntranetProvider } from './intranet-provider'
 import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '../interceptors/intranet-fetch'
 import { withOpenAiStatelessResponses } from '../streaming/openai-stateless.middleware'
+import { withGeminiThinkingLevel } from '../streaming/gemini-thinking.middleware'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -97,7 +98,7 @@ export class AiProviderFactory {
         apiKey: 'proxy', // Dummy key required by SDK
         fetch: customFetch,
       })
-      return { model: sdk(modelId), isGemini: true }
+      return { model: withGeminiThinkingLevel(sdk(modelId), definition.thinkingLevel), isGemini: true }
     }
     if (provider === 'claude') {
       const sdk = createAnthropic({
@@ -131,7 +132,7 @@ export class AiProviderFactory {
     }
     if (provider === 'gemini') {
       const sdk = createGoogleGenerativeAI({ apiKey })
-      return { model: sdk(modelId), isGemini: true }
+      return { model: withGeminiThinkingLevel(sdk(modelId), definition.thinkingLevel), isGemini: true }
     }
     if (provider === 'claude') {
       const sdk = createAnthropic({
