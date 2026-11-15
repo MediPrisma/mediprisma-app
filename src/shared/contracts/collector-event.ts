@@ -27,13 +27,19 @@ export const collectorModelSchema = z.enum([
   // 北榮院內 Azure 的 Luna；醫析以固定代號回報，不讀端點回傳的自由字串。
   'gpt-6-luna',
 ])
+// D089: model 不再限於上面的清單。另接受符合格式的模型名稱，包括新增的內建模型，以及使用者自訂端點設定的模型名稱。
+// 格式：英數字開頭，只含英數字與 . _ : / -，最長 64 字，且不含 "://"。中文、空白、@、網址與錯誤訊息都不會通過；
+// 不符合時 sender 改送 'custom'（自訂端點）或 'unknown'，不能直接送出原字串。上面的清單用於監看頁的中文名稱與單價。
+export const COLLECTOR_MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/
+export const isCollectorModelName = (value: string) => COLLECTOR_MODEL_NAME_PATTERN.test(value) && !value.includes('://')
+export const collectorModelNameSchema = z.string().refine(isCollectorModelName, 'Model name is outside the allowed format')
 const elapsed = z.number().int().min(0).max(86_400_000)
 const collectorEventBaseSchema = z.object({
   schema_version: z.literal(2), event_id: z.string().uuid(),
   occurred_at: z.string().datetime({ offset: true }), site: z.literal('vghtpe'),
   feature: featureSchema,
   provider: z.enum(['openai', 'gemini', 'anthropic', 'custom', 'perplexity', 'unknown']),
-  model: collectorModelSchema,
+  model: collectorModelNameSchema,
   model_source: z.enum(['configured', 'reported', 'unreported']),
   sample_kind: z.enum(['feature', 'request']),
   latency_ms: elapsed,
