@@ -34,13 +34,15 @@ const review: InteractionReview = {
 }
 
 describe('InteractionSummary', () => {
-  it('lists the cross-visit pair with its action and keeps the rest collapsed', () => {
+  it('lists the cross-visit pair with its action, names the unchecked drug, and folds same-visit pairs', () => {
     render(<InteractionSummary review={review} rows={rows} />)
     const section = screen.getByRole('region', { name: '交互作用' })
-    expect(within(section).getByText('避免併用 1')).toBeInTheDocument()
+    expect(within(section).getByText('需注意 1 項（避免併用 1） · 已檢核 4／5 項')).toBeInTheDocument()
+    expect(within(section).getByText('避免併用')).toBeInTheDocument()
     expect(within(section).getByText('Sildenafil × Isosorbide dinitrate')).toBeInTheDocument()
     expect(within(section).getByText('絕對不可併用。')).toBeInTheDocument()
-    expect(within(section).getByText('已檢核 4／5 項')).toBeInTheDocument()
+    expect(within(section).getByText('未檢核 1 項（成分未對到）：')).toBeInTheDocument()
+    expect(within(section).getByText('Dapoxetine · 雲端')).toBeInTheDocument()
     expect(within(section).queryByText('Spironolactone × Enalapril')).not.toBeInTheDocument()
     expect(within(section).queryByText('可能發生嚴重低血壓。')).not.toBeInTheDocument()
   })
@@ -53,19 +55,34 @@ describe('InteractionSummary', () => {
     expect(screen.getByText('Isosorbide dinitrate · 院內 · 臺北榮總 門診 · 2026/10/28')).toBeInTheDocument()
   })
 
-  it('reveals same-visit pairs and unchecked drugs behind one disclosure', () => {
+  it('reveals same-visit pairs behind one disclosure', () => {
     render(<InteractionSummary review={review} rows={rows} />)
-    fireEvent.click(screen.getByRole('button', { name: '其他 1 項、1 項未檢核' }))
+    fireEvent.click(screen.getByRole('button', { name: '同次開立 1 項' }))
     expect(screen.getByText('Spironolactone × Enalapril')).toBeInTheDocument()
     expect(screen.getByText('同次開立')).toBeInTheDocument()
-    expect(screen.getByText(/未檢核：成分未對到/)).toBeInTheDocument()
   })
 
-  it('says so when nothing was found', () => {
-    render(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: [] }} rows={rows} />)
-    expect(screen.getByText('跨次開立未發現')).toBeInTheDocument()
-    expect(screen.getByText('已檢核 2／2 項')).toBeInTheDocument()
+  it('keeps a same-visit avoid pair and a low cross-visit pair in the list', () => {
+    render(<InteractionSummary review={{
+      findings: [
+        { id: 'a', tier: 'avoid', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '避免併用', mechanism: '', source: '', samePrescription: true },
+        { id: 'n', tier: 'note', rowIdsA: ['isdn'], rowIdsB: ['sild'], action: '注意', mechanism: '', source: '', samePrescription: false },
+      ],
+      checkedRowIds: ['isdn', 'sild', 'spiro', 'enal'],
+      uncheckedRowIds: [],
+    }} rows={rows} />)
+    expect(screen.getByText('需注意 2 項（避免併用 1） · 已檢核 4／4 項')).toBeInTheDocument()
+    expect(screen.getByText('Spironolactone × Enalapril')).toBeInTheDocument()
+    expect(screen.getByText('Isosorbide dinitrate × Sildenafil')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /同次開立 \d+ 項/ })).not.toBeInTheDocument()
+  })
+
+  it('tells "none found" apart from "not checked"', () => {
+    const { rerender } = render(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: [] }} rows={rows} />)
+    expect(screen.getByText('已檢核 2／2 項，未發現需注意的交互作用')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    rerender(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: ['dapo'] }} rows={rows} />)
+    expect(screen.getByText('已檢核的 2 項之間未發現，1 項未檢核')).toBeInTheDocument()
   })
 })
 

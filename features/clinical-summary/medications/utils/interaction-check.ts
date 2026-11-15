@@ -99,12 +99,13 @@ function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
     && asked.every((word, index) => known.has(word) || (index > 0 && SALT_SUFFIXES.has(word)))
 }
 
-const AVOID = /不可併用|禁止併用|避免併用|禁忌/
+const AVOID = /不可併用|禁止併用|避免併用|不宜併用|不建議併用|禁忌/
 
-function tierOf(severity: unknown, action: string): InteractionTier {
-  // The action text outranks the service's grade: it rates sildenafil with
-  // a nitrate "low" while the action reads 絕對不可併用.
-  if (AVOID.test(action)) return 'avoid'
+function tierOf(severity: unknown, action: string, mechanism: string): InteractionTier {
+  // The text outranks the service's grade: it rates sildenafil with a nitrate
+  // "low" while the action reads 絕對不可併用. The warning is sometimes only
+  // in the mechanism.
+  if (AVOID.test(action) || AVOID.test(mechanism)) return 'avoid'
   return severity === 'high' || severity === 'moderate' ? 'act' : 'note'
 }
 
@@ -150,15 +151,16 @@ export function interpretInteractionCheck(
     // Two ingredients of one combination product are not a co-prescription.
     if (rowIdsA.length === 1 && rowIdsB.length === 1 && rowIdsA[0] === rowIdsB[0]) continue
     const action = text(alert.nursingAction)
+    const mechanism = text(alert.mechanism)
     const id = text(alert.alertId) || [...rowIdsA, '×', ...rowIdsB].join('|')
     if (findings.has(id)) continue
     findings.set(id, {
       id,
-      tier: tierOf(alert.severity, action),
+      tier: tierOf(alert.severity, action, mechanism),
       rowIdsA,
       rowIdsB,
       action,
-      mechanism: text(alert.mechanism),
+      mechanism,
       source: text(alert.source),
       samePrescription: rowIdsA.every(x => rowIdsB.every(y => {
         const visit = visitOf.get(x)
@@ -175,7 +177,12 @@ export function interpretInteractionCheck(
   }
 }
 
-/** Pairs that need the clinician's attention: across visits, above a note. */
+/**
+ * Pairs that need the clinician's attention: every pair across visits — the
+ * service's grade is not reliable enough to fold a "low" away — and an avoid
+ * pair even when one prescriber wrote both. Same-visit pairs below avoid were
+ * the prescriber's own choice.
+ */
 export function attentionFindings(review: InteractionReview): InteractionFinding[] {
-  return review.findings.filter(f => f.tier !== 'note' && !f.samePrescription)
+  return review.findings.filter(f => !f.samePrescription || f.tier === 'avoid')
 }

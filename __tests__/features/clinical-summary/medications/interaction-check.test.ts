@@ -1,4 +1,5 @@
 import {
+  attentionFindings,
   interactionCheckBody,
   interpretInteractionCheck,
   planInteractionCheck,
@@ -76,6 +77,19 @@ describe('interpretInteractionCheck', () => {
     })])
     expect(review.checkedRowIds.sort()).toEqual(['c-sild', 'h-isdn'])
     expect(review.uncheckedRowIds).toEqual([])
+  })
+
+  it('raises a pair to "avoid" when only the mechanism or a 不宜併用 wording says so', () => {
+    const answer = (nursingAction: string, mechanism: string) => interpretInteractionCheck(plan, rows, {
+      resolvedMedications: [
+        resolved(0, '01669', 'isosorbide dinitrate', 'Isordil tab 10 mg'),
+        resolved(1, '02602', 'Sildenafil citrate (sildenafil)', 'VIAGRA FC * TAB 100 MG'),
+      ],
+      alerts: [{ ...alert('02602', '01669', 'low', nursingAction), mechanism }],
+    }).findings[0]?.tier
+    expect(answer('監測血壓', '可能嚴重低血壓，禁止併用')).toBe('avoid')
+    expect(answer('不宜併用', '')).toBe('avoid')
+    expect(answer('監測血壓', '可能低血壓')).toBe('note')
   })
 
   it('reports a drug the service could not place as unchecked', () => {
@@ -172,5 +186,17 @@ describe('interpretInteractionCheck', () => {
     })
     expect(review.findings).toEqual([])
     expect(review.checkedRowIds).toEqual(['combo'])
+  })
+})
+
+describe('attentionFindings', () => {
+  const f = (id: string, tier: 'avoid' | 'act' | 'note', samePrescription: boolean) =>
+    ({ id, tier, rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription })
+  it('keeps every cross-visit pair and same-visit avoid pairs', () => {
+    const review = {
+      findings: [f('1', 'avoid', true), f('2', 'act', true), f('3', 'note', true), f('4', 'note', false), f('5', 'act', false)],
+      checkedRowIds: [], uncheckedRowIds: [],
+    }
+    expect(attentionFindings(review).map(x => x.id)).toEqual(['1', '4', '5'])
   })
 })

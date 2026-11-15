@@ -60,9 +60,9 @@ test('安全 counts cross-visit interactions, opens from the 用藥 line, and se
   await expect(page.getByRole('tab', { name: '安全 · 需注意 3 項，另有 1 項未檢核' }).first()).toBeVisible()
 
   const section = page.locator('[data-tour="right-content-medication-safety"]').getByRole('region', { name: '交互作用' })
-  await expect(section.getByText('避免併用 1')).toBeVisible()
-  await expect(section.getByText('需處理 2')).toBeVisible()
-  await expect(section.getByText('已檢核 6／7 項')).toBeVisible()
+  await expect(section.getByText('需注意 3 項（避免併用 1） · 已檢核 6／7 項')).toBeVisible()
+  // The drug the service could not place is named in the open, not folded.
+  await expect(section.getByText('未檢核 1 項（成分未對到）：')).toBeVisible()
   const avoid = section.getByRole('button', { name: /TAMOXIFEN.* × PAROXETINE/ })
   await expect(avoid).toContainText('儘量避免併用')
   await expect(section.getByRole('button', { name: /CIPROFLOXACIN.* × WARFARIN/ })).toBeVisible()
@@ -73,9 +73,8 @@ test('安全 counts cross-visit interactions, opens from the 用藥 line, and se
   await expect(section.getByText(/院內/).first()).toBeVisible()
   await expect(section.getByText(/合成範例診所/).first()).toBeVisible()
 
-  await section.getByRole('button', { name: '其他 1 項、1 項未檢核' }).click()
+  await section.getByRole('button', { name: '同次開立 1 項' }).click()
   await expect(section.getByRole('button', { name: /SPIRONOLACTONE.* × ENALAPRIL/ })).toContainText('同次開立')
-  await expect(section.getByText(/未檢核：成分未對到/)).toBeVisible()
 
   // One request for the list, however many places show it; ingredient names only.
   expect(bodies).toHaveLength(1)

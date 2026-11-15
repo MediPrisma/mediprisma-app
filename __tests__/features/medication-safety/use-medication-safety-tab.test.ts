@@ -37,7 +37,7 @@ describe('useMedicationSafetyTab', () => {
     expect(result.current).toMatchObject({ visible: true, unreachable: true })
   })
 
-  it('counts cross-visit pairs above a note, avoid pairs, and unchecked drugs', () => {
+  it('counts every cross-visit pair, avoid pairs, and unchecked drugs', () => {
     const { result } = renderHook(() => useMedicationSafetyTab())
     publish({
       status: 'ok',
@@ -52,6 +52,6 @@ describe('useMedicationSafetyTab', () => {
         uncheckedRowIds: ['c'],
       },
     }, cloudOnly)
-    expect(result.current).toEqual({ visible: true, unreachable: false, count: 2, avoid: 1, unchecked: 1 })
+    expect(result.current).toEqual({ visible: true, unreachable: false, count: 3, avoid: 1, unchecked: 1 })
   })
 })
