@@ -1,9 +1,11 @@
-// 交互作用 — a quiet section above the medication list. It never opens by
-// itself and never blocks: cross-visit pairs that need a decision are listed,
-// same-visit pairs (the prescriber chose them), low-grade pairs and drugs the
-// service could not check sit behind one disclosure.
+// 交互作用 — the hospital interaction check in the 安全 tab. It never opens by
+// itself and never blocks. Every cross-visit pair and every avoid pair is
+// listed; drugs the service could not check are named in the open, so "none
+// found" never hides "not checked". Only same-visit pairs below avoid (the
+// prescriber chose them) sit behind one disclosure. Quiet styling: no red
+// alarm badges, the same restraint as 開藥注意.
 import { useState } from 'react'
-import { AlertTriangle, Ban, ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { MedicationRow } from '../types'
@@ -16,9 +18,9 @@ interface InteractionSummaryProps {
 
 const text = 'text-[max(13px,0.8125rem)]'
 const meta = 'text-[max(12px,0.75rem)] text-muted-foreground'
-const badge = 'inline-flex h-5 items-center rounded-sm border px-1.5 text-[max(12px,0.75rem)] tabular-nums'
-const avoidTone = 'border-destructive/35 bg-destructive/10 text-destructive dark:bg-destructive/15'
-const actTone = 'border-orange-400 bg-orange-100 text-orange-950 dark:border-orange-500/60 dark:bg-orange-500/20 dark:text-orange-100'
+const tag = 'mt-px inline-flex h-5 shrink-0 items-center rounded-sm border px-1.5 text-[max(11px,0.6875rem)]'
+const avoidTone = 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100'
+const otherTone = 'border-border bg-muted/60 text-muted-foreground'
 
 export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
   const { locale } = useLanguage()
@@ -36,17 +38,20 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
   const rest = review.findings.filter(f => !primary.includes(f))
   const unchecked = sides(review.uncheckedRowIds)
   const avoid = primary.filter(f => f.tier === 'avoid').length
-  const act = primary.length - avoid
   const checked = review.checkedRowIds.length
   const total = checked + unchecked.length
-  const restLabel = [
-    rest.length ? (en ? `${rest.length} other` : `其他 ${rest.length} 項`) : '',
-    unchecked.length ? (en ? `${unchecked.length} not checked` : `${unchecked.length} 項未檢核`) : '',
-  ].filter(Boolean).join(en ? ', ' : '、')
+  const status = primary.length > 0
+    ? (en
+      ? `${primary.length} to review${avoid ? ` (${avoid} avoid)` : ''} · checked ${checked}/${total}`
+      : `需注意 ${primary.length} 項${avoid ? `（避免併用 ${avoid}）` : ''} · 已檢核 ${checked}／${total} 項`)
+    : unchecked.length > 0
+      ? (en
+        ? `None among the ${checked} checked · ${unchecked.length} not checked`
+        : `已檢核的 ${checked} 項之間未發現，${unchecked.length} 項未檢核`)
+      : (en ? `Checked ${checked}/${total} · none to review` : `已檢核 ${checked}／${total} 項，未發現需注意的交互作用`)
 
   const finding = (f: InteractionFinding, quiet: boolean) => {
     const open = openId === f.id
-    const Icon = f.tier === 'avoid' ? Ban : AlertTriangle
     return (
       <li key={f.id} className="border-t border-border/60">
         <button
@@ -55,11 +60,9 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
           onClick={() => setOpenId(open ? null : f.id)}
           className="flex w-full items-start gap-2 px-2.5 py-1.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [@media(pointer:coarse)]:min-h-[44px]"
         >
-          <Icon
-            aria-hidden
-            className={cn('mt-0.5 h-3.5 w-3.5 shrink-0',
-              quiet ? 'text-muted-foreground' : f.tier === 'avoid' ? 'text-destructive' : 'text-orange-600 dark:text-orange-300')}
-          />
+          <span className={cn(tag, f.tier === 'avoid' ? avoidTone : otherTone)}>
+            {f.tier === 'avoid' ? (en ? 'Avoid' : '避免併用') : (en ? 'Review' : '需注意')}
+          </span>
           <span className="min-w-0 flex-1">
             <span className={cn('block break-words', text, quiet ? 'text-foreground/80' : 'font-medium text-foreground')}>
               {names(f.rowIdsA)} × {names(f.rowIdsB)}
@@ -85,17 +88,29 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
 
   return (
     <section aria-label={en ? 'Drug interactions' : '交互作用'} className="rounded-md border border-border/70">
-      <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-1.5">
-        <h3 className={cn('font-medium text-foreground', text)}>{en ? 'Interactions' : '交互作用'}</h3>
-        {avoid > 0 && <span className={cn(badge, avoidTone)}>{en ? `Avoid ${avoid}` : `避免併用 ${avoid}`}</span>}
-        {act > 0 && <span className={cn(badge, actTone)}>{en ? `Review ${act}` : `需處理 ${act}`}</span>}
-        {primary.length === 0 && <span className={meta}>{en ? 'None across visits' : '跨次開立未發現'}</span>}
-        <span className={cn('ml-auto tabular-nums', meta)}>
-          {en ? `Checked ${checked}/${total}` : `已檢核 ${checked}／${total} 項`}
-        </span>
+      <div className="px-2.5 py-1.5">
+        <h3 className={cn('font-medium text-foreground', text)}>
+          {en ? 'Interactions' : '交互作用'}
+          <span className={cn('font-normal', meta)}>{en ? ' · VGH pharmacy database' : ' · 北榮藥劑部資料庫'}</span>
+        </h3>
+        <p className={cn('mt-0.5 tabular-nums text-foreground/80', text)}>{status}</p>
       </div>
       {primary.length > 0 && <ul>{primary.map(f => finding(f, false))}</ul>}
-      {restLabel && (
+      {unchecked.length > 0 && (
+        <div className={cn('mx-2.5 my-2 rounded-md border border-dashed border-border px-2.5 py-1.5', meta)}>
+          <p className="text-foreground/80">
+            {en ? `Not checked (${unchecked.length}) — ingredient not matched:` : `未檢核 ${unchecked.length} 項（成分未對到）：`}
+          </p>
+          <ul>
+            {unchecked.map(row => (
+              <li key={row.id} className="break-words">
+                {[row.title, origin(row)].filter(Boolean).join(' · ')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {rest.length > 0 && (
         <div className="border-t border-border/60">
           <button
             type="button"
@@ -104,19 +119,9 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
             className={cn('flex w-full items-center gap-1 px-2.5 py-1.5 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [@media(pointer:coarse)]:min-h-[44px]', meta)}
           >
             {showRest ? <ChevronDown aria-hidden className="h-3.5 w-3.5" /> : <ChevronRight aria-hidden className="h-3.5 w-3.5" />}
-            {restLabel}
+            {en ? `Same visit: ${rest.length}` : `同次開立 ${rest.length} 項`}
           </button>
-          {showRest && (
-            <ul>
-              {rest.map(f => finding(f, true))}
-              {unchecked.map(row => (
-                <li key={row.id} className={cn('break-words border-t border-border/60 px-2.5 py-1.5 pl-8', meta)}>
-                  <span className="text-foreground/80">{row.title}</span>
-                  {' · '}{[origin(row), en ? 'not checked: ingredient not matched' : '未檢核：成分未對到'].filter(Boolean).join(' · ')}
-                </li>
-              ))}
-            </ul>
-          )}
+          {showRest && <ul>{rest.map(f => finding(f, true))}</ul>}
         </div>
       )}
     </section>

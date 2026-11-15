@@ -47,11 +47,13 @@ export interface InteractionReview {
 const STRENGTH = /\s\.?\d[\d.,]*\s*(?:mg|mcg|ug|gm?|ml|l|iu|u|units?|meq|mmol|%)(?![a-z]).*$/i
 
 // "TRAMADOL HCL 37.5 MG+ACETAMINOPHEN (=PARACETAMOL) 325 MG" and
-// "Netupitant / Palonosetron" both name two ingredients.
+// "Netupitant / Palonosetron" both name two ingredients. The terminology text
+// is cut at a fixed length, so a parenthesis may never close: "OXYBUTYNIN
+// CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG" — the aside runs to the end.
 function ingredientNames(text: string | undefined): string[] {
   if (!text) return []
   return text.split(/\+|\s\/\s/)
-    .map(part => part.replace(/\([^)]*\)/g, ' ').replace(STRENGTH, '').replace(/\s+/g, ' ').trim())
+    .map(part => part.replace(/\([^)]*(?:\)|$)/g, ' ').replace(STRENGTH, '').replace(/\s+/g, ' ').trim())
     .filter(Boolean)
 }
 
@@ -91,20 +93,26 @@ const SALT_SUFFIXES = new Set(['hcl', 'hydrochloride', 'hbr', 'hydrobromide', 's
   'magnesium', 'maleate', 'citrate', 'sulfate', 'sulphate', 'phosphate', 'acetate', 'besylate', 'besilate',
   'mesylate', 'tartrate', 'fumarate', 'succinate', 'bromide', 'nitrate', 'anhydrous', 'monohydrate', 'dihydrate'])
 
+// Spellings the service abbreviates. Unlike a salt suffix, the word itself must
+// still be there: "sodium chloride" is not "diclofenac sodium".
+const ABBREVIATIONS: Record<string, string> = { chloride: 'cl' }
+
 function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
   if (String(resolved.udCode ?? '').startsWith('RAW-') || !resolved.udCode) return false
   const known = new Set(words(`${resolved.genericName ?? ''} ${resolved.englishName ?? ''}`))
   const asked = words(query)
   return asked.length > 0
-    && asked.every((word, index) => known.has(word) || (index > 0 && SALT_SUFFIXES.has(word)))
+    && asked.every((word, index) => known.has(word) || known.has(ABBREVIATIONS[word] ?? '')
+      || (index > 0 && SALT_SUFFIXES.has(word)))
 }
 
-const AVOID = /不可併用|禁止併用|避免併用|禁忌/
+const AVOID = /不可併用|禁止併用|避免併用|不宜併用|不建議併用|禁忌/
 
-function tierOf(severity: unknown, action: string): InteractionTier {
-  // The action text outranks the service's grade: it rates sildenafil with
-  // a nitrate "low" while the action reads 絕對不可併用.
-  if (AVOID.test(action)) return 'avoid'
+function tierOf(severity: unknown, action: string, mechanism: string): InteractionTier {
+  // The text outranks the service's grade: it rates sildenafil with a nitrate
+  // "low" while the action reads 絕對不可併用. The warning is sometimes only
+  // in the mechanism.
+  if (AVOID.test(action) || AVOID.test(mechanism)) return 'avoid'
   return severity === 'high' || severity === 'moderate' ? 'act' : 'note'
 }
 
@@ -150,15 +158,16 @@ export function interpretInteractionCheck(
     // Two ingredients of one combination product are not a co-prescription.
     if (rowIdsA.length === 1 && rowIdsB.length === 1 && rowIdsA[0] === rowIdsB[0]) continue
     const action = text(alert.nursingAction)
+    const mechanism = text(alert.mechanism)
     const id = text(alert.alertId) || [...rowIdsA, '×', ...rowIdsB].join('|')
     if (findings.has(id)) continue
     findings.set(id, {
       id,
-      tier: tierOf(alert.severity, action),
+      tier: tierOf(alert.severity, action, mechanism),
       rowIdsA,
       rowIdsB,
       action,
-      mechanism: text(alert.mechanism),
+      mechanism,
       source: text(alert.source),
       samePrescription: rowIdsA.every(x => rowIdsB.every(y => {
         const visit = visitOf.get(x)
@@ -175,7 +184,12 @@ export function interpretInteractionCheck(
   }
 }
 
-/** Pairs that need the clinician's attention: across visits, above a note. */
+/**
+ * Pairs that need the clinician's attention: every pair across visits — the
+ * service's grade is not reliable enough to fold a "low" away — and an avoid
+ * pair even when one prescriber wrote both. Same-visit pairs below avoid were
+ * the prescriber's own choice.
+ */
 export function attentionFindings(review: InteractionReview): InteractionFinding[] {
-  return review.findings.filter(f => f.tier !== 'note' && !f.samePrescription)
+  return review.findings.filter(f => !f.samePrescription || f.tier === 'avoid')
 }
