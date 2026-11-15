@@ -19,7 +19,7 @@ export const errorClassSchema = z.enum([
 ])
 export const collectorModelSchema = z.enum([
   'gpt-5.4-nano', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol',
-  'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-3.1-pro-preview',
   'claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5',
   'custom', 'unknown', 'whisper-1', 'provider-managed',
   // The hospital-managed endpoint profile names this model; any user-defined endpoint stays 'custom'.
