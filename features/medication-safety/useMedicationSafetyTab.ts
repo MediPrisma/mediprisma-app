@@ -19,9 +19,12 @@ export interface MedicationSafetyTab {
   avoid: number
   /** Current rows the service could not check. */
   unchecked: number
+  /** Fewer than two ingredients could be sent, so nothing was checked: 0 here
+   *  is not "none found". */
+  notRun: boolean
 }
 
-const HIDDEN: MedicationSafetyTab = { visible: false, unreachable: false, count: null, avoid: 0, unchecked: 0 }
+const HIDDEN: MedicationSafetyTab = { visible: false, unreachable: false, count: null, avoid: 0, unchecked: 0, notRun: false }
 
 /**
  * The service is on the hospital network only, and from a public page the
@@ -39,11 +42,11 @@ export function useMedicationSafetyTab(): MedicationSafetyTab {
       || rows.some(row => row.dataOrigin === 'hospital' || row.dataOrigin === 'integrated')
     if (!atHospital) return HIDDEN
     if (state.status === 'blocked' || state.status === 'unreachable') {
-      return { visible: true, unreachable: true, count: null, avoid: 0, unchecked: 0 }
+      return { visible: true, unreachable: true, count: null, avoid: 0, unchecked: 0, notRun: false }
     }
     if (state.status === 'loading') return { ...HIDDEN, visible: true }
     if (state.status === 'too-few') {
-      return { visible: true, unreachable: false, count: 0, avoid: 0, unchecked: rows.filter(row => !row.isInactive).length }
+      return { visible: true, unreachable: false, count: 0, avoid: 0, unchecked: rows.filter(row => !row.isInactive).length, notRun: true }
     }
     const attention = attentionFindings(state.review)
     return {
@@ -52,6 +55,7 @@ export function useMedicationSafetyTab(): MedicationSafetyTab {
       count: attention.length,
       avoid: attention.filter(f => f.tier === 'avoid').length,
       unchecked: state.review.uncheckedRowIds.length,
+      notRun: false,
     }
   }, [rows, state])
 }

@@ -52,6 +52,12 @@ describe('useMedicationSafetyTab', () => {
         uncheckedRowIds: ['c'],
       },
     }, cloudOnly)
-    expect(result.current).toEqual({ visible: true, unreachable: false, count: 3, avoid: 1, unchecked: 1 })
+    expect(result.current).toEqual({ visible: true, unreachable: false, count: 3, avoid: 1, unchecked: 1, notRun: false })
+  })
+
+  it('marks a list with fewer than two checkable ingredients as not run', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    publish({ status: 'too-few' }, withHospital)
+    expect(result.current).toMatchObject({ visible: true, count: 0, notRun: true })
   })
 })

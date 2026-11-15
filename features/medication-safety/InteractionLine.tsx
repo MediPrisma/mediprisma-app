@@ -25,6 +25,9 @@ function VisibleInteractionLine({ tab }: { tab: MedicationSafetyTab }) {
     ? (en ? 'Interactions not checked: hospital drug database unreachable' : '交互作用未檢核：連不上院內藥劑資料庫')
     : tab.count === null
       ? (en ? 'Checking interactions…' : '交互作用檢核中…')
+      : tab.notRun
+        // Nothing was sent, so "none found" would overstate it.
+        ? (en ? 'Interactions not checked' : '交互作用未檢核')
       : tab.count > 0
         ? (en
           ? `Interactions: ${tab.count} to review${tab.avoid ? ` (${tab.avoid} avoid)` : ''}`
