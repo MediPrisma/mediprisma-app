@@ -55,6 +55,14 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
     .filter(identifier => isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)
       || isMedcloudSystem(identifier.system, MEDCLOUD_NATIONAL_ID_SYSTEM)
       || (!isMedcloudNamespace(identifier.system) && NATIONAL_ID_SYSTEM.test(identifier.system)))
+    // Since bridge 0.15.20 a physical-card login yields the unmasked ID. Mask
+    // it the way the MediCloud page header shows it (A123***789), so the full
+    // ID never leaves the browser and the lookup key equals the one saved
+    // from the masked header before.
+    .map(identifier => isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)
+      && /^[A-Z][12]\d{8}$/.test(identifier.value)
+      ? { ...identifier, value: `${identifier.value.slice(0, 4)}***${identifier.value.slice(7)}` }
+      : identifier)
   if (matches.length !== 1 || !MASKED_NATIONAL_ID.test(matches[0].value)
     || !MASK.test(matches[0].value.slice(1))) {
     throw new Error('cdss_identity_unavailable')

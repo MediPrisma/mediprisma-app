@@ -74,6 +74,10 @@ jobs:
           MEDIPRISMA_BASE_PATH: /app-staging
           NEXT_PUBLIC_DEPLOY_CHANNEL: staging
           NEXT_PUBLIC_INTRANET_AI_ORIGIN: https://ai-vghtpe.mediprisma.tw
+          # 交互作用 (drug-interaction section on 用藥) is on for /app-staging only,
+          # by owner decision 2026-11-13: test here before any other site. Do not
+          # copy this line to the /app or /app-hmc builds without the owner's yes.
+          NEXT_PUBLIC_DDI_SERVICE_ORIGIN: https://whisper.vghtpe.gov.tw:18427
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
           # Public origin only (no secrets); baked into /app, not a runtime switch.
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}

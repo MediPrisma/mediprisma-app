@@ -16,8 +16,8 @@ describe('gateModel — downgrade stranded premium models', () => {
     // Gemini 3 Flash Preview is now a second free (proxy-eligible) Gemini tier
     expect(gateModel('gemini-3-flash-preview', false)).toBe('gemini-3-flash-preview')
     expect(gateModel('gemini-3-flash-preview', true)).toBe('gemini-3-flash-preview')
-    expect(gateModel('gemini-3.8-flash', false)).toBe('gemini-3.8-flash')
-    expect(gateModel('gemini-3.8-flash', true)).toBe('gemini-3.8-flash')
+    expect(gateModel('gemini-4-hydrogen', false)).toBe('gemini-4-hydrogen')
+    expect(gateModel('gemini-4-hydrogen', true)).toBe('gemini-4-hydrogen')
   })
 
   it('keeps a key-required model when the user HAS the provider key', () => {
@@ -65,8 +65,8 @@ describe('gateModelForKeys — provider-key-aware gate (agent chat)', () => {
 
   it('leaves a free (proxy-eligible) model untouched regardless of keys', () => {
     expect(gateModelForKeys('gemini-3-flash-preview', {})).toBe('gemini-3-flash-preview')
-    expect(gateModelForKeys('gemini-3.8-flash', {})).toBe('gemini-3.8-flash')
-    expect(gateModelForKeys('gemini-3.8-flash', { geminiKey: 'k' })).toBe('gemini-3.8-flash')
+    expect(gateModelForKeys('gemini-4-hydrogen', {})).toBe('gemini-4-hydrogen')
+    expect(gateModelForKeys('gemini-4-hydrogen', { geminiKey: 'k' })).toBe('gemini-4-hydrogen')
     expect(gateModelForKeys('gemini-3.1-flash-lite', { claudeKey: 'k' })).toBe('gemini-3.1-flash-lite')
   })
 

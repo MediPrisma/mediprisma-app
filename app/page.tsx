@@ -47,6 +47,7 @@ import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding
 import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
 import { ProgressiveImportStatus } from "@/features/import-bundle/components/ProgressiveImportStatus"
 import { HospitalCaptureReasons } from "@/features/import-bundle/components/HospitalCaptureReasons"
+import { InteractionCheckRunner } from "@/features/clinical-summary/medications/components/InteractionCheckRunner"
 import { BUNDLE_CHANGED_EVENT } from "@/src/shared/utils/reset-on-bundle-change"
 import {
   ClinicalMobilePanelSwitcher,
@@ -756,6 +757,9 @@ function PageContent() {
             >
               <StableRightPanelFeature />
             </div>
+            {/* Shared by the 用藥 list and the right panel, so it lives with
+                neither: one request per medication list. */}
+            <InteractionCheckRunner />
             {detail && (
               <div
                 ref={detailOverlayRef}

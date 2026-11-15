@@ -682,6 +682,8 @@ export interface DiagnosticReportEntity extends ClinicalSourceRecord {
   /** True only when local import inferred encounter by calendar date. */
   _encounterInferred?: boolean
   performer?: Array<{ display?: string; reference?: string }>
+  /** Reporting / interpreting physician. */
+  resultsInterpreter?: Array<{ display?: string; reference?: string }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
@@ -849,6 +851,9 @@ export interface EncounterEntity extends ClinicalSourceRecord {
   _sourceEncounterRecords?: any[]
   /** Orders written at this visit that HIS has no request or report for yet. */
   _awaitingOrders?: import('@/src/shared/utils/awaiting-order').AwaitingOrder[]
+  /** How many examination orders this visit wrote, reported or not; unset
+   *  when the bundle does not say (an earlier import, a source without orders). */
+  _orderCount?: number
   id: string
   status?: string
   class?: {

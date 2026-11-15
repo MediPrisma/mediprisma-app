@@ -86,7 +86,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     const adapter = new AiSdkStreamAdapter({ create } as any)
 
     await adapter.stream({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey,
       signal: new AbortController().signal,
@@ -94,7 +94,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     })
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-hydrogen',
       apiKey: apiKey ?? undefined,
       useProxy,
     }))
@@ -122,6 +122,26 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({
       providerOptions: { openai: { reasoningEffort: 'low' } },
     }))
+  })
+
+  it('forwards reasoning effort to the intranet Luna and to no other built-in model', async () => {
+    const create = jest.fn(() => ({ model: { kind: 'responses' }, isGemini: false }))
+    const adapter = new AiSdkStreamAdapter({ create } as any)
+    const request = {
+      messages: [{ role: 'user', content: 'hello' }],
+      apiKey: 'personal-key',
+      signal: new AbortController().signal,
+      reasoningEffort: 'low' as const,
+      onChunk: jest.fn(),
+    }
+
+    await adapter.stream({ ...request, model: 'gpt-6-luna' })
+    expect(mockStreamText.mock.calls[0][0]).toMatchObject({
+      providerOptions: { openai: { reasoningEffort: 'low', forceReasoning: true } },
+    })
+
+    await adapter.stream({ ...request, model: 'gpt-5.6-terra' })
+    expect(mockStreamText.mock.calls[1][0]).not.toHaveProperty('providerOptions')
   })
 
   it('omits reasoning effort for non-gpt-oss custom models', async () => {

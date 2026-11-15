@@ -4,8 +4,10 @@ import { readLocalBundleVersion } from '@/src/infrastructure/fhir/services/local
 
 import { collectorEventV5Schema, collectorModelSchema, featureSchema, type CollectorEventV5 as CollectorEvent, type SummaryCardCounts } from '@/src/shared/contracts/collector-event'
 import { customOpenAiModelIdForProfile, getModelDefinition, isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { sameModelVersion } from '@/src/shared/utils/ai-model-execution'
 import { captureCollectorAuth } from './collector-auth'
-import { collectorEventV10Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorEventV10, type CollectorAppSurface, type CollectorRequest, type SummaryAttempt } from '@/src/shared/contracts/collector-event'
+import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
+import { collectorEventV11Schema, MAX_COLLECTOR_REQUEST_DETAILS, type CollectorEventV6, type CollectorEventV7, type CollectorEventV8, type CollectorEventV9, type CollectorEventV10, type CollectorEventV11, type CollectorAppSurface, type CollectorRequestV11 as CollectorRequest, type SummaryAttempt, type TokenUsage } from '@/src/shared/contracts/collector-event'
 const nowMs = () => typeof performance !== 'undefined' ? performance.now() : Date.now()
 
 type Diagnostics = CollectorEvent['diagnostics']
@@ -35,6 +37,8 @@ type Finish = {
   modelId?: string
   modelSource?: CollectorEvent['model_source']
   httpStatus?: number
+  /** Token counts the AI service reported for this request; never an estimate. */
+  usage?: { inputTokens?: number; outputTokens?: number }
   summaryCards?: SummaryCardCounts
   summaryAttempt?: SummaryAttempt
   /** Random run ID shared with this summary's v7 attempts; names the operation (v8). */
@@ -49,8 +53,8 @@ const MAX_IN_FLIGHT = 2
 let generation = 0
 const active = new Set<AbortController>()
 // Bounded technical-only queue absorbs simultaneous lane completion. No bodies.
-type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9 | CollectorEventV10
-const isSummaryAttemptEvent = (event: WireEvent) => (event.schema_version === 7 || event.schema_version === 10) && 'summary_attempt' in event.diagnostics
+type WireEvent = CollectorEvent | CollectorEventV6 | CollectorEventV7 | CollectorEventV8 | CollectorEventV9 | CollectorEventV10 | CollectorEventV11
+const isSummaryAttemptEvent = (event: WireEvent) => (event.schema_version === 7 || event.schema_version >= 10) && 'summary_attempt' in event.diagnostics
 const pending: Array<{event: WireEvent; owner: number; endpoint: string; auth: ReturnType<typeof captureCollectorAuth>}> = []
 const MAX_PENDING = 64
 let failures = 0
@@ -129,6 +133,12 @@ function counts(input: ResourceCounts | PreparedCounts | undefined, prepared = f
   }
   return Object.keys(result).length ? result : undefined
 }
+function tokenUsage(input: Finish['usage']): TokenUsage | undefined {
+  const valid = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0
+  if (!input) return undefined
+  const usage = { ...(valid(input.inputTokens) ? { input_tokens: input.inputTokens } : {}), ...(valid(input.outputTokens) ? { output_tokens: input.outputTokens } : {}) }
+  return Object.keys(usage).length ? usage : undefined
+}
 function tokenBucket(n: number | undefined): Diagnostics['context_tokens_bucket'] {
   if (n === undefined || !Number.isFinite(n) || n < 0) return undefined
   return n === 0 ? '0' : n <= 2000 ? '1-2000' : n <= 8000 ? '2001-8000' : n <= 32000 ? '8001-32000' : n <= 128000 ? '32001-128000' : '128000+'
@@ -172,22 +182,7 @@ function modelInfo(id: string, provider?: Start['provider']) {
 }
 
 /** Read existing browser consent only. Never probe the network to request it. */
-export async function collectorNetworkPermission(endpoint: string): Promise<PermissionStatus | null> {
-  try {
-    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return null
-    const host = new URL(endpoint).hostname
-    const name = ['localhost', '127.0.0.1', '[::1]'].includes(host) ? 'loopback-network' : 'local-network'
-    try {
-      // Chromium 145+ splits local and loopback permissions; lib.dom may lag it.
-      return await navigator.permissions.query({ name: name as PermissionName })
-    } catch (error) {
-      // Older Chromium only knows the combined descriptor. Never override a
-      // returned prompt/denied state with a different permission's grant.
-      if (!(error instanceof TypeError)) return null
-      return await navigator.permissions.query({ name: 'local-network-access' as PermissionName })
-    }
-  } catch { return null }
-}
+export const collectorNetworkPermission = localNetworkPermission
 
 /** Map only source-code labels; arbitrary panel titles and operation keys never pass through. */
 export function collectorFeature(label?: string): Start['feature'] {
@@ -211,18 +206,18 @@ function dispatch(event: WireEvent, owner: number, endpoint: string, auth: Retur
     // whole queue; a custom summary request may use half, and is the first to give way.
     const queued = { event, owner, endpoint, auth }
     const isAttempt = isSummaryAttemptEvent(event)
-    const isTemplate = (event.schema_version === 9 || event.schema_version === 10) && 'template' in event.diagnostics
+    const isTemplate = (event.schema_version === 9 || event.schema_version >= 10) && 'template' in event.diagnostics
     if (isAttempt || event.sample_kind === 'feature') {
       if (pending.length >= MAX_PENDING) {
         const templateIndex = pending.findIndex(item => item.event.schema_version === 9 ||
-          (item.event.schema_version === 10 && 'template' in item.event.diagnostics))
+          (item.event.schema_version >= 10 && 'template' in item.event.diagnostics))
         if (templateIndex < 0) { dropped++; return }
         pending.splice(templateIndex, 1)
         dropped++
       }
       pending.push(queued)
     } else if (isTemplate && pending.filter(item => item.event.schema_version === 9 ||
-      (item.event.schema_version === 10 && 'template' in item.event.diagnostics)).length < MAX_PENDING / 2 && pending.length < MAX_PENDING) {
+      (item.event.schema_version >= 10 && 'template' in item.event.diagnostics)).length < MAX_PENDING / 2 && pending.length < MAX_PENDING) {
       pending.push(queued)
     } else dropped++
     return
@@ -334,7 +329,8 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
             latency_ms: event.latency_ms, status: event.status, error_class: event.error_class,
             response_complete: event.response_complete, phase: d.phase, mode: d.mode,
             ...(d.first_chunk_ms !== undefined ? { first_chunk_ms: d.first_chunk_ms } : {}),
-            ...(d.http_status !== undefined ? { http_status: d.http_status } : {}) }
+            ...(d.http_status !== undefined ? { http_status: d.http_status } : {}),
+            ...('usage' in d && d.usage ? { usage: d.usage } : {}) }
         }, source)
         // A parent may end before a cancelled transport reports; keep an explicit incomplete entry.
         requestSnapshots.push(() => {
@@ -353,11 +349,14 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
           ended = true
           if (generation !== owner || !isCollectorSite()) return
           for (const snapshot of requestSnapshots) snapshot()
-          const measured = configured.provider === 'custom' ? configured : result.modelId ? modelInfo(result.modelId, provider) : configured
+          // A dated revision of the selected model is that model, not an unknown one.
+          const measured = configured.provider === 'custom' || !result.modelId || sameModelVersion(input.modelId, result.modelId)
+            ? configured : modelInfo(result.modelId, provider)
           // v8: a summary operation that knows its run; v6: any other operation; v7/v5: requests.
           const runId = !result.summaryAttempt && feature === 'summary' && kind === 'feature' ? result.summaryRunId : undefined
-          const version = 10
-          const parsed = collectorEventV10Schema.safeParse({
+          const version = 11
+          const usage = tokenUsage(result.usage)
+          const parsed = collectorEventV11Schema.safeParse({
             schema_version: version, app_surface: collectorAppSurface(), ...browser, event_id: id, occurred_at: new Date().toISOString(), site: 'vghtpe',
             feature, ...measured, model_source: result.modelSource ?? 'configured', sample_kind: kind,
             latency_ms: Math.max(0, Math.round(nowMs() - started)),
@@ -372,6 +371,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
               ...(tokens ? { context_tokens_bucket: tokens } : {}),
               ...(firstChunk !== undefined ? { first_chunk_ms: firstChunk } : {}),
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
+              ...(usage ? { usage } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
               ...(runId ? { summary_run_id: runId } : {}),

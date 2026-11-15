@@ -282,20 +282,33 @@ function SharedReportSources({ sources }: { sources?: SharedReportSource[] }) {
  *  node is snapshotted into the right-detail context and rendered apart from the
  *  originating ReportRow, so it can't share the row's local state. Falls back to
  *  a single natural-scroll column when only text OR only images are present. */
+/** 判讀醫師 sign-off under the report body — the same line in the inline
+ *  (向下展開) and right-pane (向右展開) views. */
+function ReportInterpreterFooter({ interpreter, locale }: { interpreter?: string; locale: string }) {
+  if (!interpreter) return null
+  return (
+    <p className="pt-2 text-muted-foreground">
+      {locale === 'en' ? 'Interpreted by: ' : '判讀醫師：'}{interpreter}
+    </p>
+  )
+}
+
 function ReportImagingDetail({
   text,
   images,
   title,
   reportId,
   sharedReportSources,
+  interpreter,
 }: {
   text: string
   images: ReportImage[]
   title: string
   reportId?: string
   sharedReportSources?: SharedReportSource[]
+  interpreter?: string
 }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const tt = (t as any).reports?.image
   const hasText = text.length > 0
   const hasImages = images.length > 0
@@ -383,7 +396,11 @@ function ReportImagingDetail({
           </>
         )}
       </button>
-      <FormattedReportText text={text} className="text-sm leading-relaxed text-foreground/90" />
+      <FormattedReportText
+        text={text}
+        className="text-sm leading-relaxed text-foreground/90"
+        footer={<ReportInterpreterFooter interpreter={interpreter} locale={locale} />}
+      />
       <SharedReportSources sources={sharedReportSources} />
     </div>
   ) : null
@@ -889,6 +906,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
               title={row.title}
               reportId={reportSourceId}
               sharedReportSources={row.sharedReportSources}
+              interpreter={row.interpreter}
             />
           ),
         })
@@ -1029,7 +1047,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta, showTypeBadge }: Rep
             {hasText && (
               textExpanded ? (
                 <>
-                  <FormattedReportText text={fullText} className={REPORT_BODY_TEXT_CLASSES} />
+                  <FormattedReportText
+                    text={fullText}
+                    className={REPORT_BODY_TEXT_CLASSES}
+                    footer={<ReportInterpreterFooter interpreter={row.interpreter} locale={locale} />}
+                  />
                   <SharedReportSources sources={row.sharedReportSources} />
                 </>
               ) : (

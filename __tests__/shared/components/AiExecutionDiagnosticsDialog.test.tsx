@@ -43,7 +43,7 @@ describe('AiExecutionDiagnosticsDialog', () => {
           id: 'execution-1',
           modelName: 'Actual model not reported',
           modelId: 'unreported',
-          modelExecution: createModelExecution('gemini-3.8-flash'),
+          modelExecution: createModelExecution('gemini-4-hydrogen'),
           timestamp: '2026-08-05T02:51:53.866Z',
           prompt: 'SYSTEM PROMPT',
           inputData: { patient: 'masked' },
@@ -59,7 +59,7 @@ describe('AiExecutionDiagnosticsDialog', () => {
     expect(screen.getByText('SYSTEM PROMPT')).toBeInTheDocument()
     expect(screen.getByText(/"patient": "masked"/)).toBeInTheDocument()
     expect(screen.getByText('MODEL OUTPUT')).toBeInTheDocument()
-    expect(screen.getByText('gemini-3.8-flash')).toBeInTheDocument()
+    expect(screen.getByText('gemini-4-hydrogen')).toBeInTheDocument()
     expect(screen.queryByText('unreported')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' })).toBeInTheDocument()
     expect(screen.getByTitle('2026-08-05T02:51:53.866Z')).toHaveTextContent(/\([^)]+\)$/)

@@ -10,6 +10,9 @@ import { buttonVariants } from "@/components/ui/button"
 interface FormattedReportTextProps {
   text: string
   className?: string
+  /** Shown under the report body, above the raw-report toggle — where the
+   *  hospital's own report signs off (判讀醫師). */
+  footer?: ReactNode
 }
 
 /**
@@ -42,7 +45,7 @@ function withGap(gap: boolean | undefined, key: number, node: ReactNode) {
   )
 }
 
-export function FormattedReportText({ text, className }: FormattedReportTextProps) {
+export function FormattedReportText({ text, className, footer }: FormattedReportTextProps) {
   const lines = formatReportText(text)
   if (lines.length === 0) return null
 
@@ -157,6 +160,7 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
           </div>
         )
       })()))}
+      {footer}
       <details className="group/raw min-w-0 pt-2">
         <summary
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'min-h-11 cursor-pointer list-none text-muted-foreground sm:min-h-8 [&::-webkit-details-marker]:hidden')}

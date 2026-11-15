@@ -4,6 +4,8 @@
 // change verdict computed by `classifyMedicationChanges` against the FULL
 // prescription history so "new" really means new.
 import { Fragment, useMemo, useState, type ReactElement, type Ref } from 'react'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import type { OverviewMedFilter } from '@/src/application/stores/outpatient-prefs.store'
 import { Pill } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -36,7 +38,7 @@ import {
   overviewChipClass,
 } from './overview-styles'
 
-type MedFilter = 'current' | 'changed' | 'all'
+type MedFilter = OverviewMedFilter
 
 /** Single-line row: 24px of content, the row's 2px border, the 3px stack gap. */
 
@@ -176,7 +178,12 @@ export function OverviewMedsSection({
   const copyState = useMedCopyActions(copySources, 'overview_meds')
   // 使用中 by default: the card answers "what is this patient on", and 全部
   // stays one click away for the times that is not the question.
-  const [filter, setFilter] = useState<MedFilter>('current')
+  // The last filter picked is remembered. 異動 with no change on this chart
+  // has nothing to show, so this chart reads 使用中; the choice is kept.
+  const { overviewMedFilter, setOverviewMedFilter: setFilter } = useOutpatientPrefs()
+  const filter: MedFilter = !overviewMedFilter || (overviewMedFilter === 'changed' && data.changeCount === 0)
+    ? 'current'
+    : overviewMedFilter
   const [listOpen, setListOpen] = useState(false)
   const target = {
     resourceType: 'MedicationRequest',

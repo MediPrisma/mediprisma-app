@@ -429,6 +429,23 @@ it('does not roll back to an older account copy delivered after a save', async (
   expect(meta()?.dirty).toBe(false)
 })
 
+it('saves the 總覽 view choices to the account and takes them from another device', async () => {
+  stop = syncOutpatientPrefsForAccount('a')
+  emit(snapshot(remoteField({}, 100)))
+  await settle()
+  store.getState().update('a', { overviewRange: 6, overviewMedFilter: 'all' })
+  await settle()
+  expect(account).toMatchObject({ overviewRange: 6, overviewMedFilter: 'all' })
+
+  // Another device then picks a visit filter; this one changed the range again.
+  const other = { ...(account as object), overviewVisitFilter: 'inpatient', updatedAt: (account as { updatedAt: number }).updatedAt + 1_000 }
+  store.getState().update('a', { overviewRange: 12 })
+  account = other
+  await settle()
+  expect(account).toMatchObject({ overviewRange: 12, overviewMedFilter: 'all', overviewVisitFilter: 'inpatient' })
+  expect(local()).toMatchObject({ overviewRange: 12, overviewVisitFilter: 'inpatient' })
+})
+
 describe('mergeOutpatientPrefs (three-way)', () => {
   const base = prefs({ pinnedLabs: ['chem:CREA'], labMode: 'pinned', formats: [format('f1'), format('f2')] })
   const names = (merged: OutpatientPrefs) => merged.formats.map((f) => `${f.id}:${f.name}`)

@@ -1,5 +1,5 @@
 import { beginCollectorObservation, collectorError, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
-import { collectorEventV10Schema } from '@/src/shared/contracts/collector-event'
+import { collectorEventV11Schema } from '@/src/shared/contracts/collector-event'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
@@ -55,7 +55,7 @@ test.each(['/?site=vghtpe', '/app/?site=vghtpe', '/app-hmc/?site=vghtpe'])('auto
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body().site).toBe('vghtpe')
   expect(body().app_surface).toBe(url.startsWith('/app-hmc') ? 'app-hmc' : url.startsWith('/app/') ? 'app' : 'other')
-  expect(collectorEventV10Schema.safeParse(body()).success).toBe(true)
+  expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
 })
 
 test.each(['prompt', 'denied'] as const)('permission %s skips telemetry without changing clinical success or cache', async (state) => {
@@ -225,8 +225,8 @@ test('exact resource counts and approved model codes leave the browser, once per
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
   const payload = body()
-  expect(collectorEventV10Schema.safeParse(payload).success).toBe(true)
-  expect(payload).toMatchObject({ schema_version: 10, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
+  expect(collectorEventV11Schema.safeParse(payload).success).toBe(true)
+  expect(payload).toMatchObject({ schema_version: 11, site: 'vghtpe', model: 'custom', provider: 'custom', status: 'error', response_complete: true,
     diagnostics: { loaded: { total: 8237, medications: 47, encounters: 23, documents: 0, observations: 8121, reports: 19 },
       prepared: { total: 124, medications: 4, encounters: 11, observations: 100, reports: 8, documents: 0 },
       context_tokens_bucket: '32001-128000', context_trimmed: true } })
@@ -250,9 +250,17 @@ test('unknown counts are absent, not zero; fixed model catalogue is representabl
   for (const model of MODEL_CATALOG) {
     beginCollectorObservation({ feature: 'summary', modelId: model.id, sampleKind: 'feature', mode: 'structured' }).finish({ outcome: 'ok' })
     await settle()
-    expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id === 'gpt-6-luna' ? 'unknown' : model.id)
-    expect(collectorEventV10Schema.safeParse(body()).success).toBe(true)
+    expect(body().model).toBe(model.provider === 'custom' ? 'custom' : model.id)
+    expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
   }
+})
+
+test('the hospital Azure Luna is sent as gpt-6-luna, not unknown', async () => {
+  beginCollectorObservation({ feature: 'chat', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' }).finish({ outcome: 'ok' })
+  await settle()
+  const payload = body()
+  expect(payload).toMatchObject({ model: 'gpt-6-luna', provider: 'openai' })
+  expect(collectorEventV11Schema.safeParse(payload).success).toBe(true)
 })
 
 test('invalid counts are omitted, never rounded, made positive or coerced from strings', async () => {
@@ -263,7 +271,7 @@ test('invalid counts are omitted, never rounded, made positive or coerced from s
   await settle()
   expect(body().diagnostics).not.toHaveProperty('loaded')
   for (const value of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '12', '11-50', null]) {
-    expect(collectorEventV10Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
+    expect(collectorEventV11Schema.safeParse({ ...body(), diagnostics: { ...body().diagnostics, loaded: { medications: value } } }).success).toBe(false)
   }
 })
 
@@ -273,10 +281,10 @@ test('rejects PHI-shaped fields and arbitrary error/feature strings on the wire'
   await settle()
   const payload = body()
   for (const field of ['prompt', 'response', 'patient_id', 'token', 'url', 'error_message']) {
-    expect(collectorEventV10Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
-    expect(collectorEventV10Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
+    expect(collectorEventV11Schema.safeParse({ ...payload, [field]: 'SYNTHETIC-SECRET' }).success).toBe(false)
+    expect(collectorEventV11Schema.safeParse({ ...payload, diagnostics: { ...payload.diagnostics, [field]: 'SYNTHETIC-SECRET' } }).success).toBe(false)
   }
-  expect(collectorEventV10Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
+  expect(collectorEventV11Schema.safeParse({ ...payload, error_class: 'SYNTHETIC-SECRET' }).success).toBe(false)
   expect(collectorFeature('SYNTHETIC-PATIENT-TITLE')).toBe('ai_other')
   expect(collectorFeature('__proto__')).toBe('ai_other')
   expect(collectorError(new Error('SYNTHETIC-SECRET'))).toBe('error')
@@ -313,7 +321,7 @@ test.each([[0, 6], [3, 3], [6, 0], [1, 0]])('summary terminal event measures %i/
   expect(store.getState().running.summary).toBe(false)
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(body()).toMatchObject({
-    schema_version: 10, sample_kind: 'feature', status: failed ? 'error' : 'completed',
+    schema_version: 11, sample_kind: 'feature', status: failed ? 'error' : 'completed',
     error_class: failed ? 'parse_failed' : null,
     diagnostics: { summary_cards: { succeeded, failed }, phase: failed ? 'parse' : 'unknown' },
   })
@@ -359,8 +367,8 @@ test.each(['ok', 'parse_failed', 'aborted'] as const)('a summary operation names
   })
   await settle()
   expect(fetch).toHaveBeenCalledTimes(1)
-  expect(body()).toMatchObject({ schema_version: 10, feature: 'summary', sample_kind: 'feature', diagnostics: { summary_run_id: SYNTHETIC_RUN } })
-  expect(collectorEventV10Schema.safeParse(body()).success).toBe(true)
+  expect(body()).toMatchObject({ schema_version: 11, feature: 'summary', sample_kind: 'feature', diagnostics: { summary_run_id: SYNTHETIC_RUN } })
+  expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
 })
 
 test('operations without a run, and non-summary features, are v6 operation events without summary_run_id', async () => {
@@ -368,13 +376,13 @@ test('operations without a run, and non-summary features, are v6 operation event
   await runGenerationJob({ store, key: 'summary', cacheKey: 'synthetic-summary',
     analytics: { surface: 'summary', modelId: 'gpt-5.4-nano' }, produce: async () => ({}) })
   await settle()
-  expect(body().schema_version).toBe(10)
+  expect(body().schema_version).toBe(11)
   expect(body().diagnostics).not.toHaveProperty('summary_run_id')
   await runGenerationJob({ store, key: 'insights', cacheKey: 'synthetic-insights',
     analytics: { surface: 'insights', modelId: 'gpt-5.4-nano' },
     produce: async (_measure, identifySummaryRun) => { identifySummaryRun(SYNTHETIC_RUN); return {} } })
   await settle()
-  expect(body()).toMatchObject({ schema_version: 10, feature: 'insights' })
+  expect(body()).toMatchObject({ schema_version: 11, feature: 'insights' })
   expect(body().diagnostics).not.toHaveProperty('summary_run_id')
 })
 
@@ -448,7 +456,7 @@ test('automatic collection uses a persistent browser ID, never storing credentia
   expect(JSON.stringify(localStorage)).not.toContain(TOKEN)
   for (const key of ['user_id', 'email', 'source_ip', 'room', 'receipt']) {
     expect(body()).not.toHaveProperty(key)
-    expect(collectorEventV10Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
+    expect(collectorEventV11Schema.safeParse({ ...body(), [key]: 'spoofed' }).success).toBe(false)
   }
   localStorage.clear()
   start().finish({ outcome: 'ok' })
@@ -531,4 +539,20 @@ test('captures the active Bundle version at operation start and omits it after c
  rememberLocalBundleVersion(bundle('patient text'))
  start().finish({outcome:'ok'});await settle()
  expect(body()).not.toHaveProperty('medcloud_extension_version')
+})
+
+test('the intranet Azure Luna keeps its name when the service reports a dated revision or nothing at all', async () => {
+  const run = async (reported?: string) => {
+    beginCollectorObservation({ feature: 'chat', modelId: 'gpt-6-luna', provider: 'openai', sampleKind: 'request', mode: 'stream' })
+      .finish({ outcome: 'ok', ...(reported ? { modelId: reported, modelSource: 'reported' as const } : {}) })
+    await settle()
+    expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
+    return body()
+  }
+  expect(await run()).toMatchObject({ model: 'gpt-6-luna', provider: 'openai', model_source: 'configured' })
+  expect(await run('gpt-6-luna')).toMatchObject({ model: 'gpt-6-luna', model_source: 'reported' })
+  expect(await run('gpt-6-luna-2026-10-01')).toMatchObject({ model: 'gpt-6-luna', model_source: 'reported' })
+  // A different model than the one selected is still reported as what it is.
+  expect(await run('gpt-5.6-terra')).toMatchObject({ model: 'gpt-5.6-terra', model_source: 'reported' })
+  expect(await run('synthetic-other-model')).toMatchObject({ model: 'unknown', model_source: 'reported' })
 })
