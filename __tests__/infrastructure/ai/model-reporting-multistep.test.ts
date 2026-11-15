@@ -12,14 +12,14 @@ function response(parts: unknown[], modelVersion?: string) {
   })}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } })
 }
 
-test.each([undefined, 'gemini-3.8-flash'])('tracks completed missing reports without treating pending metadata as missing (%s)', async (firstModel) => {
-  let execution = createModelExecution('gemini-3.8-flash')
+test.each([undefined, 'gemini-4-hydrogen'])('tracks completed missing reports without treating pending metadata as missing (%s)', async (firstModel) => {
+  let execution = createModelExecution('gemini-4-hydrogen')
   const fetch = jest.fn()
     .mockResolvedValueOnce(response([{ functionCall: { name: 'lookup', args: {} }, thoughtSignature: 'fixture-signature' }], firstModel))
-    .mockResolvedValueOnce(response([{ text: 'Synthetic final answer' }], 'gemini-3.8-flash'))
+    .mockResolvedValueOnce(response([{ text: 'Synthetic final answer' }], 'gemini-4-hydrogen'))
   const sdk = createGoogleGenerativeAI({ apiKey: 'fixture-key', fetch })
   const result = streamText({
-    model: withModelReporting(sdk('gemini-3.8-flash'), true,
+    model: withModelReporting(sdk('gemini-4-hydrogen'), true,
       (id) => { execution = reportModelExecution(execution, id) },
       () => { execution = markModelExecutionUnreported(execution) }),
     prompt: 'Use lookup and answer', stopWhen: stepCountIs(2),
@@ -27,7 +27,7 @@ test.each([undefined, 'gemini-3.8-flash'])('tracks completed missing reports wit
   })
   expect(await result.text).toBe('Synthetic final answer')
   expect(fetch).toHaveBeenCalledTimes(2)
-  expect(execution.actualModelId).toBe('gemini-3.8-flash')
+  expect(execution.actualModelId).toBe('gemini-4-hydrogen')
   if (firstModel) {
     expect(modelExecutionNotice(execution, 'zh-TW')).toBeNull()
     expect(execution.hasUnreportedSteps).not.toBe(true)

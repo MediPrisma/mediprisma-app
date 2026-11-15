@@ -21,7 +21,7 @@ describe('Gemini proxy model routing', () => {
       proxyUrl: 'https://proxy.example.com/gemini',
       proxyClientKey: 'test-client-key',
       isGemini: true,
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-hydrogen',
     })
     const nativeBody = {
       contents: [
@@ -32,7 +32,7 @@ describe('Gemini proxy model routing', () => {
     }
 
     const result = await proxyFetch(
-      `https://sdk.example.com/models/gemini-3.8-flash:${endpoint}`,
+      `https://sdk.example.com/models/gemini-4-hydrogen:${endpoint}`,
       {
         method: 'POST',
         headers: { 'x-goog-api-key': 'proxy-dummy-key' },
@@ -45,7 +45,7 @@ describe('Gemini proxy model routing', () => {
     expect(url).toBe('https://proxy.example.com/gemini')
     expect(JSON.parse(init.body)).toEqual({
       ...nativeBody,
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       __proxyStreaming: streaming,
     })
     const headers = new Headers(init.headers)

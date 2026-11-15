@@ -141,7 +141,7 @@ describe('useUnifiedAi cancellation', () => {
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })
   it.each(['stream', 'query'] as const)('keeps actual provenance in %s diagnostics and forwards it to result owners', async (transport) => {
-    const execution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+    const execution = reportModelExecution(createModelExecution('gemini-4-hydrogen'), 'gemini-3.1-flash-lite')
     if (transport === 'stream') mockStream.mockImplementationOnce(async (options) => {
       options.onModelExecution(execution)
       options.onChunk('actual Lite answer')
@@ -150,7 +150,7 @@ describe('useUnifiedAi cancellation', () => {
     const onModelExecution = jest.fn()
     const { result } = renderHook(() => useUnifiedAi())
     await act(async () => {
-      await result.current[transport]([{ role: 'user', content: 'hello' }], { modelId: 'gemini-3.8-flash', onModelExecution })
+      await result.current[transport]([{ role: 'user', content: 'hello' }], { modelId: 'gemini-4-hydrogen', onModelExecution })
     })
     expect(onModelExecution).toHaveBeenCalledWith(execution)
     expect(useAiExecutionDiagnosticsStore.getState().records.at(-1)).toMatchObject({

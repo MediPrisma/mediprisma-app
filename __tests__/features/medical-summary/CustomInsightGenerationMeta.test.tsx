@@ -89,10 +89,10 @@ describe("CustomInsightGenerationMeta", () => {
 
   it('replaces a previously saved unreported label with the selected model and an info hint', () => {
     render(<CustomInsightGenerationMeta metadata={{
-      modelId: 'gemini-3.8-flash', modelName: '實際模型未回報', provider: 'gemini',
-      generatedAt: Date.now(), modelExecution: createModelExecution('gemini-3.8-flash'),
+      modelId: 'gemini-4-hydrogen', modelName: '實際模型未回報', provider: 'gemini',
+      generatedAt: Date.now(), modelExecution: createModelExecution('gemini-4-hydrogen'),
     }} />)
-    expect(screen.getByTestId('custom-insight-generation-meta')).toHaveTextContent('Gemini 3.8 Flash')
+    expect(screen.getByTestId('custom-insight-generation-meta')).toHaveTextContent('Gemini 4 Hydrogen')
     expect(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' })).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.queryByText('實際模型未回報')).not.toBeInTheDocument()
