@@ -49,6 +49,11 @@ describe('planInteractionCheck', () => {
     expect(plan.items.map(item => item.query)).toEqual(['ISOSORBIDE 5-MONONITRTATE', 'TAURINE'])
   })
 
+  it('drops an aside whose parenthesis the terminology text cut off', () => {
+    const plan = planInteractionCheck([cloud('c1', 'OXYBUTYNIN CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG')])
+    expect(plan.items.map(item => item.query)).toEqual(['OXYBUTYNIN CHLORIDE'])
+  })
+
   it('lists a current row with no ingredient name as unnamed', () => {
     const plan = planInteractionCheck([
       row('x', { dataOrigin: 'hospital', hospitalMedicationName: { status: 'unresolved', version: 'v', reviewedAt: 'd' } }),
@@ -141,6 +146,14 @@ describe('interpretInteractionCheck', () => {
       resolvedMedications: [resolved(0, '03951', 'Warfarin'), resolved(1, '03868', 'diclofenac')],
     })
     expect(review.checkedRowIds.sort()).toEqual(['diclo', 'warf'])
+  })
+
+  it('accepts a chloride salt the service abbreviates', () => {
+    const list = [cloud('oxy', 'OXYBUTYNIN CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, {
+      resolvedMedications: [resolved(0, '04424', 'Oxybutynin Cl (oxybutynin)', 'Oxbu ER * tab 5 mg')],
+    })
+    expect(review.checkedRowIds).toEqual(['oxy'])
   })
 
   it('treats everything as unchecked when the response is unusable', () => {

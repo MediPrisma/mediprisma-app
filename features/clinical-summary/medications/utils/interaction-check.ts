@@ -47,11 +47,13 @@ export interface InteractionReview {
 const STRENGTH = /\s\.?\d[\d.,]*\s*(?:mg|mcg|ug|gm?|ml|l|iu|u|units?|meq|mmol|%)(?![a-z]).*$/i
 
 // "TRAMADOL HCL 37.5 MG+ACETAMINOPHEN (=PARACETAMOL) 325 MG" and
-// "Netupitant / Palonosetron" both name two ingredients.
+// "Netupitant / Palonosetron" both name two ingredients. The terminology text
+// is cut at a fixed length, so a parenthesis may never close: "OXYBUTYNIN
+// CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG" — the aside runs to the end.
 function ingredientNames(text: string | undefined): string[] {
   if (!text) return []
   return text.split(/\+|\s\/\s/)
-    .map(part => part.replace(/\([^)]*\)/g, ' ').replace(STRENGTH, '').replace(/\s+/g, ' ').trim())
+    .map(part => part.replace(/\([^)]*(?:\)|$)/g, ' ').replace(STRENGTH, '').replace(/\s+/g, ' ').trim())
     .filter(Boolean)
 }
 
@@ -89,7 +91,7 @@ const words = (text: string) => text.toLowerCase().match(/[a-z][a-z-]+/g) ?? []
 // emtansine" is not "trastuzumab", "sodium chloride" is not "potassium chloride".
 const SALT_SUFFIXES = new Set(['hcl', 'hydrochloride', 'hbr', 'hydrobromide', 'sodium', 'potassium', 'calcium',
   'magnesium', 'maleate', 'citrate', 'sulfate', 'sulphate', 'phosphate', 'acetate', 'besylate', 'besilate',
-  'mesylate', 'tartrate', 'fumarate', 'succinate', 'bromide', 'nitrate', 'anhydrous', 'monohydrate', 'dihydrate'])
+  'mesylate', 'tartrate', 'chloride', 'fumarate', 'succinate', 'bromide', 'nitrate', 'anhydrous', 'monohydrate', 'dihydrate'])
 
 function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
   if (String(resolved.udCode ?? '').startsWith('RAW-') || !resolved.udCode) return false

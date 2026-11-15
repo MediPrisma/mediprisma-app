@@ -53,8 +53,10 @@ test('安全 counts cross-visit interactions, opens from the 用藥 line, and se
   await importBundle(page, { bundlePath })
   const panel = await openLeftTab(page, /^用藥$/)
 
-  const line = panel.getByRole('button', { name: /交互作用：需注意 3 項（避免併用 1） · 1 項未檢核/ })
+  const line = panel.getByRole('button', { name: /交互作用：需注意 3 項（避免併用 1）/ })
   await expect(line).toBeVisible()
+  // An unmatched ingredient is ours to fix: only the 安全 tab names it.
+  await expect(line).not.toContainText('未檢核')
   await line.click()
   // The tab carries the count; the unchecked drug behind the dot is in its name.
   await expect(page.getByRole('tab', { name: '安全 · 需注意 3 項，另有 1 項未檢核' }).first()).toBeVisible()
