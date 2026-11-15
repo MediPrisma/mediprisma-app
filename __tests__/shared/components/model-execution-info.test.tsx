@@ -18,7 +18,7 @@ beforeAll(() => {
 })
 
 test('info can be opened by click and remains open after the event', async () => {
-  render(<LanguageProvider><ModelExecutionInfo execution={createModelExecution('gemini-3.8-flash')} /></LanguageProvider>)
+  render(<LanguageProvider><ModelExecutionInfo execution={createModelExecution('gemini-4-hydrogen')} /></LanguageProvider>)
   fireEvent.click(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' }))
   const tooltip = await screen.findByRole('tooltip')
   expect(tooltip).not.toHaveAttribute('data-state', 'closed')
@@ -48,7 +48,7 @@ test('saved custom provenance keeps its original name after the profile is renam
 })
 
 test('the info hint stays visible when the last step reports its model but an earlier step did not', async () => {
-  const execution = reportModelExecution(markModelExecutionUnreported(createModelExecution('gemini-3.8-flash')), 'gemini-3.8-flash')
+  const execution = reportModelExecution(markModelExecutionUnreported(createModelExecution('gemini-4-hydrogen')), 'gemini-4-hydrogen')
   render(<LanguageProvider><ModelExecutionInfo execution={execution} /></LanguageProvider>)
   fireEvent.focus(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' }))
   expect(await screen.findByRole('tooltip')).toHaveTextContent('部分步驟')

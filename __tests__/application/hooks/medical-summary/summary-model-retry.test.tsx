@@ -16,8 +16,8 @@ const mockMeasureResult = jest.fn()
 const mockIdentifySummaryRun = jest.fn()
 const mockGenerate = async () => {
   mockResult = await mockSlotOptions.run({
-    operationKey: 'audit-slot', modelId: 'gemini-3.8-flash', requestedModelId: 'gemini-3.8-flash',
-    modelName: 'Gemini 3.8 Flash', locale: 'zh-TW', audience: 'medical',
+    operationKey: 'audit-slot', modelId: 'gemini-4-hydrogen', requestedModelId: 'gemini-4-hydrogen',
+    modelName: 'Gemini 4 Hydrogen', locale: 'zh-TW', audience: 'medical',
     clinicalContext: 'synthetic data', catalog: [], piiLiterals: [], contextLimit: 10000,
     ai: { stream: mockStream }, measureResult: mockMeasureResult, identifySummaryRun: mockIdentifySummaryRun,
   })
@@ -32,7 +32,7 @@ jest.mock('@/src/application/hooks/ai-generation/use-ai-slot-generation.hook', (
 jest.mock('@/src/application/providers/audience.provider', () => ({ useAudience: () => ({ audience: 'medical' }) }))
 jest.mock('@/src/application/providers/ai-demographics-gate.provider', () => ({ useAiDemographicsGate: () => ({ demographicsReadyForAi: true }) }))
 jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-case', () => ({
-  MEDICAL_SUMMARY_MODEL_ID: 'gemini-3.8-flash',
+  MEDICAL_SUMMARY_MODEL_ID: 'gemini-4-hydrogen',
   generateMedicalSummaryUseCase: {
     createAiDraftFromResult: (base: any) => ({ ...base }),
     finalizeResult: (summary: any) => summary,
@@ -69,7 +69,7 @@ beforeEach(() => {
   mockStream.mockImplementation(async (_messages, options) => {
     options.onChunk('NEW_OVERVIEW_CARD')
     // Some providers report identity only in their last chunk.
-    options.onModelExecution(reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.8-flash'))
+    options.onModelExecution(reportModelExecution(createModelExecution('gemini-4-hydrogen'), 'gemini-4-hydrogen'))
     return 'NEW_OVERVIEW_CARD'
   })
 })
@@ -112,11 +112,11 @@ test('a manual summary model choice immediately releases the Medcloud override',
 
 test('retrying failed cards retains provenance for successful cards kept from the previous run', async () => {
   const clear = jest.spyOn(useAiExecutionDiagnosticsStore.getState(), 'clearOperationFeature')
-  const previousExecution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+  const previousExecution = reportModelExecution(createModelExecution('gemini-4-hydrogen'), 'gemini-3.1-flash-lite')
   medicalSummaryStore.setState({ byKey: { 'audit-slot': {
     problems: 'RETAINED_LITE_CARD', cardErrors: { overview: 'PARSE_FAILED' },
     completedCardIds: ['problems'],
-    generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.1 Flash-Lite',
+    generation: { source: 'live', modelId: 'gemini-4-hydrogen', modelName: 'Gemini 3.1 Flash-Lite',
       generatedAt: 1, modelExecution: previousExecution },
   } as any } })
   const { result } = renderHook(() => useMedicalSummary())
@@ -126,27 +126,27 @@ test('retrying failed cards retains provenance for successful cards kept from th
   expect(mockResult.generation.modelExecution.actualModelIds).toContain('gemini-3.1-flash-lite')
   expect(modelExecutionFallback(mockResult.generation.modelExecution)).toBe(true)
   expect(mockResult.generation.cardModelExecutions.problems.actualModelId).toBe('gemini-3.1-flash-lite')
-  expect(mockResult.generation.cardModelExecutions.overview.actualModelId).toBe('gemini-3.8-flash')
+  expect(mockResult.generation.cardModelExecutions.overview.actualModelId).toBe('gemini-4-hydrogen')
   expect(mockResult.generation.modelExecution.hasUnreportedSteps).not.toBe(true)
   expect(clear).not.toHaveBeenCalled()
   await act(async () => result.current.generate())
-  expect(mockResult.generation.modelExecution.actualModelIds).toEqual(['gemini-3.8-flash'])
+  expect(mockResult.generation.modelExecution.actualModelIds).toEqual(['gemini-4-hydrogen'])
   expect(modelExecutionFallback(mockResult.generation.modelExecution)).toBe(false)
   expect(clear).toHaveBeenCalledWith('audit-slot', 'medical-summary')
 })
 
 test('replaces only the retried card provenance instead of retaining an obsolete aggregate fallback', async () => {
-  const flash = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.8-flash')
-  const lite = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+  const flash = reportModelExecution(createModelExecution('gemini-4-hydrogen'), 'gemini-4-hydrogen')
+  const lite = reportModelExecution(createModelExecution('gemini-4-hydrogen'), 'gemini-3.1-flash-lite')
   medicalSummaryStore.setState({ byKey: { 'audit-slot': {
     problems: 'RETAINED_FLASH_CARD', cardErrors: { overview: 'PARSE_FAILED' }, completedCardIds: ['problems'],
-    generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.1 Flash-Lite', generatedAt: 1,
+    generation: { source: 'live', modelId: 'gemini-4-hydrogen', modelName: 'Gemini 3.1 Flash-Lite', generatedAt: 1,
       modelExecution: lite, cardModelExecutions: { problems: flash, overview: lite } },
   } as any } })
   const { result } = renderHook(() => useMedicalSummary())
   await act(async () => result.current.retryFailedModules())
   expect(mockResult.problems).toBe('RETAINED_FLASH_CARD')
-  expect(mockResult.generation.modelExecution.actualModelIds).toEqual(['gemini-3.8-flash'])
+  expect(mockResult.generation.modelExecution.actualModelIds).toEqual(['gemini-4-hydrogen'])
   expect(modelExecutionFallback(mockResult.generation.modelExecution)).toBe(false)
 })
 
@@ -155,13 +155,13 @@ test('a module retry names its operation with the earlier run ID its attempts co
   const diagnostics = useAiExecutionDiagnosticsStore.getState()
   diagnostics.beginSummaryRun('audit-slot', PRIOR)
   diagnostics.addRecord({ version: 1, id: 'synthetic-record', feature: 'medical-summary', operationKey: 'audit-slot', transport: 'stream',
-    modelName: 'Gemini 3.8 Flash', modelId: 'gemini-3.8-flash', timestamp: new Date().toISOString(), prompt: 'SYNTHETIC', inputData: null,
+    modelName: 'Gemini 4 Hydrogen', modelId: 'gemini-4-hydrogen', timestamp: new Date().toISOString(), prompt: 'SYNTHETIC', inputData: null,
     outputData: '', hasError: true, errorMessage: null, status: 'error',
     technical: { run_id: PRIOR, request_id: '10000000-0000-4000-8000-0000000000cc', attempt: 3, lane: 'full', output_chars: 0, last_chunk_ms: null, parse_state: 'empty' } } as any)
   medicalSummaryStore.setState({ byKey: { 'audit-slot': {
     problems: 'RETAINED_PROBLEM_CARD', cardErrors: { overview: 'PARSE_FAILED' }, completedCardIds: ['problems'],
-    generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.8 Flash',
-      generatedAt: 1, modelExecution: createModelExecution('gemini-3.8-flash') },
+    generation: { source: 'live', modelId: 'gemini-4-hydrogen', modelName: 'Gemini 4 Hydrogen',
+      generatedAt: 1, modelExecution: createModelExecution('gemini-4-hydrogen') },
   } as any } })
   const { result } = renderHook(() => useMedicalSummary())
   await act(async () => result.current.retryFailedModules())
@@ -176,8 +176,8 @@ test('retrying a failed safety card preserves successful summary cards', async (
     problems: 'RETAINED_PROBLEM_CARD',
     cardErrors: { safety: 'PARSE_FAILED' },
     completedCardIds: ['problems'],
-    generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.8 Flash',
-      generatedAt: 1, modelExecution: createModelExecution('gemini-3.8-flash') },
+    generation: { source: 'live', modelId: 'gemini-4-hydrogen', modelName: 'Gemini 4 Hydrogen',
+      generatedAt: 1, modelExecution: createModelExecution('gemini-4-hydrogen') },
   } as any } })
 
   const { result } = renderHook(() => useMedicalSummary())
