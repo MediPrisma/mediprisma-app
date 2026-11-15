@@ -356,7 +356,9 @@ function RightPanelContentInner() {
         key={feature.id}
         value={feature.id}
         data-tour={`right-tab-${feature.id}`}
-        icon={Icon}
+        // A live count needs the room more than the icon does: in a crowded
+        // strip the icon would squeeze the label down to one character.
+        icon={live?.suffix ? undefined : Icon}
         iconVisibility={feature.iconOnly ? "always" : "responsive"}
         label={label}
         labelVisibility={feature.iconOnly ? "never" : "always"}
