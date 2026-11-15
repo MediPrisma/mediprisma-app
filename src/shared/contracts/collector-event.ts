@@ -24,6 +24,8 @@ export const collectorModelSchema = z.enum([
   'custom', 'unknown', 'whisper-1', 'provider-managed',
   // The hospital-managed endpoint profile names this model; any user-defined endpoint stays 'custom'.
   'tvghbrain3.5',
+  // 北榮院內 Azure 的 Luna；醫析以固定代號回報，不讀端點回傳的自由字串。
+  'gpt-6-luna',
 ])
 const elapsed = z.number().int().min(0).max(86_400_000)
 const collectorEventBaseSchema = z.object({
