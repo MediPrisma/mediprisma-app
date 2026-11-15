@@ -156,6 +156,16 @@ describe('interpretInteractionCheck', () => {
     expect(review.checkedRowIds).toEqual(['oxy'])
   })
 
+  it('does not let sodium chloride pass as another sodium salt', () => {
+    const list = [cloud('nacl', 'SODIUM CHLORIDE 9 MG/ML'), cloud('warf', 'WARFARIN SODIUM 1 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, {
+      resolvedMedications: [resolved(0, '03868', 'Diclofenac sodium'), resolved(1, '03951', 'Warfarin')],
+      alerts: [alert('03868', '03951', 'high', '監測出血')],
+    })
+    expect(review.uncheckedRowIds).toEqual(['nacl'])
+    expect(review.findings).toEqual([])
+  })
+
   it('treats everything as unchecked when the response is unusable', () => {
     expect(interpretInteractionCheck(plan, rows, null).uncheckedRowIds.sort()).toEqual(['c-sild', 'h-isdn'])
   })
