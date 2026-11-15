@@ -174,3 +174,8 @@ export function interpretInteractionCheck(
     uncheckedRowIds: [...unchecked],
   }
 }
+
+/** Pairs that need the clinician's attention: across visits, above a note. */
+export function attentionFindings(review: InteractionReview): InteractionFinding[] {
+  return review.findings.filter(f => f.tier !== 'note' && !f.samePrescription)
+}

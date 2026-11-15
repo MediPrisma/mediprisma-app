@@ -112,6 +112,7 @@ export const zhTW = {
     medicalSummary: '醫療摘要',
     ipsExport: '複製',
     medicalCalculator: '計算機',
+    medicationSafety: '安全',
     personalizedEducation: '個人化衛教',
     personalizedGuidance: '個人化照護指引',
     settings: '設定',

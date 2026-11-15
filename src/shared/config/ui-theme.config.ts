@@ -24,6 +24,7 @@ import {
   LayoutDashboard,
   BookOpenCheck,
   GraduationCap,
+  ShieldCheck,
   type LucideIcon
 } from 'lucide-react'
 import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
@@ -182,6 +183,11 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
     id: PERSONALIZED_EDUCATION_FEATURE_ID,
     icon: GraduationCap,
     colorKey: 'selection',
+  },
+  'medication-safety': {
+    id: 'medication-safety',
+    icon: ShieldCheck,
+    colorKey: 'clinical',
   },
   'settings': {
     id: 'settings',

@@ -21,7 +21,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
-import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import { getEnabledRightPanelFeatures, RIGHT_PANEL_TAB_STATE_HOOKS, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import type { RightPanelTabState } from "@/src/shared/config/right-panel-tab-state"
 import { resolveScrollMode, tabPanelClasses } from "@/src/shared/config/right-panel-scroll"
 import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
 import { useBetaFeatures } from "@/src/application/hooks/use-beta-features.hook"
@@ -33,6 +34,7 @@ import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
 import { useRightFeatureTourStore } from '@/features/right-feature-tour/right-feature-tour.store'
+import { MEDICATION_SAFETY_FEATURE_ID } from '@/features/medication-safety/useMedicationSafetyTab'
 import {
   ClinicalTabContentFrame,
   ClinicalTabList,
@@ -77,6 +79,10 @@ const PersonalizedEducationFeature = dynamic(() => import("@/features/personaliz
   ssr: false,
   loading: FeatureLoading,
 })
+const MedicationSafetyFeature = dynamic(() => import("@/features/medication-safety/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
 const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
   ssr: false,
   loading: FeatureLoading,
@@ -103,6 +109,7 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'medical-calculator': MedicalCalculatorFeature,
   [PERSONALIZED_EDUCATION_FEATURE_ID]: PersonalizedEducationFeature,
   [CLINICAL_DECISION_SUPPORT_FEATURE_ID]: PersonalizedGuidanceFeature,
+  [MEDICATION_SAFETY_FEATURE_ID]: MedicationSafetyFeature,
   'settings': SettingsFeature,
 }
 
@@ -220,7 +227,10 @@ function RightPanelContentInner() {
   const { t } = useLanguage()
   const { audience } = useAudience()
   const { enabled: betaFeaturesEnabled } = useBetaFeatures()
+  const tabStates = useRightPanelTabStates()
+  // Build-time registry, then any feature that reports its tab hidden right now.
   const features = getEnabledRightPanelFeatures(audience, { betaFeaturesEnabled })
+    .filter(feature => !tabStates[feature.id]?.hidden)
   const { activeTab, setActiveTab } = useRightPanel()
   const tourActive = useRightFeatureTourStore((state) => state.active)
   const tourStep = useRightFeatureTourStore((state) => state.stepId)
@@ -338,19 +348,24 @@ function RightPanelContentInner() {
     const theme = getTabTheme(feature.id)
     const Icon = theme.icon
     const label = getTabLabel(feature)
-    const accessibleLabel = feature.badge ? `${label} · ${feature.badge}` : label
+    const live = tabStates[feature.id]
+    const status = live?.status ?? feature.badge
+    const accessibleLabel = status ? `${label} · ${status}` : label
     return (
       <ClinicalTabTrigger
         key={feature.id}
         value={feature.id}
         data-tour={`right-tab-${feature.id}`}
-        icon={Icon}
+        // A live count needs the room more than the icon does: in a crowded
+        // strip the icon would squeeze the label down to one character.
+        icon={live?.suffix ? undefined : Icon}
         iconVisibility={feature.iconOnly ? "always" : "responsive"}
         label={label}
         labelVisibility={feature.iconOnly ? "never" : "always"}
         title={accessibleLabel}
         aria-label={accessibleLabel}
-        suffix={feature.badge ? (
+        className={live?.dimmed ? '!text-muted-foreground/60 data-[state=active]:after:!bg-muted-foreground/50' : undefined}
+        suffix={live?.suffix ? <span aria-hidden="true">{live.suffix}</span> : feature.badge ? (
           <Badge
             variant="outline"
             className="border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
@@ -481,4 +496,17 @@ function RightPanelContentInner() {
       ))}
     </Tabs>
   )
+}
+
+/** Live tab state from every feature that registers `useTabState`. The list is
+ *  a module constant, so the hooks run in the same order on every render. */
+function useRightPanelTabStates(): Record<string, RightPanelTabState | undefined> {
+  const states: Record<string, RightPanelTabState | undefined> = {}
+  for (const [id, useTabState] of RIGHT_PANEL_TAB_STATE_HOOKS) {
+    // Safe: the list never changes after module load, so every render calls
+    // the same hooks in the same order.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    states[id] = useTabState()
+  }
+  return states
 }

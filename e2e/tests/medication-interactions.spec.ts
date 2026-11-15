@@ -47,13 +47,19 @@ async function mockInteractionService(page: Page) {
   return bodies
 }
 
-test('用藥 lists cross-visit interactions, keeps the rest collapsed, and sends ingredient names only', async ({ page }) => {
+test('安全 counts cross-visit interactions, opens from the 用藥 line, and sends ingredient names only', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-11-13T04:00:00Z'))
   const bodies = await mockInteractionService(page)
   await importBundle(page, { bundlePath })
   const panel = await openLeftTab(page, /^用藥$/)
-  const section = panel.getByRole('region', { name: '交互作用' })
 
+  const line = panel.getByRole('button', { name: /交互作用：需注意 3 項（避免併用 1） · 1 項未檢核/ })
+  await expect(line).toBeVisible()
+  await line.click()
+  // The tab carries the count; the unchecked drug behind the dot is in its name.
+  await expect(page.getByRole('tab', { name: '安全 · 需注意 3 項，另有 1 項未檢核' }).first()).toBeVisible()
+
+  const section = page.locator('[data-tour="right-content-medication-safety"]').getByRole('region', { name: '交互作用' })
   await expect(section.getByText('避免併用 1')).toBeVisible()
   await expect(section.getByText('需處理 2')).toBeVisible()
   await expect(section.getByText('已檢核 6／7 項')).toBeVisible()
@@ -71,25 +77,31 @@ test('用藥 lists cross-visit interactions, keeps the rest collapsed, and sends
   await expect(section.getByRole('button', { name: /SPIRONOLACTONE.* × ENALAPRIL/ })).toContainText('同次開立')
   await expect(section.getByText(/未檢核：成分未對到/)).toBeVisible()
 
-  // Only ingredient names leave the browser.
-  expect(bodies.length).toBeGreaterThan(0)
+  // One request for the list, however many places show it; ingredient names only.
+  expect(bodies).toHaveLength(1)
   for (const medication of bodies[0]!.medications) expect(Object.keys(medication)).toEqual(['drugName'])
   expect(JSON.stringify(bodies[0])).not.toMatch(/合成資料|1958|SYN0000/)
 
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 })
-    const summary = page.getByRole('button', { name: '摘要', exact: true })
-    if (width < 768 && await summary.isVisible()) await summary.click()
+    const feature = page.getByRole('button', { name: '功能', exact: true })
+    if (width < 768 && await feature.isVisible()) await feature.click()
     await expect(avoid).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
   }
 })
 
-test('用藥 shows no 交互作用 section when the service cannot be reached', async ({ page }) => {
+test('安全 stays, greyed, and says why when the hospital service cannot be reached', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-11-13T04:00:00Z'))
   await page.route('https://ddi.e2e.test/**', route => route.abort('connectionrefused'))
   await importBundle(page, { bundlePath })
   const panel = await openLeftTab(page, /^用藥$/)
   await expect(panel.getByText(/TAMOXIFEN/).first()).toBeVisible()
-  await expect(panel.getByRole('region', { name: '交互作用' })).toHaveCount(0)
+  const line = panel.getByRole('button', { name: /交互作用未檢核：連不上院內藥劑資料庫/ })
+  await expect(line).toBeVisible()
+  await line.click()
+  const content = page.locator('[data-tour="right-content-medication-safety"]')
+  await expect(content.getByText('連不上院內藥劑資料庫，交互作用未檢核')).toBeVisible()
+  await expect(content.getByRole('button', { name: '重試' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '安全 · 未檢核：連不上院內服務' }).first()).toBeAttached()
 })
