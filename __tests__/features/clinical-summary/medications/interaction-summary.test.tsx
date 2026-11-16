@@ -30,7 +30,7 @@ const review: InteractionReview = {
     { id: 'b', tier: 'act', severity: 'moderate', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '監測血鉀', mechanism: '高血鉀', source: '', samePrescription: true, involvesEnded: false },
   ],
   checkedRowIds: ['isdn', 'sild', 'spiro', 'enal'],
-  uncheckedRowIds: ['dapo'], localRowIds: [], endedRowIds: [],
+  uncheckedRowIds: ['dapo'], localRowIds: [], endedRowIds: [], coveredUntil: {},
 }
 
 describe('InteractionSummary', () => {
@@ -76,7 +76,7 @@ describe('InteractionSummary', () => {
         { id: 'n', tier: 'note', severity: 'unknown', rowIdsA: ['isdn'], rowIdsB: ['sild'], action: '注意', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
       ],
       checkedRowIds: ['isdn', 'sild', 'spiro', 'enal'],
-      uncheckedRowIds: [], localRowIds: [], endedRowIds: [],
+      uncheckedRowIds: [], localRowIds: [], endedRowIds: [], coveredUntil: {},
     }} rows={rows} />)
     expect(screen.getByText('需注意 2 項（避免併用 1） · 已檢核 4／4 項')).toBeInTheDocument()
     expect(screen.getByText('Spironolactone × Enalapril')).toBeInTheDocument()
@@ -91,7 +91,7 @@ describe('InteractionSummary', () => {
     ]
     render(<InteractionSummary review={{
       findings: [{ id: 'e', tier: 'act', severity: 'moderate', rowIdsA: ['val'], rowIdsB: ['spiro'], action: '監測血鉀', mechanism: '', source: '', samePrescription: false, involvesEnded: true }],
-      checkedRowIds: ['val', 'spiro'], uncheckedRowIds: [], localRowIds: [], endedRowIds: ['val'],
+      checkedRowIds: ['val', 'spiro'], uncheckedRowIds: [], localRowIds: [], endedRowIds: ['val'], coveredUntil: { val: '2026-11-03' },
     }} rows={list} />)
     expect(screen.getByText('含 1 項最近用完的長期用藥（慢箋期間內或用完 14 天內），續開前請確認是否仍在服用')).toBeInTheDocument()
     expect(screen.getByText('已用完')).toBeInTheDocument()
@@ -100,10 +100,10 @@ describe('InteractionSummary', () => {
   })
 
   it('tells "none found" apart from "not checked"', () => {
-    const { rerender } = render(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: [], localRowIds: [], endedRowIds: [] }} rows={rows} />)
+    const { rerender } = render(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: [], localRowIds: [], endedRowIds: [], coveredUntil: {} }} rows={rows} />)
     expect(screen.getByText('已檢核 2／2 項，未發現需注意的交互作用')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    rerender(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: ['dapo'], localRowIds: [], endedRowIds: [] }} rows={rows} />)
+    rerender(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: ['dapo'], localRowIds: [], endedRowIds: [], coveredUntil: {} }} rows={rows} />)
     expect(screen.getByText('已檢核的 2 項之間未發現，1 項未檢核')).toBeInTheDocument()
   })
 })

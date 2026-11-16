@@ -84,7 +84,7 @@ describe('planInteractionCheck', () => {
     const plan = planInteractionCheck([
       row('x', { dataOrigin: 'hospital', hospitalMedicationName: { status: 'unresolved', version: 'v', reviewedAt: 'd' } }),
     ])
-    expect(plan).toEqual({ items: [], unnamedRowIds: ['x'], localRowIds: [], endedRowIds: [] })
+    expect(plan).toEqual({ items: [], unnamedRowIds: ['x'], localRowIds: [], endedRowIds: [], coveredUntil: {} })
   })
 })
 
@@ -330,6 +330,17 @@ describe('drugs whose supply has run out', () => {
     expect(plan.endedRowIds).toEqual(['warf'])
   })
 
+  it('keeps a whole slip when only its second fill is on record', () => {
+    // 慢簽(三個月) 8/20: first fill to 9/18, second fill 9/19 to 10/18, the
+    // third from a pharmacy with no record; the slip covers to 11/17.
+    const plan = planInteractionCheck([
+      cloud('warf-visit', 'WARFARIN SODIUM 1 MG', ended('2026-09-18', { drugKey: 'warf', isChronic: true, chronicFills: 3, startedOnIso: '2026-08-20' })),
+      cloud('warf-fill', 'WARFARIN SODIUM 1 MG', ended('2026-10-18', { drugKey: 'warf', isChronic: true, startedOnIso: '2026-08-20', dispensedOnIso: '2026-09-19' })),
+    ], now)
+    expect(plan.items).toEqual([{ query: 'WARFARIN SODIUM', rowIds: ['warf-fill'] }])
+    expect(plan.coveredUntil).toEqual({ 'warf-fill': '2026-11-17' })
+  })
+
   it('marks a pair with an ended side, lists it after current pairs, and not when a current row shares it', () => {
     const list = [
       cloud('warf', 'WARFARIN SODIUM 1 MG', ended('2026-11-10')),
@@ -367,7 +378,7 @@ describe('attentionFindings', () => {
   it('keeps every cross-visit pair and same-visit avoid pairs', () => {
     const review = {
       findings: [f('1', 'avoid', true), f('2', 'act', true), f('3', 'note', true), f('4', 'note', false), f('5', 'act', false)],
-      checkedRowIds: [], uncheckedRowIds: [], localRowIds: [], endedRowIds: [],
+      checkedRowIds: [], uncheckedRowIds: [], localRowIds: [], endedRowIds: [], coveredUntil: {},
     }
     expect(attentionFindings(review).map(x => x.id)).toEqual(['1', '4', '5'])
   })

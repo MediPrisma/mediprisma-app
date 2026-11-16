@@ -49,7 +49,7 @@ describe('useMedicationSafetyTab', () => {
           { id: '4', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: true, involvesEnded: false },
         ],
         checkedRowIds: ['a', 'b'],
-        uncheckedRowIds: ['c'], localRowIds: [], endedRowIds: [],
+        uncheckedRowIds: ['c'], localRowIds: [], endedRowIds: [], coveredUntil: {},
       },
     }, cloudOnly)
     expect(result.current).toEqual({ visible: true, unreachable: false, count: 3, avoid: 1, unchecked: 1, notRun: false })

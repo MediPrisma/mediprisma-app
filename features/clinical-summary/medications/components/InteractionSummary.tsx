@@ -11,7 +11,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { MedicationRow } from '../types'
-import { attentionFindings, stillCoveredUntil, type InteractionFinding, type InteractionReview, type InteractionSeverity } from '../utils/interaction-check'
+import { attentionFindings, type InteractionFinding, type InteractionReview, type InteractionSeverity } from '../utils/interaction-check'
 
 interface InteractionSummaryProps {
   review: InteractionReview
@@ -67,7 +67,7 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
   // 慢簽's later fills, possibly from a pharmacy, could reach.
   const endedNote = (row: MedicationRow) => {
     if (!ended.has(row.id)) return ''
-    const covered = stillCoveredUntil(row)
+    const covered = review.coveredUntil[row.id]
     const day = (iso?: string) => iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : ''
     return covered && covered !== row.endDateIso
       ? (en ? `supply to ${day(row.endDateIso)}, refills to ${day(covered)}` : `院內藥用到 ${day(row.endDateIso)}，慢箋可續領至 ${day(covered)}`)

@@ -24,6 +24,8 @@ export interface InteractionCheckPlan {
   localRowIds: string[]
   /** Rows no longer current that are still checked: see stillCoveredUntil. */
   endedRowIds: string[]
+  /** For each of those, the last day its prescription may still supply. */
+  coveredUntil: Record<string, string>
 }
 
 export type InteractionTier = 'avoid' | 'act' | 'note'
@@ -54,6 +56,7 @@ export interface InteractionReview {
   /** Skin and ear preparations, not sent: see isLocalPreparation. */
   localRowIds: string[]
   endedRowIds: string[]
+  coveredUntil: Record<string, string>
 }
 
 // A strength is a number with a unit. A number inside the name stays:
@@ -113,8 +116,7 @@ export function stillCoveredUntil(row: MedicationRow): string | undefined {
   return medicationSupplyEndDay(row.endDateIso, laterFills + 1)
 }
 
-function stillChecked(row: MedicationRow, today: string): boolean {
-  const covered = stillCoveredUntil(row)
+const withinGrace = (covered: string | undefined, today: string) => {
   const last = covered && medicationSupplyEndDay(covered, ENDED_GRACE_DAYS + 1)
   return !!last && today <= last
 }
@@ -124,25 +126,37 @@ export function planInteractionCheck(rows: MedicationRow[], nowMs = Date.now()):
   const unnamedRowIds: string[] = []
   const localRowIds: string[] = []
   const endedRowIds: string[] = []
+  const coveredUntil: Record<string, string> = {}
   const today = medicationClinicalDay(nowMs) ?? ''
   // A newer record of the same drug — the renewal, or a later fill, which keeps
   // the visit's date and has its own dispense day — replaces an older one,
   // which would otherwise make a same-visit pair look cross-visit. An order
   // that was cancelled or never issued replaces nothing.
   const supplyStart = (row: MedicationRow) => row.dispensedOnIso ?? row.startedOnIso ?? ''
+  // A later fill carries no fill count; its slip still covers as far as the
+  // visit's record says, with the remaining fills perhaps from a pharmacy.
   const newest = new Map<string, string>()
+  const slipCover = new Map<string, string>()
+  const slip = (row: MedicationRow) => `${row.drugKey ?? row.title}|${row.startedOnIso ?? ''}`
   for (const row of rows) {
     const key = row.drugKey ?? row.title
-    if (!STOPPED.has(row.status) && supplyStart(row) > (newest.get(key) ?? '')) newest.set(key, supplyStart(row))
+    if (STOPPED.has(row.status)) continue
+    if (supplyStart(row) > (newest.get(key) ?? '')) newest.set(key, supplyStart(row))
+    const covered = stillCoveredUntil(row)
+    if (covered && covered > (slipCover.get(slip(row)) ?? '')) slipCover.set(slip(row), covered)
   }
   for (const row of rows) {
+    const covered = stillCoveredUntil(row) && slipCover.get(slip(row))
     if (row.isInactive
-      && (supplyStart(row) < (newest.get(row.drugKey ?? row.title) ?? '') || !stillChecked(row, today))) continue
+      && (supplyStart(row) < (newest.get(row.drugKey ?? row.title) ?? '') || !withinGrace(covered, today))) continue
     if (isLocalPreparation(row)) {
       if (!row.isInactive) localRowIds.push(row.id)
       continue
     }
-    if (row.isInactive) endedRowIds.push(row.id)
+    if (row.isInactive && covered) {
+      endedRowIds.push(row.id)
+      coveredUntil[row.id] = covered
+    }
     const names = rowIngredients(row)
     if (!names.length) unnamedRowIds.push(row.id)
     for (const name of names) {
@@ -152,7 +166,7 @@ export function planInteractionCheck(rows: MedicationRow[], nowMs = Date.now()):
       byQuery.set(key, item)
     }
   }
-  return { items: [...byQuery.values()], unnamedRowIds, localRowIds, endedRowIds }
+  return { items: [...byQuery.values()], unnamedRowIds, localRowIds, endedRowIds, coveredUntil }
 }
 
 export function interactionCheckBody(plan: InteractionCheckPlan) {
@@ -272,6 +286,7 @@ export function interpretInteractionCheck(
     uncheckedRowIds: [...unchecked],
     localRowIds: plan.localRowIds,
     endedRowIds: plan.endedRowIds.filter(id => checked.has(id)),
+    coveredUntil: plan.coveredUntil,
   }
 }
 
