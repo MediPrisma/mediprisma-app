@@ -40,6 +40,10 @@ describe('Pooled Cohort Equations (Goff 2013)', () => {
   it('known ASCVD is not a primary-prevention case', () => {
     expect(calculatePce({ ...example, race: 'white', sex: 'male', cvd: 'yes' })).toMatchObject({ status: 'ineligible', issues: ['cvd'] })
   })
+  it('reads its four history and drug questions from the record', () => {
+    const sources = Object.fromEntries(PCE.inputs.map((input) => [input.key, input.source]))
+    expect(sources).toMatchObject({ bptreat: { kind: 'hfpefClinical', key: 'pceBpTreat' }, dm: { kind: 'hfpefClinical', key: 'pceDiabetes' }, smoking: { kind: 'hfpefClinical', key: 'pceSmoking' }, cvd: { kind: 'hfpefClinical', key: 'pceAscvd' } })
+  })
   it('the catalog entry bands the result as the 2018 cholesterol guideline does', () => {
     expect(CALCULATORS.filter((c) => c.id === 'pce-ascvd')).toHaveLength(1)
     expect(PCE.compute({ ...example, race: 'white', sex: 'male' })).toMatchObject({ value: '5.4', unit: '%', interpretation: { zh: '邊緣風險（5–<7.5%）' }, severity: 'moderate' })
