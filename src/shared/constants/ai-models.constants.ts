@@ -54,6 +54,12 @@ export interface ModelDefinition {
   /** Gemini only: the thinking level sent when the caller sets none. Unset
    *  leaves the model's own default. */
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
+  /** Provider reasoning default; explicit per-request options take precedence. */
+  reasoningEffort?: 'low'
+  /** Includes hidden thinking as well as visible output. */
+  defaultMaxOutputTokens?: number
+  /** Allow models that think before their first visible token to finish. */
+  streamIdleTimeoutMs?: number
 }
 
 /** Stable logical id for browser-configured OpenAI-compatible endpoints. */
@@ -69,6 +75,7 @@ export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
 export const MODEL_CATALOG = [
   {
     id: 'gpt-6-luna',
+    reasoningEffort: 'low',
     label: 'GPT-6 Luna',
     descriptions: {
       en: 'Efficient for high-volume workloads',
@@ -249,6 +256,12 @@ export const MODEL_CATALOG = [
   },
   {
     id: 'claude-haiku-5-5',
+    reasoningEffort: 'low',
+    // Adaptive thinking exhausted the SDK's unknown-model 4096-token fallback
+    // before producing the demo summary. The 32768-token budget completed it.
+    defaultMaxOutputTokens: 32_768,
+    // Health-bank low needed 82 s before its first narrative token.
+    streamIdleTimeoutMs: 180_000,
     label: 'Claude Haiku 5.5',
     descriptions: {
       en: 'Fastest responses, budget friendly',

@@ -8,6 +8,7 @@ import { createIntranetProvider } from './intranet-provider'
 import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '../interceptors/intranet-fetch'
 import { withOpenAiStatelessResponses } from '../streaming/openai-stateless.middleware'
 import { withGeminiThinkingLevel } from '../streaming/gemini-thinking.middleware'
+import { withModelReasoningDefaults } from '../streaming/model-reasoning.middleware'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -49,7 +50,8 @@ export class AiProviderFactory {
    */
   create(config: ProviderConfig): ProviderResult {
     const result = this.createProvider(config)
-    return { ...result, model: withModelReporting(result.model, result.isGemini, config.onModelReported, config.onModelUnreported) }
+    const model = withModelReasoningDefaults(result.model, getModelDefinitionOrThrow(config.modelId))
+    return { ...result, model: withModelReporting(model, result.isGemini, config.onModelReported, config.onModelUnreported) }
   }
 
   private createProvider(config: ProviderConfig): ProviderResult {
