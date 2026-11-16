@@ -69,10 +69,10 @@ export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
 export const MODEL_CATALOG = [
   {
     id: 'gpt-6-luna',
-    label: 'GPT-6 Luna（院內）',
+    label: 'GPT-6 Luna',
     descriptions: {
-      en: 'Taipei Veterans intranet Azure; shared US$200 monthly budget',
-      'zh-TW': '北榮院內 Azure；每月共用 US$200 額度',
+      en: 'Efficient for high-volume workloads',
+      'zh-TW': '適合高用量、重視成本效率的任務',
     },
     provider: 'openai',
     contextLimit: 900_000,
@@ -82,7 +82,7 @@ export const MODEL_CATALOG = [
     conversationMode: 'deep-agent',
     status: 'available',
     selectable: true,
-    providerBase: false,
+    providerBase: true,
     autoRunEligible: false,
     roles: [],
   },
@@ -100,33 +100,14 @@ export const MODEL_CATALOG = [
     temperaturePolicy: 'fixed-one',
     conversationMode: 'deep-agent',
     status: 'available',
-    selectable: true,
-    providerBase: true,
+    selectable: false,
+    providerBase: false,
     autoRunEligible: true,
     roles: ['smart-title'],
   },
   {
-    id: 'gpt-5.6-luna',
-    label: 'GPT-5.6 Luna',
-    descriptions: {
-      en: 'Efficient for high-volume workloads',
-      'zh-TW': '適合高用量、重視成本效率的任務',
-    },
-    provider: 'openai',
-    contextLimit: 900_000,
-    access: 'proxy-or-key',
-    apiSurface: 'openai-responses',
-    temperaturePolicy: 'omit',
-    conversationMode: 'deep-agent',
-    status: 'available',
-    selectable: true,
-    providerBase: false,
-    autoRunEligible: true,
-    roles: [],
-  },
-  {
-    id: 'gpt-5.6-terra',
-    label: 'GPT-5.6 Terra',
+    id: 'gpt-6.1-terra',
+    label: 'GPT-6.1 Terra',
     descriptions: {
       en: 'Balanced intelligence and cost',
       'zh-TW': '平衡智慧能力與成本',
@@ -144,8 +125,27 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'gpt-5.6-sol',
-    label: 'GPT-5.6 Sol',
+    id: 'gpt-6.1-sol',
+    label: 'GPT-6.1 Sol',
+    descriptions: {
+      en: 'Flagship model for complex professional work',
+      'zh-TW': '適合複雜專業工作的旗艦模型',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'gpt-6-astra',
+    label: 'GPT-6 Astra',
     descriptions: {
       en: 'Flagship model for complex professional work',
       'zh-TW': '適合複雜專業工作的旗艦模型',
@@ -187,25 +187,6 @@ export const MODEL_CATALOG = [
     ],
   },
   {
-    id: 'gemini-3-flash-preview',
-    label: 'Gemini 3 Flash Preview',
-    descriptions: {
-      en: 'Fast and accurate',
-      'zh-TW': '快速準確',
-    },
-    provider: 'gemini',
-    contextLimit: 900_000,
-    access: 'proxy-or-key',
-    apiSurface: 'gemini-generate-content',
-    temperaturePolicy: 'passthrough',
-    conversationMode: 'deep-agent',
-    status: 'available',
-    selectable: true,
-    providerBase: false,
-    autoRunEligible: false,
-    roles: ['default'],
-  },
-  {
     id: 'gemini-4-hydrogen',
     label: 'Gemini 4 Hydrogen',
     descriptions: {
@@ -222,21 +203,21 @@ export const MODEL_CATALOG = [
     selectable: true,
     providerBase: false,
     autoRunEligible: true,
-    roles: [],
+    roles: ['default'],
     // Hydrogen thinks at high by default: the demo summary took 122 s and
     // timed out. Low took 19-24 s, medium 51-60 s (2026-11-16, demo patient);
     // the owner chose speed.
     thinkingLevel: 'low',
   },
   {
-    id: 'gemini-3.1-pro-preview',
-    label: 'Gemini 3.1 Pro Preview',
+    id: 'gemini-4-argon',
+    label: 'Gemini 4 Argon',
     descriptions: {
       en: 'Newest top-tier model',
       'zh-TW': '最新頂級模型',
     },
     provider: 'gemini',
-    contextLimit: 1_800_000,
+    contextLimit: 900_000,
     access: 'key-only',
     apiSurface: 'gemini-generate-content',
     temperaturePolicy: 'passthrough',
@@ -248,17 +229,36 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-haiku-4-5-20251001',
-    label: 'Claude Haiku 4.5',
+    id: 'gemini-4-carbon',
+    label: 'Gemini 4 Carbon',
+    descriptions: {
+      en: 'Newest top-tier model',
+      'zh-TW': '最新頂級模型',
+    },
+    provider: 'gemini',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'gemini-generate-content',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'claude-haiku-5-5',
+    label: 'Claude Haiku 5.5',
     descriptions: {
       en: 'Fastest responses, budget friendly',
       'zh-TW': '極速回應，經濟實惠',
     },
     provider: 'claude',
-    contextLimit: 180_000,
+    contextLimit: 900_000,
     access: 'proxy-or-key',
     apiSurface: 'anthropic-messages',
-    temperaturePolicy: 'passthrough',
+    temperaturePolicy: 'omit',
     conversationMode: 'deep-agent',
     status: 'available',
     selectable: true,
@@ -267,8 +267,8 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-sonnet-5',
-    label: 'Claude Sonnet 5',
+    id: 'claude-sonnet-5-5',
+    label: 'Claude Sonnet 5.5',
     descriptions: {
       en: 'Best balance of speed and intelligence',
       'zh-TW': '兼顧速度與智慧能力',
@@ -286,8 +286,8 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-opus-5',
-    label: 'Claude Opus 5',
+    id: 'claude-opus-5-5',
+    label: 'Claude Opus 5.5',
     descriptions: {
       en: 'Deep reasoning for complex tasks',
       'zh-TW': '深度推理，複雜任務',
@@ -305,8 +305,8 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-fable-5',
-    label: 'Claude Fable 5',
+    id: 'claude-fable-5-2',
+    label: 'Claude Fable 5.2',
     descriptions: {
       en: 'Newest top-tier model',
       'zh-TW': '最新頂級模型',
@@ -424,6 +424,12 @@ export function isClaudeModelId(value: string): value is ClaudeModelId {
 
 export function isModelId(value: string): value is ModelId {
   return isCustomOpenAiModelId(value) || ALL_MODEL_IDS.has(value as ModelId)
+}
+
+/** User preferences exclude internal-only models such as smart-title Nano. */
+export function isSelectableModelId(value: string): value is ModelId {
+  const definition = getModelDefinition(value)
+  return definition?.selectable === true && definition.status === 'available'
 }
 
 export function getModelDefinition(modelId: string): ModelDefinition | undefined {

@@ -132,7 +132,7 @@ jest.mock('@/src/shared/components/ModelPicker', () => ({
     <button
       type="button"
       data-testid="header-model-picker"
-      onClick={() => onSelect('gemini-3-flash-preview')}
+      onClick={() => onSelect('gemini-4-hydrogen')}
     >
       switch header model
     </button>
@@ -175,7 +175,7 @@ jest.mock('@/features/medical-chat/components/ChatToolbar', () => ({
         <button
           type="button"
           data-testid="toolbar-model-picker"
-          onClick={() => onModelSelect('gemini-3-flash-preview')}
+          onClick={() => onModelSelect('gemini-4-hydrogen')}
         >
           switch toolbar model
         </button>
@@ -503,7 +503,7 @@ describe('MedicalChat model privacy boundary', () => {
     fireEvent.click(screen.getByTestId('header-model-picker'))
 
     await waitFor(() => expect(useModelPrefsStore.getState().prefs.chat).toBe(
-      'gemini-3-flash-preview',
+      'gemini-4-hydrogen',
     ))
     // No privacy boundary was crossed: the transcript (and any in-flight
     // stream) survives an ordinary cloud→cloud picker change.

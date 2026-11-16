@@ -10,7 +10,12 @@ export function withOpenAiStatelessResponses(model: Parameters<typeof wrapLangua
         ...params,
         providerOptions: {
           ...params.providerOptions,
-          openai: { ...params.providerOptions?.openai, store: false },
+          openai: {
+            ...params.providerOptions?.openai,
+            // This SDK predates GPT-6; preserve reasoning and encrypted tool context.
+            ...(model.modelId.startsWith('gpt-6') ? { forceReasoning: true } : {}),
+            store: false,
+          },
         },
       }),
     },

@@ -6,12 +6,12 @@ import {
 const ready = {
   enabled: true,
   authLoading: false,
-  slotKey: 'patient-1::medical::gemini-3.1-pro-preview',
+  slotKey: 'patient-1::medical::gemini-4-argon',
   busy: false,
   dataReady: true,
   hasResult: false,
-  hydratedSlotKey: 'patient-1::medical::gemini-3.1-pro-preview',
-  autoRunIdentity: 'patient-1::medical::gemini-3.1-pro-preview::user:1',
+  hydratedSlotKey: 'patient-1::medical::gemini-4-argon',
+  autoRunIdentity: 'patient-1::medical::gemini-4-argon::user:1',
   triggeredIdentity: null,
 }
 
@@ -20,9 +20,9 @@ describe('Medical Summary auto-run policy', () => {
     expect(shouldAutoRunSummarySlot(ready)).toBe(true)
     expect(shouldAutoRunSummarySlot({
       ...ready,
-      slotKey: 'patient-1::medical::gpt-5.6-terra',
-      hydratedSlotKey: 'patient-1::medical::gpt-5.6-terra',
-      autoRunIdentity: 'patient-1::medical::gpt-5.6-terra::user:1',
+      slotKey: 'patient-1::medical::gpt-6.1-terra',
+      hydratedSlotKey: 'patient-1::medical::gpt-6.1-terra',
+      autoRunIdentity: 'patient-1::medical::gpt-6.1-terra::user:1',
     })).toBe(true)
   })
 
@@ -44,9 +44,9 @@ describe('demo snapshot policy', () => {
   it('allows a bundled fallback after a retained non-default slot is hydrated', () => {
     expect(shouldSeedDemoSlot({
       hasDemoSeed: true,
-      slotKey: 'demo-patient-1::patient::gpt-5.6-terra',
+      slotKey: 'demo-patient-1::patient::gpt-6.1-terra',
       hasResult: false,
-      hydratedSlotKey: 'demo-patient-1::patient::gpt-5.6-terra',
+      hydratedSlotKey: 'demo-patient-1::patient::gpt-6.1-terra',
       patientId: 'demo-patient-1',
       demoPatientId: 'demo-patient-1',
       locale: 'zh-TW',
@@ -70,9 +70,9 @@ describe('demo snapshot policy', () => {
   it('does not seed a real patient or overwrite an existing result', () => {
     const ready = {
       hasDemoSeed: true,
-      slotKey: 'demo-patient-1::patient::gpt-5.6-terra',
+      slotKey: 'demo-patient-1::patient::gpt-6.1-terra',
       hasResult: false,
-      hydratedSlotKey: 'demo-patient-1::patient::gpt-5.6-terra',
+      hydratedSlotKey: 'demo-patient-1::patient::gpt-6.1-terra',
       patientId: 'demo-patient-1',
       demoPatientId: 'demo-patient-1',
       locale: 'zh-TW',

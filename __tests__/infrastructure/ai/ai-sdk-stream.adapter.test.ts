@@ -35,7 +35,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     const onChunk = jest.fn()
 
     await adapter.stream({
-      model: 'gpt-5.6-terra',
+      model: 'gpt-6.1-terra',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey: 'personal-key',
       signal: new AbortController().signal,
@@ -46,7 +46,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     })
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      modelId: 'gpt-5.6-terra',
+      modelId: 'gpt-6.1-terra',
       apiKey: 'personal-key',
       useProxy: false,
     }))
@@ -64,7 +64,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     const adapter = new AiSdkStreamAdapter({ create } as any)
 
     await adapter.stream({
-      model: 'gpt-5.6-luna',
+      model: 'gpt-6-luna',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey: null,
       signal: new AbortController().signal,
@@ -72,7 +72,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     })
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      modelId: 'gpt-5.6-luna',
+      modelId: 'gpt-6-luna',
       apiKey: undefined,
       useProxy: true,
     }))
@@ -140,7 +140,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
       providerOptions: { openai: { reasoningEffort: 'low', forceReasoning: true } },
     })
 
-    await adapter.stream({ ...request, model: 'gpt-5.6-terra' })
+    await adapter.stream({ ...request, model: 'gpt-6.1-terra' })
     expect(mockStreamText.mock.calls[1][0]).not.toHaveProperty('providerOptions')
   })
 
@@ -187,7 +187,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     const adapter = new AiSdkStreamAdapter({ create } as any)
 
     await adapter.stream({
-      model: 'claude-opus-5',
+      model: 'claude-opus-5-5',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey: 'personal-key',
       signal: new AbortController().signal,

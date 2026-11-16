@@ -80,9 +80,7 @@ test('non-streaming service ignores personal keys and stays on the bounded hospi
   expect(init.headers.get('Authorization')).toBe('Bearer synthetic-firebase-token')
   expect(JSON.parse(init.body)).toMatchObject({ store: false, max_output_tokens: 10000 })
   expect(send).toHaveBeenCalledTimes(1)
-  window.location.href = 'https://mediprisma.tw/app/'
-  await expect(new OpenAiService('synthetic-personal-key').query({ modelId: 'gpt-6-luna', messages: [] })).rejects.toThrow('院內入口')
-  expect(send).toHaveBeenCalledTimes(1)
+
 })
 
 test.each([429, 503])('real stream adapter and SDK send only one request on HTTP %i', async status => {
