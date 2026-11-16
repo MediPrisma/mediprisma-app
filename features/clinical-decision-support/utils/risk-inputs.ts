@@ -15,7 +15,8 @@
  *   visit     — an answer given today on the page (DP-08's 目前吸菸)
  *   clinic    — a measurement entered in the room today
  *   record    — a lab, vital or demographic from the chart
- *   none      — nothing to read; the clinician answers
+ *   none      — nothing to read; the clinician answers (a history or drug
+ *               question with no evidence is the rule's 「否」 instead)
  *
  * Every formula stays in medical-calculator; this file only resolves inputs.
  */
@@ -117,6 +118,9 @@ export const RISK_FIELD_GROUPS: readonly { id: string; title: { zh: string; en: 
 
 const text = (zh: string, en: string) => ({ zh, en })
 
+/** History and drug questions answered 「否」 when the record shows nothing. */
+const DEFAULT_NO_KEYS: ReadonlySet<string> = new Set(['dm', 'hbp', 'smoking', 'cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife', 'bptreat', 'statin'])
+
 export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill, manual: CalcValues, vitals?: ClinicVitals, visit: RiskVisitAnswers = {}): RiskInputs {
   const values: CalcValues = {}
   const today = profile.evaluatedAt?.slice(0, 10)
@@ -163,15 +167,16 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
       date = statin.lastPrescriptionDate
       detail = value ? text(value === 'yes' ? '規則：statin 處方供藥中' : '規則：近期無 statin 處方', value === 'yes' ? 'Rule: a statin is currently supplied' : 'Rule: no recent statin prescription') : undefined
     }
-    if (!isManual && key === 'bptreat' && autofill.clinicalSelects?.antihypertensives?.value === 'yes') {
-      const select = autofill.clinicalSelects.antihypertensives
-      value = 'yes'; origin = 'rule'; date = select.date; detail = text(`規則：${select.testName}`, `Rule: ${select.testName}`)
+    // Any one current antihypertensive is treatment (not the HFpEF ≥2 count).
+    const anyAntihypertensive = autofill.clinicalSelects?.antihypertensiveAny
+    if (!isManual && key === 'bptreat' && anyAntihypertensive?.value === 'yes') {
+      value = 'yes'; origin = 'rule'; date = anyAntihypertensive.date; detail = text(`規則：${anyAntihypertensive.testName}`, `Rule: ${anyAntihypertensive.testName}`)
     }
     // Known hypertension (HPA's 「已知高血壓」): a code, or treatment under way.
     if (!isManual && key === 'hbp') {
       const code = facts.hypertensionDiagnosis
       if (code) { value = 'yes'; origin = 'icd'; date = code.date; detail = text(`ICD：${code.zh}`, `ICD: ${code.en}`) }
-      else if (autofill.clinicalSelects?.antihypertensives?.value === 'yes') { value = 'yes'; origin = 'rule'; date = autofill.clinicalSelects.antihypertensives.date; detail = text('規則：降血壓藥供藥中', 'Rule: an antihypertensive is currently supplied') }
+      else if (anyAntihypertensive?.value === 'yes') { value = 'yes'; origin = 'rule'; date = anyAntihypertensive.date; detail = text('規則：降血壓藥供藥中', 'Rule: an antihypertensive is currently supplied') }
     }
     // PCE publishes White and African American equations only; the guideline
     // reads other groups, Taiwanese patients included, with the White ones.
@@ -194,6 +199,12 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     const measured = vitalKey ? vitals?.entries?.[vitalKey] : undefined
     if (!isManual && measured) {
       value = String(measured.value); date = measured.measuredOn; origin = 'clinic'; unitError = false; detail = text('門診今日量測', 'Measured in clinic today')
+    }
+    // Owner 2026-11-16: a history or drug question the record has no evidence
+    // for (no code, no prescription, no answer today) is prefilled 「否」, not
+    // left 未確認; the clinician changes it where it is wrong.
+    if (!isManual && !value && DEFAULT_NO_KEYS.has(key)) {
+      value = 'no'; origin = 'rule'; detail = text('規則：病歷未見相關診斷碼或處方，預設否（請核對）', 'Rule: no code or prescription in the record; defaults to no (please check)')
     }
     values[key] = value
     const days = date && profile.evaluatedAt ? Math.floor((Date.parse(profile.evaluatedAt) - Date.parse(date)) / 86400000) : undefined
