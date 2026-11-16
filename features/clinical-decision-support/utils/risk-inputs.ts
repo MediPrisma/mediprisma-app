@@ -144,7 +144,9 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
       detail = codeFact ? text(`ICD：${codeFact.zh}`, `ICD: ${codeFact.en}`)
         : key === 'eskd' ? text('病歷：腎臟替代治療', 'Record: kidney replacement therapy')
         : text(`病歷：LVEF ${facts.LVEF?.numericValue}%`, `Record: LVEF ${facts.LVEF?.numericValue}%`)
-      date = codeFact?.date ?? facts.LVEF?.date ?? date
+      // Each answer keeps its own evidence's date: the LVEF date only for the
+      // LVEF-based subclinical answer, never for a code or dialysis.
+      date = codeFact ? (codeFact.date ?? date) : key === 'subclinical' ? (facts.LVEF?.date ?? date) : date
     }
     // The host's rules: inferences from prescriptions and codes, prefilled but
     // the clinician's to confirm (owner: 「RULE 判斷的結果再讓使用者確認」).

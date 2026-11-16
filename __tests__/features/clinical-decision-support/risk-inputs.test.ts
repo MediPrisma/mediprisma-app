@@ -68,6 +68,18 @@ describe('shared risk inputs', () => {
     expect(field('waist')).toMatchObject({ value: '92', origin: 'record' })
   })
 
+  it('dates each positive answer by its own evidence, never by the LVEF', () => {
+    const lvef = { zh: 'LVEF 35%', en: 'LVEF 35%', date: '2026-09-01', numericValue: 35 }
+    const p = { ...profile({ LVEF: lvef, ascvdDiagnosis: fact('陳舊性心肌梗塞 I25.2') }), kidneyReplacementTherapy: { state: 'confirmed' } } as unknown as Parameters<typeof buildRiskInputs>[0]
+    const shared = buildRiskInputs(p, record, {})
+    const field = (key: string) => shared.fields.find((item) => item.input.key === key)!
+    expect(field('subclinical')).toMatchObject({ value: 'yes', date: '2026-09-01' })
+    expect(field('cvd')).toMatchObject({ value: 'yes', origin: 'icd' })
+    expect(field('cvd').date).toBeUndefined()
+    expect(field('eskd')).toMatchObject({ value: 'yes', origin: 'record' })
+    expect(field('eskd').date).toBeUndefined()
+  })
+
   it('the clinician\'s own entry outranks every source except a positive code, and today\'s clinic measurement outranks the chart', () => {
     const p = profile({ type2DiabetesDiagnosis: fact('第二型糖尿病 E11.9', '2026-01-10') })
     const vitals = { entries: { systolic: { value: 126, measuredOn: '2026-11-03', modifiedAt: AT }, bodyHeight: { value: 172, measuredOn: '2026-11-03', modifiedAt: AT }, bodyWeight: { value: 80, measuredOn: '2026-11-03', modifiedAt: AT } } } as never
