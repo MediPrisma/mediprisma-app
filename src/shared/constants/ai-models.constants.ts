@@ -426,6 +426,12 @@ export function isModelId(value: string): value is ModelId {
   return isCustomOpenAiModelId(value) || ALL_MODEL_IDS.has(value as ModelId)
 }
 
+/** User preferences exclude internal-only models such as smart-title Nano. */
+export function isSelectableModelId(value: string): value is ModelId {
+  const definition = getModelDefinition(value)
+  return definition?.selectable === true && definition.status === 'available'
+}
+
 export function getModelDefinition(modelId: string): ModelDefinition | undefined {
   if (isCustomOpenAiModelId(modelId)) {
     const template = MODEL_BY_ID.get(CUSTOM_OPENAI_MODEL_ID)

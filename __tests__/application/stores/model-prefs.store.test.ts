@@ -73,6 +73,15 @@ describe('model-prefs.store', () => {
     expect(useModelPrefsStore.getState().prefs.chat).toBe(DEFAULT_MODEL_ID)
   })
 
+  it.each(['legacy', 'per-feature'])('migrates internal Nano %s preferences to the display/run defaults', (source) => {
+    localStorage.setItem(source === 'legacy' ? 'ai-config-storage' : 'model-prefs', JSON.stringify({
+      state: source === 'legacy' ? { model: 'gpt-5.4-nano' } : { prefs: { chat: 'gpt-5.4-nano', insights: 'gpt-5.4-nano' } },
+      version: 0,
+    }))
+    const { useModelPrefsStore } = loadStore()
+    expect(useModelPrefsStore.getState().prefs).toEqual({ chat: DEFAULT_MODEL_ID, insights: DEFAULT_MODEL_ID })
+  })
+
   it('persisted prefs win over the legacy global model', () => {
     localStorage.setItem(
       'ai-config-storage',
@@ -81,13 +90,13 @@ describe('model-prefs.store', () => {
     localStorage.setItem(
       'model-prefs',
       JSON.stringify({
-        state: { prefs: { chat: 'gpt-5.4-nano', insights: 'gemini-3.1-flash-lite' } },
+        state: { prefs: { chat: 'gpt-6-luna', insights: 'gemini-3.1-flash-lite' } },
         version: 0,
       }),
     )
     const { useModelPrefsStore } = loadStore()
     expect(useModelPrefsStore.getState().prefs).toEqual({
-      chat: 'gpt-5.4-nano',
+      chat: 'gpt-6-luna',
       insights: 'gemini-3.1-flash-lite',
     })
   })
@@ -96,14 +105,14 @@ describe('model-prefs.store', () => {
     localStorage.setItem(
       'model-prefs',
       JSON.stringify({
-        state: { prefs: { chat: 'gpt-5.5', insights: 'gpt-5.4-nano' } },
+        state: { prefs: { chat: 'gpt-5.5', insights: 'gpt-6-luna' } },
         version: 0,
       }),
     )
     const { useModelPrefsStore } = loadStore()
     const { prefs } = useModelPrefsStore.getState()
     expect(prefs.chat).toBe(DEFAULT_MODEL_ID)
-    expect(prefs.insights).toBe('gpt-5.4-nano')
+    expect(prefs.insights).toBe('gpt-6-luna')
   })
 
   it('temporarily presents the Medcloud model without changing the saved preference', () => {

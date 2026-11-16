@@ -6,7 +6,7 @@ import { mockAiStream, getChatCallCount } from '../fixtures/mock-stream'
 // The Medical Summary action generates all registered cards in one validated
 // batch. Return every exact module block so these tests exercise the current
 // unified UI without a real model or network.
-const TEST_MODEL_ID = 'gpt-5.4-nano'
+const TEST_MODEL_ID = 'gemini-3.1-flash-lite'
 
 const SAFETY_RESULT = {
   scannedCount: 12,
