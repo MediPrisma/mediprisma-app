@@ -26,8 +26,8 @@ const rows = [
 
 const review: InteractionReview = {
   findings: [
-    { id: 'a', tier: 'avoid', rowIdsA: ['sild'], rowIdsB: ['isdn'], action: '絕對不可併用。', mechanism: '可能發生嚴重低血壓。', source: '北榮藥劑部交互作用資料庫', samePrescription: false },
-    { id: 'b', tier: 'act', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '監測血鉀', mechanism: '高血鉀', source: '', samePrescription: true },
+    { id: 'a', tier: 'avoid', severity: 'low', rowIdsA: ['sild'], rowIdsB: ['isdn'], action: '絕對不可併用。', mechanism: '可能發生嚴重低血壓。', source: '北榮藥劑部交互作用資料庫', samePrescription: false },
+    { id: 'b', tier: 'act', severity: 'moderate', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '監測血鉀', mechanism: '高血鉀', source: '', samePrescription: true },
   ],
   checkedRowIds: ['isdn', 'sild', 'spiro', 'enal'],
   uncheckedRowIds: ['dapo'],
@@ -39,6 +39,8 @@ describe('InteractionSummary', () => {
     const section = screen.getByRole('region', { name: '交互作用' })
     expect(within(section).getByText('需注意 1 項（避免併用 1） · 已檢核 4／5 項')).toBeInTheDocument()
     expect(within(section).getByText('避免併用')).toBeInTheDocument()
+    // The service's own grade shows beside 避免併用, even when it reads 輕度.
+    expect(within(section).getByText('輕度')).toBeInTheDocument()
     expect(within(section).getByText('Sildenafil × Isosorbide dinitrate')).toBeInTheDocument()
     expect(within(section).getByText('絕對不可併用。')).toBeInTheDocument()
     expect(within(section).getByText('未檢核 1 項（成分未對到）：')).toBeInTheDocument()
@@ -65,8 +67,8 @@ describe('InteractionSummary', () => {
   it('keeps a same-visit avoid pair and a low cross-visit pair in the list', () => {
     render(<InteractionSummary review={{
       findings: [
-        { id: 'a', tier: 'avoid', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '避免併用', mechanism: '', source: '', samePrescription: true },
-        { id: 'n', tier: 'note', rowIdsA: ['isdn'], rowIdsB: ['sild'], action: '注意', mechanism: '', source: '', samePrescription: false },
+        { id: 'a', tier: 'avoid', severity: 'high', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '避免併用', mechanism: '', source: '', samePrescription: true },
+        { id: 'n', tier: 'note', severity: 'unknown', rowIdsA: ['isdn'], rowIdsB: ['sild'], action: '注意', mechanism: '', source: '', samePrescription: false },
       ],
       checkedRowIds: ['isdn', 'sild', 'spiro', 'enal'],
       uncheckedRowIds: [],

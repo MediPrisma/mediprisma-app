@@ -78,7 +78,7 @@ describe('interpretInteractionCheck', () => {
       alerts: [alert('02602', '01669', 'low', '絕對不可併用。')],
     })
     expect(review.findings).toEqual([expect.objectContaining({
-      tier: 'avoid', rowIdsA: ['c-sild'], rowIdsB: ['h-isdn'], action: '絕對不可併用。', samePrescription: false,
+      tier: 'avoid', severity: 'low', rowIdsA: ['c-sild'], rowIdsB: ['h-isdn'], action: '絕對不可併用。', samePrescription: false,
     })])
     expect(review.checkedRowIds.sort()).toEqual(['c-sild', 'h-isdn'])
     expect(review.uncheckedRowIds).toEqual([])
@@ -95,6 +95,21 @@ describe('interpretInteractionCheck', () => {
     expect(answer('監測血壓', '可能嚴重低血壓，禁止併用')).toBe('avoid')
     expect(answer('不宜併用', '')).toBe('avoid')
     expect(answer('監測血壓', '可能低血壓')).toBe('note')
+  })
+
+  it('keeps the service grade as given, and an unknown grade as unknown', () => {
+    const grade = (severity: string) => interpretInteractionCheck(plan, rows, {
+      resolvedMedications: [
+        resolved(0, '01669', 'isosorbide dinitrate', 'Isordil tab 10 mg'),
+        resolved(1, '02602', 'Sildenafil citrate (sildenafil)', 'VIAGRA FC * TAB 100 MG'),
+      ],
+      alerts: [alert('02602', '01669', severity, '絕對不可併用。')],
+    }).findings[0]?.severity
+    expect(grade('high')).toBe('high')
+    expect(grade('moderate')).toBe('moderate')
+    expect(grade('low')).toBe('low')
+    expect(grade('')).toBe('unknown')
+    expect(grade('critical')).toBe('unknown')
   })
 
   it('reports a drug the service could not place as unchecked', () => {
@@ -194,10 +209,10 @@ describe('interpretInteractionCheck', () => {
         alert('00050', '01675', 'high', '分開管路', 'IV_INCOMPATIBILITY'),
       ],
     })
-    expect(review.findings.map(f => [f.tier, f.samePrescription, f.rowIdsA[0], f.rowIdsB[0]])).toEqual([
-      ['act', false, 'warf', 'amio'],
-      ['act', true, 'spiro', 'enal'],
-      ['note', false, 'para', 'warf'],
+    expect(review.findings.map(f => [f.tier, f.severity, f.samePrescription, f.rowIdsA[0], f.rowIdsB[0]])).toEqual([
+      ['act', 'high', false, 'warf', 'amio'],
+      ['act', 'moderate', true, 'spiro', 'enal'],
+      ['note', 'low', false, 'para', 'warf'],
     ])
   })
 
@@ -214,7 +229,7 @@ describe('interpretInteractionCheck', () => {
 
 describe('attentionFindings', () => {
   const f = (id: string, tier: 'avoid' | 'act' | 'note', samePrescription: boolean) =>
-    ({ id, tier, rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription })
+    ({ id, tier, severity: 'unknown' as const, rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription })
   it('keeps every cross-visit pair and same-visit avoid pairs', () => {
     const review = {
       findings: [f('1', 'avoid', true), f('2', 'act', true), f('3', 'note', true), f('4', 'note', false), f('5', 'act', false)],
