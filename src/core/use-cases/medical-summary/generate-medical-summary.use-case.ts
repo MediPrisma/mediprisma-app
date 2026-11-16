@@ -997,7 +997,6 @@ function formatLongitudinalLabLines(points: LongitudinalLabPoint[]): string[] {
     else byKey.set(point.key, [point])
   }
   return [...byKey.values()]
-    .filter((series) => new Set(series.map((p) => p.date)).size >= 2)
     .sort((a, b) => {
       const pa = investigationPriority(a[0].key, a[0].label)
       const pb = investigationPriority(b[0].key, b[0].label)
@@ -1069,10 +1068,10 @@ export function buildLongitudinalInvestigationContext(
 
   const sections = [
     LONGITUDINAL_INVESTIGATION_HEADING,
-    `Use this section for the serial numbers inside each problem's "metric". Show at most the latest ${MAX_INVESTIGATION_TREND_POINTS} dated points/reports. If a topic below has 2+ points, it is NOT a single result; use the sequence and cite the shown O keys for laboratory values or L keys for report-level findings.`,
+    `Use this section for the numbers inside each problem's "metric", including single measurements. A single dated value is evidence, not a missing test; label it as single rather than inventing a trend. Show at most the latest ${MAX_INVESTIGATION_TREND_POINTS} dated points/reports. If a topic below has 2+ points on different dates, it is NOT a single result; use the sequence and cite the shown O keys for laboratory values or L keys for report-level findings.`,
   ]
   if (labLines.length > 0) {
-    sections.push('### Serial lab values (oldest → newest)', ...labLines)
+    sections.push('### Lab values (single measurements and serial values oldest → newest)', ...labLines)
   }
   if (imagingLines.length > 0) {
     sections.push('### Serial imaging reports (oldest → newest)', ...imagingLines)

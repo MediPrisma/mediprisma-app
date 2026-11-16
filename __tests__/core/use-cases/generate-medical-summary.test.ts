@@ -367,6 +367,26 @@ describe('buildSourceCatalog — clinical documents', () => {
 })
 
 describe('buildLongitudinalInvestigationContext', () => {
+  it('retains single lab values with their date and source instead of presenting only the test name', () => {
+    const input = {
+      diagnosticReports: [{
+        id: 'single-tsh-report', category: [{ text: 'Laboratory' }],
+        code: { text: 'TSH' }, effectiveDateTime: '2026-01-14',
+        result: [{ reference: 'Observation/single-tsh' }],
+      }],
+      observations: [{
+        id: 'single-tsh', code: { text: 'TSH' }, effectiveDateTime: '2026-01-14',
+        valueQuantity: { value: 8.2, unit: 'mIU/L' },
+      }],
+    }
+    const catalog = buildSourceCatalog(input as never)
+    const source = catalog.find((entry) => entry.resourceId === 'single-tsh')!
+    const context = buildLongitudinalInvestigationContext(input as never, catalog)
+    expect(context).toContain(`TSH: 8.2 mIU/L (2026-01-14; ${source.key})`)
+    expect(context).toContain('A single dated value is evidence, not a missing test')
+    expect(context.split('\n').find((line) => line.startsWith('- TSH:'))).not.toContain('→')
+  })
+
   it('surfaces serial labs and imaging from all available reports so they are not labeled single', () => {
     const bridgeLabMeta = { meta: { source: 'nhi-fhir-bridge/scraper' } }
     const input = {
