@@ -96,7 +96,8 @@ describe('HTN baseline-risk facts for the pack', () => {
     const field = (inputs: CalcValues, smokingCurrent?: 'yes' | 'no') => buildPreventReading(p, record, inputs, undefined, smokingCurrent ? { smokingCurrent } : {}).fields.find((item) => item.input.key === 'smoking')!
     expect(field({}, 'yes')).toMatchObject({ value: 'yes', source: 'record' })
     expect(field({ smoking: 'no' }, 'yes')).toMatchObject({ value: 'no', source: 'physician' })
-    expect(field({})).toMatchObject({ value: '', source: 'none' })
+    // Nothing anywhere: the rule's 「否」 (owner 2026-11-16).
+    expect(field({})).toMatchObject({ value: 'no', source: 'record' })
   })
 
   it('offers the value column of the 計算機 list for the HTN page', () => {
