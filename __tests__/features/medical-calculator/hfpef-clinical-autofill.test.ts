@@ -127,3 +127,24 @@ describe('NYHA from the CDSS, and BMI as reported', () => {
     expect(autofill.resolve({ kind: 'bmi' })?.value).toBe(32.8)
   })
 })
+
+// Owner 2026-11-16: STOP-Bang's P is prefilled — a hypertension code counts as
+// 「是」, and so does one current antihypertensive (not the HFpEF ≥2 count).
+describe('hypertension for STOP-Bang P', () => {
+  test.each(['I10', 'I11.9', 'I12.9', 'I13.0', 'I15.0', 'I16.0', '401.9', '405.99'])('code %s answers 「是」 from the diagnosis', (code) => {
+    expect(buildClinicalSelects([], [], now, [dx(code)]).hypertension).toMatchObject({ value: 'yes', resourceType: 'Condition' })
+  })
+  test('one current antihypertensive is 「是」 where the HFpEF count stays 「否」', () => {
+    const result = buildClinicalSelects([], [drug('amlodipine 5mg')], now)
+    expect(result.hypertension).toMatchObject({ value: 'yes', resourceType: 'MedicationRequest' })
+    expect(result.antihypertensives?.value).toBe('no')
+  })
+  test('current prescriptions without one and no code are a labelled 「否」; no prescriptions say nothing', () => {
+    const off = buildClinicalSelects([], [drug('metformin')], now)
+    expect(off.hypertension).toMatchObject({ value: 'no' })
+    expect(off.hypertension?.testName).toContain('請核對')
+    expect(buildClinicalSelects([], [], now).hypertension).toBeUndefined()
+    expect(buildClinicalSelects([], [drug('metformin')], now, [dx('I10')]).hypertension?.value).toBe('yes')
+    expect(buildClinicalSelects([], [drug('timolol eye drops')], now).hypertension?.value).toBe('no')
+  })
+})

@@ -84,9 +84,10 @@ describe('STOP-Bang (Chung 2016)', () => {
     expect(settled.band).toBeUndefined()
     expect(calculateStopBang({ snoring: 'yes', tired: 'no', observed: 'no', pressure: 'no', bmi: '', age: '60', neck: '41', sex: 'female' })).toMatchObject({ score: 3, upperBound: 4, band: 'intermediate' })
   })
-  it('is in the catalog with A, G, B from the record and P asked, never read off the ≥2-drug rule', () => {
+  it('is in the catalog with P, A, G, B from the record, P from the hypertension select, never the ≥2-drug rule', () => {
     expect(CALCULATORS.filter((c) => c.id === 'stop-bang')).toHaveLength(1)
     const sources = Object.fromEntries(STOP_BANG.inputs.map((input) => [input.key, input.source?.kind]))
-    expect(sources).toMatchObject({ pressure: undefined, age: 'age', sex: 'sex', bmi: 'bmi', neck: undefined, snoring: undefined })
+    expect(sources).toMatchObject({ pressure: 'hfpefClinical', age: 'age', sex: 'sex', bmi: 'bmi', neck: undefined, snoring: undefined })
+    expect(STOP_BANG.inputs.find((input) => input.key === 'pressure')?.source).toEqual({ kind: 'hfpefClinical', key: 'hypertension' })
   })
 })
