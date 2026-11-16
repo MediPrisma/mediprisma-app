@@ -9,6 +9,7 @@ import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '../interceptors/intr
 import { withOpenAiStatelessResponses } from '../streaming/openai-stateless.middleware'
 import { withGeminiThinkingLevel } from '../streaming/gemini-thinking.middleware'
 import { withModelReasoningDefaults } from '../streaming/model-reasoning.middleware'
+import { withClaudeThinkingDefault } from '../interceptors/claude-thinking-fetch'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -106,7 +107,7 @@ export class AiProviderFactory {
       const sdk = createAnthropic({
         baseURL: proxyUrl,
         apiKey: 'proxy', // Dummy key required by SDK
-        fetch: customFetch,
+        fetch: withClaudeThinkingDefault(customFetch, definition.thinkingMode),
       })
       return { model: sdk(modelId), isGemini: false }
     }
@@ -139,6 +140,7 @@ export class AiProviderFactory {
     if (provider === 'claude') {
       const sdk = createAnthropic({
         apiKey,
+        fetch: withClaudeThinkingDefault(globalThis.fetch, definition.thinkingMode),
         // Anthropic blocks browser-origin calls unless explicitly opted in;
         // BYO-key direct mode runs in the browser by design here
         headers: { 'anthropic-dangerous-direct-browser-access': 'true' },

@@ -29,7 +29,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     mockStreamText.mockReturnValue({ textStream: textStream('hello') })
   })
 
-  it('lets Haiku low think past 60 seconds before its first visible token', async () => {
+  it('uses the normal 60-second idle limit for Haiku without hidden thinking', async () => {
     jest.useFakeTimers()
     try {
       mockStreamText.mockReturnValue({ textStream: (async function* () {
@@ -41,9 +41,10 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
       const run = adapter.stream({ model: 'claude-haiku-5-5', apiKey: 'test-key',
         messages: [{ role: 'user', content: 'Synthetic only.' }],
         signal: new AbortController().signal, onChunk })
-      await jest.advanceTimersByTimeAsync(82_001)
-      await run
-      expect(onChunk).toHaveBeenCalledWith('summary')
+      const outcome = expect(run).rejects.toThrow(/timed out/i)
+      await jest.advanceTimersByTimeAsync(60_001)
+      await outcome
+      expect(onChunk).not.toHaveBeenCalled()
     } finally { jest.useRealTimers() }
   })
 

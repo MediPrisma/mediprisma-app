@@ -43,6 +43,7 @@ import {
 import { buildOverviewSnapshot } from '@/src/core/use-cases/medical-summary/overview-snapshot'
 import { buildReportDigest, sentReportKeys } from '@/src/core/use-cases/medical-summary/report-digest'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
+import { withHaikuSummaryEvidenceCheck } from '@/src/core/use-cases/medical-summary/haiku-summary-policy'
 import type {
   MedicalSummaryCardErrors,
   MedicalSummaryCardId,
@@ -472,7 +473,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       modelName: ctx.modelName,
       locale: ctx.locale,
       buildRequest: (fittedClinicalContext) => {
-        const messages = request.buildMessages(fittedClinicalContext)
+        const messages = withHaikuSummaryEvidenceCheck(request.buildMessages(fittedClinicalContext), ctx.modelId)
         return {
           request: messages,
           requestText: messages.map((message) => message.content).join('\n\n'),
