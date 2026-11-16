@@ -169,5 +169,9 @@ describe('PCE history and drug questions from the record', () => {
       expect(result[key]?.testName).toContain('預設否')
     }
     expect(buildClinicalSelects([], [drug('timolol eye drops')], now).pceBpTreat?.value).toBe('no')
+    // Eye drops and topicals are not antihypertensive treatment.
+    expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).pceBpTreat?.value).toBe('no')
+    expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).pceBpTreat?.value).toBe('no')
+    expect(buildClinicalSelects([], [drug('betaxolol 20mg tablet')], now).pceBpTreat?.value).toBe('yes')
   })
 })
