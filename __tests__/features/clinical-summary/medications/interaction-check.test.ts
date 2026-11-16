@@ -319,6 +319,17 @@ describe('drugs whose supply has run out', () => {
     expect(plan.items).toEqual([{ query: 'Valsartan', rowIds: ['val'] }, { query: 'Spironolactone', rowIds: ['spiro'] }])
   })
 
+  it('lets a later fill replace the visit record, and not a cancelled renewal', () => {
+    const plan = planInteractionCheck([
+      hospital('val-visit', 'Valsartan', ended('2026-11-05', { drugKey: 'val', isChronic: true, startedOnIso: '2026-10-07' })),
+      hospital('val-fill', 'Valsartan', { drugKey: 'val', startedOnIso: '2026-10-07', dispensedOnIso: '2026-11-04' }),
+      cloud('warf', 'WARFARIN SODIUM 1 MG', ended('2026-11-08', { drugKey: 'warf' })),
+      cloud('warf-new', 'WARFARIN SODIUM 1 MG', { drugKey: 'warf', status: 'cancelled', isInactive: true, startedOnIso: '2026-11-16' }),
+    ], now)
+    expect(plan.items).toEqual([{ query: 'Valsartan', rowIds: ['val-fill'] }, { query: 'WARFARIN SODIUM', rowIds: ['warf'] }])
+    expect(plan.endedRowIds).toEqual(['warf'])
+  })
+
   it('marks a pair with an ended side, lists it after current pairs, and not when a current row shares it', () => {
     const list = [
       cloud('warf', 'WARFARIN SODIUM 1 MG', ended('2026-11-10')),

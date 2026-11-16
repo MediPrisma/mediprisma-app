@@ -409,6 +409,7 @@ export function useMedicationRows(
         totalQuantity,
         startedOn: sourceCalendarDate(startDateRaw),
         dispensedOn: refillDispenseDay ? sourceCalendarDate(refillDispenseDay) : undefined,
+        dispensedOnIso: refillDispenseDay ? isoCalendarDay(refillDispenseDay) : undefined,
         stoppedOn: stopDateRaw ? sourceCalendarDate(stopDateRaw) : undefined,
         durationDays,
         endDate: endDate ? sourceCalendarDate(endDate) : undefined,

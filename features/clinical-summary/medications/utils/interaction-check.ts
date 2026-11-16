@@ -125,16 +125,19 @@ export function planInteractionCheck(rows: MedicationRow[], nowMs = Date.now()):
   const localRowIds: string[] = []
   const endedRowIds: string[] = []
   const today = medicationClinicalDay(nowMs) ?? ''
-  // A newer record of the same drug — the renewal, or a later fill — replaces
-  // an older one, which would otherwise make a same-visit pair look cross-visit.
+  // A newer record of the same drug — the renewal, or a later fill, which keeps
+  // the visit's date and has its own dispense day — replaces an older one,
+  // which would otherwise make a same-visit pair look cross-visit. An order
+  // that was cancelled or never issued replaces nothing.
+  const supplyStart = (row: MedicationRow) => row.dispensedOnIso ?? row.startedOnIso ?? ''
   const newest = new Map<string, string>()
   for (const row of rows) {
     const key = row.drugKey ?? row.title
-    if ((row.startedOnIso ?? '') > (newest.get(key) ?? '')) newest.set(key, row.startedOnIso ?? '')
+    if (!STOPPED.has(row.status) && supplyStart(row) > (newest.get(key) ?? '')) newest.set(key, supplyStart(row))
   }
   for (const row of rows) {
     if (row.isInactive
-      && ((row.startedOnIso ?? '') < (newest.get(row.drugKey ?? row.title) ?? '') || !stillChecked(row, today))) continue
+      && (supplyStart(row) < (newest.get(row.drugKey ?? row.title) ?? '') || !stillChecked(row, today))) continue
     if (isLocalPreparation(row)) {
       if (!row.isInactive) localRowIds.push(row.id)
       continue
