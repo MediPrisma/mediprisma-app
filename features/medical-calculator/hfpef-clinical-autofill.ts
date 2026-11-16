@@ -8,7 +8,7 @@ import type { DoacPatientKey } from './doac-patient-autofill'
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'hypertension' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'antihypertensiveAny' | 'hypertension' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -181,10 +181,15 @@ const isHypertensionCode = (code: string) => /^I1[0-6]/.test(code) || /^40[1-5]/
  * record lists current prescriptions, none of them antihypertensive, and no
  * hypertension code; the clinician can change it.
  */
+/** Any one current antihypertensive (PREVENT's and PCE's 「目前使用降血壓藥」); not the HFpEF ≥2 count. */
+function antihypertensiveAnySelect(medications: MedicationEntity[], now: Date): ClinicalSelectValue | undefined {
+  return drugClassSelect(medications, now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+}
+
 function hypertensionSelect(medications: MedicationEntity[], now: Date, conditions: ConditionEntity[], encounters: EncounterEntity[]): ClinicalSelectValue | undefined {
   const code = diagnosisSelect(conditions, encounters, now, isHypertensionCode, '高血壓')
   if (code) return code
-  const drug = drugClassSelect(medications, now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+  const drug = antihypertensiveAnySelect(medications, now)
   if (drug?.value === 'no') return { ...drug, testName: '未見高血壓診斷碼，目前有效處方也未見降血壓藥（依處方推算，請核對）' }
   return drug
 }
@@ -244,6 +249,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
   const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
   const hypertension = hypertensionSelect(medications, now, conditions, encounters)
+  const antihypertensiveAny = antihypertensiveAnySelect(medications, now)
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
@@ -253,6 +259,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     afHistory,
     antihypertensives: antihypertensiveSelect(medications, now),
     ...(hypertension ? { hypertension } : {}),
+    ...(antihypertensiveAny ? { antihypertensiveAny } : {}),
     ...(diabetes ? { diabetes } : {}),
     ...(copd ? { copd } : {}),
     ...(betaBlocker ? { betaBlocker } : {}),

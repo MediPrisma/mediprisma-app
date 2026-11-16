@@ -20,7 +20,7 @@ const fact = (zh: string, date?: string) => ({ zh, en: zh, ...(date ? { date } :
 const record: Autofill = {
   sex: 'male',
   clinicalSelects: {
-    antihypertensives: { value: 'yes', date: '2026-10-28', testName: '降血壓藥處方供藥中（amlodipine）' },
+    antihypertensiveAny: { value: 'yes', date: '2026-10-28', testName: '降血壓藥處方供藥中（amlodipine）' },
   },
   resolve: (source?: AutofillSource) => {
     if (!source) return undefined
@@ -64,7 +64,8 @@ describe('shared risk inputs', () => {
     expect(field('tc')).toMatchObject({ value: '213', origin: 'record', detail: { zh: '病歷：Cholesterol total' }, date: '2026-10-20' })
     expect(field('sex')).toMatchObject({ value: 'male', origin: 'record' })
     expect(field('age')).toMatchObject({ value: '58', origin: 'record' })
-    expect(field('cvd')).toMatchObject({ value: '', origin: 'none', locked: false })
+    // Owner 2026-11-16: no code and no prescription is a prefilled 「否」.
+    expect(field('cvd')).toMatchObject({ value: 'no', origin: 'rule', locked: false, detail: { zh: '規則：病歷未見相關診斷碼或處方，預設否（請核對）' } })
     expect(field('waist')).toMatchObject({ value: '92', origin: 'record' })
   })
 

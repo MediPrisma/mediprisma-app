@@ -148,3 +148,11 @@ describe('hypertension for STOP-Bang P', () => {
     expect(buildClinicalSelects([], [drug('timolol eye drops')], now).hypertension?.value).toBe('no')
   })
 })
+
+describe('any current antihypertensive for PREVENT and PCE', () => {
+  test('one drug is 「是」, prescriptions without one are 「否」, none say nothing', () => {
+    expect(buildClinicalSelects([], [drug('amlodipine 5mg')], now).antihypertensiveAny).toMatchObject({ value: 'yes' })
+    expect(buildClinicalSelects([], [drug('metformin')], now).antihypertensiveAny).toMatchObject({ value: 'no' })
+    expect(buildClinicalSelects([], [], now).antihypertensiveAny).toBeUndefined()
+  })
+})
