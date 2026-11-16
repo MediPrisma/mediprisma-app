@@ -110,7 +110,7 @@ function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
   const asked = words(query)
   return asked.length > 0
     && asked.every((word, index) => known.has(word) || known.has(ABBREVIATIONS[word] ?? '')
-      || (index > 0 && !IONS.has(asked[0]) && SALT_SUFFIXES.has(word)))
+      || (index > 0 && !IONS.has(asked[0] ?? '') && SALT_SUFFIXES.has(word)))
 }
 
 const AVOID = /不可併用|禁止併用|避免併用|不宜併用|不建議併用|禁忌/
