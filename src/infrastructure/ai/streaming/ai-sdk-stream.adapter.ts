@@ -146,7 +146,7 @@ export class AiSdkStreamAdapter {
     const idleTimeoutMs = config.idleTimeoutMs ?? (
       isCustom
         ? OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS
-        : resolveStreamIdleTimeoutMs()
+        : resolveStreamIdleTimeoutMs(definition.streamIdleTimeoutMs)
     )
     let fullText = ""
     try {
