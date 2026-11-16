@@ -24,6 +24,32 @@ const alert = (a: string, b: string, severity: string, nursingAction: string, ty
 })
 
 describe('planInteractionCheck', () => {
+  it('leaves skin and ear preparations out, and keeps eye drops, patches and gelatin capsules in', () => {
+    const plan = planInteractionCheck([
+      cloud('oint', 'NEOMYCIN (SULFATE) 3.5 MG/GM+BACITRACIN ZINC 500 U/GM', { secondaryTitle: 'B. &N. BACINEOCIN OINTMENT' }),
+      cloud('cream', 'KETOCONAZOLE 20 MG/GM', { drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's', ingredientText: 'KETOCONAZOLE 20 MG/GM', doseForm: '乳膏劑' } }),
+      cloud('ear', 'OFLOXACIN 3 MG/ML', { secondaryTitle: 'Tarivid Otic Solution' }),
+      cloud('eye', 'TIMOLOL 5 MG/ML', { secondaryTitle: 'Timolol Ophthalmic Solution' }),
+      cloud('patch', 'FENTANYL 12 MCG/HR', { secondaryTitle: 'Durogesic Transdermal Patch' }),
+      cloud('cap', 'OMEPRAZOLE 20 MG', { secondaryTitle: 'Gelatin Capsules' }),
+    ])
+    expect(plan.localRowIds).toEqual(['oint', 'cream', 'ear'])
+    expect(plan.items.map(item => item.query)).toEqual(['TIMOLOL', 'FENTANYL', 'OMEPRAZOLE'])
+  })
+
+  it('keeps eye gels and eye ointments in, and reads the TOP route and 耳用 form as local', () => {
+    const term = (ingredientText: string, doseForm: string) =>
+      ({ drugTerminology: { source: 'nhi-official-drug-master' as const, snapshotId: 's', ingredientText, doseForm } })
+    const plan = planInteractionCheck([
+      cloud('eye-gel', 'TIMOLOL 1 MG/GM', { secondaryTitle: 'Timolol Ophthalmic Gel', route: 'OPH', ...term('TIMOLOL 1 MG/GM', '眼用凝膠劑') }),
+      cloud('eye-oint', 'TOBRAMYCIN 3 MG/GM', { secondaryTitle: 'Tobrex Eye Ointment' }),
+      cloud('top', 'CLOBETASOL 0.5 MG/ML', { route: 'TOP' }),
+      cloud('ear', 'OFLOXACIN 3 MG/ML', { route: '耳用', ...term('OFLOXACIN 3 MG/ML', '耳用液劑') }),
+    ])
+    expect(plan.localRowIds).toEqual(['top', 'ear'])
+    expect(plan.items.map(item => item.query)).toEqual(['TIMOLOL', 'TOBRAMYCIN'])
+  })
+
   it('sends ingredient names without strength, one entry per ingredient', () => {
     const plan = planInteractionCheck([
       cloud('c1', 'TRAMADOL HCL 37.5 MG+ACETAMINOPHEN (=PARACETAMOL) 325 MG'),
@@ -58,7 +84,7 @@ describe('planInteractionCheck', () => {
     const plan = planInteractionCheck([
       row('x', { dataOrigin: 'hospital', hospitalMedicationName: { status: 'unresolved', version: 'v', reviewedAt: 'd' } }),
     ])
-    expect(plan).toEqual({ items: [], unnamedRowIds: ['x'] })
+    expect(plan).toEqual({ items: [], unnamedRowIds: ['x'], localRowIds: [] })
   })
 })
 
@@ -249,7 +275,7 @@ describe('attentionFindings', () => {
   it('keeps every cross-visit pair and same-visit avoid pairs', () => {
     const review = {
       findings: [f('1', 'avoid', true), f('2', 'act', true), f('3', 'note', true), f('4', 'note', false), f('5', 'act', false)],
-      checkedRowIds: [], uncheckedRowIds: [],
+      checkedRowIds: [], uncheckedRowIds: [], localRowIds: [],
     }
     expect(attentionFindings(review).map(x => x.id)).toEqual(['1', '4', '5'])
   })

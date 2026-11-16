@@ -124,6 +124,7 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
           </ul>
         </div>
       )}
+      <LocalPreparationNote rowIds={review.localRowIds} rows={rows} className="mx-2.5 my-2" />
       {rest.length > 0 && (
         <div className="border-t border-border/60">
           <button
@@ -139,5 +140,19 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
         </div>
       )}
     </section>
+  )
+}
+
+/** One quiet line naming the skin and ear preparations left out of the check,
+ *  each name once. Shown whether or not the check could run. */
+export function LocalPreparationNote({ rowIds, rows, className }: { rowIds: string[]; rows: MedicationRow[]; className?: string }) {
+  const { locale } = useLanguage()
+  const byId = new Map(rows.map(row => [row.id, row]))
+  const names = [...new Set(rowIds.map(id => byId.get(id)?.title).filter((title): title is string => !!title))]
+  if (!names.length) return null
+  return (
+    <p className={cn('break-words', meta, className)}>
+      {locale === 'en' ? `Skin and ear preparations not checked: ${names.join(', ')}` : `外用藥不列入檢核：${names.join('、')}`}
+    </p>
   )
 }
