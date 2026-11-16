@@ -139,11 +139,11 @@ describe('hypertension for STOP-Bang P', () => {
     expect(result.hypertension).toMatchObject({ value: 'yes', resourceType: 'MedicationRequest' })
     expect(result.antihypertensives?.value).toBe('no')
   })
-  test('current prescriptions without one and no code are a labelled 「否」; no prescriptions say nothing', () => {
+  test('no code and no antihypertensive is a labelled 「否」, even with no prescriptions at all', () => {
     const off = buildClinicalSelects([], [drug('metformin')], now)
     expect(off.hypertension).toMatchObject({ value: 'no' })
     expect(off.hypertension?.testName).toContain('請核對')
-    expect(buildClinicalSelects([], [], now).hypertension).toBeUndefined()
+    expect(buildClinicalSelects([], [], now).hypertension).toMatchObject({ value: 'no' })
     expect(buildClinicalSelects([], [drug('metformin')], now, [dx('I10')]).hypertension?.value).toBe('yes')
     expect(buildClinicalSelects([], [drug('timolol eye drops')], now).hypertension?.value).toBe('no')
   })
@@ -154,5 +154,28 @@ describe('any current antihypertensive for PREVENT and PCE', () => {
     expect(buildClinicalSelects([], [drug('amlodipine 5mg')], now).antihypertensiveAny).toMatchObject({ value: 'yes' })
     expect(buildClinicalSelects([], [drug('metformin')], now).antihypertensiveAny).toMatchObject({ value: 'no' })
     expect(buildClinicalSelects([], [], now).antihypertensiveAny).toBeUndefined()
+  })
+})
+
+// Owner 2026-11-16: PCE's four questions read the record — a code or a
+// prescription is 「是」, none is 「否」, never 未確認.
+describe('PCE history and drug questions from the record', () => {
+  test('codes and one antihypertensive answer 「是」', () => {
+    const result = buildClinicalSelects([], [drug('amlodipine 5mg')], now, [dx('E11.9'), dx('F17.210'), dx('I25.10')])
+    expect(result.pceBpTreat).toMatchObject({ value: 'yes', resourceType: 'MedicationRequest' })
+    expect(result.pceDiabetes).toMatchObject({ value: 'yes', resourceType: 'Condition' })
+    expect(result.pceSmoking).toMatchObject({ value: 'yes', resourceType: 'Condition' })
+    expect(result.pceAscvd).toMatchObject({ value: 'yes', resourceType: 'Condition' })
+  })
+  test.each(['I21.4', 'I63.9', 'G45.9', 'I70.21', 'I73.9', '414.01', '434.91'])('ASCVD code %s is 「是」', (code) => {
+    expect(buildClinicalSelects([], [], now, [dx(code)]).pceAscvd?.value).toBe('yes')
+  })
+  test('nothing in the record is a labelled 「否」 for all four', () => {
+    const result = buildClinicalSelects([], [], now, [dx('I10')])
+    for (const key of ['pceBpTreat', 'pceDiabetes', 'pceSmoking', 'pceAscvd'] as const) {
+      expect(result[key]).toMatchObject({ value: 'no' })
+      expect(result[key]?.testName).toContain('預設否')
+    }
+    expect(buildClinicalSelects([], [drug('timolol eye drops')], now).pceBpTreat?.value).toBe('no')
   })
 })
