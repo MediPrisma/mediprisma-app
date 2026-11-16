@@ -8,7 +8,7 @@ import type { DoacPatientKey } from './doac-patient-autofill'
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'hypertension' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -189,6 +189,25 @@ function hypertensionSelect(medications: MedicationEntity[], now: Date, conditio
   return drug
 }
 
+/** ICD-10 F17 nicotine dependence, Z72.0 tobacco use, Z87.891 history excluded; ICD-9 305.1. */
+const isSmokingCode = (code: string) => /^F17/.test(code) || /^Z720/.test(code) || /^3051/.test(code)
+/**
+ * ASCVD as PCE reads it: coronary disease (ICD-10 I20–I25), stroke or TIA
+ * (I63, I64, I69.3, G45), peripheral artery disease (I70.2, I73.9); ICD-9
+ * 410–414, 433–434, 435, 438, 440.2, 443.9.
+ */
+const isAscvdCode = (code: string) => /^I2[0-5]/.test(code) || /^I6[34]/.test(code) || /^I693/.test(code) || /^G45/.test(code)
+  || /^I702/.test(code) || /^I739/.test(code) || /^41[0-4]/.test(code) || /^43[3-58]/.test(code) || /^4402/.test(code) || /^4439/.test(code)
+
+/**
+ * Owner 2026-11-16: a calculator's history or drug question is 「是」 when the
+ * record shows the code or the prescription and 「否」 when it does not — never
+ * left 未確認. The clinician changes it where the record is wrong.
+ */
+function defaultNo(found: ClinicalSelectValue | undefined, now: Date, missing: string): ClinicalSelectValue {
+  return found?.value === 'yes' ? found : { value: 'no', date: now.toISOString().slice(0, 10), testName: `${missing}（預設否，請核對）` }
+}
+
 const BETA_BLOCKERS = ['bisoprolol', 'carvedilol', 'metoprolol', 'atenolol', 'nebivolol', 'propranolol', 'labetalol', 'acebutolol', 'betaxolol', 'nadolol', 'pindolol', 'bucindolol']
 const ACEI_ARB = ['captopril', 'enalapril', 'lisinopril', 'ramipril', 'perindopril', 'benazepril', 'fosinopril', 'imidapril', 'quinapril', 'cilazapril', 'trandolapril', 'losartan', 'valsartan', 'candesartan', 'irbesartan', 'telmisartan', 'olmesartan', 'azilsartan', 'eprosartan']
 
@@ -243,8 +262,13 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const blocksNegativeAf = uncertainAf || unclassifiedAf
   const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
   const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
-  const hypertension = hypertensionSelect(medications, now, conditions, encounters)
+  const hypertension = defaultNo(hypertensionSelect(medications, now, conditions, encounters), now, '病歷未見高血壓診斷碼，目前有效處方也未見降血壓藥')
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
+  // PCE's four history and drug questions (owner 2026-11-16).
+  const pceBpTreat = defaultNo(drugClassSelect(medications, now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
+  const pceDiabetes = defaultNo(diabetes, now, '病歷未見糖尿病診斷碼')
+  const pceSmoking = defaultNo(diagnosisSelect(conditions, encounters, now, isSmokingCode, '吸菸'), now, '病歷未見吸菸診斷碼')
+  const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD '), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
   const aceiArb = drugClassSelect(medications, now, ACEI_ARB, /^C09/, ' ACEI／ARB')
@@ -252,7 +276,8 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...ecg,
     afHistory,
     antihypertensives: antihypertensiveSelect(medications, now),
-    ...(hypertension ? { hypertension } : {}),
+    hypertension,
+    pceBpTreat, pceDiabetes, pceSmoking, pceAscvd,
     ...(diabetes ? { diabetes } : {}),
     ...(copd ? { copd } : {}),
     ...(betaBlocker ? { betaBlocker } : {}),
