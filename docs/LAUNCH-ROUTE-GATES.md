@@ -284,3 +284,9 @@ eligibility is preserved. No previously visible clinical surface is removed.
 | HF 「整理模型資料」 button | Replaced by automatic local preparation when the detail opens (no network request) and a 「重新整理」 link in step 1. Nothing is sent until 「執行 HF 模型預測」. | Every route where the HF research calculator is available. | Explicit chat request, 2026-10-07 |
 
 Automatic source resolution also retains active Condition/Allergy evidence when update ordering is absent, never groups different resource identities by imported modifier labels, and redirects duplicate-include references to the selected version. Background refreshes keep the previous complete snapshot within the same patient and lifecycle scope until all updated searches settle. Missing medication content is stated neutrally; it does not create a reconciliation banner or task.
+
+## Intranet Luna development routes (2026-11-17)
+
+| Surface | Behaviour | Routes | Owner decision |
+|---|---|---|---|
+| Hospital Azure Luna transport | Available only with configured intranet origin and exactly one `site=vghtpe`. Production `/app` and its subpaths cannot use the hospital gateway; ordinary cloud/personal-key model access follows its existing policy. | Retained on `/app-staging` and `/app-hmc`, including their subpaths. Only `/app-hmc` retains its existing hospital launch default. | Owner explicitly limited hospital Luna to these development routes in chat, 2026-11-17. |
