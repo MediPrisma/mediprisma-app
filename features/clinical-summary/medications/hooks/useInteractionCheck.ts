@@ -26,8 +26,9 @@ export type InteractionCheckState =
   | { status: 'off' }
   /** Medication list not loaded yet, or the request is in flight. */
   | { status: 'loading' }
-  /** Fewer than two ingredient names to send. */
-  | { status: 'too-few' }
+  /** Fewer than two ingredient names to send. `localRowIds` are the skin and
+   *  ear preparations left out, which still need naming. */
+  | { status: 'too-few'; localRowIds: string[] }
   /** Chrome refused this page access to the hospital network. */
   | { status: 'blocked' }
   | { status: 'unreachable'; reason: 'timeout' | 'network' | 'http' }
@@ -105,7 +106,7 @@ export function useRunInteractionCheck(rows: MedicationRow[], options: { enabled
   const state = useMemo<InteractionCheckState>(() => {
     if (!enabled || !origin) return { status: 'off' }
     if (!ready) return { status: 'loading' }
-    if (plan.items.length < 2) return { status: 'too-few' }
+    if (plan.items.length < 2) return { status: 'too-few', localRowIds: plan.localRowIds }
     if (!result || result.key !== key || result.attempt !== attempt) return { status: 'loading' }
     const { outcome } = result
     if (outcome.kind === 'blocked') return { status: 'blocked' }
