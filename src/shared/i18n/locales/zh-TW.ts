@@ -1227,6 +1227,7 @@ export const zhTW = {
     terminologySource: '健保署藥品主檔補充',
     terminologySourceTooltip: 'App 依健保藥品碼與處方日期，對照鎖定版本的官方藥品主檔；這些資訊不是來源紀錄提供的結構化欄位。',
     terminologyIngredientLabel: '成分／含量',
+    terminologyOfficialIngredientLabel: '已依勘誤更正，藥典原值',
     terminologyOfficialNameZhLabel: '中文品名',
     terminologyOfficialNameEnLabel: '英文品名',
     terminologyDoseFormLabel: '劑型',
