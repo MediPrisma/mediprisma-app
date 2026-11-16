@@ -19,6 +19,8 @@ export interface InteractionCheckPlan {
   items: InteractionCheckItem[]
   /** Current rows with no ingredient name to send. */
   unnamedRowIds: string[]
+  /** Current skin and ear preparations, left out of the check. */
+  localRowIds: string[]
 }
 
 export type InteractionTier = 'avoid' | 'act' | 'note'
@@ -43,6 +45,8 @@ export interface InteractionReview {
   findings: InteractionFinding[]
   checkedRowIds: string[]
   uncheckedRowIds: string[]
+  /** Skin and ear preparations, not sent: see isLocalPreparation. */
+  localRowIds: string[]
 }
 
 // A strength is a number with a unit. A number inside the name stays:
@@ -67,11 +71,28 @@ function rowIngredients(row: MedicationRow): string[] {
   return hospital?.status === 'normalized' ? ingredientNames(hospital.ingredientName) : []
 }
 
+// Skin and ear preparations (owner decision 2026-11-16): the service matches
+// an ingredient to the hospital's systemic product, so a neomycin ointment
+// reads as neomycin capsules and draws their kidney warning. Eye drops,
+// inhalers, suppositories and patches stay in — timolol drops and fentanyl
+// patches act systemically. 「gel」 as a word only: a gelatin capsule is oral.
+const LOCAL = /cream|ointment|\bgel\b|lotion|shampoo|topical|\botic\b|ear\s*drop|乳膏|軟膏|凝膠|洗髮|外用|耳滴/i
+
+export function isLocalPreparation(row: MedicationRow): boolean {
+  return LOCAL.test([row.secondaryTitle, row.title, row.drugTerminology?.doseForm, row.drugTerminology?.officialNameEn, row.route]
+    .filter(Boolean).join(' '))
+}
+
 export function planInteractionCheck(rows: MedicationRow[]): InteractionCheckPlan {
   const byQuery = new Map<string, InteractionCheckItem>()
   const unnamedRowIds: string[] = []
+  const localRowIds: string[] = []
   for (const row of rows) {
     if (row.isInactive) continue
+    if (isLocalPreparation(row)) {
+      localRowIds.push(row.id)
+      continue
+    }
     const names = rowIngredients(row)
     if (!names.length) unnamedRowIds.push(row.id)
     for (const name of names) {
@@ -81,7 +102,7 @@ export function planInteractionCheck(rows: MedicationRow[]): InteractionCheckPla
       byQuery.set(key, item)
     }
   }
-  return { items: [...byQuery.values()], unnamedRowIds }
+  return { items: [...byQuery.values()], unnamedRowIds, localRowIds }
 }
 
 export function interactionCheckBody(plan: InteractionCheckPlan) {
@@ -189,6 +210,7 @@ export function interpretInteractionCheck(
       TIER_ORDER[x.tier] - TIER_ORDER[y.tier] || Number(x.samePrescription) - Number(y.samePrescription)),
     checkedRowIds: [...checked],
     uncheckedRowIds: [...unchecked],
+    localRowIds: plan.localRowIds,
   }
 }
 

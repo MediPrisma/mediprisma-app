@@ -50,6 +50,7 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
   const primary = attentionFindings(review)
   const rest = review.findings.filter(f => !primary.includes(f))
   const unchecked = sides(review.uncheckedRowIds)
+  const local = [...new Set(sides(review.localRowIds).map(row => row.title))]
   const avoid = primary.filter(f => f.tier === 'avoid').length
   const checked = review.checkedRowIds.length
   const total = checked + unchecked.length
@@ -123,6 +124,11 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
             ))}
           </ul>
         </div>
+      )}
+      {local.length > 0 && (
+        <p className={cn('mx-2.5 my-2 break-words', meta)}>
+          {en ? `Skin and ear preparations not checked: ${local.join(', ')}` : `外用藥不列入檢核：${local.join('、')}`}
+        </p>
       )}
       {rest.length > 0 && (
         <div className="border-t border-border/60">
