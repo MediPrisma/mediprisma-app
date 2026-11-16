@@ -86,7 +86,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     const adapter = new AiSdkStreamAdapter({ create } as any)
 
     await adapter.stream({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey,
       signal: new AbortController().signal,
@@ -94,7 +94,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     })
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-hydrogen',
       apiKey: apiKey ?? undefined,
       useProxy,
     }))

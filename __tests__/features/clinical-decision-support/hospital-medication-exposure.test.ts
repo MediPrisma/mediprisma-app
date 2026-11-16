@@ -2,7 +2,7 @@ import { CARE_PACKS } from '@voho0000/personalized-care'
 import { createFhirCdssPatientProfile, type FhirCdssProfileInput } from '@voho0000/personalized-care-fhir'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 import type { CdssLocale, CdssResult } from '@/features/clinical-decision-support/types'
-import { createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
+import { anticoagulationOnProfile, createHospitalAwareCdssPatientProfile } from '@/features/clinical-decision-support/utils/hospital-medication-profile'
 import { buildHospitalAwareCdssResult } from '@/features/clinical-decision-support/utils/hospital-medication-review'
 
 const now = new Date('2026-10-01T04:00:00Z')
@@ -126,6 +126,13 @@ describe('hospital prescription exposure review regressions', () => {
 
   it('does not declare OAC absent when an unresolved hospital ingredient might be an anticoagulant', () => {
     const profile = build([order('Unlisted tablet')])
+    // The OAC class facts mean 「已抗凝」 by their presence; an unidentified
+    // tablet must leave them absent while the classes stay uncertain.
+    expect(profile.facts.currentDoac).toBeUndefined()
+    expect(profile.facts.currentVitaminKAntagonist).toBeUndefined()
+    expect(profile.medicationClassContexts?.['direct-oral-anticoagulant']?.state).toBe('uncertain')
+    expect(profile.medicationClassContexts?.['vitamin-k-antagonist']?.state).toBe('uncertain')
+    expect(anticoagulationOnProfile(profile)).toBe(false)
     const recommendation = moduleOf(buildHospitalAwareCdssResult(afPack, profile, 'en'), 'af-anticoagulation-concordance')!
     expect(recommendation.status).toBe('needs-data')
     expect(recommendation.title).not.toMatch(/not taking/)

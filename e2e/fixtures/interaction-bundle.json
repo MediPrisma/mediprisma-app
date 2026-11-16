@@ -1,0 +1,916 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "identifier": {
+    "value": "SYNTHETIC-INTERACTION-NOT-A-REAL-PATIENT"
+  },
+  "timestamp": "2026-11-12T00:00:00Z",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "synthetic-interaction",
+        "name": [
+          {
+            "text": "交互作用範例（合成資料）"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1958-01-01"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "ix-hospital-visit",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "status": "finished",
+        "class": {
+          "code": "AMB"
+        },
+        "period": {
+          "start": "2026-11-10T09:30:00+08:00"
+        },
+        "serviceType": {
+          "text": "合成範例門診"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "ix-clinic-visit",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "status": "finished",
+        "class": {
+          "code": "AMB"
+        },
+        "period": {
+          "start": "2026-11-03"
+        },
+        "serviceProvider": {
+          "display": "合成範例診所;門診;0000000001"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "ix-cardio-visit",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "status": "finished",
+        "class": {
+          "code": "AMB"
+        },
+        "period": {
+          "start": "2026-10-27"
+        },
+        "serviceProvider": {
+          "display": "合成範例醫院;門診;0000000002"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "ix-hospital-tamoxifen",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "encounter": {
+          "reference": "Encounter/ix-hospital-visit"
+        },
+        "authoredOn": "2026-11-10",
+        "status": "active",
+        "intent": "order",
+        "identifier": [
+          {
+            "system": "urn:oid:vgh.medication.order",
+            "value": "IX-HOSPITAL-TAMOXIFEN"
+          }
+        ],
+        "requester": {
+          "display": "臺北榮總"
+        },
+        "medicationCodeableConcept": {
+          "text": "Tamoxifen (Nolvadex)* tab 10 mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.name",
+              "code": "Tamoxifen (Nolvadex)* tab 10 mg",
+              "display": "Tamoxifen (Nolvadex)* tab 10 mg"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "1 TAB PO BID",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "code": {
+                "text": "BID"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "TAB"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "ix-hospital-ciprofloxacin",
+        "meta": {
+          "source": "ehr-fhir-bridge/scraper"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "encounter": {
+          "reference": "Encounter/ix-hospital-visit"
+        },
+        "authoredOn": "2026-11-10",
+        "status": "active",
+        "intent": "order",
+        "identifier": [
+          {
+            "system": "urn:oid:vgh.medication.order",
+            "value": "IX-HOSPITAL-CIPROFLOXACIN"
+          }
+        ],
+        "requester": {
+          "display": "臺北榮總"
+        },
+        "medicationCodeableConcept": {
+          "text": "Ciprofloxacin \"Swiss\" *tab 250mg",
+          "coding": [
+            {
+              "system": "urn:oid:vgh.medication.name",
+              "code": "Ciprofloxacin \"Swiss\" *tab 250mg",
+              "display": "Ciprofloxacin \"Swiss\" *tab 250mg"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "1 TAB PO BID",
+            "route": {
+              "text": "PO"
+            },
+            "timing": {
+              "code": {
+                "text": "BID"
+              }
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "TAB"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "ix-paroxetine",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "encounter": {
+          "reference": "Encounter/ix-clinic-visit"
+        },
+        "authoredOn": "2026-11-03",
+        "status": "active",
+        "intent": "order",
+        "requester": {
+          "display": "合成範例診所;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "合成範例帕羅西汀錠２０毫克",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "SYN0000001",
+              "display": "SYNTHETIC PAROXETINE TABLETS 20MG"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "QD"
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 28
+          },
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "supportingInformation": [
+          {
+            "reference": "MedicationKnowledge/ix-mk-paroxetine"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationKnowledge",
+        "id": "ix-mk-paroxetine",
+        "meta": {
+          "source": "https://data.gov.tw/dataset/23715",
+          "tag": [
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot",
+              "code": "nhi-drug-terminology-20260728",
+              "display": "NHI drug terminology snapshot"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-master-effective-period",
+              "code": "from:2015-01-01",
+              "display": "Official drug record effective start"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot",
+              "code": "atc-hierarchy-2026",
+              "display": "ATC hierarchy snapshot (levels 2-4)"
+            },
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy",
+              "code": "latest-covered-record-atc-levels-2-4-v5",
+              "display": "Use the latest covered drug record for newer prescriptions"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/drug-terminology-record",
+            "value": "nhi-drug-terminology-20260728:SYN0000001:1"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "version": "nhi-drug-terminology-20260728",
+              "code": "SYN0000001",
+              "display": "SYNTHETIC PAROXETINE TABLETS 20MG"
+            }
+          ],
+          "text": "合成範例帕羅西汀錠２０毫克"
+        },
+        "synonym": [
+          "SYNTHETIC PAROXETINE TABLETS 20MG"
+        ],
+        "doseForm": {
+          "text": "錠劑"
+        },
+        "ingredient": [
+          {
+            "itemCodeableConcept": {
+              "text": "PAROXETINE HCL 20 MG"
+            }
+          }
+        ],
+        "medicineClassification": [
+          {
+            "type": {
+              "text": "Anatomical Therapeutic Chemical classification"
+            },
+            "classification": [
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "code": "N06AB05",
+                    "display": "paroxetine"
+                  }
+                ],
+                "text": "paroxetine"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "ix-warfarin",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "encounter": {
+          "reference": "Encounter/ix-clinic-visit"
+        },
+        "authoredOn": "2026-11-03",
+        "status": "active",
+        "intent": "order",
+        "requester": {
+          "display": "合成範例診所;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "合成範例華法林錠１毫克",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "SYN0000002",
+              "display": "SYNTHETIC WARFARIN TABLETS 1MG"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "QD"
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 28
+          },
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "supportingInformation": [
+          {
+            "reference": "MedicationKnowledge/ix-mk-warfarin"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationKnowledge",
+        "id": "ix-mk-warfarin",
+        "meta": {
+          "source": "https://data.gov.tw/dataset/23715",
+          "tag": [
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot",
+              "code": "nhi-drug-terminology-20260728",
+              "display": "NHI drug terminology snapshot"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-master-effective-period",
+              "code": "from:2015-01-01",
+              "display": "Official drug record effective start"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot",
+              "code": "atc-hierarchy-2026",
+              "display": "ATC hierarchy snapshot (levels 2-4)"
+            },
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy",
+              "code": "latest-covered-record-atc-levels-2-4-v5",
+              "display": "Use the latest covered drug record for newer prescriptions"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/drug-terminology-record",
+            "value": "nhi-drug-terminology-20260728:SYN0000002:1"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "version": "nhi-drug-terminology-20260728",
+              "code": "SYN0000002",
+              "display": "SYNTHETIC WARFARIN TABLETS 1MG"
+            }
+          ],
+          "text": "合成範例華法林錠１毫克"
+        },
+        "synonym": [
+          "SYNTHETIC WARFARIN TABLETS 1MG"
+        ],
+        "doseForm": {
+          "text": "錠劑"
+        },
+        "ingredient": [
+          {
+            "itemCodeableConcept": {
+              "text": "WARFARIN SODIUM 1 MG"
+            }
+          }
+        ],
+        "medicineClassification": [
+          {
+            "type": {
+              "text": "Anatomical Therapeutic Chemical classification"
+            },
+            "classification": [
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "code": "B01AA03",
+                    "display": "warfarin"
+                  }
+                ],
+                "text": "warfarin"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "ix-unlisted",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "encounter": {
+          "reference": "Encounter/ix-clinic-visit"
+        },
+        "authoredOn": "2026-11-03",
+        "status": "active",
+        "intent": "order",
+        "requester": {
+          "display": "合成範例診所;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "合成範例未收載成分錠",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "SYN0000003",
+              "display": "SYNTHETIC UNLISTED TABLETS"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "QD"
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 28
+          },
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "supportingInformation": [
+          {
+            "reference": "MedicationKnowledge/ix-mk-unlisted"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationKnowledge",
+        "id": "ix-mk-unlisted",
+        "meta": {
+          "source": "https://data.gov.tw/dataset/23715",
+          "tag": [
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot",
+              "code": "nhi-drug-terminology-20260728",
+              "display": "NHI drug terminology snapshot"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-master-effective-period",
+              "code": "from:2015-01-01",
+              "display": "Official drug record effective start"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot",
+              "code": "atc-hierarchy-2026",
+              "display": "ATC hierarchy snapshot (levels 2-4)"
+            },
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy",
+              "code": "latest-covered-record-atc-levels-2-4-v5",
+              "display": "Use the latest covered drug record for newer prescriptions"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/drug-terminology-record",
+            "value": "nhi-drug-terminology-20260728:SYN0000003:1"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "version": "nhi-drug-terminology-20260728",
+              "code": "SYN0000003",
+              "display": "SYNTHETIC UNLISTED TABLETS"
+            }
+          ],
+          "text": "合成範例未收載成分錠"
+        },
+        "synonym": [
+          "SYNTHETIC UNLISTED TABLETS"
+        ],
+        "doseForm": {
+          "text": "錠劑"
+        },
+        "ingredient": [
+          {
+            "itemCodeableConcept": {
+              "text": "EXAMPLE UNLISTED INGREDIENT 5 MG"
+            }
+          }
+        ],
+        "medicineClassification": [
+          {
+            "type": {
+              "text": "Anatomical Therapeutic Chemical classification"
+            },
+            "classification": [
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "code": "V03AX",
+                    "display": "other therapeutic products"
+                  }
+                ],
+                "text": "other therapeutic products"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "ix-spironolactone",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "encounter": {
+          "reference": "Encounter/ix-cardio-visit"
+        },
+        "authoredOn": "2026-10-27",
+        "status": "active",
+        "intent": "order",
+        "requester": {
+          "display": "合成範例醫院;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "合成範例螺內酯錠２５毫克",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "SYN0000004",
+              "display": "SYNTHETIC SPIRONOLACTONE TABLETS 25MG"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "QD"
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 28
+          },
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "supportingInformation": [
+          {
+            "reference": "MedicationKnowledge/ix-mk-spironolactone"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationKnowledge",
+        "id": "ix-mk-spironolactone",
+        "meta": {
+          "source": "https://data.gov.tw/dataset/23715",
+          "tag": [
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot",
+              "code": "nhi-drug-terminology-20260728",
+              "display": "NHI drug terminology snapshot"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-master-effective-period",
+              "code": "from:2015-01-01",
+              "display": "Official drug record effective start"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot",
+              "code": "atc-hierarchy-2026",
+              "display": "ATC hierarchy snapshot (levels 2-4)"
+            },
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy",
+              "code": "latest-covered-record-atc-levels-2-4-v5",
+              "display": "Use the latest covered drug record for newer prescriptions"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/drug-terminology-record",
+            "value": "nhi-drug-terminology-20260728:SYN0000004:1"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "version": "nhi-drug-terminology-20260728",
+              "code": "SYN0000004",
+              "display": "SYNTHETIC SPIRONOLACTONE TABLETS 25MG"
+            }
+          ],
+          "text": "合成範例螺內酯錠２５毫克"
+        },
+        "synonym": [
+          "SYNTHETIC SPIRONOLACTONE TABLETS 25MG"
+        ],
+        "doseForm": {
+          "text": "錠劑"
+        },
+        "ingredient": [
+          {
+            "itemCodeableConcept": {
+              "text": "SPIRONOLACTONE 25 MG"
+            }
+          }
+        ],
+        "medicineClassification": [
+          {
+            "type": {
+              "text": "Anatomical Therapeutic Chemical classification"
+            },
+            "classification": [
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "code": "C03DA01",
+                    "display": "spironolactone"
+                  }
+                ],
+                "text": "spironolactone"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "ix-enalapril",
+        "meta": {
+          "source": "https://medcloud2.nhi.gov.tw/",
+          "tag": [
+            {
+              "system": "https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module",
+              "code": "imue0008"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/synthetic-interaction"
+        },
+        "encounter": {
+          "reference": "Encounter/ix-cardio-visit"
+        },
+        "authoredOn": "2026-10-27",
+        "status": "active",
+        "intent": "order",
+        "requester": {
+          "display": "合成範例醫院;門診"
+        },
+        "medicationCodeableConcept": {
+          "text": "合成範例依那普利錠２０毫克",
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medication-nhi-tw",
+              "code": "SYN0000005",
+              "display": "SYNTHETIC ENALAPRIL TABLETS 20MG"
+            }
+          ]
+        },
+        "dosageInstruction": [
+          {
+            "text": "QD"
+          }
+        ],
+        "dispenseRequest": {
+          "quantity": {
+            "value": 28
+          },
+          "expectedSupplyDuration": {
+            "value": 28,
+            "code": "d",
+            "unit": "days"
+          }
+        },
+        "supportingInformation": [
+          {
+            "reference": "MedicationKnowledge/ix-mk-enalapril"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationKnowledge",
+        "id": "ix-mk-enalapril",
+        "meta": {
+          "source": "https://data.gov.tw/dataset/23715",
+          "tag": [
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot",
+              "code": "nhi-drug-terminology-20260728",
+              "display": "NHI drug terminology snapshot"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/drug-master-effective-period",
+              "code": "from:2015-01-01",
+              "display": "Official drug record effective start"
+            },
+            {
+              "system": "https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot",
+              "code": "atc-hierarchy-2026",
+              "display": "ATC hierarchy snapshot (levels 2-4)"
+            },
+            {
+              "system": "https://mediprisma.app/fhir/CodeSystem/nhi-drug-enrichment-policy",
+              "code": "latest-covered-record-atc-levels-2-4-v5",
+              "display": "Use the latest covered drug record for newer prescriptions"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://nhi-fhir-bridge.github.io/IdentifierSystem/drug-terminology-record",
+            "value": "nhi-drug-terminology-20260728:SYN0000005:1"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code",
+              "version": "nhi-drug-terminology-20260728",
+              "code": "SYN0000005",
+              "display": "SYNTHETIC ENALAPRIL TABLETS 20MG"
+            }
+          ],
+          "text": "合成範例依那普利錠２０毫克"
+        },
+        "synonym": [
+          "SYNTHETIC ENALAPRIL TABLETS 20MG"
+        ],
+        "doseForm": {
+          "text": "錠劑"
+        },
+        "ingredient": [
+          {
+            "itemCodeableConcept": {
+              "text": "ENALAPRIL MALEATE 20 MG"
+            }
+          }
+        ],
+        "medicineClassification": [
+          {
+            "type": {
+              "text": "Anatomical Therapeutic Chemical classification"
+            },
+            "classification": [
+              {
+                "coding": [
+                  {
+                    "system": "http://www.whocc.no/atc",
+                    "code": "C09AA02",
+                    "display": "enalapril"
+                  }
+                ],
+                "text": "enalapril"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

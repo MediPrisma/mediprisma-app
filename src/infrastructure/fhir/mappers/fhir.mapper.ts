@@ -396,6 +396,7 @@ export class FhirMapper implements IDataMapper {
       _encounterInferred: fhirResource._encounterInferred,
       _orderEncounterIds: fhirResource._orderEncounterIds,
       performer: fhirResource.performer,
+      resultsInterpreter: fhirResource.resultsInterpreter,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -508,6 +509,7 @@ export class FhirMapper implements IDataMapper {
       _sourceRecordComparison: fhirResource._sourceRecordComparison,
       _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
       _awaitingOrders: fhirResource._awaitingOrders,
+      _orderCount: fhirResource._orderCount,
       id: fhirResource.id || '',
       status: fhirResource.status,
       class: fhirResource.class,

@@ -222,3 +222,67 @@ describe('buildAutofill — pediatric eGFR', () => {
     expect(af.resolve(ADULT)?.value).toBe(177)
   })
 })
+
+describe('buildAutofill — a serum input never takes a urine row', () => {
+  const crea = { kind: 'lab' as const, keys: ['CREA'] }
+  const sodium = { kind: 'lab' as const, keys: ['NA'] }
+
+  it('uses the unmarked serum creatinine when a later same-day urine creatinine is marked Urine', () => {
+    const af = buildAutofill(
+      [
+        labLoinc('2160-0', 1.1, 'mg/dL', '2026-10-23T08:00:00+08:00'),
+        { ...named('Creatinine', 85, 'mg/dL', '2026-10-23T08:30:00+08:00'), specimen: { display: 'Urine' } },
+      ],
+      {},
+    )
+    expect(af.resolve(crea)?.value).toBe(1.1)
+  })
+
+  it('uses the unmarked serum sodium, not a later urine sodium', () => {
+    const af = buildAutofill(
+      [
+        named('Na', 139, 'mmol/L', '2026-10-23T08:00:00+08:00'),
+        { ...named('Na', 42, 'mmol/L', '2026-10-23T08:30:00+08:00'), specimen: { display: 'Urine' } },
+      ],
+      {},
+    )
+    expect(af.resolve(sodium)?.value).toBe(139)
+  })
+
+  it('fills nothing when the only creatinine is urine', () => {
+    const af = buildAutofill(
+      [{ ...named('Creatinine', 85, 'mg/dL', '2026-10-23'), specimen: { display: 'Urine' } }],
+      {},
+    )
+    expect(af.resolve(crea)).toBeUndefined()
+  })
+
+  it('treats a row named as urine as urine when it has no specimen field', () => {
+    const af = buildAutofill(
+      [
+        named('Creatinine', 1.1, 'mg/dL', '2026-10-22'),
+        named('Urine Creatinine', 85, 'mg/dL', '2026-10-23'),
+        named('尿液肌酸酐', 90, 'mg/dL', '2026-10-24'),
+      ],
+      {},
+    )
+    expect(af.resolve(crea)?.value).toBe(1.1)
+  })
+
+  it('still falls back to an unmarked row, and to one with an unrecognised specimen label', () => {
+    expect(buildAutofill([named('Creatinine', 1.3, 'mg/dL', '2026-10-23')], {}).resolve(crea)?.value).toBe(1.3)
+    const labelled = { ...named('Creatinine', 1.4, 'mg/dL', '2026-10-23'), specimen: { display: '血清' } }
+    expect(buildAutofill([labelled], {}).resolve(crea)?.value).toBe(1.4)
+  })
+
+  it('keeps the urine creatinine available to the urine ACR', () => {
+    const af = buildAutofill(
+      [
+        { ...named('Microalbumin', 30, 'mg/L', '2026-10-23'), code: { coding: [{ code: '14957-5' }] } },
+        { ...named('Creatinine', 100, 'mg/dL', '2026-10-23'), specimen: { display: 'Urine' } },
+      ],
+      {},
+    )
+    expect(af.resolve({ kind: 'labSpecimen', keys: ['ACR'], loinc: ['9318-7', '14959-1'], specimen: 'urine' })?.value).toBe(30)
+  })
+})

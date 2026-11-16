@@ -45,10 +45,12 @@ export function readRemoteOutpatientPrefs(data: DocumentData | undefined): Remot
  *  round-trip drops any undefined, which Firestore refuses. */
 export function toRemoteOutpatientPrefs(prefs: OutpatientPrefs, updatedAt: number): DocumentData {
   const {
-    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat, clinicianName,
+    pinnedLabs, labMode, overviewRange, overviewMedFilter, overviewVisitFilter, overviewReportGroup,
+    formats, activeFormatId, handoffMode, medFormat, clinicianName,
   } = sanitizeOutpatientPrefs(prefs)
   return JSON.parse(JSON.stringify({
-    pinnedLabs, labMode, formats, activeFormatId, handoffMode, medFormat, clinicianName, updatedAt,
+    pinnedLabs, labMode, overviewRange, overviewMedFilter, overviewVisitFilter, overviewReportGroup,
+    formats, activeFormatId, handoffMode, medFormat, clinicianName, updatedAt,
   }))
 }
 
@@ -67,7 +69,7 @@ export function mergeOutpatientPrefs(
   theirs: OutpatientPrefs,
   mineIsNewer: boolean,
 ): OutpatientPrefs {
-  const choice = <K extends 'pinnedLabs' | 'labMode' | 'activeFormatId' | 'handoffMode' | 'medFormat' | 'clinicianName'>(key: K): OutpatientPrefs[K] => {
+  const choice = <K extends Exclude<keyof OutpatientPrefs, 'formats'>>(key: K): OutpatientPrefs[K] => {
     const mineChanged = !same(mine[key], base[key])
     const theirsChanged = !same(theirs[key], base[key])
     if (mineChanged && theirsChanged) return mineIsNewer ? mine[key] : theirs[key]
@@ -76,6 +78,10 @@ export function mergeOutpatientPrefs(
   return sanitizeOutpatientPrefs({
     pinnedLabs: choice('pinnedLabs'),
     labMode: choice('labMode'),
+    overviewRange: choice('overviewRange'),
+    overviewMedFilter: choice('overviewMedFilter'),
+    overviewVisitFilter: choice('overviewVisitFilter'),
+    overviewReportGroup: choice('overviewReportGroup'),
     formats: mergeFormatLists(base.formats, mine.formats, theirs.formats, mineIsNewer),
     activeFormatId: choice('activeFormatId'),
     handoffMode: choice('handoffMode'),

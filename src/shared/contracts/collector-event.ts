@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v10, the hospital-capture event, plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v11, the hospital-capture event, plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -19,19 +19,27 @@ export const errorClassSchema = z.enum([
 ])
 export const collectorModelSchema = z.enum([
   'gpt-5.4-nano', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol',
-  'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-3.1-pro-preview',
   'claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5',
   'custom', 'unknown', 'whisper-1', 'provider-managed',
   // The hospital-managed endpoint profile names this model; any user-defined endpoint stays 'custom'.
   'tvghbrain3.5',
+  // 北榮院內 Azure 的 Luna；醫析以固定代號回報，不讀端點回傳的自由字串。
+  'gpt-6-luna',
 ])
+// D089: model 不再限於上面的清單。另接受符合格式的模型名稱，包括新增的內建模型，以及使用者自訂端點設定的模型名稱。
+// 格式：英數字開頭，只含英數字與 . _ : / -，最長 64 字，且不含 "://"。中文、空白、@、網址與錯誤訊息都不會通過；
+// 不符合時 sender 改送 'custom'（自訂端點）或 'unknown'，不能直接送出原字串。上面的清單用於監看頁的中文名稱與單價。
+export const COLLECTOR_MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/
+export const isCollectorModelName = (value: string) => COLLECTOR_MODEL_NAME_PATTERN.test(value) && !value.includes('://')
+export const collectorModelNameSchema = z.string().refine(isCollectorModelName, 'Model name is outside the allowed format')
 const elapsed = z.number().int().min(0).max(86_400_000)
 const collectorEventBaseSchema = z.object({
   schema_version: z.literal(2), event_id: z.string().uuid(),
   occurred_at: z.string().datetime({ offset: true }), site: z.literal('vghtpe'),
   feature: featureSchema,
   provider: z.enum(['openai', 'gemini', 'anthropic', 'custom', 'perplexity', 'unknown']),
-  model: collectorModelSchema,
+  model: collectorModelNameSchema,
   model_source: z.enum(['configured', 'reported', 'unreported']),
   sample_kind: z.enum(['feature', 'request']),
   latency_ms: elapsed,
@@ -277,6 +285,33 @@ export const collectorEventV10Schema = collectorEventV10BaseSchema.superRefine((
   }
 })
 export type CollectorEventV10 = z.infer<typeof collectorEventV10Schema>
+
+// v11: the token counts the AI provider reported for one request. Exact numbers, never an
+// estimate; a side the provider did not report is left out, and an event without any is unchanged.
+export const tokenUsageSchema = z.object({
+  input_tokens: resourceCountSchema.optional(), output_tokens: resourceCountSchema.optional(),
+}).strict().refine(u => u.input_tokens !== undefined || u.output_tokens !== undefined, 'Token usage needs at least one count')
+export type TokenUsage = z.infer<typeof tokenUsageSchema>
+const collectorRequestV11Schema = requestBaseSchema.extend({ usage: tokenUsageSchema.optional() }).strict()
+export type CollectorRequestV11 = z.infer<typeof collectorRequestV11Schema>
+export const collectorEventV11Schema = collectorEventV10BaseSchema.extend({
+  schema_version: z.literal(11),
+  diagnostics: collectorEventV10BaseSchema.shape.diagnostics.extend({
+    usage: tokenUsageSchema.optional(),
+    requests: z.object({
+      count: resourceCountSchema, omitted: resourceCountSchema,
+      details: z.array(collectorRequestV11Schema).max(MAX_COLLECTOR_REQUEST_DETAILS),
+    }).strict().optional(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v10 invariant rather than maintaining another copy.
+  const { usage: _usage, requests, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV10Schema.safeParse({ ...e, schema_version: 10, diagnostics: { ...diagnostics,
+    ...(requests ? { requests: { ...requests, details: requests.details.map(({ usage: _requestUsage, ...request }) => request) } } : {}) } })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+})
+export type CollectorEventV11 = z.infer<typeof collectorEventV11Schema>
 
 // Hospital-capture outcome: MediPrisma relays what 北榮懷爾抓抓 tagged on the Bundle it
 // delivered (category, failure kind, HTTP status, count). Its own endpoint and table,

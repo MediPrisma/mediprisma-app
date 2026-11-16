@@ -33,6 +33,7 @@ import { useResourceNavigationStore } from '@/src/application/stores/resource-na
 import { useClinicalTabActivity } from '@/src/application/providers/clinical-tab-activity.provider'
 import { markUserTrigger, trackEvent, useTrackView } from '@/src/application/telemetry/usage-analytics'
 import { MedicationList } from './components/MedicationList'
+import { InteractionLine } from '@/features/medication-safety/InteractionLine'
 import { MedCopyButtons, MedCopyDialogs, useMedCopyActions } from './components/MedCopyActions'
 import { useCurrentMedCopySources } from '@/features/clinical-summary/overview/hooks/useCurrentMedCopySources'
 import { MedicationRemainingSupplyList } from './components/MedicationRemainingSupplyList'
@@ -433,6 +434,10 @@ export function MedListCard() {
               <span>{sourceHintStatement}</span>
             </div>
           )}
+          {/* 交互作用 covers the whole current list, whatever the view, search
+              or 藥理類別 filter shows — a hidden drug still interacts. The
+              detail lives in the right panel's 安全 tab. */}
+          <InteractionLine />
           {hasMedicationFilters && (
             view === 'remaining'
               ? filteredRemainingSupplySummaries.length === 0

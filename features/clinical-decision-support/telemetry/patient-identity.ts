@@ -1,4 +1,5 @@
 import { isDeidentifiedPatient, type PatientEntity } from '@/src/core/entities/patient.entity'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 const MASK = /[Xx*＊○〇●Ｏ◯]/u
 const NAME_MASK = /[Xx○〇●Ｏ◯]/u
@@ -61,6 +62,14 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
       || isMedcloudSystem(identifier.system, MEDCLOUD_NATIONAL_ID_SYSTEM)
       || identifier.system === TVGH_NATIONAL_ID_SYSTEM
       || (!isMedcloudNamespace(identifier.system) && NATIONAL_ID_SYSTEM.test(identifier.system)))
+    // Since bridge 0.15.20 a physical-card login yields the unmasked ID. Mask
+    // it the way the MediCloud page header shows it (A123***789), so the full
+    // ID never leaves the browser and the lookup key equals the one saved
+    // from the masked header before.
+    .map(identifier => isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)
+      && /^[A-Z][12]\d{8}$/.test(identifier.value)
+      ? { ...identifier, value: `${identifier.value.slice(0, 4)}***${identifier.value.slice(7)}` }
+      : identifier)
   // Match the existing cloud identity's privacy boundary: discard hidden
   // digits before hashing as well as before constructing display fields.
   if (matches.length === 1 && matches[0].system === TVGH_NATIONAL_ID_SYSTEM) {
@@ -102,7 +111,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
   const birthDate = patient.birthDate?.trim() ?? ''
   const parsedBirthDate = Date.parse(birthDate)
   if (!BIRTH_DATE.test(birthDate) || Number.isNaN(parsedBirthDate)
-    || new Date(parsedBirthDate).toISOString().slice(0, 10) !== birthDate) {
+    || utcDay(parsedBirthDate) !== birthDate) {
     throw new Error('cdss_identity_unavailable')
   }
   const identifier = nationalId(patient)

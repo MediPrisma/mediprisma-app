@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { CdssPatientProfile } from '../types'
 import { todayIsoDate, type ClinicVitalsPatch } from '../stores/clinic-vitals.store'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 interface Props {
   weight?: CdssPatientProfile['facts'][string]
@@ -84,7 +85,7 @@ function WeightForm({ isEnglish, now, saving, failed, onSave }: Required<Pick<Pr
           }
           const date = new Date(measuredOn)
           if (!/^\d{4}-\d{2}-\d{2}$/.test(measuredOn) || !Number.isFinite(date.getTime())
-            || date.toISOString().slice(0, 10) !== measuredOn || measuredOn > today) {
+            || utcDay(date) !== measuredOn || measuredOn > today) {
             setError({ field: 'date', message: isEnglish ? 'Enter a valid measurement date, no later than today.' : '請填寫有效的量測日期，不能晚於今天。' })
             dateInput.current?.focus()
             return

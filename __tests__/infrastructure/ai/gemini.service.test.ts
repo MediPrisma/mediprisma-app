@@ -54,9 +54,9 @@ describe('GeminiService', () => {
     it.each([false, true])('records actual model from a fallback response (wrapped proxy=%s)', async (wrapped) => {
       const upstream = { modelVersion: 'gemini-3.1-flash-lite', usageMetadata: { totalTokenCount: 9 }, candidates: [{ content: { parts: [{ text: 'Lite answer' }] } }] }
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => wrapped ? { message: 'Lite answer', geminiResponse: upstream } : upstream } as Response)
-      const result = await service.query({ modelId: 'gemini-3.8-flash', messages: [{ role: 'user', content: 'hello' }] })
+      const result = await service.query({ modelId: 'gemini-4-hydrogen', messages: [{ role: 'user', content: 'hello' }] })
       expect(result.metadata).toMatchObject({ modelId: 'gemini-3.1-flash-lite', tokensUsed: 9, modelExecution: {
-        requestedModelId: 'gemini-3.8-flash', actualModelId: 'gemini-3.1-flash-lite',
+        requestedModelId: 'gemini-4-hydrogen', actualModelId: 'gemini-3.1-flash-lite',
       } })
     })
 
@@ -111,7 +111,7 @@ describe('GeminiService', () => {
 
       await service.query({
         ...mockRequest,
-        modelId: 'gemini-3.8-flash',
+        modelId: 'gemini-4-hydrogen',
         messages: [
           { role: 'system', content: 'Follow clinical safety rules.' },
           { role: 'user', content: 'Summarize the record.' },
@@ -305,7 +305,7 @@ describe('GeminiService', () => {
       mutableEnv.proxyClientKey = ''
     })
 
-    it.each(['gemini-3.1-flash-lite', 'gemini-3.8-flash'])(
+    it.each(['gemini-3.1-flash-lite', 'gemini-4-hydrogen'])(
       'routes %s without a personal key to the absolute Gemini proxy',
       async (modelId) => {
         mockFetch.mockResolvedValueOnce({
