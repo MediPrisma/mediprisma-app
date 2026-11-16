@@ -156,6 +156,22 @@ describe('interpretInteractionCheck', () => {
     expect(review.checkedRowIds).toEqual(['oxy'])
   })
 
+  it('accepts a chloride or hydrate the service leaves out after the drug name', () => {
+    const list = [cloud('beth', 'BETHANECHOL CHLORIDE 25 MG'), cloud('ppi', 'PANTOPRAZOLE SODIUM SESQUIHYDRATE 40 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, {
+      resolvedMedications: [resolved(0, '05412', 'Bethanechol', 'Wecoli * tab 25 mg'), resolved(1, '03258', 'Pantoprazole')],
+    })
+    expect(review.checkedRowIds.sort()).toEqual(['beth', 'ppi'])
+  })
+
+  it('does not let potassium chloride pass as another potassium salt', () => {
+    const list = [cloud('kcl', 'POTASSIUM CHLORIDE 600 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, {
+      resolvedMedications: [resolved(0, '00001', 'Potassium citrate')],
+    })
+    expect(review.uncheckedRowIds).toEqual(['kcl'])
+  })
+
   it('does not let sodium chloride pass as another sodium salt', () => {
     const list = [cloud('nacl', 'SODIUM CHLORIDE 9 MG/ML'), cloud('warf', 'WARFARIN SODIUM 1 MG')]
     const review = interpretInteractionCheck(planInteractionCheck(list), list, {
