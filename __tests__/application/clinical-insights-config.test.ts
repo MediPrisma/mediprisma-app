@@ -147,7 +147,7 @@ describe('custom summary module defaults', () => {
 
     expect(selectAutoGeneratePanelIds({
       panels,
-      modelId: 'gemini-3-flash-preview',
+      modelId: 'gemini-4-hydrogen',
       autoRunPanels: new Set(),
     })).toEqual([])
 

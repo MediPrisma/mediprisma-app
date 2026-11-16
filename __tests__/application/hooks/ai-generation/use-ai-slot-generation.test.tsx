@@ -207,7 +207,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const run = jest.fn(async () => ({ headline: 'selected model result' }))
     const { result, rerender } = renderHook(() => useAiSlotGeneration({
       defaultModelId: 'gemini-3.1-flash-lite',
-      selectedModelId: 'gpt-5.6-terra',
+      selectedModelId: 'gpt-6.1-terra',
       autoRunEnabled: true,
       requireDataReadyToGenerate: true,
       store,
@@ -218,7 +218,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     }))
 
     await waitFor(() => expect(result.current.isHydrated).toBe(true))
-    expect(result.current.resolvedModelId).toBe('gpt-5.6-terra')
+    expect(result.current.resolvedModelId).toBe('gpt-6.1-terra')
     expect(result.current.modelUnavailable).toBe(true)
     expect(result.current.error).toContain('本次未送出任何資料')
     await act(async () => result.current.generate())
@@ -229,7 +229,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     await act(async () => result.current.generate())
     expect(result.current.modelUnavailable).toBe(false)
     expect(result.current.error).toBeNull()
-    expect(run).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'gpt-5.6-terra' }))
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'gpt-6.1-terra' }))
   })
 
   it('keeps the shared fallback behaviour for features that do not opt in', async () => {
@@ -239,7 +239,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const run = jest.fn(async () => ({ headline: 'fallback result' }))
     const { result } = renderHook(() => useAiSlotGeneration({
       defaultModelId: 'gemini-3.1-flash-lite',
-      selectedModelId: 'gpt-5.6-terra',
+      selectedModelId: 'gpt-6.1-terra',
       autoRunEnabled: false,
       requireDataReadyToGenerate: true,
       store,
@@ -486,7 +486,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     const { result } = renderHook(() => useAiSlotGeneration({
       defaultModelId: 'gemini-3.1-flash-lite',
-      selectedModelId: 'gpt-5.6-terra',
+      selectedModelId: 'gpt-6.1-terra',
       autoRunEnabled: true,
       requireDataReadyToGenerate: true,
       store,
@@ -497,7 +497,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     }))
 
     await waitFor(() => {
-      expect(result.current.resolvedModelId).toBe('gpt-5.6-terra')
+      expect(result.current.resolvedModelId).toBe('gpt-6.1-terra')
       expect(result.current.result).toEqual({ headline: 'pre-generated demo result' })
     })
     expect(store.getState().byKey[result.current.slotKey]).toBeUndefined()
@@ -522,7 +522,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const store = createAiResultStore<VersionedResult>()
     let failPreview = true
     const run = jest.fn(async (ctx: { modelId: string }) => {
-      if (ctx.modelId === 'gemini-3-flash-preview' && failPreview) return null
+      if (ctx.modelId === 'gemini-4-hydrogen' && failPreview) return null
       return {
         headline: `live result from ${ctx.modelId}`,
         generation: { modelId: ctx.modelId },
@@ -569,17 +569,17 @@ describe('useAiSlotGeneration demo snapshot', () => {
     // polluted by the old policy with a Flash-Lite demo snapshot. Selecting
     // the model must not make that older slot replace the visible live result.
     const previewSlotParts = result.current.slotKey.split('::')
-    previewSlotParts[3] = 'gemini-3-flash-preview'
+    previewSlotParts[3] = 'gemini-4-hydrogen'
     act(() => {
       store.getState().setResult(previewSlotParts.join('::'), {
         headline: 'old Flash-Lite snapshot in preview slot',
       })
     })
 
-    rerender({ selectedModelId: 'gemini-3-flash-preview' })
+    rerender({ selectedModelId: 'gemini-4-hydrogen' })
 
     await waitFor(() => {
-      expect(result.current.resolvedModelId).toBe('gemini-3-flash-preview')
+      expect(result.current.resolvedModelId).toBe('gemini-4-hydrogen')
       expect(result.current.isHydrated).toBe(true)
     })
     expect(result.current.result?.headline).toBe(
@@ -599,9 +599,9 @@ describe('useAiSlotGeneration demo snapshot', () => {
     await act(async () => result.current.generate())
 
     expect(run).toHaveBeenLastCalledWith(expect.objectContaining({
-      modelId: 'gemini-3-flash-preview',
+      modelId: 'gemini-4-hydrogen',
     }))
-    expect(result.current.result?.headline).toBe('live result from gemini-3-flash-preview')
+    expect(result.current.result?.headline).toBe('live result from gemini-4-hydrogen')
     expect(result.current.error).toBeNull()
     expect(demoSeed).toHaveBeenCalledTimes(1)
 
@@ -639,7 +639,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const store = createAiResultStore<VersionedResult>()
     let resolveModelBCache!: (value: VersionedResult) => void
     const loadCached = jest.fn((slotKey: string) => {
-      if (slotKey.includes('::gpt-5.6-terra::')) {
+      if (slotKey.includes('::gpt-6.1-terra::')) {
         return new Promise<VersionedResult>((resolve) => {
           resolveModelBCache = resolve
         })
@@ -672,23 +672,23 @@ describe('useAiSlotGeneration demo snapshot', () => {
     await act(async () => result.current.generate())
     expect(result.current.result?.headline).toBe('live gpt-5.4-nano')
 
-    rerender({ selectedModelId: 'gpt-5.6-terra' })
+    rerender({ selectedModelId: 'gpt-6.1-terra' })
     await waitFor(() => expect(loadCached.mock.calls.some(
-      ([slotKey]) => slotKey.includes('::gpt-5.6-terra::'),
+      ([slotKey]) => slotKey.includes('::gpt-6.1-terra::'),
     )).toBe(true))
     expect(result.current.result?.headline).toBe('live gpt-5.4-nano')
 
     await act(async () => {
       resolveModelBCache({
         headline: 'cached model B',
-        generation: { modelId: 'gpt-5.6-terra', modelName: 'GPT-5.6 Terra' },
+        generation: { modelId: 'gpt-6.1-terra', modelName: 'GPT-6.1 Terra' },
       })
       await Promise.resolve()
     })
 
     await waitFor(() => {
       expect(result.current.result?.headline).toBe('cached model B')
-      expect(result.current.result?.generation.modelId).toBe('gpt-5.6-terra')
+      expect(result.current.result?.generation.modelId).toBe('gpt-6.1-terra')
     })
     expect(run).toHaveBeenCalledTimes(1)
   })
@@ -1194,13 +1194,13 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.isAnyRunning).toBe(true)
 
     mockAudience = 'medical'
-    rerender({ selectedModelId: 'gpt-5.6-terra' })
+    rerender({ selectedModelId: 'gpt-6.1-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
     mockAudience = 'patient'
     mockLocale = 'en'
-    rerender({ selectedModelId: 'gpt-5.6-terra' })
+    rerender({ selectedModelId: 'gpt-6.1-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
@@ -1213,7 +1213,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
         { id: 'changed-encounter' },
       ],
     }
-    rerender({ selectedModelId: 'gpt-5.6-terra' })
+    rerender({ selectedModelId: 'gpt-6.1-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
@@ -1223,12 +1223,12 @@ describe('useAiSlotGeneration demo snapshot', () => {
       encounters: [{ id: 'demo-encounter-1' }],
     }
     mockPatientId = 'smart-patient-2'
-    rerender({ selectedModelId: 'gpt-5.6-terra' })
+    rerender({ selectedModelId: 'gpt-6.1-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
     mockPatientId = 'smart-patient-1'
-    rerender({ selectedModelId: 'gpt-5.6-terra' })
+    rerender({ selectedModelId: 'gpt-6.1-terra' })
     expect(result.current.scopeKey).toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(true)
 
@@ -1288,7 +1288,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     const { result } = renderHook(() => useAiSlotGeneration({
       defaultModelId: 'gemini-3.1-flash-lite',
-      selectedModelId: 'gemini-3-flash-preview',
+      selectedModelId: 'gemini-4-hydrogen',
       autoRunEnabled: false,
       requireDataReadyToGenerate: true,
       store,
@@ -1321,7 +1321,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     const { result } = renderHook(() => useAiSlotGeneration({
       defaultModelId: 'gemini-3.1-flash-lite',
-      selectedModelId: 'gemini-3-flash-preview',
+      selectedModelId: 'gemini-4-hydrogen',
       autoRunEnabled: false,
       requireDataReadyToGenerate: true,
       store,

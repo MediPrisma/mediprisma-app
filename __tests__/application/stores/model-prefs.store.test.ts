@@ -55,12 +55,12 @@ describe('model-prefs.store', () => {
   it('seeds both consumers from the legacy global model on first run', () => {
     localStorage.setItem(
       'ai-config-storage',
-      JSON.stringify({ state: { model: 'claude-opus-5' }, version: 0 }),
+      JSON.stringify({ state: { model: 'claude-opus-5-5' }, version: 0 }),
     )
     const { useModelPrefsStore } = loadStore()
     expect(useModelPrefsStore.getState().prefs).toEqual({
-      chat: 'claude-opus-5',
-      insights: 'claude-opus-5',
+      chat: 'claude-opus-5-5',
+      insights: 'claude-opus-5-5',
     })
   })
 
@@ -76,7 +76,7 @@ describe('model-prefs.store', () => {
   it('persisted prefs win over the legacy global model', () => {
     localStorage.setItem(
       'ai-config-storage',
-      JSON.stringify({ state: { model: 'claude-opus-5' }, version: 0 }),
+      JSON.stringify({ state: { model: 'claude-opus-5-5' }, version: 0 }),
     )
     localStorage.setItem(
       'model-prefs',
@@ -154,18 +154,18 @@ describe('model-prefs.store', () => {
 
     it('REGRESSION: a stranded premium pick runs (and shows) as the free default', () => {
       // Picked Opus while holding a Claude key; key died with the session.
-      expect(gateModelForKeys('claude-opus-5', noKeys, DEFAULT_MODEL_ID)).toBe(DEFAULT_MODEL_ID)
+      expect(gateModelForKeys('claude-opus-5-5', noKeys, DEFAULT_MODEL_ID)).toBe(DEFAULT_MODEL_ID)
     })
 
     it('a premium pick with its provider key present stays picked', () => {
       expect(
-        gateModelForKeys('claude-opus-5', { ...noKeys, claudeKey: 'sk-ant-x' }, DEFAULT_MODEL_ID),
-      ).toBe('claude-opus-5')
+        gateModelForKeys('claude-opus-5-5', { ...noKeys, claudeKey: 'sk-ant-x' }, DEFAULT_MODEL_ID),
+      ).toBe('claude-opus-5-5')
     })
 
     it("a key for a DIFFERENT provider does not keep a stranded pick alive", () => {
       expect(
-        gateModelForKeys('claude-opus-5', { ...noKeys, geminiKey: 'AIza-x' }, DEFAULT_MODEL_ID),
+        gateModelForKeys('claude-opus-5-5', { ...noKeys, geminiKey: 'AIza-x' }, DEFAULT_MODEL_ID),
       ).toBe(DEFAULT_MODEL_ID)
     })
 

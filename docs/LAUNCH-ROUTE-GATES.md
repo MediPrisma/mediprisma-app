@@ -1,5 +1,14 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-11-16 owner decision: GPT-6 Luna is also offered through the public
+owner-funded proxy on ordinary routes. Configured hospital launches still route
+Luna to the hospital Gateway first, retaining authentication, no retries and no
+cloud fallback after an intranet request. The picker labels that route
+`GPT-6 Luna（院內）`; other routes show `GPT-6 Luna`. The selectable free lineup is
+Gemini 3.1 Flash-Lite, Gemini 4 Hydrogen, GPT-6 Luna and Claude Haiku 5.5.
+Old selectable GPT, Gemini Preview and Claude versions are replaced by the
+current lineup; Nano remains internal for existing smart-title calls only.
+
 2026-11-11 owner decision (later the same day, supersedes the `/app-hmc`
 exclusion below): the GPT-6 Luna（院內） option is also offered on `/app-hmc`
 under the same conditions, and the hospital automatic launch

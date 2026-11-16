@@ -44,7 +44,7 @@ describe('AiProviderFactory routing', () => {
     mockCreateOpenRouter.mockClear()
   })
 
-  it.each(MODEL_CATALOG.filter((model) => model.apiSurface === 'openai-responses' && model.id !== 'gpt-6-luna'))(
+  it.each(MODEL_CATALOG.filter((model) => model.apiSurface === 'openai-responses'))(
     'routes $id through the manifest-declared Responses API',
     ({ id: modelId }) => {
       const factory = new AiProviderFactory()
@@ -75,15 +75,15 @@ describe('AiProviderFactory routing', () => {
   it('routes the free Luna proxy through the Responses API', () => {
     const factory = new AiProviderFactory()
     const result = factory.create({
-      modelId: 'gpt-5.6-luna',
+      modelId: 'gpt-6-luna',
       useProxy: true,
     })
 
-    expect(mockResponses).toHaveBeenCalledWith('gpt-5.6-luna')
+    expect(mockResponses).toHaveBeenCalledWith('gpt-6-luna')
     expect(mockChat).not.toHaveBeenCalled()
     expect(result.model).toEqual({
       kind: 'responses-model',
-      modelId: 'gpt-5.6-luna',
+      modelId: 'gpt-6-luna',
       stateless: true,
     })
   })

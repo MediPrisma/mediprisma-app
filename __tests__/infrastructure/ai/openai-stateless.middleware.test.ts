@@ -14,11 +14,11 @@ it('carries encrypted reasoning and tool results through a stateless two-step re
     ] : [
       { type: 'message', id: 'msg_test', role: 'assistant', content: [{ type: 'output_text', text: '2026-06-02: 32', annotations: [] }] },
     ]
-    return new Response(JSON.stringify({ id: `resp_${requests.length}`, created_at: 1788912000, model: 'gpt-5.6-luna', output }), {
+    return new Response(JSON.stringify({ id: `resp_${requests.length}`, created_at: 1788912000, model: 'gpt-6-luna', output }), {
       headers: { 'content-type': 'application/json' },
     })
   })
-  const model = withOpenAiStatelessResponses(createOpenAI({ apiKey: 'test', fetch: fetchMock }).responses('gpt-5.6-luna'))
+  const model = withOpenAiStatelessResponses(createOpenAI({ apiKey: 'test', fetch: fetchMock }).responses('gpt-6-luna'))
   const execute = jest.fn(async () => ({ date: '2026-06-02', value: 32 }))
   const result = await generateText({
     model,

@@ -30,7 +30,7 @@ describe('Gemini thinking level on the wire', () => {
   })
 
   it('leaves other Gemini models at their own default', async () => {
-    expect((await sentGenerationConfig('gemini-3-flash-preview', true)).thinkingConfig).toBeUndefined()
+    expect((await sentGenerationConfig('gemini-3.1-flash-lite', true)).thinkingConfig).toBeUndefined()
   })
 
   it('keeps a level the caller asked for', async () => {
