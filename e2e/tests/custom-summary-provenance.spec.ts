@@ -40,7 +40,7 @@ test.describe('custom summary generation provenance', () => {
     await expect(summaryModule.locator('.animate-spin')).toHaveCount(1)
     await expect(summaryModule.locator('.animate-pulse')).toHaveCount(0)
     await expect(summaryModule.getByRole('button', { name: '重新產生摘要', exact: true })).toBeVisible({ timeout: 20_000 })
-    await expect(meta).toContainText('Gemini 3 Flash Preview')
+    await expect(meta).toContainText('Gemini 4 Hydrogen')
     await expect(meta).toContainText(/\d{4}.+\d{2}:\d{2}/)
     await expect(meta).not.toContainText('產生於')
     await expect(meta).toContainText('耗時 00:01')
@@ -48,7 +48,7 @@ test.describe('custom summary generation provenance', () => {
     await expect(summaryModule).not.toContainText('**2018/02/12')
     await expect(meta).toHaveAttribute(
       'aria-label',
-      /由 Gemini 3 Flash Preview 於 .+產生，總耗時 00:01/,
+      /由 Gemini 4 Hydrogen 於 .+產生，總耗時 00:01/,
     )
 
     // The picker controls only the next generation. The current artifact and
@@ -58,7 +58,7 @@ test.describe('custom summary generation provenance', () => {
     await page.getByRole('menuitem', { name: /Gemini 3\.1 Flash-Lite/ }).click()
     await expect(modelPicker).toContainText('Gemini 3.1 Flash-Lite')
     await expect(summaryModule).toContainText('已完成自訂摘要測試。')
-    await expect(meta).toContainText('Gemini 3 Flash Preview')
+    await expect(meta).toContainText('Gemini 4 Hydrogen')
 
     const collapseResult = summaryModule.getByRole('button', { name: '收合「變化摘要」摘要結果' })
     await expect(collapseResult).toHaveAttribute('aria-expanded', 'true')
@@ -87,10 +87,10 @@ test.describe('custom summary generation provenance', () => {
     await expect(summaryModule.getByText('已完成自訂摘要測試。')).toBeVisible()
 
     await modelPicker.click()
-    await page.getByRole('menuitem', { name: /Gemini 3 Flash Preview/ }).click()
-    await expect(modelPicker).toContainText('Gemini 3 Flash Preview')
+    await page.getByRole('menuitem', { name: /Gemini 4 Hydrogen/ }).click()
+    await expect(modelPicker).toContainText('Gemini 4 Hydrogen')
     await expect(summaryModule).toContainText('已完成自訂摘要測試。')
-    await expect(meta).toContainText('Gemini 3 Flash Preview')
+    await expect(meta).toContainText('Gemini 4 Hydrogen')
 
     await page.setViewportSize({ width: 1440, height: 900 })
     const openResult = summaryModule.getByRole('button', { name: '放大閱讀「變化摘要」摘要結果' })
@@ -98,7 +98,7 @@ test.describe('custom summary generation provenance', () => {
     const resultDialog = page.getByRole('dialog', { name: '變化摘要' })
     await expect(resultDialog).toBeVisible()
     await expect(resultDialog).toContainText('已完成自訂摘要測試。')
-    await expect(resultDialog).toContainText('Gemini 3 Flash Preview')
+    await expect(resultDialog).toContainText('Gemini 4 Hydrogen')
     const wideDialogBox = await resultDialog.boundingBox()
     expect(wideDialogBox).not.toBeNull()
     expect(wideDialogBox!.width).toBeGreaterThanOrEqual(800)
@@ -175,7 +175,7 @@ test.describe('custom summary generation provenance', () => {
       .getByRole('button', { name: '展開「變化摘要」摘要結果' })
       .click({ position: { x: 12, y: 12 } })
     await expect(summaryModule.getByText('已完成自訂摘要測試。')).toBeVisible()
-    const modelBox = await meta.getByText('Gemini 3 Flash Preview').boundingBox()
+    const modelBox = await meta.getByText('Gemini 4 Hydrogen').boundingBox()
     const timeBox = await meta.locator('time').boundingBox()
     const durationBox = await meta.getByText('耗時 00:01').boundingBox()
     expect(modelBox).not.toBeNull()
