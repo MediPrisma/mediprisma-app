@@ -122,7 +122,10 @@ describe('shared risk inputs', () => {
 
   it('says what PCE still needs or why it does not apply, and clears a stale result', () => {
     const p = profile()
-    const blank = buildPreventReading(p, record, {})
+    // No code or prescription is a prefilled 「否」 now (owner 2026-11-16); a
+    // clinician who clears the answers back to 未確認 leaves PCE waiting.
+    const blank = buildPreventReading(p, record, { dm: '', smoking: '', cvd: '' })
+    expect(buildPceReading(buildPreventReading(p, record, {}))!.result.status).toBe('ready')
     const pce = buildPceReading(blank)!
     expect(pce.result.status).toBe('needs-data')
     expect(pce.result.issues).toEqual(['dm', 'smoking', 'cvd'])
