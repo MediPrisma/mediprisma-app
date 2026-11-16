@@ -37,6 +37,19 @@ describe('planInteractionCheck', () => {
     expect(plan.items.map(item => item.query)).toEqual(['TIMOLOL', 'FENTANYL', 'OMEPRAZOLE'])
   })
 
+  it('keeps eye gels and eye ointments in, and reads the TOP route and 耳用 form as local', () => {
+    const term = (ingredientText: string, doseForm: string) =>
+      ({ drugTerminology: { source: 'nhi-official-drug-master' as const, snapshotId: 's', ingredientText, doseForm } })
+    const plan = planInteractionCheck([
+      cloud('eye-gel', 'TIMOLOL 1 MG/GM', { secondaryTitle: 'Timolol Ophthalmic Gel', route: 'OPH', ...term('TIMOLOL 1 MG/GM', '眼用凝膠劑') }),
+      cloud('eye-oint', 'TOBRAMYCIN 3 MG/GM', { secondaryTitle: 'Tobrex Eye Ointment' }),
+      cloud('top', 'CLOBETASOL 0.5 MG/ML', { route: 'TOP' }),
+      cloud('ear', 'OFLOXACIN 3 MG/ML', { route: '耳用', ...term('OFLOXACIN 3 MG/ML', '耳用液劑') }),
+    ])
+    expect(plan.localRowIds).toEqual(['top', 'ear'])
+    expect(plan.items.map(item => item.query)).toEqual(['TIMOLOL', 'TOBRAMYCIN'])
+  })
+
   it('sends ingredient names without strength, one entry per ingredient', () => {
     const plan = planInteractionCheck([
       cloud('c1', 'TRAMADOL HCL 37.5 MG+ACETAMINOPHEN (=PARACETAMOL) 325 MG'),

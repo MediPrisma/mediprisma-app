@@ -73,14 +73,18 @@ function rowIngredients(row: MedicationRow): string[] {
 
 // Skin and ear preparations (owner decision 2026-11-16): the service matches
 // an ingredient to the hospital's systemic product, so a neomycin ointment
-// reads as neomycin capsules and draws their kidney warning. Eye drops,
+// reads as neomycin capsules and draws their kidney warning. Eye preparations,
 // inhalers, suppositories and patches stay in — timolol drops and fentanyl
-// patches act systemically. 「gel」 as a word only: a gelatin capsule is oral.
-const LOCAL = /cream|ointment|\bgel\b|lotion|shampoo|topical|\botic\b|ear\s*drop|乳膏|軟膏|凝膠|洗髮|外用|耳滴/i
+// patches act systemically — so an eye gel or eye ointment is checked although
+// its form says gel or ointment. 「gel」 as a word only: a gelatin capsule is
+// oral. TOP is the route code route-display gives SNOMED 6064005 (topical).
+const EYE = /ophthalmic|\beye\b|\bOPH\b|眼/i
+const LOCAL = /cream|ointment|\bgel\b|lotion|shampoo|topical|\bTOP\b|\botic\b|ear\s*drop|乳膏|軟膏|凝膠|洗髮|外用|耳用|耳滴/i
 
 export function isLocalPreparation(row: MedicationRow): boolean {
-  return LOCAL.test([row.secondaryTitle, row.title, row.drugTerminology?.doseForm, row.drugTerminology?.officialNameEn, row.route]
-    .filter(Boolean).join(' '))
+  const text = [row.secondaryTitle, row.title, row.drugTerminology?.doseForm, row.drugTerminology?.officialNameEn, row.route]
+    .filter(Boolean).join(' ')
+  return !EYE.test(text) && LOCAL.test(text)
 }
 
 export function planInteractionCheck(rows: MedicationRow[]): InteractionCheckPlan {

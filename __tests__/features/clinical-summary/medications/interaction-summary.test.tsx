@@ -133,7 +133,7 @@ describe('useRunInteractionCheck', () => {
 
   it('waits for the list, then says when there are too few ingredients to check', () => {
     expect(run(pair, { enabled: true, ready: false }).result.current.state).toEqual({ status: 'loading' })
-    expect(run(pair.slice(0, 1)).result.current.state).toEqual({ status: 'too-few' })
+    expect(run(pair.slice(0, 1)).result.current.state).toEqual({ status: 'too-few', localRowIds: [] })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

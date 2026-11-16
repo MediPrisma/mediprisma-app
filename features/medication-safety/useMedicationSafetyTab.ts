@@ -46,7 +46,9 @@ export function useMedicationSafetyTab(): MedicationSafetyTab {
     }
     if (state.status === 'loading') return { ...HIDDEN, visible: true }
     if (state.status === 'too-few') {
-      return { visible: true, unreachable: false, count: 0, avoid: 0, unchecked: rows.filter(row => !row.isInactive).length, notRun: true }
+      const local = new Set(state.localRowIds)
+      return { visible: true, unreachable: false, count: 0, avoid: 0,
+        unchecked: rows.filter(row => !row.isInactive && !local.has(row.id)).length, notRun: true }
     }
     const attention = attentionFindings(state.review)
     return {

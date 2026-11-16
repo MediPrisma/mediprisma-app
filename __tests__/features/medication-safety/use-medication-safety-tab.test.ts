@@ -57,7 +57,13 @@ describe('useMedicationSafetyTab', () => {
 
   it('marks a list with fewer than two checkable ingredients as not run', () => {
     const { result } = renderHook(() => useMedicationSafetyTab())
-    publish({ status: 'too-few' }, withHospital)
+    publish({ status: 'too-few', localRowIds: [] }, withHospital)
     expect(result.current).toMatchObject({ visible: true, count: 0, notRun: true })
+  })
+
+  it('does not count skin and ear preparations as unchecked when the check cannot run', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    publish({ status: 'too-few', localRowIds: ['b'] }, withHospital)
+    expect(result.current).toMatchObject({ notRun: true, unchecked: 1 })
   })
 })
