@@ -69,9 +69,24 @@ describe('STOP-Bang (Chung 2016)', () => {
     expect(calculateStopBang({ snoring: 'yes', tired: 'yes', observed: 'yes', pressure: 'yes', bmi: '', age: '60', neck: '', sex: 'male' })).toMatchObject({ score: 6, band: 'high', complete: false })
     expect(STOP_BANG.compute({ snoring: 'yes', tired: '', observed: 'no', pressure: 'no', bmi: '', age: '45', neck: '', sex: 'female' })).toMatchObject({ value: '1–4', interpretation: { zh: '資料未齊 — 可能分數範圍' } })
   })
-  it('is in the catalog with P prefilled from the antihypertensive rule and A, G, B from the record', () => {
+  it('does not band intermediate while an unknown answer could still make it high', () => {
+    // 3 known, neck unknown: neck >40 would meet STOP ≥2 plus neck.
+    const neck = calculateStopBang({ snoring: 'yes', tired: 'yes', observed: 'no', pressure: 'no', bmi: '24', age: '60', neck: '', sex: 'female' })
+    expect(neck).toMatchObject({ score: 3, upperBound: 4, complete: false })
+    expect(neck.band).toBeUndefined()
+    expect(calculateStopBang({ snoring: 'yes', tired: 'yes', observed: 'no', pressure: 'no', bmi: '24', age: '60', neck: '41', sex: 'female' })).toMatchObject({ score: 4, band: 'high' })
+    // 4 known, one unknown: the total could reach 5.
+    expect(calculateStopBang({ snoring: 'yes', tired: 'no', observed: 'no', pressure: 'yes', bmi: '24', age: '60', neck: '', sex: 'male' }).band).toBe('high')
+    expect(calculateStopBang({ snoring: 'yes', tired: 'no', observed: 'no', pressure: '', bmi: '24', age: '60', neck: '38', sex: 'female' }).band).toBeUndefined()
+    // Intermediate once nothing unknown can lift it: one STOP item, female, small neck, only BMI unknown.
+    const settled = calculateStopBang({ snoring: 'yes', tired: 'no', observed: 'no', pressure: 'no', bmi: '', age: '60', neck: '38', sex: 'female' })
+    expect(settled).toMatchObject({ score: 2, upperBound: 3 })
+    expect(settled.band).toBeUndefined()
+    expect(calculateStopBang({ snoring: 'yes', tired: 'no', observed: 'no', pressure: 'no', bmi: '', age: '60', neck: '41', sex: 'female' })).toMatchObject({ score: 3, upperBound: 4, band: 'intermediate' })
+  })
+  it('is in the catalog with A, G, B from the record and P asked, never read off the ≥2-drug rule', () => {
     expect(CALCULATORS.filter((c) => c.id === 'stop-bang')).toHaveLength(1)
     const sources = Object.fromEntries(STOP_BANG.inputs.map((input) => [input.key, input.source?.kind]))
-    expect(sources).toMatchObject({ pressure: 'hfpefClinical', age: 'age', sex: 'sex', bmi: 'bmi', neck: undefined, snoring: undefined })
+    expect(sources).toMatchObject({ pressure: undefined, age: 'age', sex: 'sex', bmi: 'bmi', neck: undefined, snoring: undefined })
   })
 })
