@@ -8,7 +8,7 @@ import type { DoacPatientKey } from './doac-patient-autofill'
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'hypertension' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -172,6 +172,23 @@ const isDiabetesCode = (code: string) => /^(?:E0[89]|E1[0-3])/.test(code) || /^2
 /** ICD-10 J43 (emphysema), J44; ICD-9 491, 492, 496. */
 const isCopdCode = (code: string) => /^J4[34]/.test(code) || /^(?:491|492|496)/.test(code)
 
+/** ICD-10 I10–I16 (essential, hypertensive heart/kidney, secondary, crisis); ICD-9 401–405. */
+const isHypertensionCode = (code: string) => /^I1[0-6]/.test(code) || /^40[1-5]/.test(code)
+
+/**
+ * STOP-Bang's P, 「高血壓（有或治療中）」: a hypertension code, else any one
+ * current antihypertensive (not the HFpEF item's ≥2). 「否」 only when the
+ * record lists current prescriptions, none of them antihypertensive, and no
+ * hypertension code; the clinician can change it.
+ */
+function hypertensionSelect(medications: MedicationEntity[], now: Date, conditions: ConditionEntity[], encounters: EncounterEntity[]): ClinicalSelectValue | undefined {
+  const code = diagnosisSelect(conditions, encounters, now, isHypertensionCode, '高血壓')
+  if (code) return code
+  const drug = drugClassSelect(medications, now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+  if (drug?.value === 'no') return { ...drug, testName: '未見高血壓診斷碼，目前有效處方也未見降血壓藥（依處方推算，請核對）' }
+  return drug
+}
+
 const BETA_BLOCKERS = ['bisoprolol', 'carvedilol', 'metoprolol', 'atenolol', 'nebivolol', 'propranolol', 'labetalol', 'acebutolol', 'betaxolol', 'nadolol', 'pindolol', 'bucindolol']
 const ACEI_ARB = ['captopril', 'enalapril', 'lisinopril', 'ramipril', 'perindopril', 'benazepril', 'fosinopril', 'imidapril', 'quinapril', 'cilazapril', 'trandolapril', 'losartan', 'valsartan', 'candesartan', 'irbesartan', 'telmisartan', 'olmesartan', 'azilsartan', 'eprosartan']
 
@@ -226,6 +243,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const blocksNegativeAf = uncertainAf || unclassifiedAf
   const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
   const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
+  const hypertension = hypertensionSelect(medications, now, conditions, encounters)
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
@@ -234,6 +252,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...ecg,
     afHistory,
     antihypertensives: antihypertensiveSelect(medications, now),
+    ...(hypertension ? { hypertension } : {}),
     ...(diabetes ? { diabetes } : {}),
     ...(copd ? { copd } : {}),
     ...(betaBlocker ? { betaBlocker } : {}),
