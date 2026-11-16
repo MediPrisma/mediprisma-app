@@ -4,6 +4,7 @@
  * 計算機」): the 2013 ACC/AHA Pooled Cohort Equations and STOP-Bang.
  */
 import { calculatePce, PCE } from '@/features/medical-calculator/calculators/pce'
+import { calculateStopBang, STOP_BANG } from '@/features/medical-calculator/calculators/stop-bang'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
 
@@ -47,3 +48,30 @@ describe('Pooled Cohort Equations (Goff 2013)', () => {
   })
 })
 
+describe('STOP-Bang (Chung 2016)', () => {
+  const all: CalcValues = { snoring: 'yes', tired: 'yes', observed: 'yes', pressure: 'yes', bmi: '36', age: '51', neck: '41', sex: 'male' }
+  it('scores one point per item that is met and bands 0–2 / 3–4 / 5–8', () => {
+    expect(calculateStopBang(all)).toMatchObject({ score: 8, complete: true, band: 'high' })
+    expect(calculateStopBang({ ...all, snoring: 'no', tired: 'no', observed: 'no', pressure: 'no', bmi: '24' })).toMatchObject({ score: 3, band: 'intermediate' })
+    expect(calculateStopBang({ snoring: 'no', tired: 'no', observed: 'no', pressure: 'no', bmi: '24', age: '45', neck: '38', sex: 'female' })).toMatchObject({ score: 0, band: 'low' })
+    // The thresholds are strict: 50 years, BMI 35 and 40 cm do not score.
+    expect(calculateStopBang({ ...all, age: '50', bmi: '35', neck: '40' }).score).toBe(5)
+  })
+  it('STOP ≥2 plus male, BMI >35 or neck >40 is high at a score of 3 or 4', () => {
+    const r = calculateStopBang({ snoring: 'yes', tired: 'yes', observed: 'no', pressure: 'no', bmi: '24', age: '45', neck: '38', sex: 'male' })
+    expect(r).toMatchObject({ score: 3, band: 'high', alternativeHigh: true })
+  })
+  it('an unanswered item is unknown, never no: the band waits where it could still change', () => {
+    const r = calculateStopBang({ snoring: 'yes', tired: '', observed: 'no', pressure: 'no', bmi: '', age: '45', neck: '', sex: 'female' })
+    expect(r).toMatchObject({ score: 1, upperBound: 4, complete: false, missingInputs: ['tired', 'bmi', 'neck'] })
+    expect(r.band).toBeUndefined()
+    // A band already reached stands whatever is unknown.
+    expect(calculateStopBang({ snoring: 'yes', tired: 'yes', observed: 'yes', pressure: 'yes', bmi: '', age: '60', neck: '', sex: 'male' })).toMatchObject({ score: 6, band: 'high', complete: false })
+    expect(STOP_BANG.compute({ snoring: 'yes', tired: '', observed: 'no', pressure: 'no', bmi: '', age: '45', neck: '', sex: 'female' })).toMatchObject({ value: '1–4', interpretation: { zh: '資料未齊 — 可能分數範圍' } })
+  })
+  it('is in the catalog with P prefilled from the antihypertensive rule and A, G, B from the record', () => {
+    expect(CALCULATORS.filter((c) => c.id === 'stop-bang')).toHaveLength(1)
+    const sources = Object.fromEntries(STOP_BANG.inputs.map((input) => [input.key, input.source?.kind]))
+    expect(sources).toMatchObject({ pressure: 'hfpefClinical', age: 'age', sex: 'sex', bmi: 'bmi', neck: undefined, snoring: undefined })
+  })
+})
