@@ -112,7 +112,7 @@ describe('HTN baseline-risk facts for the pack', () => {
     const excluded = buildPreventReading(p, record, { ...answers, cvd: 'yes' })
     const excludedFacts = applyHtnRiskReadings(p, excluded, buildHpaReading(p, record, excluded)).facts
     expect(htnCalculatorValues({ ...excludedFacts, preventAssessment: { zh: 'ineligible', en: 'ineligible', textEvidence: { direction: 'supports', matchedTerms: ['ineligible', 'cvd'] } } }, false)).toEqual({ 'prevent-ascvd': { status: 'inapplicable' }, 'hpa-mace': { status: 'inapplicable' } })
-    const blank = buildPreventReading(p, record, {})
+    const blank = buildPreventReading(p, record, { cvd: '', smoking: '' })
     const blankFacts = applyHtnRiskReadings(p, blank, buildHpaReading(p, record, blank)).facts
     expect(htnCalculatorValues({ ...blankFacts, preventAssessment: { zh: 'needs-data', en: 'needs-data', textEvidence: { direction: 'supports', matchedTerms: ['needs-data', ...blank.result.issues] } } }, false)).toEqual({
       'prevent-ascvd': { status: 'to-fill', value: String(blank.result.issues.length) },
