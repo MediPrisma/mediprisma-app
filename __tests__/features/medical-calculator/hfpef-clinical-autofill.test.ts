@@ -146,6 +146,9 @@ describe('hypertension for STOP-Bang P', () => {
     expect(buildClinicalSelects([], [], now).hypertension).toMatchObject({ value: 'no' })
     expect(buildClinicalSelects([], [drug('metformin')], now, [dx('I10')]).hypertension?.value).toBe('yes')
     expect(buildClinicalSelects([], [drug('timolol eye drops')], now).hypertension?.value).toBe('no')
+    // Review round 3: eye drops and topicals are not treatment for P.
+    expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).hypertension?.value).toBe('no')
+    expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).hypertension?.value).toBe('no')
   })
 })
 
