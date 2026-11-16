@@ -26,11 +26,11 @@ const rows = [
 
 const review: InteractionReview = {
   findings: [
-    { id: 'a', tier: 'avoid', severity: 'low', rowIdsA: ['sild'], rowIdsB: ['isdn'], action: '絕對不可併用。', mechanism: '可能發生嚴重低血壓。', source: '北榮藥劑部交互作用資料庫', samePrescription: false },
-    { id: 'b', tier: 'act', severity: 'moderate', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '監測血鉀', mechanism: '高血鉀', source: '', samePrescription: true },
+    { id: 'a', tier: 'avoid', severity: 'low', rowIdsA: ['sild'], rowIdsB: ['isdn'], action: '絕對不可併用。', mechanism: '可能發生嚴重低血壓。', source: '北榮藥劑部交互作用資料庫', samePrescription: false, involvesEnded: false },
+    { id: 'b', tier: 'act', severity: 'moderate', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '監測血鉀', mechanism: '高血鉀', source: '', samePrescription: true, involvesEnded: false },
   ],
   checkedRowIds: ['isdn', 'sild', 'spiro', 'enal'],
-  uncheckedRowIds: ['dapo'], localRowIds: [],
+  uncheckedRowIds: ['dapo'], localRowIds: [], endedRowIds: [],
 }
 
 describe('InteractionSummary', () => {
@@ -72,11 +72,11 @@ describe('InteractionSummary', () => {
   it('keeps a same-visit avoid pair and a low cross-visit pair in the list', () => {
     render(<InteractionSummary review={{
       findings: [
-        { id: 'a', tier: 'avoid', severity: 'high', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '避免併用', mechanism: '', source: '', samePrescription: true },
-        { id: 'n', tier: 'note', severity: 'unknown', rowIdsA: ['isdn'], rowIdsB: ['sild'], action: '注意', mechanism: '', source: '', samePrescription: false },
+        { id: 'a', tier: 'avoid', severity: 'high', rowIdsA: ['spiro'], rowIdsB: ['enal'], action: '避免併用', mechanism: '', source: '', samePrescription: true, involvesEnded: false },
+        { id: 'n', tier: 'note', severity: 'unknown', rowIdsA: ['isdn'], rowIdsB: ['sild'], action: '注意', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
       ],
       checkedRowIds: ['isdn', 'sild', 'spiro', 'enal'],
-      uncheckedRowIds: [], localRowIds: [],
+      uncheckedRowIds: [], localRowIds: [], endedRowIds: [],
     }} rows={rows} />)
     expect(screen.getByText('需注意 2 項（避免併用 1） · 已檢核 4／4 項')).toBeInTheDocument()
     expect(screen.getByText('Spironolactone × Enalapril')).toBeInTheDocument()
@@ -84,11 +84,26 @@ describe('InteractionSummary', () => {
     expect(screen.queryByRole('button', { name: /同次開立 \d+ 項/ })).not.toBeInTheDocument()
   })
 
+  it('says which drugs ran out, and how far a chronic slip could still reach', () => {
+    const list = [
+      ...rows,
+      row('val', 'Valsartan', { dataOrigin: 'hospital', isInactive: true, isChronic: true, chronicFills: 3, durationDays: 30, endDateIso: '2026-09-04' }),
+    ]
+    render(<InteractionSummary review={{
+      findings: [{ id: 'e', tier: 'act', severity: 'moderate', rowIdsA: ['val'], rowIdsB: ['spiro'], action: '監測血鉀', mechanism: '', source: '', samePrescription: false, involvesEnded: true }],
+      checkedRowIds: ['val', 'spiro'], uncheckedRowIds: [], localRowIds: [], endedRowIds: ['val'],
+    }} rows={list} />)
+    expect(screen.getByText('含 1 項最近用完的長期用藥（慢箋期間內或用完 14 天內），續開前請確認是否仍在服用')).toBeInTheDocument()
+    expect(screen.getByText('已用完')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Valsartan × Spironolactone/ }))
+    expect(screen.getByText('Valsartan · 院內 · 院內藥用到 9/4，慢箋可續領至 11/3')).toBeInTheDocument()
+  })
+
   it('tells "none found" apart from "not checked"', () => {
-    const { rerender } = render(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: [], localRowIds: [] }} rows={rows} />)
+    const { rerender } = render(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: [], localRowIds: [], endedRowIds: [] }} rows={rows} />)
     expect(screen.getByText('已檢核 2／2 項，未發現需注意的交互作用')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    rerender(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: ['dapo'], localRowIds: [] }} rows={rows} />)
+    rerender(<InteractionSummary review={{ findings: [], checkedRowIds: ['isdn', 'sild'], uncheckedRowIds: ['dapo'], localRowIds: [], endedRowIds: [] }} rows={rows} />)
     expect(screen.getByText('已檢核的 2 項之間未發現，1 項未檢核')).toBeInTheDocument()
   })
 })

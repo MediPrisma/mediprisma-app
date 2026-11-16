@@ -11,7 +11,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { MedicationRow } from '../types'
-import { attentionFindings, type InteractionFinding, type InteractionReview, type InteractionSeverity } from '../utils/interaction-check'
+import { attentionFindings, stillCoveredUntil, type InteractionFinding, type InteractionReview, type InteractionSeverity } from '../utils/interaction-check'
 
 interface InteractionSummaryProps {
   review: InteractionReview
@@ -62,6 +62,17 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
         ? `None among the ${checked} checked · ${unchecked.length} not checked`
         : `已檢核的 ${checked} 項之間未發現，${unchecked.length} 項未檢核`)
       : (en ? `Checked ${checked}/${total} · none to review` : `已檢核 ${checked}／${total} 項，未發現需注意的交互作用`)
+  const ended = new Set(review.endedRowIds)
+  // A long-term drug whose supply ran out: when it ran out, and how far a
+  // 慢簽's later fills, possibly from a pharmacy, could reach.
+  const endedNote = (row: MedicationRow) => {
+    if (!ended.has(row.id)) return ''
+    const covered = stillCoveredUntil(row)
+    const day = (iso?: string) => iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : ''
+    return covered && covered !== row.endDateIso
+      ? (en ? `supply to ${day(row.endDateIso)}, refills to ${day(covered)}` : `院內藥用到 ${day(row.endDateIso)}，慢箋可續領至 ${day(covered)}`)
+      : (en ? `ran out ${day(row.endDateIso)}` : `${day(row.endDateIso)} 已用完`)
+  }
 
   const finding = (f: InteractionFinding, quiet: boolean) => {
     const open = openId === f.id
@@ -83,14 +94,19 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
             </span>
             {f.action && <span className={cn('block text-foreground/80', text, open ? 'break-words' : 'truncate')}>{f.action}</span>}
           </span>
-          {f.samePrescription && <span className={cn('shrink-0', meta)}>{en ? 'Same visit' : '同次開立'}</span>}
+          {(f.involvesEnded || f.samePrescription) && (
+            <span className={cn('shrink-0 text-right', meta)}>
+              {f.involvesEnded && <span className="block">{en ? 'Ran out' : '已用完'}</span>}
+              {f.samePrescription && <span className="block">{en ? 'Same visit' : '同次開立'}</span>}
+            </span>
+          )}
         </button>
         {open && (
           <div className={cn('space-y-0.5 px-2.5 pb-2 pl-8 leading-relaxed', meta)}>
             {f.mechanism && <p className="break-words text-foreground/80">{f.mechanism}</p>}
             {[...sides(f.rowIdsA), ...sides(f.rowIdsB)].map(row => (
               <p key={row.id} className="break-words">
-                {[row.title, origin(row), row.pharmacy, row.startedOn].filter(Boolean).join(' · ')}
+                {[row.title, origin(row), row.pharmacy, row.startedOn, endedNote(row)].filter(Boolean).join(' · ')}
               </p>
             ))}
             {f.source && <p>{en ? 'Source: ' : '來源：'}{f.source}</p>}
@@ -108,6 +124,13 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
           <span className={cn('font-normal', meta)}>{en ? ' · VGH pharmacy database' : ' · 北榮藥劑部資料庫'}</span>
         </h3>
         <p className={cn('mt-0.5 tabular-nums text-foreground/80', text)}>{status}</p>
+        {ended.size > 0 && (
+          <p className={cn('mt-0.5', meta)}>
+            {en
+              ? `Includes ${ended.size} long-term drug${ended.size > 1 ? 's' : ''} that ran out recently — confirm before renewing`
+              : `含 ${ended.size} 項最近用完的長期用藥（慢箋期間內或用完 14 天內），續開前請確認是否仍在服用`}
+          </p>
+        )}
       </div>
       {primary.length > 0 && <ul>{primary.map(f => finding(f, false))}</ul>}
       {unchecked.length > 0 && (
