@@ -796,6 +796,13 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               hiddenReasoning: 'off',
             },
           ]
+        : ctx.modelId === 'gpt-6-luna' && narrativeCards.some((card) => card.id === 'problems') && narrativeCards.length > 1
+          ? [
+              // Keep the complete evidence for the problem list, but let this
+              // request concentrate on its indicators instead of three cards.
+              { id: 'full', cards: narrativeCards.filter((card) => card.id === 'problems'), input: promptInput },
+              { id: 'batch', cards: narrativeCards.filter((card) => card.id !== 'problems'), input: promptInput },
+            ]
         : narrativeCards.length > 0
           ? [{
               id: 'batch',
