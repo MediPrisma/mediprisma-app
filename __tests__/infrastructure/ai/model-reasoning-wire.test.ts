@@ -83,11 +83,11 @@ describe('Luna and Haiku reasoning defaults on the wire', () => {
     }
   })
 
-  it.each([true, false])('sends Haiku adaptive low with room for thinking (proxy=%s)', async useProxy => {
+  it.each([true, false])('sends Haiku low with thinking explicitly disabled (proxy=%s)', async useProxy => {
     for (const streaming of [false, true]) {
       expect(await sentBody('claude-haiku-5-5', useProxy, streaming)).toMatchObject({
-        model: 'claude-haiku-5-5', thinking: { type: 'adaptive' },
-        output_config: { effort: 'low' }, max_tokens: 32_768,
+        model: 'claude-haiku-5-5', thinking: { type: 'disabled' },
+        output_config: { effort: 'low' }, max_tokens: 8_192,
       })
     }
   })

@@ -24,7 +24,7 @@ export function withModelReasoningDefaults(model: Model, definition: ModelDefini
             },
           } : {
             anthropic: {
-              thinking: { type: 'adaptive' },
+              thinking: { type: definition.thinkingMode ?? 'adaptive' },
               effort: definition.reasoningEffort,
               ...params.providerOptions?.anthropic,
             },
