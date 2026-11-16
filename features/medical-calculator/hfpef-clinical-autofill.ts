@@ -183,7 +183,7 @@ const isHypertensionCode = (code: string) => /^I1[0-6]/.test(code) || /^40[1-5]/
  */
 /** Any one current antihypertensive (PREVENT's and PCE's 「目前使用降血壓藥」); not the HFpEF ≥2 count. */
 function antihypertensiveAnySelect(medications: MedicationEntity[], now: Date): ClinicalSelectValue | undefined {
-  return drugClassSelect(medications, now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+  return drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
 }
 
 function hypertensionSelect(medications: MedicationEntity[], now: Date, conditions: ConditionEntity[], encounters: EncounterEntity[]): ClinicalSelectValue | undefined {
@@ -209,6 +209,20 @@ const isAscvdCode = (code: string) => /^I2[0-5]/.test(code) || /^I6[34]/.test(co
  * record shows the code or the prescription and 「否」 when it does not — never
  * left 未確認. The clinician changes it where the record is wrong.
  */
+/**
+ * A systemic medicine: not an eye drop, a topical (minoxidil lotion,
+ * betaxolol eye drops) or an injection, the same exclusions the HFpEF
+ * antihypertensive count applies.
+ */
+function systemicOnly(medications: MedicationEntity[]): MedicationEntity[] {
+  return medications.filter((med) => {
+    const atc = medicationAtcCode(med) ?? med.atcClassification?.atcCode
+    const text = [med.drugTerminology?.ingredientText, medicationDisplayName(med), med.drugTerminology?.officialNameEn].filter(Boolean).join(' ')
+    const route = [med.drugTerminology?.doseForm, ...med.dosageInstruction?.map(d => `${d.route?.text ?? ''} ${d.text ?? ''}`) ?? []].join(' ')
+    return !(/^(S|D)/.test(atc ?? '') || /ophthalm|eye\s*drop|topical|lotion|solution\s+for\s+scalp|眼|外用|皮膚|頭皮|\b(?:IV|intravenous|injection)\b|注射/i.test(`${text} ${route}`))
+  })
+}
+
 function defaultNo(found: ClinicalSelectValue | undefined, now: Date, missing: string): ClinicalSelectValue {
   return found?.value === 'yes' ? found : { value: 'no', date: now.toISOString().slice(0, 10), testName: `${missing}（預設否，請核對）` }
 }

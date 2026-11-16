@@ -68,6 +68,18 @@ describe('shared risk inputs', () => {
     expect(field('waist')).toMatchObject({ value: '92', origin: 'record' })
   })
 
+  it('locks a hypertension code over a manual 否, and reads a smoking code before the no-evidence 否', () => {
+    const p = profile({ hypertensionDiagnosis: fact('原發性高血壓 I10', '2024-05-02') })
+    const smoker = { ...record, clinicalSelects: { ...record.clinicalSelects, pceSmoking: { value: 'yes', date: '2026-03-01', testName: '吸菸診斷碼：F17.210（請核對）' } } }
+    const shared = buildRiskInputs(p, smoker, { hbp: 'no' })
+    const field = (key: string) => shared.fields.find((item) => item.input.key === key)!
+    expect(field('hbp')).toMatchObject({ value: 'yes', origin: 'icd', locked: true })
+    expect(field('smoking')).toMatchObject({ value: 'yes', origin: 'icd', date: '2026-03-01' })
+    // Today's answer and the clinician's own entry still outrank the code.
+    expect(buildRiskInputs(p, smoker, {}, undefined, { smokingCurrent: 'no' }).fields.find((item) => item.input.key === 'smoking')).toMatchObject({ value: 'no', origin: 'visit' })
+    expect(buildRiskInputs(p, smoker, { smoking: 'no' }).fields.find((item) => item.input.key === 'smoking')).toMatchObject({ value: 'no', origin: 'physician' })
+  })
+
   it('dates each positive answer by its own evidence, never by the LVEF', () => {
     const lvef = { zh: 'LVEF 35%', en: 'LVEF 35%', date: '2026-09-01', numericValue: 35 }
     const p = { ...profile({ LVEF: lvef, ascvdDiagnosis: fact('陳舊性心肌梗塞 I25.2') }), kidneyReplacementTherapy: { state: 'confirmed' } } as unknown as Parameters<typeof buildRiskInputs>[0]

@@ -138,6 +138,7 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     // Positive diagnosis codes, read by the FHIR adapter, lock the answer.
     const codeFact = key === 'cvd' ? (facts.ascvdDiagnosis ?? facts.heartFailureDiagnosis)
       : key === 'dm' ? DIABETES_CODE_FACT_KEYS.map((factKey) => facts[factKey]).find(Boolean)
+      : key === 'hbp' ? facts.hypertensionDiagnosis
       : undefined
     const positive = Boolean(codeFact)
       || (key === 'eskd' && profile.kidneyReplacementTherapy?.state === 'confirmed')
@@ -172,11 +173,10 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     if (!isManual && key === 'bptreat' && anyAntihypertensive?.value === 'yes') {
       value = 'yes'; origin = 'rule'; date = anyAntihypertensive.date; detail = text(`規則：${anyAntihypertensive.testName}`, `Rule: ${anyAntihypertensive.testName}`)
     }
-    // Known hypertension (HPA's 「已知高血壓」): a code, or treatment under way.
-    if (!isManual && key === 'hbp') {
-      const code = facts.hypertensionDiagnosis
-      if (code) { value = 'yes'; origin = 'icd'; date = code.date; detail = text(`ICD：${code.zh}`, `ICD: ${code.en}`) }
-      else if (anyAntihypertensive?.value === 'yes') { value = 'yes'; origin = 'rule'; date = anyAntihypertensive.date; detail = text('規則：降血壓藥供藥中', 'Rule: an antihypertensive is currently supplied') }
+    // Known hypertension (HPA's 「已知高血壓」): a code locks it above; without
+    // one, treatment under way proposes it.
+    if (!isManual && !positive && key === 'hbp' && anyAntihypertensive?.value === 'yes') {
+      value = 'yes'; origin = 'rule'; date = anyAntihypertensive.date; detail = text('規則：降血壓藥供藥中', 'Rule: an antihypertensive is currently supplied')
     }
     // PCE publishes White and African American equations only; the guideline
     // reads other groups, Taiwanese patients included, with the White ones.
@@ -187,6 +187,12 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     // question here, so the clinician answers once; their own entry still wins.
     if (!isManual && key === 'smoking' && visit.smokingCurrent) {
       value = visit.smokingCurrent; origin = 'visit'; date = today; detail = text('問診：DP-08 目前吸菸', 'Asked: DP-08 current smoking')
+    }
+    // Without today's answer, a smoking code (F17, Z72.0) proposes 「是」
+    // before the no-evidence 「否」 below.
+    const smokingCode = autofill.clinicalSelects?.pceSmoking
+    if (!isManual && key === 'smoking' && !visit.smokingCurrent && smokingCode?.value === 'yes') {
+      value = 'yes'; origin = 'icd'; date = smokingCode.date || undefined; detail = text(`ICD：${smokingCode.testName}`, `ICD: ${smokingCode.testName}`)
     }
     // The chart's own BMI and eGFR facts outrank a lab line.
     const clinicKey = key === 'bmi' ? 'bodyMassIndex' : key === 'egfr' ? 'eGFR' : undefined
