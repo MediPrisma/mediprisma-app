@@ -22,10 +22,13 @@ export interface InteractionCheckPlan {
 }
 
 export type InteractionTier = 'avoid' | 'act' | 'note'
+/** The service's own grade, shown as given; `unknown` when it sends none. */
+export type InteractionSeverity = 'high' | 'moderate' | 'low' | 'unknown'
 
 export interface InteractionFinding {
   id: string
   tier: InteractionTier
+  severity: InteractionSeverity
   rowIdsA: string[]
   rowIdsB: string[]
   action: string
@@ -116,6 +119,10 @@ function tierOf(severity: unknown, action: string, mechanism: string): Interacti
   return severity === 'high' || severity === 'moderate' ? 'act' : 'note'
 }
 
+const SEVERITIES: readonly string[] = ['high', 'moderate', 'low']
+const severityOf = (value: unknown): InteractionSeverity =>
+  SEVERITIES.includes(String(value)) ? value as InteractionSeverity : 'unknown'
+
 const TIER_ORDER: Record<InteractionTier, number> = { avoid: 0, act: 1, note: 2 }
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? value as Record<string, unknown> : {}
@@ -164,6 +171,7 @@ export function interpretInteractionCheck(
     findings.set(id, {
       id,
       tier: tierOf(alert.severity, action, mechanism),
+      severity: severityOf(alert.severity),
       rowIdsA,
       rowIdsB,
       action,

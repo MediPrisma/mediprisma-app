@@ -2,14 +2,16 @@
 // itself and never blocks. Every cross-visit pair and every avoid pair is
 // listed; drugs the service could not check are named in the open, so "none
 // found" never hides "not checked". Only same-visit pairs below avoid (the
-// prescriber chose them) sit behind one disclosure. Quiet styling: no red
-// alarm badges, the same restraint as 開藥注意.
+// prescriber chose them) sit behind one disclosure. Each pair carries the
+// service's own grade in its own colour (orange, yellow, blue — no red alarm
+// badges, the same restraint as 開藥注意), and 避免併用 as a separate solid tag
+// when the text says so, since the grade alone misses those.
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { MedicationRow } from '../types'
-import { attentionFindings, type InteractionFinding, type InteractionReview } from '../utils/interaction-check'
+import { attentionFindings, type InteractionFinding, type InteractionReview, type InteractionSeverity } from '../utils/interaction-check'
 
 interface InteractionSummaryProps {
   review: InteractionReview
@@ -19,8 +21,19 @@ interface InteractionSummaryProps {
 const text = 'text-[max(13px,0.8125rem)]'
 const meta = 'text-[max(12px,0.75rem)] text-muted-foreground'
 const tag = 'mt-px inline-flex h-5 shrink-0 items-center rounded-sm border px-1.5 text-[max(11px,0.6875rem)]'
-const avoidTone = 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100'
-const otherTone = 'border-border bg-muted/60 text-muted-foreground'
+const avoidTone = 'border-amber-600 bg-amber-600 font-medium text-white dark:border-amber-500 dark:bg-amber-500 dark:text-amber-950'
+const SEVERITY_TONE: Record<InteractionSeverity, string> = {
+  high: 'border-orange-300 bg-orange-50 text-orange-900 dark:border-orange-500/40 dark:bg-orange-500/15 dark:text-orange-100',
+  moderate: 'border-yellow-300 bg-yellow-50 text-yellow-900 dark:border-yellow-500/40 dark:bg-yellow-500/15 dark:text-yellow-100',
+  low: 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-100',
+  unknown: 'border-border bg-muted/60 text-muted-foreground',
+}
+const SEVERITY_LABEL: Record<InteractionSeverity, [string, string]> = {
+  high: ['高度', 'High'],
+  moderate: ['中度', 'Moderate'],
+  low: ['輕度', 'Low'],
+  unknown: ['未分級', 'Unrated'],
+}
 
 export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
   const { locale } = useLanguage()
@@ -60,8 +73,9 @@ export function InteractionSummary({ review, rows }: InteractionSummaryProps) {
           onClick={() => setOpenId(open ? null : f.id)}
           className="flex w-full items-start gap-2 px-2.5 py-1.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [@media(pointer:coarse)]:min-h-[44px]"
         >
-          <span className={cn(tag, f.tier === 'avoid' ? avoidTone : otherTone)}>
-            {f.tier === 'avoid' ? (en ? 'Avoid' : '避免併用') : (en ? 'Review' : '需注意')}
+          <span className="flex shrink-0 flex-col items-start gap-0.5">
+            {f.tier === 'avoid' && <span className={cn(tag, avoidTone)}>{en ? 'Avoid' : '避免併用'}</span>}
+            <span className={cn(tag, SEVERITY_TONE[f.severity])}>{SEVERITY_LABEL[f.severity][en ? 1 : 0]}</span>
           </span>
           <span className="min-w-0 flex-1">
             <span className={cn('block break-words', text, quiet ? 'text-foreground/80' : 'font-medium text-foreground')}>
