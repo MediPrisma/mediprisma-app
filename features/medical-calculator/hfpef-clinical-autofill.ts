@@ -184,7 +184,7 @@ const isHypertensionCode = (code: string) => /^I1[0-6]/.test(code) || /^40[1-5]/
 function hypertensionSelect(medications: MedicationEntity[], now: Date, conditions: ConditionEntity[], encounters: EncounterEntity[]): ClinicalSelectValue | undefined {
   const code = diagnosisSelect(conditions, encounters, now, isHypertensionCode, '高血壓')
   if (code) return code
-  const drug = drugClassSelect(medications, now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+  const drug = drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
   if (drug?.value === 'no') return { ...drug, testName: '未見高血壓診斷碼，目前有效處方也未見降血壓藥（依處方推算，請核對）' }
   return drug
 }
