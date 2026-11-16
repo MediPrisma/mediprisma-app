@@ -2,6 +2,12 @@ jest.mock('@/src/infrastructure/ai/streaming/model-reporting.middleware', () => 
   withModelReporting: (model: unknown) => model,
 }))
 
+// This suite checks routing; real reasoning serialization is covered by
+// model-reasoning-wire.test.ts with the actual SDK and middleware.
+jest.mock('@/src/infrastructure/ai/streaming/model-reasoning.middleware', () => ({
+  withModelReasoningDefaults: (model: unknown) => model,
+}))
+
 jest.mock('@/src/infrastructure/ai/streaming/openai-stateless.middleware', () => ({
   withOpenAiStatelessResponses: (model: object) => ({ ...model, stateless: true }),
 }))
