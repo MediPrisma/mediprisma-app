@@ -46,6 +46,7 @@ import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
 import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { applyNhiDictionaryErrata } from '../nhi-dictionary-errata'
 import { hasVghtpeMedicationAtcCheck, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
 import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
 import { toAwaitingOrder, type AwaitingOrder } from '@/src/shared/utils/awaiting-order'
@@ -902,6 +903,20 @@ function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {
         && tag?.code === NHI_DRUG_ENRICHMENT_POLICY_VERSION,
     ))
   return hasCurrentHierarchy && hasCurrentAppPolicy
+}
+
+/** The NHI drug code of the first linked MedicationKnowledge that carries one. */
+function nhiDrugCodeOfKnowledge(request: any, knowledgeById: Map<string, any>): string | undefined {
+  const references = Array.isArray(request.supportingInformation) ? request.supportingInformation : []
+  for (const candidate of references) {
+    const id = typeof candidate?.reference === 'string' ? referenceId(candidate.reference) : undefined
+    const knowledge = id ? knowledgeById.get(id) : undefined
+    const coding = Array.isArray(knowledge?.code?.coding)
+      ? knowledge.code.coding.find((c: any) => isNhiDrugCodeSystem(c?.system) && typeof c?.code === 'string')
+      : undefined
+    if (coding) return coding.code
+  }
+  return undefined
 }
 
 function terminologyFromMedicationKnowledge(
@@ -1981,10 +1996,12 @@ export const LocalBundleService = {
     // as well (IPS-style orders reference a Medication rather than inlining it).
     const medicationRequests = byType('MedicationRequest').map((m: any) => {
       const resolved = resolveMedicationCode(m)
-      const drugTerminology = terminologyFromMedicationKnowledge(
+      const officialTerminology = terminologyFromMedicationKnowledge(
         m,
         medicationKnowledgeMap,
       )
+      const drugTerminology = officialTerminology
+        && applyNhiDictionaryErrata(nhiDrugCodeOfKnowledge(m, medicationKnowledgeMap), officialTerminology)
       return {
         ...resolved,
         _sourceResourceType: 'MedicationRequest' as const,
