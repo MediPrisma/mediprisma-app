@@ -187,6 +187,20 @@ const isAscvdCode = (code: string) => /^I2[0-5]/.test(code) || /^I6[34]/.test(co
  * record shows the code or the prescription and 「否」 when it does not — never
  * left 未確認. The clinician changes it where the record is wrong.
  */
+/**
+ * A systemic medicine: not an eye drop, a topical (minoxidil lotion,
+ * betaxolol eye drops) or an injection, the same exclusions the HFpEF
+ * antihypertensive count applies.
+ */
+function systemicOnly(medications: MedicationEntity[]): MedicationEntity[] {
+  return medications.filter((med) => {
+    const atc = medicationAtcCode(med) ?? med.atcClassification?.atcCode
+    const text = [med.drugTerminology?.ingredientText, medicationDisplayName(med), med.drugTerminology?.officialNameEn].filter(Boolean).join(' ')
+    const route = [med.drugTerminology?.doseForm, ...med.dosageInstruction?.map(d => `${d.route?.text ?? ''} ${d.text ?? ''}`) ?? []].join(' ')
+    return !(/^(S|D)/.test(atc ?? '') || /ophthalm|eye\s*drop|topical|lotion|solution\s+for\s+scalp|眼|外用|皮膚|頭皮|\b(?:IV|intravenous|injection)\b|注射/i.test(`${text} ${route}`))
+  })
+}
+
 function defaultNo(found: ClinicalSelectValue | undefined, now: Date, missing: string): ClinicalSelectValue {
   return found?.value === 'yes' ? found : { value: 'no', date: now.toISOString().slice(0, 10), testName: `${missing}（預設否，請核對）` }
 }
@@ -247,7 +261,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
   // PCE's four history and drug questions (owner 2026-11-16).
-  const pceBpTreat = defaultNo(drugClassSelect(medications, now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
+  const pceBpTreat = defaultNo(drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
   const pceDiabetes = defaultNo(diabetes, now, '病歷未見糖尿病診斷碼')
   const pceSmoking = defaultNo(diagnosisSelect(conditions, encounters, now, isSmokingCode, '吸菸'), now, '病歷未見吸菸診斷碼')
   const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD '), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
