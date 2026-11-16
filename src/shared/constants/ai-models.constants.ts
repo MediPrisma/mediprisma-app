@@ -51,6 +51,9 @@ export interface ModelDefinition {
   providerBase: boolean
   autoRunEligible: boolean
   roles: readonly ModelRole[]
+  /** Gemini only: the thinking level sent when the caller sets none. Unset
+   *  leaves the model's own default. */
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
 }
 
 /** Stable logical id for browser-configured OpenAI-compatible endpoints. */
@@ -203,8 +206,8 @@ export const MODEL_CATALOG = [
     roles: ['default'],
   },
   {
-    id: 'gemini-3.8-flash',
-    label: 'Gemini 3.8 Flash',
+    id: 'gemini-4-hydrogen',
+    label: 'Gemini 4 Hydrogen',
     descriptions: {
       en: 'Next-gen fast model',
       'zh-TW': '新一代快速模型',
@@ -220,6 +223,10 @@ export const MODEL_CATALOG = [
     providerBase: false,
     autoRunEligible: true,
     roles: [],
+    // Hydrogen thinks at high by default: the demo summary took 122 s and
+    // timed out. Low took 19-24 s, medium 51-60 s (2026-11-16, demo patient);
+    // the owner chose speed.
+    thinkingLevel: 'low',
   },
   {
     id: 'gemini-3.1-pro-preview',

@@ -32,11 +32,10 @@
     "loop:gate": "node scripts/loop/gate.mjs",
     "loop:dashboard": "node scripts/loop/dashboard.mjs",
     "loop:log": "node scripts/loop/log.mjs",
-    "version": "node scripts/write-version.mjs && git add public/version.json",
     "lint": "eslint .",
     "dev:af": "node scripts/dev-af.mjs",
     "typecheck": "node scripts/typecheck.mjs",
-    "test:optional": "node --test scripts/__tests__/optional-install.test.mjs"
+    "test:optional": "node --test scripts/__tests__/optional-install.test.mjs scripts/__tests__/app-version.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.84",
@@ -109,10 +108,10 @@
     "typescript": "^6.0.3"
   },
   "optionalDependencies": {
-    "@voho0000/clinical-lab-normalization": "1.3.0",
+    "@voho0000/clinical-lab-normalization": "1.5.0",
     "@voho0000/personalization-sdk": "1.0.0",
-    "@voho0000/personalized-care": "2.27.0",
-    "@voho0000/personalized-care-fhir": "1.17.4",
+    "@voho0000/personalized-care": "2.29.0",
+    "@voho0000/personalized-care-fhir": "1.17.15",
     "@voho0000/personalized-education": "1.4.1"
   }
 }

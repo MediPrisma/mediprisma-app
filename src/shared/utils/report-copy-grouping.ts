@@ -9,6 +9,7 @@ import {
   sharedReportNarrative,
   sharedReportSourceIdentity,
 } from './shared-report-grouping'
+import { taipeiDay, utcDay } from '@/src/core/utils/calendar-day'
 
 type Source = 'hospital' | 'cloud'
 const VGH_NAMES = new Set(['臺北榮總', '台北榮總', '臺北榮民總醫院', '台北榮民總醫院'])
@@ -107,10 +108,10 @@ function sourceDay(raw: string | undefined): string | undefined {
   if (!raw || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(raw)) return undefined
   const day = raw.slice(0, 10)
   const date = new Date(`${day}T00:00:00Z`)
-  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day) return undefined
+  if (!Number.isFinite(date.getTime()) || utcDay(date) !== day) return undefined
   if (!raw.includes('T')) return day
   const instant = sourceInstant(raw)
-  return instant === undefined ? undefined : new Date(instant + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  return instant === undefined ? undefined : taipeiDay(instant)
 }
 
 function examDay(report: Report): string | undefined {

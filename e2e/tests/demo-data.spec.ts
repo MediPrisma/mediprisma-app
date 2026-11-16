@@ -120,7 +120,7 @@ test.describe('demo data (試用資料)', () => {
     const customModule = summaryPanel.locator('article').filter({
       has: page.getByRole('heading', { name: "What's Changed" }),
     })
-    await expect(customModule).toContainText('August 27 records show', { timeout: 20_000 })
+    await expect(customModule).toContainText('Status Changes and Deltas Requiring Attention', { timeout: 20_000 })
     await expect(customModule.getByTestId('custom-insight-generation-meta'))
       .toHaveAttribute(
         'aria-label',

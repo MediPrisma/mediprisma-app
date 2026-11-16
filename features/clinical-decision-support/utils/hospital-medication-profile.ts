@@ -130,6 +130,8 @@ export function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMe
 }
 
 const ANTICOAGULANT_FACT_KEYS = ['currentDoac', 'currentVitaminKAntagonist', 'currentOralAnticoagulant'] as const
+/** Class-context fact keys whose mere presence means the class is being taken. */
+const PRESENCE_ONLY_CLASS_FACT_KEYS: ReadonlySet<string> = new Set(['currentDoac', 'currentVitaminKAntagonist'])
 
 /** Use the hospital's order status and the same supply calculation as the chart.
  * This is the app's recorded-medication policy, not an assertion of adherence. */
@@ -306,7 +308,12 @@ export function createHospitalAwareCdssPatientProfile(
   if (unresolved.length) for (const [classId, context] of Object.entries(contexts)) {
     if (!context || context.state !== 'not-found') continue
     contexts[classId as CdssMedicationClassId] = { ...context, state: 'uncertain' }
+    // The oral-anticoagulant class facts exist only while the class is being
+    // taken: the AF pack and `anticoagulationOnProfile` read their presence as
+    // 「已抗凝」. A placeholder there would turn an unidentified tablet into
+    // current anticoagulation, so leave them absent like the harmful classes.
     if (!context.factKey.startsWith('hfHarmful')
+      && !PRESENCE_ONLY_CLASS_FACT_KEYS.has(context.factKey)
       && !(context.factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass)) facts[context.factKey] = {
       zh: '院內紀錄未提供藥物成分',
       en: 'Hospital ingredient not recorded',

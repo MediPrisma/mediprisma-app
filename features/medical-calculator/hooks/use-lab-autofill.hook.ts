@@ -79,9 +79,17 @@ function keepLatest(cur: AutofillValue | undefined, next: AutofillValue): Autofi
 function normSpecimen(display: string | undefined): 'blood' | 'urine' | 'other' | undefined {
   if (!display) return undefined
   const d = display.toLowerCase()
-  if (/urin/.test(d)) return 'urine'
+  if (/urin|尿/.test(d)) return 'urine'
   if (/blood|serum|plas/.test(d)) return 'blood'
   return 'other'
+}
+
+/** A row with no specimen field whose own name says it is urine ("Urine
+ *  Creatinine", "尿液肌酸酐"). The canonical layer keys these the same as the
+ *  serum analyte, so the name is the only thing separating them. */
+function namedAsUrine(holder: CodeHolder): boolean {
+  const names = [holder.code?.text, ...(holder.code?.coding ?? []).map((c) => c?.display)]
+  return names.some((n) => !!n && /urin|尿液/i.test(n))
 }
 
 /** Urine albumin concentration → mg/L (the numerator unit for ACR mg/g). */
@@ -150,6 +158,9 @@ export function buildAutofill(
   const echo = buildEchoAutofill(reports, observations)
   const byCanonical: Record<string, AutofillValue> = {}
   const byLoinc: Record<string, AutofillValue> = {}
+  // Same as byCanonical minus rows known to be urine — what a serum input may
+  // fall back to when no row is marked blood.
+  const byNonUrine: Record<string, AutofillValue> = {}
   // Keyed by `${specimen}|${canonicalKey}` (e.g. "blood|NA", "urine|CREA").
   const bySpecimen: Record<string, AutofillValue> = {}
   // Vitals matched by display name (fallback when LOINC is absent).
@@ -170,7 +181,8 @@ export function buildAutofill(
     // keys, as the cumulative report does.
     const key = isPediatricEgfr(holder) ? 'EGFR(PED)' : getAnalyteCanonicalKey(holder)
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
-    const spec = normSpecimen(specimenDisplay)
+    const spec = normSpecimen(specimenDisplay) ?? (namedAsUrine(holder) ? 'urine' : undefined)
+    if (key && spec !== 'urine') byNonUrine[key] = keepLatest(byNonUrine[key], entry)
     if (key && spec) {
       const sk = `${spec}|${key}`
       bySpecimen[sk] = keepLatest(bySpecimen[sk], entry)
@@ -260,12 +272,15 @@ export function buildAutofill(
       case 'lab':
         // Prefer a blood-specimen match so a serum analyte never picks up a
         // same-named urine value (urine Na also canonicalises to NA); fall
-        // back to any specimen when the field is absent (older bundles).
+        // back to rows that are not urine when none is marked blood (older
+        // bundles omit the field). A urine row is never a serum value: with
+        // the serum row unmarked and the urine row marked, the urine
+        // creatinine used to fill eGFR and CrCl.
         for (const k of source.keys) {
           if (bySpecimen[`blood|${k}`]) return bySpecimen[`blood|${k}`]
         }
         for (const k of source.keys) {
-          if (byCanonical[k]) return byCanonical[k]
+          if (byNonUrine[k]) return byNonUrine[k]
         }
         return undefined
       case 'labSpecimen':

@@ -14,10 +14,11 @@ import { useVisitAnswersStore, visitAnswersOf } from '../stores/visit-answers.st
 import { useEvidenceOverridesStore } from '../stores/evidence-overrides.store'
 import { usePreventStore } from '../stores/prevent-inputs.store'
 import { useCarriedAnswersStore } from '../stores/carried-answers.store'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {}
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value)
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => Number.isFinite(Date.parse(value)) && utcDay(Date.parse(value)) === value)
 const measurement = z.object({ value: z.number().finite().nonnegative(), measuredOn: day, modifiedAt: storedTimestampV2 })
 const echo = z.object({ value: z.string().max(120).refine(value => value.trim() !== '' && Number.isFinite(Number(value))), measuredOn: day, modifiedAt: storedTimestampV2 })
 // Only echo measurements, never the calculator's current age, medicines or labs.

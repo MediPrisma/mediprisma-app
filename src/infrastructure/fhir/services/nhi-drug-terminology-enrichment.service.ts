@@ -18,6 +18,7 @@ import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
 import { VGHTPE_MEDICATION_ATC_CHECK, VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
 import type { HospitalMedicationAtcClassification } from '@/src/core/entities/clinical-data.entity'
 import { markVghtpeMedicationIdentities } from './vghtpe-medication-identity-enrichment'
+import { utcDay } from '@/src/core/utils/calendar-day'
 export { isNhiDrugCodeSystem, NHI_DRUG_CODE_SYSTEMS } from '@/src/shared/utils/nhi-drug-code-system'
 const WHO_ATC_CODE_SYSTEM = 'http://www.whocc.no/atc'
 
@@ -175,7 +176,7 @@ function prescriptionDate(request: FhirResource): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
   const parsed = new Date(`${date}T00:00:00Z`)
   return !Number.isNaN(parsed.valueOf())
-    && parsed.toISOString().slice(0, 10) === date
+    && utcDay(parsed) === date
     ? date
     : null
 }

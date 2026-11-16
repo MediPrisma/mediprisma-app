@@ -113,6 +113,7 @@ import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/
 type SummaryView = "standard" | "custom"
 
 import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
+import { taipeiDay } from "@/src/core/utils/calendar-day"
 
 export default function MedicalSummaryFeature() {
   const { t, locale } = useLanguage()
@@ -443,7 +444,7 @@ export default function MedicalSummaryFeature() {
   // reference date (the demo's own as-of date for demo data), counted the way
   // the prompt counted them.
   const currentAnticholinergics = useMemo(() => {
-    const referenceDay = new Date(clinicalNowMs(isDemoDataActive(), demoPatientId) + 8 * 3_600_000).toISOString().slice(0, 10)
+    const referenceDay = taipeiDay(clinicalNowMs(isDemoDataActive(), demoPatientId))
     return currentAnticholinergicMedicines(safetySourceCatalog ?? [], referenceDay).map(({ ingredient }) => ingredient)
   }, [safetySourceCatalog, demoPatientId])
   // 待核對 beside an alert that calls a medicine anticholinergic against its

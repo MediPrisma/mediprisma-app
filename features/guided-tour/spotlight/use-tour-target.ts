@@ -43,6 +43,11 @@ const MAX_ATTEMPTS = 32
 /** Find, follow and scroll to the element a tour step points at. */
 export function useTourTarget(spec: TourTargetSpec | null, isDesktop = false): TourTargetState {
   const [targetRect, setTargetRect] = useState<Rect | null>(null)
+  // The spec the rect was measured for. A new step renders once before its
+  // search starts; without this it would be placed on the previous step's
+  // target for that frame (and an optional step that is about to be skipped
+  // would briefly show as placed).
+  const [rectFor, setRectFor] = useState<TourTargetSpec | null>(null)
   const [usingFallback, setUsingFallback] = useState(false)
   // The spec the missing verdict belongs to, so a verdict for one step is
   // never read as the verdict for the next before the search restarts.
@@ -77,6 +82,7 @@ export function useTourTarget(spec: TourTargetSpec | null, isDesktop = false): T
       if (!target || !isVisibleTourElement(target)) return
       const nextRect = rectFromElement(target)
       setTargetRect((currentRect) => sameRect(currentRect, nextRect) ? currentRect : nextRect)
+      setRectFor(spec)
     }
     const bindTarget = (nextTarget: HTMLElement, fallback: boolean) => {
       setMissingFor(null)
@@ -181,5 +187,10 @@ export function useTourTarget(spec: TourTargetSpec | null, isDesktop = false): T
     }
   }, [isDesktop, spec])
 
-  return { targetRect, usingFallback, missing: spec !== null && missingFor === spec, viewport }
+  return {
+    targetRect: spec !== null && rectFor === spec ? targetRect : null,
+    usingFallback,
+    missing: spec !== null && missingFor === spec,
+    viewport,
+  }
 }

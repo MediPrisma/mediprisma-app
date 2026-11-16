@@ -39,6 +39,11 @@ jest.mock('@/src/application/providers/audience.provider', () => ({
   useAudience: () => ({ audience: 'medical' }),
 }))
 
+const mockPatient = { id: 'patient-a' }
+jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
+  usePatient: () => ({ patient: { id: mockPatient.id }, loading: false, error: null }),
+}))
+
 const mockUseClinicalData = jest.fn()
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => mockUseClinicalData(),
@@ -101,6 +106,7 @@ describe('OverviewCard (demo bundle)', () => {
     mockUseClinicalData.mockReturnValue(clinicalData)
     // The lab mode is a remembered preference; each test starts from none.
     useOutpatientPrefsStore.setState({ byUser: {} })
+    mockPatient.id = 'patient-a'
   })
 
   it('shows ongoing medication before finished medication in card and dialog', () => {
@@ -416,6 +422,113 @@ describe('OverviewCard (demo bundle)', () => {
       expect(card).toBeInTheDocument()
       expect(within(card as HTMLElement).getByText(zhTW.overview.emptyWindow)).toBeInTheDocument()
     }
+  })
+
+  describe('remembered view choices', () => {
+    // No account and no anonymous session in this suite: the shared guest key.
+    const stored = () => useOutpatientPrefsStore.getState().byUser.guest
+    const remember = (prefs: Record<string, unknown>) =>
+      useOutpatientPrefsStore.getState().update('guest', prefs)
+    const pressed = (sectionId: string, name: string) => within(
+      document.getElementById(`overview-section-${sectionId}`)!,
+    ).getByRole('button', { name })
+    const visit = (id: string, day: string) => ({
+      resourceType: 'Encounter', id, status: 'finished',
+      class: { code: 'AMB' },
+      period: { start: `${day}T09:00:00+08:00`, end: `${day}T10:00:00+08:00` },
+    })
+    const chartWith = (encounters: unknown[]) => ({
+      ...clinicalData,
+      encounters,
+      medications: [],
+      diagnosticReports: [],
+      observations: [],
+      procedures: [],
+      conditions: [],
+      documentReferences: [],
+      compositions: [],
+    })
+
+    it('opens the next chart on the range picked last', () => {
+      const first = render(<OverviewCard />)
+      fireEvent.click(screen.getByRole('button', { name: zhTW.overview.ranges[1] }))
+      expect(stored()?.overviewRange).toBe(1)
+      first.unmount()
+
+      render(<OverviewCard />)
+      expect(screen.getByText('近1個月總覽')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: zhTW.overview.ranges[1] })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('keeps the remembered range while it holds data, common lab or not', async () => {
+      remember({ overviewRange: 6 })
+      // One visit four months back and nothing else: no 常用 result anywhere.
+      mockUseClinicalData.mockReturnValue(chartWith([visit('v1', '2026-02-10')]))
+      render(<OverviewCard />)
+
+      await waitFor(() => expect(tileValue('visits')).toBe(1))
+      expect(screen.getByText('近6個月總覽')).toBeInTheDocument()
+      expect(screen.queryByText('近1年總覽')).not.toBeInTheDocument()
+    })
+
+    it('shows a longer window when the remembered one is empty, without changing what is remembered', async () => {
+      remember({ overviewRange: 1 })
+      // Nothing in the last month or the last three; one visit five months back.
+      mockUseClinicalData.mockReturnValue(chartWith([visit('v1', '2026-01-10')]))
+      render(<OverviewCard />)
+
+      await waitFor(() => expect(screen.getByText('近6個月總覽')).toBeInTheDocument())
+      expect(tileValue('visits')).toBe(1)
+      expect(stored()?.overviewRange).toBe(1)
+    })
+
+    it('goes back to the remembered range on the next patient', async () => {
+      remember({ overviewRange: 1 })
+      mockUseClinicalData.mockReturnValue(chartWith([visit('v1', '2026-01-10')]))
+      const view = render(<OverviewCard />)
+      await waitFor(() => expect(screen.getByText('近6個月總覽')).toBeInTheDocument())
+
+      mockPatient.id = 'patient-b'
+      mockUseClinicalData.mockReturnValue(clinicalData)
+      view.rerender(<OverviewCard />)
+
+      await waitFor(() => expect(screen.getByText('近1個月總覽')).toBeInTheDocument())
+    })
+
+    it('does not widen a range picked on this chart, even when it is empty', async () => {
+      mockUseClinicalData.mockReturnValue(chartWith([visit('v1', '2026-01-10')]))
+      render(<OverviewCard />)
+      fireEvent.click(screen.getByRole('button', { name: zhTW.overview.ranges[1] }))
+
+      await waitFor(() => expect(screen.getByText('近1個月總覽')).toBeInTheDocument())
+      expect(screen.getByRole('button', { name: zhTW.overview.ranges[1] })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('remembers the medication, visit and report filters', () => {
+      const first = render(<OverviewCard />)
+      fireEvent.click(pressed('meds', zhTW.overview.meds.all))
+      fireEvent.click(pressed('visits', zhTW.visitHistory.badges.outpatient))
+      expect(stored()).toMatchObject({ overviewMedFilter: 'all', overviewVisitFilter: 'outpatient' })
+      first.unmount()
+
+      render(<OverviewCard />)
+      expect(pressed('meds', zhTW.overview.meds.all)).toHaveAttribute('aria-pressed', 'true')
+      expect(pressed('visits', zhTW.visitHistory.badges.outpatient)).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('shows the default on a chart the remembered filter does not apply to, and keeps the choice', () => {
+      remember({ overviewMedFilter: 'changed', overviewVisitFilter: 'inpatient', overviewReportGroup: 'pathology' })
+      mockUseClinicalData.mockReturnValue(chartWith([visit('v1', '2026-06-01')]))
+      render(<OverviewCard />)
+
+      expect(pressed('meds', zhTW.overview.meds.current)).toHaveAttribute('aria-pressed', 'true')
+      expect(pressed('visits', zhTW.overview.visits.all)).toHaveAttribute('aria-pressed', 'true')
+      expect(tileValue('visits')).toBe(1)
+      expect(within(document.getElementById('overview-section-visits')!).queryByText(zhTW.overview.emptyWindow)).not.toBeInTheDocument()
+      expect(stored()).toMatchObject({
+        overviewMedFilter: 'changed', overviewVisitFilter: 'inpatient', overviewReportGroup: 'pathology',
+      })
+    })
   })
 
   it('pins the clock used by the window so the assertions above are stable', () => {

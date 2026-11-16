@@ -4,6 +4,7 @@
 // dispatch by provider, but the implementation delegates to generateText()
 // instead of hand-rolled fetch. Proxy routing comes from AiProviderFactory.
 
+import { readTokenUsage } from '@/src/shared/utils/ai-token-usage'
 import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from '@/src/shared/utils/ai-model-execution'
 import { generateText } from 'ai'
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
@@ -69,6 +70,7 @@ export class ClaudeService {
         modelExecution,
         provider: 'claude',
         tokensUsed: result.usage?.totalTokens,
+        usage: readTokenUsage(result.usage),
       },
     }
   }

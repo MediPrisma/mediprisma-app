@@ -47,16 +47,16 @@ describe('ChatMessageList — afterMessages slot (follow-up chips placement)', (
   })
 
   it('shows the selected model with info until actual metadata arrives, then warns on fallback', async () => {
-    const pending = createModelExecution('gemini-3.8-flash')
-    const message = { id: 'a1', role: 'assistant' as const, content: 'SAME_ANSWER', timestamp: 0, modelId: 'gemini-3.8-flash', modelExecution: pending }
+    const pending = createModelExecution('gemini-4-hydrogen')
+    const message = { id: 'a1', role: 'assistant' as const, content: 'SAME_ANSWER', timestamp: 0, modelId: 'gemini-4-hydrogen', modelExecution: pending }
     const view = render(<LanguageProvider><ChatMessageList messages={[message]} isLoading={true} /></LanguageProvider>)
-    expect(screen.getByText('Gemini 3.8 Flash')).toBeInTheDocument()
+    expect(screen.getByText('Gemini 4 Hydrogen')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('載入中')
     fireEvent.focus(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' }))
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('目前顯示所選模型 Gemini 3.8 Flash。API 未回報實際模型')
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('目前顯示所選模型 Gemini 4 Hydrogen。API 未回報實際模型')
     view.rerender(<LanguageProvider><ChatMessageList messages={[{ ...message, modelExecution: reportModelExecution(pending, 'gemini-3.1-flash-lite') }]} isLoading={false} /></LanguageProvider>)
     expect(screen.getByText('Gemini 3.1 Flash-Lite')).toHaveAttribute('title', 'Gemini 3.1 Flash-Lite')
-    expect(screen.getByRole('status')).toHaveTextContent('本次未能依選擇的 Gemini 3.8 Flash 完成')
+    expect(screen.getByRole('status')).toHaveTextContent('本次未能依選擇的 Gemini 4 Hydrogen 完成')
     expect(screen.getByRole('status')).toHaveTextContent('實際使用 Gemini 3.1 Flash-Lite')
     expect(screen.getByText('SAME_ANSWER')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '模型資訊：API 未回報實際模型' })).not.toBeInTheDocument()
