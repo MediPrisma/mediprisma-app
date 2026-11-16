@@ -43,10 +43,10 @@ describe('useMedicationSafetyTab', () => {
       status: 'ok',
       review: {
         findings: [
-          { id: '1', tier: 'avoid', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '2', tier: 'act', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '3', tier: 'note', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '4', tier: 'act', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: true },
+          { id: '1', tier: 'avoid', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
+          { id: '2', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
+          { id: '3', tier: 'note', severity: 'low', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
+          { id: '4', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: true },
         ],
         checkedRowIds: ['a', 'b'],
         uncheckedRowIds: ['c'],
