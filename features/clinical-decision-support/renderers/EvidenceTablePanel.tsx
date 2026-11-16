@@ -139,7 +139,9 @@ const CATEGORY_LABELS: Record<EvidenceItemCategory, { zh: string; en: string }> 
   context: { zh: '臨床背景', en: 'Clinical context' },
 }
 
-const CONCEPT_LABELS: Record<EvidenceTable['concept'] | 'lipid-very-high-risk', { zh: string; en: string }> = {
+// The union names the pack's concepts plus the ones this host labels ahead of
+// the published pack (the preview typechecks against the published version).
+const CONCEPT_LABELS: Record<EvidenceTable['concept'] | 'lipid-very-high-risk' | 'htn-taiwan-risk-stage', { zh: string; en: string }> = {
   'lipid-very-high-risk': { zh: 'ASCVD 極高風險：主要事件與高風險條件', en: 'Very-high-risk ASCVD: major events and high-risk conditions' },
   'af-diagnosis': { zh: 'AF 診斷', en: 'AF diagnosis' },
   'af-stroke-risk': { zh: '血栓風險計分依據', en: 'Stroke risk components' },
@@ -202,6 +204,8 @@ const CONCEPT_LABELS: Record<EvidenceTable['concept'] | 'lipid-very-high-risk', 
     en: 'Blood-pressure target individualization',
   },
   'htn-sleep-apnea': { zh: '睡眠呼吸中止', en: 'Sleep apnea' },
+  // The Taiwan 2022 Figure 4 stage DP-08 reads before the target and the start.
+  'htn-taiwan-risk-stage': { zh: '台灣 2022 風險分期（Figure 4）', en: 'Taiwan 2022 risk stage (Figure 4)' },
 }
 
 const DIRECTION_LABELS: Record<EvidenceDirection, { zh: string; en: string }> = {
