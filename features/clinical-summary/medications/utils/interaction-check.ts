@@ -94,7 +94,14 @@ const words = (text: string) => text.toLowerCase().match(/[a-z][a-z-]+/g) ?? []
 // emtansine" is not "trastuzumab", "sodium chloride" is not "potassium chloride".
 const SALT_SUFFIXES = new Set(['hcl', 'hydrochloride', 'hbr', 'hydrobromide', 'sodium', 'potassium', 'calcium',
   'magnesium', 'maleate', 'citrate', 'sulfate', 'sulphate', 'phosphate', 'acetate', 'besylate', 'besilate',
-  'mesylate', 'tartrate', 'fumarate', 'succinate', 'bromide', 'nitrate', 'anhydrous', 'monohydrate', 'dihydrate'])
+  'mesylate', 'tartrate', 'fumarate', 'succinate', 'bromide', 'chloride', 'nitrate', 'anhydrous', 'hydrate',
+  'monohydrate', 'dihydrate', 'trihydrate', 'hemihydrate', 'sesquihydrate'])
+
+// When the name itself starts with an ion, the salt words are the drug:
+// "SODIUM CHLORIDE" must not resolve to Diclofenac sodium by dropping
+// "chloride". Suffixes may be left out only after a drug's own name.
+const IONS = new Set(['sodium', 'potassium', 'calcium', 'magnesium', 'zinc', 'ferrous', 'ferric', 'lithium', 'aluminium',
+  'aluminum', 'ammonium'])
 
 // Spellings the service abbreviates. Unlike a salt suffix, the word itself must
 // still be there: "sodium chloride" is not "diclofenac sodium".
@@ -106,7 +113,7 @@ function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
   const asked = words(query)
   return asked.length > 0
     && asked.every((word, index) => known.has(word) || known.has(ABBREVIATIONS[word] ?? '')
-      || (index > 0 && SALT_SUFFIXES.has(word)))
+      || (index > 0 && !IONS.has(asked[0] ?? '') && SALT_SUFFIXES.has(word)))
 }
 
 const AVOID = /不可併用|禁止併用|避免併用|不宜併用|不建議併用|禁忌/
