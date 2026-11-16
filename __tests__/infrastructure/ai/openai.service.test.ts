@@ -211,7 +211,7 @@ describe('OpenAiService', () => {
 
     it('omits legacy sampling parameters for GPT-5.6 reasoning requests', async () => {
       const request: AiQueryRequest = {
-        modelId: 'gpt-5.6-terra',
+        modelId: 'gpt-6.1-terra',
         messages: [{ role: 'user', content: 'Test' }],
         temperature: 0.5,
         maxTokens: 4096,
@@ -243,7 +243,7 @@ describe('OpenAiService', () => {
         json: async () => ({
           message: 'Proxy Luna response',
           openAiResponse: {
-            model: 'gpt-5.6-luna',
+            model: 'gpt-6-luna',
             output: [{
               type: 'message',
               content: [{ type: 'output_text', text: 'Proxy Luna response' }],
@@ -254,7 +254,7 @@ describe('OpenAiService', () => {
       } as Response)
 
       const result = await service.query({
-        modelId: 'gpt-5.6-luna',
+        modelId: 'gpt-6-luna',
         messages: [{ role: 'user', content: 'Test' }],
         temperature: 0.5,
         maxTokens: 2048,
@@ -266,7 +266,7 @@ describe('OpenAiService', () => {
       expect((init?.headers as Record<string, string>).Authorization)
         .toBe('Bearer firebase-test-token')
       expect(body).toMatchObject({
-        model: 'gpt-5.6-luna',
+        model: 'gpt-6-luna',
         input: [{ role: 'user', content: 'Test' }],
         max_output_tokens: 2048,
       })
@@ -274,8 +274,8 @@ describe('OpenAiService', () => {
       expect(result).toEqual({
         text: 'Proxy Luna response',
         metadata: {
-          modelId: 'gpt-5.6-luna',
-          modelExecution: { requestedModelId: 'gpt-5.6-luna', routedModelId: 'gpt-5.6-luna', actualModelId: 'gpt-5.6-luna', actualModelIds: ['gpt-5.6-luna'] },
+          modelId: 'gpt-6-luna',
+          modelExecution: { requestedModelId: 'gpt-6-luna', routedModelId: 'gpt-6-luna', actualModelId: 'gpt-6-luna', actualModelIds: ['gpt-6-luna'] },
           provider: 'openai',
           tokensUsed: 42,
         },

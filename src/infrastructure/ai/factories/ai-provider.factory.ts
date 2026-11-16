@@ -53,7 +53,7 @@ export class AiProviderFactory {
   }
 
   private createProvider(config: ProviderConfig): ProviderResult {
-    if (config.modelId === INTRANET_LUNA_ID) return createIntranetProvider()
+    if (config.modelId === INTRANET_LUNA_ID && intranetGatewayAvailable()) return createIntranetProvider()
     const isCustom = isCustomOpenAiModelId(config.modelId)
     if (isCustom) {
       return this.createOpenAiCompatibleProvider(config.openAiCompatible, config.hiddenReasoning)
@@ -175,9 +175,7 @@ export class AiProviderFactory {
    * Validate proxy availability
    */
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
-    if (modelId === INTRANET_LUNA_ID) return intranetGatewayAvailable()
-      ? { available: true }
-      : { available: false, error: '院內 GPT 僅供北榮院內入口使用' }
+    if (modelId === INTRANET_LUNA_ID && intranetGatewayAvailable()) return { available: true }
     let definition: ModelDefinition
     try {
       definition = getModelDefinitionOrThrow(modelId)

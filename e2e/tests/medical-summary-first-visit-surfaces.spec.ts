@@ -7,7 +7,7 @@ import { mockAiStream } from '../fixtures/mock-stream'
 // the bridge only when the chart came through it, 開藥注意 says so when a
 // finished scan found nothing, and a failed scan is listed once in the error
 // banner. Synthetic bundles and a mocked model only.
-const TEST_MODEL_ID = 'gpt-5.4-nano'
+const TEST_MODEL_ID = 'gemini-3.1-flash-lite'
 const block = (id: string, body: unknown) => `<<<MEDIPRISMA_MODULE:${id}>>>${JSON.stringify(body)}<<<END_MEDIPRISMA_MODULE:${id}>>>`
 const reply = (safety: string, problems = block('problems', { problems: [] })) => [
   block('overview', { headline: 'Synthetic review patient', medicationEducation: [] }),
