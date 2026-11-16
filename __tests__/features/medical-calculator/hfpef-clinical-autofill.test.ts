@@ -146,6 +146,9 @@ describe('hypertension for STOP-Bang P', () => {
     expect(buildClinicalSelects([], [], now).hypertension).toMatchObject({ value: 'no' })
     expect(buildClinicalSelects([], [drug('metformin')], now, [dx('I10')]).hypertension?.value).toBe('yes')
     expect(buildClinicalSelects([], [drug('timolol eye drops')], now).hypertension?.value).toBe('no')
+    // Review round 3: eye drops and topicals are not treatment for P.
+    expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).hypertension?.value).toBe('no')
+    expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).hypertension?.value).toBe('no')
   })
 })
 
@@ -177,5 +180,17 @@ describe('PCE history and drug questions from the record', () => {
       expect(result[key]?.testName).toContain('預設否')
     }
     expect(buildClinicalSelects([], [drug('timolol eye drops')], now).pceBpTreat?.value).toBe('no')
+    // Eye drops and topicals are not antihypertensive treatment.
+    expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).pceBpTreat?.value).toBe('no')
+    expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).pceBpTreat?.value).toBe('no')
+    expect(buildClinicalSelects([], [drug('betaxolol 20mg tablet')], now).pceBpTreat?.value).toBe('yes')
+  })
+})
+
+describe('any current antihypertensive skips eye drops and topicals', () => {
+  test('betaxolol eye drops and minoxidil lotion are not treatment', () => {
+    expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).antihypertensiveAny?.value).not.toBe('yes')
+    expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).antihypertensiveAny?.value).not.toBe('yes')
+    expect(buildClinicalSelects([], [drug('amlodipine 5mg')], now).antihypertensiveAny?.value).toBe('yes')
   })
 })
