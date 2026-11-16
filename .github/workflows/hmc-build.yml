@@ -169,6 +169,9 @@ jobs:
           NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY: ${{ vars.NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY }}
           NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ vars.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
           NEXT_PUBLIC_FEEDBACK_URL: ${{ vars.NEXT_PUBLIC_FEEDBACK_URL }}
+          # 交互作用 (安全 tab) on /app-hmc too, by owner decision 2026-11-16.
+          # The tab shows only on hospital workstations; /app stays off.
+          NEXT_PUBLIC_DDI_SERVICE_ORIGIN: https://whisper.vghtpe.gov.tw:18427
         shell: bash
         run: |
           restore_api() {
