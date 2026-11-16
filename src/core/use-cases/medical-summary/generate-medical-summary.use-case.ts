@@ -119,7 +119,6 @@ import {
 // possibly-slow chat model (GPT-Nano on a large context ≈ 77s).
 export const MEDICAL_SUMMARY_MODEL_ID = MODEL_ROLE_IDS['medical-summary']
 
-const LONGITUDINAL_MAX_LAB_SERIES = 16
 const LONGITUDINAL_MAX_LAB_POINTS = MAX_INVESTIGATION_TREND_POINTS
 const LONGITUDINAL_MAX_IMAGING_SERIES = 8
 const LONGITUDINAL_MAX_IMAGING_POINTS = MAX_INVESTIGATION_TREND_POINTS
@@ -1004,7 +1003,6 @@ function formatLongitudinalLabLines(points: LongitudinalLabPoint[]): string[] {
       if (b.length !== a.length) return b.length - a.length
       return b[b.length - 1].date.localeCompare(a[a.length - 1].date)
     })
-    .slice(0, LONGITUDINAL_MAX_LAB_SERIES)
     .map((series) => {
       const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
       const recent = sorted.slice(-LONGITUDINAL_MAX_LAB_POINTS)

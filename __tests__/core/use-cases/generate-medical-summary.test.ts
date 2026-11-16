@@ -387,6 +387,24 @@ describe('buildLongitudinalInvestigationContext', () => {
     expect(context.split('\n').find((line) => line.startsWith('- TSH:'))).not.toContain('→')
   })
 
+  it('does not drop a selected lab value merely because sixteen other analytes precede it', () => {
+    const observations = Array.from({ length: 17 }, (_, index) => ({
+      id: `analyte-${index}`, code: { text: `Analyte ${index}` },
+      effectiveDateTime: '2026-01-14', valueQuantity: { value: index + 1, unit: 'mg/dL' },
+    }))
+    const input = {
+      observations,
+      diagnosticReports: observations.map((obs) => ({
+        id: `report-${obs.id}`, category: [{ text: 'Laboratory' }], code: obs.code,
+        effectiveDateTime: obs.effectiveDateTime, result: [{ reference: `Observation/${obs.id}` }],
+      })),
+    }
+    const context = buildLongitudinalInvestigationContext(input as never, buildSourceCatalog(input as never))
+    for (const [index] of observations.entries()) {
+      expect(context).toContain(`Analyte ${index}: ${index + 1} mg/dL`)
+    }
+  })
+
   it('surfaces serial labs and imaging from all available reports so they are not labeled single', () => {
     const bridgeLabMeta = { meta: { source: 'nhi-fhir-bridge/scraper' } }
     const input = {
