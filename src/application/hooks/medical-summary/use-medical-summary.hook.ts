@@ -473,6 +473,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       locale: ctx.locale,
       buildRequest: (fittedClinicalContext) => {
         const messages = request.buildMessages(fittedClinicalContext)
+        if (ctx.modelId === 'gpt-6-luna' && request.laneId === 'full') {
+          messages.push({
+            role: 'user',
+            content: 'Final problem-list evidence check: inspect every abnormal laboratory result and long-term medication class for a supported problem omitted from your list. For EACH listed problem, search the lab values, report findings AND discharge-document text for its relevant indicator. Retain the latest supported measurement or finding with its source keys, including single measurements and measurements embedded in documents. A test name alone is not its result; do not copy a value from another problem. Write "Not in cloud record" only after checking all those sources. Do not omit a supported indicator merely to shorten the response. Preserve diagnostic uncertainty and later assessments that revise an earlier suspicion. Return only the required module JSON, without this checklist.',
+          })
+        }
         return {
           request: messages,
           requestText: messages.map((message) => message.content).join('\n\n'),
