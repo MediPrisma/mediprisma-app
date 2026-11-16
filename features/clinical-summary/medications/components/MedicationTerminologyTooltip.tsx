@@ -112,7 +112,6 @@ export function MedicationTerminologyTooltip({
     [locale === 'en' ? 'Recorded NHI product code' : (integrated ? '雲端紀錄健保藥碼' : '來源紀錄健保藥碼'), medication.nhiDrugCode],
     ...(!terminology ? [] : [
     [mt.terminologyIngredientLabel ?? 'Ingredient / strength', terminology.ingredientText],
-    [mt.terminologyOfficialIngredientLabel ?? 'Corrected; NHI dictionary reads', terminology.officialIngredientText],
     [mt.terminologyOfficialNameZhLabel ?? 'Chinese product name', terminology.officialNameZh],
     [mt.terminologyOfficialNameEnLabel ?? 'English product name', terminology.officialNameEn],
     [mt.terminologyDoseFormLabel ?? 'Dose form', terminology.doseForm],

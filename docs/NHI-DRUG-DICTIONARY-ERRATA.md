@@ -4,7 +4,7 @@
 
 ## 勘誤檔
 - 內容：[`src/infrastructure/fhir/data/nhi-dictionary-errata.json`](../src/infrastructure/fhir/data/nhi-dictionary-errata.json)（本機比對工具使用同一份 `work/nhi-dictionary-errata.json`，身分表的 `sourceHashes.errata` 記錄其雜湊）。
-- App 讀取病人資料時也套用 `ingredientText` 勘誤（`src/infrastructure/fhir/nhi-dictionary-errata.ts`，2026-11-16 起）：雲端列的成分顯示、交互作用送檢、AI 工具都用更正後的成分；藥名說明框另列「已依勘誤更正，藥典原值」。已儲存的 MedicationKnowledge 不改，仍是官方原值。
+- App 讀取病人資料時也套用 `ingredientText` 勘誤（`src/infrastructure/fhir/nhi-dictionary-errata.ts`，2026-11-16 起）：雲端列的成分顯示、交互作用送檢、AI 工具都用更正後的成分。畫面不另外標示勘誤（使用者 2026-11-16 決定），更正前的官方原值只保留在 `drugTerminology.officialIngredientText` 供追查。已儲存的 MedicationKnowledge 不改，仍是官方原值。
 - 每筆記錄：健保碼、欄位、藥典原值（`original`）、更正值（`corrected`）、類別、理由、證據、發現日期、是否已回報健保署（`reportedToNhi`）。
 - 套用規則：只有藥典該列仍等於 `original` 時才改成 `corrected`。建表時會列出三種狀況並需人工處理：
   - `already_corrected_upstream`：新版藥典已更正，可把該筆標為已解決。

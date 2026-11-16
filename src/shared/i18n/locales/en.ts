@@ -1221,7 +1221,6 @@ export const en = {
     terminologySource: 'Enriched from NHI drug master',
     terminologySourceTooltip: 'The App matched the exact NHI drug code and prescription date against the pinned official drug-master snapshot. This information was not supplied as structured fields by the source record.',
     terminologyIngredientLabel: 'Ingredient / strength',
-    terminologyOfficialIngredientLabel: 'Corrected; NHI dictionary reads',
     terminologyOfficialNameZhLabel: 'Chinese product name',
     terminologyOfficialNameEnLabel: 'English product name',
     terminologyDoseFormLabel: 'Dose form',

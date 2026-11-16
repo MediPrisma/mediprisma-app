@@ -1016,7 +1016,6 @@ function medicationClassificationFields(medication: MedicationEntity) {
         ...(terminology.officialNameZh ? { officialNameZh: terminology.officialNameZh } : {}),
         ...(terminology.officialNameEn ? { officialNameEn: terminology.officialNameEn } : {}),
         ...(terminology.ingredientText ? { ingredientText: terminology.ingredientText } : {}),
-        ...(terminology.officialIngredientText ? { officialIngredientText: terminology.officialIngredientText } : {}),
         ...(terminology.doseForm ? { doseForm: terminology.doseForm } : {}),
         ...(terminology.atcCode ? { atcCode: terminology.atcCode } : {}),
         ...(terminology.atcNameZh ? { atcNameZh: terminology.atcNameZh } : {}),

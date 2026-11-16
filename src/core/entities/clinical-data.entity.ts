@@ -286,7 +286,8 @@ export interface MedicationEntity extends ClinicalSourceRecord {
     officialNameEn?: string
     ingredientText?: string
     /** The dictionary's own ingredient text, present only when a verified
-     *  erratum replaced it in `ingredientText` (nhi-dictionary-errata). */
+     *  erratum replaced it in `ingredientText` (nhi-dictionary-errata). Kept
+     *  for tracing; not shown — the correction is silent by owner decision. */
     officialIngredientText?: string
     doseForm?: string
     atcCode?: string
