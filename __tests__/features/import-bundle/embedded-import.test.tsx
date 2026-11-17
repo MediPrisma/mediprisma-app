@@ -11,6 +11,10 @@ const load = jest.fn()
 jest.mock('@/features/import-bundle/hooks/useImportBundle', () => ({
   useImportBundle: () => ({ importFile, loadedPatientIds: () => load() }),
 }))
+const signIn = jest.fn()
+jest.mock('@/src/application/providers/auth.provider', () => ({
+  useAuth: () => ({ signInAsEmbeddingAccount: (uid: string, token: string) => signIn(uid, token) }),
+}))
 
 import { isAllowedEmbedParent, isEmbedImportMessage, patientIdsOf } from '@/features/import-bundle/services/embedded-import'
 import { useEmbeddedImport } from '@/features/import-bundle/hooks/useEmbeddedImport'
@@ -49,6 +53,7 @@ describe('useEmbeddedImport', () => {
 
   beforeEach(() => {
     importFile.mockReset().mockResolvedValue(undefined)
+    signIn.mockReset().mockResolvedValue(undefined)
     load.mockReset().mockResolvedValue(['sim-v01'])
     parent.postMessage.mockReset()
     Object.defineProperty(window, 'parent', { configurable: true, value: parent })
@@ -88,6 +93,29 @@ describe('useEmbeddedImport', () => {
     expect(parent.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ requestId: 'r9', ok: false, error: '格式錯誤' }), ASSISTANT)
     expect(load).not.toHaveBeenCalled()
+  })
+
+  const signInMessage = (requestId = 's1') => ({
+    source: 'mediprisma-ai-assistant', type: 'mediprisma:embed-sign-in', version: 1, requestId, uid: 'uid-synthetic', token: 'custom-token',
+  })
+
+  it("signs in as the assistant's account and answers that origin only", async () => {
+    renderHook(() => useEmbeddedImport())
+    await send(signInMessage('s2'), ASSISTANT)
+    expect(signIn).toHaveBeenCalledWith('uid-synthetic', 'custom-token')
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'mediprisma:embed-signed-in', requestId: 's2', ok: true }), ASSISTANT)
+    expect(importFile).not.toHaveBeenCalled()
+  })
+
+  it('takes no sign-in from another origin, and answers a failed one with the error', async () => {
+    renderHook(() => useEmbeddedImport())
+    await send(signInMessage(), 'https://example.com')
+    expect(signIn).not.toHaveBeenCalled()
+    signIn.mockRejectedValue(new Error('auth/invalid-custom-token'))
+    await send(signInMessage('s3'), ASSISTANT)
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestId: 's3', ok: false, error: 'auth/invalid-custom-token' }), ASSISTANT)
   })
 
   it('does nothing when the app is not framed', async () => {
