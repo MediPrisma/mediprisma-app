@@ -29,19 +29,19 @@ const profile = (
 })
 
 describe('useModelSelection', () => {
-  it('selects the hospital model without a personal key or Firebase chat proxy', () => {
+  it.each(['/app-hmc/', '/app-staging/'])('selects the hospital model on %s but not production, without a personal key or Firebase chat proxy', path => {
     const previousChannel = process.env.NEXT_PUBLIC_DEPLOY_CHANNEL
     const previousOrigin = process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
     process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'staging'
     process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = 'https://ai-vghtpe.mediprisma.tw'
-    window.history.replaceState({}, '', '/app/?site=vghtpe')
+    window.history.replaceState({}, '', `${path}?site=vghtpe`)
     try {
       const setModel = jest.fn()
       const { result } = renderHook(() => useModelSelection(null, null, null, 'gemini-4-hydrogen', setModel), { wrapper })
       expect(result.current.gptModels.some(entry => entry.id === 'gpt-6-luna')).toBe(true)
       act(() => result.current.handleSelectModel('gpt-6-luna'))
       expect(setModel).toHaveBeenCalledWith('gpt-6-luna')
-      window.history.replaceState({}, '', '/app/')
+      window.history.replaceState({}, '', '/app/?site=vghtpe')
       setModel.mockClear()
       act(() => result.current.handleSelectModel('gpt-6-luna'))
       expect(setModel).not.toHaveBeenCalled()
