@@ -1,16 +1,23 @@
 'use client'
 
-import { hospitalCaptureCategorySchema, hospitalCaptureEventSchema, hospitalCaptureFailureKindSchema, hospitalUnavailableReasonSchema, type HospitalCaptureEvent } from '@/src/shared/contracts/collector-event'
+import { hospitalCaptureCategorySchema, hospitalCaptureEncounterClassSchema, hospitalCaptureEventSchema, hospitalCaptureResourceTypeSchema, hospitalCaptureFailureKindSchema, hospitalUnavailableReasonSchema, type HospitalCaptureEvent } from '@/src/shared/contracts/collector-event'
 import { captureCollectorAuth } from './collector-auth'
 import { collectorAppSurface, collectorNetworkPermission, configuredEndpoint, isCollectorSite } from './collector'
 
 // 北榮懷爾抓抓 tags the Bundle it delivers with why parts of the capture failed
 // (category:kind[:HTTP status], display = count) and its version. 雲端懷爾抓抓 keeps
-// those tags when it merges the hospital supplement. Only these bounded codes leave
-// the browser; no resource, identifier, date or free text is read into the event.
+// those tags when it merges the hospital supplement. Only these bounded codes, counts per
+// resource type and the chart number the extension tagged (D084, in-hospital Collector only)
+// leave the browser; no resource content, name, national ID, date or free text does.
 const FAILURE_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-failure'
 const HOSPITAL_VERSION_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/extension-version'
 const COMPLETENESS_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-completeness'
+// D083/D084 (owner decision 2026-11-12): the in-hospital Collector keeps the chart number so a
+// capture with a problem can be traced to its patient; the capture time is the extension's own.
+const CHART_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-chart-no'
+const DURATION_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-duration-ms'
+const CHART_NO = /^[0-9A-Za-z-]{1,16}$/
+const ENCOUNTER_CLASS: Record<string, 'outpatient' | 'inpatient' | 'emergency'> = { AMB: 'outpatient', IMP: 'inpatient', EMER: 'emergency' }
 const MEDCLOUD_VERSION_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/CodeSystem/extension-version'
 const HOSPITAL_LOCAL_SOURCE = 'ehr-fhir-bridge/extension-local'
 const VERSION = /^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/
@@ -27,6 +34,15 @@ export interface HospitalCaptureSummary {
   hospitalVersion?: string
   medcloudVersion?: string
   hospitalResources: number
+  chartNo?: string
+  durationMs?: number
+  resourceCounts?: NonNullable<HospitalCaptureEvent['resource_counts']>
+  encounterCounts?: NonNullable<HospitalCaptureEvent['encounter_counts']>
+}
+
+const singleCode = (tags: Tag[], system: string) => {
+  const matches = tags.filter(tag => tag.system === system)
+  return matches.length === 1 && typeof matches[0].code === 'string' ? matches[0].code : undefined
 }
 
 export function failureFromTag(tag: Tag): HospitalCaptureEvent['failures'][number] | null {
@@ -52,16 +68,34 @@ export function summarizeHospitalCapture(bundle: unknown, stage?: string): Hospi
   const oneClick = stage === undefined && b?.meta?.source === HOSPITAL_LOCAL_SOURCE
   if (!oneClick && !['hospital', 'hospital-reports-failed', 'hospital-empty', 'cloud-only'].includes(stage ?? '')) return null
   const failures = tags.map(failureFromTag).filter(f => f !== null).slice(0, 40)
-  const hospitalResources = oneClick
-    ? entries.filter(e => e?.resource?.resourceType && e.resource.resourceType !== 'Patient').length
+  const hospitalEntries = oneClick
+    ? entries.filter(e => e?.resource?.resourceType && e.resource.resourceType !== 'Patient')
     : entries.filter(e => Array.isArray(e?.resource?.meta?.tag) && e.resource.meta.tag.some((t: Tag) =>
-      t?.system === 'urn:wildcatch:source' && t.code === 'vghtpe-outpatient-supplement')).length
+      t?.system === 'urn:wildcatch:source' && t.code === 'vghtpe-outpatient-supplement'))
+  const hospitalResources = hospitalEntries.length
+  // zod 4 records over an enum need every key; the Collector does not show the zeros.
+  const resourceCounts = Object.fromEntries(hospitalCaptureResourceTypeSchema.options.map(k => [k, 0])) as NonNullable<HospitalCaptureSummary['resourceCounts']>
+  const encounterCounts = Object.fromEntries(hospitalCaptureEncounterClassSchema.options.map(k => [k, 0])) as NonNullable<HospitalCaptureSummary['encounterCounts']>
+  for (const e of hospitalEntries) {
+    const resource = e.resource as { resourceType?: unknown; class?: { code?: unknown } }
+    const type = hospitalCaptureResourceTypeSchema.safeParse(resource.resourceType).success ? resource.resourceType as keyof typeof resourceCounts : 'other'
+    resourceCounts[type] += 1
+    if (resource.resourceType === 'Encounter') {
+      const cls = ENCOUNTER_CLASS[String(resource.class?.code ?? '')] ?? 'other'
+      encounterCounts[cls] += 1
+    }
+  }
+  const chart = singleCode(tags, CHART_SYSTEM)
+  const duration = Number(singleCode(tags, DURATION_SYSTEM))
   const incomplete = failures.length > 0 || tags.some(t => t.system === COMPLETENESS_SYSTEM && t.code === 'partial')
   const outcome: HospitalCaptureEvent['outcome'] = stage === 'cloud-only' ? 'failed'
     : stage === 'hospital-reports-failed' || incomplete ? 'partial'
     : stage === 'hospital-empty' || hospitalResources === 0 ? 'empty' : 'complete'
   return { path: oneClick ? 'one_click' : 'medcloud_relay', outcome, failures: outcome === 'complete' ? [] : failures,
-    hospitalVersion: singleVersion(tags, HOSPITAL_VERSION_SYSTEM), medcloudVersion: singleVersion(tags, MEDCLOUD_VERSION_SYSTEM), hospitalResources }
+    hospitalVersion: singleVersion(tags, HOSPITAL_VERSION_SYSTEM), medcloudVersion: singleVersion(tags, MEDCLOUD_VERSION_SYSTEM), hospitalResources,
+    ...(chart && CHART_NO.test(chart) ? { chartNo: chart } : {}),
+    ...(Number.isInteger(duration) && duration >= 0 && duration <= 3_600_000 ? { durationMs: duration } : {}),
+    ...(hospitalResources ? { resourceCounts, encounterCounts } : {}) }
 }
 
 function bucket(n: number): HospitalCaptureEvent['hospital_resources'] {
@@ -84,6 +118,9 @@ export function reportHospitalCapture(bundle: unknown, stage?: string, reason?: 
       ...(summary.hospitalVersion ? { hospital_extension_version: summary.hospitalVersion } : {}),
       ...(summary.medcloudVersion ? { medcloud_extension_version: summary.medcloudVersion } : {}),
       hospital_resources: bucket(summary.hospitalResources),
+      ...(summary.chartNo ? { chart_no: summary.chartNo } : {}),
+      ...(summary.durationMs !== undefined ? { duration_ms: summary.durationMs } : {}),
+      ...(summary.resourceCounts ? { resource_counts: summary.resourceCounts, encounter_counts: summary.encounterCounts } : {}),
       // Only a cloud-only end carries 雲端懷爾抓抓's closed reason code; anything else is dropped.
       ...(stage === 'cloud-only' && summary.outcome === 'failed' && hospitalUnavailableReasonSchema.safeParse(reason).success
         ? { unavailable_reason: reason } : {}),
