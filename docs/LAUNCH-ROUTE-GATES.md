@@ -1,5 +1,14 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-11-16 owner decision: GPT-6 Luna is also offered through the public
+owner-funded proxy on ordinary routes. Configured hospital launches still route
+Luna to the hospital Gateway first, retaining authentication, no retries and no
+cloud fallback after an intranet request. The picker labels that route
+`GPT-6 Luna（院內）`; other routes show `GPT-6 Luna`. The selectable free lineup is
+Gemini 3.1 Flash-Lite, Gemini 4 Hydrogen, GPT-6 Luna and Claude Haiku 5.5.
+Old selectable GPT, Gemini Preview and Claude versions are replaced by the
+current lineup; Nano remains internal for existing smart-title calls only.
+
 2026-11-11 owner decision (later the same day, supersedes the `/app-hmc`
 exclusion below): the GPT-6 Luna（院內） option is also offered on `/app-hmc`
 under the same conditions, and the hospital automatic launch
@@ -275,3 +284,9 @@ eligibility is preserved. No previously visible clinical surface is removed.
 | HF 「整理模型資料」 button | Replaced by automatic local preparation when the detail opens (no network request) and a 「重新整理」 link in step 1. Nothing is sent until 「執行 HF 模型預測」. | Every route where the HF research calculator is available. | Explicit chat request, 2026-10-07 |
 
 Automatic source resolution also retains active Condition/Allergy evidence when update ordering is absent, never groups different resource identities by imported modifier labels, and redirects duplicate-include references to the selected version. Background refreshes keep the previous complete snapshot within the same patient and lifecycle scope until all updated searches settle. Missing medication content is stated neutrally; it does not create a reconciliation banner or task.
+
+## Intranet Luna development routes (2026-11-17)
+
+| Surface | Behaviour | Routes | Owner decision |
+|---|---|---|---|
+| Hospital Azure Luna transport | Available only with configured intranet origin and exactly one `site=vghtpe`. Production `/app` and its subpaths cannot use the hospital gateway; ordinary cloud/personal-key model access follows its existing policy. | Retained on `/app-staging` and `/app-hmc`, including their subpaths. Only `/app-hmc` retains its existing hospital launch default. | Owner explicitly limited hospital Luna to these development routes in chat, 2026-11-17. |

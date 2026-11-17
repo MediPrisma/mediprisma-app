@@ -37,21 +37,50 @@ describe('useMedicationSafetyTab', () => {
     expect(result.current).toMatchObject({ visible: true, unreachable: true })
   })
 
-  it('counts cross-visit pairs above a note, avoid pairs, and unchecked drugs', () => {
+  it('counts every cross-visit pair, avoid pairs, and unchecked drugs', () => {
     const { result } = renderHook(() => useMedicationSafetyTab())
     publish({
       status: 'ok',
       review: {
         findings: [
-          { id: '1', tier: 'avoid', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '2', tier: 'act', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '3', tier: 'note', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '4', tier: 'act', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: true },
+          { id: '1', tier: 'avoid', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
+          { id: '2', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
+          { id: '3', tier: 'note', severity: 'low', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
+          { id: '4', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: true, involvesEnded: false },
         ],
         checkedRowIds: ['a', 'b'],
-        uncheckedRowIds: ['c'],
+        uncheckedRowIds: ['c'], localRowIds: [], endedRowIds: [], coveredUntil: {},
       },
     }, cloudOnly)
-    expect(result.current).toEqual({ visible: true, unreachable: false, count: 2, avoid: 1, unchecked: 1 })
+    expect(result.current).toEqual({ visible: true, unreachable: false, count: 3, avoid: 1, unchecked: 1, notRun: false })
+  })
+
+  it('marks a list with fewer than two checkable ingredients as not run', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    publish({ status: 'too-few', localRowIds: [] }, withHospital)
+    expect(result.current).toMatchObject({ visible: true, count: 0, notRun: true })
+  })
+
+  it('does not count skin and ear preparations as unchecked when the check cannot run', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    publish({ status: 'too-few', localRowIds: ['b'] }, withHospital)
+    expect(result.current).toMatchObject({ notRun: true, unchecked: 1 })
+  })
+
+  it('shows the tab for a cloud-only patient with too few drugs once the service answers', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    const single = [row('a', 'medcloud')]
+    publish({ status: 'too-few', localRowIds: [], reachable: false }, single)
+    expect(result.current.visible).toBe(false)
+    publish({ status: 'too-few', localRowIds: [], reachable: true }, single)
+    expect(result.current).toMatchObject({ visible: true, count: 0, notRun: true })
+  })
+
+  it('waits for an answer before showing the tab away from other hospital signs', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    publish({ status: 'loading' }, cloudOnly)
+    expect(result.current.visible).toBe(false)
+    publish({ status: 'too-few', localRowIds: [] }, [row('a', 'medcloud')])
+    expect(result.current.visible).toBe(false)
   })
 })

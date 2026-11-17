@@ -46,18 +46,18 @@ describe('report interpretation preferences', () => {
   })
 
   it('saves a selectable cloud model preference', () => {
-    useReportInterpretationPrefsStore.getState().setModelId('gpt-5.4-nano')
+    useReportInterpretationPrefsStore.getState().setModelId('gpt-6-luna')
 
     expect(useReportInterpretationPrefsStore.getState().modelId)
-      .toBe('gpt-5.4-nano')
+      .toBe('gpt-6-luna')
   })
 
   it('falls back to Gemini when a selected cloud model has no required key', () => {
-    expect(resolveReportInterpretationModel('gpt-5.6-terra', {}))
+    expect(resolveReportInterpretationModel('gpt-6.1-terra', {}))
       .toBe(REPORT_INTERPRETATION_DEFAULT_MODEL_ID)
-    expect(resolveReportInterpretationModel('gpt-5.6-terra', {
+    expect(resolveReportInterpretationModel('gpt-6.1-terra', {
       openAiKey: 'test-key',
-    })).toBe('gpt-5.6-terra')
+    })).toBe('gpt-6.1-terra')
   })
 
   it('bounds the saved custom prompt', () => {

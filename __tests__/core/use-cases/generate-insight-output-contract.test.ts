@@ -5,7 +5,7 @@ describe('GenerateInsightUseCase output contracts', () => {
   const baseInput = {
     prompt: 'Use S:, O:, A:, P:. Keep English clinical content.',
     clinicalContext: 'Patient record',
-    modelId: 'gpt-5.6-luna',
+    modelId: 'gpt-6-luna',
     locale: 'zh-TW' as const,
   }
 

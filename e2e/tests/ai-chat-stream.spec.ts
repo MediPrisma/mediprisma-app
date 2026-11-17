@@ -11,7 +11,7 @@ import { mockAiStream, getLongTasks, resetLongTasks, STREAM_PROBE_MARKER } from 
  */
 test.describe('AI chat streaming (mocked)', () => {
   test('streams formatted markdown without freezing the main thread', async ({ page }) => {
-    await mockAiStream(page, { model: 'gpt-5.4-nano' })
+    await mockAiStream(page, { model: 'gemini-3.1-flash-lite' })
     await importBundle(page)
 
     const textarea = await openChatInput(page)
@@ -68,7 +68,7 @@ test.describe('AI chat streaming (mocked)', () => {
     ).join('\n')
     const HUGE_LIST = `| 項目 | 數值 | 狀態 | 備註 |\n| --- | --- | --- | --- |\n${rows}`
 
-    await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: HUGE_LIST, chunkSize: 8, delayMs: 6 })
+    await mockAiStream(page, { model: 'gemini-3.1-flash-lite', markdown: HUGE_LIST, chunkSize: 8, delayMs: 6 })
     await importBundle(page)
 
     const textarea = await openChatInput(page)
@@ -98,7 +98,7 @@ test.describe('AI chat streaming (mocked)', () => {
   // and surface a timeout error instead. Idle timeout pinned to 4s for this page.
   test('a stalled stream times out instead of hanging forever', async ({ page }) => {
     // Emit 3 tokens then stall (never close, never send more).
-    await mockAiStream(page, { model: 'gpt-5.4-nano', stallAfter: 3, delayMs: 8, idleTimeoutMs: 4000 })
+    await mockAiStream(page, { model: 'gemini-3.1-flash-lite', stallAfter: 3, delayMs: 8, idleTimeoutMs: 4000 })
     await importBundle(page)
 
     const textarea = await openChatInput(page)

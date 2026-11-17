@@ -1,17 +1,5 @@
-# CI for MediPrisma (SMART app side).
-#
-# Four checks run on every push to master and on every PR:
-#   1. typecheck — catches type drift before deploy
-#   2. test — runs the Jest suite with --ci flag so any flaky tests fail
-#             clearly instead of retrying silently
-#   3. lint — enforces code quality and architecture boundaries
-#   4. build — full Next static-export build, smoke-tests that the app
-#              still compiles end-to-end with all GH-Pages env wiring
-#
-# gh-pages.yml's `build` job depends on this workflow passing first
-# (`needs: ci`), so a red test blocks deploy. Solo-dev master pushes
-# without PRs are the default flow here, so gating on push is what
-# actually protects production.
+# Full coverage on PRs and master; independent checks run concurrently.
+# The existing required `ci` check aggregates every job, including failures/cancellations.
 name: CI
 
 on:
@@ -87,6 +75,13 @@ jobs:
       - run: npm ci --prefix .gallery-backend
       - run: npm ci --prefix .gallery-backend/functions
       - run: npx playwright install --with-deps chromium
+      # Keep compiler caches separate for each build mode; never reuse build output.
+      - uses: actions/cache@v5
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-gallery-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-next-gallery-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-
       - name: Migration and gallery browser regression
         working-directory: .gallery-backend
         run: npx firebase emulators:exec --config firebase.gallery-test.json --only auth,firestore --project demo-mediprisma "node --test tests/prompt-visibility-migration.test.mjs && cd .. && npx playwright test -c playwright.gallery.config.ts"
@@ -116,6 +111,13 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
       - run: npx playwright install --with-deps chromium
+      # Keep compiler caches separate for each build mode; never reuse build output.
+      - uses: actions/cache@v5
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-import-app-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-next-import-app-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-
       - name: Build the production /app static artifact
         run: npm run build:mediprisma
       - name: Native Worker and original FHIR/image roundtrip
@@ -128,7 +130,7 @@ jobs:
         with:
           name: import-worker-results
           path: test-results/
-  ci:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -166,6 +168,18 @@ jobs:
         # (core/shared/infrastructure layering) fail as errors.
         run: npm run lint
 
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
       - name: Unit tests
         # `--testPathIgnorePatterns="worktrees"` keeps jest from picking up
         # the copies of these tests living under `.claude/worktrees/<branch>/`
@@ -174,6 +188,25 @@ jobs:
         # the deploy job below.
         run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees"
 
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
+      # Keep compiler caches separate for each build mode; never reuse build output.
+      - uses: actions/cache@v5
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-private-gh-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-next-private-gh-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-
       - name: Build (smoke test)
         # Same env as the deploy build — catches any GH-Pages-specific
         # config issues (basePath, env wiring) before we attempt deploy.
@@ -200,3 +233,14 @@ jobs:
           NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
           NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
         run: npm run build:gh
+
+  ci:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [quality, unit, build, public-deployment, gallery-regression, import-worker]
+    steps:
+      - name: Require all CI jobs to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs = JSON.parse(process.env.RESULTS); const failed = Object.entries(jobs).filter(([, job]) => job.result !== "success"); if (failed.length) { console.error(failed); process.exit(1); }'

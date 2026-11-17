@@ -97,10 +97,10 @@ export async function* withIdleTimeout<T>(
  * in production) so the anti-hang test trips fast even against a reused dev
  * server.
  */
-export function resolveStreamIdleTimeoutMs(): number {
+export function resolveStreamIdleTimeoutMs(modelDefaultMs?: number): number {
   if (typeof window !== "undefined") {
     const override = (window as { __streamIdleTimeoutMs?: number }).__streamIdleTimeoutMs
     if (typeof override === "number" && override > 0) return override
   }
-  return ENV_CONFIG.streamIdleTimeoutMs
+  return modelDefaultMs ?? ENV_CONFIG.streamIdleTimeoutMs
 }

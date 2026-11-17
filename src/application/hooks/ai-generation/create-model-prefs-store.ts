@@ -5,7 +5,7 @@
 // the persist wiring and the model-id rehydration validation.
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { isModelId } from '@/src/shared/constants/ai-models.constants'
+import { isSelectableModelId } from '@/src/shared/constants/ai-models.constants'
 
 export function createModelPrefsStore<S extends { modelId: string }>(config: {
   /** localStorage key — MUST NOT change, or existing user prefs are lost. */
@@ -23,7 +23,7 @@ export function createModelPrefsStore<S extends { modelId: string }>(config: {
         // The model lineup changes between releases — a persisted id that no
         // longer exists falls back to the default instead of dead-ending.
         onRehydrateStorage: () => (state) => {
-          if (state && !isModelId(state.modelId)) state.modelId = defaultModelId
+          if (state && !isSelectableModelId(state.modelId)) state.modelId = defaultModelId
         },
       },
     ),

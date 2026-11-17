@@ -17,7 +17,7 @@ import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays, medicationRefillDispenseDay } from '@/src/core/utils/clinical-context-selection.utils'
-import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
+import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus, chronicSlipFills } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
@@ -299,6 +299,7 @@ export function useMedicationRows(
       // A prior chronic fill does not make a different order a chronic Rx.
       const drugKey = medicationClinicalIdentityKey(med)
       const isChronic = isChronicPrescription(med) || hasExplicitChronicNote(med)
+      const chronicFills = isChronic && !refillDispenseDay ? chronicSlipFills(med, durationDays) : undefined
       const selfPurchased = sourceSelfPurchase(med) === true
 
       const refillAgg = drugKey ? refillsByDrug.get(drugKey) : undefined
@@ -408,6 +409,7 @@ export function useMedicationRows(
         totalQuantity,
         startedOn: sourceCalendarDate(startDateRaw),
         dispensedOn: refillDispenseDay ? sourceCalendarDate(refillDispenseDay) : undefined,
+        dispensedOnIso: refillDispenseDay ? isoCalendarDay(refillDispenseDay) : undefined,
         stoppedOn: stopDateRaw ? sourceCalendarDate(stopDateRaw) : undefined,
         durationDays,
         endDate: endDate ? sourceCalendarDate(endDate) : undefined,
@@ -423,6 +425,7 @@ export function useMedicationRows(
         isInactive,
         currentnessUncertain: currentness.uncertain,
         isChronic,
+        ...(chronicFills ? { chronicFills } : {}),
         selfPurchased,
         category,
         drugTerminology,
