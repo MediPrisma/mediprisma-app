@@ -19,16 +19,31 @@ beforeEach(() => {
   jest.mocked(getProxyIdToken).mockResolvedValue('synthetic-firebase-token')
 })
 
-test('permits production, staging and the HMC preview only with exactly one vghtpe site parameter', () => {
+test('permits staging and HMC only, excluding production even with the hospital site parameter', () => {
   expect(intranetGatewayAvailable(href)).toBe(true)
   expect(intranetGatewayAvailable(href.replace('/app-staging/', '/app-hmc/'))).toBe(true)
   for (const url of [href.replace('/app-staging/', '/app-other/'), href.replace('vghtpe', 'hmc'), `${href}&site=hmc`, `${href}&site=vghtpe`, href.split('?')[0]]) {
     expect(intranetGatewayAvailable(url)).toBe(false)
   }
   process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'production'
-  expect(intranetGatewayAvailable(href.replace('/app-staging/', '/app/'))).toBe(true)
+  for (const path of ['/app/', '/app', '/app/workspace', '/app-staging-other/', '/app-hmc-other/']) {
+    expect(intranetGatewayAvailable(href.replace('/app-staging/', path))).toBe(false)
+  }
+  expect(intranetGatewayAvailable(href)).toBe(true)
+  expect(intranetGatewayAvailable(href.replace('/app-staging/', '/app-hmc/'))).toBe(true)
   delete process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
   expect(intranetGatewayAvailable(href)).toBe(false)
+})
+
+test('production cannot send an authenticated request to the hospital gateway', async () => {
+  Object.defineProperty(globalThis, 'window', {
+    value: { location: { href: href.replace('/app-staging/', '/app/') } }, configurable: true,
+  })
+  const send = jest.fn()
+  await expect(createIntranetFetch(origin, send)(`${origin}/v1/responses`, {
+    method: 'POST', body: JSON.stringify({ model: 'gpt-6-luna', input: 'Synthetic only.' }),
+  })).rejects.toThrow('院內 GPT')
+  expect(send).not.toHaveBeenCalled()
 })
 
 test('uses Firebase auth and preserves the Responses path, body and cancellation', async () => {
@@ -45,6 +60,25 @@ test('uses Firebase auth and preserves the Responses path, body and cancellation
   expect(init.headers.get('Authorization')).toBe('Bearer synthetic-firebase-token')
   expect(init.headers.has('x-api-key')).toBe(false)
   expect(init.redirect).toBe('error')
+})
+
+test.each(['/app-hmc/', '/app-staging/'])('real SDK sends low thinking and high verbosity on %s', async path => {
+  Object.defineProperty(globalThis, 'window', {
+    value: { location: { href: href.replace('/app-staging/', path) } }, configurable: true,
+  })
+  const send = jest.fn().mockResolvedValue(Response.json({ error: { message: 'synthetic rejection' } }, { status: 400 }))
+  globalThis.fetch = send
+  await expect(new AiSdkStreamAdapter(new AiProviderFactory()).stream({
+    model: 'gpt-6-luna', apiKey: null, signal: new AbortController().signal,
+    messages: [{ role: 'user', content: 'Synthetic question' }], onChunk: () => {},
+    reasoningEffort: 'low', textVerbosity: 'high',
+  })).rejects.toThrow()
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(String(send.mock.calls[0][0])).toBe(`${origin}/v1/responses`)
+  expect(JSON.parse(send.mock.calls[0][1].body)).toMatchObject({
+    model: 'gpt-6-luna', reasoning: { effort: 'low' }, text: { verbosity: 'high' }, store: false,
+  })
+  expect(send.mock.calls[0][1].headers.get('Authorization')).toBe('Bearer synthetic-firebase-token')
 })
 
 test('does not retry budget rejection or network failure through Firebase', async () => {

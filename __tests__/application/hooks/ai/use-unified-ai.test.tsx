@@ -227,6 +227,8 @@ describe('useUnifiedAi cancellation', () => {
           temperature: 0.2,
           maxTokens: 2048,
           responseFormat: 'json',
+          reasoningEffort: 'low',
+          textVerbosity: 'high',
         },
       )
     })
@@ -237,6 +239,8 @@ describe('useUnifiedAi cancellation', () => {
       temperature: 0.2,
       maxTokens: 2048,
       responseFormat: 'json',
+      reasoningEffort: 'low',
+      textVerbosity: 'high',
     }))
   })
 
