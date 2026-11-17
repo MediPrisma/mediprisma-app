@@ -2,6 +2,7 @@
 "use client"
 
 import { AppProviders } from "@/src/application/providers/app-providers"
+import { EmbeddedImportBridge } from '@/features/import-bundle/hooks/useEmbeddedImport'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import { AudienceSwitcher } from "@/src/shared/components/AudienceSwitcher"
@@ -839,6 +840,8 @@ export default function Page() {
 
   return (
     <AppProviders>
+      {/* Framed by the 門診 AI 助理: takes the patient's record from it (features/import-bundle/services/embedded-import.ts). */}
+      <EmbeddedImportBridge />
       <ErrorBoundary>
         <AiDemographicsGateProvider>
           <RightDetailProvider>
