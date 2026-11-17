@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { useInteractionCheckStore, type InteractionCheckState } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
 import { useMedicationSafetyTab } from '@/features/medication-safety/useMedicationSafetyTab'
+import { markServiceReached } from '@/features/clinical-summary/medications/hooks/hospital-service-reach'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 
 const row = (id: string, dataOrigin?: MedicationRow['dataOrigin']): MedicationRow => ({
@@ -14,7 +15,7 @@ function publish(state: InteractionCheckState, rows: MedicationRow[]) {
 }
 
 describe('useMedicationSafetyTab', () => {
-  afterEach(() => { window.history.replaceState({}, '', '/') })
+  afterEach(() => { window.history.replaceState({}, '', '/'); window.localStorage.clear() })
 
   it('has no tab without the service', () => {
     const { result } = renderHook(() => useMedicationSafetyTab())
@@ -65,5 +66,28 @@ describe('useMedicationSafetyTab', () => {
     const { result } = renderHook(() => useMedicationSafetyTab())
     publish({ status: 'too-few', localRowIds: ['b'] }, withHospital)
     expect(result.current).toMatchObject({ notRun: true, unchecked: 1 })
+  })
+
+  it('shows the tab for a cloud-only patient with too few drugs once the service answers', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    const single = [row('a', 'medcloud')]
+    publish({ status: 'too-few', localRowIds: [], reachable: false }, single)
+    expect(result.current.visible).toBe(false)
+    publish({ status: 'too-few', localRowIds: [], reachable: true }, single)
+    expect(result.current).toMatchObject({ visible: true, count: 0, notRun: true })
+  })
+
+  it('shows the tab while checking only if the service was reached in the last 7 days', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    publish({ status: 'loading' }, cloudOnly)
+    expect(result.current.visible).toBe(false)
+    markServiceReached()
+    publish({ status: 'loading' }, [...cloudOnly])
+    expect(result.current).toMatchObject({ visible: true, count: null })
+    publish({ status: 'unreachable', reason: 'network' }, cloudOnly)
+    expect(result.current.visible).toBe(false)
+    markServiceReached(Date.now() - 8 * 24 * 60 * 60 * 1000)
+    publish({ status: 'loading' }, [...cloudOnly])
+    expect(result.current.visible).toBe(false)
   })
 })

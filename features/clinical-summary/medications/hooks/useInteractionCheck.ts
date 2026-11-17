@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
+import { markServiceReached, probeService } from './hospital-service-reach'
 import type { MedicationRow } from '../types'
 import {
   interactionCheckBody,
@@ -27,8 +28,10 @@ export type InteractionCheckState =
   /** Medication list not loaded yet, or the request is in flight. */
   | { status: 'loading' }
   /** Fewer than two ingredient names to send. `localRowIds` are the skin and
-   *  ear preparations left out, which still need naming. */
-  | { status: 'too-few'; localRowIds: string[] }
+   *  ear preparations left out, which still need naming. `reachable` says
+   *  whether the service answered a synthetic request (undefined while asking),
+   *  so the tab can still show on a hospital workstation. */
+  | { status: 'too-few'; localRowIds: string[]; reachable?: boolean }
   /** Chrome refused this page access to the hospital network. */
   | { status: 'blocked' }
   | { status: 'unreachable'; reason: 'timeout' | 'network' | 'http' }
@@ -57,6 +60,19 @@ export function useRunInteractionCheck(rows: MedicationRow[], options: { enabled
   const [result, setResult] = useState<{ key: string; attempt: number; outcome: Outcome } | null>(null)
   const active = enabled && !!origin && ready && plan.items.length >= 2
   const retry = useCallback(() => setAttempt(n => n + 1), [])
+  const [reach, setReach] = useState<{ key: string; attempt: number; reachable: boolean } | null>(null)
+  const probing = enabled && !!origin && ready && plan.items.length < 2
+
+  // Too few drugs to check: still find out whether this is a hospital
+  // workstation, so the tab says why nothing was checked instead of vanishing.
+  useEffect(() => {
+    if (!probing) return
+    const controller = new AbortController()
+    void probeService(origin, controller.signal).then(reachable => {
+      if (!controller.signal.aborted) setReach({ key, attempt, reachable })
+    })
+    return () => controller.abort()
+  }, [probing, key, origin, attempt])
 
   useEffect(() => {
     if (!active) return
@@ -84,6 +100,7 @@ export function useRunInteractionCheck(rows: MedicationRow[], options: { enabled
           body: JSON.stringify(interactionCheckBody(plan)),
           signal: controller.signal,
         })
+        markServiceReached()
         if (!response.ok) return settle({ kind: 'unreachable', reason: 'http' })
         settle({ kind: 'answer', response: await response.json() })
       } catch {
@@ -106,13 +123,16 @@ export function useRunInteractionCheck(rows: MedicationRow[], options: { enabled
   const state = useMemo<InteractionCheckState>(() => {
     if (!enabled || !origin) return { status: 'off' }
     if (!ready) return { status: 'loading' }
-    if (plan.items.length < 2) return { status: 'too-few', localRowIds: plan.localRowIds }
+    if (plan.items.length < 2) {
+      const reachable = reach && reach.key === key && reach.attempt === attempt ? reach.reachable : undefined
+      return { status: 'too-few', localRowIds: plan.localRowIds, reachable }
+    }
     if (!result || result.key !== key || result.attempt !== attempt) return { status: 'loading' }
     const { outcome } = result
     if (outcome.kind === 'blocked') return { status: 'blocked' }
     if (outcome.kind === 'unreachable') return { status: 'unreachable', reason: outcome.reason }
     return { status: 'ok', review: interpretInteractionCheck(plan, rows, outcome.response) }
-  }, [attempt, enabled, key, origin, plan, ready, result, rows])
+  }, [attempt, enabled, key, origin, plan, reach, ready, result, rows])
 
   return { state, retry }
 }
