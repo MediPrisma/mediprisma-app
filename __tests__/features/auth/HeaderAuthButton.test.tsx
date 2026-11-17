@@ -28,6 +28,7 @@ describe('HeaderAuthButton', () => {
       signInWithGoogle: jest.fn(async () => undefined),
       signInWithEmail: jest.fn(async () => undefined),
       signUpWithEmail: jest.fn(async () => undefined),
+      signInAsEmbeddingAccount: jest.fn(async () => undefined),
       signOut: jest.fn(),
       resetPassword: jest.fn(async () => undefined),
       dailyUsage: 0,

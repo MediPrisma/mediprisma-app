@@ -132,6 +132,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [dailyUsage, setDailyUsage] = useState(0)
   const [perplexityUsage, setPerplexityUsage] = useState(0)
   const [whisperUsage, setWhisperUsage] = useState(0)
+  // The guest session being minted, and whether the framing 門診 AI 助理 is
+  // signing an account in: no guest is minted then, so none lands after it.
+  const guestSignIn = useRef<Promise<unknown> | undefined>(undefined)
+  const embedSigningIn = useRef(false)
 
   // Anonymous visitors get a smaller free allowance; these are display-only,
   // the Functions enforce the real numbers (must mirror ANON_LIMITS).
@@ -238,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setDailyUsage(0)
         setPerplexityUsage(0)
         setWhisperUsage(0)
-        signInAnonymously(firebaseAuth).catch((error: { code?: string }) => {
+        if (!embedSigningIn.current) guestSignIn.current = signInAnonymously(firebaseAuth).catch((error: { code?: string }) => {
           // auth/operation-not-allowed = Anonymous sign-in not enabled in the
           // Firebase Console (Authentication → Sign-in method). The app still
           // works with a user's own API key; the free proxy just won't.
@@ -423,13 +427,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInAsEmbeddingAccount = async (uid: string, token: string) => {
     if (!auth) throw new Error('Firebase not initialized')
-    const current = auth.currentUser
-    if (current && !current.isAnonymous && current.uid === uid) return
-    // Signed in over the current session rather than after a sign-out: a
-    // moment with nobody signed in would mint an anonymous session that could
-    // land after this one.
-    if (current && !current.isAnonymous) await clearPreviousUser()
-    await signInWithCustomToken(auth, token)
+    embedSigningIn.current = true
+    try {
+      // The account this browser had is restored, and a guest session already
+      // being minted has landed, before deciding what to clear and signing in.
+      await auth.authStateReady()
+      await guestSignIn.current
+      const current = auth.currentUser
+      if (current && !current.isAnonymous && current.uid === uid) return
+      // Signed in over the current session rather than after a sign-out: a
+      // moment with nobody signed in would mint a guest session.
+      if (current && !current.isAnonymous) await clearPreviousUser()
+      await signInWithCustomToken(auth, token)
+    } finally {
+      embedSigningIn.current = false
+    }
   }
 
   // Reset password

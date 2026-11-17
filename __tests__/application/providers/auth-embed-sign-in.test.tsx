@@ -7,16 +7,22 @@ import { render } from '@testing-library/react'
 import { AuthProvider, useAuth, type AuthContextType } from '@/src/application/providers/auth.provider'
 import { QueryProvider } from '@/src/application/providers/query-provider'
 
-const mockAuth: { currentUser: { uid: string; isAnonymous: boolean } | null } = { currentUser: null }
+const mockAuth: { currentUser: { uid: string; isAnonymous: boolean } | null; authStateReady: () => Promise<void> } = {
+  currentUser: null,
+  authStateReady: () => mockReady(),
+}
+const mockReady = jest.fn()
+let mockAuthListener: ((user: unknown) => Promise<void>) | undefined
+const mockSignInAnonymously = jest.fn()
 const mockSignInWithCustomToken = jest.fn()
 const mockClearKeys = jest.fn()
 const mockClearBundle = jest.fn()
 
 jest.mock('@/src/shared/config/firebase.config', () => ({ get auth() { return mockAuth }, db: undefined }))
 jest.mock('firebase/auth', () => ({
-  onAuthStateChanged: jest.fn(() => jest.fn()),
+  onAuthStateChanged: jest.fn((_auth, listener) => { mockAuthListener = listener; return jest.fn() }),
   getRedirectResult: jest.fn(async () => null),
-  signInAnonymously: jest.fn(async () => undefined),
+  signInAnonymously: (...args: unknown[]) => mockSignInAnonymously(...args),
   signInWithCustomToken: (...args: unknown[]) => mockSignInWithCustomToken(...args),
   signOut: jest.fn(async () => undefined),
 }))
@@ -47,6 +53,8 @@ function Capture({ onAuth }: { onAuth: (value: AuthContextType) => void }) {
 describe('signInAsEmbeddingAccount', () => {
   beforeEach(() => {
     mockSignInWithCustomToken.mockReset().mockResolvedValue({ user: { uid: 'uid-a' } })
+    mockSignInAnonymously.mockReset().mockResolvedValue(undefined)
+    mockReady.mockReset().mockResolvedValue(undefined)
     mockClearKeys.mockReset()
     mockClearBundle.mockReset().mockResolvedValue(undefined)
     render(<QueryProvider><AuthProvider><Capture onAuth={keep} /></AuthProvider></QueryProvider>)
@@ -72,6 +80,32 @@ describe('signInAsEmbeddingAccount', () => {
     mockAuth.currentUser = { uid: 'anon-1', isAnonymous: true }
     await act(async () => { await context.signInAsEmbeddingAccount('uid-a', 'token-a') })
     expect(mockClearBundle).not.toHaveBeenCalled()
+    expect(mockSignInWithCustomToken).toHaveBeenCalledWith(mockAuth, 'token-a')
+  })
+
+  it('waits for a guest session already being minted, so it cannot land after the sign-in', async () => {
+    mockAuth.currentUser = null
+    let landGuest!: () => void
+    mockSignInAnonymously.mockReturnValue(new Promise<void>((resolve) => { landGuest = () => { mockAuth.currentUser = { uid: 'anon-2', isAnonymous: true }; resolve() } }))
+    await act(async () => { await mockAuthListener!(null) })
+    let done = false
+    const signing = context.signInAsEmbeddingAccount('uid-a', 'token-a').then(() => { done = true })
+    await act(async () => { await Promise.resolve() })
+    expect(mockSignInWithCustomToken).not.toHaveBeenCalled()
+    await act(async () => { landGuest(); await signing })
+    expect(done).toBe(true)
+    expect(mockSignInWithCustomToken).toHaveBeenCalledWith(mockAuth, 'token-a')
+  })
+
+  it('mints no guest while signing in, and clears an account restored only after it was asked', async () => {
+    mockAuth.currentUser = null
+    let restore!: () => void
+    mockReady.mockReturnValue(new Promise<void>((resolve) => { restore = () => { mockAuth.currentUser = { uid: 'uid-b', isAnonymous: false }; resolve() } }))
+    const signing = context.signInAsEmbeddingAccount('uid-a', 'token-a')
+    await act(async () => { await mockAuthListener!(null) })
+    expect(mockSignInAnonymously).not.toHaveBeenCalled()
+    await act(async () => { restore(); await signing })
+    expect(mockClearBundle).toHaveBeenCalled()
     expect(mockSignInWithCustomToken).toHaveBeenCalledWith(mockAuth, 'token-a')
   })
 })
