@@ -68,11 +68,23 @@ export function useRunInteractionCheck(rows: MedicationRow[], options: { enabled
   useEffect(() => {
     if (!probing) return
     const controller = new AbortController()
+    // Allowing access later (from the prompt or site settings) asks again,
+    // as the full check does.
+    let permission: PermissionStatus | null = null
+    const onPermissionChange = () => { if (permission?.state === 'granted') retry() }
+    void localNetworkPermission(origin).then(status => {
+      if (controller.signal.aborted) return
+      permission = status
+      permission?.addEventListener('change', onPermissionChange)
+    })
     void probeService(origin, controller.signal).then(reachable => {
       if (!controller.signal.aborted) setReach({ key, attempt, reachable })
     })
-    return () => controller.abort()
-  }, [probing, key, origin, attempt])
+    return () => {
+      controller.abort()
+      permission?.removeEventListener('change', onPermissionChange)
+    }
+  }, [probing, key, origin, attempt, retry])
 
   useEffect(() => {
     if (!active) return

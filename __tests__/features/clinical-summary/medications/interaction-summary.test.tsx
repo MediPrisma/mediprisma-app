@@ -170,11 +170,15 @@ describe('useRunInteractionCheck', () => {
     await waitFor(() => expect(result.current.state).toMatchObject({ status: 'too-few', reachable: true }))
   })
 
-  it('does not ask a service the browser was refused', async () => {
-    permission('denied')
+  it('does not ask a service the browser was refused, and asks once access is allowed', async () => {
+    const { change } = permission('denied')
     const { result } = run([])
     await waitFor(() => expect(result.current.state).toMatchObject({ status: 'too-few', reachable: false }))
     expect(fetchMock).not.toHaveBeenCalled()
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
+    act(() => change('granted'))
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: 'too-few', reachable: true }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('sends ingredient names only and returns the graded review', async () => {
