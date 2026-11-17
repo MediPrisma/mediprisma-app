@@ -163,3 +163,15 @@ test('D083/D084: chart number, capture time and counts reach the Collector; malf
     expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('durationMs')
   }
 })
+
+test('D091: the HIS request count the extension tagged reaches the Collector; a malformed or repeated tag is dropped', async () => {
+  const REQUESTS = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-request-count'
+  reportHospitalCapture(oneClick([{ system: REQUESTS, code: '512' }]))
+  await settle()
+  const body = sentBody()
+  expect(hospitalCaptureEventSchema.safeParse(body).success).toBe(true)
+  expect(body).toMatchObject({ request_count: 512 })
+  for (const bad of [[{ system: REQUESTS, code: '-1' }], [{ system: REQUESTS, code: '1.5' }], [{ system: REQUESTS, code: '100000' }],
+    [{ system: REQUESTS, code: '1' }, { system: REQUESTS, code: '2' }]])
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('requestCount')
+})

@@ -351,8 +351,9 @@ export const hospitalCaptureEventSchema = z.object({
   app_surface: collectorAppSurfaceSchema,
   app_version: z.string().regex(/^\d+\.\d+\.\d+$/),
   build_revision: z.string().regex(/^(?:[a-f0-9]{7,40}|unknown)$/),
-  // one_click: 北榮懷爾抓抓 imported directly; medcloud_relay: via 雲端懷爾抓抓 progressive import.
-  path: z.enum(['one_click', 'medcloud_relay']),
+  // one_click: 北榮懷爾抓抓 imported directly; medcloud_relay: via 雲端懷爾抓抓 progressive import;
+  // clinic_prep (D091): the outpatient assistant preparing a clinic ahead of time, one patient per event.
+  path: z.enum(['one_click', 'medcloud_relay', 'clinic_prep']),
   // empty = the capture finished without hospital resources; failed = no hospital data reached the app.
   outcome: z.enum(['complete', 'partial', 'empty', 'failed']),
   unavailable_reason: hospitalUnavailableReasonSchema.optional(),
@@ -365,6 +366,9 @@ export const hospitalCaptureEventSchema = z.object({
   chart_no: z.string().regex(/^[0-9A-Za-z-]{1,16}$/).optional(),
   // Capture time as 北榮懷爾抓抓 measured it (start of the capture to the bundle being ready), at most one hour.
   duration_ms: z.number().int().min(0).max(3_600_000).optional(),
+  // HIS requests 北榮懷爾抓抓 itself sent for this capture (D091). Not the requests the chart
+  // page sends on its own when the assistant opens it in a tab.
+  request_count: captureCount.optional(),
   failures: z.array(z.object({
     category: hospitalCaptureCategorySchema, kind: hospitalCaptureFailureKindSchema,
     status: z.number().int().min(100).max(599).optional(), count: z.number().int().min(1).max(99_999),
