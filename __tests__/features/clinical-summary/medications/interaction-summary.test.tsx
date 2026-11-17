@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { InteractionSummary } from '@/features/clinical-summary/medications/components/InteractionSummary'
 import { useRunInteractionCheck } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
-import { reachedServiceRecently, resetServiceReach } from '@/features/clinical-summary/medications/hooks/hospital-service-reach'
+import { resetServiceReach } from '@/features/clinical-summary/medications/hooks/hospital-service-reach'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 import type { InteractionReview } from '@/features/clinical-summary/medications/utils/interaction-check'
 
@@ -157,12 +157,10 @@ describe('useRunInteractionCheck', () => {
     await waitFor(() => expect(result.current.state).toEqual({ status: 'too-few', localRowIds: [], reachable: true }))
   })
 
-  it('asks the service with a fixed synthetic drug when there are too few to check, and remembers reaching it', async () => {
-    window.localStorage.clear()
+  it('asks the service with a fixed synthetic drug when there are too few to check', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     const { result } = run([])
     await waitFor(() => expect(result.current.state).toEqual({ status: 'too-few', localRowIds: [], reachable: false }))
-    expect(reachedServiceRecently()).toBe(false)
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('https://ddi.example.test/api/ddi-check')
     expect(JSON.parse(init.body)).toEqual({ medications: [{ drugName: 'acetaminophen' }] })
@@ -170,8 +168,6 @@ describe('useRunInteractionCheck', () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 422 })
     act(() => result.current.retry())
     await waitFor(() => expect(result.current.state).toMatchObject({ status: 'too-few', reachable: true }))
-    expect(reachedServiceRecently()).toBe(true)
-    expect(reachedServiceRecently(Date.now() + 8 * 24 * 60 * 60 * 1000)).toBe(false)
   })
 
   it('does not ask a service the browser was refused', async () => {

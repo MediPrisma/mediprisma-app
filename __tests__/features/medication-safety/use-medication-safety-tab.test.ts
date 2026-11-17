@@ -1,7 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { useInteractionCheckStore, type InteractionCheckState } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
 import { useMedicationSafetyTab } from '@/features/medication-safety/useMedicationSafetyTab'
-import { markServiceReached } from '@/features/clinical-summary/medications/hooks/hospital-service-reach'
 import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 
 const row = (id: string, dataOrigin?: MedicationRow['dataOrigin']): MedicationRow => ({
@@ -15,7 +14,7 @@ function publish(state: InteractionCheckState, rows: MedicationRow[]) {
 }
 
 describe('useMedicationSafetyTab', () => {
-  afterEach(() => { window.history.replaceState({}, '', '/'); window.localStorage.clear() })
+  afterEach(() => { window.history.replaceState({}, '', '/') })
 
   it('has no tab without the service', () => {
     const { result } = renderHook(() => useMedicationSafetyTab())
@@ -77,17 +76,11 @@ describe('useMedicationSafetyTab', () => {
     expect(result.current).toMatchObject({ visible: true, count: 0, notRun: true })
   })
 
-  it('shows the tab while checking only if the service was reached in the last 7 days', () => {
+  it('waits for an answer before showing the tab away from other hospital signs', () => {
     const { result } = renderHook(() => useMedicationSafetyTab())
     publish({ status: 'loading' }, cloudOnly)
     expect(result.current.visible).toBe(false)
-    markServiceReached()
-    publish({ status: 'loading' }, [...cloudOnly])
-    expect(result.current).toMatchObject({ visible: true, count: null })
-    publish({ status: 'unreachable', reason: 'network' }, cloudOnly)
-    expect(result.current.visible).toBe(false)
-    markServiceReached(Date.now() - 8 * 24 * 60 * 60 * 1000)
-    publish({ status: 'loading' }, [...cloudOnly])
+    publish({ status: 'too-few', localRowIds: [] }, [row('a', 'medcloud')])
     expect(result.current.visible).toBe(false)
   })
 })

@@ -4,7 +4,6 @@ import { useMemo } from 'react'
 import { detectSite } from '@/src/application/telemetry/launch-context'
 import { useInteractionCheck } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
 import { attentionFindings } from '@/features/clinical-summary/medications/utils/interaction-check'
-import { reachedServiceRecently } from '@/features/clinical-summary/medications/hooks/hospital-service-reach'
 
 export const MEDICATION_SAFETY_FEATURE_ID = 'medication-safety'
 
@@ -33,19 +32,16 @@ const HIDDEN: MedicationSafetyTab = { visible: false, unreachable: false, count:
  * the request". So the hospital is recognised from what the app already knows
  * — the 北榮 launcher's `?site=vghtpe`, or 院內 medication rows — and from the
  * service answering, which covers cloud-only patients and lists too short to
- * check. Having reached it in the last 7 days shows the tab while a check is
- * still running. Away from the hospital the tab does not appear at all.
+ * check. Away from the hospital the tab does not appear at all.
  */
 export function useMedicationSafetyTab(): MedicationSafetyTab {
   const { state, rows } = useInteractionCheck()
   return useMemo(() => {
     if (state.status === 'off') return HIDDEN
     const answered = state.status === 'ok' || (state.status === 'too-few' && state.reachable === true)
-    const stillAsking = state.status === 'loading' || (state.status === 'too-few' && state.reachable === undefined)
     const atHospital = answered
       || detectSite() === 'vghtpe'
       || rows.some(row => row.dataOrigin === 'hospital' || row.dataOrigin === 'integrated')
-      || (stillAsking && reachedServiceRecently())
     if (!atHospital) return HIDDEN
     if (state.status === 'blocked' || state.status === 'unreachable') {
       return { visible: true, unreachable: true, count: null, avoid: 0, unchecked: 0, notRun: false }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { localNetworkPermission } from '@/src/shared/utils/local-network-permission'
-import { markServiceReached, probeService } from './hospital-service-reach'
+import { probeService } from './hospital-service-reach'
 import type { MedicationRow } from '../types'
 import {
   interactionCheckBody,
@@ -100,7 +100,6 @@ export function useRunInteractionCheck(rows: MedicationRow[], options: { enabled
           body: JSON.stringify(interactionCheckBody(plan)),
           signal: controller.signal,
         })
-        markServiceReached()
         if (!response.ok) return settle({ kind: 'unreachable', reason: 'http' })
         settle({ kind: 'answer', response: await response.json() })
       } catch {
