@@ -9,6 +9,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInAnonymously,
+  signInWithCustomToken,
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
   sendEmailVerification,
@@ -69,6 +70,14 @@ export interface AuthContextType {
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  /**
+   * Signs this browser in as the account the framing 門診 AI 助理 is signed in
+   * as, with a Firebase custom token its server minted for that account
+   * (features/import-bundle/services/embedded-import.ts). Nothing happens when
+   * that account is already signed in. Another real account's keys and patient
+   * are cleared first, as the logout button does, so they never carry over.
+   */
+  signInAsEmbeddingAccount: (uid: string, token: string) => Promise<void>
   resetPassword: (email: string) => Promise<void>
   dailyUsage: number
   /** Daily chat limit for the active tier (smaller for anonymous visitors) */
@@ -369,6 +378,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Run on logout, and before the 門診 AI 助理 signs another account in.
+  const clearPreviousUser = async () => {
+    // Shared-workstation hygiene: wipes locally stored LLM API
+    // keys and the obfuscation key so the next user can't reuse them
+    useAiConfigStore.getState().clearAllKeys()
+    clearSessionKey()
+
+    // …and the previous PATIENT's data, not just the doctor's keys. Two
+    // separate sources have to go: the live SMART session (fhirclient's
+    // cached access token, still valid for its full lifetime — without this
+    // the chart stays readable and keeps fetching after "logout") and the
+    // imported bundle (IndexedDB ciphertext + sessionStorage AES key +
+    // stored images + demo flag) plus cached AI results.
+    clearSmartSession()
+
+    await serializeLocalBundleMutation(async () => {
+      const importId = LocalBundleService.getActiveImportId()
+      await LocalBundleService.clear()
+      purgeAiResultCaches(importId)
+      // Same signal an import/clear dispatches — resets in-memory AI-result
+      // stores and lets every useImportBundle instance drop its state.
+      notifyBundleChanged()
+      // Drop the React-Query-cached chart so the UI stops showing the
+      // previous patient immediately, not just after a reload.
+      await queryClient.invalidateQueries()
+    })
+  }
+
   // Sign out
   const signOut = async () => {
     if (!auth) throw new Error('Firebase not initialized')
@@ -378,33 +415,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await firebaseSignOut(auth)
       // User state will be updated by onAuthStateChanged listener
 
-      // Shared-workstation hygiene: logout also wipes locally stored LLM API
-      // keys and the obfuscation key so the next user can't reuse them
-      useAiConfigStore.getState().clearAllKeys()
-      clearSessionKey()
-
-      // …and the previous PATIENT's data, not just the doctor's keys. Two
-      // separate sources have to go: the live SMART session (fhirclient's
-      // cached access token, still valid for its full lifetime — without this
-      // the chart stays readable and keeps fetching after "logout") and the
-      // imported bundle (IndexedDB ciphertext + sessionStorage AES key +
-      // stored images + demo flag) plus cached AI results.
-      clearSmartSession()
-
-      await serializeLocalBundleMutation(async () => {
-        const importId = LocalBundleService.getActiveImportId()
-        await LocalBundleService.clear()
-        purgeAiResultCaches(importId)
-        // Same signal an import/clear dispatches — resets in-memory AI-result
-        // stores and lets every useImportBundle instance drop its state.
-        notifyBundleChanged()
-        // Drop the React-Query-cached chart so the UI stops showing the
-        // previous patient immediately, not just after a reload.
-        await queryClient.invalidateQueries()
-      })
+      await clearPreviousUser()
     } finally {
       setLoading(false)
     }
+  }
+
+  const signInAsEmbeddingAccount = async (uid: string, token: string) => {
+    if (!auth) throw new Error('Firebase not initialized')
+    const current = auth.currentUser
+    if (current && !current.isAnonymous && current.uid === uid) return
+    // Signed in over the current session rather than after a sign-out: a
+    // moment with nobody signed in would mint an anonymous session that could
+    // land after this one.
+    if (current && !current.isAnonymous) await clearPreviousUser()
+    await signInWithCustomToken(auth, token)
   }
 
   // Reset password
@@ -423,6 +448,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithEmail,
     signUpWithEmail,
     signOut,
+    signInAsEmbeddingAccount,
     resetPassword,
     dailyUsage,
     dailyLimit,
