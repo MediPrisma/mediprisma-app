@@ -46,6 +46,8 @@ export interface StreamConfig {
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
+  /** OpenAI Responses output detail; independent of hidden reasoning effort. */
+  textVerbosity?: 'low' | 'medium' | 'high'
   /** CUSTOM endpoints only: suppress the model's hidden reasoning for this one
    *  request. The dialect (vLLM `chat_template_kwargs`, gpt-oss's bounded
    *  `reasoning_effort`, OpenRouter's `reasoning.enabled`) is resolved at the
@@ -127,6 +129,8 @@ export class AiSdkStreamAdapter {
       )
         ? { providerOptions: { openai: {
             reasoningEffort: config.reasoningEffort,
+            ...(modelId === INTRANET_LUNA_ID && config.textVerbosity
+              ? { textVerbosity: config.textVerbosity } : {}),
             // The SDK does not know this deployment name and would drop the
             // effort without saying so.
             ...(modelId === INTRANET_LUNA_ID ? { forceReasoning: true } : {}),
