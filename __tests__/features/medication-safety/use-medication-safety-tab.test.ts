@@ -66,4 +66,21 @@ describe('useMedicationSafetyTab', () => {
     publish({ status: 'too-few', localRowIds: ['b'] }, withHospital)
     expect(result.current).toMatchObject({ notRun: true, unchecked: 1 })
   })
+
+  it('shows the tab for a cloud-only patient with too few drugs once the service answers', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    const single = [row('a', 'medcloud')]
+    publish({ status: 'too-few', localRowIds: [], reachable: false }, single)
+    expect(result.current.visible).toBe(false)
+    publish({ status: 'too-few', localRowIds: [], reachable: true }, single)
+    expect(result.current).toMatchObject({ visible: true, count: 0, notRun: true })
+  })
+
+  it('waits for an answer before showing the tab away from other hospital signs', () => {
+    const { result } = renderHook(() => useMedicationSafetyTab())
+    publish({ status: 'loading' }, cloudOnly)
+    expect(result.current.visible).toBe(false)
+    publish({ status: 'too-few', localRowIds: [] }, [row('a', 'medcloud')])
+    expect(result.current.visible).toBe(false)
+  })
 })
