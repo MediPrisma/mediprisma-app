@@ -27,6 +27,7 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
 import { prepareLocalImportFile } from '../services/local-import-file.service'
+import { patientIdsOf } from '../services/embedded-import'
 import { ProgressiveImportError } from '../services/progressive-import-transaction'
 import { persistSummaryVersions } from '@/src/application/hooks/medical-summary/summary-versions.store'
 import { reportHospitalCapture } from '@/src/infrastructure/telemetry/hospital-capture'
@@ -71,6 +72,8 @@ export interface UseImportBundleReturn {
   bundleIsActive: boolean
   /** True when the active bundle is the bundled demo. */
   isDemo: boolean
+  /** The Patient ids of the bundle now stored (the embedded import answers with them). */
+  loadedPatientIds: () => Promise<string[]>
 }
 
 export function useImportBundle(): UseImportBundleReturn {
@@ -289,5 +292,9 @@ export function useImportBundle(): UseImportBundleReturn {
     })
   }, [queryClient])
 
-  return { importFile, loadDemo, clear, loading, error, hasBundle, bundleIsActive, isDemo }
+  const loadedPatientIds = useCallback(async () => {
+    return patientIdsOf(await LocalBundleService.load())
+  }, [])
+
+  return { importFile, loadDemo, clear, loading, error, hasBundle, bundleIsActive, isDemo, loadedPatientIds }
 }
