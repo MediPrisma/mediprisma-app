@@ -84,7 +84,7 @@ describe('planInteractionCheck', () => {
     const plan = planInteractionCheck([
       row('x', { dataOrigin: 'hospital', hospitalMedicationName: { status: 'unresolved', version: 'v', reviewedAt: 'd' } }),
     ])
-    expect(plan).toEqual({ items: [], unnamedRowIds: ['x'], localRowIds: [] })
+    expect(plan).toEqual({ items: [], unnamedRowIds: ['x'], localRowIds: [], endedRowIds: [], coveredUntil: {} })
   })
 })
 
@@ -269,13 +269,116 @@ describe('interpretInteractionCheck', () => {
   })
 })
 
+describe('drugs whose supply has run out', () => {
+  // 2026-11-17 in Taipei.
+  const now = Date.parse('2026-11-17T10:00:00+08:00')
+  const ended = (endDateIso: string, patch: Partial<MedicationRow> = {}) =>
+    ({ isInactive: true, endDateIso, startedOnIso: '2026-01-01', durationDays: 30, ...patch })
+  const queries = (rows: MedicationRow[]) => planInteractionCheck(rows, now).items.map(item => item.query)
+
+  it('keeps a long-term drug for 14 days after its supply ends', () => {
+    expect(queries([
+      cloud('warf', 'WARFARIN SODIUM 1 MG', ended('2026-11-03')),
+      cloud('amio', 'AMIODARONE HCL 200 MG', ended('2026-11-02')),
+      cloud('fluc', 'FLUCONAZOLE 150 MG', ended('2026-11-03', { durationDays: 27, isChronic: true })),
+    ])).toEqual(['WARFARIN SODIUM', 'FLUCONAZOLE'])
+  })
+
+  it('leaves out a short course once ended, and any order the source stopped', () => {
+    const plan = planInteractionCheck([
+      cloud('cipro', 'CIPROFLOXACIN 500 MG', ended('2026-11-16', { durationDays: 7 })),
+      cloud('warf', 'WARFARIN SODIUM 1 MG', ended('2026-11-16', { status: 'stopped' })),
+      cloud('amio', 'AMIODARONE HCL 200 MG'),
+    ], now)
+    expect(plan.items.map(item => item.query)).toEqual(['AMIODARONE HCL'])
+    expect(plan.endedRowIds).toEqual([])
+  })
+
+  it('keeps a chronic slip for its later fills, which a pharmacy may have dispensed', () => {
+    // 慢簽(三個月) written 8/1: the hospital gave 30 days to 8/30; two more
+    // fills cover to 10/29, the grace to 11/12. A two-fill slip ending 10/10
+    // covers to 11/9; a plain long-term supply ending 11/5 only to 11/5.
+    expect(queries([
+      hospital('three', 'Valsartan', ended('2026-08-30', { isChronic: true, chronicFills: 3 })),
+      hospital('two', 'Spironolactone', ended('2026-10-10', { isChronic: true, chronicFills: 2 })),
+      hospital('one', 'Rosuvastatin', ended('2026-11-05', { isChronic: true })),
+      hospital('slipless', 'Metformin', ended('2026-10-10', { isChronic: true })),
+    ])).toEqual(['Spironolactone', 'Rosuvastatin'])
+    expect(queries([
+      hospital('three', 'Valsartan', ended('2026-09-04', { isChronic: true, chronicFills: 3 })),
+    ])).toEqual(['Valsartan'])
+  })
+
+  it('takes the newest record of a drug, so an older slip cannot split a same-visit pair', () => {
+    const list = [
+      hospital('val-old', 'Valsartan', ended('2026-09-05', { drugKey: 'val', isChronic: true, chronicFills: 3, encounterReference: 'Encounter/8' })),
+      hospital('val', 'Valsartan', { drugKey: 'val', startedOnIso: '2026-11-12', encounterReference: 'Encounter/11' }),
+      hospital('spiro', 'Spironolactone', { drugKey: 'spiro', startedOnIso: '2026-11-12', encounterReference: 'Encounter/11' }),
+    ]
+    const plan = planInteractionCheck(list, now)
+    expect(plan.items).toEqual([{ query: 'Valsartan', rowIds: ['val'] }, { query: 'Spironolactone', rowIds: ['spiro'] }])
+  })
+
+  it('lets a later fill replace the visit record, and not a cancelled renewal', () => {
+    const plan = planInteractionCheck([
+      hospital('val-visit', 'Valsartan', ended('2026-11-05', { drugKey: 'val', isChronic: true, startedOnIso: '2026-10-07' })),
+      hospital('val-fill', 'Valsartan', { drugKey: 'val', startedOnIso: '2026-10-07', dispensedOnIso: '2026-11-04' }),
+      cloud('warf', 'WARFARIN SODIUM 1 MG', ended('2026-11-08', { drugKey: 'warf' })),
+      cloud('warf-new', 'WARFARIN SODIUM 1 MG', { drugKey: 'warf', status: 'cancelled', isInactive: true, startedOnIso: '2026-11-16' }),
+    ], now)
+    expect(plan.items).toEqual([{ query: 'Valsartan', rowIds: ['val-fill'] }, { query: 'WARFARIN SODIUM', rowIds: ['warf'] }])
+    expect(plan.endedRowIds).toEqual(['warf'])
+  })
+
+  it('keeps a whole slip when only its second fill is on record', () => {
+    // 慢簽(三個月) 8/20: first fill to 9/18, second fill 9/19 to 10/18, the
+    // third from a pharmacy with no record; the slip covers to 11/17.
+    const plan = planInteractionCheck([
+      cloud('warf-visit', 'WARFARIN SODIUM 1 MG', ended('2026-09-18', { drugKey: 'warf', isChronic: true, chronicFills: 3, startedOnIso: '2026-08-20' })),
+      cloud('warf-fill', 'WARFARIN SODIUM 1 MG', ended('2026-10-18', { drugKey: 'warf', isChronic: true, startedOnIso: '2026-08-20', dispensedOnIso: '2026-09-19' })),
+    ], now)
+    expect(plan.items).toEqual([{ query: 'WARFARIN SODIUM', rowIds: ['warf-fill'] }])
+    expect(plan.coveredUntil).toEqual({ 'warf-fill': '2026-11-17' })
+  })
+
+  it('marks a pair with an ended side, lists it after current pairs, and not when a current row shares it', () => {
+    const list = [
+      cloud('warf', 'WARFARIN SODIUM 1 MG', ended('2026-11-10')),
+      cloud('amio', 'AMIODARONE HCL 200 MG'),
+      cloud('flu', 'FLUCONAZOLE 150 MG'),
+      cloud('para-old', 'ACETAMINOPHEN 500 MG', ended('2026-11-10')),
+      cloud('para', 'ACETAMINOPHEN 500 MG', { drugKey: 'para-other', startedOnIso: '2026-11-15' }),
+    ]
+    const plan = planInteractionCheck(list, now)
+    const review = interpretInteractionCheck(plan, list, {
+      resolvedMedications: [
+        resolved(0, '03951', 'Warfarin'),
+        resolved(1, '01363', 'Amiodarone HCl (amiodarone)'),
+        resolved(2, '02247', 'Fluconazole'),
+        resolved(3, '01833', 'Acetaminophen (paracetamol)'),
+      ],
+      alerts: [
+        alert('03951', '01363', 'high', '監測 INR'),
+        alert('02247', '01363', 'high', '監測 QT'),
+        alert('01833', '01363', 'high', '觀察'),
+      ],
+    })
+    expect(review.findings.map(f => [f.rowIdsA, f.involvesEnded])).toEqual([
+      [['flu'], false],
+      [['para-old', 'para'], false],
+      [['warf'], true],
+    ])
+    expect(review.endedRowIds).toEqual(['warf', 'para-old'])
+  })
+})
+
 describe('attentionFindings', () => {
   const f = (id: string, tier: 'avoid' | 'act' | 'note', samePrescription: boolean) =>
-    ({ id, tier, severity: 'unknown' as const, rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription })
+    ({ id, tier, severity: 'unknown' as const, rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription, involvesEnded: false })
   it('keeps every cross-visit pair and same-visit avoid pairs', () => {
     const review = {
       findings: [f('1', 'avoid', true), f('2', 'act', true), f('3', 'note', true), f('4', 'note', false), f('5', 'act', false)],
-      checkedRowIds: [], uncheckedRowIds: [], localRowIds: [],
+      checkedRowIds: [], uncheckedRowIds: [], localRowIds: [], endedRowIds: [], coveredUntil: {},
     }
     expect(attentionFindings(review).map(x => x.id)).toEqual(['1', '4', '5'])
   })

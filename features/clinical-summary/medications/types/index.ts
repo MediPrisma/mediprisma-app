@@ -67,6 +67,8 @@ export interface MedicationRow {
   /** A later 慢連箋 fill's dispense day. `startedOn` stays the visit that
    *  wrote it; the supply window (`endDate`) runs from this day. */
   dispensedOn?: string
+  /** `dispensedOn` as YYYY-MM-DD (see startedOnIso). */
+  dispensedOnIso?: string
   stoppedOn?: string
   durationDays?: number
   /** Computed end date: startedOn + durationDays (ISO date) */
@@ -93,6 +95,9 @@ export interface MedicationRow {
   /** True when FHIR courseOfTherapyType marks the order as 'continuous'
    *  (NHI 慢性處方箋, refillable chronic prescription). */
   isChronic: boolean
+  /** Fills the chronic slip allows in all, including this one (2 or 3).
+   *  Only on the visit's own record: a later fill's record has none. */
+  chronicFills?: number
   /** The source explicitly marks this outpatient order as self-purchased. */
   selfPurchased?: boolean
   /** Audience-aware drug-category label (e.g. "降血壓藥" or "HYPOTENSIVE AGENTS").

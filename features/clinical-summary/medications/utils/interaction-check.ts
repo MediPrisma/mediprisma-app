@@ -7,6 +7,7 @@
 // sends ingredient names, accepts a resolution only when the returned drug
 // names that ingredient, and reports every row it could not verify as
 // unchecked instead of letting it read as "no interaction".
+import { medicationClinicalDay, medicationSupplyEndDay } from '@/src/shared/utils/medication-calendar'
 import type { MedicationRow } from '../types'
 
 export interface InteractionCheckItem {
@@ -21,6 +22,10 @@ export interface InteractionCheckPlan {
   unnamedRowIds: string[]
   /** Current skin and ear preparations, left out of the check. */
   localRowIds: string[]
+  /** Rows no longer current that are still checked: see stillCoveredUntil. */
+  endedRowIds: string[]
+  /** For each of those, the last day its prescription may still supply. */
+  coveredUntil: Record<string, string>
 }
 
 export type InteractionTier = 'avoid' | 'act' | 'note'
@@ -39,6 +44,9 @@ export interface InteractionFinding {
   /** Both drugs were written at the same visit, so the prescriber chose the
    *  combination; the list shows these collapsed. */
   samePrescription: boolean
+  /** One side is only drugs whose supply has run out (see stillCoveredUntil):
+   *  the patient may have stopped them, or be back to renew them. */
+  involvesEnded: boolean
 }
 
 export interface InteractionReview {
@@ -47,6 +55,8 @@ export interface InteractionReview {
   uncheckedRowIds: string[]
   /** Skin and ear preparations, not sent: see isLocalPreparation. */
   localRowIds: string[]
+  endedRowIds: string[]
+  coveredUntil: Record<string, string>
 }
 
 // A strength is a number with a unit. A number inside the name stays:
@@ -87,15 +97,65 @@ export function isLocalPreparation(row: MedicationRow): boolean {
   return !EYE.test(text) && LOCAL.test(text)
 }
 
-export function planInteractionCheck(rows: MedicationRow[]): InteractionCheckPlan {
+// A patient often comes back once the last supply has run out, to renew it.
+// Long-term drugs stay in the check (owner decision 2026-11-17): a 「慢簽」
+// slip for its whole length, since the later fills can be collected at a
+// community pharmacy that the hospital record never shows, and any supply of
+// 28 days or more until it ends; both for 14 more days. Short courses and
+// orders the source marks stopped count only while current.
+const ENDED_GRACE_DAYS = 14
+const LONG_TERM_DAYS = 28
+const STOPPED = new Set(['stopped', 'cancelled', 'entered-in-error', 'draft', 'on-hold'])
+
+/** Last day (YYYY-MM-DD) of supply a row that is no longer current may still
+ *  cover: the slip's later fills included, before the 14-day grace. */
+export function stillCoveredUntil(row: MedicationRow): string | undefined {
+  const days = row.durationDays ?? 0
+  if (STOPPED.has(row.status) || !row.endDateIso || (!row.isChronic && days < LONG_TERM_DAYS)) return undefined
+  const laterFills = row.chronicFills && days ? (row.chronicFills - 1) * days : 0
+  return medicationSupplyEndDay(row.endDateIso, laterFills + 1)
+}
+
+const withinGrace = (covered: string | undefined, today: string) => {
+  const last = covered && medicationSupplyEndDay(covered, ENDED_GRACE_DAYS + 1)
+  return !!last && today <= last
+}
+
+export function planInteractionCheck(rows: MedicationRow[], nowMs = Date.now()): InteractionCheckPlan {
   const byQuery = new Map<string, InteractionCheckItem>()
   const unnamedRowIds: string[] = []
   const localRowIds: string[] = []
+  const endedRowIds: string[] = []
+  const coveredUntil: Record<string, string> = {}
+  const today = medicationClinicalDay(nowMs) ?? ''
+  // A newer record of the same drug — the renewal, or a later fill, which keeps
+  // the visit's date and has its own dispense day — replaces an older one,
+  // which would otherwise make a same-visit pair look cross-visit. An order
+  // that was cancelled or never issued replaces nothing.
+  const supplyStart = (row: MedicationRow) => row.dispensedOnIso ?? row.startedOnIso ?? ''
+  // A later fill carries no fill count; its slip still covers as far as the
+  // visit's record says, with the remaining fills perhaps from a pharmacy.
+  const newest = new Map<string, string>()
+  const slipCover = new Map<string, string>()
+  const slip = (row: MedicationRow) => `${row.drugKey ?? row.title}|${row.startedOnIso ?? ''}`
   for (const row of rows) {
-    if (row.isInactive) continue
+    const key = row.drugKey ?? row.title
+    if (STOPPED.has(row.status)) continue
+    if (supplyStart(row) > (newest.get(key) ?? '')) newest.set(key, supplyStart(row))
+    const covered = stillCoveredUntil(row)
+    if (covered && covered > (slipCover.get(slip(row)) ?? '')) slipCover.set(slip(row), covered)
+  }
+  for (const row of rows) {
+    const covered = stillCoveredUntil(row) && slipCover.get(slip(row))
+    if (row.isInactive
+      && (supplyStart(row) < (newest.get(row.drugKey ?? row.title) ?? '') || !withinGrace(covered, today))) continue
     if (isLocalPreparation(row)) {
-      localRowIds.push(row.id)
+      if (!row.isInactive) localRowIds.push(row.id)
       continue
+    }
+    if (row.isInactive && covered) {
+      endedRowIds.push(row.id)
+      coveredUntil[row.id] = covered
     }
     const names = rowIngredients(row)
     if (!names.length) unnamedRowIds.push(row.id)
@@ -106,7 +166,7 @@ export function planInteractionCheck(rows: MedicationRow[]): InteractionCheckPla
       byQuery.set(key, item)
     }
   }
-  return { items: [...byQuery.values()], unnamedRowIds, localRowIds }
+  return { items: [...byQuery.values()], unnamedRowIds, localRowIds, endedRowIds, coveredUntil }
 }
 
 export function interactionCheckBody(plan: InteractionCheckPlan) {
@@ -188,6 +248,7 @@ export function interpretInteractionCheck(
   plan.items.forEach(item => item.rowIds.forEach(id => { if (!unchecked.has(id)) checked.add(id) }))
 
   const visitOf = new Map(rows.map(row => [row.id, row.encounterReference]))
+  const ended = new Set(plan.endedRowIds)
   const findings = new Map<string, InteractionFinding>()
   for (const alert of asList(body.alerts).map(asRecord)) {
     if (alert.type !== 'DRUG_INTERACTION') continue
@@ -213,15 +274,19 @@ export function interpretInteractionCheck(
         const visit = visitOf.get(x)
         return x === y || (!!visit && visit === visitOf.get(y))
       })),
+      involvesEnded: rowIdsA.every(id => ended.has(id)) || rowIdsB.every(id => ended.has(id)),
     })
   }
 
   return {
     findings: [...findings.values()].sort((x, y) =>
-      TIER_ORDER[x.tier] - TIER_ORDER[y.tier] || Number(x.samePrescription) - Number(y.samePrescription)),
+      TIER_ORDER[x.tier] - TIER_ORDER[y.tier] || Number(x.involvesEnded) - Number(y.involvesEnded)
+        || Number(x.samePrescription) - Number(y.samePrescription)),
     checkedRowIds: [...checked],
     uncheckedRowIds: [...unchecked],
     localRowIds: plan.localRowIds,
+    endedRowIds: plan.endedRowIds.filter(id => checked.has(id)),
+    coveredUntil: plan.coveredUntil,
   }
 }
 
