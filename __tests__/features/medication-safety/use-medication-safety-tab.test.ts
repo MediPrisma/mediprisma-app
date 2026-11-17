@@ -43,13 +43,13 @@ describe('useMedicationSafetyTab', () => {
       status: 'ok',
       review: {
         findings: [
-          { id: '1', tier: 'avoid', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '2', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '3', tier: 'note', severity: 'low', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false },
-          { id: '4', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: true },
+          { id: '1', tier: 'avoid', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
+          { id: '2', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
+          { id: '3', tier: 'note', severity: 'low', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: false, involvesEnded: false },
+          { id: '4', tier: 'act', severity: 'high', rowIdsA: ['a'], rowIdsB: ['b'], action: '', mechanism: '', source: '', samePrescription: true, involvesEnded: false },
         ],
         checkedRowIds: ['a', 'b'],
-        uncheckedRowIds: ['c'], localRowIds: [],
+        uncheckedRowIds: ['c'], localRowIds: [], endedRowIds: [], coveredUntil: {},
       },
     }, cloudOnly)
     expect(result.current).toEqual({ visible: true, unreachable: false, count: 3, avoid: 1, unchecked: 1, notRun: false })
