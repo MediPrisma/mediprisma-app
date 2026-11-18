@@ -19,11 +19,14 @@ it.each([
   ['G45.4', []], // transient global amnesia is not a TIA
   ['I25.2', ['cadOrStroke', 'ihd', 'vascular']],
   ['I70.21', ['vascular']],
-  ['K74.60', ['liverDisease']],
+  ['K74.60', ['chronicLiverDisease', 'liverDisease']],
+  ['B15.9', ['liverDisease']], // acute hepatitis A is not chronic liver disease
   ['Z86.71', ['priorVte']],
+  ['I82.40', ['priorDvt', 'priorVte']],
   ['C34.90', ['activeCancer']],
   ['C44.91', []], // non-melanoma skin cancer
   ['F17.210', ['smoker']],
+  ['F17.211', []], // nicotine dependence in remission
   ['J44.9', []],
 ])('reads %s', (code, expected) => {
   expect(keys([code])).toEqual([...expected].sort())
@@ -51,4 +54,16 @@ it("maps the record's 是 onto Wells' option values", () => {
   const autofill = buildAutofill([], { age: 60, gender: 'male' }, [], [], now, [condition('I26.99')], [])
   expect(resolveInput(field('wells-pe', 'prior'), autofill).value).toBe('1')
   expect(resolveInput(field('wells-pe', 'cancer'), autofill).value).toBe('0')
+})
+
+it('keeps a resolved stroke as history but not a resolved smoking code', () => {
+  const resolved = (code: string) => ({ ...condition(code), clinicalStatus: 'resolved' }) as ConditionEntity
+  const found = historySelects([resolved('I63.9'), resolved('F17.210')], [], now)
+  expect(found.strokeTiaEmbolism?.value).toBe('yes')
+  expect(found.smoker).toBeUndefined()
+})
+
+it('answers Wells DVT 「曾確診 DVT」 否 for a PE-only history', () => {
+  const autofill = buildAutofill([], { age: 60, gender: 'male' }, [], [], now, [condition('I26.99')], [])
+  expect(resolveInput(field('wells-dvt', 'priordvt'), autofill).value).toBe('0')
 })

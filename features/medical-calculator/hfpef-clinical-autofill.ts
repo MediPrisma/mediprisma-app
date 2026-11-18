@@ -141,12 +141,14 @@ export function diagnosisSelect(
   name: string,
   /** Only a diagnosis dated within this many days counts; an undated one then does not. */
   withinDays?: number,
+  /** A past history: a resolved or inactive diagnosis still counts. */
+  history = false,
 ): ClinicalSelectValue | undefined {
   const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
   const tooOld = (date: string) => withinDays !== undefined && (!date || now.getTime() - Date.parse(date) > withinDays * 86_400_000)
   for (const condition of conditions) {
     if (['refuted', 'entered-in-error', 'provisional', 'differential', 'unconfirmed'].includes(condition.verificationStatus ?? '') || condition._inferred) continue
-    if (['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
+    if (!history && ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
     const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
     if ((date && Date.parse(date) > now.getTime()) || tooOld(date)) continue
     const code = condition.code?.coding?.find((coding) => (!coding.system || /icd/i.test(coding.system)) && matches(normal(coding.code)))

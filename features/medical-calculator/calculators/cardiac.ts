@@ -166,7 +166,7 @@ export const CARDIAC: CalculatorDef[] = [
         ynItem('calf', { en: 'Calf swelling > 3 cm vs other leg', zh: '小腿較對側腫 > 3 cm' }, 1),
         ynItem('edema', { en: 'Pitting edema (symptomatic leg)', zh: '患肢凹陷性水腫' }, 1),
         ynItem('collateral', { en: 'Collateral superficial veins (non-varicose)', zh: '側枝表淺靜脈（非靜脈曲張）' }, 1),
-        ynItem('priordvt', { en: 'Previously documented DVT', zh: '曾確診 DVT' }, 1, 'priorVte'),
+        ynItem('priordvt', { en: 'Previously documented DVT', zh: '曾確診 DVT' }, 1, 'priorDvt'),
         ynItem('altdx', { en: 'Alternative diagnosis at least as likely', zh: '其他診斷同樣或更可能' }, -2),
       ],
       interpret: (s) => {
