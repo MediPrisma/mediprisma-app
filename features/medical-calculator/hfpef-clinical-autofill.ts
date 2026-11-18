@@ -140,16 +140,23 @@ export function diagnosisSelect(
   name: string,
   /** Only a diagnosis dated within this many days counts; an undated one then does not. */
   withinDays?: number,
+  /**
+   * A past event (MI, stroke) stays history once its Condition is resolved,
+   * inactive or in remission: ASCVD asks whether it ever happened, not whether
+   * it is current. Refuted, voided and unconfirmed diagnoses still do not count.
+   */
+  { includeEnded = false }: { includeEnded?: boolean } = {},
 ): ClinicalSelectValue | undefined {
   const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
   const tooOld = (date: string) => withinDays !== undefined && (!date || now.getTime() - Date.parse(date) > withinDays * 86_400_000)
   for (const condition of conditions) {
     if (['refuted', 'entered-in-error', 'provisional', 'differential', 'unconfirmed'].includes(condition.verificationStatus ?? '') || condition._inferred) continue
-    if (['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
+    const ended = ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')
+    if (ended && !includeEnded) continue
     const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
     if ((date && Date.parse(date) > now.getTime()) || tooOld(date)) continue
     const code = condition.code?.coding?.find((coding) => (!coding.system || /icd/i.test(coding.system)) && matches(normal(coding.code)))
-    if (code) return { value: 'yes', date, testName: `${name}診斷碼：${code.code}（請核對）`, obsId: condition.id, resourceType: 'Condition' }
+    if (code) return { value: 'yes', date, testName: `${name}診斷碼：${code.code}${ended ? '（病史，已結束）' : ''}（請核對）`, obsId: condition.id, resourceType: 'Condition' }
   }
   for (const encounter of encounters) {
     if (['cancelled', 'entered-in-error'].includes(encounter.status ?? '')) continue
@@ -264,7 +271,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const pceBpTreat = defaultNo(drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
   const pceDiabetes = defaultNo(diabetes, now, '病歷未見糖尿病診斷碼')
   const pceSmoking = defaultNo(diagnosisSelect(conditions, encounters, now, isSmokingCode, '吸菸'), now, '病歷未見吸菸診斷碼')
-  const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD '), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
+  const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD ', undefined, { includeEnded: true }), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
   const aceiArb = drugClassSelect(medications, now, ACEI_ARB, /^C09/, ' ACEI／ARB')

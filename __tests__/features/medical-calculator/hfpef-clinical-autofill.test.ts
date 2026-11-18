@@ -141,6 +141,23 @@ describe('PCE history and drug questions from the record', () => {
   test.each(['I21.4', 'I63.9', 'G45.9', 'I70.21', 'I73.9', '414.01', '434.91'])('ASCVD code %s is 「是」', (code) => {
     expect(buildClinicalSelects([], [], now, [dx(code)]).pceAscvd?.value).toBe('yes')
   })
+  // #525 review round 2: a past MI or stroke whose Condition is resolved,
+  // inactive or in remission is still ASCVD history — PCE must not run.
+  test.each(['resolved', 'inactive', 'remission'])('an ended (%s) MI or stroke is still ASCVD 「是」', (clinicalStatus) => {
+    for (const code of ['I21.4', 'I63.9']) {
+      const result = buildClinicalSelects([], [], now, [{ ...dx(code), clinicalStatus }])
+      expect(result.pceAscvd).toMatchObject({ value: 'yes', resourceType: 'Condition' })
+      expect(result.pceAscvd?.testName).toContain('已結束')
+    }
+  })
+  test('a refuted or voided ASCVD diagnosis still does not count', () => {
+    for (const verificationStatus of ['refuted', 'entered-in-error', 'unconfirmed']) {
+      expect(buildClinicalSelects([], [], now, [{ ...dx('I21.4'), clinicalStatus: 'resolved', verificationStatus }]).pceAscvd?.value).toBe('no')
+    }
+  })
+  test('other history questions keep ignoring ended diagnoses', () => {
+    expect(buildClinicalSelects([], [], now, [{ ...dx('E11.9'), clinicalStatus: 'resolved' }]).pceDiabetes?.value).toBe('no')
+  })
   test('nothing in the record is a labelled 「否」 for all four', () => {
     const result = buildClinicalSelects([], [], now, [dx('I10')])
     for (const key of ['pceBpTreat', 'pceDiabetes', 'pceSmoking', 'pceAscvd'] as const) {
