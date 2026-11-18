@@ -365,7 +365,7 @@ export const HEART_FAILURE_PROGNOSIS: CalculatorDef[] = [{
     AGE_INPUT,
     SEX_INPUT,
     { key: 'lvef', type: 'number', label: label('Current LVEF (eligibility)', '目前 LVEF（適用條件）'), unit: '%', source: { kind: 'echo', key: 'lvef' } },
-    yesNo('priorReducedLvef', 'Any previously documented LVEF <50%', '過去是否曾記錄 LVEF <50%'),
+    { ...yesNo('priorReducedLvef', 'Any previously documented LVEF <50%', '過去是否曾記錄 LVEF <50%'), presumed: 'no' },
     { ...yesNo('diabetes', 'Diabetes mellitus', '糖尿病'), source: { kind: 'hfpefClinical', key: 'diabetes' }, presumed: 'no' },
     { ...yesNo('smoker', 'Current smoker', '目前吸菸'), source: { kind: 'hfpefClinical', key: 'smoker' }, presumed: 'no' },
     { key: 'hfHospitalization', type: 'select', label: label('Previous HF hospitalization', '過去心衰竭住院'), defaultValue: '', options: [

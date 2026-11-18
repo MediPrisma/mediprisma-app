@@ -3,13 +3,14 @@ import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, Encount
 import { doacSelects, type DoacSelectKey } from './doac-clinical-autofill'
 import type { DoacPatientKey } from './doac-patient-autofill'
 import { historySelects, type HistoryKey } from './history-autofill'
+import type { HasBledKey } from './has-bled-autofill'
 
 /**
  * Yes/no and graded answers the record (or the CDSS visit) can give a
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | HistoryKey | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | HasBledKey | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -176,6 +177,8 @@ const isDiabetesCode = (code: string) => /^(?:E0[89]|E1[0-3])/.test(code) || /^2
 const isCopdCode = (code: string) => /^J4[34]/.test(code) || /^(?:491|492|496)/.test(code)
 
 const BETA_BLOCKERS = ['bisoprolol', 'carvedilol', 'metoprolol', 'atenolol', 'nebivolol', 'propranolol', 'labetalol', 'acebutolol', 'betaxolol', 'nadolol', 'pindolol', 'bucindolol']
+/** HAS-BLED D (drugs): antiplatelets (B01AC, aspirin N02BA01) and NSAIDs (M01A). */
+const ANTIPLATELET_NSAID = ['aspirin', 'clopidogrel', 'ticagrelor', 'prasugrel', 'cilostazol', 'dipyridamole', 'ticlopidine', 'ibuprofen', 'naproxen', 'diclofenac', 'celecoxib', 'etoricoxib', 'meloxicam', 'mefenamic', 'ketorolac', 'indomethacin', 'piroxicam', 'ketoprofen', 'aceclofenac', 'sulindac', 'nabumetone', 'etodolac']
 const ACEI_ARB = ['captopril', 'enalapril', 'lisinopril', 'ramipril', 'perindopril', 'benazepril', 'fosinopril', 'imidapril', 'quinapril', 'cilazapril', 'trandolapril', 'losartan', 'valsartan', 'candesartan', 'irbesartan', 'telmisartan', 'olmesartan', 'azilsartan', 'eprosartan']
 
 /**
@@ -233,6 +236,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
   const aceiArb = drugClassSelect(medications, now, ACEI_ARB, /^C09/, ' ACEI／ARB')
+  const antiplateletNsaid = drugClassSelect(medications, now, ANTIPLATELET_NSAID, /^(?:B01AC|M01A|N02BA01)/, '抗血小板藥或 NSAID')
   return {
     ...ecg,
     afHistory,
@@ -241,6 +245,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...(copd ? { copd } : {}),
     ...(betaBlocker ? { betaBlocker } : {}),
     ...(aceiArb ? { aceiArb } : {}),
+    ...(antiplateletNsaid ? { antiplateletNsaid } : {}),
     ...doacSelects(medications, now),
     ...historySelects(conditions, encounters, now),
   }

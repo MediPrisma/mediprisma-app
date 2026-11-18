@@ -123,10 +123,13 @@ export const HAS_BLED: CalculatorDef = {
     label: { zh, en },
     defaultValue: '',
     ...(key === 'elderly' ? { source: { kind: 'hfpefClinical' as const, key: 'ageOver65' as const } } : {}),
-    ...(key === 'stroke' ? { source: { kind: 'hfpefClinical' as const, key: 'stroke' as const }, presumed: 'no' } : {}),
-    ...(key === 'liver' ? { source: { kind: 'hfpefClinical' as const, key: 'chronicLiverDisease' as const }, presumed: 'no' } : {}),
-    // The record cannot show these; presumed absent for the clinician to change.
-    ...(['bleeding', 'inr', 'alcohol'].includes(key) ? { presumed: 'no' } : {}),
+    ...(key === 'stroke' ? { source: { kind: 'hfpefClinical' as const, key: 'stroke' as const } } : {}),
+    ...(key === 'liver' ? { source: { kind: 'hfpefClinical' as const, key: 'chronicLiverDisease' as const } } : {}),
+    ...(key === 'htn' ? { source: { kind: 'hfpefClinical' as const, key: 'sbpOver160' as const } } : {}),
+    ...(key === 'renal' ? { source: { kind: 'hfpefClinical' as const, key: 'hasBledRenal' as const } } : {}),
+    ...(key === 'drugs' ? { source: { kind: 'hfpefClinical' as const, key: 'antiplateletNsaid' as const } } : {}),
+    // Owner rule 2026-11-19: every item is presumed 「無」 unless the record shows it.
+    presumed: key === 'elderly' ? undefined : 'no',
     options: [
       { value: 'yes', label: { zh: '是', en: 'Yes' } },
       { value: 'no', label: { zh: '否', en: 'No' } },
