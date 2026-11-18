@@ -18,6 +18,10 @@ it('answers H from the latest systolic pressure', () => {
   expect(hasBled('htn', autofill()).value).toBe('no')
 })
 
+it('converts a kPa systolic pressure before comparing it with 160 mmHg', () => {
+  expect(hasBled('htn', autofill([obs('8480-6', 23, 'kPa')]))).toMatchObject({ value: 'yes', source: { testName: '最近收縮壓 173 mmHg（請核對未控制高血壓）' } })
+})
+
 it('answers A from creatinine >2.26 mg/dL, in either unit', () => {
   expect(hasBled('renal', autofill([obs('2160-0', 2.5, 'mg/dL')])).value).toBe('yes')
   expect(hasBled('renal', autofill([obs('2160-0', 150, 'umol/L')])).value).toBe('no')
