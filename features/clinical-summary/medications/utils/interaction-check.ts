@@ -1,18 +1,32 @@
 // Drug-interaction check against the hospital's DoseCopilot service
 // (`POST /api/ddi-check`, rules from the VGH pharmacy interaction database).
 //
-// The service only knows the hospital formulary. An NHI product code from
-// another institution comes back as a `RAW-n` placeholder with no alerts, and
-// a name it cannot place is fuzzy-matched to some other drug. So this module
-// sends ingredient names, accepts a resolution only when the returned drug
-// names that ingredient, and reports every row it could not verify as
-// unchecked instead of letting it read as "no interaction".
+// The service only knows the hospital formulary, and a name it cannot place
+// exactly is fuzzy-matched to some other drug. So each row is sent by an
+// identity the service can confirm, looked up by the service at run time
+// rather than from a table in this repository (owner decision 2026-11-18):
+// - a hospital order by its hospital product name, accepted when the product
+//   returned carries one of the NHI codes of the order's indexed identity, or
+//   is that very name;
+// - a row with a recorded NHI code by that code, accepted when the product
+//   returned carries it; a code the hospital never filed falls back to the
+//   ingredient name sent alongside;
+// - otherwise by ingredient name, accepted only when the returned drug names
+//   that ingredient.
+// Every row it could not verify is reported as unchecked instead of letting it
+// read as "no interaction".
 import { medicationClinicalDay, medicationSupplyEndDay } from '@/src/shared/utils/medication-calendar'
 import type { MedicationRow } from '../types'
 
 export interface InteractionCheckItem {
-  /** Ingredient name sent as `drugName`. */
+  /** Sent as `drugName`: a hospital product name or an ingredient name. */
   query: string
+  /** Sent as `nhiCode`: the row's recorded NHI product code. */
+  nhiCode?: string
+  /** A product carrying any of these NHI codes is this item's drug. */
+  codes?: string[]
+  /** `query` is a hospital product name, accepted only as that exact name. */
+  productName?: boolean
   rowIds: string[]
 }
 
@@ -67,11 +81,35 @@ const STRENGTH = /\s\.?\d[\d.,]*\s*(?:mg|mcg|ug|gm?|ml|l|iu|u|units?|meq|mmol|%)
 // "Netupitant / Palonosetron" both name two ingredients. The terminology text
 // is cut at a fixed length, so a parenthesis may never close: "OXYBUTYNIN
 // CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG" — the aside runs to the end.
+// "SACUBITRIL/VALSARTAN AS SACUBITRIL VALSARTAN SODIUM SAL 100 MG" (Entresto):
+// what follows AS describes the salt form, not another ingredient, and its
+// words never appear in the name the service returns.
+const SALT_FORM = /\sAS\s.*$/i
+
 function ingredientNames(text: string | undefined): string[] {
   if (!text) return []
   return text.split(/\+|\s\/\s/)
-    .map(part => part.replace(/\([^)]*(?:\)|$)/g, ' ').replace(STRENGTH, '').replace(/\s+/g, ' ').trim())
+    .map(part => part.replace(/\([^)]*(?:\)|$)/g, ' ').replace(STRENGTH, '').replace(SALT_FORM, '')
+      .replace(/\s+/g, ' ').trim())
     .filter(Boolean)
+}
+
+type Entry = Omit<InteractionCheckItem, 'rowIds'>
+
+// The one product name the hospital recorded ("Isormol * tab 20 mg").
+function hospitalProductName(row: MedicationRow): string | undefined {
+  const name = row.hospitalMedicationName
+  const recorded = name?.recordedProductName ?? name?.recordedName
+  return recorded && !recorded.includes(' / ') ? recorded : undefined
+}
+
+function rowEntries(row: MedicationRow): Entry[] {
+  const product = hospitalProductName(row)
+  if (product && row.hospitalNhiCodes?.length) return [{ query: product, codes: row.hospitalNhiCodes, productName: true }]
+  const names = rowIngredients(row)
+  const code = row.nhiDrugCode?.trim().toUpperCase()
+  if (!code) return names.map(query => ({ query }))
+  return (names.length ? names : ['']).map(query => ({ query, nhiCode: code, codes: [code] }))
 }
 
 function rowIngredients(row: MedicationRow): string[] {
@@ -157,11 +195,11 @@ export function planInteractionCheck(rows: MedicationRow[], nowMs = Date.now()):
       endedRowIds.push(row.id)
       coveredUntil[row.id] = covered
     }
-    const names = rowIngredients(row)
-    if (!names.length) unnamedRowIds.push(row.id)
-    for (const name of names) {
-      const key = name.toLowerCase()
-      const item = byQuery.get(key) ?? { query: name, rowIds: [] }
+    const entries = rowEntries(row)
+    if (!entries.length) unnamedRowIds.push(row.id)
+    for (const entry of entries) {
+      const key = [entry.query.toLowerCase(), entry.nhiCode ?? '', entry.productName ? 'product' : ''].join('|')
+      const item = byQuery.get(key) ?? { ...entry, rowIds: [] }
       if (!item.rowIds.includes(row.id)) item.rowIds.push(row.id)
       byQuery.set(key, item)
     }
@@ -170,7 +208,12 @@ export function planInteractionCheck(rows: MedicationRow[], nowMs = Date.now()):
 }
 
 export function interactionCheckBody(plan: InteractionCheckPlan) {
-  return { medications: plan.items.map(item => ({ drugName: item.query })) }
+  return {
+    medications: plan.items.map(item => ({
+      ...(item.query ? { drugName: item.query } : {}),
+      ...(item.nhiCode ? { nhiCode: item.nhiCode } : {}),
+    })),
+  }
 }
 
 const words = (text: string) => text.toLowerCase().match(/[a-z][a-z-]+/g) ?? []
@@ -192,8 +235,19 @@ const IONS = new Set(['sodium', 'potassium', 'calcium', 'magnesium', 'zinc', 'fe
 // still be there: "sodium chloride" is not "diclofenac sodium".
 const ABBREVIATIONS: Record<string, string> = { chloride: 'cl' }
 
-function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
+const sameName = (a: string, b: string) =>
+  a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase()
+
+/** Whether the product the service returned is this item's drug. */
+function confirms(item: InteractionCheckItem, resolved: Record<string, unknown>): boolean {
   if (String(resolved.udCode ?? '').startsWith('RAW-') || !resolved.udCode) return false
+  const carried = new Set(asList(resolved.allNhiCodes).map(code => String(code).trim().toUpperCase()))
+  if (item.codes?.some(code => carried.has(code.trim().toUpperCase()))) return true
+  if (item.productName) return sameName(item.query, text(resolved.englishName))
+  return !!item.query && resolvesTo(item.query, resolved)
+}
+
+function resolvesTo(query: string, resolved: Record<string, unknown>): boolean {
   const known = new Set(words(`${resolved.genericName ?? ''} ${resolved.englishName ?? ''}`))
   const asked = words(query)
   return asked.length > 0
@@ -227,18 +281,24 @@ export function interpretInteractionCheck(
   response: unknown,
 ): InteractionReview {
   const body = asRecord(response)
-  const rowsByCode = new Map<string, Set<string>>()
+  // Products of one ingredient (warfarin 1 mg and 5 mg) are one drug here, so
+  // an interaction the service reports for each is listed once.
+  const groupOf = new Map<string, string>()
+  const rowsByGroup = new Map<string, Set<string>>()
   const verified = new Set<number>()
   for (const entry of asList(body.resolvedMedications).map(asRecord)) {
     const index = Number(entry.inputIndex)
     const item = plan.items[index]
-    if (!item || !resolvesTo(item.query, entry)) continue
+    if (!item || !confirms(item, entry)) continue
     verified.add(index)
-    const code = String(entry.udCode)
-    const ids = rowsByCode.get(code) ?? new Set<string>()
+    const group = text(entry.genericName).toLowerCase().replace(/\s+/g, ' ') || String(entry.udCode)
+    groupOf.set(String(entry.udCode), group)
+    const ids = rowsByGroup.get(group) ?? new Set<string>()
     item.rowIds.forEach(id => ids.add(id))
-    rowsByCode.set(code, ids)
+    rowsByGroup.set(group, ids)
   }
+  const groupOfDrug = (drug: unknown) => groupOf.get(String(asRecord(drug).udCode))
+  const rowsOf = (drug: unknown) => [...(rowsByGroup.get(groupOfDrug(drug) ?? '') ?? [])]
 
   const unchecked = new Set(plan.unnamedRowIds)
   plan.items.forEach((item, index) => {
@@ -252,14 +312,14 @@ export function interpretInteractionCheck(
   const findings = new Map<string, InteractionFinding>()
   for (const alert of asList(body.alerts).map(asRecord)) {
     if (alert.type !== 'DRUG_INTERACTION') continue
-    const rowIdsA = [...(rowsByCode.get(String(asRecord(alert.drugA).udCode)) ?? [])]
-    const rowIdsB = [...(rowsByCode.get(String(asRecord(alert.drugB).udCode)) ?? [])]
+    const rowIdsA = rowsOf(alert.drugA)
+    const rowIdsB = rowsOf(alert.drugB)
     if (!rowIdsA.length || !rowIdsB.length) continue
     // Two ingredients of one combination product are not a co-prescription.
     if (rowIdsA.length === 1 && rowIdsB.length === 1 && rowIdsA[0] === rowIdsB[0]) continue
     const action = text(alert.nursingAction)
     const mechanism = text(alert.mechanism)
-    const id = text(alert.alertId) || [...rowIdsA, '×', ...rowIdsB].join('|')
+    const id = [groupOfDrug(alert.drugA), groupOfDrug(alert.drugB)].sort().join('×')
     if (findings.has(id)) continue
     findings.set(id, {
       id,
