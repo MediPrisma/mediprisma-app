@@ -462,3 +462,15 @@ describe('identifying each row by code before name', () => {
     expect(review.findings[0].rowIdsA.sort()).toEqual(['w1', 'w5'])
   })
 })
+
+describe('another maker\'s product, by the hospital code for its ATC substance', () => {
+  it('sends the code the hospital files for the same ATC and confirms by it', () => {
+    const list = [cloud('imdur', 'ISOSORBIDE 5-MONONITRTATE 20 MG', { nhiDrugCode: 'B011212100',
+      drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's', ingredientText: 'ISOSORBIDE 5-MONONITRTATE 20 MG', atcCode: 'C01DA14' } })]
+    const plan = planInteractionCheck(list)
+    expect(interactionCheckBody(plan).medications).toEqual([{ drugName: 'ISOSORBIDE 5-MONONITRTATE', nhiCode: 'AC311681G0' }])
+    const review = interpretInteractionCheck(plan, list, { resolvedMedications: [{ inputIndex: 0, udCode: '03971',
+      genericName: 'Isosorbide-5-mononitrate', englishName: 'Isormol * tab 20 mg', allNhiCodes: ['AC311681G0'] }] })
+    expect(review.checkedRowIds).toEqual(['imdur'])
+  })
+})
