@@ -16,7 +16,7 @@ import { useSecondTick } from '@/src/shared/hooks/use-second-tick.hook'
 import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
 import { formatGenerationDuration } from '@/features/medical-summary/utils/summary-generation-info'
 import { TherapyResponseChart } from './TherapyResponseChart'
-import { NhiCopyChartNoteButton } from './NhiCopyChartNoteButton'
+import { useNhiChartNoteCopy } from './NhiChartNoteCopy'
 import type { CdssCoverageCheck, CdssCoverageSummary, CdssFactSource } from '../types'
 import {
   selectNhiLipidAiCriteria,
@@ -903,7 +903,8 @@ function NhiTable1PanelContent({
   const tableScrollRef = useRef<HTMLDivElement>(null)
   const preserveTierRef = useRef<{ tier: string; until: number } | null>(null)
   const isEnglish = locale === 'en'
-  const allChecks = [...summary.factors, ...summary.metabolicChecks, ...summary.diseaseChecks]
+  const chartNoteCopy = useNhiChartNoteCopy(summary, locale)
+  const allChecks =[...summary.factors, ...summary.metabolicChecks, ...summary.diseaseChecks]
   const tiers = COLUMNS.map((id) => summary.tiers.find((tier) => tier.id === id)).filter(
     (tier): tier is CdssCoverageSummary['tiers'][number] => Boolean(tier),
   )
@@ -1089,18 +1090,19 @@ function NhiTable1PanelContent({
     <section className="space-y-3 px-3 pb-4" aria-label={summary.title} data-testid="nhi-table1-panel">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <p className="text-sm font-semibold">{summary.conclusion}</p>
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <a
-            className="pt-1 text-xs text-primary underline underline-offset-2"
+            className="text-xs text-primary underline underline-offset-2"
             href={summary.sourceUrl}
             target="_blank"
             rel="noreferrer"
           >
             {summary.source}
           </a>
-          <NhiCopyChartNoteButton summary={summary} locale={locale} />
+          {chartNoteCopy.button}
         </div>
       </div>
+      {chartNoteCopy.copiedNote}
 
       {clinicalSummaryRows.length > 0 ? (
         <dl className="grid gap-x-5 gap-y-1 text-xs sm:grid-cols-3" data-testid="nhi-table1-clinical-summary">
