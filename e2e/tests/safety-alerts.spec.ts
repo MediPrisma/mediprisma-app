@@ -6,7 +6,7 @@ import { mockAiStream, getChatCallCount } from '../fixtures/mock-stream'
 // The Medical Summary action generates all registered cards in one validated
 // batch. Return every exact module block so these tests exercise the current
 // unified UI without a real model or network.
-const TEST_MODEL_ID = 'gpt-5.4-nano'
+const TEST_MODEL_ID = 'gemini-3.1-flash-lite'
 
 const SAFETY_RESULT = {
   scannedCount: 12,
@@ -102,23 +102,23 @@ test.describe('safety alerts (mocked)', () => {
     await summaryPanel.getByTestId('model-picker-trigger').click()
 
     // Free models are selectable; premium models route to key setup.
-    await expect(page.getByRole('menuitem', { name: /Claude Haiku 4\.5/ })).toBeVisible()
-    const opusKeyLink = page.getByTestId('model-picker-key-link-claude-opus-5')
+    await expect(page.getByRole('menuitem', { name: /Claude Haiku 5\.5/ })).toBeVisible()
+    const opusKeyLink = page.getByTestId('model-picker-key-link-claude-opus-5-5')
     await expect(opusKeyLink).toBeVisible()
-    await expect(opusKeyLink).toHaveAccessibleName('Claude Opus 5，設定金鑰')
+    await expect(opusKeyLink).toHaveAccessibleName('Claude Opus 5.5，設定金鑰')
 
     // Pick a free model → label updates.
-    await page.getByRole('menuitem', { name: /Claude Haiku 4\.5/ }).click()
-    await expect(summaryPanel.getByTestId('model-picker-trigger')).toContainText('Claude Haiku 4.5')
+    await page.getByRole('menuitem', { name: /Claude Haiku 5\.5/ }).click()
+    await expect(summaryPanel.getByTestId('model-picker-trigger')).toContainText('Claude Haiku 5.5')
 
     // The registered-card summary is the only runtime preference owner. The
     // legacy safety store is a migration surface and the chat model is separate.
     await expect.poll(() => page.evaluate(() => localStorage.getItem('medical-summary-prefs') || ''))
-      .toContain('claude-haiku-4-5')
+      .toContain('claude-haiku-5-5')
     const legacySafetyPrefs = await page.evaluate(() => localStorage.getItem('safety-alerts-prefs') || '')
-    expect(legacySafetyPrefs).not.toContain('claude-haiku-4-5')
+    expect(legacySafetyPrefs).not.toContain('claude-haiku-5-5')
     const chatPrefs = await page.evaluate(() => localStorage.getItem('ai-config-storage') || '')
-    expect(chatPrefs).not.toContain('claude-haiku-4-5')
+    expect(chatPrefs).not.toContain('claude-haiku-5-5')
   })
 
   test('auto-generation runs the integrated safety analysis', async ({ page }) => {

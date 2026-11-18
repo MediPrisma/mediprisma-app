@@ -20,7 +20,7 @@ describe('model attribution', () => {
     expect(modelExecutionFallback(last)).toBe(true)
   })
   it('reports a client-side key gate even when the server honors the routed model', () => {
-    const result = reportModelExecution(createModelExecution('gemini-3.1-pro-preview', 'gemini-3.1-flash-lite'), 'gemini-3.1-flash-lite')
+    const result = reportModelExecution(createModelExecution('gemini-4-argon', 'gemini-3.1-flash-lite'), 'gemini-3.1-flash-lite')
     expect(modelExecutionFallback(result)).toBe(true)
   })
   it('separates unknown provenance from an observed fallback', () => {
@@ -32,7 +32,7 @@ describe('model attribution', () => {
     expect(modelExecutionNotice(reportModelExecution(result, 'gemini-4-hydrogen'), 'zh-TW')).toBeNull()
   })
   it('keeps known routing and earlier fallback evidence visible without a final model report', () => {
-    const gated = createModelExecution('gemini-3.1-pro-preview', 'gemini-3.1-flash-lite')
+    const gated = createModelExecution('gemini-4-argon', 'gemini-3.1-flash-lite')
     expect(modelExecutionLabel(gated)).toBe('Gemini 3.1 Flash-Lite')
     expect(modelExecutionNotice(gated, 'zh-TW')).toContain('已請求 Gemini 3.1 Flash-Lite')
     const earlier = reportModelExecution(createModelExecution('gemini-4-hydrogen'), 'gemini-3.1-flash-lite')

@@ -17,9 +17,10 @@ import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
 import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays, medicationRefillDispenseDay } from '@/src/core/utils/clinical-context-selection.utils'
-import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
+import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus, chronicSlipFills } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
+import { vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
 import { complementComparisonRecord, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
@@ -40,6 +41,17 @@ import {
 /** Taipei clinical date, shared by the list, timeline and copied text. */
 function isoCalendarDay(value?: string): string | undefined {
   return medicationClinicalDay(value)
+}
+
+// The hospital order's identity mark, on the row itself or, for a row merged
+// with a cloud record, on the hospital record it came from.
+function hospitalIdentityCodes(medication: any): string[] | undefined {
+  const records = [medication, ...(medication._sourcePrescriptionRecords ?? [])]
+  for (const record of records) {
+    const codes = vghtpeMedicationIdentityCodes(record)
+    if (codes) return [...codes]
+  }
+  return undefined
 }
 
 function isHospitalOutpatientMedication(medication: any): boolean {
@@ -299,6 +311,7 @@ export function useMedicationRows(
       // A prior chronic fill does not make a different order a chronic Rx.
       const drugKey = medicationClinicalIdentityKey(med)
       const isChronic = isChronicPrescription(med) || hasExplicitChronicNote(med)
+      const chronicFills = isChronic && !refillDispenseDay ? chronicSlipFills(med, durationDays) : undefined
       const selfPurchased = sourceSelfPurchase(med) === true
 
       const refillAgg = drugKey ? refillsByDrug.get(drugKey) : undefined
@@ -390,6 +403,7 @@ export function useMedicationRows(
         encounterReference: med.encounter?.reference,
         reconciledOrderIds: med._reconciledSourceReferences?.map((reference: string) => reference.split('/').pop()).filter(Boolean),
         nhiDrugCode: (med.medicationCodeableConcept || med.code)?.coding?.find((coding: any) => isNhiDrugCodeSystem(coding.system))?.code,
+        hospitalNhiCodes: hospitalIdentityCodes(med),
         sourceOrderIdentifiers: med.identifier?.filter((identifier: any) => identifier.system === 'urn:oid:vgh.medication.order' && identifier.value)
           .map((identifier: any) => identifier.value),
         dataOrigin: med._sourcePrescriptionRecords?.some(isVghtpeSource) ? 'hospital'
@@ -408,6 +422,7 @@ export function useMedicationRows(
         totalQuantity,
         startedOn: sourceCalendarDate(startDateRaw),
         dispensedOn: refillDispenseDay ? sourceCalendarDate(refillDispenseDay) : undefined,
+        dispensedOnIso: refillDispenseDay ? isoCalendarDay(refillDispenseDay) : undefined,
         stoppedOn: stopDateRaw ? sourceCalendarDate(stopDateRaw) : undefined,
         durationDays,
         endDate: endDate ? sourceCalendarDate(endDate) : undefined,
@@ -423,6 +438,7 @@ export function useMedicationRows(
         isInactive,
         currentnessUncertain: currentness.uncertain,
         isChronic,
+        ...(chronicFills ? { chronicFills } : {}),
         selfPurchased,
         category,
         drugTerminology,

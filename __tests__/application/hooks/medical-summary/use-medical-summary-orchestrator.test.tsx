@@ -194,15 +194,15 @@ describe('useMedicalSummaryOrchestrator', () => {
 
   it('exposes a selected-model access block to the Medical Summary surface', () => {
     arrange({
-      summaryModel: 'gpt-5.6-terra',
-      summaryResolvedModelName: 'GPT-5.6 Terra',
+      summaryModel: 'gpt-6.1-terra',
+      summaryResolvedModelName: 'GPT-6.1 Terra',
       summaryModelUnavailable: true,
-      summaryError: '所選的 GPT-5.6 Terra 需要有效的金鑰或連線設定。本次未送出任何資料。',
+      summaryError: '所選的 GPT-6.1 Terra 需要有效的金鑰或連線設定。本次未送出任何資料。',
     })
 
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
 
-    expect(result.current.model).toBe('gpt-5.6-terra')
+    expect(result.current.model).toBe('gpt-6.1-terra')
     expect(result.current.modelUnavailable).toBe(true)
     expect(result.current.summaryError).toContain('本次未送出任何資料')
   })
@@ -1245,7 +1245,7 @@ describe('useMedicalSummaryOrchestrator', () => {
     arrange({
       summaryResult: oldSummary,
       summaryGenerating: true,
-      summaryResolvedModelName: 'Gemini 3 Flash Preview',
+      summaryResolvedModelName: 'Gemini 4 Hydrogen',
     })
     rerender()
     expect(result.current.activeGeneration?.modelName).toBe('MODEL_NAME')
@@ -1262,7 +1262,7 @@ describe('useMedicalSummaryOrchestrator', () => {
     }
     arrange({
       summaryResult: newSummary,
-      summaryResolvedModelName: 'Gemini 3 Flash Preview',
+      summaryResolvedModelName: 'Gemini 4 Hydrogen',
     })
     rerender()
     await act(async () => undefined)

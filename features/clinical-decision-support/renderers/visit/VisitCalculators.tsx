@@ -59,6 +59,45 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'gwtg-hf', dp: 'DP-19', prognosis: 'gwtg-hf', names: /GWTG[-‐–]HF/ },
 ]
 
+/**
+ * The hypertension page's calculators (owner request 2026-11-19: HTN and CAD
+ * get the same 計算機 entry as HF and AF). Only calculators the medical
+ * calculator has: DP-08's guideline scores (PREVENT-CVD, SCORE2/SCORE2-OP)
+ * come with their own calculators, and PREVENT-ASCVD stays off this page — a
+ * different endpoint from the one DP-08's threshold reads (owner decision).
+ */
+export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
+  { id: 'egfr', dp: 'DP-04', source: 'htn', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  { id: 'hpa-risk', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署[^，。；、]{0,12}風險|Taiwan HPA/ },
+  { id: 'ckd-kdigo-risk', dp: 'DP-18', source: 'htn', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/, needsPoint: true },
+]
+
+/**
+ * The coronary page's calculators (owner request 2026-11-19). DP-16's are the
+ * AF ones, offered only where the page holds OAC with an antiplatelet.
+ */
+export const CAD_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
+  { id: 'egfr', dp: 'DP-10', source: 'cad', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  { id: 'cha2ds2-va', dp: 'DP-16', source: 'cad', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
+  { id: 'has-bled', dp: 'DP-16', source: 'cad', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
+  { id: 'crcl', dp: 'DP-16', source: 'cad', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },
+  { id: 'doac-dose', dp: 'DP-16', source: 'cad', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/, needsPoint: true },
+  { id: 'bmi', dp: 'DP-27', source: 'cad', calculatorId: 'bmi', names: /BMI/, needsPoint: true },
+]
+
+/** The pages with a 計算機 entry, each with its own list. HF's list also serves AF's page. */
+const PAGE_CALCULATORS: Readonly<Record<string, readonly VisitCalculatorEntry[]>> = {
+  hf: HF_VISIT_CALCULATORS,
+  af: HF_VISIT_CALCULATORS,
+  htn: HTN_VISIT_CALCULATORS,
+  cad: CAD_VISIT_CALCULATORS,
+}
+
+/** Whether a page has calculators to offer: the screen mounts the entry only there. */
+export function pageHasCalculators(source: string | undefined): boolean {
+  return Boolean(source && PAGE_CALCULATORS[source])
+}
+
 type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable'
 
 /** A model's acronym where its full name carries one (「…（SHFM）」). */
@@ -212,7 +251,7 @@ export function VisitCalculatorsProvider({
   const pointOf = useCallback((dp: string, source?: DecisionPointView['source']) => (
     points.find((point) => point.dp === dp && point.source === (source ?? sourceOfPage))
   ), [points, sourceOfPage])
-  const rows = useMemo(() => HF_VISIT_CALCULATORS.flatMap((entry): CalculatorRow[] => {
+  const rows = useMemo(() => (PAGE_CALCULATORS[sourceOfPage ?? ''] ?? []).flatMap((entry): CalculatorRow[] => {
     // The AF page lists AF's own calculators only; the HF page keeps its list,
     // with AF's where AF's points sit on it.
     if (sourceOfPage !== 'hf' && (entry.source ?? 'hf') !== sourceOfPage) return []
@@ -224,7 +263,8 @@ export function VisitCalculatorsProvider({
     const model = entry.prognosis ? HF_PROGNOSIS_MODELS.find((item) => item.id === entry.prognosis) : undefined
     const calc: CalculatorDef | undefined = CALCULATORS.find((item) => item.id === (entry.calculatorId ?? model?.calculatorId))
     // A prognosis model by its own name (「MAGGIC」), not the calculator's longer one.
-    const name = shortName(model?.name ?? (calc ? tr(locale, calc.name) : entry.id))
+    // A calculator keeps its full name: 「國健署五項慢性病風險（重建版）」 is not 「重建版」.
+    const name = model ? shortName(model.name) : calc ? tr(locale, calc.name) : entry.id
     // GWTG-HF reads the admission's values, never today's chart.
     const fixed: RowStatus | undefined = calc ? undefined : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
     return [{ entry, calc, model, name, fixed }]

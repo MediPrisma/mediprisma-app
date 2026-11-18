@@ -65,12 +65,12 @@ describe('OpenAI Responses proxy stream guarding', () => {
       proxyUrl: 'https://proxy.example.com/openai',
       proxyClientKey: 'test-client-key',
       isGemini: false,
-      modelId: 'gpt-5.6-terra',
+      modelId: 'gpt-6.1-terra',
     })
 
     const result = await proxyFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
-      body: JSON.stringify({ model: 'gpt-5.6-terra', input: 'hello' }),
+      body: JSON.stringify({ model: 'gpt-6.1-terra', input: 'hello' }),
     })
 
     const body = await result.text()

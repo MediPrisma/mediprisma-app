@@ -223,20 +223,24 @@ describe('useUnifiedAi cancellation', () => {
       await capturedStream(
         [{ role: 'user', content: 'structured summary' }],
         {
-          modelId: 'gpt-5.6-terra',
+          modelId: 'gpt-6.1-terra',
           temperature: 0.2,
           maxTokens: 2048,
           responseFormat: 'json',
+          reasoningEffort: 'low',
+          textVerbosity: 'high',
         },
       )
     })
 
     expect(mockStream).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'gpt-5.6-terra',
+      model: 'gpt-6.1-terra',
       apiKey: 'replacement-openai-key',
       temperature: 0.2,
       maxTokens: 2048,
       responseFormat: 'json',
+      reasoningEffort: 'low',
+      textVerbosity: 'high',
     }))
   })
 

@@ -2,7 +2,7 @@
 // an indented hierarchy instead of one wall of text. Parsing is delegated to the
 // pure `formatReportText` helper; this component only maps the parsed lines to
 // layout (heading vs item, indentation by level, marker column).
-import type { ReactNode } from "react"
+import { Fragment, type ReactNode } from "react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatReportText } from "@/src/shared/utils/report-text-format"
 import { buttonVariants } from "@/components/ui/button"
@@ -33,13 +33,25 @@ const INDENT_BY_LEVEL: Record<number, string> = {
   3: 'pl-10',
 }
 
+// A source paragraph break (blank line) becomes a little vertical space, as in
+// the hospital's own report, instead of disappearing.
+function withGap(gap: boolean | undefined, key: number, node: ReactNode) {
+  if (!gap || !node) return node
+  return (
+    <Fragment key={key}>
+      <div aria-hidden="true" className="h-2" />
+      {node}
+    </Fragment>
+  )
+}
+
 export function FormattedReportText({ text, className, footer }: FormattedReportTextProps) {
   const lines = formatReportText(text)
   if (lines.length === 0) return null
 
   return (
     <div className={cn('@container/report space-y-1', className)}>
-      {lines.map((line, i) => {
+      {lines.map((line, i) => withGap(line.gapBefore && i > 0, i, (() => {
         if (line.separator) {
           return <div key={i} aria-hidden="true" className="my-2 border-t border-border" />
         }
@@ -147,7 +159,7 @@ export function FormattedReportText({ text, className, footer }: FormattedReport
             )}>{line.text}</span>
           </div>
         )
-      })}
+      })()))}
       {footer}
       <details className="group/raw min-w-0 pt-2">
         <summary
