@@ -17,8 +17,8 @@ export const GI: CalculatorDef[] = [
         { key: 'hr', type: 'select', label: { en: 'Heart rate ≥ 100', zh: '心率 ≥ 100' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
         { key: 'melena', type: 'select', label: { en: 'Melena', zh: '黑便' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
         { key: 'syncope', type: 'select', label: { en: 'Syncope', zh: '昏厥' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'hepatic', type: 'select', label: { en: 'Hepatic disease', zh: '肝臟疾病' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'cardiac', type: 'select', label: { en: 'Cardiac failure', zh: '心臟衰竭' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'hepatic', type: 'select', label: { en: 'Hepatic disease', zh: '肝臟疾病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'cardiac', type: 'select', label: { en: 'Cardiac failure', zh: '心臟衰竭' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const bun = n(v, 'bun'); const hb = n(v, 'hb'); const sbp = n(v, 'sbp')
