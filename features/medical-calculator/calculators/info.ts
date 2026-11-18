@@ -9,6 +9,10 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'prevent-cvd': {
+    useWhen: { zh: '30–79 歲初級預防之 10 年總心血管（ASCVD＋心衰竭）風險；高血壓 130–139/80–89 依 AHA/ACC 2025 以 ≥7.5% 決定是否用藥。30–59 歲另估 30 年。', en: '10-year total CVD (ASCVD plus heart failure) risk for primary prevention at age 30–79; at 130–139/80–89 the 2025 AHA/ACC guideline starts medication at ≥7.5%. 30-year risk at age 30–59.' },
+    caveats: { zh: '與 PREVENT-ASCVD 是不同終點：血脂讀 ASCVD，高血壓讀總 CVD，勿互換。排除已有 CVD、亞臨床動脈粥樣硬化、遺傳性 CVD、末期腎病及壽命不足一年者。美國基礎模型，無台灣校準，不含 UACR/HbA1c/SDI。', en: 'A different endpoint from PREVENT-ASCVD: lipids read ASCVD, hypertension reads total CVD; do not interchange. Excludes known CVD, subclinical atherosclerosis, inherited CVD, ESKD and life expectancy under one year. US base model without Taiwanese calibration or UACR/HbA1c/SDI.' },
+  },
   'prevent-ascvd': {
     useWhen: { zh: '30–79 歲初級預防之 10 年 ASCVD 風險；30–59 歲另估 30 年。血脂治療判讀需核對 LDL-C 70–189 mg/dL 及疾病專屬適應症。', en: '10-year ASCVD risk for primary prevention at age 30–79; 30-year risk at age 30–59. Lipid treatment guidance requires LDL-C 70–189 mg/dL and review of disease-specific indications.' },
     caveats: { zh: '本流程排除已有 CVD、亞臨床動脈粥樣硬化、遺傳性 CVD、末期腎病及壽命不足一年者。採美國基礎模型，無台灣校準，不含 UACR/HbA1c/SDI。缺值不補零，不以調整用藥輸入推算治療效益。', en: 'This pathway excludes known CVD, subclinical atherosclerosis, inherited CVD, ESKD and life expectancy under one year. US base model without Taiwanese calibration or UACR/HbA1c/SDI. Missing values are not zero; changing treatment inputs does not estimate treatment benefit.' },
