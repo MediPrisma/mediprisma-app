@@ -133,6 +133,13 @@ export interface SelectInput {
   source?: AutofillSource
   defaultValue?: string
   /**
+   * The usual answer, filled when the record gives none (owner decision
+   * 2026-11-19: what the record does not show is presumed absent, so the
+   * clinician only changes what is there). Shown as 預設（請核對）, editable.
+   * With a record source, it waits for the chart to finish loading.
+   */
+  presumed?: string
+  /**
    * Asked only in some of the cases the calculator covers (one indication's
    * question): a blank stays unknown to the rules that read it, but the
    * calculator lists do not count it as one to fill.

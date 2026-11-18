@@ -15,7 +15,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'na', type: 'number', label: { en: 'Sodium', zh: '鈉' }, unit: 'mmol/L', dimension: 'electrolyte', normalRange: { low: 136, high: 145 }, source: { kind: 'lab', keys: ['NA'] } },
         {
           key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' },
-          defaultValue: '',
+          defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_dialysis' }, presumed: 'no',
           options: [
             { value: 'no', label: { en: 'No', zh: '否' } },
             { value: 'yes', label: { en: 'Yes', zh: '是' } },
@@ -70,7 +70,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'alb', type: 'number', label: { en: 'Albumin', zh: '白蛋白' }, unit: 'g/dL', dimension: 'albumin', normalRange: { low: 3.5, high: 5.0 }, source: { kind: 'lab', keys: ['ALB'] } },
         SEX_INPUT,
         {
-          key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' }, defaultValue: '',
+          key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_dialysis' }, presumed: 'no',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
       ],
@@ -219,7 +219,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
         { key: 'height', type: 'number', label: { en: 'Height', zh: '身高' }, unit: 'cm', dimension: 'height', source: { kind: 'vital', loinc: HEIGHT_LOINC, vital: 'height' } },
         {
-          key: 'dm', type: 'select', label: { en: 'Impaired fasting glucose / diabetes', zh: '空腹血糖異常／糖尿病' }, defaultValue: '',
+          key: 'dm', type: 'select', label: { en: 'Impaired fasting glucose / diabetes', zh: '空腹血糖異常／糖尿病' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'diabetes' }, presumed: 'no',
           options: [
             { value: 'no', label: { en: 'No', zh: '否' } },
             { value: 'yes', label: { en: 'Yes', zh: '是' } },

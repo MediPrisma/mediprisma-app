@@ -14,11 +14,11 @@ export const GI: CalculatorDef[] = [
         { key: 'hb', type: 'number', label: { en: 'Hemoglobin', zh: '血色素' }, unit: 'g/dL', dimension: 'hemoglobin', normalRange: { low: 12, high: 16 }, source: { kind: 'lab', keys: ['HB'] } },
         { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 } },
         SEX_INPUT,
-        { key: 'hr', type: 'select', label: { en: 'Heart rate ≥ 100', zh: '心率 ≥ 100' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'melena', type: 'select', label: { en: 'Melena', zh: '黑便' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'syncope', type: 'select', label: { en: 'Syncope', zh: '昏厥' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'hepatic', type: 'select', label: { en: 'Hepatic disease', zh: '肝臟疾病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'cardiac', type: 'select', label: { en: 'Cardiac failure', zh: '心臟衰竭' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'hr', type: 'select', label: { en: 'Heart rate ≥ 100', zh: '心率 ≥ 100' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'melena', type: 'select', label: { en: 'Melena', zh: '黑便' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'syncope', type: 'select', label: { en: 'Syncope', zh: '昏厥' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'hepatic', type: 'select', label: { en: 'Hepatic disease', zh: '肝臟疾病' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'cardiac', type: 'select', label: { en: 'Cardiac failure', zh: '心臟衰竭' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const bun = n(v, 'bun'); const hb = n(v, 'hb'); const sbp = n(v, 'sbp')
@@ -57,9 +57,9 @@ export const GI: CalculatorDef[] = [
       inputs: [
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
         AGE_INPUT,
-        { key: 'mental', type: 'select', label: { en: 'Impaired mental status', zh: '意識改變' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'sirs', type: 'select', label: { en: 'SIRS (≥2 criteria)', zh: 'SIRS（≥2 項）' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'effusion', type: 'select', label: { en: 'Pleural effusion', zh: '肋膜積液' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'mental', type: 'select', label: { en: 'Impaired mental status', zh: '意識改變' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'sirs', type: 'select', label: { en: 'SIRS (≥2 criteria)', zh: 'SIRS（≥2 項）' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'effusion', type: 'select', label: { en: 'Pleural effusion', zh: '肋膜積液' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const bun = n(v, 'bun'); const age = n(v, 'age')
@@ -137,7 +137,7 @@ export const GI: CalculatorDef[] = [
         { key: 'inr', type: 'number', label: { en: 'INR', zh: 'INR' }, normalRange: { low: 0.8, high: 1.1 }, source: { kind: 'lab', keys: ['INR'] } },
         { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 } },
         AGE_INPUT,
-        { key: 'mental', type: 'select', label: { en: 'Altered mental status', zh: '意識改變' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'mental', type: 'select', label: { en: 'Altered mental status', zh: '意識改變' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const alb = n(v, 'alb'); const inr = n(v, 'inr'); const sbp = n(v, 'sbp'); const age = n(v, 'age')

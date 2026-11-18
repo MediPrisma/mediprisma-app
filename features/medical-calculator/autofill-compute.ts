@@ -56,6 +56,13 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
       }
     }
     if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
+    const presumed = input.presumed !== undefined ? input.options.find((option) => option.value === input.presumed) : undefined
+    // A record question presumes nothing until the record has loaded.
+    const recordSettled = input.source?.kind !== 'hfpefClinical' || !!autofill.clinicalSelects
+    if (presumed && recordSettled) {
+      const testName = `${input.source?.kind === 'hfpefClinical' ? '紀錄未見，' : ''}預設「${presumed.label.zh}」（請核對）`
+      return { ...EMPTY, value: presumed.value, filled: true, source: { testName } }
+    }
     return { ...EMPTY, value: input.defaultValue ?? input.options[0]?.value ?? '' }
   }
   if (input.type !== 'number') return { ...EMPTY, value: input.defaultValue ?? '' }

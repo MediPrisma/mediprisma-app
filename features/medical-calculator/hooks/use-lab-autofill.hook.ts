@@ -320,6 +320,7 @@ export function buildAutofill(
     clinicalSelects: {
       ...buildClinicalSelects(reports, medications, now, conditions, encounters),
       ...doacPatientSelects({ observations: observations as LabObservation[], conditions, encounters, demographics: { age, gender: sex }, now }),
+      ...(typeof age === 'number' ? { ageOver65: { value: age > 65 ? 'yes' : 'no', date: '', testName: `年齡 ${age} 歲` } } : {}),
     },
   }
 }
