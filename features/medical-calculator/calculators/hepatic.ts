@@ -219,7 +219,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
         { key: 'height', type: 'number', label: { en: 'Height', zh: '身高' }, unit: 'cm', dimension: 'height', source: { kind: 'vital', loinc: HEIGHT_LOINC, vital: 'height' } },
         {
-          key: 'dm', type: 'select', label: { en: 'Impaired fasting glucose / diabetes', zh: '空腹血糖異常／糖尿病' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'diabetes' }, presumed: 'no',
+          key: 'dm', type: 'select', label: { en: 'Impaired fasting glucose / diabetes', zh: '空腹血糖異常／糖尿病' }, defaultValue: '',
           options: [
             { value: 'no', label: { en: 'No', zh: '否' } },
             { value: 'yes', label: { en: 'Yes', zh: '是' } },

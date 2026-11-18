@@ -10,8 +10,8 @@ const input = (calcId: string, key: string) => {
   if (found?.type !== 'select') throw new Error(`${calcId}.${key}`)
   return found as SelectInput
 }
-const loaded = (clinicalSelects: Autofill['clinicalSelects']): Autofill => ({ resolve: () => undefined, clinicalSelects })
-const loading = loaded(undefined)
+const loaded = (clinicalSelects: Autofill['clinicalSelects']): Autofill => ({ resolve: () => undefined, clinicalSelects, recordLoaded: true })
+const loading: Autofill = { resolve: () => undefined, recordLoaded: false }
 
 it('fills a bedside question with its presumed answer and says so', () => {
   const hit = resolveInput(input('curb-65', 'confusion'), loading)
@@ -44,4 +44,13 @@ it('fills every presumed answer with one of its own options', () => {
   for (const calc of CALCULATORS) for (const item of calc.inputs) {
     if (item.type === 'select' && item.presumed !== undefined) expect(item.options.map((o) => o.value)).toContain(item.presumed)
   }
+})
+
+it('presumes nothing while the chart reloads, even with a CDSS NYHA answer', () => {
+  const nyhaOnly: Autofill = { resolve: () => undefined, recordLoaded: false, clinicalSelects: { nyha: { value: '2', date: '2026-11-19', testName: 'CDSS 門診評估：NYHA II' } } }
+  expect(resolveInput(input('maggic-hf', 'diabetes'), nyhaOnly)).toMatchObject({ value: '', filled: false })
+})
+
+it('leaves questions it cannot read from the record unanswered', () => {
+  expect(resolveInput(input('nafld-fibrosis', 'dm'), loaded({})).value).toBe('')
 })
