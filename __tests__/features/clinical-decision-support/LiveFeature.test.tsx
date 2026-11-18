@@ -11,7 +11,6 @@ import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores
 import { usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { usePhysicianDecisionsStore } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { useNhiLipidReviewStore } from '@/features/clinical-decision-support/stores/nhi-lipid-review.store'
-import { useCdssLayoutStore } from '@/features/clinical-decision-support/stores/layout-preference.store'
 import { afAnswersStorageKey, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
 
 jest.mock('@/features/clinical-decision-support/utils/hospital-medication-profile', () => {
@@ -235,25 +234,16 @@ describe('Live personalized-guidance pathway list', () => {
     })
   })
 
-  // Clinician decision 2026-09-28: 新版流程 and 原版看板 are retired — 「暫時會只有
-  // 三區塊跟決策地圖」.
-  it('defaults to the decision map, offers only it and 三區塊, and remembers the choice', () => {
+  // Owner decision 2026-11-19: 三區塊 is gone, only the decision map, no switch.
+  it('opens on the decision map with no layout switch', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
-    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
-    for (const retired of ['flow', 'board', 'classic', 'c']) {
-      expect(screen.queryByTestId(`cdss-layout-switch-${retired}`)).not.toBeInTheDocument()
-    }
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-sections'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
-    expect(screen.getByTestId('cdss-layout-switch-sections')).toHaveAttribute('aria-pressed', 'true')
-    expect(JSON.parse(window.localStorage.getItem('cdss-layout-preference') ?? '{}'))
-      .toMatchObject({ state: { layout: 'sections' } })
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
   })
 
-  it('opens a browser that stored a retired layout on the pack default', () => {
-    useCdssLayoutStore.setState({ layout: 'board' })
+  it('ignores a layout an older version stored in this browser', () => {
+    window.localStorage.setItem('cdss-layout-preference', JSON.stringify({ state: { layout: 'sections' }, version: 0 }))
     render(<LiveClinicalDecisionSupportFeature />)
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
   })
@@ -266,7 +256,6 @@ describe('Live personalized-guidance pathway list', () => {
     jest.setSystemTime(beforeMidnight)
     const patientId = 'switch-patient'
     useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { [patientId]: true } })
-    useCdssLayoutStore.setState({ layout: 'map' })
     usePhenotypeAnswerStore.setState({ byPatientId: { [patientId]: { choice: 'reduced', lvef: 35, answeredOn: '2026-10-05' } }, hydratedPatientIds: { [patientId]: true } })
     const view = render(<LiveClinicalDecisionSupportFeature />)
     const findSign = (value: unknown): Record<string, unknown> | undefined => {
@@ -296,7 +285,6 @@ describe('Live personalized-guidance pathway list', () => {
     jest.setSystemTime(new Date(2026, 9, 5, 23, 59, 58))
     const patientId = 'switch-patient'
     useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { [patientId]: true } })
-    useCdssLayoutStore.setState({ layout: 'map' })
     const view = render(<LiveClinicalDecisionSupportFeature />)
     const nyha = () => within(screen.getByRole('group', { name: 'NYHA 分級' }))
     try {
@@ -347,23 +335,16 @@ describe('Live personalized-guidance pathway list', () => {
     }
   })
 
-  it('replaces the duplicate lipid visit flow with the dedicated NHI Table 1 view', () => {
+  it('opens dyslipidemia on NHI Table 1 only, and heart failure back on the map', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
     fireEvent.click(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss'))
-
-    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
-    expect(screen.getByTestId('cdss-layout-switch-nhi')).toHaveTextContent('健保表一')
-    expect(screen.queryByTestId('cdss-layout-switch-board')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('cdss-layout-switch-flow')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-nhi'))
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'nhi')
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('cdss-disease-switch-heart-failure-cdss'))
-    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'sections')
-    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
-    expect(screen.queryByTestId('cdss-layout-switch-nhi')).not.toBeInTheDocument()
+    expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-layout', 'map')
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
   })
 
   it('restores every physician-entered HF value to the page defaults in one click', () => {
@@ -409,7 +390,6 @@ describe('Live personalized-guidance pathway list', () => {
 
     render(<LiveClinicalDecisionSupportFeature />)
     fireEvent.click(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss'))
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-nhi'))
 
     expect(screen.getByTestId('mock-cdss-result')).toHaveAttribute('data-nhi-reset-key', '0')
     fireEvent.click(screen.getByTestId('cdss-nhi-reset-page-defaults'))
