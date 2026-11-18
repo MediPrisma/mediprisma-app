@@ -66,14 +66,15 @@ it('rejects ongoing admission and future visits rather than inventing a complete
   expect(() => withPhysicianHfDiagnosis(input, { code: 'I50.9', confirmed: true, ranks: { [visit.fullUrl]: 2 }, encounters: [visit.fullUrl] })).toThrow()
 })
 
-it('requires an explicit diagnosis rank and refuses conflicts with original ranks', () => {
+it('requires an explicit diagnosis rank and moves other diagnoses down instead of rejecting an occupied rank', () => {
   const { input } = prepared(), reference = input.indexEncounterReference!
   expect(() => withPhysicianHfDiagnosis(input, { code: 'I50.9', confirmed: true, ranks: {}, encounters: [reference] })).toThrow('physician-diagnosis-invalid')
   const encounter = input.bundle.entry.find((e: any) => e.fullUrl === reference).resource
   encounter.diagnosis[0].rank = 1
-  expect(() => withPhysicianHfDiagnosis(input, { code: 'I50.9', confirmed: true, ranks: { [reference]: 1 }, encounters: [reference] }, randomUUID)).toThrow('physician-diagnosis-rank-conflict')
-  const result = withPhysicianHfDiagnosis(input, { code: 'I50.9', confirmed: true, ranks: { [reference]: 2 }, encounters: [reference] }, randomUUID)
-  expect(result.bundle.entry.find((e: any) => e.fullUrl === reference).resource.diagnosis.map((d: any) => d.rank)).toEqual([1, 2])
+  const before = JSON.stringify(input)
+  const result = withPhysicianHfDiagnosis(input, { code: 'I50.9', confirmed: true, ranks: { [reference]: 1 }, encounters: [reference] }, randomUUID)
+  expect(result.bundle.entry.find((e: any) => e.fullUrl === reference).resource.diagnosis.map((d: any) => d.rank)).toEqual([2, 1])
+  expect(JSON.stringify(input)).toBe(before)
 })
 
 it('suggests two actual recent outpatient encounters with secondary ranks, without applying diagnoses', () => {
@@ -94,7 +95,7 @@ it('does not invent a second outpatient visit and uses only an existing complete
   past.status = 'in-progress'
   expect(suggestHfDiagnosis(input, 'inpatient')).toBeNull()
 })
-it('keeps an existing primary HF rank and avoids occupied ranks for an additional secondary diagnosis', () => {
+it('keeps an existing HF rank within 1–3 and otherwise supplements at rank 2', () => {
   const { input } = prepared()
   const index = input.bundle.entry.find((e: any) => e.fullUrl === input.indexEncounterReference).resource
   index.diagnosis[0].rank = 3
@@ -102,10 +103,36 @@ it('keeps an existing primary HF rank and avoids occupied ranks for an additiona
   const dx = input.bundle.entry.find((e: any) => e.fullUrl === past.diagnosis[0].condition.reference).resource
   dx.code.coding[0].code = 'I50.9'; past.diagnosis[0].rank = 1
   const draft = suggestHfDiagnosis(input, 'outpatient')!
-  expect(draft.ranks[input.indexEncounterReference!]).toBe(4)
   const pastReference = input.bundle.entry.find((e: any) => e.resource === past).fullUrl
+  expect(draft.ranks[input.indexEncounterReference!]).toBe(2)
   expect(draft.ranks[pastReference]).toBe(1)
-  expect(Object.values(draft.ranks)).toEqual([4, 1])
+})
+
+it('places confirmed HF at rank 2 when visits already carry four or more ranked diagnoses (model counts ranks 1–3 only)', () => {
+  const { input } = prepared()
+  const patient = input.bundle.entry.find((e: any) => e.resource.resourceType === 'Patient').fullUrl
+  const encounters = input.bundle.entry.filter((e: any) => e.resource.resourceType === 'Encounter')
+  let hf20 = ''
+  for (const enc of encounters) {
+    const codes = ['I10', 'I25.10', 'E78.5', 'E13.9', ...(enc.fullUrl === input.indexEncounterReference ? ['I50.20'] : [])]
+    enc.resource.diagnosis = codes.map((code, i) => {
+      const id = randomUUID()
+      input.bundle.entry.push({ fullUrl: 'urn:uuid:' + id, resource: { resourceType: 'Condition', id, subject: { reference: patient }, encounter: { reference: enc.fullUrl },
+        code: { coding: [{ system: 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw', code }] } } })
+      if (code === 'I50.20') hf20 = 'urn:uuid:' + id
+      return { condition: { reference: 'urn:uuid:' + id }, rank: i + 1 }
+    })
+  }
+  const draft = suggestHfDiagnosis(input, 'outpatient')!
+  expect(Object.values(draft.ranks)).toEqual([2, 2])
+  const result = withPhysicianHfDiagnosis(input, { ...draft, confirmed: true }, randomUUID)
+  const index = result.bundle.entry.find((e: any) => e.fullUrl === input.indexEncounterReference).resource
+  expect(index.diagnosis.find((d: any) => d.condition.reference === hf20).rank).toBe(2)
+  expect(index.diagnosis.map((d: any) => d.rank).sort()).toEqual([1, 2, 3, 4, 5])
+  const past = result.bundle.entry.find((e: any) => e.fullUrl === draft.encounters[1]).resource
+  expect(past.diagnosis.map((d: any) => d.rank)).toEqual([1, 3, 4, 5, 2])
+  expect(result.counts.Condition).toBe(input.counts.Condition + 1)
+  expect(validateHfTransportBundle(result.bundle, result.indexDate)).toBe(true)
 })
 
 it('excludes case-type 08 records from shortcuts and manual supplementation', () => {
