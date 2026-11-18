@@ -25,7 +25,11 @@ export function hasBledSelects(input: {
   const out: Partial<Record<HasBledKey, ClinicalSelectValue>> = {}
 
   const sbp = resolve({ kind: 'vital', loinc: ['8480-6'], vital: 'sbp' })
-  if (sbp) out.sbpOver160 = { value: sbp.value > 160 ? 'yes' : 'no', date: day(sbp.date), testName: `最近收縮壓 ${sbp.value} mmHg（請核對未控制高血壓）`, obsId: sbp.obsId, resourceType: 'Observation' }
+  // Compared in mmHg (a kPa reading converted, no unit read as mmHg); an unreadable unit is left to the clinician.
+  const mmHg = sbp ? (sbp.unit.trim() ? convertToBase(sbp.value, sbp.unit, 'pressure')?.value : sbp.value) : undefined
+  if (sbp) out.sbpOver160 = mmHg === undefined
+    ? { value: 'unknown', date: day(sbp.date), testName: `最近收縮壓 ${sbp.value} ${sbp.unit}（單位無法判讀，請核對）` }
+    : { value: mmHg > 160 ? 'yes' : 'no', date: day(sbp.date), testName: `最近收縮壓 ${Math.round(mmHg)} mmHg（請核對未控制高血壓）`, obsId: sbp.obsId, resourceType: 'Observation' }
 
   const transplant = diagnosisSelect(conditions, encounters, now, (code) => /^Z940/.test(code), '腎臟移植', undefined, true)
   const creatinine = resolve({ kind: 'lab', keys: ['CREA', 'CREATININE'] })

@@ -18,6 +18,10 @@ it('answers H from the latest systolic pressure', () => {
   expect(hasBled('htn', autofill()).value).toBe('no')
 })
 
+it('converts a kPa systolic pressure before comparing it with 160 mmHg', () => {
+  expect(hasBled('htn', autofill([obs('8480-6', 23, 'kPa')]))).toMatchObject({ value: 'yes', source: { testName: '最近收縮壓 173 mmHg（請核對未控制高血壓）' } })
+})
+
 it('answers A from creatinine >2.26 mg/dL, in either unit', () => {
   expect(hasBled('renal', autofill([obs('2160-0', 2.5, 'mg/dL')])).value).toBe('yes')
   expect(hasBled('renal', autofill([obs('2160-0', 150, 'umol/L')])).value).toBe('no')
@@ -34,6 +38,12 @@ it('answers D from a current antiplatelet or NSAID prescription', () => {
   expect(hasBled('drugs', autofill([], [], [med('Clopidogrel 75 mg')])).value).toBe('yes')
   expect(hasBled('drugs', autofill([], [], [med('Amlodipine 5 mg')])).value).toBe('no')
   expect(hasBled('drugs', autofill()).value).toBe('no')
+})
+
+it('does not count diclofenac eye drops as an NSAID', () => {
+  const med = (name: string, atc?: string) => ({ id: name, status: 'active', authoredOn: '2026-11-01', medicationCodeableConcept: { text: name }, drugTerminology: { ingredientText: name }, ...(atc ? { atcClassification: { atcCode: atc } } : {}) }) as unknown as MedicationEntity
+  expect(hasBled('drugs', autofill([], [], [med('Diclofenac sodium 1 mg/mL 點眼液劑', 'S01BC03')])).value).toBe('no')
+  expect(hasBled('drugs', autofill([], [], [med('Diclofenac 25 mg tablet', 'M01AB05')])).value).toBe('yes')
 })
 
 it('answers MELD dialysis from the record, else 否', () => {

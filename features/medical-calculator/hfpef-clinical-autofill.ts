@@ -200,10 +200,10 @@ function drugClassSelect(
     const end = medicationSupplyEndDate(med)
     if (end && end < now.toISOString().slice(0, 10)) return false
     // Eye drops and topical forms are not the systemic drug the scores ask
-    // about (betaxolol or timolol drops, minoxidil lotion), as in antihypertensiveSelect.
+    // about (diclofenac or timolol drops, minoxidil lotion), as in antihypertensiveSelect.
     const atc = medicationAtcCode(med) ?? med.atcClassification?.atcCode
     const text = [med.drugTerminology?.ingredientText, medicationDisplayName(med), med.drugTerminology?.officialNameEn, med.drugTerminology?.doseForm, ...med.dosageInstruction?.map(d => `${d.route?.text ?? ''} ${d.text ?? ''}`) ?? []].filter(Boolean).join(' ')
-    return !(/^(S|D)/.test(atc ?? '') || /ophthalm|eye\s*drop|topical|眼|外用|皮膚/i.test(text))
+    return !(/^(S|D)/.test(atc ?? '') || /ophthalm|eye\s*drop|topical|眼|外用|皮膚|點眼/i.test(text))
   })
   if (!current.length) return undefined
   for (const med of current) {
