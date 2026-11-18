@@ -62,12 +62,13 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
 /**
  * The hypertension page's calculators (owner request 2026-11-19: HTN and CAD
  * get the same 計算機 entry as HF and AF). Only calculators the medical
- * calculator has: DP-08's guideline scores (PREVENT-CVD, SCORE2/SCORE2-OP)
- * come with their own calculators, and PREVENT-ASCVD stays off this page — a
+ * calculator has. DP-08's PREVENT-CVD is the score the AHA/ACC threshold
+ * reads (ESC's SCORE2/SCORE2-OP come with their own calculator), and PREVENT-ASCVD stays off this page — a
  * different endpoint from the one DP-08's threshold reads (owner decision).
  */
 export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'egfr', dp: 'DP-04', source: 'htn', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/ },
   { id: 'hpa-risk', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署[^，。；、]{0,12}風險|Taiwan HPA/ },
   { id: 'ckd-kdigo-risk', dp: 'DP-18', source: 'htn', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/, needsPoint: true },
 ]
