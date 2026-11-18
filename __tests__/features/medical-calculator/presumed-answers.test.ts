@@ -52,5 +52,7 @@ it('presumes nothing while the chart reloads, even with a CDSS NYHA answer', () 
 })
 
 it('leaves questions it cannot read from the record unanswered', () => {
-  expect(resolveInput(input('nafld-fibrosis', 'dm'), loaded({})).value).toBe('')
+  for (const [calc, key] of [['nafld-fibrosis', 'dm'], ['meld-na', 'dialysis'], ['meld-3', 'dialysis']]) {
+    expect(resolveInput(input(calc, key), loaded({})).value).toBe('')
+  }
 })

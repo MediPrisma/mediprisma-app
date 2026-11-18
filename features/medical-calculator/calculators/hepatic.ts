@@ -15,7 +15,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'na', type: 'number', label: { en: 'Sodium', zh: '鈉' }, unit: 'mmol/L', dimension: 'electrolyte', normalRange: { low: 136, high: 145 }, source: { kind: 'lab', keys: ['NA'] } },
         {
           key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' },
-          defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_dialysis' }, presumed: 'no',
+          defaultValue: '',
           options: [
             { value: 'no', label: { en: 'No', zh: '否' } },
             { value: 'yes', label: { en: 'Yes', zh: '是' } },
@@ -70,7 +70,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'alb', type: 'number', label: { en: 'Albumin', zh: '白蛋白' }, unit: 'g/dL', dimension: 'albumin', normalRange: { low: 3.5, high: 5.0 }, source: { kind: 'lab', keys: ['ALB'] } },
         SEX_INPUT,
         {
-          key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_dialysis' }, presumed: 'no',
+          key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' }, defaultValue: '',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
       ],
