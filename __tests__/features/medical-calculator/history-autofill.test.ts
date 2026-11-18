@@ -127,3 +127,8 @@ it('reads a stroke history coded only as Z86.73 as known CVD for PREVENT', () =>
   const autofill = buildAutofill([], { age: 60, gender: 'male' }, [], [], now, [condition('Z86.73')], [])
   expect(resolveInput(field('prevent-ascvd', 'cvd'), autofill).value).toBe('yes')
 })
+
+it('reads an HF hospitalization whose diagnosis references a Condition', () => {
+  const stay = { id: 'adm', status: 'finished', class: { code: 'IMP' }, period: { start: '2026-09-01' }, diagnosis: [{ condition: { reference: 'Condition/c-I50.9' } }] } as EncounterEntity
+  expect(historySelects([condition('I50.9', '2026-09-01')], [stay], now).hfHospitalization?.value).toBe('recent')
+})

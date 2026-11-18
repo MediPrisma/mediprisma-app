@@ -104,8 +104,17 @@ function heartFailureCourse(conditions: ConditionEntity[], encounters: Encounter
     out.hfOver18Months = { ...first, value: months >= 18 ? 'yes' : 'no', testName: `最早心衰竭紀錄 ${first.date.slice(0, 10)}（${first.testName.replace(/（.*）$/, '')}；紀錄約涵蓋一年，請核對）` }
   }
   const stays = encounters.filter((encounter) => classifyEncounterClass(encounter.class) === 'inpatient')
-  const stay = stays.map((encounter) => diagnosisSelect([], [encounter], now, isHf, '心衰竭住院', undefined, true))
-    .filter((hit): hit is ClinicalSelectValue => !!hit).sort((a, b) => b.date.localeCompare(a.date))[0]
+  // A stay's diagnosis may be a reference to a loaded Condition rather than a code on the stay.
+  const byId = new Map(conditions.map((condition) => [condition.id, condition]))
+  const stay = stays.map((encounter) => {
+    const linked = (encounter.diagnosis ?? []).map((item) => byId.get(item.condition?.reference?.split('/').pop() ?? '')).filter((condition): condition is ConditionEntity => !!condition)
+    const onStay = diagnosisSelect([], [encounter], now, isHf, '心衰竭住院', undefined, true)
+    if (onStay) return onStay
+    const date = encounter.period?.start ?? ''
+    const fromCondition = date && Date.parse(date) <= now.getTime() ? diagnosisSelect(linked, [], now, isHf, '心衰竭', undefined, true) : undefined
+    // Dated by the stay, not by the Condition the stay points to.
+    return fromCondition && { ...fromCondition, date, obsId: encounter.id, resourceType: 'Encounter' as const, testName: `住院${fromCondition.testName}` }
+  }).filter((hit): hit is ClinicalSelectValue => !!hit).sort((a, b) => b.date.localeCompare(a.date))[0]
   if (stay) out.hfHospitalization = { ...stay, value: now.getTime() - Date.parse(stay.date) <= 183 * 86_400_000 ? 'recent' : 'prior' }
   return out
 }
