@@ -53,6 +53,7 @@ interface QueryOptions {
   allowTruncatedOutput?: boolean
   onOutputTruncated?: (truncated: boolean) => void
   reasoningEffort?: 'low' | 'medium' | 'high'
+  textVerbosity?: 'low' | 'medium' | 'high'
   /** Ask a user-configured (CUSTOM) endpoint to skip hidden reasoning for this
    *  request. Frontier providers ignore it. Used by the 醫療摘要 fast lane,
    *  where the measured cost of the first section is the model's thinking. */
@@ -347,6 +348,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           temperature: streamOptions?.temperature,
           maxTokens: streamOptions?.maxTokens,
           reasoningEffort: streamOptions?.reasoningEffort,
+          textVerbosity: streamOptions?.textVerbosity,
           hiddenReasoning: streamOptions?.hiddenReasoning,
           responseFormat: streamOptions?.responseFormat,
           requestedModelId: streamOptions?.requestedModelId,

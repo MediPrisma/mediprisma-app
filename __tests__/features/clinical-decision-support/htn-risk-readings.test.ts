@@ -8,7 +8,7 @@
  */
 import { buildPreventReading } from '@/features/clinical-decision-support/utils/prevent-reading'
 import { applyHtnRiskReadings, buildHpaReading, htnCalculatorValues } from '@/features/clinical-decision-support/utils/htn-risk-readings'
-import { HF_VISIT_CALCULATORS } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
+import { HF_VISIT_CALCULATORS, HTN_VISIT_CALCULATORS } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
 import type { Autofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import type { CalcValues } from '@/features/medical-calculator/types'
 
@@ -120,8 +120,10 @@ describe('HTN baseline-risk facts for the pack', () => {
       'hpa-mace': { status: 'to-fill', value: '2' },
     })
     // The list's HTN entries open at DP-08 and only where the HTN page has it.
-    const entries = HF_VISIT_CALCULATORS.filter((entry) => entry.source === 'htn')
-    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['risk-inputs', 'DP-08', true], ['prevent-ascvd', 'DP-08', true], ['pce-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true], ['stop-bang', 'DP-07', true]])
+    // The HTN page has its own list (#562): the risk panels sit in it, by chapter, beside eGFR and KDIGO.
+    expect(HF_VISIT_CALCULATORS.some((entry) => entry.source === 'htn')).toBe(false)
+    const entries = HTN_VISIT_CALCULATORS.filter((entry) => entry.dp === 'DP-07' || entry.dp === 'DP-08')
+    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['stop-bang', 'DP-07', true], ['risk-inputs', 'DP-08', true], ['prevent-ascvd', 'DP-08', true], ['pce-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true]])
     const line = 'PREVENT-ASCVD 9.2%｜ACC/AHA PCE 5.4%｜國健署心血管風險預測 8.1%（低）'
     const byId = Object.fromEntries(entries.map((entry) => [entry.id, entry]))
     expect(byId['prevent-ascvd']!.names.test(line)).toBe(true)

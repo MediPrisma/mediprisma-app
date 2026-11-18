@@ -42,7 +42,7 @@ describe('AiService injected provider routing', () => {
   it.each([
     ['openai', 'gpt-5.4-nano'],
     ['gemini', 'gemini-3.1-flash-lite'],
-    ['claude', 'claude-haiku-4-5-20251001'],
+    ['claude', 'claude-haiku-5-5'],
   ] as const)('dispatches %s models through the injected provider service', async (provider, modelId) => {
     const queries = {
       openai: jest.fn().mockResolvedValue({ text: 'openai', metadata: { modelId, provider: 'openai' } }),

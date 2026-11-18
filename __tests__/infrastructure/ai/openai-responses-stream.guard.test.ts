@@ -61,7 +61,7 @@ describe('guardOpenAiResponsesProxyStream', () => {
     const openai = createOpenAI({ apiKey: 'test-key', fetch })
     const errors: unknown[] = []
     const result = streamText({
-      model: openai.responses('gpt-5.6-terra'),
+      model: openai.responses('gpt-6.1-terra'),
       prompt: 'hello',
       maxRetries: 0,
       onError: ({ error }) => {

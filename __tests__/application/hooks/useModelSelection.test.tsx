@@ -29,24 +29,24 @@ const profile = (
 })
 
 describe('useModelSelection', () => {
-  it('selects the hospital model without a personal key or Firebase chat proxy', () => {
+  it.each(['/app-hmc/', '/app-staging/'])('selects the hospital model on %s but not production, without a personal key or Firebase chat proxy', path => {
     const previousChannel = process.env.NEXT_PUBLIC_DEPLOY_CHANNEL
     const previousOrigin = process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
     process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = 'staging'
     process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = 'https://ai-vghtpe.mediprisma.tw'
-    window.history.replaceState({}, '', '/app/?site=vghtpe')
+    window.history.replaceState({}, '', `${path}?site=vghtpe`)
     try {
       const setModel = jest.fn()
-      const { result } = renderHook(() => useModelSelection(null, null, null, 'gemini-3-flash-preview', setModel), { wrapper })
+      const { result } = renderHook(() => useModelSelection(null, null, null, 'gemini-4-hydrogen', setModel), { wrapper })
       expect(result.current.gptModels.some(entry => entry.id === 'gpt-6-luna')).toBe(true)
       act(() => result.current.handleSelectModel('gpt-6-luna'))
       expect(setModel).toHaveBeenCalledWith('gpt-6-luna')
-      window.history.replaceState({}, '', '/app/')
+      window.history.replaceState({}, '', '/app/?site=vghtpe')
       setModel.mockClear()
       act(() => result.current.handleSelectModel('gpt-6-luna'))
       expect(setModel).not.toHaveBeenCalled()
-      const hidden = renderHook(() => useModelSelection(null, null, null, 'gemini-3-flash-preview', setModel), { wrapper })
-      expect(hidden.result.current.gptModels.some(entry => entry.id === 'gpt-6-luna')).toBe(false)
+      const hidden = renderHook(() => useModelSelection(null, null, null, 'gemini-4-hydrogen', setModel), { wrapper })
+      expect(hidden.result.current.gptModels.some(entry => entry.id === 'gpt-6-luna')).toBe(true)
     } finally {
       if (previousChannel === undefined) delete process.env.NEXT_PUBLIC_DEPLOY_CHANNEL
       else process.env.NEXT_PUBLIC_DEPLOY_CHANNEL = previousChannel
@@ -145,21 +145,21 @@ describe('useModelSelection', () => {
         null,
         null,
         'test-claude-key',
-        'claude-fable-5',
+        'claude-fable-5-2',
         setModel,
       ),
       { wrapper },
     )
 
     expect(result.current.claudeModels.find(
-      (entry) => entry.id === 'claude-fable-5',
+      (entry) => entry.id === 'claude-fable-5-2',
     )).toMatchObject({
-      label: 'Claude Fable 5',
+      label: 'Claude Fable 5.2',
       isLocked: false,
     })
 
-    act(() => result.current.handleSelectModel('claude-fable-5'))
-    expect(setModel).toHaveBeenCalledWith('claude-fable-5')
+    act(() => result.current.handleSelectModel('claude-fable-5-2'))
+    expect(setModel).toHaveBeenCalledWith('claude-fable-5-2')
   })
 
   it('keeps Nano and Luna unlocked without an OpenAI key and unlocks every GPT-5.6 model with one', () => {
@@ -175,10 +175,10 @@ describe('useModelSelection', () => {
     )
 
     expect(result.current.gptModels.map(({ id, isLocked }) => ({ id, isLocked }))).toEqual([
-      { id: 'gpt-5.4-nano', isLocked: false },
-      { id: 'gpt-5.6-luna', isLocked: false },
-      { id: 'gpt-5.6-terra', isLocked: true },
-      { id: 'gpt-5.6-sol', isLocked: true },
+      { id: 'gpt-6-luna', isLocked: false },
+      { id: 'gpt-6.1-terra', isLocked: true },
+      { id: 'gpt-6.1-sol', isLocked: true },
+      { id: 'gpt-6-astra', isLocked: true },
     ])
 
     rerender({ apiKey: 'test-openai-key' })
@@ -192,7 +192,7 @@ describe('useModelSelection', () => {
     )
 
     expect(result.current.gptModels.find(
-      (entry) => entry.id === 'gpt-5.4-nano',
-    )?.description).toBe('極速回應，經濟實惠')
+      (entry) => entry.id === 'gpt-6-luna',
+    )?.description).toBe('適合高用量、重視成本效率的任務')
   })
 })

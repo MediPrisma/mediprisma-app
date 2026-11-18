@@ -44,6 +44,23 @@ test('an expired HIS login and a lost connection are named separately', () => {
     '院內資料未取得：檢查驗報告－北榮登入已過期，請重新登入北榮後再取得（2 次）；用藥－無法連到北榮（網路中斷或北榮沒有回應）。請核對 HIS。')
 })
 
+test('a capture cut short by the visit limit or unmatched orders names that, not a missing reason', () => {
+  render(<HospitalCaptureReasons />)
+  act(() => rememberLocalBundleCapture(bundle([
+    { system: COMPLETENESS, code: 'partial' },
+    { system: FAILURE, code: 'encounters:visit_limit', display: '21' },
+    { system: FAILURE, code: 'orders:order_unmatched', display: '101' },
+  ])))
+  expect(screen.getByRole('status')).toHaveTextContent(
+    '院內資料不完整：門診紀錄－超過門診數上限，略過較舊門診（21 次）；醫囑－無法唯一對應申請序號，報告涵蓋範圍待核對（101 筆）。請核對 HIS。')
+  act(() => rememberLocalBundleCapture(bundle([
+    { system: FAILURE, code: 'reports:timeout', display: '1' },
+    { system: FAILURE, code: 'orders:order_unmatched', display: '1' },
+  ])))
+  expect(screen.getByRole('status')).toHaveTextContent(
+    '院內資料未取得：檢查驗報告－北榮回應逾時；醫囑－無法唯一對應申請序號，報告涵蓋範圍待核對（1 筆）。請核對 HIS。')
+})
+
 test('English wording', () => {
   mockLocale = 'en'
   render(<HospitalCaptureReasons />)

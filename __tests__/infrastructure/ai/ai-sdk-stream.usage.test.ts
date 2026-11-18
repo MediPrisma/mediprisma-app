@@ -13,7 +13,7 @@ import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-str
 const textStream = (...chunks: string[]) => (async function* () { for (const chunk of chunks) yield chunk })()
 const adapter = () => new AiSdkStreamAdapter({ create: jest.fn(() => ({ model: { kind: 'responses' } })) } as never)
 const config = (onUsage: jest.Mock, signal = new AbortController().signal) => ({
-  model: 'gpt-5.6-terra', messages: [{ role: 'user', content: 'hello' }], apiKey: 'personal-key', signal, onChunk: jest.fn(), onUsage,
+  model: 'gpt-6.1-terra', messages: [{ role: 'user', content: 'hello' }], apiKey: 'personal-key', signal, onChunk: jest.fn(), onUsage,
 })
 
 describe('AiSdkStreamAdapter token usage', () => {

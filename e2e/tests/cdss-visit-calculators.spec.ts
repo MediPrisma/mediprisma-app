@@ -18,7 +18,6 @@ async function openBook(page: Page, { width, where }: { width: number; where: 'p
     await page.goto(`/dev/cdss-scenarios/view?w=${width}&visit=book`)
   } else {
     await page.goto(`/dev/cdss-scenarios/view?w=${width}`)
-    await page.getByRole('button', { name: '決策地圖 v2' }).first().click()
   }
   await expect(page.getByTestId('cdss-visit-book')).toBeVisible({ timeout: 90_000 })
 }
