@@ -12,8 +12,9 @@
 // decision 2026-11-18: no hospital codes in plain text in this repository).
 //
 // Left out: inactive and trial items (udCode starting with T); ATC codes
-// below the substance level; and WHO combination codes (last two digits 50
-// and above), which name a family of different combinations rather than one.
+// below the substance level; WHO combination codes (last two digits 50 and
+// above); and any code under which the NHI drug master files more than one
+// substance or a combination (see singleSubstanceAtcCodes).
 // Where one substance comes in several routes, an oral product is preferred:
 // cloud records are outpatient prescriptions.
 
@@ -21,10 +22,11 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildDdiAtcReference, type FormularyItem } from './lib/ddi-atc-reference'
+import { buildDdiAtcReference, type DictionaryRow, type FormularyItem } from './lib/ddi-atc-reference'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = path.join(ROOT, 'src/shared/data/ddi-atc-reference.generated.json')
+const MASTER = path.join(ROOT, 'vendor/nhi-fhir-bridge-nhi-drug-terminology/data/nhi-drug-terminology-20260728.json')
 
 const input = process.argv[2]
 if (!input) {
@@ -33,7 +35,8 @@ if (!input) {
 }
 const bytes = fs.readFileSync(input)
 const source = JSON.parse(bytes.toString('utf8')) as { items: FormularyItem[] }
-const byAtc = buildDdiAtcReference(source.items)
+const master = JSON.parse(fs.readFileSync(MASTER, 'utf8')) as { rows: DictionaryRow[] }
+const byAtc = buildDdiAtcReference(source.items, master.rows)
 const output = {
   schemaVersion: 'ddi-atc-reference-v1',
   sourceSha256: createHash('sha256').update(bytes).digest('hex'),
