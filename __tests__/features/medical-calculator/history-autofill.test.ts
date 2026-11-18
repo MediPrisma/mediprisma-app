@@ -23,6 +23,10 @@ it.each([
   ['B15.9', ['liverDisease']], // acute hepatitis A is not chronic liver disease
   ['Z86.71', ['priorVte']],
   ['I82.40', ['priorDvt', 'priorVte']],
+  ['I82.501', ['priorDvt', 'priorVte']], // chronic DVT
+  ['433.11', ['cadOrStroke', 'stroke', 'strokeTiaEmbolism']], // ICD-9 carotid occlusion with infarction
+  ['433.10', []], // without infarction
+  ['434.00', []],
   ['C34.90', ['activeCancer']],
   ['C44.91', []], // non-melanoma skin cancer
   ['F17.210', ['smoker']],
@@ -66,4 +70,9 @@ it('keeps a resolved stroke as history but not a resolved smoking code', () => {
 it('answers Wells DVT 「曾確診 DVT」 否 for a PE-only history', () => {
   const autofill = buildAutofill([], { age: 60, gender: 'male' }, [], [], now, [condition('I26.99')], [])
   expect(resolveInput(field('wells-dvt', 'priordvt'), autofill).value).toBe('0')
+})
+
+it('counts cancer treated within six months even if now in remission', () => {
+  const remission = { ...condition('C18.9', '2026-10-01'), clinicalStatus: 'remission' } as ConditionEntity
+  expect(historySelects([remission], [], now).activeCancer?.value).toBe('yes')
 })
