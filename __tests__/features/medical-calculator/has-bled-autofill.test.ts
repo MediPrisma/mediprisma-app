@@ -46,8 +46,8 @@ it('does not count diclofenac eye drops as an NSAID', () => {
   expect(hasBled('drugs', autofill([], [], [med('Diclofenac 25 mg tablet', 'M01AB05')])).value).toBe('yes')
 })
 
-it('presumes MELD dialysis 否 but leaves a dialysis patient to the clinician', () => {
+it('answers MELD dialysis from the record, else 否', () => {
   expect(resolveInput(field('meld-na', 'dialysis'), autofill([obs('33914-3', 60, 'mL/min/{1.73_m2}')])).value).toBe('no')
   const dialysis = { id: 'hd', code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'Z99.2' }] }, recordedDate: '2026-10-01' } as ConditionEntity
-  expect(resolveInput(field('meld-3', 'dialysis'), autofill([], [dialysis]))).toMatchObject({ value: '', filled: false })
+  expect(resolveInput(field('meld-3', 'dialysis'), autofill([], [dialysis]))).toMatchObject({ value: 'yes', filled: true })
 })

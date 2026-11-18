@@ -98,8 +98,8 @@ function score(v: CalcValues, includeSex: boolean): CalcResult | null {
       ...items.map((item) => ({ label: item.label, value: item.known ? String(item.points) : '—' })),
     ],
     notes: label(
-      '未填病史不視為 0 分；不能僅依低的最低分排除抗凝需求。機械瓣、中重度 MS、HCM／心臟類澱粉沉積等另循專門指引。',
-      'Missing history is not zero; a low minimum cannot exclude an OAC indication. Mechanical valves, significant MS, HCM and cardiac amyloidosis require dedicated guidance.',
+      '紀錄未見的病史預填「無」，請核對；清空的項目不計 0 分。機械瓣、中重度 MS、HCM／心臟類澱粉沉積等另循專門指引。',
+      'Histories the record does not show are prefilled No — check them; a cleared item is not scored 0. Mechanical valves, significant MS, HCM and cardiac amyloidosis require dedicated guidance.',
     ),
   }
 }

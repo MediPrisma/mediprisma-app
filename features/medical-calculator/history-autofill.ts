@@ -1,5 +1,6 @@
 import type { ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import { diagnosisSelect, type ClinicalSelectValue } from './hfpef-clinical-autofill'
+import { classifyEncounterClass } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 
 /**
  * Histories the calculators ask, read from diagnosis codes (conditions and
@@ -8,7 +9,7 @@ import { diagnosisSelect, type ClinicalSelectValue } from './hfpef-clinical-auto
  * Codes are ICD-10 without dots; ICD-9 is not read (owner decision
  * 2026-11-19: the record is ICD-10 now).
  */
-export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker'
+export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis'
 
 /** I10–I16. */
 const isHtn = (code: string) => /^I1[0-6]/.test(code)
@@ -37,6 +38,13 @@ const isSmoker = (code: string) => /^(?:F17|Z720)/.test(code) && !/^F172\d1/.tes
 /** Nicotine dependence in remission: F17.2x1. */
 const isSmokingRemission = (code: string) => /^F172\d1/.test(code)
 
+/** Diabetes E08–E13, or impaired fasting glucose / prediabetes R73.0x (NAFLD fibrosis score). */
+const isIfgOrDiabetes = (code: string) => /^(?:E0[89]|E1[0-3]|R730)/.test(code)
+/** PREVENT's end-stage kidney disease or dialysis: N18.6, Z99.2, Z49, Z91.15. */
+const isEsrdOrDialysis = (code: string) => /^(?:N186|Z992|Z49|Z9115)/.test(code)
+/** PREVENT's known CVD: coronary disease, stroke (or its history code Z86.73), PAD or heart failure. */
+const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:Z8673|I70|I739)/.test(code) || isHf(code)
+
 /** Wells' 「active cancer」: treated within six months. */
 const CANCER_WINDOW_DAYS = 183
 
@@ -57,6 +65,10 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
     priorDvt: read(isDvt, 'DVT '),
     activeCancer: activeCancer(conditions, encounters, now),
     smoker: currentSmoking(conditions, encounters, now),
+    ifgOrDiabetes: read(isIfgOrDiabetes, '空腹血糖異常／糖尿病'),
+    ascvdOrHf: read(isAscvdOrHf, '心血管疾病'),
+    esrdOrDialysis: read(isEsrdOrDialysis, '末期腎病／透析'),
+    ...heartFailureCourse(conditions, encounters, now),
   }
   return Object.fromEntries(Object.entries(found).filter(([, value]) => value)) as Partial<Record<HistoryKey, ClinicalSelectValue>>
 }
@@ -70,8 +82,41 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
 function activeCancer(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): ClinicalSelectValue | undefined {
   const recentVisit = diagnosisSelect([], encounters, now, isCancer, '惡性腫瘤（近 6 個月，治療請核對）', CANCER_WINDOW_DAYS, true)
   if (recentVisit) return recentVisit
+  // Owner rule 2026-11-19: no visit for it in six months reads 「無」, naming the older code.
   const known = diagnosisSelect(conditions, encounters, now, isCancer, '惡性腫瘤', undefined, true)
-  return known && { ...known, value: 'unknown' }
+  return known && { ...known, value: 'no', testName: `近 6 個月未見癌症就醫；${known.testName.replace(/（.*）$/, '')}，預設無（請核對是否治療中）` }
+}
+
+/**
+ * MAGGIC's 「HF diagnosed ≥18 months ago」 from the earliest HF code, and
+ * LIFE-Preserved's previous HF hospitalization from inpatient stays with an
+ * HF code (within six months: 「recent」). Nothing found: their presumed 「無」.
+ */
+function heartFailureCourse(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): Partial<Record<HistoryKey, ClinicalSelectValue>> {
+  const out: Partial<Record<HistoryKey, ClinicalSelectValue>> = {}
+  const hits = [
+    ...conditions.map((condition) => diagnosisSelect([condition], [], now, isHf, '心衰竭', undefined, true)),
+    ...encounters.map((encounter) => diagnosisSelect([], [encounter], now, isHf, '心衰竭', undefined, true)),
+  ].filter((hit): hit is ClinicalSelectValue => !!hit && !!hit.date).sort((a, b) => a.date.localeCompare(b.date))
+  const first = hits[0]
+  if (first) {
+    const months = (now.getTime() - Date.parse(first.date)) / (30.44 * 86_400_000)
+    out.hfOver18Months = { ...first, value: months >= 18 ? 'yes' : 'no', testName: `最早心衰竭紀錄 ${first.date.slice(0, 10)}（${first.testName.replace(/（.*）$/, '')}；紀錄約涵蓋一年，請核對）` }
+  }
+  const stays = encounters.filter((encounter) => classifyEncounterClass(encounter.class) === 'inpatient')
+  // A stay's diagnosis may be a reference to a loaded Condition rather than a code on the stay.
+  const byId = new Map(conditions.map((condition) => [condition.id, condition]))
+  const stay = stays.map((encounter) => {
+    const linked = (encounter.diagnosis ?? []).map((item) => byId.get(item.condition?.reference?.split('/').pop() ?? '')).filter((condition): condition is ConditionEntity => !!condition)
+    const onStay = diagnosisSelect([], [encounter], now, isHf, '心衰竭住院', undefined, true)
+    if (onStay) return onStay
+    const date = encounter.period?.start ?? ''
+    const fromCondition = date && Date.parse(date) <= now.getTime() ? diagnosisSelect(linked, [], now, isHf, '心衰竭', undefined, true) : undefined
+    // Dated by the stay, not by the Condition the stay points to.
+    return fromCondition && { ...fromCondition, date, obsId: encounter.id, resourceType: 'Encounter' as const, testName: `住院${fromCondition.testName}` }
+  }).filter((hit): hit is ClinicalSelectValue => !!hit).sort((a, b) => b.date.localeCompare(a.date))[0]
+  if (stay) out.hfHospitalization = { ...stay, value: now.getTime() - Date.parse(stay.date) <= 183 * 86_400_000 ? 'recent' : 'prior' }
+  return out
 }
 
 /** The latest of the records matching, each read on its own so the newest wins. */

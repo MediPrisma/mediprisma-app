@@ -331,7 +331,7 @@ export const HEART_FAILURE_PROGNOSIS: CalculatorDef[] = [{
     { ...yesNo('betaBlocker', 'Currently prescribed a beta-blocker', '目前使用 β 阻斷劑'), source: { kind: 'hfpefClinical', key: 'betaBlocker' } },
     { key: 'sbp', type: 'number', label: label('Systolic blood pressure', '收縮壓'), unit: 'mmHg', source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
     { key: 'bmi', type: 'number', label: label('Body mass index', '身體質量指數'), unit: 'kg/m²', source: { kind: 'bmi' } },
-    yesNo('hfDuration', 'Heart failure first diagnosed ≥18 months ago', '心衰竭初次診斷已 ≥18 個月'),
+    { ...yesNo('hfDuration', 'Heart failure first diagnosed ≥18 months ago', '心衰竭初次診斷已 ≥18 個月'), source: { kind: 'hfpefClinical', key: 'hfOver18Months' }, presumed: 'no' },
     { ...yesNo('smoker', 'Current smoker', '目前吸菸'), source: { kind: 'hfpefClinical', key: 'smoker' }, presumed: 'no' },
     { ...yesNo('copd', 'Chronic obstructive pulmonary disease', '慢性阻塞性肺病'), source: { kind: 'hfpefClinical', key: 'copd' }, presumed: 'no' },
     { ...yesNo('aceiArb', 'Currently prescribed an ACEI or ARB', '目前使用 ACEI 或 ARB'), source: { kind: 'hfpefClinical', key: 'aceiArb' } },
@@ -368,14 +368,14 @@ export const HEART_FAILURE_PROGNOSIS: CalculatorDef[] = [{
     { ...yesNo('priorReducedLvef', 'Any previously documented LVEF <50%', '過去是否曾記錄 LVEF <50%'), presumed: 'no' },
     { ...yesNo('diabetes', 'Diabetes mellitus', '糖尿病'), source: { kind: 'hfpefClinical', key: 'diabetes' }, presumed: 'no' },
     { ...yesNo('smoker', 'Current smoker', '目前吸菸'), source: { kind: 'hfpefClinical', key: 'smoker' }, presumed: 'no' },
-    { key: 'hfHospitalization', type: 'select', label: label('Previous HF hospitalization', '過去心衰竭住院'), defaultValue: '', options: [
+    { key: 'hfHospitalization', type: 'select', label: label('Previous HF hospitalization', '過去心衰竭住院'), defaultValue: '', source: { kind: 'hfpefClinical', key: 'hfHospitalization' }, presumed: 'never', options: [
       { value: 'never', label: label('Never', '無') },
       { value: 'prior', label: label('Yes, but not within 6 months', '有，但非近 6 個月內') },
       { value: 'recent', label: label('Yes, within the past 6 months', '有，且在近 6 個月內') },
     ] },
     { ...yesNo('copd', 'Chronic obstructive pulmonary disease', '慢性阻塞性肺病'), source: { kind: 'hfpefClinical', key: 'copd' }, presumed: 'no' },
     { ...yesNo('af', 'Atrial fibrillation', '心房顫動'), source: { kind: 'hfpefClinical', key: 'afHistory' }, presumed: 'no' },
-    { key: 'nyha', type: 'select', label: label('NYHA functional class', 'NYHA 功能分級'), defaultValue: '', options: [
+    { key: 'nyha', type: 'select', label: label('NYHA functional class', 'NYHA 功能分級'), defaultValue: '', source: { kind: 'hfpefClinical', key: 'nyha', answers: { 1: 'low', 2: 'low', 3: 'high', 4: 'high' } }, presumed: 'low', options: [
       { value: 'low', label: label('Class I or II', '第 I 或 II 級') },
       { value: 'high', label: label('Class III or IV', '第 III 或 IV 級') },
     ] },
