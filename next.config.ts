@@ -120,6 +120,7 @@ const nextConfig: NextConfig = {
               "frame-ancestors 'self' " +
               "https://myhealthbank.nhi.gov.tw " +
               "https://*.vghtpe.gov.tw " +
+              "https://opd-ai-agent.mediprisma.tw " +  // 門診 AI 助理 visit page (embedded import)
               "http://localhost:5001"  // mock-his
           },
           { key: 'X-Content-Type-Options', value: 'nosniff' },

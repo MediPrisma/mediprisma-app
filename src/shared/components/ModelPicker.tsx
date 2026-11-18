@@ -110,7 +110,9 @@ export function ModelPicker({
     ? gateModelForAgentSupport(credentialGatedModelId, fallbackModelId)
     : credentialGatedModelId
   const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)
-  const effectiveLabel = effectiveCustomEntry?.label ?? modelDisplayLabel(effectiveModelId)
+  const effectiveLabel = effectiveCustomEntry?.label
+    ?? gptModels.find(entry => entry.id === effectiveModelId)?.label
+    ?? modelDisplayLabel(effectiveModelId)
   const usesStandardChat = (candidateModelId: string) => {
     const definition = getModelDefinition(candidateModelId)
     if (definition?.provider !== 'custom') return modelUsesStandardChat(candidateModelId)

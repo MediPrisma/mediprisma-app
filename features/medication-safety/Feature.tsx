@@ -6,7 +6,7 @@
 // and says why, so "not checked" never reads as "nothing found".
 import { Loader2, RotateCw } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { InteractionSummary } from '@/features/clinical-summary/medications/components/InteractionSummary'
+import { InteractionSummary, LocalPreparationNote } from '@/features/clinical-summary/medications/components/InteractionSummary'
 import { useInteractionCheck } from '@/features/clinical-summary/medications/hooks/useInteractionCheck'
 
 export default function MedicationSafetyFeature() {
@@ -46,9 +46,12 @@ export default function MedicationSafetyFeature() {
     ? (en ? 'Fewer than two checkable ingredients — interactions not checked.' : '可檢核的成分不足兩項，交互作用未檢核。')
     : (en ? 'Checking interactions…' : '交互作用檢核中…')
   return (
-    <p className="flex items-center gap-1.5 px-1 py-2 text-[max(13px,0.8125rem)] text-muted-foreground" role="status">
-      {state.status !== 'too-few' && <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />}
-      {message}
-    </p>
+    <div>
+      <p className="flex items-center gap-1.5 px-1 py-2 text-[max(13px,0.8125rem)] text-muted-foreground" role="status">
+        {state.status !== 'too-few' && <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />}
+        {message}
+      </p>
+      {state.status === 'too-few' && <LocalPreparationNote rowIds={state.localRowIds} rows={rows} className="px-1" />}
+    </div>
   )
 }

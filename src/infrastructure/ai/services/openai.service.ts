@@ -28,8 +28,7 @@ export class OpenAiService {
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
-    const intranet = request.modelId === INTRANET_LUNA_ID
-    if (intranet && !intranetGatewayAvailable()) throw new Error('院內 GPT 僅供北榮院內入口使用')
+    const intranet = request.modelId === INTRANET_LUNA_ID && intranetGatewayAvailable()
     const modelDef = getModelDefinitionOrThrow(request.modelId)
     if (modelDef.provider !== 'openai') {
       throw new Error(`Model ${request.modelId} is not an OpenAI model`)
@@ -71,10 +70,12 @@ export class OpenAiService {
 
     const temperature = resolveModelTemperature(modelDef, request.temperature)
     const isResponsesApi = modelDef.apiSurface === 'openai-responses'
+    const reasoningEffort = request.reasoningEffort ?? modelDef.reasoningEffort
     const body: Record<string, unknown> = isResponsesApi
       ? {
           model: request.modelId,
           input: request.messages,
+          ...(reasoningEffort !== undefined ? { reasoning: { effort: reasoningEffort } } : {}),
           ...(temperature !== undefined ? { temperature } : {}),
           ...(request.maxTokens !== undefined ? { max_output_tokens: request.maxTokens } : {}),
           ...(request.responseFormat === 'json'

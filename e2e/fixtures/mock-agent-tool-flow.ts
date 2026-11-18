@@ -11,7 +11,7 @@ export interface MockAgentToolFlowOptions {
 }
 
 /**
- * Deterministic two-step OpenAI Chat Completions mock:
+ * Deterministic two-step model mock (Gemini by default):
  *
  *   user prompt -> model tool_call -> real browser-side FHIR tool execution
  *   -> tool result sent back to model -> final answer
@@ -25,7 +25,7 @@ export async function mockAgentToolFlow(
   page: Page,
   options: MockAgentToolFlowOptions,
 ): Promise<void> {
-  const model = options.model ?? 'gpt-5.4-nano'
+  const model = options.model ?? 'gemini-3.1-flash-lite'
 
   await page.addInitScript(
     ({ model, marker, toolName, toolInput, expectedResultIncludes, finalMarkdown }) => {
@@ -39,7 +39,12 @@ export async function mockAgentToolFlow(
       state.__agentToolResultVerified = false
 
       const frame = (delta: Record<string, unknown>, finishReason: string | null = null) =>
-        `data: ${JSON.stringify({
+        `data: ${JSON.stringify(model.startsWith('gemini') ? {
+          candidates: [{ index: 0, content: { role: 'model', parts: delta.tool_calls
+            ? (delta.tool_calls as Array<{ function: { name: string; arguments: string } }>).map(call => ({ functionCall: { name: call.function.name, args: JSON.parse(call.function.arguments) } }))
+            : [{ text: delta.content ?? '' }] }, ...(finishReason ? { finishReason: 'STOP' } : {}) }],
+          modelVersion: model,
+        } : {
           id: 'chatcmpl-agent-tool-e2e',
           object: 'chat.completion.chunk',
           created: 0,

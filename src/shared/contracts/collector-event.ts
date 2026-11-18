@@ -315,15 +315,20 @@ export type CollectorEventV11 = z.infer<typeof collectorEventV11Schema>
 
 // Hospital-capture outcome: MediPrisma relays what 北榮懷爾抓抓 tagged on the Bundle it
 // delivered (category, failure kind, HTTP status, count). Its own endpoint and table,
-// never accepted by /events. Metadata only: no chart numbers, dates, URLs or free text.
+// never accepted by /events. From D084 it may carry the hospital chart number, the only
+// patient identifier here; still no names, national IDs, dates, URLs or free text.
 export const hospitalCaptureCategorySchema = z.enum([
   'patient', 'allergies', 'vitals', 'conditions', 'encounters', 'orders', 'admissions', 'emergency',
   'operations', 'medications', 'reports', 'discharge_summaries', 'implants', 'chemotherapy', 'careplans', 'other',
 ])
 // login_or_network: extensions before D080 could not tell an expired HIS login from a lost
 // connection. Newer ones report login_expired (HIS redirected) or network (no response) instead.
+// D090: visit_limit and order_unmatched are not fetch failures. They name why a capture that
+// fetched every page is still incomplete (older visits left out by the visit cap; orders
+// whose report coverage could not be confirmed), so a partial capture always has a reason.
 export const hospitalCaptureFailureKindSchema = z.enum([
-  'timeout', 'his_busy', 'http_error', 'parse_failed', 'login_or_network', 'login_expired', 'network', 'unknown',
+  'timeout', 'his_busy', 'http_error', 'parse_failed', 'login_or_network', 'login_expired', 'network',
+  'visit_limit', 'order_unmatched', 'unknown',
 ])
 // Why no hospital data reached the app (outcome failed only). 雲端懷爾抓抓 maps the
 // 北榮懷爾抓抓 peer error (or its own timeout/validation failure) to this closed set.
@@ -331,6 +336,14 @@ export const hospitalUnavailableReasonSchema = z.enum([
   'HIS_LOGIN_REQUIRED', 'HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH', 'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT',
   'HIS_PATIENT_SELECTION_REQUIRED',
 ])
+// How much the capture delivered (D083): exact counts per FHIR resource type of the hospital
+// resources that reached the app, and encounters by class. A type outside the list counts as other.
+export const hospitalCaptureResourceTypeSchema = z.enum([
+  'Encounter', 'Condition', 'Observation', 'DiagnosticReport', 'MedicationRequest', 'MedicationStatement', 'MedicationAdministration',
+  'Procedure', 'AllergyIntolerance', 'DocumentReference', 'ServiceRequest', 'CarePlan', 'Device', 'Immunization', 'Composition', 'ImagingStudy', 'other',
+])
+export const hospitalCaptureEncounterClassSchema = z.enum(['outpatient', 'inpatient', 'emergency', 'other'])
+const captureCount = z.number().int().min(0).max(99_999)
 const extensionVersion = z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/)
 export const hospitalCaptureEventSchema = z.object({
   schema_version: z.literal(1), event_id: z.string().uuid(),
@@ -338,14 +351,24 @@ export const hospitalCaptureEventSchema = z.object({
   app_surface: collectorAppSurfaceSchema,
   app_version: z.string().regex(/^\d+\.\d+\.\d+$/),
   build_revision: z.string().regex(/^(?:[a-f0-9]{7,40}|unknown)$/),
-  // one_click: 北榮懷爾抓抓 imported directly; medcloud_relay: via 雲端懷爾抓抓 progressive import.
-  path: z.enum(['one_click', 'medcloud_relay']),
+  // one_click: 北榮懷爾抓抓 imported directly; medcloud_relay: via 雲端懷爾抓抓 progressive import;
+  // clinic_prep (D091): the outpatient assistant preparing a clinic ahead of time, one patient per event.
+  path: z.enum(['one_click', 'medcloud_relay', 'clinic_prep']),
   // empty = the capture finished without hospital resources; failed = no hospital data reached the app.
   outcome: z.enum(['complete', 'partial', 'empty', 'failed']),
   unavailable_reason: hospitalUnavailableReasonSchema.optional(),
   hospital_extension_version: extensionVersion.optional(),
   medcloud_extension_version: extensionVersion.optional(),
   hospital_resources: resourceBucketSchema.optional(),
+  resource_counts: z.record(hospitalCaptureResourceTypeSchema, captureCount).optional(),
+  encounter_counts: z.record(hospitalCaptureEncounterClassSchema, captureCount).optional(),
+  // 北榮 chart number (histno) of the captured patient. The collector is in-hospital and admin-only.
+  chart_no: z.string().regex(/^[0-9A-Za-z-]{1,16}$/).optional(),
+  // Capture time as 北榮懷爾抓抓 measured it (start of the capture to the bundle being ready), at most one hour.
+  duration_ms: z.number().int().min(0).max(3_600_000).optional(),
+  // HIS requests 北榮懷爾抓抓 itself sent for this capture (D091). Not the requests the chart
+  // page sends on its own when the assistant opens it in a tab.
+  request_count: captureCount.optional(),
   failures: z.array(z.object({
     category: hospitalCaptureCategorySchema, kind: hospitalCaptureFailureKindSchema,
     status: z.number().int().min(100).max(599).optional(), count: z.number().int().min(1).max(99_999),

@@ -10,7 +10,7 @@ export function intranetGatewayAvailable(href = typeof window === 'undefined' ? 
   if (!process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN) return false
   try {
     const url = new URL(href)
-    return ['/app', '/app-staging', '/app-hmc'].some(path => url.pathname === path || url.pathname.startsWith(`${path}/`)) &&
+    return ['/app-staging', '/app-hmc'].some(path => url.pathname === path || url.pathname.startsWith(`${path}/`)) &&
       url.searchParams.getAll('site').length === 1 && url.searchParams.get('site') === 'vghtpe'
   } catch { return false }
 }

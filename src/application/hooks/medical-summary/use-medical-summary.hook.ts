@@ -473,6 +473,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       locale: ctx.locale,
       buildRequest: (fittedClinicalContext) => {
         const messages = request.buildMessages(fittedClinicalContext)
+        if (ctx.modelId === 'gpt-6-luna' && request.laneId === 'full') {
+          messages.push({
+            role: 'user',
+            content: 'Final problem-list evidence check: inspect every abnormal laboratory result and long-term medication class for a supported problem omitted from your list. For EACH listed problem, search the lab values, report findings AND discharge-document text for its relevant indicator. Retain the latest supported measurement or finding with its source keys, including single measurements and measurements embedded in documents. A test name alone is not its result; do not copy a value from another problem. Write "Not in cloud record" only after checking all those sources. Do not omit a supported indicator merely to shorten the response. Preserve diagnostic uncertainty and later assessments that revise an earlier suspicion. Return only the required module JSON, without this checklist.',
+          })
+        }
         return {
           request: messages,
           requestText: messages.map((message) => message.content).join('\n\n'),
@@ -500,7 +506,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               // took 40-72 s and the run could time out. Low kept the same
               // cards and problem list in 11-14 s (2026-11-11, demo patient).
               : ctx.modelId === 'gpt-6-luna'
-                ? { reasoningEffort: 'low' as const }
+                ? { reasoningEffort: 'low' as const, textVerbosity: 'high' as const }
                 : {}),
             ...(request.hiddenReasoning ? { hiddenReasoning: request.hiddenReasoning } : {}),
             onChunk: streamChunk,
@@ -796,6 +802,13 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               hiddenReasoning: 'off',
             },
           ]
+        : ctx.modelId === 'gpt-6-luna' && narrativeCards.some((card) => card.id === 'problems') && narrativeCards.length > 1
+          ? [
+              // Keep the complete evidence for the problem list, but let this
+              // request concentrate on its indicators instead of three cards.
+              { id: 'full', cards: narrativeCards.filter((card) => card.id === 'problems'), input: promptInput },
+              { id: 'batch', cards: narrativeCards.filter((card) => card.id !== 'problems'), input: promptInput },
+            ]
         : narrativeCards.length > 0
           ? [{
               id: 'batch',
