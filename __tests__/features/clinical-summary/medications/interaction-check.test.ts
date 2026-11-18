@@ -462,3 +462,32 @@ describe('identifying each row by code before name', () => {
     expect(review.findings[0].rowIdsA.sort()).toEqual(['w1', 'w5'])
   })
 })
+
+describe('another maker\'s product, by the hospital code for its ATC substance', () => {
+  it('sends the code the hospital files for the same ATC and confirms by it', () => {
+    const list = [cloud('imdur', 'ISOSORBIDE 5-MONONITRTATE 20 MG', { nhiDrugCode: 'B011212100',
+      drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's', ingredientText: 'ISOSORBIDE 5-MONONITRTATE 20 MG', atcCode: 'C01DA14' } })]
+    const plan = planInteractionCheck(list)
+    expect(interactionCheckBody(plan).medications).toEqual([{ drugName: 'ISOSORBIDE 5-MONONITRTATE', nhiCode: 'AC311681G0' }])
+    const review = interpretInteractionCheck(plan, list, { resolvedMedications: [{ inputIndex: 0, udCode: '03971',
+      genericName: 'Isosorbide-5-mononitrate', englishName: 'Isormol * tab 20 mg', allNhiCodes: ['AC311681G0'] }] })
+    expect(review.checkedRowIds).toEqual(['imdur'])
+  })
+})
+
+describe('an ATC code that names more than one drug', () => {
+  it('keeps the row\'s own code, and a different product the service returns leaves it unchecked', () => {
+    // R05FA01 holds codeine and dextromethorphan combinations alike; it is not in the reference table.
+    const list = [cloud('cough', 'CODEINE PHOSPHATE 1 MG/ML+ARMENIACA WATER .05 ML/ML', { nhiDrugCode: 'A031004151',
+      drugTerminology: { source: 'nhi-official-drug-master', snapshotId: 's',
+        ingredientText: 'CODEINE PHOSPHATE 1 MG/ML+ARMENIACA WATER .05 ML/ML', atcCode: 'R05FA01' } })]
+    const plan = planInteractionCheck(list)
+    expect(interactionCheckBody(plan).medications.map(m => m.nhiCode)).toEqual(['A031004151', 'A031004151'])
+    const review = interpretInteractionCheck(plan, list, { resolvedMedications: [
+      { inputIndex: 0, udCode: '01234', genericName: 'Dextromethorphan', englishName: 'Medicon', allNhiCodes: ['AC217581G0'] },
+      { inputIndex: 1, udCode: '01234', genericName: 'Dextromethorphan', englishName: 'Medicon', allNhiCodes: ['AC217581G0'] },
+    ] })
+    expect(review.checkedRowIds).toEqual([])
+    expect(review.uncheckedRowIds).toEqual(['cough'])
+  })
+})

@@ -9,13 +9,16 @@
 //   returned carries one of the NHI codes of the order's indexed identity, or
 //   is that very name;
 // - a row with a recorded NHI code by that code, accepted when the product
-//   returned carries it; a code the hospital never filed falls back to the
-//   ingredient name sent alongside;
+//   returned carries it. Another maker's product, unknown to the service, is
+//   sent by the code the hospital files for the same ATC substance (a public
+//   ATC-to-NHI table, no hospital item codes); failing that, the service
+//   falls back to the ingredient name sent alongside;
 // - otherwise by ingredient name, accepted only when the returned drug names
 //   that ingredient.
 // Every row it could not verify is reported as unchecked instead of letting it
 // read as "no interaction".
 import { medicationClinicalDay, medicationSupplyEndDay } from '@/src/shared/utils/medication-calendar'
+import ATC_REFERENCE from '@/src/shared/data/ddi-atc-reference.generated.json'
 import type { MedicationRow } from '../types'
 
 export interface InteractionCheckItem {
@@ -109,7 +112,12 @@ function rowEntries(row: MedicationRow): Entry[] {
   const names = rowIngredients(row)
   const code = row.nhiDrugCode?.trim().toUpperCase()
   if (!code) return names.map(query => ({ query }))
-  return (names.length ? names : ['']).map(query => ({ query, nhiCode: code, codes: [code] }))
+  // Another maker's product is unknown to the service: send the code the
+  // hospital files for the same ATC substance instead (see build-ddi-atc-reference).
+  const atc = row.drugTerminology?.atcCode?.trim().toUpperCase() ?? ''
+  const reference = (ATC_REFERENCE.byAtc as Record<string, string>)[atc]
+  const sent = reference ?? code
+  return (names.length ? names : ['']).map(query => ({ query, nhiCode: sent, codes: [...new Set([sent, code])] }))
 }
 
 function rowIngredients(row: MedicationRow): string[] {
