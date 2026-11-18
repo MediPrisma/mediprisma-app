@@ -9,7 +9,7 @@ import { classifyEncounterClass } from '@/src/core/use-cases/medical-summary/gen
  * Codes are ICD-10 without dots; ICD-9 is not read (owner decision
  * 2026-11-19: the record is ICD-10 now).
  */
-export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf'
+export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis'
 
 /** I10–I16. */
 const isHtn = (code: string) => /^I1[0-6]/.test(code)
@@ -40,6 +40,8 @@ const isSmokingRemission = (code: string) => /^F172\d1/.test(code)
 
 /** Diabetes E08–E13, or impaired fasting glucose / prediabetes R73.0x (NAFLD fibrosis score). */
 const isIfgOrDiabetes = (code: string) => /^(?:E0[89]|E1[0-3]|R730)/.test(code)
+/** PREVENT's end-stage kidney disease or dialysis: N18.6, Z99.2, Z49, Z91.15. */
+const isEsrdOrDialysis = (code: string) => /^(?:N186|Z992|Z49|Z9115)/.test(code)
 /** PREVENT's known CVD: coronary disease, stroke, PAD or heart failure. */
 const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:I70|I739)/.test(code) || isHf(code)
 
@@ -65,6 +67,7 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
     smoker: currentSmoking(conditions, encounters, now),
     ifgOrDiabetes: read(isIfgOrDiabetes, '空腹血糖異常／糖尿病'),
     ascvdOrHf: read(isAscvdOrHf, '心血管疾病'),
+    esrdOrDialysis: read(isEsrdOrDialysis, '末期腎病／透析'),
     ...heartFailureCourse(conditions, encounters, now),
   }
   return Object.fromEntries(Object.entries(found).filter(([, value]) => value)) as Partial<Record<HistoryKey, ClinicalSelectValue>>

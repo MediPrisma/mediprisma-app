@@ -2,7 +2,7 @@ import { historySelects } from '@/features/medical-calculator/history-autofill'
 import { resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { buildAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
-import type { ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
+import type { ConditionEntity, EncounterEntity, MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
 const now = new Date('2026-11-19')
 const condition = (code: string, recordedDate = '2026-06-01'): ConditionEntity =>
@@ -109,4 +109,16 @@ it('leaves no CHA2DS2-VASc, HAS-BLED or LIFE-Preserved choice blank once the rec
   }
   const life = CALCULATORS.find((c) => c.id === 'life-preserved')!
   for (const item of life.inputs) if (item.type === 'select') expect([item.key, resolveInput(item, autofill).value]).not.toEqual([item.key, ''])
+})
+
+it('answers PREVENT end-stage kidney disease from N18.6 without a dialysis code', () => {
+  const autofill = buildAutofill([], { age: 60, gender: 'male' }, [], [], now, [condition('N18.6')], [])
+  expect(resolveInput(field('prevent-ascvd', 'eskd'), autofill).value).toBe('yes')
+})
+
+it('does not count eye drops as a blood-pressure drug', () => {
+  const med = (name: string, extra: object = {}) => ({ id: name, status: 'active', authoredOn: '2026-11-01', medicationCodeableConcept: { text: name }, drugTerminology: { ingredientText: name }, ...extra }) as unknown as MedicationEntity
+  const bptreat = (meds: MedicationEntity[]) => resolveInput(field('prevent-ascvd', 'bptreat'), buildAutofill([], { age: 60, gender: 'male' }, [], meds, now, [], [])).value
+  expect(bptreat([med('Betaxolol 0.5% eye drops')])).toBe('no')
+  expect(bptreat([med('Betaxolol 0.5% eye drops'), med('Amlodipine 5 mg')])).toBe('yes')
 })

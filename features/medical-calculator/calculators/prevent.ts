@@ -4,7 +4,7 @@ import type { ClinicalSelectKey } from '../hfpef-clinical-autofill'
 export const PREVENT_VERSION = 'base-ascvd-v1'
 const l = (zh: string, en: string) => ({ zh, en })
 // Owner rule 2026-11-19: each is read from the record where it can be, else presumed 「否」.
-const RECORD: Record<string, ClinicalSelectKey> = { dm: 'diabetes', smoking: 'smoker', statin: 'statin', bptreat: 'anyAntihypertensive', cvd: 'ascvdOrHf', eskd: 'doac_dialysis' }
+const RECORD: Record<string, ClinicalSelectKey> = { dm: 'diabetes', smoking: 'smoker', statin: 'statin', bptreat: 'anyAntihypertensive', cvd: 'ascvdOrHf', eskd: 'esrdOrDialysis' }
 const yesNo = (key: string, zh: string, en: string): CalcInput => ({ key, type: 'select', label: l(zh, en), defaultValue: '', presumed: 'no',
   ...(RECORD[key] ? { source: { kind: 'hfpefClinical' as const, key: RECORD[key] } } : {}), options: [
   { value: '', label: l('未確認', 'Unconfirmed') }, { value: 'no', label: l('否', 'No') }, { value: 'yes', label: l('是', 'Yes') },
