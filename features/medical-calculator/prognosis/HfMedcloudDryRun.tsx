@@ -45,7 +45,6 @@ const MODULE: Record<string, [string, string]> = {
   imue0070: ['住院', 'Admissions'], imue0020: ['手術', 'Surgery'],
 }
 const ERRORS: Record<string, [string, string]> = {
-  'physician-diagnosis-rank-conflict': ['診斷順位與既有資料衝突；請核對來源，不自動覆寫原診斷', 'Diagnosis rank conflicts with existing data; review the source record'],
   'physician-diagnosis-invalid': ['請選擇診斷碼、既有就診及有效的診斷順位', 'Select a diagnosis code, existing visits and valid diagnosis ranks'],
   'preview-fixture-required': ['本機中繼僅接受指定合成病例，這份資料未送出', 'Local relay accepts only pinned synthetic cases; this data was not sent'],
   'duplicate-reference': ['病歷包含重複資源編號，請重新匯入', 'Duplicate resource references; import the record again'],
@@ -199,7 +198,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
           <details className="group border-t border-border pt-1">
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">{chevron}{en ? 'Different dates? Choose visits and diagnosis ranks' : '日期不同？自訂就診與診斷順位'}</summary>
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">{en ? 'Tick the visits that had HF and enter each rank (1 is primary). The API does not recognize unranked supplemental codes; acceptance is still decided by the API. The source record is unchanged.' : '勾選確有心衰診斷的就診並填順位（1 為主診斷，2 以上為次診斷）。API 不辨識未標順位的補充碼，是否接受仍由 API 判定。原始病歷不變。'}</p>
+              <p className="text-xs text-muted-foreground">{en ? 'Tick the visits that had HF and enter each rank (1 is primary). The model only counts HF ranked 1–3; other diagnoses at or after the chosen rank move down by one. Acceptance is still decided by the API. The source record is unchanged.' : '勾選確有心衰診斷的就診並填順位（1 為主診斷，2 以上為次診斷）。模型只採計順位 1–3 的心衰診斷；該順位以後的其他診斷會往後移一位。是否接受仍由 API 判定。原始病歷不變。'}</p>
               <label className="block space-y-1 text-sm">{en ? 'Supplemental ICD-10-CM code' : '補充 ICD-10-CM 診斷碼'}
                 <select className={control} value={draft?.code ?? ''} disabled={busy} onChange={event => chooseDiagnosis({ ...current.diagnosisDraft, quickChoice: undefined, code: event.target.value, confirmed: false })}>
                   <option value="">{en ? 'Select a diagnosis' : '請選擇診斷'}</option>
@@ -220,7 +219,6 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
                   </div>)}
                 </div>
               </fieldset>
-              {visibleMessage === 'physician-diagnosis-rank-conflict' && <p className="text-xs font-medium" role="alert">{text(ERRORS['physician-diagnosis-rank-conflict'])}</p>}
               {invalidDiagnosisRank && <p className="text-xs font-medium" role="status" aria-live="polite">{en ? 'Enter an integer diagnosis rank from 1 to 50 for every selected visit. Incomplete supplementation is not applied.' : '每次所選就診的診斷順位須為 1–50 的整數；補充資料未完整前不會套用。'}</p>}
             </div>
           </details>
@@ -248,7 +246,7 @@ export function HfMedcloudDetail({ locale, state }: { locale: string; state: Ret
     </>}
 
     <div role="status" aria-live="polite" className="space-y-2 text-sm">
-      {visibleMessage && visibleMessage !== 'physician-diagnosis-rank-conflict' && <p className="font-medium">{describeError(visibleMessage)}</p>}
+      {visibleMessage && <p className="font-medium">{describeError(visibleMessage)}</p>}
       {runs && current && (busy || Object.values(runs).some(run => run?.check || run?.prediction || run?.error)) && <section aria-label={en ? 'HF model prediction' : 'HF 模型預測結果'} className="space-y-3 rounded-lg border border-border bg-background p-3">
         <div className="space-y-0.5">
           <h4 className="text-base font-semibold">{en ? 'Risk of death within 1 and 3 months' : '就診後 1／3 個月內死亡風險'}</h4>
