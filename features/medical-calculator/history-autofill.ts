@@ -42,8 +42,8 @@ const isSmokingRemission = (code: string) => /^F172\d1/.test(code)
 const isIfgOrDiabetes = (code: string) => /^(?:E0[89]|E1[0-3]|R730)/.test(code)
 /** PREVENT's end-stage kidney disease or dialysis: N18.6, Z99.2, Z49, Z91.15. */
 const isEsrdOrDialysis = (code: string) => /^(?:N186|Z992|Z49|Z9115)/.test(code)
-/** PREVENT's known CVD: coronary disease, stroke, PAD or heart failure. */
-const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:I70|I739)/.test(code) || isHf(code)
+/** PREVENT's known CVD: coronary disease, stroke (or its history code Z86.73), PAD or heart failure. */
+const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:Z8673|I70|I739)/.test(code) || isHf(code)
 
 /** Wells' 「active cancer」: treated within six months. */
 const CANCER_WINDOW_DAYS = 183

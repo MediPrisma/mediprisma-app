@@ -122,3 +122,8 @@ it('does not count eye drops as a blood-pressure drug', () => {
   expect(bptreat([med('Betaxolol 0.5% eye drops')])).toBe('no')
   expect(bptreat([med('Betaxolol 0.5% eye drops'), med('Amlodipine 5 mg')])).toBe('yes')
 })
+
+it('reads a stroke history coded only as Z86.73 as known CVD for PREVENT', () => {
+  const autofill = buildAutofill([], { age: 60, gender: 'male' }, [], [], now, [condition('Z86.73')], [])
+  expect(resolveInput(field('prevent-ascvd', 'cvd'), autofill).value).toBe('yes')
+})
