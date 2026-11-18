@@ -395,3 +395,70 @@ describe('attentionFindings', () => {
     expect(attentionFindings(review).map(x => x.id)).toEqual(['1', '4', '5'])
   })
 })
+
+describe('identifying each row by code before name', () => {
+  // Trimmed from the service's answers to synthetic lists (2026-11-18).
+  const product = (inputIndex: number, udCode: string, genericName: string, englishName: string, allNhiCodes: string[]) =>
+    ({ inputIndex, udCode, genericName, englishName, allNhiCodes })
+  const ordered = (id: string, name: string, codes: string[], ingredientName: string) =>
+    hospital(id, ingredientName, {
+      hospitalNhiCodes: codes,
+      hospitalMedicationName: { status: 'normalized', ingredientName, recordedName: name, version: 'v', reviewedAt: 'd' },
+    })
+
+  it('sends a hospital order by its product name and confirms it by an NHI code of its identity', () => {
+    // The dictionary spells the ingredient MONONITRTATE; the name never matters here.
+    const list = [ordered('isormol', 'Isormol * tab 20 mg', ['A031168100', 'B011212100'], 'ISOSORBIDE 5-MONONITRTATE 20 MG')]
+    const plan = planInteractionCheck(list)
+    expect(interactionCheckBody(plan).medications).toEqual([{ drugName: 'Isormol * tab 20 mg' }])
+    const review = interpretInteractionCheck(plan, list, { resolvedMedications: [product(0, '03971',
+      'Isosorbide-5-mononitrate (isosorbide mononitrate, Isosorbide)', 'Isormol * tab 20 mg', ['AC311681G0', 'AC31168100', 'A031168100'])] })
+    expect(review.checkedRowIds).toEqual(['isormol'])
+  })
+
+  it('accepts a hospital product by its exact name, and nothing the name was fuzzily matched to', () => {
+    const list = [ordered('a', 'Entresto FC * tab 100 mg', ['XX00000000'], 'SACUBITRIL/VALSARTAN 100 MG'),
+      ordered('b', 'Isosorbide (Isormol) * tab 20 mg', ['XX00000001'], 'ISOSORBIDE 5-MONONITRATE 20 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, { resolvedMedications: [
+      product(0, '05499', 'SACUBITRIL +VALSARTAN', 'Entresto FC * tab 100 mg', ['BC26672100']),
+      product(1, '05004', 'Isosorbide', 'Isobide * solution 70% 500 ml', []),
+    ] })
+    expect(review.checkedRowIds).toEqual(['a'])
+    expect(review.uncheckedRowIds).toEqual(['b'])
+  })
+
+  it('sends a recorded NHI code with the ingredient, and falls back to the name check when the code is not on the product', () => {
+    const list = [cloud('entresto', 'SACUBITRIL/VALSARTAN AS SACUBITRIL VALSARTAN SODIUM SAL 100 MG', { nhiDrugCode: 'BC26672100' }),
+      cloud('warf', 'WARFARIN SODIUM 5 MG', { nhiDrugCode: 'BC20798209' }),
+      cloud('other', 'ISOSORBIDE 5-MONONITRTATE 20 MG', { nhiDrugCode: 'B011212100' })]
+    const plan = planInteractionCheck(list)
+    expect(interactionCheckBody(plan).medications).toEqual([
+      { drugName: 'SACUBITRIL/VALSARTAN', nhiCode: 'BC26672100' },
+      { drugName: 'WARFARIN SODIUM', nhiCode: 'BC20798209' },
+      { drugName: 'ISOSORBIDE 5-MONONITRTATE', nhiCode: 'B011212100' },
+    ])
+    const review = interpretInteractionCheck(plan, list, { resolvedMedications: [
+      product(0, '05499', 'SACUBITRIL +VALSARTAN', 'Entresto FC * tab 100 mg', ['BC26672100']),
+      product(1, '03951', 'Warfarin', 'Cofarin #* tab 1 mg', ['AC43862100']),
+      product(2, '05004', 'Isosorbide', 'Isobide * solution 70% 500 ml', []),
+    ] })
+    expect(review.checkedRowIds.sort()).toEqual(['entresto', 'warf'])
+    expect(review.uncheckedRowIds).toEqual(['other'])
+  })
+
+  it('lists one interaction when two products of one ingredient both meet the other drug', () => {
+    const list = [ordered('w1', 'Cofarin #* tab 1 mg', ['AC43862100'], 'WARFARIN SODIUM 1 MG'),
+      cloud('w5', 'WARFARIN SODIUM 5 MG', { nhiDrugCode: 'AC43863100' }),
+      ordered('amio', 'Cordarone * tab 200 mg', ['BC21409100'], 'AMIODARONE HCL 200 MG')]
+    const review = interpretInteractionCheck(planInteractionCheck(list), list, {
+      resolvedMedications: [
+        product(0, '03951', 'Warfarin', 'Cofarin #* tab 1 mg', ['AC43862100']),
+        product(1, '03952', 'Warfarin', 'Cofarin #* tab 5 mg', ['AC43863100']),
+        product(2, '01363', 'Amiodarone HCl (amiodarone)', 'Cordarone * tab 200 mg', ['BC21409100']),
+      ],
+      alerts: [alert('03951', '01363', 'high', '監測 INR'), alert('03952', '01363', 'high', '監測 INR')],
+    })
+    expect(review.findings).toHaveLength(1)
+    expect(review.findings[0].rowIdsA.sort()).toEqual(['w1', 'w5'])
+  })
+})
