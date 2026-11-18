@@ -45,6 +45,9 @@ export interface MedicationRow {
   /** An actually recorded NHI product code, including an explicit cloud code
    *  retained in a confirmed cross-source order. Never guessed from names. */
   nhiDrugCode?: string
+  /** NHI codes of the hospital product's drug identity (VGH medication index);
+   *  the codes of one product across license holders. Never guessed. */
+  hospitalNhiCodes?: string[]
   dataOrigin?: 'hospital' | 'medcloud' | 'integrated'
   sourceOrderIdentifiers?: string[]
   /** Stable source medication key used for grouping; never infer identity from
