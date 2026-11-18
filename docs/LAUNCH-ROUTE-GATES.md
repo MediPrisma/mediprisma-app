@@ -165,6 +165,13 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | Surface | Behaviour | Owner decision |
 |---|---|---|
 | 高血脂畫面切換 at `/` and launch-query variants | Hide「新版流程」for dyslipidemia because it rendered the same generic module list as「原版看板」. Keep「三區塊」and「原版看板」, and add the distinct「健保表一」review for NHI tier criteria, supporting evidence and treatment response. Heart-failure layout choices are unchanged. | Explicit owner request in chat, 2026-09-20 |
+| 高血脂畫面切換 at every route (superseded 2026-11-19) | **不顯示**: the layout switch and「三區塊」. Dyslipidemia opens on「健保表一」only. | Explicit owner request in chat, 2026-11-19: 「高血脂則是只留健保表一那個」 |
+
+## One face per disease, no layout switch (all launch routes, 2026-11-19)
+
+| Surface | Behaviour | Owner decision | Tests |
+|---|---|---|---|
+| The CDSS layout switch (`cdss-layout-switch`) and「三區塊」for heart failure, atrial fibrillation, hypertension and coronary disease | **不顯示 on every route**: each disease opens on 決策地圖 v2 with no switch; a layout a browser stored earlier (`cdss-layout-preference`) is ignored. 「三區塊」is drawn only when the decision map could not be built for a record, so the guidance still shows. The inputs below that were kept only on 三區塊 (HFpEF calculator, prognosis models, handoff card, the AF question groups and the other rows marked 「Where the original stays: 三區塊」) are no longer reachable while the map is built. | Explicit owner request in chat, 2026-11-19: 「幫我把CDSS的三區塊全部都拿掉，只留決策地圖，這樣也不用tab去切了」 | `LiveFeature`, `visit-map-wiring`, `layout-preference.store`; e2e `hospital-medication-cdss` |
 
 ## 決策地圖 v2 — the decision map (all launch routes)
 

@@ -61,6 +61,10 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'prevent-cvd': {
+    formula: { zh: '總 CVD 風險 (%) = 100 / (1 + exp(−Σ βᵢxᵢ))。與 PREVENT-ASCVD 相同的變項轉換與交互作用，係數為總 CVD 模型專屬。', en: 'Total CVD risk (%) = 100 / (1 + exp(−Σ βᵢxᵢ)). The same transformed terms and interactions as PREVENT-ASCVD with total-CVD coefficients.' },
+    note: { zh: '總 CVD = ASCVD＋心衰竭。係數取自 Khan 2024 Table S12（以 preventr 套件資料核對）。', en: 'Total CVD = ASCVD plus heart failure. Coefficients from Khan 2024 Table S12 (checked against the preventr package data).' },
+  },
   'hpa-chronic-risk-reconstruction': {
     formula: { en: 'Approximation: risk (%) ≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]. Separate sex-specific fits for each of five outcomes; not the published official coefficients.', zh: '近似式：風險（%）≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]。五項結果各依性別重建；β 不是官方公布係數。' },
     note: { en: 'The attached 2022 IJERPH paper has CHD, stroke and MACE coefficients, but omits the other two diseases and does not specify all baseline survival terms; its MACE predictors differ from the current public V4 form. See the reconstruction note for the holdout audit.', zh: '所附 2022 年論文有冠心病、中風及 MACE 係數，但沒有另外兩病及全部基準存活率；MACE 變項也與目前公開 V4 表單不同。留出樣本驗算見重建說明。' },

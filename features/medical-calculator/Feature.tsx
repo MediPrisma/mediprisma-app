@@ -7,7 +7,9 @@
 "use client"
 
 import { Suspense, useMemo, useState } from "react"
-import { Search, ChevronRight, Calculator, Star, Clock, Loader2, Users, Stethoscope } from "lucide-react"
+import { Search, ChevronRight, Calculator, Star, Clock, Loader2, Users, Stethoscope, Copy, Check } from "lucide-react"
+import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
+import { resultToClipboardText } from "./format"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -223,7 +225,7 @@ function MedicalCalculatorContent({ samd }: { samd: HfSamdSessionState }) {
   )
 }
 
-function CalculatorCard({
+export function CalculatorCard({
   calc: c,
   locale,
   autofill,
@@ -248,6 +250,9 @@ function CalculatorCard({
   const auto = computeAutofilledResult(c, autofill)
   const staleDays = auto?.asOf ? daysAgo(auto.asOf) : null
   const isStale = staleDays !== null && staleDays > STALE_DAYS
+  const { copied, copy } = useCopyToClipboard()
+  // The same one line as the detail view's 複製, with the date of the data it rests on.
+  const copyText = auto ? `${resultToClipboardText(c, auto.result, locale)}${auto.asOf ? (zh ? `（資料日期 ${auto.asOf.slice(0, 10)}）` : ` (data from ${auto.asOf.slice(0, 10)})`) : ""}` : ""
 
   return (
     <Card
@@ -318,6 +323,19 @@ function CalculatorCard({
               </div>
             )}
           </div>
+        )}
+        {auto && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); void copy(copyText) }}
+            onKeyDown={(e) => e.stopPropagation()}
+            title={zh ? "複製結果（一行，可貼入病歷）" : "Copy result (one line)"}
+            aria-label={zh ? `複製 ${tr(locale, c.name)} 結果` : `Copy ${tr(locale, c.name)} result`}
+            data-testid={`calc-list-copy-${c.id}`}
+            className="-mt-0.5 shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+          </button>
         )}
         <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       </CardContent>

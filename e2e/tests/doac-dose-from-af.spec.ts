@@ -18,7 +18,6 @@ test('opened from the AF dose point, it carries the latest weight, defaults the 
   await page.waitForURL('**/cdss-scenarios/view')
   await page.goto('/dev/cdss-scenarios/view?w=1280')
   await page.getByRole('group', { name: '選擇疾病指引' }).first().getByRole('button', { name: /^心房顫動/ }).click({ timeout: 90_000 })
-  await page.getByRole('button', { name: '決策地圖 v2' }).first().click()
   await expect(page.getByTestId('cdss-visit-book')).toBeVisible({ timeout: 60_000 })
 
   // The dose point names the patient's figures and the reduced dose.
