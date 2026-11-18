@@ -189,6 +189,18 @@ describe('interpretInteractionCheck', () => {
     expect(review.checkedRowIds.sort()).toEqual(['diclo', 'warf'])
   })
 
+  it('sends a salt-form description without its AS clause, and accepts the name the service returns', () => {
+    // Entresto as the NHI dictionary records it; the service resolves the
+    // ingredient to Entresto 05252 (checked 2026-11-18).
+    const list = [cloud('ent', 'SACUBITRIL/VALSARTAN AS SACUBITRIL VALSARTAN SODIUM SAL 100 MG')]
+    const plan = planInteractionCheck(list)
+    expect(plan.items.map(item => item.query)).toEqual(['SACUBITRIL/VALSARTAN'])
+    const review = interpretInteractionCheck(plan, list, {
+      resolvedMedications: [resolved(0, '05252', 'Sacubitril + Valsartan (SACUBITRIL +VALSARTAN)')],
+    })
+    expect(review.checkedRowIds).toEqual(['ent'])
+  })
+
   it('accepts a chloride salt the service abbreviates', () => {
     const list = [cloud('oxy', 'OXYBUTYNIN CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG')]
     const review = interpretInteractionCheck(planInteractionCheck(list), list, {

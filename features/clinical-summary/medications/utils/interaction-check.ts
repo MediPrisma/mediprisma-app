@@ -67,10 +67,16 @@ const STRENGTH = /\s\.?\d[\d.,]*\s*(?:mg|mcg|ug|gm?|ml|l|iu|u|units?|meq|mmol|%)
 // "Netupitant / Palonosetron" both name two ingredients. The terminology text
 // is cut at a fixed length, so a parenthesis may never close: "OXYBUTYNIN
 // CHLORIDE (=OXIBUTININA HCL=OXYBUTYNIN H 5 MG" — the aside runs to the end.
+// "SACUBITRIL/VALSARTAN AS SACUBITRIL VALSARTAN SODIUM SAL 100 MG" (Entresto):
+// what follows AS describes the salt form, not another ingredient, and its
+// words never appear in the name the service returns.
+const SALT_FORM = /\sAS\s.*$/i
+
 function ingredientNames(text: string | undefined): string[] {
   if (!text) return []
   return text.split(/\+|\s\/\s/)
-    .map(part => part.replace(/\([^)]*(?:\)|$)/g, ' ').replace(STRENGTH, '').replace(/\s+/g, ' ').trim())
+    .map(part => part.replace(/\([^)]*(?:\)|$)/g, ' ').replace(STRENGTH, '').replace(SALT_FORM, '')
+      .replace(/\s+/g, ' ').trim())
     .filter(Boolean)
 }
 
