@@ -40,7 +40,7 @@ import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type Bo
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
 import { displayDate, visitStatusSentence, VisitStatusLine } from './VisitStatusHeader'
-import { VisitCalculatorsButton, VisitCalculatorsProvider } from './VisitCalculators'
+import { VisitCalculatorsButton, VisitCalculatorsProvider, pageHasCalculators } from './VisitCalculators'
 import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
 import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
 
@@ -379,7 +379,7 @@ export function VisitDecisionScreen({
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-      {...(sourceOfPage === 'hf' || sourceOfPage === 'af' ? {
+      {...(pageHasCalculators(sourceOfPage) ? {
         headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
         calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
         onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
@@ -390,7 +390,7 @@ export function VisitDecisionScreen({
 
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      {sourceOfPage === 'hf' || sourceOfPage === 'af' ? (
+      {pageHasCalculators(sourceOfPage) ? (
         <VisitCalculatorsProvider
           isEnglish={isEnglish}
           points={model.points}

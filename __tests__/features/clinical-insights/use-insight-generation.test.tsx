@@ -49,7 +49,7 @@ describe("useInsightGeneration provenance", () => {
 
   const safetyOptions = () => ({
     panels: ['first', 'second'].map(id => ({ id, title: id, prompt: 'synthetic summary', outputFormat: 'plain-text' as const, languagePolicy: 'follow-template' as const })),
-    prompts: {}, context: 'synthetic context', piiLiterals: [], model: 'gpt-5.6-luna', modelName: 'GPT',
+    prompts: {}, context: 'synthetic context', piiLiterals: [], model: 'gpt-6-luna', modelName: 'GPT',
     contextLimit: 120_000, contextAdaptation: null, inputSignature: 'synthetic-input',
   })
 
@@ -204,8 +204,8 @@ describe("useInsightGeneration provenance", () => {
       prompts: { changes: "比較近期變化" },
       context: "clinical context",
       piiLiterals: [],
-      model: "gpt-5.6-luna",
-      modelName: "GPT-5.6 Luna",
+      model: "gpt-6-luna",
+      modelName: "GPT-6 Luna",
       contextLimit: 120_000,
       contextAdaptation: null,
       inputSignature: "input-1",
@@ -220,7 +220,7 @@ describe("useInsightGeneration provenance", () => {
       expect(useInsightResponsesStore.getState().panelStatus.changes?.activeGeneration)
         .toMatchObject({
           id: "1:changes",
-          modelName: "GPT-5.6 Luna",
+          modelName: "GPT-6 Luna",
           startedAt: new Date("2026-08-27T06:32:00.000Z").getTime(),
         })
     })
@@ -236,10 +236,10 @@ describe("useInsightGeneration provenance", () => {
       isEdited: false,
       metadata: {
         source: "live",
-        modelId: "gpt-5.6-luna",
+        modelId: "gpt-6-luna",
         provider: "openai",
-        modelName: "GPT-5.6 Luna",
-        modelExecution: { requestedModelId: "gpt-5.6-luna", routedModelId: "gpt-5.6-luna", actualModelId: null, actualModelIds: [] },
+        modelName: "GPT-6 Luna",
+        modelExecution: { requestedModelId: "gpt-6-luna", routedModelId: "gpt-6-luna", actualModelId: null, actualModelIds: [] },
         generatedAt: new Date("2026-08-27T06:32:18.400Z").getTime(),
         durationMs: 18_400,
         outputFormat: "plain-text",

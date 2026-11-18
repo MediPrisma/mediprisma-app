@@ -13,7 +13,6 @@ import {
   GUEST_BETA_FEATURES_KEY,
   useBetaFeaturesStore,
 } from '@/src/application/stores/beta-features.store'
-import { useCdssLayoutStore } from '@/features/clinical-decision-support/stores/layout-preference.store'
 import { useVisitAnswersStore } from '@/features/clinical-decision-support/stores/visit-answers.store'
 import type {
   BuildVisitDecisionModelInput,
@@ -142,7 +141,6 @@ describe('decision map wiring', () => {
     const { visitMapOf } = jest.requireActual<typeof import('@/features/clinical-decision-support/renderers/visit/visit-model.source')>('@/features/clinical-decision-support/renderers/visit/visit-model.source')
     mockVisitMapOf.mockReset()
     mockVisitMapOf.mockImplementation(visitMapOf)
-    useCdssLayoutStore.setState({ layout: null })
     useVisitAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
     useBetaFeaturesStore.setState({ enabledByUser: {} })
     useBetaFeaturesStore.getState().setBetaFeaturesEnabled(GUEST_BETA_FEATURES_KEY, true)
@@ -161,77 +159,37 @@ describe('decision map wiring', () => {
     expect(input.companions?.['atrial-fibrillation-cdss']?.packId).toBe('atrial-fibrillation-cdss')
     expect(input.locale).toBe('zh-TW')
 
-    // The map is 決策地圖 v2, in this panel; the first decision map is gone
-    // (owner, 2026-10-01: 「原本的決策地圖就可以整個拿掉了，留著v2跟三區塊」).
+    // The map is 決策地圖 v2, in this panel, and the only face: no layout
+    // switch (owner, 2026-11-19: 「三區塊全部都拿掉，只留決策地圖」).
     expect(view()).toHaveAttribute('data-book', 'inline')
-    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveTextContent('決策地圖 v2')
-    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
-    expect(screen.getByTestId('cdss-layout-switch').querySelectorAll('button')).toHaveLength(2)
-    for (const retired of ['flow', 'board', 'book']) {
-      expect(screen.queryByTestId(`cdss-layout-switch-${retired}`)).not.toBeInTheDocument()
-    }
-    // Nothing in the header is hidden by the map: the module counts stay.
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
     // The header's 優先／需資料 counts are left out on the map: 今天要決定 says it, item by item.
     expect(screen.queryByText(/\d+ 優先$/)).toBeNull()
     expect(screen.getByTestId('cdss-hf-reset-page-defaults')).toBeInTheDocument()
   })
 
-  it('keeps a browser that chose a layout on it', () => {
-    useCdssLayoutStore.setState({ layout: 'sections' })
+  it('ignores the three sections a browser chose before they were removed', () => {
+    window.localStorage.setItem('cdss-layout-preference', JSON.stringify({ state: { layout: 'sections' }, version: 0 }))
     render(<LiveClinicalDecisionSupportFeature />)
-    expect(view()).toHaveAttribute('data-layout', 'sections')
-    expect(view()).toHaveAttribute('data-model', '')
-    // The map is not built for a page that is not showing it.
-    expect(mockBuildVisitModel).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-map'))
-    expect(view()).toHaveAttribute('data-layout', 'map')
-  })
-
-  it('switches between 決策地圖 v2, beside the patient\'s record, and the three sections', () => {
-    render(<LiveClinicalDecisionSupportFeature />)
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-sections'))
-    expect(useCdssLayoutStore.getState().layout).toBe('sections')
-    expect(view()).toHaveAttribute('data-layout', 'sections')
-    expect(view()).toHaveAttribute('data-book', 'no')
-
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-map'))
-    expect(useCdssLayoutStore.getState().layout).toBe('map')
     expect(view()).toHaveAttribute('data-layout', 'map')
     expect(view()).toHaveAttribute('data-model', 'heart-failure-cdss')
-    // Beside the patient's record, under this header's own switches.
-    expect(view()).toHaveAttribute('data-book', 'inline')
-    expect(screen.getByTestId('cdss-layout-switch-map')).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('opens 決策地圖 v2 for a browser that chose it while it sat beside the first map', () => {
-    window.localStorage.setItem('cdss-layout-preference', JSON.stringify({ state: { layout: 'book' }, version: 0 }))
-    useCdssLayoutStore.persist.rehydrate()
-    render(<LiveClinicalDecisionSupportFeature />)
-    expect(useCdssLayoutStore.getState().layout).toBe('map')
-    expect(view()).toHaveAttribute('data-layout', 'map')
-    expect(view()).toHaveAttribute('data-book', 'inline')
   })
 
   it('opens 決策地圖 v2 over the whole window from the panel, and returns to the panel', () => {
-    useCdssLayoutStore.setState({ layout: 'map' })
     render(<LiveClinicalDecisionSupportFeature />)
     expect(view()).toHaveAttribute('data-book', 'inline')
     fireEvent.click(screen.getByRole('button', { name: 'expand book' }))
-    // The same page, over the window with its own disease tabs; the stored layout stays the map.
     expect(view()).toHaveAttribute('data-book', 'window')
-    expect(useCdssLayoutStore.getState().layout).toBe('map')
     fireEvent.click(screen.getByRole('button', { name: 'collapse book' }))
     expect(view()).toHaveAttribute('data-book', 'inline')
   })
 
-  it('falls back to three sections, and stops offering the map, when the model cannot be built', () => {
+  it('falls back to three sections, with no switch, only when the model cannot be built', () => {
     mockBuildVisitModel.mockReturnValue(undefined)
     render(<LiveClinicalDecisionSupportFeature />)
     expect(view()).toHaveAttribute('data-layout', 'sections')
     expect(view()).toHaveAttribute('data-book', 'no')
-    expect(screen.queryByTestId('cdss-layout-switch-map')).not.toBeInTheDocument()
-    expect(screen.getByTestId('cdss-layout-switch-sections')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
   })
 
   it('leaves heart failure standing when the AF companion cannot be built', () => {
@@ -258,24 +216,20 @@ describe('decision map wiring', () => {
     expect(view()).toHaveAttribute('data-companion', '')
   })
 
-  it('opens atrial fibrillation on its map, beside its own three-section flow', () => {
+  it('opens atrial fibrillation on its map, with no switch to three sections', () => {
     render(<LiveClinicalDecisionSupportFeature />)
     fireEvent.click(screen.getByTestId('cdss-disease-switch-atrial-fibrillation-cdss'))
     expect(view()).toHaveAttribute('data-pack', 'atrial-fibrillation-cdss')
     expect(view()).toHaveAttribute('data-layout', 'map')
     expect(view()).toHaveAttribute('data-companion', '')
-    expect(screen.getByTestId('cdss-layout-switch-map')).toBeInTheDocument()
-    expect(screen.getByTestId('cdss-layout-switch-sections')).toBeInTheDocument()
-    expect(screen.queryByTestId('cdss-layout-switch-flow')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('cdss-layout-switch-sections'))
-    expect(view()).toHaveAttribute('data-layout', 'sections')
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
   })
 
-  it('leaves dyslipidemia on three sections', () => {
+  it('opens dyslipidemia on NHI Table 1 only', () => {
     render(<LiveClinicalDecisionSupportFeature />)
     fireEvent.click(screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss'))
-    expect(view()).toHaveAttribute('data-layout', 'sections')
-    expect(screen.queryByTestId('cdss-layout-switch-map')).not.toBeInTheDocument()
+    expect(view()).toHaveAttribute('data-layout', 'nhi')
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
   })
 
   // Which pages have a map, and which results a map reads beside the page's
@@ -307,7 +261,7 @@ describe('decision map wiring', () => {
     fireEvent.click(screen.getByTestId('cdss-disease-switch-atrial-fibrillation-cdss'))
     expect(view()).toHaveAttribute('data-layout', 'sections')
     expect(view()).toHaveAttribute('data-model', '')
-    expect(screen.queryByTestId('cdss-layout-switch-map')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('cdss-layout-switch')).not.toBeInTheDocument()
   })
 
   it('carries an every-visit answer into the profile through the pack, and resets it with the page', () => {

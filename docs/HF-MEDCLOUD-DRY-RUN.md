@@ -128,3 +128,9 @@ HF 畫面提供「未納入的檢驗／觀察項目明細」，列出所選病�
 這份清單包含模型不使用的觀察項目，並不代表沒有抽驗；尚未匯入來源的檢驗無法列出。每次顯示 20 筆，可繼續展開全部紀錄。切換病例、院所或基準門診會依目前輸入重建明細。明細僅保留於瀏覽器的 HfInput.excludedLabs，不放進去識別化 Bundle、不傳送至 HF 服務；既有輸入篩選與模型規則不變。
 
 無法核對病人歸屬的 Observation 另以 unlinkedObservationCount 計數並顯示提示，不保留或顯示其名稱、結果等臨床內容；此計數也不放入傳輸 Bundle。
+
+## Supplemented HF rank 2 (2026-11-18)
+
+Synthetic live dry-runs on 2026-11-18 showed the upstream model counts an HF diagnosis toward its intended-use cohort only at ranks 1–3: two outpatient visits with HF at rank 2 or 3 returned 200, rank 4, 5 or 6 returned 422 「索引日以前須有心衰竭診斷（預期用途族群）」. HF only at two visits before the index date also passed. The previous shortcut appended I50.9 after the last known rank, so it always failed for visits that already carried three or more diagnoses.
+
+Owner decision (chat, 2026-11-18): supplemented HF goes to rank 2. Shortcuts keep an existing HF (any ICD-10-CM I50.x) already at rank 1–3; otherwise they propose rank 2. Applying a confirmed rank moves an existing I50.x on that visit to the chosen rank (no duplicate I50.9) or adds I50.9 there. If another diagnosis already holds that rank, it and every later ranked diagnosis move down by one. This replaces the earlier rank-conflict rejection. The change only affects the in-memory model request; the source record and displayed chart are unchanged.

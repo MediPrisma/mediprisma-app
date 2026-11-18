@@ -20,7 +20,7 @@ import {
   DEFAULT_MODEL_ID,
   gateModelForAgentSupport,
   gateModelForKeys,
-  isModelId,
+  isSelectableModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import { useAllApiKeys } from './ai-config.store'
 import {
@@ -52,7 +52,7 @@ function initialPrefs(): Record<ModelPrefConsumer, string> {
     const raw = window.localStorage.getItem('ai-config-storage')
     if (!raw) return { ...MODEL_PREF_DEFAULTS }
     const model = (JSON.parse(raw) as { state?: { model?: unknown } }).state?.model
-    return typeof model === 'string' && isModelId(model)
+    return typeof model === 'string' && isSelectableModelId(model)
       ? { chat: model, insights: model }
       : { ...MODEL_PREF_DEFAULTS }
   } catch {
@@ -76,7 +76,7 @@ export const useModelPrefsStore = create<ModelPrefsState>()(
         // (or a consumer added later, absent from persisted state) falls back
         // to that consumer's default instead of dead-ending.
         for (const consumer of Object.keys(MODEL_PREF_DEFAULTS) as ModelPrefConsumer[]) {
-          if (!isModelId(state.prefs[consumer])) {
+          if (!isSelectableModelId(state.prefs[consumer])) {
             state.prefs[consumer] = MODEL_PREF_DEFAULTS[consumer]
           }
         }

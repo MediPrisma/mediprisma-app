@@ -31,7 +31,10 @@ it.each([true, false])('uses one selected revision=%s consistently in serial evi
   expect(JSON.stringify(scoped)).not.toContain('clinicalSourceNodeKey')
   const auditCatalog = buildSourceCatalog(stripClinicalCaptureMetadata(data))
   expect(formatSourceList(auditCatalog)).not.toContain('chronology unresolved')
-  expect(buildLongitudinalInvestigationContext(scoped, catalog)).toBe('')
+  const evidence = buildLongitudinalInvestigationContext(scoped, catalog)
+  expect(evidence).toContain(`Potassium: ${data.observations[0].valueQuantity.value} mmol/L`)
+  expect(evidence.match(/^- Potassium:/gm)).toHaveLength(1)
+  expect(evidence.split('\n').find(line => line.startsWith('- Potassium:'))).not.toContain('→')
   expect(stripClinicalCaptureMetadata(data).observations[0].clinicalRecordVariant).toBeUndefined()
   const input = { patient: { id: 'synthetic', age: 70 }, conditions: [], encounters: [], observations: data.observations, medications: [], allergies: [], carePlans: [], diagnosticReports: data.diagnosticReports, now: new Date('2026-10-02') }
   const selected = selectCdssClinicalInputs(input)

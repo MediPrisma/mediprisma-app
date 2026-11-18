@@ -4,7 +4,7 @@ import { generateText, stepCountIs, tool } from 'ai'
 import { z } from 'zod'
 import { withOpenAiStatelessResponses } from '@/src/infrastructure/ai/streaming/openai-stateless.middleware'
 
-it('carries encrypted reasoning and tool results through a stateless two-step request', async () => {
+it.each(['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.1-sol', 'gpt-6-astra'])('%s carries encrypted reasoning and tool results through a stateless two-step request', async (modelId) => {
   const requests: any[] = []
   const fetchMock = jest.fn(async (_url: unknown, init?: RequestInit) => {
     requests.push(JSON.parse(init!.body as string))
@@ -14,11 +14,11 @@ it('carries encrypted reasoning and tool results through a stateless two-step re
     ] : [
       { type: 'message', id: 'msg_test', role: 'assistant', content: [{ type: 'output_text', text: '2026-06-02: 32', annotations: [] }] },
     ]
-    return new Response(JSON.stringify({ id: `resp_${requests.length}`, created_at: 1788912000, model: 'gpt-5.6-luna', output }), {
+    return new Response(JSON.stringify({ id: `resp_${requests.length}`, created_at: 1788912000, model: modelId, output }), {
       headers: { 'content-type': 'application/json' },
     })
   })
-  const model = withOpenAiStatelessResponses(createOpenAI({ apiKey: 'test', fetch: fetchMock }).responses('gpt-5.6-luna'))
+  const model = withOpenAiStatelessResponses(createOpenAI({ apiKey: 'test', fetch: fetchMock }).responses(modelId))
   const execute = jest.fn(async () => ({ date: '2026-06-02', value: 32 }))
   const result = await generateText({
     model,

@@ -553,7 +553,7 @@ test('the intranet Azure Luna keeps its name when the service reports a dated re
   expect(await run('gpt-6-luna')).toMatchObject({ model: 'gpt-6-luna', model_source: 'reported' })
   expect(await run('gpt-6-luna-2026-10-01')).toMatchObject({ model: 'gpt-6-luna', model_source: 'reported' })
   // A different model than the one selected is still reported as what it is.
-  expect(await run('gpt-5.6-terra')).toMatchObject({ model: 'gpt-5.6-terra', model_source: 'reported' })
+  expect(await run('gpt-6.1-terra')).toMatchObject({ model: 'gpt-6.1-terra', model_source: 'reported' })
   // D089: a reported name outside the contract list is sent as reported when it fits the format.
   expect(await run('synthetic-other-model')).toMatchObject({ model: 'synthetic-other-model', model_source: 'reported' })
   expect(await run('synthetic other model')).toMatchObject({ model: 'unknown', model_source: 'reported' })

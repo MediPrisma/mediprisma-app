@@ -77,7 +77,7 @@ export interface MockStreamOptions {
  * first load).
  */
 export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
-  const model = opts.model ?? 'gpt-5.4-nano'
+  const model = opts.model ?? 'gemini-3.1-flash-lite'
   const markdown = opts.markdown ?? MOCK_REPLY_MARKDOWN
   const chunkSize = opts.chunkSize ?? 6
   const delayMs = opts.delayMs ?? 8
@@ -92,8 +92,7 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
         ;(window as unknown as { __streamIdleTimeoutMs?: number }).__streamIdleTimeoutMs = idleTimeoutMs
       }
 
-      // 1) Force the chat onto `model`. GPT-Nano is proxy-eligible (no user
-      //    key) → the chat rides the OpenAI proxy track → an OpenAI-format SSE.
+      // 1) Force chat onto a current selectable proxy-eligible model.
       localStorage.setItem('ai-config-storage', JSON.stringify({ state: { model }, version: 0 }))
 
       // 2) Record main-thread long tasks (>50ms) with their start offset, so

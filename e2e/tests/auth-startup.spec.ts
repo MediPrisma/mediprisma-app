@@ -9,7 +9,7 @@ test('CDSS scenario storage actions have auth context', async ({ page }) => {
   await page.goto('/dev/cdss-scenarios')
   await page.locator('button[data-scenario="p9-hfpef-af-dose"]').click()
   await page.waitForURL('**/cdss-scenarios/view')
-  await expect(page.getByRole('button', { name: '決策地圖 v2' }).first()).toBeVisible()
+  await expect(page.getByTestId('cdss-visit-book').first()).toBeVisible({ timeout: 90_000 })
   expect(errors).toEqual([])
 })
 

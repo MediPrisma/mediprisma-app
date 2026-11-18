@@ -11,6 +11,15 @@ export interface HfPhysicianDiagnosis {
 export const emptyHfDiagnosisDraft = (): HfPhysicianDiagnosisDraft => ({ code: '', encounters: [], ranks: {}, confirmed: false })
 const ICD10 = 'https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw'
 
+/** An HF diagnosis (ICD-10-CM I50.x) already linked to the visit; it is moved instead of duplicated. */
+function existingHf(input: HfInput, encounter: string) {
+  return input.bundle.entry.find((item: any) => item.resource.resourceType === 'Condition' && item.resource.encounter?.reference === encounter
+    && item.resource.code?.coding?.some((coding: any) => /icd-10-cm/.test(coding.system ?? '') && /^I50/i.test(coding.code)))
+}
+/** The upstream model only counts HF diagnoses ranked 1–3 (verified 2026-11-18); supplemented HF is placed at rank 2. */
+export const HF_SUPPLEMENT_RANK = 2
+const HF_COUNTED_RANK = 3
+
 /** Only actual, completed, already-projected same-patient/hospital visits may receive an attested diagnosis. */
 export function hfDiagnosisVisits(input: HfInput): { reference: string; date: string; encounterClass: string }[] {
   return input.bundle.entry.filter((entry: any) => entry.resource.resourceType === 'Encounter'
@@ -39,20 +48,17 @@ export function withPhysicianHfDiagnosis(base: HfInput, draft: HfPhysicianDiagno
   const entries = base.bundle.entry.map((entry: any) => {
     if (!draft.encounters.includes(entry.fullUrl)) return entry
     const rank = draft.ranks[entry.fullUrl]
-    const existing = base.bundle.entry.find((item: any) => item.resource.resourceType === 'Condition' && item.resource.encounter?.reference === entry.fullUrl
-      && item.resource.code?.coding?.some((coding: any) => /icd-10-cm/.test(coding.system ?? '') && coding.code.replace('.', '').toUpperCase() === 'I509'))
-    const existingReference = existing?.fullUrl
-    if ((entry.resource.diagnosis ?? []).some((dx: any) => dx.rank === rank && dx.condition.reference !== existingReference)) throw new Error('physician-diagnosis-rank-conflict')
-    if (existing) {
-      const old = entry.resource.diagnosis?.find((dx: any) => dx.condition.reference === existingReference)
-      if (old?.rank && old.rank !== rank) throw new Error('physician-diagnosis-rank-conflict')
-      return { ...entry, resource: { ...entry.resource, diagnosis: [...(entry.resource.diagnosis ?? []).filter((dx: any) => dx.condition.reference !== existingReference), { condition: { reference: existingReference }, rank }] } }
-    }
+    const existingReference = existingHf(base, entry.fullUrl)?.fullUrl
+    // The confirmed HF takes the chosen rank; other diagnoses at or after it move down by one in this request only.
+    const others = (entry.resource.diagnosis ?? []).filter((dx: any) => dx.condition.reference !== existingReference)
+    const shift = others.some((dx: any) => dx.rank === rank)
+    const shifted = others.map((dx: any) => shift && dx.rank >= rank ? { ...dx, rank: dx.rank + 1 } : dx)
+    if (existingReference) return { ...entry, resource: { ...entry.resource, diagnosis: [...shifted, { condition: { reference: existingReference }, rank }] } }
     const id = uuid()
     const condition = { reference: 'urn:uuid:' + id }
     additions.push({ fullUrl: condition.reference, resource: { resourceType: 'Condition', id,
       subject: { reference: patient.fullUrl }, encounter: { reference: entry.fullUrl }, code: { coding: [{ system: ICD10, code: 'I50.9' }] } } })
-    return { ...entry, resource: { ...entry.resource, diagnosis: [...(entry.resource.diagnosis ?? []), { condition, rank }] } }
+    return { ...entry, resource: { ...entry.resource, diagnosis: [...shifted, { condition, rank }] } }
   })
   return { ...base, bundle: { ...base.bundle, entry: [...entries, ...additions] },
     counts: { ...base.counts, Condition: (base.counts.Condition ?? 0) + additions.length },
@@ -71,11 +77,9 @@ export function suggestHfDiagnosis(input: HfInput, choice: HfDiagnosisQuickChoic
   const ranks: Record<string, number> = {}
   for (const visit of visits) {
     const encounter = input.bundle.entry.find((entry: any) => entry.fullUrl === visit.reference).resource
-    const existing = input.bundle.entry.find((entry: any) => entry.resource.resourceType === 'Condition' && entry.resource.encounter?.reference === visit.reference
-      && entry.resource.code?.coding?.some((coding: any) => /icd-10-cm/.test(coding.system ?? '') && coding.code.replace('.', '').toUpperCase() === 'I509'))
+    const existing = existingHf(input, visit.reference)
     const knownRank = existing && encounter.diagnosis?.find((dx: any) => dx.condition.reference === existing.fullUrl)?.rank
-    const rank = knownRank ?? Math.max(1, encounter.diagnosis?.length ?? 0, ...(encounter.diagnosis ?? []).map((dx: any) => dx.rank ?? 0)) + 1
-    if (!Number.isInteger(rank) || rank < 1 || rank > 50) return null
+    const rank = knownRank && knownRank <= HF_COUNTED_RANK ? knownRank : HF_SUPPLEMENT_RANK
     ranks[visit.reference] = rank
   }
   return { quickChoice: choice, code: 'I50.9', encounters: visits.map(visit => visit.reference), ranks, confirmed: false }
