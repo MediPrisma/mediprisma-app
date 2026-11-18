@@ -9,6 +9,8 @@ interface QItem {
   key: string
   label: L
   scoreOn: 'yes' | 'no'
+  /** The answer filled when nothing says otherwise (see SelectInput.presumed). */
+  presumed?: 'yes' | 'no'
 }
 
 /**
@@ -31,7 +33,7 @@ export function yesNoQuestionnaire(opts: {
     { value: 'no', label: { en: 'No', zh: '否' } },
   ]
   const inputs: CalcInput[] = opts.items.map((it) => ({
-    key: it.key, type: 'select', label: it.label, options: yesNo, defaultValue: '',
+    key: it.key, type: 'select', label: it.label, options: yesNo, defaultValue: '', presumed: it.presumed,
   }))
   const { items } = opts
   return {
@@ -62,6 +64,8 @@ interface ScoredItem {
   label: L
   /** Per-item options; falls back to the shared `scale` when omitted. */
   options?: { label: L; points: number }[]
+  /** Index of the option filled when nothing says otherwise (see SelectInput.presumed). */
+  presumed?: number
 }
 
 /**
@@ -86,6 +90,7 @@ export function scoredQuestionnaire(opts: {
     type: 'select',
     label: it.label,
     defaultValue: '',
+    presumed: it.presumed === undefined ? undefined : String(it.presumed),
     options: optionsFor(it).map((o, i) => ({ value: String(i), label: o.label })),
   }))
   const { items } = opts
@@ -130,10 +135,13 @@ export const EPWORTH_SCALE = [
 ]
 
 /** A scored-questionnaire No/Yes item worth `points` when "Yes" (for Wells etc). */
-export function ynItem(key: string, label: L, points: number): ScoredItem {
+export function ynItem(key: string, label: L, points: number, presume = true): ScoredItem {
   return {
     key,
     label,
+    // Presumed 「否」: the clinician marks only what the patient has. A history
+    // the record is not read for yet stays unanswered (`presume` false).
+    ...(presume ? { presumed: 0 } : {}),
     options: [
       { label: { en: 'No', zh: '否' }, points: 0 },
       { label: { en: 'Yes', zh: '是' }, points },

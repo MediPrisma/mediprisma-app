@@ -40,6 +40,8 @@ export interface AutofillValue {
 }
 
 export interface Autofill {
+  /** The whole chart has loaded without error; only then may a missing answer be presumed absent. */
+  recordLoaded?: boolean
   clinicalSelects?: Partial<Record<ClinicalSelectKey, ClinicalSelectValue>>
   resolve: (source?: AutofillSource) => AutofillValue | undefined
   sex?: string
@@ -317,9 +319,11 @@ export function buildAutofill(
   return {
     resolve,
     sex,
+    recordLoaded: true,
     clinicalSelects: {
       ...buildClinicalSelects(reports, medications, now, conditions, encounters),
       ...doacPatientSelects({ observations: observations as LabObservation[], conditions, encounters, demographics: { age, gender: sex }, now }),
+      ...(typeof age === 'number' ? { ageOver65: { value: age > 65 ? 'yes' : 'no', date: '', testName: `年齡 ${age} 歲` } } : {}),
     },
   }
 }
@@ -398,7 +402,7 @@ export function useLabAutofill(): LabAutofillState {
     () => {
       const data = buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }, diagnosticReports, medications, new Date(), conditions, encounters)
       // A partially loaded chart must not infer absence before diagnoses arrive.
-      if (isLoading || isFetching || error) data.clinicalSelects = undefined
+      if (isLoading || isFetching || error) { data.clinicalSelects = undefined; data.recordLoaded = false }
       return withCdssWeight(withCdssNyha(data, nyhaAnswer), clinicWeight)
     },
     [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, nyhaAnswer, clinicWeight],

@@ -18,6 +18,8 @@ const historyInputs: SelectInput[] = histories.map(({ key, label }) => ({
   label,
   type: 'select',
   defaultValue: '',
+  // Diabetes is read from the record and presumed absent when it shows none.
+  ...(key === 'dm' ? { source: { kind: 'hfpefClinical' as const, key: 'diabetes' as const }, presumed: 'no' } : {}),
   options: [
     { value: 'no', label: { zh: '無', en: 'No' } },
     { value: 'yes', label: { zh: '有', en: 'Yes' } },
