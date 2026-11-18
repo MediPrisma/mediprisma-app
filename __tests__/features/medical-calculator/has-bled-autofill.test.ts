@@ -40,6 +40,12 @@ it('answers D from a current antiplatelet or NSAID prescription', () => {
   expect(hasBled('drugs', autofill()).value).toBe('no')
 })
 
+it('does not count diclofenac eye drops as an NSAID', () => {
+  const med = (name: string, atc?: string) => ({ id: name, status: 'active', authoredOn: '2026-11-01', medicationCodeableConcept: { text: name }, drugTerminology: { ingredientText: name }, ...(atc ? { atcClassification: { atcCode: atc } } : {}) }) as unknown as MedicationEntity
+  expect(hasBled('drugs', autofill([], [], [med('Diclofenac sodium 1 mg/mL 點眼液劑', 'S01BC03')])).value).toBe('no')
+  expect(hasBled('drugs', autofill([], [], [med('Diclofenac 25 mg tablet', 'M01AB05')])).value).toBe('yes')
+})
+
 it('presumes MELD dialysis 否 but leaves a dialysis patient to the clinician', () => {
   expect(resolveInput(field('meld-na', 'dialysis'), autofill([obs('33914-3', 60, 'mL/min/{1.73_m2}')])).value).toBe('no')
   const dialysis = { id: 'hd', code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'Z99.2' }] }, recordedDate: '2026-10-01' } as ConditionEntity
