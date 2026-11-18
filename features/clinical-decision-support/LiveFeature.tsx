@@ -57,15 +57,7 @@ import {
   usePhysicianDecisionsHydrated,
   usePhysicianDecisionsStore,
 } from './stores/physician-decisions.store'
-import {
-  AF_SWITCHABLE_LAYOUTS,
-  CDSS_SWITCHABLE_LAYOUTS,
-  LIPID_SWITCHABLE_LAYOUTS,
-  RETIRED_LAYOUTS,
-  defaultLayoutFor,
-  type CdssLayout,
-  useCdssLayoutStore,
-} from './stores/layout-preference.store'
+import { layoutFor, type CdssLayout } from './stores/layout-preference.store'
 import {
   useVisitAnswerRecord,
   useVisitAnswersHydrated,
@@ -94,7 +86,6 @@ import { cdssSourceRecords } from './telemetry/source-records'
 import { useCdssGateway } from './telemetry/use-cdss-gateway'
 import { recordCdssEvent } from './telemetry/cdss-gateway'
 
-const AF_PACK_ID = 'atrial-fibrillation-cdss'
 const LIPID_PACK_ID = 'hyperlipidemia-cdss'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
@@ -224,86 +215,6 @@ function DiseaseSwitcher({
   )
 }
 
-/**
- * The available layouts, side by side in the header so
- * a pilot user can flip between them on the same patient. Same pack, same
- * result; only the placement differs.
- */
-function LayoutSwitcher({
-  locale,
-  layout,
-  packId,
-  mapAvailable,
-  onSelect,
-}: {
-  locale: CdssLocale
-  layout: CdssLayout
-  packId: string
-  /** Whether the pack produced a decision map for this record. */
-  mapAvailable: boolean
-  onSelect: (layout: CdssLayout) => void
-}) {
-  const isEnglish = locale === 'en'
-  const labels: Record<'map' | 'sections' | 'nhi', { label: string; title: string }> = {
-    // The first decision map was retired on 2026-10-01; v2 kept its name.
-    map: {
-      label: isEnglish ? 'Decision map v2' : '決策地圖 v2',
-      title: isEnglish
-        ? 'The decision map as a pocket-handbook page: the map on the left, each point once on the right'
-        : '口袋手冊版面：左邊決策地圖，右邊每個決策點寫一次',
-    },
-    sections: {
-      label: isEnglish ? 'Three sections' : '三區塊',
-      title: isEnglish ? 'Diagnosis / condition follow-up, treatment and prognosis' : '診斷／病況追蹤、治療與預後；展開模組查看依據',
-    },
-    nhi: {
-      label: isEnglish ? 'NHI Table 1' : '健保表一',
-      title: isEnglish
-        ? 'Review the NHI lipid tier, supporting criteria and treatment response'
-        : '核對健保血脂分級、支持條件與治療反應',
-    },
-  }
-  const layoutIds = (packId === LIPID_PACK_ID
-    ? LIPID_SWITCHABLE_LAYOUTS
-    : packId === AF_PACK_ID
-      ? AF_SWITCHABLE_LAYOUTS
-      : CDSS_SWITCHABLE_LAYOUTS
-  ).filter((id) => id !== 'map' || mapAvailable)
-  const options = layoutIds.map((id) => ({ id, ...labels[id as keyof typeof labels] }))
-  return (
-    <div className="flex flex-wrap items-center gap-2" data-testid="cdss-layout-switch">
-      <span className="sr-only">
-        {isEnglish ? 'View' : '畫面'}
-      </span>
-      <div
-        className="inline-flex max-w-full flex-wrap rounded-md border border-border bg-muted/30 p-0.5"
-        role="group"
-        aria-label={isEnglish ? 'Choose the guidance layout' : '選擇指引畫面'}
-      >
-        {options.map((option) => {
-          const selected = option.id === layout
-          return (
-            <button
-              key={option.id}
-              type="button"
-              className={[
-                'inline-flex items-center rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                selected ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-              ].join(' ')}
-              aria-pressed={selected}
-              title={option.title}
-              data-testid={`cdss-layout-switch-${option.id}`}
-              onClick={() => onSelect(option.id)}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 export default function LiveClinicalDecisionSupportFeature({
   previousCdssVisit,
 }: {
@@ -357,8 +268,6 @@ export default function LiveClinicalDecisionSupportFeature({
   const setPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.setAnswer)
   const clearPhenotypeAnswer = usePhenotypeAnswerStore((state) => state.clearAnswer)
   const hydratePhenotypeAnswer = usePhenotypeAnswerStore((state) => state.hydrate)
-  const layout = useCdssLayoutStore((state) => state.layout)
-  const setLayout = useCdssLayoutStore((state) => state.setLayout)
   const visitAnswerRecord = useVisitAnswerRecord(patientId)
   // Today's answers only, and 「today」 turns at midnight on an open page too.
   const today = useLocalDay()
@@ -595,12 +504,10 @@ export default function LiveClinicalDecisionSupportFeature({
       ? buildHospitalAwareCdssResult(selectedPack, profile, 'en') : null
   }, [cdssLocale, profile, result, selectedPack])
 
-  // The layout this browser chose, or — when it never chose — the pack's own
-  // default: the decision map wherever the pack declares one (heart failure
-  // and atrial fibrillation today).
-  // A retired layout (新版流程, 原版看板) stored before it went reads as no choice.
-  const preferredLayout: CdssLayout = layout && !RETIRED_LAYOUTS.includes(layout) ? layout : defaultLayoutFor(selectedPack.id)
-  const wantsMap = preferredLayout === 'map' && hasVisitMap(selectedPack.id)
+  // Each pack has one face, with no switch: Table 1 for dyslipidemia, the
+  // decision map for every pack that declares one.
+  const preferredLayout: CdssLayout = layoutFor(selectedPack.id)
+  const wantsMap = preferredLayout === 'map'
 
   // A map can read other packs' results beside the page's own — the pack
   // names them (`VisitMapDefinition.companions`): on the heart-failure page,
@@ -751,29 +658,15 @@ export default function LiveClinicalDecisionSupportFeature({
     )
   }
 
-  // A layout can be remembered while the clinician moves between diseases.
-  // Map a disease-specific choice to its closest valid view without rewriting
-  // the stored preference; returning to that disease restores the choice. The
-  // decision map exists only where the pack produced one; anywhere else, and
-  // whenever the model could not be built, the page opens on three sections.
+  // The page's one face. Only a map that could not be built for this record
+  // falls back to the three sections, so the guidance still shows.
   const mapAvailable = Boolean(visitModel)
-  // The switch offers the map wherever the package can build one; only a map
-  // that was asked for and could not be built is withdrawn from it.
-  const mapOffered = hasVisitMap(result.packId) && (!wantsMap || mapAvailable)
-  const prefersMap = preferredLayout === 'map'
-  const chosenLayout: CdssLayout = result.packId === LIPID_PACK_ID
-    ? preferredLayout === 'flow' || prefersMap ? 'sections' : preferredLayout
-    : preferredLayout === 'nhi' || (prefersMap && !mapAvailable) ? 'sections' : preferredLayout
-  const effectiveLayout: CdssLayout = chosenLayout
+  const effectiveLayout: CdssLayout = result.packId === LIPID_PACK_ID
+    ? 'nhi'
+    : preferredLayout === 'map' && mapAvailable ? 'map' : 'sections'
   const isMap = effectiveLayout === 'map'
-  const isVisitFlow = (effectiveLayout === 'flow' || effectiveLayout === 'sections') && result.packId === HEART_FAILURE_PACK_ID
-  const isNhiTable = effectiveLayout === 'nhi' && result.packId === LIPID_PACK_ID
-  // Atrial fibrillation has two faces: the map, and its own three-section flow,
-  // which is what every other stored layout has always shown there.
-  const switcherLayout: CdssLayout = result.packId === AF_PACK_ID && !isMap ? 'sections' : chosenLayout
-  const showLayoutSwitcher = result.packId === HEART_FAILURE_PACK_ID
-    || result.packId === LIPID_PACK_ID
-    || mapOffered
+  const isVisitFlow = effectiveLayout === 'sections' && result.packId === HEART_FAILURE_PACK_ID
+  const isNhiTable = effectiveLayout === 'nhi'
   const highPriorityCount = result.recommendations.filter((item) => item.priority === 'high').length
   const needsDataCount = result.recommendations.filter((item) => item.status === 'needs-data').length
   const resetVisitDefaults = () => {
@@ -818,7 +711,7 @@ export default function LiveClinicalDecisionSupportFeature({
         <h2 className="sr-only">
           {result.title}
         </h2>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 [&>[data-testid=cdss-layout-switch]]:ml-auto">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
           <DiseaseSwitcher
             locale={cdssLocale}
             packs={guidelinePacks}
@@ -826,7 +719,7 @@ export default function LiveClinicalDecisionSupportFeature({
             selectedPackId={selectedPack.id}
             onSelect={id => { if (patientId) recordCdssEvent(patientId, id, { kind: 'interaction', action: 'disease_selected' }); setRequestedPackId(id) }}
           />
-          {/* Beside the diseases, so the layout switch keeps the row's right end (owner request 2026-10-07). */}
+          {/* Beside the diseases (owner request 2026-10-07). */}
           <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
             // Saving and records are offered on the decision map and the NHI table, not on 三區塊 (owner decision 2026-10-07).
             offered={isMap || isNhiTable}
@@ -838,15 +731,6 @@ export default function LiveClinicalDecisionSupportFeature({
             physicianDecisions: { ...physicianDecisions },
           }} sourceRecords={() => cdssSourceRecords(profile, result, clinicalData.observations, clinicalData.diagnosticReports ?? [])} />
           <HospitalMedicationReview evidence={recordProfile?.hospitalMedicationEvidence} locale={cdssLocale} />
-          {showLayoutSwitcher ? (
-            <LayoutSwitcher
-              locale={cdssLocale}
-              layout={switcherLayout}
-              packId={result.packId}
-              mapAvailable={mapOffered}
-              onSelect={next => { if (patientId) recordCdssEvent(patientId, result.packId, { kind: 'interaction', action: 'layout_selected', target: next }); setLayout(next) }}
-            />
-          ) : null}
           {(isVisitFlow || isNhiTable) && patientId ? (
             <Button
               type="button"

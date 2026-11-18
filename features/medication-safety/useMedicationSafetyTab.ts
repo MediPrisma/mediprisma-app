@@ -30,14 +30,16 @@ const HIDDEN: MedicationSafetyTab = { visible: false, unreachable: false, count:
  * The service is on the hospital network only, and from a public page the
  * browser cannot tell "outside the hospital" from "inside, but Chrome blocked
  * the request". So the hospital is recognised from what the app already knows
- * — the 北榮 launcher's `?site=vghtpe`, or 院內 medication rows — and a
- * successful answer. Away from the hospital the tab does not appear at all.
+ * — the 北榮 launcher's `?site=vghtpe`, or 院內 medication rows — and from the
+ * service answering, which covers cloud-only patients and lists too short to
+ * check. Away from the hospital the tab does not appear at all.
  */
 export function useMedicationSafetyTab(): MedicationSafetyTab {
   const { state, rows } = useInteractionCheck()
   return useMemo(() => {
     if (state.status === 'off') return HIDDEN
-    const atHospital = state.status === 'ok'
+    const answered = state.status === 'ok' || (state.status === 'too-few' && state.reachable === true)
+    const atHospital = answered
       || detectSite() === 'vghtpe'
       || rows.some(row => row.dataOrigin === 'hospital' || row.dataOrigin === 'integrated')
     if (!atHospital) return HIDDEN
@@ -46,7 +48,9 @@ export function useMedicationSafetyTab(): MedicationSafetyTab {
     }
     if (state.status === 'loading') return { ...HIDDEN, visible: true }
     if (state.status === 'too-few') {
-      return { visible: true, unreachable: false, count: 0, avoid: 0, unchecked: rows.filter(row => !row.isInactive).length, notRun: true }
+      const local = new Set(state.localRowIds)
+      return { visible: true, unreachable: false, count: 0, avoid: 0,
+        unchecked: rows.filter(row => !row.isInactive && !local.has(row.id)).length, notRun: true }
     }
     const attention = attentionFindings(state.review)
     return {

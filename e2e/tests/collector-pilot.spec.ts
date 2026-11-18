@@ -42,7 +42,7 @@ test('site gate and offline collector leave chat operational, with no clinical t
     else await route.fulfill({ status: 201, contentType: 'application/json',
       headers: { 'access-control-allow-origin': 'http://localhost:3001' }, body: '{}' })
   })
-  await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: 'SYNTHETIC-COLLECTOR-ANSWER', delayMs: 2,
+  await mockAiStream(page, { model: 'gemini-3.1-flash-lite', markdown: 'SYNTHETIC-COLLECTOR-ANSWER', delayMs: 2,
     replies: [
       { includes: 'OTHER-SITE', markdown: 'SYNTHETIC-OTHER-SITE-ANSWER' },
       { includes: 'SECOND-PRIVATE-PROMPT', markdown: 'SYNTHETIC-OFFLINE-ANSWER' },
@@ -100,7 +100,7 @@ for (const permission of ['prompt', 'denied', 'unsupported'] as const) {
           'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'authorization, content-type' },
         body: '' })
     })
-    await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: 'SYNTHETIC-PERMISSION-ANSWER', delayMs: 2 })
+    await mockAiStream(page, { model: 'gemini-3.1-flash-lite', markdown: 'SYNTHETIC-PERMISSION-ANSWER', delayMs: 2 })
     await importBundle(page, { bundlePath: SYNTHETIC_BUNDLE })
     const textarea = await openChatInput(page)
     await page.waitForFunction(() => Boolean(window.mediprismaCollector))

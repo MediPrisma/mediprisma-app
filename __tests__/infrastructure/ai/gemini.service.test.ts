@@ -337,7 +337,7 @@ describe('GeminiService', () => {
 
       await expect(proxyService.query({
         ...proxyRequest,
-        modelId: 'gemini-3.1-pro-preview',
+        modelId: 'gemini-4-argon',
       })).rejects.toThrow('personal Gemini API key')
       expect(mockFetch).not.toHaveBeenCalled()
     })

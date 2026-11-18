@@ -29,13 +29,42 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     mockStreamText.mockReturnValue({ textStream: textStream('hello') })
   })
 
+  it('lets Haiku low think past 60 seconds before its first visible token', async () => {
+    jest.useFakeTimers()
+    try {
+      mockStreamText.mockReturnValue({ textStream: (async function* () {
+        await new Promise(resolve => setTimeout(resolve, 82_000))
+        yield 'summary'
+      })() })
+      const adapter = new AiSdkStreamAdapter({ create: () => ({ model: {}, isGemini: false }) } as any)
+      const onChunk = jest.fn()
+      const run = adapter.stream({ model: 'claude-haiku-5-5', apiKey: 'test-key',
+        messages: [{ role: 'user', content: 'Synthetic only.' }],
+        signal: new AbortController().signal, onChunk })
+      await jest.advanceTimersByTimeAsync(82_001)
+      await run
+      expect(onChunk).toHaveBeenCalledWith('summary')
+    } finally { jest.useRealTimers() }
+  })
+
+  it('still honours a caller-specified short timeout for Haiku', async () => {
+    mockStreamText.mockReturnValue({ textStream: { [Symbol.asyncIterator]: () => ({
+      next: () => new Promise(() => {}), return: async () => ({ done: true }),
+    }) } })
+    const adapter = new AiSdkStreamAdapter({ create: () => ({ model: {}, isGemini: false }) } as any)
+    await expect(adapter.stream({ model: 'claude-haiku-5-5', apiKey: 'test-key',
+      messages: [{ role: 'user', content: 'Synthetic only.' }],
+      signal: new AbortController().signal, idleTimeoutMs: 10, onChunk: jest.fn(),
+    })).rejects.toThrow(/timed out/i)
+  })
+
   it('uses manifest policy for Responses models and forwards structured options', async () => {
     const create = jest.fn(() => ({ model: { kind: 'responses' }, isGemini: false }))
     const adapter = new AiSdkStreamAdapter({ create } as any)
     const onChunk = jest.fn()
 
     await adapter.stream({
-      model: 'gpt-5.6-terra',
+      model: 'gpt-6.1-terra',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey: 'personal-key',
       signal: new AbortController().signal,
@@ -46,7 +75,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     })
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      modelId: 'gpt-5.6-terra',
+      modelId: 'gpt-6.1-terra',
       apiKey: 'personal-key',
       useProxy: false,
     }))
@@ -64,7 +93,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     const adapter = new AiSdkStreamAdapter({ create } as any)
 
     await adapter.stream({
-      model: 'gpt-5.6-luna',
+      model: 'gpt-6-luna',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey: null,
       signal: new AbortController().signal,
@@ -72,7 +101,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     })
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
-      modelId: 'gpt-5.6-luna',
+      modelId: 'gpt-6-luna',
       apiKey: undefined,
       useProxy: true,
     }))
@@ -140,7 +169,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
       providerOptions: { openai: { reasoningEffort: 'low', forceReasoning: true } },
     })
 
-    await adapter.stream({ ...request, model: 'gpt-5.6-terra' })
+    await adapter.stream({ ...request, model: 'gpt-6.1-terra' })
     expect(mockStreamText.mock.calls[1][0]).not.toHaveProperty('providerOptions')
   })
 
@@ -187,7 +216,7 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     const adapter = new AiSdkStreamAdapter({ create } as any)
 
     await adapter.stream({
-      model: 'claude-opus-5',
+      model: 'claude-opus-5-5',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey: 'personal-key',
       signal: new AbortController().signal,

@@ -1,3 +1,4 @@
+import { CdssSaveError } from '@/features/clinical-decision-support/telemetry/save-error'
 import { toast } from 'sonner'
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }))
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
@@ -148,8 +149,10 @@ test.each([false, true])('other save failures retain the general error and do no
   const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
   fireEvent.click(screen.getByTestId('cdss-save-record'))
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
-    english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。',
+    english ? 'CDSS record was not saved.' : 'CDSS 紀錄未儲存。',
+    expect.objectContaining({ description: expect.stringContaining('cdss_save_unknown'), duration: 15000 }),
   ))
+  expect(JSON.stringify(jest.mocked(toast.error).mock.calls)).not.toContain('private server error')
   expect(screen.getByTestId('cdss-save-record')).toBeEnabled()
   view.unmount()
 })
@@ -203,7 +206,7 @@ test.each([[false, false], [false, true], [true, false], [true, true]])('de-iden
     fireEvent.click(screen.getByTestId('cdss-save-record'))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
       english ? 'De-identified patient data cannot be saved as a CDSS record.' : '去識別化資料無法儲存 CDSS 紀錄。',
-      { description: expect.stringContaining(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項'), duration: 10000 },
+      { description: expect.stringContaining(english ? 'Turn off the de-identification option' : '取消雲抓或北榮懷爾抓抓的「去識別化」選項'), duration: 10000 },
     ))
     expect(toast.success).not.toHaveBeenCalled()
   } finally { view.unmount(); target.remove() }
@@ -215,7 +218,7 @@ test.each([false, true])('history de-identification rejection explains how to re
   fireEvent.click(screen.getByTestId('cdss-history-records'))
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent(english ? 'CDSS history cannot be retrieved for de-identified patient data.' : '去識別化資料無法查詢 CDSS 歷史紀錄。')
-  expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消雲抓的「去識別化」選項')
+  expect(alert).toHaveTextContent(english ? 'Turn off the de-identification option' : '取消雲抓或北榮懷爾抓抓的「去識別化」選項')
   view.unmount()
 })
 
@@ -278,5 +281,27 @@ test('三區塊 does not offer saving or records, and switching to it neither ca
   expect(toast.success).toHaveBeenCalledWith('CDSS 紀錄已儲存。')
   view.rerender(<CdssStorageActions input={input} sourceRecords={() => []} onCarryForward={() => 1} />)
   expect(screen.getByTestId('cdss-history-records')).toBeVisible()
+  view.unmount()
+})
+
+test.each([false, true].flatMap(english => ['cdss_save_timeout', 'cdss_save_interrupted', 'cdss_network_unavailable'].map(code => [english, code] as const)))('uncertain save outcomes ask users to check records (English=%s, code=%s)', async (english, code) => {
+  jest.clearAllMocks()
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new Error(code))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} english={english} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+    english ? 'CDSS save was not confirmed.' : 'CDSS 儲存結果未確認。',
+    expect.objectContaining({ description: expect.stringContaining(code) }),
+  ))
+  view.unmount()
+})
+
+test.each([408, 500, 502, 503, 504])('server HTTP %s uses an uncertain title with recovery guidance', async status => {
+  jest.clearAllMocks()
+  jest.mocked(saveCdssSnapshot).mockRejectedValueOnce(new CdssSaveError('cdss_gateway_rejected', 'request', status))
+  const view = render(<CdssStorageActions input={input} sourceRecords={() => []} />)
+  fireEvent.click(screen.getByTestId('cdss-save-record'))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('CDSS 儲存結果未確認。',
+    expect.objectContaining({ description: expect.stringContaining('先查看紀錄') })))
   view.unmount()
 })
