@@ -155,6 +155,15 @@ describe('PCE history and drug questions from the record', () => {
       expect(buildClinicalSelects([], [], now, [{ ...dx('I21.4'), clinicalStatus: 'resolved', verificationStatus }]).pceAscvd?.value).toBe('no')
     }
   })
+  // #525 review round 3: F17.2x1 is nicotine dependence 「in remission」 — stopped, not current smoking.
+  test.each(['F17.201', 'F17.211', 'F17.221', 'F17.291'])('%s (in remission) is not current smoking', (code) => {
+    expect(buildClinicalSelects([], [], now, [dx(code)]).pceSmoking?.value).toBe('no')
+    const encounter = { id: 'enc-1', status: 'finished', period: { start: '2026-01-01' }, reasonCode: [{ coding: [{ code }] }] }
+    expect(buildClinicalSelects([], [], now, [], [encounter as never]).pceSmoking?.value).toBe('no')
+  })
+  test.each(['F17.200', 'F17.210', 'F17.290', 'Z72.0'])('%s is current smoking', (code) => {
+    expect(buildClinicalSelects([], [], now, [dx(code)]).pceSmoking?.value).toBe('yes')
+  })
   test('other history questions keep ignoring ended diagnoses', () => {
     expect(buildClinicalSelects([], [], now, [{ ...dx('E11.9'), clinicalStatus: 'resolved' }]).pceDiabetes?.value).toBe('no')
   })

@@ -180,7 +180,9 @@ const isDiabetesCode = (code: string) => /^(?:E0[89]|E1[0-3])/.test(code) || /^2
 const isCopdCode = (code: string) => /^J4[34]/.test(code) || /^(?:491|492|496)/.test(code)
 
 /** ICD-10 F17 nicotine dependence, Z72.0 tobacco use, Z87.891 history excluded; ICD-9 305.1. */
-const isSmokingCode = (code: string) => /^F17/.test(code) || /^Z720/.test(code) || /^3051/.test(code)
+// Current smoking: nicotine dependence (F17) except its 「in remission」 subcodes
+// F17.2x1 (F17.201, .211, .221, .291), which mean the patient has stopped.
+const isSmokingCode = (code: string) => (/^F17/.test(code) && !/^F172\d1$/.test(code)) || /^Z720/.test(code) || /^3051/.test(code)
 /**
  * ASCVD as PCE reads it: coronary disease (ICD-10 I20–I25), stroke or TIA
  * (I63, I64, I69.3, G45), peripheral artery disease (I70.2, I73.9); ICD-9
