@@ -135,12 +135,13 @@ export const EPWORTH_SCALE = [
 ]
 
 /** A scored-questionnaire No/Yes item worth `points` when "Yes" (for Wells etc). */
-export function ynItem(key: string, label: L, points: number): ScoredItem {
+export function ynItem(key: string, label: L, points: number, presume = true): ScoredItem {
   return {
     key,
     label,
-    // Presumed 「否」: the clinician marks only what the patient has.
-    presumed: 0,
+    // Presumed 「否」: the clinician marks only what the patient has. A history
+    // the record is not read for yet stays unanswered (`presume` false).
+    ...(presume ? { presumed: 0 } : {}),
     options: [
       { label: { en: 'No', zh: '否' }, points: 0 },
       { label: { en: 'Yes', zh: '是' }, points },
