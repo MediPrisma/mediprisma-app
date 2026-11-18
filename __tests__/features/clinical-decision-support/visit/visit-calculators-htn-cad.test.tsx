@@ -59,15 +59,15 @@ describe('計算機 on the HTN and CAD pages', () => {
 
   it('lists the hypertension calculators, without PREVENT-ASCVD', () => {
     render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-08'), point('htn', 'DP-18')]} />)
-    expect(listedIds()).toEqual(['egfr', 'hpa-risk', 'ckd-kdigo-risk'])
+    expect(listedIds()).toEqual(['egfr', 'prevent-cvd', 'hpa-risk', 'ckd-kdigo-risk'])
     expect(HTN_VISIT_CALCULATORS.some((entry) => entry.calculatorId === 'prevent-ascvd')).toBe(false)
     // The calculator's full name, not the last parenthesis of it.
     expect(screen.getByTestId('cdss-book-calculator-hpa-risk')).toHaveTextContent('國健署五項慢性病風險（重建版）')
   })
 
   it('drops KDIGO where DP-18 is not on the hypertension page', () => {
-    render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-18', 'not-applicable')]} />)
-    expect(listedIds()).toEqual(['egfr', 'hpa-risk'])
+    render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-08'), point('htn', 'DP-18', 'not-applicable')]} />)
+    expect(listedIds()).toEqual(['egfr', 'prevent-cvd', 'hpa-risk'])
   })
 
   it('offers the AF calculators on the coronary page only with OAC and an antiplatelet', () => {
