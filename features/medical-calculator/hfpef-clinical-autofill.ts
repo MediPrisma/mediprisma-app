@@ -2,13 +2,14 @@ import { classifyReport, reportNarrative, extractEcgFindings, isMedicationBeingT
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import { doacSelects, type DoacSelectKey } from './doac-clinical-autofill'
 import type { DoacPatientKey } from './doac-patient-autofill'
+import { historySelects, type HistoryKey } from './history-autofill'
 
 /**
  * Yes/no and graded answers the record (or the CDSS visit) can give a
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -140,12 +141,14 @@ export function diagnosisSelect(
   name: string,
   /** Only a diagnosis dated within this many days counts; an undated one then does not. */
   withinDays?: number,
+  /** A past history: a resolved or inactive diagnosis still counts. */
+  history = false,
 ): ClinicalSelectValue | undefined {
   const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
   const tooOld = (date: string) => withinDays !== undefined && (!date || now.getTime() - Date.parse(date) > withinDays * 86_400_000)
   for (const condition of conditions) {
     if (['refuted', 'entered-in-error', 'provisional', 'differential', 'unconfirmed'].includes(condition.verificationStatus ?? '') || condition._inferred) continue
-    if (['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
+    if (!history && ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
     const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
     if ((date && Date.parse(date) > now.getTime()) || tooOld(date)) continue
     const code = condition.code?.coding?.find((coding) => (!coding.system || /icd/i.test(coding.system)) && matches(normal(coding.code)))
@@ -239,5 +242,6 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...(betaBlocker ? { betaBlocker } : {}),
     ...(aceiArb ? { aceiArb } : {}),
     ...doacSelects(medications, now),
+    ...historySelects(conditions, encounters, now),
   }
 }

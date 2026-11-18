@@ -2,7 +2,8 @@
 // the calculator definitions. Split out of the (large) definitions so each
 // category file stays focused on its formulas.
 
-import type { CalculatorDef, CalcValues, CalcInput, CalcResult, CalcCategory, CalcAudience, L } from '../types'
+import type { CalculatorDef, CalcValues, CalcInput, CalcResult, CalcCategory, CalcAudience, L, AutofillSource } from '../types'
+import type { ClinicalSelectKey } from '../hfpef-clinical-autofill'
 
 /** One yes/no item of a questionnaire; `scoreOn` is the answer worth 1 point. */
 interface QItem {
@@ -66,6 +67,7 @@ interface ScoredItem {
   options?: { label: L; points: number }[]
   /** Index of the option filled when nothing says otherwise (see SelectInput.presumed). */
   presumed?: number
+  source?: AutofillSource
 }
 
 /**
@@ -91,6 +93,7 @@ export function scoredQuestionnaire(opts: {
     label: it.label,
     defaultValue: '',
     presumed: it.presumed === undefined ? undefined : String(it.presumed),
+    source: it.source,
     options: optionsFor(it).map((o, i) => ({ value: String(i), label: o.label })),
   }))
   const { items } = opts
@@ -135,13 +138,13 @@ export const EPWORTH_SCALE = [
 ]
 
 /** A scored-questionnaire No/Yes item worth `points` when "Yes" (for Wells etc). */
-export function ynItem(key: string, label: L, points: number, presume = true): ScoredItem {
+export function ynItem(key: string, label: L, points: number, record?: ClinicalSelectKey): ScoredItem {
   return {
     key,
     label,
-    // Presumed 「否」: the clinician marks only what the patient has. A history
-    // the record is not read for yet stays unanswered (`presume` false).
-    ...(presume ? { presumed: 0 } : {}),
+    ...(record ? { source: { kind: 'hfpefClinical' as const, key: record, answers: { yes: '1', no: '0' } } } : {}),
+    // Presumed 「否」: the clinician marks only what the patient has.
+    presumed: 0,
     options: [
       { label: { en: 'No', zh: '否' }, points: 0 },
       { label: { en: 'Yes', zh: '是' }, points },

@@ -158,7 +158,7 @@ export const CARDIAC: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Pre-test probability of DVT.', zh: '深部靜脈栓塞前測機率。' },
       items: [
-        ynItem('cancer', { en: 'Active cancer (treatment within 6 mo)', zh: '活動性癌症（6 個月內治療）' }, 1, false),
+        ynItem('cancer', { en: 'Active cancer (treatment within 6 mo)', zh: '活動性癌症（6 個月內治療）' }, 1, 'activeCancer'),
         ynItem('paralysis', { en: 'Paralysis/paresis or recent leg immobilization', zh: '下肢癱瘓或近期固定' }, 1),
         ynItem('bedridden', { en: 'Bedridden ≥ 3 days or major surgery within 12 wk', zh: '臥床 ≥ 3 天或 12 週內大手術' }, 1),
         ynItem('tenderness', { en: 'Localized tenderness along deep veins', zh: '深靜脈走向局部壓痛' }, 1),
@@ -166,7 +166,7 @@ export const CARDIAC: CalculatorDef[] = [
         ynItem('calf', { en: 'Calf swelling > 3 cm vs other leg', zh: '小腿較對側腫 > 3 cm' }, 1),
         ynItem('edema', { en: 'Pitting edema (symptomatic leg)', zh: '患肢凹陷性水腫' }, 1),
         ynItem('collateral', { en: 'Collateral superficial veins (non-varicose)', zh: '側枝表淺靜脈（非靜脈曲張）' }, 1),
-        ynItem('priordvt', { en: 'Previously documented DVT', zh: '曾確診 DVT' }, 1, false),
+        ynItem('priordvt', { en: 'Previously documented DVT', zh: '曾確診 DVT' }, 1, 'priorDvt'),
         ynItem('altdx', { en: 'Alternative diagnosis at least as likely', zh: '其他診斷同樣或更可能' }, -2),
       ],
       interpret: (s) => {
@@ -191,9 +191,9 @@ export const CARDIAC: CalculatorDef[] = [
         ynItem('altdx', { en: 'PE is the #1 or equally likely diagnosis', zh: 'PE 為最可能或同等可能診斷' }, 3),
         ynItem('hr', { en: 'Heart rate > 100', zh: '心率 > 100' }, 1.5),
         ynItem('immob', { en: 'Immobilization ≥ 3 days or surgery within 4 wk', zh: '固定 ≥ 3 天或 4 週內手術' }, 1.5),
-        ynItem('prior', { en: 'Previous PE / DVT', zh: '曾有 PE / DVT' }, 1.5, false),
+        ynItem('prior', { en: 'Previous PE / DVT', zh: '曾有 PE / DVT' }, 1.5, 'priorVte'),
         ynItem('hemoptysis', { en: 'Hemoptysis', zh: '咳血' }, 1),
-        ynItem('cancer', { en: 'Malignancy (treatment within 6 mo)', zh: '惡性腫瘤（6 個月內治療）' }, 1, false),
+        ynItem('cancer', { en: 'Malignancy (treatment within 6 mo)', zh: '惡性腫瘤（6 個月內治療）' }, 1, 'activeCancer'),
       ],
       interpret: (s) => {
         let interp: L; let severity: 'normal' | 'moderate' | 'high'
@@ -228,7 +228,7 @@ export const CARDIAC: CalculatorDef[] = [
           ],
         },
         {
-          key: 'smk', type: 'select', label: { en: 'Current smoker', zh: '目前吸菸' }, defaultValue: '', presumed: 'no',
+          key: 'smk', type: 'select', label: { en: 'Current smoker', zh: '目前吸菸' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'smoker' }, presumed: 'no',
           options: [
             { value: 'no', label: { en: 'No', zh: '無' } },
             { value: 'yes', label: { en: 'Yes', zh: '有' } },

@@ -80,7 +80,8 @@ export type ConvertDim =
 export type VitalKind = 'sbp' | 'weight' | 'height' | 'waist'
 
 export type AutofillSource =
-  | { kind: 'hfpefClinical'; key: import('./hfpef-clinical-autofill').ClinicalSelectKey }
+  /** `answers` maps the record's 「yes」/「no」 onto the input's own option values (Wells' 「0」/「1」). */
+  | { kind: 'hfpefClinical'; key: import('./hfpef-clinical-autofill').ClinicalSelectKey; answers?: Record<string, string> }
   | { kind: 'echo'; key: import('./echo-autofill').EchoKey }
   | { kind: 'bmi' }
   | { kind: 'natriuretic'; assay: 'BNP' | 'NT-PROBNP' }
