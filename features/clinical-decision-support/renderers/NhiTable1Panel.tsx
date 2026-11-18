@@ -16,6 +16,7 @@ import { useSecondTick } from '@/src/shared/hooks/use-second-tick.hook'
 import type { ResourceNavTarget } from '@/src/application/stores/resource-navigation.store'
 import { formatGenerationDuration } from '@/features/medical-summary/utils/summary-generation-info'
 import { TherapyResponseChart } from './TherapyResponseChart'
+import { NhiCopyChartNoteButton } from './NhiCopyChartNoteButton'
 import type { CdssCoverageCheck, CdssCoverageSummary, CdssFactSource } from '../types'
 import {
   selectNhiLipidAiCriteria,
@@ -1088,14 +1089,17 @@ function NhiTable1PanelContent({
     <section className="space-y-3 px-3 pb-4" aria-label={summary.title} data-testid="nhi-table1-panel">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <p className="text-sm font-semibold">{summary.conclusion}</p>
-        <a
-          className="text-xs text-primary underline underline-offset-2"
-          href={summary.sourceUrl}
-          target="_blank"
-          rel="noreferrer"
-        >
-          {summary.source}
-        </a>
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+          <a
+            className="pt-1 text-xs text-primary underline underline-offset-2"
+            href={summary.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {summary.source}
+          </a>
+          <NhiCopyChartNoteButton summary={summary} locale={locale} />
+        </div>
       </div>
 
       {clinicalSummaryRows.length > 0 ? (
