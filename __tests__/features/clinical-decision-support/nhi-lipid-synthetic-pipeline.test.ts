@@ -38,14 +38,14 @@ describe('bridge FHIR → production parser → automatic answers → clinician 
       expect(suggestion.evidence.length).toBeGreaterThan(0)
       expect(store().provenance[suggestion.criterionId].source).toBe('ai')
     }
-    expect(fixtureSummary(effective(record)).documentationNote).not.toContain('醫師人工核對')
+    expect(fixtureSummary(effective(record)).documentationNote).not.toContain('醫師核對')
     // Re-running unchanged evidence must not drop prior AI-origin facts merely
     // because they are no longer unknown after the first extraction.
     run(scenario, record)
     expect(tier(record)).toBe(scenario.expected.acceptedAiTier)
     for (const [id, answer] of Object.entries(scenario.physicianAnswers)) store().answer(record.id, id, answer)
     expect(tier(record)).toBe(scenario.expected.physicianTier)
-    expect(fixtureSummary(effective(record)).documentationNote).toContain('醫師人工核對')
+    expect(fixtureSummary(effective(record)).documentationNote).toContain('醫師核對')
   })
 
   it('keeps a clinician rejection of carotid disease through repeated model replies', () => {
