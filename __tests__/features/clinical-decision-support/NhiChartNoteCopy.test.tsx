@@ -47,6 +47,22 @@ describe('useNhiChartNoteCopy', () => {
     expect(screen.queryByTestId('nhi-table1-copied-note')).toBeNull()
   })
 
+  it('keeps showing what was copied, and asks for a re-copy, after the assessment changes', async () => {
+    writeText.mockResolvedValue(undefined)
+    const { rerender } = render(<Harness value={summary()} />)
+    fireEvent.click(screen.getByRole('button', { name: '複製到病歷' }))
+    await screen.findByText('已複製以下內容，可直接貼到病歷')
+    expect(screen.queryByTestId('nhi-table1-copied-note-stale')).toBeNull()
+
+    rerender(<Harness value={summary({ documentationNote: '判讀：至少「非常高風險」' })} />)
+    expect(screen.getByLabelText('已複製的內容').textContent).toBe(NOTE)
+    expect(screen.getByTestId('nhi-table1-copied-note-stale')).toHaveTextContent('判讀已更新，剪貼簿仍是下方舊內容')
+
+    fireEvent.click(screen.getByRole('button', { name: /複製/ }))
+    await waitFor(() => expect(screen.getByLabelText('已複製的內容').textContent).toBe('判讀：至少「非常高風險」'))
+    expect(writeText).toHaveBeenLastCalledWith('判讀：至少「非常高風險」')
+    expect(screen.queryByTestId('nhi-table1-copied-note-stale')).toBeNull()
+  })
   it('says how many unreviewed AI answers the copy leaves out', async () => {
     writeText.mockResolvedValue(undefined)
     render(<Harness value={summary({ factors: [check('smoking', 'ai')], diseaseChecks: [check('cad', 'ai'), check('diabetes', 'physician')] })} />)
