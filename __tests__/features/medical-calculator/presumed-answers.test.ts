@@ -51,8 +51,6 @@ it('presumes nothing while the chart reloads, even with a CDSS NYHA answer', () 
   expect(resolveInput(input('maggic-hf', 'diabetes'), nyhaOnly)).toMatchObject({ value: '', filled: false })
 })
 
-it('leaves questions it cannot read from the record unanswered', () => {
-  for (const [calc, key] of [['nafld-fibrosis', 'dm']]) {
-    expect(resolveInput(input(calc, key), loaded({})).value).toBe('')
-  }
+it('fills NAFLD 空腹血糖異常／糖尿病 否 when the record shows neither', () => {
+  expect(resolveInput(input('nafld-fibrosis', 'dm'), loaded({})).value).toBe('no')
 })

@@ -170,7 +170,7 @@ export const CALC_INFO: Record<string, CalcInfo> = {
   },
   'cha2ds2-va': {
     useWhen: { en: 'ESC 2024 thromboembolic risk assessment in AF.', zh: 'ESC 2024 心房顫動血栓風險評估。' },
-    caveats: { en: 'No sex point. Missing histories remain unknown. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。未填病史保留未知；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },
+    caveats: { en: 'No sex point. Histories not in the record are prefilled No for you to check. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。紀錄未見的病史預填「無」，請核對；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },
   },
   'cha2ds2-vasc': {
     useWhen: { en: 'Stroke risk in non-valvular atrial fibrillation, to guide anticoagulation.', zh: '非瓣膜性心房顫動之中風風險，用以指引抗凝。' },
