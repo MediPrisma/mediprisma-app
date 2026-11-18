@@ -16,6 +16,8 @@ const COMPLETENESS_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSys
 // capture with a problem can be traced to its patient; the capture time is the extension's own.
 const CHART_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-chart-no'
 const DURATION_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-duration-ms'
+// D091: HIS requests the extension itself sent for this capture (not the chart page's own requests).
+const REQUESTS_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-request-count'
 const CHART_NO = /^[0-9A-Za-z-]{1,16}$/
 const ENCOUNTER_CLASS: Record<string, 'outpatient' | 'inpatient' | 'emergency'> = { AMB: 'outpatient', IMP: 'inpatient', EMER: 'emergency' }
 const MEDCLOUD_VERSION_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/CodeSystem/extension-version'
@@ -36,6 +38,7 @@ export interface HospitalCaptureSummary {
   hospitalResources: number
   chartNo?: string
   durationMs?: number
+  requestCount?: number
   resourceCounts?: NonNullable<HospitalCaptureEvent['resource_counts']>
   encounterCounts?: NonNullable<HospitalCaptureEvent['encounter_counts']>
 }
@@ -87,6 +90,7 @@ export function summarizeHospitalCapture(bundle: unknown, stage?: string): Hospi
   }
   const chart = singleCode(tags, CHART_SYSTEM)
   const duration = Number(singleCode(tags, DURATION_SYSTEM))
+  const requests = singleCode(tags, REQUESTS_SYSTEM)
   const incomplete = failures.length > 0 || tags.some(t => t.system === COMPLETENESS_SYSTEM && t.code === 'partial')
   const outcome: HospitalCaptureEvent['outcome'] = stage === 'cloud-only' ? 'failed'
     : stage === 'hospital-reports-failed' || incomplete ? 'partial'
@@ -95,6 +99,7 @@ export function summarizeHospitalCapture(bundle: unknown, stage?: string): Hospi
     hospitalVersion: singleVersion(tags, HOSPITAL_VERSION_SYSTEM), medcloudVersion: singleVersion(tags, MEDCLOUD_VERSION_SYSTEM), hospitalResources,
     ...(chart && CHART_NO.test(chart) ? { chartNo: chart } : {}),
     ...(Number.isInteger(duration) && duration >= 0 && duration <= 3_600_000 ? { durationMs: duration } : {}),
+    ...(typeof requests === 'string' && /^\d{1,5}$/.test(requests) ? { requestCount: Number(requests) } : {}),
     ...(hospitalResources ? { resourceCounts, encounterCounts } : {}) }
 }
 
@@ -120,6 +125,7 @@ export function reportHospitalCapture(bundle: unknown, stage?: string, reason?: 
       hospital_resources: bucket(summary.hospitalResources),
       ...(summary.chartNo ? { chart_no: summary.chartNo } : {}),
       ...(summary.durationMs !== undefined ? { duration_ms: summary.durationMs } : {}),
+      ...(summary.requestCount !== undefined ? { request_count: summary.requestCount } : {}),
       ...(summary.resourceCounts ? { resource_counts: summary.resourceCounts, encounter_counts: summary.encounterCounts } : {}),
       // Only a cloud-only end carries 雲端懷爾抓抓's closed reason code; anything else is dropped.
       ...(stage === 'cloud-only' && summary.outcome === 'failed' && hospitalUnavailableReasonSchema.safeParse(reason).success
