@@ -1,5 +1,8 @@
 import type { CalculatorDef, CalcValues, CalcResult, L, SelectInput } from '../types'
 import { AGE_INPUT, SEX_INPUT, n } from './_shared'
+import type { ClinicalSelectKey } from '../hfpef-clinical-autofill'
+
+const HISTORY_SOURCE: Record<string, ClinicalSelectKey> = { chf: 'chf', htn: 'htn', dm: 'diabetes', stroke: 'strokeTiaEmbolism', vascular: 'vascular' }
 
 const label = (zh: string, en: string): L => ({ zh, en })
 const histories = [
@@ -18,8 +21,9 @@ const historyInputs: SelectInput[] = histories.map(({ key, label }) => ({
   label,
   type: 'select',
   defaultValue: '',
-  // Diabetes is read from the record and presumed absent when it shows none.
-  ...(key === 'dm' ? { source: { kind: 'hfpefClinical' as const, key: 'diabetes' as const }, presumed: 'no' } : {}),
+  // Read from the record's diagnosis codes; presumed absent when it shows none.
+  source: { kind: 'hfpefClinical' as const, key: HISTORY_SOURCE[key] },
+  presumed: 'no',
   options: [
     { value: 'no', label: { zh: '無', en: 'No' } },
     { value: 'yes', label: { zh: '有', en: 'Yes' } },

@@ -123,6 +123,8 @@ export const HAS_BLED: CalculatorDef = {
     label: { zh, en },
     defaultValue: '',
     ...(key === 'elderly' ? { source: { kind: 'hfpefClinical' as const, key: 'ageOver65' as const } } : {}),
+    ...(key === 'stroke' ? { source: { kind: 'hfpefClinical' as const, key: 'stroke' as const }, presumed: 'no' } : {}),
+    ...(key === 'liver' ? { source: { kind: 'hfpefClinical' as const, key: 'liverDisease' as const }, presumed: 'no' } : {}),
     // The record cannot show these; presumed absent for the clinician to change.
     ...(['bleeding', 'inr', 'alcohol'].includes(key) ? { presumed: 'no' } : {}),
     options: [

@@ -50,8 +50,9 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     // stays unfilled (its default is not "from the patient").
     if (input.source?.kind === 'hfpefClinical') {
       const hit = autofill.clinicalSelects?.[input.source.key]
-      if (hit && input.options.some(option => option.value === hit.value)) return {
-        ...EMPTY, value: hit.value, filled: true, date: hit.date,
+      const answer = hit && (input.source.answers?.[hit.value] ?? hit.value)
+      if (hit && input.options.some(option => option.value === answer)) return {
+        ...EMPTY, value: answer!, filled: true, date: hit.date,
         source: { testName: hit.testName, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType },
       }
     }
