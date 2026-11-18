@@ -24,9 +24,8 @@ it.each([
   ['Z86.71', ['priorVte']],
   ['I82.40', ['priorDvt', 'priorVte']],
   ['I82.501', ['priorDvt', 'priorVte']], // chronic DVT
-  ['433.11', ['cadOrStroke', 'stroke', 'strokeTiaEmbolism']], // ICD-9 carotid occlusion with infarction
-  ['433.10', []], // without infarction
-  ['434.00', []],
+  ['401.9', []], // ICD-9 is not read
+  ['434.11', []],
   ['C34.90', ['activeCancer']],
   ['C44.91', []], // non-melanoma skin cancer
   ['F17.210', ['smoker']],
@@ -40,8 +39,8 @@ it('counts cancer treated within six months only', () => {
   expect(historySelects([condition('C18.9', '2026-01-01')], [], now).activeCancer).toBeUndefined()
 })
 
-it('reads an ICD-9 code from an encounter diagnosis', () => {
-  expect(historySelects([], [encounter('401.9 Essential hypertension')], now).htn?.value).toBe('yes')
+it('reads a code from an encounter diagnosis', () => {
+  expect(historySelects([], [encounter('I10 Essential hypertension')], now).htn?.value).toBe('yes')
 })
 
 const field = (calcId: string, key: string) => CALCULATORS.find((c) => c.id === calcId)!.inputs.find((i) => i.key === key)!
