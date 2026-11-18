@@ -34,14 +34,15 @@ const isVte = (code: string) => isDvt(code) || /^(?:I26|Z8671)/.test(code)
 const isCancer = (code: string) => /^C(?:[0-8]\d|9[0-6])/.test(code) && !/^C44/.test(code)
 /** Current tobacco use: F17 bar its remission codes (F17.2x1), Z72.0. */
 const isSmoker = (code: string) => /^(?:F17|Z720)/.test(code) && !/^F172\d1/.test(code)
+/** Nicotine dependence in remission: F17.2x1. */
+const isSmokingRemission = (code: string) => /^F172\d1/.test(code)
 
 /** Wells' 「active cancer」: treated within six months. */
 const CANCER_WINDOW_DAYS = 183
 
 export function historySelects(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): Partial<Record<HistoryKey, ClinicalSelectValue>> {
-  // A history counts once diagnosed, resolved or not; current smoking does not.
+  // A history counts once diagnosed, resolved or not.
   const read = (matches: (code: string) => boolean, name: string, withinDays?: number) => diagnosisSelect(conditions, encounters, now, matches, name, withinDays, true)
-  const current = (matches: (code: string) => boolean, name: string, withinDays?: number) => diagnosisSelect(conditions, encounters, now, matches, name, withinDays)
   const found: Partial<Record<HistoryKey, ClinicalSelectValue | undefined>> = {
     htn: read(isHtn, '高血壓'),
     chf: read(isHf, '心衰竭'),
@@ -54,9 +55,38 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
     chronicLiverDisease: read(isChronicLiverDisease, '慢性肝病'),
     priorVte: read(isVte, 'DVT／PE '),
     priorDvt: read(isDvt, 'DVT '),
-    // Treated within six months counts even if it is now in remission.
-    activeCancer: read(isCancer, '惡性腫瘤（近 6 個月）', CANCER_WINDOW_DAYS),
-    smoker: current(isSmoker, '吸菸'),
+    activeCancer: activeCancer(conditions, encounters, now),
+    smoker: currentSmoking(conditions, encounters, now),
   }
   return Object.fromEntries(Object.entries(found).filter(([, value]) => value)) as Partial<Record<HistoryKey, ClinicalSelectValue>>
+}
+
+/**
+ * Wells' 「active cancer」 asks for treatment within six months, which the
+ * record does not date. A cancer code on a visit in the last six months reads
+ * 「是」 (seen for it, for the clinician to confirm); a cancer known only from
+ * older records reads 「unknown」, left blank rather than presumed absent.
+ */
+function activeCancer(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): ClinicalSelectValue | undefined {
+  const recentVisit = diagnosisSelect([], encounters, now, isCancer, '惡性腫瘤（近 6 個月，治療請核對）', CANCER_WINDOW_DAYS, true)
+  if (recentVisit) return recentVisit
+  const known = diagnosisSelect(conditions, encounters, now, isCancer, '惡性腫瘤', undefined, true)
+  return known && { ...known, value: 'unknown' }
+}
+
+/** The latest of the records matching, each read on its own so the newest wins. */
+function latest(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date, matches: (code: string) => boolean, name: string, history: boolean): ClinicalSelectValue | undefined {
+  const hits = [
+    ...conditions.map((condition) => diagnosisSelect([condition], [], now, matches, name, undefined, history)),
+    ...encounters.map((encounter) => diagnosisSelect([], [encounter], now, matches, name, undefined, history)),
+  ].filter((hit): hit is ClinicalSelectValue => !!hit)
+  return hits.sort((a, b) => b.date.localeCompare(a.date))[0]
+}
+
+/** Current smoking: the latest tobacco code, unless a remission code is as recent or newer (then 「否」). */
+function currentSmoking(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): ClinicalSelectValue | undefined {
+  const smoking = latest(conditions, encounters, now, isSmoker, '吸菸', false)
+  const remission = latest(conditions, encounters, now, isSmokingRemission, '尼古丁依賴緩解', true)
+  if (remission && (!smoking || remission.date >= smoking.date)) return { ...remission, value: 'no' }
+  return smoking
 }

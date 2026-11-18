@@ -29,14 +29,14 @@ it.each([
   ['C34.90', ['activeCancer']],
   ['C44.91', []], // non-melanoma skin cancer
   ['F17.210', ['smoker']],
-  ['F17.211', []], // nicotine dependence in remission
+  ['F17.211', ['smoker']], // remission: answered 否 (below)
   ['J44.9', []],
 ])('reads %s', (code, expected) => {
   expect(keys([code])).toEqual([...expected].sort())
 })
 
-it('counts cancer treated within six months only', () => {
-  expect(historySelects([condition('C18.9', '2026-01-01')], [], now).activeCancer).toBeUndefined()
+it('answers 否 for current smoking when the only code is remission', () => {
+  expect(historySelects([condition('F17.211')], [], now).smoker?.value).toBe('no')
 })
 
 it('reads a code from an encounter diagnosis', () => {
@@ -71,7 +71,19 @@ it('answers Wells DVT 「曾確診 DVT」 否 for a PE-only history', () => {
   expect(resolveInput(field('wells-dvt', 'priordvt'), autofill).value).toBe('0')
 })
 
-it('counts cancer treated within six months even if now in remission', () => {
-  const remission = { ...condition('C18.9', '2026-10-01'), clinicalStatus: 'remission' } as ConditionEntity
-  expect(historySelects([remission], [], now).activeCancer?.value).toBe('yes')
+const visit = (code: string, start: string): EncounterEntity =>
+  ({ id: `v-${code}-${start}`, status: 'finished', period: { start }, reasonCode: [{ coding: [{ code }] }] }) as EncounterEntity
+
+it('reads Wells active cancer from a visit in six months, else leaves a known cancer for the clinician', () => {
+  expect(historySelects([], [visit('C18.9', '2026-10-01')], now).activeCancer?.value).toBe('yes')
+  const backfilled = { ...condition('C18.9', '2026-11-01'), onsetDateTime: '2020-01-01', clinicalStatus: 'resolved' } as ConditionEntity
+  expect(historySelects([backfilled], [], now).activeCancer?.value).toBe('unknown')
+  const autofill = buildAutofill([], { age: 60, gender: 'male' }, [], [], now, [backfilled], [])
+  expect(resolveInput(field('wells-pe', 'cancer'), autofill)).toMatchObject({ value: '', filled: false })
+})
+
+it('lets a newer smoking remission code outrank an older smoking code', () => {
+  const found = historySelects([condition('F17.211', '2026-11-01')], [visit('F17.210', '2026-04-01')], now)
+  expect(found.smoker?.value).toBe('no')
+  expect(historySelects([condition('F17.211', '2026-01-01')], [visit('F17.210', '2026-04-01')], now).smoker?.value).toBe('yes')
 })

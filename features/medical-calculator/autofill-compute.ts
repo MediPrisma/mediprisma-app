@@ -55,6 +55,9 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
         ...EMPTY, value: answer!, filled: true, date: hit.date,
         source: { testName: hit.testName, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType },
       }
+      // The record has something it cannot turn into an answer (「unknown」):
+      // left for the clinician, never presumed absent.
+      if (hit) return { ...EMPTY, value: '' }
     }
     if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
     const presumed = input.presumed !== undefined ? input.options.find((option) => option.value === input.presumed) : undefined
