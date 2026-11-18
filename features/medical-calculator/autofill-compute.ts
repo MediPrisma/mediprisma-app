@@ -87,6 +87,11 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     }
   }
 
+  // A percentage takes no reading in another unit: an absolute count (neutrophils in /µL) is not a share.
+  if (expected === '%' && hit.unit.trim() && normUnit(hit.unit) !== normUnit('%')) {
+    return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
+  }
+
   // Preserve HFpEF threshold precision (e.g. RWT 0.424 must not become 0.42).
   const formatted = input.source && ['echo', 'bmi', 'natriuretic'].includes(input.source.kind) ? String(hit.value) : formatNum(hit.value)
   const prov = { testName: hit.testName, loinc: hit.loinc, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType }

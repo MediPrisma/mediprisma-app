@@ -17,6 +17,7 @@ import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue 
 import { buildEchoAutofill } from '../echo-autofill'
 import { doacPatientSelects, type LabObservation } from '../doac-patient-autofill'
 import { hasBledSelects } from '../has-bled-autofill'
+import { ageBpSelects } from '../age-bp-autofill'
 import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals, type MeasuredEntry } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
 import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
@@ -326,6 +327,7 @@ export function buildAutofill(
       ...buildClinicalSelects(reports, medications, now, conditions, encounters),
       ...doacPatient,
       ...hasBledSelects({ resolve, dialysis: doacPatient.doac_dialysis, conditions, encounters, now }),
+      ...ageBpSelects({ age: typeof age === 'number' ? age : undefined, resolve }),
       ...(typeof age === 'number' ? { ageOver65: { value: age > 65 ? 'yes' : 'no', date: '', testName: `年齡 ${age} 歲` } } : {}),
     },
   }

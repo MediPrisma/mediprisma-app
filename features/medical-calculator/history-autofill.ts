@@ -9,7 +9,7 @@ import { classifyEncounterClass } from '@/src/core/use-cases/medical-summary/gen
  * Codes are ICD-10 without dots; ICD-9 is not read (owner decision
  * 2026-11-19: the record is ICD-10 now).
  */
-export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis'
+export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis' | 'rockallComorbid'
 
 /** I10–I16. */
 const isHtn = (code: string) => /^I1[0-6]/.test(code)
@@ -45,6 +45,9 @@ const isEsrdOrDialysis = (code: string) => /^(?:N186|Z992|Z49|Z9115)/.test(code)
 /** PREVENT's known CVD: coronary disease, stroke (or its history code Z86.73), PAD or heart failure. */
 const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:Z8673|I70|I739)/.test(code) || isHf(code)
 
+/** Rockall 3 points: renal failure (N17, N18.4–N18.6, N19, Z99.2), liver failure (K72, K70.4, K76.7) or metastatic cancer (C77–C79). */
+const isRockallFailureOrMets = (code: string) => /^(?:N17|N18[4-6]|N19|Z992|K72|K704|K767|C7[7-9])/.test(code)
+
 /** Wells' 「active cancer」: treated within six months. */
 const CANCER_WINDOW_DAYS = 183
 
@@ -68,6 +71,7 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
     ifgOrDiabetes: read(isIfgOrDiabetes, '空腹血糖異常／糖尿病'),
     ascvdOrHf: read(isAscvdOrHf, '心血管疾病'),
     esrdOrDialysis: read(isEsrdOrDialysis, '末期腎病／透析'),
+    rockallComorbid: rockallComorbidity(conditions, encounters, now),
     ...heartFailureCourse(conditions, encounters, now),
   }
   return Object.fromEntries(Object.entries(found).filter(([, value]) => value)) as Partial<Record<HistoryKey, ClinicalSelectValue>>
@@ -85,6 +89,19 @@ function activeCancer(conditions: ConditionEntity[], encounters: EncounterEntity
   // Owner rule 2026-11-19: no visit for it in six months reads 「無」, naming the older code.
   const known = diagnosisSelect(conditions, encounters, now, isCancer, '惡性腫瘤', undefined, true)
   return known && { ...known, value: 'no', testName: `近 6 個月未見癌症就醫；${known.testName.replace(/（.*）$/, '')}，預設無（請核對是否治療中）` }
+}
+
+/**
+ * Rockall's comorbidity as its option index: 2 for renal or liver failure or
+ * metastases (3 points), 1 for heart failure or ischaemic heart disease
+ * (2 points). Failure is read from active diagnoses only; heart disease is a
+ * history. Neither: the presumed 「無」.
+ */
+function rockallComorbidity(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): ClinicalSelectValue | undefined {
+  const failure = diagnosisSelect(conditions, encounters, now, isRockallFailureOrMets, '腎／肝衰竭或轉移癌')
+  if (failure) return { ...failure, value: '2' }
+  const cardiac = diagnosisSelect(conditions, encounters, now, (code) => isHf(code) || isIhd(code), '心衰竭或缺血性心臟病', undefined, true)
+  return cardiac && { ...cardiac, value: '1' }
 }
 
 /**
