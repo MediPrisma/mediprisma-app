@@ -61,26 +61,41 @@ export function timiSelects(input: { observations: LabObservation[]; reports: Di
     if (!text.trim() || classifyReport(report, text) !== 'ecg' || !recent(date, now)) return []
     return [{ report, text, date }]
   }).sort((a, b) => b.date.localeCompare(a.date))
-  const ecg = ecgs.find((item) => affirmedSt(item.text)) ?? ecgs[0]
+  const ecgReadings = ecgs.map((item) => ({ ...item, st: readSt(item.text) }))
+  const ecg = ecgReadings.find((item) => item.st === 'yes') ?? ecgReadings.find((item) => item.st === 'unsure') ?? ecgReadings[0]
   if (ecg) {
-    const st = affirmedSt(ecg.text)
-    out.timiSt = { value: st ? 'yes' : 'no', date: day(ecg.date), testName: st ? `72 小時內 EKG 記載 ST 偏移（請核對 ≥0.5 mm）` : '72 小時內 EKG 未記載 ST 偏移（請核對）', obsId: ecg.report.id, resourceType: 'DiagnosticReport' }
+    out.timiSt = ecg.st === 'yes'
+      ? { value: 'yes', date: day(ecg.date), testName: '72 小時內 EKG 記載 ST 偏移（未載幅度者請核對 ≥0.5 mm）', obsId: ecg.report.id, resourceType: 'DiagnosticReport' }
+      : ecg.st === 'unsure'
+        ? { value: 'unknown', date: day(ecg.date), testName: '72 小時內 EKG 的 ST 描述不確定（疑似／待排除），請依原文判讀', obsId: ecg.report.id, resourceType: 'DiagnosticReport' }
+        : { value: 'no', date: day(ecg.date), testName: '72 小時內 EKG 未記載 ≥0.5 mm 的 ST 偏移（請核對）', obsId: ecg.report.id, resourceType: 'DiagnosticReport' }
   }
   return out
 }
 
 /**
- * ST elevation or depression affirmed somewhere in the report: each mention is
- * read within its own clause, negated by a word before it (「No ST elevation」)
- * or after it (「ST elevation is no longer present」), so one negated finding
- * does not hide another affirmed one.
+ * TIMI's ST deviation as the ECG states it. Each mention is read in its own
+ * clause. A negation counts only where it governs the finding itself: right
+ * before it (「No ST elevation」, 「無明顯 ST 段上升」) or as its own predicate
+ * right after it (「ST elevation is no longer present」); 「no change in ST
+ * depression」 or 「ST depression with absent P waves」 still affirm it. A stated
+ * size under 0.5 mm is below TIMI's threshold. 「Possible」 or 「suspect」 is
+ * left for the clinician.
  */
-function affirmedSt(text: string): boolean {
+function readSt(text: string): 'yes' | 'unsure' | 'no' {
   const mention = /\bST(?:[- ]segment)?[- ]?(?:elevation|depression)|\bST[- ]?[↑↓]|ST\s*段\s*(?:上升|抬高|下降|壓低)/gi
-  return text.split(/[\n\r.;。；,，]|\bbut\b|但|而/i).some((clause) => [...clause.matchAll(mention)].some((match) => {
-    const before = clause.slice(0, match.index)
-    const after = clause.slice(match.index! + match[0].length)
-    return !/(?:\bno\b|\bnot\b|without|absence|rule\s*out|possible|suspect|\br\/o\b|疑|未見|沒有|無)[^,，:：]*$/i.test(before)
-      && !/^[^,，]*?(?:no\s+longer|not\s+(?:seen|present)|\babsent\b|\bresolved\b|已消失|消失|未見)/i.test(after)
-  }))
+  let unsure = false
+  for (const clause of text.split(/[\n\r;。；,，]|\.(?!\d)|\bbut\b|但|而/i)) {
+    for (const match of clause.matchAll(mention)) {
+      const before = clause.slice(0, match.index)
+      const after = clause.slice(match.index! + match[0].length)
+      if (/(?:\bno\b|\bnot\b|without|absence\s+of|未見|沒有|無)\s*(?:significant|obvious|definite|acute|new|明顯|顯著)?\s*$/i.test(before)) continue
+      if (/^\s*(?:(?:is|are|was|were|has|have)\s+)?(?:no\s+longer|not\s+(?:seen|present)|absent|resolved|已消失|消失)/i.test(after)) continue
+      if (/(?:possible|suspect(?:ed)?|rule\s*out|\br\/o\b|equivocal|疑似?|待排除)\s*(?:\S+\s*){0,2}$/i.test(before)) { unsure = true; continue }
+      const size = /(\d+(?:\.\d+)?)\s*mm/i.exec(clause)
+      if (size && Number(size[1]) < 0.5) continue
+      return 'yes'
+    }
+  }
+  return unsure ? 'unsure' : 'no'
 }

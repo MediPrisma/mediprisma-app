@@ -50,6 +50,18 @@ describe('TIMI ST deviation from the ECG', () => {
     expect(st('無 ST 段上升，但 ST 段壓低')).toBe('yes')
     expect(st('ST elevation is no longer present.')).toBe('no')
     expect(st('ST depression resolved.')).toBe('no')
+    // A negation that governs something else does not deny the ST finding.
+    expect(st('No significant change in ST depression.')).toBe('yes')
+    expect(st('ST depression with absent P waves.')).toBe('yes')
+    expect(st('無明顯 ST 段上升')).toBe('no')
+  })
+
+  it('applies TIMI’s 0.5 mm threshold where the report states a size, and leaves an equivocal finding blank', () => {
+    const st = (text: string) => timiSelects({ observations: [], reports: [ecg(text, '2026-11-19T08:00:00+08:00')], now }).timiSt?.value
+    expect(st('ST depression 0.3 mm in V4-V6.')).toBe('no')
+    expect(st('ST depression 0.5 mm in V4-V6.')).toBe('yes')
+    expect(st('ST elevation 2 mm in II, III, aVF.')).toBe('yes')
+    expect(st('Possible ST depression in V5.')).toBe('unknown')
   })
 
   it('reads 否 from a recent ECG that names none or denies it, and nothing from an older one', () => {
