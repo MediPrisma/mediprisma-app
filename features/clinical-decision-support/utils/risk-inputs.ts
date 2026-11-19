@@ -166,7 +166,8 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
       value = statin.state === 'confirmed-current' ? 'yes' : statin.state === 'not-found' ? 'no' : ''
       origin = value ? 'rule' : 'none'
       date = statin.lastPrescriptionDate
-      detail = value ? text(value === 'yes' ? '規則：statin 處方供藥中' : '規則：近期無 statin 處方', value === 'yes' ? 'Rule: a statin is currently supplied' : 'Rule: no recent statin prescription') : undefined
+      detail = value ? text(value === 'yes' ? '規則：statin 處方供藥中' : '規則：近期無 statin 處方', value === 'yes' ? 'Rule: a statin is currently supplied' : 'Rule: no recent statin prescription')
+        : text('病歷有 statin 處方，目前是否服用待確認', 'A statin is on the record; current use to confirm')
     }
     // Any one current antihypertensive is treatment (not the HFpEF ≥2 count).
     const anyAntihypertensive = autofill.clinicalSelects?.antihypertensiveAny
@@ -188,10 +189,11 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     if (!isManual && key === 'smoking' && visit.smokingCurrent) {
       value = visit.smokingCurrent; origin = 'visit'; date = today; detail = text('問診：DP-08 目前吸菸', 'Asked: DP-08 current smoking')
     }
-    // Without today's answer, a smoking code (F17, Z72.0) proposes 「是」
-    // before the no-evidence 「否」 below.
+    // Without today's answer or the record's own dated reading (a newer
+    // remission code makes `smoker` 「否」), a smoking code (F17, Z72.0)
+    // proposes 「是」 before the no-evidence 「否」 below.
     const smokingCode = autofill.clinicalSelects?.pceSmoking
-    if (!isManual && key === 'smoking' && !visit.smokingCurrent && smokingCode?.value === 'yes') {
+    if (!isManual && key === 'smoking' && !visit.smokingCurrent && !autofill.clinicalSelects?.smoker && smokingCode?.value === 'yes') {
       value = 'yes'; origin = 'icd'; date = smokingCode.date || undefined; detail = text(`ICD：${smokingCode.testName}`, `ICD: ${smokingCode.testName}`)
     }
     // The chart's own BMI and eGFR facts outrank a lab line.
@@ -209,7 +211,10 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     // Owner 2026-11-16: a history or drug question the record has no evidence
     // for (no code, no prescription, no answer today) is prefilled 「否」, not
     // left 未確認; the clinician changes it where it is wrong.
-    if (!isManual && !value && DEFAULT_NO_KEYS.has(key)) {
+    // A statin on the record whose current use is unconfirmed stays for the
+    // clinician to answer: that is evidence, not its absence.
+    const statinUnconfirmed = key === 'statin' && Boolean(profile.medicationClassContexts?.statin) && !value
+    if (!isManual && !value && !statinUnconfirmed && DEFAULT_NO_KEYS.has(key)) {
       value = 'no'; origin = 'rule'; detail = text('規則：病歷未見相關診斷碼或處方，預設否（請核對）', 'Rule: no code or prescription in the record; defaults to no (please check)')
     }
     values[key] = value
