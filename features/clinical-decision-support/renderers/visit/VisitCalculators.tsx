@@ -113,7 +113,10 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
  * AF ones, offered only where the page holds OAC with an antiplatelet.
  */
 export const CAD_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
+  // The cardiologist's 「CAD 有沒有 TIMI 等等的風險」 (owner request 2026-11-19):
+  // TRS 2°P where long-term antiplatelet therapy is decided.
   { id: 'egfr', dp: 'DP-10', source: 'cad', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  { id: 'trs2p', dp: 'DP-12', source: 'cad', calculatorId: 'timi-trs2p', names: /TRS[ -]?2°?P|TIMI 二級預防/, needsPoint: true },
   { id: 'cha2ds2-va', dp: 'DP-16', source: 'cad', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
   { id: 'has-bled', dp: 'DP-16', source: 'cad', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
   { id: 'crcl', dp: 'DP-16', source: 'cad', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },

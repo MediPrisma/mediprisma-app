@@ -9,7 +9,7 @@ import { classifyEncounterClass } from '@/src/core/use-cases/medical-summary/gen
  * Codes are ICD-10 without dots; ICD-9 is not read (owner decision
  * 2026-11-19: the record is ICD-10 now).
  */
-export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis'
+export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis' | 'pad' | 'priorCabg'
 
 /** I10–I16. */
 const isHtn = (code: string) => /^I1[0-6]/.test(code)
@@ -45,6 +45,10 @@ const isEsrdOrDialysis = (code: string) => /^(?:N186|Z992|Z49|Z9115)/.test(code)
 /** PREVENT's known CVD: coronary disease, stroke (or its history code Z86.73), PAD or heart failure. */
 const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:Z8673|I70|I739)/.test(code) || isHf(code)
 
+/** TRS 2°P's peripheral artery disease: lower-limb atherosclerosis I70.2x, I73.9. */
+const isPad = (code: string) => /^(?:I702|I739)/.test(code)
+/** Prior CABG: bypass graft present (Z95.1) or graft atherosclerosis (I25.81x). */
+const isPriorCabg = (code: string) => /^(?:Z951|I2581)/.test(code)
 /** Wells' 「active cancer」: treated within six months. */
 const CANCER_WINDOW_DAYS = 183
 
@@ -68,6 +72,8 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
     ifgOrDiabetes: read(isIfgOrDiabetes, '空腹血糖異常／糖尿病'),
     ascvdOrHf: read(isAscvdOrHf, '心血管疾病'),
     esrdOrDialysis: read(isEsrdOrDialysis, '末期腎病／透析'),
+    pad: read(isPad, '周邊動脈疾病'),
+    priorCabg: read(isPriorCabg, '冠狀動脈繞道'),
     ...heartFailureCourse(conditions, encounters, now),
   }
   return Object.fromEntries(Object.entries(found).filter(([, value]) => value)) as Partial<Record<HistoryKey, ClinicalSelectValue>>
