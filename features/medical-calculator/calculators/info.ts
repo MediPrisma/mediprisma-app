@@ -9,6 +9,10 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'prevent-cvd': {
+    useWhen: { zh: '30–79 歲初級預防之 10 年總心血管（ASCVD＋心衰竭）風險；高血壓 130–139/80–89 依 AHA/ACC 2025 以 ≥7.5% 決定是否用藥。30–59 歲另估 30 年。', en: '10-year total CVD (ASCVD plus heart failure) risk for primary prevention at age 30–79; at 130–139/80–89 the 2025 AHA/ACC guideline starts medication at ≥7.5%. 30-year risk at age 30–59.' },
+    caveats: { zh: '與 PREVENT-ASCVD 是不同終點：血脂讀 ASCVD，高血壓讀總 CVD，勿互換。排除已有 CVD、亞臨床動脈粥樣硬化、遺傳性 CVD、末期腎病及壽命不足一年者。美國基礎模型，無台灣校準，不含 UACR/HbA1c/SDI。', en: 'A different endpoint from PREVENT-ASCVD: lipids read ASCVD, hypertension reads total CVD; do not interchange. Excludes known CVD, subclinical atherosclerosis, inherited CVD, ESKD and life expectancy under one year. US base model without Taiwanese calibration or UACR/HbA1c/SDI.' },
+  },
   'pce-ascvd': {
     useWhen: { zh: '40–79 歲、無 ASCVD 者的 10 年 hard ASCVD 風險（2013 ACC/AHA 多世代方程式）；與 PREVENT 並列參考，判讀 2018 ACC/AHA 血脂指引的四個風險帶。', en: '10-year hard ASCVD risk at age 40–79 without ASCVD (2013 ACC/AHA Pooled Cohort Equations), read beside PREVENT against the four 2018 ACC/AHA cholesterol-guideline bands.' },
     caveats: { zh: '只發表白人與非裔美國人係數；其他族裔（含台灣病人）依指引用白人係數，亞裔族群報告有高估，台灣無校正版。不含 eGFR、BMI、statin；AHA 2025 高血壓指引的 7.5% 門檻用的是 PREVENT total CVD，不是本式。', en: 'Published for non-Hispanic White and African American adults only; other groups (Taiwanese patients included) use the White equations, with overestimation reported in Asian cohorts and no Taiwanese recalibration. No eGFR, BMI or statin term; the AHA 2025 hypertension threshold of 7.5% reads PREVENT total CVD, not this equation.' },
@@ -174,7 +178,7 @@ export const CALC_INFO: Record<string, CalcInfo> = {
   },
   'cha2ds2-va': {
     useWhen: { en: 'ESC 2024 thromboembolic risk assessment in AF.', zh: 'ESC 2024 心房顫動血栓風險評估。' },
-    caveats: { en: 'No sex point. Missing histories remain unknown. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。未填病史保留未知；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },
+    caveats: { en: 'No sex point. Histories not in the record are prefilled No for you to check. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。紀錄未見的病史預填「無」，請核對；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },
   },
   'cha2ds2-vasc': {
     useWhen: { en: 'Stroke risk in non-valvular atrial fibrillation, to guide anticoagulation.', zh: '非瓣膜性心房顫動之中風風險，用以指引抗凝。' },

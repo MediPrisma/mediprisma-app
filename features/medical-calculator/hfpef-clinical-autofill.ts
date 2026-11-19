@@ -2,13 +2,15 @@ import { classifyReport, reportNarrative, extractEcgFindings, isMedicationBeingT
 import type { DiagnosticReportEntity, MedicationEntity, ConditionEntity, EncounterEntity } from '@/src/core/entities/clinical-data.entity'
 import { doacSelects, type DoacSelectKey } from './doac-clinical-autofill'
 import type { DoacPatientKey } from './doac-patient-autofill'
+import { historySelects, type HistoryKey } from './history-autofill'
+import type { HasBledKey } from './has-bled-autofill'
 
 /**
  * Yes/no and graded answers the record (or the CDSS visit) can give a
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -141,18 +143,18 @@ export function diagnosisSelect(
   /** Only a diagnosis dated within this many days counts; an undated one then does not. */
   withinDays?: number,
   /**
-   * A past event (MI, stroke) stays history once its Condition is resolved,
-   * inactive or in remission: ASCVD asks whether it ever happened, not whether
-   * it is current. Refuted, voided and unconfirmed diagnoses still do not count.
+   * A past history: a resolved, inactive or in-remission diagnosis still
+   * counts (an MI or stroke stays history). Refuted, voided and unconfirmed
+   * diagnoses still do not.
    */
-  { includeEnded = false }: { includeEnded?: boolean } = {},
+  history = false,
 ): ClinicalSelectValue | undefined {
   const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
   const tooOld = (date: string) => withinDays !== undefined && (!date || now.getTime() - Date.parse(date) > withinDays * 86_400_000)
   for (const condition of conditions) {
     if (['refuted', 'entered-in-error', 'provisional', 'differential', 'unconfirmed'].includes(condition.verificationStatus ?? '') || condition._inferred) continue
     const ended = ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')
-    if (ended && !includeEnded) continue
+    if (ended && !history) continue
     const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
     if ((date && Date.parse(date) > now.getTime()) || tooOld(date)) continue
     const code = condition.code?.coding?.find((coding) => (!coding.system || /icd/i.test(coding.system)) && matches(normal(coding.code)))
@@ -215,6 +217,8 @@ function defaultNo(found: ClinicalSelectValue | undefined, now: Date, missing: s
 }
 
 const BETA_BLOCKERS = ['bisoprolol', 'carvedilol', 'metoprolol', 'atenolol', 'nebivolol', 'propranolol', 'labetalol', 'acebutolol', 'betaxolol', 'nadolol', 'pindolol', 'bucindolol']
+/** HAS-BLED D (drugs): antiplatelets (B01AC, aspirin N02BA01) and NSAIDs (M01A). */
+const ANTIPLATELET_NSAID = ['aspirin', 'clopidogrel', 'ticagrelor', 'prasugrel', 'cilostazol', 'dipyridamole', 'ticlopidine', 'ibuprofen', 'naproxen', 'diclofenac', 'celecoxib', 'etoricoxib', 'meloxicam', 'mefenamic', 'ketorolac', 'indomethacin', 'piroxicam', 'ketoprofen', 'aceclofenac', 'sulindac', 'nabumetone', 'etodolac']
 const ACEI_ARB = ['captopril', 'enalapril', 'lisinopril', 'ramipril', 'perindopril', 'benazepril', 'fosinopril', 'imidapril', 'quinapril', 'cilazapril', 'trandolapril', 'losartan', 'valsartan', 'candesartan', 'irbesartan', 'telmisartan', 'olmesartan', 'azilsartan', 'eprosartan']
 
 /**
@@ -234,7 +238,12 @@ function drugClassSelect(
     if (!isMedicationBeingTaken(med, now)) return false
     if (med.authoredOn && Date.parse(med.authoredOn) > now.getTime()) return false
     const end = medicationSupplyEndDate(med)
-    return !(end && end < now.toISOString().slice(0, 10))
+    if (end && end < now.toISOString().slice(0, 10)) return false
+    // Eye drops and topical forms are not the systemic drug the scores ask
+    // about (diclofenac or timolol drops, minoxidil lotion), as in antihypertensiveSelect.
+    const atc = medicationAtcCode(med) ?? med.atcClassification?.atcCode
+    const text = [med.drugTerminology?.ingredientText, medicationDisplayName(med), med.drugTerminology?.officialNameEn, med.drugTerminology?.doseForm, ...med.dosageInstruction?.map(d => `${d.route?.text ?? ''} ${d.text ?? ''}`) ?? []].filter(Boolean).join(' ')
+    return !(/^(S|D)/.test(atc ?? '') || /ophthalm|eye\s*drop|topical|眼|外用|皮膚|點眼/i.test(text))
   })
   if (!current.length) return undefined
   for (const med of current) {
@@ -273,10 +282,13 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const pceBpTreat = defaultNo(drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
   const pceDiabetes = defaultNo(diabetes, now, '病歷未見糖尿病診斷碼')
   const pceSmoking = defaultNo(diagnosisSelect(conditions, encounters, now, isSmokingCode, '吸菸'), now, '病歷未見吸菸診斷碼')
-  const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD ', undefined, { includeEnded: true }), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
+  const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD ', undefined, true), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
   const aceiArb = drugClassSelect(medications, now, ACEI_ARB, /^C09/, ' ACEI／ARB')
+  const statin = drugClassSelect(medications, now, ['atorvastatin', 'rosuvastatin', 'simvastatin', 'pravastatin', 'pitavastatin', 'fluvastatin', 'lovastatin'], /^C10(?:AA|BA|BX)/, ' statin')
+  const anyAntihypertensive = drugClassSelect(medications, now, INGREDIENTS, /^C0(?:2|3|7|8|9)/, '降血壓藥')
+  const antiplateletNsaid = drugClassSelect(medications, now, ANTIPLATELET_NSAID, /^(?:B01AC|M01A|N02BA01)/, '抗血小板藥或 NSAID')
   return {
     ...ecg,
     afHistory,
@@ -286,6 +298,10 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...(copd ? { copd } : {}),
     ...(betaBlocker ? { betaBlocker } : {}),
     ...(aceiArb ? { aceiArb } : {}),
+    ...(antiplateletNsaid ? { antiplateletNsaid } : {}),
+    ...(statin ? { statin } : {}),
+    ...(anyAntihypertensive ? { anyAntihypertensive } : {}),
     ...doacSelects(medications, now),
+    ...historySelects(conditions, encounters, now),
   }
 }

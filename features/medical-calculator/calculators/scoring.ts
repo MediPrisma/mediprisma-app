@@ -61,6 +61,10 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'prevent-cvd': {
+    formula: { zh: '總 CVD 風險 (%) = 100 / (1 + exp(−Σ βᵢxᵢ))。與 PREVENT-ASCVD 相同的變項轉換與交互作用，係數為總 CVD 模型專屬。', en: 'Total CVD risk (%) = 100 / (1 + exp(−Σ βᵢxᵢ)). The same transformed terms and interactions as PREVENT-ASCVD with total-CVD coefficients.' },
+    note: { zh: '總 CVD = ASCVD＋心衰竭。係數取自 Khan 2024 Table S12（以 preventr 套件資料核對）。', en: 'Total CVD = ASCVD plus heart failure. Coefficients from Khan 2024 Table S12 (checked against the preventr package data).' },
+  },
   'pce-ascvd': {
     formula: { zh: '10 年風險 = 1 − S₀^exp(Σβᵢxᵢ − 群組平均)。四組（白人／非裔 × 女／男）各有係數：ln 年齡、ln 總膽固醇、ln HDL、ln 收縮壓（治療中／未治療分開）、吸菸、糖尿病及其與 ln 年齡的交互作用。', en: '10-year risk = 1 − S₀^exp(Σβᵢxᵢ − group mean). Four groups (White/African American × female/male) with coefficients for ln age, ln total cholesterol, ln HDL, ln SBP (treated and untreated separately), smoking, diabetes and their ln-age interactions.' },
     note: { zh: '2018 ACC/AHA 血脂指引風險帶：<5% 低、5–<7.5% 邊緣、7.5–<20% 中等、≥20% 高。其他族裔用白人係數（指引建議），僅供參考。', en: '2018 ACC/AHA cholesterol-guideline bands: <5% low, 5–<7.5% borderline, 7.5–<20% intermediate, ≥20% high. Other groups use the White equations as the guideline advises; reference only.' },
