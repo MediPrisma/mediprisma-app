@@ -10,7 +10,7 @@ import type { HasBledKey } from './has-bled-autofill'
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'antihypertensiveAny' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | HistoryKey | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'antihypertensiveAny' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | 'aspirin' | HasBledKey | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -311,6 +311,8 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
   const aceiArb = drugClassSelect(medications, now, ACEI_ARB, /^C09/, ' ACEI／ARB')
   const statin = drugClassSelect(medications, now, ['atorvastatin', 'rosuvastatin', 'simvastatin', 'pravastatin', 'pitavastatin', 'fluvastatin', 'lovastatin'], /^C10(?:AA|BA|BX)/, ' statin')
+  // TIMI UA/NSTEMI's aspirin in the past 7 days: a current aspirin prescription.
+  const aspirin = drugClassSelect(medications, now, ['aspirin', 'acetylsalicylic'], /^(?:B01AC06|N02BA01)/, ' aspirin')
   const anyAntihypertensive = drugClassSelect(medications, now, INGREDIENTS, /^C0(?:2|3|7|8|9)/, '降血壓藥')
   const antiplateletNsaid = drugClassSelect(medications, now, ANTIPLATELET_NSAID, /^(?:B01AC|M01A|N02BA01)/, '抗血小板藥或 NSAID')
   return {
@@ -326,6 +328,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...(aceiArb ? { aceiArb } : {}),
     ...(antiplateletNsaid ? { antiplateletNsaid } : {}),
     ...(statin ? { statin } : {}),
+    ...(aspirin ? { aspirin } : {}),
     ...(anyAntihypertensive ? { anyAntihypertensive } : {}),
     ...doacSelects(medications, now),
     ...historySelects(conditions, encounters, now),
