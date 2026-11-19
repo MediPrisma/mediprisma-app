@@ -205,7 +205,7 @@ export const NEURO: CalculatorDef[] = [
           { label: { en: '10–59 min (1)', zh: '10–59 分 (1)' }, points: 1 },
           { label: { en: '≥ 60 min (2)', zh: '≥ 60 分 (2)' }, points: 2 },
         ] },
-        { key: 'diabetes', label: { en: 'Diabetes', zh: '糖尿病' }, options: [
+        { key: 'diabetes', label: { en: 'Diabetes', zh: '糖尿病' }, source: { kind: 'hfpefClinical', key: 'diabetes', answers: { yes: '1', no: '0' } }, presumed: 0, options: [
           { label: { en: 'No (0)', zh: '否 (0)' }, points: 0 },
           { label: { en: 'Yes (1)', zh: '是 (1)' }, points: 1 },
         ] },
