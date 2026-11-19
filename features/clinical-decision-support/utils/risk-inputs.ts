@@ -15,7 +15,8 @@
  *   visit     — an answer given today on the page (DP-08's 目前吸菸)
  *   clinic    — a measurement entered in the room today
  *   record    — a lab, vital or demographic from the chart
- *   none      — nothing to read; the clinician answers
+ *   none      — nothing to read; the clinician answers (a history or drug
+ *               question with no evidence is the rule's 「否」 instead)
  *
  * Every formula stays in medical-calculator; this file only resolves inputs.
  */
@@ -63,7 +64,7 @@ const DIABETES_CODE_FACT_KEYS = ['type1DiabetesDiagnosis', 'type2DiabetesDiagnos
 
 const HPA_INPUTS = HPA_RISK[0]!.inputs
 /** The HPA form's keys for the shared fields; its other inputs keep their own keys. */
-export const HPA_KEY_FROM_SHARED: Readonly<Record<string, string>> = { sex: 'gender', tc: 'chol', hdl: 'hdlc', dm: 'diabetes', smoking: 'smoke', cvd: 'prior_cvd' }
+export const HPA_KEY_FROM_SHARED: Readonly<Record<string, string>> = { sex: 'gender', tc: 'chol', hdl: 'hdlc', dm: 'diabetes', smoking: 'smoke' }
 const SHARED_KEY_FROM_HPA: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(HPA_KEY_FROM_SHARED).map(([shared, hpa]) => [hpa, shared]))
 
 function hpaOnly(key: string): CalcInput {
@@ -98,7 +99,10 @@ export const RISK_INPUTS: readonly { input: CalcInput; usedBy: readonly RiskCalc
   { input: prevent('dm'), usedBy: ['prevent', 'pce', 'hpa'] },
   { input: hpaOnly('hbp'), usedBy: ['hpa'] },
   { input: prevent('smoking'), usedBy: ['prevent', 'pce', 'hpa'] },
-  { input: prevent('cvd'), usedBy: ['prevent', 'pce', 'hpa'] },
+  { input: prevent('cvd'), usedBy: ['prevent', 'pce'] },
+  // HPA asks the narrower question, coronary disease or stroke (its own
+  // cadOrStroke reading): heart failure or PAD alone is not a prior event there.
+  { input: hpaOnly('prior_cvd'), usedBy: ['hpa'] },
   { input: prevent('subclinical'), usedBy: ['prevent'] },
   { input: prevent('genetic'), usedBy: ['prevent'] },
   { input: prevent('eskd'), usedBy: ['prevent'] },
@@ -111,11 +115,14 @@ export const RISK_FIELD_GROUPS: readonly { id: string; title: { zh: string; en: 
   { id: 'who', title: { zh: '基本', en: 'Patient' }, keys: ['sex', 'age', 'race'] },
   { id: 'measured', title: { zh: '量測', en: 'Measurements' }, keys: ['sbp', 'bmi', 'height', 'weight', 'waist'] },
   { id: 'labs', title: { zh: '檢驗', en: 'Labs' }, keys: ['tc', 'hdl', 'ldlc', 'tg', 'glu', 'egfr'] },
-  { id: 'history', title: { zh: '病史', en: 'History' }, keys: ['dm', 'hbp', 'smoking', 'cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife'] },
+  { id: 'history', title: { zh: '病史', en: 'History' }, keys: ['dm', 'hbp', 'smoking', 'cvd', 'prior_cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife'] },
   { id: 'drugs', title: { zh: '用藥', en: 'Medication' }, keys: ['bptreat', 'statin'] },
 ]
 
 const text = (zh: string, en: string) => ({ zh, en })
+
+/** History and drug questions answered 「否」 when the record shows nothing. */
+const DEFAULT_NO_KEYS: ReadonlySet<string> = new Set(['dm', 'hbp', 'smoking', 'cvd', 'prior_cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife', 'bptreat', 'statin'])
 
 export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill, manual: CalcValues, vitals?: ClinicVitals, visit: RiskVisitAnswers = {}): RiskInputs {
   const values: CalcValues = {}
@@ -134,17 +141,24 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     // Positive diagnosis codes, read by the FHIR adapter, lock the answer.
     const codeFact = key === 'cvd' ? (facts.ascvdDiagnosis ?? facts.heartFailureDiagnosis)
       : key === 'dm' ? DIABETES_CODE_FACT_KEYS.map((factKey) => facts[factKey]).find(Boolean)
+      : key === 'hbp' ? facts.hypertensionDiagnosis
       : undefined
-    const positive = Boolean(codeFact)
+    // HPA's coronary disease or stroke, from its own code reading (cadOrStroke):
+    // a code locks it as the broad cvd code does, HF or PAD alone does not.
+    const cadStroke = key === 'prior_cvd' && autofill.clinicalSelects?.cadOrStroke?.value === 'yes' ? autofill.clinicalSelects.cadOrStroke : undefined
+    const positive = Boolean(codeFact) || Boolean(cadStroke)
       || (key === 'eskd' && profile.kidneyReplacementTherapy?.state === 'confirmed')
       || (key === 'subclinical' && (facts.LVEF?.numericValue ?? 100) < 40)
     if (positive) {
       value = 'yes'
-      origin = codeFact ? 'icd' : 'record'
+      origin = codeFact || cadStroke ? 'icd' : 'record'
       detail = codeFact ? text(`ICD：${codeFact.zh}`, `ICD: ${codeFact.en}`)
+        : cadStroke ? text(`ICD：${cadStroke.testName}`, `ICD: ${cadStroke.testName}`)
         : key === 'eskd' ? text('病歷：腎臟替代治療', 'Record: kidney replacement therapy')
         : text(`病歷：LVEF ${facts.LVEF?.numericValue}%`, `Record: LVEF ${facts.LVEF?.numericValue}%`)
-      date = codeFact?.date ?? facts.LVEF?.date ?? date
+      // Each answer keeps its own evidence's date: the LVEF date only for the
+      // LVEF-based subclinical answer, never for a code or dialysis.
+      date = codeFact ? (codeFact.date ?? date) : cadStroke ? (cadStroke.date || date) : key === 'subclinical' ? (facts.LVEF?.date ?? date) : date
     }
     // The host's rules: inferences from prescriptions and codes, prefilled but
     // the clinician's to confirm (owner: 「RULE 判斷的結果再讓使用者確認」).
@@ -159,17 +173,18 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
       value = statin.state === 'confirmed-current' ? 'yes' : statin.state === 'not-found' ? 'no' : ''
       origin = value ? 'rule' : 'none'
       date = statin.lastPrescriptionDate
-      detail = value ? text(value === 'yes' ? '規則：statin 處方供藥中' : '規則：近期無 statin 處方', value === 'yes' ? 'Rule: a statin is currently supplied' : 'Rule: no recent statin prescription') : undefined
+      detail = value ? text(value === 'yes' ? '規則：statin 處方供藥中' : '規則：近期無 statin 處方', value === 'yes' ? 'Rule: a statin is currently supplied' : 'Rule: no recent statin prescription')
+        : text('病歷有 statin 處方，目前是否服用待確認', 'A statin is on the record; current use to confirm')
     }
-    if (!isManual && key === 'bptreat' && autofill.clinicalSelects?.antihypertensives?.value === 'yes') {
-      const select = autofill.clinicalSelects.antihypertensives
-      value = 'yes'; origin = 'rule'; date = select.date; detail = text(`規則：${select.testName}`, `Rule: ${select.testName}`)
+    // Any one current antihypertensive is treatment (not the HFpEF ≥2 count).
+    const anyAntihypertensive = autofill.clinicalSelects?.antihypertensiveAny
+    if (!isManual && key === 'bptreat' && anyAntihypertensive?.value === 'yes') {
+      value = 'yes'; origin = 'rule'; date = anyAntihypertensive.date; detail = text(`規則：${anyAntihypertensive.testName}`, `Rule: ${anyAntihypertensive.testName}`)
     }
-    // Known hypertension (HPA's 「已知高血壓」): a code, or treatment under way.
-    if (!isManual && key === 'hbp') {
-      const code = facts.hypertensionDiagnosis
-      if (code) { value = 'yes'; origin = 'icd'; date = code.date; detail = text(`ICD：${code.zh}`, `ICD: ${code.en}`) }
-      else if (autofill.clinicalSelects?.antihypertensives?.value === 'yes') { value = 'yes'; origin = 'rule'; date = autofill.clinicalSelects.antihypertensives.date; detail = text('規則：降血壓藥供藥中', 'Rule: an antihypertensive is currently supplied') }
+    // Known hypertension (HPA's 「已知高血壓」): a code locks it above; without
+    // one, treatment under way proposes it.
+    if (!isManual && !positive && key === 'hbp' && anyAntihypertensive?.value === 'yes') {
+      value = 'yes'; origin = 'rule'; date = anyAntihypertensive.date; detail = text('規則：降血壓藥供藥中', 'Rule: an antihypertensive is currently supplied')
     }
     // PCE publishes White and African American equations only; the guideline
     // reads other groups, Taiwanese patients included, with the White ones.
@@ -180,6 +195,13 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     // question here, so the clinician answers once; their own entry still wins.
     if (!isManual && key === 'smoking' && visit.smokingCurrent) {
       value = visit.smokingCurrent; origin = 'visit'; date = today; detail = text('問診：DP-08 目前吸菸', 'Asked: DP-08 current smoking')
+    }
+    // Without today's answer or the record's own dated reading (a newer
+    // remission code makes `smoker` 「否」), a smoking code (F17, Z72.0)
+    // proposes 「是」 before the no-evidence 「否」 below.
+    const smokingCode = autofill.clinicalSelects?.pceSmoking
+    if (!isManual && key === 'smoking' && !visit.smokingCurrent && !autofill.clinicalSelects?.smoker && smokingCode?.value === 'yes') {
+      value = 'yes'; origin = 'icd'; date = smokingCode.date || undefined; detail = text(`ICD：${smokingCode.testName}`, `ICD: ${smokingCode.testName}`)
     }
     // The chart's own BMI and eGFR facts outrank a lab line.
     const clinicKey = key === 'bmi' ? 'bodyMassIndex' : key === 'egfr' ? 'eGFR' : undefined
@@ -192,6 +214,15 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
     const measured = vitalKey ? vitals?.entries?.[vitalKey] : undefined
     if (!isManual && measured) {
       value = String(measured.value); date = measured.measuredOn; origin = 'clinic'; unitError = false; detail = text('門診今日量測', 'Measured in clinic today')
+    }
+    // Owner 2026-11-16: a history or drug question the record has no evidence
+    // for (no code, no prescription, no answer today) is prefilled 「否」, not
+    // left 未確認; the clinician changes it where it is wrong.
+    // A statin on the record whose current use is unconfirmed stays for the
+    // clinician to answer: that is evidence, not its absence.
+    const statinUnconfirmed = key === 'statin' && Boolean(profile.medicationClassContexts?.statin) && !value
+    if (!isManual && !value && !statinUnconfirmed && DEFAULT_NO_KEYS.has(key)) {
+      value = 'no'; origin = 'rule'; detail = text('規則：病歷未見相關診斷碼或處方，預設否（請核對）', 'Rule: no code or prescription in the record; defaults to no (please check)')
     }
     values[key] = value
     const days = date && profile.evaluatedAt ? Math.floor((Date.parse(profile.evaluatedAt) - Date.parse(date)) / 86400000) : undefined

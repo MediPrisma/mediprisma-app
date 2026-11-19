@@ -3,9 +3,9 @@ import type { CalculatorDef, CalcValues, CalcInput } from '../types'
 /** Raise when the coefficients or the eligibility rules change. */
 export const PCE_VERSION = 'goff2013-v1'
 const l = (zh: string, en: string) => ({ zh, en })
-const yesNo = (key: string, zh: string, en: string): CalcInput => ({ key, type: 'select', label: l(zh, en), defaultValue: '', options: [
+const yesNo = (key: string, zh: string, en: string, extra: Partial<CalcInput> = {}): CalcInput => ({ key, type: 'select', label: l(zh, en), defaultValue: '', options: [
   { value: '', label: l('未確認', 'Unconfirmed') }, { value: 'no', label: l('否', 'No') }, { value: 'yes', label: l('是', 'Yes') },
-] })
+], ...extra } as CalcInput)
 
 /**
  * The 2013 ACC/AHA Pooled Cohort Equations (Goff DC et al., Circulation
@@ -30,10 +30,11 @@ export const PCE_INPUTS: CalcInput[] = [
   { key: 'tc', type: 'number', label: l('總膽固醇（130–320）', 'Total cholesterol (130–320)'), source: { kind: 'lab', keys: ['CHOL'] }, unit: 'mg/dL', dimension: 'cholesterol' },
   { key: 'hdl', type: 'number', label: l('HDL-C（20–100）', 'HDL-C (20–100)'), source: { kind: 'lab', keys: ['HDL'] }, unit: 'mg/dL', dimension: 'cholesterol' },
   { key: 'sbp', type: 'number', label: l('收縮壓（90–200）', 'Systolic BP (90–200)'), source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' }, unit: 'mmHg' },
-  yesNo('bptreat', '目前使用降血壓藥', 'Current antihypertensive use'),
-  yesNo('dm', '糖尿病病史', 'Diabetes history'),
-  yesNo('smoking', '目前吸菸', 'Current smoking'),
-  yesNo('cvd', '既有 ASCVD（冠心病、腦中風、PAD）', 'Known ASCVD (coronary disease, stroke, PAD)'),
+  // From the record: a code or prescription is 「是」, none is 「否」 (owner 2026-11-16).
+  yesNo('bptreat', '目前使用降血壓藥', 'Current antihypertensive use', { source: { kind: 'hfpefClinical', key: 'pceBpTreat' } }),
+  yesNo('dm', '糖尿病病史', 'Diabetes history', { source: { kind: 'hfpefClinical', key: 'pceDiabetes' } }),
+  yesNo('smoking', '目前吸菸', 'Current smoking', { source: { kind: 'hfpefClinical', key: 'pceSmoking' } }),
+  yesNo('cvd', '既有 ASCVD（冠心病、腦中風、PAD）', 'Known ASCVD (coronary disease, stroke, PAD)', { source: { kind: 'hfpefClinical', key: 'pceAscvd' } }),
 ]
 
 // Appendix 7 Table A, as reproduced by two independent implementations

@@ -69,6 +69,21 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', names: /LIFE[-‐–]Preserved/, note: true },
   { id: 'shfm', dp: 'DP-19', prognosis: 'shfm', names: /SHFM|Seattle Heart Failure Model/ },
   { id: 'gwtg-hf', dp: 'DP-19', prognosis: 'gwtg-hf', names: /GWTG[-‐–]HF/ },
+]
+
+/**
+ * The hypertension page's calculators, in the order of its chapters (owner
+ * request 2026-11-19: HTN and CAD get the same 計算機 entry as HF and AF).
+ * DP-08's risk panels came from pilot/hmc (owner 2026-11-03); PREVENT-ASCVD
+ * stays there because clinical users asked for it (owner 2026-11-19), beside
+ * PREVENT-CVD, the total-CVD score the AHA/ACC 2025 7.5% threshold reads.
+ */
+export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
+  { id: 'egfr', dp: 'DP-04', source: 'htn', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  // DP-07's STOP-Bang (owner 2026-11-03: 「Stop-bang 應該也要列入計算機」): the
+  // generic form, P, A, G and B prefilled from the record; S, T, O and N are
+  // the four questions DP-07 itself asks.
+  { id: 'stop-bang', dp: 'DP-07', source: 'htn', calculatorId: 'stop-bang', names: /STOP[-‐–]Bang/, needsPoint: true, note: true },
   // The hypertension page's baseline cardiovascular risk (plan 05 §19, owner
   // 2026-11-03): the host runs both and hands the pack their results
   // (`applyHtnRiskReadings`); DP-08's line names them. PREVENT here is the
@@ -81,19 +96,43 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // and today's answers, confirmed once for all of them.
   { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, needsPoint: true, panel: 'risk-inputs',
     title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
-  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?:[-‐–](?:ASCVD|CVD))?/, needsPoint: true, panel: 'prevent-visit', note: true,
-    title: { zh: 'PREVENT 心血管風險', en: 'PREVENT cardiovascular risk' } },
+  { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, needsPoint: true, note: true },
+  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, needsPoint: true, panel: 'prevent-visit', note: true,
+    title: { zh: 'PREVENT-ASCVD 心血管風險', en: 'PREVENT-ASCVD cardiovascular risk' } },
   // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
   // 「包括 ACC/AHA 的 Multicohort CV risk calculators」), a reference the pack shows.
   { id: 'pce-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'pce-ascvd', names: /ACC\/AHA PCE|Pooled Cohort|PCE/, needsPoint: true, panel: 'pce-visit', note: true,
     title: { zh: 'ACC/AHA Pooled Cohort（PCE）', en: 'ACC/AHA Pooled Cohort Equations' } },
   { id: 'hpa-mace', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署心血管風險預測(?:公式)?|國健署 MACE|HPA MACE|HPA cardiovascular risk prediction|國健署五項慢性病風險/, needsPoint: true, panel: 'hpa-visit', note: true,
     title: { zh: '國健署心血管風險預測公式', en: 'HPA cardiovascular risk prediction' } },
-  // DP-07's STOP-Bang (owner 2026-11-03: 「Stop-bang 應該也要列入計算機」): the
-  // generic form, P, A, G and B prefilled from the record; S, T, O and N are
-  // the four questions DP-07 itself asks.
-  { id: 'stop-bang', dp: 'DP-07', source: 'htn', calculatorId: 'stop-bang', names: /STOP[-‐–]Bang/, needsPoint: true, note: true },
+  { id: 'ckd-kdigo-risk', dp: 'DP-18', source: 'htn', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/, needsPoint: true },
 ]
+
+/**
+ * The coronary page's calculators (owner request 2026-11-19). DP-16's are the
+ * AF ones, offered only where the page holds OAC with an antiplatelet.
+ */
+export const CAD_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
+  { id: 'egfr', dp: 'DP-10', source: 'cad', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  { id: 'cha2ds2-va', dp: 'DP-16', source: 'cad', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
+  { id: 'has-bled', dp: 'DP-16', source: 'cad', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
+  { id: 'crcl', dp: 'DP-16', source: 'cad', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },
+  { id: 'doac-dose', dp: 'DP-16', source: 'cad', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/, needsPoint: true },
+  { id: 'bmi', dp: 'DP-27', source: 'cad', calculatorId: 'bmi', names: /BMI/, needsPoint: true },
+]
+
+/** The pages with a 計算機 entry, each with its own list. HF's list also serves AF's page. */
+const PAGE_CALCULATORS: Readonly<Record<string, readonly VisitCalculatorEntry[]>> = {
+  hf: HF_VISIT_CALCULATORS,
+  af: HF_VISIT_CALCULATORS,
+  htn: HTN_VISIT_CALCULATORS,
+  cad: CAD_VISIT_CALCULATORS,
+}
+
+/** Whether a page has calculators to offer: the screen mounts the entry only there. */
+export function pageHasCalculators(source: string | undefined): boolean {
+  return Boolean(source && PAGE_CALCULATORS[source])
+}
 
 type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable' | 'inapplicable' | 'inputs'
 
@@ -262,7 +301,7 @@ export function VisitCalculatorsProvider({
   const pointOf = useCallback((dp: string, source?: DecisionPointView['source']) => (
     points.find((point) => point.dp === dp && point.source === (source ?? sourceOfPage))
   ), [points, sourceOfPage])
-  const rows = useMemo(() => HF_VISIT_CALCULATORS.flatMap((entry): CalculatorRow[] => {
+  const rows = useMemo(() => (PAGE_CALCULATORS[sourceOfPage ?? ''] ?? []).flatMap((entry): CalculatorRow[] => {
     // The AF page lists AF's own calculators only; the HF page keeps its list,
     // with AF's where AF's points sit on it.
     if (sourceOfPage !== 'hf' && (entry.source ?? 'hf') !== sourceOfPage) return []
@@ -274,7 +313,8 @@ export function VisitCalculatorsProvider({
     const model = entry.prognosis ? HF_PROGNOSIS_MODELS.find((item) => item.id === entry.prognosis) : undefined
     const calc: CalculatorDef | undefined = CALCULATORS.find((item) => item.id === (entry.calculatorId ?? model?.calculatorId))
     // A prognosis model by its own name (「MAGGIC」), not the calculator's longer one.
-    const name = entry.title ? (locale === 'en' ? entry.title.en : entry.title.zh) : shortName(model?.name ?? (calc ? tr(locale, calc.name) : entry.id))
+    // A calculator keeps its full name: 「國健署五項慢性病風險（重建版）」 is not 「重建版」.
+    const name = entry.title ? (locale === 'en' ? entry.title.en : entry.title.zh) : model ? shortName(model.name) : calc ? tr(locale, calc.name) : entry.id
     // GWTG-HF reads the admission's values, never today's chart.
     const fixed: RowStatus | undefined = calc ? undefined : entry.panel === 'risk-inputs' ? 'inputs' : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
     return [{ entry, calc, model, name, fixed }]

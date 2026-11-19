@@ -40,7 +40,7 @@ import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type Bo
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
 import { displayDate, visitStatusSentence, VisitStatusLine } from './VisitStatusHeader'
-import { VisitCalculatorsButton, VisitCalculatorsProvider } from './VisitCalculators'
+import { VisitCalculatorsButton, VisitCalculatorsProvider, pageHasCalculators } from './VisitCalculators'
 import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
 import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
@@ -103,8 +103,6 @@ export interface VisitDecisionScreenProps {
   doseRecovery?: ReactNode
 }
 
-/** The pages with a 計算機 list (`HF_VISIT_CALCULATORS` names their entries). */
-const CALCULATOR_PAGES: ReadonlySet<string> = new Set(['hf', 'af', 'htn'])
 
 /**
  * The decision map the heart-failure and atrial-fibrillation pages share,
@@ -390,7 +388,7 @@ export function VisitDecisionScreen({
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-      {...(CALCULATOR_PAGES.has(sourceOfPage) ? {
+      {...(pageHasCalculators(sourceOfPage) ? {
         headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
         calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
         onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
@@ -401,7 +399,7 @@ export function VisitDecisionScreen({
 
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      {CALCULATOR_PAGES.has(sourceOfPage) ? (
+      {pageHasCalculators(sourceOfPage) ? (
         <VisitCalculatorsProvider
           isEnglish={isEnglish}
           points={model.points}
