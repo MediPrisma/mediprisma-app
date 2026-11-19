@@ -28,7 +28,7 @@ const record: Autofill = {
     return undefined
   },
 }
-const answered: CalcValues = { bmi: '24', egfr: '90', dm: 'no', smoking: 'no', statin: 'no', bptreat: 'no', cvd: 'no', subclinical: 'no', genetic: 'no', eskd: 'no', limitedLife: 'no' }
+const answered: CalcValues = { bmi: '24', egfr: '90', dm: 'no', smoking: 'no', statin: 'no', bptreat: 'no', cvd: 'no', prior_cvd: 'no', subclinical: 'no', genetic: 'no', eskd: 'no', limitedLife: 'no' }
 
 describe('HTN DP-08 panels', () => {
   beforeEach(() => act(() => usePreventStore.getState().activate('synthetic-htn')))
@@ -53,7 +53,7 @@ describe('HTN DP-08 panels', () => {
   })
 
   it('says what is still to confirm before any result reaches the pack', () => {
-    const reading = buildPreventReading(profile, record, {})
+    const reading = buildPreventReading(profile, record, { cvd: '' })
     render(
       <PreventReadingContext.Provider value={reading}>
         <PreventVisitPanel isEnglish={false} />
@@ -120,7 +120,7 @@ describe('HTN DP-08 panels', () => {
   it("the 共用輸入 panel lists every field in groups with its origin, the three results on top, and 確認 records a rule's value as the clinician's", () => {
     const reading = buildPreventReading(
       { ...profile, facts: { type2DiabetesDiagnosis: { zh: '第二型糖尿病 E11.9', en: 'Type 2 diabetes E11.9', date: '2026-01-10' } } },
-      { ...record, clinicalSelects: { antihypertensives: { value: 'yes', date: '2026-10-28', testName: '降血壓藥處方供藥中' } } },
+      { ...record, clinicalSelects: { antihypertensiveAny: { value: 'yes', date: '2026-10-28', testName: '降血壓藥處方供藥中' } } },
       { smoking: 'no', statin: 'no', cvd: 'no', subclinical: 'no', genetic: 'no', eskd: 'no', limitedLife: 'no', bmi: '24', egfr: '90' },
     )
     render(

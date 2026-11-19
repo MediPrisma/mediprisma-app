@@ -35,8 +35,8 @@ export const HFPEF: CalculatorDef[] = [{
     { key: 'bmi', type: 'number', label: label('BMI'), unit: 'kg/m²', source: { kind: 'bmi' } },
     { ...echo('ee', "E/e′ ratio", 'E/e′ 比值'), optional: false },
     { ...echo('pasp', 'Pulmonary artery systolic pressure', '肺動脈收縮壓（PASP）', 'mmHg'), optional: false },
-    { ...yesNo('af', 'Paroxysmal or persistent atrial fibrillation', '陣發性或持續性心房顫動'), source: { kind: 'hfpefClinical', key: 'afHistory' } },
-    { ...yesNo('antihypertensives', 'Taking ≥2 antihypertensive medications', '使用 ≥2 種降血壓藥物'), source: { kind: 'hfpefClinical', key: 'antihypertensives' } },
+    { ...yesNo('af', 'Paroxysmal or persistent atrial fibrillation', '陣發性或持續性心房顫動'), source: { kind: 'hfpefClinical', key: 'afHistory' }, presumed: 'no' },
+    { ...yesNo('antihypertensives', 'Taking ≥2 antihypertensive medications', '使用 ≥2 種降血壓藥物'), source: { kind: 'hfpefClinical', key: 'antihypertensives' }, presumed: 'no' },
   ],
   coherence: { keys: ['ee', 'pasp', 'bmi'], windowDays: 0 },
   compute(v) {

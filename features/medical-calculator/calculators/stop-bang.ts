@@ -16,9 +16,9 @@ export const STOP_BANG_INPUTS: CalcInput[] = [
   yesNo('snoring', 'S 大聲打鼾（隔著門聽得到）', 'S Loud snoring (heard through a closed door)'),
   yesNo('tired', 'T 白天常疲倦、嗜睡', 'T Often tired or sleepy in the daytime'),
   yesNo('observed', 'O 有人目擊睡眠中呼吸停止', 'O Breathing pauses observed during sleep'),
-  // P reads the antihypertensive prescriptions (the host's rule), so a treated
-  // patient is prefilled; untreated hypertension is the clinician's answer.
-  yesNo('pressure', 'P 高血壓（有或治療中）', 'P High blood pressure (present or treated)', { source: { kind: 'hfpefClinical', key: 'antihypertensives' } }),
+  // P reads a hypertension code, else any one current antihypertensive
+  // (`hypertension`, not the HFpEF item's ≥2-drug count); editable.
+  yesNo('pressure', 'P 高血壓（有或治療中）', 'P High blood pressure (present or treated)', { source: { kind: 'hfpefClinical', key: 'hypertension' } }),
   { key: 'bmi', type: 'number', label: l(`B BMI（>${STOP_BANG_BMI_OVER} 計 1 分）`, `B BMI (>${STOP_BANG_BMI_OVER} scores)`), source: { kind: 'bmi' }, unit: 'kg/m²' },
   { key: 'age', type: 'number', label: l(`A 年齡（>${STOP_BANG_AGE_OVER} 計 1 分）`, `A Age (>${STOP_BANG_AGE_OVER} scores)`), source: { kind: 'age' }, unit: 'y' },
   { key: 'neck', type: 'number', label: l(`N 頸圍（>${STOP_BANG_NECK_OVER_CM} cm 計 1 分）`, `N Neck circumference (>${STOP_BANG_NECK_OVER_CM} cm scores)`), unit: 'cm' },
@@ -54,16 +54,22 @@ export function calculateStopBang(v: CalcValues): StopBangScore {
   const stopKnown = ['snoring', 'tired', 'observed', 'pressure'].filter((key) => items[key] === true).length
   const alternativeHigh = stopKnown >= 2 && (items.sex === true || items.bmi === true || items.neck === true)
   const upperBound = score + missingInputs.length
+  // High may still be reached by the unknown items: a total of 5, or STOP ≥2
+  // plus male, BMI >35 or neck >40.
+  const stopPossible = ['snoring', 'tired', 'observed', 'pressure'].filter((key) => items[key] !== false).length
+  const highPossible = upperBound >= 5 || (stopPossible >= 2 && ['sex', 'bmi', 'neck'].some((key) => items[key] !== false))
   // A band the known items already reach stands whatever is still unknown;
-  // 「low」 only once the score can no longer reach 3.
-  const band: StopBangScore['band'] = score >= 5 || alternativeHigh ? 'high' : score >= 3 ? 'intermediate' : upperBound < 3 ? 'low' : undefined
+  // a lower band only once no unknown answer can move it.
+  const band: StopBangScore['band'] = score >= 5 || alternativeHigh ? 'high'
+    : highPossible ? undefined
+      : score >= 3 ? 'intermediate' : upperBound < 3 ? 'low' : undefined
   return { score, upperBound, complete: !missingInputs.length, missingInputs, ...(band ? { band } : {}), alternativeHigh }
 }
 
 export const STOP_BANG: CalculatorDef = {
   id: 'stop-bang', version: '1.0.0',
   name: l('STOP-Bang 阻塞型睡眠呼吸中止風險', 'STOP-Bang Score for OSA'), category: 'pulmonary', inputs: STOP_BANG_INPUTS,
-  blurb: l('八題問卷；P、A、G、B 由病歷帶入，S、T、O、N 問診。', 'Eight items; P, A, G and B from the record, S, T, O and N asked.'),
+  blurb: l('八題問卷；P、A、G、B 由病歷帶入（P 看高血壓診斷碼或降壓藥），S、T、O、N 問診。', 'Eight items; P, A, G and B from the record (P from a hypertension code or an antihypertensive), S, T, O and N asked.'),
   compute: (v) => {
     const r = calculateStopBang(v)
     const bandWords = r.band === 'high' ? l(r.alternativeHigh && r.score < 5 ? '高風險（STOP ≥2 加男性／BMI >35／頸圍 >40）' : '高風險（5–8）', r.alternativeHigh && r.score < 5 ? 'High (STOP ≥2 plus male, BMI >35 or neck >40)' : 'High (5–8)')

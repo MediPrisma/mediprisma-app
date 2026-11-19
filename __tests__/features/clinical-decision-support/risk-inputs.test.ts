@@ -20,7 +20,7 @@ const fact = (zh: string, date?: string) => ({ zh, en: zh, ...(date ? { date } :
 const record: Autofill = {
   sex: 'male',
   clinicalSelects: {
-    antihypertensives: { value: 'yes', date: '2026-10-28', testName: '降血壓藥處方供藥中（amlodipine）' },
+    antihypertensiveAny: { value: 'yes', date: '2026-10-28', testName: '降血壓藥處方供藥中（amlodipine）' },
   },
   resolve: (source?: AutofillSource) => {
     if (!source) return undefined
@@ -64,8 +64,54 @@ describe('shared risk inputs', () => {
     expect(field('tc')).toMatchObject({ value: '213', origin: 'record', detail: { zh: '病歷：Cholesterol total' }, date: '2026-10-20' })
     expect(field('sex')).toMatchObject({ value: 'male', origin: 'record' })
     expect(field('age')).toMatchObject({ value: '58', origin: 'record' })
-    expect(field('cvd')).toMatchObject({ value: '', origin: 'none', locked: false })
+    // Owner 2026-11-16: no code and no prescription is a prefilled 「否」.
+    expect(field('cvd')).toMatchObject({ value: 'no', origin: 'rule', locked: false, detail: { zh: '規則：病歷未見相關診斷碼或處方，預設否（請核對）' } })
     expect(field('waist')).toMatchObject({ value: '92', origin: 'record' })
+  })
+
+  it('locks a hypertension code over a manual 否, and reads a smoking code before the no-evidence 否', () => {
+    const p = profile({ hypertensionDiagnosis: fact('原發性高血壓 I10', '2024-05-02') })
+    const smoker = { ...record, clinicalSelects: { ...record.clinicalSelects, pceSmoking: { value: 'yes', date: '2026-03-01', testName: '吸菸診斷碼：F17.210（請核對）' } } }
+    const shared = buildRiskInputs(p, smoker, { hbp: 'no' })
+    const field = (key: string) => shared.fields.find((item) => item.input.key === key)!
+    expect(field('hbp')).toMatchObject({ value: 'yes', origin: 'icd', locked: true })
+    expect(field('smoking')).toMatchObject({ value: 'yes', origin: 'icd', date: '2026-03-01' })
+    // Today's answer and the clinician's own entry still outrank the code.
+    expect(buildRiskInputs(p, smoker, {}, undefined, { smokingCurrent: 'no' }).fields.find((item) => item.input.key === 'smoking')).toMatchObject({ value: 'no', origin: 'visit' })
+    expect(buildRiskInputs(p, smoker, { smoking: 'no' }).fields.find((item) => item.input.key === 'smoking')).toMatchObject({ value: 'no', origin: 'physician' })
+  })
+
+  it('keeps the record’s dated smoking reading over an older smoking code', () => {
+    // F17.210 in March, F17.211 (in remission) in October: the record reads 「否」.
+    const quit = { ...record, recordLoaded: true, clinicalSelects: { ...record.clinicalSelects,
+      pceSmoking: { value: 'yes', date: '2026-03-01', testName: '吸菸診斷碼：F17.210（請核對）' },
+      smoker: { value: 'no', date: '2026-10-01', testName: '尼古丁依賴緩解 F17.211（請核對）' } } }
+    const field = buildRiskInputs(profile(), quit, {}).fields.find((item) => item.input.key === 'smoking')!
+    expect(field).toMatchObject({ value: 'no', origin: 'record', date: '2026-10-01' })
+    const reading = buildPreventReading(profile() as never, quit, {})
+    expect(reading.fields.find((item) => item.input.key === 'smoking')?.value).toBe('no')
+  })
+
+  it('leaves a statin whose current use is unconfirmed for the clinician, not a presumed 否', () => {
+    const p = { ...profile(), medicationClassContexts: { statin: { state: 'uncertain', lastPrescriptionDate: '2026-05-01' } } }
+    const shared = buildRiskInputs(p as never, { ...record, recordLoaded: true }, {})
+    expect(shared.fields.find((item) => item.input.key === 'statin')).toMatchObject({ value: '', origin: 'none', detail: { zh: '病歷有 statin 處方，目前是否服用待確認' } })
+    expect(shared.values.statin).toBe('')
+    // Not found on the record is still the prefilled 「否」.
+    const none = { ...profile(), medicationClassContexts: { statin: { state: 'not-found' } } }
+    expect(buildRiskInputs(none as never, record, {}).values.statin).toBe('no')
+  })
+
+  it('dates each positive answer by its own evidence, never by the LVEF', () => {
+    const lvef = { zh: 'LVEF 35%', en: 'LVEF 35%', date: '2026-09-01', numericValue: 35 }
+    const p = { ...profile({ LVEF: lvef, ascvdDiagnosis: fact('陳舊性心肌梗塞 I25.2') }), kidneyReplacementTherapy: { state: 'confirmed' } } as unknown as Parameters<typeof buildRiskInputs>[0]
+    const shared = buildRiskInputs(p, record, {})
+    const field = (key: string) => shared.fields.find((item) => item.input.key === key)!
+    expect(field('subclinical')).toMatchObject({ value: 'yes', date: '2026-09-01' })
+    expect(field('cvd')).toMatchObject({ value: 'yes', origin: 'icd' })
+    expect(field('cvd').date).toBeUndefined()
+    expect(field('eskd')).toMatchObject({ value: 'yes', origin: 'record' })
+    expect(field('eskd').date).toBeUndefined()
   })
 
   it('the clinician\'s own entry outranks every source except a positive code, and today\'s clinic measurement outranks the chart', () => {
@@ -109,7 +155,10 @@ describe('shared risk inputs', () => {
 
   it('says what PCE still needs or why it does not apply, and clears a stale result', () => {
     const p = profile()
-    const blank = buildPreventReading(p, record, {})
+    // No code or prescription is a prefilled 「否」 now (owner 2026-11-16); a
+    // clinician who clears the answers back to 未確認 leaves PCE waiting.
+    const blank = buildPreventReading(p, record, { dm: '', smoking: '', cvd: '' })
+    expect(buildPceReading(buildPreventReading(p, record, {}))!.result.status).toBe('ready')
     const pce = buildPceReading(blank)!
     expect(pce.result.status).toBe('needs-data')
     expect(pce.result.issues).toEqual(['dm', 'smoking', 'cvd'])
