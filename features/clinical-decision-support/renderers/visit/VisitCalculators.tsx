@@ -97,6 +97,8 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, needsPoint: true, panel: 'risk-inputs',
     title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
   { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, needsPoint: true, note: true },
+  // ESC 2024's SCORE2, recalibrated for the Asia-Pacific; Taiwan in its low-risk region (owner 2026-11-20).
+  { id: 'score2-ap', dp: 'DP-08', source: 'htn', calculatorId: 'score2-asia-pacific', names: /SCORE2(?![-‐–](?:OP|Diabetes))/, needsPoint: true, note: true },
   { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, needsPoint: true, panel: 'prevent-visit', note: true,
     title: { zh: 'PREVENT-ASCVD 心血管風險', en: 'PREVENT-ASCVD cardiovascular risk' } },
   // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
@@ -114,7 +116,9 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
  */
 export const CAD_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // The cardiologist's 「CAD 有沒有 TIMI 等等的風險」 (owner request 2026-11-19):
-  // TRS 2°P where long-term antiplatelet therapy is decided.
+  // TIMI UA/NSTEMI where an acute presentation is triaged, TRS 2°P where
+  // long-term antiplatelet therapy is decided.
+  { id: 'timi-ua', dp: 'DP-00', source: 'cad', calculatorId: 'timi-ua-nstemi', names: /TIMI(?: risk score)?(?: for)? UA|TIMI.*NSTEMI/i, needsPoint: true },
   { id: 'egfr', dp: 'DP-10', source: 'cad', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
   { id: 'trs2p', dp: 'DP-12', source: 'cad', calculatorId: 'timi-trs2p', names: /TRS[ -]?2°?P|TIMI 二級預防/, needsPoint: true },
   { id: 'cha2ds2-va', dp: 'DP-16', source: 'cad', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
