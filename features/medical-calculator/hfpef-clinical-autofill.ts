@@ -10,7 +10,7 @@ import type { HasBledKey } from './has-bled-autofill'
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | HistoryKey | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -142,18 +142,23 @@ export function diagnosisSelect(
   name: string,
   /** Only a diagnosis dated within this many days counts; an undated one then does not. */
   withinDays?: number,
-  /** A past history: a resolved or inactive diagnosis still counts. */
+  /**
+   * A past history: a resolved, inactive or in-remission diagnosis still
+   * counts (an MI or stroke stays history). Refuted, voided and unconfirmed
+   * diagnoses still do not.
+   */
   history = false,
 ): ClinicalSelectValue | undefined {
   const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
   const tooOld = (date: string) => withinDays !== undefined && (!date || now.getTime() - Date.parse(date) > withinDays * 86_400_000)
   for (const condition of conditions) {
     if (['refuted', 'entered-in-error', 'provisional', 'differential', 'unconfirmed'].includes(condition.verificationStatus ?? '') || condition._inferred) continue
-    if (!history && ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
+    const ended = ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')
+    if (ended && !history) continue
     const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
     if ((date && Date.parse(date) > now.getTime()) || tooOld(date)) continue
     const code = condition.code?.coding?.find((coding) => (!coding.system || /icd/i.test(coding.system)) && matches(normal(coding.code)))
-    if (code) return { value: 'yes', date, testName: `${name}診斷碼：${code.code}（請核對）`, obsId: condition.id, resourceType: 'Condition' }
+    if (code) return { value: 'yes', date, testName: `${name}診斷碼：${code.code}${ended ? '（病史，已結束）' : ''}（請核對）`, obsId: condition.id, resourceType: 'Condition' }
   }
   for (const encounter of encounters) {
     if (['cancelled', 'entered-in-error'].includes(encounter.status ?? '')) continue
@@ -175,6 +180,41 @@ export function diagnosisSelect(
 const isDiabetesCode = (code: string) => /^(?:E0[89]|E1[0-3])/.test(code) || /^250/.test(code)
 /** ICD-10 J43 (emphysema), J44; ICD-9 491, 492, 496. */
 const isCopdCode = (code: string) => /^J4[34]/.test(code) || /^(?:491|492|496)/.test(code)
+
+/** ICD-10 F17 nicotine dependence, Z72.0 tobacco use, Z87.891 history excluded; ICD-9 305.1. */
+// Current smoking: nicotine dependence (F17) except its 「in remission」 subcodes
+// F17.2x1 (F17.201, .211, .221, .291), which mean the patient has stopped.
+const isSmokingCode = (code: string) => (/^F17/.test(code) && !/^F172\d1$/.test(code)) || /^Z720/.test(code) || /^3051/.test(code)
+/**
+ * ASCVD as PCE reads it: coronary disease (ICD-10 I20–I25), stroke or TIA
+ * (I63, I64, I69.3, G45), peripheral artery disease (I70.2, I73.9); ICD-9
+ * 410–414, 433–434, 435, 438, 440.2, 443.9.
+ */
+const isAscvdCode = (code: string) => /^I2[0-5]/.test(code) || /^I6[34]/.test(code) || /^I693/.test(code) || /^G45/.test(code)
+  || /^I702/.test(code) || /^I739/.test(code) || /^41[0-4]/.test(code) || /^43[3-58]/.test(code) || /^4402/.test(code) || /^4439/.test(code)
+
+/**
+ * Owner 2026-11-16: a calculator's history or drug question is 「是」 when the
+ * record shows the code or the prescription and 「否」 when it does not — never
+ * left 未確認. The clinician changes it where the record is wrong.
+ */
+/**
+ * A systemic medicine: not an eye drop, a topical (minoxidil lotion,
+ * betaxolol eye drops) or an injection, the same exclusions the HFpEF
+ * antihypertensive count applies.
+ */
+function systemicOnly(medications: MedicationEntity[]): MedicationEntity[] {
+  return medications.filter((med) => {
+    const atc = medicationAtcCode(med) ?? med.atcClassification?.atcCode
+    const text = [med.drugTerminology?.ingredientText, medicationDisplayName(med), med.drugTerminology?.officialNameEn].filter(Boolean).join(' ')
+    const route = [med.drugTerminology?.doseForm, ...med.dosageInstruction?.map(d => `${d.route?.text ?? ''} ${d.text ?? ''}`) ?? []].join(' ')
+    return !(/^(S|D)/.test(atc ?? '') || /ophthalm|eye\s*drop|topical|lotion|solution\s+for\s+scalp|眼|外用|皮膚|頭皮|\b(?:IV|intravenous|injection)\b|注射/i.test(`${text} ${route}`))
+  })
+}
+
+function defaultNo(found: ClinicalSelectValue | undefined, now: Date, missing: string): ClinicalSelectValue {
+  return found?.value === 'yes' ? found : { value: 'no', date: now.toISOString().slice(0, 10), testName: `${missing}（預設否，請核對）` }
+}
 
 const BETA_BLOCKERS = ['bisoprolol', 'carvedilol', 'metoprolol', 'atenolol', 'nebivolol', 'propranolol', 'labetalol', 'acebutolol', 'betaxolol', 'nadolol', 'pindolol', 'bucindolol']
 /** HAS-BLED D (drugs): antiplatelets (B01AC, aspirin N02BA01) and NSAIDs (M01A). */
@@ -238,6 +278,11 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
   const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
+  // PCE's four history and drug questions (owner 2026-11-16).
+  const pceBpTreat = defaultNo(drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
+  const pceDiabetes = defaultNo(diabetes, now, '病歷未見糖尿病診斷碼')
+  const pceSmoking = defaultNo(diagnosisSelect(conditions, encounters, now, isSmokingCode, '吸菸'), now, '病歷未見吸菸診斷碼')
+  const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD ', undefined, true), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
   const copd = diagnosisSelect(conditions, encounters, now, isCopdCode, 'COPD ')
   const betaBlocker = drugClassSelect(medications, now, BETA_BLOCKERS, /^C07/, ' β 阻斷劑')
   const aceiArb = drugClassSelect(medications, now, ACEI_ARB, /^C09/, ' ACEI／ARB')
@@ -248,6 +293,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...ecg,
     afHistory,
     antihypertensives: antihypertensiveSelect(medications, now),
+    pceBpTreat, pceDiabetes, pceSmoking, pceAscvd,
     ...(diabetes ? { diabetes } : {}),
     ...(copd ? { copd } : {}),
     ...(betaBlocker ? { betaBlocker } : {}),

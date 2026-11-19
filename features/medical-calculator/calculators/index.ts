@@ -11,6 +11,7 @@ import { ELECTROLYTE } from './electrolyte'
 import { HFPEF } from './hfpef'
 import { CARDIAC } from './cardiac'
 import { PREVENT, PREVENT_CVD } from './prevent'
+import { PCE } from './pce'
 import { PULMONARY } from './pulmonary'
 import { HEME } from './heme'
 import { NEURO } from './neuro'
@@ -29,6 +30,7 @@ export const CALCULATORS: CalculatorDef[] = [
   ...DOAC_DOSE,
   PREVENT,
   PREVENT_CVD,
+  PCE,
   ...HFPEF,
   ...HEART_FAILURE_PROGNOSIS,
   ...PULMONARY,
