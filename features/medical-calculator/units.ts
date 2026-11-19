@@ -16,7 +16,7 @@ import type { ConvertDim } from './types'
  *  collapse the many ways an exponent is written (10⁹, 10*9, 10e9, x10^9) to a
  *  single `10^9` form. */
 /** UCUM spellings of the same vital-sign unit (FHIR sends 「Cel」, 「/min」). */
-const UNIT_ALIASES: Record<string, string> = { cel: '°c', degc: '°c', '℃': '°c', '/min': 'bpm', '{beats}/min': 'bpm', 'beats/min': 'bpm', '{breaths}/min': 'bpm', 'breaths/min': 'bpm' }
+const UNIT_ALIASES: Record<string, string> = { 'mm[hg]': 'mmhg', cel: '°c', degc: '°c', '℃': '°c', '/min': 'bpm', '{beats}/min': 'bpm', 'beats/min': 'bpm', '{breaths}/min': 'bpm', 'breaths/min': 'bpm' }
 
 export function normUnit(u: string | undefined): string {
   const unit = normUnitSpelling(u)

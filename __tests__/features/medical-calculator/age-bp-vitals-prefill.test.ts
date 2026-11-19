@@ -55,6 +55,7 @@ it('fills blood pressure, heart rate, temperature, respiratory rate and QT from 
   // UCUM 「Cel」 and 「/min」 are the inputs' own units, not a mismatch.
   expect(resolveInput(field('sirs', 'temp'), data).unconvertible).toBe(false)
   expect(resolveInput(field('sirs', 'hr'), data).unconvertible).toBe(false)
+  expect(resolveInput(field('map', 'sbp'), data).unconvertible).toBe(false)
 })
 
 it('fills segmented neutrophils as a percentage only', () => {
