@@ -38,7 +38,12 @@ export function timiSelects(input: { observations: LabObservation[]; reports: Di
   const high = readings.find((r) => r.uln !== undefined && r.value > r.uln)
   const latest = [...readings].sort((a, b) => (b.obs.effectiveDateTime ?? '').localeCompare(a.obs.effectiveDateTime ?? ''))[0]
   const shown = high ?? latest
-  if (shown && (high || readings.every((r) => r.uln !== undefined))) {
+  // A recent result whose report gives no limit cannot be read either way: 「unknown」 keeps the
+  // field blank for the clinician rather than letting it fall back to the presumed 「無」.
+  const unread = !high ? readings.find((r) => r.uln === undefined) : undefined
+  if (unread) {
+    out.timiMarker = { value: 'unknown', date: day(unread.obs.effectiveDateTime ?? ''), testName: `72 小時內 troponin ${unread.value} ${unread.unit}，報告未附上限，請依該檢驗判讀`, obsId: unread.obs.id, resourceType: 'Observation' }
+  } else if (shown) {
     out.timiMarker = {
       value: high ? 'yes' : 'no',
       date: day(shown.obs.effectiveDateTime ?? ''),
@@ -64,11 +69,18 @@ export function timiSelects(input: { observations: LabObservation[]; reports: Di
   return out
 }
 
-/** ST elevation or depression named in a report sentence and not negated there. */
+/**
+ * ST elevation or depression affirmed somewhere in the report: each mention is
+ * read within its own clause, negated by a word before it (「No ST elevation」)
+ * or after it (「ST elevation is no longer present」), so one negated finding
+ * does not hide another affirmed one.
+ */
 function affirmedSt(text: string): boolean {
-  return text.split(/[\n\r.;。；]/).some((fragment) => {
-    const match = /\bST(?:[- ]segment)?[- ]?(?:elevation|depression)|\bST[- ]?[↑↓]|ST\s*段\s*(?:上升|抬高|下降|壓低)/i.exec(fragment)
-    if (!match) return false
-    return !/(?:\bno\b|\bnot\b|without|absence|rule\s*out|possible|suspect|\br\/o\b|疑|未見|沒有|無)[^,，:：]*$/i.test(fragment.slice(0, match.index))
-  })
+  const mention = /\bST(?:[- ]segment)?[- ]?(?:elevation|depression)|\bST[- ]?[↑↓]|ST\s*段\s*(?:上升|抬高|下降|壓低)/gi
+  return text.split(/[\n\r.;。；,，]|\bbut\b|但|而/i).some((clause) => [...clause.matchAll(mention)].some((match) => {
+    const before = clause.slice(0, match.index)
+    const after = clause.slice(match.index! + match[0].length)
+    return !/(?:\bno\b|\bnot\b|without|absence|rule\s*out|possible|suspect|\br\/o\b|疑|未見|沒有|無)[^,，:：]*$/i.test(before)
+      && !/^[^,，]*?(?:no\s+longer|not\s+(?:seen|present)|\babsent\b|\bresolved\b|已消失|消失|未見)/i.test(after)
+  }))
 }

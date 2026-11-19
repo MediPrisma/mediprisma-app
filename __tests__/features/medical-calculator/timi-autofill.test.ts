@@ -4,6 +4,8 @@
  */
 import { timiSelects } from '@/features/medical-calculator/timi-autofill'
 import type { LabObservation } from '@/features/medical-calculator/doac-patient-autofill'
+import { resolveInput } from '@/features/medical-calculator/autofill-compute'
+import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { DiagnosticReportEntity } from '@/src/core/entities/clinical-data.entity'
 
 const now = new Date('2026-11-19T10:00:00+08:00')
@@ -20,8 +22,12 @@ describe('TIMI marker from troponin', () => {
 
   it('reads 否 only when every troponin of the window has a limit and none is above it', () => {
     expect(timiSelects({ observations: [trop(0.01, '2026-11-19T07:00:00+08:00')], reports: [], now }).timiMarker?.value).toBe('no')
-    // One result without a limit: not enough to say 否.
-    expect(timiSelects({ observations: [trop(0.01, '2026-11-19T07:00:00+08:00'), trop(0.02, '2026-11-18T07:00:00+08:00', [])], reports: [], now }).timiMarker).toBeUndefined()
+    // One result without a limit: 「unknown」, so the form leaves it blank rather than presuming 無.
+    const unread = timiSelects({ observations: [trop(0.01, '2026-11-19T07:00:00+08:00'), trop(0.02, '2026-11-18T07:00:00+08:00', [])], reports: [], now }).timiMarker
+    expect(unread).toMatchObject({ value: 'unknown', testName: expect.stringContaining('報告未附上限') })
+    const input = CALCULATORS.find((calc) => calc.id === 'timi-ua-nstemi')!.inputs.find((item) => item.key === 'marker')!
+    expect(resolveInput(input, { resolve: () => undefined, recordLoaded: true, clinicalSelects: { timiMarker: unread } }).value).toBe('')
+    expect(resolveInput(input, { resolve: () => undefined, recordLoaded: true, clinicalSelects: {} }).value).toBe('no')
   })
 
   it('ignores a troponin older than 72 hours and reads hs-troponin by its LOINC', () => {
@@ -36,6 +42,14 @@ describe('TIMI ST deviation from the ECG', () => {
     expect(timiSelects({ observations: [], reports: [ecg('Sinus rhythm. ST depression in V4-V6.', '2026-11-19T08:00:00+08:00')], now }).timiSt)
       .toMatchObject({ value: 'yes', resourceType: 'DiagnosticReport' })
     expect(timiSelects({ observations: [], reports: [ecg('竇性心律，ST 段壓低', '2026-11-18T09:00:00+08:00')], now }).timiSt?.value).toBe('yes')
+  })
+
+  it('reads each ST mention in its own clause, negated before or after', () => {
+    const st = (text: string) => timiSelects({ observations: [], reports: [ecg(text, '2026-11-19T08:00:00+08:00')], now }).timiSt?.value
+    expect(st('No ST elevation, ST depression in V4-V6.')).toBe('yes')
+    expect(st('無 ST 段上升，但 ST 段壓低')).toBe('yes')
+    expect(st('ST elevation is no longer present.')).toBe('no')
+    expect(st('ST depression resolved.')).toBe('no')
   })
 
   it('reads 否 from a recent ECG that names none or denies it, and nothing from an older one', () => {
