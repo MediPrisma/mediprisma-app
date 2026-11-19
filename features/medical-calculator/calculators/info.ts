@@ -180,6 +180,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Checking respiratory compensation in a metabolic acidosis.', zh: '檢查代謝性酸中毒之呼吸代償。' },
     caveats: { en: 'Applies to metabolic acidosis only; a measured PaCO₂ outside the expected range signals a mixed disorder.', zh: '僅適用於代謝性酸中毒；實測 PaCO₂ 超出預期範圍代表合併型障礙。' },
   },
+  'timi-trs2p': {
+    useWhen: { zh: '心肌梗塞後穩定冠心病（門診追蹤），評估復發心血管事件風險，協助決定是否加強降脂或延長抗栓。', en: 'Stable CAD after MI in follow-up: recurrent cardiovascular risk, to weigh intensified lipid lowering or extended antithrombotic therapy.' },
+    caveats: { zh: '每項 1 分，只分低（0–1）、中（2）、高（≥3）；不換算絕對風險。延長抗栓須另評出血風險。病史由診斷碼帶入、未見預填無，請核對。', en: 'One point each, read as low (0–1), intermediate (2) or high (≥3); no absolute risk is given. Extended antithrombotic therapy still needs a bleeding-risk assessment. Histories come from diagnosis codes, absent ones prefilled No — check them.' },
+  },
   'cha2ds2-va': {
     useWhen: { en: 'ESC 2024 thromboembolic risk assessment in AF.', zh: 'ESC 2024 心房顫動血栓風險評估。' },
     caveats: { en: 'No sex point. Histories not in the record are prefilled No for you to check. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。紀錄未見的病史預填「無」，請核對；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },

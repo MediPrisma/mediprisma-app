@@ -18,7 +18,10 @@ it.each([
   ['G45.9', ['strokeTiaEmbolism']],
   ['G45.4', []], // transient global amnesia is not a TIA
   ['I25.2', ['ascvdOrHf', 'cadOrStroke', 'ihd', 'vascular']],
-  ['I70.21', ['ascvdOrHf', 'vascular']],
+  ['I70.21', ['ascvdOrHf', 'pad', 'vascular']],
+  ['I73.9', ['ascvdOrHf', 'pad', 'vascular']],
+  ['Z95.1', ['priorCabg']],
+  ['I25.810', ['ascvdOrHf', 'cadOrStroke', 'ihd', 'priorCabg']],
   ['K74.60', ['chronicLiverDisease', 'liverDisease']],
   ['B15.9', ['liverDisease']], // acute hepatitis A is not chronic liver disease
   ['Z86.71', ['priorVte']],
@@ -132,3 +135,4 @@ it('reads an HF hospitalization whose diagnosis references a Condition', () => {
   const stay = { id: 'adm', status: 'finished', class: { code: 'IMP' }, period: { start: '2026-09-01' }, diagnosis: [{ condition: { reference: 'Condition/c-I50.9' } }] } as EncounterEntity
   expect(historySelects([condition('I50.9', '2026-09-01')], [stay], now).hfHospitalization?.value).toBe('recent')
 })
+

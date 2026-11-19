@@ -3,7 +3,7 @@ import { createHash, webcrypto } from 'node:crypto'
 import { cancelCdssGatewayRequests, cdssEndpoint, cdssGatewayStatus, recordCdssEvent, saveCdssSnapshot } from '@/features/clinical-decision-support/telemetry/cdss-gateway'
 import { cdssGatewaySaveSchema } from '@/src/shared/contracts/cdss-gateway-event'
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
-import { parseStoredCdssSaveV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
+import { parseStoredCdssSave } from '@/src/shared/contracts/cdss-stored-save-v3'
 
 const mockGetToken = jest.fn()
 const mockIsCurrent = jest.fn(() => true)
@@ -93,7 +93,7 @@ test('records clicks locally and sends all used data only on explicit save', asy
   expect(body.physician_decisions.module.note).toBe('clinician text [已遮蔽] [已遮蔽]')
   expect(body.events).toHaveLength(1)
   expect(body.patient_session_id).toMatch(/^[0-9a-f-]{36}$/)
-  expect(body.schema_version).toBe(2)
+  expect(body.schema_version).toBe(3)
   expect(body.patient_identity).toEqual({
     name_masked: '陳○華', birth_year: '1968',
     identifier_masked: 'A123XXXXXX', identifier_system: 'https://example.org/national-id',
@@ -238,7 +238,7 @@ test.each([
   const body = JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
   expect(body.patient_identity.identifier_system).toBe(canonical)
   expect(body.patient_identity.identifier_masked).toBe('B123***789')
-  expect(() => parseStoredCdssSaveV2(body)).not.toThrow()
+  expect(() => parseStoredCdssSave(body)).not.toThrow()
   expect(body.patient_key_sha256).toBe((await cdssPatientIdentity({ ...patient,
     identifier: [{ system: canonical, value: 'B123***789' }] })).patient_key_sha256)
   expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
@@ -252,7 +252,7 @@ test('a card-login full ID from the bridge is saved masked, under the same key a
   const body = JSON.parse(sent)
   expect(sent).not.toContain('B123456789')
   expect(body.patient_identity.identifier_masked).toBe('B123***789')
-  expect(() => parseStoredCdssSaveV2(body)).not.toThrow()
+  expect(() => parseStoredCdssSave(body)).not.toThrow()
   expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
   expect(body.patient_key_sha256).toBe((await cdssPatientIdentity({ ...patient,
     identifier: [{ system, value: 'B123***789' }] })).patient_key_sha256)
@@ -449,7 +449,7 @@ test('TVGH hospital bridge identity saves without transmitting its full national
     1, 'vghtpe', '陳小華', '1968-05-09',
     'urn:mediprisma:vghtpe-bridge:national-id', 'A123XXX789',
   ])).digest('hex'))
-  expect(parseStoredCdssSaveV2(JSON.parse(serialized)).patient_identity.identifier_masked).toBe('A123XXX789')
+  expect(parseStoredCdssSave(JSON.parse(serialized)).patient_identity.identifier_masked).toBe('A123XXX789')
   expect(first.patient_identity.identifier_masked).toBe(second.patient_identity.identifier_masked)
 })
 
@@ -539,4 +539,47 @@ test('reserved hospital storage namespace is not accepted as an imported source'
   await expect(cdssPatientIdentity({ ...input.patient, identifier: [
     { system: 'urn:mediprisma:vghtpe-bridge:national-id', value: 'A123XXX789' },
   ] })).rejects.toThrow('cdss_identity_unavailable')
+})
+
+describe('optional HIS medical record number', () => {
+  const MRN = 'urn:oid:his.patient.mrn'
+  const tvgh = { ...input.patient, identifier: [
+    { system: MRN, value: '12345678' }, { system: 'urn:oid:tw.gov.id-number', value: 'A123456789' },
+  ] }
+  const cloud = { ...input.patient, identifier: [
+    { system: 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id', value: 'B123456789' },
+    { system: MRN, value: '87654321' },
+  ] }
+  const sentBody = () => JSON.parse(jest.mocked(fetch).mock.calls[0][1]?.body as string)
+
+  test.each([['TVGH bridge', tvgh, '12345678'], ['cloud bridge with TVGH MRN', cloud, '87654321']])(
+    '%s saves the MRN without changing the lookup key', async (_label, patient, mrn) => {
+      await saveCdssSnapshot({ ...input, patient })
+      const body = sentBody()
+      expect(body.schema_version).toBe(3)
+      expect(body.patient_identity.mrn).toBe(mrn)
+      expect(cdssGatewaySaveSchema.safeParse(body).success).toBe(true)
+      expect(parseStoredCdssSave(body).patient_identity.mrn).toBe(mrn)
+      const withoutMrn = { ...patient, identifier: patient.identifier.filter(id => id.system !== MRN) }
+      expect(body.patient_key_sha256).toBe((await cdssPatientIdentity(withoutMrn)).patient_key_sha256)
+    })
+
+  test('a patient without an MRN saves with the field absent', async () => {
+    await saveCdssSnapshot(input)
+    expect(sentBody().patient_identity).not.toHaveProperty('mrn')
+  })
+
+  test('two different MRNs are ambiguous and nothing is sent', async () => {
+    await expect(saveCdssSnapshot({ ...input, patient: { ...tvgh, identifier: [
+      ...tvgh.identifier, { system: MRN, value: '99999999' },
+    ] } })).rejects.toThrow('cdss_identity_unavailable')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  test('a repeated identical MRN is accepted; a malformed one is left out', async () => {
+    expect((await cdssPatientIdentity({ ...tvgh, identifier: [...tvgh.identifier, { system: ` ${MRN} `, value: '１２３４５６７８' }] }))
+      .patient_identity.mrn).toBe('12345678')
+    expect((await cdssPatientIdentity({ ...tvgh, identifier: [{ system: MRN, value: '12 34' }, tvgh.identifier[1]] }))
+      .patient_identity).not.toHaveProperty('mrn')
+  })
 })

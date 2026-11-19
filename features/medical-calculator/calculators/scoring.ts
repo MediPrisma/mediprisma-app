@@ -552,6 +552,14 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
     },
     note: { en: 'Ethanol (mg/dL) is optional; the /3.7 term is only added when entered.', zh: '乙醇（mg/dL）為選填；僅在輸入時才加入 /3.7 項。' },
   },
+  'timi-trs2p': {
+    formula: { zh: '年齡 ≥75、心衰竭、高血壓、糖尿病、曾中風、曾 CABG、PAD、eGFR <60、目前吸菸，各 1 分（0–9 分）', en: 'Age ≥75, heart failure, hypertension, diabetes, prior stroke, prior CABG, PAD, eGFR <60, current smoking: 1 point each (0–9)' },
+    outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: '風險分層（IMPROVE-IT）', en: 'Risk group (IMPROVE-IT)' }, rows: [
+      { score: '0–1', outcome: { zh: '低風險', en: 'Low risk' } },
+      { score: '2', outcome: { zh: '中風險', en: 'Intermediate risk' } },
+      { score: '≥3', outcome: { zh: '高風險：加強降脂或延長抗栓的絕對效益較大', en: 'High risk: larger absolute benefit from intensified lipid lowering or extended antithrombotics' } },
+    ] },
+  },
   'cha2ds2-va': {
     formula: { zh: '心衰竭 1 + 高血壓 1 + 年齡 65–74 歲 1 或 ≥75 歲 2 + 糖尿病 1 + 中風／TIA／動脈栓塞 2 + 血管疾病 1（不计性別，0–8 分）', en: 'HF 1 + hypertension 1 + age 65–74: 1 or ≥75: 2 + diabetes 1 + stroke/TIA/arterial embolism 2 + vascular disease 1. No sex point (0–8).' },
     outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: 'ESC 2024 抗凝評估', en: 'ESC 2024 OAC assessment' }, rows: [
