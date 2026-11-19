@@ -122,7 +122,7 @@ test.each([
 })
 
 test.each([
-  ['unknown version', { schema_version: 3 }],
+  ['unknown version', { schema_version: 999 }],
   ['malformed UUID', { patient_session_id: 'not-a-uuid' }],
   ['invalid timestamp', { saved_at: '2026-02-30T12:34+0800' }],
   ['invalid event date', { events: [{ kind: 'assessment', pack_id: 'synthetic', occurred_at: index.receivedAt,
@@ -135,10 +135,26 @@ test.each([
   await expect(readCdssHistory(patient, saveId, new AbortController().signal)).rejects.toThrow()
 })
 
+test('v3 snapshots with or without an MRN are readable; a malformed stored MRN is not', async () => {
+  for (const patch of [{ schema_version: 3 }, { schema_version: 3, patient_identity: { ...(await detail()).save.patient_identity, mrn: '12345678' } }]) {
+    const stored = await detail(patch)
+    jest.mocked(fetch).mockResolvedValueOnce(response(stored))
+    await expect(readCdssHistory(patient, saveId, new AbortController().signal)).resolves.toEqual(stored)
+  }
+  for (const patch of [{ schema_version: 2, patient_identity: { ...(await detail()).save.patient_identity, mrn: '12345678' } },
+    { schema_version: 3, patient_identity: { ...(await detail()).save.patient_identity, mrn: 'bad mrn' } }]) {
+    jest.mocked(fetch).mockResolvedValueOnce(response(await detail(patch)))
+    await expect(readCdssHistory(patient, saveId, new AbortController().signal)).rejects.toThrow()
+  }
+})
+
 test('historical compatibility does not loosen the current writer', async () => {
-  expect(cdssGatewaySaveSchema.safeParse((await detail()).save).success).toBe(true)
+  // The writer now emits v3; the same snapshot shape must pass it and the
+  // legacy lexical forms the v2 reader tolerates must still be rejected.
+  const asWriter = (save: object) => ({ ...save, schema_version: 3 })
+  expect(cdssGatewaySaveSchema.safeParse(asWriter((await detail()).save)).success).toBe(true)
   for (const patch of [{ patient_session_id: 'ABCDEFAB-1234-0000-0000-ABCDEFABCDEF' }, { saved_at: '2026-10-03T12:34+0800' }]) {
-    expect(cdssGatewaySaveSchema.safeParse((await detail(patch)).save).success).toBe(false)
+    expect(cdssGatewaySaveSchema.safeParse(asWriter((await detail(patch)).save)).success).toBe(false)
   }
 })
 

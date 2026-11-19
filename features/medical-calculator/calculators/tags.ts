@@ -17,6 +17,7 @@ const HEART_FAILURE: L = { en: 'Heart failure', zh: '心衰竭' }
 const HFPEF_DISEASE: L = { en: 'HFpEF', zh: '射出分率保留型心衰竭' }
 
 export const CALC_TAGS: Record<string, CalcTags> = {
+  'score2-asia-pacific': { purpose: ['risk', 'prognosis'], diseases: [{ en: 'Hypertension', zh: '高血壓' }, { en: 'CVD prevention', zh: '心血管疾病預防' }] },
   'pce-ascvd': { purpose: ['risk', 'prognosis'], diseases: [{ en: 'ASCVD prevention', zh: 'ASCVD 預防' }, { en: 'Hypertension', zh: '高血壓' }, { en: 'Dyslipidemia', zh: '血脂異常' }] },
   'stop-bang': { purpose: ['screening', 'risk'], diseases: [{ en: 'Obstructive sleep apnea', zh: '阻塞型睡眠呼吸中止' }, { en: 'Hypertension', zh: '高血壓' }] },
   'prevent-ascvd': { purpose: ['risk', 'prognosis'], diseases: [{ en: 'Dyslipidemia', zh: '血脂異常' }, { en: 'ASCVD prevention', zh: 'ASCVD 預防' }] },
@@ -37,6 +38,7 @@ export const CALC_TAGS: Record<string, CalcTags> = {
   'serum-osmolality': { purpose: ['formula'], diseases: [{ en: 'Hyponatremia', zh: '低血鈉' }] },
   'free-water-deficit': { purpose: ['formula', 'treatment'], diseases: [{ en: 'Hypernatremia', zh: '高血鈉' }] },
   'timi-trs2p': { purpose: ['prognosis', 'risk'], diseases: [{ en: 'Coronary artery disease', zh: '冠心病' }, { en: 'Myocardial infarction', zh: '心肌梗塞' }] },
+  'timi-ua-nstemi': { purpose: ['prognosis', 'risk'], diseases: [{ en: 'Acute coronary syndrome', zh: '急性冠心症' }, { en: 'Chest pain', zh: '胸痛' }] },
   'cha2ds2-va': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'cha2ds2-vasc': { purpose: ['prognosis', 'risk'], diseases: [AFIB, { en: 'Stroke', zh: '中風' }] },
   'h2fpef': { purpose: ['diagnosis'], diseases: [HFPEF_DISEASE] },

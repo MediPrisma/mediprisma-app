@@ -9,7 +9,8 @@ const condition = (code: string, recordedDate = '2026-06-01'): ConditionEntity =
   ({ id: `c-${code}`, code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code }] }, recordedDate }) as ConditionEntity
 const encounter = (text: string): EncounterEntity =>
   ({ id: `e-${text}`, status: 'finished', period: { start: '2026-09-01' }, reasonCode: [{ text }] }) as EncounterEntity
-const keys = (codes: string[]) => Object.keys(historySelects(codes.map((code) => condition(code)), [], now)).sort()
+// TIMI's risk-factor count always answers (否 below three), so it is read on its own below.
+const keys = (codes: string[]) => Object.keys(historySelects(codes.map((code) => condition(code)), [], now)).filter((key) => key !== 'timiRiskFactors').sort()
 
 it.each([
   ['I10', ['htn']],
@@ -136,3 +137,11 @@ it('reads an HF hospitalization whose diagnosis references a Condition', () => {
   expect(historySelects([condition('I50.9', '2026-09-01')], [stay], now).hfHospitalization?.value).toBe('recent')
 })
 
+it('counts TIMI risk factors from codes: three or more is 是, fewer names what was found', () => {
+  const three = historySelects([condition('I10'), condition('E78.5'), condition('E11.9')], [], now).timiRiskFactors
+  expect(three).toMatchObject({ value: 'yes', testName: '危險因子 3 項：高血壓、高血脂、糖尿病（請核對）' })
+  const two = historySelects([condition('I10'), condition('F17.210')], [], now).timiRiskFactors
+  expect(two).toMatchObject({ value: 'no', testName: '病歷診斷碼見危險因子 2 項（高血壓、吸菸），未含家族史，預設無（請核對）' })
+  // A smoker in remission is not counted.
+  expect(historySelects([condition('I10'), condition('E78.0'), condition('F17.211')], [], now).timiRiskFactors?.value).toBe('no')
+})
