@@ -98,7 +98,7 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
     title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
   { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, needsPoint: true, note: true },
   { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, needsPoint: true, panel: 'prevent-visit', note: true,
-    title: { zh: 'PREVENT 心血管風險', en: 'PREVENT cardiovascular risk' } },
+    title: { zh: 'PREVENT-ASCVD 心血管風險', en: 'PREVENT-ASCVD cardiovascular risk' } },
   // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
   // 「包括 ACC/AHA 的 Multicohort CV risk calculators」), a reference the pack shows.
   { id: 'pce-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'pce-ascvd', names: /ACC\/AHA PCE|Pooled Cohort|PCE/, needsPoint: true, panel: 'pce-visit', note: true,
