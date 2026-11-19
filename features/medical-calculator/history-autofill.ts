@@ -9,7 +9,7 @@ import { classifyEncounterClass } from '@/src/core/use-cases/medical-summary/gen
  * Codes are ICD-10 without dots; ICD-9 is not read (owner decision
  * 2026-11-19: the record is ICD-10 now).
  */
-export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis' | 'pad' | 'priorCabg' | 'timiRiskFactors'
+export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis' | 'pad' | 'priorCabg'
 
 /** I10–I16. */
 const isHtn = (code: string) => /^I1[0-6]/.test(code)
@@ -49,11 +49,6 @@ const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:Z867
 const isPad = (code: string) => /^(?:I702|I739)/.test(code)
 /** Prior CABG: bypass graft present (Z95.1) or graft atherosclerosis (I25.81x). */
 const isPriorCabg = (code: string) => /^(?:Z951|I2581)/.test(code)
-/** Hyperlipidaemia for TIMI's risk-factor count: E78.0–E78.5. */
-const isHyperlipidemia = (code: string) => /^E78[0-5]/.test(code)
-/** Diabetes E08–E13. */
-const isDiabetes = (code: string) => /^(?:E0[89]|E1[0-3])/.test(code)
-
 /** Wells' 「active cancer」: treated within six months. */
 const CANCER_WINDOW_DAYS = 183
 
@@ -79,29 +74,9 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
     esrdOrDialysis: read(isEsrdOrDialysis, '末期腎病／透析'),
     pad: read(isPad, '周邊動脈疾病'),
     priorCabg: read(isPriorCabg, '冠狀動脈繞道'),
-    timiRiskFactors: timiRiskFactors(conditions, encounters, now, read),
     ...heartFailureCourse(conditions, encounters, now),
   }
   return Object.fromEntries(Object.entries(found).filter(([, value]) => value)) as Partial<Record<HistoryKey, ClinicalSelectValue>>
-}
-
-/**
- * TIMI UA/NSTEMI's 「≥3 CAD risk factors」, counted from codes: hypertension,
- * hyperlipidaemia, diabetes and current smoking. Family history is not coded,
- * so fewer than three reads 「否」 naming what was found, for the clinician to check.
- */
-function timiRiskFactors(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date, read: (matches: (code: string) => boolean, name: string) => ClinicalSelectValue | undefined): ClinicalSelectValue | undefined {
-  const smoking = currentSmoking(conditions, encounters, now)
-  const hits = [
-    ['高血壓', read(isHtn, '高血壓')],
-    ['高血脂', read(isHyperlipidemia, '高血脂')],
-    ['糖尿病', read(isDiabetes, '糖尿病')],
-    ['吸菸', smoking?.value === 'yes' ? smoking : undefined],
-  ] as const
-  const found = hits.flatMap(([, hit]) => hit ? [hit] : [])
-  const names = hits.filter(([, hit]) => hit).map(([name]) => name).join('、')
-  if (found.length >= 3) return { ...found[0]!, value: 'yes', testName: `危險因子 ${found.length} 項：${names}（請核對）` }
-  return { value: 'no', date: now.toISOString().slice(0, 10), testName: `病歷診斷碼見危險因子 ${found.length} 項${names ? `（${names}）` : ''}，未含家族史，預設無（請核對）` }
 }
 
 /**
