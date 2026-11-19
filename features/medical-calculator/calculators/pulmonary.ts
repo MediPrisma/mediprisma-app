@@ -10,16 +10,16 @@ export const PULMONARY: CalculatorDef[] = [
       blurb: { en: 'Community-acquired pneumonia severity / disposition.', zh: '社區型肺炎嚴重度／處置建議。' },
       inputs: [
         {
-          key: 'confusion', type: 'select', label: { en: 'Confusion (new)', zh: '新發意識混亂' }, defaultValue: '',
+          key: 'confusion', type: 'select', label: { en: 'Confusion (new)', zh: '新發意識混亂' }, defaultValue: '', presumed: 'no',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
         {
-          key: 'rr', type: 'select', label: { en: 'Respiratory rate ≥ 30/min', zh: '呼吸速率 ≥ 30/分' }, defaultValue: '',
+          key: 'rr', type: 'select', label: { en: 'Respiratory rate ≥ 30/min', zh: '呼吸速率 ≥ 30/分' }, defaultValue: '', presumed: 'no',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         {
-          key: 'bp', type: 'select', label: { en: 'SBP < 90 or DBP ≤ 60 mmHg', zh: '收縮壓 < 90 或舒張壓 ≤ 60 mmHg' }, defaultValue: '',
+          key: 'bp', type: 'select', label: { en: 'SBP < 90 or DBP ≤ 60 mmHg', zh: '收縮壓 < 90 或舒張壓 ≤ 60 mmHg' }, defaultValue: '', presumed: 'no',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         AGE_INPUT,
@@ -61,9 +61,9 @@ export const PULMONARY: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Quick sepsis risk outside the ICU.', zh: '非加護病房之快速敗血症風險。' },
       items: [
-        { key: 'rr', scoreOn: 'yes', label: { en: 'Respiratory rate ≥ 22/min', zh: '呼吸速率 ≥ 22/分' } },
-        { key: 'ams', scoreOn: 'yes', label: { en: 'Altered mentation (GCS < 15)', zh: '意識改變（GCS < 15）' } },
-        { key: 'sbp', scoreOn: 'yes', label: { en: 'Systolic BP ≤ 100 mmHg', zh: '收縮壓 ≤ 100 mmHg' } },
+        { key: 'rr', scoreOn: 'yes', presumed: 'no', label: { en: 'Respiratory rate ≥ 22/min', zh: '呼吸速率 ≥ 22/分' } },
+        { key: 'ams', scoreOn: 'yes', presumed: 'no', label: { en: 'Altered mentation (GCS < 15)', zh: '意識改變（GCS < 15）' } },
+        { key: 'sbp', scoreOn: 'yes', presumed: 'no', label: { en: 'Systolic BP ≤ 100 mmHg', zh: '收縮壓 ≤ 100 mmHg' } },
       ],
       interpret: (s) => ({
         value: `${s} / 3`,
