@@ -79,21 +79,31 @@ export function timiSelects(input: { observations: LabObservation[]; reports: Di
  * before it (「No ST elevation」, 「無明顯 ST 段上升」) or as its own predicate
  * right after it (「ST elevation is no longer present」); 「no change in ST
  * depression」 or 「ST depression with absent P waves」 still affirm it. A stated
- * size under 0.5 mm is below TIMI's threshold. 「Possible」 or 「suspect」 is
- * left for the clinician.
+ * size under 0.5 mm (or 「<0.5 mm」) is below TIMI's threshold. A negation also
+ * covers ST mentions coordinated with it (「No ST elevation or ST depression」).
+ * 「Possible」, 「suspect」 or a limit that cannot settle it is left for the clinician.
  */
 function readSt(text: string): 'yes' | 'unsure' | 'no' {
   const mention = /\bST(?:[- ]segment)?[- ]?(?:elevation|depression)|\bST[- ]?[↑↓]|ST\s*段\s*(?:上升|抬高|下降|壓低)/gi
   let unsure = false
   for (const clause of text.split(/[\n\r;。；,，]|\.(?!\d)|\bbut\b|但|而/i)) {
+    // A negation also governs the ST mentions coordinated with the one it heads: 「No ST elevation or ST depression」.
+    let negatedUntil = -1
     for (const match of clause.matchAll(mention)) {
       const before = clause.slice(0, match.index)
       const after = clause.slice(match.index! + match[0].length)
-      if (/(?:\bno\b|\bnot\b|without|absence\s+of|未見|沒有|無)\s*(?:significant|obvious|definite|acute|new|明顯|顯著)?\s*$/i.test(before)) continue
+      const coordinated = negatedUntil >= 0 && /^\s*(?:or|and|nor|\/|、|或|及|與)\s*(?:significant|obvious|definite|acute|new|明顯|顯著)?\s*$/i.test(clause.slice(negatedUntil, match.index))
+      if (coordinated || /(?:\bno\b|\bnot\b|without|absence\s+of|未見|沒有|無)\s*(?:significant|obvious|definite|acute|new|明顯|顯著)?\s*$/i.test(before)) { negatedUntil = match.index! + match[0].length; continue }
+      negatedUntil = -1
       if (/^\s*(?:(?:is|are|was|were|has|have)\s+)?(?:no\s+longer|not\s+(?:seen|present)|absent|resolved|已消失|消失)/i.test(after)) continue
       if (/(?:possible|suspect(?:ed)?|rule\s*out|\br\/o\b|equivocal|疑似?|待排除)\s*(?:\S+\s*){0,2}$/i.test(before)) { unsure = true; continue }
-      const size = /(\d+(?:\.\d+)?)\s*mm/i.exec(clause)
-      if (size && Number(size[1]) < 0.5) continue
+      // A stated size keeps its comparator: 「<0.5 mm」 is under the threshold, 「<1 mm」 cannot say.
+      const size = /(<|≤|≦|＜|less\s+than|under|小於|未達)?\s*(\d+(?:\.\d+)?)\s*mm/i.exec(after) ?? /(<|≤|≦|＜|less\s+than|under|小於|未達)?\s*(\d+(?:\.\d+)?)\s*mm/i.exec(clause)
+      if (size) {
+        const value = Number(size[2])
+        if (size[1] ? value <= 0.5 : value < 0.5) continue
+        if (size[1]) { unsure = true; continue }
+      }
       return 'yes'
     }
   }

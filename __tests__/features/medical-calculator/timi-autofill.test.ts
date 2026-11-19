@@ -62,6 +62,16 @@ describe('TIMI ST deviation from the ECG', () => {
     expect(st('ST depression 0.5 mm in V4-V6.')).toBe('yes')
     expect(st('ST elevation 2 mm in II, III, aVF.')).toBe('yes')
     expect(st('Possible ST depression in V5.')).toBe('unknown')
+    expect(st('ST depression <0.5 mm in V4-V6.')).toBe('no')
+    expect(st('ST depression <1 mm in V4-V6.')).toBe('unknown')
+  })
+
+  it('carries a negation over coordinated ST mentions, and not past a comma', () => {
+    const st = (text: string) => timiSelects({ observations: [], reports: [ecg(text, '2026-11-19T08:00:00+08:00')], now }).timiSt?.value
+    expect(st('No ST elevation or ST depression.')).toBe('no')
+    expect(st('No significant ST elevation or ST depression.')).toBe('no')
+    expect(st('無 ST 段上升或 ST 段壓低')).toBe('no')
+    expect(st('No ST elevation, ST depression in V4-V6.')).toBe('yes')
   })
 
   it('reads 否 from a recent ECG that names none or denies it, and nothing from an older one', () => {
