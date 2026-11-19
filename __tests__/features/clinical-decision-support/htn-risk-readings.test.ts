@@ -123,10 +123,13 @@ describe('HTN baseline-risk facts for the pack', () => {
     // The HTN page has its own list (#562): the risk panels sit in it, by chapter, beside eGFR and KDIGO.
     expect(HF_VISIT_CALCULATORS.some((entry) => entry.source === 'htn')).toBe(false)
     const entries = HTN_VISIT_CALCULATORS.filter((entry) => entry.dp === 'DP-07' || entry.dp === 'DP-08')
-    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['stop-bang', 'DP-07', true], ['risk-inputs', 'DP-08', true], ['prevent-ascvd', 'DP-08', true], ['pce-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true]])
+    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['stop-bang', 'DP-07', true], ['risk-inputs', 'DP-08', true], ['prevent-cvd', 'DP-08', true], ['prevent-ascvd', 'DP-08', true], ['pce-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true]])
     const line = 'PREVENT-ASCVD 9.2%｜ACC/AHA PCE 5.4%｜國健署心血管風險預測 8.1%（低）'
     const byId = Object.fromEntries(entries.map((entry) => [entry.id, entry]))
     expect(byId['prevent-ascvd']!.names.test(line)).toBe(true)
+    // PREVENT-CVD keeps its own row: neither row reads the other's value.
+    expect(byId['prevent-cvd']!.names.test(line)).toBe(false)
+    expect(byId['prevent-ascvd']!.names.test('PREVENT-CVD 12.1%')).toBe(false)
     expect(byId['pce-ascvd']!.names.test(line)).toBe(true)
     expect(byId['hpa-mace']!.names.test(line)).toBe(true)
     expect(byId['hpa-mace']!.names.test('HPA cardiovascular risk prediction 8.1% (low)')).toBe(true)

@@ -75,7 +75,8 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
  * The hypertension page's calculators, in the order of its chapters (owner
  * request 2026-11-19: HTN and CAD get the same 計算機 entry as HF and AF).
  * DP-08's risk panels came from pilot/hmc (owner 2026-11-03); PREVENT-ASCVD
- * stays there because clinical users asked for it (owner 2026-11-19).
+ * stays there because clinical users asked for it (owner 2026-11-19), beside
+ * PREVENT-CVD, the total-CVD score the AHA/ACC 2025 7.5% threshold reads.
  */
 export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'egfr', dp: 'DP-04', source: 'htn', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
@@ -95,7 +96,8 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // and today's answers, confirmed once for all of them.
   { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, needsPoint: true, panel: 'risk-inputs',
     title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
-  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?:[-‐–](?:ASCVD|CVD))?/, needsPoint: true, panel: 'prevent-visit', note: true,
+  { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, needsPoint: true, note: true },
+  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, needsPoint: true, panel: 'prevent-visit', note: true,
     title: { zh: 'PREVENT 心血管風險', en: 'PREVENT cardiovascular risk' } },
   // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
   // 「包括 ACC/AHA 的 Multicohort CV risk calculators」), a reference the pack shows.

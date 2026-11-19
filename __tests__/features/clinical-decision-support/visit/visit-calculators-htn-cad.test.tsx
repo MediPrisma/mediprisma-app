@@ -59,7 +59,7 @@ describe('計算機 on the HTN and CAD pages', () => {
 
   it('lists the hypertension calculators by chapter, the DP-08 risk panels among them', () => {
     render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-07'), point('htn', 'DP-08'), point('htn', 'DP-18')]} />)
-    expect(listedIds()).toEqual(['egfr', 'stop-bang', 'risk-inputs', 'prevent-ascvd', 'pce-ascvd', 'hpa-mace', 'ckd-kdigo-risk'])
+    expect(listedIds()).toEqual(['egfr', 'stop-bang', 'risk-inputs', 'prevent-cvd', 'prevent-ascvd', 'pce-ascvd', 'hpa-mace', 'ckd-kdigo-risk'])
     // A title where the entry has one; otherwise the calculator's full name, not its last parenthesis.
     expect(screen.getByTestId('cdss-book-calculator-hpa-mace')).toHaveTextContent('國健署心血管風險預測公式')
     expect(screen.getByTestId('cdss-book-calculator-egfr')).toHaveTextContent('eGFR (CKD-EPI 2021)')
