@@ -12,6 +12,7 @@ import { HFPEF } from './hfpef'
 import { CARDIAC } from './cardiac'
 import { PREVENT, PREVENT_CVD } from './prevent'
 import { PCE } from './pce'
+import { SCORE2_ASIA_PACIFIC } from './score2'
 import { STOP_BANG } from './stop-bang'
 import { PULMONARY } from './pulmonary'
 import { HEME } from './heme'
@@ -34,6 +35,7 @@ export const CALCULATORS: CalculatorDef[] = [
   PREVENT,
   PREVENT_CVD,
   PCE,
+  SCORE2_ASIA_PACIFIC,
   ...HFPEF,
   ...HEART_FAILURE_PROGNOSIS,
   ...PULMONARY,
