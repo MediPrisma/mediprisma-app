@@ -144,7 +144,7 @@ export async function saveCdssSnapshot(input: {
     const receipt = previous?.content === signature
       ? previous : { content: signature, saveId: crypto.randomUUID(), savedAt: new Date().toISOString() }
     stage = 'validate'
-    const validation = cdssGatewaySaveSchema.safeParse({ schema_version: 2, save_id: receipt.saveId,
+    const validation = cdssGatewaySaveSchema.safeParse({ schema_version: 3, save_id: receipt.saveId,
       saved_at: receipt.savedAt, ...identity, ...content })
     if (!validation.success) throw new CdssSaveError('cdss_payload_invalid', stage)
     const parsed = validation.data

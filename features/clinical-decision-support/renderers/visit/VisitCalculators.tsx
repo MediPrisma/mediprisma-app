@@ -97,6 +97,8 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, needsPoint: true, panel: 'risk-inputs',
     title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
   { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, needsPoint: true, note: true },
+  // ESC 2024's SCORE2, recalibrated for the Asia-Pacific; Taiwan in its low-risk region (owner 2026-11-20).
+  { id: 'score2-ap', dp: 'DP-08', source: 'htn', calculatorId: 'score2-asia-pacific', names: /SCORE2(?![-‐–](?:OP|Diabetes))/, needsPoint: true, note: true },
   { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, needsPoint: true, panel: 'prevent-visit', note: true,
     title: { zh: 'PREVENT-ASCVD 心血管風險', en: 'PREVENT-ASCVD cardiovascular risk' } },
   // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
