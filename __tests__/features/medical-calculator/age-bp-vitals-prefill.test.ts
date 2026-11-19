@@ -64,3 +64,23 @@ it('fills segmented neutrophils as a percentage only', () => {
   expect(value('anc', 'neut', autofill({ observations: [pct] }))).toBe('62')
   expect(value('anc', 'neut', autofill({ observations: [count] }))).toBe('')
 })
+
+it('converts kPa blood pressure before MAP and the bleeding scores use it', () => {
+  const data = autofill({ observations: [obs('8480-6', 16, 'kPa'), obs('8462-4', 10, 'kPa')] })
+  expect(value('map', 'sbp', data)).toBe('120.01')
+  expect(value('map', 'dbp', data)).toBe('75.01')
+  expect(value('glasgow-blatchford', 'sbp', data)).toBe('120.01')
+  expect(value('aims65', 'sbp', data)).toBe('120.01')
+})
+
+it('keeps an FiO2 fraction converted to a percentage', () => {
+  const data = autofill({ observations: [obs('3150-0', 0.4, '1')] })
+  const fio2 = CALCULATORS.flatMap((c) => c.inputs).find((i) => i.key === 'fio2' && i.type === 'number')!
+  expect(resolveInput(fio2, data).value).toBe('40')
+})
+
+it('does not count a resolved kidney injury again from an old visit', () => {
+  const visit = { id: 'e1', status: 'finished', class: { code: 'AMB' }, period: { start: '2025-03-01' }, reasonCode: [{ coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'N17.9' }] }] }
+  const data = buildAutofill([], { age: 75, gender: 'male' }, [], [], now, [condition('N17.9', 'resolved')], [visit] as never)
+  expect(value('rockall', 'comorbid', data)).toBe('0')
+})

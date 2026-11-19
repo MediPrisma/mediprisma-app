@@ -12,7 +12,7 @@ export const GI: CalculatorDef[] = [
       inputs: [
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
         { key: 'hb', type: 'number', label: { en: 'Hemoglobin', zh: '血色素' }, unit: 'g/dL', dimension: 'hemoglobin', normalRange: { low: 12, high: 16 }, source: { kind: 'lab', keys: ['HB'] } },
-        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
         SEX_INPUT,
         { key: 'hr', type: 'select', label: { en: 'Heart rate ≥ 100', zh: '心率 ≥ 100' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
         { key: 'melena', type: 'select', label: { en: 'Melena', zh: '黑便' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
@@ -135,7 +135,7 @@ export const GI: CalculatorDef[] = [
       inputs: [
         { key: 'alb', type: 'number', label: { en: 'Albumin', zh: '白蛋白' }, unit: 'g/dL', dimension: 'albumin', normalRange: { low: 3.5, high: 5.0 }, source: { kind: 'lab', keys: ['ALB'] } },
         { key: 'inr', type: 'number', label: { en: 'INR', zh: 'INR' }, normalRange: { low: 0.8, high: 1.1 }, source: { kind: 'lab', keys: ['INR'] } },
-        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
         AGE_INPUT,
         { key: 'mental', type: 'select', label: { en: 'Altered mental status', zh: '意識改變' }, defaultValue: '', presumed: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],

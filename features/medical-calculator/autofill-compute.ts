@@ -88,7 +88,8 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
   }
 
   // A percentage takes no reading in another unit: an absolute count (neutrophils in /µL) is not a share.
-  if (expected === '%' && hit.unit.trim() && normUnit(hit.unit) !== normUnit('%')) {
+  // (A unit the input's dimension converts, FiO₂ as a fraction, is not refused.)
+  if (expected === '%' && hit.unit.trim() && normUnit(hit.unit) !== normUnit('%') && !convertToBase(hit.value, hit.unit, input.dimension)) {
     return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
   }
 

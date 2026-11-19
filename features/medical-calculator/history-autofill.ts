@@ -98,7 +98,10 @@ function activeCancer(conditions: ConditionEntity[], encounters: EncounterEntity
  * history. Neither: the presumed 「無」.
  */
 function rockallComorbidity(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): ClinicalSelectValue | undefined {
-  const failure = diagnosisSelect(conditions, encounters, now, isRockallFailureOrMets, '腎／肝衰竭或轉移癌')
+  // A failure the record marks resolved is not current: old visits for it then do not count, only an active diagnosis.
+  const settled = conditions.some((condition) => ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')
+    && condition.code?.coding?.some((coding) => isRockallFailureOrMets(coding.code?.replace(/\./g, '').toUpperCase() ?? '')))
+  const failure = diagnosisSelect(conditions, settled ? [] : encounters, now, isRockallFailureOrMets, '腎／肝衰竭或轉移癌')
   if (failure) return { ...failure, value: '2' }
   const cardiac = diagnosisSelect(conditions, encounters, now, (code) => isHf(code) || isIhd(code), '心衰竭或缺血性心臟病', undefined, true)
   return cardiac && { ...cardiac, value: '1' }

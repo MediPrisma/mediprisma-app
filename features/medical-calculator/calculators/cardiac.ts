@@ -51,8 +51,8 @@ export const CARDIAC: CalculatorDef[] = [
       category: 'cardiac',
       blurb: { en: '(SBP + 2×DBP) / 3.', zh: '(收縮壓 + 2×舒張壓) / 3。' },
       inputs: [
-        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
-        { key: 'dbp', type: 'number', label: { en: 'Diastolic BP', zh: '舒張壓' }, unit: 'mmHg', normalRange: { low: 60, high: 80 }, source: { kind: 'vital', loinc: ['8462-4'] } },
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
+        { key: 'dbp', type: 'number', label: { en: 'Diastolic BP', zh: '舒張壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 60, high: 80 }, source: { kind: 'vital', loinc: ['8462-4'] } },
       ],
       compute: (v) => {
         const sbp = n(v, 'sbp'); const dbp = n(v, 'dbp')
@@ -218,7 +218,7 @@ export const CARDIAC: CalculatorDef[] = [
       inputs: [
         SEX_INPUT,
         AGE_INPUT,
-        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
         { key: 'chol', type: 'number', label: { en: 'Total cholesterol', zh: '總膽固醇' }, unit: 'mg/dL', dimension: 'cholesterol', normalRange: { low: 125, high: 200 }, source: { kind: 'lab', keys: ['CHOL'] } },
         {
           key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'diabetes' }, presumed: 'no',
