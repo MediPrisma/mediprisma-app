@@ -50,12 +50,23 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     // stays unfilled (its default is not "from the patient").
     if (input.source?.kind === 'hfpefClinical') {
       const hit = autofill.clinicalSelects?.[input.source.key]
-      if (hit && input.options.some(option => option.value === hit.value)) return {
-        ...EMPTY, value: hit.value, filled: true, date: hit.date,
+      const answer = hit && (input.source.answers?.[hit.value] ?? hit.value)
+      if (hit && input.options.some(option => option.value === answer)) return {
+        ...EMPTY, value: answer!, filled: true, date: hit.date,
         source: { testName: hit.testName, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType },
       }
+      // The record has something it cannot turn into an answer (「unknown」):
+      // left for the clinician, never presumed absent.
+      if (hit) return { ...EMPTY, value: '' }
     }
     if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
+    const presumed = input.presumed !== undefined ? input.options.find((option) => option.value === input.presumed) : undefined
+    // A record question presumes nothing until the record has loaded.
+    const recordSettled = input.source?.kind !== 'hfpefClinical' || autofill.recordLoaded === true
+    if (presumed && recordSettled) {
+      const testName = `${input.source?.kind === 'hfpefClinical' ? '紀錄未見，' : ''}預設「${presumed.label.zh}」（請核對）`
+      return { ...EMPTY, value: presumed.value, filled: true, source: { testName } }
+    }
     return { ...EMPTY, value: input.defaultValue ?? input.options[0]?.value ?? '' }
   }
   if (input.type !== 'number') return { ...EMPTY, value: input.defaultValue ?? '' }

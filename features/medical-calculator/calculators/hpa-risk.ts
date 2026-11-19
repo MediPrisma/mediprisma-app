@@ -31,10 +31,10 @@ export const HPA_RISK: CalculatorDef[] = [{
     { key: 'tg', type: 'number', label: { en: 'Triglycerides', zh: '三酸甘油酯' }, unit: 'mg/dL', dimension: 'triglyceride', source: { kind: 'lab', keys: ['TG'] } },
     { key: 'ldlc', type: 'number', label: { en: 'LDL cholesterol', zh: '低密度脂蛋白膽固醇' }, unit: 'mg/dL', dimension: 'cholesterol', source: { kind: 'lab', keys: ['LDL'] } },
     { key: 'hdlc', type: 'number', label: { en: 'HDL cholesterol', zh: '高密度脂蛋白膽固醇' }, unit: 'mg/dL', dimension: 'cholesterol', source: { kind: 'lab', keys: ['HDL'] } },
-    { key: 'diabetes', type: 'select', label: { en: 'Known diabetes', zh: '已知糖尿病' }, options: YES_NO, defaultValue: '' },
-    { key: 'hbp', type: 'select', label: { en: 'Known hypertension', zh: '已知高血壓' }, options: YES_NO, defaultValue: '' },
-    { key: 'smoke', type: 'select', label: { en: 'Current smoking', zh: '目前吸菸' }, options: YES_NO, defaultValue: '' },
-    { key: 'prior_cvd', type: 'select', label: { en: 'Prior coronary disease or stroke', zh: '既往冠心病或中風' }, options: YES_NO, defaultValue: '' },
+    { key: 'diabetes', type: 'select', label: { en: 'Known diabetes', zh: '已知糖尿病' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'diabetes' }, presumed: 'no' },
+    { key: 'hbp', type: 'select', label: { en: 'Known hypertension', zh: '已知高血壓' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'htn' }, presumed: 'no' },
+    { key: 'smoke', type: 'select', label: { en: 'Current smoking', zh: '目前吸菸' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'smoker' }, presumed: 'no' },
+    { key: 'prior_cvd', type: 'select', label: { en: 'Prior coronary disease or stroke', zh: '既往冠心病或中風' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'cadOrStroke' }, presumed: 'no' },
   ],
   // This composite deliberately has no single-number result. Detail presents
   // independently eligible outcomes; generic inline list scoring stays blank.

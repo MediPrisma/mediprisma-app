@@ -1,5 +1,8 @@
 import type { CalculatorDef, CalcValues, CalcResult, L, SelectInput } from '../types'
 import { AGE_INPUT, SEX_INPUT, n } from './_shared'
+import type { ClinicalSelectKey } from '../hfpef-clinical-autofill'
+
+const HISTORY_SOURCE: Record<string, ClinicalSelectKey> = { chf: 'chf', htn: 'htn', dm: 'diabetes', stroke: 'strokeTiaEmbolism', vascular: 'vascular' }
 
 const label = (zh: string, en: string): L => ({ zh, en })
 const histories = [
@@ -18,6 +21,9 @@ const historyInputs: SelectInput[] = histories.map(({ key, label }) => ({
   label,
   type: 'select',
   defaultValue: '',
+  // Read from the record's diagnosis codes; presumed absent when it shows none.
+  source: { kind: 'hfpefClinical' as const, key: HISTORY_SOURCE[key] },
+  presumed: 'no',
   options: [
     { value: 'no', label: { zh: '無', en: 'No' } },
     { value: 'yes', label: { zh: '有', en: 'Yes' } },
@@ -92,8 +98,8 @@ function score(v: CalcValues, includeSex: boolean): CalcResult | null {
       ...items.map((item) => ({ label: item.label, value: item.known ? String(item.points) : '—' })),
     ],
     notes: label(
-      '未填病史不視為 0 分；不能僅依低的最低分排除抗凝需求。機械瓣、中重度 MS、HCM／心臟類澱粉沉積等另循專門指引。',
-      'Missing history is not zero; a low minimum cannot exclude an OAC indication. Mechanical valves, significant MS, HCM and cardiac amyloidosis require dedicated guidance.',
+      '紀錄未見的病史預填「無」，請核對；清空的項目不計 0 分。機械瓣、中重度 MS、HCM／心臟類澱粉沉積等另循專門指引。',
+      'Histories the record does not show are prefilled No — check them; a cleared item is not scored 0. Mechanical valves, significant MS, HCM and cardiac amyloidosis require dedicated guidance.',
     ),
   }
 }
