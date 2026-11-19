@@ -4,13 +4,14 @@ import { doacSelects, type DoacSelectKey } from './doac-clinical-autofill'
 import type { DoacPatientKey } from './doac-patient-autofill'
 import { historySelects, type HistoryKey } from './history-autofill'
 import type { HasBledKey } from './has-bled-autofill'
+import type { TimiSelectKey } from './timi-autofill'
 
 /**
  * Yes/no and graded answers the record (or the CDSS visit) can give a
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'antihypertensiveAny' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | 'aspirin' | HasBledKey | HistoryKey | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'antihypertensiveAny' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | 'aspirin' | HasBledKey | TimiSelectKey | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string

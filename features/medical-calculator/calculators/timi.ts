@@ -83,8 +83,8 @@ const TIMI_ITEMS: Item[] = [
   { key: 'knownCad', label: label('已知冠狀動脈狹窄 ≥50%', 'Known coronary stenosis ≥50%'), record: 'ihd' },
   { key: 'aspirin', label: label('7 天內使用 aspirin', 'Aspirin use in the past 7 days'), record: 'aspirin' },
   { key: 'angina', label: label('24 小時內 ≥2 次嚴重心絞痛', '≥2 severe angina episodes in 24 h') },
-  { key: 'st', label: label('心電圖 ST 偏移 ≥0.5 mm', 'ST deviation ≥0.5 mm on ECG') },
-  { key: 'marker', label: label('心肌標記（troponin／CK-MB）升高', 'Positive cardiac marker (troponin / CK-MB)') },
+  { key: 'st', label: label('心電圖 ST 偏移 ≥0.5 mm', 'ST deviation ≥0.5 mm on ECG'), record: 'timiSt' },
+  { key: 'marker', label: label('心肌標記（troponin／CK-MB）升高', 'Positive cardiac marker (troponin / CK-MB)'), record: 'timiMarker' },
 ]
 /** 14-day all-cause death, new or recurrent MI, or severe recurrent ischaemia requiring urgent revascularisation (TIMI 11B). */
 const TIMI_14_DAY = ['4.7', '4.7', '8.3', '13.2', '19.9', '26.2', '40.9', '40.9']
@@ -114,8 +114,8 @@ function timiUa(v: CalcValues): CalcResult | null {
       ...items.map((item) => ({ label: item.label, value: item.point === undefined ? '—' : item.point ? '1' : '0' })),
     ],
     notes: label(
-      '用於疑似不穩定心絞痛／NSTEMI 的急性評估；門診穩定病人不適用。病歷帶入的危險因子、已知狹窄與 aspirin 請核對；急性症狀、ST 與心肌標記依今天實際情形填寫。事件率來自 2000 年 TIMI 11B，早於高敏感度 troponin 與現代治療。',
-      'For suspected UA/NSTEMI at presentation; not for stable outpatients. Check the risk factors, known stenosis and aspirin read from the record; answer symptoms, ST and markers for today. Event rates are from TIMI 11B (2000), before high-sensitivity troponin and contemporary therapy.',
+      '用於疑似不穩定心絞痛／NSTEMI 的急性評估；門診穩定病人不適用。病歷帶入的危險因子、已知狹窄、aspirin，以及 72 小時內的 troponin 與 EKG 請核對；心絞痛次數依今天問診填寫。事件率來自 2000 年 TIMI 11B，早於高敏感度 troponin 與現代治療。',
+      'For suspected UA/NSTEMI at presentation; not for stable outpatients. Check the risk factors, known stenosis, aspirin and the troponin and ECG of the last 72 hours read from the record; answer the angina count from today’s history. Event rates are from TIMI 11B (2000), before high-sensitivity troponin and contemporary therapy.',
     ),
   }
 }
