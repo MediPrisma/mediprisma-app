@@ -81,6 +81,27 @@ describe('shared risk inputs', () => {
     expect(buildRiskInputs(p, smoker, { smoking: 'no' }).fields.find((item) => item.input.key === 'smoking')).toMatchObject({ value: 'no', origin: 'physician' })
   })
 
+  it('keeps the record’s dated smoking reading over an older smoking code', () => {
+    // F17.210 in March, F17.211 (in remission) in October: the record reads 「否」.
+    const quit = { ...record, recordLoaded: true, clinicalSelects: { ...record.clinicalSelects,
+      pceSmoking: { value: 'yes', date: '2026-03-01', testName: '吸菸診斷碼：F17.210（請核對）' },
+      smoker: { value: 'no', date: '2026-10-01', testName: '尼古丁依賴緩解 F17.211（請核對）' } } }
+    const field = buildRiskInputs(profile(), quit, {}).fields.find((item) => item.input.key === 'smoking')!
+    expect(field).toMatchObject({ value: 'no', origin: 'record', date: '2026-10-01' })
+    const reading = buildPreventReading(profile() as never, quit, {})
+    expect(reading.fields.find((item) => item.input.key === 'smoking')?.value).toBe('no')
+  })
+
+  it('leaves a statin whose current use is unconfirmed for the clinician, not a presumed 否', () => {
+    const p = { ...profile(), medicationClassContexts: { statin: { state: 'uncertain', lastPrescriptionDate: '2026-05-01' } } }
+    const shared = buildRiskInputs(p as never, { ...record, recordLoaded: true }, {})
+    expect(shared.fields.find((item) => item.input.key === 'statin')).toMatchObject({ value: '', origin: 'none', detail: { zh: '病歷有 statin 處方，目前是否服用待確認' } })
+    expect(shared.values.statin).toBe('')
+    // Not found on the record is still the prefilled 「否」.
+    const none = { ...profile(), medicationClassContexts: { statin: { state: 'not-found' } } }
+    expect(buildRiskInputs(none as never, record, {}).values.statin).toBe('no')
+  })
+
   it('dates each positive answer by its own evidence, never by the LVEF', () => {
     const lvef = { zh: 'LVEF 35%', en: 'LVEF 35%', date: '2026-09-01', numericValue: 35 }
     const p = { ...profile({ LVEF: lvef, ascvdDiagnosis: fact('陳舊性心肌梗塞 I25.2') }), kidneyReplacementTherapy: { state: 'confirmed' } } as unknown as Parameters<typeof buildRiskInputs>[0]
