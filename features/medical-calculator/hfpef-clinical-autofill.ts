@@ -11,7 +11,7 @@ import type { AgeBpKey } from './age-bp-autofill'
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | AgeBpKey | HistoryKey | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | AgeBpKey | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -182,6 +182,23 @@ const isDiabetesCode = (code: string) => /^(?:E0[89]|E1[0-3])/.test(code) || /^2
 /** ICD-10 J43 (emphysema), J44; ICD-9 491, 492, 496. */
 const isCopdCode = (code: string) => /^J4[34]/.test(code) || /^(?:491|492|496)/.test(code)
 
+/** ICD-10 I10–I16 (essential, hypertensive heart/kidney, secondary, crisis); ICD-9 401–405. */
+const isHypertensionCode = (code: string) => /^I1[0-6]/.test(code) || /^40[1-5]/.test(code)
+
+/**
+ * STOP-Bang's P, 「高血壓（有或治療中）」: a hypertension code, else any one
+ * current antihypertensive (not the HFpEF item's ≥2). 「否」 only when the
+ * record lists current prescriptions, none of them antihypertensive, and no
+ * hypertension code; the clinician can change it.
+ */
+function hypertensionSelect(medications: MedicationEntity[], now: Date, conditions: ConditionEntity[], encounters: EncounterEntity[]): ClinicalSelectValue | undefined {
+  const code = diagnosisSelect(conditions, encounters, now, isHypertensionCode, '高血壓')
+  if (code) return code
+  const drug = drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+  if (drug?.value === 'no') return { ...drug, testName: '未見高血壓診斷碼，目前有效處方也未見降血壓藥（依處方推算，請核對）' }
+  return drug
+}
+
 /** ICD-10 F17 nicotine dependence, Z72.0 tobacco use, Z87.891 history excluded; ICD-9 305.1. */
 // Current smoking: nicotine dependence (F17) except its 「in remission」 subcodes
 // F17.2x1 (F17.201, .211, .221, .291), which mean the patient has stopped.
@@ -278,6 +295,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const blocksNegativeAf = uncertainAf || unclassifiedAf
   const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
   const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
+  const hypertension = defaultNo(hypertensionSelect(medications, now, conditions, encounters), now, '病歷未見高血壓診斷碼，目前有效處方也未見降血壓藥')
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
   // PCE's four history and drug questions (owner 2026-11-16).
   const pceBpTreat = defaultNo(drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
@@ -294,6 +312,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     ...ecg,
     afHistory,
     antihypertensives: antihypertensiveSelect(medications, now),
+    hypertension,
     pceBpTreat, pceDiabetes, pceSmoking, pceAscvd,
     ...(diabetes ? { diabetes } : {}),
     ...(copd ? { copd } : {}),
