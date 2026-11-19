@@ -46,7 +46,7 @@ function listedIds(): string[] {
 
 describe('計算機 on the HTN and CAD pages', () => {
   it('names only calculators the medical calculator has', () => {
-    for (const entry of [...HTN_VISIT_CALCULATORS, ...CAD_VISIT_CALCULATORS]) {
+    for (const entry of [...HTN_VISIT_CALCULATORS, ...CAD_VISIT_CALCULATORS].filter((item) => item.calculatorId)) {
       expect(CALCULATORS.some((calc) => calc.id === entry.calculatorId)).toBe(true)
     }
   })
@@ -57,17 +57,17 @@ describe('計算機 on the HTN and CAD pages', () => {
     expect(pageHasCalculators(undefined)).toBe(false)
   })
 
-  it('lists the hypertension calculators, without PREVENT-ASCVD', () => {
-    render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-08'), point('htn', 'DP-18')]} />)
-    expect(listedIds()).toEqual(['egfr', 'prevent-cvd', 'hpa-risk', 'ckd-kdigo-risk'])
-    expect(HTN_VISIT_CALCULATORS.some((entry) => entry.calculatorId === 'prevent-ascvd')).toBe(false)
-    // The calculator's full name, not the last parenthesis of it.
-    expect(screen.getByTestId('cdss-book-calculator-hpa-risk')).toHaveTextContent('國健署五項慢性病風險（重建版）')
+  it('lists the hypertension calculators by chapter, the DP-08 risk panels among them', () => {
+    render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-07'), point('htn', 'DP-08'), point('htn', 'DP-18')]} />)
+    expect(listedIds()).toEqual(['egfr', 'stop-bang', 'risk-inputs', 'prevent-cvd', 'prevent-ascvd', 'pce-ascvd', 'hpa-mace', 'ckd-kdigo-risk'])
+    // A title where the entry has one; otherwise the calculator's full name, not its last parenthesis.
+    expect(screen.getByTestId('cdss-book-calculator-hpa-mace')).toHaveTextContent('國健署心血管風險預測公式')
+    expect(screen.getByTestId('cdss-book-calculator-egfr')).toHaveTextContent('eGFR (CKD-EPI 2021)')
   })
 
-  it('drops KDIGO where DP-18 is not on the hypertension page', () => {
-    render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-08'), point('htn', 'DP-18', 'not-applicable')]} />)
-    expect(listedIds()).toEqual(['egfr', 'prevent-cvd', 'hpa-risk'])
+  it('drops the points the hypertension page does not have', () => {
+    render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-18', 'not-applicable')]} />)
+    expect(listedIds()).toEqual(['egfr'])
   })
 
   it('offers the AF calculators on the coronary page only with OAC and an antiplatelet', () => {
@@ -76,6 +76,12 @@ describe('計算機 on the HTN and CAD pages', () => {
     unmount()
     render(<Page source="cad" points={[point('cad', 'DP-10'), point('cad', 'DP-16'), point('cad', 'DP-27')]} />)
     expect(listedIds()).toEqual(['egfr', 'cha2ds2-va', 'has-bled', 'crcl', 'doac-dose', 'bmi'])
+  })
+
+  it('offers TRS 2°P at the antiplatelet decision', () => {
+    render(<Page source="cad" points={[point('cad', 'DP-10'), point('cad', 'DP-12')]} />)
+    expect(listedIds()).toEqual(['egfr', 'trs2p'])
+    expect(screen.getByTestId('cdss-book-calculator-trs2p')).toHaveTextContent('TIMI 二級預防風險分數（TRS 2°P）')
   })
 
   it('opens the chosen calculator beside the page', () => {

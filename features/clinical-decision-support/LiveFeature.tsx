@@ -2,6 +2,8 @@
 
 import { usePreventInputs, usePreventStore } from './stores/prevent-inputs.store'
 import { buildPreventReading, applyPreventReading } from './utils/prevent-reading'
+import { applyHtnRiskReadings, buildHpaReading, buildPceReading } from './utils/htn-risk-readings'
+import { HpaReadingContext, PceReadingContext } from './renderers/visit/HtnRiskPanels'
 import { PreventReadingContext } from './renderers/PreventRiskSummary'
 
 
@@ -445,7 +447,16 @@ export default function LiveClinicalDecisionSupportFeature({
       : undefined
   ), [answeredProfile, autofill, hfpefInputs])
 
-  const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals])
+  // Read by name: the preview typechecks against the published pack, whose
+  // VisitAnswers may not yet name HTN DP-08's 「目前吸菸」 (plan 05 §19).
+  const smokingAnswer = (visitAnswers as Readonly<Record<string, string | undefined>>)['smoking-current']
+  const smokingCurrent = smokingAnswer === 'yes' || smokingAnswer === 'no' ? smokingAnswer : undefined
+  const preventReading = useMemo(() => answeredProfile ? buildPreventReading(answeredProfile, autofill, preventInputs, clinicVitals, smokingCurrent ? { smokingCurrent } : {}) : undefined, [answeredProfile, autofill, preventInputs, clinicVitals, smokingCurrent])
+  // The HPA (國健署) MACE reconstruction for the HTN page's DP-08, read off the
+  // same record and the same PREVENT answers (plan 05 §19, owner 2026-11-03).
+  const hpaReading = useMemo(() => answeredProfile ? buildHpaReading(answeredProfile, autofill, preventReading, clinicVitals) : undefined, [answeredProfile, autofill, preventReading, clinicVitals])
+  // The ACC/AHA Pooled Cohort Equations off the same shared inputs (owner 2026-11-03).
+  const pceReading = useMemo(() => buildPceReading(preventReading), [preventReading])
   // The every-visit answers enter last, as the pack's own facts
   // (`applyVisitAnswers`), so 「喘變差」 changes the recommendation it bears on
   // on every layout, not only on the map where it was asked. A pillar the
@@ -460,7 +471,7 @@ export default function LiveClinicalDecisionSupportFeature({
         applyHtnDiagnosis(
           applyFmtIntolerance(
             applyVisitAnswers(
-              applyAfCalculatorResults(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading)),
+              applyAfCalculatorResults(applyHtnRiskReadings(applyPreventReading(applyHfpefReading(answeredProfile, hfpefReading), preventReading), preventReading, hpaReading, pceReading)),
               visitAnswers,
             ),
             intolerant,
@@ -470,7 +481,7 @@ export default function LiveClinicalDecisionSupportFeature({
         previousCdssVisit,
       )
       : null
-  ), [answeredProfile, hfpefReading, htnConfirmed, intolerant, preventReading, previousCdssVisit, visitAnswers])
+  ), [answeredProfile, hfpefReading, hpaReading, htnConfirmed, intolerant, pceReading, preventReading, previousCdssVisit, visitAnswers])
 
   const applicablePacks = useMemo(() => (
     profile ? getApplicableClinicalGuidelinePacks(profile) : []
@@ -772,6 +783,8 @@ export default function LiveClinicalDecisionSupportFeature({
         <ClinicalHandoffCard handoff={result.clinicalHandoff} />
       ) : null}
       <PreventReadingContext.Provider value={preventReading}>
+      <HpaReadingContext.Provider value={hpaReading}>
+      <PceReadingContext.Provider value={pceReading}>
       {/* The decision map (決策地圖 v2, the pocket-handbook page) stays in this
           panel, under the header above. Opened by `?visit=book`, or 全螢幕
           from the panel, it draws its own header over the whole window, and
@@ -840,6 +853,8 @@ export default function LiveClinicalDecisionSupportFeature({
       />
       </CarriedAnswerContext.Provider>
       </VisitBookChromeContext.Provider>
+      </PceReadingContext.Provider>
+      </HpaReadingContext.Provider>
       </PreventReadingContext.Provider>
       {/* On the map, the reset sits at the foot, after today's plan: it clears
           every answer and decision on the page, and has no business beside

@@ -7,6 +7,7 @@
  */
 import { buildRiskInputs, RISK_FIELD_GROUPS, RISK_INPUTS } from '@/features/clinical-decision-support/utils/risk-inputs'
 import { buildPreventReading } from '@/features/clinical-decision-support/utils/prevent-reading'
+import { applyHtnRiskReadings, buildHpaReading, buildPceReading, htnCalculatorValues } from '@/features/clinical-decision-support/utils/htn-risk-readings'
 import type { Autofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 
 type AutofillSource = Parameters<Autofill['resolve']>[0]
@@ -125,5 +126,50 @@ describe('shared risk inputs', () => {
     expect(field('sbp')).toMatchObject({ value: '126', origin: 'clinic', detail: { zh: '門診今日量測' } })
     expect(field('height')).toMatchObject({ value: '172', origin: 'clinic' })
     expect(field('weight')).toMatchObject({ value: '80', origin: 'clinic' })
+  })
+
+  it('feeds the three calculators from the one reading, so a shared input changes all three', () => {
+    const p = profile({ hypertensionDiagnosis: fact('原發性高血壓 I10', '2024-05-02') })
+    const answers = { bmi: '27', egfr: '88', dm: 'no', smoking: 'no', statin: 'no', cvd: 'no', subclinical: 'no', genetic: 'no', eskd: 'no', limitedLife: 'no' }
+    const prevent = buildPreventReading(p, record, answers)
+    const pce = buildPceReading(prevent)!
+    const hpa = buildHpaReading(p, record, prevent)
+    expect(prevent.result.status).toBe('ready')
+    expect(pce.result).toMatchObject({ status: 'ready', equations: 'white' })
+    expect(pce.values).toMatchObject({ sex: 'male', age: '58', race: 'other', tc: '213', hdl: '50', sbp: '138', bptreat: 'yes', dm: 'no', smoking: 'no', cvd: 'no' })
+    expect(hpa.values).toMatchObject({ gender: 'male', age: '58', chol: '213', hdlc: '50', ldlc: '130', tg: '160', glu: '102', sbp: '138', waist: '92', hbp: 'yes', diabetes: 'no', smoke: 'no', prior_cvd: 'no' })
+    expect(hpa.mace?.status).toBe('estimated')
+    // Smoking answered 「yes」 once moves every result.
+    const smoker = buildPreventReading(p, record, { ...answers, smoking: 'yes' })
+    expect(smoker.result.risk10!).toBeGreaterThan(prevent.result.risk10!)
+    expect(buildPceReading(smoker)!.result.risk10!).toBeGreaterThan(pce.result.risk10!)
+    expect(buildHpaReading(p, record, smoker).values.smoke).toBe('yes')
+    // All three reach the pack as facts, and the list's value column.
+    const facts = applyHtnRiskReadings(p, prevent, hpa, pce).facts
+    expect(facts.pceAscvdRisk10y).toMatchObject({ unit: '%', calculator: { id: 'pce-ascvd', version: 'goff2013-v1', endpoint: 'ascvd', horizonYears: 10, evaluatedAt: AT } })
+    expect(facts.pceAscvdRisk10y!.numericValue).toBeCloseTo(pce.result.risk10!, 6)
+    expect(facts.pceAscvdRisk10y!.textEvidence?.matchedTerms).toContain('equations:white')
+    expect(facts.pceAscvdRisk10y!.calculator!.inputs).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'race', value: 'other', source: 'record' }), expect.objectContaining({ key: 'bptreat', value: 'yes', source: 'record' })]))
+    expect(htnCalculatorValues(facts, false)!['pce-ascvd']).toEqual({ status: 'computed', value: `${pce.result.risk10!.toFixed(1)}%` })
+  })
+
+  it('says what PCE still needs or why it does not apply, and clears a stale result', () => {
+    const p = profile()
+    // No code or prescription is a prefilled 「否」 now (owner 2026-11-16); a
+    // clinician who clears the answers back to 未確認 leaves PCE waiting.
+    const blank = buildPreventReading(p, record, { dm: '', smoking: '', cvd: '' })
+    expect(buildPceReading(buildPreventReading(p, record, {}))!.result.status).toBe('ready')
+    const pce = buildPceReading(blank)!
+    expect(pce.result.status).toBe('needs-data')
+    expect(pce.result.issues).toEqual(['dm', 'smoking', 'cvd'])
+    const facts = applyHtnRiskReadings(p, blank, buildHpaReading(p, record, blank), pce).facts
+    expect(facts.pceAscvdRisk10y).toBeUndefined()
+    expect(htnCalculatorValues(facts, false)!['pce-ascvd']).toEqual({ status: 'to-fill', value: '3' })
+    const excluded = buildPreventReading(p, record, { dm: 'no', smoking: 'no', cvd: 'yes' })
+    expect(buildPceReading(excluded)!.result).toMatchObject({ status: 'ineligible', issues: ['cvd'] })
+    expect(htnCalculatorValues(applyHtnRiskReadings(p, excluded, buildHpaReading(p, record, excluded), buildPceReading(excluded)).facts, false)!['pce-ascvd']).toEqual({ status: 'inapplicable' })
+    // Outside 40–79 the equations do not apply even with every input.
+    const young = buildPreventReading(p, { ...record, resolve: (source) => (source?.kind === 'age' ? { value: 36, unit: 'y', date: '' } : record.resolve(source)) }, { dm: 'no', smoking: 'no', cvd: 'no' })
+    expect(buildPceReading(young)!.result).toMatchObject({ status: 'ineligible', issues: ['age'] })
   })
 })
