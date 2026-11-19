@@ -91,10 +91,16 @@ it('still counts a different current failure seen only on a visit', () => {
   expect(value('rockall', 'comorbid', data)).toBe('2')
 })
 
-it('counts a kidney injury that recurs on a visit after the resolved one', () => {
+it('leaves Rockall comorbidity for the clinician when a resolved failure code appears on a later visit', () => {
+  // The record carries no resolution date: a later visit may be the same course or a recurrence.
   const visit = { id: 'e1', status: 'finished', class: { code: 'AMB' }, period: { start: '2026-11-18' }, reasonCode: [{ coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'N17.9' }] }] }
-  const data = buildAutofill([], { age: 75, gender: 'male' }, [], [], now, [condition('N17.9', 'resolved')], [visit] as never)
-  expect(value('rockall', 'comorbid', data)).toBe('2')
+  const data = buildAutofill([], { age: 75, gender: 'male' }, [], [], now, [condition('N17.9', 'resolved'), condition('I25.10')], [visit] as never)
+  expect(resolveInput(field('rockall', 'comorbid'), data)).toMatchObject({ value: '', filled: false })
+})
+
+it('converts a temperature in °F to °C for SIRS', () => {
+  expect(value('sirs', 'temp', autofill({ observations: [obs('8310-5', 98.6, '[degF]')] }))).toBe('37')
+  expect(value('sirs', 'temp', autofill({ observations: [obs('8310-5', 101, 'degF')] }))).toBe('38.33')
 })
 
 it('converts a QT in seconds to milliseconds, so QTc matches the same reading in ms', () => {
