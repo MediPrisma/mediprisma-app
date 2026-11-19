@@ -128,12 +128,25 @@ function activeCancer(conditions: ConditionEntity[], encounters: EncounterEntity
  * history. Neither: the presumed 「無」.
  */
 function rockallComorbidity(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): ClinicalSelectValue | undefined {
-  // A failure the record marks resolved is not current: old visits for that same code do not bring it back.
+  // A failure the record marks resolved is not current: visits for that code up to when it was marked do not bring it back;
+  // a later visit with the same code is a new episode.
   const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
-  const settled = new Set(conditions.filter((condition) => ['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? ''))
-    .flatMap((condition) => condition.code?.coding?.map((coding) => normal(coding.code)) ?? []).filter(isRockallFailureOrMets))
-  const failure = diagnosisSelect(conditions, [], now, isRockallFailureOrMets, '腎／肝衰竭或轉移癌')
-    ?? diagnosisSelect([], encounters, now, (code) => isRockallFailureOrMets(code) && !settled.has(code), '腎／肝衰竭或轉移癌')
+  const settledUntil = new Map<string, string>()
+  for (const condition of conditions) {
+    if (!['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
+    const date = condition.recordedDate ?? condition.onsetDateTime ?? ''
+    for (const coding of condition.code?.coding ?? []) {
+      const code = normal(coding.code)
+      if (isRockallFailureOrMets(code) && date >= (settledUntil.get(code) ?? '')) settledUntil.set(code, date)
+    }
+  }
+  const visitFailures = encounters.map((encounter) => {
+    const visitDate = encounter.period?.start ?? ''
+    // A settled code without a date cannot be placed in time: its visits are not counted.
+    const current = (code: string) => isRockallFailureOrMets(code) && (!settledUntil.has(code) || (!!settledUntil.get(code) && !!visitDate && visitDate.slice(0, 10) > settledUntil.get(code)!.slice(0, 10)))
+    return diagnosisSelect([], [encounter], now, current, '腎／肝衰竭或轉移癌')
+  }).filter((hit): hit is ClinicalSelectValue => !!hit).sort((a, b) => b.date.localeCompare(a.date))
+  const failure = diagnosisSelect(conditions, [], now, isRockallFailureOrMets, '腎／肝衰竭或轉移癌') ?? visitFailures[0]
   if (failure) return { ...failure, value: '2' }
   const cardiac = diagnosisSelect(conditions, encounters, now, (code) => isHf(code) || isIhd(code), '心衰竭或缺血性心臟病', undefined, true)
   return cardiac && { ...cardiac, value: '1' }

@@ -1,5 +1,5 @@
 // Owner rule 2026-11-19: prefill everything the FHIR record holds; what it lacks is presumed 「無」.
-import { resolveInput } from '@/features/medical-calculator/autofill-compute'
+import { computeAutofilledResult, resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { buildAutofill } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import type { ConditionEntity } from '@/src/core/entities/clinical-data.entity'
@@ -89,4 +89,19 @@ it('still counts a different current failure seen only on a visit', () => {
   const visit = (id: string, code: string) => ({ id, status: 'finished', class: { code: 'AMB' }, period: { start: '2026-03-01' }, reasonCode: [{ coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code }] }] })
   const data = buildAutofill([], { age: 75, gender: 'male' }, [], [], now, [condition('N17.9', 'resolved')], [visit('e1', 'N17.9'), visit('e2', 'C78.7')] as never)
   expect(value('rockall', 'comorbid', data)).toBe('2')
+})
+
+it('counts a kidney injury that recurs on a visit after the resolved one', () => {
+  const visit = { id: 'e1', status: 'finished', class: { code: 'AMB' }, period: { start: '2026-11-18' }, reasonCode: [{ coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'N17.9' }] }] }
+  const data = buildAutofill([], { age: 75, gender: 'male' }, [], [], now, [condition('N17.9', 'resolved')], [visit] as never)
+  expect(value('rockall', 'comorbid', data)).toBe('2')
+})
+
+it('converts a QT in seconds to milliseconds, so QTc matches the same reading in ms', () => {
+  const qtc = CALCULATORS.find((c) => c.id === 'qtc')!
+  const result = (qt: object) => computeAutofilledResult(qtc, autofill({ observations: [qt, obs('8867-4', 60, '/min')] }))?.result
+  const inSeconds = result(obs('8634-8', 0.52, 's'))
+  expect(value('qtc', 'qt', autofill({ observations: [obs('8634-8', 0.52, 's')] }))).toBe('520')
+  expect(inSeconds).toEqual(result(obs('8634-8', 520, 'ms')))
+  expect(result(obs('8634-8', 0.52, 'furlong'))).toBeUndefined()
 })

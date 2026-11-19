@@ -81,6 +81,8 @@ const FACTORS: Record<ConvertDim, Record<string, number>> = {
   hemoglobin: { 'g/dl': 1, 'g/l': 0.1, 'mmol/l': 1.6113 },
   // FiO₂: base %. A fraction (0.21) → percent (21%); unit "1" or "fraction".
   fio2: { '%': 1, '1': 100, fraction: 100 },
+  // ECG interval: base ms. UCUM 「s」 is seconds.
+  duration: { ms: 1, s: 1000, sec: 1000 },
   // Urine albumin/creatinine ratio: base mg/g.
   // 1 mg/mmol ≈ 8.84 mg/g; µg/mg and mcg/mg are numerically equivalent to mg/g.
   'albumin-creatinine-ratio': {

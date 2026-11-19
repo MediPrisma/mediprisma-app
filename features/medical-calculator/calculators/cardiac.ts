@@ -80,7 +80,7 @@ export const CARDIAC: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Bazett & Fridericia correction.', zh: 'Bazett 與 Fridericia 校正。' },
       inputs: [
-        { key: 'qt', type: 'number', label: { en: 'QT interval', zh: 'QT 間期' }, unit: 'ms', normalRange: { low: 350, high: 450 }, source: { kind: 'labLoinc', loinc: ['8634-8'] } },
+        { key: 'qt', type: 'number', label: { en: 'QT interval', zh: 'QT 間期' }, unit: 'ms', dimension: 'duration', normalRange: { low: 350, high: 450 }, source: { kind: 'labLoinc', loinc: ['8634-8'] } },
         { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 100 }, source: { kind: 'vital', loinc: ['8867-4'] } },
       ],
       compute: (v) => {

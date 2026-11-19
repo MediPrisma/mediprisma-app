@@ -165,6 +165,8 @@ export function computeAutofilledResult(calc: CalculatorDef, autofill: Autofill)
       // card would look auto-computed while resting on an assumption — suppress.
       const isOptional = !!inp.optional
       if (inp.source && !isOptional && !resolved.filled) return null
+      // A reading in a unit the formula cannot take (QT in an unknown unit) is not computed inline.
+      if (resolved.unconvertible) return null
     }
     const result = calc.compute(values)
     return result ? { result, asOf } : null
