@@ -152,6 +152,14 @@ describe('hypertension for STOP-Bang P', () => {
   })
 })
 
+describe('any current antihypertensive for PREVENT and PCE', () => {
+  test('one drug is 「是」, prescriptions without one are 「否」, none say nothing', () => {
+    expect(buildClinicalSelects([], [drug('amlodipine 5mg')], now).antihypertensiveAny).toMatchObject({ value: 'yes' })
+    expect(buildClinicalSelects([], [drug('metformin')], now).antihypertensiveAny).toMatchObject({ value: 'no' })
+    expect(buildClinicalSelects([], [], now).antihypertensiveAny).toBeUndefined()
+  })
+})
+
 // Owner 2026-11-16: PCE's four questions read the record — a code or a
 // prescription is 「是」, none is 「否」, never 未確認.
 describe('PCE history and drug questions from the record', () => {
@@ -202,5 +210,13 @@ describe('PCE history and drug questions from the record', () => {
     expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).pceBpTreat?.value).toBe('no')
     expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).pceBpTreat?.value).toBe('no')
     expect(buildClinicalSelects([], [drug('betaxolol 20mg tablet')], now).pceBpTreat?.value).toBe('yes')
+  })
+})
+
+describe('any current antihypertensive skips eye drops and topicals', () => {
+  test('betaxolol eye drops and minoxidil lotion are not treatment', () => {
+    expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).antihypertensiveAny?.value).not.toBe('yes')
+    expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).antihypertensiveAny?.value).not.toBe('yes')
+    expect(buildClinicalSelects([], [drug('amlodipine 5mg')], now).antihypertensiveAny?.value).toBe('yes')
   })
 })

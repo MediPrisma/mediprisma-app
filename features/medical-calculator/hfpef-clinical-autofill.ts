@@ -11,7 +11,7 @@ import type { AgeBpKey } from './age-bp-autofill'
  * calculator. Named for the HFpEF scores that first used it; MAGGIC and
  * LIFE-Preserved read the rest (diabetes, COPD, β-blocker, ACEI/ARB, NYHA).
  */
-export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | AgeBpKey | HistoryKey | DoacSelectKey | DoacPatientKey
+export type ClinicalSelectKey = 'afHistory' | 'rhythm' | 'antihypertensives' | 'antihypertensiveAny' | 'hypertension' | 'pceBpTreat' | 'pceDiabetes' | 'pceSmoking' | 'pceAscvd' | 'diabetes' | 'copd' | 'betaBlocker' | 'aceiArb' | 'nyha' | 'ageOver65' | 'antiplateletNsaid' | 'statin' | 'anyAntihypertensive' | HasBledKey | AgeBpKey | HistoryKey | DoacSelectKey | DoacPatientKey
 export interface ClinicalSelectValue {
   value: string
   date: string
@@ -191,10 +191,15 @@ const isHypertensionCode = (code: string) => /^I1[0-6]/.test(code) || /^40[1-5]/
  * record lists current prescriptions, none of them antihypertensive, and no
  * hypertension code; the clinician can change it.
  */
+/** Any one current antihypertensive (PREVENT's and PCE's 「目前使用降血壓藥」); not the HFpEF ≥2 count. */
+function antihypertensiveAnySelect(medications: MedicationEntity[], now: Date): ClinicalSelectValue | undefined {
+  return drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+}
+
 function hypertensionSelect(medications: MedicationEntity[], now: Date, conditions: ConditionEntity[], encounters: EncounterEntity[]): ClinicalSelectValue | undefined {
   const code = diagnosisSelect(conditions, encounters, now, isHypertensionCode, '高血壓')
   if (code) return code
-  const drug = drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥')
+  const drug = antihypertensiveAnySelect(medications, now)
   if (drug?.value === 'no') return { ...drug, testName: '未見高血壓診斷碼，目前有效處方也未見降血壓藥（依處方推算，請核對）' }
   return drug
 }
@@ -296,9 +301,10 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
   const ecgAfHistory = blocksNegativeAf && ecg.afHistory?.value === 'no' ? undefined : ecg.afHistory
   const afHistory = diagnosis ?? ecgAfHistory ?? (!blocksNegativeAf && ecg.rhythm?.value === 'sr' ? { ...ecg.rhythm, value: 'no', testName: '目前未見 AF 診斷碼或 EKG AF 紀錄；最近 EKG 為竇性心律（請核對陣發性 AF 病史）' } : undefined)
   const hypertension = defaultNo(hypertensionSelect(medications, now, conditions, encounters), now, '病歷未見高血壓診斷碼，目前有效處方也未見降血壓藥')
+  const antihypertensiveAny = antihypertensiveAnySelect(medications, now)
   const diabetes = diagnosisSelect(conditions, encounters, now, isDiabetesCode, '糖尿病')
   // PCE's four history and drug questions (owner 2026-11-16).
-  const pceBpTreat = defaultNo(drugClassSelect(systemicOnly(medications), now, INGREDIENTS, /^C0[23789]/, '降血壓藥'), now, '目前有效處方未見降血壓藥')
+  const pceBpTreat = defaultNo(antihypertensiveAny, now, '目前有效處方未見降血壓藥')
   const pceDiabetes = defaultNo(diabetes, now, '病歷未見糖尿病診斷碼')
   const pceSmoking = defaultNo(diagnosisSelect(conditions, encounters, now, isSmokingCode, '吸菸'), now, '病歷未見吸菸診斷碼')
   const pceAscvd = defaultNo(diagnosisSelect(conditions, encounters, now, isAscvdCode, 'ASCVD ', undefined, true), now, '病歷未見冠心病、中風／TIA、周邊動脈疾病診斷碼')
@@ -313,6 +319,7 @@ export function buildClinicalSelects(reports: DiagnosticReportEntity[], medicati
     afHistory,
     antihypertensives: antihypertensiveSelect(medications, now),
     hypertension,
+    ...(antihypertensiveAny ? { antihypertensiveAny } : {}),
     pceBpTreat, pceDiabetes, pceSmoking, pceAscvd,
     ...(diabetes ? { diabetes } : {}),
     ...(copd ? { copd } : {}),
