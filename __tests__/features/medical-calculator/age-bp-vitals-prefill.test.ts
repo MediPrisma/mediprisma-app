@@ -84,3 +84,9 @@ it('does not count a resolved kidney injury again from an old visit', () => {
   const data = buildAutofill([], { age: 75, gender: 'male' }, [], [], now, [condition('N17.9', 'resolved')], [visit] as never)
   expect(value('rockall', 'comorbid', data)).toBe('0')
 })
+
+it('still counts a different current failure seen only on a visit', () => {
+  const visit = (id: string, code: string) => ({ id, status: 'finished', class: { code: 'AMB' }, period: { start: '2026-03-01' }, reasonCode: [{ coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code }] }] })
+  const data = buildAutofill([], { age: 75, gender: 'male' }, [], [], now, [condition('N17.9', 'resolved')], [visit('e1', 'N17.9'), visit('e2', 'C78.7')] as never)
+  expect(value('rockall', 'comorbid', data)).toBe('2')
+})
