@@ -1,8 +1,11 @@
 /**
- * TRS 2°P for the CAD page (owner request 2026-11-19): Bohula, Circulation
- * 2016; groups from IMPROVE-IT, JACC 2017.
+ * The TIMI scores for the CAD page (owner request 2026-11-19): TRS 2°P
+ * (Bohula, Circulation 2016; groups from IMPROVE-IT, JACC 2017) and TIMI
+ * UA/NSTEMI (Antman, JAMA 2000).
  */
 import { CALCULATORS, getCalcInfo, getCalcScoring, getCalcTags } from '@/features/medical-calculator/calculators'
+import { buildClinicalSelects } from '@/features/medical-calculator/hfpef-clinical-autofill'
+import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
 const calc = (id: string) => CALCULATORS.find((item) => item.id === id)!
 const NO = { chf: 'no', htn: 'no', dm: 'no', stroke: 'no', cabg: 'no', pad: 'no', smoking: 'no' }
@@ -33,8 +36,38 @@ describe('TIMI Risk Score for Secondary Prevention', () => {
   })
 })
 
-it('describes it in the calculator list', () => {
-  for (const id of ['timi-trs2p']) {
+describe('TIMI Risk Score for UA/NSTEMI', () => {
+  const timi = calc('timi-ua-nstemi')
+  const none = { riskFactors: 'no', knownCad: 'no', aspirin: 'no', angina: 'no', st: 'no', marker: 'no' }
+
+  it.each([
+    [{ age: '50', ...none }, 0, '4.7%', '低風險（0–2 分）'],
+    [{ age: '70', ...none, knownCad: 'yes' }, 2, '8.3%', '低風險（0–2 分）'],
+    [{ age: '70', ...none, knownCad: 'yes', aspirin: 'yes' }, 3, '13.2%', '中風險（3–4 分）'],
+    [{ age: '70', ...none, knownCad: 'yes', aspirin: 'yes', st: 'yes', marker: 'yes' }, 5, '26.2%', '高風險（5–7 分）'],
+    [{ age: '70', riskFactors: 'yes', knownCad: 'yes', aspirin: 'yes', angina: 'yes', st: 'yes', marker: 'yes' }, 7, '40.9%', '高風險（5–7 分）'],
+  ])('%o scores %i with the TIMI 11B 14-day rate', (values, score, rate, band) => {
+    const result = timi.compute(values)!
+    expect(result.numericValue).toBe(score)
+    expect(result.interpretation?.zh).toBe(band)
+    expect(result.extra?.[0]).toEqual({ label: { zh: '14 天死亡、心肌梗塞或需緊急血行重建', en: '14-day death, MI or urgent revascularisation' }, value: rate })
+  })
+
+  it('shows no event rate until every item is answered', () => {
+    const result = timi.compute({ age: '70', ...none, st: '' })!
+    expect(result.value).toBe('1–2 / 7')
+    expect(result.extra?.some((row) => row.value.endsWith('%'))).toBe(false)
+  })
+
+  it('reads aspirin from a current prescription', () => {
+    const now = new Date('2026-11-19')
+    const aspirin = { id: 'm1', status: 'active', authoredOn: '2026-11-01', medicationCodeableConcept: { text: 'Aspirin 100 mg' }, drugTerminology: { ingredientText: 'aspirin' }, atcClassification: { atcCode: 'B01AC06' }, dispenseRequest: { validityPeriod: { end: '2026-12-31' } } } as unknown as MedicationEntity
+    expect(buildClinicalSelects([], [aspirin], now).aspirin).toMatchObject({ value: 'yes', testName: expect.stringContaining('aspirin') })
+  })
+})
+
+it('describes both in the calculator list', () => {
+  for (const id of ['timi-trs2p', 'timi-ua-nstemi']) {
     expect(getCalcInfo(id)?.useWhen?.zh).toBeTruthy()
     expect(getCalcScoring(id)?.formula?.zh).toBeTruthy()
     expect(getCalcTags(id)?.purpose).toContain('risk')

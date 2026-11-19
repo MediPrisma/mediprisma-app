@@ -564,6 +564,17 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
       { score: '≥3', outcome: { zh: '高風險：加強降脂或延長抗栓的絕對效益較大', en: 'High risk: larger absolute benefit from intensified lipid lowering or extended antithrombotics' } },
     ] },
   },
+  'timi-ua-nstemi': {
+    formula: { zh: '年齡 ≥65、≥3 項冠心病危險因子、已知冠脈狹窄 ≥50%、7 天內 aspirin、24 小時內 ≥2 次嚴重心絞痛、ST 偏移 ≥0.5 mm、心肌標記升高，各 1 分（0–7 分）', en: 'Age ≥65, ≥3 CAD risk factors, known stenosis ≥50%, aspirin in 7 days, ≥2 severe angina in 24 h, ST deviation ≥0.5 mm, positive marker: 1 point each (0–7)' },
+    outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: '14 天死亡、心肌梗塞或需緊急血行重建', en: '14-day death, MI or urgent revascularisation' }, rows: [
+      { score: '0–1', outcome: { zh: '4.7%', en: '4.7%' } },
+      { score: '2', outcome: { zh: '8.3%', en: '8.3%' } },
+      { score: '3', outcome: { zh: '13.2%', en: '13.2%' } },
+      { score: '4', outcome: { zh: '19.9%', en: '19.9%' } },
+      { score: '5', outcome: { zh: '26.2%', en: '26.2%' } },
+      { score: '6–7', outcome: { zh: '40.9%', en: '40.9%' } },
+    ] },
+  },
   'cha2ds2-va': {
     formula: { zh: '心衰竭 1 + 高血壓 1 + 年齡 65–74 歲 1 或 ≥75 歲 2 + 糖尿病 1 + 中風／TIA／動脈栓塞 2 + 血管疾病 1（不计性別，0–8 分）', en: 'HF 1 + hypertension 1 + age 65–74: 1 or ≥75: 2 + diabetes 1 + stroke/TIA/arterial embolism 2 + vascular disease 1. No sex point (0–8).' },
     outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: 'ESC 2024 抗凝評估', en: 'ESC 2024 OAC assessment' }, rows: [

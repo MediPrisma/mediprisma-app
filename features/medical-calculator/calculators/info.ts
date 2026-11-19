@@ -188,6 +188,10 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { zh: '心肌梗塞後穩定冠心病（門診追蹤），評估復發心血管事件風險，協助決定是否加強降脂或延長抗栓。', en: 'Stable CAD after MI in follow-up: recurrent cardiovascular risk, to weigh intensified lipid lowering or extended antithrombotic therapy.' },
     caveats: { zh: '每項 1 分，只分低（0–1）、中（2）、高（≥3）；不換算絕對風險。延長抗栓須另評出血風險。病史由診斷碼帶入、未見預填無，請核對。', en: 'One point each, read as low (0–1), intermediate (2) or high (≥3); no absolute risk is given. Extended antithrombotic therapy still needs a bleeding-risk assessment. Histories come from diagnosis codes, absent ones prefilled No — check them.' },
   },
+  'timi-ua-nstemi': {
+    useWhen: { zh: '疑似不穩定心絞痛／NSTEMI 就診當下，估 14 天死亡、心肌梗塞或需緊急血行重建風險。', en: 'Suspected UA/NSTEMI at presentation: 14-day death, MI or urgent revascularisation.' },
+    caveats: { zh: '穩定門診病人不適用。家族史無代碼，危險因子由診斷碼計數、請核對；事件率來自 2000 年 TIMI 11B，早於高敏感度 troponin。', en: 'Not for stable outpatients. Family history is not coded, so the risk-factor count from codes needs checking; rates are from TIMI 11B (2000), before high-sensitivity troponin.' },
+  },
   'cha2ds2-va': {
     useWhen: { en: 'ESC 2024 thromboembolic risk assessment in AF.', zh: 'ESC 2024 心房顫動血栓風險評估。' },
     caveats: { en: 'No sex point. Histories not in the record are prefilled No for you to check. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。紀錄未見的病史預填「無」，請核對；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },

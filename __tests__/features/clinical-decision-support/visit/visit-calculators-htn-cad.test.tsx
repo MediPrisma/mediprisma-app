@@ -78,9 +78,9 @@ describe('計算機 on the HTN and CAD pages', () => {
     expect(listedIds()).toEqual(['egfr', 'cha2ds2-va', 'has-bled', 'crcl', 'doac-dose', 'bmi'])
   })
 
-  it('offers TRS 2°P at the antiplatelet decision', () => {
-    render(<Page source="cad" points={[point('cad', 'DP-10'), point('cad', 'DP-12')]} />)
-    expect(listedIds()).toEqual(['egfr', 'trs2p'])
+  it('offers TIMI UA/NSTEMI at acute triage and TRS 2°P at the antiplatelet decision', () => {
+    render(<Page source="cad" points={[point('cad', 'DP-00'), point('cad', 'DP-10'), point('cad', 'DP-12')]} />)
+    expect(listedIds()).toEqual(['timi-ua', 'egfr', 'trs2p'])
     expect(screen.getByTestId('cdss-book-calculator-trs2p')).toHaveTextContent('TIMI 二級預防風險分數（TRS 2°P）')
   })
 
