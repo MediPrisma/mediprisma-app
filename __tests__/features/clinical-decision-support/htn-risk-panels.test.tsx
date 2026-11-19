@@ -28,7 +28,7 @@ const record: Autofill = {
     return undefined
   },
 }
-const answered: CalcValues = { bmi: '24', egfr: '90', dm: 'no', smoking: 'no', statin: 'no', bptreat: 'no', cvd: 'no', subclinical: 'no', genetic: 'no', eskd: 'no', limitedLife: 'no' }
+const answered: CalcValues = { bmi: '24', egfr: '90', dm: 'no', smoking: 'no', statin: 'no', bptreat: 'no', cvd: 'no', prior_cvd: 'no', subclinical: 'no', genetic: 'no', eskd: 'no', limitedLife: 'no' }
 
 describe('HTN DP-08 panels', () => {
   beforeEach(() => act(() => usePreventStore.getState().activate('synthetic-htn')))

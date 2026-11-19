@@ -64,7 +64,7 @@ const DIABETES_CODE_FACT_KEYS = ['type1DiabetesDiagnosis', 'type2DiabetesDiagnos
 
 const HPA_INPUTS = HPA_RISK[0]!.inputs
 /** The HPA form's keys for the shared fields; its other inputs keep their own keys. */
-export const HPA_KEY_FROM_SHARED: Readonly<Record<string, string>> = { sex: 'gender', tc: 'chol', hdl: 'hdlc', dm: 'diabetes', smoking: 'smoke', cvd: 'prior_cvd' }
+export const HPA_KEY_FROM_SHARED: Readonly<Record<string, string>> = { sex: 'gender', tc: 'chol', hdl: 'hdlc', dm: 'diabetes', smoking: 'smoke' }
 const SHARED_KEY_FROM_HPA: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(HPA_KEY_FROM_SHARED).map(([shared, hpa]) => [hpa, shared]))
 
 function hpaOnly(key: string): CalcInput {
@@ -99,7 +99,10 @@ export const RISK_INPUTS: readonly { input: CalcInput; usedBy: readonly RiskCalc
   { input: prevent('dm'), usedBy: ['prevent', 'pce', 'hpa'] },
   { input: hpaOnly('hbp'), usedBy: ['hpa'] },
   { input: prevent('smoking'), usedBy: ['prevent', 'pce', 'hpa'] },
-  { input: prevent('cvd'), usedBy: ['prevent', 'pce', 'hpa'] },
+  { input: prevent('cvd'), usedBy: ['prevent', 'pce'] },
+  // HPA asks the narrower question, coronary disease or stroke (its own
+  // cadOrStroke reading): heart failure or PAD alone is not a prior event there.
+  { input: hpaOnly('prior_cvd'), usedBy: ['hpa'] },
   { input: prevent('subclinical'), usedBy: ['prevent'] },
   { input: prevent('genetic'), usedBy: ['prevent'] },
   { input: prevent('eskd'), usedBy: ['prevent'] },
@@ -112,14 +115,14 @@ export const RISK_FIELD_GROUPS: readonly { id: string; title: { zh: string; en: 
   { id: 'who', title: { zh: '基本', en: 'Patient' }, keys: ['sex', 'age', 'race'] },
   { id: 'measured', title: { zh: '量測', en: 'Measurements' }, keys: ['sbp', 'bmi', 'height', 'weight', 'waist'] },
   { id: 'labs', title: { zh: '檢驗', en: 'Labs' }, keys: ['tc', 'hdl', 'ldlc', 'tg', 'glu', 'egfr'] },
-  { id: 'history', title: { zh: '病史', en: 'History' }, keys: ['dm', 'hbp', 'smoking', 'cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife'] },
+  { id: 'history', title: { zh: '病史', en: 'History' }, keys: ['dm', 'hbp', 'smoking', 'cvd', 'prior_cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife'] },
   { id: 'drugs', title: { zh: '用藥', en: 'Medication' }, keys: ['bptreat', 'statin'] },
 ]
 
 const text = (zh: string, en: string) => ({ zh, en })
 
 /** History and drug questions answered 「否」 when the record shows nothing. */
-const DEFAULT_NO_KEYS: ReadonlySet<string> = new Set(['dm', 'hbp', 'smoking', 'cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife', 'bptreat', 'statin'])
+const DEFAULT_NO_KEYS: ReadonlySet<string> = new Set(['dm', 'hbp', 'smoking', 'cvd', 'prior_cvd', 'subclinical', 'genetic', 'eskd', 'limitedLife', 'bptreat', 'statin'])
 
 export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill, manual: CalcValues, vitals?: ClinicVitals, visit: RiskVisitAnswers = {}): RiskInputs {
   const values: CalcValues = {}

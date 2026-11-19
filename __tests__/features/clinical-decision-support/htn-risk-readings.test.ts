@@ -60,11 +60,17 @@ describe('HTN baseline-risk facts for the pack', () => {
     expect(mace.textEvidence?.direction).toBe('unknown')
   })
 
-  it('reads the HPA history fields off the PREVENT form, so a known CVD withholds both and clears the old facts', () => {
+  it('withholds both for known coronary disease or stroke and clears the old facts; HF or PAD alone withholds PREVENT only', () => {
     const p = profile()
     const before = applyHtnRiskReadings(p, buildPreventReading(p, record, answers), buildHpaReading(p, record, buildPreventReading(p, record, answers)))
     expect(before.facts.preventAscvdRisk10y).toBeDefined()
-    const prevent = buildPreventReading(before, record, { ...answers, cvd: 'yes' })
+    // PREVENT's broad CVD (HF, PAD) is not HPA's narrower 「既往冠心病或中風」.
+    const hfOnly = buildPreventReading(before, record, { ...answers, cvd: 'yes' })
+    expect(hfOnly.result.status).toBe('ineligible')
+    const hfHpa = buildHpaReading(before, record, hfOnly)
+    expect(hfHpa.values.prior_cvd).toBe('no')
+    expect(hfHpa.mace?.status).not.toBe('existing')
+    const prevent = buildPreventReading(before, record, { ...answers, cvd: 'yes', prior_cvd: 'yes' })
     expect(prevent.result.status).toBe('ineligible')
     const hpa = buildHpaReading(before, record, prevent)
     expect(hpa.values.prior_cvd).toBe('yes')
@@ -109,10 +115,10 @@ describe('HTN baseline-risk facts for the pack', () => {
     expect(values['hpa-mace']).toEqual({ status: 'computed', value: expect.stringMatching(/^\d+(\.\d+)?%（[低中高]）$/) })
     expect(htnCalculatorValues({}, false)).toBeUndefined()
     // Not applicable and inputs-to-fill are said, and the rows stay open.
-    const excluded = buildPreventReading(p, record, { ...answers, cvd: 'yes' })
+    const excluded = buildPreventReading(p, record, { ...answers, cvd: 'yes', prior_cvd: 'yes' })
     const excludedFacts = applyHtnRiskReadings(p, excluded, buildHpaReading(p, record, excluded)).facts
     expect(htnCalculatorValues({ ...excludedFacts, preventAssessment: { zh: 'ineligible', en: 'ineligible', textEvidence: { direction: 'supports', matchedTerms: ['ineligible', 'cvd'] } } }, false)).toEqual({ 'prevent-ascvd': { status: 'inapplicable' }, 'hpa-mace': { status: 'inapplicable' } })
-    const blank = buildPreventReading(p, record, { cvd: '', smoking: '' })
+    const blank = buildPreventReading(p, record, { cvd: '', prior_cvd: '', smoking: '' })
     const blankFacts = applyHtnRiskReadings(p, blank, buildHpaReading(p, record, blank)).facts
     expect(htnCalculatorValues({ ...blankFacts, preventAssessment: { zh: 'needs-data', en: 'needs-data', textEvidence: { direction: 'supports', matchedTerms: ['needs-data', ...blank.result.issues] } } }, false)).toEqual({
       'prevent-ascvd': { status: 'to-fill', value: String(blank.result.issues.length) },
