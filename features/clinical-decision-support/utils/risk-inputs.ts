@@ -143,18 +143,22 @@ export function buildRiskInputs(profile: CdssPatientProfile, autofill: Autofill,
       : key === 'dm' ? DIABETES_CODE_FACT_KEYS.map((factKey) => facts[factKey]).find(Boolean)
       : key === 'hbp' ? facts.hypertensionDiagnosis
       : undefined
-    const positive = Boolean(codeFact)
+    // HPA's coronary disease or stroke, from its own code reading (cadOrStroke):
+    // a code locks it as the broad cvd code does, HF or PAD alone does not.
+    const cadStroke = key === 'prior_cvd' && autofill.clinicalSelects?.cadOrStroke?.value === 'yes' ? autofill.clinicalSelects.cadOrStroke : undefined
+    const positive = Boolean(codeFact) || Boolean(cadStroke)
       || (key === 'eskd' && profile.kidneyReplacementTherapy?.state === 'confirmed')
       || (key === 'subclinical' && (facts.LVEF?.numericValue ?? 100) < 40)
     if (positive) {
       value = 'yes'
-      origin = codeFact ? 'icd' : 'record'
+      origin = codeFact || cadStroke ? 'icd' : 'record'
       detail = codeFact ? text(`ICD：${codeFact.zh}`, `ICD: ${codeFact.en}`)
+        : cadStroke ? text(`ICD：${cadStroke.testName}`, `ICD: ${cadStroke.testName}`)
         : key === 'eskd' ? text('病歷：腎臟替代治療', 'Record: kidney replacement therapy')
         : text(`病歷：LVEF ${facts.LVEF?.numericValue}%`, `Record: LVEF ${facts.LVEF?.numericValue}%`)
       // Each answer keeps its own evidence's date: the LVEF date only for the
       // LVEF-based subclinical answer, never for a code or dialysis.
-      date = codeFact ? (codeFact.date ?? date) : key === 'subclinical' ? (facts.LVEF?.date ?? date) : date
+      date = codeFact ? (codeFact.date ?? date) : cadStroke ? (cadStroke.date || date) : key === 'subclinical' ? (facts.LVEF?.date ?? date) : date
     }
     // The host's rules: inferences from prescriptions and codes, prefilled but
     // the clinician's to confirm (owner: 「RULE 判斷的結果再讓使用者確認」).

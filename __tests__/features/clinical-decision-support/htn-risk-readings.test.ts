@@ -80,6 +80,17 @@ describe('HTN baseline-risk facts for the pack', () => {
     expect(after.hpaMaceRisk10y).toBeUndefined()
   })
 
+  it('locks HPA’s coronary disease or stroke on a code, so a manual 無 cannot bring back a first-event estimate', () => {
+    const p = profile()
+    const coded = { ...record, clinicalSelects: { ...record.clinicalSelects, cadOrStroke: { value: 'yes', date: '2025-04-02', testName: '腦梗塞 I63.9（請核對）' } } }
+    const prevent = buildPreventReading(p, coded, { ...answers, prior_cvd: 'no' })
+    expect(prevent.shared.fields.find((field) => field.input.key === 'prior_cvd')).toMatchObject({ value: 'yes', origin: 'icd', locked: true, date: '2025-04-02' })
+    const hpa = buildHpaReading(p, coded, prevent)
+    expect(hpa.values.prior_cvd).toBe('yes')
+    expect(hpa.mace?.status).toBe('existing')
+    expect(applyHtnRiskReadings(p, prevent, hpa).facts.hpaMaceRisk10y).toBeUndefined()
+  })
+
   it('uses the PREVENT form\'s systolic pressure and smoking answer for HPA, and today\'s clinic height and weight', () => {
     const p = profile()
     const prevent = buildPreventReading(p, record, { ...answers, sbp: '126', smoking: 'yes' })
