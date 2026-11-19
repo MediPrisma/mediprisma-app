@@ -38,7 +38,7 @@ export const cdssSourceSchema = z.object({
 
 /** One clinician-triggered save of the current CDSS inputs and assessment. */
 export const cdssGatewaySaveSchema = z.object({
-  schema_version: z.literal(2),
+  schema_version: z.literal(3),
   save_id: z.string().uuid(),
   saved_at: z.string().datetime({ offset: true }),
   site: z.literal('vghtpe'),
@@ -51,6 +51,8 @@ export const cdssGatewaySaveSchema = z.object({
     identifier_masked: z.string().regex(/^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u)
       .refine((value) => /[X*＊○〇●Ｏ◯]/u.test(value.slice(1))),
     identifier_system: z.string().min(1).max(200),
+    /** Optional HIS medical record number (in-hospital storage only); not part of the lookup key. */
+    mrn: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/).optional(),
   }).strict(),
   pack_id: key,
   app_version: z.string().regex(/^\d+\.\d+\.\d+$/),

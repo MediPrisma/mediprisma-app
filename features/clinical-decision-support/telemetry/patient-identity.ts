@@ -11,6 +11,8 @@ const MEDCLOUD_SOURCE_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/Identifi
 const MEDCLOUD_MASKED_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id'
 const MEDCLOUD_NATIONAL_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
+const MRN_SYSTEM = 'urn:oid:his.patient.mrn'
+const MRN = /^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/
 
 function normalizedIdentifierSystem(system?: string): string {
   return system?.normalize('NFKC').trim() ?? ''
@@ -93,6 +95,20 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
   return identifier
 }
 
+// In-hospital storage may keep the HIS medical record number. It is optional
+// (only present when the TVGH bridge supplied it) and never enters the lookup
+// key, so records saved before or without it stay readable.
+function medicalRecordNumber(patient: PatientEntity): string | undefined {
+  const values = new Set((patient.identifier ?? [])
+    .filter(identifier => normalizedIdentifierSystem(identifier.system) === MRN_SYSTEM)
+    .map(identifier => identifier.value?.normalize('NFKC').trim() ?? '')
+    .filter(Boolean))
+  // Two different MRNs mean the merged chart is ambiguous; do not guess.
+  if (values.size > 1) throw new Error('cdss_identity_unavailable')
+  const [value] = values
+  return value && MRN.test(value) ? value : undefined
+}
+
 /** The identifying inputs exist only in this browser; only the digest and masked display fields leave it. */
 export async function cdssPatientIdentity(patient: PatientEntity) {
   const remaskedMedcloudId = (patient.identifier ?? []).some(identifier => {
@@ -115,6 +131,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
     throw new Error('cdss_identity_unavailable')
   }
   const identifier = nationalId(patient)
+  const mrn = medicalRecordNumber(patient)
   const canonical = JSON.stringify([1, 'vghtpe', name, birthDate, identifier.system, identifier.value])
   if (!crypto.subtle) throw new Error('cdss_crypto_unavailable')
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical))
@@ -127,6 +144,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
       birth_year: birthDate.slice(0, 4),
       identifier_masked: identifier.value,
       identifier_system: identifier.system,
+      ...(mrn ? { mrn } : {}),
     },
   }
 }
