@@ -128,6 +128,30 @@ describe('NYHA from the CDSS, and BMI as reported', () => {
   })
 })
 
+// Owner 2026-11-16: STOP-Bang's P is prefilled — a hypertension code counts as
+// 「是」, and so does one current antihypertensive (not the HFpEF ≥2 count).
+describe('hypertension for STOP-Bang P', () => {
+  test.each(['I10', 'I11.9', 'I12.9', 'I13.0', 'I15.0', 'I16.0', '401.9', '405.99'])('code %s answers 「是」 from the diagnosis', (code) => {
+    expect(buildClinicalSelects([], [], now, [dx(code)]).hypertension).toMatchObject({ value: 'yes', resourceType: 'Condition' })
+  })
+  test('one current antihypertensive is 「是」 where the HFpEF count stays 「否」', () => {
+    const result = buildClinicalSelects([], [drug('amlodipine 5mg')], now)
+    expect(result.hypertension).toMatchObject({ value: 'yes', resourceType: 'MedicationRequest' })
+    expect(result.antihypertensives?.value).toBe('no')
+  })
+  test('no code and no antihypertensive is a labelled 「否」, even with no prescriptions at all', () => {
+    const off = buildClinicalSelects([], [drug('metformin')], now)
+    expect(off.hypertension).toMatchObject({ value: 'no' })
+    expect(off.hypertension?.testName).toContain('請核對')
+    expect(buildClinicalSelects([], [], now).hypertension).toMatchObject({ value: 'no' })
+    expect(buildClinicalSelects([], [drug('metformin')], now, [dx('I10')]).hypertension?.value).toBe('yes')
+    expect(buildClinicalSelects([], [drug('timolol eye drops')], now).hypertension?.value).toBe('no')
+    // Review round 3: eye drops and topicals are not treatment for P.
+    expect(buildClinicalSelects([], [drug('betaxolol eye drops')], now).hypertension?.value).toBe('no')
+    expect(buildClinicalSelects([], [drug('minoxidil 5% topical solution')], now).hypertension?.value).toBe('no')
+  })
+})
+
 // Owner 2026-11-16: PCE's four questions read the record — a code or a
 // prescription is 「是」, none is 「否」, never 未確認.
 describe('PCE history and drug questions from the record', () => {
