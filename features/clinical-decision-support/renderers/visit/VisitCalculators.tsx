@@ -14,7 +14,6 @@ import { PrognosisModelDetail } from '@/features/medical-calculator/prognosis/Pr
 import { tr, type CalcResult, type CalculatorDef } from '@/features/medical-calculator/types'
 import type { DecisionPointView } from '../../types'
 import type { VisitCalculatorNote } from '../../stores/visit-calculator-notes.store'
-import { ABSENT_STATES } from './visit-decisions'
 import { HpaVisitPanel, PceVisitPanel, PreventVisitPanel, RiskInputsPanel } from './HtnRiskPanels'
 import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import styles from './VisitCalculators.module.css'
@@ -34,8 +33,6 @@ interface VisitCalculatorEntry {
   prognosis?: HfPrognosisModelId
   /** The calculator's name as a line of the page writes it, for its link there. */
   names: RegExp
-  /** Shown only when the page has this point (AF's calculators, behind DP-14). */
-  needsPoint?: boolean
   note?: boolean
   /**
    * A panel of the host's own in place of the generic calculator form: the HTN
@@ -52,19 +49,21 @@ interface VisitCalculatorEntry {
  * then the hypertension page's. Owner decision 2026-10-19: one way in — the
  * 「計算機」 button at the head of the page — and the map itself stays as it is
  * (「幫我留C就好」). Each page lists its own (`source`); the HF page keeps AF's
- * where AF's points sit on it.
+ * where AF's points sit on it. Owner request 2026-11-20: every page lists all
+ * its calculators on opening, whatever state its decision points are in —
+ * the AF ones no longer wait for DP-14/DP-09.
  */
 export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'hfa-peff', dp: 'DP-34', calculatorId: 'hfa-peff', names: /HFA[-‐–]PEFF/ },
   { id: 'h2fpef', dp: 'DP-34', calculatorId: 'h2fpef', names: /H[₂2]FPEF/ },
   // Not the older CHA₂DS₂-VASc, a calculator of its own.
-  { id: 'cha2ds2-va', dp: 'DP-14', source: 'af', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
-  { id: 'crcl', dp: 'DP-14', source: 'af', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },
-  { id: 'has-bled', dp: 'DP-14', source: 'af', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
+  { id: 'cha2ds2-va', dp: 'DP-14', source: 'af', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/ },
+  { id: 'crcl', dp: 'DP-14', source: 'af', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/ },
+  { id: 'has-bled', dp: 'DP-14', source: 'af', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/ },
   // Label rules the AF dose point leaves to a calculator (owner decision
   // 2026-10-21: CDSS = guideline, label = calculator); its card names it.
-  { id: 'doac-dose', dp: 'DP-09', source: 'af', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/, needsPoint: true },
-  { id: 'doac-periop', dp: 'DP-09', source: 'af', calculatorId: 'doac-periop', names: /DOAC 手術前後停藥計算機|DOAC peri-procedural calculator/, needsPoint: true },
+  { id: 'doac-dose', dp: 'DP-09', source: 'af', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/ },
+  { id: 'doac-periop', dp: 'DP-09', source: 'af', calculatorId: 'doac-periop', names: /DOAC 手術前後停藥計算機|DOAC peri-procedural calculator/ },
   { id: 'maggic', dp: 'DP-19', prognosis: 'maggic', names: /MAGGIC/, note: true },
   { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', names: /LIFE[-‐–]Preserved/, note: true },
   { id: 'shfm', dp: 'DP-19', prognosis: 'shfm', names: /SHFM|Seattle Heart Failure Model/ },
@@ -326,8 +325,6 @@ export function VisitCalculatorsProvider({
     // The AF page lists AF's own calculators only; the HF page keeps its list,
     // with AF's where AF's points sit on it.
     if (sourceOfPage !== 'hf' && (entry.source ?? 'hf') !== sourceOfPage) return []
-    const point = pointOf(entry.dp, entry.source)
-    if (entry.needsPoint && (!point || ABSENT_STATES.has(point.state))) return []
     // LIFE-Preserved is for HFpEF: offered only on an LVEF known to be 50% or
     // above, never on an unknown one (#334 review).
     if (entry.prognosis === 'life-preserved' && !(lvef !== undefined && lvef >= 50)) return []
@@ -339,7 +336,7 @@ export function VisitCalculatorsProvider({
     // GWTG-HF reads the admission's values, never today's chart.
     const fixed: RowStatus | undefined = calc ? undefined : entry.panel === 'risk-inputs' ? 'inputs' : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
     return [{ entry, calc, model, name, fixed }]
-  }), [locale, lvef, pointOf, sourceOfPage])
+  }), [locale, lvef, sourceOfPage])
   const pattern = useMemo(() => (
     rows.length ? new RegExp(rows.map((row) => `(${row.entry.names.source})`).join('|'), 'g') : undefined
   ), [rows])
@@ -452,10 +449,14 @@ export function VisitCalculatorsButton({ chapterOf, goTo }: {
   if (!calculators?.rows.length) return null
   const { isEnglish, rows, open, values } = calculators
   const byChapter = new Map<string, CalculatorRow[]>()
+  const other: CalculatorRow[] = []
   for (const row of rows) {
-    const chapter = chapterOf(row.entry.dp, row.entry.source) ?? (isEnglish ? 'Other' : '其他')
-    byChapter.set(chapter, [...(byChapter.get(chapter) ?? []), row])
+    const chapter = chapterOf(row.entry.dp, row.entry.source)
+    if (chapter === undefined) other.push(row)
+    else byChapter.set(chapter, [...(byChapter.get(chapter) ?? []), row])
   }
+  // Calculators whose point is not on this page come last, under 其他.
+  if (other.length) byChapter.set(isEnglish ? 'Other' : '其他', [...(byChapter.get(isEnglish ? 'Other' : '其他') ?? []), ...other])
   const choose = (row: CalculatorRow) => {
     setListOpen(false)
     goTo(row.entry.dp, row.entry.source)

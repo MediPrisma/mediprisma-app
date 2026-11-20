@@ -357,7 +357,7 @@ describe('registration', () => {
   it('one calculator, listed once, opened from the AF dose point (DP-09)', () => {
     expect(CALCULATORS.filter((c) => c.id === 'doac-dose-nvaf')).toHaveLength(1)
     const entry = HF_VISIT_CALCULATORS.find((e) => e.calculatorId === 'doac-dose-nvaf')!
-    expect(entry).toMatchObject({ dp: 'DP-09', source: 'af', needsPoint: true })
+    expect(entry).toMatchObject({ dp: 'DP-09', source: 'af' })
     // The AF card's line 「劑量請用 DOAC 劑量計算機核對」 links to it.
     expect('劑量請用 DOAC 劑量計算機核對。').toMatch(entry.names)
   })

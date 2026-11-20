@@ -141,7 +141,7 @@ describe('HTN baseline-risk facts for the pack', () => {
     // The HTN page has its own list (#562): the risk panels sit in it, by chapter, beside eGFR and KDIGO.
     expect(HF_VISIT_CALCULATORS.some((entry) => entry.source === 'htn')).toBe(false)
     const entries = HTN_VISIT_CALCULATORS.filter((entry) => entry.dp === 'DP-07' || entry.dp === 'DP-08')
-    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['stop-bang', 'DP-07', undefined], ['risk-inputs', 'DP-08', undefined], ['prevent-cvd', 'DP-08', undefined], ['score2-ap', 'DP-08', undefined], ['prevent-ascvd', 'DP-08', undefined], ['pce-ascvd', 'DP-08', undefined], ['hpa-mace', 'DP-08', undefined]])
+    expect(entries.map((entry) => [entry.id, entry.dp])).toEqual([['stop-bang', 'DP-07'], ['risk-inputs', 'DP-08'], ['prevent-cvd', 'DP-08'], ['score2-ap', 'DP-08'], ['prevent-ascvd', 'DP-08'], ['pce-ascvd', 'DP-08'], ['hpa-mace', 'DP-08']])
     const line = 'PREVENT-ASCVD 9.2%｜ACC/AHA PCE 5.4%｜國健署心血管風險預測 8.1%（低）'
     const byId = Object.fromEntries(entries.map((entry) => [entry.id, entry]))
     expect(byId['prevent-ascvd']!.names.test(line)).toBe(true)
