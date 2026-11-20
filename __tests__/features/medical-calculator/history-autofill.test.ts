@@ -14,15 +14,15 @@ const keys = (codes: string[]) => Object.keys(historySelects(codes.map((code) =>
 
 it.each([
   ['I10', ['htn']],
-  ['I50.32', ['ascvdOrHf', 'chf', 'hfOver18Months']],
+  ['I50.32', ['ascvdOrHf', 'chf', 'hfOver18Months', 'rockallComorbid']],
   ['I63.9', ['ascvdOrHf', 'cadOrStroke', 'stroke', 'strokeTiaEmbolism']],
   ['G45.9', ['strokeTiaEmbolism']],
   ['G45.4', []], // transient global amnesia is not a TIA
-  ['I25.2', ['ascvdOrHf', 'cadOrStroke', 'ihd', 'vascular']],
+  ['I25.2', ['ascvdOrHf', 'cadOrStroke', 'ihd', 'rockallComorbid', 'vascular']],
   ['I70.21', ['ascvdOrHf', 'pad', 'vascular']],
   ['I73.9', ['ascvdOrHf', 'pad', 'vascular']],
   ['Z95.1', ['priorCabg']],
-  ['I25.810', ['ascvdOrHf', 'cadOrStroke', 'ihd', 'priorCabg']],
+  ['I25.810', ['ascvdOrHf', 'cadOrStroke', 'ihd', 'priorCabg', 'rockallComorbid']],
   ['K74.60', ['chronicLiverDisease', 'liverDisease']],
   ['B15.9', ['liverDisease']], // acute hepatitis A is not chronic liver disease
   ['Z86.71', ['priorVte']],

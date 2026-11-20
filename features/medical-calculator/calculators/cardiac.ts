@@ -51,8 +51,8 @@ export const CARDIAC: CalculatorDef[] = [
       category: 'cardiac',
       blurb: { en: '(SBP + 2×DBP) / 3.', zh: '(收縮壓 + 2×舒張壓) / 3。' },
       inputs: [
-        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 } },
-        { key: 'dbp', type: 'number', label: { en: 'Diastolic BP', zh: '舒張壓' }, unit: 'mmHg', normalRange: { low: 60, high: 80 } },
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
+        { key: 'dbp', type: 'number', label: { en: 'Diastolic BP', zh: '舒張壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 60, high: 80 }, source: { kind: 'vital', loinc: ['8462-4'] } },
       ],
       compute: (v) => {
         const sbp = n(v, 'sbp'); const dbp = n(v, 'dbp')
@@ -80,8 +80,8 @@ export const CARDIAC: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Bazett & Fridericia correction.', zh: 'Bazett 與 Fridericia 校正。' },
       inputs: [
-        { key: 'qt', type: 'number', label: { en: 'QT interval', zh: 'QT 間期' }, unit: 'ms', normalRange: { low: 350, high: 450 } },
-        { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 100 } },
+        { key: 'qt', type: 'number', label: { en: 'QT interval', zh: 'QT 間期' }, unit: 'ms', dimension: 'duration', normalRange: { low: 350, high: 450 }, source: { kind: 'labLoinc', loinc: ['8634-8'] } },
+        { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 100 }, source: { kind: 'vital', loinc: ['8867-4'] } },
       ],
       compute: (v) => {
         const qt = n(v, 'qt'); const hr = n(v, 'hr')
@@ -218,7 +218,7 @@ export const CARDIAC: CalculatorDef[] = [
       inputs: [
         SEX_INPUT,
         AGE_INPUT,
-        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
         { key: 'chol', type: 'number', label: { en: 'Total cholesterol', zh: '總膽固醇' }, unit: 'mg/dL', dimension: 'cholesterol', normalRange: { low: 125, high: 200 }, source: { kind: 'lab', keys: ['CHOL'] } },
         {
           key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: '', source: { kind: 'hfpefClinical', key: 'diabetes' }, presumed: 'no',

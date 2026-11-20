@@ -9,7 +9,7 @@ import { classifyEncounterClass } from '@/src/core/use-cases/medical-summary/gen
  * Codes are ICD-10 without dots; ICD-9 is not read (owner decision
  * 2026-11-19: the record is ICD-10 now).
  */
-export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis' | 'pad' | 'priorCabg' | 'timiRiskFactors'
+export type HistoryKey = 'htn' | 'chf' | 'strokeTiaEmbolism' | 'stroke' | 'vascular' | 'ihd' | 'cadOrStroke' | 'liverDisease' | 'chronicLiverDisease' | 'priorVte' | 'priorDvt' | 'activeCancer' | 'smoker' | 'ifgOrDiabetes' | 'hfOver18Months' | 'hfHospitalization' | 'ascvdOrHf' | 'esrdOrDialysis' | 'pad' | 'priorCabg' | 'timiRiskFactors' | 'rockallComorbid'
 
 /** I10–I16. */
 const isHtn = (code: string) => /^I1[0-6]/.test(code)
@@ -49,6 +49,8 @@ const isAscvdOrHf = (code: string) => isIhd(code) || isStroke(code) || /^(?:Z867
 const isPad = (code: string) => /^(?:I702|I739)/.test(code)
 /** Prior CABG: bypass graft present (Z95.1) or graft atherosclerosis (I25.81x). */
 const isPriorCabg = (code: string) => /^(?:Z951|I2581)/.test(code)
+/** Rockall 3 points: renal failure (N17, N18.4–N18.6, N19, Z99.2), liver failure (K72, K70.4, K76.7) or metastatic cancer (C77–C79). */
+const isRockallFailureOrMets = (code: string) => /^(?:N17|N18[4-6]|N19|Z992|K72|K704|K767|C7[7-9])/.test(code)
 /** Hyperlipidaemia for TIMI's risk-factor count: E78.0–E78.5. */
 const isHyperlipidemia = (code: string) => /^E78[0-5]/.test(code)
 /** Diabetes E08–E13. */
@@ -79,6 +81,7 @@ export function historySelects(conditions: ConditionEntity[], encounters: Encoun
     esrdOrDialysis: read(isEsrdOrDialysis, '末期腎病／透析'),
     pad: read(isPad, '周邊動脈疾病'),
     priorCabg: read(isPriorCabg, '冠狀動脈繞道'),
+    rockallComorbid: rockallComorbidity(conditions, encounters, now),
     timiRiskFactors: timiRiskFactors(conditions, encounters, now, read),
     ...heartFailureCourse(conditions, encounters, now),
   }
@@ -116,6 +119,39 @@ function activeCancer(conditions: ConditionEntity[], encounters: EncounterEntity
   // Owner rule 2026-11-19: no visit for it in six months reads 「無」, naming the older code.
   const known = diagnosisSelect(conditions, encounters, now, isCancer, '惡性腫瘤', undefined, true)
   return known && { ...known, value: 'no', testName: `近 6 個月未見癌症就醫；${known.testName.replace(/（.*）$/, '')}，預設無（請核對是否治療中）` }
+}
+
+/**
+ * Rockall's comorbidity as its option index: 2 for renal or liver failure or
+ * metastases (3 points), 1 for heart failure or ischaemic heart disease
+ * (2 points). Failure is read from active diagnoses only; heart disease is a
+ * history. Neither: the presumed 「無」.
+ */
+function rockallComorbidity(conditions: ConditionEntity[], encounters: EncounterEntity[], now: Date): ClinicalSelectValue | undefined {
+  // A failure the record marks resolved is not current. The record gives no resolution date, so a later visit with
+  // the same code may be the same course or a recurrence: that is left for the clinician, never presumed 「無」.
+  const normal = (code: string | undefined) => code?.replace(/\./g, '').toUpperCase() ?? ''
+  // Visits up to the resolved diagnosis's own recorded date belong to that course and are not counted.
+  const settledSince = new Map<string, string>()
+  for (const condition of conditions) {
+    if (!['inactive', 'resolved', 'remission'].includes(condition.clinicalStatus ?? '')) continue
+    const date = (condition.recordedDate ?? condition.onsetDateTime ?? '').slice(0, 10)
+    for (const coding of condition.code?.coding ?? []) {
+      const code = normal(coding.code)
+      if (isRockallFailureOrMets(code) && date >= (settledSince.get(code) ?? '')) settledSince.set(code, date)
+    }
+  }
+  const failure = diagnosisSelect(conditions, [], now, isRockallFailureOrMets, '腎／肝衰竭或轉移癌')
+    ?? diagnosisSelect([], encounters, now, (code) => isRockallFailureOrMets(code) && !settledSince.has(code), '腎／肝衰竭或轉移癌')
+  const settledVisit = !failure && encounters.map((encounter) => {
+    const visitDate = (encounter.period?.start ?? '').slice(0, 10)
+    const afterResolvedRecord = (code: string) => settledSince.has(code) && (!visitDate || !settledSince.get(code) || visitDate > settledSince.get(code)!)
+    return diagnosisSelect([], [encounter], now, afterResolvedRecord, '腎／肝衰竭或轉移癌')
+  }).find((hit) => hit)
+  if (settledVisit) return { ...settledVisit, value: 'unknown' }
+  if (failure) return { ...failure, value: '2' }
+  const cardiac = diagnosisSelect(conditions, encounters, now, (code) => isHf(code) || isIhd(code), '心衰竭或缺血性心臟病', undefined, true)
+  return cardiac && { ...cardiac, value: '1' }
 }
 
 /**

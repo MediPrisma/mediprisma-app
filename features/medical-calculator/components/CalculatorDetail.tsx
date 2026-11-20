@@ -195,7 +195,12 @@ export function CalculatorDetail({
   }, [calc, autofill])
 
   // What the rules read: an input that does not apply right now is blank.
-  const effective = useMemo(() => visibleValues(calc.inputs, values), [calc, values])
+  // A filled value in a unit the formula cannot take is not computed on until the clinician corrects it.
+  const effective = useMemo(() => {
+    const usable = { ...values }
+    for (const [key, fill] of Object.entries(filled)) if (fill.unconvertible && !edited.has(key)) usable[key] = ''
+    return visibleValues(calc.inputs, usable)
+  }, [calc, values, filled, edited])
   const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, effective), [calc, effective])
   useEffect(() => {
     onResult?.(computeCrashed ? null : result)

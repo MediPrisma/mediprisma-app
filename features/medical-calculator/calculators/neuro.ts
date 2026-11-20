@@ -187,11 +187,11 @@ export const NEURO: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Stroke risk after TIA.', zh: 'TIA 後中風風險。' },
       items: [
-        { key: 'age', label: { en: 'Age ≥ 60', zh: '年齡 ≥ 60' }, options: [
+        { key: 'age', label: { en: 'Age ≥ 60', zh: '年齡 ≥ 60' }, source: { kind: 'hfpefClinical', key: 'ageOver60', answers: { yes: '1', no: '0' } }, options: [
           { label: { en: 'No (0)', zh: '否 (0)' }, points: 0 },
           { label: { en: 'Yes (1)', zh: '是 (1)' }, points: 1 },
         ] },
-        { key: 'bp', label: { en: 'BP ≥ 140/90 mmHg', zh: '血壓 ≥ 140/90 mmHg' }, options: [
+        { key: 'bp', label: { en: 'BP ≥ 140/90 mmHg', zh: '血壓 ≥ 140/90 mmHg' }, source: { kind: 'hfpefClinical', key: 'bpOver140_90', answers: { yes: '1', no: '0' } }, presumed: 0, options: [
           { label: { en: 'No (0)', zh: '否 (0)' }, points: 0 },
           { label: { en: 'Yes (1)', zh: '是 (1)' }, points: 1 },
         ] },
