@@ -8,15 +8,15 @@
 
 | 專案 | 遠端 | 工作分支 | 負責內容 |
 | --- | --- | --- | --- |
-| App | https://github.com/voho0000/medical-note-smart-on-fhir | pilot/hmc | CDSS 畫面、輸入、醫學計算機 |
-| 規則 | https://github.com/voho0000/mediprisma-personalization | pilot/hmc | 臨床事實、FHIR adapter、規則及引用 |
+| App | https://github.com/MediPrisma/mediprisma-app | pilot/hmc | CDSS 畫面、輸入、醫學計算機 |
+| 規則 | https://github.com/MediPrisma/mediprisma-cdss | pilot/hmc | 臨床事實、FHIR adapter、規則及引用 |
 
 已交付的功能版本：
 
 - App `47b30c38`：三區塊、診斷／追蹤切換、主訴與體重追蹤、高血脂診斷核對及 PREVENT 區塊。
 - 規則 `77db017`：HF 模組分類與診斷／追蹤情境。
 - 規則 `a30205d`：LDL 123 不再被自動當成未知；有可判讀數值時依 190 門檻比較，另列日期與治療前／歷史紀錄核對提醒，保留醫師覆核。
-- 規則 `fe5d4ecdb04c538249ca7420ce2fd9062863e13e`：已合併 owner [PR #12「高血脂：對每位病人評估，並正式釋出」](https://github.com/voho0000/mediprisma-personalization/pull/12)。高血脂 pack 改為對每位病人評估，`enabled: true`；缺少診斷／嚴重血脂證據仍會標示限制，沒有放寬嚴重 LDL/TG 模組門檻。這不是 npm 發布，也不等於正式 main 已合併。
+- 規則 `fe5d4ecdb04c538249ca7420ce2fd9062863e13e`：已合併 owner [PR #12「高血脂：對每位病人評估，並正式釋出」](https://github.com/MediPrisma/mediprisma-cdss/pull/12)。高血脂 pack 改為對每位病人評估，`enabled: true`；缺少診斷／嚴重血脂證據仍會標示限制，沒有放寬嚴重 LDL/TG 模組門檻。這不是 npm 發布，也不等於正式 main 已合併。
 
 本文件會有自己的 App commit。不要把以上功能基準 SHA 當成永遠固定的分支 HEAD。
 
@@ -32,10 +32,10 @@
 先執行下列單行命令（於共同父目錄執行）：
 
 ```text
-git -C medical-note-smart-on-fhir status --short
-git -C mediprisma-personalization status --short
-git -C medical-note-smart-on-fhir branch --show-current
-git -C mediprisma-personalization branch --show-current
+git -C mediprisma-app status --short
+git -C mediprisma-cdss status --short
+git -C mediprisma-app branch --show-current
+git -C mediprisma-cdss branch --show-current
 ```
 
 有未提交變更時先辨認所有權，不覆蓋、不 reset。工作分支預期皆為 `pilot/hmc`；如果使用者另指定分支，先核對上下文。既有 AGENTS 對 pilot 的保護條文與 HMC guide 的角色指示有差異；本次合併與交付有使用者明確授權，不代表未來所有發布、merge 或正式版操作一律授權。不要修改部署 workflow、Firebase 規則或使用 owner 憑證來繞過限制。
@@ -43,8 +43,8 @@ git -C mediprisma-personalization branch --show-current
 只同步目前工作分支，乾淨工作樹才執行：
 
 ```text
-git -C medical-note-smart-on-fhir pull --ff-only origin pilot/hmc
-git -C mediprisma-personalization pull --ff-only origin pilot/hmc
+git -C mediprisma-app pull --ff-only origin pilot/hmc
+git -C mediprisma-cdss pull --ff-only origin pilot/hmc
 ```
 
 若拒絕 fast-forward，先比較差異；不要 force-push 或用 reset 消除衝突。此次 PR #12 的授權只針對該筆，不包含 owner 其他指向 main 的 PR。
@@ -57,8 +57,8 @@ git -C mediprisma-personalization pull --ff-only origin pilot/hmc
 gh auth login --hostname github.com --git-protocol https --web
 gh auth setup-git
 gh api user --jq .login
-gh api repos/voho0000/mediprisma-personalization --jq .permissions.push
-gh api repos/voho0000/medical-note-smart-on-fhir --jq .permissions.push
+gh api repos/MediPrisma/mediprisma-cdss --jq .permissions.push
+gh api repos/MediPrisma/mediprisma-app --jq .permissions.push
 ```
 
 最後兩個命令應回傳 `true`。這次使用帳號是 `hmcheng0913`，另一位協作者請以自己的授權帳號為準。
@@ -87,13 +87,15 @@ unset GITHUB_TOKEN GH_TOKEN
 Clone（於共同父目錄；已存在的 repo 不重複 clone）：
 
 ```text
-git clone --branch pilot/hmc https://github.com/voho0000/medical-note-smart-on-fhir.git
-git clone --branch pilot/hmc https://github.com/voho0000/mediprisma-personalization.git
+git clone --branch pilot/hmc https://github.com/MediPrisma/mediprisma-app.git
+git clone --branch pilot/hmc https://github.com/MediPrisma/mediprisma-cdss.git
 ```
+
+先前以舊名稱 clone 的資料夾（`medical-note-smart-on-fhir`、`mediprisma-personalization`）請在沒有開啟的程式時改名為 `mediprisma-app`、`mediprisma-cdss`，本文件的命令與第 4 節的程式都以新名稱找資料夾。舊 remote 網址 GitHub 會自動轉址，也可用 `git remote set-url origin <上面的新網址>` 更新。
 
 App 的 `.env.local` 必須由 owner 透過既有安全方式提供或依 `.env.example` 設定。確認 `git check-ignore .env.local` 有輸出。不要複製到 handoff；不要讀出內容給 agent。localhost 使用既有正式帳號服務，測試只用內建合成 demo。
 
-安裝規則 repo：進入 `mediprisma-personalization`，執行 `npm ci`，再 `npm run build`。安裝 App：進入 `medical-note-smart-on-fhir`，執行 `npm run packages:ci`；此既有 wrapper 使用 CLI 登入憑證，不需手動貼 Token。若套件讀取權限不足，依 GitHub CLI 提示補足自己的 `read:packages` 權限；若 Windows wrapper 回報 spawn/EINVAL，這是本機 Node/npm 執行問題，應記錄錯誤修復安裝流程，不要將憑證改寫成明文。
+安裝規則 repo：進入 `mediprisma-cdss`，執行 `npm ci`，再 `npm run build`。安裝 App：進入 `mediprisma-app`，執行 `npm run packages:ci`；此既有 wrapper 使用 CLI 登入憑證，不需手動貼 Token。若套件讀取權限不足，依 GitHub CLI 提示補足自己的 `read:packages` 權限；若 Windows wrapper 回報 spawn/EINVAL，這是本機 Node/npm 執行問題，應記錄錯誤修復安裝流程，不要將憑證改寫成明文。
 
 以上是新環境重建步驟；本次沒有在全新空白電腦重新跑完整安裝。任何安裝錯誤都要先解決，不可繼續假設套件已裝好。
 
@@ -108,10 +110,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const names = ['clinical-lab-normalization', 'personalization-sdk', 'personalized-care', 'personalized-care-fhir'];
 const app = process.cwd();
-if (JSON.parse(fs.readFileSync(path.join(app, 'package.json'), 'utf8')).name !== 'medical-note-smart-on-fhir') throw new Error('Run from the App root');
+if (JSON.parse(fs.readFileSync(path.join(app, 'package.json'), 'utf8')).name !== 'mediprisma-app') throw new Error('Run from the App root');
 const targetRoot = path.resolve(app, 'node_modules', '@voho0000');
 const pairs = names.map(name => {
-  const source = path.resolve(app, '..', 'mediprisma-personalization', 'packages', name);
+  const source = path.resolve(app, '..', 'mediprisma-cdss', 'packages', name);
   const target = path.resolve(targetRoot, name);
   if (path.dirname(target) !== targetRoot) throw new Error('Unexpected target');
   if (fs.existsSync(target) && fs.lstatSync(target).isSymbolicLink()) throw new Error('Linked package: review installation before replacing');
@@ -199,10 +201,10 @@ npm run build
 需兩個 repo 協作時，先完成兩邊檢查，再推規則與 App。兩次訊號可能取消先前 build，應看**最新**的 run，不能只看第一筆。
 
 ```text
-gh run list --repo voho0000/medical-note-smart-on-fhir --limit 8
-gh run list --repo voho0000/mediprisma-personalization --limit 5
-git -C medical-note-smart-on-fhir rev-parse HEAD
-git -C mediprisma-personalization rev-parse HEAD
+gh run list --repo MediPrisma/mediprisma-app --limit 8
+gh run list --repo MediPrisma/mediprisma-cdss --limit 5
+git -C mediprisma-app rev-parse HEAD
+git -C mediprisma-cdss rev-parse HEAD
 ```
 
 查 `HMC preview build`，再查 `Publish HMC pilot preview`。`Publish` 的 workflow 自 master 執行，headSha 不一定等於 App pilot SHA；最終要用 `hmc-build.json` 的 `appSha` 和 `personalizationSha` 核對。Publisher 顯示成功但版本沒變時，也可能只是前一個取消 build 的無發布流程，不能單憑綠勾宣稱上線。

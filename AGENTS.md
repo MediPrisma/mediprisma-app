@@ -38,7 +38,7 @@ red on a two-line version bump.
 
 ## Someone else's branch, and the machinery that ships it
 
-`pilot/hmc` — in this repository and in `mediprisma-personalization` — is a
+`pilot/hmc` — in this repository and in `mediprisma-cdss` — is a
 collaborator's working branch. They push to it directly, they review their own
 clinical work on `https://mediprisma.tw/app-hmc/`, and nothing on it is yours
 to tidy.
@@ -55,7 +55,7 @@ The preview's engine is a chain across two repositories, and only its last
 link is ours:
 
 ```
-mediprisma-personalization  main       .github/workflows/relay-hmc-preview.yml
+mediprisma-cdss             main       .github/workflows/relay-hmc-preview.yml
 this repository             pilot/hmc  .github/workflows/hmc-build.yml
 this repository             master     .github/workflows/hmc-publish.yml
 this repository             master     docs/HMC-AI-AGENT-GUIDE.md

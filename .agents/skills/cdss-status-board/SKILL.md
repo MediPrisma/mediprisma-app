@@ -58,7 +58,7 @@ a second disease.
 1. **Dump the pack's real output first.** Never design from the module
    catalog alone. Run the pack against a synthetic profile (script in
    `references/hf-worked-example.md`) and against the fixture bundles under
-   `mediprisma-personalization/__tests__/fixtures/` where the disease has
+   `mediprisma-cdss/__tests__/fixtures/` where the disease has
    them. Record for every module: `id`, `moduleName`, `moduleGroup`,
    `domain`, `status`, `overviewEvidenceFactKey(s)`, the `patientEvidence`
    fact keys, `evidenceTables` item ids, `missingData`, `nextActions[0]`.

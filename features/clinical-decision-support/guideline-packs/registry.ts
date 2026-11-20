@@ -44,7 +44,7 @@ const HOST_PACK_ORDER = ['heart-failure-cdss', 'hypertension-cdss', 'hyperlipide
 /**
  * Local development only: the packs a disease-branch start-of-session script
  * asks this dev server to list ahead of the host's own, so a pathway still on
- * its own mediprisma-personalization branch can be reviewed on localhost. The
+ * its own mediprisma-cdss branch can be reviewed on localhost. The
  * HMC scripts set `NEXT_PUBLIC_HMC_DEV_EXTRA_PACKS` from that branch's build;
  * nothing sets it for app-hmc or /app, and a production build ignores it
  * anyway. An id the package does not ship is skipped rather than thrown on —
@@ -80,7 +80,7 @@ setLocaleLayer('taiwan')
 // validates each pack against the contract, and a pack that fails the contract
 // should be caught the release it lands in, not the release it is listed in.
 registerCarePacks(CARE_PACKS, {
-  source: 'medical-note-smart-on-fhir/bundled-care-packs',
+  source: 'mediprisma-app/bundled-care-packs',
   defaultPackId: HOST_DEFAULT_PACK_ID,
 })
 

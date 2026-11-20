@@ -339,7 +339,7 @@
 
 ### 範本說明清空
 
-- PR：https://github.com/voho0000/medical-note-smart-on-fhir/pull/95 （已提交並推送，待審查／CI）。
+- PR：https://github.com/MediPrisma/mediprisma-app/pull/95 （已提交並推送，待審查／CI）。
 
 - 確認為最新主分支仍存在的 bug：`description: undefined` 被省略，Firestore 保留舊值。
 - 從 `origin/master` 的 d48aaba9 建立 `codex/fix-gallery-description-clear`，工作目錄 `/private/tmp/mediprisma-gallery-description`。
@@ -360,7 +360,7 @@
 
 ## 範本重複匯入：PR #96 已提交
 
-- PR：https://github.com/voho0000/medical-note-smart-on-fhir/pull/96
+- PR：https://github.com/MediPrisma/mediprisma-app/pull/96
 - 分支 `codex/gallery-import-dedup`，提交 `ab52f581`；工作目錄 `/private/tmp/mediprisma-gallery-import`。
 - 從最新 master 拆出 19 個檔案，不帶入旧版聊天智慧標題與其他未提交功能。
 - 行為：重複來源沿用已存版本；來源更新時選擇保留／更新／副本；來源資訊隨帳號同步。
@@ -371,7 +371,7 @@
 ## 範本版本與驗收（2026-09-14）
 
 - PR #96 後續已修正：完全相同範本帶入會顯示提醒，沒有成功帶入不增加使用次數；最新相關提交 `8f974a8c`。
-- 範本版本 PR #97：https://github.com/voho0000/medical-note-smart-on-fhir/pull/97 ，基底為 PR #96 分支；工作目錄 `/private/tmp/mediprisma-template-versions`。
+- 範本版本 PR #97：https://github.com/MediPrisma/mediprisma-app/pull/97 ，基底為 PR #96 分支；工作目錄 `/private/tmp/mediprisma-template-versions`。
 - App 提交 `56cb4317`、`ba2db9d4`：V1 基準、實質內容儲存升版、來源版本保存、表格獨立版本欄。使用者已在 localhost:3020 驗收通過；已 commit/push，尚未合併。
 - Firebase PR #3：https://github.com/voho0000/firebase-smart-on-fhir/pull/3 ，提交 `a571113`、`afaccdc`。
 - 過渡 Rules 已依使用者授權部署至 `smart-on-fhir-ac97d` 的 `mediprisma` 資料庫，發布後讀回比對相同。舊 app 無版本文件仍可新增/編輯；已版本化文件允許原版號編輯，避免正式舊版使用受阻。舊 app 不會自動升版，後續新版上線後再評估收緊。
@@ -380,7 +380,7 @@
 
 ## 健保雲端檢驗來源標記：PR #98
 
-- PR：https://github.com/voho0000/medical-note-smart-on-fhir/pull/98 ，提交 `0af97bbe`，分支 `codex/nhi-lab-source-provenance`。
+- PR：https://github.com/MediPrisma/mediprisma-app/pull/98 ，提交 `0af97bbe`，分支 `codex/nhi-lab-source-provenance`。
 - 隔離工作目錄 `/private/tmp/mediprisma-nhi-lab-source`，基於 master `d48aaba9`。已 commit/push/PR，尚未合併。
 - 報告列、日群組、累積檢驗顯示明確來源；院所缺少則標示未提供，不將健保署當檢驗院所。
 - 混合來源不整組誤標；保留每筆來源與主線完整時間/performer/method 分組，不搬回 dirty 舊版退步。
@@ -402,13 +402,13 @@
 - 第 11 項「窄側欄錯誤提示改上下排列、按鈕加高」：**不採用，已結案，從待辦排除**。使用者看過 Before/After 後選擇保留目前較省空間的左右排版；除非使用者重新提出需求，不再列為待處理。舊提交 95e75baa 中的此項變更不得移植。
 - 第 6 項「全部標準摘要卡片同一錯誤時合併訊息」：使用者已授權 commit、push、PR。僅六張卡片全部有相同顯示錯誤時合併為醫療摘要；部分失敗、不同錯誤及額外 summaryError 保留原行為。
 - 第 6 項隔離工作目錄：`/private/tmp/mediprisma-summary-error-dedup`，分支 `codex/summary-error-dedup`。兩組 12 項測試、相關 lint、TypeScript 及正式 webpack build 通過；未改 localhost:3020，未納入其餘摘要行為。
-- 第 6 項已提交並推送：`f368ebe6`，PR #103：https://github.com/voho0000/medical-note-smart-on-fhir/pull/103 。尚未合併或部署。
+- 第 6 項已提交並推送：`f368ebe6`，PR #103：https://github.com/MediPrisma/mediprisma-app/pull/103 。尚未合併或部署。
 
 - 第 9 項「容量超限時保留調整資料範圍操作」：主線已涵蓋，依使用者決策結案並從待辦排除，不另開 PR。
 
-- 第 8 項不採用「AI 設定」入口；改為錯誤提示中的「切換模型」。依使用者決策，點擊後移至醫療摘要上方既有模型選擇器並直接展開，切換模型後仍由使用者按「重試」，不自動生成。隔離分支 `codex/summary-error-model-picker`，提交 `7f375ddc`，PR #106：https://github.com/voho0000/medical-note-smart-on-fhir/pull/106 。已 commit/push/PR，尚未合併或部署。
+- 第 8 項不採用「AI 設定」入口；改為錯誤提示中的「切換模型」。依使用者決策，點擊後移至醫療摘要上方既有模型選擇器並直接展開，切換模型後仍由使用者按「重試」，不自動生成。隔離分支 `codex/summary-error-model-picker`，提交 `7f375ddc`，PR #106：https://github.com/MediPrisma/mediprisma-app/pull/106 。已 commit/push/PR，尚未合併或部署。
 
-- 第 7 項「新模型失敗時保留上一版摘要並顯示本次錯誤」：使用者已同意實作。隔離工作目錄 `/private/tmp/mediprisma-summary-retained-errors`，分支 `codex/summary-retained-errors`，基於 master `d2c2b6df`。修改 2 個程式檔與 1 個測試檔；關鍵測試 41 項、相關 ESLint、TypeScript、lockfile check 與正式 Turbopack build 通過。提交 `de011788`，PR #107：https://github.com/voho0000/medical-note-smart-on-fhir/pull/107 。已 commit/push/PR，尚未合併或部署。B 成功卡片逐張顯示與只重試失敗卡片的既有流程不變。
+- 第 7 項「新模型失敗時保留上一版摘要並顯示本次錯誤」：使用者已同意實作。隔離工作目錄 `/private/tmp/mediprisma-summary-retained-errors`，分支 `codex/summary-retained-errors`，基於 master `d2c2b6df`。修改 2 個程式檔與 1 個測試檔；關鍵測試 41 項、相關 ESLint、TypeScript、lockfile check 與正式 Turbopack build 通過。提交 `de011788`，PR #107：https://github.com/MediPrisma/mediprisma-app/pull/107 。已 commit/push/PR，尚未合併或部署。B 成功卡片逐張顯示與只重試失敗卡片的既有流程不變。
 
 - 第 10 項改為「安全警示錯誤與重試集中到摘要上方」：使用者看過安全警示單獨失敗及一般摘要／安全警示同時失敗的 Before/After 後核准。安全卡有舊成功內容時繼續顯示內容；首次失敗且沒有內容時不顯示空卡。上方錯誤區列出所有失敗卡片並只提供一個重試，既有精準重試只重跑失敗卡片。
-- 第 10 項隔離工作目錄：`/private/tmp/mediprisma-summary-safety-retry`，分支 `codex/summary-safety-retry`，提交 `7babe5f1`，PR #109：https://github.com/voho0000/medical-note-smart-on-fhir/pull/109 。兩組 8 項測試與相關 ESLint 通過，試用資料瀏覽器檢查確認成功安全卡仍正常顯示。webpack 已完成編譯，但完整建置被最新主線既有的 CDSS `CdssCriterionSummary` 匯出型別錯誤阻擋；本分支未修改該檔案。
+- 第 10 項隔離工作目錄：`/private/tmp/mediprisma-summary-safety-retry`，分支 `codex/summary-safety-retry`，提交 `7babe5f1`，PR #109：https://github.com/MediPrisma/mediprisma-app/pull/109 。兩組 8 項測試與相關 ESLint 通過，試用資料瀏覽器檢查確認成功安全卡仍正常顯示。webpack 已完成編譯，但完整建置被最新主線既有的 CDSS `CdssCriterionSummary` 匯出型別錯誤阻擋；本分支未修改該檔案。
