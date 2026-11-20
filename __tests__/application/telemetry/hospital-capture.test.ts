@@ -175,3 +175,27 @@ test('D091: the HIS request count the extension tagged reaches the Collector; a 
     [{ system: REQUESTS, code: '1' }, { system: REQUESTS, code: '2' }]])
     expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('requestCount')
 })
+
+test('D093: how the capture used the stored record and how long each part took reach the Collector; anything malformed is dropped', async () => {
+  const STORED = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-stored-record'
+  const MEASURE = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-measure'
+  const measure = (code: string) => ({ system: MEASURE, code })
+  reportHospitalCapture(oneClick([{ system: STORED, code: 'used' }, measure('prelude_ms:6200'), measure('record_read_ms:1800'), measure('record_wait_ms:0'),
+    measure('capture_ms:3100'), measure('merge_ms:12'), measure('held_resources:812'), measure('newer_resources:23'), measure('since_days:1'), measure('something_new:5')]))
+  await settle()
+  const body = sentBody()
+  expect(hospitalCaptureEventSchema.safeParse(body).success).toBe(true)
+  expect(body).toMatchObject({ stored_record: { outcome: 'used', held_resources: 812, newer_resources: 23, since_days: 1 },
+    stage_ms: { prelude: 6200, record_read: 1800, record_wait: 0, capture: 3100, merge: 12 } })
+  // Times alone, with the setting off: no stored record is named.
+  const timed = summarizeHospitalCapture(oneClick([measure('prelude_ms:4000'), measure('capture_ms:9000')]))
+  expect(timed).toMatchObject({ stageMs: { prelude: 4000, capture: 9000 } })
+  expect(timed).not.toHaveProperty('storedRecord')
+  // An outcome the contract does not know, or said twice, is not sent; a size out of range leaves the outcome alone.
+  for (const bad of [[{ system: STORED, code: 'maybe' }], [{ system: STORED, code: 'used' }, { system: STORED, code: 'none' }]])
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('storedRecord')
+  expect(summarizeHospitalCapture(oneClick([{ system: STORED, code: 'used' }, measure('held_resources:812'), measure('newer_resources:23'), measure('since_days:401')]))?.storedRecord)
+    .toEqual({ outcome: 'used', held_resources: 812, newer_resources: 23 })
+  for (const bad of [[measure('capture_ms:-1')], [measure('capture_ms:1.5')], [measure('capture_ms:3600001')], [measure('capture_ms:1'), measure('capture_ms:2')], [measure('Capture_ms:1')], [measure('T000001:1')]])
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('stageMs')
+})

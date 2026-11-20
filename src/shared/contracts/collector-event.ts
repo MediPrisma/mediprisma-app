@@ -344,6 +344,7 @@ export const hospitalCaptureResourceTypeSchema = z.enum([
 ])
 export const hospitalCaptureEncounterClassSchema = z.enum(['outpatient', 'inpatient', 'emergency', 'other'])
 const captureCount = z.number().int().min(0).max(99_999)
+const captureStageMs = z.number().int().min(0).max(3_600_000)
 const extensionVersion = z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/)
 export const hospitalCaptureEventSchema = z.object({
   schema_version: z.literal(1), event_id: z.string().uuid(),
@@ -369,6 +370,24 @@ export const hospitalCaptureEventSchema = z.object({
   // HIS requests 北榮懷爾抓抓 itself sent for this capture (D091). Not the requests the chart
   // page sends on its own when the assistant opens it in a tab.
   request_count: captureCount.optional(),
+  // D093: a capture made in the clinic may build on the record the outpatient assistant already holds.
+  // outcome: used = that record with what is newer laid over it; none = the assistant had no usable record;
+  // timeout = it did not arrive in time; failed = reading it failed; unusable = it arrived but could not be
+  // built on (not the same patient, too old to add to, or HIS could not say what is newer).
+  // held_resources: resources in the held record; newer_resources: resources read from HIS to lay over it;
+  // since_days: how many days back that reading started.
+  stored_record: z.object({
+    outcome: z.enum(['used', 'none', 'timeout', 'failed', 'unusable']),
+    held_resources: captureCount.optional(), newer_resources: captureCount.optional(),
+    since_days: z.number().int().min(0).max(400).optional(),
+  }).strict().optional(),
+  // D093: how long each part took, as 北榮懷爾抓抓 measured it. prelude = finding the patient, opening the chart,
+  // the access audit and the identity check; record_read = reading the held record from the assistant;
+  // record_wait = how long the capture stood waiting for that record; capture = reading HIS; merge = joining the two.
+  stage_ms: z.object({
+    prelude: captureStageMs.optional(), record_read: captureStageMs.optional(), record_wait: captureStageMs.optional(),
+    capture: captureStageMs.optional(), merge: captureStageMs.optional(),
+  }).strict().optional(),
   failures: z.array(z.object({
     category: hospitalCaptureCategorySchema, kind: hospitalCaptureFailureKindSchema,
     status: z.number().int().min(100).max(599).optional(), count: z.number().int().min(1).max(99_999),
