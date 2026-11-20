@@ -740,6 +740,7 @@ export function useAgentChat(
             Object.keys(toolsForTurn ?? {}),
             turnDataScope,
             initialToolName,
+            routingContext,
           ),
           generation: openAiCompatible?.profileId === VGTPE_TVGHBRAIN_PROFILE_ID
             ? VGTPE_TVGHBRAIN_AGENT_GENERATION

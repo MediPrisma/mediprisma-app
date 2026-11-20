@@ -352,10 +352,16 @@ export function shouldRequireInitialAgentToolCall(
   selectedToolNames: readonly string[],
   dataScope: ChatDataScope,
   initialToolName: string | undefined,
+  context?: AgentRoutingContext,
 ): boolean {
   if (initialToolName || selectedToolNames.length === 0) return false
   if (dataScope === 'auto' || dataScope === 'general') return false
-  return !matchesAny(question, NO_RECORD_QUERY) && !isGeneralMedicalKnowledgeQuestion(question)
+  if (matchesAny(question, NO_RECORD_QUERY)) return false
+  // These two are about this patient's record whatever else they say, so a
+  // general-knowledge keyword ("是什麼", "禁忌") does not free step zero.
+  if (refersToEarlierTurn(question, context)) return true
+  if (LAB_AND_MEDICATION_QUERY.every((pattern) => pattern.test(question))) return true
+  return !isGeneralMedicalKnowledgeQuestion(question)
 }
 
 function isStructuredClinicalRequest(question: string): boolean {

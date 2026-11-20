@@ -303,6 +303,22 @@ describe('agent tool router', () => {
     expect(shouldRequireInitialAgentToolCall(question, selected, 'patient', undefined)).toBe(true)
   })
 
+  it('still requires a record lookup when such a question also reads as general knowledge', () => {
+    const earlier = { hasEarlierTurns: true }
+    const followUp = '那次就診的診斷是什麼？'
+    const followUpTools = selectAgentToolNames(followUp, names, 'patient', earlier)
+    expect(forcedInitialAgentToolName(followUp, followUpTools, 'patient', earlier)).toBeUndefined()
+    expect(shouldRequireInitialAgentToolCall(followUp, followUpTools, 'patient', undefined, earlier)).toBe(true)
+
+    const contraindication = '以他的腎功能，目前用藥有哪些禁忌？'
+    const tools = selectAgentToolNames(contraindication, names, 'patient')
+    expect(forcedInitialAgentToolName(contraindication, tools, 'patient')).toBeUndefined()
+    expect(shouldRequireInitialAgentToolCall(contraindication, tools, 'patient', undefined)).toBe(true)
+
+    expect(shouldRequireInitialAgentToolCall('不要查病歷，那次的診斷是什麼？', followUpTools, 'patient', undefined, earlier)).toBe(false)
+    expect(shouldRequireInitialAgentToolCall(followUp, followUpTools, 'general', undefined, earlier)).toBe(false)
+  })
+
   it('prefetches only compact local tools', () => {
     expect(shouldPreExecuteLocalAgentTool('queryPatientInfo')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getDataOverview')).toBe(true)
