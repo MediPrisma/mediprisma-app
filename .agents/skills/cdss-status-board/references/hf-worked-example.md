@@ -56,7 +56,7 @@ Things the output taught that the catalog did not:
 ```js
 // node dump.cjs — run against the built dist so no ts loader is needed
 const care = require('<repo>/node_modules/@voho0000/personalized-care/dist/index.js')
-// or the packages repo: mediprisma-personalization/packages/personalized-care/dist/index.js
+// or the packages repo: mediprisma-cdss/packages/personalized-care/dist/index.js
 const fact = (v, n, date) => ({ zh: v, en: v, ...(n === undefined ? {} : { numericValue: n }), date,
   sources: [{ resourceType: 'Observation', resourceId: 'obs-' + v.replace(/\W/g, ''), date }] })
 const med = (state, factKey, names = [], last) => ({ state, medicationNames: names, factKey,
@@ -87,7 +87,7 @@ the wording for a taken class is 「目前用藥中：<names>」 / "Currently ta
    a `@container` div of the width under test (`?w=880`).
 2. Load a bundle: the welcome screen's hidden `<input type=file>` accepts a
    `File` set through `DataTransfer` from the browser console; fixtures in
-   `mediprisma-personalization/__tests__/fixtures/<disease>/fhir/*.bundle.json`
+   `mediprisma-cdss/__tests__/fixtures/<disease>/fhir/*.bundle.json`
    (copy one under `public/` temporarily and `fetch` it). Decline the AI
    consent dialog.
 3. Beta tab: 設定 → 顯示與關於 → 開啟 Beta 功能 (no sign-in needed since

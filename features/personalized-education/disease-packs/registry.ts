@@ -35,5 +35,5 @@ export function getEnabledDiseasePacks(): readonly DiseaseEducationPack[] {
 }
 
 registerEducationPacks(BUNDLED_EDUCATION_PACKS, {
-  source: 'medical-note-smart-on-fhir/bundled-education-packs',
+  source: 'mediprisma-app/bundled-education-packs',
 })
