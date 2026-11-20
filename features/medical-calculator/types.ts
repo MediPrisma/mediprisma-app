@@ -66,6 +66,8 @@ export type ConvertDim =
   | 'hemoglobin'  // g/dL ↔ g/L ↔ mmol/L
   | 'fio2'        // % ↔ fraction (21% ↔ 0.21)
   | 'albumin-creatinine-ratio' // urine ACR: mg/g ↔ mg/mmol
+  | 'duration'    // ECG intervals: ms ↔ s
+  | 'temperature' // °C ↔ °F
 
 /**
  * Where an input's initial value comes from, if any. Resolved by

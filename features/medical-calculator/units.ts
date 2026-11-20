@@ -15,7 +15,15 @@ import type { ConvertDim } from './types'
 /** Normalize a unit string for lookup: lowercase, strip spaces, µ/μ → u, and
  *  collapse the many ways an exponent is written (10⁹, 10*9, 10e9, x10^9) to a
  *  single `10^9` form. */
+/** UCUM spellings of the same vital-sign unit (FHIR sends 「Cel」, 「/min」). */
+const UNIT_ALIASES: Record<string, string> = { 'mm[hg]': 'mmhg', cel: '°c', degc: '°c', '℃': '°c', '[degf]': '°f', degf: '°f', '℉': '°f', '/min': 'bpm', '{beats}/min': 'bpm', 'beats/min': 'bpm', '{breaths}/min': 'bpm', 'breaths/min': 'bpm' }
+
 export function normUnit(u: string | undefined): string {
+  const unit = normUnitSpelling(u)
+  return UNIT_ALIASES[unit] ?? unit
+}
+
+function normUnitSpelling(u: string | undefined): string {
   return (u || '')
     .toLowerCase()
     .replace(/[µμ]/g, 'u')
@@ -73,6 +81,10 @@ const FACTORS: Record<ConvertDim, Record<string, number>> = {
   hemoglobin: { 'g/dl': 1, 'g/l': 0.1, 'mmol/l': 1.6113 },
   // FiO₂: base %. A fraction (0.21) → percent (21%); unit "1" or "fraction".
   fio2: { '%': 1, '1': 100, fraction: 100 },
+  // ECG interval: base ms. UCUM 「s」 is seconds.
+  duration: { ms: 1, s: 1000, sec: 1000 },
+  // Body temperature: base °C. °F is converted in convertToBase (not a factor).
+  temperature: { '°c': 1 },
   // Urine albumin/creatinine ratio: base mg/g.
   // 1 mg/mmol ≈ 8.84 mg/g; µg/mg and mcg/mg are numerically equivalent to mg/g.
   'albumin-creatinine-ratio': {
@@ -111,6 +123,7 @@ export function convertToBase(
   dimension: ConvertDim | undefined,
 ): UnitConversion | null {
   if (!dimension) return null
+  if (dimension === 'temperature' && normUnit(fromUnit) === '°f') return { value: (value - 32) * 5 / 9, changed: true }
   const table = FACTORS[dimension]
   if (!table) return null
   const factor = table[normUnit(fromUnit)]

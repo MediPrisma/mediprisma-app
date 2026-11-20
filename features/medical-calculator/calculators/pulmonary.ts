@@ -83,9 +83,9 @@ export const PULMONARY: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Systemic inflammatory response.', zh: '全身性發炎反應。' },
       inputs: [
-        { key: 'temp', type: 'number', label: { en: 'Temperature', zh: '體溫' }, unit: '°C', normalRange: { low: 36, high: 38 } },
-        { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 90 } },
-        { key: 'rr', type: 'number', label: { en: 'Respiratory rate', zh: '呼吸速率' }, unit: '/min', normalRange: { low: 12, high: 20 } },
+        { key: 'temp', type: 'number', label: { en: 'Temperature', zh: '體溫' }, unit: '°C', dimension: 'temperature', normalRange: { low: 36, high: 38 }, source: { kind: 'vital', loinc: ['8310-5'] } },
+        { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 90 }, source: { kind: 'vital', loinc: ['8867-4'] } },
+        { key: 'rr', type: 'number', label: { en: 'Respiratory rate', zh: '呼吸速率' }, unit: '/min', normalRange: { low: 12, high: 20 }, source: { kind: 'vital', loinc: ['9279-1'] } },
         { key: 'wbc', type: 'number', label: { en: 'WBC', zh: '白血球' }, unit: '10⁹/L', dimension: 'wbc', normalRange: { low: 4, high: 12 }, source: { kind: 'lab', keys: ['WBC'] } },
       ],
       compute: (v) => {

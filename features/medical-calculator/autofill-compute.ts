@@ -87,6 +87,12 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     }
   }
 
+  // A percentage takes no reading in another unit: an absolute count (neutrophils in /µL) is not a share.
+  // (A unit the input's dimension converts, FiO₂ as a fraction, is not refused.)
+  if (expected === '%' && hit.unit.trim() && normUnit(hit.unit) !== normUnit('%') && !convertToBase(hit.value, hit.unit, input.dimension)) {
+    return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
+  }
+
   // Preserve HFpEF threshold precision (e.g. RWT 0.424 must not become 0.42).
   const formatted = input.source && ['echo', 'bmi', 'natriuretic'].includes(input.source.kind) ? String(hit.value) : formatNum(hit.value)
   const prov = { testName: hit.testName, loinc: hit.loinc, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType }
@@ -159,6 +165,8 @@ export function computeAutofilledResult(calc: CalculatorDef, autofill: Autofill)
       // card would look auto-computed while resting on an assumption — suppress.
       const isOptional = !!inp.optional
       if (inp.source && !isOptional && !resolved.filled) return null
+      // A reading in a unit the formula cannot take (QT in an unknown unit) is not computed inline.
+      if (resolved.unconvertible) return null
     }
     const result = calc.compute(values)
     return result ? { result, asOf } : null
