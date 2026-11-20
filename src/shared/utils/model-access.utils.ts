@@ -21,7 +21,9 @@ export function apiKeyForModel(
   keys: ProviderKeys,
   customConfig?: OpenAiCompatibleConfig | null,
 ): string | null {
-  const provider = getModelDefinitionOrThrow(modelId).provider
+  const { provider, access } = getModelDefinitionOrThrow(modelId)
+  // 院內 Gemini runs in the clinician's own browser tab: no provider key is sent anywhere.
+  if (access === 'browser-extension') return null
   if (provider === 'custom') return customConfig?.apiKey?.trim() || null
   if (provider === 'gemini') return keys.geminiKey?.trim() || null
   if (provider === 'claude') return keys.claudeKey?.trim() || null
@@ -37,6 +39,7 @@ export function hasDirectModelAccess(
   if (isCustomOpenAiModelId(modelId)) {
     return isOpenAiCompatibleRuntimeReady(customConfig)
   }
+  if (getModelDefinition(modelId)?.access === 'browser-extension') return true
   return Boolean(apiKeyForModel(modelId, keys, customConfig))
 }
 

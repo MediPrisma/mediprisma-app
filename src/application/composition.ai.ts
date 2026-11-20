@@ -22,6 +22,11 @@ import { OpenAiCompatibleService } from '@/src/infrastructure/ai/services/openai
 import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
 import { StreamOrchestrator } from '@/src/infrastructure/ai/streaming/stream-orchestrator'
+import {
+  setHospitalGeminiFailureListener,
+  type HospitalGeminiFailure,
+} from '@/src/infrastructure/ai/hospital-gemini/hospital-gemini-stream'
+import { toast } from 'sonner'
 import type {
   OpenAiCompatibleConfig,
   OpenAiCompatibleProfile,
@@ -67,6 +72,24 @@ export function createQueryAiUseCase(config: AiRuntimeConfig): QueryAiUseCase {
 export function createSmartTitleUseCase(config: AiRuntimeConfig): GenerateSmartTitleUseCase {
   return new GenerateSmartTitleUseCase(createAiService(config))
 }
+
+/** A failed 院內 Gemini request keeps its prompt one click away, to paste by hand. */
+export function showHospitalGeminiFailure({ message, prompt }: HospitalGeminiFailure): void {
+  toast.error(message, {
+    id: 'hospital-gemini-failure',
+    duration: 15_000,
+    action: {
+      label: '複製提示',
+      onClick: () => {
+        void Promise.resolve().then(() => navigator.clipboard.writeText(prompt)).then(
+          () => toast.success('已複製提示，可貼到院內 Gemini'),
+          () => toast.error('無法複製提示，請確認瀏覽器允許剪貼簿'),
+        )
+      },
+    },
+  })
+}
+setHospitalGeminiFailureListener(showHospitalGeminiFailure)
 
 export function createAiStreamOrchestrator(): StreamOrchestrator {
   const providerFactory = new AiProviderFactory()

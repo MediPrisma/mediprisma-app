@@ -13,6 +13,9 @@ import {
   type AskHospitalGeminiOptions,
   type HospitalGeminiAnswer,
 } from './hospital-gemini-bridge'
+import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
+import { HOSPITAL_GEMINI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 
 export interface HospitalGeminiStreamConfig {
   messages: { role: string; content: string; images?: { data: string }[] }[]
@@ -96,6 +99,26 @@ export async function streamHospitalGemini(
     if (config.signal.aborted) return
     if (error instanceof Error) failureListener?.({ message: error.message, prompt: flattenHospitalGeminiPrompt(config.messages) })
     throw error
+  }
+}
+
+/** Non-streaming callers (custom summaries) get the finished answer. */
+export async function queryHospitalGemini(request: AiQueryRequest, ask: Ask = askHospitalGemini): Promise<AiQueryResponse> {
+  const signal = request.signal ?? new AbortController().signal
+  let text = ''
+  await streamHospitalGemini({ messages: request.messages, signal, onChunk: (markdown) => { text = markdown } }, ask)
+  if (signal.aborted) {
+    const abort = new Error('The operation was aborted')
+    abort.name = 'AbortError'
+    throw abort
+  }
+  return {
+    text,
+    metadata: {
+      modelId: HOSPITAL_GEMINI_MODEL_ID,
+      provider: 'gemini',
+      modelExecution: reportModelExecution(createModelExecution(request.modelId, HOSPITAL_GEMINI_MODEL_ID), HOSPITAL_GEMINI_MODEL_ID),
+    },
   }
 }
 
