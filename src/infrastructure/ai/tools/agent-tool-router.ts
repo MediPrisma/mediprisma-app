@@ -119,8 +119,8 @@ export function agentToolNamesForDataScope(
 }
 
 const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
-  // `age`: a bare /age/ also matched "stage" and "dosage".
-  patient: [/(年齡|歲|性別|gender|age|demographic)/i],
+  // `\bage\b`: a bare /age/ also matched "stage" and "dosage".
+  patient: [/(年齡|歲|性別|gender|\bage\b|demographic)/i],
   overview: [/(資料概況|資料總覽|有哪些類型|data overview|what data|available data)/i],
   encounters: [/(就醫|門診|急診|住院|出院|看診|科別|visit|encounter|admission|hospitali[sz])/i],
   conditions: [/(診斷|疾病|病況|問題清單|condition|diagnos)/i],

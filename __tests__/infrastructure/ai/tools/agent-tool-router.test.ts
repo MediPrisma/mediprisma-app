@@ -237,14 +237,16 @@ describe('agent tool router', () => {
 
     expect(selected).not.toEqual(['queryPatientInfo'])
     expect(forcedInitialAgentToolName(question, selected, 'patient')).toBeUndefined()
+    expect(selectAgentToolNames('What drug dosage is recorded?', names, 'patient')).not.toContain('queryPatientInfo')
   })
 
   it('still routes a demographics question to the demographics tool', () => {
-    const question = '這位病人幾歲？ What is the patient age?'
-    const selected = selectAgentToolNames(question, names, 'patient')
+    for (const question of ['這位病人幾歲？', 'What is the patient age?']) {
+      const selected = selectAgentToolNames(question, names, 'patient')
 
-    expect(selected).toEqual(['queryPatientInfo'])
-    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBe('queryPatientInfo')
+      expect(selected).toEqual(['queryPatientInfo'])
+      expect(forcedInitialAgentToolName(question, selected, 'patient')).toBe('queryPatientInfo')
+    }
     expect(shouldPreExecuteLocalAgentTool('queryPatientInfo')).toBe(true)
   })
 
