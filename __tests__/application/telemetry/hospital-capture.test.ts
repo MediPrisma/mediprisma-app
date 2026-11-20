@@ -194,7 +194,8 @@ test('D093: how the capture used the stored record and how long each part took r
   // An outcome the contract does not know, or said twice, is not sent; a size out of range leaves the outcome alone.
   for (const bad of [[{ system: STORED, code: 'maybe' }], [{ system: STORED, code: 'used' }, { system: STORED, code: 'none' }]])
     expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('storedRecord')
-  expect(summarizeHospitalCapture(oneClick([{ system: STORED, code: 'used' }, measure('since_days:401')]))).toMatchObject({ storedRecord: { outcome: 'used' } })
+  expect(summarizeHospitalCapture(oneClick([{ system: STORED, code: 'used' }, measure('held_resources:812'), measure('newer_resources:23'), measure('since_days:401')]))?.storedRecord)
+    .toEqual({ outcome: 'used', held_resources: 812, newer_resources: 23 })
   for (const bad of [[measure('capture_ms:-1')], [measure('capture_ms:1.5')], [measure('capture_ms:3600001')], [measure('capture_ms:1'), measure('capture_ms:2')], [measure('Capture_ms:1')], [measure('T000001:1')]])
     expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('stageMs')
 })

@@ -86,8 +86,11 @@ function stagesOf(tags: Tag[]): Pick<HospitalCaptureSummary, 'storedRecord' | 's
   const measures = measuresOf(tags)
   const shape = hospitalCaptureEventSchema.shape
   const outcome = singleCode(tags, STORED_RECORD_SYSTEM)
-  const sizes = Object.fromEntries(RECORD_SIZES.filter(name => measures.has(name)).map(name => [name, measures.get(name)]))
-  const stored = outcome === undefined ? undefined : [{ outcome, ...sizes }, { outcome }].map(value => shape.stored_record.safeParse(value)).find(parsed => parsed.success)?.data
+  const known = outcome === undefined ? undefined : shape.stored_record.safeParse({ outcome }).data
+  // Each size on its own: one out of the contract's range does not take the others with it.
+  const sizes = known ? Object.fromEntries(RECORD_SIZES.filter(name => measures.has(name) && shape.stored_record.safeParse({ ...known, [name]: measures.get(name) }).success)
+    .map(name => [name, measures.get(name)])) : {}
+  const stored = known ? shape.stored_record.safeParse({ ...known, ...sizes }).data : undefined
   const stages = Object.fromEntries(Object.entries(STAGES).filter(([tag]) => measures.has(tag) && measures.get(tag)! <= 3_600_000).map(([tag, name]) => [name, measures.get(tag)]))
   const stageMs = Object.keys(stages).length ? shape.stage_ms.safeParse(stages).data : undefined
   return { ...(stored ? { storedRecord: stored } : {}), ...(stageMs ? { stageMs } : {}) }
