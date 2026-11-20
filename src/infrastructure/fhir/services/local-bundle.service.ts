@@ -83,7 +83,6 @@ import {
 } from './bundle-crypto'
 import {
   LOCAL_BUNDLE_DEMO_FLAG_KEY,
-  LOCAL_BUNDLE_IMPORT_MARKER_PREFIX,
   LOCAL_BUNDLE_MARKER,
   LOCAL_BUNDLE_STORAGE_KEY,
   importIdFromLocalBundleMarker,
@@ -96,7 +95,6 @@ import {
 // localStorage markers are retired on the first successful load/import.
 const STORAGE_KEY = LOCAL_BUNDLE_STORAGE_KEY
 const MARKER = LOCAL_BUNDLE_MARKER
-const IMPORT_MARKER_PREFIX = LOCAL_BUNDLE_IMPORT_MARKER_PREFIX
 
 // Set while the loaded bundle is the bundled demo patient (試用資料). Owned
 // here so every bundle wipe (import-bundle clear, logout PHI wipe) removes it
@@ -278,10 +276,12 @@ async function idbSweepExpiredRecords(now = Date.now()): Promise<void> {
         req.onsuccess = () => {
           const cursor = req.result
           if (!cursor) return
-          if (
-            isEncryptedRecord(cursor.value)
-            && now - cursor.value.savedAt > MAX_BUNDLE_AGE_MS
-          ) {
+          if (!isEncryptedRecord(cursor.value)) {
+            // Builds before 2026-06-12 stored charts and images in plaintext.
+            // They carry no age and no owning import, so they are removed,
+            // never shown as the current patient.
+            cursor.delete()
+          } else if (now - cursor.value.savedAt > MAX_BUNDLE_AGE_MS) {
             if (storeName === IMG_STORE && typeof cursor.key === 'string'
               && cursor.key.startsWith('original-fhir:')) {
               // Original chunks share the owning chart's lifetime. Profile
@@ -457,8 +457,7 @@ async function idbPutImages(items: Array<{ id: string; record: unknown }>): Prom
   }
 }
 
-// Raw read — value may be an EncryptedRecord (current) or a plaintext Blob
-// (written by older builds); getImage() handles both.
+// Raw read — getImage() accepts only an EncryptedRecord.
 async function idbGetImage(id: string): Promise<unknown> {
   const db = await openDb()
   try {
@@ -1488,14 +1487,13 @@ export const LocalBundleService = {
   },
 
   // Fetch a stored image by its `_imageRef`. Used by the lazy viewer so the
-  // bytes are only pulled into memory while the dialog is open. Handles both
-  // encrypted records (current) and plaintext Blobs from older builds.
+  // bytes are only pulled into memory while the dialog is open. Only encrypted
+  // records are read; plaintext Blobs from older builds are swept, not shown.
   async getImage(ref: string): Promise<Blob | null> {
     if (typeof window === 'undefined') return null
     try {
       const stored = await idbGetImage(ref)
       if (!stored) return null
-      if (stored instanceof Blob) return stored // legacy plaintext (purged on next load/import)
       if (isEncryptedRecord(stored)) {
         const key = await getSessionBundleKey()
         if (!key) return null
@@ -1593,74 +1591,15 @@ export const LocalBundleService = {
           return null
         }
       }
-      if (fromIdb) {
-        // Plaintext bundle written by an older build — serve it this once and
-        // immediately re-encrypt in place so it stops existing as plaintext.
-        const importId = migratedImportId()
-        cacheBundle(fromIdb as object)
-        memBundleImportId = importId
-        memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
-        memBundleSourceMetadata = null
-        memUserEnteredPatientProfile = null
-        try {
-          const key = await getSessionBundleKey({ create: true })
-          if (key) {
-            const migrated = {
-              __mediprismaBundle: 1,
-              importId,
-              demo: memBundleIsDemo,
-              bundle: fromIdb as object,
-            } satisfies PersistedBundleEnvelope
-            await idbPut(await encryptJson(key, migrated), importId)
-            await idbDelete(bundleKey)
-            writeTabBundleScope(importId, memBundleIsDemo)
-          } else {
-            await idbDelete(bundleKey)
-          }
-        } catch {
-          // Re-encryption failed — leave the in-memory copy serving this session.
-        }
-        return fromIdb as object
-      }
+      // A plaintext record left by a pre-2026-06-12 build: never served.
+      if (fromIdb) await idbDelete(bundleKey)
     } catch {
-      // IndexedDB unavailable (private mode, etc.) — fall through to migration.
+      // IndexedDB unavailable (private mode, etc.) — there is nothing to load.
     }
 
-    // Migration path: older builds stored the full bundle JSON under STORAGE_KEY.
+    // Builds before 2026-06-04 kept the whole chart JSON here. Like the
+    // plaintext IndexedDB record it is removed below, never shown.
     const raw = readLegacyBundleMarker()
-    if (raw && raw !== MARKER && !raw.startsWith(IMPORT_MARKER_PREFIX)) {
-      try {
-        const parsed = JSON.parse(raw)
-        if (parsed && (parsed.resourceType === 'Bundle' || Array.isArray(parsed.entry))) {
-          const importId = migratedImportId()
-          cacheBundle(parsed)
-          memBundleImportId = importId
-          memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
-          memBundleSourceMetadata = null
-          memUserEnteredPatientProfile = null
-          // Move it (encrypted) to IndexedDB and shrink the marker so we don't
-          // re-migrate.
-          try {
-            const key = await getSessionBundleKey({ create: true })
-            if (key) {
-              const migrated = {
-                __mediprismaBundle: 1,
-                importId,
-                demo: memBundleIsDemo,
-                bundle: parsed,
-              } satisfies PersistedBundleEnvelope
-              await idbPut(await encryptJson(key, migrated), importId)
-              writeTabBundleScope(importId, memBundleIsDemo)
-            }
-          } catch {
-            // Migration write failed — keep serving from the in-memory copy.
-          }
-          return parsed
-        }
-      } catch {
-        // Corrupt JSON — treat as no data.
-      }
-    }
     if (tabMarker) {
       clearTabBundleScope()
       clearSessionBundleKey()
