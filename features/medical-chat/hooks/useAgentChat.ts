@@ -41,6 +41,7 @@ import {
   localAgentPrefetchInput,
   selectAgentToolsForQuestion,
   shouldPreExecuteLocalAgentTool,
+  shouldRequireInitialAgentToolCall,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "@/src/infrastructure/ai/services/openai-compatible.service"
@@ -66,6 +67,10 @@ import { truncateToContextWindow } from '@/src/shared/utils/context-window-manag
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
 import { countContextResources } from '@/src/application/telemetry/patient-resource-counts'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
+import {
+  VGTPE_TVGHBRAIN_AGENT_GENERATION,
+  VGTPE_TVGHBRAIN_PROFILE_ID,
+} from '@/src/application/launch/medcloud-launch-context'
 import { formatClinicalContextAdaptationNotice } from '@/src/core/utils/adaptive-clinical-context.utils'
 import type { MedicalChatExecutionRecord } from '@/features/medical-chat/utils/ai-execution-export'
 
@@ -726,6 +731,15 @@ export function useAgentChat(
           ...(isCustomEndpoint && /^gpt-oss(?::|-)/i.test(openAiCompatible?.modelId.trim() ?? '')
             ? { reasoningEffort: 'low' as const }
             : {}),
+          requireInitialToolCall: isCustomEndpoint && shouldRequireInitialAgentToolCall(
+            routingQuestion,
+            Object.keys(toolsForTurn ?? {}),
+            turnDataScope,
+            initialToolName,
+          ),
+          generation: openAiCompatible?.profileId === VGTPE_TVGHBRAIN_PROFILE_ID
+            ? VGTPE_TVGHBRAIN_AGENT_GENERATION
+            : undefined,
           idleMs,
           abortController,
           onEvent,

@@ -134,7 +134,18 @@ export interface RunDeepModeAgentParams {
   /** Optional provider reasoning control. Callers must only opt in for a
    * compatible endpoint model (currently gpt-oss). */
   reasoningEffort?: 'low' | 'medium' | 'high'
+  /** Sampling limits for every request of the turn. Callers opt in per
+   * endpoint; omitted fields keep the provider default. */
+  generation?: AgentGenerationSettings
+  /** When routing named no first tool, still make step zero call one, so a
+   * small model reads the record instead of answering from nothing. */
+  requireInitialToolCall?: boolean
   onEvent?: (event: AgentRunEvent) => void
+}
+
+export interface AgentGenerationSettings {
+  temperature?: number
+  maxOutputTokens?: number
 }
 
 export interface AgentRunUsage {
@@ -217,6 +228,8 @@ export async function runDeepModeAgent(
     preExecuteInitialTool,
     preExecuteInitialToolInput,
     reasoningEffort,
+    generation,
+    requireInitialToolCall,
     onEvent,
   } = params
 
@@ -230,9 +243,11 @@ export async function runDeepModeAgent(
       boundRecovery(await execute(...args))) as typeof execute }]
   }))
 
-  const reasoningOptions = reasoningEffort === undefined
-    ? {}
-    : { providerOptions: { openai: { reasoningEffort } } }
+  const requestOptions = {
+    ...(generation?.temperature === undefined ? {} : { temperature: generation.temperature }),
+    ...(generation?.maxOutputTokens === undefined ? {} : { maxOutputTokens: generation.maxOutputTokens }),
+    ...(reasoningEffort === undefined ? {} : { providerOptions: { openai: { reasoningEffort } } }),
+  }
 
   const emit = (event: AgentRunEvent) => onEvent?.(event)
   const onStreamIdle = () => abortController.abort()
@@ -324,12 +339,14 @@ _${note}_` : text
           return true
         },
       ],
-      ...reasoningOptions,
+      ...requestOptions,
       prepareStep: initialToolName
         ? ({ stepNumber }) => stepNumber === 0
           ? { toolChoice: { type: 'tool', toolName: initialToolName } }
           : { toolChoice: 'auto' }
-        : undefined,
+        : requireInitialToolCall && Object.keys(tools ?? {}).length > 0
+          ? ({ stepNumber }) => ({ toolChoice: stepNumber === 0 ? 'required' : 'auto' })
+          : undefined,
       abortSignal: abortController.signal,
       onStepFinish: ({ toolCalls }) => {
         stepCount += 1
@@ -465,7 +482,7 @@ _${note}_` : text
               stoppedByStepLimit = true
             }
           },
-          ...reasoningOptions,
+          ...requestOptions,
           abortSignal: requestController.signal,
         })
 
@@ -541,7 +558,7 @@ _${note}_` : text
         model,
         maxRetries: intranetMaxRetries(model),
         messages: finalMessages as ModelMessage[],
-        ...reasoningOptions,
+        ...requestOptions,
         abortSignal: abortController.signal,
       })
 
