@@ -13,10 +13,12 @@ import { readTokenUsage } from "@/src/shared/utils/ai-token-usage"
 import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from "@/src/shared/utils/ai-model-execution"
 import { Output, streamText, type ModelMessage } from "ai"
 import { INTRANET_LUNA_ID, intranetMaxRetries } from '../interceptors/intranet-fetch'
+import { streamHospitalGemini } from '../hospital-gemini/hospital-gemini-stream'
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
   getModelDefinitionOrThrow,
   gateModel,
+  HOSPITAL_GEMINI_MODEL_ID,
   isProxyEligibleModel,
   isCustomOpenAiModelId,
   resolveModelTemperature,
@@ -65,6 +67,8 @@ export class AiSdkStreamAdapter {
   ) {}
 
   async stream(config: StreamConfig): Promise<void> {
+    // 院內 Gemini is a page in the clinician's browser, not an SDK provider.
+    if (config.model === HOSPITAL_GEMINI_MODEL_ID) return this.streamHospitalGemini(config)
     // Central safety net: every AI feature streams through here. If the picked
     // model needs the user's own key but none was supplied, downgrade to the
     // provider's free, proxy-eligible base model so the call rides the proxy
@@ -193,6 +197,14 @@ export class AiSdkStreamAdapter {
         if (usage) config.onUsage(usage)
       } catch { /* usage is optional */ }
     }
+  }
+
+  private async streamHospitalGemini(config: StreamConfig): Promise<void> {
+    const execution = createModelExecution(config.requestedModelId ?? config.model, HOSPITAL_GEMINI_MODEL_ID)
+    config.onModelExecution?.(execution)
+    await streamHospitalGemini(config)
+    // The page does not name its model version; the source itself is the provenance.
+    if (!config.signal.aborted) config.onModelExecution?.(reportModelExecution(execution, HOSPITAL_GEMINI_MODEL_ID))
   }
 
   private shouldUseProxy(apiKey: string | null, model: string): boolean {
