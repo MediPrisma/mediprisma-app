@@ -186,7 +186,7 @@ Firebase 設定位於另一個專案 `../firebase-smart-on-fhir`，不是本 App
 - `packVersion`：臨床規則版本。
 - `revision`：某一筆欄位狀態的修改次數，用於同步衝突；不是資料格式版本。
 
-在 `mediprisma-personalization` 建立每個 pack 的 persistence manifest，描述固定欄位碼、型別、單位、選項碼、來源依賴、沿用政策及 migrations。manifest 可提供病種差異；前端共用 transport／history，後端共用 envelope 驗證和同來源產生的欄位驗證器。第一版不必重寫所有疾病 UI。
+在 `mediprisma-cdss` 建立每個 pack 的 persistence manifest，描述固定欄位碼、型別、單位、選項碼、來源依賴、沿用政策及 migrations。manifest 可提供病種差異；前端共用 transport／history，後端共用 envelope 驗證和同來源產生的欄位驗證器。第一版不必重寫所有疾病 UI。
 
 | 改動 | 相容策略 |
 |---|---|

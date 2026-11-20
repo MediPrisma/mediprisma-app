@@ -25,7 +25,7 @@ import { FeatureRequestPoolDialog } from '@/features/feature-request-pool'
 import { useBetaFeatures } from '@/src/application/hooks/use-beta-features.hook'
 import { ClinicianNameSetting } from './ClinicianNameSetting'
 
-const REPO = 'voho0000/medical-note-smart-on-fhir'
+const REPO = 'MediPrisma/mediprisma-app'
 
 const FONT_SIZE_OPTIONS: Array<{ value: FontSize; labelKey: string; fallback: string; preview: string }> = [
   { value: 'xs', labelKey: 'fontSizeXSmall', fallback: '特小', preview: 'text-[0.625rem]' },
