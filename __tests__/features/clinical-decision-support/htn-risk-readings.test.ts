@@ -136,11 +136,12 @@ describe('HTN baseline-risk facts for the pack', () => {
       // Female MACE waits for the PREVENT form's prior-CVD and smoking answers.
       'hpa-mace': { status: 'to-fill', value: '2' },
     })
-    // The list's HTN entries open at DP-08 and only where the HTN page has it.
+    // The list's HTN entries open at DP-08, listed whether or not the page has
+    // the point (owner 2026-11-20: 「高血壓頁也是直接顯示」).
     // The HTN page has its own list (#562): the risk panels sit in it, by chapter, beside eGFR and KDIGO.
     expect(HF_VISIT_CALCULATORS.some((entry) => entry.source === 'htn')).toBe(false)
     const entries = HTN_VISIT_CALCULATORS.filter((entry) => entry.dp === 'DP-07' || entry.dp === 'DP-08')
-    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['stop-bang', 'DP-07', true], ['risk-inputs', 'DP-08', true], ['prevent-cvd', 'DP-08', true], ['score2-ap', 'DP-08', true], ['prevent-ascvd', 'DP-08', true], ['pce-ascvd', 'DP-08', true], ['hpa-mace', 'DP-08', true]])
+    expect(entries.map((entry) => [entry.id, entry.dp, entry.needsPoint])).toEqual([['stop-bang', 'DP-07', undefined], ['risk-inputs', 'DP-08', undefined], ['prevent-cvd', 'DP-08', undefined], ['score2-ap', 'DP-08', undefined], ['prevent-ascvd', 'DP-08', undefined], ['pce-ascvd', 'DP-08', undefined], ['hpa-mace', 'DP-08', undefined]])
     const line = 'PREVENT-ASCVD 9.2%｜ACC/AHA PCE 5.4%｜國健署心血管風險預測 8.1%（低）'
     const byId = Object.fromEntries(entries.map((entry) => [entry.id, entry]))
     expect(byId['prevent-ascvd']!.names.test(line)).toBe(true)
