@@ -136,7 +136,7 @@ it('shows one horizon\'s connection error in its own column', async () => {
   render(<HfMedcloudDryRun locale="zh-TW" />)
   await prepared()
   run()
-  expect(await within(await screen.findByTestId('hf-result-P1_CD_mortality_3m')).findByText('無法完成檢查，請確認院內連線後重試')).toBeVisible()
+  expect(await within(await screen.findByTestId('hf-result-P1_CD_mortality_3m')).findByText(/院內服務或上游模型未能完成請求/)).toBeVisible()
   expect(within(screen.getByTestId('hf-result-P1_CD_mortality_1m')).getByText('12.34%')).toBeVisible()
 })
 it('shows a 422 refusal for both horizons and clears it when preparing again', async () => {
@@ -353,10 +353,10 @@ it('drops a local connection error after switching to a SMART chart', async () =
   const view=render(<HfMedcloudDryRun locale="zh-TW" />)
   await prepared()
   run()
-  expect(await screen.findAllByText('無法完成檢查，請確認院內連線後重試')).toHaveLength(1)
+  expect(await screen.findAllByText(/院內服務或上游模型未能完成請求/)).toHaveLength(1)
   jest.mocked(shouldUseLocalBundle).mockReturnValue(false)
   view.rerender(<HfMedcloudDryRun locale="zh-TW" />)
-  expect(screen.queryByText('無法完成檢查，請確認院內連線後重試')).toBeNull()
+  expect(screen.queryByText(/院內服務或上游模型未能完成請求/)).toBeNull()
   await screen.findByText('請匯入雲端、健康或北榮懷爾抓抓的單一患者病歷')
 })
 it('keeps the HF input surface usable on a hospital launch query', async () => {
@@ -712,7 +712,7 @@ it('keeps completed checks when both predictions fail the same way', async () =>
   render(<HfMedcloudDryRun locale="zh-TW" />)
   await prepared()
   run()
-  expect(await screen.findAllByText('無法完成檢查，請確認院內連線後重試')).toHaveLength(1)
+  expect(await screen.findAllByText(/院內服務或上游模型未能完成請求/)).toHaveLength(1)
   expect(screen.getByText('輸入檢查通過，但有資料警告；請核對下列缺漏。')).toBeVisible()
   expect(screen.getByText('Synthetic check warning')).toBeVisible()
 })
@@ -749,4 +749,27 @@ it('leaves step 2 optional when the record already has an HF diagnosis', async (
   await prepared()
   expect(screen.getByRole('button', { name: '執行 HF 模型預測' })).toBeEnabled()
   expect(screen.getByTestId('hf-model-actions')).not.toHaveTextContent('未偵測到心衰診斷')
+})
+
+it('keeps per-request diagnostics only for the active run and drops late records after an import changes', async () => {
+  const callbacks: NonNullable<Parameters<typeof requestHfDryRun>[1]['onDiagnostic']>[] = []
+  jest.mocked(requestHfDryRun).mockImplementation(async (input, options) => {
+    callbacks.push(options.onDiagnostic!)
+    options.onDiagnostic?.({ inputJson: JSON.stringify(input.bundle), diagnostic: {
+      requestId: randomUUID(), operation: 'dry-run', claim: input.claim, indexDate: input.indexDate,
+      startedAt: new Date().toISOString(), elapsedMs: 200, stage: 'connect', httpStatus: null,
+      errorCode: 'gateway-network', verdict: null, requestBytes: 100, responseBytes: 0, responseType: 'missing', responseIdMatched: null,
+    } })
+    throw new Error('gateway-network')
+  })
+  const { result } = renderHook(() => useMedcloudHfDryRun())
+  await act(async () => result.current.prepare())
+  await act(async () => result.current.predict())
+  expect(result.current.diagnostics?.records).toHaveLength(2)
+  const prior = result.current.diagnostics!.records[0]
+  importId = 'synthetic-import-2'
+  act(() => window.dispatchEvent(new Event('storage')))
+  expect(result.current.diagnostics).toBeNull()
+  act(() => callbacks[0](prior))
+  expect(result.current.diagnostics).toBeNull()
 })
