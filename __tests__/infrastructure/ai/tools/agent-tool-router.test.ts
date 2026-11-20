@@ -9,6 +9,7 @@ import {
   selectAgentToolNames,
   selectAgentToolsForQuestion,
   shouldPreExecuteLocalAgentTool,
+  shouldRequireInitialAgentToolCall,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 
 const names = [
@@ -220,7 +221,50 @@ describe('agent tool router', () => {
     expect(forcedInitialAgentToolName(question, names, 'auto')).toBeUndefined()
   })
 
+  it('names no first tool when no keyword says which record answers the question', () => {
+    const question = '他為什麼在吃 Betmiga？'
+    const selected = selectAgentToolNames(question, names, 'patient')
+
+    expect(selected).toContain('queryPatientInfo')
+    expect(selected).toContain('queryObservations')
+    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBeUndefined()
+    expect(shouldRequireInitialAgentToolCall(question, selected, 'patient', undefined)).toBe(true)
+  })
+
+  it('does not read "stage" as a question about age', () => {
+    const question = 'CKD stage 3b 的血壓目標是多少？'
+    const selected = selectAgentToolNames(question, names, 'patient')
+
+    expect(selected).not.toEqual(['queryPatientInfo'])
+    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBeUndefined()
+    expect(selectAgentToolNames('What drug dosage is recorded?', names, 'patient')).not.toContain('queryPatientInfo')
+  })
+
+  it('still routes a demographics question to the demographics tool', () => {
+    for (const question of ['這位病人幾歲？', 'What is the patient age?']) {
+      const selected = selectAgentToolNames(question, names, 'patient')
+
+      expect(selected).toEqual(['queryPatientInfo'])
+      expect(forcedInitialAgentToolName(question, selected, 'patient')).toBe('queryPatientInfo')
+    }
+    expect(shouldPreExecuteLocalAgentTool('queryPatientInfo')).toBe(true)
+  })
+
+  it('requires a first tool call only for an unrouted patient-record question', () => {
+    const tools = ['queryPatientInfo', 'queryObservations']
+
+    expect(shouldRequireInitialAgentToolCall('他最近怎麼了？', tools, 'patient', undefined)).toBe(true)
+    expect(shouldRequireInitialAgentToolCall('他最近怎麼了？', tools, 'patient-literature', undefined)).toBe(true)
+    expect(shouldRequireInitialAgentToolCall('他最近怎麼了？', tools, 'patient', 'queryObservations')).toBe(false)
+    expect(shouldRequireInitialAgentToolCall('他最近怎麼了？', [], 'patient', undefined)).toBe(false)
+    expect(shouldRequireInitialAgentToolCall('他最近怎麼了？', tools, 'auto', undefined)).toBe(false)
+    expect(shouldRequireInitialAgentToolCall('他最近怎麼了？', tools, 'general', undefined)).toBe(false)
+    expect(shouldRequireInitialAgentToolCall('mirabegron 的副作用是什麼？', tools, 'patient', undefined)).toBe(false)
+    expect(shouldRequireInitialAgentToolCall('不要查病歷，他最近怎麼了？', tools, 'patient', undefined)).toBe(false)
+  })
+
   it('prefetches only compact local tools', () => {
+    expect(shouldPreExecuteLocalAgentTool('queryPatientInfo')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getDataOverview')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getHealthSummarySnapshot')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getActiveMedicationList')).toBe(true)

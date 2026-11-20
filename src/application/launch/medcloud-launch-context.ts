@@ -6,6 +6,15 @@ import { sanitizeApiKey } from '@/src/shared/utils/api-key.utils'
 export const VGTPE_TVGHBRAIN_PROFILE_ID = 'vghtpe-tvghbrain'
 export const VGTPE_TVGHBRAIN_BASE_URL = 'https://whisper.vghtpe.gov.tw:30001/v1'
 export const VGTPE_TVGHBRAIN_MODEL_ID = 'tvghbrain3.5'
+/** Agent sampling for tvghbrain3.5. Without a temperature the endpoint's
+ * default produced Simplified characters and invented values; without an
+ * output cap a runaway generation ran to the model limit and looked like a
+ * stalled chat until the idle timeout. The longest measured answer was about
+ * 1,000 tokens. */
+export const VGTPE_TVGHBRAIN_AGENT_GENERATION = {
+  temperature: 0,
+  maxOutputTokens: 4096,
+} as const
 export const VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID = customOpenAiModelIdForProfile(
   VGTPE_TVGHBRAIN_PROFILE_ID,
 )
