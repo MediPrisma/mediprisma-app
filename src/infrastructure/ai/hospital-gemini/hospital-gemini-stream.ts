@@ -122,6 +122,26 @@ export async function queryHospitalGemini(request: AiQueryRequest, ask: Ask = as
   }
 }
 
+// The extension answers one question at a time (else BUSY), but one standard
+// summary starts its overview and full summary together. Requests from this
+// page therefore wait their turn; one stopped while waiting is never sent.
+let queueTail: Promise<unknown> = Promise.resolve()
+
+function inTurn<T>(signal: AbortSignal, send: () => Promise<T>): Promise<T> {
+  const turn = queueTail.then(() => {
+    if (signal.aborted) throw new HospitalGeminiError('CANCELLED')
+    return send()
+  })
+  queueTail = turn.catch(() => {})
+  if (signal.aborted) return turn
+  // A stop while waiting ends this request at once; its turn is skipped when reached.
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new HospitalGeminiError('CANCELLED'))
+    signal.addEventListener('abort', abort, { once: true })
+    turn.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
+}
+
 async function runHospitalGemini(
   config: HospitalGeminiStreamConfig,
   prompt: string,
@@ -137,7 +157,7 @@ async function runHospitalGemini(
     shown = markdown
     config.onChunk(markdown)
   }
-  const answer = await ask({ prompt, sessionId, signal: config.signal, onText: show })
+  const answer = await inTurn(config.signal, () => ask({ prompt, sessionId, signal: config.signal, onText: show }))
   if (!answer.markdown.trim()) throw new HospitalGeminiError('EMPTY_ANSWER')
   show(answer.markdown)
   if (answer.sessionId) rememberSession(conversationKey([...config.messages, { role: 'assistant', content: '' }]), answer.sessionId)

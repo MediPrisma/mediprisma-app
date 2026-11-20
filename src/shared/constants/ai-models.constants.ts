@@ -278,7 +278,8 @@ export const MODEL_CATALOG = [
     status: 'available',
     selectable: true,
     providerBase: false,
-    // Never drives the clinician's Gemini tab without an explicit request.
+    // Custom summaries never auto-run on it. The standard summary's persisted
+    // 自動產生 switch does not read this flag (use-ai-slot-generation).
     autoRunEligible: false,
     roles: [],
   },

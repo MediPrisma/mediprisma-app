@@ -192,6 +192,43 @@ describe('streamHospitalGemini', () => {
     } finally { unsubscribe() }
   })
 
+  it('sends parallel requests one at a time, like a one-question extension needs', async () => {
+    let running = false
+    const prompts: string[] = []
+    const ask = jest.fn(async ({ prompt }: { prompt: string }) => {
+      if (running) throw new HospitalGeminiError('BUSY')
+      running = true
+      prompts.push(prompt)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      running = false
+      return { markdown: `answer to ${prompt}`, sessionId: null }
+    })
+    const overview = jest.fn()
+    const full = jest.fn()
+    // A standard summary starts its overview and full summary together.
+    await Promise.all([
+      streamHospitalGemini({ messages: [{ role: 'user', content: 'overview' }], signal: signal(), onChunk: overview }, ask),
+      streamHospitalGemini({ messages: [{ role: 'user', content: 'full' }], signal: signal(), onChunk: full }, ask),
+    ])
+    expect(prompts).toEqual(['overview', 'full'])
+    expect(overview).toHaveBeenLastCalledWith('answer to overview')
+    expect(full).toHaveBeenLastCalledWith('answer to full')
+  })
+
+  it('never sends a request stopped while it waits its turn', async () => {
+    let release!: () => void
+    const ask = jest.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve({ markdown: 'first', sessionId: null }) }))
+    const first = streamHospitalGemini({ messages: [{ role: 'user', content: 'first' }], signal: signal(), onChunk: jest.fn() }, ask)
+    const controller = new AbortController()
+    const second = streamHospitalGemini({ messages: [{ role: 'user', content: 'second' }], signal: controller.signal, onChunk: jest.fn() }, ask)
+    controller.abort()
+    await expect(second).resolves.toBeUndefined()
+    release()
+    await first
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+
   it('ends quietly when the user stops', async () => {
     const controller = new AbortController()
     const ask = jest.fn(async () => {
