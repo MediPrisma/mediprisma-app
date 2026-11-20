@@ -65,6 +65,9 @@ export interface ModelDefinition {
 /** Stable logical id for browser-configured OpenAI-compatible endpoints. */
 export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
 
+/** 院內 Gemini Enterprise, answered by the clinician's own signed-in tab via 北榮懷爾抓抓. */
+export const HOSPITAL_GEMINI_MODEL_ID = 'hospital-gemini-enterprise' as const
+
 /**
  * Canonical model manifest. Each id appears exactly once, even when the same
  * model is both user-selectable and used by an internal background task.
