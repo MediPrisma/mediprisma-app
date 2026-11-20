@@ -263,6 +263,62 @@ describe('agent tool router', () => {
     expect(shouldRequireInitialAgentToolCall('不要查病歷，他最近怎麼了？', tools, 'patient', undefined)).toBe(false)
   })
 
+  it('answers an allergy question from the allergy list, not the medication list', () => {
+    const question = '有沒有藥物過敏？'
+    const selected = selectAgentToolNames(question, names, 'patient')
+
+    expect(selected).toContain('queryAllergies')
+    expect(selected).toContain('queryMedications')
+    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBe('queryAllergies')
+    expect(shouldPreExecuteLocalAgentTool('queryAllergies')).toBe(true)
+  })
+
+  it('lets the model choose the lookup for a follow-up that points at an earlier turn', () => {
+    const earlier = { hasEarlierTurns: true }
+    const patientNames = names.filter((name) => name !== 'searchMedicalLiterature')
+    for (const question of ['第二次那次開了什麼藥？', '那血脂呢？', '跟上一次比有進步嗎？']) {
+      const selected = selectAgentToolNames(question, names, 'patient', earlier)
+      expect(selected).toEqual(patientNames)
+      expect(forcedInitialAgentToolName(question, selected, 'patient', earlier)).toBeUndefined()
+      expect(shouldRequireInitialAgentToolCall(question, selected, 'patient', undefined)).toBe(true)
+    }
+  })
+
+  it('keeps keyword routing for the same wording on a first turn', () => {
+    const question = '第二次那次開了什麼藥？'
+    const selected = selectAgentToolNames(question, names, 'patient')
+
+    expect(selected).toEqual(['queryMedications', 'getActiveMedicationList'])
+    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBe('getActiveMedicationList')
+    expect(selectAgentToolNames(question, names, 'general', { hasEarlierTurns: true })).toEqual([])
+  })
+
+  it('names no single first tool when the question joins lab values and medications', () => {
+    const question = '以他的腎功能，目前用藥有沒有需要調整劑量的？'
+    const selected = selectAgentToolNames(question, names, 'patient')
+
+    expect(selected).toContain('searchObservationByName')
+    expect(selected).toContain('getActiveMedicationList')
+    expect(forcedInitialAgentToolName(question, selected, 'patient')).toBeUndefined()
+    expect(shouldRequireInitialAgentToolCall(question, selected, 'patient', undefined)).toBe(true)
+  })
+
+  it('still requires a record lookup when such a question also reads as general knowledge', () => {
+    const earlier = { hasEarlierTurns: true }
+    const followUp = '那次就診的診斷是什麼？'
+    const followUpTools = selectAgentToolNames(followUp, names, 'patient', earlier)
+    expect(forcedInitialAgentToolName(followUp, followUpTools, 'patient', earlier)).toBeUndefined()
+    expect(shouldRequireInitialAgentToolCall(followUp, followUpTools, 'patient', undefined, earlier)).toBe(true)
+
+    const contraindication = '以他的腎功能，目前用藥有哪些禁忌？'
+    const tools = selectAgentToolNames(contraindication, names, 'patient')
+    expect(forcedInitialAgentToolName(contraindication, tools, 'patient')).toBeUndefined()
+    expect(shouldRequireInitialAgentToolCall(contraindication, tools, 'patient', undefined)).toBe(true)
+
+    expect(shouldRequireInitialAgentToolCall('不要查病歷，那次的診斷是什麼？', followUpTools, 'patient', undefined, earlier)).toBe(false)
+    expect(shouldRequireInitialAgentToolCall(followUp, followUpTools, 'general', undefined, earlier)).toBe(false)
+  })
+
   it('prefetches only compact local tools', () => {
     expect(shouldPreExecuteLocalAgentTool('queryPatientInfo')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getDataOverview')).toBe(true)

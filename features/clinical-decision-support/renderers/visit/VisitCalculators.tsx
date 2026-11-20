@@ -111,21 +111,32 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
 ]
 
 /**
- * The coronary page's calculators (owner request 2026-11-19). DP-16's are the
- * AF ones, offered only where the page holds OAC with an antiplatelet.
+ * The coronary page's calculators (owner request 2026-11-19). Every one a CAD
+ * patient may use is listed whether or not this visit raises its point (owner
+ * request 2026-11-20: 「CAD 病人可以使用的計算機都放在 CAD CDSS 的計算機入口」):
+ * one on a point the page shows sits in that point's chapter, the others under
+ * 其他. Primary-prevention scores (PREVENT, PCE, SCORE2, 國健署) are not here:
+ * they exclude known coronary disease.
  */
 export const CAD_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // The cardiologist's 「CAD 有沒有 TIMI 等等的風險」 (owner request 2026-11-19):
-  // TIMI UA/NSTEMI where an acute presentation is triaged, TRS 2°P where
-  // long-term antiplatelet therapy is decided.
-  { id: 'timi-ua', dp: 'DP-00', source: 'cad', calculatorId: 'timi-ua-nstemi', names: /TIMI(?: risk score)?(?: for)? UA|TIMI.*NSTEMI/i, needsPoint: true },
+  // TIMI UA/NSTEMI and HEART where an acute presentation is triaged, TRS 2°P
+  // where long-term antiplatelet therapy is decided.
+  { id: 'timi-ua', dp: 'DP-00', source: 'cad', calculatorId: 'timi-ua-nstemi', names: /TIMI(?: risk score)?(?: for)? UA|TIMI.*NSTEMI/i },
+  { id: 'heart', dp: 'DP-00', source: 'cad', calculatorId: 'heart', names: /HEART(?: score| 分數)/ },
   { id: 'egfr', dp: 'DP-10', source: 'cad', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
-  { id: 'trs2p', dp: 'DP-12', source: 'cad', calculatorId: 'timi-trs2p', names: /TRS[ -]?2°?P|TIMI 二級預防/, needsPoint: true },
-  { id: 'cha2ds2-va', dp: 'DP-16', source: 'cad', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
-  { id: 'has-bled', dp: 'DP-16', source: 'cad', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
-  { id: 'crcl', dp: 'DP-16', source: 'cad', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },
-  { id: 'doac-dose', dp: 'DP-16', source: 'cad', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/, needsPoint: true },
-  { id: 'bmi', dp: 'DP-27', source: 'cad', calculatorId: 'bmi', names: /BMI/, needsPoint: true },
+  { id: 'crcl', dp: 'DP-10', source: 'cad', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/ },
+  { id: 'qtc', dp: 'DP-10', source: 'cad', calculatorId: 'qtc', names: /QTc/ },
+  { id: 'trs2p', dp: 'DP-12', source: 'cad', calculatorId: 'timi-trs2p', names: /TRS[ -]?2°?P|TIMI 二級預防/ },
+  // AF's, for a CAD patient who also takes or needs an anticoagulant (DP-16).
+  { id: 'cha2ds2-va', dp: 'DP-16', source: 'cad', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/ },
+  { id: 'has-bled', dp: 'DP-16', source: 'cad', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/ },
+  { id: 'doac-dose', dp: 'DP-16', source: 'cad', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/ },
+  { id: 'ldl', dp: 'DP-23', source: 'cad', calculatorId: 'ldl-friedewald', names: /Friedewald/ },
+  { id: 'ckd-kdigo-risk', dp: 'DP-25', source: 'cad', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/ },
+  { id: 'bmi', dp: 'DP-27', source: 'cad', calculatorId: 'bmi', names: /BMI/ },
+  // Depression screening after ACS and in chronic coronary disease (ESC 2024 CCS).
+  { id: 'phq-9', dp: 'DP-29', source: 'cad', calculatorId: 'phq-9', names: /PHQ[-‐–]?9/ },
 ]
 
 /** The pages with a 計算機 entry, each with its own list. HF's list also serves AF's page. */

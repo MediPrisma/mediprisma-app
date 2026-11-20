@@ -70,18 +70,27 @@ describe('計算機 on the HTN and CAD pages', () => {
     expect(listedIds()).toEqual(['egfr'])
   })
 
-  it('offers the AF calculators on the coronary page only with OAC and an antiplatelet', () => {
+  it('lists every calculator a CAD patient may use, whether or not this visit raises its point', () => {
+    const all = ['timi-ua', 'heart', 'egfr', 'crcl', 'qtc', 'trs2p', 'cha2ds2-va', 'has-bled', 'doac-dose', 'ldl', 'ckd-kdigo-risk', 'bmi', 'phq-9']
     const { unmount } = render(<Page source="cad" points={[point('cad', 'DP-10'), point('cad', 'DP-16', 'not-applicable')]} />)
-    expect(listedIds()).toEqual(['egfr'])
+    expect([...listedIds()].sort()).toEqual([...all].sort())
     unmount()
-    render(<Page source="cad" points={[point('cad', 'DP-10'), point('cad', 'DP-16'), point('cad', 'DP-27')]} />)
-    expect(listedIds()).toEqual(['egfr', 'cha2ds2-va', 'has-bled', 'crcl', 'doac-dose', 'bmi'])
+    render(<Page source="cad" points={[point('cad', 'DP-00'), point('cad', 'DP-10'), point('cad', 'DP-12')]} />)
+    expect([...listedIds()].sort()).toEqual([...all].sort())
+    expect(screen.getByTestId('cdss-book-calculator-trs2p')).toHaveTextContent('TIMI 二級預防風險分數（TRS 2°P）')
+    expect(screen.getByTestId('cdss-book-calculator-heart')).toHaveTextContent('HEART')
+    expect(screen.getByTestId('cdss-book-calculator-phq-9')).toHaveTextContent('PHQ-9')
   })
 
-  it('offers TIMI UA/NSTEMI at acute triage and TRS 2°P at the antiplatelet decision', () => {
-    render(<Page source="cad" points={[point('cad', 'DP-00'), point('cad', 'DP-10'), point('cad', 'DP-12')]} />)
-    expect(listedIds()).toEqual(['timi-ua', 'egfr', 'trs2p'])
-    expect(screen.getByTestId('cdss-book-calculator-trs2p')).toHaveTextContent('TIMI 二級預防風險分數（TRS 2°P）')
+  it('lists them before the diagnosis is confirmed, while every point is still not included', () => {
+    render(<Page source="cad" points={['DP-00', 'DP-10', 'DP-12', 'DP-16', 'DP-23', 'DP-27'].map((dp) => point('cad', dp, 'not-included'))} />)
+    expect(listedIds()).toHaveLength(13)
+  })
+
+  it('leaves out the primary-prevention scores, which exclude known coronary disease', () => {
+    render(<Page source="cad" points={[point('cad', 'DP-10'), point('cad', 'DP-23')]} />)
+    const ids = listedIds()
+    for (const id of ['prevent-cvd', 'prevent-ascvd', 'pce-ascvd', 'score2-ap', 'hpa-mace']) expect(ids).not.toContain(id)
   })
 
   it('opens the chosen calculator beside the page', () => {
