@@ -102,7 +102,8 @@ export function agentToolNamesForDataScope(
 }
 
 const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
-  patient: [/(年齡|歲|性別|gender|age|demographic)/i],
+  // `age`: a bare /age/ also matched "stage" and "dosage".
+  patient: [/(年齡|歲|性別|gender|age|demographic)/i],
   overview: [/(資料概況|資料總覽|有哪些類型|data overview|what data|available data)/i],
   encounters: [/(就醫|門診|急診|住院|出院|看診|科別|visit|encounter|admission|hospitali[sz])/i],
   conditions: [/(診斷|疾病|病況|問題清單|condition|diagnos)/i],
@@ -296,8 +297,30 @@ export function forcedInitialAgentToolName(
   if (isMedicalEvidenceQuestion(question)) {
     priority.push('searchMedicalLiterature')
   }
-  priority.push('queryPatientInfo', 'getDataOverview', ...selectedToolNames)
-  return priority.find((name) => selectedToolNames.includes(name))
+  const routed = priority.find((name) => selectedToolNames.includes(name))
+  if (routed) return routed
+  // Demographics are in the tool set only when the question asked for them or
+  // no keyword narrowed the tools. In the second case nothing says which
+  // record answers the question, so name no tool; the caller makes step zero
+  // call one of the model's choosing (shouldRequireInitialAgentToolCall).
+  if (selectedToolNames.includes('queryPatientInfo')) {
+    return matchesAny(question, GROUP_TRIGGERS.patient) ? 'queryPatientInfo' : undefined
+  }
+  return ['getDataOverview', ...selectedToolNames].find((name) => selectedToolNames.includes(name))
+}
+
+/** A patient-scope turn with no named first tool must still read the record
+ * first: with a free tool choice a small model answers from nothing. General
+ * knowledge questions and explicit "do not query" requests stay free. */
+export function shouldRequireInitialAgentToolCall(
+  question: string,
+  selectedToolNames: readonly string[],
+  dataScope: ChatDataScope,
+  initialToolName: string | undefined,
+): boolean {
+  if (initialToolName || selectedToolNames.length === 0) return false
+  if (dataScope === 'auto' || dataScope === 'general') return false
+  return !matchesAny(question, NO_RECORD_QUERY) && !isGeneralMedicalKnowledgeQuestion(question)
 }
 
 function isStructuredClinicalRequest(question: string): boolean {
@@ -312,6 +335,9 @@ function isStructuredClinicalRequest(question: string): boolean {
  * Frontier models never use this path because their data scope remains `auto`.
  */
 const LOCAL_AGENT_PREFETCH_TOOLS = new Set([
+  // No parameters: a forced model call for it has nothing to write and can
+  // run on to the output limit, so the harness always runs it itself.
+  'queryPatientInfo',
   'getDataOverview',
   'getHealthSummarySnapshot',
   'getActiveMedicationList',
