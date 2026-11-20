@@ -82,6 +82,11 @@ describe('計算機 on the HTN and CAD pages', () => {
     expect(screen.getByTestId('cdss-book-calculator-phq-9')).toHaveTextContent('PHQ-9')
   })
 
+  it('lists them before the diagnosis is confirmed, while every point is still not included', () => {
+    render(<Page source="cad" points={['DP-00', 'DP-10', 'DP-12', 'DP-16', 'DP-23', 'DP-27'].map((dp) => point('cad', dp, 'not-included'))} />)
+    expect(listedIds()).toHaveLength(13)
+  })
+
   it('leaves out the primary-prevention scores, which exclude known coronary disease', () => {
     render(<Page source="cad" points={[point('cad', 'DP-10'), point('cad', 'DP-23')]} />)
     const ids = listedIds()
