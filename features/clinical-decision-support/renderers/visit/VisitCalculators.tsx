@@ -74,6 +74,9 @@ export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
 /**
  * The hypertension page's calculators, in the order of its chapters (owner
  * request 2026-11-19: HTN and CAD get the same 計算機 entry as HF and AF).
+ * Every one is listed whether or not this visit raises its point (owner
+ * request 2026-11-20: 「高血壓頁也是直接顯示」); the DP-08 panels read the
+ * record, not the point.
  * DP-08's risk panels came from pilot/hmc (owner 2026-11-03); PREVENT-ASCVD
  * stays there because clinical users asked for it (owner 2026-11-19), beside
  * PREVENT-CVD, the total-CVD score the AHA/ACC 2025 7.5% threshold reads.
@@ -83,7 +86,7 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // DP-07's STOP-Bang (owner 2026-11-03: 「Stop-bang 應該也要列入計算機」): the
   // generic form, P, A, G and B prefilled from the record; S, T, O and N are
   // the four questions DP-07 itself asks.
-  { id: 'stop-bang', dp: 'DP-07', source: 'htn', calculatorId: 'stop-bang', names: /STOP[-‐–]Bang/, needsPoint: true, note: true },
+  { id: 'stop-bang', dp: 'DP-07', source: 'htn', calculatorId: 'stop-bang', names: /STOP[-‐–]Bang/, note: true },
   // The hypertension page's baseline cardiovascular risk (plan 05 §19, owner
   // 2026-11-03): the host runs both and hands the pack their results
   // (`applyHtnRiskReadings`); DP-08's line names them. PREVENT here is the
@@ -94,20 +97,20 @@ export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   // One set of inputs for the three (owner 2026-11-03: 「提供一個 common 的輸入
   // 面板…套用多項公式」): filled from the record, ICD codes, the host's rules
   // and today's answers, confirmed once for all of them.
-  { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, needsPoint: true, panel: 'risk-inputs',
+  { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, panel: 'risk-inputs',
     title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
-  { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, needsPoint: true, note: true },
+  { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, note: true },
   // ESC 2024's SCORE2, recalibrated for the Asia-Pacific; Taiwan in its low-risk region (owner 2026-11-20).
-  { id: 'score2-ap', dp: 'DP-08', source: 'htn', calculatorId: 'score2-asia-pacific', names: /SCORE2(?![-‐–](?:OP|Diabetes))/, needsPoint: true, note: true },
-  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, needsPoint: true, panel: 'prevent-visit', note: true,
+  { id: 'score2-ap', dp: 'DP-08', source: 'htn', calculatorId: 'score2-asia-pacific', names: /SCORE2(?![-‐–](?:OP|Diabetes))/, note: true },
+  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, panel: 'prevent-visit', note: true,
     title: { zh: 'PREVENT-ASCVD 心血管風險', en: 'PREVENT-ASCVD cardiovascular risk' } },
   // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
   // 「包括 ACC/AHA 的 Multicohort CV risk calculators」), a reference the pack shows.
-  { id: 'pce-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'pce-ascvd', names: /ACC\/AHA PCE|Pooled Cohort|PCE/, needsPoint: true, panel: 'pce-visit', note: true,
+  { id: 'pce-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'pce-ascvd', names: /ACC\/AHA PCE|Pooled Cohort|PCE/, panel: 'pce-visit', note: true,
     title: { zh: 'ACC/AHA Pooled Cohort（PCE）', en: 'ACC/AHA Pooled Cohort Equations' } },
-  { id: 'hpa-mace', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署心血管風險預測(?:公式)?|國健署 MACE|HPA MACE|HPA cardiovascular risk prediction|國健署五項慢性病風險/, needsPoint: true, panel: 'hpa-visit', note: true,
+  { id: 'hpa-mace', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署心血管風險預測(?:公式)?|國健署 MACE|HPA MACE|HPA cardiovascular risk prediction|國健署五項慢性病風險/, panel: 'hpa-visit', note: true,
     title: { zh: '國健署心血管風險預測公式', en: 'HPA cardiovascular risk prediction' } },
-  { id: 'ckd-kdigo-risk', dp: 'DP-18', source: 'htn', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/, needsPoint: true },
+  { id: 'ckd-kdigo-risk', dp: 'DP-18', source: 'htn', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/ },
 ]
 
 /**

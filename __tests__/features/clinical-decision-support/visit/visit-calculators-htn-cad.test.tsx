@@ -65,9 +65,14 @@ describe('計算機 on the HTN and CAD pages', () => {
     expect(screen.getByTestId('cdss-book-calculator-egfr')).toHaveTextContent('eGFR (CKD-EPI 2021)')
   })
 
-  it('drops the points the hypertension page does not have', () => {
-    render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-18', 'not-applicable')]} />)
-    expect(listedIds()).toEqual(['egfr'])
+  it('lists every hypertension calculator whether or not this visit raises its point', () => {
+    const all = ['egfr', 'stop-bang', 'risk-inputs', 'prevent-cvd', 'score2-ap', 'prevent-ascvd', 'pce-ascvd', 'hpa-mace', 'ckd-kdigo-risk']
+    const { unmount } = render(<Page source="htn" points={[point('htn', 'DP-04'), point('htn', 'DP-18', 'not-applicable')]} />)
+    expect([...listedIds()].sort()).toEqual([...all].sort())
+    unmount()
+    // Before the diagnosis is confirmed, every point is still not included.
+    render(<Page source="htn" points={['DP-04', 'DP-07', 'DP-08', 'DP-18'].map((dp) => point('htn', dp, 'not-included'))} />)
+    expect([...listedIds()].sort()).toEqual([...all].sort())
   })
 
   it('lists every calculator a CAD patient may use, whether or not this visit raises its point', () => {
