@@ -610,14 +610,18 @@ export function useAgentChat(
         const toolDataScope: ChatDataScope = turnDataScope === 'auto' && !hasPatient
           ? 'general'
           : turnDataScope
+        const routingContext = {
+          hasEarlierTurns: scopedConversation.some((message) => message.role === 'assistant'),
+        }
         const toolsForTurn = isCustomEndpoint
-          ? selectAgentToolsForQuestion(agentTools, routingQuestion, turnDataScope)
+          ? selectAgentToolsForQuestion(agentTools, routingQuestion, turnDataScope, routingContext)
           : filterAgentToolsForDataScope(agentTools, toolDataScope)
         const initialToolName = isCustomEndpoint
           ? forcedInitialAgentToolName(
               routingQuestion,
               Object.keys(toolsForTurn ?? {}),
               turnDataScope,
+              routingContext,
             )
           : undefined
 
@@ -736,6 +740,7 @@ export function useAgentChat(
             Object.keys(toolsForTurn ?? {}),
             turnDataScope,
             initialToolName,
+            routingContext,
           ),
           generation: openAiCompatible?.profileId === VGTPE_TVGHBRAIN_PROFILE_ID
             ? VGTPE_TVGHBRAIN_AGENT_GENERATION
