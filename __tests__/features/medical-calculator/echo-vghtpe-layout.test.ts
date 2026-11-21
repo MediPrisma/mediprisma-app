@@ -12,7 +12,7 @@ describe('echo layout with LVEF(method) and E\'_Med / E\'_Lat labels', () => {
     expect(v.averageEe).toBeCloseTo(2 * 72.4 / (6.2 + 9.8))
     expect(v.ee).toBeCloseTo(2 * 72.4 / (6.2 + 9.8))
     expect(v.rwt).toBeCloseTo(18 / 46)
-    expect(v.trv).toBeUndefined()
+    expect(v.trv).toBe(2.35) // from TR Max PG 22.0 mmHg
     expect(v.lavi).toBeUndefined()
   })
 
@@ -22,7 +22,7 @@ describe('echo layout with LVEF(method) and E\'_Med / E\'_Lat labels', () => {
     expect(v.averageEe).toBeCloseTo(2 * 120.5 / (5.5 + 8.5))
     expect(v.ee).toBeCloseTo(2 * 120.5 / (5.5 + 8.5))
     expect(v.rwt).toBeCloseTo(22 / 50)
-    expect(v.trv).toBeUndefined()
+    expect(v.trv).toBe(2.74) // from TR max PG:30.0mmHg
   })
 
   test('blank E does not borrow a later number and yields no E/e′', () => {
