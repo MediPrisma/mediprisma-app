@@ -332,8 +332,9 @@ function hfaPeffReading(
   // 「報告未提供」 is the list of parameters the calculator had no value for.
   // Age, sex and the rhythm are not report parameters, BNP is the alternative
   // assay rather than a second missing one, and a mitral E is only asked for to
-  // derive an average E/e′ the report may have printed outright.
-  const skip = new Set(['sex', 'age', 'rhythm', 'bnp'])
+  // derive an average E/e′ the report may have printed outright. Height,
+  // weight, LA volume and LV mass only derive LAVI and LVMI, which stay listed.
+  const skip = new Set(['sex', 'age', 'rhythm', 'bnp', 'height', 'weight', 'laVolume', 'lvMass'])
   if (used.find((item) => item.key === 'averageEe')?.value !== undefined) skip.add('e')
   const missingInputs = used.filter((item) => (
     item.value === undefined && !skip.has(item.key)
