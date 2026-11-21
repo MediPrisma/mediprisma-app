@@ -8,6 +8,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { HfpefInputsDialog } from '@/features/clinical-decision-support/renderers/HfpefInputsDialog'
 import { buildHfpefReading } from '@/features/clinical-decision-support/utils/hfpef-scores'
+import { HFPEF } from '@/features/medical-calculator/calculators/hfpef'
 import type { Autofill, AutofillValue } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
 
@@ -86,5 +87,59 @@ describe('the HFpEF input dialog', () => {
 
     expect(screen.getByTestId('cdss-hf-hfpef-row-pasp')).toHaveTextContent('PASP')
     expect(screen.queryByTestId('cdss-hf-hfpef-row-lavi')).toBeNull()
+  })
+
+  it('shows the body size and raw values a derived LAVI and LVMI were scored from', () => {
+    // Synthetic echo with LA volume and an LV mass the scanner estimated from
+    // wall dimensions, no stated LAVI/LVMI; height and weight from vitals.
+    const echo: Record<string, number> = { averageEe: 13.2, ee: 13.2, trv: 3.1, rwt: 0.44, wall: 12, laVolume: 80, lvMass: 200 }
+    const derivedAutofill: Autofill = {
+      ...autofill,
+      resolve: (source): AutofillValue | undefined => {
+        if (source?.kind === 'vital') {
+          return source.vital === 'height'
+            ? { value: 160, unit: 'cm', date: '2026-09-12' }
+            : { value: 60, unit: 'kg', date: '2026-09-12' }
+        }
+        if (source?.kind === 'echo') {
+          if (echo[source.key] === undefined) return undefined
+          const caption = source.key === 'lvMass' ? '（由 LVIDd、IVSd、LVPWd 以 ASE 公式估算）' : ''
+          return { value: echo[source.key], unit: '', date: ECHO_DAY, testName: `心臟超音波 · ${source.key}${caption}` }
+        }
+        return autofill.resolve(source)
+      },
+    }
+    const reading = buildHfpefReading({ profile, autofill: derivedAutofill })
+    render(
+      <HfpefInputsDialog open onOpenChange={() => {}} reading={reading} isEnglish={false} now={NOW} onApply={jest.fn()} />,
+    )
+
+    // The raw inputs, each with its value, source and date, and editable.
+    expect(screen.getByTestId('cdss-hf-hfpef-input-height')).toHaveValue(160)
+    expect(screen.getByTestId('cdss-hf-hfpef-row-height')).toHaveTextContent('量測 2026-09-12')
+    expect(screen.getByTestId('cdss-hf-hfpef-input-weight')).toHaveValue(60)
+    expect(screen.getByTestId('cdss-hf-hfpef-input-laVolume')).toHaveValue(80)
+    expect(screen.getByTestId('cdss-hf-hfpef-row-laVolume')).toHaveTextContent(`心超 ${ECHO_DAY}`)
+    expect(screen.getByTestId('cdss-hf-hfpef-row-lvMass')).toHaveTextContent('（由 LVIDd、IVSd、LVPWd 以 ASE 公式估算）')
+    for (const key of ['height', 'weight', 'laVolume', 'lvMass']) {
+      expect(screen.getByTestId('cdss-hf-hfpef-section-morphological')).toContainElement(screen.getByTestId(`cdss-hf-hfpef-row-${key}`))
+    }
+
+    // The indices scored, labelled as derived rather than 「報告未提供」.
+    expect(screen.getByTestId('cdss-hf-hfpef-row-lavi')).toHaveTextContent('報告未直接提供，已由 LA 容積÷BSA 推算：49.3 mL/m²')
+    expect(screen.getByTestId('cdss-hf-hfpef-row-lvmi')).toHaveTextContent('報告未直接提供，已由 LV 質量÷BSA 推算：123.3 g/m²')
+    expect(screen.getByTestId('cdss-hf-hfpef-row-lavi')).not.toHaveTextContent('報告未提供')
+    expect(screen.getByTestId('cdss-hf-hfpef-dialog-derived-hfa-peff')).toHaveTextContent('BSA 1.62 m²')
+    const missing = screen.getByTestId('cdss-hf-hfpef-dialog-missing-hfa-peff')
+    expect(missing).not.toHaveTextContent('LAVI')
+    expect(missing).not.toHaveTextContent('身高')
+
+    // The score shown is the calculator's for the same record.
+    const direct = HFPEF.find((def) => def.id === 'hfa-peff')!.compute({
+      age: '76', sex: 'female', rhythm: 'sr', averageEe: '13.2', trv: '3.1',
+      rwt: '0.44', wall: '12', laVolume: '80', lvMass: '200', height: '160', weight: '60',
+    })
+    expect(direct?.value).toBe('4–6 / 6')
+    expect(screen.getByTestId('cdss-hf-hfpef-dialog-score-hfa-peff')).toHaveTextContent('HFA-PEFF4–6／6')
   })
 })
