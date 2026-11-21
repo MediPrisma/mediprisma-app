@@ -1,7 +1,7 @@
 export type ModelProvider = 'openai' | 'gemini' | 'claude' | 'custom'
 
 /** How a model is allowed to obtain credentials at runtime. */
-export type ModelAccess = 'proxy-or-key' | 'key-only' | 'custom-profile'
+export type ModelAccess = 'proxy-or-key' | 'key-only' | 'custom-profile' | 'browser-extension'
 
 /** Concrete upstream API contract. Provider and API surface are intentionally
  * separate: OpenAI models can use either Chat Completions or Responses. */
@@ -11,6 +11,8 @@ export type ModelApiSurface =
   | 'gemini-generate-content'
   | 'anthropic-messages'
   | 'openai-compatible-chat-completions'
+  /** A web page driven by a browser extension (院內 Gemini). */
+  | 'browser-extension-page'
 
 /** Sampling rules that must remain identical in query and streaming paths. */
 export type ModelTemperaturePolicy = 'passthrough' | 'fixed-one' | 'omit'
@@ -255,6 +257,30 @@ export const MODEL_CATALOG = [
     selectable: true,
     providerBase: false,
     autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: HOSPITAL_GEMINI_MODEL_ID,
+    label: 'Gemini Enterprise（院內）',
+    descriptions: {
+      en: 'Your signed-in hospital Gemini tab, through 北榮懷爾抓抓',
+      'zh-TW': '透過北榮懷爾抓抓使用您已登入的院內 Gemini 分頁',
+    },
+    provider: 'gemini',
+    // The extension takes at most 150,000 characters; at the estimator's
+    // 4 characters per English token this keeps the whole prompt under it.
+    contextLimit: 36_000,
+    access: 'browser-extension',
+    apiSurface: 'browser-extension-page',
+    temperaturePolicy: 'omit',
+    // The web page has no tools: chat answers from the selected snapshot.
+    conversationMode: 'standard',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    // Custom summaries never auto-run on it. The standard summary's persisted
+    // 自動產生 switch does not read this flag (use-ai-slot-generation).
+    autoRunEligible: false,
     roles: [],
   },
   {

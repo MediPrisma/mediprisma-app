@@ -38,7 +38,7 @@ describe('MODEL_CATALOG contract', () => {
     expect(model.descriptions['zh-TW'].trim()).not.toBe('')
     expect(Number.isInteger(model.contextLimit)).toBe(true)
     expect(model.contextLimit).toBeGreaterThan(0)
-    expect(['proxy-or-key', 'key-only', 'custom-profile']).toContain(model.access)
+    expect(['proxy-or-key', 'key-only', 'custom-profile', 'browser-extension']).toContain(model.access)
     expect(['passthrough', 'fixed-one', 'omit']).toContain(model.temperaturePolicy)
     expect(['deep-agent', 'standard']).toContain(model.conversationMode)
     expect(['available', 'disabled']).toContain(model.status)
@@ -84,7 +84,8 @@ describe('MODEL_CATALOG contract', () => {
   it('uses API surfaces compatible with each provider', () => {
     const allowed: Record<ModelProvider, readonly string[]> = {
       openai: ['openai-chat-completions', 'openai-responses'],
-      gemini: ['gemini-generate-content'],
+      // 院內 Gemini Enterprise is a web page driven by 北榮懷爾抓抓.
+      gemini: ['gemini-generate-content', 'browser-extension-page'],
       claude: ['anthropic-messages'],
       custom: ['openai-compatible-chat-completions'],
     }
