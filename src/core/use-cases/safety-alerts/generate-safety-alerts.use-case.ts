@@ -2,6 +2,7 @@
 // Builds a JSON-only prompt and parses/validates the model's reply into the
 // fixed SafetyScanResult shape. No state, no framework — unit-testable.
 import type { AiMessage } from '@/src/core/entities/ai.entity'
+import { LAB_SOURCE_EVIDENCE_RULE } from '../medical-summary/source-evidence-contract'
 import {
   SafetyScanResultSchema,
   normaliseCategory,
@@ -63,7 +64,8 @@ const NO_POSITIONAL_RULE =
 
 // Appended to both prompts: how to cite the SOURCE LIST in "sources".
 const SOURCE_RULE =
-  ' In "sources", list the SOURCE LIST key(s) (e.g. "L3", "M2") for the records this alert is based on; ' +
+  ' ' + LAB_SOURCE_EVIDENCE_RULE +
+  'In "sources", list the SOURCE LIST key(s) (e.g. "L3", "M2") for the records this alert is based on; ' +
   'use ONLY keys that appear in the SOURCE LIST, and omit any you cannot match. This is separate from "evidence" (which stays human-readable). ' +
   'When an alert relies on a discharge summary or other clinical document, cite its matching D# source key. ' +
   // 2026-10-05 demo runs wrote "Donepezil (M5)", "visits E1, E8" and
@@ -329,7 +331,7 @@ export class GenerateSafetyAlertsUseCase {
         ? '\n\nSOURCE LIST (cite these keys in "sources"):\n' +
           input.catalog
             .map((c) =>
-              `[${c.key}] ${[c.resourceType, c.date ?? '?', c.organization ?? '', c.display, medicationClassOnLine(c, reference) ?? '']
+              `[${c.key}] ${[c.resourceType, c.date ?? '?', c.organization ?? '', c.display, medicationClassOnLine(c, reference) ?? '', c.observationFacts ?? '']
                 .filter(Boolean)
                 .join(' | ')}`,
             )

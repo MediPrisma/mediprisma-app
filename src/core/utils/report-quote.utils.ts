@@ -34,7 +34,7 @@ const NEGATION_BEFORE = /\b(?:no|without|negative\s+for|free\s+of|absence\s+of)\
 const NEGATION_AFTER = /^[^.;\n。；]*?(?:\b(?:absent|none|negative|resolved|not\s+(?:seen|identified|detected|present|noted|demonstrated))\b|未見|消失)/i
 const COURSE_NOT_ABSENCE = /\bno\s+(?:significant\s+|definite\s+)?(?:interval\s+)?(?:change|progression)\b/gi
 
-function negatedAround(sourceText: string, start: number, end: number): boolean {
+export function negatedAround(sourceText: string, start: number, end: number): boolean {
   const before = sourceText.slice(0, start)
   let clauseStart = 0
   for (const match of before.matchAll(CLAUSE_BOUNDARY)) clauseStart = (match.index ?? 0) + match[0].length
