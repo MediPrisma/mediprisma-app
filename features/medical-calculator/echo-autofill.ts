@@ -27,7 +27,9 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     const u = (match[2] ?? '').toLowerCase().replace(/\s/g, '').replace(/sec$/, 's')
     return u === 'm/s' && unit?.includes('cm') ? value * 100 : value
   }
-  const lvef = number('\\b(?:LVEF|LV\\s*(?:ejection\\s*fraction|EF)|left\\s*ventricular\\s*ejection\\s*fraction)', '%')
+  // Some reports name the method, “LVEF(MOD-sp4) 62.5 %”, and glue the label
+  // straight after the previous value, “LA volume:88.4mlLVEF(Bp):61.1%”.
+  const lvef = number('(?:\\b|(?<=\\dml))(?:LVEF|LV\\s*(?:ejection\\s*fraction|EF)|left\\s*ventricular\\s*ejection\\s*fraction)(?:\\s*\\([^()]{1,20}\\))?', '%')
   if (lvef !== undefined && lvef > 0) values.lvef = lvef
   const e = number('\\b(?:MV\\s*)?E(?:\\s*(?:max\\s*vel(?:ocity)?|vel(?:ocity)?|wave))?\\b(?!\\s*[/\\\'])', 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
   // Some reports print both transmitral velocities as “MV E/A 54/89.1cm/s”.
@@ -37,8 +39,8 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     ? Number(pairedVelocity[1]) * (pairedVelocity[3].toLowerCase() === 'm' ? 100 : 1)
     : undefined
   const mitralE = e ?? pairedE
-  const septal = number("(?:\\b(?:med\\s*peak|sep(?:tal)?|medial)\\s*e'|(?<![/\\w])e'\\s*(?:sep(?:tal)?|medial))(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
-  const lateral = number("(?:\\b(?:lat(?:eral)?)\\s*e'|(?<![/\\w])e'\\s*lat(?:eral)?)(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
+  const septal = number("(?:\\b(?:med\\s*peak|sep(?:tal)?|medial)\\s*e'|(?<![/\\w])e'\\s*_?\\s*(?:sep(?:tal)?|med(?:ial)?\\b))(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
+  const lateral = number("(?:\\b(?:lat(?:eral)?)\\s*e'|(?<![/\\w])e'\\s*_?\\s*lat(?:eral)?)(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
   if (mitralE !== undefined && mitralE > 0) values.e = mitralE
   if (septal !== undefined && septal > 0) values.septalE = septal
   if (lateral !== undefined && lateral > 0) values.lateralE = lateral
