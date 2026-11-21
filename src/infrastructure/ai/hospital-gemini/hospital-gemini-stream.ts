@@ -9,6 +9,7 @@
 // clinical context, a reload) starts a new conversation with the whole text.
 import {
   askHospitalGemini,
+  getHospitalGeminiInfo,
   HospitalGeminiError,
   type AskHospitalGeminiOptions,
   type HospitalGeminiAnswer,
@@ -44,6 +45,7 @@ function rememberSession(key: string, sessionId: string): void {
 /** Test seam: forget every remembered conversation. */
 export function resetHospitalGeminiSessions(): void {
   sessions.clear()
+  knownCapacity = null
 }
 
 const LABELS: Record<string, string> = { user: '【使用者】', assistant: '【AI 回答】' }
@@ -90,10 +92,11 @@ export function setHospitalGeminiFailureListener(listener: (failure: HospitalGem
 export async function streamHospitalGemini(
   config: HospitalGeminiStreamConfig,
   ask: Ask = askHospitalGemini,
+  capacity: Capacity = extensionCapacity,
 ): Promise<void> {
   const { prompt, sessionId } = planHospitalGeminiRequest(config.messages)
   try {
-    await runHospitalGemini(config, prompt, sessionId, ask)
+    await runHospitalGemini(config, prompt, sessionId, ask, capacity)
   } catch (error) {
     // The user's stop ends quietly, like every other model.
     if (config.signal.aborted) return
@@ -122,24 +125,63 @@ export async function queryHospitalGemini(request: AiQueryRequest, ask: Ask = as
   }
 }
 
-// The extension answers one question at a time (else BUSY), but one standard
-// summary starts its overview and full summary together. Requests from this
-// page therefore wait their turn; one stopped while waiting is never sent.
-let queueTail: Promise<unknown> = Promise.resolve()
+// One standard summary starts its overview, full summary and safety scan
+// together. The extension says how many questions it answers at once
+// (maxConcurrent, vghtpe-fhir-bridge #176); an older version answers one and
+// replies BUSY to the rest. Requests beyond that wait here, in order, and one
+// stopped while waiting is never sent.
+type Capacity = () => Promise<number>
 
-function inTurn<T>(signal: AbortSignal, send: () => Promise<T>): Promise<T> {
-  const turn = queueTail.then(() => {
-    if (signal.aborted) throw new HospitalGeminiError('CANCELLED')
-    return send()
+let knownCapacity: Promise<number> | null = null
+
+/** Asked once per page; an extension that did not answer is asked again next time. */
+const extensionCapacity: Capacity = () => {
+  knownCapacity ??= getHospitalGeminiInfo().then((info) => {
+    if (info.status === 'unavailable') knownCapacity = null
+    return info.maxConcurrent ?? 1
+  }, () => {
+    knownCapacity = null
+    return 1
   })
-  queueTail = turn.catch(() => {})
-  if (signal.aborted) return turn
-  // A stop while waiting ends this request at once; its turn is skipped when reached.
-  return new Promise<T>((resolve, reject) => {
-    const abort = () => reject(new HospitalGeminiError('CANCELLED'))
+  return knownCapacity
+}
+
+let active = 0
+/** Each waiter receives a running slot handed over by a finishing request. */
+const waiters: (() => void)[] = []
+
+function releaseSlot(): void {
+  const next = waiters.shift()
+  if (next) next()
+  else active -= 1
+}
+
+function waitForSlot(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const take = () => {
+      signal.removeEventListener('abort', abort)
+      resolve()
+    }
+    const abort = () => {
+      const index = waiters.indexOf(take)
+      if (index >= 0) waiters.splice(index, 1)
+      reject(new HospitalGeminiError('CANCELLED'))
+    }
+    waiters.push(take)
     signal.addEventListener('abort', abort, { once: true })
-    turn.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
   })
+}
+
+async function inTurn<T>(signal: AbortSignal, capacity: Capacity, send: () => Promise<T>): Promise<T> {
+  const limit = await capacity()
+  if (signal.aborted) throw new HospitalGeminiError('CANCELLED')
+  if (active < limit) active += 1
+  else await waitForSlot(signal)
+  try {
+    return await send()
+  } finally {
+    releaseSlot()
+  }
 }
 
 async function runHospitalGemini(
@@ -147,6 +189,7 @@ async function runHospitalGemini(
   prompt: string,
   sessionId: string | null,
   ask: Ask,
+  capacity: Capacity,
 ): Promise<void> {
   if (config.messages.some((message) => message.images?.length)) {
     throw new HospitalGeminiError('IMAGES_UNSUPPORTED')
@@ -157,7 +200,7 @@ async function runHospitalGemini(
     shown = markdown
     config.onChunk(markdown)
   }
-  const answer = await inTurn(config.signal, () => ask({ prompt, sessionId, signal: config.signal, onText: show }))
+  const answer = await inTurn(config.signal, capacity, () => ask({ prompt, sessionId, signal: config.signal, onText: show }))
   if (!answer.markdown.trim()) throw new HospitalGeminiError('EMPTY_ANSWER')
   show(answer.markdown)
   if (answer.sessionId) rememberSession(conversationKey([...config.messages, { role: 'assistant', content: '' }]), answer.sessionId)

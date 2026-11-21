@@ -2,6 +2,7 @@
 // follows extension/gemini-enterprise.js (vghtpe-fhir-bridge #173).
 import {
   askHospitalGemini,
+  getHospitalGeminiInfo,
   getHospitalGeminiStatus,
   HOSPITAL_GEMINI_PROTOCOL,
   HospitalGeminiError,
@@ -215,6 +216,80 @@ describe('streamHospitalGemini', () => {
     expect(full).toHaveBeenLastCalledWith('answer to full')
   })
 
+  describe('with the extension\'s own concurrency (vghtpe-fhir-bridge #176)', () => {
+    afterEach(() => { delete (globalThis as { chrome?: unknown }).chrome })
+
+    /** A fake extension that answers `limit` questions at once and replies BUSY beyond that. */
+    function oneQuestionAtATimeOver(limit: number) {
+      let running = 0
+      let peak = 0
+      const releases: (() => void)[] = []
+      const ask = jest.fn(({ prompt }: { prompt: string }) => {
+        if (running >= limit) return Promise.reject(new HospitalGeminiError('BUSY'))
+        running += 1
+        peak = Math.max(peak, running)
+        return new Promise<{ markdown: string; sessionId: string }>((resolve) => {
+          releases.push(() => { running -= 1; resolve({ markdown: `answer to ${prompt}`, sessionId: `s-${prompt}` }) })
+        })
+      })
+      return { ask, releases, peak: () => peak }
+    }
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+    const question = (content: string, onChunk = jest.fn(), controller = new AbortController()) =>
+      ({ messages: [{ role: 'user', content }], signal: controller.signal, onChunk })
+
+    it('reads maxConcurrent from the status reply, and none from an older extension', async () => {
+      const { runtime } = fakeRuntime({ ok: true, status: 'ready', busy: false, running: 0, maxConcurrent: 3 })
+      await expect(getHospitalGeminiInfo(runtime)).resolves.toEqual({ status: 'ready', maxConcurrent: 3 })
+      const old = fakeRuntime({ ok: true, status: 'ready', busy: false }).runtime
+      await expect(getHospitalGeminiInfo(old)).resolves.toEqual({ status: 'ready', maxConcurrent: null })
+    })
+
+    it('sends three questions at once to a new extension and each finishes with its own answer', async () => {
+      ;(globalThis as { chrome?: { runtime?: unknown } }).chrome = { runtime: fakeRuntime({ ok: true, status: 'ready', busy: false, running: 0, maxConcurrent: 3 }).runtime }
+      const fake = oneQuestionAtATimeOver(3)
+      const chunks = { overview: jest.fn(), full: jest.fn(), safety: jest.fn() }
+      const runs = (['overview', 'full', 'safety'] as const)
+        .map((name) => streamHospitalGemini(question(name, chunks[name]), fake.ask))
+      await flush()
+      expect(fake.ask).toHaveBeenCalledTimes(3)
+      fake.releases.splice(0).reverse().forEach((release) => release())
+      await Promise.all(runs)
+      expect(fake.peak()).toBe(3)
+      expect(chunks.overview).toHaveBeenLastCalledWith('answer to overview')
+      expect(chunks.full).toHaveBeenLastCalledWith('answer to full')
+      expect(chunks.safety).toHaveBeenLastCalledWith('answer to safety')
+    })
+
+    it('keeps an older extension at one question at a time, so it never replies BUSY', async () => {
+      ;(globalThis as { chrome?: { runtime?: unknown } }).chrome = { runtime: fakeRuntime({ ok: true, status: 'ready', busy: false }).runtime }
+      const fake = oneQuestionAtATimeOver(1)
+      const runs = ['overview', 'full', 'safety'].map((name) => streamHospitalGemini(question(name), fake.ask))
+      for (let sent = 1; sent <= 3; sent += 1) {
+        await flush()
+        expect(fake.ask).toHaveBeenCalledTimes(sent)
+        fake.releases.shift()!()
+      }
+      await Promise.all(runs)
+      expect(fake.peak()).toBe(1)
+    })
+
+    it('never sends a fourth question stopped while it waits for a free slot', async () => {
+      const fake = oneQuestionAtATimeOver(3)
+      const three = async () => 3
+      const runs = ['a', 'b', 'c'].map((name) => streamHospitalGemini(question(name), fake.ask, three))
+      const controller = new AbortController()
+      const fourth = streamHospitalGemini(question('d', jest.fn(), controller), fake.ask, three)
+      await flush()
+      expect(fake.ask).toHaveBeenCalledTimes(3)
+      controller.abort()
+      await expect(fourth).resolves.toBeUndefined()
+      fake.releases.splice(0).forEach((release) => release())
+      await Promise.all(runs)
+      expect(fake.ask).toHaveBeenCalledTimes(3)
+    })
+  })
+
   it('never sends a request stopped while it waits its turn', async () => {
     let release!: () => void
     const ask = jest.fn()
@@ -253,7 +328,8 @@ describe('AiSdkStreamAdapter with 院內 Gemini', () => {
       model: HOSPITAL_GEMINI_MODEL_ID, apiKey: null, signal: new AbortController().signal, onChunk, onModelExecution,
       messages: [{ role: 'system', content: 'Synthetic chart' }, { role: 'user', content: 'Summarise' }],
     })
-    await Promise.resolve()
+    // The bridge is asked how many questions it takes before the first one is sent.
+    await new Promise((resolve) => setTimeout(resolve, 0))
     connections[0].emit({ type: 'delta', markdown: 'Partial' })
     connections[0].emit({ type: 'done', markdown: 'Partial and complete', sessionId: 's-2' })
     await run
