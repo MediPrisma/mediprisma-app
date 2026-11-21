@@ -574,9 +574,18 @@
 
 /* A classification side by side (HF DP-01's phenotype). */
 .classWrap { display: flex; flex-direction: column; gap: 6px; }
-.classTable { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: 14px; }
+/* Fits the side panel (~380px, CAD DP-01's five columns the most): cells wrap
+   rather than the table running past the panel and hiding the patient's
+   column. A definition breaks anywhere when it must; a heading only between
+   words, so 「Definition」 keeps its column. The floor leaves the scroller
+   only for the narrowest page (#219, English at 320px). */
+.classTable { width: 100%; min-width: 16rem; border-collapse: collapse; font-size: 14px; }
 .classTable thead tr { background: var(--thead); text-align: left; }
-.classTable th, .classTable td { padding: 8px 10px; text-align: left; vertical-align: top; }
+.classTable th, .classTable td { padding: 8px 10px; text-align: left; vertical-align: top; overflow-wrap: break-word; }
+.classTable td { overflow-wrap: anywhere; }
+@container (max-width: 600px) {
+  .classTable th, .classTable td { padding: 6px 6px; }
+}
 .classTable thead th { font-weight: 700; }
 .classTable thead th:first-child { width: 18%; }
 .classTable tbody th { font-weight: 500; color: var(--ink-3); }
