@@ -2392,6 +2392,9 @@ export function ClinicalDecisionSupportView({
   if (isMap && visitModel) {
     const companionModules = (companionResults ?? []).flatMap((companion) => restoreCompletedModules(companion).recommendations)
     const htnValues = htnCalculatorValues(profileFacts, isEnglish)
+    // As the pack reads it (`applyHfpefReading`): not on an LVEF known below 50%.
+    const lvefFact = profileFacts?.LVEF?.numericValue
+    const hfaPeff = typeof lvefFact === 'number' && lvefFact < 50 ? undefined : hfpefReading?.hfaPeff
     const visitModules = new Map<string, CdssRecommendation>([
       ...companionModules.map((item): [string, CdssRecommendation] => [item.id, item]),
       ...displayRecommendations.map((item): [string, CdssRecommendation] => [item.id, item]),
@@ -2407,6 +2410,7 @@ export function ClinicalDecisionSupportView({
           screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
           prognosisEvidence={hfPrognosisEvidence(profileFacts, isEnglish)}
           {...(htnValues ? { calculatorValues: htnValues } : {})}
+          {...(hfaPeff ? { hfaPeff } : {})}
           doseRecovery={result.packId === AF_BOARD_CONFIG.packId || companionResults?.some(companion => companion.packId === AF_BOARD_CONFIG.packId)
             ? <AfWeightEntry key={patientId} weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} /> : undefined}
           decisions={physicianDecisions}
