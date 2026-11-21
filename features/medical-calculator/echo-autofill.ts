@@ -11,6 +11,14 @@ const units: Record<EchoKey, string> = { lvef: '%', ee: '', averageEe: '', pasp:
  * In particular, a unilateral E/e′ is NOT an average for HFA-PEFF.
  */
 export function parseCalculatorEcho(raw: string): EchoValues {
+  return parseEcho(raw).values
+}
+
+/** What a value was derived from, when the report did not state it: a caption suffix. */
+export type EchoDerivations = Partial<Record<EchoKey, string>>
+
+function parseEcho(raw: string): { values: EchoValues; derived: EchoDerivations } {
+  const derived: EchoDerivations = {}
   const text = raw.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&prime;|&#8242;|&#39;|&apos;/gi, "'").replace(/[′’`]/g, "'").replace(/\s+/g, ' ')
   const base = extractEchoMeasurements(text)
   const values: EchoValues = {}
@@ -60,6 +68,13 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     const hasVelocityUnit = /\b(?:TR\s*(?:max\s*)?V(?:\s*max|el(?:ocity)?)?|TRV)\s*[:=]?\s*\d+(?:\.\d+)?\s*(?:cm|m)\s*\/\s*s(?:ec)?/i.test(text)
     values.trv = hasVelocityUnit || tr > 20 ? tr / 100 : tr
   }
+  // Without a stated velocity, a point TR peak gradient gives V by simplified
+  // Bernoulli (PG = 4V²). RVSP adds RA pressure, so it is never used here.
+  const trPg = text.match(/\b(?:TR\s*(?:(?:max|peak)\s*)?PG|TRPG)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mmHg/i)
+  if (values.trv === undefined && trPg && Number(trPg[1]) > 0) {
+    values.trv = Math.round(Math.sqrt(Number(trPg[1]) / 4) * 100) / 100
+    derived.trv = '（由 TR max PG 換算）'
+  }
   const rest: Array<[EchoKey, string, string?]> = [
     ['lavi', '\\b(?:LAVI|LA\\s*(?:volume|vol\\.?)\\s*index(?:ed)?)'],
     ['lvmi', '\\b(?:LVMI|LV\\s*mass\\s*index|LV\\s*mass\\(C\\)dI)'],
@@ -83,7 +98,7 @@ export function parseCalculatorEcho(raw: string): EchoValues {
   for (const key of Object.keys(values) as EchoKey[]) {
     if (values[key]! < 0 || values[key]! > limits[key]) delete values[key]
   }
-  return values
+  return { values, derived }
 }
 
 export interface EchoObservation {
@@ -107,7 +122,7 @@ function observationNarrative(obs: EchoObservation): string[] {
  * Newer order stubs without findings do not displace an available report.
  */
 export function buildEchoAutofill(reports: DiagnosticReportEntity[], observations: EchoObservation[] = []): Partial<Record<EchoKey, AutofillValue>> {
-  let latest: { date: string; report: DiagnosticReportEntity; values: EchoValues } | undefined
+  let latest: { date: string; report: DiagnosticReportEntity; values: EchoValues; derived: EchoDerivations } | undefined
   for (const report of reports) {
     if (['entered-in-error', 'cancelled', 'registered', 'partial', 'preliminary'].includes(report.status ?? '')) continue
     const refs = new Set((report.result ?? []).map(r => r.reference?.split('/').pop()).filter(Boolean))
@@ -116,14 +131,14 @@ export function buildEchoAutofill(reports: DiagnosticReportEntity[], observation
     if (!narrative.trim() || classifyReport(report, narrative) !== 'echocardiography') continue
     const date = report.effectiveDateTime ?? report.effectivePeriod?.start ?? report.issued ?? ''
     if (!date || !Number.isFinite(Date.parse(date))) continue
-    const values = parseCalculatorEcho(narrative)
-    if (!latest || Date.parse(date) > Date.parse(latest.date)) latest = { date, report, values }
+    const { values, derived } = parseEcho(narrative)
+    if (!latest || Date.parse(date) > Date.parse(latest.date)) latest = { date, report, values, derived }
   }
   if (!latest) return {}
-  const { report, date, values } = latest
+  const { report, date, values, derived } = latest
   const result: Partial<Record<EchoKey, AutofillValue>> = {}
   for (const key of Object.keys(values) as EchoKey[]) {
-    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ lvef: 'LVEF', ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness' })[key]}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
+    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ lvef: 'LVEF', ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness' })[key]}${derived[key] ?? ''}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
   }
   return result
 }
