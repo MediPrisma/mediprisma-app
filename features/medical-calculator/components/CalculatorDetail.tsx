@@ -543,7 +543,7 @@ export function CalculatorDetail({
               {fill?.source && (fill.source.testName || fill.source.loinc || fill.source.facility || fill.source.obsId) && (
                 <div className={`flex flex-wrap items-center gap-x-1.5 text-muted-foreground ${input.source?.kind === "hfpefClinical" ? "text-xs leading-relaxed" : "text-[10px] leading-tight"}`}>
                   <span className="font-medium">{zh ? "來源" : "Source"}:</span>
-                  {fill.source.testName && <span className={input.source?.kind === "hfpefClinical" ? "break-words" : "truncate max-w-[45%]"}>{fill.source.testName}</span>}
+                  {fill.source.testName && <span className={input.source?.kind === "hfpefClinical" || input.source?.kind === "echo" ? "break-words" : "truncate max-w-[45%]"}>{fill.source.testName}</span>}
                   {fill.source.loinc && <span>· LOINC {fill.source.loinc}</span>}
                   {fill.source.facility && <span className="truncate max-w-[35%]">· {fill.source.facility}</span>}
                   {fill.source.obsId && (
