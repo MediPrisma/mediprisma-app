@@ -648,7 +648,7 @@ function classificationOf(point: object | undefined): ClassificationView | undef
  * 「新的可能要讓醫師可以點」): a button under each class it offers, and the
  * answers beside the classes (「還不確定」) under the table.
  */
-function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, hfaPeff }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string; coronaryPhase?: CoronaryPhaseAnswer; hfaPeff?: HfpefScoreReading }) {
+function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, hfaPeff, now }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string; coronaryPhase?: CoronaryPhaseAnswer; hfaPeff?: HfpefScoreReading; now?: Date }) {
   const choiceId = useId()
   const table = classificationOf(point)
   if (!table) return null
@@ -694,7 +694,7 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, h
                   : <td colSpan={table.classes.length}>{table.patient}</td>}
               </tr>
             ) : null}
-            {hfaPeff ? <HfaPeffRow score={hfaPeff} isEnglish={isEnglish} span={table.classes.length} /> : null}
+            {hfaPeff ? <HfaPeffRow score={hfaPeff} isEnglish={isEnglish} span={table.classes.length} date={displayDate(hfaPeff.date, now ?? new Date())} /> : null}
           </tbody>
         </table>
       </div>
@@ -730,7 +730,7 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, h
  * 2026-11-22: the map shows it, and says when LAVI/LVMI were derived). Its
  * name opens the calculator, as anywhere the page names it.
  */
-function HfaPeffRow({ score, isEnglish, span }: { score: HfpefScoreReading; isEnglish: boolean; span: number }) {
+function HfaPeffRow({ score, isEnglish, span, date }: { score: HfpefScoreReading; isEnglish: boolean; span: number; date?: string }) {
   const value = `${score.upper > score.score ? `${score.score}–${score.upper}` : score.score}${isEnglish ? '/' : '／'}${score.maximum}`
   const band = isEnglish ? score.bandEn : score.bandZh
   const headroom = score.upper - score.score
@@ -742,15 +742,15 @@ function HfaPeffRow({ score, isEnglish, span }: { score: HfpefScoreReading; isEn
   const bsa = derived?.bsa
   return (
     <tr data-testid="cdss-book-hfa-peff">
-      <th scope="row">{isEnglish ? 'This patient' : '本病人'}</th>
+      <th scope="row"><FormulaText text="HFA-PEFF" /></th>
       <td colSpan={span}>
-        <FormulaText text={`HFA-PEFF ${value}${band ? (isEnglish ? ` (${band})` : `（${band}）`) : ''}`} />
-        {score.date ? <span className={styles.date}>{isEnglish ? ` (${score.date})` : `（${score.date}）`}</span> : null}
+        {`${value}${band ? (isEnglish ? ` (${band})` : `（${band}）`) : ''}`}
+        {date ? <span className={styles.date}>{isEnglish ? ` (${date})` : `（${date}）`}</span> : null}
         {score.missing.length > 0 ? (
           <span className={styles.cellMuted} data-testid="cdss-book-hfa-peff-missing">
             {isEnglish
-              ? ` · Not reported: ${score.missingEn.join(', ')} (at most +${headroom})`
-              : `・報告未提供：${score.missingZh.join('、')}（最多再 +${headroom}）`}
+              ? ` · Not reported: ${score.missingEn.join(', ')}${headroom > 0 ? ` (at most +${headroom})` : ''}`
+              : `・報告未提供：${score.missingZh.join('、')}${headroom > 0 ? `（最多再 +${headroom}）` : ''}`}
           </span>
         ) : null}
         {indexed.length ? (
@@ -1184,7 +1184,7 @@ export function VisitBookLayout({
       {...(tag ? { tag } : {})}
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onChooseClass ? { onChoose: (input: ClassInput) => onChooseClass(point, input) } : {})}
-      {...(hfaPeff && point.dp === 'DP-01' && point.source === 'hf' ? { hfaPeff } : {})}
+      {...(hfaPeff && point.dp === 'DP-01' && point.source === 'hf' ? { hfaPeff, now } : {})}
     />
   )
   const { copied, copy } = useCopyToClipboard()
