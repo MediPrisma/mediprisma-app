@@ -1,5 +1,5 @@
 import type { CalculatorDef, NumberInput, SelectInput, CalcValues, L } from '../types'
-import { AGE_INPUT, SEX_INPUT, n } from './_shared'
+import { AGE_INPUT, SEX_INPUT, n, round, HEIGHT_LOINC, WEIGHT_LOINC } from './_shared'
 import type { EchoKey } from '../echo-autofill'
 
 const label = (en: string, zh = en): L => ({ en, zh })
@@ -87,6 +87,10 @@ export const HFPEF: CalculatorDef[] = [{
     echo('lateralE', 'Lateral e′', '側壁 e′', 'cm/s'),
     echo('trv', 'TR peak velocity', '三尖瓣逆流峰值速度', 'm/s'),
     echo('gls', 'GLS (absolute magnitude)', 'GLS（絕對值）', '%'),
+    { key: 'height', type: 'number', label: label('Height (for BSA)', '身高（算 BSA 用）'), unit: 'cm', dimension: 'height', optional: true, source: { kind: 'vital', loinc: HEIGHT_LOINC, vital: 'height' } },
+    { key: 'weight', type: 'number', label: label('Weight (for BSA)', '體重（算 BSA 用）'), unit: 'kg', dimension: 'weight', optional: true, source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
+    echo('laVolume', 'Left atrial volume (LAVI = volume / BSA)', '左心房容積（LAVI＝容積／BSA）', 'mL'),
+    echo('lvMass', 'LV mass (LVMI = mass / BSA)', '左心室質量（LVMI＝質量／BSA）', 'g'),
     echo('lavi', 'Left atrial volume index (LAVI)', '左心房容積指數（LAVI）', 'mL/m²'),
     echo('lvmi', 'LV mass index (LVMI)', '左心室質量指數（LVMI）', 'g/m²'),
     echo('rwt', 'Relative wall thickness (RWT)', '相對壁厚（RWT）'),
@@ -94,16 +98,25 @@ export const HFPEF: CalculatorDef[] = [{
     { key: 'ntprobnp', type: 'number', label: label('NT-proBNP'), unit: 'pg/mL', optional: true, source: { kind: 'natriuretic', assay: 'NT-PROBNP' } },
     { key: 'bnp', type: 'number', label: label('BNP'), unit: 'pg/mL', optional: true, source: { kind: 'natriuretic', assay: 'BNP' } },
   ],
-  coherence: { keys: ['averageEe', 'e', 'septalE', 'lateralE', 'trv', 'gls', 'lavi', 'lvmi', 'rwt', 'wall', 'ntprobnp', 'bnp'], windowDays: 0 },
+  coherence: { keys: ['averageEe', 'e', 'septalE', 'lateralE', 'trv', 'gls', 'laVolume', 'lvMass', 'lavi', 'lvmi', 'rwt', 'wall', 'ntprobnp', 'bnp'], windowDays: 0 },
   compute(v) {
-    const numeric = ['age', 'averageEe', 'e', 'septalE', 'lateralE', 'trv', 'gls', 'lavi', 'lvmi', 'rwt', 'wall', 'ntprobnp', 'bnp']
+    const numeric = ['age', 'averageEe', 'e', 'septalE', 'lateralE', 'trv', 'gls', 'height', 'weight', 'laVolume', 'lvMass', 'lavi', 'lvmi', 'rwt', 'wall', 'ntprobnp', 'bnp']
     if (!valid(v, numeric)) return null
     const age = n(v, 'age')
     if (age === undefined || age < 18 || !['male', 'female'].includes(v.sex) || !['sr', 'af'].includes(v.rhythm)) return null
     const af = v.rhythm === 'af'
     const septal = n(v, 'septalE'), lateral = n(v, 'lateralE'), e = n(v, 'e')
     const ee = n(v, 'averageEe') ?? (e !== undefined && septal !== undefined && lateral !== undefined && septal + lateral > 0 ? 2 * e / (septal + lateral) : undefined)
-    const tr = n(v, 'trv'), gls = n(v, 'gls'), lavi = n(v, 'lavi'), lvmi = n(v, 'lvmi'), rwt = n(v, 'rwt'), wall = n(v, 'wall')
+    // A stated index wins; otherwise index the raw value to Du Bois BSA, which
+    // needs both height and weight. Rounded as a report would print it.
+    const height = n(v, 'height'), weight = n(v, 'weight'), laVolume = n(v, 'laVolume'), lvMass = n(v, 'lvMass')
+    const bsa = height && weight && height > 0 && weight > 0 ? 0.007184 * weight ** 0.425 * height ** 0.725 : undefined
+    // Thresholds are judged on the unrounded index; only the displayed row is rounded.
+    const indexed = (raw: number | undefined) => (bsa && raw && raw > 0 ? raw / bsa : undefined)
+    const statedLavi = n(v, 'lavi'), statedLvmi = n(v, 'lvmi')
+    const lavi = statedLavi ?? indexed(laVolume), lvmi = statedLvmi ?? indexed(lvMass)
+    const laviDerived = statedLavi === undefined && lavi !== undefined, lvmiDerived = statedLvmi === undefined && lvmi !== undefined
+    const tr = n(v, 'trv'), gls = n(v, 'gls'), rwt = n(v, 'rwt'), wall = n(v, 'wall')
     const nt = n(v, 'ntprobnp'), bnp = n(v, 'bnp')
     const functionalMajor = (septal !== undefined && septal < (age >= 75 ? 5 : 7)) || (lateral !== undefined && lateral < (age >= 75 ? 7 : 10)) || (ee !== undefined && ee >= 15) || (tr !== undefined && tr > 2.8)
     const functionalMinor = (ee !== undefined && ee >= 9 && ee < 15) || (gls !== undefined && gls < 16)
@@ -125,7 +138,12 @@ export const HFPEF: CalculatorDef[] = [{
     return {
       value: complete ? `${score} / 6` : `${score}–${upper} / 6`,
       interpretation: !complete ? label('Incomplete data — possible score range', '資料未齊 — 顯示可能分數範圍') : score >= 5 ? label('Supports HFpEF', '支持 HFpEF') : score <= 1 ? label('HFpEF unlikely', 'HFpEF 可能性低') : label('Indeterminate — functional testing required', '未定 — 需功能性檢查'),
-      extra: domains.map(d => ({ label: d.label, value: d.complete || d.score === 2 ? `${d.score} / 2` : `${d.score}–2 / 2` })),
+      extra: [
+        ...domains.map(d => ({ label: d.label, value: d.complete || d.score === 2 ? `${d.score} / 2` : `${d.score}–2 / 2` })),
+        ...(bsa && (laviDerived || lvmiDerived) ? [{ label: label('BSA (Du Bois)', 'BSA（Du Bois）'), value: `${round(bsa, 2)} m²` }] : []),
+        ...(laviDerived ? [{ label: label('LAVI (LA volume / BSA)', 'LAVI（左心房容積／BSA）'), value: `${round(lavi!, 1)} mL/m²` }] : []),
+        ...(lvmiDerived ? [{ label: label('LVMI (LV mass / BSA)', 'LVMI（左心室質量／BSA）'), value: `${round(lvmi!, 1)} g/m²` }] : []),
+      ],
       scoreRanges: hfaRanges,
       notes: label('Each domain contributes at most 2 points. When data are incomplete, do not classify from the lower bound alone.', '每領域最多 2 分。資料未齊時顯示可能範圍，不能僅用範圍下限分級。'),
     }
