@@ -24,6 +24,7 @@ import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 import styles from './VisitBookLayout.module.css'
 import { coronaryPhaseInput } from './physician-input'
 import type { CoronaryPhaseAnswer } from '../../stores/coronary-phase.store'
+import type { HfpefScoreReading } from '../../utils/hfpef-scores'
 
 /**
  * The visit laid out as a pocket-handbook page (owner request 2026-09-30,
@@ -131,6 +132,8 @@ export interface VisitBookLayoutProps {
   onRemoveCalculatorNote?: (key: string) => void
   /** Missing-dose-input recovery supplied by the host's patient measurement flow. */
   doseRecovery?: ReactNode
+  /** The host's HFA-PEFF reading, shown under HF DP-01's 本病人 (preserved EF only). */
+  hfaPeff?: HfpefScoreReading
 }
 
 /** What the page hands its head tools. */
@@ -645,7 +648,7 @@ function classificationOf(point: object | undefined): ClassificationView | undef
  * 「新的可能要讓醫師可以點」): a button under each class it offers, and the
  * answers beside the classes (「還不確定」) under the table.
  */
-function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string; coronaryPhase?: CoronaryPhaseAnswer }) {
+function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, hfaPeff }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string; coronaryPhase?: CoronaryPhaseAnswer; hfaPeff?: HfpefScoreReading }) {
   const choiceId = useId()
   const table = classificationOf(point)
   if (!table) return null
@@ -691,6 +694,7 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase }:
                   : <td colSpan={table.classes.length}>{table.patient}</td>}
               </tr>
             ) : null}
+            {hfaPeff ? <HfaPeffRow score={hfaPeff} isEnglish={isEnglish} span={table.classes.length} /> : null}
           </tbody>
         </table>
       </div>
@@ -718,6 +722,46 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase }:
         </div>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * The HFA-PEFF score as the host's calculator read it (owner decision
+ * 2026-11-22: the map shows it, and says when LAVI/LVMI were derived). Its
+ * name opens the calculator, as anywhere the page names it.
+ */
+function HfaPeffRow({ score, isEnglish, span }: { score: HfpefScoreReading; isEnglish: boolean; span: number }) {
+  const value = `${score.upper > score.score ? `${score.score}–${score.upper}` : score.score}${isEnglish ? '/' : '／'}${score.maximum}`
+  const band = isEnglish ? score.bandEn : score.bandZh
+  const headroom = score.upper - score.score
+  const derived = score.derived
+  const indexed = [
+    derived?.lavi ? { value: `LAVI ${derived.lavi}`, zh: 'LA 容積', en: 'LA volume' } : undefined,
+    derived?.lvmi ? { value: `LVMI ${derived.lvmi}`, zh: 'LV 質量', en: 'LV mass' } : undefined,
+  ].filter((item) => item !== undefined)
+  const bsa = derived?.bsa
+  return (
+    <tr data-testid="cdss-book-hfa-peff">
+      <th scope="row">{isEnglish ? 'This patient' : '本病人'}</th>
+      <td colSpan={span}>
+        <FormulaText text={`HFA-PEFF ${value}${band ? (isEnglish ? ` (${band})` : `（${band}）`) : ''}`} />
+        {score.date ? <span className={styles.date}>{isEnglish ? ` (${score.date})` : `（${score.date}）`}</span> : null}
+        {score.missing.length > 0 ? (
+          <span className={styles.cellMuted} data-testid="cdss-book-hfa-peff-missing">
+            {isEnglish
+              ? ` · Not reported: ${score.missingEn.join(', ')} (at most +${headroom})`
+              : `・報告未提供：${score.missingZh.join('、')}（最多再 +${headroom}）`}
+          </span>
+        ) : null}
+        {indexed.length ? (
+          <span className={styles.date} data-testid="cdss-book-hfa-peff-derived">
+            {isEnglish
+              ? ` · ${indexed.map((item) => item.value).join(', ')} derived from ${indexed.map((item) => item.en).join(', ')} ÷ BSA${bsa ? ` (${bsa})` : ''}`
+              : `・${indexed.map((item) => item.value).join('、')} 由 ${indexed.map((item) => item.zh).join('、')}÷BSA${bsa ? `（${bsa}）` : ''}推算`}
+          </span>
+        ) : null}
+      </td>
+    </tr>
   )
 }
 
@@ -1083,6 +1127,7 @@ export function VisitBookLayout({
   calculatorNotes,
   onRemoveCalculatorNote,
   doseRecovery,
+  hfaPeff,
 }: VisitBookLayoutProps) {
   const chrome = useContext(VisitBookChromeContext)
   const onSaveTarget = chrome?.onSaveTarget
@@ -1139,6 +1184,7 @@ export function VisitBookLayout({
       {...(tag ? { tag } : {})}
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onChooseClass ? { onChoose: (input: ClassInput) => onChooseClass(point, input) } : {})}
+      {...(hfaPeff && point.dp === 'DP-01' && point.source === 'hf' ? { hfaPeff } : {})}
     />
   )
   const { copied, copy } = useCopyToClipboard()

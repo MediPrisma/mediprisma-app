@@ -44,6 +44,7 @@ import { VisitCalculatorsButton, VisitCalculatorsProvider, pageHasCalculators } 
 import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
 import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
+import type { HfpefScoreReading } from '../../utils/hfpef-scores'
 
 export interface VisitDecisionScreenProps {
   model: VisitDecisionModel
@@ -101,6 +102,8 @@ export interface VisitDecisionScreenProps {
    */
   calculatorValues?: Readonly<Record<string, HostCalculatorState>>
   doseRecovery?: ReactNode
+  /** The host's HFA-PEFF reading for HF DP-01's table; absent on a reduced EF. */
+  hfaPeff?: HfpefScoreReading
 }
 
 
@@ -135,6 +138,7 @@ export function VisitDecisionScreen({
   prognosisEvidence,
   calculatorValues,
   doseRecovery,
+  hfaPeff,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -384,6 +388,7 @@ export function VisitDecisionScreen({
       decided={bookDecided}
       summaryText={summaryText}
       doseRecovery={doseRecovery}
+      {...(hfaPeff ? { hfaPeff } : {})}
       // A class chosen in DP-01's table is the answer the diagnosis
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
