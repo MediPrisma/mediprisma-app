@@ -694,10 +694,11 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, h
                   : <td colSpan={table.classes.length}>{table.patient}</td>}
               </tr>
             ) : null}
-            {hfaPeff ? <HfaPeffRow score={hfaPeff} isEnglish={isEnglish} span={table.classes.length} date={displayDate(hfaPeff.date, now ?? new Date())} /> : null}
           </tbody>
         </table>
       </div>
+      {/* Outside the table's scroller, so it wraps to the panel and is read whole. */}
+      {hfaPeff ? <HfaPeffLine score={hfaPeff} isEnglish={isEnglish} date={displayDate(hfaPeff.date, now ?? new Date())} /> : null}
       {choosable ? (
         // The answer as every answer on the page is given (the prototype's
         // 「喘比上次」): one segmented control, the classes it offers and the
@@ -730,7 +731,7 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, h
  * 2026-11-22: the map shows it, and says when LAVI/LVMI were derived). Its
  * name opens the calculator, as anywhere the page names it.
  */
-function HfaPeffRow({ score, isEnglish, span, date }: { score: HfpefScoreReading; isEnglish: boolean; span: number; date?: string }) {
+function HfaPeffLine({ score, isEnglish, date }: { score: HfpefScoreReading; isEnglish: boolean; date?: string }) {
   const value = `${score.upper > score.score ? `${score.score}–${score.upper}` : score.score}${isEnglish ? '/' : '／'}${score.maximum}`
   const band = isEnglish ? score.bandEn : score.bandZh
   const headroom = score.upper - score.score
@@ -741,10 +742,10 @@ function HfaPeffRow({ score, isEnglish, span, date }: { score: HfpefScoreReading
   ].filter((item) => item !== undefined)
   const bsa = derived?.bsa
   return (
-    <tr data-testid="cdss-book-hfa-peff">
-      <th scope="row"><FormulaText text="HFA-PEFF" /></th>
-      <td colSpan={span}>
-        {`${value}${band ? (isEnglish ? ` (${band})` : `（${band}）`) : ''}`}
+    <div className={styles.hfaPeff} data-testid="cdss-book-hfa-peff">
+      <p>
+        <b><FormulaText text="HFA-PEFF" /></b>
+        {` ${value}${band ? (isEnglish ? ` (${band})` : `（${band}）`) : ''}`}
         {date ? <span className={styles.date}>{isEnglish ? ` (${date})` : `（${date}）`}</span> : null}
         {score.missing.length > 0 ? (
           <span className={styles.cellMuted} data-testid="cdss-book-hfa-peff-missing">
@@ -753,15 +754,15 @@ function HfaPeffRow({ score, isEnglish, span, date }: { score: HfpefScoreReading
               : `・報告未提供：${score.missingZh.join('、')}${headroom > 0 ? `（最多再 +${headroom}）` : ''}`}
           </span>
         ) : null}
-        {indexed.length ? (
-          <span className={styles.date} data-testid="cdss-book-hfa-peff-derived">
-            {isEnglish
-              ? ` · ${indexed.map((item) => item.value).join(', ')} derived from ${indexed.map((item) => item.en).join(', ')} ÷ BSA${bsa ? ` (${bsa})` : ''}`
-              : `・${indexed.map((item) => item.value).join('、')} 由 ${indexed.map((item) => item.zh).join('、')}÷BSA${bsa ? `（${bsa}）` : ''}推算`}
-          </span>
-        ) : null}
-      </td>
-    </tr>
+      </p>
+      {indexed.length ? (
+        <p className={styles.date} data-testid="cdss-book-hfa-peff-derived">
+          {isEnglish
+            ? `${indexed.map((item) => item.value).join(', ')} derived from ${indexed.map((item) => item.en).join(', ')} ÷ BSA${bsa ? ` (${bsa})` : ''}`
+            : `${indexed.map((item) => item.value).join('、')} 由 ${indexed.map((item) => item.zh).join('、')}÷BSA${bsa ? `（${bsa}）` : ''}推算`}
+        </p>
+      ) : null}
+    </div>
   )
 }
 

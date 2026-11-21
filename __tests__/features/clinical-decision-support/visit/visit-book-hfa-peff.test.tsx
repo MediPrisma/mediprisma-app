@@ -68,7 +68,10 @@ describe('HFA-PEFF on the decision map (HF DP-01)', () => {
   it('shows the score, its band and day, and which indices were derived from BSA', () => {
     renderMap('p9-hfpef-af-dose', { inputs: [], hfaPeff: score({ derived: { bsa: '1.81 m²', lavi: '44.2 mL/m²', lvmi: '152.7 g/m²' } }) })
     const line = within(dp01()).getByTestId('cdss-book-hfa-peff')
-    expect(line).toHaveTextContent('HFA-PEFF5／6（支持 HFpEF）（2025-07-14）')
+    expect(line).toHaveTextContent('HFA-PEFF 5／6（支持 HFpEF）（2025-07-14）')
+    // Under DP-01's table, outside its horizontal scroller, so it wraps to the panel.
+    expect(line.closest('table')).toBeNull()
+    expect(within(dp01()).getByTestId('cdss-book-classification')).toContainElement(line)
     expect(within(line).getByTestId('cdss-book-hfa-peff-derived'))
       .toHaveTextContent('LAVI 44.2 mL/m²、LVMI 152.7 g/m² 由 LA 容積、LV 質量÷BSA（1.81 m²）推算')
     expect(within(line).queryByTestId('cdss-book-hfa-peff-missing')).toBeNull()
@@ -80,7 +83,7 @@ describe('HFA-PEFF on the decision map (HF DP-01)', () => {
   it('names only the index derived, and the report\'s missing items, with no note when both are stated', () => {
     renderMap('p9-hfpef-af-dose', { inputs: [], hfaPeff: score({ score: 3, upper: 4, bandZh: '未定 — 需功能性檢查', missing: ['ee'], missingZh: ['E/e′'], missingEn: ['E/e′'], derived: { bsa: '1.81 m²', lavi: '44.2 mL/m²' } }) })
     const line = within(dp01()).getByTestId('cdss-book-hfa-peff')
-    expect(line).toHaveTextContent('HFA-PEFF3–4／6（未定 — 需功能性檢查）')
+    expect(line).toHaveTextContent('HFA-PEFF 3–4／6（未定 — 需功能性檢查）')
     expect(within(line).getByTestId('cdss-book-hfa-peff-missing')).toHaveTextContent('報告未提供：E/e′（最多再 +1）')
     expect(within(line).getByTestId('cdss-book-hfa-peff-derived')).toHaveTextContent('LAVI 44.2 mL/m² 由 LA 容積÷BSA（1.81 m²）推算')
     expect(line).not.toHaveTextContent('LVMI')
@@ -96,14 +99,14 @@ describe('HFA-PEFF on the decision map (HF DP-01)', () => {
   it('has no derived note when the report stated LAVI and LVMI', () => {
     renderMap('p9-hfpef-af-dose', { inputs: [], hfaPeff: score() })
     const line = within(dp01()).getByTestId('cdss-book-hfa-peff')
-    expect(line).toHaveTextContent('HFA-PEFF5／6')
+    expect(line).toHaveTextContent('HFA-PEFF 5／6')
     expect(within(line).queryByTestId('cdss-book-hfa-peff-derived')).toBeNull()
   })
 
   it('writes the line in English on the English page', () => {
     renderMap('p9-hfpef-af-dose', { inputs: [], hfaPeff: score({ derived: { bsa: '1.81 m²', lvmi: '152.7 g/m²' } }) }, 'en')
     const line = within(dp01()).getByTestId('cdss-book-hfa-peff')
-    expect(line).toHaveTextContent('HFA-PEFF5/6 (Supports HFpEF) (2025-07-14)')
+    expect(line).toHaveTextContent('HFA-PEFF 5/6 (Supports HFpEF) (2025-07-14)')
     expect(line).toHaveTextContent('LVMI 152.7 g/m² derived from LV mass ÷ BSA (1.81 m²)')
   })
 
