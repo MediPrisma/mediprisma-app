@@ -73,24 +73,39 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const STATUSES = new Set(['disabled', 'no_tab', 'needs_login', 'ready'])
 
-export function getHospitalGeminiStatus(runtime = externalRuntime()): Promise<HospitalGeminiStatus> {
-  if (!runtime) return Promise.resolve('unavailable')
+export interface HospitalGeminiInfo {
+  status: HospitalGeminiStatus
+  /** Questions the extension answers at once (vghtpe-fhir-bridge #176); null from older versions, which take one. */
+  maxConcurrent: number | null
+}
+
+const UNAVAILABLE: HospitalGeminiInfo = { status: 'unavailable', maxConcurrent: null }
+
+export function getHospitalGeminiInfo(runtime = externalRuntime()): Promise<HospitalGeminiInfo> {
+  if (!runtime) return Promise.resolve(UNAVAILABLE)
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve('unavailable'), STATUS_TIMEOUT_MS)
+    const timer = setTimeout(() => resolve(UNAVAILABLE), STATUS_TIMEOUT_MS)
     try {
       runtime.sendMessage(VGHTPE_BRIDGE_EXTENSION_ID, { protocol: HOSPITAL_GEMINI_PROTOCOL, action: 'status' }, (reply) => {
         clearTimeout(timer)
         // Reading lastError also keeps Chrome from logging "Unchecked runtime.lastError".
-        if (runtime.lastError || !isRecord(reply) || reply.ok !== true) return resolve('unavailable')
-        resolve(typeof reply.status === 'string' && STATUSES.has(reply.status)
-          ? reply.status as HospitalGeminiStatus
-          : 'unavailable')
+        if (runtime.lastError || !isRecord(reply) || reply.ok !== true) return resolve(UNAVAILABLE)
+        if (typeof reply.status !== 'string' || !STATUSES.has(reply.status)) return resolve(UNAVAILABLE)
+        const max = reply.maxConcurrent
+        resolve({
+          status: reply.status as HospitalGeminiStatus,
+          maxConcurrent: typeof max === 'number' && Number.isInteger(max) && max >= 1 ? max : null,
+        })
       })
     } catch {
       clearTimeout(timer)
-      resolve('unavailable')
+      resolve(UNAVAILABLE)
     }
   })
+}
+
+export function getHospitalGeminiStatus(runtime = externalRuntime()): Promise<HospitalGeminiStatus> {
+  return getHospitalGeminiInfo(runtime).then((info) => info.status)
 }
 
 export interface HospitalGeminiAnswer {
