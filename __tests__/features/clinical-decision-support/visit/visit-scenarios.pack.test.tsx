@@ -28,7 +28,14 @@ import { useVisitAnswerRecord, useVisitAnswersStore, visitAnswersOf } from '@/fe
 import { buildClinicVitals, mergeClinicVitals, useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { usePhenotypeAnswer, usePhenotypeAnswerStore } from '@/features/clinical-decision-support/stores/phenotype-answer.store'
 import { useAfAnswers, useAfAnswersStore } from '@/features/clinical-decision-support/stores/af-answers.store'
-import { atScenarioDay, DP06_EXAM_TERMS, examToday, scenarioRun, type ScenarioId } from './scenario-models'
+import { atScenarioDay, DP06_EXAM_TERMS, examToday, scenarioRun, type ScenarioId, withRecordedWeight } from './scenario-models'
+
+// These walk paths that need a measured weight (the apixaban 60 kg criterion,
+// every DOAC at its dose); the scenario bundles no longer carry one, so the
+// recorded weight is put back here (scenario-models, RECORDED_WEIGHTS).
+let restoreWeight: () => void
+beforeAll(() => { restoreWeight = withRecordedWeight('p3-new-af', 'p5-titrating-af', 'p9-hfpef-af-dose', 'p11-af-dabigatran-renal') })
+afterAll(() => restoreWeight())
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => ({ diagnosticReports: [] }),

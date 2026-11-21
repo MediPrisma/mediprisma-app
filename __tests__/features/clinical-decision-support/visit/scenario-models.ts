@@ -79,9 +79,56 @@ export interface ScenarioRun {
   model: VisitDecisionModel
 }
 
+/**
+ * The measured body weights the bundles carried until 2026-10-22, when they
+ * were taken out because 雲端病歷 seldom has one (owner decision). The bundles
+ * now show the app as it usually runs, without a weight; a test of a path
+ * that needs one (the apixaban 60 kg criterion, a DOAC dose table) puts the
+ * scenario's own recorded weight back with `withRecordedWeight`.
+ */
+const RECORDED_WEIGHTS: Partial<Record<ScenarioId, { patient: string; weights: [string, string, number][] }>> = {
+  'p1-suspected-hfpef': { patient: 'Patient/sim-p1', weights: [['p1-wt', '2026-09-27', 82]] },
+  'p2-new-hfref': { patient: 'Patient/sim-p2', weights: [['p2-wt', '2026-09-27', 76]] },
+  'p3-new-af': { patient: 'Patient/sim-p3', weights: [['p3-wt', '2026-09-27', 68]] },
+  'p4-stable-optimised': { patient: 'Patient/sim-p4', weights: [['p4-wt0', '2026-06-20', 72], ['p4-wt', '2026-09-27', 72]] },
+  'p5-titrating-af': { patient: 'Patient/sim-p5', weights: [['p5-wt', '2026-09-27', 70]] },
+  'p6-hyperkalaemia': { patient: 'Patient/sim-p6', weights: [['p6-wt', '2026-09-27', 66]] },
+  'p7-worsening-congestion': { patient: 'Patient/sim-p7', weights: [['p7-wt0', '2026-08-20', 65], ['p7-wt', '2026-09-27', 68]] },
+  'p8-post-discharge': { patient: 'Patient/sim-p8', weights: [['p8-wt0', '2026-09-12', 71], ['p8-wt', '2026-09-27', 70]] },
+  'p9-hfpef-af-dose': { patient: 'Patient/sim-p9', weights: [['p9-wt0', '2026-06-20', 61], ['p9-wt', '2026-09-27', 58]] },
+  'p10-improved-ef': { patient: 'Patient/sim-p10', weights: [['p10-wt', '2026-09-27', 78]] },
+  'p11-af-dabigatran-renal': { patient: 'Patient/sim-p11', weights: [['p11-wt', '2026-09-27', 64]] },
+}
+
+const weighed = new Set<ScenarioId>()
+
+/**
+ * Puts the recorded weight back into these scenarios' bundles until the
+ * returned function is called — for a test file's `beforeAll`/`afterAll`.
+ */
+export function withRecordedWeight(...ids: ScenarioId[]): () => void {
+  for (const id of ids) {
+    if (!RECORDED_WEIGHTS[id]) throw new Error(`${id} had no recorded weight`)
+    weighed.add(id)
+  }
+  return () => { for (const id of ids) weighed.delete(id) }
+}
+
+function weightEntries(id: ScenarioId): unknown[] {
+  const recorded = weighed.has(id) ? RECORDED_WEIGHTS[id] : undefined
+  return (recorded?.weights ?? []).map(([obsId, date, kg]) => ({
+    fullUrl: `urn:uuid:Observation-${obsId}`,
+    resource: {
+      resourceType: 'Observation', subject: { reference: recorded!.patient }, id: obsId, status: 'final', effectiveDateTime: date,
+      code: { coding: [{ system: 'http://loinc.org', code: '29463-7' }] }, valueQuantity: { value: kg, unit: 'kg' },
+    },
+  }))
+}
+
 /** The profile LiveFeature would hand the packs for this bundle, before the answers — on the scenario's day, or `now`. */
 export function scenarioProfile(id: ScenarioId, now: Date = SCENARIO_NOW): CdssPatientProfile {
   const bundle = JSON.parse(fs.readFileSync(path.join(BUNDLE_DIR, `${id}.json`), 'utf8'))
+  bundle.entry = [...bundle.entry, ...weightEntries(id)]
   const parsed = LocalBundleService.parse(bundle)
   if (!parsed) throw new Error(`${id}: the bundle did not parse`)
   const { patient, collection } = parsed

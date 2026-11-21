@@ -281,30 +281,6 @@
    }
   },
   {
-   "fullUrl": "urn:uuid:Observation-p1-wt",
-   "resource": {
-    "resourceType": "Observation",
-    "subject": {
-     "reference": "Patient/sim-p1"
-    },
-    "id": "p1-wt",
-    "status": "final",
-    "effectiveDateTime": "2026-09-27",
-    "code": {
-     "coding": [
-      {
-       "system": "http://loinc.org",
-       "code": "29463-7"
-      }
-     ]
-    },
-    "valueQuantity": {
-     "value": 82,
-     "unit": "kg"
-    }
-   }
-  },
-  {
    "fullUrl": "urn:uuid:Observation-p1-ht",
    "resource": {
     "resourceType": "Observation",

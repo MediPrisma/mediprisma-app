@@ -14,7 +14,14 @@ import { useClinicVitals, useClinicVitalsStore } from '@/features/clinical-decis
 import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
 import { VisitBookChromeContext, type VisitBookChrome } from '@/features/clinical-decision-support/renderers/visit/visit-book-chrome'
 import { buildHfpefReading } from '@/features/clinical-decision-support/utils/hfpef-scores'
-import { scenarioRun, type ScenarioId } from './scenario-models'
+import { scenarioRun, type ScenarioId, withRecordedWeight } from './scenario-models'
+
+// These walk paths that need a measured weight (the apixaban 60 kg criterion,
+// every DOAC at its dose); the scenario bundles no longer carry one, so the
+// recorded weight is put back here (scenario-models, RECORDED_WEIGHTS).
+let restoreWeight: () => void
+beforeAll(() => { restoreWeight = withRecordedWeight('p9-hfpef-af-dose') })
+afterAll(() => restoreWeight())
 
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => ({ diagnosticReports: [] }),
