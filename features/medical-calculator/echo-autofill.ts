@@ -2,9 +2,9 @@ import { classifyReport, reportNarrative, extractEchoMeasurements } from '@voho0
 import type { DiagnosticReportEntity } from '@/src/core/entities/clinical-data.entity'
 import type { AutofillValue } from './hooks/use-lab-autofill.hook'
 
-export type EchoKey = 'lvef' | 'ee' | 'averageEe' | 'pasp' | 'e' | 'septalE' | 'lateralE' | 'trv' | 'gls' | 'lavi' | 'lvmi' | 'rwt' | 'wall'
+export type EchoKey = 'lvef' | 'ee' | 'averageEe' | 'pasp' | 'e' | 'septalE' | 'lateralE' | 'trv' | 'gls' | 'lavi' | 'lvmi' | 'rwt' | 'wall' | 'laVolume' | 'lvMass'
 export type EchoValues = Partial<Record<EchoKey, number>>
-const units: Record<EchoKey, string> = { lvef: '%', ee: '', averageEe: '', pasp: 'mmHg', e: 'cm/s', septalE: 'cm/s', lateralE: 'cm/s', trv: 'm/s', gls: '%', lavi: 'mL/m²', lvmi: 'g/m²', rwt: '', wall: 'mm' }
+const units: Record<EchoKey, string> = { lvef: '%', ee: '', averageEe: '', pasp: 'mmHg', e: 'cm/s', septalE: 'cm/s', lateralE: 'cm/s', trv: 'm/s', gls: '%', lavi: 'mL/m²', lvmi: 'g/m²', rwt: '', wall: 'mm', laVolume: 'mL', lvMass: 'g' }
 
 /** Extends personalization's cross-hospital echo scanner. No diagnoses are inferred.
  * Only unequivocal point measurements are accepted; ranges/comparators are not numbers.
@@ -93,8 +93,19 @@ function parseEcho(raw: string): { values: EchoValues; derived: EchoDerivations 
   const ivs = length('IVSd|IVS'), pw = length('LVPWd|LVPW|PWd'), lvid = length('LVIDd|LVDd|LVEDD')
   if (values.wall === undefined && ivs !== undefined && pw !== undefined) values.wall = Math.max(ivs, pw)
   if (values.rwt === undefined && pw !== undefined && lvid !== undefined && lvid > 0) values.rwt = 2 * pw / lvid
+  // Raw values behind LAVI and LVMI, which the calculator indexes to BSA.
+  const laVolume = text.match(/\bLA\s*(?:volume|vol\.?)\s*(?:\([^()]{1,20}\)\s*)?[:=]?\s*(\d+(?:\.\d+)?)\s*ml(?!\s*\/)/i)
+  if (laVolume && Number(laVolume[1]) > 0) values.laVolume = Number(laVolume[1])
+  const lvMass = text.match(/\b(?:LV\s*mass|LVM)\s*(?:\([^()]{1,20}\)\s*)?[:=]?\s*(\d+(?:\.\d+)?)\s*g(?!\s*\/)/i)
+  if (lvMass && Number(lvMass[1]) > 0) values.lvMass = Number(lvMass[1])
+  else if (ivs !== undefined && pw !== undefined && lvid !== undefined && lvid > 0) {
+    // ASE cube formula, dimensions in cm.
+    const [l, i, p] = [lvid / 10, ivs / 10, pw / 10]
+    values.lvMass = Math.round((0.8 * 1.04 * ((l + i + p) ** 3 - l ** 3) + 0.6) * 10) / 10
+    derived.lvMass = '（由 LVIDd、IVSd、LVPWd 以 ASE 公式估算）'
+  }
   // Reject implausible scales rather than auto-filling an unconverted unit.
-  const limits: Record<EchoKey, number> = { lvef: 100, ee: 100, averageEe: 100, pasp: 200, e: 300, septalE: 50, lateralE: 50, trv: 10, gls: 100, lavi: 300, lvmi: 500, rwt: 2, wall: 50 }
+  const limits: Record<EchoKey, number> = { lvef: 100, ee: 100, averageEe: 100, pasp: 200, e: 300, septalE: 50, lateralE: 50, trv: 10, gls: 100, lavi: 300, lvmi: 500, rwt: 2, wall: 50, laVolume: 500, lvMass: 1000 }
   for (const key of Object.keys(values) as EchoKey[]) {
     if (values[key]! < 0 || values[key]! > limits[key]) delete values[key]
   }
@@ -138,7 +149,7 @@ export function buildEchoAutofill(reports: DiagnosticReportEntity[], observation
   const { report, date, values, derived } = latest
   const result: Partial<Record<EchoKey, AutofillValue>> = {}
   for (const key of Object.keys(values) as EchoKey[]) {
-    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ lvef: 'LVEF', ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness' })[key]}${derived[key] ?? ''}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
+    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ lvef: 'LVEF', ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness', laVolume: 'LA volume', lvMass: 'LV mass' })[key]}${derived[key] ?? ''}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
   }
   return result
 }

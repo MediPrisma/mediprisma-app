@@ -188,6 +188,48 @@ describe('the measurements behind the score', () => {
     expect(after.hfaPeff?.score).toBe(6)
   })
 
+  it('does not score with a LAVI or LVMI derived from BSA the dialog cannot show', () => {
+    // Synthetic echo: LA volume and LV mass (from wall dimensions) printed, no
+    // stated LAVI or LVMI. The calculator would derive both from height and
+    // weight; the CDSS reading must not until its dialog can show that.
+    const raw = { lavi: undefined, lvmi: undefined, laVolume: 80, lvMass: 200 }
+    const withBody = (body: boolean): Autofill => {
+      const base = autofillWith(raw)
+      return {
+        ...base,
+        resolve: (source) => {
+          if (body && source?.kind === 'vital') {
+            return source.vital === 'height'
+              ? { value: 160, unit: 'cm', date: '2026-09-12' }
+              : { value: 60, unit: 'kg', date: '2026-09-12' }
+          }
+          return base.resolve(source)
+        },
+      }
+    }
+    const without = buildHfpefReading({ profile: { ...profile, facts: { LVEF: profile.facts.LVEF } }, autofill: withBody(false) })
+    const withHw = buildHfpefReading({ profile: { ...profile, facts: { LVEF: profile.facts.LVEF } }, autofill: withBody(true) })
+
+    // The calculator itself does score differently with height and weight, so
+    // the equality below is not vacuous.
+    const calc = HFPEF.find((def) => def.id === 'hfa-peff')!
+    const common = {
+      age: '76', sex: 'female', rhythm: 'sr', averageEe: '13.2', trv: '3.1',
+      rwt: '0.44', wall: '12', laVolume: '80', lvMass: '200',
+    }
+    expect(calc.compute({ ...common, height: '160', weight: '60' })?.value)
+      .not.toBe(calc.compute(common)?.value)
+
+    expect(withHw.hfaPeff?.score).toBe(without.hfaPeff?.score)
+    expect(withHw.hfaPeff?.upper).toBe(without.hfaPeff?.upper)
+    expect(withHw.hfaPeff?.matchedTerms).toEqual(without.hfaPeff?.matchedTerms)
+    expect(withHw.hfaPeff?.missing).toEqual(expect.arrayContaining(['lavi', 'lvmi']))
+    expect(withHw.hfaPeff?.date).toBe(without.hfaPeff?.date)
+    for (const key of ['height', 'weight', 'laVolume', 'lvMass']) {
+      expect(withHw.inputs.some((item) => item.key === key)).toBe(false)
+    }
+  })
+
   it('writes the rhythm the ECG reported as a term, not as a number', () => {
     const next = applyHfpefReading(profile, buildHfpefReading({ profile, autofill: autofillWith() }))
 

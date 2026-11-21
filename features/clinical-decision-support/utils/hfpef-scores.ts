@@ -163,6 +163,18 @@ export interface HfpefReading {
 }
 
 const HFA_PEFF: CalculatorDef = HFPEF.find((calc) => calc.id === 'hfa-peff')!
+
+/**
+ * Calculator inputs the CDSS reading does not use yet.
+ *
+ * The calculator derives LAVI and LVMI from these via BSA when the report does
+ * not state the index. The CDSS dialog cannot yet show the raw values or the
+ * derived index, so scoring with them here would put a number on the card that
+ * nobody can see the basis of. Until a follow-up PR shows the derivation, the
+ * CDSS reads only a stated LAVI/LVMI: these keys are never read, scored, dated
+ * or listed as missing.
+ */
+const CDSS_UNREAD_INPUTS: ReadonlySet<string> = new Set(['height', 'weight', 'laVolume', 'lvMass'])
 const H2FPEF: CalculatorDef = HFPEF.find((calc) => calc.id === 'h2fpef')!
 
 function unitOf(input: CalcInput): string | undefined {
@@ -433,6 +445,7 @@ export function buildHfpefReading(input: HfpefReadingInput): HfpefReading {
     const values: CalcValues = {}
     const used: HfpefInputReading[] = []
     for (const field of def.inputs) {
+      if (CDSS_UNREAD_INPUTS.has(field.key)) continue
       const existing = readings.get(field.key)
       const reading = existing ?? readInput(field, autofill, inputs, profile)
       if (!existing) readings.set(field.key, reading)
