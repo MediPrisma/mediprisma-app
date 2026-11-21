@@ -79,6 +79,12 @@ const INPUT_META: Readonly<Record<string, InputMeta>> = {
   trv: { factKey: 'echoTrVmax', token: 'tr-vmax', section: 'functional', zh: 'TR velocity', en: 'TR peak velocity', editable: true },
   pasp: { factKey: 'echoRvsp', token: 'rvsp', section: 'functional', zh: 'PASP／RVSP', en: 'PASP / RVSP', editable: true },
   gls: { factKey: 'echoGls', token: 'gls', section: 'functional', zh: 'GLS', en: 'GLS', editable: true },
+  // The raw values behind LAVI and LVMI, and the body size that indexes them.
+  // No fact key: the pack reads the index, never these.
+  laVolume: { token: 'la-volume', section: 'morphological', zh: 'LA 容積', en: 'LA volume', editable: true },
+  lvMass: { token: 'lv-mass', section: 'morphological', zh: 'LV 質量', en: 'LV mass', editable: true },
+  height: { token: 'height', section: 'morphological', zh: '身高（算 BSA 用）', en: 'Height (for BSA)' },
+  weight: { token: 'weight', section: 'morphological', zh: '體重（算 BSA 用）', en: 'Weight (for BSA)' },
   lavi: { factKey: 'echoLavi', token: 'lavi', section: 'morphological', zh: 'LAVI', en: 'LAVI', editable: true },
   lvmi: { factKey: 'echoLvmi', token: 'lvmi', section: 'morphological', zh: 'LVMI', en: 'LVMI', editable: true },
   rwt: { factKey: 'echoRwt', token: 'rwt', section: 'morphological', zh: 'RWT', en: 'RWT', editable: true },
@@ -128,10 +134,25 @@ export interface HfpefInputReading {
   /** 「心超 2026-07-14」, 「EKG 2026-05-25」, 「你輸入 2026-09-12」. */
   sourceZh?: string
   sourceEn?: string
+  /**
+   * How the report scanner arrived at a value the report did not print, e.g.
+   * 「（由 LVIDd、IVSd、LVPWd 以 ASE 公式估算）」.
+   */
+  derivationZh?: string
   /** Provenance of an auto-filled value, where the chart carried one. */
   source?: CdssFactSource
   /** The profile already states this value: no host fact is written for it. */
   inRecord: boolean
+}
+
+/**
+ * The indices the calculator computed from body size because the report did
+ * not state them, as the calculator printed them (「34.2 mL/m²」).
+ */
+export interface HfpefDerivedIndices {
+  bsa?: string
+  lavi?: string
+  lvmi?: string
 }
 
 export interface HfpefScoreReading {
@@ -153,6 +174,8 @@ export interface HfpefScoreReading {
   missingEn: readonly string[]
   /** The most recent measurement day among the inputs used. */
   date?: string
+  /** HFA-PEFF only: LAVI/LVMI scored from LA volume / LV mass ÷ BSA. */
+  derived?: HfpefDerivedIndices
   matchedTerms: readonly string[]
 }
 
@@ -163,18 +186,6 @@ export interface HfpefReading {
 }
 
 const HFA_PEFF: CalculatorDef = HFPEF.find((calc) => calc.id === 'hfa-peff')!
-
-/**
- * Calculator inputs the CDSS reading does not use yet.
- *
- * The calculator derives LAVI and LVMI from these via BSA when the report does
- * not state the index. The CDSS dialog cannot yet show the raw values or the
- * derived index, so scoring with them here would put a number on the card that
- * nobody can see the basis of. Until a follow-up PR shows the derivation, the
- * CDSS reads only a stated LAVI/LVMI: these keys are never read, scored, dated
- * or listed as missing.
- */
-const CDSS_UNREAD_INPUTS: ReadonlySet<string> = new Set(['height', 'weight', 'laVolume', 'lvMass'])
 const H2FPEF: CalculatorDef = HFPEF.find((calc) => calc.id === 'h2fpef')!
 
 function unitOf(input: CalcInput): string | undefined {
@@ -202,6 +213,7 @@ function sourceLabels(
   if (kind === 'echo') return { zh: `心超 ${day}`, en: `Echo ${day}` }
   if (kind === 'hfpefClinical') return { zh: `紀錄 ${day}`, en: `Record ${day}` }
   if (kind === 'natriuretic') return { zh: `檢驗 ${day}`, en: `Lab ${day}` }
+  if (kind === 'vital') return { zh: `量測 ${day}`, en: `Measured ${day}` }
   return { zh: day, en: day }
 }
 
@@ -261,6 +273,8 @@ function readInput(
     const numeric = numberFrom(hit.value)
     const labels = sourceLabels(input, hit.date)
     const fact = meta?.factKey ? profile.facts[meta.factKey] : undefined
+    // The scanner's own caption for a value it computed rather than read.
+    const derivation = /（由[^）]+）/.exec(hit.source?.testName ?? '')?.[0]
     return {
       ...base,
       value: hit.value,
@@ -269,6 +283,7 @@ function readInput(
       ...(hit.date ? { date: hit.date.slice(0, 10) } : {}),
       ...(labels.zh ? { sourceZh: labels.zh } : {}),
       ...(labels.en ? { sourceEn: labels.en } : {}),
+      ...(derivation ? { derivationZh: derivation } : {}),
       ...(hit.source?.obsId && hit.source.resourceType
         ? {
           source: {
@@ -323,6 +338,25 @@ function parseDomain(value: string): { score: number; upper: number } | undefine
 
 const DOMAIN_TOKENS: readonly string[] = ['functional', 'morphological', 'biomarker']
 
+/** The rows the calculator adds when it indexed LA volume / LV mass to BSA. */
+const DERIVED_ROWS: Readonly<Record<keyof HfpefDerivedIndices, string>> = {
+  bsa: 'BSA (Du Bois)',
+  lavi: 'LAVI (LA volume / BSA)',
+  lvmi: 'LVMI (LV mass / BSA)',
+}
+
+function derivedIndices(result: CalcResult): HfpefDerivedIndices {
+  const derived: HfpefDerivedIndices = {}
+  for (const [key, en] of Object.entries(DERIVED_ROWS) as [keyof HfpefDerivedIndices, string][]) {
+    const row = result.extra?.find((item) => item.label.en === en)
+    if (row) derived[key] = row.value
+  }
+  return derived
+}
+
+/** Body size only indexes LA volume and LV mass; it is not the study's day. */
+const UNDATED_INPUTS: ReadonlySet<string> = new Set(['height', 'weight'])
+
 /** The measurement days of the inputs a score actually used. */
 function latestDate(inputs: readonly HfpefInputReading[]): string | undefined {
   return inputs
@@ -344,9 +378,15 @@ function hfaPeffReading(
   // 「報告未提供」 is the list of parameters the calculator had no value for.
   // Age, sex and the rhythm are not report parameters, BNP is the alternative
   // assay rather than a second missing one, and a mitral E is only asked for to
-  // derive an average E/e′ the report may have printed outright.
-  const skip = new Set(['sex', 'age', 'rhythm', 'bnp'])
+  // derive an average E/e′ the report may have printed outright. Height,
+  // weight, LA volume and LV mass only derive LAVI and LVMI: an index is
+  // listed when it was neither stated nor derivable, and its inputs never are.
+  const derived = derivedIndices(result)
+  const skip = new Set(['sex', 'age', 'rhythm', 'bnp', 'height', 'weight', 'laVolume', 'lvMass'])
   if (used.find((item) => item.key === 'averageEe')?.value !== undefined) skip.add('e')
+  if (derived.lavi) skip.add('lavi')
+  if (derived.lvmi) skip.add('lvmi')
+  const dated = used.filter((item) => item.value !== undefined && !UNDATED_INPUTS.has(item.key))
   const missingInputs = used.filter((item) => (
     item.value === undefined && !skip.has(item.key)
   ))
@@ -368,9 +408,8 @@ function hfaPeffReading(
     missing: missingInputs.map((item) => item.token),
     missingZh: missingInputs.map((item) => item.zh),
     missingEn: missingInputs.map((item) => item.en),
-    ...(latestDate(used.filter((item) => item.value !== undefined))
-      ? { date: latestDate(used.filter((item) => item.value !== undefined)) }
-      : {}),
+    ...(latestDate(dated) ? { date: latestDate(dated) } : {}),
+    ...(derived.lavi || derived.lvmi ? { derived } : {}),
     matchedTerms: [
       ...parsed.map((domain, index) => `${DOMAIN_TOKENS[index]}:${domain.score}`),
       `upper:${upper}`,
@@ -445,7 +484,6 @@ export function buildHfpefReading(input: HfpefReadingInput): HfpefReading {
     const values: CalcValues = {}
     const used: HfpefInputReading[] = []
     for (const field of def.inputs) {
-      if (CDSS_UNREAD_INPUTS.has(field.key)) continue
       const existing = readings.get(field.key)
       const reading = existing ?? readInput(field, autofill, inputs, profile)
       if (!existing) readings.set(field.key, reading)
