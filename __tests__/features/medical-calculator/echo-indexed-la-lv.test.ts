@@ -56,6 +56,14 @@ describe('HFA-PEFF indexes LA volume and LV mass to BSA', () => {
     expect(result.extra?.map(r => r.label.en)).toEqual(['Functional', 'Morphological', 'Biomarker', 'BSA (Du Bois)', 'LVMI (LV mass / BSA)'])
     expect(hfa.compute({ ...raw, lavi: '28', lvmi: '90' })!.extra).toHaveLength(3)
   })
+  test('a derived index just past a threshold scores like the same index typed in', () => {
+    // 61.6 mL / 1.8097 m² = 34.04 mL/m²: above the >34 major criterion although it displays as 34.
+    const near = { ...base, height: '170', weight: '70', laVolume: '61.6', lvmi: '90' }
+    const derived = hfa.compute(near)!
+    expect(derived.value).toBe('2 / 6')
+    expect(derived.value).toBe(hfa.compute({ ...base, lavi: '34.03864421666407', lvmi: '90' })!.value)
+    expect(derived.extra).toContainEqual({ label: { en: 'LAVI (LA volume / BSA)', zh: 'LAVI（左心房容積／BSA）' }, value: '34 mL/m²' })
+  })
   test.each(['height', 'weight'])('without %s the indices stay unknown, as today', missing => {
     const result = hfa.compute({ ...raw, [missing]: '' })!
     expect(result.value).toBe('0–2 / 6')

@@ -111,7 +111,8 @@ export const HFPEF: CalculatorDef[] = [{
     // needs both height and weight. Rounded as a report would print it.
     const height = n(v, 'height'), weight = n(v, 'weight'), laVolume = n(v, 'laVolume'), lvMass = n(v, 'lvMass')
     const bsa = height && weight && height > 0 && weight > 0 ? 0.007184 * weight ** 0.425 * height ** 0.725 : undefined
-    const indexed = (raw: number | undefined) => (bsa && raw && raw > 0 ? round(raw / bsa, 1) : undefined)
+    // Thresholds are judged on the unrounded index; only the displayed row is rounded.
+    const indexed = (raw: number | undefined) => (bsa && raw && raw > 0 ? raw / bsa : undefined)
     const statedLavi = n(v, 'lavi'), statedLvmi = n(v, 'lvmi')
     const lavi = statedLavi ?? indexed(laVolume), lvmi = statedLvmi ?? indexed(lvMass)
     const laviDerived = statedLavi === undefined && lavi !== undefined, lvmiDerived = statedLvmi === undefined && lvmi !== undefined
@@ -140,8 +141,8 @@ export const HFPEF: CalculatorDef[] = [{
       extra: [
         ...domains.map(d => ({ label: d.label, value: d.complete || d.score === 2 ? `${d.score} / 2` : `${d.score}–2 / 2` })),
         ...(bsa && (laviDerived || lvmiDerived) ? [{ label: label('BSA (Du Bois)', 'BSA（Du Bois）'), value: `${round(bsa, 2)} m²` }] : []),
-        ...(laviDerived ? [{ label: label('LAVI (LA volume / BSA)', 'LAVI（左心房容積／BSA）'), value: `${lavi} mL/m²` }] : []),
-        ...(lvmiDerived ? [{ label: label('LVMI (LV mass / BSA)', 'LVMI（左心室質量／BSA）'), value: `${lvmi} g/m²` }] : []),
+        ...(laviDerived ? [{ label: label('LAVI (LA volume / BSA)', 'LAVI（左心房容積／BSA）'), value: `${round(lavi!, 1)} mL/m²` }] : []),
+        ...(lvmiDerived ? [{ label: label('LVMI (LV mass / BSA)', 'LVMI（左心室質量／BSA）'), value: `${round(lvmi!, 1)} g/m²` }] : []),
       ],
       scoreRanges: hfaRanges,
       notes: label('Each domain contributes at most 2 points. When data are incomplete, do not classify from the lower bound alone.', '每領域最多 2 分。資料未齊時顯示可能範圍，不能僅用範圍下限分級。'),
