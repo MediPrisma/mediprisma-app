@@ -586,6 +586,9 @@
 .classTable thead .dpTag { white-space: nowrap; }
 .classTable td[data-current] { background: var(--blue-soft); }
 .classPatient { font-weight: 500; }
+/* HF DP-01's HFA-PEFF reading, under the table so it wraps to the panel. */
+.hfaPeff { padding: 0 10px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.hfaPeff p { margin: 0; }
 
 /* A point drawn as a block (AF 抗凝): its part of the question, what it decides on, today's box. */
 /* Measured on its own column, so the pair stacks where the page is narrow — a
