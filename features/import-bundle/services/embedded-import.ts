@@ -8,6 +8,11 @@
 // so that account's templates and settings are here; it does so before
 // handing a record, since switching accounts clears the open patient.
 //
+// The page can also ask which part of this app the frame shows
+// (mediprisma:embed-navigate): the clinical record or the 自訂摘要 view, so a
+// tab on the page opens straight onto it. A view this version does not know is
+// answered as not shown, and the page leaves the frame where it was.
+//
 // Only the exact parent origins below are accepted, only from the frame's own
 // parent window, and the answer goes back to that origin alone. Nothing is sent
 // anywhere else; the record stays in this browser as any local import does.
@@ -20,6 +25,8 @@ export const EMBED_IMPORTED = 'mediprisma:embed-imported'
 export const EMBED_READY = 'mediprisma:embed-ready'
 export const EMBED_SIGN_IN = 'mediprisma:embed-sign-in'
 export const EMBED_SIGNED_IN = 'mediprisma:embed-signed-in'
+export const EMBED_NAVIGATE = 'mediprisma:embed-navigate'
+export const EMBED_NAVIGATED = 'mediprisma:embed-navigated'
 
 /** The 門診 AI 助理 on the hospital VM. */
 const PRODUCTION_PARENTS = ['https://opd-ai-agent.mediprisma.tw']
@@ -82,4 +89,30 @@ export function isEmbedSignInMessage(data: unknown): data is EmbedSignInMessage 
 
 export function signedInReply(requestId: string, result: { ok: true } | { ok: false; error: string }) {
   return { source: EMBED_SOURCE_APP, type: EMBED_SIGNED_IN, version: EMBED_VERSION, requestId, ...result }
+}
+
+/** What the page may ask the frame to show: the clinical record, or 醫療摘要's 自訂摘要. */
+export const EMBED_VIEWS = ['record', 'custom-summary'] as const
+export type EmbedView = typeof EMBED_VIEWS[number]
+
+export interface EmbedNavigateMessage {
+  source: typeof EMBED_SOURCE_PARENT
+  type: typeof EMBED_NAVIGATE
+  version: typeof EMBED_VERSION
+  requestId: string
+  /** One of EMBED_VIEWS; a later page may name a view this version does not have. */
+  view: string
+}
+
+export function isEmbedNavigateMessage(data: unknown): data is EmbedNavigateMessage {
+  const message = data as Partial<EmbedNavigateMessage> | null
+  return Boolean(message) && message!.source === EMBED_SOURCE_PARENT && message!.type === EMBED_NAVIGATE
+    && message!.version === EMBED_VERSION && typeof message!.requestId === 'string' && message!.requestId.length > 0
+    && message!.requestId.length <= 100 && typeof message!.view === 'string'
+}
+
+export const isEmbedView = (view: string): view is EmbedView => (EMBED_VIEWS as readonly string[]).includes(view)
+
+export function navigatedReply(requestId: string, result: { ok: true; view: EmbedView } | { ok: false; error: string }) {
+  return { source: EMBED_SOURCE_APP, type: EMBED_NAVIGATED, version: EMBED_VERSION, requestId, ...result }
 }
