@@ -268,6 +268,13 @@ function PageContent() {
   const deferredDetailClearTimerRef = useRef<number | null>(null)
   const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
 
+  // A record detail (a trend, a visit) is drawn over the 功能 panel. When a
+  // right-panel task is asked for (revealTab), it is underneath that detail,
+  // so the detail goes.
+  useEffect(() => {
+    if (revealSeq) clearDetail()
+  }, [revealSeq, clearDetail])
+
   // What is actually collapsed right now. Derived, never stored: an effect
   // writing this into state would cascade a render on every resize and would
   // have to be unwound when the reader overrode it.
