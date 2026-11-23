@@ -5,17 +5,19 @@ import { importBundle, openLeftTab } from '../fixtures/import'
 
 const bundlePath = path.join(__dirname, '../fixtures/interaction-bundle.json')
 
-// What the hospital service answered for these ingredient names on
-// 2026-11-13 (trimmed). An ingredient it does not carry comes back as a RAW
-// placeholder with no alert.
-const KNOWN: Record<string, { udCode: string; genericName: string }> = {
-  tamoxifen: { udCode: '04373', genericName: 'Tamoxifen citrate (tamoxifen)' },
-  ciprofloxacin: { udCode: '04508', genericName: 'Ciprofloxacin lactate (ciprofloxacin)' },
-  'paroxetine hcl': { udCode: '05230', genericName: 'Paroxetine HCl (paroxetine)' },
-  'warfarin sodium': { udCode: '03951', genericName: 'Warfarin' },
-  spironolactone: { udCode: '00050', genericName: 'Spironolactone' },
-  'enalapril maleate': { udCode: '01675', genericName: 'Enalapril maleate (enalapril)' },
-}
+// What the hospital service answered for these drugs on 2026-11-13 (trimmed).
+// Since #553 a hospital order is sent by its product name and a cloud row by
+// its NHI code plus ingredient; the service returns the product it resolved,
+// with that product's English name and NHI codes. A drug it does not carry
+// comes back as a RAW placeholder with no alert.
+const KNOWN: Array<[RegExp, { udCode: string; genericName: string }]> = [
+  [/^tamoxifen/i, { udCode: '04373', genericName: 'Tamoxifen citrate (tamoxifen)' }],
+  [/^ciprofloxacin/i, { udCode: '04508', genericName: 'Ciprofloxacin lactate (ciprofloxacin)' }],
+  [/^paroxetine hcl$/i, { udCode: '05230', genericName: 'Paroxetine HCl (paroxetine)' }],
+  [/^warfarin sodium$/i, { udCode: '03951', genericName: 'Warfarin' }],
+  [/^spironolactone$/i, { udCode: '00050', genericName: 'Spironolactone' }],
+  [/^enalapril maleate$/i, { udCode: '01675', genericName: 'Enalapril maleate (enalapril)' }],
+]
 const alert = (a: string, b: string, severity: string, nursingAction: string, mechanism: string, type = 'DRUG_INTERACTION') => ({
   alertId: `db50::${a}::${b}`, type, severity, drugA: { udCode: a }, drugB: { udCode: b },
   nursingAction, mechanism, source: '北榮藥劑部交互作用資料庫 (.50 OLAP.DRGINACT)',
@@ -34,10 +36,10 @@ async function mockInteractionService(page: Page) {
     bodies.push(body)
     await route.fulfill({
       json: {
-        resolvedMedications: body.medications.map((medication: { drugName: string }, inputIndex: number) => {
-          const known = KNOWN[medication.drugName.toLowerCase()]
+        resolvedMedications: body.medications.map((medication: { drugName: string; nhiCode?: string }, inputIndex: number) => {
+          const known = KNOWN.find(([pattern]) => pattern.test(medication.drugName))?.[1]
           return known
-            ? { inputIndex, ...known }
+            ? { inputIndex, ...known, englishName: medication.drugName, allNhiCodes: medication.nhiCode ? [medication.nhiCode] : [] }
             : { inputIndex, udCode: `RAW-${inputIndex + 1}`, matchedBy: 'rawName', genericName: medication.drugName }
         }),
         alerts: ALERTS,
@@ -47,7 +49,7 @@ async function mockInteractionService(page: Page) {
   return bodies
 }
 
-test('安全 counts cross-visit interactions, opens from the 用藥 line, and sends ingredient names only', async ({ page }) => {
+test('安全 counts cross-visit interactions, opens from the 用藥 line, and sends drug names and drug codes only', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-11-13T04:00:00Z'))
   const bodies = await mockInteractionService(page)
   await importBundle(page, { bundlePath })
@@ -78,10 +80,14 @@ test('安全 counts cross-visit interactions, opens from the 用藥 line, and se
   await section.getByRole('button', { name: '同次開立 1 項' }).click()
   await expect(section.getByRole('button', { name: /SPIRONOLACTONE.* × ENALAPRIL/ })).toContainText('同次開立')
 
-  // One request for the list, however many places show it; ingredient names only.
+  // One request for the list, however many places show it. Each drug goes as
+  // a name and, where recorded, its NHI drug code (#553); nothing about the
+  // patient — name, birth date, record id — leaves the browser.
   expect(bodies).toHaveLength(1)
-  for (const medication of bodies[0]!.medications) expect(Object.keys(medication)).toEqual(['drugName'])
-  expect(JSON.stringify(bodies[0])).not.toMatch(/合成資料|1958|SYN0000/)
+  for (const medication of bodies[0]!.medications) {
+    expect(Object.keys(medication).every(key => key === 'drugName' || key === 'nhiCode')).toBe(true)
+  }
+  expect(JSON.stringify(bodies[0])).not.toMatch(/合成資料|1958|synthetic-interaction/)
 
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 })
