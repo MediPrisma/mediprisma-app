@@ -17,6 +17,16 @@ export function parseCalculatorEcho(raw: string): EchoValues {
 /** What a value was derived from, when the report did not state it: a caption suffix. */
 export type EchoDerivations = Partial<Record<EchoKey, string>>
 
+// 3 decimals for display, with more kept when rounding would cross HFA-PEFF's
+// rwt > 0.42 cut-off (0.42004 must not become 0.42).
+function roundRwt(exact: number): number {
+  for (let digits = 3; digits < 10; digits++) {
+    const rounded = Number(exact.toFixed(digits))
+    if ((rounded > 0.42) === (exact > 0.42)) return rounded
+  }
+  return exact
+}
+
 function parseEcho(raw: string): { values: EchoValues; derived: EchoDerivations } {
   const derived: EchoDerivations = {}
   const text = raw.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&prime;|&#8242;|&#39;|&apos;/gi, "'").replace(/[′’`]/g, "'").replace(/\s+/g, ' ')
@@ -92,7 +102,7 @@ function parseEcho(raw: string): { values: EchoValues; derived: EchoDerivations 
   }
   const ivs = length('IVSd|IVS'), pw = length('LVPWd|LVPW|PWd'), lvid = length('LVIDd|LVDd|LVEDD')
   if (values.wall === undefined && ivs !== undefined && pw !== undefined) values.wall = Math.max(ivs, pw)
-  if (values.rwt === undefined && pw !== undefined && lvid !== undefined && lvid > 0) values.rwt = 2 * pw / lvid
+  if (values.rwt === undefined && pw !== undefined && lvid !== undefined && lvid > 0) values.rwt = roundRwt(2 * pw / lvid)
   // Raw values behind LAVI and LVMI, which the calculator indexes to BSA.
   const laVolume = text.match(/\bLA\s*(?:volume|vol\.?)\s*(?:\([^()]{1,20}\)\s*)?[:=]?\s*(\d+(?:\.\d+)?)\s*ml(?!\s*\/)/i)
   if (laVolume && Number(laVolume[1]) > 0) values.laVolume = Number(laVolume[1])

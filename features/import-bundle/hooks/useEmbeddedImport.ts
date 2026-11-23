@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useImportBundle } from './useImportBundle'
 import { useAuth } from '@/src/application/providers/auth.provider'
+import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import {
   EMBED_READY,
   EMBED_SOURCE_APP,
@@ -10,7 +11,10 @@ import {
   importedReply,
   isAllowedEmbedParent,
   isEmbedImportMessage,
+  isEmbedNavigateMessage,
   isEmbedSignInMessage,
+  isEmbedView,
+  navigatedReply,
   signedInReply,
 } from '../services/embedded-import'
 
@@ -18,16 +22,18 @@ import {
  * While this app is framed, signs in as the parent page's account when it asks
  * (services/embedded-import.ts), and takes a Bundle from an allowlisted parent page
  * (services/embedded-import.ts), imports it through the same path as the
- * import button, and answers with the Patient ids now loaded. Does nothing
- * when the app is not framed.
+ * import button, and answers with the Patient ids now loaded. Shows the view
+ * the parent asks for (the record, or 自訂摘要). Does nothing when the app is
+ * not framed.
  */
 export function useEmbeddedImport() {
   const { importFile, loadedPatientIds } = useImportBundle()
   const { signInAsEmbeddingAccount } = useAuth()
-  const importRef = useRef({ importFile, loadedPatientIds, signInAsEmbeddingAccount })
+  const { revealTab, revealRecord } = useRightPanel()
+  const importRef = useRef({ importFile, loadedPatientIds, signInAsEmbeddingAccount, revealTab, revealRecord })
   useEffect(() => {
-    importRef.current = { importFile, loadedPatientIds, signInAsEmbeddingAccount }
-  }, [importFile, loadedPatientIds, signInAsEmbeddingAccount])
+    importRef.current = { importFile, loadedPatientIds, signInAsEmbeddingAccount, revealTab, revealRecord }
+  }, [importFile, loadedPatientIds, signInAsEmbeddingAccount, revealTab, revealRecord])
 
   useEffect(() => {
     if (typeof window === 'undefined' || window.parent === window) return
@@ -42,6 +48,17 @@ export function useEmbeddedImport() {
         } catch (error) {
           reply({ ok: false, error: error instanceof Error ? error.message : '登入失敗' })
         }
+        return
+      }
+      if (isEmbedNavigateMessage(data)) {
+        const { view } = data
+        if (!isEmbedView(view)) {
+          window.parent.postMessage(navigatedReply(data.requestId, { ok: false, error: `沒有「${view.slice(0, 40)}」這個畫面` }), event.origin)
+          return
+        }
+        if (view === 'custom-summary') importRef.current.revealTab('medical-summary', { summaryView: 'custom' })
+        else importRef.current.revealRecord()
+        window.parent.postMessage(navigatedReply(data.requestId, { ok: true, view }), event.origin)
         return
       }
       if (!isEmbedImportMessage(data)) return

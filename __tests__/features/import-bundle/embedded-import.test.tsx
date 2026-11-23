@@ -16,6 +16,12 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
   useAuth: () => ({ signInAsEmbeddingAccount: (uid: string, token: string) => signIn(uid, token) }),
 }))
 
+const revealTab = jest.fn()
+const revealRecord = jest.fn()
+jest.mock('@/src/application/providers/right-panel.provider', () => ({
+  useRightPanel: () => ({ revealTab: (...args: unknown[]) => revealTab(...args), revealRecord: () => revealRecord() }),
+}))
+
 import { isAllowedEmbedParent, isEmbedImportMessage, patientIdsOf } from '@/features/import-bundle/services/embedded-import'
 import { useEmbeddedImport } from '@/features/import-bundle/hooks/useEmbeddedImport'
 
@@ -54,6 +60,8 @@ describe('useEmbeddedImport', () => {
   beforeEach(() => {
     importFile.mockReset().mockResolvedValue(undefined)
     signIn.mockReset().mockResolvedValue(undefined)
+    revealTab.mockReset()
+    revealRecord.mockReset()
     load.mockReset().mockResolvedValue(['sim-v01'])
     parent.postMessage.mockReset()
     Object.defineProperty(window, 'parent', { configurable: true, value: parent })
@@ -116,6 +124,30 @@ describe('useEmbeddedImport', () => {
     await send(signInMessage('s3'), ASSISTANT)
     expect(parent.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ requestId: 's3', ok: false, error: 'auth/invalid-custom-token' }), ASSISTANT)
+  })
+
+  const navigateMessage = (view: string, requestId = 'n1') => ({
+    source: 'mediprisma-ai-assistant', type: 'mediprisma:embed-navigate', version: 1, requestId, view,
+  })
+
+  it('shows 自訂摘要 or the record when the assistant asks, and answers which', async () => {
+    renderHook(() => useEmbeddedImport())
+    await send(navigateMessage('custom-summary', 'n2'), ASSISTANT)
+    expect(revealTab).toHaveBeenCalledWith('medical-summary', { summaryView: 'custom' })
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'mediprisma:embed-navigated', requestId: 'n2', ok: true, view: 'custom-summary' }), ASSISTANT)
+    await send(navigateMessage('record', 'n3'), ASSISTANT)
+    expect(revealRecord).toHaveBeenCalledTimes(1)
+    expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n3', ok: true, view: 'record' }), ASSISTANT)
+  })
+
+  it('answers a view it does not have as not shown, and moves nothing for another origin', async () => {
+    renderHook(() => useEmbeddedImport())
+    await send(navigateMessage('custom-summary'), 'https://example.com')
+    await send(navigateMessage('last-visit', 'n4'), ASSISTANT)
+    expect(revealTab).not.toHaveBeenCalled()
+    expect(revealRecord).not.toHaveBeenCalled()
+    expect(parent.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ requestId: 'n4', ok: false }), ASSISTANT)
   })
 
   it('does nothing when the app is not framed', async () => {
