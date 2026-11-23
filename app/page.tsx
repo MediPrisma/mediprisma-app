@@ -213,7 +213,7 @@ function PageContent() {
   // The opposite direction: a control in the clinical summary sent the reader
   // to a right-panel task (總覽 → 帶回病歷). Flip the phone view to 功能 and
   // reopen a collapsed right panel — asking for it is the reader choosing it.
-  const { revealSeq } = useRightPanel()
+  const { revealSeq, recordSeq } = useRightPanel()
   useEffect(() => {
     if (!revealSeq) return
     setMobileView('right')
@@ -222,6 +222,16 @@ function PageContent() {
     setChosenCollapse((c) => (c === 'right' ? null : c))
     setCollapseChosen(true)
   }, [revealSeq, setMobileView])
+
+  // And back: the page framing this app asked for the clinical record
+  // (features/import-bundle/services/embedded-import.ts).
+  useEffect(() => {
+    if (!recordSeq) return
+    setMobileView('left')
+    // A request from an external context must make the panel visible.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChosenCollapse((c) => (c === 'left' ? null : c))
+  }, [recordSeq, setMobileView])
 
   // Header collapse: tuck the title/toolbar away into a slim strip so the
   // panels get the full viewport height. In-session only (same hydration
@@ -257,6 +267,13 @@ function PageContent() {
   const deferredDetailClearFrameRef = useRef<number | null>(null)
   const deferredDetailClearTimerRef = useRef<number | null>(null)
   const detailVisible = !!detail && detail.sourceId !== closingDetailSourceId
+
+  // A record detail (a trend, a visit) is drawn over the 功能 panel. When a
+  // right-panel task is asked for (revealTab), it is underneath that detail,
+  // so the detail goes.
+  useEffect(() => {
+    if (revealSeq) clearDetail()
+  }, [revealSeq, clearDetail])
 
   // What is actually collapsed right now. Derived, never stored: an effect
   // writing this into state would cascade a render on every resize and would

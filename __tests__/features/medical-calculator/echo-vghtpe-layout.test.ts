@@ -44,6 +44,13 @@ describe('echo layout with LVEF(method) and E\'_Med / E\'_Lat labels', () => {
     expect(parseCalculatorEcho("E'_Sep 7.1 cm/sec").septalE).toBe(7.1)
   })
 
+  test('derived RWT rounds to 3 decimals without crossing the 0.42 cut-off', () => {
+    expect(parseCalculatorEcho('LVIDd 46 mm LVPWd 10 mm').rwt).toBe(0.435) // 20 / 46 = 0.43478…
+    expect(parseCalculatorEcho('LVIDd 50 mm LVPWd 10.501 mm').rwt).toBe(0.42004) // not 0.42
+    expect(parseCalculatorEcho('LVIDd 50 mm LVPWd 10.4995 mm').rwt).toBe(0.42) // 0.41998 stays at or below
+    expect(parseCalculatorEcho('RWT 0.4237 LVIDd 46 mm LVPWd 10 mm').rwt).toBe(0.4237) // stated value kept
+  })
+
   test.each(['LVEF 55-60%', 'LVEF(MOD-sp4) 55-60 %', 'LA volume:88.4mlLVEF(Bp):55–60%'])('does not read an LVEF range from %s', text => {
     expect(parseCalculatorEcho(text).lvef).toBeUndefined()
   })
