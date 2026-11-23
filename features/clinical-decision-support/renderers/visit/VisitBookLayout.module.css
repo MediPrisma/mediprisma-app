@@ -574,9 +574,18 @@
 
 /* A classification side by side (HF DP-01's phenotype). */
 .classWrap { display: flex; flex-direction: column; gap: 6px; }
-.classTable { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: 14px; }
+/* Fits the side panel (~380px, CAD DP-01's five columns the most): cells wrap
+   rather than the table running past the panel and hiding the patient's
+   column. A definition breaks anywhere when it must; a heading only between
+   words, so 「Definition」 keeps its column. The floor leaves the scroller
+   only for the narrowest page (#219, English at 320px). */
+.classTable { width: 100%; min-width: 16rem; border-collapse: collapse; font-size: 14px; }
 .classTable thead tr { background: var(--thead); text-align: left; }
-.classTable th, .classTable td { padding: 8px 10px; text-align: left; vertical-align: top; }
+.classTable th, .classTable td { padding: 8px 10px; text-align: left; vertical-align: top; overflow-wrap: break-word; }
+.classTable td { overflow-wrap: anywhere; }
+@container (max-width: 600px) {
+  .classTable th, .classTable td { padding: 6px 6px; }
+}
 .classTable thead th { font-weight: 700; }
 .classTable thead th:first-child { width: 18%; }
 .classTable tbody th { font-weight: 500; color: var(--ink-3); }
@@ -586,6 +595,9 @@
 .classTable thead .dpTag { white-space: nowrap; }
 .classTable td[data-current] { background: var(--blue-soft); }
 .classPatient { font-weight: 500; }
+/* HF DP-01's HFA-PEFF reading, under the table so it wraps to the panel. */
+.hfaPeff { padding: 0 10px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.hfaPeff p { margin: 0; }
 
 /* A point drawn as a block (AF 抗凝): its part of the question, what it decides on, today's box. */
 /* Measured on its own column, so the pair stacks where the page is narrow — a
@@ -701,6 +713,25 @@
 .askLabel { min-width: 0; font-size: 14px; font-weight: 700; }
 .askGroup > button[data-prefilled], .questionGroup > button[data-prefilled] { background: var(--blue-soft); font-weight: 500; }
 .askNote { grid-column: 2; font-size: 12px; color: var(--ink-4); }
+/* A number typed beside the asks (HTN's home blood pressure): one field for the pair, its unit, and 「沒有量」. */
+.measureBody { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+/* The point's own decision on the field's line, pushed to the right (owner 2026-11-02: 「放在右邊不要獨立一行」). */
+.measureTrailing { margin-left: auto; }
+.measureInput {
+  width: 7.5em;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--btn-line);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.measureInput:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.measureInput[aria-invalid='true'] { border-color: var(--warn-ink); }
+.measureUnit { font-size: 13px; color: var(--ink-4); }
 /* Today's grade beside the asks (HF NYHA, owner decision 2026-10-02): each class with its meaning under it. */
 .askLabelTop { align-self: start; padding-top: 12px; }
 .gradeBody { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

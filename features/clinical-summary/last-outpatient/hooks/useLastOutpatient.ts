@@ -8,6 +8,7 @@ import { useOutpatientPrefs } from "@/src/application/hooks/use-outpatient-prefs
 import { useProgressiveImportStore } from "@/src/application/stores/progressive-import.store"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { isVghtpeSource } from "@/src/shared/utils/clinical-source-identity"
+import type { AwaitingOrder } from "@/src/shared/utils/awaiting-order"
 import { useVisitHistory, type VisitRecord } from "@/features/clinical-summary/visit-history/hooks/useVisitHistory"
 import { useEncounterDetails, type EncounterDetails } from "@/features/clinical-summary/visit-history/hooks/useEncounterDetails"
 import {
@@ -16,6 +17,8 @@ import {
   displayClinicianName,
   isHospitalOutpatientEncounter,
   isSameClinician,
+  lastOwnVisitBefore,
+  mergeVisitDetails,
   orderingVisitIds,
   resultsOrderedAt,
   type PriorLabValue,
@@ -31,7 +34,15 @@ export type HospitalOutpatientVisit = {
   institution?: string
 }
 
+/** What an own visit shows: everything every listed physician ordered from
+ *  that visit on, only the clinician's own orders from it on, or it alone. */
+export type VisitScope = 'since-all' | 'since-own' | 'single'
+
 const EMPTY: never[] = []
+
+function localDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 /** The hospital's own copy of a visit: the record itself, the hospital copy a
  *  confirmed merge kept, or the hospital partner of an unresolved pair. */
@@ -57,7 +68,11 @@ function toHospitalVisit(visit: VisitRecord, byId: Map<string, any>): HospitalOu
   }
 }
 
-export function useLastOutpatient(selectedVisitId: string | null) {
+/** `physician` narrows the visit list to one physician's visits; null lists
+ *  them all. The selected visit is always one the list shows; with none
+ *  selected it is the clinician's own last visit, else the newest. An own
+ *  visit gathers the listed visits from it on, unless `scope` is 'single'. */
+export function useLastOutpatient(selectedVisitId: string | null, physician: string | null = null, scope: VisitScope = 'since-all') {
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const { clinicianName } = useOutpatientPrefs()
@@ -95,9 +110,21 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     return new Set(visits.filter((visit) => visit.encounterIds.some((id) => ordered.has(id))).map((visit) => visit.id))
   }, [visits, diagnosticReports, observations])
 
-  const mine = clinicianName ? visits.filter((visit) => isSameClinician(visit.physician, clinicianName)) : []
-  const defaultVisit = mine[0] ?? visits[0]
-  const visit = (selectedVisitId && visits.find((candidate) => candidate.id === selectedVisitId)) || defaultVisit
+  // A physician no longer on this chart lists every visit.
+  const listedVisits = useMemo(() => {
+    const narrowed = physician ? visits.filter((visit) => visit.physician === physician) : visits
+    return narrowed.length > 0 ? narrowed : visits
+  }, [visits, physician])
+  const visit = (selectedVisitId && listedVisits.find((candidate) => candidate.id === selectedVisitId))
+    || lastOwnVisitBefore(listedVisits, clinicianName, localDay(new Date()))
+    || listedVisits[0]
+  // The visits an own visit gathers: itself and every listed one after it.
+  const sinceVisits = useMemo(() => {
+    if (!visit || scope === 'single' || !isSameClinician(visit.physician, clinicianName)) return EMPTY as HospitalOutpatientVisit[]
+    const from = visit.date.slice(0, 10)
+    return listedVisits.filter((candidate) => candidate.date.slice(0, 10) >= from
+      && (scope === 'since-all' || isSameClinician(candidate.physician, clinicianName)))
+  }, [visit, scope, listedVisits, clinicianName])
 
   // Only this visit's results, each placed under it: its own source link or an
   // order of this visit in basedOn (a combined draw belongs to every visit
@@ -142,6 +169,26 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     }
     return counts
   }, [visits, details])
+  // Orders each visit wrote that HIS has no request or report for yet.
+  const awaitingOrders = useMemo(() => {
+    const byVisit = new Map<string, AwaitingOrder[]>()
+    for (const candidate of visits) {
+      const seen = new Set<string>()
+      const orders = candidate.encounterIds
+        .flatMap((id) => (encounterById.get(id)?._awaitingOrders ?? []) as AwaitingOrder[])
+        .filter((order) => !seen.has(order.id) && !!seen.add(order.id))
+      if (orders.length > 0) byVisit.set(candidate.id, orders)
+    }
+    return byVisit
+  }, [visits, encounterById])
+  // Visits known to have written no examination order: a count of zero, never
+  // a missing count (a chart imported before visits carried one).
+  const withoutOrders = useMemo(() => new Set(visits
+    .filter((candidate) => {
+      const counts = candidate.encounterIds.map((id) => encounterById.get(id)?._orderCount)
+      return counts.includes(0) && !counts.some((count) => !!count)
+    })
+    .map((candidate) => candidate.id)), [visits, encounterById])
   const priorValues = useMemo(() => buildPriorLabValues(observations, diagnosticReports), [observations, diagnosticReports])
   // The source Observation behind each row, for the shared trend / history pane.
   const sourceObservations = useMemo(() => {
@@ -152,8 +199,14 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     }
     return byId
   }, [observations, diagnosticReports])
-  const rangeComparisons = useMemo(() => buildRangeComparisons(ordered.observations, ordered.reports), [ordered])
+  const rangeComparisons = useMemo(() => buildRangeComparisons(everyVisit.observations, everyVisit.reports), [everyVisit])
   const visitDetails = visit ? details.get(visit.id) as EncounterDetails | undefined : undefined
+  const sinceDetails = useMemo(() => sinceVisits.length > 1
+    ? mergeVisitDetails(
+      sinceVisits.flatMap((candidate) => (details.get(candidate.id) as EncounterDetails | undefined) ?? []),
+      sourceObservations,
+    )
+    : null, [sinceVisits, details, sourceObservations])
   const sharedCount = visitDetails
     ? visitDetails.tests.filter((test) => ordered.sharedIds.has(test.id)).length
       + visitDetails.reports.filter((report) => report.row.diagnosticReportIds?.some((id) => ordered.sharedIds.has(id))).length
@@ -163,13 +216,17 @@ export function useLastOutpatient(selectedVisitId: string | null) {
     isLoading,
     reportsPending: progressivePhase === 'reports-pending' || progressivePhase === 'reports-pending-partial',
     clinicianName,
-    clinicianMatched: !!clinicianName && mine.length > 0,
     visits,
+    listedVisits,
     withResults,
     itemCounts,
+    awaitingOrders,
+    withoutOrders,
     visit,
-    details: visitDetails,
-    sharedCount,
+    /** The visits gathered with an own visit; empty when it shows alone. */
+    sinceVisits,
+    details: sinceDetails ?? visitDetails,
+    sharedCount: sinceDetails ? 0 : sharedCount,
     priorValues: priorValues as Map<string, PriorLabValue>,
     rangeComparisons,
     sourceObservations,

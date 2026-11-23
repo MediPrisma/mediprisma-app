@@ -66,6 +66,8 @@ export type ConvertDim =
   | 'hemoglobin'  // g/dL ↔ g/L ↔ mmol/L
   | 'fio2'        // % ↔ fraction (21% ↔ 0.21)
   | 'albumin-creatinine-ratio' // urine ACR: mg/g ↔ mg/mmol
+  | 'duration'    // ECG intervals: ms ↔ s
+  | 'temperature' // °C ↔ °F
 
 /**
  * Where an input's initial value comes from, if any. Resolved by
@@ -80,7 +82,8 @@ export type ConvertDim =
 export type VitalKind = 'sbp' | 'weight' | 'height' | 'waist'
 
 export type AutofillSource =
-  | { kind: 'hfpefClinical'; key: import('./hfpef-clinical-autofill').ClinicalSelectKey }
+  /** `answers` maps the record's 「yes」/「no」 onto the input's own option values (Wells' 「0」/「1」). */
+  | { kind: 'hfpefClinical'; key: import('./hfpef-clinical-autofill').ClinicalSelectKey; answers?: Record<string, string> }
   | { kind: 'echo'; key: import('./echo-autofill').EchoKey }
   | { kind: 'bmi' }
   | { kind: 'natriuretic'; assay: 'BNP' | 'NT-PROBNP' }
@@ -132,6 +135,13 @@ export interface SelectInput {
   options: SelectOption[]
   source?: AutofillSource
   defaultValue?: string
+  /**
+   * The usual answer, filled when the record gives none (owner decision
+   * 2026-11-19: what the record does not show is presumed absent, so the
+   * clinician only changes what is there). Shown as 預設（請核對）, editable.
+   * With a record source, it waits for the chart to finish loading.
+   */
+  presumed?: string
   /**
    * Asked only in some of the cases the calculator covers (one indication's
    * question): a blank stays unknown to the rules that read it, but the
@@ -225,7 +235,7 @@ export interface CalculatorDef {
     hint?: L
     keys: string[]
     /** Folds the group to one line while nothing in it needs the reader; `open` while something does. */
-    summary?: (values: CalcValues, shownKeys: string[]) => { text: L; open: boolean }
+    summary?: (values: CalcValues, shownKeys: string[], captions?: Record<string, string | undefined>) => { text: L; open: boolean }
   }[]
 }
 

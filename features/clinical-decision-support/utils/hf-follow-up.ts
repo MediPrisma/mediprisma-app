@@ -1,12 +1,13 @@
 import { excludeUnresolvedDecisionVariants } from '@/src/core/utils/clinical-variant-inputs'
 import type { ObservationEntity } from '@/src/core/entities/clinical-data.entity'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 export type SymptomChange = 'improved' | 'unchanged' | 'worse' | 'resolved'
 export interface FollowUpComplaint { text: string; date: string; source: string; change?: SymptomChange; comparedWith?: string; note?: string }
 export interface WeightPoint { value: number; date: string; source: string }
 export interface HfFollowUpHistory { complaints: FollowUpComplaint[]; weights: WeightPoint[]; weightChanges?: { date: string; value: 'increased' | 'unchanged' | 'decreased' }[] }
 export const EMPTY_HF_HISTORY: HfFollowUpHistory = { complaints: [], weights: [] }
-const validDate = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value
+const validDate = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && utcDay(Date.parse(value)) === value
 
 export function parseHfHistory(raw: unknown): HfFollowUpHistory {
   const value = raw as Partial<HfFollowUpHistory> | undefined

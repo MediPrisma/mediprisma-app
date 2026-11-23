@@ -21,7 +21,7 @@ describe('Gemini proxy model routing', () => {
       proxyUrl: 'https://proxy.example.com/gemini',
       proxyClientKey: 'test-client-key',
       isGemini: true,
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-hydrogen',
     })
     const nativeBody = {
       contents: [
@@ -32,7 +32,7 @@ describe('Gemini proxy model routing', () => {
     }
 
     const result = await proxyFetch(
-      `https://sdk.example.com/models/gemini-3.8-flash:${endpoint}`,
+      `https://sdk.example.com/models/gemini-4-hydrogen:${endpoint}`,
       {
         method: 'POST',
         headers: { 'x-goog-api-key': 'proxy-dummy-key' },
@@ -45,7 +45,7 @@ describe('Gemini proxy model routing', () => {
     expect(url).toBe('https://proxy.example.com/gemini')
     expect(JSON.parse(init.body)).toEqual({
       ...nativeBody,
-      model: 'gemini-3.8-flash',
+      model: 'gemini-4-hydrogen',
       __proxyStreaming: streaming,
     })
     const headers = new Headers(init.headers)
@@ -65,12 +65,12 @@ describe('OpenAI Responses proxy stream guarding', () => {
       proxyUrl: 'https://proxy.example.com/openai',
       proxyClientKey: 'test-client-key',
       isGemini: false,
-      modelId: 'gpt-5.6-terra',
+      modelId: 'gpt-6.1-terra',
     })
 
     const result = await proxyFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
-      body: JSON.stringify({ model: 'gpt-5.6-terra', input: 'hello' }),
+      body: JSON.stringify({ model: 'gpt-6.1-terra', input: 'hello' }),
     })
 
     const body = await result.text()

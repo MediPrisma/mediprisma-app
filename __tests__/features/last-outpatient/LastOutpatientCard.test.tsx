@@ -28,10 +28,24 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
 }))
 
 // The report row is the reports tab's own component; here it only has to show
-// which report landed under the visit.
+// which report landed under the visit and whether it starts open.
 jest.mock('@/features/clinical-summary/reports/components/ReportRow', () => ({
-  ReportRow: ({ row }: { row: { title: string } }) => <div data-testid="report-row">{row.title}</div>,
+  ReportRow: ({ row, defaultOpen }: { row: { id: string; title: string }; defaultOpen: string[] }) => (
+    <div data-testid="report-row" data-open={String(defaultOpen.includes(row.id))}>{row.title}</div>
+  ),
 }))
+
+// Days show their year only when it is not this year; pin "today" so the
+// fixture's 2026 days read as this year. Only Date is faked.
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: new Date('2026-11-07T12:00:00+08:00'),
+    doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate',
+      'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback',
+      'cancelIdleCallback', 'hrtime', 'performance'],
+  })
+})
+afterAll(() => jest.useRealTimers())
 
 // Radix Select needs these in jsdom.
 beforeAll(() => {
@@ -44,8 +58,20 @@ const openSelect = (trigger: HTMLElement) => fireEvent.keyDown(trigger, { key: '
 // The visit the list has selected.
 const shownVisit = () => within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { pressed: true })
 
+// Pick a visit from the list by its day.
+const openVisit = (day: string) => fireEvent.click(
+  within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { name: new RegExp(day) }),
+)
+
+// The physician filter above the visit list.
+const physicianFilter = () => screen.getByRole('combobox', { name: zhTW.lastOutpatient.physicianFilter })
+
 // A lab row of the results table, found by the figure it shows.
 const rowWith = (figure: string) => screen.queryAllByRole('row').find((row) => row.textContent?.includes(figure))
+
+// The fold button on the category heading above a lab row.
+const categoryHeading = (figure: string) =>
+  rowWith(figure)!.closest('[role="rowgroup"]')!.querySelector('button[aria-expanded]') as HTMLElement
 
 const HOSPITAL_META = {
   source: 'https://web9.vghtpe.gov.tw/emr/qemr/',
@@ -149,15 +175,17 @@ describe('LastOutpatientCard', () => {
     expect(rowWith('2.2')).toBeTruthy()
   })
 
-  it('opens on the clinician’s own last visit and shows what it ordered, including a later echo', () => {
+  it('shows what the picked visit ordered, including a later echo, and marks the clinician’s own visit', () => {
     mockClinicianName = '陳怡君 醫師'
     render(<LastOutpatientCard />)
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.scopeSingle }))
 
     expect(shownVisit()).toHaveTextContent('2026/10/09')
     expect(screen.getByText('陳怡君（您）')).toBeInTheDocument()
     expect(rowWith('1.26')).toBeTruthy()
-    expect(rowWith('1.26')?.textContent).toMatch(/1\.12\s*07\/10/)
+    expect(rowWith('1.26')?.textContent).toMatch(/1\.12/)
     expect(screen.getByTestId('report-row')).toHaveTextContent('Echocardiography')
+    expect(screen.getByTestId('report-row')).toHaveAttribute('data-open', 'true')
     // Ordered elsewhere, or only date-matched: not part of this visit.
     expect(rowWith('4.6')).toBeUndefined()
     expect(rowWith('108')).toBeUndefined()
@@ -172,6 +200,7 @@ describe('LastOutpatientCard', () => {
   it('filters labs to abnormal results and keeps the free-text reports', () => {
     mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     fireEvent.click(screen.getByRole('button', { name: '異常' }))
 
     expect(screen.getByRole('button', { name: '異常' })).toHaveAttribute('aria-pressed', 'true')
@@ -182,50 +211,107 @@ describe('LastOutpatientCard', () => {
     expect(screen.getByTestId('report-row')).toBeInTheDocument()
   })
 
-  it('says when the clinician has no hospital visit with this patient', () => {
-    mockClinicianName = '王志明'
+  it('opens every lab category, and folds one from its heading without losing its counts', () => {
     render(<LastOutpatientCard />)
-    expect(screen.getByText(zhTW.lastOutpatient.noMatch.replace('{name}', '王志明'))).toBeInTheDocument()
-    expect(shownVisit()).toHaveTextContent('2026/10/20')
+    openVisit('2026/10/09')
+    const table = screen.getByRole('table')
+    const headings = within(table).getAllByRole('button', { expanded: true })
+    expect(headings.length).toBeGreaterThan(0)
+    expect(within(table).queryByRole('button', { expanded: false })).not.toBeInTheDocument()
+
+    const heading = categoryHeading('12.6')
+    fireEvent.click(heading)
+    expect(heading).toHaveAttribute('aria-expanded', 'false')
+    expect(rowWith('12.6')).toBeUndefined()
+    // The folded heading still says how many results it holds and how many are abnormal.
+    expect(heading.textContent).toMatch(/\d+ 項/)
+    expect(heading.textContent).toMatch(/異常 \d+/)
+    // The visit's own total is untouched.
+    expect(screen.getByText('異常 2')).toBeInTheDocument()
+
+    fireEvent.click(heading)
+    expect(heading).toHaveAttribute('aria-expanded', 'true')
+    expect(rowWith('12.6')).toBeTruthy()
   })
 
-  it('picks the name from this patient’s physicians in the tab and opens that clinician’s last visit', () => {
-    mockClinicianName = '陳怡君'
-    const { rerender } = render(<LastOutpatientCard />)
-    const menu = screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })
-    expect(menu).toHaveTextContent('陳怡君')
-    // A menu only: no free-text name.
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  it('opens every category again on another visit', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
+    fireEvent.click(categoryHeading('12.6'))
+    expect(rowWith('12.6')).toBeUndefined()
+    openVisit('2026/10/20')
+    openVisit('2026/10/09')
+    expect(rowWith('12.6')).toBeTruthy()
+  })
 
-    openSelect(menu)
+  it('lists every physician by default and narrows the list to one physician', () => {
+    render(<LastOutpatientCard />)
+    expect(physicianFilter()).toHaveTextContent(zhTW.lastOutpatient.physicianFilterAll)
+    // The tab no longer asks for the clinician's name.
+    expect(screen.queryByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).not.toBeInTheDocument()
+
+    openSelect(physicianFilter())
     const options = screen.getAllByRole('option').map((option) => option.textContent)
-    expect(options[0]).toBe(zhTW.settings.clinicianNameNone)
-    expect(options.some((text) => text?.startsWith('陳怡君'))).toBe(true)
+    expect(options).toEqual([`${zhTW.lastOutpatient.physicianFilterAll}3`, '陳怡君2', '李建國1'])
+    fireEvent.click(screen.getByRole('option', { name: /陳怡君/ }))
+
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    expect(within(list).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      expect.stringMatching(/2026\/10\/09/),
+      expect.stringMatching(/2026\/07\/10/),
+    ])
+    // The shown visit moves to that physician's latest.
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+    expect(rowWith('1.26')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.physicianFilterClear }))
+    expect(within(list).getAllByRole('button')).toHaveLength(3)
+    expect(physicianFilter()).toHaveTextContent(zhTW.lastOutpatient.physicianFilterAll)
+  })
+
+  it('keeps the picked visit when the filter still lists it', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/07/10')
+    openSelect(physicianFilter())
+    fireEvent.click(screen.getByRole('option', { name: /陳怡君/ }))
+    expect(shownVisit()).toHaveTextContent('2026/07/10')
+  })
+
+  it('follows the shown visit across filter changes, not an earlier pick', () => {
+    render(<LastOutpatientCard />)
+    openVisit('2026/07/10')
+    openSelect(physicianFilter())
     fireEvent.click(screen.getByRole('option', { name: /李建國/ }))
-    expect(mockSetClinicianName).toHaveBeenCalledWith('李建國')
-
-    rerender(<LastOutpatientCard />)
     expect(shownVisit()).toHaveTextContent('2026/10/20')
-    expect(screen.getByText('李建國（您）')).toBeInTheDocument()
+
+    // The 07/10 pick is gone: back on 陳怡君, her latest visit opens.
+    openSelect(physicianFilter())
+    fireEvent.click(screen.getByRole('option', { name: /陳怡君/ }))
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
+
+    // Clearing the filter keeps the visit on screen.
+    fireEvent.click(screen.getByRole('button', { name: zhTW.lastOutpatient.physicianFilterClear }))
+    expect(shownVisit()).toHaveTextContent('2026/10/09')
   })
 
-  it('clears the name with 不指定', () => {
-    mockClinicianName = '陳怡君'
+  it('lists the clinician first in the filter, marked as theirs', () => {
+    mockClinicianName = '李建國'
     render(<LastOutpatientCard />)
-    openSelect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel }))
-    fireEvent.click(screen.getByRole('option', { name: zhTW.settings.clinicianNameNone }))
-    expect(mockSetClinicianName).toHaveBeenCalledWith('')
+    openSelect(physicianFilter())
+    const options = screen.getAllByRole('option').map((option) => option.textContent)
+    expect(options.slice(1)).toEqual(['李建國（您）1', '陳怡君2'])
   })
 
-  it('keeps a name saved on another chart selectable, with the no-visit note', () => {
-    mockClinicianName = '王志明'
+  it('hides the filter when every visit has the same physician', () => {
+    const data = chart()
+    mockClinicalData = { ...data, encounters: data.encounters.filter((e: any) => e.id !== 'h-other') }
     render(<LastOutpatientCard />)
-    expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent('王志明')
+    expect(screen.queryByRole('combobox', { name: zhTW.lastOutpatient.physicianFilter })).not.toBeInTheDocument()
   })
 
   it('opens the shared trend pane for a lab result', () => {
-    mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     const row = rowWith('1.26')!
     fireEvent.click(within(row).getByRole('button', { name: '查看趨勢' }))
     expect(mockShowDetail).toHaveBeenCalledWith(expect.objectContaining({
@@ -233,9 +319,36 @@ describe('LastOutpatientCard', () => {
     }))
   })
 
-  it('offers the menu to a clinician without a saved name', () => {
+  it('names the usual 本次 and 前次 days in the column headings, and dates only a result from another day', () => {
+    const { unmount } = render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
+    const headers = () => screen.getAllByRole('columnheader').map((header) => header.textContent)
+    expect(headers()).toEqual(expect.arrayContaining(['本次10/09', '前次07/10']))
+    expect(within(rowWith('1.26')!).getAllByRole('cell')[1]).not.toHaveTextContent('10/09')
+    expect(within(rowWith('1.26')!).getAllByRole('cell')[3]).toHaveTextContent(/^1\.12$/)
+    unmount()
+
+    const data = chart()
+    mockClinicalData = {
+      ...data,
+      observations: data.observations.map((o: any) => o.id === 'cr-now' ? { ...o, effectiveDateTime: '2026-10-12T08:10:00+08:00' } : o),
+    }
     render(<LastOutpatientCard />)
-    expect(screen.getByRole('combobox', { name: zhTW.settings.clinicianNameLabel })).toHaveTextContent(zhTW.settings.clinicianNameNone)
+    openVisit('2026/10/09')
+    expect(headers()).toEqual(expect.arrayContaining(['本次10/09']))
+    expect(within(rowWith('1.26')!).getAllByRole('cell')[1]).toHaveTextContent(/1\.26.*10\/12/)
+    expect(within(rowWith('12.6')!).getAllByRole('cell')[1]).not.toHaveTextContent('10/09')
+  })
+
+  it('adds the year to a day from another year', () => {
+    const data = chart()
+    mockClinicalData = {
+      ...data,
+      observations: data.observations.map((o: any) => o.id === 'cr-old' ? { ...o, effectiveDateTime: '2025-12-10T08:10:00+08:00' } : o),
+    }
+    render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual(expect.arrayContaining(['前次25/12/10']))
   })
 
   it('lists every hospital visit, any physician, and switches to one', () => {
@@ -249,7 +362,6 @@ describe('LastOutpatientCard', () => {
     // A visit with no linked result says so.
     expect(visits[2]).toMatch(/2026\/07\/10/)
     expect(visits.some((text) => text?.includes('2026/10/25'))).toBe(false)
-    expect(shownVisit()).toHaveTextContent('2026/10/09')
 
     fireEvent.click(within(list).getByRole('button', { name: /2026\/10\/20/ }))
     expect(shownVisit()).toHaveTextContent('2026/10/20')
@@ -257,17 +369,51 @@ describe('LastOutpatientCard', () => {
     expect(rowWith('1.26')).toBeUndefined()
   })
 
-  it('mutes a visit with nothing linked yet', () => {
-    mockClinicalData = { ...chart(), observations: chart().observations.filter((o: any) => o.id !== 'cr-old') }
+  it('names only the clinic in the visit list and keeps the room code and session in the header', () => {
+    const data = chart()
+    mockClinicalData = {
+      ...data,
+      encounters: data.encounters.map((e: any) => e.id === 'h-other' ? { ...e, serviceType: { text: '003(心臟內科上午)' } } : e),
+    }
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    const chip = within(list).getByRole('button', { name: /2026\/10\/20/ })
+    expect(chip).toHaveTextContent('心臟內科 · 李建國')
+    expect(chip).not.toHaveTextContent('003')
+    expect(chip).toHaveAttribute('title', '2026/10/20 · 003(心臟內科上午) · 李建國')
+
+    fireEvent.click(chip)
+    expect(screen.getAllByText('003(心臟內科上午)').length).toBeGreaterThan(0)
+  })
+
+  it('mutes a visit with nothing linked yet, and says whether it ordered anything', () => {
+    const data = { ...chart(), observations: chart().observations.filter((o: any) => o.id !== 'cr-old') }
+    const oldVisit = () => within(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).getByRole('button', { name: /2026\/07\/10/ })
+    // No order count (an earlier import): unknown, so only "no results".
+    mockClinicalData = data
+    const first = render(<LastOutpatientCard />)
+    expect(oldVisit()).toHaveTextContent(zhTW.lastOutpatient.noResults)
+    expect(oldVisit()).not.toHaveTextContent(zhTW.lastOutpatient.noOrders)
+    first.unmount()
+
+    // A recorded count of zero: it ordered nothing.
+    mockClinicalData = { ...data, encounters: data.encounters.map((visit: any) => visit.id === 'h-old' ? { ...visit, _orderCount: 0 } : visit) }
+    const { unmount } = render(<LastOutpatientCard />)
+    expect(oldVisit()).toHaveTextContent(zhTW.lastOutpatient.noOrders)
+    unmount()
+
+    // It wrote an order, and nothing has come back for it.
+    mockClinicalData = { ...data, encounters: data.encounters.map((visit: any) => visit.id === 'h-old' ? { ...visit, _orderCount: 1 } : visit) }
     render(<LastOutpatientCard />)
     const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
     expect(within(list).getByRole('button', { name: /2026\/07\/10/ })).toHaveTextContent(zhTW.lastOutpatient.noResults)
+    expect(within(list).getByRole('button', { name: /2026\/07\/10/ })).not.toHaveTextContent(zhTW.lastOutpatient.noOrders)
     expect(within(list).getByRole('button', { name: /2026\/10\/09/ })).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
   })
 
   it('counts each visit’s items the way the summary does, and groups visits by year', () => {
-    mockClinicianName = '陳怡君'
     render(<LastOutpatientCard />)
+    openVisit('2026/10/09')
     const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
     const mine = within(list).getByRole('button', { name: /2026\/10\/09/ })
     // 開立 5 項 in the summary is the same count the list shows.
@@ -299,5 +445,153 @@ describe('LastOutpatientCard', () => {
     // Nor does the visit list call any visit empty yet.
     expect(screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
     useProgressiveImportStore.setState({ current: null })
+  })
+
+  it('breaks a multi-clause reference range at its own separators, not mid-token', () => {
+    mockClinicalData = {
+      ...chart(),
+      observations: [
+        ...chart().observations,
+        // Fictional values; text shaped like a hospital urine ACR range.
+        lab('acr', '9318-7', 'Malb/Ucre', 0.05, '', '2026-10-20', 'h-other', {
+          referenceRange: [{ text: '<0.03:normal;0.03~0.3:microalbuminuria;>0.3:overt proteinuria' }],
+        }),
+        lab('alt', '1742-6', 'ALT', 20, 'U/L', '2026-10-20', 'h-other', {
+          referenceRange: [{ text: 'M:&lt;41; F:&lt;33 U/L' }],
+        }),
+        lab('a1c', '4548-4', 'HbA1c', 6.1, '%', '2026-10-20', 'h-other', {
+          referenceRange: [{ text: 'Healthy: 4.8~5.9% , Prediabetes: 5.7-6.4% , Diabetes: >=6.5%' }],
+        }),
+      ],
+    }
+    render(<LastOutpatientCard />)
+    for (const clause of ['<0.03:normal', '0.03~0.3:microalbuminuria', '>0.3:overt proteinuria', 'Healthy: 4.8~5.9%', 'Prediabetes: 5.7-6.4%', 'Diabetes: >=6.5%', 'M:&lt;41', 'F:&lt;33 U/L']) {
+      const shown = screen.getAllByText(clause)
+      expect(shown.length).toBeGreaterThan(0)
+      shown.forEach((el) => expect(el).toHaveClass('block'))
+    }
+  })
+
+  it('lists the orders a visit wrote that have no report yet, and marks a booked examination', () => {
+    const data = chart()
+    data.encounters = data.encounters.map((visit: any) => visit.id === 'h-other' ? {
+      ...visit,
+      _awaitingOrders: [
+        { id: 'o-bnp', label: 'NT-pro-BNP', appointment: false },
+        { id: 'o-echo', label: 'COLOR, ECHOCARDIOGRAM', appointment: true },
+      ],
+    } : visit)
+    mockClinicalData = data
+    render(<LastOutpatientCard />)
+    const section = screen.getByTestId('last-outpatient-awaiting')
+    expect(section).toHaveTextContent(zhTW.lastOutpatient.awaitingTitle)
+    expect(section).toHaveTextContent('2 項')
+    expect(within(section).getByText('NT-pro-BNP').closest('li')).not.toHaveTextContent(zhTW.lastOutpatient.awaitingAppointment)
+    expect(within(section).getByText('COLOR, ECHOCARDIOGRAM').closest('li')).toHaveTextContent(zhTW.lastOutpatient.awaitingAppointment)
+    expect(section).toHaveTextContent(zhTW.lastOutpatient.awaitingNote)
+    // Another visit's orders stay with that visit.
+    openVisit('2026/10/09')
+    expect(screen.queryByTestId('last-outpatient-awaiting')).not.toBeInTheDocument()
+  })
+
+  it('says a visit with only unreported orders is awaiting reports, not empty', () => {
+    const data = chart()
+    data.observations = data.observations.filter((o: any) => o.id !== 'cr-old')
+    data.encounters = data.encounters.map((visit: any) => visit.id === 'h-old'
+      ? { ...visit, _awaitingOrders: [{ id: 'o-cbc', label: 'CBC', appointment: false }] } : visit)
+    mockClinicalData = data
+    render(<LastOutpatientCard />)
+    const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+    const chip = within(list).getByRole('button', { name: /2026\/07\/10/ })
+    expect(chip).toHaveTextContent('待報告 1 項')
+    expect(chip).not.toHaveTextContent(zhTW.lastOutpatient.noResults)
+    openVisit('2026/07/10')
+    expect(screen.getByTestId('last-outpatient-awaiting')).toHaveTextContent('CBC')
+    expect(screen.queryByText(zhTW.lastOutpatient.empty)).not.toBeInTheDocument()
+  })
+
+  describe('since the clinician’s own last visit', () => {
+    const scopeButton = (name: string) => screen.getByRole('button', { name })
+
+    it('opens on the clinician’s own last visit and gathers every later visit’s results', () => {
+      mockClinicianName = '陳怡君'
+      render(<LastOutpatientCard />)
+      expect(shownVisit()).toHaveTextContent('2026/10/09')
+      expect(scopeButton(zhTW.lastOutpatient.scopeSinceAll)).toHaveAttribute('aria-pressed', 'true')
+      // Own orders and the nephrologist's later ones, in one table.
+      expect(rowWith('1.26')).toBeTruthy()
+      expect(rowWith('4.6')).toBeTruthy()
+      // The combined draw is under both visits, and listed once.
+      expect(screen.queryAllByRole('row').filter((row) => row.textContent?.includes('2.2'))).toHaveLength(1)
+      expect(screen.getByText(/開立 6 項/)).toBeInTheDocument()
+      expect(screen.getByText(/合併 2 次門診/)).toBeInTheDocument()
+      const list = screen.getByRole('group', { name: zhTW.lastOutpatient.visitPicker })
+      expect(within(list).getByRole('button', { name: /2026\/10\/20/ })).toHaveAttribute('data-gathered', 'true')
+      expect(within(list).getByRole('button', { name: /2026\/07\/10/ })).not.toHaveAttribute('data-gathered')
+    })
+
+    it('shows an item two physicians ordered once, as its latest result with the earlier one as previous', () => {
+      mockClinicianName = '陳怡君'
+      const data = chart()
+      data.observations.push(lab('cr-repeat', '2160-0', 'Creatinine', 1.41, 'mg/dL', '2026-10-20', 'h-other'))
+      mockClinicalData = data
+      render(<LastOutpatientCard />)
+      expect(rowWith('1.41')?.textContent).toMatch(/1\.26/)
+      expect(screen.queryAllByRole('row').filter((row) => row.textContent?.includes('Creatinine') || row.textContent?.includes('Cr'))
+        .filter((row) => /1\.26/.test(row.textContent ?? '') && !/1\.41/.test(row.textContent ?? ''))).toHaveLength(0)
+
+      // Alone, the visit shows its own result again.
+      fireEvent.click(scopeButton(zhTW.lastOutpatient.scopeSingle))
+      expect(rowWith('1.41')).toBeUndefined()
+      expect(rowWith('1.26')?.textContent).toMatch(/1\.12/)
+    })
+
+    it('narrows to the clinician’s own orders, and a visit of another physician shows alone', () => {
+      mockClinicianName = '陳怡君'
+      render(<LastOutpatientCard />)
+      fireEvent.click(scopeButton(zhTW.lastOutpatient.scopeSinceOwn))
+      expect(rowWith('1.26')).toBeTruthy()
+      expect(rowWith('4.6')).toBeUndefined()
+
+      openVisit('2026/10/20')
+      expect(screen.queryByRole('group', { name: zhTW.lastOutpatient.scopeLabel })).not.toBeInTheDocument()
+      expect(rowWith('4.6')).toBeTruthy()
+      expect(rowWith('1.26')).toBeUndefined()
+    })
+
+    it('starts from an own visit that ordered nothing, and from an earlier own visit when picked', () => {
+      mockClinicianName = '陳怡君'
+      const data = chart()
+      data.encounters.push(encounter('h-mine-plain', HOSPITAL_META, '2026-10-15', '心臟內科', '陳怡君'))
+      mockClinicalData = data
+      render(<LastOutpatientCard />)
+      expect(shownVisit()).toHaveTextContent('2026/10/15')
+      // Only what came after it: the later visit's results, not the 10/09 ones.
+      expect(rowWith('4.6')).toBeTruthy()
+      expect(rowWith('1.26')).toBeUndefined()
+
+      openVisit('2026/10/09')
+      expect(rowWith('1.26')).toBeTruthy()
+      expect(rowWith('4.6')).toBeTruthy()
+      expect(screen.getByText(/合併 3 次門診/)).toBeInTheDocument()
+    })
+
+    it('leaves today’s own visit out of "last": it is the one in progress', () => {
+      mockClinicianName = '陳怡君'
+      const data = chart()
+      data.encounters.push(encounter('h-today', HOSPITAL_META, '2026-11-07', '心臟內科', '陳怡君'))
+      mockClinicalData = data
+      render(<LastOutpatientCard />)
+      expect(shownVisit()).toHaveTextContent('2026/10/09')
+    })
+
+    it('names the visit of each unreported order when visits are gathered', () => {
+      mockClinicianName = '陳怡君'
+      const data = chart()
+      ;(data.encounters[2] as any)._awaitingOrders = [{ id: 'o1', label: 'HbA1c', appointment: false }]
+      mockClinicalData = data
+      render(<LastOutpatientCard />)
+      expect(within(screen.getByTestId('last-outpatient-awaiting')).getByText('HbA1c').closest('li')).toHaveTextContent('腎臟內科 · 10/20')
+    })
   })
 })

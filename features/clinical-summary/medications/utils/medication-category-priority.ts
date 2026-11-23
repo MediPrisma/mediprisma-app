@@ -9,14 +9,18 @@ const COAGULATION_CATEGORY_PATTERN = /(?:抗凝|抗血小板|抗血小版|抗血
  * for source records without structured drug-master terminology.
  */
 export function isCoagulationOrSurgeryRelevant(
-  row: Pick<MedicationRow, 'category' | 'drugTerminology'>,
+  row: Pick<MedicationRow, 'category' | 'drugTerminology' | 'hospitalAtcClassification'>,
 ): boolean {
   const terminology = row.drugTerminology
+  const hospitalAtc = terminology ? undefined : row.hospitalAtcClassification
   const codes = [
     terminology?.atcCode,
     terminology?.atcLevel2Code,
     terminology?.atcLevel3Code,
     terminology?.atcLevel4Code,
+    hospitalAtc?.atcCode,
+    hospitalAtc?.atcLevel2Code,
+    hospitalAtc?.atcLevel4Code,
   ]
     .filter((value): value is string => typeof value === 'string')
     .map((value) => value.trim().toUpperCase())

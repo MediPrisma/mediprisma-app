@@ -16,11 +16,19 @@ import {
   type MedCopyFormat,
   type OutpatientPrefs,
   type OverviewLabMode,
+  type OverviewMedFilter,
+  type OverviewRangePref,
+  type OverviewReportGroupPref,
+  type OverviewVisitFilter,
 } from '@/src/application/stores/outpatient-prefs.store'
 
 export interface OutpatientPrefsApi extends OutpatientPrefs {
   setPinnedLabs: (ids: string[] | null) => void
   setLabMode: (mode: OverviewLabMode) => void
+  setOverviewRange: (months: OverviewRangePref) => void
+  setOverviewMedFilter: (filter: OverviewMedFilter) => void
+  setOverviewVisitFilter: (filter: OverviewVisitFilter) => void
+  setOverviewReportGroup: (group: OverviewReportGroupPref) => void
   saveFormat: (format: EmrCustomFormat) => void
   deleteFormat: (id: string) => void
   setActiveFormat: (id: string) => void
@@ -41,6 +49,10 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
 
   const setPinnedLabs = useCallback((ids: string[] | null) => update(key, { pinnedLabs: ids }), [key, update])
   const setLabMode = useCallback((mode: OverviewLabMode) => update(key, { labMode: mode }), [key, update])
+  const setOverviewRange = useCallback((months: OverviewRangePref) => update(key, { overviewRange: months }), [key, update])
+  const setOverviewMedFilter = useCallback((filter: OverviewMedFilter) => update(key, { overviewMedFilter: filter }), [key, update])
+  const setOverviewVisitFilter = useCallback((filter: OverviewVisitFilter) => update(key, { overviewVisitFilter: filter }), [key, update])
+  const setOverviewReportGroup = useCallback((group: OverviewReportGroupPref) => update(key, { overviewReportGroup: group }), [key, update])
   const setHandoffMode = useCallback((mode: EmrHandoffMode) => update(key, { handoffMode: mode }), [key, update])
   const setActiveFormat = useCallback((id: string) => update(key, { activeFormatId: id }), [key, update])
 
@@ -70,6 +82,10 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
     ...prefs,
     setPinnedLabs,
     setLabMode,
+    setOverviewRange,
+    setOverviewMedFilter,
+    setOverviewVisitFilter,
+    setOverviewReportGroup,
     saveFormat,
     deleteFormat,
     setActiveFormat,
@@ -77,5 +93,5 @@ export function useOutpatientPrefs(): OutpatientPrefsApi {
     saveMedFormat,
     resetMedFormat,
     setClinicianName,
-  }), [prefs, setPinnedLabs, setLabMode, saveFormat, deleteFormat, setActiveFormat, setHandoffMode, saveMedFormat, resetMedFormat, setClinicianName])
+  }), [prefs, setPinnedLabs, setLabMode, setOverviewRange, setOverviewMedFilter, setOverviewVisitFilter, setOverviewReportGroup, saveFormat, deleteFormat, setActiveFormat, setHandoffMode, saveMedFormat, resetMedFormat, setClinicianName])
 }

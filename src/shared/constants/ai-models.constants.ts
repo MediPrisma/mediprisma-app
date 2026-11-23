@@ -1,7 +1,7 @@
 export type ModelProvider = 'openai' | 'gemini' | 'claude' | 'custom'
 
 /** How a model is allowed to obtain credentials at runtime. */
-export type ModelAccess = 'proxy-or-key' | 'key-only' | 'custom-profile'
+export type ModelAccess = 'proxy-or-key' | 'key-only' | 'custom-profile' | 'browser-extension'
 
 /** Concrete upstream API contract. Provider and API surface are intentionally
  * separate: OpenAI models can use either Chat Completions or Responses. */
@@ -11,6 +11,8 @@ export type ModelApiSurface =
   | 'gemini-generate-content'
   | 'anthropic-messages'
   | 'openai-compatible-chat-completions'
+  /** A web page driven by a browser extension (院內 Gemini). */
+  | 'browser-extension-page'
 
 /** Sampling rules that must remain identical in query and streaming paths. */
 export type ModelTemperaturePolicy = 'passthrough' | 'fixed-one' | 'omit'
@@ -51,10 +53,22 @@ export interface ModelDefinition {
   providerBase: boolean
   autoRunEligible: boolean
   roles: readonly ModelRole[]
+  /** Gemini only: the thinking level sent when the caller sets none. Unset
+   *  leaves the model's own default. */
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
+  /** Provider reasoning default; explicit per-request options take precedence. */
+  reasoningEffort?: 'low'
+  /** Includes hidden thinking as well as visible output. */
+  defaultMaxOutputTokens?: number
+  /** Allow models that think before their first visible token to finish. */
+  streamIdleTimeoutMs?: number
 }
 
 /** Stable logical id for browser-configured OpenAI-compatible endpoints. */
 export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
+
+/** 院內 Gemini Enterprise, answered by the clinician's own signed-in tab via 北榮懷爾抓抓. */
+export const HOSPITAL_GEMINI_MODEL_ID = 'hospital-gemini-enterprise' as const
 
 /**
  * Canonical model manifest. Each id appears exactly once, even when the same
@@ -64,6 +78,26 @@ export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
  * any `proxy-or-key` change here must also be intentionally approved there.
  */
 export const MODEL_CATALOG = [
+  {
+    id: 'gpt-6-luna',
+    reasoningEffort: 'low',
+    label: 'GPT-6 Luna',
+    descriptions: {
+      en: 'Efficient for high-volume workloads',
+      'zh-TW': '適合高用量、重視成本效率的任務',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'proxy-or-key',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: true,
+    autoRunEligible: false,
+    roles: [],
+  },
   {
     id: 'gpt-5.4-nano',
     label: 'GPT-5.4 Nano',
@@ -78,33 +112,14 @@ export const MODEL_CATALOG = [
     temperaturePolicy: 'fixed-one',
     conversationMode: 'deep-agent',
     status: 'available',
-    selectable: true,
-    providerBase: true,
+    selectable: false,
+    providerBase: false,
     autoRunEligible: true,
     roles: ['smart-title'],
   },
   {
-    id: 'gpt-5.6-luna',
-    label: 'GPT-5.6 Luna',
-    descriptions: {
-      en: 'Efficient for high-volume workloads',
-      'zh-TW': '適合高用量、重視成本效率的任務',
-    },
-    provider: 'openai',
-    contextLimit: 900_000,
-    access: 'proxy-or-key',
-    apiSurface: 'openai-responses',
-    temperaturePolicy: 'omit',
-    conversationMode: 'deep-agent',
-    status: 'available',
-    selectable: true,
-    providerBase: false,
-    autoRunEligible: true,
-    roles: [],
-  },
-  {
-    id: 'gpt-5.6-terra',
-    label: 'GPT-5.6 Terra',
+    id: 'gpt-6.1-terra',
+    label: 'GPT-6.1 Terra',
     descriptions: {
       en: 'Balanced intelligence and cost',
       'zh-TW': '平衡智慧能力與成本',
@@ -122,8 +137,27 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'gpt-5.6-sol',
-    label: 'GPT-5.6 Sol',
+    id: 'gpt-6.1-sol',
+    label: 'GPT-6.1 Sol',
+    descriptions: {
+      en: 'Flagship model for complex professional work',
+      'zh-TW': '適合複雜專業工作的旗艦模型',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'gpt-6-astra',
+    label: 'GPT-6 Astra',
     descriptions: {
       en: 'Flagship model for complex professional work',
       'zh-TW': '適合複雜專業工作的旗艦模型',
@@ -165,27 +199,8 @@ export const MODEL_CATALOG = [
     ],
   },
   {
-    id: 'gemini-3-flash-preview',
-    label: 'Gemini 3 Flash Preview',
-    descriptions: {
-      en: 'Fast and accurate',
-      'zh-TW': '快速準確',
-    },
-    provider: 'gemini',
-    contextLimit: 900_000,
-    access: 'proxy-or-key',
-    apiSurface: 'gemini-generate-content',
-    temperaturePolicy: 'passthrough',
-    conversationMode: 'deep-agent',
-    status: 'available',
-    selectable: true,
-    providerBase: false,
-    autoRunEligible: false,
-    roles: ['default'],
-  },
-  {
-    id: 'gemini-3.8-flash',
-    label: 'Gemini 3.8 Flash',
+    id: 'gemini-4-hydrogen',
+    label: 'Gemini 4 Hydrogen',
     descriptions: {
       en: 'Next-gen fast model',
       'zh-TW': '新一代快速模型',
@@ -200,17 +215,21 @@ export const MODEL_CATALOG = [
     selectable: true,
     providerBase: false,
     autoRunEligible: true,
-    roles: [],
+    roles: ['default'],
+    // Hydrogen thinks at high by default: the demo summary took 122 s and
+    // timed out. Low took 19-24 s, medium 51-60 s (2026-11-16, demo patient);
+    // the owner chose speed.
+    thinkingLevel: 'low',
   },
   {
-    id: 'gemini-3.1-pro-preview',
-    label: 'Gemini 3.1 Pro Preview',
+    id: 'gemini-4-argon',
+    label: 'Gemini 4 Argon',
     descriptions: {
       en: 'Newest top-tier model',
       'zh-TW': '最新頂級模型',
     },
     provider: 'gemini',
-    contextLimit: 1_800_000,
+    contextLimit: 900_000,
     access: 'key-only',
     apiSurface: 'gemini-generate-content',
     temperaturePolicy: 'passthrough',
@@ -222,17 +241,66 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-haiku-4-5-20251001',
-    label: 'Claude Haiku 4.5',
+    id: 'gemini-4-carbon',
+    label: 'Gemini 4 Carbon',
+    descriptions: {
+      en: 'Newest top-tier model',
+      'zh-TW': '最新頂級模型',
+    },
+    provider: 'gemini',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'gemini-generate-content',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: HOSPITAL_GEMINI_MODEL_ID,
+    label: 'Gemini Enterprise（院內）',
+    descriptions: {
+      en: 'Your signed-in hospital Gemini tab, through 北榮懷爾抓抓',
+      'zh-TW': '透過北榮懷爾抓抓使用您已登入的院內 Gemini 分頁',
+    },
+    provider: 'gemini',
+    // The extension takes at most 150,000 characters; at the estimator's
+    // 4 characters per English token this keeps the whole prompt under it.
+    contextLimit: 36_000,
+    access: 'browser-extension',
+    apiSurface: 'browser-extension-page',
+    temperaturePolicy: 'omit',
+    // The web page has no tools: chat answers from the selected snapshot.
+    conversationMode: 'standard',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    // Custom summaries never auto-run on it. The standard summary's persisted
+    // 自動產生 switch does not read this flag (use-ai-slot-generation).
+    autoRunEligible: false,
+    roles: [],
+  },
+  {
+    id: 'claude-haiku-5-5',
+    reasoningEffort: 'low',
+    // Adaptive thinking exhausted the SDK's unknown-model 4096-token fallback
+    // before producing the demo summary. The 32768-token budget completed it.
+    defaultMaxOutputTokens: 32_768,
+    // Health-bank low needed 82 s before its first narrative token.
+    streamIdleTimeoutMs: 180_000,
+    label: 'Claude Haiku 5.5',
     descriptions: {
       en: 'Fastest responses, budget friendly',
       'zh-TW': '極速回應，經濟實惠',
     },
     provider: 'claude',
-    contextLimit: 180_000,
+    contextLimit: 900_000,
     access: 'proxy-or-key',
     apiSurface: 'anthropic-messages',
-    temperaturePolicy: 'passthrough',
+    temperaturePolicy: 'omit',
     conversationMode: 'deep-agent',
     status: 'available',
     selectable: true,
@@ -241,8 +309,8 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-sonnet-5',
-    label: 'Claude Sonnet 5',
+    id: 'claude-sonnet-5-5',
+    label: 'Claude Sonnet 5.5',
     descriptions: {
       en: 'Best balance of speed and intelligence',
       'zh-TW': '兼顧速度與智慧能力',
@@ -260,8 +328,8 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-opus-5',
-    label: 'Claude Opus 5',
+    id: 'claude-opus-5-5',
+    label: 'Claude Opus 5.5',
     descriptions: {
       en: 'Deep reasoning for complex tasks',
       'zh-TW': '深度推理，複雜任務',
@@ -279,8 +347,8 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
-    id: 'claude-fable-5',
-    label: 'Claude Fable 5',
+    id: 'claude-fable-5-2',
+    label: 'Claude Fable 5.2',
     descriptions: {
       en: 'Newest top-tier model',
       'zh-TW': '最新頂級模型',
@@ -398,6 +466,12 @@ export function isClaudeModelId(value: string): value is ClaudeModelId {
 
 export function isModelId(value: string): value is ModelId {
   return isCustomOpenAiModelId(value) || ALL_MODEL_IDS.has(value as ModelId)
+}
+
+/** User preferences exclude internal-only models such as smart-title Nano. */
+export function isSelectableModelId(value: string): value is ModelId {
+  const definition = getModelDefinition(value)
+  return definition?.selectable === true && definition.status === 'available'
 }
 
 export function getModelDefinition(modelId: string): ModelDefinition | undefined {

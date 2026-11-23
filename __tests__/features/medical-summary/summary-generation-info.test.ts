@@ -15,13 +15,13 @@ const labels = {
 
 describe("buildSummaryGenerationInfo", () => {
   it('refreshes a stored unreported display name without changing its provenance', () => {
-    const execution = createModelExecution('gemini-3.8-flash')
+    const execution = createModelExecution('gemini-4-hydrogen')
     const info = buildSummaryGenerationInfo({
-      generation: { source: 'live', modelId: 'gemini-3.8-flash', modelName: '實際模型未回報',
+      generation: { source: 'live', modelId: 'gemini-4-hydrogen', modelName: '實際模型未回報',
         generatedAt: Date.now(), modelExecution: execution }, locale: 'zh-TW', ...labels,
     })
-    expect(info?.modelName).toBe('Gemini 3.8 Flash')
-    expect(info?.ariaLabel).toContain('Gemini 3.8 Flash')
+    expect(info?.modelName).toBe('Gemini 4 Hydrogen')
+    expect(info?.ariaLabel).toContain('Gemini 4 Hydrogen')
     expect(info?.modelExecution?.actualModelId).toBeNull()
   })
   it("uses the configured upstream model name for a custom endpoint", () => {

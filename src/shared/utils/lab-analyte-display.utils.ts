@@ -13,6 +13,7 @@ import {
   getLabCompatibilityCanonicalDisplay,
   getLabPivotTestIdentity,
   specimenOfKey,
+  urineStripDisplay,
   type LabRow,
 } from './lab-pivot.utils'
 
@@ -72,6 +73,8 @@ export function getLabRowDisplayParts(
   // A neutral κ/λ column is named after its source; a urine or CSF one says so.
   const neutral = neutralParaproteinDisplay(row.testKey, row.displayName, language === 'zh-TW' ? 'zh-TW' : 'en')
   if (neutral) return { name: neutral, abbr: null }
+  const strip = urineStripDisplay(row.testKey, language === 'zh-TW' ? 'zh-TW' : 'en')
+  if (strip) return { name: strip, abbr: null }
   const compatibilityDisplay = getLabCompatibilityCanonicalDisplay(row.testKey)
   if (compatibilityDisplay) return { name: compatibilityDisplay, abbr: null }
   if (CANONICAL_KEYS.has(row.testKey)) {

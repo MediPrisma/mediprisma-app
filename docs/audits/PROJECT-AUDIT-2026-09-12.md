@@ -68,7 +68,7 @@ CDSS 的數值、症狀、NYHA 與 HFpEF 確認直接 JSON.stringify 後寫入 l
 
 位置：[套件宣告](<package.json:60>)；[臨時 HF-only 清單](<features/clinical-decision-support/guideline-packs/registry.ts:46>)；[KFRE 套件出口](<src/core/clinical-calculators/kfre.ts:22>)。
 
-檢查時 node_modules 的數個第一方套件是指向旁邊 mediprisma-personalization 專案的 symlink。其中 personalized-care 實際為 1.13.0，lockfile 為 1.12.0；personalized-care-fhir 實際為 1.5.0，lockfile 為 1.4.2。實際套件缺少 CKD／KFRE 出口，部分檢查也遇到外部套件 dist 檔案不存在。
+檢查時 node_modules 的數個第一方套件是指向旁邊 mediprisma-cdss 專案的 symlink。其中 personalized-care 實際為 1.13.0，lockfile 為 1.12.0；personalized-care-fhir 實際為 1.5.0，lockfile 為 1.4.2。實際套件缺少 CKD／KFRE 出口，部分檢查也遇到外部套件 dist 檔案不存在。
 
 registry.ts 還留有 TEMP local verification，將原本 HF＋CKD 改成 HF-only。它使本機試驗需要改動正式功能清單，發布前必須確認這些是暫時修改還是獨立核准的產品變更。
 

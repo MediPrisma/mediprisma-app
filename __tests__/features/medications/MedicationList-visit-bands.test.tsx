@@ -297,5 +297,18 @@ describe('current medications — visit bands and headers', () => {
     expect(lane.className).toContain('@max-[456px]:hidden')
     expect(layoutOf('SINGLE').querySelector('[data-medication-refill-inline]')).toBeNull()
   })
-})
 
+  it('keeps the self-pay tag on a narrow list when it is all the third line holds', () => {
+    const selfPay = { ...active('SELFPAY', '2026-09-20', '臺大醫院', 'I10'), isChronic: false, refillCount: 0, selfPurchased: true } as MedicationRow
+    const plain = { ...active('PLAIN', '2026-09-20', '臺大醫院', 'I10'), isChronic: false, refillCount: 0 } as MedicationRow
+    const { container } = render(
+      <MedicationList medications={[selfPay, plain]} isLoading={false} error={null} />,
+    )
+    const layoutOf = (name: string) => Array.from(container.querySelectorAll('[data-medication-row-layout]'))
+      .find((row) => row.textContent?.includes(name))!
+    const tag = layoutOf('SELFPAY').querySelector('[data-medication-self-pay]')!
+    expect(tag.textContent).toBe('自購')
+    expect(tag.closest('[data-medication-classification]')!.className).not.toContain('@max-[456px]:hidden')
+    expect(layoutOf('PLAIN').querySelector('[data-medication-classification]')!.className).toContain('@max-[456px]:hidden')
+  })
+})

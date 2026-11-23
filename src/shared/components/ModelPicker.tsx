@@ -10,7 +10,8 @@
 // exactly like the stream adapter does; re-adding the key revives the pick.
 "use client"
 
-import type { Ref } from "react"
+import { useEffect, type Ref } from "react"
+import { refreshHospitalGeminiStatus } from "@/src/application/hooks/use-hospital-gemini-status.hook"
 import { Check, ChevronDown, ChevronRight, Lock, Plus } from "lucide-react"
 import {
   DropdownMenu,
@@ -110,7 +111,9 @@ export function ModelPicker({
     ? gateModelForAgentSupport(credentialGatedModelId, fallbackModelId)
     : credentialGatedModelId
   const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)
-  const effectiveLabel = effectiveCustomEntry?.label ?? modelDisplayLabel(effectiveModelId)
+  const effectiveLabel = effectiveCustomEntry?.label
+    ?? gptModels.find(entry => entry.id === effectiveModelId)?.label
+    ?? modelDisplayLabel(effectiveModelId)
   const usesStandardChat = (candidateModelId: string) => {
     const definition = getModelDefinition(candidateModelId)
     if (definition?.provider !== 'custom') return modelUsesStandardChat(candidateModelId)
@@ -118,6 +121,16 @@ export function ModelPicker({
       resolveOpenAiCompatibleProfile(candidateModelId, openAiCompatibleProfiles),
     ) === 'standard'
   }
+
+  // 院內 Gemini depends on a browser tab the clinician may have just opened
+  // or signed into: look again whenever the menu opens (rate-limited).
+  const handleOpenChange = (next: boolean) => {
+    if (next) void refreshHospitalGeminiStatus()
+    onOpenChange?.(next)
+  }
+  useEffect(() => {
+    if (open) void refreshHospitalGeminiStatus()
+  }, [open])
 
   const groups: Array<{ label: string; items: ModelEntry[]; custom?: boolean }> = [
     { label: t.settings.openAiCompatibleGroupLabel, items: customModels, custom: true },
@@ -127,7 +140,7 @@ export function ModelPicker({
   ]
 
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           ref={triggerRef}
@@ -210,12 +223,15 @@ export function ModelPicker({
                     title={entry.label}
                     className={cn(
                       "min-w-0 flex-1",
-                      definition?.provider === 'custom'
+                      definition?.provider === 'custom' || entry.hint
                         ? "whitespace-normal break-words"
                         : "truncate",
                     )}
                   >
                     {entry.label}
+                    {entry.hint ? (
+                      <span className="block text-[0.625rem] text-muted-foreground">{entry.hint}</span>
+                    ) : null}
                   </span>
                   {entryUsesStandardChat && !configureRequired ? (
                     <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">

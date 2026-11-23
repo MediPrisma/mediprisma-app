@@ -1,5 +1,29 @@
 # Launch-route gates — what the app hides or suppresses, and why
 
+2026-11-16 owner decision: GPT-6 Luna is also offered through the public
+owner-funded proxy on ordinary routes. Configured hospital launches still route
+Luna to the hospital Gateway first, retaining authentication, no retries and no
+cloud fallback after an intranet request. The picker labels that route
+`GPT-6 Luna（院內）`; other routes show `GPT-6 Luna`. The selectable free lineup is
+Gemini 3.1 Flash-Lite, Gemini 4 Hydrogen, GPT-6 Luna and Claude Haiku 5.5.
+Old selectable GPT, Gemini Preview and Claude versions are replaced by the
+current lineup; Nano remains internal for existing smart-title calls only.
+
+2026-11-11 owner decision (later the same day, supersedes the `/app-hmc`
+exclusion below): the GPT-6 Luna（院內） option is also offered on `/app-hmc`
+under the same conditions, and the hospital automatic launch
+(`/app-hmc/?medcloud2=auto&site=vghtpe`) starts on it instead of tvghbrain.
+tvghbrain stays installed and selectable there. `/app` and `/app-staging`
+launches, and a site-only `/app-hmc` launch, still start on tvghbrain. An HMC
+build without `NEXT_PUBLIC_INTRANET_AI_ORIGIN` keeps the previous behaviour.
+
+2026-11-11 owner decision: the GPT-6 Luna（院內） option is visible only on
+`/app` and `/app-staging` with exactly one `site=vghtpe` query parameter and
+the hospital Gateway build origin configured. Other sites, missing/duplicate
+site parameters, and `/app-hmc` hide it. Factory and non-streaming service
+enforce the same gate before sending. The query parameter is a UI routing
+selector; hospital network ACL and Firebase authentication enforce access.
+
 2026-10-21 owner decision: source reconciliation is automatic on every route.
 The source-version notice and medication comparison/verification prompts are
 removed. Hospital records take priority in the existing cross-source medication
@@ -43,6 +67,7 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | Where | Kind | Behaviour on the route | Owner decision |
 |---|---|---|---|
 | `src/shared/config/feature-registry.ts` (`requires: 'hospital-outpatient'`) / `src/layouts/LeftPanelLayout.tsx` | 不顯示（依資料） | All routes: the new left tab 「上次門診」 is listed only when the loaded chart holds at least one hospital (院內) outpatient Encounter: class `AMB`, hospital source tag or a hospital visit merged into its cloud record. Charts with only cloud data (雲端病歷 / 健康存摺) do not list it. If the next patient lacks such a visit, the panel returns to 總覽. All existing tabs are unchanged. | Explicit owner request in chat, 2026-10-28: 要有院內資料跟院內門診才顯示這個分頁，只有雲端病歷資料不用顯示。 |
+| `features/clinical-summary/vitals/VitalsCard.tsx` / `utils/home-measurement-access.ts` / `utils/home-measurement-link.ts` | 不顯示（依帳號、依資料） | All routes: the new 「居家量測」 button on the 生命徵象 card (opens health-app.mediprisma.tw in a new tab) is shown only to the signed-in pilot accounts, Dr. Cheng and the owner (verified email, stored as SHA-256); every other account and signed-out users do not see it. For that account it appears when the patient has a hospital 病歷號 (`urn:oid:his.patient.mrn`), or, without one, on the hospital's own launch (`site=vghtpe`). De-identification is not considered. With a 病歷號, or without one on the hospital's own launch by an unmasked name (with the birth date when there is one), the card asks that service in the background whether it holds readings (by name, readings count only when the service finds one 病歷號 for them; several people → treated as unknown); when it answers none, the button is dimmed but stays clickable, and when it cannot answer (off the hospital network, say) the button looks as usual. With an answer that has a usable 722 week, the card adds a line 「居家血壓 722」 under the clinic readings (display only, not passed to decision support); without one, no line. Nothing existing is hidden. | Explicit owner requests in chat, 2026-11-02: 只有鄭醫師的帳號登入才出現這個按鈕；2026-11-03 加上 owner 自己的帳號；在院內使用就沒有去識別化的意義，只有送給 AI 時需要，醫師看不用。2026-11-03：先背景查有沒有血壓，沒有就暗掉（仍可點）；先只顯示在生命徵象卡（不進 CDSS）。2026-11-09：病歷號會漏查病人，因為院內版資料沒那麼快進入，要用病人名字查。2026-11-10：只要名字有就還是顯示，除非同個名字重複出現再給醫師確認（生日改為選填）。 |
 | `patient-identity.ts` / `CdssStorageActions.tsx` | 不顯示（拒絕存讀） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: explicitly de-identified source patients cannot save, list or read CDSS records. The anonymous-name source marker is preserved through local demographic overlays and IPS export/reimport. Switching the same patient between source privacy states clears visible history and cancels pending operations. Show guidance to reimport with 雲抓「去識別化」turned off. Non-de-identified patients with complete identity retain save/history; native masked national IDs using x, X or * remain accepted regardless of mask count. | Explicit owner request in chat, 2026-10-05: CDSS 只接受不選去識別化的病人。 |
 | `features/clinical-decision-support/renderers/CdssStorageActions.tsx` | 不顯示（停用操作） | On `/`, `/app/`, `/app-hmc/` with `site=vghtpe`, including launch queries and full-window `visit=book`: guests, anonymous accounts and sessions without an established account UID cannot save or open CDSS history. Signed-in accounts retain these actions, limited to their own server-owned records; logout/account change closes and clears history. Existing site/Beta/role gates still apply. | Explicit owner request in chat, 2026-10-05: 綁定登入 user 才能儲存，僅原儲存者可讀取。 |
 | `features/clinical-decision-support/LiveFeature.tsx` / `CdssStorageActions.tsx` (`offered`) | 不顯示 | On every route that shows CDSS, for every disease: the 「儲存」 and 「紀錄」 toolbar buttons, and with them saving, viewing, carrying forward and deleting CDSS records, are not offered on the 三區塊 layout. They remain on 決策地圖 v2 (panel and full-window `visit=book`) and the lipid NHI table. Switching to 三區塊 keeps the controller mounted, so a pending save is not cancelled and a FHIR grant is not dropped. Answers already carried keep their 「帶入 · 日期」 marks on 三區塊. | Explicit owner request in chat, 2026-10-07: 三區塊先不支援存資料（所有疾病、隱藏按鈕）。 |
@@ -57,7 +82,6 @@ until it was noticed. Kind 2 must never ride along on a kind-1 rule again.
 | `src/application/telemetry/launch-context.ts` | — | Telemetry labels the launch source `medcloud2`; nothing changes for the user | e5374e97 |
 | `features/lab-data-report/components/LabDataReportDialog.tsx` | — | Adds, never hides: on `?site=vghtpe` (with or without `medcloud2=auto`) the 回報檢驗資料問題 form asks 送給 — 團隊和機構（建議, default）/ 僅機構 / 僅連線測試. Elsewhere a report goes to the development team as before. The institution is the hospital Gateway named by `NEXT_PUBLIC_LAB_REPORT_INSTITUTION_URL`; until a build sets it, 團隊和機構 sends to the team alone and says so, 僅機構 cannot be sent, and the Gateway is never contacted. 僅連線測試 sends no patient data. | Supervisor's request relayed by the owner in chat, 2026-10-02 |
 | `features/clinical-decision-support/guideline-packs/pilot-gate.ts` | 不顯示 | `?pilotPacks=` is ignored and stored pilot ids do not apply (a tester's per-pack switch must not follow a clinician into a hand-off) | 90a3938c, 2026-09-05 — **stands**; the Beta switch is the way in |
-| `features/settings/components/DisplaySettings.tsx` (pilot-pack checkboxes) | 不顯示 | The per-pack 試辦 checkboxes are not shown | 90a3938c — stands, same reason |
 | `src/application/hooks/use-beta-features.hook.ts` | 不顯示 | Beta switch not offered and Beta tabs hidden — **except** on the vghtpe hand-off, where the switch is offered and honoured (never turned on by itself) | dab86c39 hid it without being asked; corrected 0dbe966b → 8a3b564d, 2026-09-08 |
 | `features/clinical-decision-support/guideline-packs/registry.ts` | 不顯示 | Held-back care packs hidden — **except** on the vghtpe hand-off, which follows the Beta switch | 8d47985d hid them without being asked; corrected 8a3b564d |
 
@@ -141,6 +165,13 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | Surface | Behaviour | Owner decision |
 |---|---|---|
 | 高血脂畫面切換 at `/` and launch-query variants | Hide「新版流程」for dyslipidemia because it rendered the same generic module list as「原版看板」. Keep「三區塊」and「原版看板」, and add the distinct「健保表一」review for NHI tier criteria, supporting evidence and treatment response. Heart-failure layout choices are unchanged. | Explicit owner request in chat, 2026-09-20 |
+| 高血脂畫面切換 at every route (superseded 2026-11-19) | **不顯示**: the layout switch and「三區塊」. Dyslipidemia opens on「健保表一」only. | Explicit owner request in chat, 2026-11-19: 「高血脂則是只留健保表一那個」 |
+
+## One face per disease, no layout switch (all launch routes, 2026-11-19)
+
+| Surface | Behaviour | Owner decision | Tests |
+|---|---|---|---|
+| The CDSS layout switch (`cdss-layout-switch`) and「三區塊」for heart failure, atrial fibrillation, hypertension and coronary disease | **不顯示 on every route**: each disease opens on 決策地圖 v2 with no switch; a layout a browser stored earlier (`cdss-layout-preference`) is ignored. 「三區塊」is drawn only when the decision map could not be built for a record, so the guidance still shows. The inputs below that were kept only on 三區塊 (HFpEF calculator, prognosis models, handoff card, the AF question groups and the other rows marked 「Where the original stays: 三區塊」) are no longer reachable while the map is built. | Explicit owner request in chat, 2026-11-19: 「幫我把CDSS的三區塊全部都拿掉，只留決策地圖，這樣也不用tab去切了」 | `LiveFeature`, `visit-map-wiring`, `layout-preference.store`; e2e `hospital-medication-cdss` |
 
 ## 決策地圖 v2 — the decision map (all launch routes)
 
@@ -260,3 +291,9 @@ eligibility is preserved. No previously visible clinical surface is removed.
 | HF 「整理模型資料」 button | Replaced by automatic local preparation when the detail opens (no network request) and a 「重新整理」 link in step 1. Nothing is sent until 「執行 HF 模型預測」. | Every route where the HF research calculator is available. | Explicit chat request, 2026-10-07 |
 
 Automatic source resolution also retains active Condition/Allergy evidence when update ordering is absent, never groups different resource identities by imported modifier labels, and redirects duplicate-include references to the selected version. Background refreshes keep the previous complete snapshot within the same patient and lifecycle scope until all updated searches settle. Missing medication content is stated neutrally; it does not create a reconciliation banner or task.
+
+## Intranet Luna development routes (2026-11-17)
+
+| Surface | Behaviour | Routes | Owner decision |
+|---|---|---|---|
+| Hospital Azure Luna transport | Available only with configured intranet origin and exactly one `site=vghtpe`. Production `/app` and its subpaths cannot use the hospital gateway; ordinary cloud/personal-key model access follows its existing policy. | Retained on `/app-staging` and `/app-hmc`, including their subpaths. Only `/app-hmc` retains its existing hospital launch default. | Owner explicitly limited hospital Luna to these development routes in chat, 2026-11-17. |

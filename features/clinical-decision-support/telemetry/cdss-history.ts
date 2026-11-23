@@ -4,7 +4,8 @@ import { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { isCollectorSite } from '@/src/application/telemetry/collector'
 import { captureFhirRequestAuth } from './fhir-auth'
-import { parseStoredCdssSaveV2, storedTimestampV2, storedUuidV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
+import { storedTimestampV2, storedUuidV2 } from '@/src/shared/contracts/cdss-stored-save-v2'
+import { parseStoredCdssSave } from '@/src/shared/contracts/cdss-stored-save-v3'
 import { cdssPatientIdentity } from './patient-identity'
 import { cdssEndpoint } from './cdss-gateway'
 
@@ -13,7 +14,7 @@ const index = z.object({ saveId: storedUuidV2,
   receivedAt: z.string().datetime({ offset: true }), packId: z.string().min(1).max(80),
   versionId: z.string().max(64).nullable() }).strict()
 const list = z.object({ records: z.array(index).max(10), hasMore: z.boolean() }).strict()
-const record = index.extend({ savedAt: storedTimestampV2, save: z.unknown().transform(parseStoredCdssSaveV2) })
+const record = index.extend({ savedAt: storedTimestampV2, save: z.unknown().transform(parseStoredCdssSave) })
 export type CdssHistoryList = z.infer<typeof list>
 export type CdssHistoryRecord = z.infer<typeof record>
 

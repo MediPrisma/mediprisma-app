@@ -45,7 +45,6 @@ for (const [entry, width] of [
     }
     if (entry === 'expanded') {
       await expect(page.getByTestId('cdss-save-record')).toBeVisible()
-      await page.getByRole('button', { name: '決策地圖 v2', exact: true }).click()
       await page.getByTestId('cdss-book-expand').click()
     }
     const book = page.getByTestId('cdss-visit-book')

@@ -33,14 +33,19 @@ describe('DOAC calculator: liver tests against the report’s own ULN', () => {
   })
   it('「no」 only when both are known and neither is above 2×ULN', () => {
     expect(selects({ observations: [alt(70, 40), ast(30, 35)] }).doac_liver_enzymes).toMatchObject({ value: 'no', testName: 'ALT 70（ULN 40）、AST 30（ULN 35），均 ≤2×ULN' })
-    expect(selects({ observations: [alt(30, 40)] }).doac_liver_enzymes).toBeUndefined()
+    // One test missing: the other's reading, and 「無」 by default (owner decision 2026-11-10).
+    expect(selects({ observations: [alt(30, 40)] }).doac_liver_enzymes).toMatchObject({ value: 'no', testName: 'ALT 30（ULN 40），≤2×ULN；AST 未見，預設無（請核對）' })
+    expect(selects().doac_liver_enzymes).toMatchObject({ value: 'no', testName: '未見 ALT／AST 檢驗，預設無（請核對）' })
   })
-  it('the newest result without a limit leaves it unknown; an older one with a limit is not used instead', () => {
-    expect(selects({ observations: [alt(30, 40, '2026-01-01'), alt(35, undefined, '2026-09-01'), ast(20, 35)] }).doac_liver_enzymes).toBeUndefined()
+  it('the newest result without a limit is read against the usual ULN; an older one with a limit is not used instead', () => {
+    expect(selects({ observations: [alt(30, 40, '2026-01-01'), alt(95, undefined, '2026-09-01'), ast(20, 35)] }).doac_liver_enzymes)
+      .toMatchObject({ value: 'yes', testName: 'ALT 95（報告未附上限，以常用 ULN 40），>2×ULN（請核對）' })
+    expect(selects({ observations: [alt(30, 40, '2026-01-01'), alt(35, undefined, '2026-09-01'), ast(20, 35)] }).doac_liver_enzymes)
+      .toMatchObject({ value: 'no', testName: 'ALT 35（報告未附上限，以常用 ULN 40）、AST 20（ULN 35），均 ≤2×ULN' })
   })
-  it('a limit in another unit is not a limit', () => {
+  it('a limit in another unit is not a limit: the usual ULN for the result unit is used', () => {
     const odd = { ...alt(30, 40), referenceRange: [{ high: { value: 0.7, unit: 'ukat/L' } }] }
-    expect(selects({ observations: [odd, ast(20, 35)] }).doac_liver_enzymes).toBeUndefined()
+    expect(selects({ observations: [odd, ast(20, 35)] }).doac_liver_enzymes).toMatchObject({ value: 'no', testName: 'ALT 30（報告未附上限，以常用 ULN 40）、AST 20（ULN 35），均 ≤2×ULN' })
   })
   it('the older of the two dates is the one shown, so the age is never understated', () => {
     expect(selects({ observations: [alt(30, 40, '2026-09-01'), ast(20, 35, '2025-11-01')] }).doac_liver_enzymes?.date).toBe('2025-11-01')
@@ -52,19 +57,19 @@ describe('DOAC calculator: liver tests against the report’s own ULN', () => {
 })
 
 describe('DOAC calculator: diagnoses and demographics', () => {
-  it('dialysis 「yes」 by its code; an ESRD code alone, or nothing, stays blank', () => {
+  it('dialysis 「yes」 by its code; an ESRD code alone, or nothing, is 「無」 by default', () => {
     expect(selects({ conditions: [condition('Z99.2')] }).doac_dialysis).toMatchObject({ value: 'yes' })
-    expect(selects({ conditions: [hypertension] }).doac_dialysis).toBeUndefined()
-    expect(selects({ conditions: [condition('N18.6')] }).doac_dialysis).toBeUndefined()
-    expect(selects().doac_dialysis).toBeUndefined()
+    expect(selects({ conditions: [hypertension] }).doac_dialysis).toMatchObject({ value: 'no', testName: '未見透析診斷碼，預設無（請核對）' })
+    expect(selects({ conditions: [condition('N18.6')] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'CKD 第 5 期，未見透析診斷碼，預設無（請核對）' })
+    expect(selects().doac_dialysis).toMatchObject({ value: 'no', testName: '未見透析診斷碼，預設無（請核對）' })
   })
   it('dialysis 「no」 from a recent CKD 1–4 code or an eGFR ≥30, with no dialysis code', () => {
     expect(selects({ conditions: [condition('N18.32')] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'CKD診斷碼：N18.32，未見透析診斷碼（請核對）' })
-    expect(selects({ conditions: [condition('N18.32'), condition('N18.6')] }).doac_dialysis).toBeUndefined()
-    expect(selects({ conditions: [condition('N18.32', '2024-01-01')] }).doac_dialysis).toBeUndefined()
+    expect(selects({ conditions: [condition('N18.32'), condition('N18.6')] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'CKD 第 5 期，未見透析診斷碼，預設無（請核對）' })
+    expect(selects({ conditions: [condition('N18.32', '2024-01-01')] }).doac_dialysis).toMatchObject({ value: 'no', testName: '未見透析診斷碼，預設無（請核對）' })
     expect(selects({ observations: [egfr(42)] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'eGFR 42，未見透析診斷碼（請核對）' })
-    expect(selects({ observations: [egfr(22)] }).doac_dialysis).toBeUndefined()
-    expect(selects({ observations: [egfr(10)], conditions: [condition('N18.4')] }).doac_dialysis).toBeUndefined()
+    expect(selects({ observations: [egfr(22)] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'eGFR 22，未見透析診斷碼，預設無（請核對）' })
+    expect(selects({ observations: [egfr(10)], conditions: [condition('N18.4')] }).doac_dialysis).toMatchObject({ value: 'no', testName: 'eGFR 10，未見透析診斷碼，預設無（請核對）' })
     expect(selects({ observations: [egfr(42)], conditions: [condition('Z99.2')] }).doac_dialysis).toMatchObject({ value: 'yes' })
   })
   it('liver: 「no liver disease」 from normal enzymes and bilirubin without a liver code', () => {
@@ -73,18 +78,20 @@ describe('DOAC calculator: diagnoses and demographics', () => {
     expect(selects({ conditions: [condition('K74.6')], observations: labs }).doac_liver).toBeUndefined()
     expect(selects({ observations: [alt(30, 40), ast(20, 35), bili(2.0, 1.2)] }).doac_liver).toBeUndefined()
     expect(selects({ observations: [alt(130, 40), ast(20, 35)] }).doac_liver).toBeUndefined()
-    expect(selects({ observations: [alt(30, 40)] }).doac_liver).toBeUndefined()
+    // Liver tests not raised and no liver code: 「no liver disease」 even with one test missing.
+    expect(selects({ observations: [alt(30, 40)] }).doac_liver).toMatchObject({ value: 'none' })
   })
-  it('GI: a lesion within a year is 「yes」; a year of other diagnoses is 「no」; no diagnoses says nothing', () => {
+  it('GI: a lesion within a year is 「yes」; a year of other diagnoses is 「no」; no diagnoses is 「no」 by default', () => {
     expect(selects({ conditions: [condition('K21.9', '2026-03-01')] }).doac_gi_risk).toMatchObject({ value: 'yes' })
-    expect(selects({ conditions: [condition('K21.9', '2024-03-01'), condition('I10', '2024-03-01')] }).doac_gi_risk).toBeUndefined()
+    expect(selects({ conditions: [condition('K21.9', '2024-03-01'), condition('I10', '2024-03-01')] }).doac_gi_risk).toMatchObject({ value: 'no', testName: '近一年未見就醫診斷，預設無（請核對）' })
     expect(selects({ conditions: [hypertension] }).doac_gi_risk).toMatchObject({ value: 'no' })
-    expect(selects().doac_gi_risk).toBeUndefined()
+    expect(selects().doac_gi_risk).toMatchObject({ value: 'no', testName: '近一年未見就醫診斷，預設無（請核對）' })
   })
-  it('pregnancy: 「no」 for a man; a woman of any age is asked (#355 review)', () => {
+  it('pregnancy: 「no」 for everyone; the caption for a woman asks the clinician to change it if pregnant or breast-feeding', () => {
     expect(selects({ demographics: { gender: 'male', age: 40 } }).doac_pregnancy).toMatchObject({ value: 'no', testName: '男性' })
-    expect(selects({ demographics: { gender: 'female', age: 72 } }).doac_pregnancy).toBeUndefined()
-    expect(selects({ demographics: { gender: 'female', age: 38 } }).doac_pregnancy).toBeUndefined()
+    for (const age of [72, 38]) {
+      expect(selects({ demographics: { gender: 'female', age } }).doac_pregnancy).toMatchObject({ value: 'no', testName: '預設無；懷孕或哺乳請改為「有」' })
+    }
   })
 })
 
@@ -94,7 +101,7 @@ describe('DOAC calculator: the record fills its fields', () => {
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
     const value = (key: string) => resolveInput(calc.inputs.find((input) => input.key === key)!, autofill).value
     expect([value('liver'), value('liver_enzymes'), value('bilirubin_high'), value('pregnancy'), value('dialysis'), value('gi_risk')])
-      .toEqual(['none', 'no', 'no', 'no', '', 'no'])
+      .toEqual(['none', 'no', 'no', 'no', 'no', 'no'])
   })
 })
 
@@ -153,16 +160,17 @@ describe('the upper limit read off the report’s range text', () => {
     expect(out.doac_liver_enzymes).toMatchObject({ value: 'yes', testName: 'AST 90（ULN 32），>2×ULN（請核對）' })
     expect(out.doac_bilirubin_high).toMatchObject({ value: 'no' })
   })
-  it('a bilirubin range in another unit for both sexes leaves the field blank, not 「no」 (#360 review)', () => {
+  it('a bilirubin range in another unit is not read; the usual ULN for mg/dL is, so a raised result is 「yes」 (#360 review)', () => {
     const textOnly: LabObservation = { ...bili(3, undefined), referenceRange: [{ text: 'M:＜21; F:＜18 umol/L' }] }
-    expect(selects({ demographics: { gender: 'male' }, observations: [textOnly] }).doac_bilirubin_high).toBeUndefined()
+    expect(selects({ demographics: { gender: 'male' }, observations: [textOnly] }).doac_bilirubin_high).toMatchObject({ value: 'yes', testName: '總膽紅素 3（報告未附上限，以常用 ULN 1.2），≥1.5×ULN' })
   })
-  it('a structured limit in another unit is not replaced by its text (#360 review)', () => {
+  it('a result in an unusual unit cannot be compared, so it stays blank rather than 「無」 (#360 review)', () => {
     const mixed: LabObservation = { ...alt(1.5, undefined), valueQuantity: { value: 1.5, unit: 'ukat/L' }, referenceRange: [{ high: { value: 40, unit: 'U/L' }, text: '0-40' }] }
     expect(selects({ demographics: { gender: 'male' }, observations: [mixed, ast(20, 35)] }).doac_liver_enzymes).toBeUndefined()
   })
   it('several ranges are bands, not one limit', () => {
     const multi: LabObservation = { ...alt(30, undefined), referenceRange: [{ text: '0~40' }, { text: '0~35' }] }
-    expect(selects({ demographics: { gender: 'male' }, observations: [multi, ast(20, 35)] }).doac_liver_enzymes).toBeUndefined()
+    // Neither band is chosen; the usual ULN for U/L is.
+    expect(selects({ demographics: { gender: 'male' }, observations: [multi, ast(20, 35)] }).doac_liver_enzymes).toMatchObject({ value: 'no', testName: 'ALT 30（報告未附上限，以常用 ULN 40）、AST 20（ULN 35），均 ≤2×ULN' })
   })
 })

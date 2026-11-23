@@ -33,7 +33,12 @@ export function isExportSubTab(value: string): value is ExportSubTab {
   return EXPORT_SUB_TABS.includes(value)
 }
 
+/** 醫療摘要's reading mode: 初診快覽 or the clinician's own 自訂摘要 modules. */
+export type SummaryView = 'standard' | 'custom'
+
 interface RevealOptions {
+  /** With the 醫療摘要 tab: which of its two views to show. */
+  summaryView?: SummaryView
   /** With the 複製 tab: which of its sub-tabs to show. Without it the tab
    *  opens on whichever sub-tab the clinician last left it. */
   exportTab?: ExportSubTab
@@ -56,12 +61,22 @@ interface RightPanelContextType {
    *  must land on 帶回紀錄 even when the tab was last left on 貼給 AI. */
   exportTab: ExportSubTab
   setExportTab: (tab: ExportSubTab) => void
+  /** 醫療摘要's open view. Held here, not inside the tab, so it can be asked
+   *  for before the tab has ever been shown (the page framing this app sends
+   *  the reader straight to 自訂摘要). */
+  summaryView: SummaryView
+  setSummaryView: (view: SummaryView) => void
   /** Open a tab AND make the right panel visible — the phone layout flips to
    *  「功能」 and a collapsed desktop panel reopens. For a control in the
    *  clinical summary that sends the reader to a right-panel task. */
   revealTab: (tab: string, options?: RevealOptions) => void
   /** Increments on every revealTab call; the page layout watches it. */
   revealSeq: number
+  /** The other direction: make the clinical record (the left panel) visible —
+   *  the phone layout flips back to 病歷 and a collapsed left panel reopens. */
+  revealRecord: () => void
+  /** Increments on every revealRecord call; the page layout watches it. */
+  recordSeq: number
 }
 
 const RightPanelContext = createContext<RightPanelContextType | undefined>(undefined)
@@ -79,6 +94,8 @@ export function RightPanelProvider({ children, defaultTab = 'medical-summary' }:
   // Clinicians open 複製 to get data back into the chart far more often than
   // for the other two, so 帶回紀錄 is where it starts.
   const [exportTab, setExportTab] = useState<ExportSubTab>('emr')
+  const [summaryView, setSummaryView] = useState<SummaryView>('standard')
+  const [recordSeq, setRecordSeq] = useState(0)
 
   const setActiveTab = useCallback((
     tab: string,
@@ -100,8 +117,11 @@ export function RightPanelProvider({ children, defaultTab = 'medical-summary' }:
   const revealTab = useCallback((tab: string, options?: RevealOptions) => {
     setActiveTab(tab, tab === 'settings' ? options?.settingsTab : undefined)
     if (tab === 'ips-export' && options?.exportTab) setExportTab(options.exportTab)
+    if (tab === 'medical-summary' && options?.summaryView) setSummaryView(options.summaryView)
     setRevealSeq((seq) => seq + 1)
   }, [setActiveTab])
+
+  const revealRecord = useCallback(() => setRecordSeq((seq) => seq + 1), [])
 
   return (
     <RightPanelContext.Provider value={{
@@ -112,8 +132,12 @@ export function RightPanelProvider({ children, defaultTab = 'medical-summary' }:
       clearSettingsTarget,
       exportTab,
       setExportTab,
+      summaryView,
+      setSummaryView,
       revealTab,
       revealSeq,
+      revealRecord,
+      recordSeq,
     }}>
       {children}
     </RightPanelContext.Provider>

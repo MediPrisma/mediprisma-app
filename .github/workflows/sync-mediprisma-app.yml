@@ -211,6 +211,7 @@ jobs:
         run: npm run build:mediprisma
         env:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          NEXT_PUBLIC_INTRANET_AI_ORIGIN: https://ai-vghtpe.mediprisma.tw
           # Public origin only (no secrets); baked into /app, not a runtime switch.
           NEXT_PUBLIC_COLLECTOR_ORIGIN: ${{ vars.NEXT_PUBLIC_COLLECTOR_ORIGIN }}
           NEXT_PUBLIC_HF_GATEWAY_ORIGIN: ${{ vars.NEXT_PUBLIC_HF_GATEWAY_ORIGIN }}

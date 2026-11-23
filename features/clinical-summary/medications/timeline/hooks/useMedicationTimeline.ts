@@ -9,7 +9,7 @@ import { stripLeadingIcdCode } from '@/src/shared/utils/icd-lookup'
 import { useMemo, useState } from 'react'
 import { sourceComparisonNarrative } from '@/src/shared/utils/source-record-comparison'
 import { assessMedicationCurrentness, medicationExpectedStartTimestamp, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
-import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { complementComparisonRecord, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
 import { periodToDays } from '../../utils/duration-helpers'
@@ -74,6 +74,7 @@ export interface TimelineDrug {
   drugProductName?: string
   drugTerminology?: MedicationEntity['drugTerminology']
   hospitalMedicationName?: HospitalMedicationName
+  hospitalAtcClassification?: MedicationEntity['hospitalAtcClassification']
   prescriptionType: TimelinePrescriptionType
   categoryKey: string
   categoryLabel: string
@@ -142,9 +143,13 @@ const ATC_LEVEL_ONE_CODES = new Set([
 type MedicationAtcData =
   | NonNullable<MedicationEntity['drugTerminology']>
   | NonNullable<MedicationEntity['atcClassification']>
+  | NonNullable<MedicationEntity['hospitalAtcClassification']>
 
+/** ATC for grouping. A hospital order's shared identity ATC comes last: it
+ * stands in only where no product-level classification exists. */
 function medicationAtcData(medication: any): MedicationAtcData | undefined {
   return medication?.drugTerminology ?? medication?.atcClassification
+    ?? medication?.hospitalAtcClassification
 }
 
 function recordedPrescriptionType(medication: any): TimelinePrescriptionType {
@@ -438,7 +443,12 @@ export function useMedicationTimeline(
 
     // Use the same hospital-owned interval and currentness as the list.
     // Cloud intervals remain in sourceIntervalDescription for inspection.
-    const intervals = projected.map(item => ({ ...item, periodSource: item.record }))
+    // A hospital row standing for a hospital/MediCloud group keeps the visit
+    // context (diagnosis, institution) its cloud copy showed, as in the list.
+    const intervals = projected.map(item => {
+      const record = complementComparisonRecord(item)
+      return { ...item, record, periodSource: record }
+    })
     for (const { record: med, sources, periodSource, collapsed, comparison } of intervals) {
       if (!med) continue
       if (['cancelled', 'entered-in-error', 'draft', 'on-hold'].includes(String(periodSource.status).toLowerCase())) continue
@@ -463,7 +473,7 @@ export function useMedicationTimeline(
         prescriptionTypesByDrug.get(clinicalDrugKey),
       )
       const hospitalMedicationName = !med.drugTerminology
-        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code)
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code, med)
         : undefined
       const officialProductName = audience === 'medical'
         ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
@@ -554,6 +564,7 @@ export function useMedicationTimeline(
           existing.drugProductName = drugProductName
           existing.drugTerminology = med.drugTerminology
           existing.hospitalMedicationName = hospitalMedicationName
+          existing.hospitalAtcClassification = hospitalMedicationName ? med.hospitalAtcClassification : undefined
           existing.categoryKey = category.key
           existing.categoryLabel = category.label
           existing.atcLevel2 = atcLevel2
@@ -569,6 +580,7 @@ export function useMedicationTimeline(
           drugProductName,
           drugTerminology: med.drugTerminology,
           hospitalMedicationName,
+          hospitalAtcClassification: hospitalMedicationName ? med.hospitalAtcClassification : undefined,
           prescriptionType,
           categoryKey: category.key,
           categoryLabel: category.label,

@@ -169,7 +169,7 @@ describe('ModelPicker custom model management entry', () => {
       <LanguageProvider>
         <RightPanelProvider>
           <ModelPicker
-            modelId="gpt-5.6-terra"
+            modelId="gpt-6.1-terra"
             fallbackModelId="gemini-3.1-flash-lite"
             onSelect={jest.fn()}
             preserveSelection
@@ -178,7 +178,7 @@ describe('ModelPicker custom model management entry', () => {
       </LanguageProvider>,
     )
 
-    expect(screen.getByTestId('model-picker-trigger')).toHaveTextContent('GPT-5.6 Terra')
+    expect(screen.getByTestId('model-picker-trigger')).toHaveTextContent('GPT-6.1 Terra')
   })
 
   it('can lock model selection while its feature is running', () => {

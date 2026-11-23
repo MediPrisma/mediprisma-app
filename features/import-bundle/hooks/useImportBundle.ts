@@ -27,8 +27,10 @@ import {
 } from '@/src/shared/utils/reset-on-bundle-change'
 import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
 import { prepareLocalImportFile } from '../services/local-import-file.service'
+import { patientIdsOf } from '../services/embedded-import'
 import { ProgressiveImportError } from '../services/progressive-import-transaction'
 import { persistSummaryVersions } from '@/src/application/hooks/medical-summary/summary-versions.store'
+import { reportHospitalCapture } from '@/src/infrastructure/telemetry/hospital-capture'
 
 /** Ceiling for pulling a bundled demo chart (~1.7–2.5MB) over hospital Wi-Fi. */
 const DEMO_FETCH_TIMEOUT_MS = 30_000
@@ -48,6 +50,10 @@ export interface ImportBundleOptions {
   onCommitted?: (importId: string) => void
   /** Only the validated progressive transaction supplies this ownership. */
   progressiveRunId?: string
+  /** The progressive stage, so a finished 北榮 capture can be logged (no clinical effect). */
+  progressiveStage?: string
+  /** Why a cloud-only stage has no hospital data (closed code from the progressive request). */
+  progressiveReason?: string
 }
 
 export interface UseImportBundleReturn {
@@ -66,6 +72,8 @@ export interface UseImportBundleReturn {
   bundleIsActive: boolean
   /** True when the active bundle is the bundled demo. */
   isDemo: boolean
+  /** The Patient ids of the bundle now stored (the embedded import answers with them). */
+  loadedPatientIds: () => Promise<string[]>
 }
 
 export function useImportBundle(): UseImportBundleReturn {
@@ -206,6 +214,7 @@ export function useImportBundle(): UseImportBundleReturn {
         await persistBundle(prepared.bundle, false, prepared.originalFhir, prepared.sourceMetadata, patientProfile,
           options?.signal, assertExpectedImport, options?.onCommitted,
           Boolean(options?.progressiveRunId && options.expectedImportId))
+        reportHospitalCapture(prepared.bundle, options?.progressiveStage, options?.progressiveReason)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'
@@ -283,5 +292,9 @@ export function useImportBundle(): UseImportBundleReturn {
     })
   }, [queryClient])
 
-  return { importFile, loadDemo, clear, loading, error, hasBundle, bundleIsActive, isDemo }
+  const loadedPatientIds = useCallback(async () => {
+    return patientIdsOf(await LocalBundleService.load())
+  }, [])
+
+  return { importFile, loadDemo, clear, loading, error, hasBundle, bundleIsActive, isDemo, loadedPatientIds }
 }

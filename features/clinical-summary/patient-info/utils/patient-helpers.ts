@@ -59,7 +59,7 @@ type IdT = Pick<
 export function formatIdentifiers(
   patient: any,
   t: IdT
-): Array<{ label: string; value: string }> {
+): Array<{ label: string; value: string; primary?: boolean }> {
   if (!Array.isArray(patient?.identifier)) return []
   const codeLabel: Record<string, string> = {
     NNxxx: t.nationalId,
@@ -72,8 +72,11 @@ export function formatIdentifiers(
   // identifiers (e.g. .../IdentifierSystem/national-id) carry no type.code or
   // type.text, so without this they fell through to the raw system URL — which
   // is far too long for the label column and visually collided with the value.
-  const systemLabel = (system: string): string | undefined => {
+  const systemLabel = (system: string, value: string): string | undefined => {
     const s = system.toLowerCase()
+    if (s === 'urn:oid:tw.gov.id-number' ||
+      (s === 'https://cloud-wildcatch.invalid/fhir/identifiersystem/source-medcloud-patient-id' &&
+        /^[A-Z][A-Z0-9][0-9X*]{8}$/i.test(value))) return t.nationalId
     if (s.includes('national-id') || s.includes('national_id')) return t.nationalId
     if (s.includes('medical-record') || s.includes('mrn') || s.includes('chart')) return t.medicalRecordNumber
     if (s.includes('passport')) return t.passportNumber
@@ -87,11 +90,13 @@ export function formatIdentifiers(
       const label =
         (code && codeLabel[code]) ||
         id?.type?.text ||
-        (typeof id?.system === 'string' ? systemLabel(id.system) : undefined) ||
+        (typeof id?.system === 'string' ? systemLabel(id.system, id.value) : undefined) ||
         t.identifierGeneric
-      return id?.value ? { label, value: id.value } : null
+      return id?.value ? { label, value: id.value,
+        ...(label === t.nationalId || label === t.medicalRecordNumber ? { primary: true } : {}),
+      } : null
     })
-    .filter(Boolean) as Array<{ label: string; value: string }>
+    .filter(Boolean) as Array<{ label: string; value: string; primary?: boolean }>
 }
 
 type TelecomT = Pick<PatientI18n, 'phone' | 'email' | 'fax' | 'sms' | 'contactGeneric'>

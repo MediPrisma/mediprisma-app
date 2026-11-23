@@ -10,16 +10,16 @@ export const PULMONARY: CalculatorDef[] = [
       blurb: { en: 'Community-acquired pneumonia severity / disposition.', zh: '社區型肺炎嚴重度／處置建議。' },
       inputs: [
         {
-          key: 'confusion', type: 'select', label: { en: 'Confusion (new)', zh: '新發意識混亂' }, defaultValue: '',
+          key: 'confusion', type: 'select', label: { en: 'Confusion (new)', zh: '新發意識混亂' }, defaultValue: '', presumed: 'no',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
         {
-          key: 'rr', type: 'select', label: { en: 'Respiratory rate ≥ 30/min', zh: '呼吸速率 ≥ 30/分' }, defaultValue: '',
+          key: 'rr', type: 'select', label: { en: 'Respiratory rate ≥ 30/min', zh: '呼吸速率 ≥ 30/分' }, defaultValue: '', presumed: 'no',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         {
-          key: 'bp', type: 'select', label: { en: 'SBP < 90 or DBP ≤ 60 mmHg', zh: '收縮壓 < 90 或舒張壓 ≤ 60 mmHg' }, defaultValue: '',
+          key: 'bp', type: 'select', label: { en: 'SBP < 90 or DBP ≤ 60 mmHg', zh: '收縮壓 < 90 或舒張壓 ≤ 60 mmHg' }, defaultValue: '', presumed: 'no',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         AGE_INPUT,
@@ -61,9 +61,9 @@ export const PULMONARY: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Quick sepsis risk outside the ICU.', zh: '非加護病房之快速敗血症風險。' },
       items: [
-        { key: 'rr', scoreOn: 'yes', label: { en: 'Respiratory rate ≥ 22/min', zh: '呼吸速率 ≥ 22/分' } },
-        { key: 'ams', scoreOn: 'yes', label: { en: 'Altered mentation (GCS < 15)', zh: '意識改變（GCS < 15）' } },
-        { key: 'sbp', scoreOn: 'yes', label: { en: 'Systolic BP ≤ 100 mmHg', zh: '收縮壓 ≤ 100 mmHg' } },
+        { key: 'rr', scoreOn: 'yes', presumed: 'no', label: { en: 'Respiratory rate ≥ 22/min', zh: '呼吸速率 ≥ 22/分' } },
+        { key: 'ams', scoreOn: 'yes', presumed: 'no', label: { en: 'Altered mentation (GCS < 15)', zh: '意識改變（GCS < 15）' } },
+        { key: 'sbp', scoreOn: 'yes', presumed: 'no', label: { en: 'Systolic BP ≤ 100 mmHg', zh: '收縮壓 ≤ 100 mmHg' } },
       ],
       interpret: (s) => ({
         value: `${s} / 3`,
@@ -83,9 +83,9 @@ export const PULMONARY: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Systemic inflammatory response.', zh: '全身性發炎反應。' },
       inputs: [
-        { key: 'temp', type: 'number', label: { en: 'Temperature', zh: '體溫' }, unit: '°C', normalRange: { low: 36, high: 38 } },
-        { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 90 } },
-        { key: 'rr', type: 'number', label: { en: 'Respiratory rate', zh: '呼吸速率' }, unit: '/min', normalRange: { low: 12, high: 20 } },
+        { key: 'temp', type: 'number', label: { en: 'Temperature', zh: '體溫' }, unit: '°C', dimension: 'temperature', normalRange: { low: 36, high: 38 }, source: { kind: 'vital', loinc: ['8310-5'] } },
+        { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 90 }, source: { kind: 'vital', loinc: ['8867-4'] } },
+        { key: 'rr', type: 'number', label: { en: 'Respiratory rate', zh: '呼吸速率' }, unit: '/min', normalRange: { low: 12, high: 20 }, source: { kind: 'vital', loinc: ['9279-1'] } },
         { key: 'wbc', type: 'number', label: { en: 'WBC', zh: '白血球' }, unit: '10⁹/L', dimension: 'wbc', normalRange: { low: 4, high: 12 }, source: { kind: 'lab', keys: ['WBC'] } },
       ],
       compute: (v) => {

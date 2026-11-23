@@ -3,8 +3,9 @@ import { withCollectorOperation } from '@/src/application/telemetry/collector-op
 import type { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
-import { collectorEventV10Schema, MAX_COLLECTOR_REQUEST_DETAILS } from '@/src/shared/contracts/collector-event'
+import { collectorEventV11Schema, MAX_COLLECTOR_REQUEST_DETAILS } from '@/src/shared/contracts/collector-event'
 import { mockCollectorPermission } from '../../helpers/collector-permissions'
+import { rememberLocalBundleVersion } from '@/src/infrastructure/fhir/services/local-bundle-version'
 
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({ saveEncryptedCache: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('@/src/application/telemetry/usage-analytics', () => ({ trackEvent: jest.fn() }))
@@ -20,6 +21,7 @@ const child = (operation: ReturnType<typeof parent>['operation'], modelId = 'gpt
   beginCollectorObservation({ feature: 'summary', modelId, sampleKind: 'request', mode: 'stream', operation })
 let permission: ReturnType<typeof mockCollectorPermission>
 beforeEach(() => {
+  rememberLocalBundleVersion(null)
   cancelCollectorRequests()
   permission = mockCollectorPermission()
   mockCapture.mockClear()
@@ -43,7 +45,7 @@ test('one operation sends one row containing ordered failures and retries, no cl
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(mockCapture).toHaveBeenCalledTimes(1)
   const event = payloads()[0]
-  expect(collectorEventV10Schema.safeParse(event).success).toBe(true)
+  expect(collectorEventV11Schema.safeParse(event).success).toBe(true)
   expect(event.diagnostics).toMatchObject({ loaded: { encounters: 23, medications: 47 },
     requests: { count: 2, omitted: 0, details: [
       { model: 'custom', status: 'error', error_class: 'timeout', response_complete: false },
@@ -61,7 +63,7 @@ test('concurrent runs and standalone calls cannot cross-associate', async () => 
   expect(payloads().map(e => e.diagnostics.requests.details[0].model)).toEqual(['gpt-5.4-nano', 'gemini-3.1-flash-lite'])
   child(undefined).finish({ outcome: 'ok' })
   await settle()
-  expect(payloads()[2]).toMatchObject({ schema_version: 10, sample_kind: 'request' })
+  expect(payloads()[2]).toMatchObject({ schema_version: 11, sample_kind: 'request' })
 })
 
 test('unfinished child is explicitly incomplete and late finish does not send or mutate', async () => {
@@ -133,12 +135,12 @@ test('a summary attempt is still sent on its own and the v8 operation nests it u
   const operation = parent()
   child(operation.operation).finish({ outcome: 'aborted', phase: 'stream', responseComplete: false, summaryAttempt: attempt(1, 'incomplete') })
   await settle()
-  expect(payloads().map(p => p.schema_version)).toEqual([10])
+  expect(payloads().map(p => p.schema_version)).toEqual([11])
   child(operation.operation).finish({ outcome: 'ok', phase: 'stream', responseComplete: true, summaryAttempt: attempt(2, 'valid') })
   operation.finish({ outcome: 'ok', summaryRunId: runId })
   await settle()
   const sent = payloads()
-  expect(sent.map(p => p.schema_version)).toEqual([10, 10, 10])
+  expect(sent.map(p => p.schema_version)).toEqual([11, 11, 11])
   expect(sent[0].diagnostics.summary_attempt.run_id).toBe(runId)
   expect(sent[2]).toMatchObject({ sample_kind: 'feature', diagnostics: { summary_run_id: runId, requests: { count: 2, omitted: 0 } } })
   expect(sent[2].diagnostics.requests.details.map((r: { status: string }) => r.status)).toEqual(['aborted', 'completed'])
@@ -153,7 +155,7 @@ test('past the detail cap a summary attempt is still sent on its own and only co
   operation.finish({ outcome: 'ok', summaryRunId: runId })
   await settle()
   const sent = payloads()
-  expect(sent.map(p => p.schema_version)).toEqual([10, 10])
+  expect(sent.map(p => p.schema_version)).toEqual([11, 11])
   expect(sent[0].diagnostics.summary_attempt.run_id).toBe(runId)
   expect(sent[1].diagnostics.requests).toMatchObject({ count: MAX_COLLECTOR_REQUEST_DETAILS + 1, omitted: 1 })
 })
@@ -181,7 +183,7 @@ test('the hospital endpoint profile reports its fixed model code; a user-defined
 
 test('a custom summary request names its template (v10); other features never carry one', async () => {
   window.history.replaceState({}, '', '/app-hmc/?site=vghtpe')
-  const { collectorEventV10Schema } = await import('@/src/shared/contracts/collector-event')
+  const { collectorEventV11Schema } = await import('@/src/shared/contracts/collector-event')
   const longTitle = '心'.repeat(150) + '😀'.repeat(60)
   beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
     template: { id: 'changes', title: '  重要\n變化\t模板  ' } }).finish({ outcome: 'timeout', phase: 'stream' })
@@ -194,19 +196,19 @@ test('a custom summary request names its template (v10); other features never ca
   beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query' }).finish({ outcome: 'ok' })
   await settle()
   const [first, second, third, fourth] = payloads()
-  expect(first).toMatchObject({ schema_version: 10, app_surface: 'app-hmc', feature: 'insights', status: 'error', diagnostics: { template: { id: 'changes', title: '重要 變化 模板' } } })
-  expect(collectorEventV10Schema.safeParse(first).success).toBe(true)
-  expect(second.schema_version).toBe(10)
+  expect(first).toMatchObject({ schema_version: 11, app_surface: 'app-hmc', feature: 'insights', status: 'error', diagnostics: { template: { id: 'changes', title: '重要 變化 模板' } } })
+  expect(collectorEventV11Schema.safeParse(first).success).toBe(true)
+  expect(second.schema_version).toBe(11)
   expect(second.diagnostics.template.title.length).toBeLessThanOrEqual(200)
   expect(second.diagnostics.template.title).not.toMatch(/[\uD800-\uDBFF]$/)
-  expect(collectorEventV10Schema.safeParse(second).success).toBe(true)
-  expect(third.schema_version).toBe(10)
+  expect(collectorEventV11Schema.safeParse(second).success).toBe(true)
+  expect(third.schema_version).toBe(11)
   expect(third.diagnostics).not.toHaveProperty('template')
-  expect(fourth.schema_version).toBe(10)
+  expect(fourth.schema_version).toBe(11)
 })
 
 test('template titles drop control, bidi and unpaired surrogate characters; an unusable ID is not rewritten', async () => {
-  const { collectorEventV10Schema } = await import('@/src/shared/contracts/collector-event')
+  const { collectorEventV11Schema } = await import('@/src/shared/contracts/collector-event')
   beginCollectorObservation({ feature: 'insights', modelId: 'gpt-5.4-nano', sampleKind: 'request', mode: 'query',
     template: { id: 'changes', title: '甲\u0085乙\uD800丙‮😀' } }).finish({ outcome: 'ok' })
   await settle()
@@ -222,9 +224,9 @@ test('template titles drop control, bidi and unpaired surrogate characters; an u
   for (const sent of edgeIds) expect(sent.diagnostics).not.toHaveProperty('template')
   expect(edgeIds).toHaveLength(3)
   expect(cleaned.diagnostics.template).toEqual({ id: 'changes', title: '甲 乙丙😀' })
-  expect(collectorEventV10Schema.safeParse(cleaned).success).toBe(true)
+  expect(collectorEventV11Schema.safeParse(cleaned).success).toBe(true)
   // The ID is how a template is found: one that would need rewriting is left out, never altered.
-  expect(badId.schema_version).toBe(10)
+  expect(badId.schema_version).toBe(11)
   expect(badId.diagnostics).not.toHaveProperty('template')
 })
 
@@ -245,4 +247,16 @@ test('custom summary requests (v9) use at most half the retry queue and give way
   const dropped = collectorStatus().dropped
   parent().finish({ outcome: 'ok' })
   expect(collectorStatus()).toMatchObject({ queued: 64, dropped: dropped + 1 })
+})
+
+test('summary child attempts retain the parent source version after a new Bundle arrives',async()=>{
+ const source=(code:string)=>({meta:{tag:[{system:'https://cloud-wildcatch.invalid/fhir/CodeSystem/extension-version',code}]}})
+ rememberLocalBundleVersion(source('0.15.17'))
+ const operation=parent()
+ rememberLocalBundleVersion(source('0.15.18'))
+ child(operation.operation).finish({outcome:'ok',summaryAttempt:{run_id:'11111111-1111-4111-8111-111111111111',request_id:'22222222-2222-4222-8222-222222222222',attempt:1,lane:'fast',output_chars:10,last_chunk_ms:null,parse_state:'valid'}})
+ operation.finish({outcome:'ok'})
+ await settle()
+ expect(payloads()).toHaveLength(2)
+ expect(payloads().every(e=>e.medcloud_extension_version==='0.15.17')).toBe(true)
 })

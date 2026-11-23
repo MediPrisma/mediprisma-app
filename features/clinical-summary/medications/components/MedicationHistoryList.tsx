@@ -98,7 +98,10 @@ function visitRowsAt(
 }
 
 /** Compact "start → end" shared with the collapsed medication row. */
-function dateRangeOf(m: MedicationRow, locale: string): string {
+function dateRangeOf(m: MedicationRow, locale: string, dispensedLabel: string): string {
+  if (m.dispensedOn && m.endDate) {
+    return `${dispensedLabel} ${compactMedicationDate(m.dispensedOn, locale)} → ${compactMedicationDate(m.endDate, locale)}`
+  }
   if (m.startedOn && m.endDate) {
     return `${compactMedicationDate(m.startedOn, locale)} → ${compactMedicationDate(m.endDate, locale)}`
   }
@@ -421,7 +424,7 @@ export function MedicationHistoryDetails({
       {medications.map((medication, index) => {
         const scheduleParts: Array<{ key: string; text: string }> = []
         const metadataParts: string[] = []
-        const range = dateRangeOf(medication, locale)
+        const range = dateRangeOf(medication, locale, mt.dispensedOn ?? '領藥')
         const durationLabel = medication.durationDays !== undefined
           ? (mt.durationCompact ?? (locale.startsWith('zh') ? '{n} 天' : '{n}d'))
             .replace('{n}', formatCompactNumber(medication.durationDays))

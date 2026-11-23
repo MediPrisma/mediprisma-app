@@ -7,7 +7,8 @@ import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { RENAL } from '@/features/medical-calculator/calculators/renal'
 import { CITES, calculateDoacDoses, checkRegimen, cockcroftGault, crclLabel, type DoacAgent } from '@/features/medical-calculator/doac-dose-model'
-import { doacSelects } from '@/features/medical-calculator/doac-clinical-autofill'
+import { DOAC_UNRESOLVED_MARK, doacSelects } from '@/features/medical-calculator/doac-clinical-autofill'
+import { vghtpeMedicationIdentityExtension } from '@/src/shared/utils/hospital-medication-index'
 import { buildClinicalSelects } from '@/features/medical-calculator/hfpef-clinical-autofill'
 import { HF_VISIT_CALCULATORS } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
@@ -267,8 +268,10 @@ describe('autofill from current prescriptions', () => {
     const selects = doacSelects([med('Pradaxa dabigatran', 110, 2, { drugTerminology: { doseForm: 'hard gelatin capsule' } } as Partial<MedicationEntity>)], now)
     expect(selects.doacRegimen?.value).toBe('dabigatran:110:2')
   })
-  it('no current prescription says nothing; none of them a DOAC says 「無」', () => {
-    expect(doacSelects([], now)).toEqual({})
+  it('no current prescription is 「無」 everywhere by default; none of them a DOAC says 「無」', () => {
+    const empty = doacSelects([], now)
+    expect(empty.doacRegimen).toMatchObject({ value: 'none', testName: '未見目前有效處方，預設無（請核對）' })
+    for (const key of DDI_KEYS) expect(empty[key as keyof typeof empty]).toMatchObject({ value: 'no', testName: '未見目前有效處方，預設無（請核對）' })
     expect(doacSelects([med('amlodipine', 5, 1)], now).doacRegimen?.value).toBe('none')
   })
   it('reaches the calculator through the shared clinical selects', () => {
@@ -281,24 +284,47 @@ describe('autofill from current prescriptions', () => {
     ...extra,
   } as Partial<MedicationEntity>)
 
-  it('a current hospital product with no resolved ingredient leaves 「無 DOAC」 and every 「否」 to the clinician', () => {
+  it('a current hospital product with no resolved ingredient leaves 「無 DOAC」 to the clinician but fills each 「否」 naming it', () => {
     const selects = doacSelects([hospital('Fictiodoac FC tab 2.5 mg'), med('amlodipine', 5, 1)], now)
-    expect(selects.doacRegimen).toBeUndefined()
-    for (const key of DDI_KEYS) expect(selects[key as keyof typeof selects]).toBeUndefined()
-    // And so in the calculator: the selects stay 待填, not 無.
+    expect(selects.doacRegimen).toMatchObject({ value: 'none', testName: `目前有效處方未見 DOAC；另有${DOAC_UNRESOLVED_MARK}Fictiodoac FC tab 2.5 mg（請核對是否為 DOAC）` })
+    for (const key of DDI_KEYS) {
+      const hit = selects[key as keyof typeof selects]
+      expect(hit?.value).toBe('no')
+      expect(hit?.testName).toContain(`${DOAC_UNRESOLVED_MARK}Fictiodoac FC tab 2.5 mg`)
+    }
+    // In the calculator: the regimen and the co-medications are 無, and
+    // the folded co-medication line names the unresolved product.
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
     const autofill = { resolve: () => undefined, clinicalSelects: buildClinicalSelects([], [hospital('Fictiodoac FC tab 2.5 mg')], now) }
-    for (const key of ['regimen', 'ddi_verapamil', 'ddi_anticoagulant']) {
-      const input = calc.inputs.find((i) => i.key === key)!
-      expect(resolveInput(input, autofill)).toMatchObject({ filled: false })
+    expect(resolveInput(calc.inputs.find((i) => i.key === 'regimen')!, autofill)).toMatchObject({ filled: true, value: 'none' })
+    const values: Record<string, string> = {}, captions: Record<string, string | undefined> = {}
+    for (const key of DDI_KEYS) {
+      const resolved = resolveInput(calc.inputs.find((i) => i.key === key)!, autofill)
+      expect(resolved).toMatchObject({ filled: true, value: 'no' })
+      values[key] = resolved.value
+      captions[key] = resolved.source?.testName
     }
+    const group = calc.inputGroups!.find((g) => g.key === 'ddi')!
+    const folded = group.summary!(values, DDI_KEYS, captions)
+    expect(folded.open).toBe(false)
+    expect(folded.text.zh).toContain('未對到成分：Fictiodoac FC tab 2.5 mg，請核對')
+  })
+
+  it('with every ingredient resolved the co-medication line names nothing unresolved', () => {
+    const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
+    const group = calc.inputGroups!.find((g) => g.key === 'ddi')!
+    const selects = doacSelects([med('amlodipine', 5, 1)], now)
+    const values = Object.fromEntries(DDI_KEYS.map((key) => [key, selects[key as keyof typeof selects]!.value]))
+    const captions = Object.fromEntries(DDI_KEYS.map((key) => [key, selects[key as keyof typeof selects]!.testName]))
+    expect(group.summary!(values, DDI_KEYS, captions).text.zh).not.toContain('未對到成分')
   })
 
   it('a drug a resolved prescription names is still 「是」 beside an unresolved hospital product', () => {
     const selects = doacSelects([hospital('Fictiodoac FC tab 2.5 mg'), med('verapamil', 120, 2), med('apixaban', 5, 2)], now)
     expect(selects.doacRegimen?.value).toBe('apixaban:5:2')
     expect(selects.ddi_verapamil?.value).toBe('yes')
-    expect(selects.ddi_ketoconazole).toBeUndefined()
+    expect(selects.ddi_ketoconazole?.value).toBe('no')
+    expect(selects.ddi_ketoconazole?.testName).toContain(`${DOAC_UNRESOLVED_MARK}Fictiodoac FC tab 2.5 mg`)
   })
 
   it('a hospital product with a resolved ingredient counts like any other prescription', () => {
@@ -308,6 +334,15 @@ describe('autofill from current prescriptions', () => {
     expect(selects.ddi_verapamil?.value).toBe('no')
     // A product resolved by the reviewed alias list, with no official terminology.
     expect(doacSelects([hospital('Aromasin SC tab 25 mg')], now).doacRegimen?.value).toBe('none')
+  })
+
+  it('a hospital brand known only through the VGH medication index is matched by that ingredient', () => {
+    const indexed = (product: string, ingredient: string) => hospital(product,
+      { extension: [vghtpeMedicationIdentityExtension('a'.repeat(64), ['SYNTHETIC1'], ingredient)] } as Partial<MedicationEntity>)
+    const selects = doacSelects([indexed('Pradaxa #* cap 110 mg', 'dabigatran etexilate mesilate 110 MG'),
+      indexed('Isoptin SR FC * tab 240 mg', 'VERAPAMIL HCL 240 MG')], now)
+    expect(selects.doacRegimen?.value).not.toBe('none')
+    expect(selects.ddi_verapamil?.value).toBe('yes')
   })
 
   it('an unresolved hospital product that is no longer current does not hold anything back', () => {
@@ -322,7 +357,7 @@ describe('registration', () => {
   it('one calculator, listed once, opened from the AF dose point (DP-09)', () => {
     expect(CALCULATORS.filter((c) => c.id === 'doac-dose-nvaf')).toHaveLength(1)
     const entry = HF_VISIT_CALCULATORS.find((e) => e.calculatorId === 'doac-dose-nvaf')!
-    expect(entry).toMatchObject({ dp: 'DP-09', source: 'af', needsPoint: true })
+    expect(entry).toMatchObject({ dp: 'DP-09', source: 'af' })
     // The AF card's line 「劑量請用 DOAC 劑量計算機核對」 links to it.
     expect('劑量請用 DOAC 劑量計算機核對。').toMatch(entry.names)
   })

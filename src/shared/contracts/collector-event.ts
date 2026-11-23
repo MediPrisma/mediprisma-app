@@ -1,4 +1,4 @@
-// Canonical wire contracts v2-v10 plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
+// Canonical wire contracts v2-v11, the hospital-capture event, plus the separate consented AI report. Generate the APP copy with scripts/sync-collector-contract.mjs.
 // Event schemas permit metadata only. The separate AI report explicitly contains clinical text.
 import { z } from 'zod'
 
@@ -19,19 +19,27 @@ export const errorClassSchema = z.enum([
 ])
 export const collectorModelSchema = z.enum([
   'gpt-5.4-nano', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol',
-  'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-3.1-pro-preview',
   'claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5',
   'custom', 'unknown', 'whisper-1', 'provider-managed',
   // The hospital-managed endpoint profile names this model; any user-defined endpoint stays 'custom'.
   'tvghbrain3.5',
+  // 北榮院內 Azure 的 Luna；醫析以固定代號回報，不讀端點回傳的自由字串。
+  'gpt-6-luna',
 ])
+// D089: model 不再限於上面的清單。另接受符合格式的模型名稱，包括新增的內建模型，以及使用者自訂端點設定的模型名稱。
+// 格式：英數字開頭，只含英數字與 . _ : / -，最長 64 字，且不含 "://"。中文、空白、@、網址與錯誤訊息都不會通過；
+// 不符合時 sender 改送 'custom'（自訂端點）或 'unknown'，不能直接送出原字串。上面的清單用於監看頁的中文名稱與單價。
+export const COLLECTOR_MODEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/
+export const isCollectorModelName = (value: string) => COLLECTOR_MODEL_NAME_PATTERN.test(value) && !value.includes('://')
+export const collectorModelNameSchema = z.string().refine(isCollectorModelName, 'Model name is outside the allowed format')
 const elapsed = z.number().int().min(0).max(86_400_000)
 const collectorEventBaseSchema = z.object({
   schema_version: z.literal(2), event_id: z.string().uuid(),
   occurred_at: z.string().datetime({ offset: true }), site: z.literal('vghtpe'),
   feature: featureSchema,
   provider: z.enum(['openai', 'gemini', 'anthropic', 'custom', 'perplexity', 'unknown']),
-  model: collectorModelSchema,
+  model: collectorModelNameSchema,
   model_source: z.enum(['configured', 'reported', 'unreported']),
   sample_kind: z.enum(['feature', 'request']),
   latency_ms: elapsed,
@@ -243,6 +251,7 @@ export type CollectorAppSurface = z.infer<typeof collectorAppSurfaceSchema>
 const collectorEventV10BaseSchema = collectorEventV4BaseSchema.extend({
   schema_version: z.literal(10),
   app_surface: collectorAppSurfaceSchema,
+  medcloud_extension_version: z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/).optional(),
   diagnostics: collectorEventV4BaseSchema.shape.diagnostics.extend({
     summary_cards: summaryCardCountsSchema.optional(),
     requests: operationRequestsSchema.optional(),
@@ -253,7 +262,7 @@ const collectorEventV10BaseSchema = collectorEventV4BaseSchema.extend({
 }).strict()
 export const collectorEventV10Schema = collectorEventV10BaseSchema.superRefine((e, ctx) => {
   validateOutcome(e, ctx)
-  const { app_surface: _surface, ...base } = e
+  const { app_surface: _surface, medcloud_extension_version: _extensionVersion, ...base } = e
   const { summary_attempt, summary_run_id, template, ...diagnostics } = e.diagnostics
   const checkLegacy = (schema: z.ZodTypeAny, version: number, legacyDiagnostics: Record<string, unknown>) => {
     const parsed = schema.safeParse({ ...base, schema_version: version, diagnostics: legacyDiagnostics })
@@ -276,6 +285,118 @@ export const collectorEventV10Schema = collectorEventV10BaseSchema.superRefine((
   }
 })
 export type CollectorEventV10 = z.infer<typeof collectorEventV10Schema>
+
+// v11: the token counts the AI provider reported for one request. Exact numbers, never an
+// estimate; a side the provider did not report is left out, and an event without any is unchanged.
+export const tokenUsageSchema = z.object({
+  input_tokens: resourceCountSchema.optional(), output_tokens: resourceCountSchema.optional(),
+}).strict().refine(u => u.input_tokens !== undefined || u.output_tokens !== undefined, 'Token usage needs at least one count')
+export type TokenUsage = z.infer<typeof tokenUsageSchema>
+const collectorRequestV11Schema = requestBaseSchema.extend({ usage: tokenUsageSchema.optional() }).strict()
+export type CollectorRequestV11 = z.infer<typeof collectorRequestV11Schema>
+export const collectorEventV11Schema = collectorEventV10BaseSchema.extend({
+  schema_version: z.literal(11),
+  diagnostics: collectorEventV10BaseSchema.shape.diagnostics.extend({
+    usage: tokenUsageSchema.optional(),
+    requests: z.object({
+      count: resourceCountSchema, omitted: resourceCountSchema,
+      details: z.array(collectorRequestV11Schema).max(MAX_COLLECTOR_REQUEST_DETAILS),
+    }).strict().optional(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v10 invariant rather than maintaining another copy.
+  const { usage: _usage, requests, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV10Schema.safeParse({ ...e, schema_version: 10, diagnostics: { ...diagnostics,
+    ...(requests ? { requests: { ...requests, details: requests.details.map(({ usage: _requestUsage, ...request }) => request) } } : {}) } })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+})
+export type CollectorEventV11 = z.infer<typeof collectorEventV11Schema>
+
+// Hospital-capture outcome: MediPrisma relays what 北榮懷爾抓抓 tagged on the Bundle it
+// delivered (category, failure kind, HTTP status, count). Its own endpoint and table,
+// never accepted by /events. From D084 it may carry the hospital chart number, the only
+// patient identifier here; still no names, national IDs, dates, URLs or free text.
+export const hospitalCaptureCategorySchema = z.enum([
+  'patient', 'allergies', 'vitals', 'conditions', 'encounters', 'orders', 'admissions', 'emergency',
+  'operations', 'medications', 'reports', 'discharge_summaries', 'implants', 'chemotherapy', 'careplans', 'other',
+])
+// login_or_network: extensions before D080 could not tell an expired HIS login from a lost
+// connection. Newer ones report login_expired (HIS redirected) or network (no response) instead.
+// D090: visit_limit and order_unmatched are not fetch failures. They name why a capture that
+// fetched every page is still incomplete (older visits left out by the visit cap; orders
+// whose report coverage could not be confirmed), so a partial capture always has a reason.
+export const hospitalCaptureFailureKindSchema = z.enum([
+  'timeout', 'his_busy', 'http_error', 'parse_failed', 'login_or_network', 'login_expired', 'network',
+  'visit_limit', 'order_unmatched', 'unknown',
+])
+// Why no hospital data reached the app (outcome failed only). 雲端懷爾抓抓 maps the
+// 北榮懷爾抓抓 peer error (or its own timeout/validation failure) to this closed set.
+export const hospitalUnavailableReasonSchema = z.enum([
+  'HIS_LOGIN_REQUIRED', 'HIS_BUSY', 'HIS_SESSION_BLOCKED', 'PATIENT_HIS_MISMATCH', 'OUTPATIENT_CAPTURE_FAILED', 'HIS_TIMEOUT', 'INVALID_HIS_RESULT',
+  'HIS_PATIENT_SELECTION_REQUIRED',
+])
+// How much the capture delivered (D083): exact counts per FHIR resource type of the hospital
+// resources that reached the app, and encounters by class. A type outside the list counts as other.
+export const hospitalCaptureResourceTypeSchema = z.enum([
+  'Encounter', 'Condition', 'Observation', 'DiagnosticReport', 'MedicationRequest', 'MedicationStatement', 'MedicationAdministration',
+  'Procedure', 'AllergyIntolerance', 'DocumentReference', 'ServiceRequest', 'CarePlan', 'Device', 'Immunization', 'Composition', 'ImagingStudy', 'other',
+])
+export const hospitalCaptureEncounterClassSchema = z.enum(['outpatient', 'inpatient', 'emergency', 'other'])
+const captureCount = z.number().int().min(0).max(99_999)
+const captureStageMs = z.number().int().min(0).max(3_600_000)
+const extensionVersion = z.string().regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}(?:\.\d{1,5})?$/)
+export const hospitalCaptureEventSchema = z.object({
+  schema_version: z.literal(1), event_id: z.string().uuid(),
+  occurred_at: z.string().datetime({ offset: true }), site: z.literal('vghtpe'),
+  app_surface: collectorAppSurfaceSchema,
+  app_version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  build_revision: z.string().regex(/^(?:[a-f0-9]{7,40}|unknown)$/),
+  // one_click: 北榮懷爾抓抓 imported directly; medcloud_relay: via 雲端懷爾抓抓 progressive import;
+  // clinic_prep (D091): the outpatient assistant preparing a clinic ahead of time, one patient per event.
+  path: z.enum(['one_click', 'medcloud_relay', 'clinic_prep']),
+  // empty = the capture finished without hospital resources; failed = no hospital data reached the app.
+  outcome: z.enum(['complete', 'partial', 'empty', 'failed']),
+  unavailable_reason: hospitalUnavailableReasonSchema.optional(),
+  hospital_extension_version: extensionVersion.optional(),
+  medcloud_extension_version: extensionVersion.optional(),
+  hospital_resources: resourceBucketSchema.optional(),
+  resource_counts: z.record(hospitalCaptureResourceTypeSchema, captureCount).optional(),
+  encounter_counts: z.record(hospitalCaptureEncounterClassSchema, captureCount).optional(),
+  // 北榮 chart number (histno) of the captured patient. The collector is in-hospital and admin-only.
+  chart_no: z.string().regex(/^[0-9A-Za-z-]{1,16}$/).optional(),
+  // Capture time as 北榮懷爾抓抓 measured it (start of the capture to the bundle being ready), at most one hour.
+  duration_ms: z.number().int().min(0).max(3_600_000).optional(),
+  // HIS requests 北榮懷爾抓抓 itself sent for this capture (D091). Not the requests the chart
+  // page sends on its own when the assistant opens it in a tab.
+  request_count: captureCount.optional(),
+  // D093: a capture made in the clinic may build on the record the outpatient assistant already holds.
+  // outcome: used = that record with what is newer laid over it; none = the assistant had no usable record;
+  // timeout = it did not arrive in time; failed = reading it failed; unusable = it arrived but could not be
+  // built on (not the same patient, too old to add to, or HIS could not say what is newer).
+  // held_resources: resources in the held record; newer_resources: resources read from HIS to lay over it;
+  // since_days: how many days back that reading started.
+  stored_record: z.object({
+    outcome: z.enum(['used', 'none', 'timeout', 'failed', 'unusable']),
+    held_resources: captureCount.optional(), newer_resources: captureCount.optional(),
+    since_days: z.number().int().min(0).max(400).optional(),
+  }).strict().optional(),
+  // D093: how long each part took, as 北榮懷爾抓抓 measured it. prelude = finding the patient, opening the chart,
+  // the access audit and the identity check; record_read = reading the held record from the assistant;
+  // record_wait = how long the capture stood waiting for that record; capture = reading HIS; merge = joining the two.
+  stage_ms: z.object({
+    prelude: captureStageMs.optional(), record_read: captureStageMs.optional(), record_wait: captureStageMs.optional(),
+    capture: captureStageMs.optional(), merge: captureStageMs.optional(),
+  }).strict().optional(),
+  failures: z.array(z.object({
+    category: hospitalCaptureCategorySchema, kind: hospitalCaptureFailureKindSchema,
+    status: z.number().int().min(100).max(599).optional(), count: z.number().int().min(1).max(99_999),
+  }).strict()).max(40),
+}).strict().superRefine((e, ctx) => {
+  if (e.outcome === 'complete' && e.failures.length) ctx.addIssue({ code: 'custom', path: ['failures'], message: 'A complete capture has no failures' })
+  if (e.unavailable_reason && e.outcome !== 'failed') ctx.addIssue({ code: 'custom', path: ['unavailable_reason'], message: 'Only a failed capture has an unavailable reason' })
+})
+export type HospitalCaptureEvent = z.infer<typeof hospitalCaptureEventSchema>
 
 // Separate, explicitly consented sensitive-content endpoint; never accepted by
 // /events. Prompt includes the clinical context actually sent to the model.

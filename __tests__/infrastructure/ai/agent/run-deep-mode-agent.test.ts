@@ -491,3 +491,92 @@ describe('review regression cases', () => {
     expect(result.answer).toContain('[[1]](https://example.org/paper)')
   })
 })
+
+describe('runDeepModeAgent endpoint generation settings', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  const answer = () => ({
+    fullStream: textStream('Answer'),
+    usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+  })
+
+  it('sends the sampling limits on the tool round and on the answer round', async () => {
+    mockStreamText.mockImplementation(answer)
+    const tools = {
+      getDataOverview: { execute: jest.fn().mockResolvedValue({ success: true, data: {} }) },
+      queryObservations: { execute: jest.fn() },
+    }
+
+    await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'user', content: 'question' }],
+      tools: tools as never,
+      generation: { temperature: 0, maxOutputTokens: 4096 },
+      translations,
+      idleMs: 1_000,
+      abortController: new AbortController(),
+    })
+    await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'user', content: 'question' }],
+      tools: tools as never,
+      initialToolName: 'getDataOverview',
+      preExecuteInitialTool: true,
+      generation: { temperature: 0, maxOutputTokens: 4096 },
+      translations,
+      idleMs: 1_000,
+      abortController: new AbortController(),
+    })
+
+    expect(mockStreamText).toHaveBeenCalledTimes(2)
+    for (const [request] of mockStreamText.mock.calls) {
+      expect(request).toMatchObject({ temperature: 0, maxOutputTokens: 4096 })
+    }
+  })
+
+  it('leaves the provider defaults alone when no settings are given', async () => {
+    mockStreamText.mockImplementation(answer)
+
+    await runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'user', content: 'question' }],
+      tools: undefined,
+      translations,
+      idleMs: 1_000,
+      abortController: new AbortController(),
+    })
+
+    const request = mockStreamText.mock.calls[0][0]
+    expect(request).not.toHaveProperty('temperature')
+    expect(request).not.toHaveProperty('maxOutputTokens')
+    expect(request.prepareStep).toBeUndefined()
+  })
+
+  it('requires a tool call on step zero only, and only when no tool was named', async () => {
+    mockStreamText.mockImplementation(answer)
+    const tools = { queryObservations: { execute: jest.fn() }, queryMedications: { execute: jest.fn() } }
+    const run = (extra: Record<string, unknown>) => runDeepModeAgent({
+      model: {} as never,
+      messages: [{ role: 'user', content: 'question' }],
+      tools: tools as never,
+      translations,
+      idleMs: 1_000,
+      abortController: new AbortController(),
+      ...extra,
+    })
+
+    await run({ requireInitialToolCall: true })
+    const required = mockStreamText.mock.calls[0][0].prepareStep
+    expect(required({ stepNumber: 0 })).toEqual({ toolChoice: 'required' })
+    expect(required({ stepNumber: 1 })).toEqual({ toolChoice: 'auto' })
+
+    await run({ requireInitialToolCall: true, initialToolName: 'queryObservations' })
+    const named = mockStreamText.mock.calls[1][0].prepareStep
+    expect(named({ stepNumber: 0 })).toEqual({ toolChoice: { type: 'tool', toolName: 'queryObservations' } })
+
+    await run({ requireInitialToolCall: true, tools: {} })
+    expect(mockStreamText.mock.calls[2][0].prepareStep).toBeUndefined()
+  })
+})

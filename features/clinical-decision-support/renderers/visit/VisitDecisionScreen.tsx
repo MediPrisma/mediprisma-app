@@ -34,14 +34,17 @@ import type {
   VisitAsk,
   VisitDecisionModel,
 } from '../../types'
-import { BookAsks, examAsksOf } from './BookAsks'
+import { BookAsks, examAsksOf, isMeasureAnswered, measureAsksOf } from './BookAsks'
+import { BookDecisionControls } from './BookDecisionControls'
 import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type BookHeadToolsPage, type BookMark } from './VisitBookLayout'
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
 import { displayDate, visitStatusSentence, VisitStatusLine } from './VisitStatusHeader'
-import { VisitCalculatorsButton, VisitCalculatorsProvider } from './VisitCalculators'
+import { VisitCalculatorsButton, VisitCalculatorsProvider, pageHasCalculators } from './VisitCalculators'
+import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
 import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
+import type { HfpefScoreReading } from '../../utils/hfpef-scores'
 
 export interface VisitDecisionScreenProps {
   model: VisitDecisionModel
@@ -81,13 +84,28 @@ export interface VisitDecisionScreenProps {
    */
   onGrade?: (id: string, value: string | null) => void
   /**
+   * Writes a pair typed beside the asks (the pack's `measureAsks`: HTN's home
+   * blood pressure) where the host keeps what was measured in the room;
+   * `null` withdraws it.
+   */
+  onMeasure?: (id: string, pair: { systolic: number; diastolic: number } | null) => void
+  /**
    * The record's values for the HF prognosis models whose formula is not
    * connected (SHFM, GWTG-HF), shown when the heart-failure page's 計算機
    * opens one.
    */
   prognosisEvidence?: PrognosisEvidence
+  /**
+   * The results the host computed for the page's calculators, by entry id,
+   * shown in the 計算機 list's value column (the HTN page's PREVENT-ASCVD and
+   * HPA MACE, `htnCalculatorValues`).
+   */
+  calculatorValues?: Readonly<Record<string, HostCalculatorState>>
   doseRecovery?: ReactNode
+  /** The host's HFA-PEFF reading for HF DP-01's table; absent on a reduced EF. */
+  hfaPeff?: HfpefScoreReading
 }
+
 
 /**
  * The decision map the heart-failure and atrial-fibrillation pages share,
@@ -116,8 +134,11 @@ export function VisitDecisionScreen({
   coronaryPhase,
   onPointAnswer,
   onGrade,
+  onMeasure,
   prognosisEvidence,
+  calculatorValues,
   doseRecovery,
+  hfaPeff,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -169,11 +190,15 @@ export function VisitDecisionScreen({
     onClearDecision?.(key)
   }
 
+  // 看依據 opens one point's reasoning, keyed by the point itself: points that
+  // share a decision (HTN DP-04, DP-05 and DP-06 on one order slip) share its
+  // record, not their reasoning, so opening DP-05's must not open DP-04's.
+  const reasoningKeyOf = (point: DecisionPointView) => `${point.source ?? ''}:${point.dp}`
   const openPoint = openKey
-    ? model.points.find((point) => visitDecisionKey(point) === openKey)
+    ? model.points.find((point) => reasoningKeyOf(point) === openKey)
     : undefined
   const toggleOpen = (point: DecisionPointView) => {
-    const key = visitDecisionKey(point)
+    const key = reasoningKeyOf(point)
     setOpenKey((current) => (current === key ? null : key))
   }
 
@@ -190,7 +215,11 @@ export function VisitDecisionScreen({
   const lvefValue = Number.parseFloat(model.keyValues.find((item) => item.key === 'LVEF')?.value ?? '')
   const lvef = Number.isFinite(lvefValue) ? lvefValue : undefined
   const basisOf = (point: DecisionPointView) => decisionBasis(point, modules, headedKeys, (date) => displayDate(date, now))
-  const unansweredAsks = model.asks.filter((ask) => !effectiveAnswer(ask, answers).value)
+  const measureAsks = measureAsksOf(model)
+  const unansweredAsks = [
+    ...model.asks.filter((ask) => !effectiveAnswer(ask, answers).value),
+    ...measureAsks.filter((ask) => !isMeasureAnswered(ask, answers)),
+  ]
 
   // The page draws the pack's model in place of the older question cards
   // (owner request 2026-09-30: 「原本的 UI 跟問題那些都廢棄了，包含 DP03」):
@@ -206,7 +235,7 @@ export function VisitDecisionScreen({
   const coveringRowOf = (point: DecisionPointView) => allRows.find((row) => row.steps.some((step, index) => (
     index > 0 && samePoint(step.point, point) && !samePoint(step.point, row.steps[0].point)
   )))
-  const bookAsks = (
+  const bookAsksWith = (measureTrailing?: ReactNode) => (
     <BookAsks
       asks={model.asks}
       answers={answers}
@@ -216,14 +245,33 @@ export function VisitDecisionScreen({
       {...(answerSources ? { sources: answerSources } : {})}
       examAsks={examAsksOf(model)}
       {...(onGrade ? { onGrade } : {})}
+      measureAsks={measureAsks}
+      {...(onMeasure ? { onMeasure } : {})}
+      {...(measureTrailing ? { measureTrailing } : {})}
     />
   )
+  const bookAsks = bookAsksWith()
   // A point answered in its classification table (HF DP-01's phenotype).
   const answeredInTable = (point: DecisionPointView) => Boolean(
     (point as { classification?: { classes?: { physicianInput?: unknown }[] } }).classification?.classes?.some((item) => item.physicianInput),
   )
   const ownEntryOf = (point: DecisionPointView): BookEntry => {
-    if (point.dp === 'DP-03' && point.source === sourceOfPage) return { kind: 'slot', point, content: bookAsks }
+    if (point.dp === 'DP-03' && point.source === sourceOfPage) {
+      // DP-03 may decide something of its own beside its asks — HTN's
+      // 「安排 HBPM 7 天」 before the diagnosis (owner 2026-11-02: 安排 HBPM
+      // 獨立一個決策點) — drawn under the home reading as any row's buttons.
+      const step = point.actions.length ? pointSteps(point, decisions, now)[0] : undefined
+      if (!step) return { kind: 'slot', point, content: bookAsks }
+      const controls = step.decision ? (
+        <BookDecisionControls point={step.point} decision={step.decision} isEnglish={isEnglish} {...(onClearDecision ? { onClear: () => clear(step.key) } : {})} />
+      ) : (
+        <BookDecisionControls point={step.point} isEnglish={isEnglish} {...(onRecordDecision ? { onDecide: (action: VisitAction) => record(step.key, step.point, action, 'map') } : {})} />
+      )
+      const decision = <div data-book-slot-decision={point.dp}>{controls}</div>
+      // On the home reading's line at the right when there is one (owner
+      // 2026-11-02: 「放在右邊不要獨立一行」), else under the asks.
+      return { kind: 'slot', point, content: measureAsks.length ? bookAsksWith(decision) : <>{bookAsks}{decision}</> }
+    }
     // A point answered in its classification table; a table only to read (AF
     // DP-17's agents by LVEF) sits on the point's own line.
     if (answeredInTable(point)) return { kind: 'slot', point, content: null }
@@ -319,7 +367,7 @@ export function VisitDecisionScreen({
       entryOf={entryOf}
       markOf={markOf}
       isComplex={isComplex}
-      openKeyOf={visitDecisionKey}
+      openKeyOf={reasoningKeyOf}
       openKey={openPoint ? openKey : null}
       onToggle={toggleOpen}
       {...(onRecordDecision ? { onDecide: (step: QueueStep, action: VisitAction, queued: boolean) => record(step.key, step.point, action, queued ? 'queue' : 'map') } : {})}
@@ -340,11 +388,12 @@ export function VisitDecisionScreen({
       decided={bookDecided}
       summaryText={summaryText}
       doseRecovery={doseRecovery}
+      {...(hfaPeff ? { hfaPeff } : {})}
       // A class chosen in DP-01's table is the answer the diagnosis
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-      {...(sourceOfPage === 'hf' || sourceOfPage === 'af' ? {
+      {...(pageHasCalculators(sourceOfPage) ? {
         headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
         calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
         onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
@@ -355,13 +404,14 @@ export function VisitDecisionScreen({
 
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      {sourceOfPage === 'hf' || sourceOfPage === 'af' ? (
+      {pageHasCalculators(sourceOfPage) ? (
         <VisitCalculatorsProvider
           isEnglish={isEnglish}
           points={model.points}
           sourceOfPage={sourceOfPage}
           {...(lvef !== undefined ? { lvef } : {})}
           {...(prognosisEvidence ? { evidence: prognosisEvidence } : {})}
+          {...(calculatorValues ? { values: calculatorValues } : {})}
           attached={new Set(calculatorNotes.map((note) => note.calculatorId))}
           onAttach={(note) => attachCalculatorNote(screenKey, { ...note, at: new Date().toISOString() })}
         >

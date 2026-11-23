@@ -328,3 +328,133 @@ describe('parenthetical section keywords', () => {
     expect(lines.find((l) => l.heading)?.text).toBe('Impression:')
   })
 })
+
+// Synthetic reports shaped like the source text, with fictional values: the
+// VGH bridge keeps each HTML table cell apart with 2+ spaces, while NHI
+// MediCloud free text often has stray double spaces that are NOT tables.
+describe('formatReportText column tables', () => {
+  const columnRows = (raw: string) => formatReportText(raw).filter((l) => l.columnCells).map((l) => l.columnCells)
+
+  it('grids a treadmill STAGE table and keeps every row text unchanged', () => {
+    const raw = [
+      '3. STAGE:',
+      'SPEED/GRADE(NPH/%)  MINUTES  BLOOD PRESSURE',
+      "(1.7/10)  ( 3' 0'' )  ( 140 / 70 )",
+      "(2.5/12)  ( 3' 0'' )  ( 160 / 72 )",
+      "(3.4/14)  ( 1' 30'' )   ( 175 / 74 )",
+      '',
+      '4. EXERCISE TERMINATED BECAUSE:',
+      'Target heart rate achieved',
+    ].join('\n')
+    expect(columnRows(raw)).toEqual([
+      ['SPEED/GRADE(NPH/%)', 'MINUTES', 'BLOOD PRESSURE'],
+      ['(1.7/10)', "( 3' 0'' )", '( 140 / 70 )'],
+      ['(2.5/12)', "( 3' 0'' )", '( 160 / 72 )'],
+      ['(3.4/14)', "( 1' 30'' )", '( 175 / 74 )'],
+    ])
+    expect(formatReportTextForClipboard(raw)).toContain("(3.4/14)  ( 1' 30'' )   ( 175 / 74 )")
+  })
+
+  it('grids a two-row measurement table with 3+ columns', () => {
+    const raw = 'MMode/2D Measurements\nAortic root 30 mm    LVIDd 45 mm   IVSd 9 mm\nLAD 35 mm            LVIDs 28 mm   LVPWd 9 mm'
+    expect(columnRows(raw)).toHaveLength(2)
+  })
+
+  it('grids two labelled "LABEL: value" columns and keeps the list marker on the table', () => {
+    const raw = '5. TOTAL TIME: ( 10 / 10 ) MIN:SEC  MAX ACHIEVED RATE: ( 160 )\nMAX PREDICATED RATE: ( 180 )  PREDICATED RATE: ( 153 )'
+    const lines = formatReportText(raw)
+    expect(lines.map((l) => l.columnCells)).toEqual([
+      ['TOTAL TIME: ( 10 / 10 ) MIN:SEC', 'MAX ACHIEVED RATE: ( 160 )'],
+      ['MAX PREDICATED RATE: ( 180 )', 'PREDICATED RATE: ( 153 )'],
+    ])
+    expect(lines[0].marker).toBe('5.')
+  })
+
+  it('never pulls a later numbered item into a table', () => {
+    const raw = 'A: ( 1 )  B: ( 2 )\nC: ( 3 )  D: ( 4 )\n6. E: ( 5 )  F: ( 6 )'
+    expect(formatReportText(raw).filter((l) => l.marker).every((l) => !l.columnCells)).toBe(true)
+  })
+
+  it('grids tab-delimited source rows exactly, including "*"-wrapped values and dash cells', () => {
+    const raw = [
+      'IMP:',
+      'RIGHT\t VENOUS REFLUX (PPG)\t LEFT',
+      '* 3.0 *\t WITHOUT CUFFS\t * 4.0 *',
+      '----\t return time(sec)\t ----',
+      'R+:',
+      'Synthetic finding.',
+    ].join('\n')
+    const lines = formatReportText(raw)
+    expect(lines.filter((l) => l.columnCells).map((l) => l.columnCells)).toEqual([
+      ['RIGHT', 'VENOUS REFLUX (PPG)', 'LEFT'],
+      ['* 3.0 *', 'WITHOUT CUFFS', '* 4.0 *'],
+      ['----', 'return time(sec)', '----'],
+    ])
+    expect(lines.some((l) => l.marker === '*')).toBe(false)
+    expect(formatReportTextForClipboard(raw)).toContain('* 3.0 *\t WITHOUT CUFFS\t * 4.0 *')
+  })
+
+  it('keeps an empty leading tab cell in its column', () => {
+    const raw = 'B-LYMPHOID\tCD19 ( 10 )\t( )\n\tCD22 ( 4 )\t( )'
+    expect(formatReportText(raw).map((l) => l.columnCells)).toEqual([
+      ['B-LYMPHOID', 'CD19 ( 10 )', '( )'],
+      ['', 'CD22 ( 4 )', '( )'],
+    ])
+  })
+
+  it('marks a source blank line as a paragraph gap before the next line', () => {
+    const raw = '*Basic rhythm:\nSynthetic sinus rhythm.\n\n*Supraventricular tachycardia:\nThere was no episode of SVT.\n\n*Suggests:\nSynthetic follow-up.'
+    const lines = formatReportText(raw)
+    expect(lines.filter((l) => l.gapBefore).map((l) => l.text)).toEqual(['*Supraventricular tachycardia:', '*Suggests:'])
+    expect(lines[0].gapBefore).toBeUndefined()
+  })
+
+  it('does not count a line break added before a heading as a source gap', () => {
+    const raw = 'Synthetic report\nFindings:\nSynthetic finding one.\nSynthetic finding two.\nImpression:\nSynthetic impression.'
+    expect(formatReportText(raw).some((l) => l.gapBefore)).toBe(false)
+  })
+
+  it('keeps the one source gap among several reflowed headings', () => {
+    const raw = 'Synthetic report\nFindings: Synthetic finding.\nImpression: Synthetic impression.\n\nRecommendation: Synthetic follow-up.'
+    expect(formatReportText(raw).filter((l) => l.gapBefore).map((l) => l.text)).toEqual(['Recommendation:'])
+  })
+
+  it('keeps an empty last cell on a table row followed by a blank line', () => {
+    const raw = 'Synthetic title\nA\tB\t\n\nC\tD\t\nE\tF\t\nSynthetic end'
+    const withoutGap = raw.replace('\n\n', '\n')
+    expect(formatReportText(raw).map((l) => l.columnCells)).toEqual(formatReportText(withoutGap).map((l) => l.columnCells))
+    expect(formatReportText(raw).find((l) => l.text.startsWith('A'))?.columnCells).toEqual(['A', 'B', ''])
+    expect(formatReportTextForClipboard(raw)).toBe(formatReportTextForClipboard(withoutGap))
+  })
+
+  it('does not count trailing blank lines as paragraph gaps', () => {
+    const raw = 'Synthetic title\nSynthetic finding.\n\nImpression:\nSynthetic impression.'
+    const gaps = (text: string) => formatReportText(text).filter((l) => l.gapBefore).map((l) => l.text)
+    expect(gaps(raw)).toEqual(['Impression:'])
+    expect(gaps(`${raw}\n\n`)).toEqual(['Impression:'])
+  })
+
+  it('ignores blank lines that pad every line', () => {
+    const raw = 'Line one.\n\nLine two.\n\nLine three.\n\nLine four.'
+    expect(formatReportText(raw).some((l) => l.gapBefore)).toBe(false)
+  })
+
+  it('leaves a single tab row as text', () => {
+    expect(formatReportText('MEDICATIONS:\tDATE\tTIME\nSynthetic note.').some((l) => l.columnCells)).toBe(false)
+  })
+
+  it('leaves grouped panels with an all-empty column as text', () => {
+    const raw = 'B-LYMPHOID  CD19 ( 10 )  (    )\n  CD22 ( 4 )  (    )\n  CD10 ( 1 )  (    )\n  cCD79a (    )  (    )'
+    expect(columnRows(raw)).toEqual([])
+  })
+
+  it.each([
+    ['prose with double spaces', 'The left kidney is     normal in size.\nThe cortex is normal with     normal thickness.\nNo hydronephrosis is     noted.'],
+    ['label: value pairs', 'Aortic Regurgitation (AR)   ：Trivial\nMitral Regurgitation (MR)   ：Mild\nTricuspid Regurgitation (TR)   ：Mild'],
+    ['equation rows', 'ABI：R / L  =  1.10    /   1.12\nbaPWV：R / L  =  1400   /  1420\nTBI：R / L  =  0.80   /  0.82'],
+    ['two-column pairs', 'mmHg PPG                        mmHg MPG\nEstimated RVSP: 28  mmHg'],
+    ['header metadata', '申請序號 / 工作號： TEST001/S000-00001  開單時間：  2026/01/02 08:00\n開單醫師： DOC0000A 測試醫師  簽收時間：  2026/01/03 09:00'],
+  ])('does not grid %s', (_name, raw) => {
+    expect(columnRows(raw)).toEqual([])
+  })
+})

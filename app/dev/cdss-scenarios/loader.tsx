@@ -18,6 +18,8 @@ import b8 from './bundles/p9-hfpef-af-dose.json'
 import b9 from './bundles/p10-improved-ef.json'
 import b10 from './bundles/p11-af-dabigatran-renal.json'
 import b11 from './bundles/p12-cad-nstemi-dapt.json'
+import b12 from './bundles/p13-htn-uncontrolled-home.json'
+import b13 from './bundles/p14-htn-suspected-untreated.json'
 
 const BUNDLES: Record<string, object> = {
   'p1-suspected-hfpef': b0,
@@ -32,6 +34,8 @@ const BUNDLES: Record<string, object> = {
   'p10-improved-ef': b9,
   'p11-af-dabigatran-renal': b10,
   'p12-cad-nstemi-dapt': b11,
+  'p13-htn-uncontrolled-home': b12,
+  'p14-htn-suspected-untreated': b13,
 }
 
 // StrictMode runs effects twice in development; pop the queue once per page load.

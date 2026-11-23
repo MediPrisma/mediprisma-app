@@ -21,10 +21,10 @@ FHIR 病歷
 
 ## 私有套件拆分
 
-目前由 private repository `voho0000/mediprisma-personalization` 管理五個 npm packages：
+目前由 private repository `MediPrisma/mediprisma-cdss` 管理五個 npm packages：
 
 ```text
-mediprisma-personalization (private repository)
+mediprisma-cdss (private repository)
   packages/
     personalization-sdk/        # @voho0000/personalization-sdk
     personalized-care/          # @voho0000/personalized-care

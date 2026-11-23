@@ -7,8 +7,11 @@ import {
   decisionInputFor,
   dependentDecisionKeys,
   effectiveAnswer,
+  htnDiagnosisConfirmed,
   visitDecisionKey,
 } from '@/features/clinical-decision-support/renderers/visit/visit-decisions'
+import { applyHtnDiagnosis } from '@/features/clinical-decision-support/renderers/visit/visit-model.source'
+import type { CdssPatientProfile } from '@/features/clinical-decision-support/types'
 import type { PhysicianDecisionMap } from '@/features/clinical-decision-support/stores/physician-decisions.store'
 import { hfAsks, p3Model, p5Model, p6Model } from './visit-model.fixtures'
 
@@ -178,5 +181,15 @@ describe('visit decision placement', () => {
     expect(effectiveAnswer(dyspnoea, {})).toEqual({ prefilled: false })
     expect(effectiveAnswer(weight, {})).toEqual({ value: 'up', prefilled: true })
     expect(effectiveAnswer(weight, { 'weight-trend': 'same' })).toEqual({ value: 'same', prefilled: false })
+  })
+})
+
+describe('the clinician\'s HTN diagnosis (DP-01 「確認高血壓」)', () => {
+  it('is read by the action id, and reaches the pack as its fact', () => {
+    expect(htnDiagnosisConfirmed({ 'visit:htn:DP-01': { actionId: 'htn-dp01-confirmed' } })).toBe(true)
+    expect(htnDiagnosisConfirmed({ 'visit:htn:DP-01': { actionId: 'htn-dp01-hbpm' } })).toBe(false)
+    const profile = { id: 'synthetic', evaluatedAt: TODAY, facts: {} } as unknown as CdssPatientProfile
+    expect(applyHtnDiagnosis(profile, false)).toBe(profile)
+    expect(applyHtnDiagnosis(profile, true).facts.physicianHypertensionDiagnosis?.zh).toBe('醫師確診高血壓（2026-09-27）')
   })
 })

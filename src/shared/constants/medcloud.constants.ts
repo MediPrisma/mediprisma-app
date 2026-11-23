@@ -17,6 +17,12 @@ export const MEDCLOUD_SOURCE_DRUG_CLASS_URL =
 export const MEDCLOUD_SOURCE_SETTING_URL =
   `${MEDCLOUD_FHIR_BASE}/StructureDefinition/medcloud-source-setting`
 
+/** IMUE0008 `cure_e_date`, which the bridge names an end date. MediCloud
+ * fills it only on the second and later fills of a 慢連箋, listed under the
+ * visit that wrote it: it is the day that fill was dispensed. */
+export const MEDCLOUD_REFILL_DISPENSE_DAY_URL =
+  `${MEDCLOUD_FHIR_BASE}/StructureDefinition/medcloud-source-medication-end-date`
+
 export const MEDCLOUD_RELATED_REMAINING_SUMMARY_URL =
   `${MEDCLOUD_FHIR_BASE}/StructureDefinition/medcloud-related-medication-remaining-summary`
 

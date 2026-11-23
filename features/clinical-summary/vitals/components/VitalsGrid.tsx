@@ -11,18 +11,17 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { formatDate } from '@/src/shared/utils/fhir-helpers'
 import { groupReadingsByDay, readingAge, type ReadingAge } from '../utils/reading-dates'
 import { ReportSourceProgramBadge } from '../../reports/components/ReportSourceProgramBadge'
+import type { HomeBp } from '../utils/home-measurement-readings'
 
 interface VitalsGridProps {
   vitals: VitalsView
+  /** The home-measurement service's 722 week, on its own line under the clinic readings. */
+  homeBp?: HomeBp | null
 }
 
-export function VitalsGrid({ vitals }: VitalsGridProps) {
+export function VitalsGrid({ vitals, homeBp }: VitalsGridProps) {
   const { t } = useLanguage()
   const groups = groupReadingsByDay(vitals.readings)
-
-  if (groups.length === 0) {
-    return <p className="text-muted-foreground">{t.vitals.noData}</p>
-  }
 
   const labels: Record<VitalKey, string> = {
     height: t.vitals.height,
@@ -41,6 +40,16 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
       years: [t.vitals.ageYears, t.vitals.ageYearsOne],
     }[age.unit]
     return age.n === 1 ? one : many.replace('{n}', String(age.n))
+  }
+  const homeLine = homeBp ? <HomeBpLine bp={homeBp} ageText={ageText} /> : null
+
+  if (groups.length === 0) {
+    return (
+      <div className="space-y-0.5">
+        <p className="text-muted-foreground">{t.vitals.noData}</p>
+        {homeLine}
+      </div>
+    )
   }
 
   return (
@@ -71,7 +80,40 @@ export function VitalsGrid({ vitals }: VitalsGridProps) {
           )}
         </p>
       ))}
+      {homeLine}
     </div>
+  )
+}
+
+// 居家血壓 722 128/78 mmHg · 心率 72 bpm  2026/10/24–2026/10/30（4 天前）· 5 天 9/14 時段
+// Labelled as home readings so it never reads as a clinic measurement.
+function HomeBpLine({ bp, ageText }: { bp: HomeBp; ageText: (age: ReadingAge) => string }) {
+  const { t } = useLanguage()
+  const age = readingAge(bp.end)
+  const notes = [!bp.sufficient && t.vitals.homeBpInsufficient, !bp.dataComplete && t.vitals.homeBpIncomplete].filter(Boolean)
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5" title={t.vitals.homeBpHint} data-testid="vitals-home-bp">
+      <span className="inline-flex flex-wrap items-baseline gap-x-1">
+        <span className="whitespace-nowrap text-muted-foreground">{t.vitals.homeBp}</span>
+        <span className="whitespace-nowrap font-semibold tabular-nums">{bp.systolic}/{bp.diastolic} mmHg</span>
+      </span>
+      {bp.heartRate !== null && (
+        <>
+          <span aria-hidden="true" className="text-muted-foreground/50">·</span>
+          <span className="inline-flex flex-wrap items-baseline gap-x-1">
+            <span className="whitespace-nowrap text-muted-foreground">{t.vitals.hr}</span>
+            <span className="whitespace-nowrap font-semibold tabular-nums">{bp.heartRate} bpm</span>
+          </span>
+        </>
+      )}
+      <span className="ml-1 inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
+        <time dateTime={bp.end} className="whitespace-nowrap">
+          {formatDate(bp.start)}–{formatDate(bp.end)}{age && t.vitals.ageInParens.replace('{age}', ageText(age))}
+        </time>
+        <span className="whitespace-nowrap">{t.vitals.homeBpCounts.replace('{days}', String(bp.days)).replace('{sessions}', String(bp.sessions))}</span>
+        {notes.map((note) => <span key={String(note)} className="whitespace-nowrap text-amber-700 dark:text-amber-400">{note}</span>)}
+      </span>
+    </p>
   )
 }
 

@@ -150,7 +150,13 @@ it('compares possible source copies without deleting either, retaining two real 
   expect(grouped.activeMedications.filter(row => row.id.startsWith('synthetic-distinct-order'))).toHaveLength(2)
   render(<>{rows.map(row => <MedicationItem key={row.id} medication={row} />)}</>)
   expect(screen.getByRole('button', { name: '院內：查看來源紀錄' })).toBeInTheDocument()
-  expect(screen.getByText('自費／自購')).toBeInTheDocument()
+  // Self-pay is a short tag right after the source tag it qualifies.
+  const selfPay = screen.getByText('自購')
+  expect(selfPay).toHaveAttribute('data-medication-self-pay')
+  const selfPayRow = selfPay.closest('li') ?? selfPay.parentElement!.parentElement!
+  const sourceTag = within(selfPayRow as HTMLElement).getAllByText('院內')[0]
+  expect(sourceTag.compareDocumentPosition(selfPay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.queryByText('自費／自購')).not.toBeInTheDocument()
   expect(screen.getByText('已取消')).toBeInTheDocument()
   expect(screen.getAllByText(/BC23097100/).length).toBeGreaterThan(0)
   expect(screen.getAllByText('Aromasin SC tab 25 mg').length).toBeGreaterThan(0)

@@ -12,7 +12,7 @@ test('one hospital prescription owns the compact row and keeps cloud originals i
   await expect(comparison).toHaveCount(1)
   await expect(comparison).toBeVisible()
   await expect(panel.locator('[data-medication-list-surface] li')).toHaveCount(1)
-  await expect(panel.getByText('Exemestane 25 mg', { exact: true })).toHaveCount(1)
+  await expect(panel.getByText('EXEMESTANE 25 MG', { exact: true })).toHaveCount(1)
   await expect(panel.locator('[data-medication-row-layout] details')).toHaveCount(0)
   await expect(panel.getByText(/含跨來源比較組/)).toHaveCount(0)
   const sources = page.getByRole('dialog', { name: '來源紀錄' })

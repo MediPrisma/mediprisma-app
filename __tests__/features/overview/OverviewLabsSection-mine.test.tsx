@@ -84,7 +84,33 @@ function renderSection(data: OverviewLabsData = DATA) {
 
 const card = () => within(document.getElementById('overview-section-labs')!)
 
+// Column labels drop the year only for the current year; pin "today" so the
+// fixture's 2026 days read as this year. Only Date is faked.
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: new Date('2026-11-07T12:00:00+08:00'),
+    doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate',
+      'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback',
+      'cancelIdleCallback', 'hrtime', 'performance'],
+  })
+})
+afterAll(() => jest.useRealTimers())
+
 describe('OverviewLabsSection — 自訂', () => {
+  it('adds the year to a column from an earlier year, and only to that one', () => {
+    useOutpatientPrefsStore.getState().update('doc-1', { pinnedLabs: ['chem:CREA'], labMode: 'mine' })
+    renderSection({
+      ...DATA,
+      columns: [{ day: '2025-12-10', institution: '示範醫院' }, { day: '2026-09-18', institution: '示範醫院' }],
+    })
+    // jsdom has no width, so the card keeps only the newest day; the full
+    // list shows every column.
+    fireEvent.click(card().getByRole('button', { name: zhTW.overview.expandList }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('25/12/10')).toBeInTheDocument()
+    expect(dialog.getByText('09/18')).toBeInTheDocument()
+  })
+
   beforeEach(() => {
     useOutpatientPrefsStore.setState({ byUser: {} })
     mockRevealTab.mockReset()

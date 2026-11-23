@@ -101,6 +101,7 @@ import { measureSummaryCardOutcomes } from './summary-result-measurement'
 import { toTraditionalChinese } from '@/src/core/utils/zh-hant-normalize.utils'
 import type { AiRunMetrics } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { nowMs } from '@/src/application/telemetry/ai-outcome'
+import { taipeiDay } from '@/src/core/utils/calendar-day'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -253,9 +254,9 @@ export interface UseMedicalSummaryReturn {
 
 /** The clinical clock's day in Taiwan (the records' own time zone). No valid
  *  clock means no reference date, never a failed run. */
-function taipeiDay(nowMs: number | undefined): string | undefined {
+function clinicalClockDay(nowMs: number | undefined): string | undefined {
   return typeof nowMs === 'number' && Number.isFinite(nowMs)
-    ? new Date(nowMs + 8 * 3_600_000).toISOString().slice(0, 10)
+    ? taipeiDay(nowMs)
     : undefined
 }
 
@@ -349,7 +350,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const isCustomEndpoint = isCustomOpenAiModelId(ctx.modelId)
     const promptInput: GenerateMedicalSummaryInput = {
       clinicalContext,
-      ...(taipeiDay(ctx.clinicalNowMs) ? { referenceDate: taipeiDay(ctx.clinicalNowMs) } : {}),
+      ...(clinicalClockDay(ctx.clinicalNowMs) ? { referenceDate: clinicalClockDay(ctx.clinicalNowMs) } : {}),
       dataSource: detectClinicalDataSource(ctx.clinicalData as Parameters<typeof detectClinicalDataSource>[0]),
       piiLiterals: ctx.piiLiterals,
       catalog: contextScope.catalog,
@@ -467,10 +468,17 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       clinicalContext: request.clinicalContext,
       contextLimit: ctx.contextLimit,
       modelId: ctx.modelId,
+      allowProviderRetry: ctx.modelId !== 'gpt-6-luna',
       modelName: ctx.modelName,
       locale: ctx.locale,
       buildRequest: (fittedClinicalContext) => {
         const messages = request.buildMessages(fittedClinicalContext)
+        if (ctx.modelId === 'gpt-6-luna' && request.laneId === 'full') {
+          messages.push({
+            role: 'user',
+            content: 'Final problem-list evidence check: inspect every abnormal laboratory result and long-term medication class for a supported problem omitted from your list. For EACH listed problem, search the lab values, report findings AND discharge-document text for its relevant indicator. Retain the latest supported measurement or finding with its source keys, including single measurements and measurements embedded in documents. A test name alone is not its result; do not copy a value from another problem. Write "Not in cloud record" only after checking all those sources. Do not omit a supported indicator merely to shorten the response. Preserve diagnostic uncertainty and later assessments that revise an earlier suspicion. Return only the required module JSON, without this checklist.',
+          })
+        }
         return {
           request: messages,
           requestText: messages.map((message) => message.content).join('\n\n'),
@@ -494,7 +502,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             signal,
             ...(isCustomEndpoint
               ? { temperature: 0, reasoningEffort: 'low' as const }
-              : {}),
+              // Unset, the intranet Luna reasons at medium: the first card
+              // took 40-72 s and the run could time out. Low kept the same
+              // cards and problem list in 11-14 s (2026-11-11, demo patient).
+              : ctx.modelId === 'gpt-6-luna'
+                ? { reasoningEffort: 'low' as const, textVerbosity: 'high' as const }
+                : {}),
             ...(request.hiddenReasoning ? { hiddenReasoning: request.hiddenReasoning } : {}),
             onChunk: streamChunk,
           })
@@ -699,6 +712,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       }
 
       await runAttempt(1, laneCards)
+      if (ctx.modelId === 'gpt-6-luna') return outcomes
       // Retry every remaining failed card in ONE progressively smaller batch.
       // Successful cards remain visible and are never regenerated. Attempts are
       // capped at three total calls per lane (initial + two combined retries).
@@ -788,6 +802,13 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               hiddenReasoning: 'off',
             },
           ]
+        : ctx.modelId === 'gpt-6-luna' && narrativeCards.some((card) => card.id === 'problems') && narrativeCards.length > 1
+          ? [
+              // Keep the complete evidence for the problem list, but let this
+              // request concentrate on its indicators instead of three cards.
+              { id: 'full', cards: narrativeCards.filter((card) => card.id === 'problems'), input: promptInput },
+              { id: 'batch', cards: narrativeCards.filter((card) => card.id !== 'problems'), input: promptInput },
+            ]
         : narrativeCards.length > 0
           ? [{
               id: 'batch',
@@ -876,7 +897,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         try {
           reply = await requestOnce()
         } catch (error) {
-          if (!isRetryableReportsError(error)) throw error
+          if (ctx.modelId === 'gpt-6-luna' || !isRetryableReportsError(error)) throw error
           // One re-send for a failed request; a rate limit is usually gone a
           // moment later.
           if (process.env.NODE_ENV !== 'production') {

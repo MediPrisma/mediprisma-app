@@ -39,6 +39,88 @@ export interface ReportLine {
   tableCells?: string[]
   /** Source label and its entire value/reference text; blanks stay blank. */
   measurement?: { label: string; value: string }
+  /**
+   * One row of a source table whose cells the bridge kept apart with 2+
+   * spaces (e.g. a treadmill STAGE table). Consecutive rows render as one
+   * table; `text` stays the source row so AI/clipboard output is unchanged.
+   */
+  columnCells?: string[]
+  /** The source left a blank line before this line (a paragraph break). */
+  gapBefore?: boolean
+}
+
+// A source table cell: short, not prose, not a bare separator, not a
+// "label:" half of a key-value pair. Kept strict so free-text reports with
+// stray double spaces (common in NHI MediCloud text) never turn into tables.
+function isColumnCell(cell: string): boolean {
+  // Parenthesised source values ("( 9 / 32 )") count as one word.
+  if (cell.length > 40 || cell.replace(/\([^()]*\)/g, '()').split(/\s+/).length > 6) return false
+  if (/^[=/\-:|.,>]+$/.test(cell)) return false
+  if (/[a-z]{2,}\.(?:\s|$)/.test(cell)) return false
+  if (/^[:：]/.test(cell) || /[:：]$/.test(cell)) return false
+  return true
+}
+
+// Cells of a tab-delimited source row: the boundaries are the source's own,
+// so no content heuristics apply; empty cells keep their column.
+function tabCellsOf(line: ReportLine): string[] | undefined {
+  if (line.heading || line.measurement || line.tableCells || line.monospace || line.separator) return undefined
+  if (!line.text.includes('\t')) return undefined
+  const cells = line.text.split('\t').map((cell) => cell.trim())
+  return cells.filter(Boolean).length >= 2 && cells.length <= 8 ? cells : undefined
+}
+
+function columnCellsOf(line: ReportLine): string[] | undefined {
+  if (line.heading || line.measurement || line.tableCells || line.monospace || line.separator) return undefined
+  if (line.text.includes('\t')) return undefined
+  // "(    )" is an empty source field, not a column gap.
+  const text = line.text.replace(/\(\s+\)/g, '( )')
+  if (!/\S {2,}\S/.test(text)) return undefined
+  const cells = text.trim().split(/ {2,}/)
+  return cells.length >= 2 && cells.length <= 8 && cells.every(isColumnCell) ? cells : undefined
+}
+
+// Mark runs of same-width column rows: 3+ rows, or 2 rows with 3+ columns
+// (or two labelled "LABEL: value" columns).
+function markColumnTables(lines: ReportLine[]): ReportLine[] {
+  for (let i = 0; i < lines.length;) {
+    const tabFirst = tabCellsOf(lines[i])
+    if (tabFirst) {
+      const run = [tabFirst]
+      let j = i + 1
+      for (; j < lines.length; j++) {
+        const cells = lines[j].marker ? undefined : tabCellsOf(lines[j])
+        if (!cells || cells.length !== tabFirst.length) break
+        run.push(cells)
+      }
+      if (run.length >= 2) run.forEach((cells, k) => { lines[i + k] = { ...lines[i + k], columnCells: cells } })
+      i = j
+      continue
+    }
+    const first = columnCellsOf(lines[i])
+    if (!first) { i++; continue }
+    const run = [first]
+    let j = i + 1
+    for (; j < lines.length; j++) {
+      // A list marker ("5.") may only open a table, never sit inside one.
+      const cells = lines[j].marker ? undefined : columnCellsOf(lines[j])
+      if (!cells || cells.length !== first.length) break
+      run.push(cells)
+    }
+    // A column that is "( )" on every row is an unfilled template field, and
+    // such grouped panels (B-/T-LYMPHOID ...) carry a group label on only the
+    // first row of each group — gridding them would regroup the values.
+    const emptyColumn = first.some((_, c) => run.every((cells) => cells[c] === '( )'))
+    // Two-column pairs only when every cell is a "LABEL: value" field (the
+    // treadmill TOTAL TIME / MAX ACHIEVED RATE block); bare two-word pairs
+    // like "mmHg PPG  mmHg MPG" stay text.
+    const labelledPairs = first.length === 2 && run.every((cells) => cells.every((cell) => /[:：]\s*\S/.test(cell)))
+    if (!emptyColumn && (run.length >= 3 || (run.length === 2 && (first.length >= 3 || labelledPairs)))) {
+      run.forEach((cells, k) => { lines[i + k] = { ...lines[i + k], columnCells: cells } })
+    }
+    i = j
+  }
+  return lines
 }
 
 // Section headings commonly seen in TW hospital endoscopy / imaging / ECG /
@@ -279,6 +361,12 @@ function segmentFindings(body: string): string[] {
  * "Conclusion:" heading, so segmentation must reach there too.
  */
 function pushBody(lines: ReportLine[], body: string, baseLevel: 0 | 1) {
+  // A tab-delimited table row is kept whole: its leading "*" is a cell value
+  // and a leading tab is an empty first cell, so no bullet or sentence split.
+  if (body.includes('\t')) {
+    lines.push({ text: body, level: baseLevel })
+    return
+  }
   const bullet = BULLET_RE.exec(body)
   if (bullet) {
     lines.push({ text: bullet[2].trim(), level: 1, marker: bullet[1] })
@@ -375,6 +463,16 @@ export function separateGluedOrderCode(raw: string): string {
   ))
 }
 
+// Private-use character standing in for a source blank-line run while the
+// text is reflowed. It never occurs in report text and no reflow pattern
+// matches it, so it rides along with the line the source put after the gap.
+const GAP_MARK = '\uE000'
+// A non-blank line followed by one or more blank lines and then more content.
+// Leading blank lines are left alone so start-anchored report-type checks still
+// see the text; trailing ones have no next paragraph, so they are not a gap.
+// The line's own trailing tabs are kept: they are empty table cells.
+const SOURCE_GAP_RE = /(\S[ \t]*)\n(?:[ \t]*\n)+(?=[^\n]*\S)/g
+
 export function formatReportText(raw: string): ReportLine[] {
   if (!raw || !raw.trim()) return []
 
@@ -388,28 +486,58 @@ export function formatReportText(raw: string): ReportLine[] {
   // 1) Force every section heading onto its own line, then break apart numbered
   //    findings the bridge ran together. Both heal glued concatenations so a
   //    plain line-split doesn't bury "Impression:" / "2." mid-sentence.
-  const broken = reflowMicrobiologyBlob(isMicrobiologyBlob ? raw.replace(/\r\n?/g, '\n') : reflowReportLayout(raw))
+  // Mark each source blank-line run on the line it precedes BEFORE any reflow:
+  // the reflow and heading passes below insert their own line breaks, and a
+  // blank line they leave behind is not a paragraph break the source wrote.
+  const normalized = raw.replace(/\r\n?/g, '\n')
+  const marked = normalized.replace(SOURCE_GAP_RE, `$1\n${GAP_MARK}`)
+  const broken = reflowMicrobiologyBlob(isMicrobiologyBlob ? marked : reflowReportLayout(marked))
     .replace(KEYWORD_COLON_RE, (_m, kw, colon) => `\n${kw}${colon}`)
     .replace(GLUED_NUM_RE, (_m, before, marker) => `${before}\n${marker}`)
 
   // 2) Split, trim, drop blank lines (this also collapses the verbose blank
   //    runs the bridge pads reports with).
-  const splitLines = broken
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
+  const splitLines: string[] = []
+  // Index (into splitLines) of each line the source preceded with a blank line.
+  let gapLines = new Set<number>()
+  let gapPending = false
+  for (const source of broken.split(/\r?\n/)) {
+    // Only a mark at the start of a line is a source paragraph break; one a
+    // reflow pass glued mid-line is dropped without marking a gap.
+    if (source.startsWith(GAP_MARK)) gapPending = splitLines.length > 0
+    const unmarked = source.split(GAP_MARK).join('')
+    // A tab is a source cell boundary (the bridge writes one between table
+    // cells), so keep a leading tab: it is an empty first cell, not padding.
+    const l = unmarked.includes('\t') ? unmarked.replace(/^ +| +$/g, '') : unmarked.trim()
+    if (!l.trim()) continue
+    if (gapPending) gapLines.add(splitLines.length)
+    gapPending = false
+    splitLines.push(l)
+  }
+  // Blank lines after most source lines are padding (some sources double-space
+  // every line), not paragraph breaks: then show none. Counted on the source,
+  // so reflowed line breaks neither add gaps nor dilute the ratio.
+  const sourceLineCount = normalized.split('\n').filter((l) => l.trim()).length
+  const sourceGapCount = marked.split(GAP_MARK).length - 1
+  if (sourceGapCount > (sourceLineCount - 1) / 2) gapLines = new Set()
 
   if (isMicrobiologyBlob) return formatMicrobiologyLines(splitLines)
 
   // Heading detection may insert a break after a source list marker. Reattach
   // only a marker-only line to its heading; never consume adjacent findings.
   const rawLines: string[] = []
-  for (const line of splitLines) {
+  const rawGaps: boolean[] = []
+  for (const [index, line] of splitLines.entries()) {
     const previous = rawLines.at(-1)
     if (previous && /^(?:\d{1,2}\.|\(?[0-9]{1,2}\))$/.test(previous) && HEADING_LINE_RE.test(line)) {
       rawLines[rawLines.length - 1] = `${previous} ${line}`
-    } else rawLines.push(line)
+    } else {
+      rawLines.push(line)
+      rawGaps.push(gapLines.has(index))
+    }
   }
+  // Output index of the first line pushed after each source paragraph break.
+  const gapAt = new Set<number>()
 
   const lines: ReportLine[] = []
   let inEchoMeasurements = isDopplerEcho(raw)
@@ -425,7 +553,8 @@ export function formatReportText(raw: string): ReportLine[] {
     lines.push(item)
     numberedContinuation = numberedEndoscopy ? item : undefined
   }
-  for (const line of rawLines) {
+  for (const [rawIndex, line] of rawLines.entries()) {
+    if (rawGaps[rawIndex]) gapAt.add(lines.length)
     if (/^Carotid Sonographic Data:/.test(line)) inCarotidTable = true
     else if (inCarotidTable && /^Diam:/.test(line)) inCarotidTable = false
     else if (inCarotidTable) {
@@ -502,8 +631,9 @@ export function formatReportText(raw: string): ReportLine[] {
       continue
     }
 
-    // Bullet "-" / "*" / "•".
-    const b = BULLET_RE.exec(line) ?? (numberedEndoscopy ? /^([*])(?=\S)([\s\S]*)$/.exec(line) : null)
+    // Bullet "-" / "*" / "•". Not in a tab-delimited table row: there "* 3.4 *"
+    // is a cell value (PPG return time), not a list item.
+    const b = line.includes('\t') ? null : BULLET_RE.exec(line) ?? (numberedEndoscopy ? /^([*])(?=\S)([\s\S]*)$/.exec(line) : null)
     if (b) {
       numberedContinuation = undefined
       lines.push({ text: b[2].trim(), level: 1, marker: b[1] })
@@ -521,7 +651,8 @@ export function formatReportText(raw: string): ReportLine[] {
     pushBody(lines, line, bodyLevel)
   }
 
-  return lines
+  for (const index of gapAt) if (lines[index]) lines[index] = { ...lines[index], gapBefore: true }
+  return markColumnTables(lines)
 }
 
 /** Serialize the display parser's hierarchy without changing clinical words. */

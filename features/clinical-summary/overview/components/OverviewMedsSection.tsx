@@ -4,6 +4,8 @@
 // change verdict computed by `classifyMedicationChanges` against the FULL
 // prescription history so "new" really means new.
 import { Fragment, useMemo, useState, type ReactElement, type Ref } from 'react'
+import { useOutpatientPrefs } from '@/src/application/hooks/use-outpatient-prefs.hook'
+import type { OverviewMedFilter } from '@/src/application/stores/outpatient-prefs.store'
 import { Pill } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -36,11 +38,11 @@ import {
   overviewChipClass,
 } from './overview-styles'
 
-type MedFilter = 'current' | 'changed' | 'all'
+type MedFilter = OverviewMedFilter
 
 /** Single-line row: 24px of content, the row's 2px border, the 3px stack gap. */
 
-function ChangeBadge({ item, compact }: { item: OverviewMedItem; compact: boolean }) {
+function ChangeBadge({ item, compact, showChange }: { item: OverviewMedItem; compact: boolean; showChange: boolean }) {
   const { t, locale } = useLanguage()
   const strings = t.overview.meds
   const sourceState = ({ cancelled: locale === 'en' ? 'Cancelled' : '已取消',
@@ -50,6 +52,10 @@ function ChangeBadge({ item, compact }: { item: OverviewMedItem; compact: boolea
   } as Record<string, string>)[item.row.status]
   if (sourceState) return <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-xs">{sourceState}</Badge>
   if (!item.change) return null
+  // 新增／調整 only answer "what changed", so they show under 異動. On 使用中
+  // and 全部 the row is just the list of drugs; 停用 stays everywhere because
+  // a stopped drug in 全部 would otherwise read as one the patient is on.
+  if (!showChange && item.change.kind !== 'stopped') return null
   const size = compact ? 'h-[18px] text-[0.625rem]' : 'h-5 text-[0.6875rem]'
   if (item.change.kind === 'added') {
     return (
@@ -172,7 +178,12 @@ export function OverviewMedsSection({
   const copyState = useMedCopyActions(copySources, 'overview_meds')
   // 使用中 by default: the card answers "what is this patient on", and 全部
   // stays one click away for the times that is not the question.
-  const [filter, setFilter] = useState<MedFilter>('current')
+  // The last filter picked is remembered. 異動 with no change on this chart
+  // has nothing to show, so this chart reads 使用中; the choice is kept.
+  const { overviewMedFilter, setOverviewMedFilter: setFilter } = useOutpatientPrefs()
+  const filter: MedFilter = !overviewMedFilter || (overviewMedFilter === 'changed' && data.changeCount === 0)
+    ? 'current'
+    : overviewMedFilter
   const [listOpen, setListOpen] = useState(false)
   const target = {
     resourceType: 'MedicationRequest',
@@ -207,10 +218,11 @@ export function OverviewMedsSection({
   // One renderer, two surfaces: the card shows what fits, the dialog shows
   // the same rows at full length. Divergence between them would be a bug
   // nobody notices, so there is only ever one copy of this markup.
+  const showChange = filter === 'changed'
   const renderRows = (items: OverviewMedItem[], expanded = false) => (
   <div className={cn('flex min-w-0 shrink-0 flex-col', compact ? 'gap-[3px]' : 'gap-1.5')}>
     {items.map((item) => {
-      const dose = item.change?.kind === 'adjusted' && item.change.previousDose
+      const dose = showChange && item.change?.kind === 'adjusted' && item.change.previousDose
         ? `${item.change.previousDose} → ${item.doseText}`
         : item.doseText
       const daysLeft = item.daysRemaining
@@ -228,7 +240,7 @@ export function OverviewMedsSection({
       )
       const sourceBadge = item.row.selfPurchased && (
         <span className="shrink-0 rounded-sm bg-muted px-1 text-xs font-medium">
-          {locale === 'en' ? 'Self-pay' : '自費／自購'}
+          {locale === 'en' ? 'Self-pay' : '自購'}
         </span>
       )
       const daysBadge = daysLeft !== undefined && (
@@ -258,7 +270,7 @@ export function OverviewMedsSection({
       // need. The full category stays on the 用藥 tab.
       const nameClass = cn(
         'truncate font-semibold',
-        compact ? 'min-w-0 max-w-[38%] shrink text-xs' : 'shrink text-[0.8125rem]',
+        compact ? 'min-w-[5rem] max-w-[38%] shrink text-xs' : 'shrink text-[0.8125rem]',
         // Muted, never struck through. A drug name is the one thing on this
         // row that has to stay readable, and a line drawn across
         // "DEXTROMETHORPHAN HYDROBROMIDE" costs more legibility than it buys —
@@ -273,11 +285,11 @@ export function OverviewMedsSection({
               tabIndex={0}
               className={cn(OVERVIEW_LIST_ROW_CLASS, 'flex h-6 items-center gap-1 px-2')}
             >
-            <ChangeBadge item={item} compact />
+            <ChangeBadge item={item} compact showChange={showChange} />
             <span className={nameClass}>{item.title}</span>
             {sourceBadge}
             {dose && (
-              <span className="shrink-0 whitespace-nowrap text-[0.6875rem] text-muted-foreground">
+              <span className="min-w-0 shrink truncate whitespace-nowrap text-[0.6875rem] text-muted-foreground">
                 {dose}
               </span>
             )}
@@ -309,7 +321,7 @@ export function OverviewMedsSection({
         <MedicationRowTooltip key={item.id} item={item}>
         <div tabIndex={0} className={cn(OVERVIEW_LIST_ROW_CLASS, 'px-3 py-1')}>
           <div className="flex min-w-0 items-center gap-1.5">
-            <ChangeBadge item={item} compact={false} />
+            <ChangeBadge item={item} compact={false} showChange={showChange} />
             <span className={nameClass}>{item.title}</span>
             {sourceBadge}
             {dose && (

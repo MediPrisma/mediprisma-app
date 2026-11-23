@@ -147,7 +147,7 @@ describe('custom summary module defaults', () => {
 
     expect(selectAutoGeneratePanelIds({
       panels,
-      modelId: 'gemini-3-flash-preview',
+      modelId: 'gpt-6-luna',
       autoRunPanels: new Set(),
     })).toEqual([])
 

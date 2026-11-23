@@ -4,7 +4,7 @@ import { chatPanel, importBundle, openChatInput } from '../fixtures/import'
 for (const firstStepReportsModel of [false, true]) {
   test(`keeps model uncertainty across Gemini tool steps (first reports: ${firstStepReportsModel})`, async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('ai-config-storage', JSON.stringify({ state: { model: 'gemini-3.8-flash' }, version: 0 }))
+      localStorage.setItem('ai-config-storage', JSON.stringify({ state: { model: 'gemini-4-hydrogen' }, version: 0 }))
       localStorage.setItem('api_key_storage_type', 'sessionStorage')
       sessionStorage.setItem('gemini_api_key', 'e2e-gemini-key')
     })
@@ -26,7 +26,7 @@ for (const firstStepReportsModel of [false, true]) {
         contentType: 'text/event-stream',
         body: `data: ${JSON.stringify({
           candidates: [{ content: { role: 'model', parts }, finishReason: 'STOP' }],
-          ...(!first || firstStepReportsModel ? { modelVersion: 'gemini-3.8-flash' } : {}),
+          ...(!first || firstStepReportsModel ? { modelVersion: 'gemini-4-hydrogen' } : {}),
           usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 },
         })}\n\n`,
       })
@@ -39,7 +39,7 @@ for (const firstStepReportsModel of [false, true]) {
     const panel = chatPanel(page)
     await expect(panel.locator('.prose').last()).toContainText('MODEL_ATTRIBUTION_OK', { timeout: 30_000 })
     expect(receivedToolResult).toBe(true)
-    await expect(panel.getByText('Gemini 3.8 Flash', { exact: true }).last()).toBeVisible()
+    await expect(panel.getByText('Gemini 4 Hydrogen', { exact: true }).last()).toBeVisible()
     const info = panel.getByRole('button', { name: '模型資訊：API 未回報實際模型' })
     if (firstStepReportsModel) {
       await expect(info).toHaveCount(0)

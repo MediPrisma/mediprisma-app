@@ -12,6 +12,7 @@
  */
 import {
   applyFmtIntolerance as packApplyFmtIntolerance,
+  applyHtnDiagnosis as packApplyHtnDiagnosis,
   applyPreviousVisit as packApplyPreviousVisit,
   applyVisitAnswers as packApplyVisitAnswers,
   buildVisitDecisionModel,
@@ -83,6 +84,17 @@ export function applyVisitAnswers(profile: CdssPatientProfile, answers: VisitAns
 export function applyFmtIntolerance(profile: CdssPatientProfile, dps: readonly string[]): CdssPatientProfile {
   if (typeof packApplyFmtIntolerance !== 'function' || dps.length === 0) return profile
   return packApplyFmtIntolerance(profile, dps)
+}
+
+/**
+ * The clinician's 「確認高血壓」 at HTN DP-01, as the fact the pack reads: the
+ * target, the start and the work-up wait for the diagnosis, and the clinician
+ * may confirm it on what the record does not hold. A package without the step
+ * leaves the profile as it was.
+ */
+export function applyHtnDiagnosis(profile: CdssPatientProfile, confirmed: boolean): CdssPatientProfile {
+  if (typeof packApplyHtnDiagnosis !== 'function' || !confirmed) return profile
+  return packApplyHtnDiagnosis(profile, confirmed)
 }
 
 /**

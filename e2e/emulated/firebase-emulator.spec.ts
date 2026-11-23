@@ -17,7 +17,7 @@ import { mockAiStream, STREAM_PROBE_MARKER } from '../fixtures/mock-stream'
  */
 test.describe('Firebase chain (auth + firestore emulators)', () => {
   test('anonymous session mints a token the proxy call carries as Bearer', async ({ page }) => {
-    await mockAiStream(page, { model: 'gpt-5.4-nano' })
+    await mockAiStream(page, { model: 'gemini-3.1-flash-lite' })
 
     // Capture the Authorization header the app puts on proxy POSTs. Registered
     // AFTER mockAiStream so this wrapper is the OUTERMOST fetch and sees the call.

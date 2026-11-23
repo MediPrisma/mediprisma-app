@@ -16,12 +16,12 @@
  *
  * Two host decisions live below, and they are separate questions.
  *
- * WHICH packs: HMC lists heart failure, dyslipidemia, atrial fibrillation, and coronary disease. The preview builds
+ * WHICH packs: HMC lists heart failure, hypertension, dyslipidemia, atrial fibrillation, and coronary disease. The preview builds
  * both from the personalization pilot branch. Local development may add
  * further branch packs through DEV_EXTRA_PACK_IDS below.
  *
  * WHETHER a listed pack shows: the Beta switch, for a pack the package ships
- * `enabled: false`. Heart failure is released; dyslipidemia remains a pilot. The 個人化照護指引 tab is itself `beta: true`,
+ * `enabled: false`. Heart failure is released; hypertension and dyslipidemia remain pilots. The 個人化照護指引 tab is itself `beta: true`,
  * so the people who reach this list are visitors who turned Beta features on
  * in Settings either way. Signing in is not part of that gate (owner decision,
  * 2026-09); the switch is stored per browser under the account uid, the
@@ -39,12 +39,12 @@ import { isPilotPack } from './pilot-gate'
 import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 
 /** HMC disease switcher; keep heart failure as the existing default. */
-const HOST_PACK_ORDER = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss', 'chronic-coronary-disease-cdss'] as const
+const HOST_PACK_ORDER = ['heart-failure-cdss', 'hypertension-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss', 'chronic-coronary-disease-cdss'] as const
 
 /**
  * Local development only: the packs a disease-branch start-of-session script
  * asks this dev server to list ahead of the host's own, so a pathway still on
- * its own mediprisma-personalization branch can be reviewed on localhost. The
+ * its own mediprisma-cdss branch can be reviewed on localhost. The
  * HMC scripts set `NEXT_PUBLIC_HMC_DEV_EXTRA_PACKS` from that branch's build;
  * nothing sets it for app-hmc or /app, and a production build ignores it
  * anyway. An id the package does not ship is skipped rather than thrown on —
@@ -80,7 +80,7 @@ setLocaleLayer('taiwan')
 // validates each pack against the contract, and a pack that fails the contract
 // should be caught the release it lands in, not the release it is listed in.
 registerCarePacks(CARE_PACKS, {
-  source: 'medical-note-smart-on-fhir/bundled-care-packs',
+  source: 'mediprisma-app/bundled-care-packs',
   defaultPackId: HOST_DEFAULT_PACK_ID,
 })
 

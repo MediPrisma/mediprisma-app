@@ -44,8 +44,8 @@ describe("CustomInsightGenerationMeta", () => {
     render(
       <CustomInsightGenerationMeta
         metadata={{
-          modelId: "gpt-5.6-luna",
-          modelName: "GPT-5.6 Luna",
+          modelId: "gpt-6-luna",
+          modelName: "GPT-6 Luna",
           provider: "openai",
           generatedAt,
           durationMs: 18_400,
@@ -55,16 +55,16 @@ describe("CustomInsightGenerationMeta", () => {
 
     const meta = screen.getByTestId("custom-insight-generation-meta")
     expect(normalizeWhitespace(meta.textContent ?? "")).toBe(
-      `GPT-5.6 Luna·${normalizeWhitespace(expectedTime)}·耗時 00:18`,
+      `GPT-6 Luna·${normalizeWhitespace(expectedTime)}·耗時 00:18`,
     )
     expect(normalizeWhitespace(meta.getAttribute("aria-label") ?? "")).toBe(
-      `由 GPT-5.6 Luna 於 ${normalizeWhitespace(expectedTime)} 產生，總耗時 00:18`,
+      `由 GPT-6 Luna 於 ${normalizeWhitespace(expectedTime)} 產生，總耗時 00:18`,
     )
     expect(meta.querySelector("time")).toHaveAttribute(
       "datetime",
       "2026-08-27T06:32:00.000Z",
     )
-    expect(screen.getByText("GPT-5.6 Luna").parentElement).toHaveClass(
+    expect(screen.getByText("GPT-6 Luna").parentElement).toHaveClass(
       "max-[340px]:basis-full",
       "max-[340px]:max-w-full",
     )
@@ -76,7 +76,7 @@ describe("CustomInsightGenerationMeta", () => {
     render(
       <CustomInsightGenerationMeta
         metadata={{
-          modelId: "gpt-5.6-luna",
+          modelId: "gpt-6-luna",
           provider: "openai",
           generatedAt: new Date("2026-08-27T06:32:00.000Z").getTime(),
           durationMs: 1_000,
@@ -84,15 +84,15 @@ describe("CustomInsightGenerationMeta", () => {
       />,
     )
 
-    expect(screen.getByText("GPT-5.6 Luna")).toBeInTheDocument()
+    expect(screen.getByText("GPT-6 Luna")).toBeInTheDocument()
   })
 
   it('replaces a previously saved unreported label with the selected model and an info hint', () => {
     render(<CustomInsightGenerationMeta metadata={{
-      modelId: 'gemini-3.8-flash', modelName: '實際模型未回報', provider: 'gemini',
-      generatedAt: Date.now(), modelExecution: createModelExecution('gemini-3.8-flash'),
+      modelId: 'gemini-4-hydrogen', modelName: '實際模型未回報', provider: 'gemini',
+      generatedAt: Date.now(), modelExecution: createModelExecution('gemini-4-hydrogen'),
     }} />)
-    expect(screen.getByTestId('custom-insight-generation-meta')).toHaveTextContent('Gemini 3.8 Flash')
+    expect(screen.getByTestId('custom-insight-generation-meta')).toHaveTextContent('Gemini 4 Hydrogen')
     expect(screen.getByRole('button', { name: '模型資訊：API 未回報實際模型' })).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.queryByText('實際模型未回報')).not.toBeInTheDocument()
@@ -134,23 +134,23 @@ describe("CustomInsightGenerationMeta", () => {
         }}
         activeGeneration={{
           id: "run-1",
-          modelName: "GPT-5.6 Luna",
+          modelName: "GPT-6 Luna",
           startedAt: Date.now(),
         }}
       />,
     )
 
     const meta = screen.getByTestId("custom-insight-generation-meta")
-    expect(meta).toHaveTextContent("產生中·GPT-5.6 Luna·00:00")
+    expect(meta).toHaveTextContent("產生中·GPT-6 Luna·00:00")
     expect(meta).not.toHaveTextContent("Old model")
     expect(screen.getByText("產生中").parentElement?.querySelector(".animate-spin")).toBeInTheDocument()
 
     act(() => jest.advanceTimersByTime(61_000))
 
-    expect(meta).toHaveTextContent("產生中·GPT-5.6 Luna·01:01")
+    expect(meta).toHaveTextContent("產生中·GPT-6 Luna·01:01")
     expect(meta).toHaveAttribute(
       "aria-label",
-      "正在使用 GPT-5.6 Luna 產生摘要，已進行 01:01",
+      "正在使用 GPT-6 Luna 產生摘要，已進行 01:01",
     )
 
     unmount()

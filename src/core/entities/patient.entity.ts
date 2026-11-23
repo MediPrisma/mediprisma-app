@@ -5,6 +5,8 @@
 // telecom, address, contact, communication) that the legacy 4-field display
 // dropped. The display layer opts in to extra fields via a "show more"
 // toggle so existing callers (medical-chat header, IPS export) stay quiet.
+import { utcDay } from '@/src/core/utils/calendar-day'
+
 export interface PatientEntity {
   id: string
   resourceType: 'Patient'
@@ -62,7 +64,10 @@ export interface PatientEntity {
 
 /** Cloud export marks de-identified names as anonymous; ID masking alone is not this option. */
 export function isDeidentifiedPatient(patient: PatientEntity): boolean {
-  return patient.deidentified === true || (Array.isArray(patient.name) && patient.name.some(name => name?.use === 'anonymous'))
+  const hospitalExport = Array.isArray(patient.identifier) && patient.identifier.some(identifier =>
+    typeof identifier?.system === 'string' && identifier.system.normalize('NFKC').trim() === 'urn:oid:his.patient.mrn')
+    && Array.isArray(patient.name) && patient.name.some(name => typeof name?.text === 'string' && /^DEID-[0-9a-f]{8}$/i.test(name.text.normalize('NFKC').trim()))
+  return patient.deidentified === true || hospitalExport || (Array.isArray(patient.name) && patient.name.some(name => name?.use === 'anonymous'))
 }
 
 export type PatientDemographicField = 'name' | 'gender' | 'birthDate'
@@ -106,7 +111,7 @@ export function isValidPatientBirthDate(
   if (!FHIR_FULL_DATE_PATTERN.test(value)) return false
   const parsed = new Date(`${value}T00:00:00Z`)
   if (Number.isNaN(parsed.getTime())) return false
-  if (parsed.toISOString().slice(0, 10) !== value) return false
+  if (utcDay(parsed) !== value) return false
   return value <= localDateString(today)
 }
 

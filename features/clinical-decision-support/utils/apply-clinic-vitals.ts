@@ -111,6 +111,7 @@ export const CLINIC_ENTRY_PATTERN = /門診輸入|entered in clinic/
 /** The windows the adapter attaches when the record holds the fact. */
 const DEFAULT_INTERVAL_DAYS: Readonly<Record<string, number>> = {
   bloodPressure: 90,
+  homeBloodPressure: 90,
   heartRate: 90,
   bodyWeight: 30,
 }
@@ -164,6 +165,21 @@ export function applyClinicVitals(
       date,
     }
     factDates.bloodPressure = date
+  }
+
+  const homeSystolic = entry('homeSystolic')
+  const homeDiastolic = entry('homeDiastolic')
+  if (homeSystolic && homeDiastolic) {
+    // The patient's home average, typed in the room: its own fact, so no
+    // module mistakes it for the clinic reading or averages the two.
+    const date = homeSystolic.measuredOn > homeDiastolic.measuredOn ? homeSystolic.measuredOn : homeDiastolic.measuredOn
+    facts.homeBloodPressure = {
+      zh: `${homeSystolic.value}/${homeDiastolic.value} mmHg（居家，${date} ${CLINIC_ENTRY_NOTE.zh}）`,
+      en: `${homeSystolic.value}/${homeDiastolic.value} mmHg (home, ${date}, ${CLINIC_ENTRY_NOTE.en})`,
+      unit: 'mmHg',
+      date,
+    }
+    factDates.homeBloodPressure = date
   }
 
   const heartRate = entry('heartRate')

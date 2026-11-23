@@ -11,7 +11,7 @@ export const HEME: CalculatorDef[] = [
       blurb: { en: 'Neutropenia assessment.', zh: '嗜中性球低下評估。' },
       inputs: [
         { key: 'wbc', type: 'number', label: { en: 'WBC', zh: '白血球' }, unit: '10⁹/L', dimension: 'wbc', normalRange: { low: 4, high: 11 }, source: { kind: 'lab', keys: ['WBC'] } },
-        { key: 'neut', type: 'number', label: { en: 'Neutrophils (segs)', zh: '嗜中性球（分葉核）' }, unit: '%', normalRange: { low: 40, high: 75 } },
+        { key: 'neut', type: 'number', label: { en: 'Neutrophils (segs)', zh: '嗜中性球（分葉核）' }, unit: '%', normalRange: { low: 40, high: 75 }, source: { kind: 'lab', keys: ['NEU'] } },
         { key: 'bands', type: 'number', label: { en: 'Bands (optional)', zh: '帶狀核（選填）' }, unit: '%', optional: true, defaultValue: '0' },
       ],
       compute: (v) => {

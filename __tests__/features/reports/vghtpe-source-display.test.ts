@@ -1,4 +1,4 @@
-import { getVghtpeSource, mergeHospitalSources } from '@/features/clinical-summary/reports/adapters/vghtpe-source-display'
+import { getVghtpeSource, mergeHospitalSources, vghtpeReportPeople } from '@/features/clinical-summary/reports/adapters/vghtpe-source-display'
 import { formatSourceInstitution, sourceInstitutionDisplay } from '@/features/clinical-summary/reports/utils/source-institution-display'
 import { buildReportsData } from '@/features/clinical-summary/reports/hooks/useReportsData'
 import { groupLabReportsByDay } from '@/features/clinical-summary/reports/utils/lab-day-grouping'
@@ -58,4 +58,25 @@ it('labels recorded in-house and merged sources without changing the source', ()
   expect(formatSourceInstitution('臺北榮總', getVghtpeSource([cloud]), 'zh-TW')).toBe('臺北榮總')
   expect(formatSourceInstitution('臺北榮總', 'in-house', 'en')).toBe('臺北榮總 (In-house)')
   expect(JSON.stringify(internal)).toBe(before)
+})
+
+describe('vghtpeReportPeople', () => {
+  // Fictional staff codes and names.
+  const report = {
+    performer: [{ display: 'DOC0001A 王測試' }],
+    resultsInterpreter: [{ display: 'DOC0002B 林判讀' }],
+  }
+
+  it('shows the hospital instead of the ordering staff code and names the interpreter', () => {
+    expect(vghtpeReportPeople(report, 'DOC0001A 王測試', 'in-house')).toEqual({
+      institution: '臺北榮民總醫院',
+      interpreter: 'DOC0002B 林判讀',
+    })
+  })
+
+  it('leaves cloud and other-hospital reports untouched', () => {
+    expect(vghtpeReportPeople(report, '某某醫院', 'cloud')).toEqual({ institution: '某某醫院' })
+    expect(vghtpeReportPeople({ performer: [{ display: '台北測試醫院' }] }, '台北測試醫院', 'in-house'))
+      .toEqual({ institution: '台北測試醫院' })
+  })
 })

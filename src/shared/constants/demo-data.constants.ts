@@ -1,6 +1,6 @@
 /**
  * The demo chart is a fixed teaching artifact whose newest clinical event is
- * 2026-08-27, from the export covering data through 2026-09-03. Every "is this
+ * 2026-10-23, from the export covering data through 2026-10-27. Every "is this
  * still current?" rule in the app (active
  * medications, recency windows) is evaluated against a clock, so judging the
  * demo by the real wall clock makes it decay: on 2026-08-17 the 2026-07-20
@@ -14,13 +14,13 @@
  * when the loaded bundle is the demo — real patients are always judged against
  * the real clock.
  */
-export const DEMO_DATA_AS_OF_ISO = '2026-09-03T23:59:59+08:00'
+export const DEMO_DATA_AS_OF_ISO = '2026-10-27T23:59:59+08:00'
 
 export const DEMO_DATA_AS_OF_MS = Date.parse(DEMO_DATA_AS_OF_ISO)
 
 /**
  * The 雲端病歷 demo is the same patient captured from NHI MediCloud on
- * 2026-10-26, later than the 健康存摺 export, so it carries its own as-of date.
+ * 2026-10-26, a day before the 健康存摺 export, so it carries its own as-of date.
  * Its Patient id is fixed by scripts/build-medcloud-demo-bundle.mjs.
  */
 export const MEDCLOUD_DEMO_PATIENT_ID = 'demo-medcloud-patient-1'

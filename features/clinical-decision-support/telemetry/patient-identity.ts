@@ -1,13 +1,18 @@
 import { isDeidentifiedPatient, type PatientEntity } from '@/src/core/entities/patient.entity'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 const MASK = /[Xx*＊○〇●Ｏ◯]/u
 const NAME_MASK = /[Xx○〇●Ｏ◯]/u
 const MASKED_NATIONAL_ID = /^[A-Z][0-9X*＊○〇●Ｏ◯]{9}$/u
 const NATIONAL_ID_SYSTEM = /national[-_]?id/i
+const TVGH_NATIONAL_ID_SYSTEM = 'urn:oid:tw.gov.id-number'
+const TVGH_STORAGE_ID_SYSTEM = 'urn:mediprisma:vghtpe-bridge:national-id'
 const MEDCLOUD_SOURCE_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/source-medcloud-patient-id'
 const MEDCLOUD_MASKED_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-medcloud-patient-id'
 const MEDCLOUD_NATIONAL_ID_SYSTEM = 'https://cloud-wildcatch.invalid/fhir/IdentifierSystem/masked-tw-national-id'
 const BIRTH_DATE = /^\d{4}-\d{2}-\d{2}$/
+const MRN_SYSTEM = 'urn:oid:his.patient.mrn'
+const MRN = /^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/
 
 function normalizedIdentifierSystem(system?: string): string {
   return system?.normalize('NFKC').trim() ?? ''
@@ -47,6 +52,9 @@ function maskedName(name: string): string {
 }
 
 function nationalId(patient: PatientEntity): { system: string; value: string } {
+  if ((patient.identifier ?? []).some(identifier => normalizedIdentifierSystem(identifier.system) === TVGH_STORAGE_ID_SYSTEM)) {
+    throw new Error('cdss_identity_unavailable')
+  }
   const matches = (patient.identifier ?? [])
     .map((identifier) => ({
       system: normalizedIdentifierSystem(identifier.system),
@@ -54,7 +62,23 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
     }))
     .filter(identifier => isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)
       || isMedcloudSystem(identifier.system, MEDCLOUD_NATIONAL_ID_SYSTEM)
+      || identifier.system === TVGH_NATIONAL_ID_SYSTEM
       || (!isMedcloudNamespace(identifier.system) && NATIONAL_ID_SYSTEM.test(identifier.system)))
+    // Since bridge 0.15.20 a physical-card login yields the unmasked ID. Mask
+    // it the way the MediCloud page header shows it (A123***789), so the full
+    // ID never leaves the browser and the lookup key equals the one saved
+    // from the masked header before.
+    .map(identifier => isMedcloudSystem(identifier.system, MEDCLOUD_SOURCE_ID_SYSTEM)
+      && /^[A-Z][12]\d{8}$/.test(identifier.value)
+      ? { ...identifier, value: `${identifier.value.slice(0, 4)}***${identifier.value.slice(7)}` }
+      : identifier)
+  // Match the existing cloud identity's privacy boundary: discard hidden
+  // digits before hashing as well as before constructing display fields.
+  if (matches.length === 1 && matches[0].system === TVGH_NATIONAL_ID_SYSTEM) {
+    const value = matches[0].value
+    if (!/^[A-Z][12][0-9]{8}$/.test(value)) throw new Error('cdss_identity_unavailable')
+    return { system: TVGH_STORAGE_ID_SYSTEM, value: `${value.slice(0, 4)}XXX${value.slice(7)}` }
+  }
   if (matches.length !== 1 || !MASKED_NATIONAL_ID.test(matches[0].value)
     || !MASK.test(matches[0].value.slice(1))) {
     throw new Error('cdss_identity_unavailable')
@@ -71,6 +95,20 @@ function nationalId(patient: PatientEntity): { system: string; value: string } {
   return identifier
 }
 
+// In-hospital storage may keep the HIS medical record number. It is optional
+// (only present when the TVGH bridge supplied it) and never enters the lookup
+// key, so records saved before or without it stay readable.
+function medicalRecordNumber(patient: PatientEntity): string | undefined {
+  const values = new Set((patient.identifier ?? [])
+    .filter(identifier => normalizedIdentifierSystem(identifier.system) === MRN_SYSTEM)
+    .map(identifier => identifier.value?.normalize('NFKC').trim() ?? '')
+    .filter(Boolean))
+  // Two different MRNs mean the merged chart is ambiguous; do not guess.
+  if (values.size > 1) throw new Error('cdss_identity_unavailable')
+  const [value] = values
+  return value && MRN.test(value) ? value : undefined
+}
+
 /** The identifying inputs exist only in this browser; only the digest and masked display fields leave it. */
 export async function cdssPatientIdentity(patient: PatientEntity) {
   const remaskedMedcloudId = (patient.identifier ?? []).some(identifier => {
@@ -84,13 +122,16 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
   })
   if (isDeidentifiedPatient(patient) || remaskedMedcloudId) throw new Error('cdss_patient_deidentified')
   const name = normalizedName(patient)
+  if (/^unknown$/i.test(name) && (patient.identifier ?? []).some(identifier =>
+    normalizedIdentifierSystem(identifier.system) === TVGH_NATIONAL_ID_SYSTEM)) throw new Error('cdss_identity_unavailable')
   const birthDate = patient.birthDate?.trim() ?? ''
   const parsedBirthDate = Date.parse(birthDate)
   if (!BIRTH_DATE.test(birthDate) || Number.isNaN(parsedBirthDate)
-    || new Date(parsedBirthDate).toISOString().slice(0, 10) !== birthDate) {
+    || utcDay(parsedBirthDate) !== birthDate) {
     throw new Error('cdss_identity_unavailable')
   }
   const identifier = nationalId(patient)
+  const mrn = medicalRecordNumber(patient)
   const canonical = JSON.stringify([1, 'vghtpe', name, birthDate, identifier.system, identifier.value])
   if (!crypto.subtle) throw new Error('cdss_crypto_unavailable')
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical))
@@ -103,6 +144,7 @@ export async function cdssPatientIdentity(patient: PatientEntity) {
       birth_year: birthDate.slice(0, 4),
       identifier_masked: identifier.value,
       identifier_system: identifier.system,
+      ...(mrn ? { mrn } : {}),
     },
   }
 }

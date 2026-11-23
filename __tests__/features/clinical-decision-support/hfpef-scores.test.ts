@@ -188,6 +188,55 @@ describe('the measurements behind the score', () => {
     expect(after.hfaPeff?.score).toBe(6)
   })
 
+  it('scores with the LAVI and LVMI the calculator derives from BSA, dated by the echo', () => {
+    // Synthetic echo: LA volume and LV mass printed, no stated LAVI or LVMI.
+    // Height and weight were measured after the study.
+    const raw = { lavi: undefined, lvmi: undefined, laVolume: 80, lvMass: 200 }
+    const withBody = (body: boolean): Autofill => {
+      const base = autofillWith(raw)
+      return {
+        ...base,
+        resolve: (source) => {
+          if (body && source?.kind === 'vital') {
+            return source.vital === 'height'
+              ? { value: 160, unit: 'cm', date: '2026-09-12' }
+              : { value: 60, unit: 'kg', date: '2026-09-12' }
+          }
+          return base.resolve(source)
+        },
+      }
+    }
+    const bare = { ...profile, facts: { LVEF: profile.facts.LVEF } }
+    const withHw = buildHfpefReading({ profile: bare, autofill: withBody(true) })
+    const without = buildHfpefReading({ profile: bare, autofill: withBody(false) })
+
+    // The same score the calculator gives for the same record.
+    const calc = HFPEF.find((def) => def.id === 'hfa-peff')!
+    const direct = calc.compute({
+      age: '76', sex: 'female', rhythm: 'sr', averageEe: '13.2', trv: '3.1',
+      rwt: '0.44', wall: '12', laVolume: '80', lvMass: '200', height: '160', weight: '60',
+    })
+    expect(direct?.value).toBe('4–6 / 6')
+    expect(`${withHw.hfaPeff?.score}–${withHw.hfaPeff?.upper} / 6`).toBe(direct?.value)
+    expect(withHw.hfaPeff?.matchedTerms).toContain('morphological:2')
+    expect(withHw.hfaPeff?.derived).toEqual({ bsa: '1.62 m²', lavi: '49.3 mL/m²', lvmi: '123.3 g/m²' })
+
+    // A derived index is not missing; its inputs never are.
+    expect(withHw.hfaPeff?.missing).not.toContain('lavi')
+    expect(withHw.hfaPeff?.missing).not.toContain('lvmi')
+    for (const token of ['height', 'weight', 'la-volume', 'lv-mass']) {
+      expect(withHw.hfaPeff?.missing).not.toContain(token)
+      expect(without.hfaPeff?.missing).not.toContain(token)
+    }
+    // Without height and weight the index cannot be derived, and is missing.
+    expect(without.hfaPeff?.derived).toBeUndefined()
+    expect(without.hfaPeff?.missing).toEqual(expect.arrayContaining(['lavi', 'lvmi']))
+
+    // A weight measured after the echo does not move the score's date.
+    expect(withHw.hfaPeff?.date).toBe(ECHO_DAY)
+    expect(withHw.inputs.find((item) => item.key === 'weight')).toMatchObject({ value: '60', origin: 'autofill' })
+  })
+
   it('writes the rhythm the ECG reported as a term, not as a number', () => {
     const next = applyHfpefReading(profile, buildHfpefReading({ profile, autofill: autofillWith() }))
 
