@@ -1,8 +1,7 @@
 // 院內 Gemini in the shared model picker, with a fake 北榮懷爾抓抓 status reply.
 // Synthetic only: no extension, no Gemini page.
 import type { MouseEventHandler, ReactNode } from 'react'
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
-import { useModelSelection } from '@/src/application/hooks/useModelSelection'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HOSPITAL_GEMINI_SIGN_IN_URL } from '@/src/infrastructure/ai/hospital-gemini/hospital-gemini-bridge'
 import { ModelPicker } from '@/src/shared/components/ModelPicker'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -155,23 +154,6 @@ describe('院內 Gemini sign-in shortcut', () => {
     jest.spyOn(Date, 'now').mockReturnValue(now + 6_000)
     act(() => { window.dispatchEvent(new Event('focus')) })
     await waitFor(() => expect(hospitalItem()).toBeDisabled())
-  })
-
-  it('puts the same link on the toast shown when the locked entry is chosen', async () => {
-    installExtension('needs_login')
-    const open = jest.spyOn(window, 'open').mockImplementation(() => null)
-    const setModel = jest.fn()
-    const { result } = renderHook(() => useModelSelection(null, null, null, 'gemini-3.1-flash-lite', setModel), {
-      wrapper: ({ children }: { children: ReactNode }) => <LanguageProvider>{children}</LanguageProvider>,
-    })
-    await waitFor(() => expect(result.current.geminiModels.find((entry) => entry.id === HOSPITAL_GEMINI_MODEL_ID)?.isLocked).toBe(true))
-    act(() => result.current.handleSelectModel(HOSPITAL_GEMINI_MODEL_ID))
-    expect(setModel).not.toHaveBeenCalled()
-    const [message, options] = mockToast.error.mock.calls.at(-1)!
-    expect(message).toBe('請先開啟並登入院內 Gemini')
-    expect(options.action.label).toBe('開啟院內 Gemini')
-    options.action.onClick()
-    expect(open).toHaveBeenCalledWith(HOSPITAL_GEMINI_SIGN_IN_URL, '_blank', 'noopener,noreferrer')
   })
 })
 

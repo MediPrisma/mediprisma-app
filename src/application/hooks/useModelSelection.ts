@@ -38,11 +38,6 @@ export interface ModelEntry {
   signInUrl?: string
 }
 
-/** Opens the 院內 Gemini sign-in in a new tab, never touching this page. */
-export function openHospitalGeminiSignIn(): void {
-  window.open(HOSPITAL_GEMINI_SIGN_IN_URL, '_blank', 'noopener,noreferrer')
-}
-
 function endpointParts(baseUrl: string): { host: string; full: string } {
   if (baseUrl.startsWith('/')) return { host: baseUrl, full: baseUrl }
   try {
@@ -194,9 +189,7 @@ export function useModelSelection(
 
     if (candidate === HOSPITAL_GEMINI_MODEL_ID) {
       if (hospitalGeminiStatus === 'ready') setModel(candidate)
-      else toast.error(HOSPITAL_GEMINI_SIGN_IN_HINT, {
-        action: { label: t.modelPicker.openHospitalGemini, onClick: openHospitalGeminiSignIn },
-      })
+      else toast.error(HOSPITAL_GEMINI_SIGN_IN_HINT)
       return
     }
 
