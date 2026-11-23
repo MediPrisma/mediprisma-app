@@ -10,7 +10,9 @@
 /** 北榮懷爾抓抓's Chrome Web Store id; a developer build sets NEXT_PUBLIC_VGHTPE_BRIDGE_EXTENSION_ID. */
 export const VGHTPE_BRIDGE_EXTENSION_ID: string =
   process.env.NEXT_PUBLIC_VGHTPE_BRIDGE_EXTENSION_ID || 'eempjoojendpjgpkhljnplchhdkllkgo'
-export const HOSPITAL_GEMINI_PROTOCOL = 'vghtpe-gemini-enterprise/1'
+/** Owner-chosen entry: the hospital Google workforce sign-in, which lands on Gemini Enterprise. */
+export const HOSPITAL_GEMINI_SIGN_IN_URL = 'https://auth.cloud.google/signin/locations/global/workforcePools/shjieng-pool/providers/shjieng-workforce-provider?continueUrl=https%3A%2F%2Fvertexaisearch.cloud.google%2Fhome%2Fcid%2F39205da3-e6cd-4097-a355-f5290956aa2d&hl=zh_TW'
+export const HOSPITAL_GEMINI_PROTOCOL ='vghtpe-gemini-enterprise/1'
 /** The extension rejects longer prompts with INVALID_REQUEST. */
 export const HOSPITAL_GEMINI_MAX_PROMPT_CHARS = 150_000
 const STATUS_TIMEOUT_MS = 3_000

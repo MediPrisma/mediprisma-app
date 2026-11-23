@@ -22,6 +22,7 @@ import { isOpenAiCompatibleReady, isOpenAiCompatibleRuntimeReady } from '@/src/s
 import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
 import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
 import { useHospitalGeminiStatus } from '@/src/application/hooks/use-hospital-gemini-status.hook'
+import { HOSPITAL_GEMINI_SIGN_IN_URL } from '@/src/infrastructure/ai/hospital-gemini/hospital-gemini-bridge'
 
 export const HOSPITAL_GEMINI_SIGN_IN_HINT = '請先開啟並登入院內 Gemini'
 
@@ -33,6 +34,8 @@ export interface ModelEntry {
   configureInSettings?: boolean
   /** Shown under a locked entry: what the clinician has to do first. */
   hint?: string
+  /** A page that resolves the lock (院內 Gemini sign-in), opened in a new tab. */
+  signInUrl?: string
 }
 
 function endpointParts(baseUrl: string): { host: string; full: string } {
@@ -83,7 +86,7 @@ export function useModelSelection(
           label: entry.label,
           description: entry.descriptions[locale],
           isLocked: !ready,
-          ...(ready ? {} : { hint: HOSPITAL_GEMINI_SIGN_IN_HINT }),
+          ...(ready ? {} : { hint: HOSPITAL_GEMINI_SIGN_IN_HINT, signInUrl: HOSPITAL_GEMINI_SIGN_IN_URL }),
         }]
       }
       const definition = getModelDefinition(entry.id)
