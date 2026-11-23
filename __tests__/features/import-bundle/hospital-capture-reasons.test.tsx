@@ -1,15 +1,20 @@
 import { act, render, screen } from '@testing-library/react'
 import { HospitalCaptureReasons } from '@/features/import-bundle/components/HospitalCaptureReasons'
+import { ProgressiveImportStatus } from '@/features/import-bundle/components/ProgressiveImportStatus'
 import { rememberLocalBundleCapture } from '@/src/infrastructure/fhir/services/local-bundle-capture'
 
 let mockLocale = 'zh-TW'
 jest.mock('@/src/application/providers/language.provider', () => ({ useLanguage: () => ({ locale: mockLocale }) }))
+let mockCurrent: { importId: string | null; phase: string } | null = null
+jest.mock('@/src/application/hooks/use-progressive-import.hook', () => ({ useProgressiveImportStatus: () => mockCurrent }))
+// As app/page.tsx stacks them.
+const Banners = () => <><ProgressiveImportStatus /><HospitalCaptureReasons /></>
 
 const FAILURE = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-failure'
 const COMPLETENESS = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-completeness'
 const bundle = (tags: object[]) => ({ resourceType: 'Bundle', meta: { tag: tags }, entry: [] })
 
-beforeEach(() => { mockLocale = 'zh-TW'; act(() => rememberLocalBundleCapture(null)) })
+beforeEach(() => { mockLocale = 'zh-TW'; mockCurrent = null; act(() => rememberLocalBundleCapture(null)) })
 
 test('names each missing category with its reason, HTTP status and count', () => {
   render(<HospitalCaptureReasons />)
@@ -77,14 +82,14 @@ test.each([
   ['failed', '門診助理的預看診存檔讀取失敗，這次全部改向院內系統擷取。'],
   ['unusable', '門診助理的預看診存檔無法銜接新資料，這次全部改向院內系統擷取。'],
 ])('a capture tagged stored-record %s says so', (code, text) => {
-  render(<HospitalCaptureReasons />)
+  render(<Banners />)
   // 雲端懷爾抓抓 relays the code without its display.
   act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code }])))
   expect(screen.getByRole('status')).toHaveTextContent(text)
 })
 
 test('no stored-record tag, an unknown code or the tag twice says nothing of the stored record', () => {
-  render(<HospitalCaptureReasons />)
+  render(<Banners />)
   for (const tags of [[], [{ system: STORED, code: 'skipped' }], [{ system: STORED }], [{ system: STORED, code: 'used' }, { system: STORED, code: 'none' }],
     [{ system: 'urn:oid:vgh.capture.base', code: 'assistant-record' }]]) {
     act(() => rememberLocalBundleCapture(bundle(tags)))
@@ -93,9 +98,9 @@ test('no stored-record tag, an unknown code or the tag twice says nothing of the
 })
 
 test('the stored-record line stands beside the missing-data line, and has English wording', () => {
-  render(<HospitalCaptureReasons />)
+  render(<Banners />)
   act(() => rememberLocalBundleCapture(bundle([{ system: FAILURE, code: 'reports:timeout', display: '1' }, { system: STORED, code: 'used' }])))
-  const [missing, stored] = screen.getAllByRole('status')
+  const [stored, missing] = screen.getAllByRole('status')
   expect(missing).toHaveTextContent('院內資料未取得：檢查驗報告－北榮回應逾時。請核對 HIS。')
   expect(stored).toHaveTextContent('近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。')
   mockLocale = 'en'
@@ -103,6 +108,22 @@ test('the stored-record line stands beside the missing-data line, and has Englis
   expect(screen.getByRole('status')).toHaveTextContent('The outpatient assistant holds no pre-visit record for this patient; this capture asked HIS for all records instead.')
   // Beside missing data the line still names only the route, in English too.
   act(() => rememberLocalBundleCapture(bundle([{ system: FAILURE, code: 'reports:timeout', display: '1' }, { system: STORED, code: 'used' }])))
-  expect(screen.getAllByRole('status')[0]).toHaveTextContent('Hospital records not captured: test and imaging reports: HIS timed out. Check HIS.')
-  expect(screen.getAllByRole('status')[1]).toHaveTextContent('The past year of hospital records came from the outpatient assistant’s pre-visit record; HIS was asked only for newer records.')
+  expect(screen.getAllByRole('status')[1]).toHaveTextContent('Hospital records not captured: test and imaging reports: HIS timed out. Check HIS.')
+  expect(screen.getAllByRole('status')[0]).toHaveTextContent('The past year of hospital records came from the outpatient assistant’s pre-visit record; HIS was asked only for newer records.')
+})
+
+test('with an import status showing, the stored-record note shares its row instead of adding one', () => {
+  mockCurrent = { importId: 'import-a', phase: 'partial' }
+  render(<Banners />)
+  act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code: 'used' }])))
+  expect(screen.getAllByRole('status')).toHaveLength(1)
+  expect(screen.getByRole('status')).toHaveTextContent('已載入部分院內門診資料，請核對 HIS。近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。')
+})
+
+test('an alert keeps its own wording; the stored-record note stays on a separate row', () => {
+  mockCurrent = { importId: 'import-a', phase: 'patient-changed' }
+  render(<Banners />)
+  act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code: 'used' }])))
+  expect(screen.getByRole('alert')).not.toHaveTextContent('預看診存檔')
+  expect(screen.getByRole('status')).toHaveTextContent('近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。')
 })
