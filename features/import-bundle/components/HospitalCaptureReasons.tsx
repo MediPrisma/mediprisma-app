@@ -27,6 +27,7 @@ const KIND: Record<string, [string, string]> = {
 export const STORED_RECORD:Record<string, [string, string]> = {
   used: ['近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。', 'The past year of hospital records came from the outpatient assistant’s pre-visit record; HIS was asked only for newer records.'],
   none: ['門診助理沒有這位病人的預看診存檔，這次全部改向院內系統擷取。', 'The outpatient assistant holds no pre-visit record for this patient; this capture asked HIS for all records instead.'],
+  signed_out: ['這個瀏覽器還沒登入門診助理，這次全部改向院內系統擷取。', 'This browser is not signed in to the outpatient assistant; this capture asked HIS for all records instead.'],
   timeout: ['門診助理的預看診存檔讀取逾時，這次全部改向院內系統擷取。', 'Reading the outpatient assistant’s pre-visit record timed out; this capture asked HIS for all records instead.'],
   failed: ['門診助理的預看診存檔讀取失敗，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be read; this capture asked HIS for all records instead.'],
   unusable: ['門診助理的預看診存檔無法銜接新資料，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be joined with newer records; this capture asked HIS for all records instead.'],
