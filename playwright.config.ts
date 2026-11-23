@@ -35,6 +35,9 @@ export default defineConfig({
       NEXT_PUBLIC_CHAT_URL: 'https://e2e-proxy.test/chat',
       NEXT_PUBLIC_GEMINI_URL: 'https://e2e-proxy.test/gemini',
       NEXT_PUBLIC_CLAUDE_URL: 'https://e2e-proxy.test/claude',
+      // Sentinel hospital interaction service; medication-interactions.spec
+      // answers it, every other spec leaves it unreachable (section stays off).
+      NEXT_PUBLIC_DDI_SERVICE_ORIGIN: 'https://ddi.e2e.test',
       // Public, deliberately fake Firebase metadata. The request fixture
       // answers Auth locally and leaves Firestore uninitialized, so a clean
       // checkout can run without inheriting a developer's `.env.local`.

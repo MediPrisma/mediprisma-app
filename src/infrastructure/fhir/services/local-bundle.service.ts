@@ -1,3 +1,5 @@
+import { rememberLocalBundleVersion } from './local-bundle-version'
+import { rememberLocalBundleCapture } from './local-bundle-capture'
 import { clinicalContainedPatientExclusions } from '@/src/core/services/clinical-contained-patient-exclusions'
 import { readClinicalRecordVariantModifier, readClinicalMedicationContentModifier } from '@/src/core/services/clinical-record-variant-modifier'
 import { recordClinicalProjectionDisposition, recordClinicalEncounterAliases } from '../mappers/clinical-projection-disposition'
@@ -43,6 +45,11 @@ import { expandClaimResources, bindClaimEncounterLink, hasUnresolvedClaimEncount
 import { expandRocheResources } from './roche-expander'
 import { reconcileOutpatientEncounters } from './outpatient-encounter-reconciliation'
 import { reconcileMedicationRequests } from './medication-reconciliation'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { applyNhiDictionaryErrata } from '../nhi-dictionary-errata'
+import { hasVghtpeMedicationAtcCheck, hasVghtpeMedicationIdentityCheck } from '@/src/shared/utils/hospital-medication-index'
+import { complementHospitalOrderVisitContext } from './hospital-order-visit-context'
+import { toAwaitingOrder, type AwaitingOrder } from '@/src/shared/utils/awaiting-order'
 import {
   isNhiDrugCodeSystem,
   NHI_DRUG_ENRICHMENT_POLICY_TAG_SYSTEM,
@@ -76,7 +83,6 @@ import {
 } from './bundle-crypto'
 import {
   LOCAL_BUNDLE_DEMO_FLAG_KEY,
-  LOCAL_BUNDLE_IMPORT_MARKER_PREFIX,
   LOCAL_BUNDLE_MARKER,
   LOCAL_BUNDLE_STORAGE_KEY,
   importIdFromLocalBundleMarker,
@@ -89,7 +95,6 @@ import {
 // localStorage markers are retired on the first successful load/import.
 const STORAGE_KEY = LOCAL_BUNDLE_STORAGE_KEY
 const MARKER = LOCAL_BUNDLE_MARKER
-const IMPORT_MARKER_PREFIX = LOCAL_BUNDLE_IMPORT_MARKER_PREFIX
 
 // Set while the loaded bundle is the bundled demo patient (試用資料). Owned
 // here so every bundle wipe (import-bundle clear, logout PHI wipe) removes it
@@ -113,6 +118,11 @@ const originalFhirPrefix = (importId: string) => `original-fhir:${importId}:`
 // Session cache: avoids re-reading IndexedDB on every query. Module-level so it
 // is shared across all hook instances in the same tab.
 let memBundle: object | null = null
+function cacheBundle(bundle: object | null): void {
+  memBundle = bundle
+  rememberLocalBundleVersion(bundle)
+  rememberLocalBundleCapture(bundle)
+}
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false
 let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
@@ -266,10 +276,12 @@ async function idbSweepExpiredRecords(now = Date.now()): Promise<void> {
         req.onsuccess = () => {
           const cursor = req.result
           if (!cursor) return
-          if (
-            isEncryptedRecord(cursor.value)
-            && now - cursor.value.savedAt > MAX_BUNDLE_AGE_MS
-          ) {
+          if (!isEncryptedRecord(cursor.value)) {
+            // Builds before 2026-06-12 stored charts and images in plaintext.
+            // They carry no age and no owning import, so they are removed,
+            // never shown as the current patient.
+            cursor.delete()
+          } else if (now - cursor.value.savedAt > MAX_BUNDLE_AGE_MS) {
             if (storeName === IMG_STORE && typeof cursor.key === 'string'
               && cursor.key.startsWith('original-fhir:')) {
               // Original chunks share the owning chart's lifetime. Profile
@@ -445,8 +457,7 @@ async function idbPutImages(items: Array<{ id: string; record: unknown }>): Prom
   }
 }
 
-// Raw read — value may be an EncryptedRecord (current) or a plaintext Blob
-// (written by older builds); getImage() handles both.
+// Raw read — getImage() accepts only an EncryptedRecord.
 async function idbGetImage(id: string): Promise<unknown> {
   const db = await openDb()
   try {
@@ -856,6 +867,13 @@ const NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM =
 const ATC_HIERARCHY_TAG_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
 
+function hasUncheckedVghtpeMedication(bundle: object): boolean {
+  const entries = Array.isArray((bundle as { entry?: unknown }).entry) ? (bundle as { entry: any[] }).entry : []
+  return entries.some((entry: any) => entry?.resource?.resourceType === 'MedicationRequest'
+    && isVghtpeSource(entry.resource)
+    && (!hasVghtpeMedicationIdentityCheck(entry.resource) || !hasVghtpeMedicationAtcCheck(entry.resource)))
+}
+
 function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {
   const entries = Array.isArray((bundle as { entry?: unknown }).entry)
     ? (bundle as { entry: any[] }).entry
@@ -884,6 +902,20 @@ function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {
         && tag?.code === NHI_DRUG_ENRICHMENT_POLICY_VERSION,
     ))
   return hasCurrentHierarchy && hasCurrentAppPolicy
+}
+
+/** The NHI drug code of the first linked MedicationKnowledge that carries one. */
+function nhiDrugCodeOfKnowledge(request: any, knowledgeById: Map<string, any>): string | undefined {
+  const references = Array.isArray(request.supportingInformation) ? request.supportingInformation : []
+  for (const candidate of references) {
+    const id = typeof candidate?.reference === 'string' ? referenceId(candidate.reference) : undefined
+    const knowledge = id ? knowledgeById.get(id) : undefined
+    const coding = Array.isArray(knowledge?.code?.coding)
+      ? knowledge.code.coding.find((c: any) => isNhiDrugCodeSystem(c?.system) && typeof c?.code === 'string')
+      : undefined
+    if (coding) return coding.code
+  }
+  return undefined
 }
 
 function terminologyFromMedicationKnowledge(
@@ -1238,7 +1270,7 @@ export const LocalBundleService = {
           adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
           terminologyMigrationByBundle.delete(bundle)
         }
-        memBundle = bundle
+        cacheBundle(bundle)
         memBundleImportId = importId
         memBundleIsDemo = demo
         memBundleSourceMetadata = sourceMetadata ?? null
@@ -1364,7 +1396,7 @@ export const LocalBundleService = {
       adoptValidatedImport(bundle, importId, sourceMetadata ?? null)
       terminologyMigrationByBundle.delete(bundle)
     }
-    memBundle = bundle
+    cacheBundle(bundle)
     memBundleUsesMemoryOnlySession = false
     memBundleImportId = importId
     memBundleIsDemo = demo
@@ -1427,7 +1459,7 @@ export const LocalBundleService = {
       ? memBundleImportId
       : readTabLocalImportId()
     const legacyImageRefs = legacyImageRefsInBundle(memBundle)
-    memBundle = null
+    cacheBundle(null)
     memBundleImportId = null
     memBundleIsDemo = false
     memBundleSourceMetadata = null
@@ -1455,14 +1487,13 @@ export const LocalBundleService = {
   },
 
   // Fetch a stored image by its `_imageRef`. Used by the lazy viewer so the
-  // bytes are only pulled into memory while the dialog is open. Handles both
-  // encrypted records (current) and plaintext Blobs from older builds.
+  // bytes are only pulled into memory while the dialog is open. Only encrypted
+  // records are read; plaintext Blobs from older builds are swept, not shown.
   async getImage(ref: string): Promise<Blob | null> {
     if (typeof window === 'undefined') return null
     try {
       const stored = await idbGetImage(ref)
       if (!stored) return null
-      if (stored instanceof Blob) return stored // legacy plaintext (purged on next load/import)
       if (isEncryptedRecord(stored)) {
         const key = await getSessionBundleKey()
         if (!key) return null
@@ -1510,7 +1541,7 @@ export const LocalBundleService = {
               clearTabBundleScope()
               return null
             }
-            memBundle = decrypted.bundle
+            cacheBundle(decrypted.bundle)
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
             memBundleSourceMetadata = decrypted.sourceMetadata ?? null
@@ -1528,7 +1559,7 @@ export const LocalBundleService = {
           }
           const bundle = decrypted as object
           const importId = migratedImportId()
-          memBundle = bundle
+          cacheBundle(bundle)
           memBundleImportId = importId
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           memBundleSourceMetadata = null
@@ -1546,7 +1577,7 @@ export const LocalBundleService = {
         } catch {
           // Never delete an undecryptable scoped record: this tab may have
           // inherited only the pointer while another tab still owns the key.
-          memBundle = null
+          cacheBundle(null)
           memBundleImportId = null
           memBundleIsDemo = false
           memBundleSourceMetadata = null
@@ -1560,74 +1591,15 @@ export const LocalBundleService = {
           return null
         }
       }
-      if (fromIdb) {
-        // Plaintext bundle written by an older build — serve it this once and
-        // immediately re-encrypt in place so it stops existing as plaintext.
-        const importId = migratedImportId()
-        memBundle = fromIdb as object
-        memBundleImportId = importId
-        memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
-        memBundleSourceMetadata = null
-        memUserEnteredPatientProfile = null
-        try {
-          const key = await getSessionBundleKey({ create: true })
-          if (key) {
-            const migrated = {
-              __mediprismaBundle: 1,
-              importId,
-              demo: memBundleIsDemo,
-              bundle: fromIdb as object,
-            } satisfies PersistedBundleEnvelope
-            await idbPut(await encryptJson(key, migrated), importId)
-            await idbDelete(bundleKey)
-            writeTabBundleScope(importId, memBundleIsDemo)
-          } else {
-            await idbDelete(bundleKey)
-          }
-        } catch {
-          // Re-encryption failed — leave the in-memory copy serving this session.
-        }
-        return fromIdb as object
-      }
+      // A plaintext record left by a pre-2026-06-12 build: never served.
+      if (fromIdb) await idbDelete(bundleKey)
     } catch {
-      // IndexedDB unavailable (private mode, etc.) — fall through to migration.
+      // IndexedDB unavailable (private mode, etc.) — there is nothing to load.
     }
 
-    // Migration path: older builds stored the full bundle JSON under STORAGE_KEY.
+    // Builds before 2026-06-04 kept the whole chart JSON here. Like the
+    // plaintext IndexedDB record it is removed below, never shown.
     const raw = readLegacyBundleMarker()
-    if (raw && raw !== MARKER && !raw.startsWith(IMPORT_MARKER_PREFIX)) {
-      try {
-        const parsed = JSON.parse(raw)
-        if (parsed && (parsed.resourceType === 'Bundle' || Array.isArray(parsed.entry))) {
-          const importId = migratedImportId()
-          memBundle = parsed
-          memBundleImportId = importId
-          memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
-          memBundleSourceMetadata = null
-          memUserEnteredPatientProfile = null
-          // Move it (encrypted) to IndexedDB and shrink the marker so we don't
-          // re-migrate.
-          try {
-            const key = await getSessionBundleKey({ create: true })
-            if (key) {
-              const migrated = {
-                __mediprismaBundle: 1,
-                importId,
-                demo: memBundleIsDemo,
-                bundle: parsed,
-              } satisfies PersistedBundleEnvelope
-              await idbPut(await encryptJson(key, migrated), importId)
-              writeTabBundleScope(importId, memBundleIsDemo)
-            }
-          } catch {
-            // Migration write failed — keep serving from the in-memory copy.
-          }
-          return parsed
-        }
-      } catch {
-        // Corrupt JSON — treat as no data.
-      }
-    }
     if (tabMarker) {
       clearTabBundleScope()
       clearSessionBundleKey()
@@ -1820,6 +1792,7 @@ export const LocalBundleService = {
     }
     recordClinicalEncounterAliases(clinicalSource, confirmedEncounterAliases)
     entries = reconcileMedicationRequests(entries)
+    entries = complementHospitalOrderVisitContext(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
     const sourceCapturedAt = typeof bundle.timestamp === 'string'
@@ -1855,6 +1828,30 @@ export const LocalBundleService = {
         return encounter ? [encounter] : []
       }))]
       if (visits.length) result._orderEncounterIds = visits
+    }
+
+    // Orders the hospital bridge marks as written but without a request or
+    // report in HIS yet, kept on their visit for the last-outpatient tab.
+    const awaitingByEncounter = new Map<string, AwaitingOrder[]>()
+    for (const order of byType('ServiceRequest') as any[]) {
+      const awaiting = toAwaitingOrder(order)
+      const encounter = orderEncounters.get(`ServiceRequest/${order.id}`)
+      if (!awaiting || !encounter) continue
+      awaitingByEncounter.set(encounter, [...(awaitingByEncounter.get(encounter) ?? []), awaiting])
+    }
+    // How many orders each visit wrote, so a visit with none is not read as
+    // one whose reports are missing. Zero is recorded only for a hospital
+    // visit in a bundle that carries visit orders at all; without them the
+    // count stays unset, which means unknown.
+    const orderCounts = new Map<string, number>()
+    for (const encounter of orderEncounters.values()) orderCounts.set(encounter, (orderCounts.get(encounter) ?? 0) + 1)
+    for (const encounter of byType('Encounter') as any[]) {
+      const awaiting = awaitingByEncounter.get(encounter.id)
+      if (awaiting) encounter._awaitingOrders = awaiting
+      const orders = orderCounts.get(encounter.id)
+      if (orders) encounter._orderCount = orders
+      else if (orderCounts.size > 0 && (isVghtpeSource(encounter)
+        || encounter._sourceEncounterRecords?.some((source: any) => source && isVghtpeSource(source)))) encounter._orderCount = 0
     }
 
     // Build encounter date map: { "YYYY-MM-DD" -> encounterId }
@@ -1938,10 +1935,12 @@ export const LocalBundleService = {
     // as well (IPS-style orders reference a Medication rather than inlining it).
     const medicationRequests = byType('MedicationRequest').map((m: any) => {
       const resolved = resolveMedicationCode(m)
-      const drugTerminology = terminologyFromMedicationKnowledge(
+      const officialTerminology = terminologyFromMedicationKnowledge(
         m,
         medicationKnowledgeMap,
       )
+      const drugTerminology = officialTerminology
+        && applyNhiDictionaryErrata(nhiDrugCodeOfKnowledge(m, medicationKnowledgeMap), officialTerminology)
       return {
         ...resolved,
         _sourceResourceType: 'MedicationRequest' as const,
@@ -2062,7 +2061,10 @@ export const LocalBundleService = {
     // current policy tag. Upgrade them once locally, then re-encrypt the
     // enriched FHIR under the same import id. The raw SDK JSON is neither
     // needed nor recovered.
-    if (!hasNhiDrugTerminologyKnowledge(bundle)) {
+    // A chart saved before the VGH medication index also gets its hospital
+    // orders checked once, so their same-day cloud copies can merge.
+    const uncheckedHospitalOrders = hasUncheckedVghtpeMedication(bundle)
+    if (!hasNhiDrugTerminologyKnowledge(bundle) || uncheckedHospitalOrders) {
       let migration = terminologyMigrationByBundle.get(bundle)
       if (!migration) {
         const owner = { bundle, importId: memBundleImportId }
@@ -2077,6 +2079,7 @@ export const LocalBundleService = {
           if (
             result.report.status === 'enriched'
             && result.report.linkedRequestCount > 0
+            || uncheckedHospitalOrders && !hasUncheckedVghtpeMedication(result.bundle)
           ) {
             // Query refresh may itself be awaited by an import holding this
             // queue. Return the derived view now; persist it behind that writer

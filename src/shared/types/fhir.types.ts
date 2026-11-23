@@ -168,6 +168,7 @@ export interface DiagnosticReport {
     _imageRef?: string
   }>
   performer?: Array<{ display?: string; reference?: string }>
+  resultsInterpreter?: Array<{ display?: string; reference?: string }>
   _observations?: Observation[]
 }
 

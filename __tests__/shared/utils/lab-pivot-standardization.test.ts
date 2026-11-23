@@ -49,7 +49,8 @@ describe('LOINC codes the package table lacks', () => {
       obs('U-CRE 尿液肌酸酐', 80, '2161-8'),
       obs('微白蛋白(尿)(半定量)', 30, '14957-5'),
     ])
-    expect(keys(pivots, 'urine').sort()).toEqual(['CREA', 'GLUCOSE', 'KETONE', 'MALB'])
+    // A semi-quantitative (strip) result keeps its own column.
+    expect(keys(pivots, 'urine').sort()).toEqual(['CREA', 'GLUCOSE', 'KETONE', 'MALB-STRIP'])
     expect(keys(pivots, 'glucose')).toEqual([])
   })
 
@@ -120,7 +121,7 @@ describe('names that used to fall to 其他 or split the urine panel (2026-09-27
       obs('Total Cholesterol/HDL-C Ratio', 3.8, '9830-1'),
     ])
     expect(keys(pivots, 'chem')).toEqual(['CREA'])
-    expect(keys(pivots, 'lipid')).toEqual(['TC/HDL RATIO'])
+    expect(keys(pivots, 'lipid')).toEqual(['TC/HDL'])
   })
 
   it('folds the urinalysis names seen in a clinic screenshot', () => {

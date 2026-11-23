@@ -424,6 +424,37 @@ it('imports one visit despite Chinese/English labels, with cloud facility and al
   expect(JSON.stringify(bundle)).toBe(original)
 })
 
+it('labels a hospital-only visit with its own SOAP diagnosis when the visit list gave only the code', () => {
+  const { resources, hospital, condition } = fixture()
+  resources.splice(resources.findIndex(resource => resource.id === 'cloud-visit'), 1)
+  ;(hospital as any).reasonCode = [{ text: 'R55' }]
+  condition.code = { text: 'Syncope and collapse', coding: [{ system: ICD, code: 'R55', display: 'Syncope and collapse' }] }
+  const bundle = { resourceType: 'Bundle', type: 'collection', entry: resources.map(resource => ({ resource })) }
+  const result = LocalBundleService.parse(bundle)!.collection
+  const { result: history } = renderHook(() => useVisitHistory(result.encounters))
+  expect(history.current[0].icdCodes).toEqual([{ code: 'R55', description: 'Syncope and collapse' }])
+})
+
+it('keeps a listed main code that the SOAP diagnoses did not repeat', () => {
+  const { resources, hospital } = fixture()
+  resources.splice(resources.findIndex(resource => resource.id === 'cloud-visit'), 1)
+  ;(hospital as any).reasonCode = [{ text: 'R55' }]
+  const graph = reconcileOutpatientEncounters(canonicalizeBundleResources({ entry: resources.map(resource => ({ resource })) }))
+  const visit = graph.find(resource => resource.id === 'hospital-visit')
+  expect(extractEncounterIcds(visit, undefined, 'zh-TW').map(icd => icd.code)).toEqual(['B02.9', 'R55'])
+})
+
+it('keeps linked SOAP labels when the bridge codes only the listed code A did not repeat', () => {
+  const { resources, hospital } = fixture()
+  resources.splice(resources.findIndex(resource => resource.id === 'cloud-visit'), 1)
+  ;(hospital as any).reasonCode = [{ coding: [{ system: ICD, code: 'R55' }] }]
+  const graph = reconcileOutpatientEncounters(canonicalizeBundleResources({ entry: resources.map(resource => ({ resource })) }))
+  const visit = graph.find(resource => resource.id === 'hospital-visit')
+  expect(extractEncounterIcds(visit, undefined, 'zh-TW')).toEqual([
+    { code: 'B02.9', description: 'Zoster without complications' }, { code: 'R55', description: undefined },
+  ])
+})
+
 it('rewrites provenance and nested order references, retaining secondary SOAP diagnoses', () => {
   const { resources, hospital } = fixture()
   hospital.diagnosis.push({ rank: 2, condition: { reference: 'Condition/secondary' } })

@@ -14,10 +14,11 @@ import { useVisitAnswersStore, visitAnswersOf } from '../stores/visit-answers.st
 import { useEvidenceOverridesStore } from '../stores/evidence-overrides.store'
 import { usePreventStore } from '../stores/prevent-inputs.store'
 import { useCarriedAnswersStore } from '../stores/carried-answers.store'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {}
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value)
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => Number.isFinite(Date.parse(value)) && utcDay(Date.parse(value)) === value)
 const measurement = z.object({ value: z.number().finite().nonnegative(), measuredOn: day, modifiedAt: storedTimestampV2 })
 const echo = z.object({ value: z.string().max(120).refine(value => value.trim() !== '' && Number.isFinite(Number(value))), measuredOn: day, modifiedAt: storedTimestampV2 })
 // Only echo measurements, never the calculator's current age, medicines or labs.
@@ -36,8 +37,16 @@ const phenotype = z.object({ answeredOn: day,
 
 export type CarryForwardChoices = { inputs: boolean; decisions: boolean }
 
-/** The every-visit questions a clinician answers afresh at each visit; never carried. */
-export const EVERY_VISIT_ASK_IDS: readonly string[] = ['dyspnoea-trend', 'weight-trend', 'dyspnoea-present']
+/**
+ * The every-visit questions a clinician answers afresh at each visit; never
+ * carried. HF: breathlessness and weight since the last visit, breathlessness
+ * today. HTN: DP-02's missed doses and dizziness/syncope/falls, and DP-03's
+ * 「沒有量」 for the home reading — last visit's 「無」 is not today's answer.
+ */
+export const EVERY_VISIT_ASK_IDS: readonly string[] = [
+  'dyspnoea-trend', 'weight-trend', 'dyspnoea-present',
+  'missed-antihypertensive', 'postural-symptoms', 'home-bp-measured',
+]
 /**
  * The PREVENT answers only a clinician gives and today's record never fills.
  * Every other PREVENT input is a measurement or a record-derived answer, where

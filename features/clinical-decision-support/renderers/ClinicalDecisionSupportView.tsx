@@ -45,6 +45,7 @@ import { buildRationaleCopyText, type RationaleCopyProvenance } from '../utils/b
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 import { EvidenceTablePanel } from './EvidenceTablePanel'
 import { PreventRiskSummary } from './PreventRiskSummary'
+import { htnCalculatorValues } from '../utils/htn-risk-readings'
 import { NhiLipidCoverageSummary } from './NhiLipidCoverageSummary'
 import { NhiTable1Panel } from './NhiTable1Panel'
 import {
@@ -2390,6 +2391,10 @@ export function ClinicalDecisionSupportView({
   // page, the atrial-fibrillation cards behind DP-14 and DP-28.
   if (isMap && visitModel) {
     const companionModules = (companionResults ?? []).flatMap((companion) => restoreCompletedModules(companion).recommendations)
+    const htnValues = htnCalculatorValues(profileFacts, isEnglish)
+    // As the pack reads it (`applyHfpefReading`): not on an LVEF known below 50%.
+    const lvefFact = profileFacts?.LVEF?.numericValue
+    const hfaPeff = typeof lvefFact === 'number' && lvefFact < 50 ? undefined : hfpefReading?.hfaPeff
     const visitModules = new Map<string, CdssRecommendation>([
       ...companionModules.map((item): [string, CdssRecommendation] => [item.id, item]),
       ...displayRecommendations.map((item): [string, CdssRecommendation] => [item.id, item]),
@@ -2404,6 +2409,8 @@ export function ClinicalDecisionSupportView({
           packVersion={result.packVersion}
           screenKey={`${patientId ?? 'no-patient'}:${result.packId}`}
           prognosisEvidence={hfPrognosisEvidence(profileFacts, isEnglish)}
+          {...(htnValues ? { calculatorValues: htnValues } : {})}
+          {...(hfaPeff ? { hfaPeff } : {})}
           doseRecovery={result.packId === AF_BOARD_CONFIG.packId || companionResults?.some(companion => companion.packId === AF_BOARD_CONFIG.packId)
             ? <AfWeightEntry key={patientId} weight={profileFacts?.bodyWeight} isEnglish={isEnglish} now={now} onSave={onSaveClinicVitals} /> : undefined}
           decisions={physicianDecisions}
@@ -2446,6 +2453,15 @@ export function ClinicalDecisionSupportView({
             if (id === 'nyha' && (value === null || value === 'I' || value === 'II' || value === 'III' || value === 'IV')) {
               onSaveClinicVitals?.({ nyhaClass: value })
             }
+          }}
+          // A home average typed beside DP-03 (HTN) is kept with what was
+          // measured in the room, as its own pair, so it comes back as the
+          // homeBloodPressure fact and never as the clinic reading.
+          onMeasure={(id: string, pair: { systolic: number; diastolic: number } | null) => {
+            if (id !== 'home-bp') return
+            onSaveClinicVitals?.({ entries: pair
+              ? { homeSystolic: { value: pair.systolic }, homeDiastolic: { value: pair.diastolic } }
+              : { homeSystolic: null, homeDiastolic: null } })
           }}
           modules={visitModules}
         />

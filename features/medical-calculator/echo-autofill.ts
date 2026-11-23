@@ -2,15 +2,33 @@ import { classifyReport, reportNarrative, extractEchoMeasurements } from '@voho0
 import type { DiagnosticReportEntity } from '@/src/core/entities/clinical-data.entity'
 import type { AutofillValue } from './hooks/use-lab-autofill.hook'
 
-export type EchoKey = 'lvef' | 'ee' | 'averageEe' | 'pasp' | 'e' | 'septalE' | 'lateralE' | 'trv' | 'gls' | 'lavi' | 'lvmi' | 'rwt' | 'wall'
+export type EchoKey = 'lvef' | 'ee' | 'averageEe' | 'pasp' | 'e' | 'septalE' | 'lateralE' | 'trv' | 'gls' | 'lavi' | 'lvmi' | 'rwt' | 'wall' | 'laVolume' | 'lvMass'
 export type EchoValues = Partial<Record<EchoKey, number>>
-const units: Record<EchoKey, string> = { lvef: '%', ee: '', averageEe: '', pasp: 'mmHg', e: 'cm/s', septalE: 'cm/s', lateralE: 'cm/s', trv: 'm/s', gls: '%', lavi: 'mL/m²', lvmi: 'g/m²', rwt: '', wall: 'mm' }
+const units: Record<EchoKey, string> = { lvef: '%', ee: '', averageEe: '', pasp: 'mmHg', e: 'cm/s', septalE: 'cm/s', lateralE: 'cm/s', trv: 'm/s', gls: '%', lavi: 'mL/m²', lvmi: 'g/m²', rwt: '', wall: 'mm', laVolume: 'mL', lvMass: 'g' }
 
 /** Extends personalization's cross-hospital echo scanner. No diagnoses are inferred.
  * Only unequivocal point measurements are accepted; ranges/comparators are not numbers.
  * In particular, a unilateral E/e′ is NOT an average for HFA-PEFF.
  */
 export function parseCalculatorEcho(raw: string): EchoValues {
+  return parseEcho(raw).values
+}
+
+/** What a value was derived from, when the report did not state it: a caption suffix. */
+export type EchoDerivations = Partial<Record<EchoKey, string>>
+
+// 3 decimals for display, with more kept when rounding would cross HFA-PEFF's
+// rwt > 0.42 cut-off (0.42004 must not become 0.42).
+function roundRwt(exact: number): number {
+  for (let digits = 3; digits < 10; digits++) {
+    const rounded = Number(exact.toFixed(digits))
+    if ((rounded > 0.42) === (exact > 0.42)) return rounded
+  }
+  return exact
+}
+
+function parseEcho(raw: string): { values: EchoValues; derived: EchoDerivations } {
+  const derived: EchoDerivations = {}
   const text = raw.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&prime;|&#8242;|&#39;|&apos;/gi, "'").replace(/[′’`]/g, "'").replace(/\s+/g, ' ')
   const base = extractEchoMeasurements(text)
   const values: EchoValues = {}
@@ -27,7 +45,9 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     const u = (match[2] ?? '').toLowerCase().replace(/\s/g, '').replace(/sec$/, 's')
     return u === 'm/s' && unit?.includes('cm') ? value * 100 : value
   }
-  const lvef = number('\\b(?:LVEF|LV\\s*(?:ejection\\s*fraction|EF)|left\\s*ventricular\\s*ejection\\s*fraction)', '%')
+  // Some reports name the method, “LVEF(MOD-sp4) 62.5 %”, and glue the label
+  // straight after the previous value, “LA volume:88.4mlLVEF(Bp):61.1%”.
+  const lvef = number('(?:\\b|(?<=\\dml))(?:LVEF|LV\\s*(?:ejection\\s*fraction|EF)|left\\s*ventricular\\s*ejection\\s*fraction)(?:\\s*\\([^()]{1,20}\\))?', '%')
   if (lvef !== undefined && lvef > 0) values.lvef = lvef
   const e = number('\\b(?:MV\\s*)?E(?:\\s*(?:max\\s*vel(?:ocity)?|vel(?:ocity)?|wave))?\\b(?!\\s*[/\\\'])', 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
   // Some reports print both transmitral velocities as “MV E/A 54/89.1cm/s”.
@@ -37,8 +57,8 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     ? Number(pairedVelocity[1]) * (pairedVelocity[3].toLowerCase() === 'm' ? 100 : 1)
     : undefined
   const mitralE = e ?? pairedE
-  const septal = number("(?:\\b(?:med\\s*peak|sep(?:tal)?|medial)\\s*e'|(?<![/\\w])e'\\s*(?:sep(?:tal)?|medial))(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
-  const lateral = number("(?:\\b(?:lat(?:eral)?)\\s*e'|(?<![/\\w])e'\\s*lat(?:eral)?)(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
+  const septal = number("(?:\\b(?:med\\s*peak|sep(?:tal)?|medial)\\s*e'|(?<![/\\w])e'\\s*_?\\s*(?:sep(?:tal)?|med(?:ial)?\\b))(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
+  const lateral = number("(?:\\b(?:lat(?:eral)?)\\s*e'|(?<![/\\w])e'\\s*_?\\s*lat(?:eral)?)(?:\\s*vel(?:ocity)?)?", 'cm\\s*/\\s*s(?:ec)?|m\\s*/\\s*s(?:ec)?')
   if (mitralE !== undefined && mitralE > 0) values.e = mitralE
   if (septal !== undefined && septal > 0) values.septalE = septal
   if (lateral !== undefined && lateral > 0) values.lateralE = lateral
@@ -58,6 +78,13 @@ export function parseCalculatorEcho(raw: string): EchoValues {
     const hasVelocityUnit = /\b(?:TR\s*(?:max\s*)?V(?:\s*max|el(?:ocity)?)?|TRV)\s*[:=]?\s*\d+(?:\.\d+)?\s*(?:cm|m)\s*\/\s*s(?:ec)?/i.test(text)
     values.trv = hasVelocityUnit || tr > 20 ? tr / 100 : tr
   }
+  // Without a stated velocity, a point TR peak gradient gives V by simplified
+  // Bernoulli (PG = 4V²). RVSP adds RA pressure, so it is never used here.
+  const trPg = text.match(/\b(?:TR\s*(?:(?:max|peak)\s*)?PG|TRPG)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mmHg/i)
+  if (values.trv === undefined && trPg && Number(trPg[1]) > 0) {
+    values.trv = Math.round(Math.sqrt(Number(trPg[1]) / 4) * 100) / 100
+    derived.trv = '（由 TR max PG 換算）'
+  }
   const rest: Array<[EchoKey, string, string?]> = [
     ['lavi', '\\b(?:LAVI|LA\\s*(?:volume|vol\\.?)\\s*index(?:ed)?)'],
     ['lvmi', '\\b(?:LVMI|LV\\s*mass\\s*index|LV\\s*mass\\(C\\)dI)'],
@@ -75,13 +102,24 @@ export function parseCalculatorEcho(raw: string): EchoValues {
   }
   const ivs = length('IVSd|IVS'), pw = length('LVPWd|LVPW|PWd'), lvid = length('LVIDd|LVDd|LVEDD')
   if (values.wall === undefined && ivs !== undefined && pw !== undefined) values.wall = Math.max(ivs, pw)
-  if (values.rwt === undefined && pw !== undefined && lvid !== undefined && lvid > 0) values.rwt = 2 * pw / lvid
+  if (values.rwt === undefined && pw !== undefined && lvid !== undefined && lvid > 0) values.rwt = roundRwt(2 * pw / lvid)
+  // Raw values behind LAVI and LVMI, which the calculator indexes to BSA.
+  const laVolume = text.match(/\bLA\s*(?:volume|vol\.?)\s*(?:\([^()]{1,20}\)\s*)?[:=]?\s*(\d+(?:\.\d+)?)\s*ml(?!\s*\/)/i)
+  if (laVolume && Number(laVolume[1]) > 0) values.laVolume = Number(laVolume[1])
+  const lvMass = text.match(/\b(?:LV\s*mass|LVM)\s*(?:\([^()]{1,20}\)\s*)?[:=]?\s*(\d+(?:\.\d+)?)\s*g(?!\s*\/)/i)
+  if (lvMass && Number(lvMass[1]) > 0) values.lvMass = Number(lvMass[1])
+  else if (ivs !== undefined && pw !== undefined && lvid !== undefined && lvid > 0) {
+    // ASE cube formula, dimensions in cm.
+    const [l, i, p] = [lvid / 10, ivs / 10, pw / 10]
+    values.lvMass = Math.round((0.8 * 1.04 * ((l + i + p) ** 3 - l ** 3) + 0.6) * 10) / 10
+    derived.lvMass = '（由 LVIDd、IVSd、LVPWd 以 ASE 公式估算）'
+  }
   // Reject implausible scales rather than auto-filling an unconverted unit.
-  const limits: Record<EchoKey, number> = { lvef: 100, ee: 100, averageEe: 100, pasp: 200, e: 300, septalE: 50, lateralE: 50, trv: 10, gls: 100, lavi: 300, lvmi: 500, rwt: 2, wall: 50 }
+  const limits: Record<EchoKey, number> = { lvef: 100, ee: 100, averageEe: 100, pasp: 200, e: 300, septalE: 50, lateralE: 50, trv: 10, gls: 100, lavi: 300, lvmi: 500, rwt: 2, wall: 50, laVolume: 500, lvMass: 1000 }
   for (const key of Object.keys(values) as EchoKey[]) {
     if (values[key]! < 0 || values[key]! > limits[key]) delete values[key]
   }
-  return values
+  return { values, derived }
 }
 
 export interface EchoObservation {
@@ -105,7 +143,7 @@ function observationNarrative(obs: EchoObservation): string[] {
  * Newer order stubs without findings do not displace an available report.
  */
 export function buildEchoAutofill(reports: DiagnosticReportEntity[], observations: EchoObservation[] = []): Partial<Record<EchoKey, AutofillValue>> {
-  let latest: { date: string; report: DiagnosticReportEntity; values: EchoValues } | undefined
+  let latest: { date: string; report: DiagnosticReportEntity; values: EchoValues; derived: EchoDerivations } | undefined
   for (const report of reports) {
     if (['entered-in-error', 'cancelled', 'registered', 'partial', 'preliminary'].includes(report.status ?? '')) continue
     const refs = new Set((report.result ?? []).map(r => r.reference?.split('/').pop()).filter(Boolean))
@@ -114,14 +152,14 @@ export function buildEchoAutofill(reports: DiagnosticReportEntity[], observation
     if (!narrative.trim() || classifyReport(report, narrative) !== 'echocardiography') continue
     const date = report.effectiveDateTime ?? report.effectivePeriod?.start ?? report.issued ?? ''
     if (!date || !Number.isFinite(Date.parse(date))) continue
-    const values = parseCalculatorEcho(narrative)
-    if (!latest || Date.parse(date) > Date.parse(latest.date)) latest = { date, report, values }
+    const { values, derived } = parseEcho(narrative)
+    if (!latest || Date.parse(date) > Date.parse(latest.date)) latest = { date, report, values, derived }
   }
   if (!latest) return {}
-  const { report, date, values } = latest
+  const { report, date, values, derived } = latest
   const result: Partial<Record<EchoKey, AutofillValue>> = {}
   for (const key of Object.keys(values) as EchoKey[]) {
-    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ lvef: 'LVEF', ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness' })[key]}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
+    result[key] = { value: values[key]!, unit: units[key], date, testName: `${report.code?.text || report.code?.coding?.find(c => c.display)?.display || '心臟超音波'} · ${({ lvef: 'LVEF', ee: 'E/e′', averageEe: '平均 E/e′', pasp: 'PASP', e: 'E', septalE: 'Septal e′', lateralE: 'Lateral e′', trv: 'TR Vmax', gls: 'GLS', lavi: 'LAVI', lvmi: 'LVMI', rwt: 'RWT', wall: 'LV wall thickness', laVolume: 'LA volume', lvMass: 'LV mass' })[key]}${derived[key] ?? ''}`, facility: report.performer?.find(p => p.display)?.display, obsId: report.id, resourceType: 'DiagnosticReport' }
   }
   return result
 }

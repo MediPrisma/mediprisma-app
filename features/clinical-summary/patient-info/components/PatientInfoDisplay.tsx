@@ -1,7 +1,8 @@
 // Patient Info Display Component
 //
 // One line — 陳○明 · 男性 · 94歲 · ID … — because the header already names the
-// patient and the HIS holds the full record. The extended demographics stay
+// patient and the HIS holds the full record. National ID and MRN stay visible
+// below the name for patient confirmation. The extended demographics stay
 // in the DOM behind the card's 更多資料 toggle (PatientInfoCard owns it).
 import { Fragment } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -16,7 +17,7 @@ interface PatientInfoDisplayProps {
 
 export function hasExtendedPatientInfo(patientInfo: PatientInfo): boolean {
   return (
-    (patientInfo.identifiers?.length ?? 0) > 0 ||
+    (patientInfo.identifiers?.some(id => !id.primary) ?? false) ||
     !!patientInfo.birthDate ||
     (patientInfo.telecom?.length ?? 0) > 0 ||
     (patientInfo.addresses?.length ?? 0) > 0 ||
@@ -79,13 +80,24 @@ export function PatientInfoDisplay({ patientInfo, showMore = false, detailsId }:
         )}
       </p>
 
+      {patientInfo.identifiers?.some(id => id.primary) && (
+        <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+          {patientInfo.identifiers.filter(id => id.primary).map((id, i) => (
+            <div key={`primary-id-${i}`} className="flex min-w-0 flex-wrap gap-x-1">
+              <dt className="text-muted-foreground">{id.label}{separator}</dt>
+              <dd className="min-w-0 break-all tabular-nums">{id.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
       {hasExtendedPatientInfo(patientInfo) && (
         <div
           id={detailsId}
           hidden={!showMore}
           className="mt-1.5 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs"
         >
-          {(patientInfo.identifiers ?? []).map((id, i) => (
+          {(patientInfo.identifiers ?? []).filter(id => !id.primary).map((id, i) => (
             <FieldRow key={`id-${i}`} label={id.label} value={id.value} />
           ))}
           {patientInfo.birthDate && (

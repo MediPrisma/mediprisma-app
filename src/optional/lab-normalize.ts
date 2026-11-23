@@ -1,4 +1,4 @@
-// Public fallback retained from medical-note-smart-on-fhir at 80c3a767c^
+// Public fallback retained from mediprisma-app at 80c3a767c^
 // (before the shared utilities moved to the private package).
 // Shared test name normalization — used by both the cumulative lab pivot
 // and the observation trend history so cross-institution name variants

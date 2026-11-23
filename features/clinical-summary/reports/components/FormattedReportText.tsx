@@ -2,6 +2,7 @@
 // an indented hierarchy instead of one wall of text. Parsing is delegated to the
 // pure `formatReportText` helper; this component only maps the parsed lines to
 // layout (heading vs item, indentation by level, marker column).
+import { Fragment, type ReactNode } from "react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatReportText } from "@/src/shared/utils/report-text-format"
 import { buttonVariants } from "@/components/ui/button"
@@ -9,7 +10,18 @@ import { buttonVariants } from "@/components/ui/button"
 interface FormattedReportTextProps {
   text: string
   className?: string
+  /** Shown under the report body, above the raw-report toggle — where the
+   *  hospital's own report signs off (判讀醫師). */
+  footer?: ReactNode
 }
+
+/**
+ * Body size for a report read inside a list card. DESIGN.md's evidence layer
+ * (original report quotes): 14px on desktop, and a 14px floor so the clinician
+ * phone default (12px root) does not shrink a multi-line echo/Holter report
+ * to 9px. Measurement grids, tables and the raw report inherit this size.
+ */
+export const REPORT_BODY_TEXT_CLASSES = 'text-[length:max(14px,0.875rem)] leading-relaxed text-foreground/90'
 
 // Indentation per nesting level. Headings (level 0 + heading) stay flush-left;
 // items/sub-items step in. Kept modest so deeply-nested reports don't run off
@@ -21,13 +33,25 @@ const INDENT_BY_LEVEL: Record<number, string> = {
   3: 'pl-10',
 }
 
-export function FormattedReportText({ text, className }: FormattedReportTextProps) {
+// A source paragraph break (blank line) becomes a little vertical space, as in
+// the hospital's own report, instead of disappearing.
+function withGap(gap: boolean | undefined, key: number, node: ReactNode) {
+  if (!gap || !node) return node
+  return (
+    <Fragment key={key}>
+      <div aria-hidden="true" className="h-2" />
+      {node}
+    </Fragment>
+  )
+}
+
+export function FormattedReportText({ text, className, footer }: FormattedReportTextProps) {
   const lines = formatReportText(text)
   if (lines.length === 0) return null
 
   return (
     <div className={cn('@container/report space-y-1', className)}>
-      {lines.map((line, i) => {
+      {lines.map((line, i) => withGap(line.gapBefore && i > 0, i, (() => {
         if (line.separator) {
           return <div key={i} aria-hidden="true" className="my-2 border-t border-border" />
         }
@@ -41,7 +65,8 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
             measurements.push(lines[j].measurement!)
           }
           return (
-            <dl key={i} className="grid grid-cols-1 gap-x-6 gap-y-0.5 text-sm leading-5 tabular-nums @min-[36rem]/report:grid-cols-2">
+            // Font size follows the caller; 1.43 keeps the former text-sm/leading-5 rhythm.
+            <dl key={i} className="grid grid-cols-1 gap-x-6 gap-y-0.5 leading-[1.43] tabular-nums @min-[36rem]/report:grid-cols-2">
               {measurements.map((measurement, index) => (
                 <div key={index} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-x-2 py-0.5">
                   <dt className="min-w-0 break-words font-medium text-foreground">{measurement.label}</dt>
@@ -49,6 +74,34 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
                 </div>
               ))}
             </dl>
+          )
+        }
+        if (line.columnCells) {
+          // Consecutive column rows are one source table; render it once. A
+          // list marker ("6.") always opens a new table, so adjacent numbered
+          // blocks stay separate and keep their own marker.
+          if (lines[i - 1]?.columnCells && !line.marker) return null
+          const rows: string[][] = [line.columnCells]
+          for (let j = i + 1; j < lines.length && lines[j].columnCells && !lines[j].marker; j++) rows.push(lines[j].columnCells!)
+          return (
+            <div key={i} className={cn('flex min-w-0 gap-1.5', INDENT_BY_LEVEL[line.level])}>
+              {line.marker && (
+                <span className="shrink-0 pt-1 tabular-nums text-muted-foreground">{line.marker}</span>
+              )}
+              <div className="min-w-0 flex-1 overflow-x-auto rounded-md border border-border">
+                <table className="w-full min-w-max border-collapse tabular-nums">
+                  <tbody className="divide-y divide-border">
+                    {rows.map((cells, r) => (
+                      <tr key={r} className="divide-x divide-border">
+                        {cells.map((cell, c) => (
+                          <td key={c} className="px-2.5 py-1 text-left align-top text-foreground">{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )
         }
         if (line.heading) {
@@ -76,7 +129,7 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
                 <span className="shrink-0 tabular-nums text-muted-foreground">{line.marker}</span>
               )}
               <div className="min-w-0 flex-1 overflow-x-auto rounded-md border border-border">
-                <table className="w-full min-w-max border-collapse text-sm tabular-nums">
+                <table className="w-full min-w-max border-collapse tabular-nums">
                   <tbody>
                     <tr className="divide-x divide-border">
                       {line.tableCells.map((cell, cellIndex) => cellIndex === 0 ? (
@@ -106,7 +159,8 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
             )}>{line.text}</span>
           </div>
         )
-      })}
+      })()))}
+      {footer}
       <details className="group/raw min-w-0 pt-2">
         <summary
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'min-h-11 cursor-pointer list-none text-muted-foreground sm:min-h-8 [&::-webkit-details-marker]:hidden')}
@@ -116,7 +170,7 @@ export function FormattedReportText({ text, className }: FormattedReportTextProp
           <span className="hidden group-open/raw:inline">收起原始報告</span>
         </summary>
         <div role="region" aria-label="原始報告" className="mt-2 min-w-0 rounded-md border border-border bg-muted/30 p-3">
-          <pre className="m-0 whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">{text}</pre>
+          <pre className="m-0 whitespace-pre-wrap font-mono text-[length:inherit] leading-relaxed text-foreground [overflow-wrap:anywhere]">{text}</pre>
         </div>
       </details>
     </div>

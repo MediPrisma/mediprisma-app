@@ -14,6 +14,11 @@ import type {
 } from '@/vendor/nhi-fhir-bridge-nhi-drug-terminology/src/types'
 
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
+import { isVghtpeSource } from '@/src/shared/utils/clinical-source-identity'
+import { VGHTPE_MEDICATION_ATC_CHECK, VGHTPE_MEDICATION_IDENTITY_URL, vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
+import type { HospitalMedicationAtcClassification } from '@/src/core/entities/clinical-data.entity'
+import { markVghtpeMedicationIdentities } from './vghtpe-medication-identity-enrichment'
+import { utcDay } from '@/src/core/utils/calendar-day'
 export { isNhiDrugCodeSystem, NHI_DRUG_CODE_SYSTEMS } from '@/src/shared/utils/nhi-drug-code-system'
 const WHO_ATC_CODE_SYSTEM = 'http://www.whocc.no/atc'
 
@@ -171,9 +176,53 @@ function prescriptionDate(request: FhirResource): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
   const parsed = new Date(`${date}T00:00:00Z`)
   return !Number.isNaN(parsed.valueOf())
-    && parsed.toISOString().slice(0, 10) === date
+    && utcDay(parsed) === date
     ? date
     : null
+}
+
+/** The ATC shared by every NHI product of a hospital identity that the drug
+ * master resolves on the order date. Products without an ATC say nothing;
+ * two different codes, or none, give no class. */
+function sharedIdentityAtc(
+  records: ReadonlyArray<{ atcCode?: string; atcNameEn?: string; atcNameZh?: string;
+    atcLevel2?: { code: string; nameEn: string; nameZh?: string }
+    atcLevel4?: { code: string; nameEn: string; nameZh?: string }; snapshotId: string }>,
+): HospitalMedicationAtcClassification | undefined {
+  const coded = records.filter((record) => record.atcCode?.trim())
+  const codes = new Set(coded.map((record) => record.atcCode!.trim().toUpperCase()))
+  if (codes.size !== 1) return undefined
+  const record = coded[0]
+  return {
+    source: 'vghtpe-identity-nhi-atc',
+    atcCode: [...codes][0],
+    ...(record.atcNameEn ? { atcNameEn: record.atcNameEn } : {}),
+    ...(record.atcNameZh ? { atcNameZh: record.atcNameZh } : {}),
+    ...(record.atcLevel2
+      ? {
+          atcLevel2Code: record.atcLevel2.code,
+          atcLevel2NameEn: record.atcLevel2.nameEn,
+          ...(record.atcLevel2.nameZh ? { atcLevel2NameZh: record.atcLevel2.nameZh } : {}),
+        }
+      : {}),
+    ...(record.atcLevel4
+      ? {
+          atcLevel4Code: record.atcLevel4.code,
+          atcLevel4NameEn: record.atcLevel4.nameEn,
+          ...(record.atcLevel4.nameZh ? { atcLevel4NameZh: record.atcLevel4.nameZh } : {}),
+        }
+      : {}),
+    snapshotId: record.snapshotId,
+  }
+}
+
+/** Record on the identity mark that its codes were checked for a shared ATC. */
+function withAtcCheck(extensions: unknown): unknown[] {
+  return (Array.isArray(extensions) ? extensions : []).map((extension: any) =>
+    extension?.url === VGHTPE_MEDICATION_IDENTITY_URL
+      ? { ...extension, extension: [...(extension.extension ?? []).filter((part: any) => part?.url !== 'atcCheck'),
+          { url: 'atcCheck', valueString: VGHTPE_MEDICATION_ATC_CHECK }] }
+      : extension)
 }
 
 function notApplicableReport(
@@ -237,6 +286,9 @@ export async function enrichBundleWithNhiDrugTerminology(
   bundle: Record<string, unknown>,
   options: { recordedAt?: string } = {},
 ): Promise<NhiDrugTerminologyEnrichmentResult> {
+  // VGH hospital orders get their index identity first; every result below
+  // derives from this marked Bundle.
+  bundle = await markVghtpeMedicationIdentities(bundle)
   const entries = asEntries(bundle)
   const medicationRequests = entries
     .map((entry, entryIndex) => ({ entry, entryIndex }))
@@ -297,7 +349,15 @@ export async function enrichBundleWithNhiDrugTerminology(
     })
   }
 
-  if (candidates.length === 0 && sourceAtcCandidates.length === 0) {
+  // VGH hospital orders with one index identity: its NHI codes are never the
+  // order's own coding, so they yield at most a display-only shared ATC.
+  const hospitalAtcCandidates = medicationRequests.flatMap(({ entry, entryIndex }) => {
+    const resource = entry.resource as FhirResource & { meta?: { source?: string }; extension?: any[] }
+    const codes = isVghtpeSource(resource) ? vghtpeMedicationIdentityCodes(resource) : undefined
+    return codes ? [{ entryIndex, codes: [...codes], date: prescriptionDate(resource) }] : []
+  })
+
+  if (candidates.length === 0 && sourceAtcCandidates.length === 0 && hospitalAtcCandidates.length === 0) {
     return {
       bundle,
       report: notApplicableReport(medicationRequests.length, skipped),
@@ -502,6 +562,27 @@ export async function enrichBundleWithNhiDrugTerminology(
       sourceAtcFallbackCount += 1
     }
 
+    for (const candidate of hospitalAtcCandidates) {
+      const current = nextEntries[candidate.entryIndex]
+      const { hospitalAtcClassification: _previous, ...resource } = current.resource as FhirResource
+      const date = candidate.date && candidate.date > latestCoveredDate ? latestCoveredDate : candidate.date
+      const records = date
+        ? terminology.resolveManyNhiDrugTerminologies(
+          candidate.codes.map((nhiDrugCode) => ({ nhiDrugCode, prescriptionDate: date })),
+        ).resolutions.flatMap((resolution) =>
+          resolution.status === 'resolved' && resolution.record ? [resolution.record] : [])
+        : []
+      const hospitalAtcClassification = sharedIdentityAtc(records)
+      nextEntries[candidate.entryIndex] = {
+        ...current,
+        resource: {
+          ...resource,
+          extension: withAtcCheck(resource.extension),
+          ...(hospitalAtcClassification ? { hospitalAtcClassification } : {}),
+        },
+      }
+    }
+
     for (const knowledge of generatedKnowledge.values()) {
       nextEntries.push({
         fullUrl: `urn:uuid:${knowledge.id}`,
@@ -564,7 +645,7 @@ export async function enrichBundleWithNhiDrugTerminology(
     }
 
     return {
-      bundle: linkedRequestCount > 0 || sourceAtcFallbackCount > 0
+      bundle: linkedRequestCount > 0 || sourceAtcFallbackCount > 0 || hospitalAtcCandidates.length > 0
         ? { ...bundle, entry: nextEntries }
         : bundle,
       report: {

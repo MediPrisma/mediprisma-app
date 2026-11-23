@@ -6,6 +6,7 @@ import {
   GPT_MODELS,
   GEMINI_MODELS,
   CLAUDE_MODELS,
+  HOSPITAL_GEMINI_MODEL_ID,
   CUSTOM_OPENAI_MODEL_ID,
   customOpenAiModelIdForProfile,
   getModelDefinition,
@@ -19,6 +20,10 @@ import { ENV_CONFIG, hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/
 import { useOpenAiCompatibleProfiles } from '@/src/application/stores/ai-config.store'
 import { isOpenAiCompatibleReady, isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
+import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
+import { useHospitalGeminiStatus } from '@/src/application/hooks/use-hospital-gemini-status.hook'
+
+export const HOSPITAL_GEMINI_SIGN_IN_HINT = '請先開啟並登入院內 Gemini'
 
 export interface ModelEntry {
   id: string
@@ -26,6 +31,8 @@ export interface ModelEntry {
   description: string
   isLocked: boolean
   configureInSettings?: boolean
+  /** Shown under a locked entry: what the clinician has to do first. */
+  hint?: string
 }
 
 function endpointParts(baseUrl: string): { host: string; full: string } {
@@ -51,13 +58,14 @@ export function useModelSelection(
 ) {
   const { locale, t } = useLanguage()
   const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
+  const hospitalGeminiStatus = useHospitalGeminiStatus()
   const gptModels = useMemo(() => {
     return GPT_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
       const isLocked = definition?.status === 'disabled' || (modelRequiresUserKey(entry.id) && !apiKey)
       return {
         id: entry.id,
-        label: entry.label,
+        label: entry.id === INTRANET_LUNA_ID && intranetGatewayAvailable() ? 'GPT-6 Luna（院內）' : entry.label,
         description: entry.descriptions[locale],
         isLocked: isLocked || false
       }
@@ -65,17 +73,29 @@ export function useModelSelection(
   }, [apiKey, locale])
 
   const geminiModels = useMemo(() => {
-    return GEMINI_MODELS.map((entry): ModelEntry => {
+    return GEMINI_MODELS.flatMap((entry): ModelEntry[] => {
+      if (entry.id === HOSPITAL_GEMINI_MODEL_ID) {
+        // Without the extension, or with its switch off, the source does not exist here.
+        if (hospitalGeminiStatus === 'unavailable' || hospitalGeminiStatus === 'disabled') return []
+        const ready = hospitalGeminiStatus === 'ready'
+        return [{
+          id: entry.id,
+          label: entry.label,
+          description: entry.descriptions[locale],
+          isLocked: !ready,
+          ...(ready ? {} : { hint: HOSPITAL_GEMINI_SIGN_IN_HINT }),
+        }]
+      }
       const definition = getModelDefinition(entry.id)
       const isLocked = definition?.status === 'disabled' || (modelRequiresUserKey(entry.id) && !geminiKey)
-      return {
+      return [{
         id: entry.id,
         label: entry.label,
         description: entry.descriptions[locale],
         isLocked: isLocked || false
-      }
+      }]
     })
-  }, [geminiKey, locale])
+  }, [geminiKey, hospitalGeminiStatus, locale])
 
   const claudeModels = useMemo(() => {
     return CLAUDE_MODELS.map((entry): ModelEntry => {
@@ -159,6 +179,17 @@ export function useModelSelection(
     const definition = getModelDefinition(candidate)
     if (!definition) return
 
+    if (candidate === INTRANET_LUNA_ID && intranetGatewayAvailable()) {
+      setModel(candidate)
+      return
+    }
+
+    if (candidate === HOSPITAL_GEMINI_MODEL_ID) {
+      if (hospitalGeminiStatus === 'ready') setModel(candidate)
+      else toast.error(HOSPITAL_GEMINI_SIGN_IN_HINT)
+      return
+    }
+
     if (definition.provider === 'custom') {
       const customProfile = customProfileForModel(candidate)
       if (!isOpenAiCompatibleRuntimeReady(customProfile)) {
@@ -213,6 +244,10 @@ export function useModelSelection(
   }
 
   const getModelStatus = (definition: ModelDefinition) => {
+    if (definition.id === INTRANET_LUNA_ID && intranetGatewayAvailable()) return '北榮院內 Azure；每月共用 US$200 額度'
+    if (definition.id === HOSPITAL_GEMINI_MODEL_ID) {
+      return hospitalGeminiStatus === 'ready' ? '透過北榮懷爾抓抓，在您已登入的院內 Gemini 分頁回答' : HOSPITAL_GEMINI_SIGN_IN_HINT
+    }
     if (definition.status === 'disabled') return t.settings.modelUnavailable
 
     if (definition.provider === 'custom') {

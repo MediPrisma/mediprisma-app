@@ -1205,6 +1205,8 @@ export function buildHeartFailureVisitFlow(
     sodium: { zh: 'Na', en: 'Na', unit: 'mmol/L' },
     NTproBNP: { zh: 'NT-proBNP', en: 'NT-proBNP', unit: 'pg/mL' },
     hemoglobin: { zh: 'Hb', en: 'Hb', unit: 'g/dL' },
+    homeSystolic: { zh: '居家收縮壓', en: 'Home systolic', unit: 'mmHg' },
+    homeDiastolic: { zh: '居家舒張壓', en: 'Home diastolic', unit: 'mmHg' },
   }
   for (const [key, entry] of Object.entries(clinicVitals?.entries ?? {})) {
     if (!entry) continue

@@ -217,6 +217,11 @@ export class FhirMapper implements IDataMapper {
         atcClassification?: MedicationEntity['atcClassification']
       }
     ).atcClassification
+    const hospitalAtcClassification = (
+      fhirResource as MedicationRequest & {
+        hospitalAtcClassification?: MedicationEntity['hospitalAtcClassification']
+      }
+    ).hospitalAtcClassification
     const isStatement = fhirResource.resourceType === 'MedicationStatement'
       || request._sourceResourceType === 'MedicationStatement'
 
@@ -245,6 +250,7 @@ export class FhirMapper implements IDataMapper {
       reportedBoolean: request.reportedBoolean,
       ...(drugTerminology ? { drugTerminology } : {}),
       ...(atcClassification ? { atcClassification } : {}),
+      ...(hospitalAtcClassification ? { hospitalAtcClassification } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       _sourceCapturedAt: request._sourceCapturedAt,
       _reconciledSourceReferences: request._reconciledSourceReferences,
@@ -390,6 +396,7 @@ export class FhirMapper implements IDataMapper {
       _encounterInferred: fhirResource._encounterInferred,
       _orderEncounterIds: fhirResource._orderEncounterIds,
       performer: fhirResource.performer,
+      resultsInterpreter: fhirResource.resultsInterpreter,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -501,6 +508,8 @@ export class FhirMapper implements IDataMapper {
       meta: fhirResource.meta,
       _sourceRecordComparison: fhirResource._sourceRecordComparison,
       _sourceEncounterRecords: fhirResource._sourceEncounterRecords,
+      _awaitingOrders: fhirResource._awaitingOrders,
+      _orderCount: fhirResource._orderCount,
       id: fhirResource.id || '',
       status: fhirResource.status,
       class: fhirResource.class,

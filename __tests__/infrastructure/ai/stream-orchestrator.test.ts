@@ -5,7 +5,7 @@ describe('StreamOrchestrator dependency injection', () => {
     const stream = jest.fn().mockResolvedValue(undefined)
     const orchestrator = new StreamOrchestrator({ stream })
     const config = {
-      model: 'gpt-5.6-terra',
+      model: 'gpt-6.1-terra',
       messages: [{ role: 'user', content: 'hello' }],
       apiKey: 'key',
       signal: new AbortController().signal,

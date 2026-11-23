@@ -14,13 +14,14 @@ import { PrognosisModelDetail } from '@/features/medical-calculator/prognosis/Pr
 import { tr, type CalcResult, type CalculatorDef } from '@/features/medical-calculator/types'
 import type { DecisionPointView } from '../../types'
 import type { VisitCalculatorNote } from '../../stores/visit-calculator-notes.store'
-import { ABSENT_STATES } from './visit-decisions'
+import { HpaVisitPanel, PceVisitPanel, PreventVisitPanel, RiskInputsPanel } from './HtnRiskPanels'
+import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import styles from './VisitCalculators.module.css'
 
 /**
- * One calculator the heart-failure guideline uses, and the decision point it
- * serves. `prognosis` names a model of the HF prognosis catalog — the ones
- * the calculator implements open it, the others their data checklist. `note`
+ * One calculator a guideline page uses, and the decision point it serves.
+ * `prognosis` names a model of the HF prognosis catalog — the ones the
+ * calculator implements open it, the others their data checklist. `note`
  * marks the ones whose result may be attached to the point as a note.
  */
 interface VisitCalculatorEntry {
@@ -32,34 +33,128 @@ interface VisitCalculatorEntry {
   prognosis?: HfPrognosisModelId
   /** The calculator's name as a line of the page writes it, for its link there. */
   names: RegExp
-  /** Shown only when the page has this point (AF's calculators, behind DP-14). */
-  needsPoint?: boolean
   note?: boolean
+  /**
+   * A panel of the host's own in place of the generic calculator form: the HTN
+   * page's PREVENT (bound to the answers the pack's facts are built from) and
+   * HPA (the host's reading of the record).
+   */
+  panel?: 'prevent-visit' | 'pce-visit' | 'hpa-visit' | 'risk-inputs'
+  /** The name the list and the panel show, where the calculator's own is not it (「國健署心血管風險預測公式」). */
+  title?: { zh: string; en: string }
 }
 
 /**
- * The heart-failure page's calculators, in the order of its chapters. Owner
- * decision 2026-10-19: one way in — the 「計算機」 button at the head of the
- * page — and the map itself stays as it is (「幫我留C就好」).
+ * The pages' calculators, in the order of the heart-failure page's chapters,
+ * then the hypertension page's. Owner decision 2026-10-19: one way in — the
+ * 「計算機」 button at the head of the page — and the map itself stays as it is
+ * (「幫我留C就好」). Each page lists its own (`source`); the HF page keeps AF's
+ * where AF's points sit on it. Owner request 2026-11-20: every page lists all
+ * its calculators on opening, whatever state its decision points are in —
+ * the AF ones no longer wait for DP-14/DP-09.
  */
 export const HF_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
   { id: 'hfa-peff', dp: 'DP-34', calculatorId: 'hfa-peff', names: /HFA[-‐–]PEFF/ },
   { id: 'h2fpef', dp: 'DP-34', calculatorId: 'h2fpef', names: /H[₂2]FPEF/ },
   // Not the older CHA₂DS₂-VASc, a calculator of its own.
-  { id: 'cha2ds2-va', dp: 'DP-14', source: 'af', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/, needsPoint: true },
-  { id: 'crcl', dp: 'DP-14', source: 'af', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/, needsPoint: true },
-  { id: 'has-bled', dp: 'DP-14', source: 'af', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/, needsPoint: true },
+  { id: 'cha2ds2-va', dp: 'DP-14', source: 'af', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/ },
+  { id: 'crcl', dp: 'DP-14', source: 'af', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/ },
+  { id: 'has-bled', dp: 'DP-14', source: 'af', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/ },
   // Label rules the AF dose point leaves to a calculator (owner decision
   // 2026-10-21: CDSS = guideline, label = calculator); its card names it.
-  { id: 'doac-dose', dp: 'DP-09', source: 'af', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/, needsPoint: true },
-  { id: 'doac-periop', dp: 'DP-09', source: 'af', calculatorId: 'doac-periop', names: /DOAC 手術前後停藥計算機|DOAC peri-procedural calculator/, needsPoint: true },
+  { id: 'doac-dose', dp: 'DP-09', source: 'af', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/ },
+  { id: 'doac-periop', dp: 'DP-09', source: 'af', calculatorId: 'doac-periop', names: /DOAC 手術前後停藥計算機|DOAC peri-procedural calculator/ },
   { id: 'maggic', dp: 'DP-19', prognosis: 'maggic', names: /MAGGIC/, note: true },
   { id: 'life-preserved', dp: 'DP-19', prognosis: 'life-preserved', names: /LIFE[-‐–]Preserved/, note: true },
   { id: 'shfm', dp: 'DP-19', prognosis: 'shfm', names: /SHFM|Seattle Heart Failure Model/ },
   { id: 'gwtg-hf', dp: 'DP-19', prognosis: 'gwtg-hf', names: /GWTG[-‐–]HF/ },
 ]
 
-type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable'
+/**
+ * The hypertension page's calculators, in the order of its chapters (owner
+ * request 2026-11-19: HTN and CAD get the same 計算機 entry as HF and AF).
+ * Every one is listed whether or not this visit raises its point (owner
+ * request 2026-11-20: 「高血壓頁也是直接顯示」); the DP-08 panels read the
+ * record, not the point.
+ * DP-08's risk panels came from pilot/hmc (owner 2026-11-03); PREVENT-ASCVD
+ * stays there because clinical users asked for it (owner 2026-11-19), beside
+ * PREVENT-CVD, the total-CVD score the AHA/ACC 2025 7.5% threshold reads.
+ */
+export const HTN_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
+  { id: 'egfr', dp: 'DP-04', source: 'htn', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  // DP-07's STOP-Bang (owner 2026-11-03: 「Stop-bang 應該也要列入計算機」): the
+  // generic form, P, A, G and B prefilled from the record; S, T, O and N are
+  // the four questions DP-07 itself asks.
+  { id: 'stop-bang', dp: 'DP-07', source: 'htn', calculatorId: 'stop-bang', names: /STOP[-‐–]Bang/, note: true },
+  // The hypertension page's baseline cardiovascular risk (plan 05 §19, owner
+  // 2026-11-03): the host runs both and hands the pack their results
+  // (`applyHtnRiskReadings`); DP-08's line names them. PREVENT here is the
+  // ASCVD base model, shown only; the HPA reconstruction is a Taiwanese
+  // reference with no guideline threshold.
+  // Both may be attached to the plan as a note (owner 2026-11-03), the way the
+  // HF prognosis models are; the row stays open when the model does not apply.
+  // One set of inputs for the three (owner 2026-11-03: 「提供一個 common 的輸入
+  // 面板…套用多項公式」): filled from the record, ICD codes, the host's rules
+  // and today's answers, confirmed once for all of them.
+  { id: 'risk-inputs', dp: 'DP-08', source: 'htn', names: /共用輸入|shared risk inputs/i, panel: 'risk-inputs',
+    title: { zh: '共用輸入（病歷／ICD／規則帶入，三個公式共用）', en: 'Shared inputs (record, ICD, rules; all three equations)' } },
+  { id: 'prevent-cvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-cvd', names: /PREVENT[-‐–]CVD/, note: true },
+  // ESC 2024's SCORE2, recalibrated for the Asia-Pacific; Taiwan in its low-risk region (owner 2026-11-20).
+  { id: 'score2-ap', dp: 'DP-08', source: 'htn', calculatorId: 'score2-asia-pacific', names: /SCORE2(?![-‐–](?:OP|Diabetes))/, note: true },
+  { id: 'prevent-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'prevent-ascvd', names: /PREVENT(?![-‐–]CVD)(?:[-‐–]ASCVD)?/, panel: 'prevent-visit', note: true,
+    title: { zh: 'PREVENT-ASCVD 心血管風險', en: 'PREVENT-ASCVD cardiovascular risk' } },
+  // The 2013 ACC/AHA Pooled Cohort Equations beside PREVENT (owner 2026-11-03:
+  // 「包括 ACC/AHA 的 Multicohort CV risk calculators」), a reference the pack shows.
+  { id: 'pce-ascvd', dp: 'DP-08', source: 'htn', calculatorId: 'pce-ascvd', names: /ACC\/AHA PCE|Pooled Cohort|PCE/, panel: 'pce-visit', note: true,
+    title: { zh: 'ACC/AHA Pooled Cohort（PCE）', en: 'ACC/AHA Pooled Cohort Equations' } },
+  { id: 'hpa-mace', dp: 'DP-08', source: 'htn', calculatorId: 'hpa-chronic-risk-reconstruction', names: /國健署心血管風險預測(?:公式)?|國健署 MACE|HPA MACE|HPA cardiovascular risk prediction|國健署五項慢性病風險/, panel: 'hpa-visit', note: true,
+    title: { zh: '國健署心血管風險預測公式', en: 'HPA cardiovascular risk prediction' } },
+  { id: 'ckd-kdigo-risk', dp: 'DP-18', source: 'htn', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/ },
+]
+
+/**
+ * The coronary page's calculators (owner request 2026-11-19). Every one a CAD
+ * patient may use is listed whether or not this visit raises its point (owner
+ * request 2026-11-20: 「CAD 病人可以使用的計算機都放在 CAD CDSS 的計算機入口」):
+ * one on a point the page shows sits in that point's chapter, the others under
+ * 其他. Primary-prevention scores (PREVENT, PCE, SCORE2, 國健署) are not here:
+ * they exclude known coronary disease.
+ */
+export const CAD_VISIT_CALCULATORS: readonly VisitCalculatorEntry[] = [
+  // The cardiologist's 「CAD 有沒有 TIMI 等等的風險」 (owner request 2026-11-19):
+  // TIMI UA/NSTEMI and HEART where an acute presentation is triaged, TRS 2°P
+  // where long-term antiplatelet therapy is decided.
+  { id: 'timi-ua', dp: 'DP-00', source: 'cad', calculatorId: 'timi-ua-nstemi', names: /TIMI(?: risk score)?(?: for)? UA|TIMI.*NSTEMI/i },
+  { id: 'heart', dp: 'DP-00', source: 'cad', calculatorId: 'heart', names: /HEART(?: score| 分數)/ },
+  { id: 'egfr', dp: 'DP-10', source: 'cad', calculatorId: 'egfr-ckd-epi-2021', names: /eGFR/ },
+  { id: 'crcl', dp: 'DP-10', source: 'cad', calculatorId: 'crcl-cockcroft-gault', names: /Cockcroft[-‐– ]Gault(?: CrCl)?|CrCl/ },
+  { id: 'qtc', dp: 'DP-10', source: 'cad', calculatorId: 'qtc', names: /QTc/ },
+  { id: 'trs2p', dp: 'DP-12', source: 'cad', calculatorId: 'timi-trs2p', names: /TRS[ -]?2°?P|TIMI 二級預防/ },
+  // AF's, for a CAD patient who also takes or needs an anticoagulant (DP-16).
+  { id: 'cha2ds2-va', dp: 'DP-16', source: 'cad', calculatorId: 'cha2ds2-va', names: /CHA[₂2]DS[₂2][-‐–]VA(?!Sc)/ },
+  { id: 'has-bled', dp: 'DP-16', source: 'cad', calculatorId: 'has-bled', names: /HAS[-‐–]BLED/ },
+  { id: 'doac-dose', dp: 'DP-16', source: 'cad', calculatorId: 'doac-dose-nvaf', names: /DOAC 劑量計算機|DOAC dose calculator/ },
+  { id: 'ldl', dp: 'DP-23', source: 'cad', calculatorId: 'ldl-friedewald', names: /Friedewald/ },
+  { id: 'ckd-kdigo-risk', dp: 'DP-25', source: 'cad', calculatorId: 'ckd-kdigo-risk', names: /KDIGO/ },
+  { id: 'bmi', dp: 'DP-27', source: 'cad', calculatorId: 'bmi', names: /BMI/ },
+  // Depression screening after ACS and in chronic coronary disease (ESC 2024 CCS).
+  { id: 'phq-9', dp: 'DP-29', source: 'cad', calculatorId: 'phq-9', names: /PHQ[-‐–]?9/ },
+]
+
+/** The pages with a 計算機 entry, each with its own list. HF's list also serves AF's page. */
+const PAGE_CALCULATORS: Readonly<Record<string, readonly VisitCalculatorEntry[]>> = {
+  hf: HF_VISIT_CALCULATORS,
+  af: HF_VISIT_CALCULATORS,
+  htn: HTN_VISIT_CALCULATORS,
+  cad: CAD_VISIT_CALCULATORS,
+}
+
+/** Whether a page has calculators to offer: the screen mounts the entry only there. */
+export function pageHasCalculators(source: string | undefined): boolean {
+  return Boolean(source && PAGE_CALCULATORS[source])
+}
+
+type RowStatus = 'computed' | 'to-fill' | 'to-confirm' | 'data-only' | 'not-applicable' | 'inapplicable' | 'inputs'
 
 /** A model's acronym where its full name carries one (「…（SHFM）」). */
 function shortName(name: string): string {
@@ -101,14 +196,21 @@ interface CalculatorRow {
  * the list is open, so the record is read for it then and not on every draw
  * of the page.
  */
-function CalculatorRows({ groups, isEnglish, onChoose }: {
+function CalculatorRows({ groups, isEnglish, values, onChoose }: {
   groups: readonly (readonly [string, readonly CalculatorRow[]])[]
   isEnglish: boolean
+  /** Where the calculators the host runs stand for this patient, by entry id. */
+  values?: Readonly<Record<string, HostCalculatorState>>
   onChoose: (row: CalculatorRow) => void
 }) {
   const { autofill } = useLabAutofill()
   const statusOf = (row: CalculatorRow): { status: RowStatus; value?: string } => {
     if (row.fixed || !row.calc) return { status: row.fixed ?? 'data-only' }
+    // A result the host computed from the record and the clinician's answers
+    // (the HTN page's PREVENT and HPA MACE) outranks the list's own estimate,
+    // which reads the record alone.
+    const host = values?.[row.entry.id]
+    if (host) return host.value !== undefined ? { status: host.status, value: host.value } : { status: host.status }
     const computed = computeAutofilledResult(row.calc, autofill)
     if (computed) return { status: 'computed', value: `${computed.result.value}${computed.result.unit ? ` ${computed.result.unit}` : ''}` }
     const empty = row.calc.inputs.filter((input) => !input.optional && !resolveInput(input, autofill).filled).length
@@ -120,6 +222,8 @@ function CalculatorRows({ groups, isEnglish, onChoose }: {
     if (status === 'to-fill') return isEnglish ? `${value} to fill` : `待填 ${value}`
     if (status === 'to-confirm') return isEnglish ? 'To confirm' : '待確認'
     if (status === 'data-only') return isEnglish ? 'Data only' : '僅資料'
+    if (status === 'inapplicable') return isEnglish ? 'Not applicable' : '不適用'
+    if (status === 'inputs') return isEnglish ? 'Inputs' : '輸入'
     return isEnglish ? 'Admission only' : '住院時適用'
   }
   return (
@@ -135,7 +239,7 @@ function CalculatorRows({ groups, isEnglish, onChoose }: {
                   <button
                     type="button"
                     onClick={() => onChoose(row)}
-                    className={`grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-border px-4 py-1.5 text-left text-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${status === 'not-applicable' ? 'text-muted-foreground' : 'text-foreground'}`}
+                    className={`grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-border px-4 py-1.5 text-left text-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${status === 'not-applicable' || status === 'inapplicable' ? 'text-muted-foreground' : 'text-foreground'}`}
                     data-testid={`cdss-book-calculator-${row.entry.id}`}
                     data-status={status}
                   >
@@ -162,6 +266,8 @@ interface VisitCalculatorsValue {
   isEnglish: boolean
   /** The page's calculators, in the order of its chapters. */
   rows: readonly CalculatorRow[]
+  /** Where the calculators the host runs stand for this patient, by entry id. */
+  values?: Readonly<Record<string, HostCalculatorState>>
   /**
    * Opens a calculator's panel; `from` is the control that opened it, where
    * focus goes back when the panel closes.
@@ -185,6 +291,7 @@ export function VisitCalculatorsProvider({
   sourceOfPage,
   lvef,
   evidence = {},
+  values,
   attached,
   onAttach,
   children,
@@ -196,6 +303,8 @@ export function VisitCalculatorsProvider({
   lvef?: number
   /** The record's values for a model whose formula is not connected. */
   evidence?: PrognosisEvidence
+  /** Where the calculators the host runs stand for this patient, by entry id (the HTN page's PREVENT and HPA). */
+  values?: Readonly<Record<string, HostCalculatorState>>
   /** The calculators already attached today. */
   attached: ReadonlySet<string>
   onAttach?: (note: Omit<VisitCalculatorNote, 'at'>) => void
@@ -212,23 +321,22 @@ export function VisitCalculatorsProvider({
   const pointOf = useCallback((dp: string, source?: DecisionPointView['source']) => (
     points.find((point) => point.dp === dp && point.source === (source ?? sourceOfPage))
   ), [points, sourceOfPage])
-  const rows = useMemo(() => HF_VISIT_CALCULATORS.flatMap((entry): CalculatorRow[] => {
+  const rows = useMemo(() => (PAGE_CALCULATORS[sourceOfPage ?? ''] ?? []).flatMap((entry): CalculatorRow[] => {
     // The AF page lists AF's own calculators only; the HF page keeps its list,
     // with AF's where AF's points sit on it.
     if (sourceOfPage !== 'hf' && (entry.source ?? 'hf') !== sourceOfPage) return []
-    const point = pointOf(entry.dp, entry.source)
-    if (entry.needsPoint && (!point || ABSENT_STATES.has(point.state))) return []
     // LIFE-Preserved is for HFpEF: offered only on an LVEF known to be 50% or
     // above, never on an unknown one (#334 review).
     if (entry.prognosis === 'life-preserved' && !(lvef !== undefined && lvef >= 50)) return []
     const model = entry.prognosis ? HF_PROGNOSIS_MODELS.find((item) => item.id === entry.prognosis) : undefined
     const calc: CalculatorDef | undefined = CALCULATORS.find((item) => item.id === (entry.calculatorId ?? model?.calculatorId))
     // A prognosis model by its own name (「MAGGIC」), not the calculator's longer one.
-    const name = shortName(model?.name ?? (calc ? tr(locale, calc.name) : entry.id))
+    // A calculator keeps its full name: 「國健署五項慢性病風險（重建版）」 is not 「重建版」.
+    const name = entry.title ? (locale === 'en' ? entry.title.en : entry.title.zh) : model ? shortName(model.name) : calc ? tr(locale, calc.name) : entry.id
     // GWTG-HF reads the admission's values, never today's chart.
-    const fixed: RowStatus | undefined = calc ? undefined : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
+    const fixed: RowStatus | undefined = calc ? undefined : entry.panel === 'risk-inputs' ? 'inputs' : model?.setting === 'hf-admission' ? 'not-applicable' : 'data-only'
     return [{ entry, calc, model, name, fixed }]
-  }), [locale, lvef, pointOf, sourceOfPage])
+  }), [locale, lvef, sourceOfPage])
   const pattern = useMemo(() => (
     rows.length ? new RegExp(rows.map((row) => `(${row.entry.names.source})`).join('|'), 'g') : undefined
   ), [rows])
@@ -241,7 +349,8 @@ export function VisitCalculatorsProvider({
       setSelected(id)
     },
     ...(pattern ? { pattern } : {}),
-  }), [isEnglish, pattern, rows])
+    ...(values ? { values } : {}),
+  }), [isEnglish, pattern, rows, values])
 
   const open = rows.find((row) => row.entry.id === selected)
   const close = () => {
@@ -272,10 +381,18 @@ export function VisitCalculatorsProvider({
               <DialogDescription className="text-xs">
                 {open.entry.source && open.entry.source !== sourceOfPage ? `${open.entry.source.toUpperCase()} ` : ''}{open.entry.dp}{dpLabel(open.entry) ? ` ${dpLabel(open.entry)}` : ''}
               </DialogDescription>
-              <DialogTitle className="text-lg">{open.calc ? tr(locale, open.calc.name) : open.model?.name}</DialogTitle>
+              <DialogTitle className="text-lg">{open.entry.title ? (isEnglish ? open.entry.title.en : open.entry.title.zh) : open.calc ? tr(locale, open.calc.name) : open.model?.name}</DialogTitle>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              {open.calc ? (
+              {open.entry.panel === 'risk-inputs' ? (
+                <RiskInputsPanel isEnglish={isEnglish} />
+              ) : open.entry.panel === 'prevent-visit' ? (
+                <PreventVisitPanel isEnglish={isEnglish} onResult={setResult} />
+              ) : open.entry.panel === 'pce-visit' ? (
+                <PceVisitPanel isEnglish={isEnglish} onResult={setResult} />
+              ) : open.entry.panel === 'hpa-visit' ? (
+                <HpaVisitPanel isEnglish={isEnglish} onResult={setResult} />
+              ) : open.calc ? (
                 <CalculatorDetail
                   calc={open.calc}
                   onBack={close}
@@ -330,12 +447,16 @@ export function VisitCalculatorsButton({ chapterOf, goTo }: {
   // The list's rows go when it closes: the panel hands focus back to this button.
   const triggerRef = useRef<HTMLButtonElement>(null)
   if (!calculators?.rows.length) return null
-  const { isEnglish, rows, open } = calculators
+  const { isEnglish, rows, open, values } = calculators
   const byChapter = new Map<string, CalculatorRow[]>()
+  const other: CalculatorRow[] = []
   for (const row of rows) {
-    const chapter = chapterOf(row.entry.dp, row.entry.source) ?? (isEnglish ? 'Other' : '其他')
-    byChapter.set(chapter, [...(byChapter.get(chapter) ?? []), row])
+    const chapter = chapterOf(row.entry.dp, row.entry.source)
+    if (chapter === undefined) other.push(row)
+    else byChapter.set(chapter, [...(byChapter.get(chapter) ?? []), row])
   }
+  // Calculators whose point is not on this page come last, under 其他.
+  if (other.length) byChapter.set(isEnglish ? 'Other' : '其他', [...(byChapter.get(isEnglish ? 'Other' : '其他') ?? []), ...other])
   const choose = (row: CalculatorRow) => {
     setListOpen(false)
     goTo(row.entry.dp, row.entry.source)
@@ -368,7 +489,7 @@ export function VisitCalculatorsButton({ chapterOf, goTo }: {
           <span className="text-sm font-semibold">{isEnglish ? 'Calculators for this patient' : '此病人可用的計算機'}</span>
           <span className="text-xs text-muted-foreground">{isEnglish ? 'By chapter' : '依章節排列'}</span>
         </div>
-        <CalculatorRows groups={[...byChapter.entries()]} isEnglish={isEnglish} onChoose={choose} />
+        <CalculatorRows groups={[...byChapter.entries()]} isEnglish={isEnglish} {...(values ? { values } : {})} onChoose={choose} />
         <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
           {isEnglish
             ? 'Opens the calculator beside its decision point. Scores never change a recommendation.'

@@ -39,6 +39,10 @@ jest.mock('@/features/clinical-summary/reports/utils/nhi-viewer-request', () => 
   requestNhiViewerOpen: jest.fn(),
 }))
 
+jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
+  usePatient: () => ({ patient: { id: 'patient-a' }, loading: false, error: null }),
+}))
+
 const mockUseClinicalData = jest.fn()
 jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', () => ({
   useClinicalData: () => mockUseClinicalData(),

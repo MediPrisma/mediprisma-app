@@ -4,7 +4,11 @@
  */
 
 import { withModelReporting } from '../streaming/model-reporting.middleware'
+import { createIntranetProvider } from './intranet-provider'
+import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '../interceptors/intranet-fetch'
 import { withOpenAiStatelessResponses } from '../streaming/openai-stateless.middleware'
+import { withGeminiThinkingLevel } from '../streaming/gemini-thinking.middleware'
+import { withModelReasoningDefaults } from '../streaming/model-reasoning.middleware'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -46,10 +50,12 @@ export class AiProviderFactory {
    */
   create(config: ProviderConfig): ProviderResult {
     const result = this.createProvider(config)
-    return { ...result, model: withModelReporting(result.model, result.isGemini, config.onModelReported, config.onModelUnreported) }
+    const model = withModelReasoningDefaults(result.model, getModelDefinitionOrThrow(config.modelId))
+    return { ...result, model: withModelReporting(model, result.isGemini, config.onModelReported, config.onModelUnreported) }
   }
 
   private createProvider(config: ProviderConfig): ProviderResult {
+    if (config.modelId === INTRANET_LUNA_ID && intranetGatewayAvailable()) return createIntranetProvider()
     const isCustom = isCustomOpenAiModelId(config.modelId)
     if (isCustom) {
       return this.createOpenAiCompatibleProvider(config.openAiCompatible, config.hiddenReasoning)
@@ -94,7 +100,7 @@ export class AiProviderFactory {
         apiKey: 'proxy', // Dummy key required by SDK
         fetch: customFetch,
       })
-      return { model: sdk(modelId), isGemini: true }
+      return { model: withGeminiThinkingLevel(sdk(modelId), definition.thinkingLevel), isGemini: true }
     }
     if (provider === 'claude') {
       const sdk = createAnthropic({
@@ -128,7 +134,7 @@ export class AiProviderFactory {
     }
     if (provider === 'gemini') {
       const sdk = createGoogleGenerativeAI({ apiKey })
-      return { model: sdk(modelId), isGemini: true }
+      return { model: withGeminiThinkingLevel(sdk(modelId), definition.thinkingLevel), isGemini: true }
     }
     if (provider === 'claude') {
       const sdk = createAnthropic({
@@ -171,6 +177,7 @@ export class AiProviderFactory {
    * Validate proxy availability
    */
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
+    if (modelId === INTRANET_LUNA_ID && intranetGatewayAvailable()) return { available: true }
     let definition: ModelDefinition
     try {
       definition = getModelDefinitionOrThrow(modelId)

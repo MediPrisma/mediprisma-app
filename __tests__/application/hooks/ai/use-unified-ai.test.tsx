@@ -110,7 +110,7 @@ describe('useUnifiedAi cancellation', () => {
       }
       const wires = jest.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)))
       expect(wires.map(w => w.diagnostics.summary_attempt.attempt)).toEqual([1, 2, 3])
-      expect(wires.every(w => w.schema_version === 10 && w.error_class === 'timeout')).toBe(true)
+      expect(wires.every(w => w.schema_version === 11 && w.error_class === 'timeout')).toBe(true)
       expect(JSON.stringify(wires)).not.toMatch(/SYNTHETIC-PROMPT|SYNTHETIC-OUTPUT|PRIVATE-PATIENT|openai-key/)
       expect(useAiExecutionDiagnosticsStore.getState().records).toHaveLength(3)
       expect(useAiExecutionDiagnosticsStore.getState().records[0].outputData).not.toContain('openai-key')
@@ -141,7 +141,7 @@ describe('useUnifiedAi cancellation', () => {
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })
   it.each(['stream', 'query'] as const)('keeps actual provenance in %s diagnostics and forwards it to result owners', async (transport) => {
-    const execution = reportModelExecution(createModelExecution('gemini-3.8-flash'), 'gemini-3.1-flash-lite')
+    const execution = reportModelExecution(createModelExecution('gemini-4-hydrogen'), 'gemini-3.1-flash-lite')
     if (transport === 'stream') mockStream.mockImplementationOnce(async (options) => {
       options.onModelExecution(execution)
       options.onChunk('actual Lite answer')
@@ -150,7 +150,7 @@ describe('useUnifiedAi cancellation', () => {
     const onModelExecution = jest.fn()
     const { result } = renderHook(() => useUnifiedAi())
     await act(async () => {
-      await result.current[transport]([{ role: 'user', content: 'hello' }], { modelId: 'gemini-3.8-flash', onModelExecution })
+      await result.current[transport]([{ role: 'user', content: 'hello' }], { modelId: 'gemini-4-hydrogen', onModelExecution })
     })
     expect(onModelExecution).toHaveBeenCalledWith(execution)
     expect(useAiExecutionDiagnosticsStore.getState().records.at(-1)).toMatchObject({
@@ -223,20 +223,24 @@ describe('useUnifiedAi cancellation', () => {
       await capturedStream(
         [{ role: 'user', content: 'structured summary' }],
         {
-          modelId: 'gpt-5.6-terra',
+          modelId: 'gpt-6.1-terra',
           temperature: 0.2,
           maxTokens: 2048,
           responseFormat: 'json',
+          reasoningEffort: 'low',
+          textVerbosity: 'high',
         },
       )
     })
 
     expect(mockStream).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'gpt-5.6-terra',
+      model: 'gpt-6.1-terra',
       apiKey: 'replacement-openai-key',
       temperature: 0.2,
       maxTokens: 2048,
       responseFormat: 'json',
+      reasoningEffort: 'low',
+      textVerbosity: 'high',
     }))
   })
 
@@ -437,9 +441,27 @@ describe('useUnifiedAi collector template', () => {
       })
       await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
       const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
-      expect(wire).toMatchObject({ schema_version: 10, feature: 'insights', sample_kind: 'request',
+      expect(wire).toMatchObject({ schema_version: 11, feature: 'insights', sample_kind: 'request',
         diagnostics: { template: { id: 'changes', title: '重要變化' } } })
       expect(JSON.stringify(wire)).not.toMatch(/SYNTHETIC-PROMPT|SYNTHETIC-ANSWER|PRIVATE-PATIENT/)
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
+
+  it.each(['query', 'stream'] as const)('a %s request reports the token counts the AI service returned', async (transport) => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
+    if (transport === 'query') mockQuery.mockResolvedValueOnce({ text: 'SYNTHETIC-ANSWER', metadata: { usage: { inputTokens: 12345, outputTokens: 678 } } })
+    else mockStream.mockImplementationOnce(async (options) => { options.onChunk('SYNTHETIC-ANSWER'); options.onUsage({ inputTokens: 12345, outputTokens: 678 }) })
+    const { result } = renderHook(() => useUnifiedAi())
+    try {
+      await act(async () => {
+        await result.current[transport]([{ role: 'user', content: 'SYNTHETIC-PROMPT' }], { modelId: 'gpt-5.4-nano', diagnosticFeature: 'chat' })
+      })
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+      const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
+      expect(wire).toMatchObject({ schema_version: 11, feature: 'chat', sample_kind: 'request', status: 'completed' })
+      expect(wire.diagnostics.usage).toEqual({ input_tokens: 12345, output_tokens: 678 })
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })
 })

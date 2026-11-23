@@ -71,7 +71,7 @@ describe('ClaudeService', () => {
     const service = new ClaudeService('test-personal-key', new AiProviderFactory())
 
     const result = await service.query({
-      modelId: 'claude-opus-5',
+      modelId: 'claude-opus-5-5',
       messages: [
         { role: 'system', content: 'Follow clinical safety rules.' },
         { role: 'user', content: 'Summarize the record.' },
@@ -92,7 +92,7 @@ describe('ClaudeService', () => {
     expect(headers['content-type']).toBe('application/json')
     expect(headers['anthropic-dangerous-direct-browser-access']).toBe('true')
     expect(body).toEqual({
-      model: 'claude-opus-5',
+      model: 'claude-opus-5-5',
       max_tokens: 2048,
       system: [
         { type: 'text', text: 'Follow clinical safety rules.' },
@@ -116,24 +116,24 @@ describe('ClaudeService', () => {
     expect(result).toMatchObject({
       text: 'Clinical summary',
       metadata: {
-        modelId: 'claude-opus-5',
+        modelId: 'claude-opus-5-5',
         provider: 'claude',
         tokensUsed: 12,
       },
     })
   })
 
-  it('keeps supported sampling parameters for Claude Haiku 4.5', async () => {
+  it('omits sampling parameters for Claude Haiku 5.5', async () => {
     const service = new ClaudeService('test-personal-key', new AiProviderFactory())
 
     await service.query({
-      modelId: 'claude-haiku-4-5-20251001',
+      modelId: 'claude-haiku-5-5',
       messages: [{ role: 'user', content: 'Summarize the record.' }],
       temperature: 0.2,
     })
 
     const body = JSON.parse(String(mockFetch.mock.calls[0][1]?.body))
-    expect(body.temperature).toBe(0.2)
+    expect(body.temperature).toBeUndefined()
   })
 
   it('uses the owner proxy only for the proxy-eligible Claude base model', async () => {
@@ -141,18 +141,18 @@ describe('ClaudeService', () => {
     mutableEnv.claudeProxyUrl = 'https://proxy.example.com/claude'
     const provider = createAnthropic({ apiKey: 'proxy', fetch: mockFetch })
     const create = jest.fn(() => ({
-      model: provider('claude-haiku-4-5-20251001'),
+      model: provider('claude-haiku-5-5'),
       isGemini: false,
     }))
     const service = new ClaudeService(null, { create })
 
     await service.query({
-      modelId: 'claude-haiku-4-5-20251001',
+      modelId: 'claude-haiku-5-5',
       messages: [{ role: 'user', content: 'Summarize the record.' }],
     })
 
     expect(create).toHaveBeenCalledWith({
-      modelId: 'claude-haiku-4-5-20251001',
+      modelId: 'claude-haiku-5-5',
       apiKey: undefined,
       onModelReported: expect.any(Function),
       onModelUnreported: expect.any(Function),
@@ -166,7 +166,7 @@ describe('ClaudeService', () => {
     const service = new ClaudeService(null, { create })
 
     await expect(service.query({
-      modelId: 'claude-opus-5',
+      modelId: 'claude-opus-5-5',
       messages: [{ role: 'user', content: 'Summarize the record.' }],
     })).rejects.toThrow('Claude API key is required')
     expect(create).not.toHaveBeenCalled()
@@ -177,7 +177,7 @@ describe('ClaudeService', () => {
     const service = new ClaudeService('test-personal-key', { create })
 
     await expect(service.query({
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-hydrogen',
       messages: [{ role: 'user', content: 'Summarize the record.' }],
     })).rejects.toThrow('is not a Claude model')
     expect(create).not.toHaveBeenCalled()

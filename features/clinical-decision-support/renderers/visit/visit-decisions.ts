@@ -387,3 +387,11 @@ export function intolerantPillars(decisions: Readonly<Record<string, { actionId?
   }
   return [...dps].sort()
 }
+
+/**
+ * Whether the clinician recorded 「確認高血壓」 at HTN DP-01 — read by the
+ * pack's action id (`htn-dp01-confirmed`), never by the label.
+ */
+export function htnDiagnosisConfirmed(decisions: Readonly<Record<string, { actionId?: string; decision?: string }>>): boolean {
+  return Object.values(decisions).some((decision) => decision.actionId === 'htn-dp01-confirmed')
+}

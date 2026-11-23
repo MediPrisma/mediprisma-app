@@ -38,7 +38,7 @@ describe('MODEL_CATALOG contract', () => {
     expect(model.descriptions['zh-TW'].trim()).not.toBe('')
     expect(Number.isInteger(model.contextLimit)).toBe(true)
     expect(model.contextLimit).toBeGreaterThan(0)
-    expect(['proxy-or-key', 'key-only', 'custom-profile']).toContain(model.access)
+    expect(['proxy-or-key', 'key-only', 'custom-profile', 'browser-extension']).toContain(model.access)
     expect(['passthrough', 'fixed-one', 'omit']).toContain(model.temperaturePolicy)
     expect(['deep-agent', 'standard']).toContain(model.conversationMode)
     expect(['available', 'disabled']).toContain(model.status)
@@ -84,7 +84,8 @@ describe('MODEL_CATALOG contract', () => {
   it('uses API surfaces compatible with each provider', () => {
     const allowed: Record<ModelProvider, readonly string[]> = {
       openai: ['openai-chat-completions', 'openai-responses'],
-      gemini: ['gemini-generate-content'],
+      // 院內 Gemini Enterprise is a web page driven by 北榮懷爾抓抓.
+      gemini: ['gemini-generate-content', 'browser-extension-page'],
       claude: ['anthropic-messages'],
       custom: ['openai-compatible-chat-completions'],
     }
@@ -95,24 +96,31 @@ describe('MODEL_CATALOG contract', () => {
     }
   })
 
+  it('offers exactly the four owner-approved free selectable models', () => {
+    expect(MODEL_CATALOG.filter(model => model.selectable && isProxyEligibleModel(model)).map(model => model.id).sort()).toEqual([
+      'claude-haiku-5-5', 'gemini-3.1-flash-lite', 'gemini-4-hydrogen', 'gpt-6-luna',
+    ])
+  })
+
   it('keeps the requested GPT rollout, free Luna access, and Fable availability', () => {
     expect(GPT_MODELS.map((model) => model.id)).toEqual([
-      'gpt-5.4-nano',
-      'gpt-5.6-luna',
-      'gpt-5.6-terra',
-      'gpt-5.6-sol',
+      'gpt-6-luna',
+      'gpt-6.1-terra',
+      'gpt-6.1-sol',
+      'gpt-6-astra',
     ])
     expect(GPT_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
-      'gpt-5.6-terra',
-      'gpt-5.6-sol',
+      'gpt-6.1-terra',
+      'gpt-6.1-sol',
+      'gpt-6-astra',
     ])
-    expect(getModelDefinition('gpt-5.6-luna')).toMatchObject({
+    expect(getModelDefinition('gpt-6-luna')).toMatchObject({
       provider: 'openai',
       access: 'proxy-or-key',
       apiSurface: 'openai-responses',
       status: 'available',
     })
-    expect(getModelDefinition('claude-fable-5')).toMatchObject({
+    expect(getModelDefinition('claude-fable-5-2')).toMatchObject({
       provider: 'claude',
       access: 'key-only',
       status: 'available',
@@ -122,28 +130,29 @@ describe('MODEL_CATALOG contract', () => {
 
   it('keeps the current user-key Gemini and Claude lineup', () => {
     expect(GEMINI_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
-      'gemini-3.1-pro-preview',
+      'gemini-4-argon',
+      'gemini-4-carbon',
     ])
-    expect(getModelDefinition('gemini-3.8-flash')).toMatchObject({
+    expect(getModelDefinition('gemini-4-hydrogen')).toMatchObject({
       provider: 'gemini',
       access: 'proxy-or-key',
       apiSurface: 'gemini-generate-content',
       status: 'available',
     })
     expect(CLAUDE_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
-      'claude-sonnet-5',
-      'claude-opus-5',
-      'claude-fable-5',
+      'claude-sonnet-5-5',
+      'claude-opus-5-5',
+      'claude-fable-5-2',
     ])
-    expect(getModelDefinition('claude-sonnet-5')).toMatchObject({
+    expect(getModelDefinition('claude-sonnet-5-5')).toMatchObject({
       contextLimit: 900_000,
       temperaturePolicy: 'omit',
     })
-    expect(getModelDefinition('claude-opus-5')).toMatchObject({
+    expect(getModelDefinition('claude-opus-5-5')).toMatchObject({
       contextLimit: 900_000,
       temperaturePolicy: 'omit',
     })
-    expect(getModelDefinition('claude-fable-5')).toMatchObject({
+    expect(getModelDefinition('claude-fable-5-2')).toMatchObject({
       temperaturePolicy: 'omit',
     })
   })

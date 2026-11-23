@@ -130,6 +130,8 @@ export function anticoagulationOnProfile(profile: Pick<CdssPatientProfile, 'afMe
 }
 
 const ANTICOAGULANT_FACT_KEYS = ['currentDoac', 'currentVitaminKAntagonist', 'currentOralAnticoagulant'] as const
+/** Class-context fact keys whose mere presence means the class is being taken. */
+const PRESENCE_ONLY_CLASS_FACT_KEYS: ReadonlySet<string> = new Set(['currentDoac', 'currentVitaminKAntagonist'])
 
 /** Use the hospital's order status and the same supply calculation as the chart.
  * This is the app's recorded-medication policy, not an assertion of adherence. */
@@ -185,7 +187,7 @@ export function createHospitalAwareCdssPatientProfile(
   const internalUseStates = new Map<string, HospitalMedicationUseState>()
   const unresolvedContents = input.medications.filter(row => row.clinicalMedicationContentUncertainty).map(row => ({ source: sourceFor(row), reason: row.clinicalMedicationContentUncertainty!.reason }))
   const medications = selected.input.medications.filter(row => !row.clinicalMedicationContentUncertainty).map((source, index): HostMedication => {
-    const name = resolveHospitalMedicationName(source.medicationCodeableConcept)
+    const name = resolveHospitalMedicationName(source.medicationCodeableConcept, source)
     if (!name) return source
     const useState = hospitalUseState(source, now)
     const ingredientName = source.drugTerminology?.ingredientText
@@ -257,8 +259,10 @@ export function createHospitalAwareCdssPatientProfile(
   for (const item of evidence) {
     if (EXCLUDED.has(item.source.status?.trim().toLowerCase() ?? '')) continue
     const originZh = item.fromOfficialTerminology ? '健保藥品主檔'
+      : item.name.source === 'vghtpe-medication-index' ? '北榮院內藥表（健保藥典身分）'
       : item.name.source === 'verified-product-alias' ? '已查證商品成分對照' : '來源藥名明列成分'
     const originEn = item.fromOfficialTerminology ? 'Official NHI drug master'
+      : item.name.source === 'vghtpe-medication-index' ? 'VGH medication index (NHI drug identity)'
       : item.name.source === 'verified-product-alias' ? 'Verified product ingredient alias' : 'Ingredient stated in the source name'
     const name = item.ingredientName || item.name.productName || '未命名藥物'
     facts[item.factKey] = {
@@ -304,7 +308,12 @@ export function createHospitalAwareCdssPatientProfile(
   if (unresolved.length) for (const [classId, context] of Object.entries(contexts)) {
     if (!context || context.state !== 'not-found') continue
     contexts[classId as CdssMedicationClassId] = { ...context, state: 'uncertain' }
+    // The oral-anticoagulant class facts exist only while the class is being
+    // taken: the AF pack and `anticoagulationOnProfile` read their presence as
+    // 「已抗凝」. A placeholder there would turn an unidentified tablet into
+    // current anticoagulation, so leave them absent like the harmful classes.
     if (!context.factKey.startsWith('hfHarmful')
+      && !PRESENCE_ONLY_CLASS_FACT_KEYS.has(context.factKey)
       && !(context.factKey === 'hypoglycemiaRiskMedications' && confirmedHypoglycemiaClass)) facts[context.factKey] = {
       zh: '院內紀錄未提供藥物成分',
       en: 'Hospital ingredient not recorded',

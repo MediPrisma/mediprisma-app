@@ -60,6 +60,7 @@ import {
   labPivotColumnLabel,
   type LabRow,
 } from '@/src/shared/utils/lab-pivot.utils'
+import { utcDay } from '@/src/core/utils/calendar-day'
 
 /** Default evidence budget. On-prem prefill is the whole constraint: the
  *  measured table (docs/FHIR-context-stability-optimization.txt) is ~10.7 s for
@@ -169,7 +170,7 @@ function dayOffset(day: string, days: number): string {
   const shifted = new Date(`${day}T00:00:00Z`)
   if (Number.isNaN(shifted.getTime())) return day
   shifted.setUTCDate(shifted.getUTCDate() + days)
-  return shifted.toISOString().slice(0, 10)
+  return utcDay(shifted)
 }
 
 function tail(hidden: number): string[] {

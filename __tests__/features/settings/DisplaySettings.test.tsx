@@ -86,13 +86,19 @@ describe('DisplaySettings Beta switch', () => {
       .toHaveAttribute('aria-checked', 'true')
   })
 
+  it('offers no per-module pilot checkboxes while Beta is off', () => {
+    renderSettings()
+
+    expect(screen.queryByText('試辦模組')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
   it('hides the switch on the unattended Medcloud launch route', () => {
     mockMedcloudLaunchRoute = true
 
     renderSettings()
 
     expect(screen.queryByRole('switch', { name: '開啟 Beta 功能' })).not.toBeInTheDocument()
-    expect(screen.queryByTestId('pilot-packs-settings')).not.toBeInTheDocument()
   })
 
   it('explains account persistence and surfaces a sync failure for the active account', () => {

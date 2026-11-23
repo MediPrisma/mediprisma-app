@@ -5,6 +5,8 @@ import { hospitalProductMatchesKnowledge, hospitalProductMayMatchKnowledge, hosp
 import { sharedPrescriptionIdentifier, conflictingSourceIdentifier, SOURCE_EVIDENCE_FIELDS } from '@/src/shared/utils/source-record-comparison'
 import { extractFrequencyFromText } from '@/src/shared/utils/fhir-display-helpers'
 import { medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
+import { medicationRefillDispenseDay } from '@/src/core/utils/clinical-context-selection.utils'
+import { vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
 
 type Resource = Record<string, any>
 const SOURCE_MODULE = 'https://cloud-wildcatch.invalid/fhir/CodeSystem/source-module'
@@ -36,20 +38,24 @@ function frequencyConflicts(left: string, right: string): boolean {
   return a[0] !== b[0] || !!a[1] && !!b[1] && a[1] !== b[1]
 }
 
+// A frequency is one code word: the timing code itself, or a SIG field that
+// holds nothing else (MediCloud records "QN" where the hospital records
+// "1 CAP PO QN"). Decided by shape, not by a list of known codes, so every
+// frequency the sources use compares the same way. Anything else is a SIG.
+const frequencyCode = (value: unknown) => typeof value === 'string'
+  && /^(?=.*[A-Z])[A-Z0-9]+$/i.test(value.trim()) ? value.trim().toUpperCase() : undefined
+
 function frequencyKey(dosage: any): string | undefined {
-  const knownFrequency = (value: unknown) => typeof value === 'string'
-    && /^(?:QD|BID|TID|QID)(?:AC|PC|CC)?$|^(?:Q\d+H|QOD|QW|QHS|HS|PRN|STAT|ASORDER)$/i.test(value.trim())
-    ? value.trim().toUpperCase() : undefined
   const codes = [...new Set((dosage?.timing?.code?.coding ?? [])
-    .map((coding: any) => knownFrequency(coding.code)).filter(Boolean))]
+    .map((coding: any) => frequencyCode(coding.code)).filter(Boolean))]
   const repeat = dosage?.timing?.repeat
   let repeatCode: string | undefined
   if (repeat?.period === 1 && repeat.periodUnit === 'd') repeatCode = ({ 1: 'QD', 2: 'BID', 3: 'TID', 4: 'QID' } as Record<number, string>)[repeat.frequency]
   if (repeat?.frequency === 1 && repeat.periodUnit === 'h' && repeat.period > 0) repeatCode = `Q${repeat.period}H`
   if (!repeatCode && repeat?.frequency > 0 && repeat?.period > 0 && repeat.periodUnit) repeatCode = `repeat:${repeat.frequency}/${repeat.period}${repeat.periodUnit}`
   if (repeatCode && repeat.when?.length === 1 && ['AC', 'PC'].includes(repeat.when[0])) repeatCode += repeat.when[0]
-  const values = [...new Set([...codes, repeatCode, knownFrequency(dosage?.timing?.code?.text),
-    knownFrequency(dosage?.text), knownFrequency(extractFrequencyFromText(dosage?.text))].filter(Boolean))] as string[]
+  const values = [...new Set([...codes, repeatCode, frequencyCode(dosage?.timing?.code?.text),
+    frequencyCode(dosage?.text), frequencyCode(extractFrequencyFromText(dosage?.text))].filter(Boolean))] as string[]
   return values.some(left => values.some(right => frequencyConflicts(left, right)))
     ? '!conflicting-source-frequency!' : values.find(value => /(?:AC|PC|CC)$/.test(value)) ?? values[0]
 }
@@ -140,7 +146,7 @@ function hasConflict(hospital: Resource, cloud: Resource): boolean {
     // MediCloud may record only "QDPC" where the hospital records
     // "1 TAB PO QDPC". Compare that frequency with the structured frequency,
     // rather than treating the short frequency as a contradictory full SIG.
-    const sig = (dose: any) => typeof dose.text === 'string' && !/^(?:QD|BID|TID|QID)(?:AC|PC|CC)?$|^(?:Q\d+H|QOD|QW|QHS|HS|PRN|STAT|ASORDER)$/i.test(dose.text.trim())
+    const sig = (dose: any) => typeof dose.text === 'string' && !frequencyCode(dose.text)
       && !/^\s*(?:給藥總量|給藥日數|平均每日)/.test(dose.text)
       ? dose.text.trim() : undefined
     if (sig(left) && sig(right) && sig(left) !== sig(right)) return true
@@ -170,7 +176,9 @@ function union(left: any[] = [], right: any[] = []): any[] {
 }
 
 /** Same canonical visit, prescription day and patient, with an exact NHI
- * product code or a verified complete product-name match to cloud knowledge.
+ * product code or a verified complete product-name match to cloud knowledge;
+ * or, for a hospital order the VGH medication index identifies, the same day's
+ * 臺北榮總 cloud order filed under a code of that identity.
  * Requires a unique cross-source match and no conflicting order facts.
  * Ingredient/name similarity alone never establishes that orders are copies.
  * Raw source Bundles are retained by LocalBundleService; only its cloned graph
@@ -193,18 +201,29 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     .map((resource) => [`Encounter/${resource.id}`, resource]))
   const vghDisplay = (display: unknown) => /^(?:臺|台)北榮(?:總|民總醫院)(?:[;；\s]|$)/.test(String(display ?? '').trim())
   const visitKey = (visit: Resource) => visit._sourceRecordComparison?.references?.join('|') ?? `Encounter/${visit.id}`
-  const identity = (order: Resource) => {
+  const outpatientDay = (order: Resource) => {
     if (order.resourceType !== 'MedicationRequest' || !order.subject?.reference) return undefined
     if (order.meta?.tag?.some((tag: any) => tag.system === SOURCE_MODULE && String(tag.code).toUpperCase() === 'IMUE0120')) return undefined
-    const day = typeof order.authoredOn === 'string' ? medicationClinicalDay(order.authoredOn) : undefined
+    // A later 慢連箋 fill carries the visit's date but is not the visit's order.
+    if (medicationRefillDispenseDay(order)) return undefined
+    const visit = encounters.get(order.encounter?.reference)
+    if (visit?.class?.code && visit.class.code !== 'AMB') return undefined
+    return typeof order.authoredOn === 'string' ? medicationClinicalDay(order.authoredOn) : undefined
+  }
+  const drug = (order: Resource) => {
     const reference = order.medicationReference?.reference
     const concept = order.medicationCodeableConcept ?? (reference?.startsWith('#')
       ? order.contained?.find((resource: Resource) => resource.resourceType === 'Medication' && resource.id === reference.slice(1))?.code
       : medications.get(reference)?.code)
     const codes = [...new Set((concept?.coding ?? []).filter((coding: any) => isNhiDrugCodeSystem(coding.system) && coding.code)
-      .map((coding: any) => String(coding.code).trim().toUpperCase()))]
+      .map((coding: any) => String(coding.code).trim().toUpperCase()))] as string[]
+    return { concept, codes }
+  }
+  const identity = (order: Resource) => {
+    const day = outpatientDay(order)
+    if (!day) return undefined
+    const { concept, codes } = drug(order)
     const visit = encounters.get(order.encounter?.reference)
-    if (visit?.class?.code && visit.class.code !== 'AMB') return undefined
     let contextVisit = visit ? visitKey(visit) : order.encounter?.reference
     const inferred = !order.encounter?.reference || !!order._encounterInferred
     if (inferred) {
@@ -260,6 +279,32 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     }).map((other) => other.order)
     candidates.set(order, matches)
   }
+  // A hospital order whose recorded name the VGH medication index resolves to
+  // one drug identity pairs with the same patient's same-day 臺北榮總
+  // MediCloud order whose code is in that identity (#398): the claim filed
+  // for the order says which product it was. No shared order number or
+  // confirmed visit link is needed. Another strength or package is another
+  // code; more than one partner on either side keeps every row.
+  const identityPairs = new Map<Resource, Set<Resource>>()
+  const vghCloud = resources.filter(order => order.resourceType === 'MedicationRequest' && isMedcloudSource(order) && !isVghtpeSource(order)
+    && (vghDisplay(order.requester?.display) || vghDisplay(encounters.get(order.encounter?.reference)?.serviceProvider?.display)))
+    .map(order => ({ order, day: outpatientDay(order), codes: drug(order).codes }))
+    .filter(({ order, day, codes }) => day && codes.length === 1 && sourceSelfPurchase(order) !== true)
+  for (const order of resources) {
+    const codes = order.resourceType === 'MedicationRequest' && isVghtpeSource(order) ? vghtpeMedicationIdentityCodes(order) : undefined
+    const day = codes && outpatientDay(order)
+    if (!codes || !day || sourceSelfPurchase(order) === true) continue
+    const matches = vghCloud.filter(other => other.day === day && codes.has(other.codes[0])
+      && other.order.subject?.reference === order.subject.reference && !conflictingSourceIdentifier(order, other.order))
+      .map(other => other.order)
+    if (!matches.length) continue
+    identityPairs.set(order, new Set(matches))
+    candidates.set(order, [...new Set([...(candidates.get(order) ?? []), ...matches])])
+    for (const other of matches) {
+      verifiedPairs.set(order, (verifiedPairs.get(order) ?? new Set<Resource>()).add(other))
+      if (hasConflict(order, other)) conflictingPairs.set(order, (conflictingPairs.get(order) ?? new Set<Resource>()).add(other))
+    }
+  }
   const aliases = new Map<string, string>()
   const removed = new Set<Resource>()
   const handled = new Set<Resource>()
@@ -288,10 +333,11 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
       // An incomplete hospital record must not make two contradictory cloud
       // regimens look like compatible copies of each other.
       || cloudMembers.some((member, index) => cloudMembers.slice(index + 1).some(partner => hasConflict(member, partner)))
-    const confirmed = unique && verifiedPairs.get(order)?.has(other) && sharedPrescriptionIdentifier(order, other) && !contextInferred && !visitCodingConflict && !factsConflict
+    const confirmed = unique && verifiedPairs.get(order)?.has(other) && !factsConflict
+      && (identityPairs.get(order)?.has(other) || sharedPrescriptionIdentifier(order, other) && !contextInferred && !visitCodingConflict)
     const statusConflict = !confirmed && [...hospitalGroup].some(member => ['cancelled', 'stopped', 'entered-in-error', 'on-hold'].includes(member.status))
       && [...cloudGroup].some(member => ['active', 'unknown'].includes(member.status || 'unknown'))
-    const warnings = [...(contextInferred ? ['encounter-link-unconfirmed'] : []), ...(factsConflict ? ['source-facts-differ'] : []), ...(statusConflict ? ['source-status-conflict'] : [])]
+    const warnings = [...(contextInferred && !confirmed ? ['encounter-link-unconfirmed'] : []), ...(factsConflict ? ['source-facts-differ'] : []), ...(statusConflict ? ['source-status-conflict'] : [])]
     const comparison = { status: confirmed ? 'confirmed' : unique ? 'candidate' : 'ambiguous',
       references: group.map(member => `MedicationRequest/${member.id}`),
       sourceStatuses: group.map(member => ({ reference: `MedicationRequest/${member.id}`, origin: isVghtpeSource(member) ? 'hospital' : 'medcloud',
@@ -304,14 +350,14 @@ export function reconcileMedicationRequests(resources: Resource[]): Resource[] {
     // are filled from the complementary source on the canonical order.
     order._sourcePrescriptionRecords = [order, other].map((source) => {
       const { _sourceRecordComparison, _sourcePrescriptionRecords, ...record } = source
-      return cloneSource({ ...record, _resolvedMedicationCodeableConcept: identity(source)?.concept })
+      return cloneSource({ ...record, _resolvedMedicationCodeableConcept: drug(source).concept })
     })
     if ((!order.status || order.status === 'unknown') && other.status && other.status !== 'unknown') order.status = other.status
     if (!order.intent && other.intent) order.intent = other.intent
     // A confirmed source pair can carry the cloud's actually recorded drug
     // code. This is source union, never a code inferred from a hospital name.
-    const hospitalConcept = identity(order)?.concept
-    const cloudConcept = identity(other)?.concept
+    const hospitalConcept = drug(order).concept
+    const cloudConcept = drug(other).concept
     if (hospitalConcept && cloudConcept) {
       order.medicationCodeableConcept = { ...hospitalConcept, coding: union(hospitalConcept.coding, cloudConcept.coding) }
       delete order.medicationReference

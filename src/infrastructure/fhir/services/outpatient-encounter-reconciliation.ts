@@ -272,8 +272,26 @@ export function reconcileOutpatientEncounters(resources: Resource[]): Resource[]
   const visits = resources.filter(eligible)
   const hospital = visits.filter(isVghtpeSource)
   for (const visit of hospital) {
-    if (!visit.reasonCode?.length) visit.reasonCode = (visit.diagnosis ?? [])
+    // The visit's own SOAP A diagnoses arrive as linked Conditions carrying
+    // the code AND the label the record wrote. Older qemr exports also copied
+    // the visit list's 門診主診斷碼 ("R55") into reasonCode as bare text, which
+    // hid those labels. Lead with the linked diagnoses; keep a reasonCode only
+    // when it names a code they do not already carry.
+    const linked = [...(visit.diagnosis ?? [])]
+      .sort((left: Resource, right: Resource) => (left.rank ?? Infinity) - (right.rank ?? Infinity))
       .map((diagnosis: Resource) => conditions.get(diagnosis.condition?.reference)?.code).filter(Boolean)
+    if (!linked.length) continue
+    const linkedCodes = new Set(linked.map((concept: Resource) => icdKey(concept)?.split('|')[1]).filter(Boolean))
+    const reasonCodes = (reason: Resource): string[] => {
+      const coded = reason?.coding?.map((coding: Resource) => coding?.code).filter(Boolean) ?? []
+      return (coded.length ? coded : String(reason?.text ?? '').split(/[,;、]/))
+        .map((code: string) => code.trim().toUpperCase().replace(/\./g, '')).filter(Boolean)
+    }
+    const unlisted = (visit.reasonCode ?? []).filter((reason: Resource) => {
+      const codes = reasonCodes(reason)
+      return !codes.length || codes.some((code) => !linkedCodes.has(code))
+    })
+    visit.reasonCode = [...linked, ...unlisted]
   }
   const cloud = visits.filter((visit) => !isVghtpeSource(visit)
     && isMedcloudSource(visit)

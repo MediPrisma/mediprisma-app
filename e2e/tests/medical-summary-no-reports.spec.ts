@@ -7,7 +7,7 @@ import { mockAiStream } from '../fixtures/mock-stream'
 // about the chart itself, so it appears only when the chart holds no report —
 // never when a report exists but the summary's scope left it out (PR #237
 // review, d834b140). Synthetic bundles only.
-const TEST_MODEL_ID = 'gpt-5.4-nano'
+const TEST_MODEL_ID = 'gemini-3.1-flash-lite'
 const block = (id: string, body: unknown) => `<<<MEDIPRISMA_MODULE:${id}>>>${JSON.stringify(body)}<<<END_MEDIPRISMA_MODULE:${id}>>>`
 const REPLY = [
   block('overview', { headline: 'Synthetic review patient', medicationEducation: [] }),

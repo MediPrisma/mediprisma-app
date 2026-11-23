@@ -8,12 +8,17 @@
 // mode share one path.
 
 import type { AiModelExecution } from "@/src/core/entities/ai-model-execution.entity"
+import type { AiTokenUsage } from "@/src/core/entities/ai.entity"
+import { readTokenUsage } from "@/src/shared/utils/ai-token-usage"
 import { createModelExecution, reportModelExecution, markModelExecutionUnreported } from "@/src/shared/utils/ai-model-execution"
 import { Output, streamText, type ModelMessage } from "ai"
+import { INTRANET_LUNA_ID, intranetMaxRetries } from '../interceptors/intranet-fetch'
+import { streamHospitalGemini } from '../hospital-gemini/hospital-gemini-stream'
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
   getModelDefinitionOrThrow,
   gateModel,
+  HOSPITAL_GEMINI_MODEL_ID,
   isProxyEligibleModel,
   isCustomOpenAiModelId,
   resolveModelTemperature,
@@ -38,9 +43,13 @@ export interface StreamConfig {
   onChunk: (content: string) => void
   requestedModelId?: string
   onModelExecution?: (execution: AiModelExecution) => void
+  /** Token counts the service reported for this stream; called once after it completes, if any. */
+  onUsage?: (usage: AiTokenUsage) => void
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
+  /** OpenAI Responses output detail; independent of hidden reasoning effort. */
+  textVerbosity?: 'low' | 'medium' | 'high'
   /** CUSTOM endpoints only: suppress the model's hidden reasoning for this one
    *  request. The dialect (vLLM `chat_template_kwargs`, gpt-oss's bounded
    *  `reasoning_effort`, OpenRouter's `reasoning.enabled`) is resolved at the
@@ -58,6 +67,8 @@ export class AiSdkStreamAdapter {
   ) {}
 
   async stream(config: StreamConfig): Promise<void> {
+    // 院內 Gemini is a page in the clinician's browser, not an SDK provider.
+    if (config.model === HOSPITAL_GEMINI_MODEL_ID) return this.streamHospitalGemini(config)
     // Central safety net: every AI feature streams through here. If the picked
     // model needs the user's own key but none was supplied, downgrade to the
     // provider's free, proxy-eligible base model so the call rides the proxy
@@ -108,13 +119,26 @@ export class AiSdkStreamAdapter {
     const temperature = resolveModelTemperature(definition, config.temperature)
     const result = streamText({
       model,
+      maxRetries: intranetMaxRetries(model),
       messages: this.toSdkMessages(config.messages),
       abortSignal: controller.signal,
       ...(temperature !== undefined ? { temperature } : {}),
       ...(config.maxTokens !== undefined ? { maxOutputTokens: config.maxTokens } : {}),
-      ...(isCustom && config.reasoningEffort !== undefined &&
-        /^gpt-oss(?::|-)/i.test(config.openAiCompatible?.modelId.trim() ?? '')
-        ? { providerOptions: { openai: { reasoningEffort: config.reasoningEffort } } }
+      // The intranet Luna defaults to medium reasoning when none is sent; a
+      // caller that asks for less must reach it (measured 2026-11-11: 49-79 s
+      // at the default, 11-14 s at low, on the demo summary).
+      ...(config.reasoningEffort !== undefined && (
+        modelId === INTRANET_LUNA_ID ||
+        (isCustom && /^gpt-oss(?::|-)/i.test(config.openAiCompatible?.modelId.trim() ?? ''))
+      )
+        ? { providerOptions: { openai: {
+            reasoningEffort: config.reasoningEffort,
+            ...(modelId === INTRANET_LUNA_ID && config.textVerbosity
+              ? { textVerbosity: config.textVerbosity } : {}),
+            // The SDK does not know this deployment name and would drop the
+            // effort without saying so.
+            ...(modelId === INTRANET_LUNA_ID ? { forceReasoning: true } : {}),
+          } } }
         : {}),
       ...(config.responseFormat === 'json' ? { output: Output.json() } : {}),
       onError: ({ error }) => { streamError = error },
@@ -130,7 +154,7 @@ export class AiSdkStreamAdapter {
     const idleTimeoutMs = config.idleTimeoutMs ?? (
       isCustom
         ? OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS
-        : resolveStreamIdleTimeoutMs()
+        : resolveStreamIdleTimeoutMs(definition.streamIdleTimeoutMs)
     )
     let fullText = ""
     try {
@@ -165,6 +189,22 @@ export class AiSdkStreamAdapter {
     if (streamError && !config.signal.aborted) {
       throw streamError
     }
+
+    // Diagnostics only: a missing or failed usage report never fails a completed stream.
+    if (config.onUsage && !config.signal.aborted) {
+      try {
+        const usage = readTokenUsage(await result.usage)
+        if (usage) config.onUsage(usage)
+      } catch { /* usage is optional */ }
+    }
+  }
+
+  private async streamHospitalGemini(config: StreamConfig): Promise<void> {
+    const execution = createModelExecution(config.requestedModelId ?? config.model, HOSPITAL_GEMINI_MODEL_ID)
+    config.onModelExecution?.(execution)
+    await streamHospitalGemini(config)
+    // The page does not name its model version; the source itself is the provenance.
+    if (!config.signal.aborted) config.onModelExecution?.(reportModelExecution(execution, HOSPITAL_GEMINI_MODEL_ID))
   }
 
   private shouldUseProxy(apiKey: string | null, model: string): boolean {

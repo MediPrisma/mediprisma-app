@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "nhi-dictionary-errata-v1",
+  "description": "健保藥典（data.gov.tw 23715）已核實的資料錯誤與同產品不一致。比對工具只在藥典列仍為 original 值時套用 corrected；新版藥典若已更正或改了值，建表時會列出，需人工重核。",
+  "verifiedAgainstSnapshot": "nhi-drug-terminology-20260728",
+  "entries": [
+    {
+      "nhiDrugCode": "B020144289", "field": "ingredientText",
+      "original": "AMPICILLIN SODIUM .5 GM",
+      "corrected": "SULBACTAM (SODIUM) .25 GM+AMPICILLIN (SODIUM) .5 GM",
+      "category": "missing_ingredient",
+      "reason": "UNASYN 為 ampicillin＋sulbactam 複方；成分欄漏登 sulbactam。",
+      "evidence": "同產品 B016361289（UNASYN IM/IV FOR INJECTION 0.75GM & 1.5GM，包裝 750 MG）登錄為 SULBACTAM (SODIUM) .25 GM+AMPICILLIN (SODIUM) .5 GM；本列包裝同為 750 MG。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "BC20144289", "field": "ingredientText",
+      "original": "AMPICILLIN SODIUM .5 GM",
+      "corrected": "SULBACTAM (SODIUM) .25 GM+AMPICILLIN (SODIUM) .5 GM",
+      "category": "missing_ingredient",
+      "reason": "同 B020144289（2015 年起的代碼）。",
+      "evidence": "同 B020144289。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "B020144210", "field": "ingredientText",
+      "original": "AMPICILLIN SODIUM 1 GM",
+      "corrected": "SULBACTAM (SODIUM) .5 GM+AMPICILLIN (SODIUM) 1 GM",
+      "category": "missing_ingredient",
+      "reason": "UNASYN 1.5 g 為 ampicillin 1 g＋sulbactam 0.5 g；成分欄漏登 sulbactam。",
+      "evidence": "同產品 B016361210（包裝 1.5 GM）登錄為 SULBACTAM (SODIUM) .5 GM+AMPICILLIN (SODIUM) 1 GM。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "BC20144210", "field": "ingredientText",
+      "original": "AMPICILLIN SODIUM 1 GM",
+      "corrected": "SULBACTAM (SODIUM) .5 GM+AMPICILLIN (SODIUM) 1 GM",
+      "category": "missing_ingredient",
+      "reason": "同 B020144210（2015 年起的代碼）。",
+      "evidence": "同 B020144210。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "A015748100", "field": "ingredientText",
+      "original": "ALUMINUM CHLORHYDROXYALLANTOINATE (=ALCOXA) 100 MG",
+      "corrected": "ALUMINUM DIHYDROXYALLANTOINATE (=ALDIOXA) 100 MG",
+      "category": "wrong_ingredient",
+      "reason": "品名為 ALDIOXA（dihydroxyaluminum allantoinate），成分欄卻登錄為 ALCOXA（chlorhydroxyaluminum allantoinate），為不同成分。",
+      "evidence": "英文品名 ALDIOXA TABLETS \"PATRON\" (DIHYDROXYALUMINUM ALLANTOINATE)；其他 Aldioxa 100 mg 錠（如 A010621100、A016322100）成分均為 ALUMINUM DIHYDROXYALLANTOINATE (=ALDIOXA) 100 MG；ATC A02AB91。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "AC15748100", "field": "ingredientText",
+      "original": "ALUMINUM CHLORHYDROXYALLANTOINATE (=ALCOXA) 100 MG",
+      "corrected": "ALUMINUM DIHYDROXYALLANTOINATE (=ALDIOXA) 100 MG",
+      "category": "wrong_ingredient",
+      "reason": "同 A015748100（同產品另一代碼）。",
+      "evidence": "同 A015748100。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "A036167209", "field": "ingredientText",
+      "original": "TRAMADOL HCL 50 MG",
+      "corrected": "TRAMADOL HCL 50 MG/ML",
+      "category": "missing_unit_denominator",
+      "reason": "注射液濃度漏了 /ML。",
+      "evidence": "品名 TRAMADOL INJECTION 50MG/ML \"S.Y\"、中文名 50公絲/公撮；同產品 A036167212（2 ML 包裝）登錄為 TRAMADOL HCL 50 MG/ML。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "B018290100", "field": "ingredientText",
+      "original": "VALPROATE SODIUM 500 MG+VALPROIC ACID 145 MG",
+      "corrected": "VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG",
+      "category": "wrong_amount",
+      "reason": "DEPAKINE CHRONO 500 mg 的組成為 sodium valproate 333 mg＋valproic acid 145 mg（合計相當於 sodium valproate 500 mg）；本列把 500 mg 與 145 mg 重複計入。",
+      "evidence": "同產品 BC22008100（DEPAKINE CHRONO 500MG FILM COATED TABLETS）登錄為 VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG；同類 Dipachro S.R. 500、Vakin Chrono 500（AB48878100）亦同。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "B022008100", "field": "ingredientText",
+      "original": "VALPROATE SODIUM 500 MG",
+      "corrected": "VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG",
+      "category": "inconsistent_basis_same_product",
+      "reason": "同一產品的不同代碼以不同基準登錄（相當量 500 mg vs 實際組成 333＋145 mg），導致同藥被拆成兩個身分；統一為同產品新代碼的實際組成。",
+      "evidence": "同產品新代碼 BC22008100 登錄為 VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "A048878100", "field": "ingredientText",
+      "original": "VALPROATE SODIUM 500 MG",
+      "corrected": "VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG",
+      "category": "inconsistent_basis_same_product",
+      "reason": "同上（Vakin Chrono 500 mg）。",
+      "evidence": "同產品 AB48878100 登錄為 VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    },
+    {
+      "nhiDrugCode": "AC48878100", "field": "ingredientText",
+      "original": "VALPROATE SODIUM 500 MG",
+      "corrected": "VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG",
+      "category": "inconsistent_basis_same_product",
+      "reason": "同上（Vakin Chrono 500 mg）。",
+      "evidence": "同產品 AB48878100 登錄為 VALPROATE SODIUM 333 MG+VALPROIC ACID 145 MG。",
+      "foundAt": "2026-11-03", "reportedToNhi": false
+    }
+  ]
+}

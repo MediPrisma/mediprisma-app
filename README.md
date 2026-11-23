@@ -94,8 +94,8 @@ AI 功能需要可用的服務設定與網路連線。內建代理提供每日�
 建議使用 **Node.js 24**（與 CI 一致）、npm 與 GitHub CLI。部分 `@voho0000/*` 套件來自 GitHub Packages，需要具有套件讀取權限的 GitHub 帳號。
 
 ```bash
-git clone https://github.com/voho0000/medical-note-smart-on-fhir.git
-cd medical-note-smart-on-fhir
+git clone https://github.com/MediPrisma/mediprisma-app.git
+cd mediprisma-app
 
 npm ci
 cp .env.example .env.local
@@ -201,7 +201,7 @@ Use `npm run build:gh` or `npm run build:mediprisma` for static exports. Registe
 
 Yi-Hsin Kuo, MD · Taipei Veterans General Hospital
 
-聯絡：[voho0000@gmail.com](mailto:voho0000@gmail.com)。問題與建議可透過 [GitHub Issues](https://github.com/voho0000/medical-note-smart-on-fhir/issues) 或 App 內回報功能提出。
+聯絡：[voho0000@gmail.com](mailto:voho0000@gmail.com)。問題與建議可透過 [GitHub Issues](https://github.com/MediPrisma/mediprisma-app/issues) 或 App 內回報功能提出。
 
 本專案採 [Apache License 2.0](LICENSE)。作者與貢獻署名見 [NOTICE](NOTICE)。
 

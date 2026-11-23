@@ -16,6 +16,9 @@ import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinica
 import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue } from '../hfpef-clinical-autofill'
 import { buildEchoAutofill } from '../echo-autofill'
 import { doacPatientSelects, type LabObservation } from '../doac-patient-autofill'
+import { hasBledSelects } from '../has-bled-autofill'
+import { ageBpSelects } from '../age-bp-autofill'
+import { timiSelects } from '../timi-autofill'
 import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals, type MeasuredEntry } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
 import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
@@ -40,6 +43,8 @@ export interface AutofillValue {
 }
 
 export interface Autofill {
+  /** The whole chart has loaded without error; only then may a missing answer be presumed absent. */
+  recordLoaded?: boolean
   clinicalSelects?: Partial<Record<ClinicalSelectKey, ClinicalSelectValue>>
   resolve: (source?: AutofillSource) => AutofillValue | undefined
   sex?: string
@@ -79,9 +84,17 @@ function keepLatest(cur: AutofillValue | undefined, next: AutofillValue): Autofi
 function normSpecimen(display: string | undefined): 'blood' | 'urine' | 'other' | undefined {
   if (!display) return undefined
   const d = display.toLowerCase()
-  if (/urin/.test(d)) return 'urine'
+  if (/urin|尿/.test(d)) return 'urine'
   if (/blood|serum|plas/.test(d)) return 'blood'
   return 'other'
+}
+
+/** A row with no specimen field whose own name says it is urine ("Urine
+ *  Creatinine", "尿液肌酸酐"). The canonical layer keys these the same as the
+ *  serum analyte, so the name is the only thing separating them. */
+function namedAsUrine(holder: CodeHolder): boolean {
+  const names = [holder.code?.text, ...(holder.code?.coding ?? []).map((c) => c?.display)]
+  return names.some((n) => !!n && /urin|尿液/i.test(n))
 }
 
 /** Urine albumin concentration → mg/L (the numerator unit for ACR mg/g). */
@@ -150,6 +163,9 @@ export function buildAutofill(
   const echo = buildEchoAutofill(reports, observations)
   const byCanonical: Record<string, AutofillValue> = {}
   const byLoinc: Record<string, AutofillValue> = {}
+  // Same as byCanonical minus rows known to be urine — what a serum input may
+  // fall back to when no row is marked blood.
+  const byNonUrine: Record<string, AutofillValue> = {}
   // Keyed by `${specimen}|${canonicalKey}` (e.g. "blood|NA", "urine|CREA").
   const bySpecimen: Record<string, AutofillValue> = {}
   // Vitals matched by display name (fallback when LOINC is absent).
@@ -170,7 +186,8 @@ export function buildAutofill(
     // keys, as the cumulative report does.
     const key = isPediatricEgfr(holder) ? 'EGFR(PED)' : getAnalyteCanonicalKey(holder)
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
-    const spec = normSpecimen(specimenDisplay)
+    const spec = normSpecimen(specimenDisplay) ?? (namedAsUrine(holder) ? 'urine' : undefined)
+    if (key && spec !== 'urine') byNonUrine[key] = keepLatest(byNonUrine[key], entry)
     if (key && spec) {
       const sk = `${spec}|${key}`
       bySpecimen[sk] = keepLatest(bySpecimen[sk], entry)
@@ -260,12 +277,15 @@ export function buildAutofill(
       case 'lab':
         // Prefer a blood-specimen match so a serum analyte never picks up a
         // same-named urine value (urine Na also canonicalises to NA); fall
-        // back to any specimen when the field is absent (older bundles).
+        // back to rows that are not urine when none is marked blood (older
+        // bundles omit the field). A urine row is never a serum value: with
+        // the serum row unmarked and the urine row marked, the urine
+        // creatinine used to fill eGFR and CrCl.
         for (const k of source.keys) {
           if (bySpecimen[`blood|${k}`]) return bySpecimen[`blood|${k}`]
         }
         for (const k of source.keys) {
-          if (byCanonical[k]) return byCanonical[k]
+          if (byNonUrine[k]) return byNonUrine[k]
         }
         return undefined
       case 'labSpecimen':
@@ -299,12 +319,18 @@ export function buildAutofill(
     }
   }
 
+  const doacPatient = doacPatientSelects({ observations: observations as LabObservation[], conditions, encounters, demographics: { age, gender: sex }, now })
   return {
     resolve,
     sex,
+    recordLoaded: true,
     clinicalSelects: {
       ...buildClinicalSelects(reports, medications, now, conditions, encounters),
-      ...doacPatientSelects({ observations: observations as LabObservation[], conditions, encounters, demographics: { age, gender: sex }, now }),
+      ...doacPatient,
+      ...hasBledSelects({ resolve, dialysis: doacPatient.doac_dialysis, conditions, encounters, now }),
+      ...ageBpSelects({ age: typeof age === 'number' ? age : undefined, resolve }),
+      ...timiSelects({ observations: observations as LabObservation[], reports, now, sex }),
+      ...(typeof age === 'number' ? { ageOver65: { value: age > 65 ? 'yes' : 'no', date: '', testName: `年齡 ${age} 歲` } } : {}),
     },
   }
 }
@@ -383,7 +409,7 @@ export function useLabAutofill(): LabAutofillState {
     () => {
       const data = buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }, diagnosticReports, medications, new Date(), conditions, encounters)
       // A partially loaded chart must not infer absence before diagnoses arrive.
-      if (isLoading || isFetching || error) data.clinicalSelects = undefined
+      if (isLoading || isFetching || error) { data.clinicalSelects = undefined; data.recordLoaded = false }
       return withCdssWeight(withCdssNyha(data, nyhaAnswer), clinicWeight)
     },
     [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, nyhaAnswer, clinicWeight],

@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/test'
 import { importBundle, openChatInput, chatPanel, SYNTHETIC_BUNDLE } from '../fixtures/import'
 import { mockAiStream, STREAM_PROBE_MARKER } from '../fixtures/mock-stream'
-import { collectorEventV10Schema } from '../../src/shared/contracts/collector-event'
+import { collectorEventV11Schema } from '../../src/shared/contracts/collector-event'
 import type { Page } from '@playwright/test'
 
 // Real browser/app, synthetic chart and AI; collector HTTP is intercepted.
@@ -42,7 +42,7 @@ test('site gate and offline collector leave chat operational, with no clinical t
     else await route.fulfill({ status: 201, contentType: 'application/json',
       headers: { 'access-control-allow-origin': 'http://localhost:3001' }, body: '{}' })
   })
-  await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: 'SYNTHETIC-COLLECTOR-ANSWER', delayMs: 2,
+  await mockAiStream(page, { model: 'gemini-3.1-flash-lite', markdown: 'SYNTHETIC-COLLECTOR-ANSWER', delayMs: 2,
     replies: [
       { includes: 'OTHER-SITE', markdown: 'SYNTHETIC-OTHER-SITE-ANSWER' },
       { includes: 'SECOND-PRIVATE-PROMPT', markdown: 'SYNTHETIC-OFFLINE-ANSWER' },
@@ -60,7 +60,7 @@ test('site gate and offline collector leave chat operational, with no clinical t
   await expect(chatPanel(page).locator('.prose').last()).toContainText('SYNTHETIC-COLLECTOR-ANSWER', { timeout: 25_000 })
   await expect.poll(() => payloads.length).toBeGreaterThan(0)
   for (const payload of payloads) {
-    const parsed = collectorEventV10Schema.safeParse(payload)
+    const parsed = collectorEventV11Schema.safeParse(payload)
     expect(parsed.success).toBe(true)
     if (parsed.success) expect(parsed.data.app_surface).toBe('other')
     expect(JSON.stringify(payload)).not.toMatch(/SYNTHETIC-PRIVATE-PROMPT|SYNTHETIC-COLLECTOR-ANSWER|王小明|patientId|operationKey/)
@@ -100,7 +100,7 @@ for (const permission of ['prompt', 'denied', 'unsupported'] as const) {
           'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'authorization, content-type' },
         body: '' })
     })
-    await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: 'SYNTHETIC-PERMISSION-ANSWER', delayMs: 2 })
+    await mockAiStream(page, { model: 'gemini-3.1-flash-lite', markdown: 'SYNTHETIC-PERMISSION-ANSWER', delayMs: 2 })
     await importBundle(page, { bundlePath: SYNTHETIC_BUNDLE })
     const textarea = await openChatInput(page)
     await page.waitForFunction(() => Boolean(window.mediprismaCollector))
@@ -123,7 +123,7 @@ for (const permission of ['prompt', 'denied', 'unsupported'] as const) {
     await expect(chatPanel(page).locator('.prose').last()).toContainText('SYNTHETIC-PERMISSION-ANSWER')
     await expect(page.getByRole('button', { name: '傳送', exact: true })).toBeVisible()
     for (const payload of payloads) {
-      const parsed = collectorEventV10Schema.safeParse(payload)
+      const parsed = collectorEventV11Schema.safeParse(payload)
       expect(parsed.success).toBe(true)
       if (parsed.success) expect(parsed.data.app_surface).toBe('other')
       expect(JSON.stringify(payload)).not.toMatch(/SYNTHETIC-PRIVATE-PROMPT|SYNTHETIC-NEW-PROMPT|SYNTHETIC-PERMISSION-ANSWER|王小明/)

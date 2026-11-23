@@ -61,6 +61,31 @@ export interface CalcScoring {
 }
 
 export const CALC_SCORING: Record<string, CalcScoring> = {
+  'prevent-cvd': {
+    formula: { zh: '總 CVD 風險 (%) = 100 / (1 + exp(−Σ βᵢxᵢ))。與 PREVENT-ASCVD 相同的變項轉換與交互作用，係數為總 CVD 模型專屬。', en: 'Total CVD risk (%) = 100 / (1 + exp(−Σ βᵢxᵢ)). The same transformed terms and interactions as PREVENT-ASCVD with total-CVD coefficients.' },
+    note: { zh: '總 CVD = ASCVD＋心衰竭。係數取自 Khan 2024 Table S12（以 preventr 套件資料核對）。', en: 'Total CVD = ASCVD plus heart failure. Coefficients from Khan 2024 Table S12 (checked against the preventr package data).' },
+  },
+  'score2-asia-pacific': {
+    formula: { zh: '10 年風險 = 1 − exp(−exp(s₁ + s₂·ln(−ln(1 − [1 − S₀^exp(Σβx)]))))。SCORE2 性別專屬係數（年齡、吸菸、收縮壓、總膽固醇、HDL 及與年齡的交互作用），再以亞太低風險區 s₁、s₂ 校正。', en: '10-year risk = 1 − exp(−exp(s₁ + s₂·ln(−ln(1 − [1 − S₀^exp(Σβx)])))). Sex-specific SCORE2 coefficients (age, smoking, SBP, total cholesterol, HDL and age interactions), recalibrated with the Asia-Pacific low-risk region s₁, s₂.' },
+    note: { zh: 'ESC 2021 分層：<50 歲 <2.5% 低至中、2.5–<7.5% 高、≥7.5% 極高；50–69 歲 <5%、5–<10%、≥10%。', en: 'ESC 2021 bands: under 50 <2.5% low-to-moderate, 2.5–<7.5% high, ≥7.5% very high; 50–69 <5%, 5–<10%, ≥10%.' },
+  },
+  'pce-ascvd': {
+    formula: { zh: '10 年風險 = 1 − S₀^exp(Σβᵢxᵢ − 群組平均)。四組（白人／非裔 × 女／男）各有係數：ln 年齡、ln 總膽固醇、ln HDL、ln 收縮壓（治療中／未治療分開）、吸菸、糖尿病及其與 ln 年齡的交互作用。', en: '10-year risk = 1 − S₀^exp(Σβᵢxᵢ − group mean). Four groups (White/African American × female/male) with coefficients for ln age, ln total cholesterol, ln HDL, ln SBP (treated and untreated separately), smoking, diabetes and their ln-age interactions.' },
+    note: { zh: '2018 ACC/AHA 血脂指引風險帶：<5% 低、5–<7.5% 邊緣、7.5–<20% 中等、≥20% 高。其他族裔用白人係數（指引建議），僅供參考。', en: '2018 ACC/AHA cholesterol-guideline bands: <5% low, 5–<7.5% borderline, 7.5–<20% intermediate, ≥20% high. Other groups use the White equations as the guideline advises; reference only.' },
+  },
+  'stop-bang': {
+    factors: [
+      { label: { en: 'S Loud snoring', zh: 'S 大聲打鼾' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'T Tired in the daytime', zh: 'T 白天疲倦、嗜睡' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'O Observed apnoea', zh: 'O 目擊呼吸停止' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'P High blood pressure', zh: 'P 高血壓' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'B BMI >35', zh: 'B BMI >35' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'A Age >50', zh: 'A 年齡 >50' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'N Neck >40 cm', zh: 'N 頸圍 >40 cm' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+      { label: { en: 'G Male', zh: 'G 男性' }, options: [{ label: { en: 'Yes', zh: '是' }, points: '1' }] },
+    ],
+    note: { en: 'Chung 2016: 0–2 low, 3–4 intermediate, 5–8 high; STOP ≥2 plus male, BMI >35 or neck >40 cm also counts as high.', zh: 'Chung 2016：0–2 低、3–4 中、5–8 高；STOP ≥2 加男性、BMI >35 或頸圍 >40 cm 亦為高風險。' },
+  },
   'hpa-chronic-risk-reconstruction': {
     formula: { en: 'Approximation: risk (%) ≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]. Separate sex-specific fits for each of five outcomes; not the published official coefficients.', zh: '近似式：風險（%）≈ 100 × [1 − exp(−exp(β₀ + Σβᵢxᵢ))]。五項結果各依性別重建；β 不是官方公布係數。' },
     note: { en: 'The attached 2022 IJERPH paper has CHD, stroke and MACE coefficients, but omits the other two diseases and does not specify all baseline survival terms; its MACE predictors differ from the current public V4 form. See the reconstruction note for the holdout audit.', zh: '所附 2022 年論文有冠心病、中風及 MACE 係數，但沒有另外兩病及全部基準存活率；MACE 變項也與目前公開 V4 表單不同。留出樣本驗算見重建說明。' },
@@ -530,6 +555,25 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
       ],
     },
     note: { en: 'Ethanol (mg/dL) is optional; the /3.7 term is only added when entered.', zh: '乙醇（mg/dL）為選填；僅在輸入時才加入 /3.7 項。' },
+  },
+  'timi-trs2p': {
+    formula: { zh: '年齡 ≥75、心衰竭、高血壓、糖尿病、曾中風、曾 CABG、PAD、eGFR <60、目前吸菸，各 1 分（0–9 分）', en: 'Age ≥75, heart failure, hypertension, diabetes, prior stroke, prior CABG, PAD, eGFR <60, current smoking: 1 point each (0–9)' },
+    outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: '風險分層（IMPROVE-IT）', en: 'Risk group (IMPROVE-IT)' }, rows: [
+      { score: '0–1', outcome: { zh: '低風險', en: 'Low risk' } },
+      { score: '2', outcome: { zh: '中風險', en: 'Intermediate risk' } },
+      { score: '≥3', outcome: { zh: '高風險：加強降脂或延長抗栓的絕對效益較大', en: 'High risk: larger absolute benefit from intensified lipid lowering or extended antithrombotics' } },
+    ] },
+  },
+  'timi-ua-nstemi': {
+    formula: { zh: '年齡 ≥65、≥3 項冠心病危險因子、已知冠脈狹窄 ≥50%、7 天內 aspirin、24 小時內 ≥2 次嚴重心絞痛、ST 偏移 ≥0.5 mm、心肌標記升高，各 1 分（0–7 分）', en: 'Age ≥65, ≥3 CAD risk factors, known stenosis ≥50%, aspirin in 7 days, ≥2 severe angina in 24 h, ST deviation ≥0.5 mm, positive marker: 1 point each (0–7)' },
+    outcome: { scoreHeader: { zh: '分數', en: 'Score' }, outcomeHeader: { zh: '14 天死亡、心肌梗塞或需緊急血行重建', en: '14-day death, MI or urgent revascularisation' }, rows: [
+      { score: '0–1', outcome: { zh: '4.7%', en: '4.7%' } },
+      { score: '2', outcome: { zh: '8.3%', en: '8.3%' } },
+      { score: '3', outcome: { zh: '13.2%', en: '13.2%' } },
+      { score: '4', outcome: { zh: '19.9%', en: '19.9%' } },
+      { score: '5', outcome: { zh: '26.2%', en: '26.2%' } },
+      { score: '6–7', outcome: { zh: '40.9%', en: '40.9%' } },
+    ] },
   },
   'cha2ds2-va': {
     formula: { zh: '心衰竭 1 + 高血壓 1 + 年齡 65–74 歲 1 或 ≥75 歲 2 + 糖尿病 1 + 中風／TIA／動脈栓塞 2 + 血管疾病 1（不计性別，0–8 分）', en: 'HF 1 + hypertension 1 + age 65–74: 1 or ≥75: 2 + diabetes 1 + stroke/TIA/arterial embolism 2 + vascular disease 1. No sex point (0–8).' },

@@ -18,6 +18,7 @@ import {
 } from '../stores/clinic-vitals.store'
 import type { HfpefInputsPatch } from '../stores/hfpef-inputs.store'
 import type {
+  HfpefDerivedIndices,
   HfpefInputReading,
   HfpefReading,
   HfpefScoreId,
@@ -50,11 +51,21 @@ const TAB_SECTIONS: Readonly<Record<HfpefScoreId, readonly HfpefSection[]>> = {
 }
 
 const TAB_KEYS: Readonly<Record<HfpefScoreId, readonly string[]>> = {
-  'hfa-peff': ['averageEe', 'e', 'septalE', 'lateralE', 'trv', 'gls', 'lavi', 'lvmi', 'rwt', 'wall', 'rhythm', 'ntprobnp', 'bnp'],
+  'hfa-peff': ['averageEe', 'e', 'septalE', 'lateralE', 'trv', 'gls', 'lavi', 'laVolume', 'lvmi', 'lvMass', 'height', 'weight', 'rwt', 'wall', 'rhythm', 'ntprobnp', 'bnp'],
   h2fpef: ['bmi', 'age', 'af', 'antihypertensives', 'ee', 'pasp'],
 }
 
 /** What a select's stored value reads as. */
+/** What a derived index was computed from, for the row and the summary. */
+const DERIVED_BASIS: Readonly<Record<'lavi' | 'lvmi', { zh: string; en: string }>> = {
+  lavi: { zh: 'LA 容積÷BSA', en: 'LA volume ÷ BSA' },
+  lvmi: { zh: 'LV 質量÷BSA', en: 'LV mass ÷ BSA' },
+}
+
+function derivedFor(key: string, derived: HfpefDerivedIndices | undefined): string | undefined {
+  return key === 'lavi' || key === 'lvmi' ? derived?.[key] : undefined
+}
+
 const SELECT_TEXT: Readonly<Record<string, { zh: string; en: string }>> = {
   sr: { zh: '竇性', en: 'Sinus' },
   af: { zh: '心房顫動', en: 'Atrial fibrillation' },
@@ -66,12 +77,30 @@ const SELECT_TEXT: Readonly<Record<string, { zh: string; en: string }>> = {
 function SourceChip({
   reading,
   isEnglish,
+  derived,
   onOrderNtProBnp,
 }: {
   reading: HfpefInputReading
   isEnglish: boolean
+  /** The index the calculator scored from body size, when none was stated. */
+  derived?: string
   onOrderNtProBnp?: () => void
 }) {
+  if (reading.value === undefined && derived && (reading.key === 'lavi' || reading.key === 'lvmi')) {
+    const basis = DERIVED_BASIS[reading.key]
+    return (
+      <span className="flex flex-wrap items-center gap-1.5" data-testid={`cdss-hf-hfpef-derived-${reading.key}`}>
+        <span className="rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground">
+          {isEnglish ? 'Derived' : '推算'}
+        </span>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {isEnglish
+            ? `Not stated in the report; derived from ${basis.en}: ${derived}`
+            : `報告未直接提供，已由 ${basis.zh} 推算：${derived}`}
+        </span>
+      </span>
+    )
+  }
   if (reading.value === undefined) {
     // A laboratory value nobody has drawn is ordered, not typed; an echo
     // parameter the report did not print is simply not there.
@@ -113,6 +142,7 @@ function SourceChip({
       </span>
       <span className="text-[11px] tabular-nums text-muted-foreground">
         {(isEnglish ? reading.sourceEn : reading.sourceZh) ?? ''}
+        {reading.derivationZh ?? ''}
       </span>
     </span>
   )
@@ -161,6 +191,24 @@ function ScoreSummary({
           {isEnglish
             ? `Not reported: ${score.missingEn.join(', ')} — at most +${headroom} more; a missing item can only raise the score.`
             : `報告未提供：${score.missingZh.join('、')}：最多再 +${headroom}，缺項只會讓分數更高`}
+        </p>
+      ) : null}
+      {score.derived ? (
+        <p
+          className="mt-0.5 text-[11px] leading-4 text-muted-foreground"
+          data-testid={`cdss-hf-hfpef-dialog-derived-${score.id}`}
+        >
+          {isEnglish
+            ? `Not stated in the report, derived for scoring: ${[
+              score.derived.lavi ? `LAVI ${score.derived.lavi} (${DERIVED_BASIS.lavi.en})` : '',
+              score.derived.lvmi ? `LVMI ${score.derived.lvmi} (${DERIVED_BASIS.lvmi.en})` : '',
+              score.derived.bsa ? `BSA ${score.derived.bsa} (Du Bois, height and weight)` : '',
+            ].filter(Boolean).join(', ')}`
+            : `報告未直接提供，已推算計分：${[
+              score.derived.lavi ? `LAVI ${score.derived.lavi}（${DERIVED_BASIS.lavi.zh}）` : '',
+              score.derived.lvmi ? `LVMI ${score.derived.lvmi}（${DERIVED_BASIS.lvmi.zh}）` : '',
+              score.derived.bsa ? `BSA ${score.derived.bsa}（Du Bois，身高、體重）` : '',
+            ].filter(Boolean).join('、')}`}
         </p>
       ) : null}
       <ScoreInterpretation result={score} isEnglish={isEnglish} />
@@ -291,6 +339,7 @@ export function HfpefInputsDialog({
                       <SourceChip
                         reading={row}
                         isEnglish={isEnglish}
+                        derived={tab === 'hfa-peff' ? derivedFor(row.key, reading.hfaPeff?.derived) : undefined}
                         onOrderNtProBnp={onOrderNtProBnp
                           ? () => { close(); onOrderNtProBnp() }
                           : undefined}

@@ -10,7 +10,10 @@ import { GI } from './gi'
 import { ELECTROLYTE } from './electrolyte'
 import { HFPEF } from './hfpef'
 import { CARDIAC } from './cardiac'
-import { PREVENT } from './prevent'
+import { PREVENT, PREVENT_CVD } from './prevent'
+import { PCE } from './pce'
+import { SCORE2_ASIA_PACIFIC } from './score2'
+import { STOP_BANG } from './stop-bang'
 import { PULMONARY } from './pulmonary'
 import { HEME } from './heme'
 import { NEURO } from './neuro'
@@ -19,6 +22,7 @@ import { GENERAL } from './general'
 import { HPA_RISK } from './hpa-risk'
 import { HEART_FAILURE_PROGNOSIS } from './heart-failure-prognosis'
 import { DOAC_DOSE } from './doac-dose'
+import { TIMI } from './timi'
 
 export const CALCULATORS: CalculatorDef[] = [
   ...RENAL,
@@ -27,10 +31,15 @@ export const CALCULATORS: CalculatorDef[] = [
   ...ELECTROLYTE,
   ...CARDIAC,
   ...DOAC_DOSE,
+  ...TIMI,
   PREVENT,
+  PREVENT_CVD,
+  PCE,
+  SCORE2_ASIA_PACIFIC,
   ...HFPEF,
   ...HEART_FAILURE_PROGNOSIS,
   ...PULMONARY,
+  STOP_BANG,
   ...HEME,
   ...NEURO,
   ...MENTAL,

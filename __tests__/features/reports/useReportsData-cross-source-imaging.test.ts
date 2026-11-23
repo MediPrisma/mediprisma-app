@@ -262,7 +262,8 @@ describe('cross-source imaging reports', () => {
     const reports = pair()
     const row = buildReportsData([reports[0]], [], 'standardized', 'medical', 'en', reportDisplayGroupingKeys(reports)).reportRows[0]
     expect(row.sharedReportSources).toBeUndefined()
-    expect(row.institution).toBe('DOC00000 Example')
+    // In-house VGH row: the DOC staff code is the ordering clinician, not the hospital.
+    expect(row.institution).toBe('臺北榮民總醫院')
   })
 
   it('uses the same Taiwan examination day for UTC and local copies', () => {

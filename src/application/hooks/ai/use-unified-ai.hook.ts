@@ -53,6 +53,7 @@ interface QueryOptions {
   allowTruncatedOutput?: boolean
   onOutputTruncated?: (truncated: boolean) => void
   reasoningEffort?: 'low' | 'medium' | 'high'
+  textVerbosity?: 'low' | 'medium' | 'high'
   /** Ask a user-configured (CUSTOM) endpoint to skip hidden reasoning for this
    *  request. Frontier providers ignore it. Used by the 醫療摘要 fast lane,
    *  where the measured cost of the first section is the model's thinking. */
@@ -217,7 +218,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         queryOptions?.onModelExecution?.(modelExecution)
         queryOptions?.onOutputTruncated?.(result.metadata.outputTruncated === true)
         outputData = result.text
-        collector.finish({ outcome: 'ok', phase: 'request', responseComplete: result.metadata.outputTruncated !== true,
+        collector.finish({ outcome: 'ok', phase: 'request', responseComplete: result.metadata.outputTruncated !== true, usage: result.metadata.usage,
           modelId: modelExecution.actualModelId ?? modelId,
           modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
         record('completed')
@@ -276,6 +277,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
       let modelExecution = createModelExecution(streamOptions?.requestedModelId ?? modelId, modelId, openAiCompatible?.modelId)
       let fullText = ''
+      let reportedUsage: { inputTokens?: number; outputTokens?: number } | undefined
       const collector = beginCollectorObservation({
         ...streamOptions?.collectorContext, feature: collectorFeature(streamOptions?.diagnosticFeature),
         modelId, sampleKind: 'request', mode: 'stream',
@@ -346,6 +348,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           temperature: streamOptions?.temperature,
           maxTokens: streamOptions?.maxTokens,
           reasoningEffort: streamOptions?.reasoningEffort,
+          textVerbosity: streamOptions?.textVerbosity,
           hiddenReasoning: streamOptions?.hiddenReasoning,
           responseFormat: streamOptions?.responseFormat,
           requestedModelId: streamOptions?.requestedModelId,
@@ -353,6 +356,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
             modelExecution = { ...modelExecution, ...execution }
             streamOptions?.onModelExecution?.(modelExecution)
           },
+          onUsage: (usage) => { reportedUsage = usage },
           onChunk: (chunk: string) => {
             if (chunk.length > 0) collector.firstChunk()
             if (chunk.length > fullText.length) lastChunkMs = Math.max(0, Math.round(diagnosticNow() - diagnosticStart))
@@ -377,7 +381,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
         streamOptions?.onComplete?.(fullText)
         const parseFailed = ['invalid', 'incomplete', 'empty'].includes(technical()?.parse_state ?? '')
-        collector.finish({ summaryAttempt: technical(), outcome: parseFailed ? 'parse_failed' : 'ok', phase: parseFailed ? 'parse' : 'stream', responseComplete: true,
+        collector.finish({ summaryAttempt: technical(), outcome: parseFailed ? 'parse_failed' : 'ok', phase: parseFailed ? 'parse' : 'stream', responseComplete: true, usage: reportedUsage,
           modelId: modelExecution.actualModelId ?? modelId,
           modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
         record(parseFailed ? 'error' : 'completed', null, parseFailed ? 'parse_failed' : null)

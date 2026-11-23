@@ -15,6 +15,7 @@ import { cancelCdssGatewayRequests, cdssGatewayStatus, saveCdssSnapshot } from '
 import { deleteCdssHistory, listCdssHistory, readCdssHistory, type CdssHistoryList, type CdssHistoryRecord } from '../telemetry/cdss-history'
 import { authorizeFhir, captureFhirRequestAuth, disconnectFhir, fhirAuthStatus, fhirOAuthEnabled, subscribeFhirAuth } from '../telemetry/fhir-auth'
 import { cdssPatientIdentity } from '../telemetry/patient-identity'
+import { cdssSaveErrorDescription, cdssSaveOutcomeUncertain } from '../telemetry/save-error'
 import type { CarryForwardChoices } from '../telemetry/cdss-carry-forward'
 
 const isDeidentifiedFailure = (failure: unknown) => failure instanceof Error && failure.message === 'cdss_patient_deidentified'
@@ -191,10 +192,10 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   } }, [])
   const deidentifiedHelp = english
     ? 'Turn off the de-identification option in the export tool, then reimport the patient data.'
-    : '請取消雲抓的「去識別化」選項後，重新匯入病人資料。'
+    : '請取消雲抓或北榮懷爾抓抓的「去識別化」選項後，重新匯入病人資料。'
   const identityHelp = english
-    ? 'Check that the patient name retains at least two recognizable letters (unrecognized source characters may appear as *; names masked with ○ are not supported), with a valid date of birth and a partially masked national ID. Then reimport the data and try again.'
-    : '請確認姓名至少保留兩個可辨識文字（來源未辨識字元可保留 *，但不支援含 ○ 的遮蔽姓名），並有有效出生日期及部分遮蔽的身分證字號；確認後重新匯入資料再試。'
+    ? 'Check that the patient name retains at least two recognizable letters (unrecognized source characters may appear as *; names masked with ○ are not supported), with a valid date of birth and a supported national ID: a partially masked national ID from the cloud or a full Taiwan national ID from the TVGH bridge. Hospital resident IDs and MRN-only records are not supported yet. Then reimport the data and try again.'
+    : '請確認姓名至少保留兩個可辨識文字（來源未辨識字元可保留 *，但不支援含 ○ 的遮蔽姓名），並有有效出生日期與支援的身分證欄位：雲端部分遮蔽的身分證字號，或北榮懷爾抓抓的完整臺灣身分證字號。目前尚不支援院內居留證或僅有病歷號的資料。確認後重新匯入資料再試。'
   /** Opens on the newest record of the disease on screen, the one a clinician most often brings back. */
   const run = async (saveId?: string, latest = false) => {
     if (!ownerUid) return
@@ -243,7 +244,10 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
           toast.error(english ? 'Patient identification failed. CDSS record was not saved.' : '病人識別失敗，CDSS 紀錄未儲存。',
             { description: identityHelp, duration: 10000 })
         } else {
-          toast.error(english ? 'Record was not saved. Please try again.' : '紀錄未儲存，請稍後重試。')
+          const uncertain = cdssSaveOutcomeUncertain(failure)
+          toast.error(uncertain ? (english ? 'CDSS save was not confirmed.' : 'CDSS 儲存結果未確認。')
+            : (english ? 'CDSS record was not saved.' : 'CDSS 紀錄未儲存。'),
+            { description: cdssSaveErrorDescription(failure, english), duration: 15000 })
         }
       }
     }
@@ -448,7 +452,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
       <h3 id="cdss-carry-title" className="text-[18px] font-semibold">
         {english ? 'Bring in ' : '帶入 '}{text(result.title) || nameOf(selected.packId)} · {when(storedTimestampForDisplay(selected.savedAt), english)}
       </h3>
-      <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-relaxed">{english ? 'Confirm the previous answers still apply. Only empty fields are filled, and each carried answer is marked "Carried · date" until you change it. Measurement and decision dates stay unchanged; current record measurements take precedence. Not carried: dyspnoea and weight since last visit, dyspnoea today (answer these every visit), manually entered lab values, PREVENT values other than smoking and family history (today\'s record is used), and AI answers.' : '請確認上次回答仍適用。只補入目前空白的欄位，帶入的答案會標示「帶入 · 日期」，改答後標示消失；量測與決策保留原日期，今天病歷已有的量測優先。不帶入：喘比上次、體重比上次、今天有沒有喘（每次重新填）、手動輸入的檢驗值、吸菸與家族史以外的 PREVENT 數值（改用今天病歷）與 AI 回答。'}</p>
+      <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-relaxed">{english ? 'Confirm the previous answers still apply. Only empty fields are filled, and each carried answer is marked "Carried · date" until you change it. Measurement and decision dates stay unchanged; current record measurements take precedence. Not carried: dyspnoea and weight since last visit, dyspnoea today, and for hypertension missed doses, dizziness/syncope/falls and 「no home reading」 (answer these every visit), manually entered lab values, PREVENT values other than smoking and family history (today\'s record is used), and AI answers.' : '請確認上次回答仍適用。只補入目前空白的欄位，帶入的答案會標示「帶入 · 日期」，改答後標示消失；量測與決策保留原日期，今天病歷已有的量測優先。不帶入：喘比上次、體重比上次、今天有沒有喘，以及高血壓的漏服降壓藥、頭暈／暈厥／跌倒、居家血壓「沒有量」（每次重新填）、手動輸入的檢驗值、吸菸與家族史以外的 PREVENT 數值（改用今天病歷）與 AI 回答。'}</p>
       {([['inputs', english ? 'Manual inputs (measurements, NYHA, signs, visit answers, AF, evidence selections, PREVENT smoking and family history)' : '人工輸入（量測、NYHA、徵候、本次問診、AF、證據勾選、PREVENT 吸菸與家族史）',
           savedInputs.length ? savedInputs.join(english ? ', ' : '、') : english ? 'Nothing saved' : '當時沒有填寫'],
         ['decisions', english ? 'Previous decisions, reasons and notes (original dates)' : '上次決策、理由與備註（保留原日期）',

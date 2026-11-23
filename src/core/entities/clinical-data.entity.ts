@@ -98,6 +98,20 @@ export interface MedicationAtcClassification {
   atcHierarchySnapshotId: string
 }
 
+export interface HospitalMedicationAtcClassification {
+  source: 'vghtpe-identity-nhi-atc'
+  atcCode: string
+  atcNameEn?: string
+  atcNameZh?: string
+  atcLevel2Code?: string
+  atcLevel2NameEn?: string
+  atcLevel2NameZh?: string
+  atcLevel4Code?: string
+  atcLevel4NameEn?: string
+  atcLevel4NameZh?: string
+  snapshotId: string
+}
+
 export interface ClinicalFhirExtension {
   valueUri?: string
   url?: string
@@ -271,6 +285,10 @@ export interface MedicationEntity extends ClinicalSourceRecord {
     officialNameZh?: string
     officialNameEn?: string
     ingredientText?: string
+    /** The dictionary's own ingredient text, present only when a verified
+     *  erratum replaced it in `ingredientText` (nhi-dictionary-errata). Kept
+     *  for tracing; not shown — the correction is silent by owner decision. */
+    officialIngredientText?: string
     doseForm?: string
     atcCode?: string
     atcNameZh?: string
@@ -298,6 +316,13 @@ export interface MedicationEntity extends ClinicalSourceRecord {
    * hierarchy; free-text drug/category labels are never guessed or translated.
    */
   atcClassification?: MedicationAtcClassification
+  /**
+   * Display-only ATC for a VGH hospital order: every NHI product of its one
+   * index identity that the drug master resolves on the order date carries
+   * this same full ATC code. No product is claimed. The hover card and the
+   * 藥理類別 filter and grouping read it; AI and calculators do not.
+   */
+  hospitalAtcClassification?: HospitalMedicationAtcClassification
   /**
    * Originating FHIR resource type. 'MedicationRequest' = 醫師處方/健保開立紀錄
    * (bridge default); 'MedicationStatement' = 病人目前服用中的藥物清單 (IPS
@@ -417,6 +442,8 @@ export interface ClinicalRecordVariant {
 }
 
 export interface ObservationEntity extends ClinicalSourceRecord {
+  /** Original graph nodes represented by this app-only cross-source lab row. */
+  clinicalSourceCopyKeys?: readonly string[]
   /** Local convenience association by date; not an explicit FHIR encounter link. */
   _encounterInferred?: boolean
   /** Encounters of the outpatient orders this result is basedOn (local import). */
@@ -659,6 +686,8 @@ export interface DiagnosticReportEntity extends ClinicalSourceRecord {
   /** True only when local import inferred encounter by calendar date. */
   _encounterInferred?: boolean
   performer?: Array<{ display?: string; reference?: string }>
+  /** Reporting / interpreting physician. */
+  resultsInterpreter?: Array<{ display?: string; reference?: string }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
@@ -824,6 +853,11 @@ export interface EncounterEntity extends ClinicalSourceRecord {
   meta?: { source?: string; tag?: Array<{ system?: string; code?: string; display?: string }> }
   _sourceRecordComparison?: import('@/src/shared/utils/source-record-comparison').SourceRecordComparison
   _sourceEncounterRecords?: any[]
+  /** Orders written at this visit that HIS has no request or report for yet. */
+  _awaitingOrders?: import('@/src/shared/utils/awaiting-order').AwaitingOrder[]
+  /** How many examination orders this visit wrote, reported or not; unset
+   *  when the bundle does not say (an earlier import, a source without orders). */
+  _orderCount?: number
   id: string
   status?: string
   class?: {

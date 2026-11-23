@@ -45,8 +45,12 @@ type LabMode = OverviewLabMode
 
 const NO_OBSERVATIONS: readonly any[] = []
 
-function shortDayLabel(day: string): string {
-  return day.length >= 10 ? `${day.slice(5, 7)}/${day.slice(8, 10)}` : day
+/** MM/DD for this year; YY/MM/DD for any other, so a 1-year window that
+ *  crosses New Year cannot read last December as this one. */
+function shortDayLabel(day: string, currentYear: number = new Date().getFullYear()): string {
+  if (day.length < 10) return day
+  const monthDay = `${day.slice(5, 7)}/${day.slice(8, 10)}`
+  return day.slice(0, 4) === String(currentYear) ? monthDay : `${day.slice(2, 4)}/${monthDay}`
 }
 
 /**

@@ -16,12 +16,13 @@ import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 import { useNow } from '@/src/shared/hooks/use-now.hook'
 import { medicationSupplyDaysRemaining, medicationClinicalDay } from '@/src/shared/utils/medication-calendar'
-import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays } from '@/src/core/utils/clinical-context-selection.utils'
-import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus } from '@/src/shared/utils/medication-source-markers'
+import { assessMedicationCurrentness, medicationRecordedTreatmentEnd, medicationExpectedEnd, medicationExpectedEndTimestamp, durationToDays, medicationRefillDispenseDay } from '@/src/core/utils/clinical-context-selection.utils'
+import { sourceSelfPurchase, hasExplicitChronicNote, hasCloudCoverageDerivedStatus, chronicSlipFills } from '@/src/shared/utils/medication-source-markers'
 import { isNhiDrugCodeSystem } from '@/src/shared/utils/nhi-drug-code-system'
 import { isVghtpeSource, isMedcloudSource } from '@/src/shared/utils/clinical-source-identity'
+import { vghtpeMedicationIdentityCodes } from '@/src/shared/utils/hospital-medication-index'
 import { formatOrganizationContextDisplay } from '@/src/shared/utils/organization-display'
-import { projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
+import { complementComparisonRecord, projectMedicationComparisons } from '@/src/shared/utils/medication-comparison-projection'
 import { hospitalMedicationDisplayRecord } from '@/src/shared/utils/medication-hospital-display'
 
 function sourceCalendarDate(value?: string): string {
@@ -40,6 +41,17 @@ import {
 /** Taipei clinical date, shared by the list, timeline and copied text. */
 function isoCalendarDay(value?: string): string | undefined {
   return medicationClinicalDay(value)
+}
+
+// The hospital order's identity mark, on the row itself or, for a row merged
+// with a cloud record, on the hospital record it came from.
+function hospitalIdentityCodes(medication: any): string[] | undefined {
+  const records = [medication, ...(medication._sourcePrescriptionRecords ?? [])]
+  for (const record of records) {
+    const codes = vghtpeMedicationIdentityCodes(record)
+    if (codes) return [...codes]
+  }
+  return undefined
 }
 
 function isHospitalOutpatientMedication(medication: any): boolean {
@@ -172,7 +184,7 @@ export function useMedicationRows(
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
       const drugTerminology = med.drugTerminology
       const hospitalMedicationName = !drugTerminology || med._reconciledSourceReferences?.length
-        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code) : undefined
+        ? resolveHospitalMedicationName(med.medicationCodeableConcept || med.code, med) : undefined
 
       // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
       // localized (zh-TW) name in `.text` and the English name in
@@ -239,6 +251,8 @@ export function useMedicationRows(
       })
 
       const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start
+      // The row stays with the visit that wrote it; a later fill shows its own supply.
+      const refillDispenseDay = medicationRefillDispenseDay(med)
       const stopDateRaw = statusInactive
         ? medicationRecordedTreatmentEnd(med)
         : undefined
@@ -297,6 +311,7 @@ export function useMedicationRows(
       // A prior chronic fill does not make a different order a chronic Rx.
       const drugKey = medicationClinicalIdentityKey(med)
       const isChronic = isChronicPrescription(med) || hasExplicitChronicNote(med)
+      const chronicFills = isChronic && !refillDispenseDay ? chronicSlipFills(med, durationDays) : undefined
       const selfPurchased = sourceSelfPurchase(med) === true
 
       const refillAgg = drugKey ? refillsByDrug.get(drugKey) : undefined
@@ -321,7 +336,15 @@ export function useMedicationRows(
       // technical pharmacology name like the drug itself).
       const sourceCategory = localizedMedicationCategory(med?.category?.[0], locale)
       const cloudAtc3Category = localizedMedcloudAtc3Category(med, locale)
-      const category = cloudAtc3Category || sourceCategory || undefined
+      // A hospital order's shared identity ATC names the same governed level-2
+      // group a cloud prescription of that class shows.
+      const hospitalAtc = drugTerminology ? undefined : med.hospitalAtcClassification
+      const hospitalAtcCategory = (locale === 'en'
+        ? hospitalAtc?.atcLevel2NameEn || hospitalAtc?.atcLevel2NameZh
+        : hospitalAtc?.atcLevel2NameZh || hospitalAtc?.atcLevel2NameEn) ?? ''
+      const category = cloudAtc3Category || sourceCategory
+        || (hospitalAtcCategory ? localizedMedicationCategory({ text: hospitalAtcCategory }, locale) : '')
+        || undefined
       const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code || undefined
       // ICD descriptions follow UI locale, NOT audience: medical users on a
@@ -368,6 +391,7 @@ export function useMedicationRows(
         totalQuantity,                               // 藥品總量
         remainingDisplay.sourceDays,
         ...dateSearchTokens(startDateRaw),           // 日期 西元 + 民國
+        ...dateSearchTokens(refillDispenseDay),
         ...dateSearchTokens(refillAgg?.firstDate),
       ].filter(Boolean).join(' ').toLowerCase()
 
@@ -379,6 +403,7 @@ export function useMedicationRows(
         encounterReference: med.encounter?.reference,
         reconciledOrderIds: med._reconciledSourceReferences?.map((reference: string) => reference.split('/').pop()).filter(Boolean),
         nhiDrugCode: (med.medicationCodeableConcept || med.code)?.coding?.find((coding: any) => isNhiDrugCodeSystem(coding.system))?.code,
+        hospitalNhiCodes: hospitalIdentityCodes(med),
         sourceOrderIdentifiers: med.identifier?.filter((identifier: any) => identifier.system === 'urn:oid:vgh.medication.order' && identifier.value)
           .map((identifier: any) => identifier.value),
         dataOrigin: med._sourcePrescriptionRecords?.some(isVghtpeSource) ? 'hospital'
@@ -396,6 +421,8 @@ export function useMedicationRows(
         frequency: frequencySummary || undefined,
         totalQuantity,
         startedOn: sourceCalendarDate(startDateRaw),
+        dispensedOn: refillDispenseDay ? sourceCalendarDate(refillDispenseDay) : undefined,
+        dispensedOnIso: refillDispenseDay ? isoCalendarDay(refillDispenseDay) : undefined,
         stoppedOn: stopDateRaw ? sourceCalendarDate(stopDateRaw) : undefined,
         durationDays,
         endDate: endDate ? sourceCalendarDate(endDate) : undefined,
@@ -411,10 +438,12 @@ export function useMedicationRows(
         isInactive,
         currentnessUncertain: currentness.uncertain,
         isChronic,
+        ...(chronicFills ? { chronicFills } : {}),
         selfPurchased,
         category,
         drugTerminology,
         hospitalMedicationName,
+        ...(hospitalAtc ? { hospitalAtcClassification: hospitalAtc } : {}),
         pharmacy,
         icdCode,
         icdText,
@@ -435,12 +464,23 @@ export function useMedicationRows(
     }
     const comparisonRows = projectMedicationComparisons(enriched,
       row => (sourceById.get(row.id) as any)?._sourceRecordComparison, row => row,
-    ).map(({ record, sources, comparison, ownedIds, warnings }) => comparison ? {
-      ...record,
-      sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
-      reconciledOrderIds: ownedIds ?? record.reconciledOrderIds,
-      searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || record.searchHaystack,
-    } : record)
+    ).map(({ record, sources, comparison, ownedIds, warnings }, index) => {
+      if (!comparison) return record
+      // The hospital row standing for an unconfirmed group keeps the visit
+      // context its cloud copy showed; the source records stay as recorded.
+      const raw = sourceById.get(record.id) as any
+      const complemented = raw && record.dataOrigin === 'hospital' && comparison.status !== 'confirmed'
+        ? complementComparisonRecord({ record: raw, comparison,
+          sources: (sources ?? []).map(source => sourceById.get(source.id)).filter(Boolean) as any[] })
+        : raw
+      const representative = complemented && complemented !== raw ? buildRow(complemented, index) : record
+      return {
+        ...representative,
+        sourceComparison: { status: comparison.status, records: sources ?? [], warnings },
+        reconciledOrderIds: ownedIds ?? representative.reconciledOrderIds,
+        searchHaystack: sources?.map(source => source.searchHaystack).join(' ') || representative.searchHaystack,
+      }
+    })
     // "雲端" only tells rows apart when a hospital import sits beside it; on a
     // MediCloud-only chart every row would carry the same tag.
     const hasHospitalSource = enriched.some(row => row.dataOrigin === 'hospital' || row.dataOrigin === 'integrated')

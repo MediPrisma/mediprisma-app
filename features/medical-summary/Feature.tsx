@@ -113,12 +113,13 @@ import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/
 type SummaryView = "standard" | "custom"
 
 import { markUserTrigger, useTrackView } from "@/src/application/telemetry/usage-analytics"
+import { taipeiDay } from "@/src/core/utils/calendar-day"
 
 export default function MedicalSummaryFeature() {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const { loading: authLoading } = useAuth()
-  const { activeTab: rightPanelTab, setActiveTab } = useRightPanel()
+  const { activeTab: rightPanelTab, setActiveTab, summaryView: selectedView, setSummaryView: setActiveView } = useRightPanel()
   const { patient } = usePatient()
   const demoPatientId = patient?.id
   const base = t.medicalSummary
@@ -139,7 +140,6 @@ export default function MedicalSummaryFeature() {
   const visibleInsightCount = visibleInsightPanels.length
   const insightsModel = useModelPref("insights")
   const setModelFor = useSetModelFor()
-  const [selectedView, setActiveView] = useState<SummaryView>("standard")
   const tourActive = useRightFeatureTourStore((state) => state.active)
   const tourStep = useRightFeatureTourStore((state) => state.stepId)
   const openCustomSummaryGuide = useRightFeatureTourStore((state) => state.openCustomSummaryGuide)
@@ -155,6 +155,9 @@ export default function MedicalSummaryFeature() {
   // tabs stay mounted for the rest of the session.
   useTrackView('summary', activeView, rightPanelTab === 'medical-summary')
   const [customUnread, setCustomUnread] = useState(false)
+  // The view can also be opened from outside this tab (the page framing this
+  // app); whoever opened 自訂摘要, what was unread there is now on screen.
+  if (activeView === "custom" && customUnread) setCustomUnread(false)
   const [customManagerOpen, setCustomManagerOpen] = useState(false)
   const [dataScopeOpen, setDataScopeOpen] = useState(false)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
@@ -443,7 +446,7 @@ export default function MedicalSummaryFeature() {
   // reference date (the demo's own as-of date for demo data), counted the way
   // the prompt counted them.
   const currentAnticholinergics = useMemo(() => {
-    const referenceDay = new Date(clinicalNowMs(isDemoDataActive(), demoPatientId) + 8 * 3_600_000).toISOString().slice(0, 10)
+    const referenceDay = taipeiDay(clinicalNowMs(isDemoDataActive(), demoPatientId))
     return currentAnticholinergicMedicines(safetySourceCatalog ?? [], referenceDay).map(({ ingredient }) => ingredient)
   }, [safetySourceCatalog, demoPatientId])
   // 待核對 beside an alert that calls a medicine anticholinergic against its

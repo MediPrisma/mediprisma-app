@@ -50,12 +50,23 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     // stays unfilled (its default is not "from the patient").
     if (input.source?.kind === 'hfpefClinical') {
       const hit = autofill.clinicalSelects?.[input.source.key]
-      if (hit && input.options.some(option => option.value === hit.value)) return {
-        ...EMPTY, value: hit.value, filled: true, date: hit.date,
+      const answer = hit && (input.source.answers?.[hit.value] ?? hit.value)
+      if (hit && input.options.some(option => option.value === answer)) return {
+        ...EMPTY, value: answer!, filled: true, date: hit.date,
         source: { testName: hit.testName, facility: hit.facility, obsId: hit.obsId, resourceType: hit.resourceType },
       }
+      // The record has something it cannot turn into an answer (「unknown」):
+      // left for the clinician, never presumed absent.
+      if (hit) return { ...EMPTY, value: '' }
     }
     if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
+    const presumed = input.presumed !== undefined ? input.options.find((option) => option.value === input.presumed) : undefined
+    // A record question presumes nothing until the record has loaded.
+    const recordSettled = input.source?.kind !== 'hfpefClinical' || autofill.recordLoaded === true
+    if (presumed && recordSettled) {
+      const testName = `${input.source?.kind === 'hfpefClinical' ? '紀錄未見，' : ''}預設「${presumed.label.zh}」（請核對）`
+      return { ...EMPTY, value: presumed.value, filled: true, source: { testName } }
+    }
     return { ...EMPTY, value: input.defaultValue ?? input.options[0]?.value ?? '' }
   }
   if (input.type !== 'number') return { ...EMPTY, value: input.defaultValue ?? '' }
@@ -74,6 +85,12 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     if (!compatible && !sameUnit) {
       return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
     }
+  }
+
+  // A percentage takes no reading in another unit: an absolute count (neutrophils in /µL) is not a share.
+  // (A unit the input's dimension converts, FiO₂ as a fraction, is not refused.)
+  if (expected === '%' && hit.unit.trim() && normUnit(hit.unit) !== normUnit('%') && !convertToBase(hit.value, hit.unit, input.dimension)) {
+    return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
   }
 
   // Preserve HFpEF threshold precision (e.g. RWT 0.424 must not become 0.42).
@@ -148,6 +165,8 @@ export function computeAutofilledResult(calc: CalculatorDef, autofill: Autofill)
       // card would look auto-computed while resting on an assumption — suppress.
       const isOptional = !!inp.optional
       if (inp.source && !isOptional && !resolved.filled) return null
+      // A reading in a unit the formula cannot take (QT in an unknown unit) is not computed inline.
+      if (resolved.unconvertible) return null
     }
     const result = calc.compute(values)
     return result ? { result, asOf } : null

@@ -95,7 +95,7 @@ const APP_ANALYTE_NAMES: Readonly<Record<string, { zh: string; en: string }>> = 
   'UROTHELIUM EPI': { zh: '尿沉渣移行上皮細胞', en: 'Urine urothelial cells' },
   'RTE-RENAL TUBE': { zh: '尿沉渣腎小管上皮細胞', en: 'Urine renal tubular epithelial cells' },
   'PROT/CR RATIO': { zh: '尿蛋白/肌酸酐比值', en: 'Urine protein/creatinine ratio' },
-  'TC/HDL RATIO': { zh: '總膽固醇/HDL 比值', en: 'Total cholesterol/HDL ratio' },
+  'TC/HDL': { zh: '總膽固醇/HDL 比值', en: 'Total cholesterol/HDL ratio' },
   // Hormones and tumour markers the pivot carries under their source key.
   IPTH: { zh: '副甲狀腺素 (intact)', en: 'Intact parathyroid hormone' },
   PTH: { zh: '副甲狀腺素', en: 'Parathyroid hormone' },

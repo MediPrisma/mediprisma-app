@@ -9,7 +9,7 @@ The backend test executes the migration CLI, verifies dry-run, preservation of p
 To run locally, install both repositories' dependencies, then from the backend checkout:
 
 ```sh
-npx firebase emulators:exec --config firebase.gallery-test.json --only auth,firestore --project demo-mediprisma "node --test tests/prompt-visibility-migration.test.mjs && cd ../medical-note-smart-on-fhir && npx playwright test -c playwright.gallery.config.ts"
+npx firebase emulators:exec --config firebase.gallery-test.json --only auth,firestore --project demo-mediprisma "node --test tests/prompt-visibility-migration.test.mjs && cd ../mediprisma-app && npx playwright test -c playwright.gallery.config.ts"
 ```
 
 Dedicated ports are Firestore 8188, Auth 9198, and app 3017. The emulator does not enforce production composite-index availability; the Jest query regression separately guards against composite-index-dependent queries. These checks do not certify that a migration was applied in production. Release verification still needs a read-only production data check.

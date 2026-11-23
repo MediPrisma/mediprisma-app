@@ -146,6 +146,32 @@ function answerEverything(
 
 const reportsCalls = () => mockStream.mock.calls.filter(([messages]: any[]) => isReportsRequest(messages))
 
+test.each(['Network error', '503 Service Unavailable', 'monthly_budget_exhausted'])('hospital summary never resends failed lanes: %s', async message => {
+  renderHook(() => useMedicalSummary())
+  mockStream.mockRejectedValue(new Error(message))
+  await act(async () => runGeneration({ modelId: 'gpt-6-luna', requestedModelId: 'gpt-6-luna' }))
+  expect(reportsCalls()).toHaveLength(1)
+  const narrative = mockStream.mock.calls.filter(([messages]) => !isReportsRequest(messages))
+  expect(narrative.length).toBeGreaterThan(0)
+  expect(narrative.filter(([messages]) => isFastLaneRequest(messages)).length).toBeLessThanOrEqual(1)
+  expect(narrative.filter(([messages]) => !isFastLaneRequest(messages))).toHaveLength(1)
+  expect(mockResult.cardErrors).toHaveProperty('reports')
+  expect(mockResult.cardErrors).toHaveProperty('problems')
+})
+
+test('hospital Luna summary asks for low reasoning on every request; other built-in models send none', async () => {
+  renderHook(() => useMedicalSummary())
+  answerEverything()
+  await act(async () => runGeneration({ modelId: 'gpt-6-luna', requestedModelId: 'gpt-6-luna' }))
+  expect(mockStream.mock.calls.length).toBeGreaterThan(1)
+  mockStream.mock.calls.forEach(([, options]) => expect(options.reasoningEffort).toBe('low'))
+
+  mockStream.mockClear()
+  await act(async () => runGeneration())
+  expect(mockStream.mock.calls.length).toBeGreaterThan(1)
+  mockStream.mock.calls.forEach(([, options]) => expect(options).not.toHaveProperty('reasoningEffort'))
+})
+
 test('an aborted real reports producer cannot publish a late completed report or retry it', async () => {
   const controller = new AbortController()
   let finish!: () => void, lateChunk!: () => void, transportSignal!: AbortSignal

@@ -48,7 +48,7 @@ jest.mock('@voho0000/personalized-care', () => {
 type Registry = typeof import('@/features/clinical-decision-support/guideline-packs/registry')
 type BetaStore = typeof import('@/src/application/stores/beta-features.store')
 
-const HOST_PACK_IDS = ['heart-failure-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss', 'chronic-coronary-disease-cdss']
+const HOST_PACK_IDS = ['heart-failure-cdss', 'hypertension-cdss', 'hyperlipidemia-cdss', 'atrial-fibrillation-cdss', 'chronic-coronary-disease-cdss']
 const EXTRA = 'stub-extra-cdss'
 
 /** A fresh module graph loaded under the given environment. */

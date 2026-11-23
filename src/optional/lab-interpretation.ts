@@ -1,4 +1,4 @@
-// Public fallback retained from medical-note-smart-on-fhir at 80c3a767c^
+// Public fallback retained from mediprisma-app at 80c3a767c^
 // (before the shared utilities moved to the private package).
 // Interpretation Helper Functions (audit C3 — shared by clinical-summary
 // reports and ips-export's inference engine)
