@@ -24,7 +24,8 @@ export function ProgressiveImportStatus() {
   const current = useProgressiveImportStatus()
   const storedRecord = useHospitalCaptureReasons()?.storedRecord
   const english = locale === 'en'
-  const note = storedRecord ? STORED_RECORD[storedRecord][english ? 1 : 0] : null
+  // Signing in once is all it takes; the link is the only thing here the physician can act on.
+  const note = storedRecord ? <>{STORED_RECORD[storedRecord][english ? 1 : 0]}{storedRecord === 'signed_out' && <a href="https://opd-ai-agent.mediprisma.tw/" target="_blank" rel="noopener noreferrer" className="ml-1 underline">{english ? 'Sign in to the outpatient assistant' : '登入門診助理'}</a>}</> : null
   // The stored-record note shares the status row; it keeps a row of its own only without a status or under an alert.
   const noteRow = note && <div role="status" aria-live="polite" className="flex shrink-0 items-start gap-2 border-b bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
     <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
