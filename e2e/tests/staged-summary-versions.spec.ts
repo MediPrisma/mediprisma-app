@@ -19,32 +19,49 @@ test('keeps cloud summary visible across a complete hospital import and restores
   await expect(page.getByTestId('import-bundle-input').first()).toBeAttached({ timeout: 90_000 })
   const deliver = await createImporter(page)
   await deliver('cloud', 1)
-  const picker = page.getByRole('button', { name: '雲端', exact: true })
-  await expect(picker).toBeVisible({ timeout: 40_000 })
-  const hospital = page.getByRole('button', { name: '含院內資料', exact: true })
+  const picker = versionPicker(page)
+  await expect(picker).toHaveText('雲端', { timeout: 40_000 })
   const cloudCalls = await getChatCallCount(page)
   expect(cloudCalls).toBeGreaterThan(0)
   await deliver('hospital-visits', 2)
-  await expect(picker).toHaveAttribute('aria-pressed', 'true')
+  await expect(picker).toHaveText('雲端')
   expect(await getChatCallCount(page)).toBe(cloudCalls)
   await deliver('hospital', 3)
   await expect(page.getByRole('status', { name: '新版產生中' })).toBeVisible()
-  await expect(picker).toHaveAttribute('aria-pressed', 'true')
-  await expect(hospital).toBeEnabled({ timeout: 40_000 })
+  await expect(picker).toHaveText('雲端')
+  await expectLatest(page, '含院內資料', true, 40_000)
   await expect(page.getByRole('status', { name: '新版產生中' })).toHaveCount(0)
-  await expect(picker).toHaveAttribute('aria-pressed', 'true')
+  await expect(picker).toHaveText('雲端')
   const finalCalls = await getChatCallCount(page)
   expect(finalCalls).toBeGreaterThan(cloudCalls)
-  await hospital.click()
-  await expect(hospital).toHaveAttribute('aria-pressed', 'true')
-  await picker.click()
+  await chooseLatest(page, '含院內資料')
+  await expect(picker).toHaveText('含院內資料')
+  await chooseLatest(page, '雲端')
   expect(await getChatCallCount(page)).toBe(finalCalls)
   await page.screenshot({ path: testInfo.outputPath('summary-versions-local-full.png') })
   await page.reload()
-  await expect(picker).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 })
-  await expect(hospital).toBeEnabled()
+  await expect(picker).toHaveText('雲端', { timeout: 30_000 })
+  await expectLatest(page, '含院內資料', true)
   expect(await getChatCallCount(page)).toBe(0)
 })
+
+const versionPicker = (page: Page) => page.getByRole('combobox', { name: '摘要版本' })
+const latestOption = (page: Page, label: string) =>
+  page.getByRole('group', { name: '最新版本' }).getByRole('option', { name: new RegExp(`^${label}`) })
+
+async function chooseLatest(page: Page, label: string) {
+  await versionPicker(page).click()
+  await latestOption(page, label).click()
+}
+
+async function expectLatest(page: Page, label: string, available: boolean, timeout?: number) {
+  await versionPicker(page).click()
+  const option = latestOption(page, label)
+  if (available) await expect(option).not.toHaveAttribute('aria-disabled', 'true', { timeout })
+  else await expect(option).toHaveAttribute('aria-disabled', 'true', { timeout })
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+}
 
 async function createImporter(page: Page) {
   const bundle = JSON.parse(await readFile(path.join(__dirname, '../fixtures/medcloud-no-reports-bundle.json'), 'utf8'))
@@ -76,8 +93,8 @@ test('a failed hospital summary retains cloud content and exposes retry', async 
   const deliver = await createImporter(page)
   await expect(page.getByTestId('import-bundle-input').first()).toBeAttached()
   await deliver('cloud', 1)
-  const cloud = page.getByRole('button', { name: '雲端', exact: true })
-  await expect(cloud).toBeVisible({ timeout: 30_000 })
+  const cloud = versionPicker(page)
+  await expect(cloud).toHaveText('雲端', { timeout: 30_000 })
   await page.evaluate(() => {
     const original = window.fetch
     const w = window as Window & { restoreAi?: () => void }
@@ -90,13 +107,13 @@ test('a failed hospital summary retains cloud content and exposes retry', async 
   })
   await deliver('hospital', 2)
   await expect(page.getByRole('button', { name: '重試', exact: true })).toBeVisible({ timeout: 30_000 })
-  await expect(cloud).toHaveAttribute('aria-pressed', 'true')
+  await expect(cloud).toHaveText('雲端')
   await expect(page.getByText('測試病人的雲端與院內摘要', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '含院內資料', exact: true })).toBeDisabled()
+  await expectLatest(page, '含院內資料', false)
   await page.evaluate(() => (window as Window & { restoreAi?: () => void }).restoreAi?.())
   await page.getByRole('button', { name: '重試', exact: true }).click()
-  await expect(page.getByRole('button', { name: '含院內資料', exact: true })).toBeEnabled({ timeout: 30_000 })
-  await expect(cloud).toHaveAttribute('aria-pressed', 'true')
+  await expectLatest(page, '含院內資料', true, 30_000)
+  await expect(cloud).toHaveText('雲端')
 })
 
 test('Stop cancels a cloud run and does not start its queued hospital replacement', async ({ page }) => {
@@ -127,7 +144,7 @@ test('Stop during manual regeneration also clears the already queued hospital su
   const deliver = await createImporter(page)
   await expect(page.getByTestId('import-bundle-input').first()).toBeAttached()
   await deliver('cloud', 1)
-  await expect(page.getByRole('button', { name: '雲端', exact: true })).toBeVisible({ timeout: 40_000 })
+  await expect(versionPicker(page)).toHaveText('雲端', { timeout: 40_000 })
   await page.getByRole('button', { name: '重新產生', exact: true }).click()
   await expect(page.getByRole('button', { name: '終止', exact: true })).toBeVisible()
   await deliver('hospital', 2)
@@ -136,7 +153,7 @@ test('Stop during manual regeneration also clears the already queued hospital su
   await expect(page.getByRole('button', { name: '終止', exact: true })).toHaveCount(0)
   await page.waitForTimeout(1200)
   expect(await getChatCallCount(page)).toBe(stoppedCalls)
-  await expect(page.getByRole('button', { name: '雲端', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(versionPicker(page)).toHaveText('雲端')
 })
 
 test('a completed version opens its saved source text after a hospital supplement', async ({ page }, testInfo) => {
@@ -149,9 +166,9 @@ test('a completed version opens its saved source text after a hospital supplemen
   const deliver = await createImporter(page)
   await expect(page.getByTestId('import-bundle-input').first()).toBeAttached()
   await deliver('cloud', 1)
-  await expect(page.getByRole('button', { name: '雲端', exact: true })).toBeVisible({ timeout: 40_000 })
+  await expect(versionPicker(page)).toHaveText('雲端', { timeout: 40_000 })
   await deliver('hospital', 2)
-  await expect(page.getByRole('button', { name: '含院內資料', exact: true })).toBeEnabled({ timeout: 40_000 })
+  await expectLatest(page, '含院內資料', true, 40_000)
   await page.locator('[data-source-link="direct"]').first().click()
   await expect(page.getByRole('dialog')).toContainText('Amlodipine')
   await expect(page.getByRole('dialog')).not.toContainText('此版本未保存來源內文')
@@ -162,6 +179,6 @@ test('a completed version opens its saved source text after a hospital supplemen
       runId: 'e2e-summary-run', importId, phase: 'privacy-stale' }, location.origin)
   })
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: '雲端', exact: true })).toHaveCount(0)
+  await expect(versionPicker(page)).toHaveCount(0)
 })
 
