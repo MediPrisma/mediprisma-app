@@ -703,7 +703,7 @@ export default function MedicalSummaryFeature() {
           onSelect={selectSummaryVersion} busy={isBusy} locale={locale} /> : null}
         <div
           data-tour="medical-summary-controls"
-          className={`ml-auto flex flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none ${summaryVersions.length ? 'min-w-40' : 'min-w-0 basis-0'}`}
+          className={`ml-auto flex flex-1 flex-nowrap items-center justify-end gap-1.5 @max-[19rem]:!ml-0 @max-[19rem]:!basis-full @max-[19rem]:!flex-none ${summaryVersions.length ? 'min-w-56' : 'min-w-0 basis-0'}`}
         >
           {activeView === "standard" ? (
             <ModelPicker

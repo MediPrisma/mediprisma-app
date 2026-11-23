@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { SummaryVersionPicker } from '@/features/medical-summary/components/SummaryVersionPicker'
 import { useSummaryVersionsStore, type SummaryVersion } from '@/src/application/hooks/medical-summary/summary-versions.store'
 import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
@@ -55,13 +55,40 @@ test('picker does not steal focus or switch when a new version arrives', () => {
   const onSelect = jest.fn()
   const cloud = version('cloud', 'cloud')
   const { rerender } = render(<SummaryVersionPicker versions={[cloud]} selectedId="cloud" onSelect={onSelect} busy locale="zh-TW" />)
-  const picker = screen.getByRole('button', { name: '雲端' })
+  const picker = screen.getByRole('combobox', { name: '摘要版本' })
+  expect(screen.getByRole('status', { name: '新版產生中' })).toBeInTheDocument()
   act(() => picker.focus())
   rerender(<SummaryVersionPicker versions={[cloud, version('hospital', 'hospital')]} selectedId="cloud" onSelect={onSelect} busy={false} locale="zh-TW" />)
-  expect(picker).toHaveAttribute('aria-pressed', 'true')
+  expect(picker).toHaveTextContent('雲端')
   expect(picker).toHaveFocus()
   expect(onSelect).not.toHaveBeenCalled()
-  expect(screen.getByRole('button', { name: '含院內資料' })).toBeEnabled()
+  expect(screen.queryByRole('status')).toBeNull()
+})
+
+test('one dropdown lists the latest versions first and earlier ones below', () => {
+  const onSelect = jest.fn()
+  const at = (id: string, kind: SummaryVersion['kind'], hour: number) =>
+    ({ ...version(id, kind), completedAt: new Date(2026, 10, 24, hour, 29, 51).getTime() })
+  const versions = [at('c1', 'cloud', 1), at('h1', 'hospital', 1), at('c2', 'cloud', 2), at('h2', 'hospital', 3)]
+  const { rerender } = render(<SummaryVersionPicker versions={versions} selectedId="h2" onSelect={onSelect} busy={false} locale="zh-TW" />)
+  expect(screen.queryAllByRole('button')).toHaveLength(0)
+  const picker = screen.getByRole('combobox', { name: '摘要版本' })
+  expect(picker).toHaveTextContent(/^含院內資料$/)
+  fireEvent.click(picker)
+  const options = screen.getAllByRole('option').map(option => option.textContent)
+  expect(options).toEqual(['雲端02:29:51', '含院內資料03:29:51', '含院內資料01:29:51', '雲端01:29:51'])
+  expect(screen.getByRole('group', { name: '較早版本' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('option', { name: /含院內資料\s*01:29:51/ }))
+  expect(onSelect).toHaveBeenCalledWith('h1')
+  rerender(<SummaryVersionPicker versions={versions} selectedId="h1" onSelect={onSelect} busy={false} locale="zh-TW" />)
+  expect(screen.getByRole('combobox', { name: '摘要版本' })).toHaveTextContent(/^含院內資料 · 01:29$/)
+})
+
+test('a missing hospital version shows as not generated yet and cannot be picked', () => {
+  render(<SummaryVersionPicker versions={[version('cloud', 'cloud')]} selectedId="cloud" onSelect={jest.fn()} busy={false} locale="zh-TW" />)
+  fireEvent.click(screen.getByRole('combobox', { name: '摘要版本' }))
+  expect(screen.getByRole('option', { name: /含院內資料.*尚未產生/ })).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.queryByRole('group', { name: '較早版本' })).toBeNull()
 })
 
 test('cited evidence is immutable after source update/removal and survives serialization', async () => {
