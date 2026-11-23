@@ -78,6 +78,7 @@ const STORED = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-s
 test.each([
   ['used', '近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。'],
   ['none', '門診助理沒有這位病人的預看診存檔，這次全部改向院內系統擷取。'],
+  ['signed_out', '這個瀏覽器還沒登入門診助理，這次全部改向院內系統擷取。'],
   ['timeout', '門診助理的預看診存檔讀取逾時，這次全部改向院內系統擷取。'],
   ['failed', '門診助理的預看診存檔讀取失敗，這次全部改向院內系統擷取。'],
   ['unusable', '門診助理的預看診存檔無法銜接新資料，這次全部改向院內系統擷取。'],
@@ -126,4 +127,15 @@ test('an alert keeps its own wording; the stored-record note stays on a separate
   act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code: 'used' }])))
   expect(screen.getByRole('alert')).not.toHaveTextContent('預看診存檔')
   expect(screen.getByRole('status')).toHaveTextContent('近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。')
+})
+
+test('a browser not signed in to the outpatient assistant is offered the sign-in link, alone or on the status row', () => {
+  render(<Banners />)
+  act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code: 'signed_out' }])))
+  expect(screen.getByRole('link', { name: '登入門診助理' })).toHaveAttribute('href', 'https://opd-ai-agent.mediprisma.tw/')
+  act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code: 'none' }])))
+  expect(screen.queryByRole('link')).toBeNull()
+  act(() => { mockCurrent = { importId: 'import-a', phase: 'loaded' }; rememberLocalBundleCapture(bundle([{ system: STORED, code: 'signed_out' }])) })
+  expect(screen.getAllByRole('status')).toHaveLength(1)
+  expect(screen.getByRole('link', { name: '登入門診助理' })).toBeInTheDocument()
 })

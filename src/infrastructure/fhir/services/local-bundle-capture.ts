@@ -7,7 +7,7 @@ import { failureFromTag, type Tag } from '@/src/infrastructure/telemetry/hospita
 const COMPLETENESS_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-completeness'
 // How a clinic capture used the record 門診助理 prepared ahead of the visit: one closed code.
 const STORED_RECORD_SYSTEM = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-stored-record'
-const STORED_RECORD = ['used', 'none', 'timeout', 'failed', 'unusable'] as const
+const STORED_RECORD = ['used', 'none', 'signed_out', 'timeout', 'failed', 'unusable'] as const
 export type StoredRecordOutcome = typeof STORED_RECORD[number]
 
 export interface LocalBundleCapture {
