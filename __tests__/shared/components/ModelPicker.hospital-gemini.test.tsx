@@ -36,8 +36,8 @@ jest.mock('@/components/ui/dropdown-menu', () => ({
 
 const statusReply = jest.fn()
 
-function installExtension(status: string | null) {
-  statusReply.mockImplementation(() => status === null ? { ok: false, error: 'UNTRUSTED_ORIGIN' } : { ok: true, status, busy: false })
+function installExtension(status: string | null, models?: string[]) {
+  statusReply.mockImplementation(() => status === null ? { ok: false, error: 'UNTRUSTED_ORIGIN' } : { ok: true, status, busy: false, ...(models ? { models } : {}) })
   ;(globalThis as { chrome?: unknown }).chrome = {
     runtime: {
       sendMessage: (_id: string, _message: unknown, reply: (response: unknown) => void) => reply(statusReply()),
@@ -154,6 +154,49 @@ describe('院內 Gemini sign-in shortcut', () => {
     jest.spyOn(Date, 'now').mockReturnValue(now + 6_000)
     act(() => { window.dispatchEvent(new Event('focus')) })
     await waitFor(() => expect(hospitalItem()).toBeDisabled())
+  })
+})
+
+describe('院內 Gemini page models in ModelPicker', () => {
+  const NEW_MODELS = ['auto', 'neon', 'hydrogen', 'carbon']
+  const PAGE_LABELS = ['Gemini 4 Neon（院內）', 'Gemini 4 Hydrogen（院內）', 'Gemini 4 Carbon（院內）']
+  const item = (label: string) => screen.queryByRole('menuitem', { name: new RegExp(label.replace(/[（）]/g, '.')) })
+
+  beforeEach(() => {
+    resetHospitalGeminiStatus()
+    statusReply.mockReset()
+    useAiConfigStore.setState({ apiKey: null, geminiKey: null, claudeKey: null, credentialsHydrating: false, openAiCompatibleProfiles: [] })
+  })
+  afterEach(() => { delete (globalThis as { chrome?: unknown }).chrome })
+
+  it('lists Neon, Hydrogen and Carbon beside Enterprise when the extension can pick them, each selectable', async () => {
+    installExtension('ready', NEW_MODELS)
+    const onSelect = renderPicker()
+    await waitFor(() => expect(item(PAGE_LABELS[0])).toBeEnabled())
+    const names = screen.getAllByRole('menuitem').map((element) => element.textContent ?? '')
+    const enterprise = names.findIndex((name) => name.includes('Gemini Enterprise（院內）'))
+    expect(PAGE_LABELS.map((label) => names.findIndex((name) => name.includes(label)))).toEqual([enterprise + 1, enterprise + 2, enterprise + 3])
+    fireEvent.click(item(PAGE_LABELS[0])!)
+    expect(onSelect).toHaveBeenCalledWith('hospital-gemini-neon')
+  })
+
+  it('hides them for an older extension that reports no models, keeping Enterprise', async () => {
+    installExtension('ready')
+    renderPicker()
+    await waitFor(() => expect(hospitalItem()).toBeEnabled())
+    for (const label of PAGE_LABELS) expect(item(label)).toBeNull()
+  })
+
+  it('locks them with the sign-in hint and link when not signed in', async () => {
+    installExtension('needs_login', NEW_MODELS)
+    renderPicker()
+    await waitFor(() => expect(item(PAGE_LABELS[0])).not.toBeNull())
+    for (const label of PAGE_LABELS) {
+      expect(item(label)).toBeDisabled()
+      expect(item(label)).toHaveTextContent('請先開啟並登入院內 Gemini')
+    }
+    // Enterprise and the three page models each offer the sign-in link.
+    expect(screen.getAllByRole('link', { name: '開啟院內 Gemini' })).toHaveLength(4)
   })
 })
 

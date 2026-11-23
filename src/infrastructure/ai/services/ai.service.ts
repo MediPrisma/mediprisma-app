@@ -3,7 +3,7 @@ import type { AiQueryRequest, AiQueryResponse, AiModelDefinition } from '@/src/c
 import {
   ALL_MODELS,
   getModelDefinitionOrThrow,
-  HOSPITAL_GEMINI_MODEL_ID,
+  isHospitalGeminiModel,
   type ModelProvider,
 } from '@/src/shared/constants/ai-models.constants'
 import { queryHospitalGemini } from '../hospital-gemini/hospital-gemini-stream'
@@ -44,7 +44,7 @@ export class AiService implements IAiService {
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
     // 院內 Gemini is the clinician's own browser tab, never a cloud provider call.
-    if (request.modelId === HOSPITAL_GEMINI_MODEL_ID) return queryHospitalGemini(request)
+    if (isHospitalGeminiModel(request.modelId)) return queryHospitalGemini(request)
     const definition = getModelDefinitionOrThrow(request.modelId)
     if (definition.provider === 'custom') {
       const profile = resolveOpenAiCompatibleProfile(

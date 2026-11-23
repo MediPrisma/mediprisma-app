@@ -16,7 +16,13 @@ import {
 } from '@/src/infrastructure/ai/hospital-gemini/hospital-gemini-stream'
 import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
 import { getUserErrorMessage } from '@/src/core/errors'
-import { HOSPITAL_GEMINI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import {
+  HOSPITAL_GEMINI_MODEL_ID,
+  HOSPITAL_GEMINI_PAGE_MODELS,
+  hospitalGeminiPageModel,
+  isHospitalGeminiModel,
+} from '@/src/shared/constants/ai-models.constants'
+import { AiService } from '@/src/infrastructure/ai/services/ai.service'
 
 type Listener = (message: unknown) => void
 
@@ -240,9 +246,9 @@ describe('streamHospitalGemini', () => {
 
     it('reads maxConcurrent from the status reply, and none from an older extension', async () => {
       const { runtime } = fakeRuntime({ ok: true, status: 'ready', busy: false, running: 0, maxConcurrent: 3 })
-      await expect(getHospitalGeminiInfo(runtime)).resolves.toEqual({ status: 'ready', maxConcurrent: 3 })
+      await expect(getHospitalGeminiInfo(runtime)).resolves.toEqual({ status: 'ready', maxConcurrent: 3, models: null })
       const old = fakeRuntime({ ok: true, status: 'ready', busy: false }).runtime
-      await expect(getHospitalGeminiInfo(old)).resolves.toEqual({ status: 'ready', maxConcurrent: null })
+      await expect(getHospitalGeminiInfo(old)).resolves.toEqual({ status: 'ready', maxConcurrent: null, models: null })
     })
 
     it('sends three questions at once to a new extension and each finishes with its own answer', async () => {
@@ -337,5 +343,88 @@ describe('AiSdkStreamAdapter with 院內 Gemini', () => {
     expect(connections[0].posted).toEqual([{ action: 'ask', prompt: 'Synthetic chart\n\nSummarise' }])
     expect(onChunk.mock.calls).toEqual([['Partial'], ['Partial and complete']])
     expect(onModelExecution).toHaveBeenLastCalledWith(expect.objectContaining({ actualModelId: HOSPITAL_GEMINI_MODEL_ID }))
+  })
+})
+
+describe('院內 Gemini page models (Neon, Hydrogen, Carbon)', () => {
+  const NEW_STATUS = { ok: true, status: 'ready', busy: false, running: 0, maxConcurrent: 3, models: ['auto', 'neon', 'hydrogen', 'carbon'] }
+  const OLD_STATUS = { ok: true, status: 'ready', busy: false }
+  const NEON = 'hospital-gemini-neon'
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const messages = [{ role: 'system' as const, content: 'Synthetic chart' }, { role: 'user' as const, content: 'Summarise' }]
+
+  beforeEach(() => resetHospitalGeminiSessions())
+  afterEach(() => { delete (globalThis as { chrome?: unknown }).chrome })
+
+  it('maps only the three page-model entries to a model key; Enterprise keeps the page choice', () => {
+    expect(isHospitalGeminiModel(HOSPITAL_GEMINI_MODEL_ID)).toBe(true)
+    expect(hospitalGeminiPageModel(HOSPITAL_GEMINI_MODEL_ID)).toBeNull()
+    expect(Object.entries(HOSPITAL_GEMINI_PAGE_MODELS)).toEqual([
+      ['hospital-gemini-neon', 'neon'], ['hospital-gemini-hydrogen', 'hydrogen'], ['hospital-gemini-carbon', 'carbon'],
+    ])
+    for (const id of Object.keys(HOSPITAL_GEMINI_PAGE_MODELS)) expect(isHospitalGeminiModel(id)).toBe(true)
+    expect(isHospitalGeminiModel('gemini-4-hydrogen')).toBe(false)
+  })
+
+  it('reads the page models a new extension can pick', async () => {
+    await expect(getHospitalGeminiInfo(fakeRuntime(NEW_STATUS).runtime))
+      .resolves.toEqual({ status: 'ready', maxConcurrent: 3, models: ['auto', 'neon', 'hydrogen', 'carbon'] })
+  })
+
+  it('sends model "neon" for a Neon chat or summary, and reports the Neon entry as the model used', async () => {
+    const { runtime, connections } = fakeRuntime(NEW_STATUS)
+    ;(globalThis as { chrome?: unknown }).chrome = { runtime }
+    const onModelExecution = jest.fn()
+    const run = new AiSdkStreamAdapter({ create: jest.fn() }).stream({
+      model: NEON, apiKey: null, signal: new AbortController().signal, onChunk: jest.fn(), onModelExecution, messages,
+    })
+    await flush()
+    expect(connections[0].posted).toEqual([{ action: 'ask', prompt: 'Synthetic chart\n\nSummarise', model: 'neon' }])
+    connections[0].emit({ type: 'done', markdown: 'Synthetic answer', sessionId: 's-n', model: 'neon', timing: { totalMs: 1 } })
+    await run
+    expect(onModelExecution).toHaveBeenLastCalledWith(expect.objectContaining({ requestedModelId: NEON, actualModelId: NEON }))
+  })
+
+  it('sends model "carbon" for a custom summary (non-streaming) and reports the Carbon entry', async () => {
+    const { runtime, connections } = fakeRuntime(NEW_STATUS)
+    ;(globalThis as { chrome?: unknown }).chrome = { runtime }
+    const cloud = { isAvailable: () => true, query: jest.fn() }
+    const service = new AiService({ cloudServices: { openai: cloud, gemini: cloud, claude: cloud }, createCustomService: () => cloud })
+    const result = service.query({ modelId: 'hospital-gemini-carbon', messages })
+    await flush()
+    expect(connections[0].posted).toEqual([{ action: 'ask', prompt: 'Synthetic chart\n\nSummarise', model: 'carbon' }])
+    connections[0].emit({ type: 'done', markdown: 'Synthetic summary', sessionId: 's-c' })
+    await expect(result).resolves.toMatchObject({ text: 'Synthetic summary', metadata: { modelId: 'hospital-gemini-carbon',
+      modelExecution: expect.objectContaining({ actualModelId: 'hospital-gemini-carbon' }) } })
+    expect(cloud.query).not.toHaveBeenCalled()
+  })
+
+  it('never lets an older extension answer a Neon request with its own model', async () => {
+    const { runtime, connections } = fakeRuntime(OLD_STATUS)
+    ;(globalThis as { chrome?: unknown }).chrome = { runtime }
+    await expect(streamHospitalGemini({ messages, modelId: NEON, signal: new AbortController().signal, onChunk: jest.fn() }))
+      .rejects.toMatchObject({ hospitalGeminiCode: 'MODEL_UNAVAILABLE' })
+    expect(connections).toHaveLength(0)
+  })
+
+  it('keeps Enterprise requests without a model key', async () => {
+    const { runtime, connections } = fakeRuntime(NEW_STATUS)
+    ;(globalThis as { chrome?: unknown }).chrome = { runtime }
+    const run = streamHospitalGemini({ messages, modelId: HOSPITAL_GEMINI_MODEL_ID, signal: new AbortController().signal, onChunk: jest.fn() })
+    await flush()
+    expect(connections[0].posted).toEqual([{ action: 'ask', prompt: 'Synthetic chart\n\nSummarise' }])
+    connections[0].emit({ type: 'done', markdown: 'Synthetic answer', sessionId: 's-e' })
+    await run
+  })
+
+  it('shows the MODEL_UNAVAILABLE reply from the page as its own message', async () => {
+    const { runtime, connections } = fakeRuntime(NEW_STATUS)
+    ;(globalThis as { chrome?: unknown }).chrome = { runtime }
+    const run = streamHospitalGemini({ messages, modelId: 'hospital-gemini-hydrogen', signal: new AbortController().signal, onChunk: jest.fn() })
+    await flush()
+    expect(connections[0].posted[0]).toMatchObject({ model: 'hydrogen' })
+    connections[0].emit({ type: 'error', code: 'MODEL_UNAVAILABLE' })
+    const error = await run.catch((caught) => caught)
+    expect(getUserErrorMessage(error)).toBe('院內 Gemini 目前無法切換到這個模型，請改選其他院內模型或稍後再試。')
   })
 })
