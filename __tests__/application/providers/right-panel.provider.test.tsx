@@ -132,3 +132,32 @@ describe('RightPanelProvider reveal with a 複製 sub-tab', () => {
     expect(screen.getByTestId('export-tab')).toHaveTextContent('emr')
   })
 })
+
+function SummaryHarness() {
+  const { activeTab, summaryView, recordSeq, revealSeq, revealTab, revealRecord } = useRightPanel()
+  return (
+    <div>
+      <output data-testid="active-tab">{activeTab}</output>
+      <output data-testid="summary-view">{summaryView}</output>
+      <output data-testid="seqs">{revealSeq}/{recordSeq}</output>
+      <button type="button" onClick={() => revealTab('medical-summary', { summaryView: 'custom' })}>Reveal custom summary</button>
+      <button type="button" onClick={() => revealRecord()}>Reveal record</button>
+    </div>
+  )
+}
+
+describe('RightPanelProvider reveal with a 醫療摘要 view', () => {
+  it('starts on 初診快覽, opens 自訂摘要 when a reveal asks, and counts a request for the record apart', () => {
+    render(<RightPanelProvider defaultTab="medical-chat"><SummaryHarness /></RightPanelProvider>)
+    expect(screen.getByTestId('summary-view')).toHaveTextContent('standard')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal custom summary' }))
+    expect(screen.getByTestId('active-tab')).toHaveTextContent('medical-summary')
+    expect(screen.getByTestId('summary-view')).toHaveTextContent('custom')
+    expect(screen.getByTestId('seqs')).toHaveTextContent('1/0')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal record' }))
+    expect(screen.getByTestId('seqs')).toHaveTextContent('1/1')
+    expect(screen.getByTestId('summary-view')).toHaveTextContent('custom')
+  })
+})
