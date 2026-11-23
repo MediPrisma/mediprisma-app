@@ -82,6 +82,9 @@ interface ActiveChatRequest {
   openAiCompatible: OpenAiCompatibleProfile | null
 }
 
+/** How long a send waits for the chart snapshot to finish fitting before giving up. */
+const CHAT_CLINICAL_CONTEXT_WAIT_MS = 60_000
+
 function usesStandardChat(
   modelId: string,
   openAiCompatible: OpenAiCompatibleProfile | null,
@@ -151,6 +154,44 @@ export function useAgentChat(
   )
   const selectedClinicalContext = fittedClinicalInput.clinicalContext
   const { t, locale } = useLanguage()
+  // A send can start while the chart is still being fitted (e.g. right after a
+  // model switch). It waits here for the settled snapshot.
+  const latestFittedInputRef = useRef(fittedClinicalInput)
+  const fittedInputWaitersRef = useRef(new Set<() => void>())
+  useEffect(() => {
+    latestFittedInputRef.current = fittedClinicalInput
+    if (fittedClinicalInput.dataReady) fittedInputWaitersRef.current.forEach((wake) => wake())
+  }, [fittedClinicalInput])
+  const waitForFittedClinicalInput = useCallback((signal: AbortSignal) => (
+    new Promise<typeof fittedClinicalInput>((resolve, reject) => {
+      if (latestFittedInputRef.current.dataReady) {
+        resolve(latestFittedInputRef.current)
+        return
+      }
+      const waiters = fittedInputWaitersRef.current
+      const finish = () => {
+        clearTimeout(timer)
+        signal.removeEventListener('abort', abort)
+        waiters.delete(wake)
+      }
+      const wake = () => {
+        finish()
+        resolve(latestFittedInputRef.current)
+      }
+      const abort = () => {
+        finish()
+        const aborted = new Error('The operation was aborted')
+        aborted.name = 'AbortError'
+        reject(aborted)
+      }
+      const timer = setTimeout(() => {
+        finish()
+        reject(new Error(t.medicalChat.clinicalContextNotReady))
+      }, CHAT_CLINICAL_CONTEXT_WAIT_MS)
+      waiters.add(wake)
+      signal.addEventListener('abort', abort, { once: true })
+    })
+  ), [t])
   const { user, isAnonymous } = useAuth()
   // The proxy accepts any Firebase token — a real account OR an anonymous
   // (free-tier) one. Gate proxy use on "we have a token", not "real account".
@@ -495,17 +536,21 @@ export function useAgentChat(
 
         if (isStandardChat) {
           const includesPatientContext = turnDataScope !== 'general'
-          if (includesPatientContext && !fittedClinicalInput.dataReady) {
-            throw new Error(t.medicalChat.localStandardContextTooLarge)
-          }
-          if (includesPatientContext && fittedClinicalInput.contextAdaptation) {
+          // Picking a model with another context window re-fits the chart; until
+          // that settles the snapshot is not ready, which is not "too large".
+          // Wait for it (the turn stays loading and stoppable) and send the
+          // settled snapshot. A chart that truly does not fit fails below.
+          const fittedInput = includesPatientContext
+            ? await waitForFittedClinicalInput(abortController.signal)
+            : latestFittedInputRef.current
+          if (includesPatientContext && fittedInput.contextAdaptation) {
             toast.info(
               formatClinicalContextAdaptationNotice(
-                fittedClinicalInput.contextAdaptation,
+                fittedInput.contextAdaptation,
                 locale,
               ),
               {
-                id: `clinical-context-fit:chat:${fittedClinicalInput.inputSignature}:${fittedClinicalInput.contextAdaptation.tier}`,
+                id: `clinical-context-fit:chat:${fittedInput.inputSignature}:${fittedInput.contextAdaptation.tier}`,
               },
             )
           }
@@ -514,7 +559,7 @@ export function useAgentChat(
           // query the complete FHIR record or current literature on demand.
           const localSystemPrompt = buildStandardChatSystemPrompt(
             systemPrompt,
-            includesPatientContext ? selectedClinicalContext : '',
+            includesPatientContext ? fittedInput.clinicalContext : '',
             turnDataScope,
           )
           const localHistory = scopedConversation.map((message) => ({
@@ -821,7 +866,7 @@ export function useAgentChat(
         }
       }
     },
-    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, fittedClinicalInput.patientCounts, fittedClinicalInput.clinicalData, fittedClinicalInput.dataReady, fittedClinicalInput.contextAdaptation, fittedClinicalInput.inputSignature, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, t, locale, isLocalMode, dataScope]
+    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, fittedClinicalInput.patientCounts, fittedClinicalInput.clinicalData, waitForFittedClinicalInput, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, t, locale, isLocalMode, dataScope]
   )
 
   const handleReset = useCallback(() => {
