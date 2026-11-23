@@ -76,7 +76,7 @@ jobs:
       - run: npm ci --prefix .gallery-backend/functions
       - run: npx playwright install --with-deps chromium
       # Keep compiler caches separate for each build mode; never reuse build output.
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-next-gallery-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-${{ github.sha }}
@@ -112,7 +112,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
       - run: npx playwright install --with-deps chromium
       # Keep compiler caches separate for each build mode; never reuse build output.
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-next-import-app-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-${{ github.sha }}
@@ -201,7 +201,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
       # Keep compiler caches separate for each build mode; never reuse build output.
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-next-private-gh-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig*.json', 'scripts/**', '.github/workflows/ci.yml', 'playwright*.ts') }}-${{ github.sha }}
