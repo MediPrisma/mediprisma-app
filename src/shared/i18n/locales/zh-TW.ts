@@ -94,6 +94,7 @@ export const zhTW = {
     addCustomModel: '新增自訂模型',
     standardChatMode: '標準對話',
     standardChatDescription: '地端模型會自動使用不含 Agent 工具的標準對話。',
+    openHospitalGemini: '開啟院內 Gemini',
   },
 
   tabs: {

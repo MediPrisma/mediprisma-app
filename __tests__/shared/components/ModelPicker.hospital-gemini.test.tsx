@@ -2,6 +2,7 @@
 // Synthetic only: no extension, no Gemini page.
 import type { MouseEventHandler, ReactNode } from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { HOSPITAL_GEMINI_SIGN_IN_URL } from '@/src/infrastructure/ai/hospital-gemini/hospital-gemini-bridge'
 import { ModelPicker } from '@/src/shared/components/ModelPicker'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import { RightPanelProvider } from '@/src/application/providers/right-panel.provider'
@@ -103,6 +104,56 @@ describe('院內 Gemini in ModelPicker', () => {
     fireEvent.click(hospitalItem()!)
     expect(onSelect).toHaveBeenCalledWith(HOSPITAL_GEMINI_MODEL_ID)
     jest.restoreAllMocks()
+  })
+})
+
+describe('院內 Gemini sign-in shortcut', () => {
+  beforeEach(() => {
+    resetHospitalGeminiStatus()
+    statusReply.mockReset()
+    mockToast.error.mockClear()
+    useAiConfigStore.setState({ apiKey: null, geminiKey: null, claudeKey: null, credentialsHydrating: false, openAiCompatibleProfiles: [] })
+  })
+  afterEach(() => {
+    delete (globalThis as { chrome?: unknown }).chrome
+    jest.restoreAllMocks()
+  })
+
+  const signInLink = () => screen.queryByRole('link', { name: '開啟院內 Gemini' })
+
+  it('sits under the locked entry, opens the sign-in page in a new tab and never selects the model', async () => {
+    installExtension('needs_login')
+    const onSelect = renderPicker()
+    await waitFor(() => expect(signInLink()).not.toBeNull())
+    expect(signInLink()).toHaveAttribute('href', HOSPITAL_GEMINI_SIGN_IN_URL)
+    expect(signInLink()).toHaveAttribute('target', '_blank')
+    expect(signInLink()).toHaveAttribute('rel', 'noopener noreferrer')
+    fireEvent.click(signInLink()!)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('is gone once 院內 Gemini is ready', async () => {
+    installExtension('ready')
+    renderPicker()
+    await waitFor(() => expect(hospitalItem()).toBeEnabled())
+    expect(signInLink()).toBeNull()
+  })
+
+  it('looks again when the clinician comes back to this tab, lifting the lock without reopening the menu', async () => {
+    installExtension('no_tab')
+    renderPicker()
+    await waitFor(() => expect(hospitalItem()).toBeDisabled())
+    installExtension('ready')
+    const now = Date.now()
+    jest.spyOn(Date, 'now').mockReturnValue(now + 3_000)
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    await waitFor(() => expect(hospitalItem()).toBeEnabled())
+
+    // A window focus also looks again (after the same 2-second rate limit).
+    installExtension('needs_login')
+    jest.spyOn(Date, 'now').mockReturnValue(now + 6_000)
+    act(() => { window.dispatchEvent(new Event('focus')) })
+    await waitFor(() => expect(hospitalItem()).toBeDisabled())
   })
 })
 
