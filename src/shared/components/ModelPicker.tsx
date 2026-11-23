@@ -10,9 +10,9 @@
 // exactly like the stream adapter does; re-adding the key revives the pick.
 "use client"
 
-import { useEffect, type Ref } from "react"
+import { Fragment, useEffect, type Ref } from "react"
 import { refreshHospitalGeminiStatus } from "@/src/application/hooks/use-hospital-gemini-status.hook"
-import { Check, ChevronDown, ChevronRight, Lock, Plus } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, ExternalLink, Lock, Plus } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -197,8 +197,8 @@ export function ModelPicker({
                 && !lockedByAgent
               const locked = entry.isLocked || lockedByAgent
               return (
+                <Fragment key={entry.id}>
                 <DropdownMenuItem
-                  key={entry.id}
                   disabled={locked && !configureRequired}
                   onClick={() => {
                     if (configureRequired) {
@@ -253,6 +253,22 @@ export function ModelPicker({
                     <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                   ) : null}
                 </DropdownMenuItem>
+                {/* The locked row ignores pointer events, so its way out is its
+                    own enabled row: a plain link that never selects the model. */}
+                {locked && entry.signInUrl ? (
+                  <DropdownMenuItem asChild className="cursor-pointer gap-1 pl-4 text-[0.6875rem] font-medium text-primary focus:bg-primary/10 focus:text-primary">
+                    <a
+                      href={entry.signInUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`model-picker-sign-in-${entry.id}`}
+                    >
+                      <ExternalLink className="h-3 w-3 text-primary" />
+                      {t.modelPicker.openHospitalGemini}
+                    </a>
+                  </DropdownMenuItem>
+                ) : null}
+                </Fragment>
               )
             })}
             {group.custom ? (

@@ -38,7 +38,20 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function useHospitalGeminiStatus(): HospitalGeminiStatus {
-  useEffect(() => { void refreshHospitalGeminiStatus() }, [])
+  useEffect(() => {
+    void refreshHospitalGeminiStatus()
+    // Coming back from the sign-in tab: look again, so the lock lifts without
+    // reopening the menu. The rate limit above keeps several pickers to one check.
+    const lookAgain = () => {
+      if (document.visibilityState === 'visible') void refreshHospitalGeminiStatus()
+    }
+    window.addEventListener('focus', lookAgain)
+    document.addEventListener('visibilitychange', lookAgain)
+    return () => {
+      window.removeEventListener('focus', lookAgain)
+      document.removeEventListener('visibilitychange', lookAgain)
+    }
+  }, [])
   return useSyncExternalStore(subscribe, () => current, () => 'unavailable')
 }
 

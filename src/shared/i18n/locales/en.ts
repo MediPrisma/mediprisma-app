@@ -93,6 +93,7 @@ export const en = {
     addCustomModel: 'Add custom model',
     standardChatMode: 'Standard chat',
     standardChatDescription: 'Local models automatically use standard chat without Agent tools.',
+    openHospitalGemini: 'Open hospital Gemini',
   },
 
   tabs: {
