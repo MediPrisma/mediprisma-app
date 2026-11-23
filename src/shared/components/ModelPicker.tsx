@@ -187,7 +187,7 @@ export function ModelPicker({
             <DropdownMenuLabel className="text-[0.6875rem] font-normal text-muted-foreground">
               {group.label}
             </DropdownMenuLabel>
-            {group.items.map((entry) => {
+            {group.items.map((entry, index) => {
               const definition = getModelDefinition(entry.id)
               const lockedByAgent = false
               const entryUsesStandardChat = agentModeActive && usesStandardChat(entry.id)
@@ -254,8 +254,10 @@ export function ModelPicker({
                   ) : null}
                 </DropdownMenuItem>
                 {/* The locked row ignores pointer events, so its way out is its
-                    own enabled row: a plain link that never selects the model. */}
-                {locked && entry.signInUrl ? (
+                    own enabled row: a plain link that never selects the model.
+                    Locked rows in a row that share one sign-in page get one link,
+                    under the last of them. */}
+                {locked && entry.signInUrl && !(group.items[index + 1]?.isLocked && group.items[index + 1]?.signInUrl === entry.signInUrl) ? (
                   <DropdownMenuItem asChild className="cursor-pointer gap-1 pl-4 text-[0.6875rem] font-medium text-primary focus:bg-primary/10 focus:text-primary">
                     <a
                       href={entry.signInUrl}

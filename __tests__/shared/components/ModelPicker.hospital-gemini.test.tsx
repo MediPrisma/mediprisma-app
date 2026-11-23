@@ -195,8 +195,10 @@ describe('院內 Gemini page models in ModelPicker', () => {
       expect(item(label)).toBeDisabled()
       expect(item(label)).toHaveTextContent('請先開啟並登入院內 Gemini')
     }
-    // Enterprise and the three page models each offer the sign-in link.
-    expect(screen.getAllByRole('link', { name: '開啟院內 Gemini' })).toHaveLength(4)
+    // Enterprise and the three page models share one sign-in page: one link, under the last of them.
+    expect(screen.getAllByRole('link', { name: '開啟院內 Gemini' })).toHaveLength(1)
+    const names = screen.getAllByRole('menuitem').map((element) => element.textContent ?? '')
+    expect(names.findIndex((name) => name.includes('開啟院內 Gemini'))).toBe(names.findIndex((name) => name.includes(PAGE_LABELS[2])) + 1)
   })
 })
 
