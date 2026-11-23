@@ -2604,6 +2604,7 @@ export const en = {
     localStandardGeneralModeDescription: 'This custom model is answering in general-medicine mode. Records under Data Selection are not added to the prompt, and external literature search is unavailable.',
     localStandardModeSwitchHint: 'For Deep Chat, choose an Agent-capable model from the model menu above.',
     localStandardContextTooLarge: 'The selected records and conversation exceed this custom model’s available space. Narrow the scope under Data Selection and try again.',
+    clinicalContextNotReady: 'The patient record is still being prepared. Please try again shortly.',
     saveMessageFailed: 'This message has not been saved to the cloud yet; the conversation is still on screen and saving will be retried.',
   },
 
