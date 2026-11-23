@@ -8,6 +8,11 @@
 // so that account's templates and settings are here; it does so before
 // handing a record, since switching accounts clears the open patient.
 //
+// The other way round (mediprisma:embed-lend-sign-in): a page where nobody is
+// signed in asks whether a real account is signed in here, and is answered with
+// that account's ID token, which its own server exchanges for a sign-in as the
+// same physician if it lets that account in. A guest session lends nothing.
+//
 // The page can also ask which part of this app the frame shows
 // (mediprisma:embed-navigate): the clinical record or the 自訂摘要 view, so a
 // tab on the page opens straight onto it. A view this version does not know is
@@ -25,6 +30,8 @@ export const EMBED_IMPORTED = 'mediprisma:embed-imported'
 export const EMBED_READY = 'mediprisma:embed-ready'
 export const EMBED_SIGN_IN = 'mediprisma:embed-sign-in'
 export const EMBED_SIGNED_IN = 'mediprisma:embed-signed-in'
+export const EMBED_LEND_SIGN_IN = 'mediprisma:embed-lend-sign-in'
+export const EMBED_LENT_SIGN_IN = 'mediprisma:embed-lent-sign-in'
 export const EMBED_NAVIGATE = 'mediprisma:embed-navigate'
 export const EMBED_NAVIGATED = 'mediprisma:embed-navigated'
 
@@ -89,6 +96,25 @@ export function isEmbedSignInMessage(data: unknown): data is EmbedSignInMessage 
 
 export function signedInReply(requestId: string, result: { ok: true } | { ok: false; error: string }) {
   return { source: EMBED_SOURCE_APP, type: EMBED_SIGNED_IN, version: EMBED_VERSION, requestId, ...result }
+}
+
+export interface EmbedLendSignInMessage {
+  source: typeof EMBED_SOURCE_PARENT
+  type: typeof EMBED_LEND_SIGN_IN
+  version: typeof EMBED_VERSION
+  requestId: string
+}
+
+export function isEmbedLendSignInMessage(data: unknown): data is EmbedLendSignInMessage {
+  const message = data as Partial<EmbedLendSignInMessage> | null
+  return Boolean(message) && message!.source === EMBED_SOURCE_PARENT && message!.type === EMBED_LEND_SIGN_IN
+    && message!.version === EMBED_VERSION && typeof message!.requestId === 'string' && message!.requestId.length > 0
+    && message!.requestId.length <= 100
+}
+
+/** `idToken` only when a real account is signed in here. */
+export function lentSignInReply(requestId: string, idToken: string | null) {
+  return { source: EMBED_SOURCE_APP, type: EMBED_LENT_SIGN_IN, version: EMBED_VERSION, requestId, ...(idToken ? { ok: true, idToken } : { ok: false }) }
 }
 
 /** What the page may ask the frame to show: the clinical record, or 醫療摘要's 自訂摘要. */
