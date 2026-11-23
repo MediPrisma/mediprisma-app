@@ -12,8 +12,9 @@ jest.mock('@/features/import-bundle/hooks/useImportBundle', () => ({
   useImportBundle: () => ({ importFile, loadedPatientIds: () => load() }),
 }))
 const signIn = jest.fn()
+const lend = jest.fn()
 jest.mock('@/src/application/providers/auth.provider', () => ({
-  useAuth: () => ({ signInAsEmbeddingAccount: (uid: string, token: string) => signIn(uid, token) }),
+  useAuth: () => ({ signInAsEmbeddingAccount: (uid: string, token: string) => signIn(uid, token), lendSignIn: () => lend() }),
 }))
 
 const revealTab = jest.fn()
@@ -124,6 +125,22 @@ describe('useEmbeddedImport', () => {
     await send(signInMessage('s3'), ASSISTANT)
     expect(parent.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ requestId: 's3', ok: false, error: 'auth/invalid-custom-token' }), ASSISTANT)
+  })
+
+  const lendMessage = (requestId = 'l1') => ({ source: 'mediprisma-ai-assistant', type: 'mediprisma:embed-lend-sign-in', version: 1, requestId })
+
+  it("lends this browser's sign-in to the assistant alone, and nothing for a guest", async () => {
+    renderHook(() => useEmbeddedImport())
+    lend.mockResolvedValue('id-token-synthetic')
+    await send(lendMessage(), 'https://example.com')
+    expect(lend).not.toHaveBeenCalled()
+    await send(lendMessage('l2'), ASSISTANT)
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      { source: 'mediprisma', type: 'mediprisma:embed-lent-sign-in', version: 1, requestId: 'l2', ok: true, idToken: 'id-token-synthetic' }, ASSISTANT)
+    lend.mockResolvedValue(null)
+    await send(lendMessage('l3'), ASSISTANT)
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      { source: 'mediprisma', type: 'mediprisma:embed-lent-sign-in', version: 1, requestId: 'l3', ok: false }, ASSISTANT)
   })
 
   const navigateMessage = (view: string, requestId = 'n1') => ({

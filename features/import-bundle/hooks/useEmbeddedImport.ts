@@ -11,16 +11,19 @@ import {
   importedReply,
   isAllowedEmbedParent,
   isEmbedImportMessage,
+  isEmbedLendSignInMessage,
   isEmbedNavigateMessage,
   isEmbedSignInMessage,
   isEmbedView,
+  lentSignInReply,
   navigatedReply,
   signedInReply,
 } from '../services/embedded-import'
 
 /**
  * While this app is framed, signs in as the parent page's account when it asks
- * (services/embedded-import.ts), and takes a Bundle from an allowlisted parent page
+ * (services/embedded-import.ts), lends the parent this browser's own sign-in
+ * when it asks for that instead, and takes a Bundle from an allowlisted parent page
  * (services/embedded-import.ts), imports it through the same path as the
  * import button, and answers with the Patient ids now loaded. Shows the view
  * the parent asks for (the record, or 自訂摘要). Does nothing when the app is
@@ -28,12 +31,12 @@ import {
  */
 export function useEmbeddedImport() {
   const { importFile, loadedPatientIds } = useImportBundle()
-  const { signInAsEmbeddingAccount } = useAuth()
+  const { signInAsEmbeddingAccount, lendSignIn } = useAuth()
   const { revealTab, revealRecord } = useRightPanel()
-  const importRef = useRef({ importFile, loadedPatientIds, signInAsEmbeddingAccount, revealTab, revealRecord })
+  const importRef = useRef({ importFile, loadedPatientIds, signInAsEmbeddingAccount, lendSignIn, revealTab, revealRecord })
   useEffect(() => {
-    importRef.current = { importFile, loadedPatientIds, signInAsEmbeddingAccount, revealTab, revealRecord }
-  }, [importFile, loadedPatientIds, signInAsEmbeddingAccount, revealTab, revealRecord])
+    importRef.current = { importFile, loadedPatientIds, signInAsEmbeddingAccount, lendSignIn, revealTab, revealRecord }
+  }, [importFile, loadedPatientIds, signInAsEmbeddingAccount, lendSignIn, revealTab, revealRecord])
 
   useEffect(() => {
     if (typeof window === 'undefined' || window.parent === window) return
@@ -48,6 +51,11 @@ export function useEmbeddedImport() {
         } catch (error) {
           reply({ ok: false, error: error instanceof Error ? error.message : '登入失敗' })
         }
+        return
+      }
+      if (isEmbedLendSignInMessage(data)) {
+        const idToken = await importRef.current.lendSignIn().catch(() => null)
+        window.parent.postMessage(lentSignInReply(data.requestId, idToken), event.origin)
         return
       }
       if (isEmbedNavigateMessage(data)) {
