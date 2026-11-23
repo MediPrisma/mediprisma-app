@@ -22,13 +22,14 @@ const KIND: Record<string, [string, string]> = {
   order_unmatched: ['無法唯一對應申請序號，報告涵蓋範圍待核對', 'not matched to a request number; report coverage unconfirmed'],
   unknown: ['原因不明', 'unknown cause'],
 }
-// Whether this capture started from the record 門診助理 prepared before the visit. A status line only: the records shown are the same either way.
+// Where this capture read from: the record 門診助理 prepared before the visit, or HIS for everything. It names the route only and
+// never says the capture succeeded; what is missing is the line above's to say.
 const STORED_RECORD: Record<string, [string, string]> = {
-  used: ['近一年院內資料取自門診助理的預看診存檔，並已補上之後的新資料。', 'The past year of hospital records came from the outpatient assistant’s pre-visit record, with newer records added.'],
-  none: ['門診助理沒有這位病人的預看診存檔，這次從院內系統完整取得。', 'The outpatient assistant holds no pre-visit record for this patient; everything was read from HIS this time.'],
-  timeout: ['門診助理的預看診存檔讀取逾時，這次從院內系統完整取得。', 'Reading the outpatient assistant’s pre-visit record timed out; everything was read from HIS this time.'],
-  failed: ['門診助理的預看診存檔讀取失敗，這次從院內系統完整取得。', 'The outpatient assistant’s pre-visit record could not be read; everything was read from HIS this time.'],
-  unusable: ['門診助理的預看診存檔無法銜接新資料，這次從院內系統完整取得。', 'The outpatient assistant’s pre-visit record could not be joined with newer records; everything was read from HIS this time.'],
+  used: ['近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。', 'The past year of hospital records came from the outpatient assistant’s pre-visit record; newer records were read from HIS separately.'],
+  none: ['門診助理沒有這位病人的預看診存檔，這次全部改向院內系統擷取。', 'The outpatient assistant holds no pre-visit record for this patient; this capture read everything from HIS instead.'],
+  timeout: ['門診助理的預看診存檔讀取逾時，這次全部改向院內系統擷取。', 'Reading the outpatient assistant’s pre-visit record timed out; this capture read everything from HIS instead.'],
+  failed: ['門診助理的預看診存檔讀取失敗，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be read; this capture read everything from HIS instead.'],
+  unusable: ['門診助理的預看診存檔無法銜接新資料，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be joined with newer records; this capture read everything from HIS instead.'],
 }
 const NOTES = new Set(['visit_limit', 'order_unmatched'])
 // order_unmatched counts orders, not attempts.

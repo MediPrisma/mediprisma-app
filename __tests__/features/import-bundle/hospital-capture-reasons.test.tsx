@@ -71,11 +71,11 @@ test('English wording', () => {
 const STORED = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-stored-record'
 
 test.each([
-  ['used', '近一年院內資料取自門診助理的預看診存檔，並已補上之後的新資料。'],
-  ['none', '門診助理沒有這位病人的預看診存檔，這次從院內系統完整取得。'],
-  ['timeout', '門診助理的預看診存檔讀取逾時，這次從院內系統完整取得。'],
-  ['failed', '門診助理的預看診存檔讀取失敗，這次從院內系統完整取得。'],
-  ['unusable', '門診助理的預看診存檔無法銜接新資料，這次從院內系統完整取得。'],
+  ['used', '近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。'],
+  ['none', '門診助理沒有這位病人的預看診存檔，這次全部改向院內系統擷取。'],
+  ['timeout', '門診助理的預看診存檔讀取逾時，這次全部改向院內系統擷取。'],
+  ['failed', '門診助理的預看診存檔讀取失敗，這次全部改向院內系統擷取。'],
+  ['unusable', '門診助理的預看診存檔無法銜接新資料，這次全部改向院內系統擷取。'],
 ])('a capture tagged stored-record %s says so', (code, text) => {
   render(<HospitalCaptureReasons />)
   // 雲端懷爾抓抓 relays the code without its display.
@@ -97,8 +97,8 @@ test('the stored-record line stands beside the missing-data line, and has Englis
   act(() => rememberLocalBundleCapture(bundle([{ system: FAILURE, code: 'reports:timeout', display: '1' }, { system: STORED, code: 'used' }])))
   const [missing, stored] = screen.getAllByRole('status')
   expect(missing).toHaveTextContent('院內資料未取得：檢查驗報告－北榮回應逾時。請核對 HIS。')
-  expect(stored).toHaveTextContent('近一年院內資料取自門診助理的預看診存檔，並已補上之後的新資料。')
+  expect(stored).toHaveTextContent('近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。')
   mockLocale = 'en'
   act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code: 'none' }])))
-  expect(screen.getByRole('status')).toHaveTextContent('The outpatient assistant holds no pre-visit record for this patient; everything was read from HIS this time.')
+  expect(screen.getByRole('status')).toHaveTextContent('The outpatient assistant holds no pre-visit record for this patient; this capture read everything from HIS instead.')
 })
