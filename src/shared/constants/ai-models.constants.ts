@@ -70,6 +70,57 @@ export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
 /** 院內 Gemini Enterprise, answered by the clinician's own signed-in tab via 北榮懷爾抓抓. */
 export const HOSPITAL_GEMINI_MODEL_ID = 'hospital-gemini-enterprise' as const
 
+/** 院內 Gemini entries that ask the page for one model (北榮懷爾抓抓 `ask.model`).
+ *  The Enterprise entry above sends none, so the page keeps its own choice. */
+export const HOSPITAL_GEMINI_PAGE_MODELS = {
+  'hospital-gemini-neon': 'neon',
+  'hospital-gemini-hydrogen': 'hydrogen',
+  'hospital-gemini-carbon': 'carbon',
+} as const
+export type HospitalGeminiPageModel = (typeof HOSPITAL_GEMINI_PAGE_MODELS)[keyof typeof HOSPITAL_GEMINI_PAGE_MODELS]
+
+/** Every 院內 Gemini entry, whichever page model it asks for. */
+export function isHospitalGeminiModel(modelId: string): boolean {
+  return modelId === HOSPITAL_GEMINI_MODEL_ID || Object.hasOwn(HOSPITAL_GEMINI_PAGE_MODELS, modelId)
+}
+
+/** The page model a 院內 Gemini entry asks for; null for Enterprise (the page's own choice) and others. */
+export function hospitalGeminiPageModel(modelId: string): HospitalGeminiPageModel | null {
+  return Object.hasOwn(HOSPITAL_GEMINI_PAGE_MODELS, modelId)
+    ? HOSPITAL_GEMINI_PAGE_MODELS[modelId as keyof typeof HOSPITAL_GEMINI_PAGE_MODELS]
+    : null
+}
+
+/** Shared by every 院內 Gemini entry: the clinician's own signed-in tab, through 北榮懷爾抓抓. */
+const HOSPITAL_GEMINI_ENTRY = {
+  provider: 'gemini',
+  // The extension takes at most 150,000 characters; at the estimator's
+  // 4 characters per English token this keeps the whole prompt under it.
+  contextLimit: 36_000,
+  access: 'browser-extension',
+  apiSurface: 'browser-extension-page',
+  temperaturePolicy: 'omit',
+  // The web page has no tools: chat answers from the selected snapshot.
+  conversationMode: 'standard',
+  status: 'available',
+  selectable: true,
+  providerBase: false,
+  // Custom summaries never auto-run on it. The standard summary's persisted
+  // 自動產生 switch does not read this flag (use-ai-slot-generation).
+  autoRunEligible: false,
+  roles: [],
+} as const
+
+const hospitalGeminiPageModelEntry = (id: keyof typeof HOSPITAL_GEMINI_PAGE_MODELS, name: string) => ({
+  ...HOSPITAL_GEMINI_ENTRY,
+  id,
+  label: `Gemini 4 ${name}（院內）`,
+  descriptions: {
+    en: `Gemini 4 ${name} in your signed-in hospital Gemini tab, through 北榮懷爾抓抓`,
+    'zh-TW': `透過北榮懷爾抓抓，在您已登入的院內 Gemini 分頁以 Gemini 4 ${name} 回答`,
+  },
+}) as const
+
 /**
  * Canonical model manifest. Each id appears exactly once, even when the same
  * model is both user-selectable and used by an internal background task.
@@ -260,29 +311,17 @@ export const MODEL_CATALOG = [
     roles: [],
   },
   {
+    ...HOSPITAL_GEMINI_ENTRY,
     id: HOSPITAL_GEMINI_MODEL_ID,
     label: 'Gemini Enterprise（院內）',
     descriptions: {
       en: 'Your signed-in hospital Gemini tab, through 北榮懷爾抓抓',
       'zh-TW': '透過北榮懷爾抓抓使用您已登入的院內 Gemini 分頁',
     },
-    provider: 'gemini',
-    // The extension takes at most 150,000 characters; at the estimator's
-    // 4 characters per English token this keeps the whole prompt under it.
-    contextLimit: 36_000,
-    access: 'browser-extension',
-    apiSurface: 'browser-extension-page',
-    temperaturePolicy: 'omit',
-    // The web page has no tools: chat answers from the selected snapshot.
-    conversationMode: 'standard',
-    status: 'available',
-    selectable: true,
-    providerBase: false,
-    // Custom summaries never auto-run on it. The standard summary's persisted
-    // 自動產生 switch does not read this flag (use-ai-slot-generation).
-    autoRunEligible: false,
-    roles: [],
   },
+  hospitalGeminiPageModelEntry('hospital-gemini-neon', 'Neon'),
+  hospitalGeminiPageModelEntry('hospital-gemini-hydrogen', 'Hydrogen'),
+  hospitalGeminiPageModelEntry('hospital-gemini-carbon', 'Carbon'),
   {
     id: 'claude-haiku-5-5',
     reasoningEffort: 'low',

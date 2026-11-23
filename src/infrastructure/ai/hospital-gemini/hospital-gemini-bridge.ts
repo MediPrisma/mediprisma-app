@@ -7,6 +7,8 @@
 // Same external-messaging channel the 門診助理 uses for the clinic roster:
 // chrome.runtime.sendMessage / connect with the extension's id.
 
+import type { HospitalGeminiPageModel } from '@/src/shared/constants/ai-models.constants'
+
 /** 北榮懷爾抓抓's Chrome Web Store id; a developer build sets NEXT_PUBLIC_VGHTPE_BRIDGE_EXTENSION_ID. */
 export const VGHTPE_BRIDGE_EXTENSION_ID: string =
   process.env.NEXT_PUBLIC_VGHTPE_BRIDGE_EXTENSION_ID || 'eempjoojendpjgpkhljnplchhdkllkgo'
@@ -25,6 +27,7 @@ const MESSAGES: Record<string, string> = {
   NO_TAB: '請先開啟並登入院內 Gemini，再重試。',
   NEEDS_LOGIN: '請先開啟並登入院內 Gemini，再重試。',
   LOGGED_OUT: '院內 Gemini 已登出，回答未完成。請重新登入後再試。',
+  MODEL_UNAVAILABLE: '院內 Gemini 目前無法切換到這個模型，請改選其他院內模型或稍後再試。',
   BUSY: '院內 Gemini 正在回答另一個問題，請等它完成後再試。',
   INVALID_REQUEST: '這次的提示不符合院內 Gemini 的限制（最多 15 萬字），請縮小病歷範圍後再試。',
   UNTRUSTED_ORIGIN: '北榮懷爾抓抓不接受這個網址的請求，請從 mediprisma.tw/app 使用。',
@@ -79,9 +82,11 @@ export interface HospitalGeminiInfo {
   status: HospitalGeminiStatus
   /** Questions the extension answers at once (vghtpe-fhir-bridge #176); null from older versions, which take one. */
   maxConcurrent: number | null
+  /** Page models the extension can pick (`ask.model`); null from versions that cannot. */
+  models: string[] | null
 }
 
-const UNAVAILABLE: HospitalGeminiInfo = { status: 'unavailable', maxConcurrent: null }
+const UNAVAILABLE: HospitalGeminiInfo = { status: 'unavailable', maxConcurrent: null, models: null }
 
 export function getHospitalGeminiInfo(runtime = externalRuntime()): Promise<HospitalGeminiInfo> {
   if (!runtime) return Promise.resolve(UNAVAILABLE)
@@ -97,6 +102,7 @@ export function getHospitalGeminiInfo(runtime = externalRuntime()): Promise<Hosp
         resolve({
           status: reply.status as HospitalGeminiStatus,
           maxConcurrent: typeof max === 'number' && Number.isInteger(max) && max >= 1 ? max : null,
+          models: Array.isArray(reply.models) ? reply.models.filter((model): model is string => typeof model === 'string') : null,
         })
       })
     } catch {
@@ -122,10 +128,12 @@ export interface AskHospitalGeminiOptions {
   signal?: AbortSignal
   /** The whole answer so far (the extension sends the accumulated text). */
   onText?: (markdown: string) => void
+  /** Page model to answer with; omitted keeps the page's own choice. */
+  model?: HospitalGeminiPageModel | null
 }
 
 export function askHospitalGemini(
-  { prompt, sessionId, signal, onText }: AskHospitalGeminiOptions,
+  { prompt, sessionId, signal, onText, model }: AskHospitalGeminiOptions,
   runtime = externalRuntime(),
 ): Promise<HospitalGeminiAnswer> {
   if (!runtime) return Promise.reject(new HospitalGeminiError('NOT_CONNECTED'))
@@ -174,6 +182,6 @@ export function askHospitalGemini(
       finish(new HospitalGeminiError('NOT_CONNECTED'))
     })
     signal?.addEventListener('abort', cancel, { once: true })
-    port.postMessage({ action: 'ask', prompt, ...(sessionId ? { sessionId } : {}) })
+    port.postMessage({ action: 'ask', prompt, ...(sessionId ? { sessionId } : {}), ...(model ? { model } : {}) })
   })
 }

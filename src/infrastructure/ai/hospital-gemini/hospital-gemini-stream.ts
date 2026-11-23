@@ -11,17 +11,20 @@ import {
   askHospitalGemini,
   getHospitalGeminiInfo,
   HospitalGeminiError,
+  type HospitalGeminiInfo,
   type AskHospitalGeminiOptions,
   type HospitalGeminiAnswer,
 } from './hospital-gemini-bridge'
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
-import { HOSPITAL_GEMINI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { hospitalGeminiPageModel, type HospitalGeminiPageModel } from '@/src/shared/constants/ai-models.constants'
 import { createModelExecution, reportModelExecution } from '@/src/shared/utils/ai-model-execution'
 
 export interface HospitalGeminiStreamConfig {
   messages: { role: string; content: string; images?: { data: string }[] }[]
   signal: AbortSignal
   onChunk: (content: string) => void
+  /** The 院內 Gemini entry picked; it decides which page model is asked for. */
+  modelId?: string
 }
 
 type Ask = (options: AskHospitalGeminiOptions) => Promise<HospitalGeminiAnswer>
@@ -45,7 +48,7 @@ function rememberSession(key: string, sessionId: string): void {
 /** Test seam: forget every remembered conversation. */
 export function resetHospitalGeminiSessions(): void {
   sessions.clear()
-  knownCapacity = null
+  knownInfo = null
 }
 
 const LABELS: Record<string, string> = { user: '【使用者】', assistant: '【AI 回答】' }
@@ -109,7 +112,7 @@ export async function streamHospitalGemini(
 export async function queryHospitalGemini(request: AiQueryRequest, ask: Ask = askHospitalGemini): Promise<AiQueryResponse> {
   const signal = request.signal ?? new AbortController().signal
   let text = ''
-  await streamHospitalGemini({ messages: request.messages, signal, onChunk: (markdown) => { text = markdown } }, ask)
+  await streamHospitalGemini({ messages: request.messages, signal, modelId: request.modelId, onChunk: (markdown) => { text = markdown } }, ask)
   if (signal.aborted) {
     const abort = new Error('The operation was aborted')
     abort.name = 'AbortError'
@@ -118,9 +121,9 @@ export async function queryHospitalGemini(request: AiQueryRequest, ask: Ask = as
   return {
     text,
     metadata: {
-      modelId: HOSPITAL_GEMINI_MODEL_ID,
+      modelId: request.modelId,
       provider: 'gemini',
-      modelExecution: reportModelExecution(createModelExecution(request.modelId, HOSPITAL_GEMINI_MODEL_ID), HOSPITAL_GEMINI_MODEL_ID),
+      modelExecution: reportModelExecution(createModelExecution(request.modelId), request.modelId),
     },
   }
 }
@@ -132,18 +135,27 @@ export async function queryHospitalGemini(request: AiQueryRequest, ask: Ask = as
 // stopped while waiting is never sent.
 type Capacity = () => Promise<number>
 
-let knownCapacity: Promise<number> | null = null
+let knownInfo: Promise<HospitalGeminiInfo | null> | null = null
 
 /** Asked once per page; an extension that did not answer is asked again next time. */
-const extensionCapacity: Capacity = () => {
-  knownCapacity ??= getHospitalGeminiInfo().then((info) => {
-    if (info.status === 'unavailable') knownCapacity = null
-    return info.maxConcurrent ?? 1
+function extensionInfo(): Promise<HospitalGeminiInfo | null> {
+  knownInfo ??= getHospitalGeminiInfo().then((info) => {
+    if (info.status === 'unavailable') knownInfo = null
+    return info
   }, () => {
-    knownCapacity = null
-    return 1
+    knownInfo = null
+    return null
   })
-  return knownCapacity
+  return knownInfo
+}
+
+const extensionCapacity: Capacity = () => extensionInfo().then((info) => info?.maxConcurrent ?? 1)
+
+/** An extension that cannot pick this page model would answer with the page's own choice instead. */
+async function ensurePageModel(model: HospitalGeminiPageModel | null): Promise<void> {
+  if (!model) return
+  const info = await extensionInfo()
+  if (!info?.models?.includes(model)) throw new HospitalGeminiError('MODEL_UNAVAILABLE')
 }
 
 let active = 0
@@ -194,13 +206,18 @@ async function runHospitalGemini(
   if (config.messages.some((message) => message.images?.length)) {
     throw new HospitalGeminiError('IMAGES_UNSUPPORTED')
   }
+  const model = hospitalGeminiPageModel(config.modelId ?? '')
+  await ensurePageModel(model)
   let shown = ''
   const show = (markdown: string) => {
     if (markdown === shown || config.signal.aborted) return
     shown = markdown
     config.onChunk(markdown)
   }
-  const answer = await inTurn(config.signal, capacity, () => ask({ prompt, sessionId, signal: config.signal, onText: show }))
+  const answer = await inTurn(config.signal, capacity, () => ask({
+    prompt, sessionId, signal: config.signal, onText: show,
+    model,
+  }))
   if (!answer.markdown.trim()) throw new HospitalGeminiError('EMPTY_ANSWER')
   show(answer.markdown)
   if (answer.sessionId) rememberSession(conversationKey([...config.messages, { role: 'assistant', content: '' }]), answer.sessionId)

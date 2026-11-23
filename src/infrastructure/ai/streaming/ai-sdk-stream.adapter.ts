@@ -18,7 +18,7 @@ import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
   getModelDefinitionOrThrow,
   gateModel,
-  HOSPITAL_GEMINI_MODEL_ID,
+  isHospitalGeminiModel,
   isProxyEligibleModel,
   isCustomOpenAiModelId,
   resolveModelTemperature,
@@ -68,7 +68,7 @@ export class AiSdkStreamAdapter {
 
   async stream(config: StreamConfig): Promise<void> {
     // 院內 Gemini is a page in the clinician's browser, not an SDK provider.
-    if (config.model === HOSPITAL_GEMINI_MODEL_ID) return this.streamHospitalGemini(config)
+    if (isHospitalGeminiModel(config.model)) return this.streamHospitalGemini(config)
     // Central safety net: every AI feature streams through here. If the picked
     // model needs the user's own key but none was supplied, downgrade to the
     // provider's free, proxy-eligible base model so the call rides the proxy
@@ -200,11 +200,11 @@ export class AiSdkStreamAdapter {
   }
 
   private async streamHospitalGemini(config: StreamConfig): Promise<void> {
-    const execution = createModelExecution(config.requestedModelId ?? config.model, HOSPITAL_GEMINI_MODEL_ID)
+    const execution = createModelExecution(config.requestedModelId ?? config.model, config.model)
     config.onModelExecution?.(execution)
-    await streamHospitalGemini(config)
-    // The page does not name its model version; the source itself is the provenance.
-    if (!config.signal.aborted) config.onModelExecution?.(reportModelExecution(execution, HOSPITAL_GEMINI_MODEL_ID))
+    await streamHospitalGemini({ ...config, modelId: config.model })
+    // The page does not name its model version; the picked 院內 entry is the provenance.
+    if (!config.signal.aborted) config.onModelExecution?.(reportModelExecution(execution, config.model))
   }
 
   private shouldUseProxy(apiKey: string | null, model: string): boolean {
