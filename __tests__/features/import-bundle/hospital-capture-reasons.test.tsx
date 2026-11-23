@@ -100,5 +100,9 @@ test('the stored-record line stands beside the missing-data line, and has Englis
   expect(stored).toHaveTextContent('近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。')
   mockLocale = 'en'
   act(() => rememberLocalBundleCapture(bundle([{ system: STORED, code: 'none' }])))
-  expect(screen.getByRole('status')).toHaveTextContent('The outpatient assistant holds no pre-visit record for this patient; this capture read everything from HIS instead.')
+  expect(screen.getByRole('status')).toHaveTextContent('The outpatient assistant holds no pre-visit record for this patient; this capture asked HIS for all records instead.')
+  // Beside missing data the line still names only the route, in English too.
+  act(() => rememberLocalBundleCapture(bundle([{ system: FAILURE, code: 'reports:timeout', display: '1' }, { system: STORED, code: 'used' }])))
+  expect(screen.getAllByRole('status')[0]).toHaveTextContent('Hospital records not captured: test and imaging reports: HIS timed out. Check HIS.')
+  expect(screen.getAllByRole('status')[1]).toHaveTextContent('The past year of hospital records came from the outpatient assistant’s pre-visit record; HIS was asked only for newer records.')
 })

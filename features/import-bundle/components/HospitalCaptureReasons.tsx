@@ -25,11 +25,11 @@ const KIND: Record<string, [string, string]> = {
 // Where this capture read from: the record 門診助理 prepared before the visit, or HIS for everything. It names the route only and
 // never says the capture succeeded; what is missing is the line above's to say.
 const STORED_RECORD: Record<string, [string, string]> = {
-  used: ['近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。', 'The past year of hospital records came from the outpatient assistant’s pre-visit record; newer records were read from HIS separately.'],
-  none: ['門診助理沒有這位病人的預看診存檔，這次全部改向院內系統擷取。', 'The outpatient assistant holds no pre-visit record for this patient; this capture read everything from HIS instead.'],
-  timeout: ['門診助理的預看診存檔讀取逾時，這次全部改向院內系統擷取。', 'Reading the outpatient assistant’s pre-visit record timed out; this capture read everything from HIS instead.'],
-  failed: ['門診助理的預看診存檔讀取失敗，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be read; this capture read everything from HIS instead.'],
-  unusable: ['門診助理的預看診存檔無法銜接新資料，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be joined with newer records; this capture read everything from HIS instead.'],
+  used: ['近一年院內資料取自門診助理的預看診存檔，之後的新資料另向院內系統擷取。', 'The past year of hospital records came from the outpatient assistant’s pre-visit record; HIS was asked only for newer records.'],
+  none: ['門診助理沒有這位病人的預看診存檔，這次全部改向院內系統擷取。', 'The outpatient assistant holds no pre-visit record for this patient; this capture asked HIS for all records instead.'],
+  timeout: ['門診助理的預看診存檔讀取逾時，這次全部改向院內系統擷取。', 'Reading the outpatient assistant’s pre-visit record timed out; this capture asked HIS for all records instead.'],
+  failed: ['門診助理的預看診存檔讀取失敗，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be read; this capture asked HIS for all records instead.'],
+  unusable: ['門診助理的預看診存檔無法銜接新資料，這次全部改向院內系統擷取。', 'The outpatient assistant’s pre-visit record could not be joined with newer records; this capture asked HIS for all records instead.'],
 }
 const NOTES = new Set(['visit_limit', 'order_unmatched'])
 // order_unmatched counts orders, not attempts.
