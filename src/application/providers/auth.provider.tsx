@@ -78,6 +78,12 @@ export interface AuthContextType {
    * are cleared first, as the logout button does, so they never carry over.
    */
   signInAsEmbeddingAccount: (uid: string, token: string) => Promise<void>
+  /**
+   * The ID token of the real account signed in here, for a framing 門診 AI 助理
+   * where nobody is signed in to sign in as the same physician; null for a
+   * guest session or nobody.
+   */
+  lendSignIn: () => Promise<string | null>
   resetPassword: (email: string) => Promise<void>
   dailyUsage: number
   /** Daily chat limit for the active tier (smaller for anonymous visitors) */
@@ -425,6 +431,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const lendSignIn = async () => {
+    if (!auth) return null
+    // The restored account, not the moment before it: an early answer would say nobody is signed in.
+    await auth.authStateReady()
+    await guestSignIn.current
+    const current = auth.currentUser
+    return current && !current.isAnonymous ? current.getIdToken() : null
+  }
+
   const signInAsEmbeddingAccount = async (uid: string, token: string) => {
     if (!auth) throw new Error('Firebase not initialized')
     embedSigningIn.current = true
@@ -461,6 +476,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUpWithEmail,
     signOut,
     signInAsEmbeddingAccount,
+    lendSignIn,
     resetPassword,
     dailyUsage,
     dailyLimit,
