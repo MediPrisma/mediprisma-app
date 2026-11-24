@@ -29,11 +29,11 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     mockStreamText.mockReturnValue({ textStream: textStream('hello') })
   })
 
-  it('uses the normal 60-second idle limit for Haiku without hidden thinking', async () => {
+  it('waits 120 seconds, not longer, for Haiku to start writing', async () => {
     jest.useFakeTimers()
     try {
       mockStreamText.mockReturnValue({ textStream: (async function* () {
-        await new Promise(resolve => setTimeout(resolve, 82_000))
+        await new Promise(resolve => setTimeout(resolve, 130_000))
         yield 'summary'
       })() })
       const adapter = new AiSdkStreamAdapter({ create: () => ({ model: {}, isGemini: false }) } as any)
@@ -42,7 +42,9 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
         messages: [{ role: 'user', content: 'Synthetic only.' }],
         signal: new AbortController().signal, onChunk })
       const outcome = expect(run).rejects.toThrow(/timed out/i)
-      await jest.advanceTimersByTimeAsync(60_001)
+      await jest.advanceTimersByTimeAsync(119_000)
+      expect(onChunk).not.toHaveBeenCalled()
+      await jest.advanceTimersByTimeAsync(1_001)
       await outcome
       expect(onChunk).not.toHaveBeenCalled()
     } finally { jest.useRealTimers() }

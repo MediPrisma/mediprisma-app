@@ -331,6 +331,10 @@ export const MODEL_CATALOG = [
     // Keep low response effort but skip hidden thinking for interactive use.
     thinkingMode: 'disabled',
     defaultMaxOutputTokens: 8_192,
+    // The 標準摘要 safety request does think: 39-44 s before its first
+    // visible token on the demo patients. Twice that, so a slower run ends
+    // late instead of failing.
+    streamIdleTimeoutMs: 120_000,
     label: 'Claude Haiku 5.5',
     descriptions: {
       en: 'Fastest responses, budget friendly',

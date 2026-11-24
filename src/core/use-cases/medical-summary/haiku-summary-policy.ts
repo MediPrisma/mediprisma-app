@@ -17,10 +17,11 @@ import type { MedicalSummaryCardId } from '@/src/core/entities/medical-summary.e
  *   it spent 20,000 tokens thinking and wrote nothing. A short visible
  *   worksheet before the card (medicine -> condition, problem -> test) costs
  *   ~1 s and removed the cross-problem medicine pairings; ~12-16 s in all.
- * - safety: adaptive thinking at low effort, with the instruction to test
- *   every candidate against its rule. Four of four runs thought, took
- *   19-30 s and returned rule-conforming alerts; without thinking the same
- *   request invented renal and duplicate alerts.
+ * - safety: adaptive thinking at medium effort, with the instruction to test
+ *   every candidate against its rule. Five of five runs on the two demo
+ *   patients thought, took 38-48 s and returned rule-conforming alerts. At
+ *   low effort it thought on one patient (19-30 s) and not on the other, and
+ *   without thinking it invented renal and duplicate alerts.
  */
 const HAIKU_MODEL_ID = 'claude-haiku-5-5'
 
@@ -72,8 +73,8 @@ export function withHaikuSummaryLanePolicy(
 export function haikuSummaryLaneOptions(
   modelId: string,
   cardIds: readonly MedicalSummaryCardId[],
-): { claudeThinking?: 'adaptive'; maxTokens?: number } {
+): { claudeThinkingEffort?: 'medium'; maxTokens?: number } {
   return usesHaikuSummaryLanes(modelId) && cardIds.length === 1 && cardIds[0] === 'safety'
-    ? { claudeThinking: 'adaptive', maxTokens: 16_000 }
+    ? { claudeThinkingEffort: 'medium', maxTokens: 16_000 }
     : {}
 }

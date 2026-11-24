@@ -69,10 +69,10 @@ test('asks for each card on its own and keeps the problem list written after a w
   const byCard = Object.fromEntries(calls.map(call => [call.cards[0], call]))
   expect(byCard.problems.system).toContain('This request covers ONLY the problems card.')
   expect(byCard.problems.user).toContain('<<<WORKSHEET>>>')
-  expect(byCard.problems.options.claudeThinking).toBeUndefined()
+  expect(byCard.problems.options.claudeThinkingEffort).toBeUndefined()
   expect(byCard.overview.user).toContain('FINAL CHECK FOR THE OVERVIEW CARD')
   expect(byCard.safety.user).toContain('FINAL CHECK FOR THE SAFETY CARD')
-  expect(byCard.safety.options).toMatchObject({ claudeThinking: 'adaptive', maxTokens: 16_000 })
+  expect(byCard.safety.options).toMatchObject({ claudeThinkingEffort: 'medium', maxTokens: 16_000 })
   expect(calls.map(call => call.options.summaryDiagnostics.lane).sort()).toEqual(['batch', 'fast', 'full'])
 
   const stored = medicalSummaryStore.getState().byKey[SLOT] as any

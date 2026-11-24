@@ -55,8 +55,8 @@ export interface StreamConfig {
    *  `reasoning_effort`, OpenRouter's `reasoning.enabled`) is resolved at the
    *  transport, because it is a property of the endpoint, not of the caller. */
   hiddenReasoning?: 'off'
-  /** Claude only: let this one request think when the model's default is off. */
-  claudeThinking?: 'adaptive'
+  /** Claude only: let this one request think, at this effort, when the model's default is off. */
+  claudeThinkingEffort?: 'low' | 'medium' | 'high'
   responseFormat?: 'json'
   /** Optional per-request idle window. Slow local models need longer for the
    *  first token after evaluating a large selected clinical context. */
@@ -142,8 +142,10 @@ export class AiSdkStreamAdapter {
             ...(modelId === INTRANET_LUNA_ID ? { forceReasoning: true } : {}),
           } } }
         : {}),
-      ...(config.claudeThinking && definition.provider === 'claude'
-        ? { providerOptions: { anthropic: { thinking: { type: config.claudeThinking } } } }
+      ...(config.claudeThinkingEffort && definition.provider === 'claude'
+        ? { providerOptions: { anthropic: {
+            thinking: { type: 'adaptive' as const }, effort: config.claudeThinkingEffort,
+          } } }
         : {}),
       ...(config.responseFormat === 'json' ? { output: Output.json() } : {}),
       onError: ({ error }) => { streamError = error },

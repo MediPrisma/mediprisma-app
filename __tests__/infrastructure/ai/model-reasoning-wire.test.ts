@@ -129,10 +129,10 @@ describe('Luna and Haiku reasoning defaults on the wire', () => {
       model: 'claude-haiku-5-5', apiKey,
       messages: [{ role: 'user', content: 'Synthetic only.' }],
       signal: new AbortController().signal, onChunk: () => {},
-      claudeThinking: 'adaptive', maxTokens: 16_000,
+      claudeThinkingEffort: 'medium', maxTokens: 16_000,
     })).rejects.toThrow()
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({
-      thinking: { type: 'adaptive' }, output_config: { effort: 'low' }, max_tokens: 16_000,
+      thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, max_tokens: 16_000,
     })
   })
 

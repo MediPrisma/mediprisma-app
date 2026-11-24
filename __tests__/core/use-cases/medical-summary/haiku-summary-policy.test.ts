@@ -32,7 +32,7 @@ it('leaves other models and multi-card requests untouched', () => {
 })
 
 it('lets only the safety card think, with room for it', () => {
-  expect(haikuSummaryLaneOptions(HAIKU, ['safety'])).toEqual({ claudeThinking: 'adaptive', maxTokens: 16_000 })
+  expect(haikuSummaryLaneOptions(HAIKU, ['safety'])).toEqual({ claudeThinkingEffort: 'medium', maxTokens: 16_000 })
   expect(haikuSummaryLaneOptions(HAIKU, ['problems'])).toEqual({})
   expect(haikuSummaryLaneOptions('gpt-6-luna', ['safety'])).toEqual({})
 })
