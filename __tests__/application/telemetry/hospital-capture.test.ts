@@ -38,7 +38,9 @@ test('one-click 北榮 bundles report failures, version and resource count; comp
     { system: FAILURE, code: 'reports:timeout', display: '2' },
     { system: FAILURE, code: 'patient:http_error:500', display: '1' },
   ]))).toEqual({ path: 'one_click', outcome: 'partial', hospitalVersion: '0.15.21', medcloudVersion: undefined, hospitalResources: 3,
-    failures: [{ category: 'reports', kind: 'timeout', count: 2 }, { category: 'patient', kind: 'http_error', status: 500, count: 1 }] })
+    failures: [{ category: 'reports', kind: 'timeout', count: 2 }, { category: 'patient', kind: 'http_error', status: 500, count: 1 }],
+    resourceCounts: expect.objectContaining({ Encounter: 3, Observation: 0, other: 0 }),
+    encounterCounts: { outpatient: 0, inpatient: 0, emergency: 0, other: 3 } })
   expect(summarizeHospitalCapture(oneClick([]))?.outcome).toBe('complete')
   expect(summarizeHospitalCapture(oneClick([], 0))?.outcome).toBe('empty')
   expect(summarizeHospitalCapture(oneClick([{ system: 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-completeness', code: 'partial' }]))?.outcome).toBe('partial')
@@ -90,7 +92,7 @@ test('sends one strict capture event to the capture endpoint without patient dat
   expect(hospitalCaptureEventSchema.safeParse(body).success).toBe(true)
   expect(body).toMatchObject({ path: 'one_click', outcome: 'partial', app_surface: 'app', hospital_extension_version: '0.15.21',
     hospital_resources: '1-10', failures: [{ category: 'vitals', kind: 'login_or_network', count: 3 }] })
-  expect(JSON.stringify(body)).not.toMatch(/TEST-1|測試甲|Encounter/)
+  expect(JSON.stringify(body)).not.toMatch(/TEST-1|測試甲|"e0"/)
 })
 
 test('sends nothing off the 北榮 site, without network permission or sign-in, or for non-capture imports', async () => {
@@ -137,4 +139,63 @@ test('a patient-selection cloud-only end is logged with its reason', async () =>
   await settle()
   expect(sentBody()).toMatchObject({ outcome: 'failed', unavailable_reason: 'HIS_PATIENT_SELECTION_REQUIRED' })
   expect(hospitalCaptureEventSchema.safeParse(sentBody()).success).toBe(true)
+})
+
+test('D083/D084: chart number, capture time and counts reach the Collector; malformed tags are dropped', async () => {
+  const CHART = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-chart-no'
+  const DURATION = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-duration-ms'
+  const bundle = oneClick([{ system: CHART, code: 'T000001' }, { system: DURATION, code: '36267' },
+    { system: FAILURE, code: 'orders:order_unmatched', display: '101' }], 0)
+  bundle.entry.push({ resource: { resourceType: 'Encounter', id: 'v1', class: { code: 'AMB' } } } as never,
+    { resource: { resourceType: 'Encounter', id: 'v2', class: { code: 'EMER' } } } as never,
+    { resource: { resourceType: 'Observation', id: 'o1' } } as never, { resource: { resourceType: 'Basic', id: 'b1' } } as never)
+  reportHospitalCapture(bundle)
+  await settle()
+  const body = sentBody()
+  expect(hospitalCaptureEventSchema.safeParse(body).success).toBe(true)
+  expect(body).toMatchObject({ chart_no: 'T000001', duration_ms: 36267, outcome: 'partial',
+    failures: [{ category: 'orders', kind: 'order_unmatched', count: 101 }],
+    resource_counts: { Encounter: 2, Observation: 1, other: 1, Condition: 0 },
+    encounter_counts: { outpatient: 1, emergency: 1, inpatient: 0, other: 0 } })
+  expect(JSON.stringify(body)).not.toMatch(/測試甲|TEST-1/)
+  for (const bad of [[{ system: CHART, code: 'T 1/2' }], [{ system: CHART, code: 'A1' }, { system: CHART, code: 'A2' }], [{ system: DURATION, code: '-1' }]]) {
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('chartNo')
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('durationMs')
+  }
+})
+
+test('D091: the HIS request count the extension tagged reaches the Collector; a malformed or repeated tag is dropped', async () => {
+  const REQUESTS = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-request-count'
+  reportHospitalCapture(oneClick([{ system: REQUESTS, code: '512' }]))
+  await settle()
+  const body = sentBody()
+  expect(hospitalCaptureEventSchema.safeParse(body).success).toBe(true)
+  expect(body).toMatchObject({ request_count: 512 })
+  for (const bad of [[{ system: REQUESTS, code: '-1' }], [{ system: REQUESTS, code: '1.5' }], [{ system: REQUESTS, code: '100000' }],
+    [{ system: REQUESTS, code: '1' }, { system: REQUESTS, code: '2' }]])
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('requestCount')
+})
+
+test('D093: how the capture used the stored record and how long each part took reach the Collector; anything malformed is dropped', async () => {
+  const STORED = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-stored-record'
+  const MEASURE = 'https://github.com/voho0000/EHR-FHIR-BRIDGE/CodeSystem/capture-measure'
+  const measure = (code: string) => ({ system: MEASURE, code })
+  reportHospitalCapture(oneClick([{ system: STORED, code: 'used' }, measure('prelude_ms:6200'), measure('record_read_ms:1800'), measure('record_wait_ms:0'),
+    measure('capture_ms:3100'), measure('merge_ms:12'), measure('held_resources:812'), measure('newer_resources:23'), measure('since_days:1'), measure('something_new:5')]))
+  await settle()
+  const body = sentBody()
+  expect(hospitalCaptureEventSchema.safeParse(body).success).toBe(true)
+  expect(body).toMatchObject({ stored_record: { outcome: 'used', held_resources: 812, newer_resources: 23, since_days: 1 },
+    stage_ms: { prelude: 6200, record_read: 1800, record_wait: 0, capture: 3100, merge: 12 } })
+  // Times alone, with the setting off: no stored record is named.
+  const timed = summarizeHospitalCapture(oneClick([measure('prelude_ms:4000'), measure('capture_ms:9000')]))
+  expect(timed).toMatchObject({ stageMs: { prelude: 4000, capture: 9000 } })
+  expect(timed).not.toHaveProperty('storedRecord')
+  // An outcome the contract does not know, or said twice, is not sent; a size out of range leaves the outcome alone.
+  for (const bad of [[{ system: STORED, code: 'maybe' }], [{ system: STORED, code: 'used' }, { system: STORED, code: 'none' }]])
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('storedRecord')
+  expect(summarizeHospitalCapture(oneClick([{ system: STORED, code: 'used' }, measure('held_resources:812'), measure('newer_resources:23'), measure('since_days:401')]))?.storedRecord)
+    .toEqual({ outcome: 'used', held_resources: 812, newer_resources: 23 })
+  for (const bad of [[measure('capture_ms:-1')], [measure('capture_ms:1.5')], [measure('capture_ms:3600001')], [measure('capture_ms:1'), measure('capture_ms:2')], [measure('Capture_ms:1')], [measure('T000001:1')]])
+    expect(summarizeHospitalCapture(oneClick(bad))).not.toHaveProperty('stageMs')
 })

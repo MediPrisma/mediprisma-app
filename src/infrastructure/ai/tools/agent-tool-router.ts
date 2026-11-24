@@ -62,6 +62,23 @@ const IMPLICIT_PATIENT_RECORD_QUERY = [
   /(?:look up|check (?:my|the)|show me|do i have|latest|most recent|current (?:medication|diagnos|lab|result))/i,
 ]
 
+/** A follow-up that points back at an earlier turn ("那次", "那血脂呢",
+ * "跟上次比"). Its own words do not say which record it is about, so keyword
+ * routing on it alone picks the wrong tool. */
+const FOLLOW_UP_REFERENCE = /(?:[那這]一?次|第[一二三四五六七八九十\d]+次|上一?次|[那這](?:個|兩|些)|呢[？?]?$|跟.*比|相比)/
+/** Needs lab values and the medication list together; prefetching only the
+ * medication list made the model stop and ask the user for the lab values. */
+const LAB_AND_MEDICATION_QUERY = [/(?:腎功能|肝功能|eGFR|creatinine|肌酸酐|檢驗)/i, /(?:藥|劑量|處方)/]
+
+export interface AgentRoutingContext {
+  /** The conversation already has earlier turns the question may refer to. */
+  hasEarlierTurns?: boolean
+}
+
+function refersToEarlierTurn(question: string, context: AgentRoutingContext | undefined): boolean {
+  return !!context?.hasEarlierTurns && FOLLOW_UP_REFERENCE.test(question.trim())
+}
+
 function matchesAny(question: string, patterns: readonly RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(question))
 }
@@ -102,7 +119,8 @@ export function agentToolNamesForDataScope(
 }
 
 const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
-  patient: [/(年齡|歲|性別|gender|age|demographic)/i],
+  // `\bage\b`: a bare /age/ also matched "stage" and "dosage".
+  patient: [/(年齡|歲|性別|gender|\bage\b|demographic)/i],
   overview: [/(資料概況|資料總覽|有哪些類型|data overview|what data|available data)/i],
   encounters: [/(就醫|門診|急診|住院|出院|看診|科別|visit|encounter|admission|hospitali[sz])/i],
   conditions: [/(診斷|疾病|病況|問題清單|condition|diagnos)/i],
@@ -171,6 +189,7 @@ export function selectAgentToolNames(
   question: string,
   availableToolNames: readonly string[],
   dataScope: ChatDataScope,
+  context?: AgentRoutingContext,
 ): string[] {
   const scopeAllowedNames = agentToolNamesForDataScope(availableToolNames, dataScope)
   if (dataScope === 'auto') return scopeAllowedNames
@@ -182,6 +201,7 @@ export function selectAgentToolNames(
   // Structured protocols can require several resource types even when a
   // summary/evidence keyword would otherwise select just one compact tool.
   if (dataScope !== 'general' && isStructuredClinicalRequest(question)) return scopeAllowedNames
+  if (dataScope !== 'general' && refersToEarlierTurn(question, context)) return scopeAllowedNames
   if (
     dataScope !== 'general' &&
     scopeAllowedNames.includes('getHealthSummarySnapshot') &&
@@ -223,9 +243,10 @@ export function selectAgentToolsForQuestion<T>(
   tools: Record<string, T> | undefined,
   question: string,
   dataScope: ChatDataScope,
+  context?: AgentRoutingContext,
 ): Record<string, T> | undefined {
   if (!tools) return tools
-  const names = selectAgentToolNames(question, Object.keys(tools), dataScope)
+  const names = selectAgentToolNames(question, Object.keys(tools), dataScope, context)
   return Object.fromEntries(
     names.flatMap((name) => name in tools ? [[name, tools[name]]] : []),
   )
@@ -239,6 +260,7 @@ export function forcedInitialAgentToolName(
   question: string,
   selectedToolNames: readonly string[],
   dataScope: ChatDataScope,
+  context?: AgentRoutingContext,
 ): string | undefined {
   if (selectedToolNames.length === 0) return undefined
   if (dataScope === 'auto') return undefined
@@ -258,8 +280,16 @@ export function forcedInitialAgentToolName(
   if (isStructuredClinicalRequest(question) && selectedToolNames.includes('getDataOverview')) {
     return 'getDataOverview'
   }
+  // The model picks the first lookup itself (step zero still has to call a
+  // tool, see shouldRequireInitialAgentToolCall).
+  if (refersToEarlierTurn(question, context)) return undefined
 
   const priority: string[] = []
+  // "藥物過敏" also matches the medication keywords below; the allergy list
+  // is the record that answers it.
+  if (matchesAny(question, GROUP_TRIGGERS.allergies)) {
+    priority.push('queryAllergies')
+  }
   if (MEDICATION_IDENTITY_QUERY.test(question) && extractMedicationRecordQuery(question)) {
     priority.push('queryMedications')
   }
@@ -296,8 +326,42 @@ export function forcedInitialAgentToolName(
   if (isMedicalEvidenceQuestion(question)) {
     priority.push('searchMedicalLiterature')
   }
-  priority.push('queryPatientInfo', 'getDataOverview', ...selectedToolNames)
-  return priority.find((name) => selectedToolNames.includes(name))
+  const routed = priority.find((name) => selectedToolNames.includes(name))
+  if (
+    (routed === 'getActiveMedicationList' || routed === 'queryMedications') &&
+    LAB_AND_MEDICATION_QUERY.every((pattern) => pattern.test(question))
+  ) {
+    return undefined
+  }
+  if (routed) return routed
+  // Demographics are in the tool set only when the question asked for them or
+  // no keyword narrowed the tools. In the second case nothing says which
+  // record answers the question, so name no tool; the caller makes step zero
+  // call one of the model's choosing (shouldRequireInitialAgentToolCall).
+  if (selectedToolNames.includes('queryPatientInfo')) {
+    return matchesAny(question, GROUP_TRIGGERS.patient) ? 'queryPatientInfo' : undefined
+  }
+  return ['getDataOverview', ...selectedToolNames].find((name) => selectedToolNames.includes(name))
+}
+
+/** A patient-scope turn with no named first tool must still read the record
+ * first: with a free tool choice a small model answers from nothing. General
+ * knowledge questions and explicit "do not query" requests stay free. */
+export function shouldRequireInitialAgentToolCall(
+  question: string,
+  selectedToolNames: readonly string[],
+  dataScope: ChatDataScope,
+  initialToolName: string | undefined,
+  context?: AgentRoutingContext,
+): boolean {
+  if (initialToolName || selectedToolNames.length === 0) return false
+  if (dataScope === 'auto' || dataScope === 'general') return false
+  if (matchesAny(question, NO_RECORD_QUERY)) return false
+  // These two are about this patient's record whatever else they say, so a
+  // general-knowledge keyword ("是什麼", "禁忌") does not free step zero.
+  if (refersToEarlierTurn(question, context)) return true
+  if (LAB_AND_MEDICATION_QUERY.every((pattern) => pattern.test(question))) return true
+  return !isGeneralMedicalKnowledgeQuestion(question)
 }
 
 function isStructuredClinicalRequest(question: string): boolean {
@@ -312,6 +376,11 @@ function isStructuredClinicalRequest(question: string): boolean {
  * Frontier models never use this path because their data scope remains `auto`.
  */
 const LOCAL_AGENT_PREFETCH_TOOLS = new Set([
+  // No parameters: a forced model call for it has nothing to write and can
+  // run on to the output limit, so the harness always runs it itself.
+  'queryPatientInfo',
+  // Both filters are optional and an allergy list is short.
+  'queryAllergies',
   'getDataOverview',
   'getHealthSummarySnapshot',
   'getActiveMedicationList',

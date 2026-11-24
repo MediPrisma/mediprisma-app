@@ -24,7 +24,9 @@ CDSS 外送自由文字的姓名遮蔽會將來源姓名中的每個 `*`／`＊`
 
 歷史清單最近10筆／hasMore，單筆驗UUID、病人hash、pack與大小；唯讀原快照，不重新評估或寫回當次answer stores。標示醫師身分未驗證；不另存localStorage/IndexedDB、不執行HTML。可見臨床tab／卡片／既有控制保留。
 
-歷史使用獨立、固定的 `src/shared/contracts/cdss-stored-save-v2.ts`，對齊 FHIR backend 的 `src/contract-v2.mjs`，不引用最新寫入 schema。v2 保留舊版 UUID 字面格式、分鐘精度與 `+0800` 等時間格式；日期、JSON 節點數／深度、4MiB、臨床快照結構及未知版本仍驗證。快照及事件中的原始 UUID／時間不改寫，只有畫面日期轉換副本以供顯示。單筆 envelope 的 savedAt 必須等於快照 saved_at。
+2026-11-17 起寫入 `schema_version: 3`：v2 加上選填的 `patient_identity.mrn`（院內資料可存病歷號）。病歷號取自病人的 `urn:oid:his.patient.mrn`（北榮懷爾抓抓直接提供，或雲端懷爾抓抓從北榮取得），沒有就不帶；同一病人出現兩個不同病歷號時不儲存。病歷號不進 patient key，舊紀錄照常查得到。需先部署支援 v3 的 mediprisma-fhir-server。
+
+歷史使用獨立、固定的 `src/shared/contracts/cdss-stored-save-v2.ts`（v3 由 `cdss-stored-save-v3.ts` 在 v2 reader 之外只多驗病歷號），對齊 FHIR backend 的 `src/contract-v2.mjs`，不引用最新寫入 schema。v2 保留舊版 UUID 字面格式、分鐘精度與 `+0800` 等時間格式；日期、JSON 節點數／深度、4MiB、臨床快照結構及未知版本仍驗證。快照及事件中的原始 UUID／時間不改寫，只有畫面日期轉換副本以供顯示。單筆 envelope 的 savedAt 必須等於快照 saved_at。
 
 歷史建議以唯讀方式呈現儲存的 title、moduleName、status、recommendation、rationale、patientEvidence、missingData、nextActions、safetyBoundary；人工輸入與決策仍可展開。這些是當時結果，調閱不重跑現有規則、不覆蓋目前評估。讀取相容性不放寬新寫入規格；未來新格式需另增 reader。
 

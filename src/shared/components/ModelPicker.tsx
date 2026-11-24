@@ -10,8 +10,9 @@
 // exactly like the stream adapter does; re-adding the key revives the pick.
 "use client"
 
-import type { Ref } from "react"
-import { Check, ChevronDown, ChevronRight, Lock, Plus } from "lucide-react"
+import { Fragment, useEffect, type Ref } from "react"
+import { refreshHospitalGeminiStatus } from "@/src/application/hooks/use-hospital-gemini-status.hook"
+import { Check, ChevronDown, ChevronRight, ExternalLink, Lock, Plus } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -121,6 +122,16 @@ export function ModelPicker({
     ) === 'standard'
   }
 
+  // 院內 Gemini depends on a browser tab the clinician may have just opened
+  // or signed into: look again whenever the menu opens (rate-limited).
+  const handleOpenChange = (next: boolean) => {
+    if (next) void refreshHospitalGeminiStatus()
+    onOpenChange?.(next)
+  }
+  useEffect(() => {
+    if (open) void refreshHospitalGeminiStatus()
+  }, [open])
+
   const groups: Array<{ label: string; items: ModelEntry[]; custom?: boolean }> = [
     { label: t.settings.openAiCompatibleGroupLabel, items: customModels, custom: true },
     { label: "Gemini", items: geminiModels },
@@ -129,7 +140,7 @@ export function ModelPicker({
   ]
 
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           ref={triggerRef}
@@ -176,7 +187,7 @@ export function ModelPicker({
             <DropdownMenuLabel className="text-[0.6875rem] font-normal text-muted-foreground">
               {group.label}
             </DropdownMenuLabel>
-            {group.items.map((entry) => {
+            {group.items.map((entry, index) => {
               const definition = getModelDefinition(entry.id)
               const lockedByAgent = false
               const entryUsesStandardChat = agentModeActive && usesStandardChat(entry.id)
@@ -186,8 +197,8 @@ export function ModelPicker({
                 && !lockedByAgent
               const locked = entry.isLocked || lockedByAgent
               return (
+                <Fragment key={entry.id}>
                 <DropdownMenuItem
-                  key={entry.id}
                   disabled={locked && !configureRequired}
                   onClick={() => {
                     if (configureRequired) {
@@ -212,12 +223,15 @@ export function ModelPicker({
                     title={entry.label}
                     className={cn(
                       "min-w-0 flex-1",
-                      definition?.provider === 'custom'
+                      definition?.provider === 'custom' || entry.hint
                         ? "whitespace-normal break-words"
                         : "truncate",
                     )}
                   >
                     {entry.label}
+                    {entry.hint ? (
+                      <span className="block text-[0.625rem] text-muted-foreground">{entry.hint}</span>
+                    ) : null}
                   </span>
                   {entryUsesStandardChat && !configureRequired ? (
                     <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
@@ -239,6 +253,24 @@ export function ModelPicker({
                     <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                   ) : null}
                 </DropdownMenuItem>
+                {/* The locked row ignores pointer events, so its way out is its
+                    own enabled row: a plain link that never selects the model.
+                    Locked rows in a row that share one sign-in page get one link,
+                    under the last of them. */}
+                {locked && entry.signInUrl && !(group.items[index + 1]?.isLocked && group.items[index + 1]?.signInUrl === entry.signInUrl) ? (
+                  <DropdownMenuItem asChild className="cursor-pointer gap-1 pl-4 text-[0.6875rem] font-medium text-primary focus:bg-primary/10 focus:text-primary">
+                    <a
+                      href={entry.signInUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`model-picker-sign-in-${entry.id}`}
+                    >
+                      <ExternalLink className="h-3 w-3 text-primary" />
+                      {t.modelPicker.openHospitalGemini}
+                    </a>
+                  </DropdownMenuItem>
+                ) : null}
+                </Fragment>
               )
             })}
             {group.custom ? (

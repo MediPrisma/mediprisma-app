@@ -16,6 +16,9 @@ import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@voho0000/clinica
 import { buildClinicalSelects, type ClinicalSelectKey, type ClinicalSelectValue } from '../hfpef-clinical-autofill'
 import { buildEchoAutofill } from '../echo-autofill'
 import { doacPatientSelects, type LabObservation } from '../doac-patient-autofill'
+import { hasBledSelects } from '../has-bled-autofill'
+import { ageBpSelects } from '../age-bp-autofill'
+import { timiSelects } from '../timi-autofill'
 import { NOT_ASSESSED, useClinicVitals, useClinicVitalsStore, type ClinicVitals, type MeasuredEntry } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { convertToBase } from '../units'
 import { isPediatricEgfr } from '@/src/shared/utils/lab-pivot.utils'
@@ -40,6 +43,8 @@ export interface AutofillValue {
 }
 
 export interface Autofill {
+  /** The whole chart has loaded without error; only then may a missing answer be presumed absent. */
+  recordLoaded?: boolean
   clinicalSelects?: Partial<Record<ClinicalSelectKey, ClinicalSelectValue>>
   resolve: (source?: AutofillSource) => AutofillValue | undefined
   sex?: string
@@ -314,12 +319,18 @@ export function buildAutofill(
     }
   }
 
+  const doacPatient = doacPatientSelects({ observations: observations as LabObservation[], conditions, encounters, demographics: { age, gender: sex }, now })
   return {
     resolve,
     sex,
+    recordLoaded: true,
     clinicalSelects: {
       ...buildClinicalSelects(reports, medications, now, conditions, encounters),
-      ...doacPatientSelects({ observations: observations as LabObservation[], conditions, encounters, demographics: { age, gender: sex }, now }),
+      ...doacPatient,
+      ...hasBledSelects({ resolve, dialysis: doacPatient.doac_dialysis, conditions, encounters, now }),
+      ...ageBpSelects({ age: typeof age === 'number' ? age : undefined, resolve }),
+      ...timiSelects({ observations: observations as LabObservation[], reports, now, sex }),
+      ...(typeof age === 'number' ? { ageOver65: { value: age > 65 ? 'yes' : 'no', date: '', testName: `年齡 ${age} 歲` } } : {}),
     },
   }
 }
@@ -398,7 +409,7 @@ export function useLabAutofill(): LabAutofillState {
     () => {
       const data = buildAutofill(observations as ObsLike[], { age: patient?.age, gender: patient?.gender }, diagnosticReports, medications, new Date(), conditions, encounters)
       // A partially loaded chart must not infer absence before diagnoses arrive.
-      if (isLoading || isFetching || error) data.clinicalSelects = undefined
+      if (isLoading || isFetching || error) { data.clinicalSelects = undefined; data.recordLoaded = false }
       return withCdssWeight(withCdssNyha(data, nyhaAnswer), clinicWeight)
     },
     [observations, patient, diagnosticReports, medications, conditions, encounters, isLoading, isFetching, error, nyhaAnswer, clinicWeight],

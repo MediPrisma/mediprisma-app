@@ -78,7 +78,7 @@ export function upperLimitFromText(text: string | undefined, unit: string, sex: 
  * report. A newest result without a usable limit leaves the limit unknown: an
  * older one is not used in its place.
  */
-function latest(observations: LabObservation[], key: string, now: Date, sex: string | undefined): LabReading | undefined {
+export function latestLab(observations: LabObservation[], key: string, now: Date, sex: string | undefined): LabReading | undefined {
   let best: LabReading | undefined
   for (const obs of observations) {
     if (['entered-in-error', 'cancelled', 'registered', 'preliminary'].includes(obs.status ?? '')) continue
@@ -163,8 +163,8 @@ export function doacPatientSelects(input: {
   const out: Partial<Record<DoacPatientKey, ClinicalSelectValue>> = {}
 
   // ALT/AST: 「>2×ULN」 when either is; 「no」 only when both are known and neither is.
-  const rawAlt = latest(observations, 'ALT', now, demographics.gender)
-  const rawAst = latest(observations, 'AST', now, demographics.gender)
+  const rawAlt = latestLab(observations, 'ALT', now, demographics.gender)
+  const rawAst = latestLab(observations, 'AST', now, demographics.gender)
   const alt = withUln(rawAlt, 'ALT'), ast = withUln(rawAst, 'AST')
   // A result that is there but cannot be compared (an unusual unit) could be
   // raised: that question stays blank rather than defaulting to 「無」.
@@ -182,7 +182,7 @@ export function doacPatientSelects(input: {
       ? { value: 'no', date: one[1].date, testName: `${reading(one[0], one[1])}，≤2×ULN；${one[0] === 'ALT' ? 'AST' : 'ALT'} 未見，預設無（請核對）`, obsId: one[1].obsId, facility: one[1].facility, resourceType: 'Observation' }
       : { value: 'no', date: today, testName: '未見 ALT／AST 檢驗，預設無（請核對）' }
   }
-  const rawBili = latest(observations, 'T.BILI', now, demographics.gender)
+  const rawBili = latestLab(observations, 'T.BILI', now, demographics.gender)
   const bili = withUln(rawBili, 'T.BILI')
   if (bili?.uln !== undefined) {
     const raised = bili.value >= 1.5 * bili.uln
@@ -198,7 +198,7 @@ export function doacPatientSelects(input: {
   const dialysis = diagnosisSelect(conditions, encounters, now, isDialysisCode, '透析')
   if (dialysis) out.doac_dialysis = dialysis
   else {
-    const egfr = EGFR_KEYS.map((key) => latest(observations, key, now, demographics.gender))
+    const egfr = EGFR_KEYS.map((key) => latestLab(observations, key, now, demographics.gender))
       .filter((lab): lab is LabReading => !!lab && now.getTime() - Date.parse(lab.date) <= RECENT_DAYS * 86_400_000)
       .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))[0]
     const ckd = diagnosisSelect(conditions, encounters, now, isCkdBeforeStage5Code, 'CKD', RECENT_DAYS)

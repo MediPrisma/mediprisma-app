@@ -10,7 +10,7 @@
 
 ### 1. 只重跑失敗卡片，會抹掉保留卡片的模型來源
 
-- 位置：[use-medical-summary.hook.ts:185–199](https://github.com/voho0000/medical-note-smart-on-fhir/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/application/hooks/medical-summary/use-medical-summary.hook.ts#L185)、[結果合併處:569–576](https://github.com/voho0000/medical-note-smart-on-fhir/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/application/hooks/medical-summary/use-medical-summary.hook.ts#L569)。
+- 位置：[use-medical-summary.hook.ts:185–199](https://github.com/MediPrisma/mediprisma-app/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/application/hooks/medical-summary/use-medical-summary.hook.ts#L185)、[結果合併處:569–576](https://github.com/MediPrisma/mediprisma-app/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/application/hooks/medical-summary/use-medical-summary.hook.ts#L569)。
 - 重現：使用者選 3.8，第一輪實際使用 Lite，部分卡片成功、用藥卡失敗。按重跑失敗卡片，第二輪只重跑用藥並回報 3.8。
 - 實際：成功的 Lite 卡片內容保留，但整份摘要的 `actualModelIds` 只剩 `gemini-3.8-flash`。畫面因此顯示 3.8 並撤掉回退警告。執行紀錄也在新一輪開始時清除舊紀錄。
 - 原因：每次 `run` 重新建立模型紀錄，沒有保留 `retryRequest.baseResult.generation.modelExecution`，結果卻合併前一輪內容。
@@ -19,7 +19,7 @@
 
 ### 2. 後一步有回報，會掩蓋前一步沒有回報
 
-- 位置：[ai-model-execution.ts:9–18](https://github.com/voho0000/medical-note-smart-on-fhir/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/shared/utils/ai-model-execution.ts#L9)、[ModelExecutionNotice.tsx:9–10](https://github.com/voho0000/medical-note-smart-on-fhir/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/shared/components/ModelExecutionNotice.tsx#L9)。
+- 位置：[ai-model-execution.ts:9–18](https://github.com/MediPrisma/mediprisma-app/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/shared/utils/ai-model-execution.ts#L9)、[ModelExecutionNotice.tsx:9–10](https://github.com/MediPrisma/mediprisma-app/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/shared/components/ModelExecutionNotice.tsx#L9)。
 - 重現：Gemini Agent 的第一個模型呼叫要求執行工具，但沒有回報 `modelVersion`；工具完成後，第二個模型呼叫回報 3.8 並產生答案。
 - 實際：最終 `actualModelId` 為 3.8、`actualModelIds` 只有 3.8、提醒為 `null`，ⓘ 消失。前一個模型呼叫的身分仍未確認。
 - 原因：資料結構只保存最後回報值與已確認模型清單，沒有保存「已完成但未回報」的步驟。
@@ -28,7 +28,7 @@
 
 ### 3. 自訂模型未回報時，不會顯示使用者所選的模型名稱
 
-- 位置：[ChatMessageList.tsx:430–433](https://github.com/voho0000/medical-note-smart-on-fhir/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/features/medical-chat/components/ChatMessageList.tsx#L430)、[ai-model-execution.ts:36–38](https://github.com/voho0000/medical-note-smart-on-fhir/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/shared/utils/ai-model-execution.ts#L36)。
+- 位置：[ChatMessageList.tsx:430–433](https://github.com/MediPrisma/mediprisma-app/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/features/medical-chat/components/ChatMessageList.tsx#L430)、[ai-model-execution.ts:36–38](https://github.com/MediPrisma/mediprisma-app/blob/d88e37947f30cda4c1fcbbde05bce1d83b0842e6/src/shared/utils/ai-model-execution.ts#L36)。
 - 重現：自訂端點選擇 `qwen2.5vl:7b`，回應沒有模型欄位，聊天元件已收到該 profile 對應的名稱。
 - 實際：顯示 `OpenAI-compatible ⓘ`，而非 `qwen2.5vl:7b ⓘ`。
 - 原因：有 `modelExecution` 時會跳過 `customModelDisplayNames`；共用名稱函式只取得邏輯 profile ID，拿不到實際選擇的 upstream 名稱。摘要與執行紀錄也使用相同函式。

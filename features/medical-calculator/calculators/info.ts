@@ -9,6 +9,22 @@ export interface CalcInfo {
 }
 
 export const CALC_INFO: Record<string, CalcInfo> = {
+  'prevent-cvd': {
+    useWhen: { zh: '30–79 歲初級預防之 10 年總心血管（ASCVD＋心衰竭）風險；高血壓 130–139/80–89 依 AHA/ACC 2025 以 ≥7.5% 決定是否用藥。30–59 歲另估 30 年。', en: '10-year total CVD (ASCVD plus heart failure) risk for primary prevention at age 30–79; at 130–139/80–89 the 2025 AHA/ACC guideline starts medication at ≥7.5%. 30-year risk at age 30–59.' },
+    caveats: { zh: '與 PREVENT-ASCVD 是不同終點：血脂讀 ASCVD，高血壓讀總 CVD，勿互換。排除已有 CVD、亞臨床動脈粥樣硬化、遺傳性 CVD、末期腎病及壽命不足一年者。美國基礎模型，無台灣校準，不含 UACR/HbA1c/SDI。', en: 'A different endpoint from PREVENT-ASCVD: lipids read ASCVD, hypertension reads total CVD; do not interchange. Excludes known CVD, subclinical atherosclerosis, inherited CVD, ESKD and life expectancy under one year. US base model without Taiwanese calibration or UACR/HbA1c/SDI.' },
+  },
+  'score2-asia-pacific': {
+    useWhen: { zh: '40–69 歲、無心血管疾病及糖尿病者之 10 年心血管風險（ESC 2024 高血壓指引讀 SCORE2）；台灣採亞太低風險區。', en: '10-year CVD risk at age 40–69 without CVD or diabetes (the ESC 2024 hypertension guideline reads SCORE2); Taiwan in the Asia-Pacific low-risk region.' },
+    caveats: { zh: '台灣不在論文國家表，低風險區為依 WHO 死亡率的推定；新加坡華人世代報告仍有高估。70 歲以上無亞太 SCORE2-OP；糖尿病改用 SCORE2-Diabetes。分層借用 ESC 2021 門檻。', en: 'Taiwan is not in the paper’s country table; the low-risk region is inferred from WHO mortality, and a Singapore Chinese cohort found overestimation. No Asia-Pacific SCORE2-OP for 70+; use SCORE2-Diabetes in diabetes. Bands borrow ESC 2021 thresholds.' },
+  },
+  'pce-ascvd': {
+    useWhen: { zh: '40–79 歲、無 ASCVD 者的 10 年 hard ASCVD 風險（2013 ACC/AHA 多世代方程式）；與 PREVENT 並列參考，判讀 2018 ACC/AHA 血脂指引的四個風險帶。', en: '10-year hard ASCVD risk at age 40–79 without ASCVD (2013 ACC/AHA Pooled Cohort Equations), read beside PREVENT against the four 2018 ACC/AHA cholesterol-guideline bands.' },
+    caveats: { zh: '只發表白人與非裔美國人係數；其他族裔（含台灣病人）依指引用白人係數，亞裔族群報告有高估，台灣無校正版。不含 eGFR、BMI、statin；AHA 2025 高血壓指引的 7.5% 門檻用的是 PREVENT total CVD，不是本式。', en: 'Published for non-Hispanic White and African American adults only; other groups (Taiwanese patients included) use the White equations, with overestimation reported in Asian cohorts and no Taiwanese recalibration. No eGFR, BMI or statin term; the AHA 2025 hypertension threshold of 7.5% reads PREVENT total CVD, not this equation.' },
+  },
+  'stop-bang': {
+    useWhen: { zh: '懷疑阻塞型睡眠呼吸中止時的八題篩檢；高血壓病人（尤其抗藥性、打鼾、嗜睡）評估是否安排睡眠檢查。', en: 'Eight-item screen for suspected obstructive sleep apnoea; in hypertension (above all resistant, snoring or sleepy patients) to decide on a sleep study.' },
+    caveats: { zh: '篩檢工具，不是診斷；中、高風險以睡眠檢查確認。盛行率高的族群（抗藥性高血壓）陰性預測值不足，抗藥性高血壓不論分數都建議檢查。頸圍病歷不帶，需量測；BMI 以 >35 計分，亞洲人 ≥30 已屬肥胖但不計分。', en: 'A screen, not a diagnosis; intermediate or high scores are confirmed by a sleep study. Negative predictive value is insufficient where prevalence is high (resistant hypertension), which warrants a study at any score. Neck circumference is not in the record and must be measured; BMI scores at >35, although ≥30 is obesity in Asian adults.' },
+  },
   'prevent-ascvd': {
     useWhen: { zh: '30–79 歲初級預防之 10 年 ASCVD 風險；30–59 歲另估 30 年。血脂治療判讀需核對 LDL-C 70–189 mg/dL 及疾病專屬適應症。', en: '10-year ASCVD risk for primary prevention at age 30–79; 30-year risk at age 30–59. Lipid treatment guidance requires LDL-C 70–189 mg/dL and review of disease-specific indications.' },
     caveats: { zh: '本流程排除已有 CVD、亞臨床動脈粥樣硬化、遺傳性 CVD、末期腎病及壽命不足一年者。採美國基礎模型，無台灣校準，不含 UACR/HbA1c/SDI。缺值不補零，不以調整用藥輸入推算治療效益。', en: 'This pathway excludes known CVD, subclinical atherosclerosis, inherited CVD, ESKD and life expectancy under one year. US base model without Taiwanese calibration or UACR/HbA1c/SDI. Missing values are not zero; changing treatment inputs does not estimate treatment benefit.' },
@@ -168,9 +184,17 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Checking respiratory compensation in a metabolic acidosis.', zh: '檢查代謝性酸中毒之呼吸代償。' },
     caveats: { en: 'Applies to metabolic acidosis only; a measured PaCO₂ outside the expected range signals a mixed disorder.', zh: '僅適用於代謝性酸中毒；實測 PaCO₂ 超出預期範圍代表合併型障礙。' },
   },
+  'timi-trs2p': {
+    useWhen: { zh: '心肌梗塞後穩定冠心病（門診追蹤），評估復發心血管事件風險，協助決定是否加強降脂或延長抗栓。', en: 'Stable CAD after MI in follow-up: recurrent cardiovascular risk, to weigh intensified lipid lowering or extended antithrombotic therapy.' },
+    caveats: { zh: '每項 1 分，只分低（0–1）、中（2）、高（≥3）；不換算絕對風險。延長抗栓須另評出血風險。病史由診斷碼帶入、未見預填無，請核對。', en: 'One point each, read as low (0–1), intermediate (2) or high (≥3); no absolute risk is given. Extended antithrombotic therapy still needs a bleeding-risk assessment. Histories come from diagnosis codes, absent ones prefilled No — check them.' },
+  },
+  'timi-ua-nstemi': {
+    useWhen: { zh: '疑似不穩定心絞痛／NSTEMI 就診當下，估 14 天死亡、心肌梗塞或需緊急血行重建風險。', en: 'Suspected UA/NSTEMI at presentation: 14-day death, MI or urgent revascularisation.' },
+    caveats: { zh: '穩定門診病人不適用。家族史無代碼，危險因子由診斷碼計數、請核對；事件率來自 2000 年 TIMI 11B，早於高敏感度 troponin。', en: 'Not for stable outpatients. Family history is not coded, so the risk-factor count from codes needs checking; rates are from TIMI 11B (2000), before high-sensitivity troponin.' },
+  },
   'cha2ds2-va': {
     useWhen: { en: 'ESC 2024 thromboembolic risk assessment in AF.', zh: 'ESC 2024 心房顫動血栓風險評估。' },
-    caveats: { en: 'No sex point. Missing histories remain unknown. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。未填病史保留未知；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },
+    caveats: { en: 'No sex point. Histories not in the record are prefilled No for you to check. Scores of 2 or more support OAC; consider at 1. Assess valve disease and clinical exceptions separately.', zh: '不計性別。紀錄未見的病史預填「無」，請核對；≥2 分建議抗凝，1 分考慮。瓣膜病與其他特殊情境另外評估。' },
   },
   'cha2ds2-vasc': {
     useWhen: { en: 'Stroke risk in non-valvular atrial fibrillation, to guide anticoagulation.', zh: '非瓣膜性心房顫動之中風風險，用以指引抗凝。' },

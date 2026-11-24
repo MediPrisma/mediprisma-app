@@ -157,9 +157,10 @@ test.describe('safety alerts (mocked)', () => {
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByRole('button', { name: '重新產生' })).toBeVisible({ timeout: 20_000 })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible()
-    // One generation is three lane requests on this compact-harness model:
-    // the overview, problems + safety, and 影像與病理重點.
-    expect(await getChatCallCount(page)).toBe(3)
+    // One generation is two requests on this frontier-window model (900K, see
+    // medical-summary-harness): overview + problems + safety in one batch, and
+    // 影像與病理重點 as its own lane. A compact-harness model splits the first.
+    expect(await getChatCallCount(page)).toBe(2)
 
     // The unified result comes back from encrypted cache. The mock counter
     // resets per navigation, so 0 proves the batch was not billed again.

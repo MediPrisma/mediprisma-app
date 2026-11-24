@@ -8,8 +8,8 @@
 
 已更新並核對兩個遠端 `origin/pilot/hmc`：
 
-- App `medical-note-smart-on-fhir`：`9a856dd24d8a606cf366405024923b738eb65048`。
-- 規則／adapter 專案 `mediprisma-personalization`：`7e68816b42810a6b3467f6ace80a7da033571cda`。
+- App `mediprisma-app`：`9a856dd24d8a606cf366405024923b738eb65048`。
+- 規則／adapter 專案 `mediprisma-cdss`：`7e68816b42810a6b3467f6ace80a7da033571cda`。
 - App `.github/workflows/deploy-hmc-preview.yml` 明確 checkout 兩個專案的 pilot/hmc，編譯 personalization 原始碼並 overlay HF；不能只根據 App package.json 或目前電腦 node_modules 的版本判斷 HMC 功能。
 - 本輪核對分支與部署組裝方式，未核對線上 hmc-build.json，亦未以瀏覽器驗證已部署版；不宣稱線上版本已與這兩個 SHA 一致。
 
@@ -99,11 +99,11 @@ HMC 已有 HFA-PEFF 與 H2FPEF 相關顯示；「規則會讀身高或 echo 指�
 
 以下連結固定到本次核對的 SHA：
 
-- [HMC 部署來源](https://github.com/voho0000/medical-note-smart-on-fhir/blob/9a856dd24d8a606cf366405024923b738eb65048/.github/workflows/deploy-hmc-preview.yml)
-- [HMC ClinicVitals store](https://github.com/voho0000/medical-note-smart-on-fhir/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/stores/clinic-vitals.store.ts)
-- [HMC phenotype answer store](https://github.com/voho0000/medical-note-smart-on-fhir/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/stores/phenotype-answer.store.ts)
-- [HMC 門診表單與代償控制](https://github.com/voho0000/medical-note-smart-on-fhir/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/renderers/HeartFailureStatusBoard.tsx)
-- [HMC NYHA 與證據列控制](https://github.com/voho0000/medical-note-smart-on-fhir/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/renderers/EvidenceTablePanel.tsx)
-- [HMC 輸入轉 profile](https://github.com/voho0000/medical-note-smart-on-fhir/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/utils/apply-clinic-vitals.ts)
-- [HMC AMT 證據規則](https://github.com/voho0000/mediprisma-personalization/blob/7e68816b42810a6b3467f6ace80a7da033571cda/packages/personalized-care/src/clinical-modules/evidence-tables.ts)
-- [HMC HFpEF／NYHA 規則](https://github.com/voho0000/mediprisma-personalization/blob/7e68816b42810a6b3467f6ace80a7da033571cda/packages/personalized-care/src/clinical-modules/hfpef-diagnosis.ts)
+- [HMC 部署來源](https://github.com/MediPrisma/mediprisma-app/blob/9a856dd24d8a606cf366405024923b738eb65048/.github/workflows/deploy-hmc-preview.yml)
+- [HMC ClinicVitals store](https://github.com/MediPrisma/mediprisma-app/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/stores/clinic-vitals.store.ts)
+- [HMC phenotype answer store](https://github.com/MediPrisma/mediprisma-app/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/stores/phenotype-answer.store.ts)
+- [HMC 門診表單與代償控制](https://github.com/MediPrisma/mediprisma-app/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/renderers/HeartFailureStatusBoard.tsx)
+- [HMC NYHA 與證據列控制](https://github.com/MediPrisma/mediprisma-app/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/renderers/EvidenceTablePanel.tsx)
+- [HMC 輸入轉 profile](https://github.com/MediPrisma/mediprisma-app/blob/9a856dd24d8a606cf366405024923b738eb65048/features/clinical-decision-support/utils/apply-clinic-vitals.ts)
+- [HMC AMT 證據規則](https://github.com/MediPrisma/mediprisma-cdss/blob/7e68816b42810a6b3467f6ace80a7da033571cda/packages/personalized-care/src/clinical-modules/evidence-tables.ts)
+- [HMC HFpEF／NYHA 規則](https://github.com/MediPrisma/mediprisma-cdss/blob/7e68816b42810a6b3467f6ace80a7da033571cda/packages/personalized-care/src/clinical-modules/hfpef-diagnosis.ts)

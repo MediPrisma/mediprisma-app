@@ -97,7 +97,7 @@ describe('決策地圖 v2 · 計算機', () => {
   it('is one button at the head of the HF page; the map and its rows carry no calculator', () => {
     render(<Page id="p9-hfpef-af-dose" page="hf" />)
     const button = screen.getByTestId('cdss-book-calculators')
-    expect(button).toHaveAccessibleName('計算機，9 個可用')
+    expect(button).toHaveAccessibleName('計算機，11 個可用')
     expect(within(screen.getByTestId('cdss-book-map')).queryByText(/MAGGIC|HFA-PEFF/)).toBeNull()
     expect(screen.queryByTestId('cdss-book-calculator-list')).toBeNull()
   })
@@ -124,11 +124,15 @@ describe('決策地圖 v2 · 計算機', () => {
     expect(screen.queryByTestId('cdss-book-calculator-hfa-peff')).toBeNull()
   })
 
-  it('keeps the HF page’s list as it was: AF’s dose point is not on it', () => {
+  // Owner request 2026-11-20: every calculator is listed on opening the page,
+  // whatever its points — AF's dose point is not on the HF page, so the two
+  // DOAC calculators sit under 其他 there.
+  it('lists AF’s DOAC calculators on the HF page too, though AF’s dose point is not on it', () => {
     render(<Page id="p9-hfpef-af-dose" page="hf" />)
     openList()
-    expect(screen.queryByTestId('cdss-book-calculator-doac-dose')).toBeNull()
-    expect(screen.queryByTestId('cdss-book-calculator-doac-periop')).toBeNull()
+    const other = screen.getAllByRole('heading', { level: 3 }).find((heading) => heading.textContent === '其他')!.parentElement!
+    expect(within(other).getByTestId('cdss-book-calculator-doac-dose')).toBeInTheDocument()
+    expect(within(other).getByTestId('cdss-book-calculator-doac-periop')).toBeInTheDocument()
   })
 
   it('lists the calculators by chapter, each with its point and where it stands for this patient (P9)', () => {
@@ -136,7 +140,7 @@ describe('決策地圖 v2 · 計算機', () => {
     openList()
     const list = screen.getByTestId('cdss-book-calculator-list')
     expect(within(list).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
-      '是哪一型？', '共病：HFpEF 的另一半治療', '裝置與進階',
+      '是哪一型？', '共病：HFpEF 的另一半治療', '裝置與進階', '其他',
     ])
     expect(screen.getByTestId('cdss-book-calculator-maggic')).toHaveTextContent('→ DP-19')
     expect(screen.getByTestId('cdss-book-calculator-maggic')).toHaveAttribute('data-status', 'to-fill')
@@ -146,10 +150,12 @@ describe('決策地圖 v2 · 計算機', () => {
     expect(screen.getByTestId('cdss-book-calculator-gwtg-hf')).toHaveTextContent('住院時適用')
   })
 
-  it('leaves out the AF calculators when the page has no AF, and LIFE-Preserved below an LVEF of 50% (P2)', () => {
+  it('lists the AF calculators when the page has no AF, and leaves out LIFE-Preserved below an LVEF of 50% (P2)', () => {
     render(<Page id="p2-new-hfref" page="hf" />)
     openList()
-    expect(screen.queryByTestId('cdss-book-calculator-cha2ds2-va')).toBeNull()
+    for (const id of ['cha2ds2-va', 'crcl', 'has-bled', 'doac-dose', 'doac-periop']) {
+      expect(screen.getByTestId(`cdss-book-calculator-${id}`)).toBeInTheDocument()
+    }
     expect(screen.queryByTestId('cdss-book-calculator-life-preserved')).toBeNull()
     expect(screen.getByTestId('cdss-book-calculator-maggic')).toBeInTheDocument()
   })

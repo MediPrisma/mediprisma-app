@@ -109,7 +109,7 @@ describe('HFpEF reference-site and integration regressions', () => {
     expect(buildEchoAutofill([{ ...report('LAVI: 36'), effectiveDateTime: '' }])).toEqual({})
   })
   test('table layout with reference ranges before units', () => {
-    expect(parseCalculatorEcho('IVSd 1.1 (0.6~1.2)cm LVPWd 0.87 (0.5~1.1)cm LVIDd 4.3 (3.6~5.2)cm')).toMatchObject({ wall: 11, rwt: 17.4 / 43 })
+    expect(parseCalculatorEcho('IVSd 1.1 (0.6~1.2)cm LVPWd 0.87 (0.5~1.1)cm LVIDd 4.3 (3.6~5.2)cm')).toMatchObject({ wall: 11, rwt: 0.405 }) // 17.4 / 43 rounded
   })
   test('BMI only derives from same-day measurements and converts units', () => {
     const measurements = [{ code: { text: 'Body weight' }, effectiveDateTime: '2026-01-01', valueQuantity: { value: 80, unit: 'kg' } }, { code: { text: 'Body height' }, effectiveDateTime: '2026-01-01', valueQuantity: { value: 2, unit: 'm' } }]

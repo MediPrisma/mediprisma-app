@@ -1,7 +1,9 @@
 'use client'
 
-import { AlertTriangle, CheckCircle2, LoaderCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info, LoaderCircle } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useHospitalCaptureReasons } from '@/src/application/hooks/use-hospital-capture-reasons.hook'
+import { STORED_RECORD } from './HospitalCaptureReasons'
 import { useProgressiveImportStatus } from '@/src/application/hooks/use-progressive-import.hook'
 import type { HospitalUnavailableReason } from '@/src/application/stores/progressive-import.store'
 
@@ -20,8 +22,16 @@ const REASON_TEXT: Record<HospitalUnavailableReason, { zh: string; en: string }>
 export function ProgressiveImportStatus() {
   const { locale } = useLanguage()
   const current = useProgressiveImportStatus()
-  if (!current) return null
+  const storedRecord = useHospitalCaptureReasons()?.storedRecord
   const english = locale === 'en'
+  // Signing in once is all it takes; the link is the only thing here the physician can act on.
+  const note = storedRecord ? <>{STORED_RECORD[storedRecord][english ? 1 : 0]}{storedRecord === 'signed_out' && <a href="https://opd-ai-agent.mediprisma.tw/" target="_blank" rel="noopener noreferrer" className="ml-1 underline">{english ? 'Sign in to the outpatient assistant' : '登入門診助理'}</a>}</> : null
+  // The stored-record note shares the status row; it keeps a row of its own only without a status or under an alert.
+  const noteRow = note && <div role="status" aria-live="polite" className="flex shrink-0 items-start gap-2 border-b bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+    <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+    <span>{note}</span>
+  </div>
+  if (!current) return noteRow || null
   const waiting = ['waiting', 'reports-pending', 'reports-pending-partial'].includes(current.phase)
   const warning = ['partial', 'failed', 'reports-failed', 'update-failed', 'reports-pending-partial', 'cancelled', 'patient-changed', 'privacy-stale', 'source-unavailable'].includes(current.phase)
   const alert = ['patient-changed', 'source-unavailable'].includes(current.phase)
@@ -46,8 +56,11 @@ export function ProgressiveImportStatus() {
   const reason = current.importId !== null && current.phase === 'failed' && current.stage === 'cloud-only' && current.reason
     ? REASON_TEXT[current.reason] : undefined
   const message = reason ? english ? `${text} (${reason.en[0].toUpperCase()}${reason.en.slice(1)}.)` : `${text}（${reason.zh}）` : text
-  return <div key={alert ? 'alert' : 'status'} role={alert ? 'alert' : 'status'} aria-live={alert ? 'assertive' : 'polite'} className={`flex shrink-0 items-center gap-2 border-b px-3 py-2 text-sm ${warning ? 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100' : waiting ? 'bg-muted/50 text-muted-foreground' : 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'}`}>
-    <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${waiting ? 'animate-spin motion-reduce:animate-none' : ''}`} />
-    <span>{message}</span>
-  </div>
+  return <>
+    <div key={alert ? 'alert' : 'status'} role={alert ? 'alert' : 'status'} aria-live={alert ? 'assertive' : 'polite'} className={`flex shrink-0 items-center gap-2 border-b px-3 py-2 text-sm ${warning ? 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100' : waiting ? 'bg-muted/50 text-muted-foreground' : 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'}`}>
+      <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${waiting ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+      <span>{message}{note && !alert && <span className="ml-2 opacity-80">{note}</span>}</span>
+    </div>
+    {alert && noteRow}
+  </>
 }

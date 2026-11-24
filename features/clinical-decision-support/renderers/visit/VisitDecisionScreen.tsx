@@ -40,9 +40,11 @@ import { VisitBookLayout, bookChaptersOf, questionRowOf, type BookEntry, type Bo
 import type { VisitAnswerProvenance } from './VisitAsks'
 import { pageSourceOf } from './visit-model.source'
 import { displayDate, visitStatusSentence, VisitStatusLine } from './VisitStatusHeader'
-import { VisitCalculatorsButton, VisitCalculatorsProvider } from './VisitCalculators'
+import { VisitCalculatorsButton, VisitCalculatorsProvider, pageHasCalculators } from './VisitCalculators'
+import type { HostCalculatorState } from '../../utils/htn-risk-readings'
 import { useVisitCalculatorNotes, useVisitCalculatorNotesStore } from '../../stores/visit-calculator-notes.store'
 import type { PrognosisEvidence } from '@/features/medical-calculator/prognosis/models'
+import type { HfpefScoreReading } from '../../utils/hfpef-scores'
 
 export interface VisitDecisionScreenProps {
   model: VisitDecisionModel
@@ -93,8 +95,17 @@ export interface VisitDecisionScreenProps {
    * opens one.
    */
   prognosisEvidence?: PrognosisEvidence
+  /**
+   * The results the host computed for the page's calculators, by entry id,
+   * shown in the 計算機 list's value column (the HTN page's PREVENT-ASCVD and
+   * HPA MACE, `htnCalculatorValues`).
+   */
+  calculatorValues?: Readonly<Record<string, HostCalculatorState>>
   doseRecovery?: ReactNode
+  /** The host's HFA-PEFF reading for HF DP-01's table; absent on a reduced EF. */
+  hfaPeff?: HfpefScoreReading
 }
+
 
 /**
  * The decision map the heart-failure and atrial-fibrillation pages share,
@@ -125,7 +136,9 @@ export function VisitDecisionScreen({
   onGrade,
   onMeasure,
   prognosisEvidence,
+  calculatorValues,
   doseRecovery,
+  hfaPeff,
 }: VisitDecisionScreenProps) {
   const sourceOfPage = pageSourceOf(model)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -375,11 +388,12 @@ export function VisitDecisionScreen({
       decided={bookDecided}
       summaryText={summaryText}
       doseRecovery={doseRecovery}
+      {...(hfaPeff ? { hfaPeff } : {})}
       // A class chosen in DP-01's table is the answer the diagnosis
       // question's own control wrote, handed back the same way.
       {...(coronaryPhase ? { coronaryPhase } : {})}
       {...(onPhysicianInput ? { onChooseClass: (_point: DecisionPointView, input: NonNullable<VisitAction['physicianInput']>) => onPhysicianInput(input) } : {})}
-      {...(sourceOfPage === 'hf' || sourceOfPage === 'af' ? {
+      {...(pageHasCalculators(sourceOfPage) ? {
         headTools: (page: BookHeadToolsPage) => <VisitCalculatorsButton chapterOf={page.chapterOf} goTo={page.goTo} />,
         calculatorNotes: calculatorNotes.map((note) => ({ key: note.calculatorId, dp: note.dp, source: note.source, text: note.text })),
         onRemoveCalculatorNote: (key: string) => removeCalculatorNote(screenKey, key),
@@ -390,13 +404,14 @@ export function VisitDecisionScreen({
 
   return (
     <div className="space-y-3" data-testid="cdss-visit-screen" data-pack={model.packId} data-stage={model.stage} data-layout="book">
-      {sourceOfPage === 'hf' || sourceOfPage === 'af' ? (
+      {pageHasCalculators(sourceOfPage) ? (
         <VisitCalculatorsProvider
           isEnglish={isEnglish}
           points={model.points}
           sourceOfPage={sourceOfPage}
           {...(lvef !== undefined ? { lvef } : {})}
           {...(prognosisEvidence ? { evidence: prognosisEvidence } : {})}
+          {...(calculatorValues ? { values: calculatorValues } : {})}
           attached={new Set(calculatorNotes.map((note) => note.calculatorId))}
           onAttach={(note) => attachCalculatorNote(screenKey, { ...note, at: new Date().toISOString() })}
         >

@@ -94,6 +94,7 @@ export const zhTW = {
     addCustomModel: '新增自訂模型',
     standardChatMode: '標準對話',
     standardChatDescription: '地端模型會自動使用不含 Agent 工具的標準對話。',
+    openHospitalGemini: '開啟院內 Gemini',
   },
 
   tabs: {
@@ -2613,6 +2614,7 @@ export const zhTW = {
     localStandardGeneralModeDescription: '此自訂模型目前以一般醫學模式回答；系統不會把「資料選擇」中的病歷放進提示，也不會搜尋外部文獻。',
     localStandardModeSwitchHint: '如需深入對話，請從上方模型選單改選支援 Agent 的模型。',
     localStandardContextTooLarge: '已選病歷與對話內容超過自訂模型的可用空間。請縮小「資料選擇」範圍後重試。',
+    clinicalContextNotReady: '病歷資料仍在整理中，請稍後再試。',
     saveMessageFailed: '這則訊息尚未存到雲端；對話仍在畫面上，稍後會自動再試。',
   },
 

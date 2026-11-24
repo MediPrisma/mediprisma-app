@@ -6,6 +6,8 @@ import {
   GPT_MODELS,
   GEMINI_MODELS,
   CLAUDE_MODELS,
+  hospitalGeminiPageModel,
+  isHospitalGeminiModel,
   CUSTOM_OPENAI_MODEL_ID,
   customOpenAiModelIdForProfile,
   getModelDefinition,
@@ -20,6 +22,10 @@ import { useOpenAiCompatibleProfiles } from '@/src/application/stores/ai-config.
 import { isOpenAiCompatibleReady, isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
 import { INTRANET_LUNA_ID, intranetGatewayAvailable } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
+import { useHospitalGeminiInfo } from '@/src/application/hooks/use-hospital-gemini-status.hook'
+import { HOSPITAL_GEMINI_SIGN_IN_URL } from '@/src/infrastructure/ai/hospital-gemini/hospital-gemini-bridge'
+
+export const HOSPITAL_GEMINI_SIGN_IN_HINT = '請先開啟並登入院內 Gemini'
 
 export interface ModelEntry {
   id: string
@@ -27,6 +33,10 @@ export interface ModelEntry {
   description: string
   isLocked: boolean
   configureInSettings?: boolean
+  /** Shown under a locked entry: what the clinician has to do first. */
+  hint?: string
+  /** A page that resolves the lock (院內 Gemini sign-in), opened in a new tab. */
+  signInUrl?: string
 }
 
 function endpointParts(baseUrl: string): { host: string; full: string } {
@@ -52,6 +62,7 @@ export function useModelSelection(
 ) {
   const { locale, t } = useLanguage()
   const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
+  const { status: hospitalGeminiStatus, models: hospitalGeminiPageModels } = useHospitalGeminiInfo()
   const gptModels = useMemo(() => {
     return GPT_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
@@ -66,17 +77,33 @@ export function useModelSelection(
   }, [apiKey, locale])
 
   const geminiModels = useMemo(() => {
-    return GEMINI_MODELS.map((entry): ModelEntry => {
+    return GEMINI_MODELS.flatMap((entry): ModelEntry[] => {
+      if (isHospitalGeminiModel(entry.id)) {
+        // Without the extension, or with its switch off, the source does not exist here.
+        if (hospitalGeminiStatus === 'unavailable' || hospitalGeminiStatus === 'disabled') return []
+        // A page model shows only when the extension can pick it; an older one
+        // would silently answer with the page's own choice.
+        const pageModel = hospitalGeminiPageModel(entry.id)
+        if (pageModel && !hospitalGeminiPageModels?.includes(pageModel)) return []
+        const ready = hospitalGeminiStatus === 'ready'
+        return [{
+          id: entry.id,
+          label: entry.label,
+          description: entry.descriptions[locale],
+          isLocked: !ready,
+          ...(ready ? {} : { hint: HOSPITAL_GEMINI_SIGN_IN_HINT, signInUrl: HOSPITAL_GEMINI_SIGN_IN_URL }),
+        }]
+      }
       const definition = getModelDefinition(entry.id)
       const isLocked = definition?.status === 'disabled' || (modelRequiresUserKey(entry.id) && !geminiKey)
-      return {
+      return [{
         id: entry.id,
         label: entry.label,
         description: entry.descriptions[locale],
         isLocked: isLocked || false
-      }
+      }]
     })
-  }, [geminiKey, locale])
+  }, [geminiKey, hospitalGeminiStatus, hospitalGeminiPageModels, locale])
 
   const claudeModels = useMemo(() => {
     return CLAUDE_MODELS.map((entry): ModelEntry => {
@@ -165,6 +192,12 @@ export function useModelSelection(
       return
     }
 
+    if (isHospitalGeminiModel(candidate)) {
+      if (hospitalGeminiStatus === 'ready') setModel(candidate)
+      else toast.error(HOSPITAL_GEMINI_SIGN_IN_HINT)
+      return
+    }
+
     if (definition.provider === 'custom') {
       const customProfile = customProfileForModel(candidate)
       if (!isOpenAiCompatibleRuntimeReady(customProfile)) {
@@ -220,6 +253,9 @@ export function useModelSelection(
 
   const getModelStatus = (definition: ModelDefinition) => {
     if (definition.id === INTRANET_LUNA_ID && intranetGatewayAvailable()) return '北榮院內 Azure；每月共用 US$200 額度'
+    if (isHospitalGeminiModel(definition.id)) {
+      return hospitalGeminiStatus === 'ready' ? '透過北榮懷爾抓抓，在您已登入的院內 Gemini 分頁回答' : HOSPITAL_GEMINI_SIGN_IN_HINT
+    }
     if (definition.status === 'disabled') return t.settings.modelUnavailable
 
     if (definition.provider === 'custom') {

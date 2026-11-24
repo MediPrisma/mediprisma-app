@@ -165,6 +165,13 @@ its launch-query variants; they do not depend on site, role, or sign-in state.
 | Surface | Behaviour | Owner decision |
 |---|---|---|
 | 高血脂畫面切換 at `/` and launch-query variants | Hide「新版流程」for dyslipidemia because it rendered the same generic module list as「原版看板」. Keep「三區塊」and「原版看板」, and add the distinct「健保表一」review for NHI tier criteria, supporting evidence and treatment response. Heart-failure layout choices are unchanged. | Explicit owner request in chat, 2026-09-20 |
+| 高血脂畫面切換 at every route (superseded 2026-11-19) | **不顯示**: the layout switch and「三區塊」. Dyslipidemia opens on「健保表一」only. | Explicit owner request in chat, 2026-11-19: 「高血脂則是只留健保表一那個」 |
+
+## One face per disease, no layout switch (all launch routes, 2026-11-19)
+
+| Surface | Behaviour | Owner decision | Tests |
+|---|---|---|---|
+| The CDSS layout switch (`cdss-layout-switch`) and「三區塊」for heart failure, atrial fibrillation, hypertension and coronary disease | **不顯示 on every route**: each disease opens on 決策地圖 v2 with no switch; a layout a browser stored earlier (`cdss-layout-preference`) is ignored. 「三區塊」is drawn only when the decision map could not be built for a record, so the guidance still shows. The inputs below that were kept only on 三區塊 (HFpEF calculator, prognosis models, handoff card, the AF question groups and the other rows marked 「Where the original stays: 三區塊」) are no longer reachable while the map is built. | Explicit owner request in chat, 2026-11-19: 「幫我把CDSS的三區塊全部都拿掉，只留決策地圖，這樣也不用tab去切了」 | `LiveFeature`, `visit-map-wiring`, `layout-preference.store`; e2e `hospital-medication-cdss` |
 
 ## 決策地圖 v2 — the decision map (all launch routes)
 
@@ -284,3 +291,9 @@ eligibility is preserved. No previously visible clinical surface is removed.
 | HF 「整理模型資料」 button | Replaced by automatic local preparation when the detail opens (no network request) and a 「重新整理」 link in step 1. Nothing is sent until 「執行 HF 模型預測」. | Every route where the HF research calculator is available. | Explicit chat request, 2026-10-07 |
 
 Automatic source resolution also retains active Condition/Allergy evidence when update ordering is absent, never groups different resource identities by imported modifier labels, and redirects duplicate-include references to the selected version. Background refreshes keep the previous complete snapshot within the same patient and lifecycle scope until all updated searches settle. Missing medication content is stated neutrally; it does not create a reconciliation banner or task.
+
+## Intranet Luna development routes (2026-11-17)
+
+| Surface | Behaviour | Routes | Owner decision |
+|---|---|---|---|
+| Hospital Azure Luna transport | Available only with configured intranet origin and exactly one `site=vghtpe`. Production `/app` and its subpaths cannot use the hospital gateway; ordinary cloud/personal-key model access follows its existing policy. | Retained on `/app-staging` and `/app-hmc`, including their subpaths. Only `/app-hmc` retains its existing hospital launch default. | Owner explicitly limited hospital Luna to these development routes in chat, 2026-11-17. |

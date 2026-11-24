@@ -46,11 +46,11 @@ function renderWithDatedLabs(latestDate: string, overrides: CalcValues = {}) {
   jest.mocked(useLabAutofill).mockReturnValue({
     autofill, isLoading: false, error: null, retry: jest.fn(),
   } as ReturnType<typeof useLabAutofill>)
-  // Synthetic, explicitly answered history; no default-no change in production.
+  // Synthetic, explicitly answered history (the record and presumed answers are tested elsewhere).
   const answeredCalc = {
     ...calc,
-    inputs: calc.inputs.map((input) => input.type === 'select' && !input.source
-      ? { ...input, defaultValue: values[input.key] }
+    inputs: calc.inputs.map((input) => input.type === 'select' && input.source?.kind !== 'sex'
+      ? { ...input, source: undefined, presumed: undefined, defaultValue: values[input.key] }
       : input),
   }
   render(<LanguageProvider>

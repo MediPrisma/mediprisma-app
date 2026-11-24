@@ -3,6 +3,7 @@
 import { generateText, streamText } from 'ai'
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
 import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
+import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
 import { intranetGatewayAvailable } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
 
 jest.mock('@/src/infrastructure/ai/utils/proxy-auth', () => ({
@@ -20,6 +21,7 @@ jest.mock('@/src/infrastructure/ai/utils/app-check', () => ({
 }))
 jest.mock('@/src/infrastructure/ai/interceptors/intranet-fetch', () => ({
   INTRANET_LUNA_ID: 'gpt-6-luna',
+  intranetMaxRetries: () => 0,
   intranetGatewayAvailable: jest.fn().mockReturnValue(false),
   createIntranetFetch: () => global.fetch,
 }))
@@ -44,6 +46,33 @@ async function sentBody(modelId: string, useProxy: boolean, streaming = false, o
 }
 
 describe('Luna and Haiku reasoning defaults on the wire', () => {
+  it.each(['proxy', 'direct', 'intranet'])('serializes opt-in Luna verbosity without increasing thinking (%s)', async route => {
+    const original = process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
+    process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = 'https://intranet.example.test'
+    jest.mocked(intranetGatewayAvailable).mockReturnValue(route === 'intranet')
+    try {
+      for (const textVerbosity of [undefined, 'high'] as const) {
+        const fetch = global.fetch as jest.Mock
+        fetch.mockReset()
+        fetch.mockResolvedValueOnce(new Response('{}', { status: 500 }))
+        await expect(new AiSdkStreamAdapter(new AiProviderFactory()).stream({
+          model: 'gpt-6-luna', apiKey: route === 'direct' ? 'test-key' : null,
+          messages: [{ role: 'user', content: 'Synthetic only.' }],
+          signal: new AbortController().signal, onChunk: () => {},
+          reasoningEffort: 'low', textVerbosity,
+        })).rejects.toThrow()
+        expect(fetch).toHaveBeenCalledTimes(1)
+        const body = JSON.parse(fetch.mock.calls[0][1].body)
+        expect(body.reasoning).toEqual({ effort: 'low' })
+        expect(body.text?.verbosity).toBe(textVerbosity)
+      }
+    } finally {
+      jest.mocked(intranetGatewayAvailable).mockReturnValue(false)
+      if (original === undefined) delete process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
+      else process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = original
+    }
+  })
+
   it.each(['proxy', 'direct', 'intranet'])('sends low through the production OpenAiService query (%s)', async route => {
     const original = process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
     process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN = 'https://intranet.example.test'

@@ -195,7 +195,12 @@ export function CalculatorDetail({
   }, [calc, autofill])
 
   // What the rules read: an input that does not apply right now is blank.
-  const effective = useMemo(() => visibleValues(calc.inputs, values), [calc, values])
+  // A filled value in a unit the formula cannot take is not computed on until the clinician corrects it.
+  const effective = useMemo(() => {
+    const usable = { ...values }
+    for (const [key, fill] of Object.entries(filled)) if (fill.unconvertible && !edited.has(key)) usable[key] = ''
+    return visibleValues(calc.inputs, usable)
+  }, [calc, values, filled, edited])
   const { result, crashed: computeCrashed } = useMemo(() => safeCompute(calc, effective), [calc, effective])
   useEffect(() => {
     onResult?.(computeCrashed ? null : result)
@@ -538,7 +543,7 @@ export function CalculatorDetail({
               {fill?.source && (fill.source.testName || fill.source.loinc || fill.source.facility || fill.source.obsId) && (
                 <div className={`flex flex-wrap items-center gap-x-1.5 text-muted-foreground ${input.source?.kind === "hfpefClinical" ? "text-xs leading-relaxed" : "text-[10px] leading-tight"}`}>
                   <span className="font-medium">{zh ? "來源" : "Source"}:</span>
-                  {fill.source.testName && <span className={input.source?.kind === "hfpefClinical" ? "break-words" : "truncate max-w-[45%]"}>{fill.source.testName}</span>}
+                  {fill.source.testName && <span className={input.source?.kind === "hfpefClinical" || input.source?.kind === "echo" ? "break-words" : "truncate max-w-[45%]"}>{fill.source.testName}</span>}
                   {fill.source.loinc && <span>· LOINC {fill.source.loinc}</span>}
                   {fill.source.facility && <span className="truncate max-w-[35%]">· {fill.source.facility}</span>}
                   {fill.source.obsId && (
