@@ -16,7 +16,10 @@ export function optionalBuildConfig(root, options = {}) {
     }
     fallback('@voho0000/clinical-lab-normalization/interpretation', 'lab-interpretation.ts')
   }
-  if (!state.fhir) fallback('@voho0000/personalized-care-fhir', 'fhir-helpers.ts')
+  if (!state.fhir) {
+    fallback('@voho0000/personalized-care-fhir', 'fhir-helpers.ts')
+    fallback('@voho0000/personalized-care-fhir/report-text', 'report-text.ts')
+  }
   if (!state.care) {
     fallback('@/features/clinical-decision-support/LiveFeature', 'unavailable-cdss.tsx')
     fallback('@/features/clinical-decision-support/guideline-packs/registry', 'care-registry.ts')

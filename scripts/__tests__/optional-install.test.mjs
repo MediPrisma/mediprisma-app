@@ -72,6 +72,8 @@ test('full builds use the real modules; absent CDSS and SDK are independent', as
   assert.equal(noCdss.env.NEXT_PUBLIC_SDK_IMPORT_AVAILABLE, 'true')
   assert.equal(noCdss.aliases['@/features/personalized-education/LiveFeature'], undefined)
   assert.equal(noCdss.aliases['@voho0000/clinical-lab-normalization/canonical'], undefined)
+  assert.equal(noCdss.aliases['@voho0000/personalized-care-fhir'], './src/optional/fhir-helpers.ts')
+  assert.equal(noCdss.aliases['@voho0000/personalized-care-fhir/report-text'], './src/optional/report-text.ts')
   const noSdk = optionalBuildConfig(process.cwd(), { state: all, sdkImport: false })
   assert.equal(noSdk.env.NEXT_PUBLIC_CDSS_AVAILABLE, 'true')
   assert.equal(noSdk.env.NEXT_PUBLIC_SDK_IMPORT_AVAILABLE, 'false')
