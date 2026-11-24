@@ -1,16 +1,77 @@
 import type { AiMessage } from '@/src/core/entities/ai.entity'
+import type { MedicalSummaryCardId } from '@/src/core/entities/medical-summary.entity'
 
-const EVIDENCE_CHECK = `FINAL EVIDENCE CHECK FOR EVERY VISIBLE FIELD:
-Keep suspected, uncertain history, and claim-code-only status visible in the headline and problem label themselves. A qualification elsewhere does not qualify an unqualified label.
-Associate a medicine or measurement with a problem only when the supplied evidence supports that relationship. Co-dispensing or a shared encounter alone is not proof of treatment or indication. Otherwise omit that association.
-For reports, preserve negation, examination dates, and uncertainty. Do not add "new", "worsening", "progressive", or "old" unless the quoted source supports that comparison or timing. Never move an older finding to the latest examination.
-For drug safety, use only supplied drug attributes and supported review conditions. Do not infer anticholinergic class from an ophthalmic/oral route or invent mandatory renal dose changes.
-Prefer concise supported statements; omit unsupported inferences. Return all requested modules with valid JSON and their exact end markers.`
+/**
+ * How 標準摘要 is asked of Claude Haiku 5.5 (measured 2026-11-24 on the
+ * 雲端病歷 demo patient, ~106k input tokens per narrative request).
+ *
+ * One batch of overview + problems + safety without hidden thinking finished
+ * in 19 s but paired medicines with the wrong problems and broke the safety
+ * rules; adaptive thinking on that batch needed 56-82 s before any text.
+ * Asking for each card in its own request lets each get what it needs:
+ *
+ * - overview: nothing extra; the headline is on screen in ~3 s.
+ * - problems: at low effort Haiku never thinks for this card, and at medium
+ *   it spent 20,000 tokens thinking and wrote nothing. A short visible
+ *   worksheet before the card (medicine -> condition, problem -> test) costs
+ *   ~1 s and removed the cross-problem medicine pairings; ~12-16 s in all.
+ * - safety: adaptive thinking at low effort, with the instruction to test
+ *   every candidate against its rule. Four of four runs thought, took
+ *   19-30 s and returned rule-conforming alerts; without thinking the same
+ *   request invented renal and duplicate alerts.
+ */
+const HAIKU_MODEL_ID = 'claude-haiku-5-5'
 
-/** Reinforce existing grounding rules without changing the data or schema. */
-export function withHaikuSummaryEvidenceCheck(messages: AiMessage[], modelId: string): AiMessage[] {
-  if (modelId !== 'claude-haiku-5-5') return messages
-  return messages.map(message => message.role === 'user'
-    ? { ...message, content: `${message.content}\n\n${EVIDENCE_CHECK}` }
-    : message)
+const PROBLEMS_CHECK = `FINAL STEP FOR THE PROBLEMS CARD. First write a worksheet between the lines <<<WORKSHEET>>> and <<<END_WORKSHEET>>>; the app discards it, so keep it terse. Then output the card.
+Worksheet part 1, one line per distinct medicine supplied in the last 6 months (use the key of its latest fill): M-key | ingredient | the one condition this ingredient treats in this patient, or "unclear". Decide from the ingredient and its ATC subgroup alone. Sharing a visit, a hospital or a dispensing day with a diagnosis is not a reason.
+Worksheet part 2, one line per problem you will list: condition | E/D/L keys that establish it | the test that measures this condition with its O/L keys, or "none in record".
+The card must agree with the worksheet: a medicine appears in "medicationSources" only under the condition named on its own worksheet line, and never when that line says "unclear"; a condition named on a medicine line but backed by no diagnosis becomes a medication-based problem when the class points to one condition. One row per condition: merge a lab-only finding into the coded diagnosis it belongs to.
+In the card, "label" is the plain condition name with the certainty the record supports: no ICD codes, dates, values or treatment notes, and no qualifier the record does not state. "metric" quotes only the test from the worksheet line, values oldest to newest, without dates. "managedBy" is a hospital or clinic copied from the record, never a pharmacy; when only a pharmacy dispensed the medicines, omit "managedBy" and "managedByRef". Count the visits in "basis" from the encounters you cite.`
+
+const SAFETY_CHECK = `FINAL CHECK FOR THE SAFETY CARD. Before writing, think through every candidate alert across renal dosing, bleeding or antithrombotics, critical labs, duplicate therapy, allergy, anticholinergic burden and monitoring, and test each one against the rule above that governs it; keep only the candidates whose rule the record fully meets. Source keys go only in "sources", never inside "title", "detail", "evidence" or "recommendation". Severity follows the rules above: duplicate, monitoring and anticholinergic-burden alerts are never "high". Return the safety module with valid JSON and its exact end marker.`
+
+const REPORTS_CHECK = `FINAL CHECK: Preserve negation, examination dates and uncertainty exactly as each report states them. Do not add "new", "worsening", "progressive" or "old" unless the quoted report supports that comparison or timing, and never move an older finding to the latest examination.`
+
+const LANE_CHECKS: Partial<Record<MedicalSummaryCardId, string>> = {
+  problems: PROBLEMS_CHECK,
+  safety: SAFETY_CHECK,
+  reports: REPORTS_CHECK,
+}
+
+const BATCH_CONTRACT = 'BATCH CARD OUTPUT CONTRACT: '
+
+export function usesHaikuSummaryLanes(modelId: string): boolean {
+  return modelId === HAIKU_MODEL_ID
+}
+
+/** The shared system rules describe every section. A one-card request says
+ *  which card it is for, then ends on that card's own check. */
+export function withHaikuSummaryLanePolicy(
+  messages: AiMessage[],
+  modelId: string,
+  cardIds: readonly MedicalSummaryCardId[],
+): AiMessage[] {
+  if (!usesHaikuSummaryLanes(modelId) || cardIds.length !== 1) return messages
+  const [cardId] = cardIds
+  const scope = `${BATCH_CONTRACT}This request covers ONLY the ${cardId} card. ` +
+    'The contracts above for other sections are context only; output no other module. '
+  const check = LANE_CHECKS[cardId]
+  return messages.map((message) => {
+    if (message.role === 'system') {
+      return { ...message, content: message.content.replace(BATCH_CONTRACT, scope) }
+    }
+    return check && message.role === 'user'
+      ? { ...message, content: `${message.content}\n\n${check}` }
+      : message
+  })
+}
+
+/** Only the safety card thinks; its thinking shares the output ceiling. */
+export function haikuSummaryLaneOptions(
+  modelId: string,
+  cardIds: readonly MedicalSummaryCardId[],
+): { claudeThinking?: 'adaptive'; maxTokens?: number } {
+  return usesHaikuSummaryLanes(modelId) && cardIds.length === 1 && cardIds[0] === 'safety'
+    ? { claudeThinking: 'adaptive', maxTokens: 16_000 }
+    : {}
 }

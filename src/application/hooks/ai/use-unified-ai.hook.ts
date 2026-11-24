@@ -58,6 +58,8 @@ interface QueryOptions {
    *  request. Frontier providers ignore it. Used by the 醫療摘要 fast lane,
    *  where the measured cost of the first section is the model's thinking. */
   hiddenReasoning?: 'off'
+  /** Claude only: let this one request think when the model's default is off. */
+  claudeThinking?: 'adaptive'
   responseFormat?: 'json'
   /** Optional owner identity for cancelling one structured generation slot
    * without aborting background work from another patient/input scope. */
@@ -350,6 +352,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           reasoningEffort: streamOptions?.reasoningEffort,
           textVerbosity: streamOptions?.textVerbosity,
           hiddenReasoning: streamOptions?.hiddenReasoning,
+          claudeThinking: streamOptions?.claudeThinking,
           responseFormat: streamOptions?.responseFormat,
           requestedModelId: streamOptions?.requestedModelId,
           onModelExecution: (execution) => {

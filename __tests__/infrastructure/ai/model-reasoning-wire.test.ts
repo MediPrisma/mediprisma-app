@@ -121,6 +121,21 @@ describe('Luna and Haiku reasoning defaults on the wire', () => {
     }
   })
 
+  it.each([null, 'test-key'])('lets one Haiku stream think when the caller asks (apiKey=%s)', async apiKey => {
+    const fetch = global.fetch as jest.Mock
+    fetch.mockReset()
+    fetch.mockResolvedValueOnce(new Response('{}', { status: 500 }))
+    await expect(new AiSdkStreamAdapter(new AiProviderFactory()).stream({
+      model: 'claude-haiku-5-5', apiKey,
+      messages: [{ role: 'user', content: 'Synthetic only.' }],
+      signal: new AbortController().signal, onChunk: () => {},
+      claudeThinking: 'adaptive', maxTokens: 16_000,
+    })).rejects.toThrow()
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({
+      thinking: { type: 'adaptive' }, output_config: { effort: 'low' }, max_tokens: 16_000,
+    })
+  })
+
   it('keeps explicit Luna effort and output limits', async () => {
     expect(await sentBody('gpt-6-luna', true, false, {
       maxOutputTokens: 1000, providerOptions: { openai: { reasoningEffort: 'none' } },

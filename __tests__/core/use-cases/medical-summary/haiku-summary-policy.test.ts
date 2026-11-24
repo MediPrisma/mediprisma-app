@@ -1,17 +1,38 @@
-import { withHaikuSummaryEvidenceCheck } from '@/src/core/use-cases/medical-summary/haiku-summary-policy'
+import {
+  haikuSummaryLaneOptions,
+  withHaikuSummaryLanePolicy,
+} from '@/src/core/use-cases/medical-summary/haiku-summary-policy'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 
-it('keeps all source text and schema while appending a Haiku-only evidence reminder', () => {
-  const input: AiMessage[] = [
-    { role: 'system', content: 'Return the existing JSON schema and module markers.' },
-    { role: 'user', content: 'Synthetic source: possible disease X; 2026-01-01 no cardiomegaly.' },
-  ]
+const HAIKU = 'claude-haiku-5-5'
+const input: AiMessage[] = [
+  { role: 'system', content: 'Shared rules.\n\nBATCH CARD OUTPUT CONTRACT: Generate all 1 registered cards.' },
+  { role: 'user', content: 'Synthetic source: possible disease X; 2026-01-01 no cardiomegaly.' },
+]
+
+it('scopes a one-card request and ends it on that card\'s own check, keeping the source text', () => {
   const before = JSON.stringify(input)
-  const result = withHaikuSummaryEvidenceCheck(input, 'claude-haiku-5-5')
-  expect(result[0]).toEqual(input[0])
-  expect(result[1].content.startsWith(input[1].content)).toBe(true)
-  expect(result[1].content).toMatch(/uncertain history/)
-  expect(result[1].content).toMatch(/preserve negation, examination dates/)
+  const [system, user] = withHaikuSummaryLanePolicy(input, HAIKU, ['problems'])
+  expect(system.content).toContain('BATCH CARD OUTPUT CONTRACT: This request covers ONLY the problems card.')
+  expect(system.content.endsWith('Generate all 1 registered cards.')).toBe(true)
+  expect(user.content.startsWith(input[1].content)).toBe(true)
+  expect(user.content).toMatch(/<<<WORKSHEET>>>[\s\S]*never a pharmacy/)
   expect(JSON.stringify(input)).toBe(before)
-  expect(withHaikuSummaryEvidenceCheck(input, 'gemini-4-hydrogen')).toBe(input)
+})
+
+it('gives each card its own check and the overview none', () => {
+  expect(withHaikuSummaryLanePolicy(input, HAIKU, ['safety'])[1].content).toMatch(/think through every candidate alert/)
+  expect(withHaikuSummaryLanePolicy(input, HAIKU, ['reports'])[1].content).toMatch(/Preserve negation, examination dates/)
+  expect(withHaikuSummaryLanePolicy(input, HAIKU, ['overview'])[1]).toEqual(input[1])
+})
+
+it('leaves other models and multi-card requests untouched', () => {
+  expect(withHaikuSummaryLanePolicy(input, 'gemini-4-hydrogen', ['problems'])).toBe(input)
+  expect(withHaikuSummaryLanePolicy(input, HAIKU, ['overview', 'problems'])).toBe(input)
+})
+
+it('lets only the safety card think, with room for it', () => {
+  expect(haikuSummaryLaneOptions(HAIKU, ['safety'])).toEqual({ claudeThinking: 'adaptive', maxTokens: 16_000 })
+  expect(haikuSummaryLaneOptions(HAIKU, ['problems'])).toEqual({})
+  expect(haikuSummaryLaneOptions('gpt-6-luna', ['safety'])).toEqual({})
 })
