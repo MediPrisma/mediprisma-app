@@ -20,10 +20,10 @@ it('scopes a one-card request and ends it on that card\'s own check, keeping the
   expect(JSON.stringify(input)).toBe(before)
 })
 
-it('gives each card its own check and the overview none', () => {
+it('gives each card its own check', () => {
   expect(withHaikuSummaryLanePolicy(input, HAIKU, ['safety'])[1].content).toMatch(/think through every candidate alert/)
   expect(withHaikuSummaryLanePolicy(input, HAIKU, ['reports'])[1].content).toMatch(/Preserve negation, examination dates/)
-  expect(withHaikuSummaryLanePolicy(input, HAIKU, ['overview'])[1]).toEqual(input[1])
+  expect(withHaikuSummaryLanePolicy(input, HAIKU, ['overview'])[1].content).toMatch(/never romanized or translated/)
 })
 
 it('leaves other models and multi-card requests untouched', () => {

@@ -70,7 +70,7 @@ test('asks for each card on its own and keeps the problem list written after a w
   expect(byCard.problems.system).toContain('This request covers ONLY the problems card.')
   expect(byCard.problems.user).toContain('<<<WORKSHEET>>>')
   expect(byCard.problems.options.claudeThinking).toBeUndefined()
-  expect(byCard.overview.user).not.toMatch(/FINAL (STEP|CHECK) FOR THE/)
+  expect(byCard.overview.user).toContain('FINAL CHECK FOR THE OVERVIEW CARD')
   expect(byCard.safety.user).toContain('FINAL CHECK FOR THE SAFETY CARD')
   expect(byCard.safety.options).toMatchObject({ claudeThinking: 'adaptive', maxTokens: 16_000 })
   expect(calls.map(call => call.options.summaryDiagnostics.lane).sort()).toEqual(['batch', 'fast', 'full'])

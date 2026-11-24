@@ -10,7 +10,9 @@ import type { MedicalSummaryCardId } from '@/src/core/entities/medical-summary.e
  * rules; adaptive thinking on that batch needed 56-82 s before any text.
  * Asking for each card in its own request lets each get what it needs:
  *
- * - overview: nothing extra; the headline is on screen in ~3 s.
+ * - overview: on screen in 3-8 s. Alone it romanized hospital names in 8 of
+ *   10 runs, and across the earlier wordings 5 of 33 headlines turned
+ *   隅角開放性青光眼 into "angle-closure"; with this check, neither in 10 runs.
  * - problems: at low effort Haiku never thinks for this card, and at medium
  *   it spent 20,000 tokens thinking and wrote nothing. A short visible
  *   worksheet before the card (medicine -> condition, problem -> test) costs
@@ -22,6 +24,11 @@ import type { MedicalSummaryCardId } from '@/src/core/entities/medical-summary.e
  */
 const HAIKU_MODEL_ID = 'claude-haiku-5-5'
 
+const OVERVIEW_CHECK = `FINAL CHECK FOR THE OVERVIEW CARD.
+Diagnoses: translate each one from the record's own Chinese wording, character by character, before you write it. A subtype, side or stage (開放性 is open, 閉鎖性 is closed) must say what the record says; when you are not certain of one, name the condition without it.
+Organizations: write a name only by copying it character for character from the record, never romanized or translated; when that does not fit, say "several hospitals and clinics". A pharmacy is not a place of care, so do not name one.
+The headline is a list of problem names and how care is split, nothing else. Before returning it, delete every number, unit, test name, trend word and medicine name from it.`
+
 const PROBLEMS_CHECK = `FINAL STEP FOR THE PROBLEMS CARD. First write a worksheet between the lines <<<WORKSHEET>>> and <<<END_WORKSHEET>>>; the app discards it, so keep it terse. Then output the card.
 Worksheet part 1, one line per distinct medicine supplied in the last 6 months (use the key of its latest fill): M-key | ingredient | the one condition this ingredient treats in this patient, or "unclear". Decide from the ingredient and its ATC subgroup alone. Sharing a visit, a hospital or a dispensing day with a diagnosis is not a reason.
 Worksheet part 2, one line per problem you will list: condition | E/D/L keys that establish it | the test that measures this condition with its O/L keys, or "none in record".
@@ -32,7 +39,8 @@ const SAFETY_CHECK = `FINAL CHECK FOR THE SAFETY CARD. Before writing, think thr
 
 const REPORTS_CHECK = `FINAL CHECK: Preserve negation, examination dates and uncertainty exactly as each report states them. Do not add "new", "worsening", "progressive" or "old" unless the quoted report supports that comparison or timing, and never move an older finding to the latest examination.`
 
-const LANE_CHECKS: Partial<Record<MedicalSummaryCardId, string>> = {
+const LANE_CHECKS: Record<MedicalSummaryCardId, string> = {
+  overview: OVERVIEW_CHECK,
   problems: PROBLEMS_CHECK,
   safety: SAFETY_CHECK,
   reports: REPORTS_CHECK,
@@ -55,15 +63,9 @@ export function withHaikuSummaryLanePolicy(
   const [cardId] = cardIds
   const scope = `${BATCH_CONTRACT}This request covers ONLY the ${cardId} card. ` +
     'The contracts above for other sections are context only; output no other module. '
-  const check = LANE_CHECKS[cardId]
-  return messages.map((message) => {
-    if (message.role === 'system') {
-      return { ...message, content: message.content.replace(BATCH_CONTRACT, scope) }
-    }
-    return check && message.role === 'user'
-      ? { ...message, content: `${message.content}\n\n${check}` }
-      : message
-  })
+  return messages.map((message) => message.role === 'system'
+    ? { ...message, content: message.content.replace(BATCH_CONTRACT, scope) }
+    : { ...message, content: `${message.content}\n\n${LANE_CHECKS[cardId]}` })
 }
 
 /** Only the safety card thinks; its thinking shares the output ceiling. */
