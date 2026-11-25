@@ -584,7 +584,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     const unsubscribe = automatic ? useProgressiveImportStore.subscribe(() => {
       if (!isProgressiveAutoSummaryBlocked()) return
       runAbort.abort()
-      stopAi(slotKey)
+      stopAi(slotKey, 'superseded')
     }) : undefined
     const generatedResult = await runGenerationJob({
       store,
@@ -742,7 +742,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     const begin = (event: Event) => {
       if (!(preserveAcrossContinuation && isSummaryContinuation(event))) {
         abortRuns()
-        stopAi()
+        stopAi(undefined, 'patient_switch')
       }
       setBundleTransitionActive(true)
     }

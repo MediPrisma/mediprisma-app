@@ -42,6 +42,8 @@ type Finish = {
   gateway?: GatewayFailure
   /** Why the model stopped producing output (v12), as the AI service reported it. */
   finishReason?: CollectorEventV12['diagnostics']['finish_reason']
+  /** Why a request was cancelled (v12). Sent only with an aborted or timed-out outcome. */
+  abortReason?: CollectorAbortReason
   /** Token counts the AI service reported for this request; never an estimate. */
   usage?: { inputTokens?: number; outputTokens?: number }
   summaryCards?: SummaryCardCounts
@@ -49,6 +51,7 @@ type Finish = {
   /** Random run ID shared with this summary's v7 attempts; names the operation (v8). */
   summaryRunId?: string
 }
+export type CollectorAbortReason = NonNullable<CollectorEventV12['diagnostics']['abort_reason']>
 export type GatewayFailure = Pick<CollectorEventV12['diagnostics'], 'gateway_error_code' | 'upstream_attempted' | 'gateway_request_id'>
 /** One user operation: AI requests made inside it are recorded into its single event. */
 export interface CollectorOperation { observeRequest: (input: Start) => Observation }
@@ -355,7 +358,8 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
             ...('gateway_error_code' in d && d.gateway_error_code !== undefined ? { gateway_error_code: d.gateway_error_code } : {}),
             ...('upstream_attempted' in d && d.upstream_attempted !== undefined ? { upstream_attempted: d.upstream_attempted } : {}),
             ...('gateway_request_id' in d && d.gateway_request_id !== undefined ? { gateway_request_id: d.gateway_request_id } : {}),
-            ...('finish_reason' in d && d.finish_reason !== undefined ? { finish_reason: d.finish_reason } : {}) }
+            ...('finish_reason' in d && d.finish_reason !== undefined ? { finish_reason: d.finish_reason } : {}),
+            ...('abort_reason' in d && d.abort_reason !== undefined ? { abort_reason: d.abort_reason } : {}) }
         }, source)
         // A parent may end before a cancelled transport reports; keep an explicit incomplete entry.
         requestSnapshots.push(() => {
@@ -399,6 +403,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
               // A gateway failure describes a request that did not complete; drop it otherwise rather than lose the event.
               ...(result.outcome !== 'ok' ? result.gateway : {}),
               ...(result.finishReason ? { finish_reason: result.finishReason } : {}),
+              ...(result.abortReason && (result.outcome === 'aborted' || result.outcome === 'timeout') ? { abort_reason: result.abortReason } : {}),
               ...(usage ? { usage } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),

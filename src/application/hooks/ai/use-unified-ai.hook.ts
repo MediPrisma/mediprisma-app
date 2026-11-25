@@ -34,7 +34,7 @@ import {
   type AiExecutionStatus,
 } from '@/src/application/stores/ai-execution-diagnostics.store'
 
-import { beginCollectorObservation, collectorFeature, collectorError, collectorHttpStatus, collectorGatewayFailure, collectorFinishReason, type CollectorContext } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, collectorFeature, collectorError, collectorHttpStatus, collectorGatewayFailure, collectorFinishReason, type CollectorContext, type CollectorAbortReason } from '@/src/application/telemetry/collector'
 
 interface UseUnifiedAiOptions {
   defaultModel?: string
@@ -110,6 +110,15 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
   // several model/input slots in flight. stop(key) aborts only that owner;
   // stop() without a key remains the global teardown used on Bundle changes.
   const abortControllersRef = useRef<Map<AbortController, ActiveAiRequest>>(new Map())
+  // Why each request was cancelled, for the usage record only. The first reason given wins; a request
+  // cancelled without one is reported as 'unknown'.
+  const abortReasonsRef = useRef(new WeakMap<AbortController, CollectorAbortReason>())
+  const abortWith = useCallback((controller: AbortController, reason?: CollectorAbortReason) => {
+    if (reason && !abortReasonsRef.current.has(controller)) abortReasonsRef.current.set(controller, reason)
+    controller.abort()
+  }, [])
+  const abortReasonOf = (controller: AbortController, outcome: string): CollectorAbortReason | undefined =>
+    outcome === 'timeout' ? 'timeout' : outcome === 'aborted' ? abortReasonsRef.current.get(controller) ?? 'unknown' : undefined
 
   // Cache stream orchestrator instance
   const streamOrchestrator = useMemo(
@@ -143,10 +152,10 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
     return () => {
       unsubscribe()
-      for (const controller of abortControllers.keys()) controller.abort()
+      for (const controller of abortControllers.keys()) abortWith(controller, 'navigation')
       abortControllers.clear()
     }
-  }, [])
+  }, [abortWith])
 
   /**
    * Query AI (non-streaming)
@@ -225,7 +234,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         options.onSuccess?.(outputData)
         return outputData
       } catch (err) {
-        collector.finish({ outcome: collectorError(err), phase: 'request', responseComplete: false, httpStatus: collectorHttpStatus(err), gateway: collectorGatewayFailure(err, modelId) })
+        collector.finish({ outcome: collectorError(err), phase: 'request', responseComplete: false, httpStatus: collectorHttpStatus(err), gateway: collectorGatewayFailure(err, modelId),
+          abortReason: abortReasonOf(abortController, collectorError(err)) })
         if (err instanceof Error && err.name === 'AbortError') {
           record('aborted', err.message)
           throw err
@@ -371,7 +381,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         // instead of rejecting. Structured callers still need a hard stop so
         // they neither parse buffered text nor launch their parse-retry pass.
         if (abortController.signal.aborted) {
-          collector.finish({ summaryAttempt: technical(), outcome: abortOutcome(), phase: 'stream', responseComplete: false })
+          collector.finish({ summaryAttempt: technical(), outcome: abortOutcome(), phase: 'stream', responseComplete: false, abortReason: abortReasonOf(abortController, abortOutcome()) })
           record('aborted', 'The operation was aborted')
           if (streamOptions?.throwOnAbort) {
             const abortError = new Error('The operation was aborted')
@@ -392,8 +402,11 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       } catch (err) {
         const classified = collectorError(err)
         const failure = classified === 'ok' ? 'error' : classified
-        collector.finish({ summaryAttempt: technical(), outcome: abortController.signal.aborted ? abortOutcome() : failure, phase: 'stream', responseComplete: false,
-          httpStatus: collectorHttpStatus(err), gateway: collectorGatewayFailure(err, modelId) })
+        // The final outcome decides the reason: the adapter's own idle watchdog times out without aborting this signal.
+        const outcome = abortController.signal.aborted ? abortOutcome() : failure
+        collector.finish({ summaryAttempt: technical(), outcome, phase: 'stream', responseComplete: false,
+          httpStatus: collectorHttpStatus(err), gateway: collectorGatewayFailure(err, modelId),
+          abortReason: abortReasonOf(abortController, outcome) })
         if (abortController.signal.aborted) {
           const abortReason = abortController.signal.reason
           record(
@@ -432,17 +445,18 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
     [streamOrchestrator, defaultModel, options]
   )
 
-  /** Stop one owned operation, or every in-flight request when no key is given. */
-  const stop = useCallback((operationKey?: string) => {
+  /** Stop one owned operation, or every in-flight request when no key is given. `reason` only labels the
+   *  cancellation in the usage record. */
+  const stop = useCallback((operationKey?: string, reason?: CollectorAbortReason) => {
     let stoppedAny = false
     for (const [controller, request] of abortControllersRef.current) {
       if (operationKey !== undefined && request.operationKey !== operationKey) continue
-      controller.abort()
+      abortWith(controller, reason)
       abortControllersRef.current.delete(controller)
       stoppedAny = true
     }
     if (stoppedAny) setIsLoading(abortControllersRef.current.size > 0)
-  }, [])
+  }, [abortWith])
 
   /**
    * Clear error

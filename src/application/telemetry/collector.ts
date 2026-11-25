@@ -1,7 +1,7 @@
 'use client'
 
 export { beginCollectorObservation, collectorFeature, collectorStatus, cancelCollectorRequests, isCollectorSite } from '@/src/infrastructure/telemetry/collector'
-export type { CollectorContext, CollectorOperation } from '@/src/infrastructure/telemetry/collector'
+export type { CollectorContext, CollectorOperation, CollectorAbortReason } from '@/src/infrastructure/telemetry/collector'
 import type { GatewayFailure } from '@/src/infrastructure/telemetry/collector'
 import { gatewayErrorCodeSchema } from '@/src/shared/contracts/collector-event'
 import { INTRANET_LUNA_ID } from '@/src/infrastructure/ai/interceptors/intranet-fetch'
