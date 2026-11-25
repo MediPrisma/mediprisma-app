@@ -291,6 +291,25 @@ test('rejects PHI-shaped fields and arbitrary error/feature strings on the wire'
   expect(collectorError(new Error('SYNTHETIC-SECRET'))).toBe('error')
 })
 
+test('a trimmed context reports its size before and after fitting as buckets, and claims no category', async () => {
+  const run = (context: Record<string, unknown>) => beginCollectorObservation({ feature: 'summary', modelId: 'gpt-5.4-nano', sampleKind: 'feature', mode: 'structured', ...context }).finish({ outcome: 'ok' })
+  run({ contextTokens: 31337, contextTrimmed: true, contextTrim: { originalTokens: 91234, adaptedTokens: 31337 } })
+  await settle()
+  expect(body().diagnostics).toMatchObject({ context_trimmed: true, context_tokens_bucket: '8001-32000',
+    context_trim: { before: '32001-128000', after: '8001-32000', categories: [] } })
+  expect(JSON.stringify(body())).not.toMatch(/91234|31337/)
+  expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
+  // Sizes without a trimmed context, or a trimmed context without sizes, send nothing extra.
+  for (const context of [{ contextTrimmed: false, contextTrim: { originalTokens: 91234, adaptedTokens: 31337 } }, { contextTrimmed: true },
+    { contextTrimmed: true, contextTrim: { originalTokens: Number.NaN, adaptedTokens: 31337 } }]) {
+    jest.mocked(fetch).mockClear()
+    run(context)
+    await settle()
+    expect(body().diagnostics.context_trim).toBeUndefined()
+    expect(collectorEventV12Schema.safeParse(body()).success).toBe(true)
+  }
+})
+
 test('a request the hospital AI gateway refused reports its fixed code, upstream flag and request ID, and nothing else', async () => {
   const REQUEST_ID = '0990d49f-d1ad-4496-9ef7-c687d37109cc'
   const refused = (code: unknown, headers: Record<string, string> = { 'x-request-id': REQUEST_ID, 'x-upstream-attempted': 'false' }) => Object.assign(new Error('SYNTHETIC-SECRET'), {

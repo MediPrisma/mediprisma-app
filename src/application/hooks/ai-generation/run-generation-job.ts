@@ -38,6 +38,8 @@ export interface AiResultAnalytics {
   /** Estimated tokens of clinical context in this request. */
   contextTokens?: number
   contextTrimmed?: boolean
+  /** Estimated context size before and after fitting, when the context was trimmed. */
+  contextTrim?: { originalTokens: number; adaptedTokens: number }
   /** Size of the chart currently loaded. Omitted when none is. */
   counts?: PatientResourceCounts
   /** How much of that chart survived Data Selection + context fitting and
@@ -106,7 +108,7 @@ export async function runGenerationJob<T>(options: {
   const collector = analytics ? beginCollectorObservation({
     feature: analytics.surface, modelId: analytics.modelId, sampleKind: 'feature', mode: 'structured',
     counts: analytics.counts, fedCounts: analytics.fedCounts, contextTokens: analytics.contextTokens,
-    contextTrimmed: analytics.contextTrimmed,
+    contextTrimmed: analytics.contextTrimmed, contextTrim: analytics.contextTrim,
   }) : undefined
   let reported = false
   let summaryRunId: string | undefined
