@@ -2,8 +2,8 @@ jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', (
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))
 import React from 'react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { toast } from 'sonner'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { webcrypto } from 'node:crypto'
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
 import { readCdssHistory } from '@/features/clinical-decision-support/telemetry/cdss-history'
@@ -318,37 +318,101 @@ test('deleting the last record of a filtered disease falls back to all records',
   expect(await screen.findByTestId(`cdss-history-row-${other.saveId}`)).toBeVisible()
 })
 
-test('the newest saved record is offered for its weight once per chart, unasked, and only to a host ready to take it (#622)', async () => {
-  const older = { ...index, saveId: '22222222-2222-4222-8222-222222222222', receivedAt: '2026-09-01T00:00:00Z', packId: 'other' }
-  const stored = await detail()
-  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [older, index], hasMore: false }))
-  const { rerender } = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} />)
-  expect(fetch).not.toHaveBeenCalled()
+describe('bringing in the last record on opening', () => {
+  const auto = async (id: string, patch = {}) => {
+    const stored = await detail({ save_id: id, patient_session_id: id, ...patch })
+    const row = { ...index, saveId: id }
+    jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? { ...stored, saveId: id } : { records: [row], hasMore: false }))
+    return { ...stored, saveId: id }
+  }
+  beforeEach(() => sessionStorage.clear())
 
-  const told = jest.spyOn(toast, 'info')
-  const onCarryWeight = jest.fn(() => ({ value: 61, measuredOn: '2026-09-28' }))
-  rerender(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
-  await waitFor(() => expect(onCarryWeight).toHaveBeenCalledWith(stored))
-  // The newest record, whatever its disease.
-  expect(JSON.parse(String(jest.mocked(fetch).mock.calls[1][1]?.body)).save_id).toBe(saveId)
-  expect(told).toHaveBeenCalledWith('已帶入上次儲存的體重 61 kg（2026-09-28 量測）。')
+  test('the newest record of this disease is brought in without a click, and the clinician is told', async () => {
+    const stored = await auto('22222222-2222-4222-8222-222222222222')
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryForward = jest.fn(() => 3)
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(onCarryForward).toHaveBeenCalledWith(stored, { inputs: true, decisions: true }))
+    expect(await screen.findByTestId('cdss-carried-notice')).toHaveTextContent(/已自動帶入/)
+    expect(told).toHaveBeenCalledWith(expect.stringMatching(/已自動帶入.*共 3 項/), expect.objectContaining({ description: expect.stringContaining('請核對') }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // Coming back to the same record does not fill again what the clinician may have cleared.
+    view.unmount()
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(jest.mocked(fetch).mock.calls).toHaveLength(3))
+    expect(onCarryForward).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('cdss-carried-notice')).not.toBeInTheDocument()
+    told.mockRestore()
+  })
 
-  rerender(<CdssStorageActions input={{ ...currentInput }} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
-  await new Promise(resolve => setTimeout(resolve, 20))
-  expect(onCarryWeight).toHaveBeenCalledTimes(1)
-  expect(fetch).toHaveBeenCalledTimes(2)
-})
+  test('nothing is read before the answers are read back, and nothing is announced when nothing was empty', async () => {
+    await auto('33333333-3333-4333-8333-333333333333')
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryForward = jest.fn(() => 0)
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} />)
+    await act(async () => { await Promise.resolve() })
+    expect(fetch).not.toHaveBeenCalled()
+    view.rerender(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(onCarryForward).toHaveBeenCalledTimes(1))
+    expect(told).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('cdss-carried-notice')).not.toBeInTheDocument()
+    told.mockRestore()
+  })
 
-test('a chart with no saved record, or a store that cannot be read, brings in nothing and shows no error', async () => {
-  const onCarryWeight = jest.fn()
-  jest.mocked(fetch).mockImplementation(async () => response({ records: [], hasMore: false }))
-  const first = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
-  first.unmount()
-  jest.mocked(fetch).mockImplementation(async () => ({ status: 503 }) as Response)
-  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
-  await new Promise(resolve => setTimeout(resolve, 20))
-  expect(onCarryWeight).not.toHaveBeenCalled()
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  test('a record of another rules version or another disease is not brought in', async () => {
+    await auto('44444444-4444-4444-8444-444444444444', { result: { ...result, packVersion: 'old' } })
+    const onCarryForward = jest.fn(() => 1)
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(jest.mocked(fetch).mock.calls).toHaveLength(2))
+    view.unmount()
+    jest.mocked(fetch).mockReset()
+    jest.mocked(fetch).mockResolvedValue(response({ records: [{ ...index, packId: 'other' }], hasMore: false }))
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady />)
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    await act(async () => { await Promise.resolve() })
+    expect(onCarryForward).not.toHaveBeenCalled()
+  })
+
+  test('the weight is asked of the newest record of any disease, read once more only when it is another record, once per tab (#622)', async () => {
+    const mine = await auto('66666666-6666-4666-8666-666666666666')
+    const otherId = '77777777-7777-4777-8777-777777777777'
+    const other = { ...(await detail({ save_id: otherId, patient_session_id: otherId, pack_id: 'other', result: { ...result, packId: 'other' }, saved_at: '2026-10-05T00:00:00Z' })),
+      saveId: otherId, packId: 'other', receivedAt: '2026-10-05T00:00:00Z', savedAt: '2026-10-05T00:00:00Z' }
+    const rows = [{ ...index, saveId: mine.saveId }, { ...index, saveId: otherId, packId: 'other', receivedAt: '2026-10-05T00:00:00Z' }]
+    jest.mocked(fetch).mockImplementation(async (url, init) => response(!String(url).endsWith('/read') ? { records: rows, hasMore: false }
+      : JSON.parse(String(init?.body)).save_id === otherId ? other : mine))
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryForward = jest.fn(() => 0)
+    const onCarryWeight = jest.fn(() => ({ value: 61, measuredOn: '2026-09-28' }))
+    const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} onCarryWeight={onCarryWeight} autoCarryReady />)
+    await waitFor(() => expect(onCarryWeight).toHaveBeenCalledWith(other))
+    expect(onCarryForward).toHaveBeenCalledWith(mine, { inputs: true, decisions: true })
+    expect(told).toHaveBeenCalledWith('已帶入上次儲存的體重 61 kg（2026-09-28 量測）。')
+    expect(fetch).toHaveBeenCalledTimes(3)
+    view.unmount()
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} onCarryWeight={onCarryWeight} autoCarryReady />)
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4))
+    await act(async () => { await Promise.resolve() })
+    expect(onCarryWeight).toHaveBeenCalledTimes(1)
+    told.mockRestore()
+  })
+
+  test('the record just brought in is asked for its weight without a second read, and a host with no use for it is not announced', async () => {
+    const stored = await auto('88888888-8888-4888-8888-888888888888')
+    const told = jest.spyOn(toast, 'info').mockImplementation(() => '')
+    const onCarryWeight = jest.fn(() => undefined)
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={jest.fn(() => 0)} onCarryWeight={onCarryWeight} autoCarryReady />)
+    await waitFor(() => expect(onCarryWeight).toHaveBeenCalledWith(stored))
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(told).not.toHaveBeenCalled()
+    told.mockRestore()
+  })
+
+  test('layouts that do not offer records bring nothing in', async () => {
+    await auto('55555555-5555-4555-8555-555555555555')
+    const onCarryForward = jest.fn(() => 1)
+    render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} autoCarryReady offered={false} />)
+    await act(async () => { await Promise.resolve() })
+    expect(fetch).not.toHaveBeenCalled()
+  })
 })

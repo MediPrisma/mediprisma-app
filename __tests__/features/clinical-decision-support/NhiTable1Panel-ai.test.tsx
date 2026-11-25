@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { HYPERLIPIDEMIA_GUIDELINE_PACK, type CdssPatientProfile } from '@voho0000/personalized-care'
 import { NhiTable1Panel } from '@/features/clinical-decision-support/renderers/NhiTable1Panel'
 import { useNhiLipidAiAssist } from '@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook'
+import { CarriedAnswerContext } from '@/features/clinical-decision-support/renderers/visit/carried-answer-context'
 
 jest.mock('@/features/clinical-decision-support/hooks/use-nhi-lipid-ai-assist.hook', () => ({
   useNhiLipidAiAssist: jest.fn(),
@@ -68,6 +69,19 @@ describe('NhiTable1Panel AI review', () => {
       run,
       decide,
     })
+  })
+
+  it('a judgement brought in from a saved record says which record', () => {
+    const summary = coverageSummary()
+    const editable = [...summary.factors, ...(summary.metabolicChecks ?? []), ...(summary.diseaseChecks ?? [])].find((check) => check.editable)
+    if (!editable) throw new Error('Expected an editable criterion')
+    render(
+      <CarriedAnswerContext.Provider value={(key) => key === `lipid:${editable.id}` ? '2025-09-01' : null}>
+        <NhiTable1Panel summary={summary} locale="zh-TW" patientId="patient-1" onAnswer={jest.fn()} />
+      </CarriedAnswerContext.Provider>,
+    )
+    expect(screen.getByTestId(`nhi-criterion-carried-${editable.id}`)).toHaveTextContent('帶入 · 2025/09/01')
+    expect(screen.getAllByText(/^帶入 · /)).toHaveLength(1)
   })
 
   it('opens the independent Table 1 data scope without starting AI', () => {

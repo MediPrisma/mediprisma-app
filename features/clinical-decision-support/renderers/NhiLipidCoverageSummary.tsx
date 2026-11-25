@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import { useNhiLipidReviewStore, type NhiLipidAnswer } from '../stores/nhi-lipid-review.store'
 import type { CdssRecommendation } from '../types'
+import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 
 interface CoverageCheck {
   id: string
@@ -37,6 +38,7 @@ function CheckRow({ row, patientId, en }: { row: CoverageCheck; patientId?: stri
   const provenance = useNhiLipidReviewStore(state => (
     state.patientId === patientId ? state.provenance[row.id] : undefined
   ))
+  const carried = useCarriedLookup()(`lipid:${row.id}`)
   const options: readonly [NhiLipidAnswer, string][] = [
     ['yes', en ? '✓ Met' : '✓ 符合'], ['no', en ? '× Not met' : '× 不符合'], ['unknown', en ? '? Unconfirmed' : '? 未確認'],
   ]
@@ -48,6 +50,7 @@ function CheckRow({ row, patientId, en }: { row: CoverageCheck; patientId?: stri
         className={`min-h-11 rounded-md border px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${row.state === state ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted/40'}`}
         onClick={() => patientId && answer(patientId, row.id, state)}>{label}</button>)}
     </div> : <p className="text-xs font-medium">{options.find(([state]) => state === row.state)?.[1]} · {en ? 'Computed from components' : '由細項計算'}</p>}
+    {carried ? <p className="w-fit rounded border border-primary/25 bg-primary/5 px-1.5 text-[11px] tabular-nums text-primary" data-carried-from={carried}>{carriedLabel(carried, en)}</p> : null}
     <p className="text-xs text-muted-foreground">{provenance?.source === 'ai' || row.origin === 'ai'
       ? en ? 'AI assessment included automatically · available for clinician correction' : 'AI 判讀自動帶入 · 可由醫師修正'
       : provenance?.source === 'manual' || row.origin === 'physician'

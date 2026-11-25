@@ -1,13 +1,13 @@
 /**
  * A weight added in the CDSS reaches the DOAC calculator through the real
- * autofill hook and the patient's clinic-vitals store — one way: what is typed
- * into the calculator never becomes a measurement. Fictional patients only.
+ * autofill hook and the patient's clinic-vitals store, and a weight typed into
+ * the calculator goes back to it as today's (#622). Fictional patients only.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { CalculatorDetail } from '@/features/medical-calculator/components/CalculatorDetail'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import { CDSS_WEIGHT_SOURCE } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
-import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
+import { todayIsoDate, useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import {
   createMemoryPatientAnswerBacking,
   patientAnswerBacking,
@@ -49,10 +49,11 @@ const addClinicWeight = (patientId: string, value: number, measuredOn: string) =
 
 describe('DOAC calculator reads the weight added in the CDSS', () => {
   const working = patientAnswerBacking()
-  beforeAll(() => setPatientAnswerBacking(createMemoryPatientAnswerBacking()))
   afterAll(() => setPatientAnswerBacking(working))
   afterEach(() => jest.useRealTimers())
   beforeEach(() => {
+    // A fresh store each time, so no test reads what another one kept.
+    setPatientAnswerBacking(createMemoryPatientAnswerBacking())
     // The weight must be from the last 90 days: the clock is the day these cases were written for.
     jest.useFakeTimers({ now: new Date('2026-10-22T08:00:00+08:00'), doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick', 'setImmediate', 'requestAnimationFrame', 'cancelAnimationFrame'] })
     useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
@@ -98,7 +99,7 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
     expect(screen.queryByTestId('calc-expired-weight')).toBeNull()
   })
 
-  it('updates the fields not typed in, keeps a what-if weight, and never stores it', () => {
+  it('updates the fields not typed in, and keeps what is being typed until the field is left', () => {
     render(detail())
     fireEvent.change(document.getElementById('calc-age')!, { target: { value: '94' } })
     addClinicWeight('weight-calc-a', 60, '2026-10-20')
@@ -112,6 +113,36 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /重新帶入/ }))
     expect(weightField()).toHaveValue(62)
+  })
+
+  it('records a typed weight as today’s clinic weight when the field is left, and says so', () => {
+    render(detail())
+    fireEvent.change(weightField(), { target: { value: '70' } })
+    expect(useClinicVitalsStore.getState().byPatientId['weight-calc-a']?.entries.bodyWeight).toBeUndefined()
+    expect(screen.queryByTestId('calc-weight-kept')).toBeNull()
+
+    fireEvent.blur(weightField())
+    const kept = useClinicVitalsStore.getState().byPatientId['weight-calc-a'].entries.bodyWeight
+    expect(kept).toMatchObject({ value: 70, measuredOn: todayIsoDate() })
+    expect(weightField()).toHaveValue(70)
+    expect(screen.getByTestId('calc-weight-kept')).toHaveTextContent('已記為今天的門診體重')
+    // (140 − 94) × 70 / (72 × 1.93) = 23.2
+    expect(screen.getByText('CrCl 23.2 mL/min · Cockcroft–Gault')).toBeInTheDocument()
+  })
+
+  it('records it when the calculator closes with the field still focused', () => {
+    const { unmount } = render(detail())
+    fireEvent.change(weightField(), { target: { value: '66' } })
+    unmount()
+    expect(useClinicVitalsStore.getState().byPatientId['weight-calc-a'].entries.bodyWeight?.value).toBe(66)
+  })
+
+  it('records nothing for a weight field left blank, and leaves an earlier entry alone', () => {
+    addClinicWeight('weight-calc-a', 60, '2026-10-20')
+    render(detail())
+    fireEvent.change(weightField(), { target: { value: '' } })
+    fireEvent.blur(weightField())
+    expect(useClinicVitalsStore.getState().byPatientId['weight-calc-a'].entries.bodyWeight).toMatchObject({ value: 60, measuredOn: '2026-10-20' })
   })
 
   it('does not carry one patient’s weight to another', () => {

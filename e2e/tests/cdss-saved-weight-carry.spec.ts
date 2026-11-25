@@ -37,7 +37,7 @@ test('the weight a saved CDSS record holds is brought in when the chart is opene
   await page.addInitScript(() => localStorage.setItem('medical-note-locale', 'zh-TW'))
 
   // What the store holds: nothing at first, then the record this chart saves.
-  let saved: (Record<string, unknown> & { save_id: string; pack_id: string; saved_at: string; physician_inputs: Record<string, unknown> }) | undefined
+  let saved: (Record<string, unknown> & { save_id: string; pack_id: string; saved_at: string; physician_inputs: Record<string, unknown>; result: Record<string, unknown> }) | undefined
   const index = () => ({ saveId: saved!.save_id, documentId: '1', patientId: '2', receivedAt: new Date().toISOString(), packId: saved!.pack_id, versionId: '1' })
   await page.route('**/cdss/v1/saves', async route => {
     saved = route.request().postDataJSON()
@@ -56,8 +56,10 @@ test('the weight a saved CDSS record holds is brought in when the chart is opene
   await page.getByTestId('cdss-save-record').click()
   await expect.poll(() => saved?.save_id).toBeTruthy()
 
-  // The record as it would be had a weight been entered at that visit, 30 days ago.
+  // The record as it would be had a weight been entered at that visit, 30 days ago, under earlier rules:
+  // the rest of such a record is for viewing only, and its weight still comes in.
   const measuredOn = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+  saved!.result = { ...saved!.result, packVersion: '0.0.0-earlier' }
   saved!.physician_inputs = { ...saved!.physician_inputs,
     clinicVitals: { entries: { bodyWeight: { value: 57, measuredOn, modifiedAt: `${measuredOn}T02:00:00.000Z` } }, signAnswers: {} } }
 

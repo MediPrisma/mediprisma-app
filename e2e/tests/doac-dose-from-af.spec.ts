@@ -87,3 +87,23 @@ test('a weight over 90 days old is not carried: the field is blank, focused, and
   await expect(panel.getByTestId('calc-expired-weight')).toHaveCount(0)
   await expect(results.getByTestId('doac-agent-apixaban')).toContainText('2.5 mg bid')
 })
+
+test('a weight typed into the calculator becomes the clinic weight of the day, and the AF dose point reads it (#622)', async ({ page }) => {
+  test.setTimeout(150_000)
+  await openAfPage(page, '2027-01-15T04:00:00Z')
+  const point = page.locator('[data-book-dp="DP-09"]')
+  await expect(point).toContainText('58 kg')
+  await page.getByTestId('cdss-book-calculators').click()
+  await page.getByTestId('cdss-book-calculator-doac-dose').click()
+  const panel = page.getByTestId('cdss-book-calculator-panel')
+  await expect(panel.locator('#calc-weight')).toBeFocused()
+  await page.keyboard.type('57')
+  await expect(panel.getByTestId('calc-weight-kept')).toHaveCount(0)
+  await page.keyboard.press('Tab')
+  await expect(panel.getByTestId('calc-weight-kept')).toContainText('已記為今天的門診體重')
+
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+  await expect(point).toContainText('57 kg')
+  await expect(point).not.toContainText('58 kg')
+})

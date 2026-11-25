@@ -17,6 +17,7 @@ import type { ResourceNavTarget } from '@/src/application/stores/resource-naviga
 import { formatGenerationDuration } from '@/features/medical-summary/utils/summary-generation-info'
 import { TherapyResponseChart } from './TherapyResponseChart'
 import { useNhiChartNoteCopy } from './NhiChartNoteCopy'
+import { carriedLabel, useCarriedLookup } from './visit/carried-answer-context'
 import type { CdssCoverageCheck, CdssCoverageSummary, CdssFactSource } from '../types'
 import {
   selectNhiLipidAiCriteria,
@@ -166,6 +167,8 @@ function Criterion({
   onNavigate?: (target: ResourceNavTarget) => void
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false)
+  // A judgement brought in from a saved record says which record, as every carried answer does.
+  const carried = useCarriedLookup()(`lipid:${check.id}`)
   const mark = MARK[check.state]
   const fromCode = check.state === 'yes' && check.origin === 'record'
   const aiApplied = answerProvenance?.source === 'ai'
@@ -257,6 +260,12 @@ function Criterion({
                 isEnglish={isEnglish}
                 testId={`nhi-criterion-provenance-${check.id}`}
               />
+            </span>
+          ) : null}
+          {carried ? (
+            <span className="ml-1 inline-flex items-center rounded border border-primary/25 bg-primary/5 px-1 text-[11px] tabular-nums text-primary"
+              data-carried-from={carried} data-testid={`nhi-criterion-carried-${check.id}`}>
+              {carriedLabel(carried, isEnglish)}
             </span>
           ) : null}
         </span>
