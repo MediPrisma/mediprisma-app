@@ -295,7 +295,7 @@ export default function LiveClinicalDecisionSupportFeature({
     return (key) => carriedFrom(carriedAnswers, key, current[key])
     // The answers it compares against are read from their stores; these are what change them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId, carriedAnswers, clinicVitals, visitAnswers, afAnswers, evidenceOverrides, preventInputs, physicianDecisions, hfpefInputs, nhiLipidReview, today])
+  }, [patientId, carriedAnswers, clinicVitals, visitAnswers, afAnswers, evidenceOverrides, preventInputs, physicianDecisions, hfpefInputs, nhiLipidReview, phenotypeAnswer, coronaryPhaseAnswer, today])
 
   // Reading an answer back is a decryption, so it is asynchronous. 「沒作答」
   // and 「還沒讀到」 render identically and mean opposite things, so the
@@ -734,6 +734,7 @@ export default function LiveClinicalDecisionSupportFeature({
           <CdssStorageActions key={patientId} english={cdssLocale === 'en'} saveTarget={bookSaveTarget}
             // Saving and records are offered on the decision map and the NHI table, not on 三區塊 (owner decision 2026-10-07).
             offered={isMap || isNhiTable}
+            autoCarryReady={Boolean(recordProfile) && answersHydrated && carriedHydrated}
             packLabel={(packId) => guidelinePacks.find((pack) => pack.id === packId)?.label[cdssLocale === 'en' ? 'en' : 'zh']}
             onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
             packId: result.packId, profile, result,

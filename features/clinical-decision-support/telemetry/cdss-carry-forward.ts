@@ -39,14 +39,15 @@ export type CarryForwardChoices = { inputs: boolean; decisions: boolean }
 
 /**
  * The every-visit questions a clinician answers afresh at each visit; never
- * carried. HF: breathlessness and weight since the last visit, breathlessness
- * today. HTN: DP-02's missed doses and dizziness/syncope/falls, and DP-03's
- * 「沒有量」 for the home reading — last visit's 「無」 is not today's answer.
+ * carried. HTN: DP-02's missed doses and DP-03's 「沒有量」 for the home
+ * reading — last visit's 「無」 is not today's answer.
+ *
+ * Owner decision 2026-11-25: symptoms are carried like the examination, marked
+ * with the record's day, so the clinician sees how the patient was last time —
+ * HF breathlessness and weight since the last visit and breathlessness today,
+ * HTN dizziness/syncope/falls.
  */
-export const EVERY_VISIT_ASK_IDS: readonly string[] = [
-  'dyspnoea-trend', 'weight-trend', 'dyspnoea-present',
-  'missed-antihypertensive', 'postural-symptoms', 'home-bp-measured',
-]
+export const EVERY_VISIT_ASK_IDS: readonly string[] = ['missed-antihypertensive', 'home-bp-measured']
 /**
  * The PREVENT answers only a clinician gives and today's record never fills.
  * Every other PREVENT input is a measurement or a record-derived answer, where
@@ -75,7 +76,9 @@ export function carryableAnswers(patientId: string, now: Date = new Date(), scop
   if (vitals?.nyhaClass && (held || (vitals.nyhaClass.assessedOn ?? calendarDayOf(vitals.nyhaClass.modifiedAt)) >= today)) answers.nyha = vitals.nyhaClass.value
   if (vitals?.compensationStatus) answers.compensation = vitals.compensationStatus.value
   put('echo:', useHfpefInputsStore.getState().byPatientId[patientId]?.entries, entry => (entry as { value: string }).value)
-  if (usePhenotypeAnswerStore.getState().byPatientId[patientId]) answers.phenotype = true
+  // The answer itself, so a changed type or suspicion loses its 「帶入」 mark.
+  const phenotypeHeld = usePhenotypeAnswerStore.getState().byPatientId[patientId]
+  if (phenotypeHeld) answers.phenotype = [phenotypeHeld.hfSuspicion ?? null, phenotypeHeld.diagnosis ?? null, phenotypeHeld.choice ?? null]
   put('visit:', visitAnswersOf(useVisitAnswersStore.getState().byPatientId[patientId], today))
   const af = useAfAnswersStore.getState(), lipid = useNhiLipidReviewStore.getState(), prevent = usePreventStore.getState()
   put('af:', af.patientId === patientId ? af.answers : undefined)
@@ -88,7 +91,7 @@ export function carryableAnswers(patientId: string, now: Date = new Date(), scop
   return answers
 }
 
-/** Explicitly confirmed, fill-only carry-forward. Historical results never enter the live evaluation. */
+/** Fill-only carry-forward, confirmed in the records or brought in on opening and announced. Historical results never enter the live evaluation. */
 export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, packId: string, packVersion: string,
   currentRecordProfile: CdssPatientProfile, choices: CarryForwardChoices): number {
   if (!patientId || record.save.pack_id !== packId || record.save.result.packVersion !== packVersion)
@@ -173,7 +176,7 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
               ? { manualAction: provenance.manualAction } : {}) })
       }
     }
-    // Every-visit answers other than breathlessness and weight, given today as carried.
+    // Every-visit answers, symptoms included, given today as carried.
     const visit = useVisitAnswersStore.getState()
     const answeredToday = visitAnswersOf(visit.byPatientId[patientId], today) as Record<string, string | undefined>
     for (const [id, value] of Object.entries(object(inputs.visitAnswers))) {
