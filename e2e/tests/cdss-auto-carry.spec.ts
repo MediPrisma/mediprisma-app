@@ -63,7 +63,8 @@ test('opening the guidance brings in the last saved record by itself and says so
   expect(reads).toBe(1)
   await page.waitForTimeout(800) // the announcement has finished sliding in
   await page.screenshot({ path: info.outputPath('auto-carried.png') })
-  for (const close of await page.getByRole('button', { name: 'Close toast', exact: true }).all()) await close.click()
+  // The announcement leaves by itself; what stays is the note beside the records button.
+  await expect(page.getByText(/已自動帶入您 .* 儲存的紀錄/)).toBeHidden({ timeout: 20_000 })
   await expect(page.getByTestId('cdss-carried-notice')).toHaveText(/已自動帶入 .* 紀錄，請核對/)
   await page.screenshot({ path: info.outputPath('auto-carried-notice.png') })
 
