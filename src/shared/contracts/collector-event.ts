@@ -313,6 +313,69 @@ export const collectorEventV11Schema = collectorEventV10BaseSchema.extend({
 })
 export type CollectorEventV11 = z.infer<typeof collectorEventV11Schema>
 
+// v12 (D094): why a request failed, stopped or was cancelled, and how much context was cut.
+// Closed sets, buckets and one random request ID only: never an error message, response body,
+// endpoint URL, prompt or answer. Every field is optional; an event without any is a v11 event.
+export const gatewayErrorCodeSchema = z.enum([
+  // The codes mediprisma-ai-gateway answers with in error.code; anything else is 'other'.
+  'origin_denied', 'authentication_required', 'invalid_token', 'authentication_unavailable', 'access_denied',
+  'request_too_large', 'request_failed', 'route_not_found', 'invalid_request', 'invalid_output_limit',
+  'provider_not_configured', 'unsupported_billable_input', 'rate_limited', 'monthly_budget_exhausted',
+  'budget_unavailable', 'provider_error', 'invalid_provider_response', 'other',
+])
+export const finishReasonSchema = z.enum(['stop', 'length', 'content_filter', 'tool_calls', 'error', 'other', 'unreported'])
+export const abortReasonSchema = z.enum(['user_cancel', 'patient_switch', 'superseded', 'navigation', 'timeout', 'unknown'])
+const contextTokensBucketSchema = collectorEventBaseSchema.shape.diagnostics.shape.context_tokens_bucket.unwrap()
+export const contextTrimSchema = z.object({
+  before: contextTokensBucketSchema, after: contextTokensBucketSchema,
+  categories: z.array(z.enum(['encounters', 'medications', 'observations', 'reports', 'documents'])).max(5)
+    .refine(list => new Set(list).size === list.length, 'Trimmed categories are listed once'),
+}).strict()
+const failureDiagnosticsShape = {
+  gateway_error_code: gatewayErrorCodeSchema.optional(),
+  upstream_attempted: z.boolean().optional(),
+  gateway_request_id: z.string().uuid().optional(),
+  finish_reason: finishReasonSchema.optional(),
+  abort_reason: abortReasonSchema.optional(),
+}
+type FailureDiagnostics = { gateway_error_code?: string; upstream_attempted?: boolean; abort_reason?: string }
+function validateFailureDiagnostics(status: string, errorClass: string | null, d: FailureDiagnostics, ctx: z.RefinementCtx) {
+  if (status === 'completed' && (d.gateway_error_code !== undefined || d.abort_reason !== undefined))
+    ctx.addIssue({ code: 'custom', message: 'A completed request has no gateway error or abort reason' })
+  if (d.abort_reason !== undefined && status !== 'aborted' && errorClass !== 'timeout')
+    ctx.addIssue({ code: 'custom', message: 'Only an aborted or timed-out request has an abort reason' })
+}
+const collectorRequestV12Schema = requestBaseSchema.extend({ usage: tokenUsageSchema.optional(), ...failureDiagnosticsShape }).strict()
+export type CollectorRequestV12 = z.infer<typeof collectorRequestV12Schema>
+export const collectorEventV12Schema = collectorEventV10BaseSchema.extend({
+  schema_version: z.literal(12),
+  diagnostics: collectorEventV10BaseSchema.shape.diagnostics.extend({
+    usage: tokenUsageSchema.optional(),
+    ...failureDiagnosticsShape,
+    context_trim: contextTrimSchema.optional(),
+    requests: z.object({
+      count: resourceCountSchema, omitted: resourceCountSchema,
+      details: z.array(collectorRequestV12Schema).max(MAX_COLLECTOR_REQUEST_DETAILS),
+    }).strict().optional(),
+  }).strict(),
+}).strict().superRefine((e, ctx) => {
+  // Reuse every v11 invariant rather than maintaining another copy.
+  const strip = <T extends Record<string, unknown>>(value: T) => {
+    const { gateway_error_code: _code, upstream_attempted: _attempted, gateway_request_id: _id, finish_reason: _finish, abort_reason: _abort, ...rest } = value
+    return rest
+  }
+  const { context_trim, requests, ...diagnostics } = e.diagnostics
+  const legacy = collectorEventV11Schema.safeParse({ ...e, schema_version: 11, diagnostics: { ...strip(diagnostics),
+    ...(requests ? { requests: { ...requests, details: requests.details.map(strip) } } : {}) } })
+  if (!legacy.success)
+    for (const issue of legacy.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
+  validateFailureDiagnostics(e.status, e.error_class, e.diagnostics, ctx)
+  requests?.details.forEach(request => validateFailureDiagnostics(request.status, request.error_class, request, ctx))
+  if (context_trim && e.diagnostics.context_trimmed !== true)
+    ctx.addIssue({ code: 'custom', path: ['diagnostics', 'context_trim'], message: 'Trim details need a trimmed context' })
+})
+export type CollectorEventV12 = z.infer<typeof collectorEventV12Schema>
+
 // Hospital-capture outcome: MediPrisma relays what 北榮懷爾抓抓 tagged on the Bundle it
 // delivered (category, failure kind, HTTP status, count). Its own endpoint and table,
 // never accepted by /events. From D084 it may carry the hospital chart number, the only

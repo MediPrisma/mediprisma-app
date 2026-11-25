@@ -1,5 +1,5 @@
 import { beginCollectorObservation, cancelCollectorRequests } from '@/src/application/telemetry/collector'
-import { collectorEventV11Schema } from '@/src/shared/contracts/collector-event'
+import { collectorEventV12Schema } from '@/src/shared/contracts/collector-event'
 import { readTokenUsage } from '@/src/shared/utils/ai-token-usage'
 import { mockCollectorPermission } from '../../helpers/collector-permissions'
 
@@ -36,7 +36,7 @@ test('a standalone request carries its token counts; one without a report sends 
   }
   const sent = payloads()
   expect(sent).toHaveLength(4)
-  for (const event of sent) expect(collectorEventV11Schema.safeParse(event).success).toBe(true)
+  for (const event of sent) expect(collectorEventV12Schema.safeParse(event).success).toBe(true)
   expect(sent.map(e => e.diagnostics.usage)).toEqual([{ input_tokens: 12345, output_tokens: 678 }, undefined, undefined, { input_tokens: 40 }])
 })
 
@@ -49,7 +49,7 @@ test('an operation lists the token counts of each of its requests', async () => 
   operation.finish({ outcome: 'ok', phase: 'unknown' })
   await settle()
   const [event] = payloads()
-  expect(collectorEventV11Schema.safeParse(event).success).toBe(true)
+  expect(collectorEventV12Schema.safeParse(event).success).toBe(true)
   expect(event.diagnostics.usage).toBeUndefined()
   expect(event.diagnostics.requests.details.map((d: { usage?: unknown }) => d.usage)).toEqual([
     { input_tokens: 9000, output_tokens: 400 }, undefined, { input_tokens: 1000, output_tokens: 100 }])
