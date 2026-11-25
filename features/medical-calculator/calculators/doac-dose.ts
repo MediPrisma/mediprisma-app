@@ -56,10 +56,9 @@ const regimenLabel = (value: string): L => {
 const RENAL_INPUTS: CalcInput[] = [
   AGE_INPUT,
   SEX_INPUT,
-  // Older than a year (owner decision 2026-10-22): the dose turns on the 60 kg and CrCl cut-offs.
-  { key: 'weight', type: 'number', label: { en: 'Weight (actual)', zh: '體重（實際）' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' }, staleAfterDays: 365 },
+  // A weight over three months old counts as none (owner decision 2026-11-25): the dose turns on the 60 kg and CrCl cut-offs.
+  { key: 'weight', type: 'number', label: { en: 'Weight (actual)', zh: '體重（實際）' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' }, expireAfterDays: 90 },
   { key: 'scr', type: 'number', label: { en: 'Creatinine', zh: '肌酸酐' }, unit: 'mg/dL', dimension: 'creatinine', normalRange: { low: 0.6, high: 1.2 }, source: { kind: 'lab', keys: ['CREA'] }, staleAfterDays: 365 },
-  { key: 'crcl_manual', type: 'number', label: { en: 'CrCl override (optional)', zh: 'CrCl 手動覆寫（選填）' }, unit: 'mL/min', optional: true },
   { key: 'dialysis', type: 'select', label: { en: 'On dialysis', zh: '透析中' }, options: YES_NO, defaultValue: '', source: { kind: 'hfpefClinical', key: 'doac_dialysis' } },
 ]
 
@@ -146,7 +145,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
   ],
   inputGroups: [
     { key: 'indication', title: { zh: '適應症', en: 'Indication' }, keys: ['indication', 'parenteral_lead_in', 'anticoagulant_switch', 'pe_unstable', 'vte_day', 'postop_day'] },
-    { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
+    { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'dialysis'] },
     { key: 'patient', title: { zh: '肝功能與其他', en: 'Liver and other' }, keys: ['liver', 'liver_enzymes', 'bilirubin_high', 'pregnancy', 'gi_risk'] },
     { key: 'regimen', title: { zh: '目前處方', en: 'Current prescription' }, keys: ['regimen'] },
     { key: 'ddi', title: { zh: '併用藥', en: 'Co-medications' }, hint: { zh: '依目前有效處方帶入（僅全身性用藥），請核對實際服用。', en: 'Filled from current prescriptions (systemic only); check what is actually taken.' }, summary: ddiSummary, keys: ['ddi_ketoconazole', 'ddi_itraconazole', 'ddi_vori_posaconazole', 'ddi_hiv_pi', 'ddi_ciclosporin', 'ddi_tacrolimus', 'ddi_dronedarone', 'ddi_verapamil', 'ddi_amiodarone', 'ddi_quinidine', 'ddi_erythromycin', 'ddi_clarithromycin', 'ddi_glecaprevir', 'ddi_inducer', 'ddi_anticoagulant'] },
@@ -158,7 +157,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
     const { crcl, results } = calculateDoacDoses(values)
     if (!crcl) return null
     const check = checkRegimen(values.regimen, results, regimenDay(values))
-    const crclText = `CrCl ${crclLabel(crcl.value)}${crcl.source === 'manual' ? '（手動）' : ''}`
+    const crclText = `CrCl ${crclLabel(crcl.value)}`
     return {
       value: crclLabel(crcl.value),
       unit: 'mL/min',
@@ -217,7 +216,7 @@ export const DOAC_DOSE: CalculatorDef[] = [{
   ],
   inputGroups: [
     { key: 'regimen', title: { zh: '目前處方與服藥時刻', en: 'Prescription and dose times' }, keys: ['regimen', 'dose_intent', 'dose_time_1', 'dose_time_2'] },
-    { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'crcl_manual', 'dialysis'] },
+    { key: 'renal', title: { zh: '腎功能（Cockcroft–Gault，實際體重）', en: 'Renal function (Cockcroft–Gault, actual weight)' }, keys: ['age', 'sex', 'weight', 'scr', 'dialysis'] },
     { key: 'procedure', title: { zh: '處置', en: 'Procedure' }, keys: ['procedure_kind', 'neuraxial', 'surgery_at'] },
     { key: 'after', title: { zh: '術後', en: 'After the procedure' }, keys: ['surgery_end_at', 'haemostasis', 'catheter_removed_at', 'sheath_removed_at', 'traumatic_puncture'] },
   ],

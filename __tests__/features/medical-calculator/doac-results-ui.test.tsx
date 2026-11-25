@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import { DoacDoseResults } from '@/features/medical-calculator/components/DoacDoseResults'
 import { DoacPeriopResults } from '@/features/medical-calculator/components/DoacPeriopResults'
 import type { CalcValues } from '@/features/medical-calculator/types'
+import { withCrcl } from './doac-crcl'
 
 const answered: CalcValues = {
   age: '70', sex: 'male', weight: '70', scr: '1.0', dialysis: 'no', liver: 'none', liver_enzymes: 'no', bilirubin_high: 'no', pregnancy: 'no', gi_risk: 'no',
@@ -30,10 +31,10 @@ describe('DOAC dose results by indication', () => {
 })
 
 describe('DOAC peri-procedural results', () => {
-  const spec: CalcValues = {
-    regimen: 'apixaban:5:2', dose_time_1: '08:00', dose_time_2: '20:00', age: '70', sex: 'male', weight: '70', scr: '1.0', crcl_manual: '62', dialysis: 'no',
+  const spec: CalcValues = withCrcl({
+    regimen: 'apixaban:5:2', dose_time_1: '08:00', dose_time_2: '20:00', age: '70', sex: 'male', weight: '70', crcl: '62', dialysis: 'no',
     procedure_kind: 'high', neuraxial: 'single', surgery_at: '2026-11-03T08:00', surgery_end_at: '2026-11-03T10:00', traumatic_puncture: 'no',
-  }
+  })
   it('shows the interval, the last dose, the skipped doses and the earliest restart', () => {
     render(<DoacPeriopResults values={spec} locale="zh-TW" />)
     expect(screen.getByTestId('doac-periop-hold')).toHaveTextContent('最後一劑距手術 ≥72 小時')
@@ -65,7 +66,7 @@ describe('DOAC peri-procedural results', () => {
     expect(resume).toHaveTextContent('恢復的第一劑：11-03 15:00')
   })
   it('CrCl 12: no interval, asked to assess individually', () => {
-    render(<DoacPeriopResults values={{ ...spec, crcl_manual: '12' }} locale="zh-TW" />)
+    render(<DoacPeriopResults values={withCrcl({ ...spec, crcl: '12' })} locale="zh-TW" />)
     expect(screen.getByTestId('doac-periop-results')).toHaveAttribute('data-state', 'no-hours')
     expect(screen.queryByTestId('doac-periop-clock')).toBeNull()
     expect(screen.getByTestId('doac-periop-hold')).toHaveTextContent('No official indication for use')

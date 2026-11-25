@@ -1,9 +1,9 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { CalculatorDetail } from '@/features/medical-calculator/components/CalculatorDetail'
 import { DoacDoseResults } from '@/features/medical-calculator/components/DoacDoseResults'
 import { DoacPeriopResults } from '@/features/medical-calculator/components/DoacPeriopResults'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
-import { calculateDoacDoses } from '@/features/medical-calculator/doac-dose-model'
+import { calculateDoacDoses, crclFieldToFill } from '@/features/medical-calculator/doac-dose-model'
 import { calculatePeriop } from '@/features/medical-calculator/doac-periop-model'
 import { inputVisible, visibleValues, type CalcInput, type CalcValues, type CalculatorDef } from '@/features/medical-calculator/types'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
@@ -49,14 +49,14 @@ function visible(calc: CalculatorDef, values: CalcValues, key: string): boolean 
 describe('DOAC calculators: a field asked for is always on screen', () => {
   it('dose: every input an agent still needs is visible for that indication (4,000 random cases)', () => {
     const random = prng(20261022)
-    const extra = { age: ['45', '78', '85'], weight: ['52', '70'], scr: ['0.9', '1.6', '3.2'], crcl_manual: ['12', '25', '45', '90'], vte_day: ['3', '15', '30'], postop_day: ['0', '3'] }
+    const extra = { age: ['45', '78', '85'], weight: ['52', '70'], scr: ['0.9', '1.6', '3.2'], vte_day: ['3', '15', '30'], postop_day: ['0', '3'] }
     const failures: string[] = []
     for (let run = 0; run < 4000; run += 1) {
       const values = randomValues(doseCalc, random, extra)
       const { results } = calculateDoacDoses(visibleValues(doseCalc.inputs, values))
       for (const result of results) {
         for (const key of result.missing) {
-          const field = key === 'CrCl' ? 'scr' : key
+          const field = key === 'CrCl' ? crclFieldToFill(values) : key
           if (!visible(doseCalc, values, field)) failures.push(`${values.indication} ${result.agent}: ${key} hidden`)
         }
       }
@@ -67,7 +67,7 @@ describe('DOAC calculators: a field asked for is always on screen', () => {
   it('peri-procedural: every input the plan still needs is visible (6,000 random cases)', () => {
     const random = prng(1103)
     const extra = {
-      age: ['60', '82'], weight: ['55', '80'], scr: ['0.9', '2.4'], crcl_manual: ['10', '25', '40', '70', '95'],
+      age: ['60', '82'], weight: ['55', '80'], scr: ['0.9', '2.4'],
       dose_time_1: ['08:00', '21:00'], dose_time_2: ['20:00', '08:00'],
       surgery_at: ['2026-11-03T08:00'], surgery_end_at: ['2026-11-03T10:00', '2026-11-03T07:00'],
       catheter_removed_at: ['2026-11-04T08:00'], sheath_removed_at: ['2026-11-03T12:00', '2026-11-03T09:00'],
@@ -77,7 +77,7 @@ describe('DOAC calculators: a field asked for is always on screen', () => {
       const values = randomValues(periopCalc, random, extra)
       const plan = calculatePeriop(visibleValues(periopCalc.inputs, values))
       for (const key of [...plan.missing, ...plan.pending]) {
-        const field = key === 'CrCl' ? 'scr' : key === 'anaesthesia' ? 'traumatic_puncture' : key
+        const field = key === 'CrCl' ? crclFieldToFill(values) : key === 'anaesthesia' ? 'traumatic_puncture' : key
         if (!visible(periopCalc, values, field)) failures.push(`${values.regimen} ${values.procedure_kind} ${values.neuraxial}: ${key} hidden`)
       }
     }
@@ -165,24 +165,68 @@ describe('DOAC calculators on screen', () => {
     expect(within(screen.getByTestId('calc-group-ddi')).getByText('1 項未填；其餘 12 項無')).toBeInTheDocument()
   })
 
-  it('an old weight keeps its value, with its age beside the date in amber; a creatinine within the year does not', () => {
-    jest.useFakeTimers({ now: new Date('2026-10-22T08:00:00+08:00'), doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick', 'setImmediate'] })
-    jest.mocked(useLabAutofill).mockReturnValue({
-      autofill: {
-        resolve: (source: any) => source?.kind === 'vital' ? { value: 64, unit: 'kg', date: '2025-03-01' } : source?.kind === 'lab' ? { value: 1.1, unit: 'mg/dL', date: '2026-03-01' } : undefined,
-        sex: 'male', clinicalSelects: {},
-      },
-      isLoading: false, error: null, retry: jest.fn(async () => {}),
-    } as unknown as ReturnType<typeof useLabAutofill>)
-    const { container } = render(
-      <LanguageProvider>
-        <CalculatorDetail calc={doseCalc} onBack={() => {}} isFavorite={false} onToggleFavorite={() => {}} />
-      </LanguageProvider>,
-    )
-    expect(container.querySelector<HTMLInputElement>('#calc-weight')!.value).toBe('64')
-    expect(screen.getByTestId('calc-stale-weight')).toHaveTextContent('2025-03-01 · 20 個月前')
-    expect(screen.queryByTestId('calc-stale-scr')).toBeNull()
-    jest.useRealTimers()
+  describe('the weight must be from the last 90 days', () => {
+    const open = (calc: CalculatorDef, weight?: { value: number; unit: string; date: string }, isLoading = false) => {
+      jest.mocked(useLabAutofill).mockReturnValue({
+        autofill: {
+          resolve: (source: any) => source?.kind === 'vital' ? weight : source?.kind === 'lab' ? { value: 1.1, unit: 'mg/dL', date: '2026-03-01' } : undefined,
+          sex: 'male', clinicalSelects: {},
+        },
+        isLoading, error: null, retry: jest.fn(async () => {}),
+      } as unknown as ReturnType<typeof useLabAutofill>)
+      return render(
+        <LanguageProvider>
+          <CalculatorDetail calc={calc} onBack={() => {}} isFavorite={false} onToggleFavorite={() => {}} />
+        </LanguageProvider>,
+      )
+    }
+    const weightOf = (container: HTMLElement) => container.querySelector<HTMLInputElement>('#calc-weight')!
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+    beforeEach(() => jest.useFakeTimers({ now: new Date('2026-10-22T08:00:00+08:00'), doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick', 'setImmediate', 'requestAnimationFrame', 'cancelAnimationFrame'] }))
+    afterEach(() => jest.useRealTimers())
+
+    it('an older weight is not filled in either calculator: the field is blank, names the reading left out, and takes the focus', async () => {
+      for (const calc of [doseCalc, periopCalc]) {
+        const { container, unmount } = open(calc, { value: 64, unit: 'kg', date: '2026-07-01' })
+        expect(weightOf(container).value).toBe('')
+        expect(screen.getByTestId('calc-expired-weight')).toHaveTextContent('最近一筆 64 kg（2026-07-01，3 個月前）已超過 90 天，未帶入')
+        await waitFor(() => expect(weightOf(container)).toHaveFocus())
+        // Typed by the clinician: the note goes, and the creatinine a year allows is still filled.
+        fireEvent.change(weightOf(container), { target: { value: '63' } })
+        expect(screen.queryByTestId('calc-expired-weight')).toBeNull()
+        expect(container.querySelector<HTMLInputElement>('#calc-scr')!.value).toBe('1.1')
+        expect(screen.queryByTestId('calc-stale-scr')).toBeNull()
+        unmount()
+      }
+    })
+    it('nothing is computed from it: CrCl stays uncomputed, and its chip opens the weight', async () => {
+      const { container } = open(doseCalc, { value: 64, unit: 'kg', date: '2026-07-01' })
+      expect(screen.getByText('CrCl 未算')).toBeInTheDocument()
+      await nextFrame()
+      weightOf(container).blur()
+      fireEvent.click(within(screen.getByTestId('doac-shared-missing')).getByRole('button', { name: /CrCl/ }))
+      expect(weightOf(container)).toHaveFocus()
+    })
+    it('a weight of the 90th day is filled as it was, and the focus is left alone', async () => {
+      const { container } = open(doseCalc, { value: 64, unit: 'kg', date: '2026-07-24T08:00:00+08:00' })
+      expect(weightOf(container).value).toBe('64')
+      expect(screen.queryByTestId('calc-expired-weight')).toBeNull()
+      await nextFrame()
+      expect(weightOf(container)).not.toHaveFocus()
+    })
+    it('a weight with no date cannot be shown recent, so it is not filled', () => {
+      const { container } = open(doseCalc, { value: 64, unit: 'kg', date: '' })
+      expect(weightOf(container).value).toBe('')
+      expect(screen.getByTestId('calc-expired-weight')).toHaveTextContent('64 kg 沒有量測日期，未帶入')
+    })
+    it('no weight on file: the field takes the focus once the chart has loaded, not before', async () => {
+      const loading = open(doseCalc, undefined, true)
+      await nextFrame()
+      expect(weightOf(loading.container)).not.toHaveFocus()
+      loading.unmount()
+      const { container } = open(doseCalc)
+      await waitFor(() => expect(weightOf(container)).toHaveFocus())
+    })
   })
 
   it('peri-procedural, once daily: no second dose time, no apixaban 2.5 question, no ablation or catheter times', () => {

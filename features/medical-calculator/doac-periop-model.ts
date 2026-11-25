@@ -221,7 +221,7 @@ export interface PeriopResult {
 }
 
 export type PeriopInputKey =
-  | 'regimen' | 'dose_intent' | 'age' | 'sex' | 'weight' | 'scr' | 'crcl_manual' | 'dialysis'
+  | 'regimen' | 'dose_intent' | 'age' | 'sex' | 'weight' | 'scr' | 'dialysis'
   | 'procedure_kind' | 'neuraxial' | 'surgery_at' | 'surgery_end_at' | 'dose_time_1' | 'dose_time_2'
   | 'haemostasis' | 'catheter_removed_at' | 'sheath_removed_at' | 'traumatic_puncture'
 

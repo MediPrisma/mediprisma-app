@@ -171,6 +171,12 @@ export type CalcInput = (NumberInput | SelectInput | DateTimeInput) & {
   visibleWhen?: (values: CalcValues) => boolean
   /** An auto-filled value older than this many days carries a small 「N 個月前」 beside its date. */
   staleAfterDays?: number
+  /**
+   * A reading older than this many days — or with no date to tell — is not
+   * filled: the field stays blank for the clinician, and says which reading
+   * was left out.
+   */
+  expireAfterDays?: number
 }
 
 /** True while the input applies to the values as they stand. */

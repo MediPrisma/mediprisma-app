@@ -6,12 +6,14 @@
  * record cannot answer prefilled 無), and that the dose the point shows is the
  * one the calculator gives.
  */
+import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures/test'
 
 test.use({ viewport: { width: 1280, height: 900 } })
 
-test('opened from the AF dose point, it carries the latest weight, defaults the unanswered questions to 無 and gives the label dose', async ({ page }) => {
-  test.setTimeout(150_000)
+/** P9's AF page on the day given: her last weight (58 kg) is from 2026-09-27. */
+async function openAfPage(page: Page, today: string) {
+  await page.clock.setFixedTime(new Date(today))
   await page.goto('/dev/cdss-scenarios')
   await page.evaluate(() => localStorage.setItem('medical-note-locale', 'zh-TW'))
   await page.locator('button[data-scenario="p9-hfpef-af-dose"]').click()
@@ -19,6 +21,12 @@ test('opened from the AF dose point, it carries the latest weight, defaults the 
   await page.goto('/dev/cdss-scenarios/view?w=1280')
   await page.getByRole('group', { name: '選擇疾病指引' }).first().getByRole('button', { name: /^心房顫動/ }).click({ timeout: 90_000 })
   await expect(page.getByTestId('cdss-visit-book')).toBeVisible({ timeout: 60_000 })
+}
+
+test('opened from the AF dose point, it carries the latest weight, defaults the unanswered questions to 無 and gives the label dose', async ({ page }) => {
+  test.setTimeout(150_000)
+  // The weight is 25 days old: within the 90 the calculator allows.
+  await openAfPage(page, '2026-10-22T04:00:00Z')
 
   // The dose point names the patient's figures and the reduced dose.
   const point = page.locator('[data-book-dp="DP-09"]')
@@ -53,4 +61,29 @@ test('opened from the AF dose point, it carries the latest weight, defaults the 
   await expect(results.getByTestId('doac-agent-dabigatran')).toContainText('110 mg bid')
   await expect(results.getByTestId('doac-regimen-check')).toContainText('apixaban 5 mg bid：仿單劑量為 2.5 mg bid')
   await expect(results.getByTestId('doac-shared-missing')).toHaveCount(0)
+  // CrCl is the computed one only: no field to type another into.
+  await expect(panel.getByText('CrCl 手動覆寫')).toHaveCount(0)
+})
+
+test('a weight over 90 days old is not carried: the field is blank, focused, and nothing is dosed until one is typed', async ({ page }) => {
+  test.setTimeout(150_000)
+  // 110 days after her last weight.
+  await openAfPage(page, '2027-01-15T04:00:00Z')
+  await page.getByTestId('cdss-book-calculators').click()
+  await page.getByTestId('cdss-book-calculator-doac-dose').click()
+  const panel = page.getByTestId('cdss-book-calculator-panel')
+  await expect(panel).toBeVisible()
+
+  const weight = panel.locator('#calc-weight')
+  await expect(weight).toHaveValue('')
+  await expect(weight).toBeFocused()
+  await expect(panel.getByTestId('calc-expired-weight')).toContainText('最近一筆 58 kg（2026-09-27，3 個月前）已超過 90 天，未帶入')
+  const results = panel.getByTestId('doac-dose-results')
+  await expect(results).toContainText('CrCl 未算')
+  await expect(results.getByTestId('doac-agent-apixaban')).toHaveAttribute('data-verdict', 'missing')
+
+  // Typed in the cursor already there: the same dose as with a recent weight on file.
+  await page.keyboard.type('58')
+  await expect(panel.getByTestId('calc-expired-weight')).toHaveCount(0)
+  await expect(results.getByTestId('doac-agent-apixaban')).toContainText('2.5 mg bid')
 })

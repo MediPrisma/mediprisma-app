@@ -12,15 +12,16 @@ import { vghtpeMedicationIdentityExtension } from '@/src/shared/utils/hospital-m
 import { buildClinicalSelects } from '@/features/medical-calculator/hfpef-clinical-autofill'
 import { HF_VISIT_CALCULATORS } from '@/features/clinical-decision-support/renderers/visit/VisitCalculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
+import { withCrcl } from './doac-crcl'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
 const DDI_KEYS = ['ddi_ketoconazole', 'ddi_itraconazole', 'ddi_vori_posaconazole', 'ddi_hiv_pi', 'ddi_ciclosporin', 'ddi_tacrolimus', 'ddi_dronedarone', 'ddi_verapamil', 'ddi_erythromycin', 'ddi_clarithromycin', 'ddi_glecaprevir', 'ddi_inducer', 'ddi_anticoagulant']
 /** Every question answered 「no」: each case below changes only what it names. */
 const base: CalcValues = { age: '70', sex: 'male', weight: '70', scr: '1.0', dialysis: 'no', liver: 'none', liver_enzymes: 'no', bilirubin_high: 'no', pregnancy: 'no', gi_risk: 'no', ...Object.fromEntries(DDI_KEYS.map((key) => [key, 'no'])) }
-const run = (values: CalcValues) => calculateDoacDoses({ ...base, ...values })
+const run = (values: CalcValues) => calculateDoacDoses(withCrcl({ ...base, ...values }))
 const agent = (values: CalcValues, name: DoacAgent) => run(values).results.find((r) => r.agent === name)!
 const dose = (values: CalcValues, name: DoacAgent) => agent(values, name).doses.map((d) => `${d.mg}x${d.perDay}`).join('|')
-const manual = (crcl: number, extra: CalcValues = {}) => ({ crcl_manual: String(crcl), ...extra })
+const manual = (crcl: number, extra: CalcValues = {}) => ({ crcl: String(crcl), ...extra })
 
 describe('Cockcroft–Gault', () => {
   it('is the medical calculator’s own CrCl, unrounded', () => {
@@ -33,8 +34,9 @@ describe('Cockcroft–Gault', () => {
     expect(cockcroftGault(70, 70, 1, '')).toBeNull()
     expect(cockcroftGault(70, 70, 0, 'male')).toBeNull()
   })
-  it('a manual CrCl overrides and says so', () => {
-    expect(run(manual(42)).crcl).toEqual({ value: 42, source: 'manual' })
+  it('is the only CrCl: a value typed for it is not read', () => {
+    expect(run({ crcl_manual: '42' }).crcl?.value).toBeCloseTo(68.06, 2)
+    expect(CALCULATORS.filter((c) => c.id.startsWith('doac-')).flatMap((c) => c.inputs).some((input) => /crcl/i.test(input.key))).toBe(false)
   })
 })
 
@@ -67,7 +69,7 @@ describe('apixaban — two of three, or CrCl 15–29 alone', () => {
     expect(result.hits.some((hit) => hit.cite === CITES.apixabanLessPotent)).toBe(true)
   })
   it('an unknown criterion that could make two stops at 「待補資料」, never 5 mg', () => {
-    const result = agent({ age: '82', weight: '' , scr: '1.0', crcl_manual: '40' }, 'apixaban')
+    const result = agent({ age: '82', weight: '', scr: '1.0' }, 'apixaban')
     expect(result).toMatchObject({ verdict: 'missing', doses: [] })
     expect(result.missing).toContain('weight')
   })

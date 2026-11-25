@@ -35,6 +35,8 @@ export interface ResolvedInput {
   unconvertible: boolean
   /** Source-report provenance for the "來源" line (only set when filled). */
   source?: { testName?: string; loinc?: string; facility?: string; obsId?: string; resourceType?: 'Condition' | 'Encounter' | 'Observation' | 'DiagnosticReport' | 'MedicationRequest' | 'MedicationStatement' }
+  /** The reading left out for its age (`expireAfterDays`), so the blank field can say what it did not use. */
+  expired?: { value: string; unit: string; date: string }
 }
 
 const EMPTY: ResolvedInput = {
@@ -73,6 +75,14 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
   const expected = input.unit ?? ''
   const hit = autofill.resolve(input.source)
   if (!hit) return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
+
+  // Too old to stand for the patient today (the DOAC weight): counted as no reading at all.
+  if (input.expireAfterDays !== undefined) {
+    const at = Date.parse(hit.date)
+    if (!Number.isFinite(at) || Math.floor((Date.now() - at) / 86_400_000) > input.expireAfterDays) {
+      return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected, expired: { value: formatNum(hit.value), unit: hit.unit, date: hit.date } }
+    }
+  }
 
   // Safety gate: a value matched only by display name (viaLoinc === false) whose
   // unit is incompatible with the input's expected dimension is probably a

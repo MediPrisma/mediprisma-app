@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react'
 import type { CalcValues, L } from '../types'
-import { LABEL_SOURCES, crclLabel } from '../doac-dose-model'
+import { LABEL_SOURCES, crclFieldToFill, crclLabel } from '../doac-dose-model'
 import {
   GUIDELINE_SOURCES,
   PERIOP_FIELD_LABELS,
@@ -23,7 +23,7 @@ const STATE: Record<PeriopResult['state'], { zh: string; en: string; style: stri
   missing: { zh: '待補資料', en: 'Needs inputs', style: 'bg-muted text-muted-foreground' },
 }
 
-const FIELD_KEY: Record<string, string> = { CrCl: 'scr', anaesthesia: 'traumatic_puncture' }
+const FIELD_KEY: Record<string, string> = { anaesthesia: 'traumatic_puncture' }
 
 function GuidelineCiteView({ cite, zh }: { cite: GuidelineCite; zh: boolean }) {
   const source = cite.source === 'ehra' ? 'EHRA 2021' : 'ASRA 2025'
@@ -49,7 +49,7 @@ function Line({ item, zh }: { item: PeriopLine; zh: boolean }) {
   )
 }
 
-function Chips({ keys, zh, onReviewField }: { keys: string[]; zh: boolean; onReviewField?: (key: string) => void }) {
+function Chips({ keys, values, zh, onReviewField }: { keys: string[]; values: CalcValues; zh: boolean; onReviewField?: (key: string) => void }) {
   if (!keys.length) return null
   return (
     <div className="mt-1 flex flex-wrap gap-1 text-xs text-muted-foreground">
@@ -61,7 +61,7 @@ function Chips({ keys, zh, onReviewField }: { keys: string[]; zh: boolean; onRev
             key={key}
             type="button"
             disabled={!onReviewField}
-            onClick={() => onReviewField?.(FIELD_KEY[key] ?? key)}
+            onClick={() => onReviewField?.(key === 'CrCl' ? crclFieldToFill(values) : FIELD_KEY[key] ?? key)}
             className="rounded border border-border px-1.5 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {label ? (zh ? label.zh : label.en) : key}
@@ -101,7 +101,7 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 border-b bg-muted/40 px-3 py-2">
         <h3 className="text-sm font-semibold">
           {plan.agent ?? (zh ? '未選 DOAC' : 'No DOAC chosen')}
-          {plan.crcl ? ` · CrCl ${crclLabel(plan.crcl.value)} mL/min${plan.crcl.source === 'manual' ? (zh ? '（手動）' : ' (manual)') : ''}` : ''}
+          {plan.crcl ? ` · CrCl ${crclLabel(plan.crcl.value)} mL/min` : ''}
         </h3>
         <span className={`rounded px-1.5 text-xs ${state.style}`}>{zh ? state.zh : state.en}</span>
       </div>
@@ -136,7 +136,7 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
               <Times label={zh ? `跳過 ${plan.skippedBefore.length} 劑（至開始時刻）：` : `Skip ${plan.skippedBefore.length} doses (to the start): `} dates={plan.skippedBefore} />
             </div>
           )}
-          <Chips keys={plan.missing} zh={zh} onReviewField={onReviewField} />
+          <Chips keys={plan.missing} values={values} zh={zh} onReviewField={onReviewField} />
         </div>
         {(plan.state === 'timed' || plan.state === 'ablation') && (
           <div className="px-3 py-2" data-testid="doac-periop-resume">
@@ -157,7 +157,7 @@ export function DoacPeriopResults({ values, locale, onReviewField }: {
         {plan.pending.length > 0 && (
           <div className="px-3 py-2">
             <p className="text-xs text-muted-foreground">{zh ? '時刻與恢復時間還需要：' : 'Clock times and restart still need:'}</p>
-            <Chips keys={plan.pending} zh={zh} onReviewField={onReviewField} />
+            <Chips keys={plan.pending} values={values} zh={zh} onReviewField={onReviewField} />
           </div>
         )}
         {plan.notes.length > 0 && (

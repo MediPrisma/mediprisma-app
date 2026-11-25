@@ -8,15 +8,16 @@ import { CITES, crclLabel } from '@/features/medical-calculator/doac-dose-model'
 import { GUIDELINE_CITES, calculatePeriop, ehraHours, formatLocal, isLabelCite, parseClock, parseLocalDateTime, type PeriopResult } from '@/features/medical-calculator/doac-periop-model'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
+import { withCrcl } from './doac-crcl'
 
 /** Apixaban 5 mg bid at 08:00 and 20:00, CrCl 62, no neuraxial, high risk, 2026-11-03 08:00 to 10:00. */
 const base: CalcValues = {
   regimen: 'apixaban:5:2', dose_time_1: '08:00', dose_time_2: '20:00',
-  age: '70', sex: 'male', weight: '70', scr: '1.0', crcl_manual: '62', dialysis: 'no',
+  age: '70', sex: 'male', weight: '70', scr: '1.0', crcl: '62', dialysis: 'no',
   procedure_kind: 'high', neuraxial: 'none', surgery_at: '2026-11-03T08:00', surgery_end_at: '2026-11-03T10:00',
   traumatic_puncture: 'no', haemostasis: '',
 }
-const plan = (values: CalcValues = {}) => calculatePeriop({ ...base, ...values })
+const plan = (values: CalcValues = {}) => calculatePeriop(withCrcl({ ...base, ...values }))
 const times = (dates: Date[]) => dates.map(formatLocal)
 const allCites = (result: PeriopResult) => [...result.cautions, ...result.basis, ...result.resume.lines, ...result.notes].flatMap((line) => line.cites)
 const allText = (result: PeriopResult) => [...result.cautions, ...result.basis, ...result.resume.lines, ...result.notes].map((line) => `${line.text.zh} ${line.text.en}`).join('\n')
@@ -58,11 +59,11 @@ describe('EHRA Figure 14 hours', () => {
     expect(ehraHours('apixaban', 14.9)).toBeUndefined()
   })
   it('rivaroxaban CrCl 20: low risk 36 h, high risk 48 h', () => {
-    expect(plan({ regimen: 'rivaroxaban:15:1', dose_time_2: '', crcl_manual: '20', procedure_kind: 'low' }).holdHours).toBe(36)
-    expect(plan({ regimen: 'rivaroxaban:15:1', dose_time_2: '', crcl_manual: '20' }).holdHours).toBe(48)
+    expect(plan({ regimen: 'rivaroxaban:15:1', dose_time_2: '', crcl: '20', procedure_kind: 'low' }).holdHours).toBe(36)
+    expect(plan({ regimen: 'rivaroxaban:15:1', dose_time_2: '', crcl: '20' }).holdHours).toBe(48)
   })
   it('dabigatran CrCl 45, high risk: 96 h, beside the label’s Table 7', () => {
-    const result = plan({ regimen: 'dabigatran:110:2', crcl_manual: '45' })
+    const result = plan({ regimen: 'dabigatran:110:2', crcl: '45' })
     expect(result.holdHours).toBe(96)
     expect(allCites(result)).toContain(CITES.dabigatranSurgeryTable)
   })
@@ -70,7 +71,7 @@ describe('EHRA Figure 14 hours', () => {
 
 describe('no interval where the sources give none', () => {
   it('CrCl 12 or dialysis: none, and the 15–29 row is not borrowed', () => {
-    for (const values of [{ crcl_manual: '12' }, { dialysis: 'yes' }] as CalcValues[]) {
+    for (const values of [{ crcl: '12' }, { dialysis: 'yes' }] as CalcValues[]) {
       const result = plan(values)
       expect(result).toMatchObject({ state: 'no-hours' })
       expect(result.holdHours).toBeUndefined()
@@ -79,14 +80,14 @@ describe('no interval where the sources give none', () => {
     }
   })
   it('dabigatran CrCl 25: none; with neuraxial, ASRA advises against the block', () => {
-    const result = plan({ regimen: 'dabigatran:110:2', crcl_manual: '25', neuraxial: 'single' })
+    const result = plan({ regimen: 'dabigatran:110:2', crcl: '25', neuraxial: 'single' })
     expect(result).toMatchObject({ state: 'no-hours' })
     expect(result.holdHours).toBeUndefined()
     expect(allCites(result)).toEqual(expect.arrayContaining([CITES.dabigatranRenal, GUIDELINE_CITES.asraDabigatranBelow30]))
   })
   it('a blank CrCl, dialysis, procedure or neuraxial answer withholds the hours', () => {
-    for (const [key, field] of [['crcl_manual', 'CrCl'], ['dialysis', 'dialysis'], ['procedure_kind', 'procedure_kind'], ['neuraxial', 'neuraxial']] as const) {
-      const result = plan({ [key]: '', ...(key === 'crcl_manual' ? { scr: '' } : {}) })
+    for (const [key, field] of [['crcl', 'CrCl'], ['dialysis', 'dialysis'], ['procedure_kind', 'procedure_kind'], ['neuraxial', 'neuraxial']] as const) {
+      const result = plan({ [key]: '' })
       expect(result.state).toBe('missing')
       expect(result.holdHours).toBeUndefined()
       expect(result.missing).toContain(field)
@@ -97,19 +98,19 @@ describe('no interval where the sources give none', () => {
 describe('neuraxial and deep blocks (ASRA 2025, fifth edition)', () => {
   it('dabigatran high dose: 72 h at CrCl ≥50, 120 h at 30–49 — by CrCl alone', () => {
     const dabigatran = { regimen: 'dabigatran:150:2', neuraxial: 'single' }
-    expect(plan({ ...dabigatran, crcl_manual: '85' }).holdHours).toBe(72)
-    expect(plan({ ...dabigatran, crcl_manual: '50' }).holdHours).toBe(72)
-    expect(plan({ ...dabigatran, crcl_manual: '49.9' }).holdHours).toBe(120)
-    expect(allCites(plan({ ...dabigatran, crcl_manual: '40' }))).toContain(GUIDELINE_CITES.asraDabigatranHigh30)
+    expect(plan({ ...dabigatran, crcl: '85' }).holdHours).toBe(72)
+    expect(plan({ ...dabigatran, crcl: '50' }).holdHours).toBe(72)
+    expect(plan({ ...dabigatran, crcl: '49.9' }).holdHours).toBe(120)
+    expect(allCites(plan({ ...dabigatran, crcl: '40' }))).toContain(GUIDELINE_CITES.asraDabigatranHigh30)
   })
   it('low doses: apixaban 36 h, rivaroxaban 24 h (30 h at CrCl <30), dabigatran 48 h — the longer of it and EHRA’s', () => {
     // A low-risk procedure under a deep plexus block: EHRA 24 h, ASRA low dose decides.
     const plexus = { procedure_kind: 'low', neuraxial: 'plexus' }
     expect(plan({ ...plexus, regimen: 'apixaban:2.5:2', dose_intent: 'low' }).holdHours).toBe(36)
     expect(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '' }).holdHours).toBe(24)
-    expect(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '', crcl_manual: '25' }).holdHours).toBe(36)
-    expect(allCites(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '', crcl_manual: '25' }))).toContain(GUIDELINE_CITES.asraRivaroxabanLow)
-    expect(plan({ ...plexus, regimen: 'dabigatran:220:1', dose_time_2: '', crcl_manual: '85' }).holdHours).toBe(48)
+    expect(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '', crcl: '25' }).holdHours).toBe(36)
+    expect(allCites(plan({ ...plexus, regimen: 'rivaroxaban:10:1', dose_time_2: '', crcl: '25' }))).toContain(GUIDELINE_CITES.asraRivaroxabanLow)
+    expect(plan({ ...plexus, regimen: 'dabigatran:220:1', dose_time_2: '', crcl: '85' }).holdHours).toBe(48)
   })
   it('apixaban 2.5 mg bid: its use unanswered reads as the high dose (72 h) and is asked', () => {
     const result = plan({ regimen: 'apixaban:2.5:2', neuraxial: 'plexus', procedure_kind: 'low' })
@@ -168,7 +169,7 @@ describe('a timed interval does not silently cost an extra dose (#review coordin
     expect(plan({}).cautions).toEqual([])
   })
   it('a CrCl just under 30 is printed on its own side of 30', () => {
-    const result = plan({ regimen: 'dabigatran:150:2', crcl_manual: '29.96' })
+    const result = plan({ regimen: 'dabigatran:150:2', crcl: '29.96' })
     expect(allText(result)).toContain('CrCl 29.96 <30')
   })
   it('low doses quote ASRA’s own low-dose residual-level paragraph', () => {
@@ -603,7 +604,7 @@ describe('what the prescription is (#review 4)', () => {
 
 describe('residual levels never clear a patient', () => {
   it('no plan says 「可開刀」 or 「safe to operate」; each says it clears no one', () => {
-    for (const values of [{}, { neuraxial: 'single' }, { procedure_kind: 'emergency' }, { regimen: 'dabigatran:150:2' }, { crcl_manual: '12' }, { procedure_kind: 'af-ablation' }] as CalcValues[]) {
+    for (const values of [{}, { neuraxial: 'single' }, { procedure_kind: 'emergency' }, { regimen: 'dabigatran:150:2' }, { crcl: '12' }, { procedure_kind: 'af-ablation' }] as CalcValues[]) {
       const text = allText(plan(values))
       expect(text).not.toMatch(/可開刀|safe to operate|may proceed/i)
       expect(text).toMatch(/不據以判定可否處置/)

@@ -337,14 +337,13 @@ export interface DoacAgentResult {
 }
 
 export type DoacInputKey =
-  | 'indication' | 'age' | 'sex' | 'weight' | 'scr' | 'crcl_manual' | 'dialysis' | 'liver' | 'liver_enzymes' | 'bilirubin_high' | 'regimen' | 'gi_risk' | 'pregnancy'
+  | 'indication' | 'age' | 'sex' | 'weight' | 'scr' | 'dialysis' | 'liver' | 'liver_enzymes' | 'bilirubin_high' | 'regimen' | 'gi_risk' | 'pregnancy'
   | 'parenteral_lead_in' | 'anticoagulant_switch' | 'pe_unstable' | 'vte_day' | 'postop_day'
   | 'ddi_ketoconazole' | 'ddi_itraconazole' | 'ddi_vori_posaconazole' | 'ddi_hiv_pi' | 'ddi_ciclosporin' | 'ddi_tacrolimus'
   | 'ddi_dronedarone' | 'ddi_verapamil' | 'ddi_amiodarone' | 'ddi_quinidine' | 'ddi_erythromycin' | 'ddi_clarithromycin' | 'ddi_glecaprevir' | 'ddi_inducer' | 'ddi_anticoagulant'
 
 export interface DoacCrcl {
   value: number
-  source: 'cockcroft-gault' | 'manual'
 }
 
 /** Cockcroft–Gault with actual body weight, as `crcl-cockcroft-gault` computes it; null without all four inputs. */
@@ -363,10 +362,13 @@ const num = (values: CalcValues, key: string): number | undefined => {
 const yes = (values: CalcValues, key: DoacInputKey) => values[key] === 'yes'
 
 export function doacCrcl(values: CalcValues): DoacCrcl | null {
-  const manual = num(values, 'crcl_manual')
-  if (manual !== undefined && manual > 0) return { value: manual, source: 'manual' }
   const computed = cockcroftGault(num(values, 'age'), num(values, 'weight'), num(values, 'scr'), values.sex)
-  return computed === null ? null : { value: computed, source: 'cockcroft-gault' }
+  return computed === null ? null : { value: computed }
+}
+
+/** The field a 「CrCl」 still to fill opens: the first of its four inputs left blank, the weight before the rest. */
+export function crclFieldToFill(values: CalcValues): string {
+  return ['weight', 'scr', 'age', 'sex'].find((key) => (values[key] ?? '') === '') ?? 'scr'
 }
 
 /** A CrCl as compared: one decimal, or as many more as keep the printed value on the same side of 15, 30, 50 and 80. */

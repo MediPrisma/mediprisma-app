@@ -83,21 +83,25 @@ function seed(calc: CalculatorDef, autofill: Autofill): {
   values: CalcValues
   filled: Record<string, FilledInfo>
   units: Record<string, string>
+  /** Readings left out for their age, by input key. */
+  expired: Record<string, NonNullable<ReturnType<typeof resolveInput>['expired']>>
 } {
   const values: CalcValues = {}
   const filled: Record<string, FilledInfo> = {}
   const units: Record<string, string> = {}
+  const expired: Record<string, NonNullable<ReturnType<typeof resolveInput>['expired']>> = {}
   for (const input of calc.inputs) {
     const r = resolveInput(input, autofill)
     values[input.key] = r.value
     if (input.type === "number") units[input.key] = r.displayUnit
+    if (r.expired) expired[input.key] = r.expired
     if (r.filled) {
       filled[input.key] = {
         date: r.date, sourceUnit: r.sourceUnit, changed: r.changed, origValue: r.origValue, unconvertible: r.unconvertible, source: r.source,
       }
     }
   }
-  return { values, filled, units }
+  return { values, filled, units, expired }
 }
 
 export function CalculatorDetail({
@@ -221,6 +225,21 @@ export function CalculatorDetail({
   const isHpa = calc.id === 'hpa-chronic-risk-reconstruction'
   const detailRef = useRef<HTMLDivElement>(null)
   const hpaResultRef = useRef<HTMLDivElement>(null)
+  // A reading that must be recent (the DOAC weight) and is not on file is asked
+  // for first: its blank field takes the focus once per patient, when the chart
+  // has loaded. Deferred a frame so a host dialog's own opening focus lands first.
+  const askFirst = patientDataLoading ? undefined
+    : calc.inputs.find((input) => input.expireAfterDays !== undefined && (values[input.key] ?? '') === '' && inputVisible(input, values))?.key
+  const askedFor = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const opened = `${calc.id}:${patientId ?? ''}`
+    if (!askFirst || askedFor.current === opened) return
+    const frame = requestAnimationFrame(() => {
+      askedFor.current = opened
+      detailRef.current?.querySelector<HTMLElement>(`#calc-${askFirst}`)?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [askFirst, calc.id, patientId])
   const inputGroups = isHpa ? [
     { key: 'basic', title: zh ? '基本資料' : 'Basic information', hint: zh ? '本地已驗算年齡為 35–70 歲。' : 'Locally checked for ages 35–70.', keys: ['gender', 'age', 'height', 'weight', 'waist'] },
     { key: 'history', title: zh ? '病史與吸菸' : 'History and smoking', hint: zh ? '病史請依曾經確診的情形填寫，不以這次血壓或血糖判定；不確定可先留空。' : 'Use previously diagnosed conditions, not today’s BP or glucose. Leave unknown history unanswered.', keys: ['diabetes', 'hbp', 'smoke', 'prior_cvd'] },
@@ -537,6 +556,22 @@ export function CalculatorDetail({
                   )}
                 </>
               )}
+
+              {initial.expired[input.key] && (values[input.key] ?? '') === '' && (() => {
+                const left = initial.expired[input.key]!
+                const days = Number.isFinite(Date.parse(left.date)) ? Math.floor((Date.now() - Date.parse(left.date)) / 86_400_000) : undefined
+                const reading = `${left.value}${left.unit ? ` ${left.unit}` : ''}`
+                return (
+                  <p className="flex items-start gap-1 text-xs leading-relaxed text-amber-700 dark:text-amber-300" data-testid={`calc-expired-${input.key}`}>
+                    <Clock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                    {days === undefined
+                      ? (zh ? `病歷的 ${reading} 沒有量測日期，未帶入；請輸入目前數值。` : `The record's ${reading} has no date and was not filled; enter the current value.`)
+                      : (zh
+                        ? `最近一筆 ${reading}（${left.date.slice(0, 10)}，${agoText(days, zh)}）已超過 ${input.expireAfterDays} 天，未帶入；請輸入目前數值。`
+                        : `The latest reading, ${reading} (${left.date.slice(0, 10)}, ${agoText(days, zh)}), is over ${input.expireAfterDays} days old and was not filled; enter the current value.`)}
+                  </p>
+                )
+              })()}
 
               {/* Source-report provenance: test name / LOINC / facility + a link
                   back to the original report in the left panel. */}
