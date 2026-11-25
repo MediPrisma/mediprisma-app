@@ -1,4 +1,4 @@
-import { beginCollectorObservation, collectorError, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, collectorError, collectorHttpStatus, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
 import { collectorEventV11Schema } from '@/src/shared/contracts/collector-event'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
@@ -288,6 +288,28 @@ test('rejects PHI-shaped fields and arbitrary error/feature strings on the wire'
   expect(collectorFeature('SYNTHETIC-PATIENT-TITLE')).toBe('ai_other')
   expect(collectorFeature('__proto__')).toBe('ai_other')
   expect(collectorError(new Error('SYNTHETIC-SECRET'))).toBe('error')
+})
+
+test('a failed AI request reports the HTTP status the service answered with and nothing else from the error', async () => {
+  const apiCall = Object.assign(new Error('SYNTHETIC-SECRET'), { name: 'AI_APICallError', statusCode: 429, responseBody: '{"error":{"code":"SYNTHETIC-SECRET"}}' })
+  expect(collectorHttpStatus(apiCall)).toBe(429)
+  expect(collectorHttpStatus(Object.assign(new Error('retry'), { lastError: apiCall, errors: [apiCall] }))).toBe(429)
+  expect(collectorHttpStatus(new Error('wrapped', { cause: Object.assign(new Error('x'), { statusCode: 503 }) }))).toBe(503)
+  // No HTTP response (network failure, missing sign-in) and malformed values report nothing.
+  for (const error of [new TypeError('Failed to fetch'), new Error('請先登入'), null, 'SYNTHETIC-SECRET',
+    { statusCode: '429' }, { statusCode: 42 }, { statusCode: 600 }, { statusCode: 429.5 }]) {
+    expect(collectorHttpStatus(error)).toBeUndefined()
+  }
+  const cyclic: { cause?: unknown } = {}
+  cyclic.cause = cyclic
+  expect(collectorHttpStatus(cyclic)).toBeUndefined()
+
+  beginCollectorObservation({ feature: 'summary', modelId: 'gpt-6-luna', sampleKind: 'request', mode: 'stream' })
+    .finish({ outcome: collectorError(apiCall), phase: 'stream', responseComplete: false, httpStatus: collectorHttpStatus(apiCall) })
+  await settle()
+  expect(body()).toMatchObject({ status: 'error', error_class: 'error', diagnostics: { http_status: 429 } })
+  expect(JSON.stringify(body())).not.toContain('SYNTHETIC-SECRET')
+  expect(collectorEventV11Schema.safeParse(body()).success).toBe(true)
 })
 
 test('collector failure cannot change clinical success, cache update or loading state', async () => {
