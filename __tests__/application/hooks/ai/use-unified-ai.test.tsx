@@ -464,4 +464,23 @@ describe('useUnifiedAi collector template', () => {
       expect(wire.diagnostics.usage).toEqual({ input_tokens: 12345, output_tokens: 678 })
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })
+
+  it.each([['stop', 'stop'], ['length', 'length'], ['content-filter', 'content_filter'], ['tool-calls', 'tool_calls'], ['SYNTHETIC-SECRET', 'unreported'], [undefined, undefined]])(
+    'a completed stream reports why the model stopped (%s → %s)', async (reported, sent) => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
+    mockStream.mockImplementationOnce(async (options) => { options.onChunk('SYNTHETIC-ANSWER'); if (reported) options.onFinishReason(reported) })
+    const { result } = renderHook(() => useUnifiedAi())
+    try {
+      await act(async () => {
+        await result.current.stream([{ role: 'user', content: 'SYNTHETIC-PROMPT' }], { modelId: 'gpt-5.4-nano', diagnosticFeature: 'chat' })
+      })
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+      const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
+      expect(wire).toMatchObject({ schema_version: 12, status: 'completed' })
+      expect(wire.diagnostics.finish_reason).toBe(sent)
+      expect(JSON.stringify(wire)).not.toContain('SYNTHETIC-SECRET')
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
 })

@@ -40,6 +40,8 @@ type Finish = {
   /** What the hospital AI gateway answered a refused request with (v12): its fixed error code, whether it
    *  reached the upstream model, and its random request ID. Never the message or body. */
   gateway?: GatewayFailure
+  /** Why the model stopped producing output (v12), as the AI service reported it. */
+  finishReason?: CollectorEventV12['diagnostics']['finish_reason']
   /** Token counts the AI service reported for this request; never an estimate. */
   usage?: { inputTokens?: number; outputTokens?: number }
   summaryCards?: SummaryCardCounts
@@ -352,7 +354,8 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
             ...('usage' in d && d.usage ? { usage: d.usage } : {}),
             ...('gateway_error_code' in d && d.gateway_error_code !== undefined ? { gateway_error_code: d.gateway_error_code } : {}),
             ...('upstream_attempted' in d && d.upstream_attempted !== undefined ? { upstream_attempted: d.upstream_attempted } : {}),
-            ...('gateway_request_id' in d && d.gateway_request_id !== undefined ? { gateway_request_id: d.gateway_request_id } : {}) }
+            ...('gateway_request_id' in d && d.gateway_request_id !== undefined ? { gateway_request_id: d.gateway_request_id } : {}),
+            ...('finish_reason' in d && d.finish_reason !== undefined ? { finish_reason: d.finish_reason } : {}) }
         }, source)
         // A parent may end before a cancelled transport reports; keep an explicit incomplete entry.
         requestSnapshots.push(() => {
@@ -395,6 +398,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
               ...(result.httpStatus !== undefined ? { http_status: result.httpStatus } : {}),
               // A gateway failure describes a request that did not complete; drop it otherwise rather than lose the event.
               ...(result.outcome !== 'ok' ? result.gateway : {}),
+              ...(result.finishReason ? { finish_reason: result.finishReason } : {}),
               ...(usage ? { usage } : {}),
               ...(result.summaryCards ? { summary_cards: result.summaryCards } : {}),
               ...(result.summaryAttempt ? { summary_attempt: result.summaryAttempt } : {}),
