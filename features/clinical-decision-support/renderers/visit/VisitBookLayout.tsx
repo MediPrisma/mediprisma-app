@@ -650,6 +650,7 @@ function classificationOf(point: object | undefined): ClassificationView | undef
  */
 function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, hfaPeff, now }: { point: DecisionPointView; isEnglish: boolean; onChoose?: (input: ClassInput) => void; tag?: string; coronaryPhase?: CoronaryPhaseAnswer; hfaPeff?: HfpefScoreReading; now?: Date }) {
   const choiceId = useId()
+  const carriedLookup = useCarriedLookup()
   const table = classificationOf(point)
   if (!table) return null
   const current = table.classes.find((item) => item.current)
@@ -663,6 +664,9 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, h
     : table.classes.find((item) => item.chosen && item.physicianInput?.request === 'cad-phase')?.id
   const monthFor = givenPhase === 'acs-recent' || givenPhase === 'pci-recent' ? givenPhase : undefined
   const savedMonth = monthFor && coronaryPhase?.phase === monthFor ? coronaryPhase.eventMonth : undefined
+  // A type or phase brought in from a saved record says so, as every carried answer does.
+  const chosen = table.classes.some((item) => item.chosen) || table.alternatives.some((item) => item.chosen) || Boolean(coronaryPhase)
+  const carried = chosen ? carriedLookup(phaseTable ? 'coronary:phase' : 'phenotype') : null
   const choose = (item: ClassChoice) => {
     // The same answer again writes nothing new.
     if (item.physicianInput && !item.chosen) onChoose?.(item.physicianInput)
@@ -719,6 +723,7 @@ function ClassificationTable({ point, isEnglish, onChoose, tag, coronaryPhase, h
               </button>
             ))}
           </div>
+          {carried ? <span className={styles.carriedNote} data-carried-from={carried}>{carriedLabel(carried, isEnglish)}</span> : null}
           {monthFor ? <EventMonthField key={monthFor} isEnglish={isEnglish} month={savedMonth} onSet={(month) => onChoose?.(coronaryPhaseInput(monthFor, month))} /> : null}
         </div>
       ) : null}

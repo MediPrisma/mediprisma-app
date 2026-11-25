@@ -21,6 +21,22 @@ import type { CarryForwardChoices } from '../telemetry/cdss-carry-forward'
 const isDeidentifiedFailure = (failure: unknown) => failure instanceof Error && failure.message === 'cdss_patient_deidentified'
 const isIdentityFailure = (failure: unknown) => failure instanceof Error && failure.message === 'cdss_identity_unavailable'
 
+// A record is brought in by itself once per browser tab: answers the clinician cleared afterwards
+// stay cleared on a reload or on coming back to the disease. Save ids only, nothing about the patient.
+const AUTO_CARRIED_KEY = 'mediprisma.cdss.autoCarried'
+const autoCarried = new Set<string>()
+const wasAutoCarried = (saveId: string) => {
+  if (autoCarried.has(saveId)) return true
+  try { return (JSON.parse(sessionStorage.getItem(AUTO_CARRIED_KEY) ?? '[]') as unknown[]).includes(saveId) } catch { return false }
+}
+const rememberAutoCarried = (saveId: string) => {
+  autoCarried.add(saveId)
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(AUTO_CARRIED_KEY) ?? '[]') as unknown[]
+    sessionStorage.setItem(AUTO_CARRIED_KEY, JSON.stringify([...new Set([...stored, saveId])].slice(-200)))
+  } catch { /* Private mode: this tab's memory still holds it. */ }
+}
+
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
   ? value as Record<string, unknown> : {}
 const text = (value: unknown) => typeof value === 'string' ? value : ''
@@ -138,6 +154,11 @@ type StorageProps = {
   /** Keep the save controller mounted when its button moves into the full-window header. */
   saveTarget?: HTMLElement | null
   onCarryForward?: (record: CdssHistoryRecord, choices: CarryForwardChoices) => number
+  /**
+   * Every answer store has been read back, so the newest record of this disease can be brought in
+   * without asking (owner request 2026-11-25). The clinician is told each time it happens.
+   */
+  autoCarryReady?: boolean
   /** Clinician-facing disease name for a stored pack id. */
   packLabel?: (packId: string) => string | undefined
   /**
@@ -156,7 +177,7 @@ export function CdssStorageActions(props: StorageProps) {
   return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient)])} {...props} ownerUid={ownerUid} />
 }
 
-function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, packLabel, offered = true }: StorageProps & { ownerUid?: string }) {
+function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, packLabel, offered = true, autoCarryReady = false }: StorageProps & { ownerUid?: string }) {
   const enabled = useSyncExternalStore(subscribeSite, () => cdssGatewayStatus().enabled, () => false)
   const authorized = useSyncExternalStore(subscribeFhirAuth, () => fhirAuthStatus(ownerUid), () => false)
   const [authorizing, setAuthorizing] = useState(false)
@@ -174,6 +195,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const [choices, setChoices] = useState<CarryForwardChoices>({ inputs: true, decisions: true })
   const [noLatest, setNoLatest] = useState(false)
   const [appliedFrom, setAppliedFrom] = useState<string | null>(null)
+  const [autoApplied, setAutoApplied] = useState(false)
   const [deleteAsked, setDeleteAsked] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const controller = useRef<AbortController | null>(null)
@@ -184,12 +206,41 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   useEffect(() => {
     // Invalidate patient/pack-scoped history without disconnecting the patient-scoped FHIR grant or cancelling saves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    controller.current?.abort(); setOpen(false); setHistory(null); setSelected(null); setPendingId(null); setConfirming(false); setAppliedFrom(null)
+    controller.current?.abort(); setOpen(false); setHistory(null); setSelected(null); setPendingId(null); setConfirming(false); setAppliedFrom(null); setAutoApplied(false)
     setNoLatest(false); setLoading(false); setApplying(false); setError(null); setFilter(null)
   }, [context])
   useEffect(() => { mounted.current = true; return () => {
     mounted.current = false; controller.current?.abort(); cancelCdssGatewayRequests(); disconnectFhir()
   } }, [])
+  const autoCarry = Boolean(enabled && offered && autoCarryReady && ownerUid && onCarryForward && (!fhirOAuthEnabled() || authorized))
+  useEffect(() => {
+    if (!autoCarry || !ownerUid) return
+    const request = new AbortController()
+    void (async () => {
+      try {
+        const listed = await listCdssHistory(input.patient, request.signal, ownerUid)
+        const item = listed.records.filter(item => item.packId === input.packId)
+          .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0]
+        if (!item || request.signal.aborted || wasAutoCarried(item.saveId)) return
+        const record = await readCdssHistory(input.patient, item.saveId, request.signal, ownerUid)
+        const latest = current.current
+        // Another rules version is for viewing only, the same as when it is picked by hand.
+        if (request.signal.aborted || !mounted.current || !cdssGatewayStatus().enabled
+          || record.save.pack_id !== input.packId || record.save.result.packVersion !== input.result.packVersion
+          || latest.input.packId !== input.packId || latest.input.result.packVersion !== input.result.packVersion) return
+        const count = latest.onCarryForward?.(record, { inputs: true, decisions: true }) ?? 0
+        rememberAutoCarried(item.saveId)
+        if (!count) return
+        setAppliedFrom(record.savedAt); setAutoApplied(true)
+        const day = dayOf(storedTimestampForDisplay(record.savedAt), english)
+        toast.info(english ? `Brought in ${count} answer(s) from your ${day} record automatically.` : `已自動帶入您 ${day} 儲存的紀錄，共 ${count} 項。`,
+          { description: english ? 'Each is marked "Carried · date". Please check them; change any that no longer applies.' : '帶入的答案都標示「帶入 · 日期」，請核對；不適用的可直接改答。', duration: 12000 })
+      } catch { /* Nothing was brought in and nothing is shown; the records button still opens them by hand. */ }
+    })()
+    return () => request.abort()
+    // The patient, disease and rules version are the context; the rest is read when the record arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCarry, context, ownerUid])
   const deidentifiedHelp = english
     ? 'Turn off the de-identification option in the export tool, then reimport the patient data.'
     : '請取消雲抓或北榮懷爾抓抓的「去識別化」選項後，重新匯入病人資料。'
@@ -267,7 +318,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
       if (latest.input.packId !== input.packId || latest.input.result.packVersion !== input.result.packVersion) throw new Error('cdss_carry_forward_unavailable')
       const count = latest.onCarryForward?.(selected, choices) ?? 0
       if (!count) { setConfirming(false); toast.info(english ? 'No eligible empty fields. Current entries were kept.' : '沒有可補入的空白欄位，已保留目前內容。'); return }
-      setAppliedFrom(selected.savedAt); setOpen(false); setConfirming(false)
+      setAppliedFrom(selected.savedAt); setAutoApplied(false); setOpen(false); setConfirming(false)
       toast.success(english ? `${count} answer(s) carried forward, each marked "Carried · date". Review the recalculated guidance.` : `已帶入 ${count} 項，帶入的答案標示「帶入 · 日期」；請確認重新計算的建議。`)
     } catch {
       if (!request.signal.aborted && mounted.current) toast.error(english ? 'Could not carry forward this record. Reopen the records and try again.' : '未能帶入此紀錄，請重新開啟紀錄後再試。')
@@ -332,9 +383,10 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
       <Save className="h-3.5 w-3.5" aria-hidden="true" />
       {!ownerUid ? english ? 'Sign in' : '請先登入' : saving ? english ? 'Saving…' : '儲存中…' : english ? 'Save' : '儲存'}
     </Button>
-  const appliedDetail = appliedFrom ? `${english ? 'Carried forward from: ' : '帶入來源：'}${when(storedTimestampForDisplay(appliedFrom), english)}${english ? '. Existing entries kept; guidance recalculated.' : '；保留當次已填內容，建議已重新計算。'}` : ''
-  const sourceNotice = appliedFrom && <span role="status" title={appliedDetail} className="whitespace-nowrap text-[12px] text-muted-foreground">
-      <span aria-hidden="true">{english ? 'Carried ' : '已帶入 '}{dayOf(storedTimestampForDisplay(appliedFrom), english).replace(/^\d{4}\//, '')}{english ? ' record' : ' 紀錄'}</span>
+  const appliedDetail = appliedFrom ? `${autoApplied ? english ? 'Brought in automatically from: ' : '自動帶入來源：' : english ? 'Carried forward from: ' : '帶入來源：'}${when(storedTimestampForDisplay(appliedFrom), english)}${english ? '. Existing entries kept; guidance recalculated.' : '；保留當次已填內容，建議已重新計算。'}` : ''
+  const sourceNotice = appliedFrom && <span role="status" title={appliedDetail} data-testid="cdss-carried-notice" className={cn('whitespace-nowrap text-[12px]',
+      autoApplied ? 'rounded bg-amber-100 px-1.5 py-1 font-semibold text-amber-900 dark:bg-amber-500/10 dark:text-amber-200' : 'text-muted-foreground')}>
+      <span aria-hidden="true">{autoApplied ? english ? 'Auto-carried ' : '已自動帶入 ' : english ? 'Carried ' : '已帶入 '}{dayOf(storedTimestampForDisplay(appliedFrom), english).replace(/^\d{4}\//, '')}{english ? ' record' : ' 紀錄'}{autoApplied ? english ? ' · please check' : '，請核對' : ''}</span>
       <span className="sr-only">{appliedDetail}</span>
     </span>
   const authButton = fhirOAuthEnabled() && <Button type="button" size="sm" variant="outline" className={toolbarButton} disabled={!ownerUid || authorizing}
@@ -452,7 +504,7 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
       <h3 id="cdss-carry-title" className="text-[18px] font-semibold">
         {english ? 'Bring in ' : '帶入 '}{text(result.title) || nameOf(selected.packId)} · {when(storedTimestampForDisplay(selected.savedAt), english)}
       </h3>
-      <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-relaxed">{english ? 'Confirm the previous answers still apply. Only empty fields are filled, and each carried answer is marked "Carried · date" until you change it. Measurement and decision dates stay unchanged; current record measurements take precedence. Not carried: dyspnoea and weight since last visit, dyspnoea today, and for hypertension missed doses, dizziness/syncope/falls and 「no home reading」 (answer these every visit), manually entered lab values, PREVENT values other than smoking and family history (today\'s record is used), and AI answers.' : '請確認上次回答仍適用。只補入目前空白的欄位，帶入的答案會標示「帶入 · 日期」，改答後標示消失；量測與決策保留原日期，今天病歷已有的量測優先。不帶入：喘比上次、體重比上次、今天有沒有喘，以及高血壓的漏服降壓藥、頭暈／暈厥／跌倒、居家血壓「沒有量」（每次重新填）、手動輸入的檢驗值、吸菸與家族史以外的 PREVENT 數值（改用今天病歷）與 AI 回答。'}</p>
+      <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] leading-relaxed">{english ? 'Confirm the previous answers still apply. Only empty fields are filled, and each carried answer is marked "Carried · date" until you change it. Measurement and decision dates stay unchanged; current record measurements take precedence. Symptoms and examination findings are carried too. Not carried: for hypertension missed doses and 「no home reading」 (answer these every visit), manually entered lab values, PREVENT values other than smoking and family history (today\'s record is used), and AI answers.' : '請確認上次回答仍適用。只補入目前空白的欄位，帶入的答案會標示「帶入 · 日期」，改答後標示消失；量測與決策保留原日期，今天病歷已有的量測優先。症狀與理學檢查也會帶入。不帶入：高血壓的漏服降壓藥、居家血壓「沒有量」（每次重新填）、手動輸入的檢驗值、吸菸與家族史以外的 PREVENT 數值（改用今天病歷）與 AI 回答。'}</p>
       {([['inputs', english ? 'Manual inputs (measurements, NYHA, signs, visit answers, AF, evidence selections, PREVENT smoking and family history)' : '人工輸入（量測、NYHA、徵候、本次問診、AF、證據勾選、PREVENT 吸菸與家族史）',
           savedInputs.length ? savedInputs.join(english ? ', ' : '、') : english ? 'Nothing saved' : '當時沒有填寫'],
         ['decisions', english ? 'Previous decisions, reasons and notes (original dates)' : '上次決策、理由與備註（保留原日期）',
