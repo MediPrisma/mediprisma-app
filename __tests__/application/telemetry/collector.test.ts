@@ -1,5 +1,6 @@
 import { beginCollectorObservation, collectorError, collectorHttpStatus, collectorFeature, collectorStatus, cancelCollectorRequests } from '@/src/application/telemetry/collector'
 import { collectorEventV11Schema } from '@/src/shared/contracts/collector-event'
+import { AiError, AiErrorCode } from '@/src/core/errors'
 import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { MODEL_CATALOG } from '@/src/shared/constants/ai-models.constants'
@@ -295,8 +296,12 @@ test('a failed AI request reports the HTTP status the service answered with and 
   expect(collectorHttpStatus(apiCall)).toBe(429)
   expect(collectorHttpStatus(Object.assign(new Error('retry'), { lastError: apiCall, errors: [apiCall] }))).toBe(429)
   expect(collectorHttpStatus(new Error('wrapped', { cause: Object.assign(new Error('x'), { statusCode: 503 }) }))).toBe(503)
+  // The query path throws our own AiError, which keeps the status in its context.
+  expect(collectorHttpStatus(new AiError('SYNTHETIC-SECRET', AiErrorCode.RATE_LIMIT_EXCEEDED, { modelId: 'gpt-6-luna', status: 429 }))).toBe(429)
+  expect(collectorHttpStatus(new Error('wrapped', { cause: new AiError('x', AiErrorCode.NETWORK_ERROR, { modelId: 'tvghbrain3.5', status: 502 }) }))).toBe(502)
   // No HTTP response (network failure, missing sign-in) and malformed values report nothing.
   for (const error of [new TypeError('Failed to fetch'), new Error('請先登入'), null, 'SYNTHETIC-SECRET',
+    new AiError('no response', AiErrorCode.NETWORK_ERROR, { modelId: 'gpt-6-luna' }), { context: { status: '429' } }, { context: null },
     { statusCode: '429' }, { statusCode: 42 }, { statusCode: 600 }, { statusCode: 429.5 }]) {
     expect(collectorHttpStatus(error)).toBeUndefined()
   }
