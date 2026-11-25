@@ -51,7 +51,10 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
   const working = patientAnswerBacking()
   beforeAll(() => setPatientAnswerBacking(createMemoryPatientAnswerBacking()))
   afterAll(() => setPatientAnswerBacking(working))
+  afterEach(() => jest.useRealTimers())
   beforeEach(() => {
+    // The weight must be from the last 90 days: the clock is the day these cases were written for.
+    jest.useFakeTimers({ now: new Date('2026-10-22T08:00:00+08:00'), doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick', 'setImmediate', 'requestAnimationFrame', 'cancelAnimationFrame'] })
     useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
     setObservations([obs('cr', '2160-0', 1.93, 'mg/dL', '2026-06-02')])
     localStorage.setItem('medical-note-locale', 'zh-TW')
@@ -72,11 +75,27 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
   })
 
   it('takes the chart weight’s place, as the CDSS does', () => {
-    setObservations([...observations, obs('w-2018', '29463-7', 78, 'kg', '2018-02-12')])
+    setObservations([...observations, obs('w-recent', '29463-7', 78, 'kg', '2026-09-01')])
     render(detail())
     expect(weightField()).toHaveValue(78)
     addClinicWeight('weight-calc-a', 60, '2026-10-20')
     expect(weightField()).toHaveValue(60)
+  })
+
+  it('a weight over 90 days old is not filled, from the chart or from the CDSS, until a recent one is added', () => {
+    setObservations([...observations, obs('w-2018', '29463-7', 78, 'kg', '2018-02-12')])
+    render(detail())
+    expect(weightField()).toHaveValue(null)
+    expect(screen.getByTestId('calc-expired-weight')).toHaveTextContent('最近一筆 78 kg（2018-02-12，8 年前）已超過 90 天，未帶入')
+    expect(screen.getByText('CrCl 未算')).toBeInTheDocument()
+
+    addClinicWeight('weight-calc-a', 61, '2026-07-01')
+    expect(weightField()).toHaveValue(null)
+    expect(screen.getByTestId('calc-expired-weight')).toHaveTextContent('最近一筆 61 kg（2026-07-01')
+
+    addClinicWeight('weight-calc-a', 60, '2026-10-20')
+    expect(weightField()).toHaveValue(60)
+    expect(screen.queryByTestId('calc-expired-weight')).toBeNull()
   })
 
   it('updates the fields not typed in, keeps a what-if weight, and never stores it', () => {

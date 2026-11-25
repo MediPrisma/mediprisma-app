@@ -7,11 +7,12 @@
 import { CITES, calculateDoacDoses, checkRegimen, type DoacAgent } from '@/features/medical-calculator/doac-dose-model'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
+import { withCrcl } from './doac-crcl'
 
 const DDI_KEYS = ['ddi_ketoconazole', 'ddi_itraconazole', 'ddi_vori_posaconazole', 'ddi_hiv_pi', 'ddi_ciclosporin', 'ddi_tacrolimus', 'ddi_dronedarone', 'ddi_verapamil', 'ddi_amiodarone', 'ddi_quinidine', 'ddi_erythromycin', 'ddi_clarithromycin', 'ddi_glecaprevir', 'ddi_inducer', 'ddi_anticoagulant']
 /** Every question answered: each case below changes only what it names. */
 const base: CalcValues = { age: '70', sex: 'male', weight: '70', scr: '1.0', dialysis: 'no', liver: 'none', liver_enzymes: 'no', bilirubin_high: 'no', pregnancy: 'no', gi_risk: 'no', parenteral_lead_in: 'done', pe_unstable: 'no', ...Object.fromEntries(DDI_KEYS.map((key) => [key, 'no'])) }
-const run = (indication: string, values: CalcValues = {}) => calculateDoacDoses({ ...base, indication, ...values })
+const run = (indication: string, values: CalcValues = {}) => calculateDoacDoses(withCrcl({ ...base, indication, ...values }))
 const agent = (indication: string, values: CalcValues, name: DoacAgent) => run(indication, values).results.find((r) => r.agent === name)!
 const dose = (indication: string, values: CalcValues, name: DoacAgent) => agent(indication, values, name).doses.map((d) => `${d.mg}x${d.perDay}`).join('|')
 const steps = (indication: string, values: CalcValues, name: DoacAgent) => agent(indication, values, name).schedule.map((s) => s.regimen ? `${s.regimen.mg}x${s.regimen.perDay}` : 'lead-in').join(' → ')
@@ -37,7 +38,7 @@ describe('the indication', () => {
 
 describe('apixaban', () => {
   it('acute VTE, 82 y, 55 kg, Cr 1.6 (CrCl 45): 10 mg bid ×7 d then 5 mg bid — NVAF’s two-of-three does not apply', () => {
-    const values = { age: '82', weight: '55', scr: '1.6', crcl_manual: '45' }
+    const values = { age: '82', weight: '55', scr: '1.6', crcl: '45' }
     expect(steps('vte-acute', values, 'apixaban')).toBe('10x2 → 5x2')
     expect(dose('vte-acute', values, 'apixaban')).toBe('5x2')
     expect(agent('vte-acute', values, 'apixaban')).toMatchObject({ verdict: 'dose', reduced: false })
@@ -46,9 +47,9 @@ describe('apixaban', () => {
     expect(dose('nvaf', values, 'apixaban')).toBe('2.5x2')
   })
   it('CrCl 20: the same dose, with caution; CrCl 14 or dialysis: not recommended', () => {
-    expect(dose('vte-acute', { crcl_manual: '20' }, 'apixaban')).toBe('5x2')
-    expect(cites('vte-acute', { crcl_manual: '20' }, 'apixaban')).toContain(CITES.apixabanVteSevereRenal)
-    expect(agent('vte-acute', { crcl_manual: '14' }, 'apixaban').verdict).toBe('not-recommended')
+    expect(dose('vte-acute', { crcl: '20' }, 'apixaban')).toBe('5x2')
+    expect(cites('vte-acute', { crcl: '20' }, 'apixaban')).toContain(CITES.apixabanVteSevereRenal)
+    expect(agent('vte-acute', { crcl: '14' }, 'apixaban').verdict).toBe('not-recommended')
     expect(agent('vte-acute', { dialysis: 'yes' }, 'apixaban').verdict).toBe('not-recommended')
   })
   it('extended: 2.5 mg bid after 6 months', () => {
@@ -72,23 +73,23 @@ describe('apixaban', () => {
 
 describe('rivaroxaban', () => {
   it('acute VTE, CrCl 40: 15 mg bid ×21 d then 20 mg qd; 15 mg qd only as a conditional option, never the label dose (#review 3)', () => {
-    expect(steps('vte-acute', { crcl_manual: '40' }, 'rivaroxaban')).toBe('15x2 → 20x1')
-    expect(dose('vte-acute', { crcl_manual: '40' }, 'rivaroxaban')).toBe('20x1')
-    expect(agent('vte-acute', { crcl_manual: '40' }, 'rivaroxaban').options.map((o) => `${o.regimen.mg}x${o.regimen.perDay}`)).toEqual(['15x1'])
-    expect(agent('vte-acute', { crcl_manual: '40' }, 'rivaroxaban').reduced).toBe(false)
-    expect(cites('vte-acute', { crcl_manual: '40' }, 'rivaroxaban')).toEqual(expect.arrayContaining([CITES.rivaroxabanVteRenal, CITES.rivaroxabanVteRenalUnstudied]))
-    expect(dose('vte-acute', { crcl_manual: '60' }, 'rivaroxaban')).toBe('20x1')
+    expect(steps('vte-acute', { crcl: '40' }, 'rivaroxaban')).toBe('15x2 → 20x1')
+    expect(dose('vte-acute', { crcl: '40' }, 'rivaroxaban')).toBe('20x1')
+    expect(agent('vte-acute', { crcl: '40' }, 'rivaroxaban').options.map((o) => `${o.regimen.mg}x${o.regimen.perDay}`)).toEqual(['15x1'])
+    expect(agent('vte-acute', { crcl: '40' }, 'rivaroxaban').reduced).toBe(false)
+    expect(cites('vte-acute', { crcl: '40' }, 'rivaroxaban')).toEqual(expect.arrayContaining([CITES.rivaroxabanVteRenal, CITES.rivaroxabanVteRenalUnstudied]))
+    expect(dose('vte-acute', { crcl: '60' }, 'rivaroxaban')).toBe('20x1')
   })
   it('extended, CrCl 40: 10 mg qd, unadjusted; 20 mg for high recurrence risk, and 15 mg beside it', () => {
-    expect(dose('vte-extended', { crcl_manual: '40' }, 'rivaroxaban')).toBe('10x1')
-    expect(agent('vte-extended', { crcl_manual: '40' }, 'rivaroxaban').options.map((o) => `${o.regimen.mg}x${o.regimen.perDay}`)).toEqual(['20x1', '15x1'])
-    expect(cites('vte-extended', { crcl_manual: '40' }, 'rivaroxaban')).toEqual(expect.arrayContaining([CITES.rivaroxabanVteRenal10, CITES.rivaroxabanVteExtendedHigh]))
+    expect(dose('vte-extended', { crcl: '40' }, 'rivaroxaban')).toBe('10x1')
+    expect(agent('vte-extended', { crcl: '40' }, 'rivaroxaban').options.map((o) => `${o.regimen.mg}x${o.regimen.perDay}`)).toEqual(['20x1', '15x1'])
+    expect(cites('vte-extended', { crcl: '40' }, 'rivaroxaban')).toEqual(expect.arrayContaining([CITES.rivaroxabanVteRenal10, CITES.rivaroxabanVteExtendedHigh]))
   })
   it('knee: 10 mg qd from 6–10 h after surgery, 2 weeks; CrCl <15 not recommended (Xarelto 10 mg SmPC)', () => {
     expect(dose('vtep-knee', {}, 'rivaroxaban')).toBe('10x1')
     expect(agent('vtep-knee', {}, 'rivaroxaban').duration?.text.zh).toContain('2 週')
     expect(agent('vtep-hip', {}, 'rivaroxaban').duration?.text.zh).toContain('5 週')
-    expect(agent('vtep-knee', { crcl_manual: '12' }, 'rivaroxaban').hits[0]!.cite).toBe(CITES.rivaroxabanVtepRenal)
+    expect(agent('vtep-knee', { crcl: '12' }, 'rivaroxaban').hits[0]!.cite).toBe(CITES.rivaroxabanVtepRenal)
   })
 })
 
@@ -111,9 +112,9 @@ describe('edoxaban', () => {
     expect(steps('vte-acute', {}, 'edoxaban')).toBe('lead-in → 60x1')
   })
   it('acute VTE, CrCl 120, 70 kg: 60 mg qd without NVAF’s high-CrCl caution', () => {
-    expect(dose('vte-acute', { crcl_manual: '120' }, 'edoxaban')).toBe('60x1')
-    expect(cites('vte-acute', { crcl_manual: '120' }, 'edoxaban')).not.toContain(CITES.edoxabanHighCrcl)
-    expect(cites('nvaf', { crcl_manual: '120' }, 'edoxaban')).toContain(CITES.edoxabanHighCrcl)
+    expect(dose('vte-acute', { crcl: '120' }, 'edoxaban')).toBe('60x1')
+    expect(cites('vte-acute', { crcl: '120' }, 'edoxaban')).not.toContain(CITES.edoxabanHighCrcl)
+    expect(cites('nvaf', { crcl: '120' }, 'edoxaban')).toContain(CITES.edoxabanHighCrcl)
   })
   it('the 30 mg factors are the SmPC’s own NVAF-and-VTE table', () => {
     expect(dose('vte-acute', { weight: '58' }, 'edoxaban')).toBe('30x1')
@@ -128,43 +129,43 @@ describe('edoxaban', () => {
 
 describe('dabigatran', () => {
   it('acute VTE, 81 y: 110 mg bid, quoting that 110 mg for DVT/PE was not studied', () => {
-    expect(dose('vte-acute', { age: '81', crcl_manual: '60' }, 'dabigatran')).toBe('110x2')
-    expect(cites('vte-acute', { age: '81', crcl_manual: '60' }, 'dabigatran')).toContain(CITES.dabigatranVte220)
-    expect(steps('vte-acute', { age: '81', crcl_manual: '60' }, 'dabigatran')).toBe('lead-in → 110x2')
+    expect(dose('vte-acute', { age: '81', crcl: '60' }, 'dabigatran')).toBe('110x2')
+    expect(cites('vte-acute', { age: '81', crcl: '60' }, 'dabigatran')).toContain(CITES.dabigatranVte220)
+    expect(steps('vte-acute', { age: '81', crcl: '60' }, 'dabigatran')).toBe('lead-in → 110x2')
   })
   it('hip, 76 y, CrCl 70: 75 mg then 150 mg qd for 28–35 days', () => {
-    const r = agent('vtep-hip', { age: '76', crcl_manual: '70' }, 'dabigatran')
-    expect(steps('vtep-hip', { age: '76', crcl_manual: '70' }, 'dabigatran')).toBe('75x1 → 150x1')
+    const r = agent('vtep-hip', { age: '76', crcl: '70' }, 'dabigatran')
+    expect(steps('vtep-hip', { age: '76', crcl: '70' }, 'dabigatran')).toBe('75x1 → 150x1')
     expect(r).toMatchObject({ verdict: 'dose', reduced: true })
     expect(r.duration?.text.zh).toContain('28–35 天')
   })
   it('hip, CrCl 40 with verapamil: 150 mg qd, and 75 mg qd to consider', () => {
-    expect(dose('vtep-hip', { crcl_manual: '40', ddi_verapamil: 'yes' }, 'dabigatran')).toBe('150x1|75x1')
-    expect(cites('vtep-hip', { crcl_manual: '40', ddi_verapamil: 'yes' }, 'dabigatran')).toContain(CITES.dabigatranVtepVerapamilRenal)
+    expect(dose('vtep-hip', { crcl: '40', ddi_verapamil: 'yes' }, 'dabigatran')).toBe('150x1|75x1')
+    expect(cites('vtep-hip', { crcl: '40', ddi_verapamil: 'yes' }, 'dabigatran')).toContain(CITES.dabigatranVtepVerapamilRenal)
   })
   it('knee, 70 y, CrCl 70, none of the three: 110 mg then 220 mg qd for 10 days; amiodarone reduces; amiodarone unanswered withholds', () => {
-    expect(steps('vtep-knee', { crcl_manual: '70' }, 'dabigatran')).toBe('110x1 → 220x1')
-    expect(agent('vtep-knee', { crcl_manual: '70' }, 'dabigatran').duration?.text.zh).toContain('10 天')
-    expect(dose('vtep-knee', { crcl_manual: '70', ddi_amiodarone: 'yes' }, 'dabigatran')).toBe('150x1')
-    expect(agent('vtep-knee', { crcl_manual: '70', ddi_amiodarone: '' }, 'dabigatran')).toMatchObject({ verdict: 'missing', missing: expect.arrayContaining(['ddi_amiodarone']) })
+    expect(steps('vtep-knee', { crcl: '70' }, 'dabigatran')).toBe('110x1 → 220x1')
+    expect(agent('vtep-knee', { crcl: '70' }, 'dabigatran').duration?.text.zh).toContain('10 天')
+    expect(dose('vtep-knee', { crcl: '70', ddi_amiodarone: 'yes' }, 'dabigatran')).toBe('150x1')
+    expect(agent('vtep-knee', { crcl: '70', ddi_amiodarone: '' }, 'dabigatran')).toMatchObject({ verdict: 'missing', missing: expect.arrayContaining(['ddi_amiodarone']) })
   })
   it('hip prophylaxis is read by the day after surgery: 75 mg on the day of surgery, 150 mg qd from day 1 (#review Astra 3)', () => {
-    const { results } = run('vtep-hip', { age: '76', crcl_manual: '62' })
+    const { results } = run('vtep-hip', { age: '76', crcl: '62' })
     expect(checkRegimen('dabigatran:75:1', results, 0)?.state).toBe('matches')
     expect(checkRegimen('dabigatran:150:1', results, 0)).toMatchObject({ state: 'differs', text: { zh: expect.stringContaining('術後第 0 天仿單劑量為 75 mg qd') } })
     expect(checkRegimen('dabigatran:150:1', results, 2)?.state).toBe('matches')
     expect(checkRegimen('dabigatran:75:1', results)).toMatchObject({ state: 'unsettled', text: { zh: expect.stringContaining('術後第幾天') } })
     expect(checkRegimen('dabigatran:150:1', results)?.state).toBe('unsettled')
     const calc = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!
-    expect(calc.compute({ ...base, indication: 'vtep-hip', age: '76', crcl_manual: '62', regimen: 'dabigatran:75:1', postop_day: '0' })!.interpretation?.zh).toContain('與仿單劑量一致')
+    expect(calc.compute(withCrcl({ ...base, indication: 'vtep-hip', age: '76', crcl: '62', regimen: 'dabigatran:75:1', postop_day: '0' }))!.interpretation?.zh).toContain('與仿單劑量一致')
   })
   it('knee, no reduction: 110 mg once on the day of surgery is a regimen the form offers and reads as matching (#review Astra re-review 3)', () => {
     const regimen = CALCULATORS.find((c) => c.id === 'doac-dose-nvaf')!.inputs.find((i) => i.key === 'regimen')!
     expect(regimen.type === 'select' && regimen.options.map((o) => o.value)).toContain('dabigatran:110:1')
-    expect(checkRegimen('dabigatran:110:1', run('vtep-knee', { crcl_manual: '62' }).results, 0)?.state).toBe('matches')
+    expect(checkRegimen('dabigatran:110:1', run('vtep-knee', { crcl: '62' }).results, 0)?.state).toBe('matches')
   })
   it('CrCl 28: contraindicated in every indication', () => {
-    for (const indication of ['vte-acute', 'vte-extended', 'vtep-hip']) expect(agent(indication, { crcl_manual: '28' }, 'dabigatran').verdict).toBe('contraindicated')
+    for (const indication of ['vte-acute', 'vte-extended', 'vtep-hip']) expect(agent(indication, { crcl: '28' }, 'dabigatran').verdict).toBe('contraindicated')
   })
 })
 
@@ -208,13 +209,13 @@ describe('the prescription against a schedule that changes with time', () => {
     expect(checkRegimen('apixaban:10:2', results, 10)?.state).toBe('differs')
   })
   it('rivaroxaban 15 mg qd on day 10 is not the loading dose, even where 15 mg qd is a later option', () => {
-    const low = run('vte-acute', { crcl_manual: '40' }).results
+    const low = run('vte-acute', { crcl: '40' }).results
     expect(checkRegimen('rivaroxaban:15:1', low, 10)?.state).toBe('differs')
     expect(checkRegimen('rivaroxaban:15:2', low, 10)?.state).toBe('matches')
     // From day 22 it is a conditional option: 「可考慮，需確認」, never 「一致」 (#review 3).
     expect(checkRegimen('rivaroxaban:15:1', low, 30)).toMatchObject({ state: 'unsettled', text: { zh: expect.stringContaining('需確認') } })
     expect(checkRegimen('rivaroxaban:20:1', low, 30)?.state).toBe('matches')
-    expect(checkRegimen('rivaroxaban:20:1', run('vte-extended', { crcl_manual: '40' }).results)).toMatchObject({ state: 'unsettled', text: { zh: expect.stringContaining('復發風險高') } })
+    expect(checkRegimen('rivaroxaban:20:1', run('vte-extended', { crcl: '40' }).results)).toMatchObject({ state: 'unsettled', text: { zh: expect.stringContaining('復發風險高') } })
   })
   it('a dose matching no phase names every phase', () => {
     expect(checkRegimen('apixaban:2.5:2', results)).toMatchObject({ state: 'differs', text: { zh: expect.stringContaining('10 mg bid 或 5 mg bid') } })
