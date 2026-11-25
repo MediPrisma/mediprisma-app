@@ -22,6 +22,8 @@ export interface CollectorContext {
   fedCounts?: PreparedCounts
   contextTokens?: number
   contextTrimmed?: boolean
+  /** Estimated context size before and after fitting (v12); sent as two buckets, only with a trimmed context. */
+  contextTrim?: { originalTokens: number; adaptedTokens: number }
 }
 type Start = CollectorContext & {
   feature: CollectorEvent['feature']
@@ -325,6 +327,7 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
     const configured = modelInfo(input.modelId, input.provider)
     const provider = input.provider
     const trimmed = input.contextTrimmed
+    const trimBefore = tokenBucket(input.contextTrim?.originalTokens), trimAfter = tokenBucket(input.contextTrim?.adaptedTokens)
     const template = feature === 'insights' && kind === 'request' ? templateLabel(input.template) : undefined
     let ended = false
     let firstChunk: number | undefined
@@ -410,6 +413,9 @@ function observe(input: Start, collect?: (event: WireEvent) => void,
               ...(runId ? { summary_run_id: runId } : {}),
               ...(template ? { template } : {}),
               ...(typeof trimmed === 'boolean' ? { context_trimmed: trimmed } : {}),
+              // Which record types the fitting cut is not known here: `prepared` also reflects the user's own
+              // data selection, so no category is claimed.
+              ...(trimmed === true && trimBefore && trimAfter ? { context_trim: { before: trimBefore, after: trimAfter, categories: [] } } : {}),
               ...(kind === 'feature' && requestCount > 0 ? { requests: { count: requestCount, omitted: requestCount - requests.length, details: requests } } : {}),
             },
           })

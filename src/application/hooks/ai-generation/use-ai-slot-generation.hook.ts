@@ -599,6 +599,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           // run (inside this callback), never on a render.
           contextTokens: estimateTokens(clinicalContext),
           contextTrimmed: Boolean(contextAdaptation),
+          contextTrim: contextAdaptation
+            ? { originalTokens: contextAdaptation.originalTokens, adaptedTokens: contextAdaptation.adaptedTokens }
+            : undefined,
           // How big the underlying chart is, as opposed to how much of it
           // this run selected. Both numbers are needed to tell "the model
           // choked on a huge context" from "the model choked even though we
