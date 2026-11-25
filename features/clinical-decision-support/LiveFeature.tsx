@@ -81,7 +81,7 @@ import { applyAfCalculatorResults } from './utils/af-calculators'
 import { applyHfpefReading, buildHfpefReading } from './utils/hfpef-scores'
 import type { CdssLocale, CdssResult, ClinicalGuidelinePack } from './types'
 import { CdssStorageActions } from './renderers/CdssStorageActions'
-import { carryableAnswers, carryForwardCdss } from './telemetry/cdss-carry-forward'
+import { carryableAnswers, carryForwardCdss, carrySavedWeight } from './telemetry/cdss-carry-forward'
 import { carriedFrom, staleCarriedKeys, useCarriedAnswers, useCarriedAnswersStore } from './stores/carried-answers.store'
 import { CarriedAnswerContext, type CarriedLookup } from './renderers/visit/carried-answer-context'
 import { cdssSourceRecords } from './telemetry/source-records'
@@ -736,7 +736,8 @@ export default function LiveClinicalDecisionSupportFeature({
             offered={isMap || isNhiTable}
             autoCarryReady={Boolean(recordProfile) && answersHydrated && carriedHydrated}
             packLabel={(packId) => guidelinePacks.find((pack) => pack.id === packId)?.label[cdssLocale === 'en' ? 'en' : 'zh']}
-            onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }} input={{ patient,
+            onCarryForward={(record, choices) => { if (!patientId || !recordProfile) throw new Error('cdss_carry_forward_unavailable'); return carryForwardCdss(patientId, record, result.packId, result.packVersion, recordProfile, choices) }}
+            onCarryWeight={patientId && recordProfile && answersHydrated && carriedHydrated ? record => carrySavedWeight(patientId, record, recordProfile) : undefined} input={{ patient,
             packId: result.packId, profile, result,
             physicianInputs: { clinicVitals, hfpefInputs, phenotypeAnswer, evidenceOverrides, afAnswers, coronaryPhaseAnswer,
               nhiLipidReview, nhiLipidReviewProvenance, preventInputs, visitAnswers },

@@ -35,7 +35,40 @@ const phenotype = z.object({ answeredOn: day,
   modifiedAt: z.object({ hfSuspicion: storedTimestampV2.optional(), phenotype: storedTimestampV2.optional(), hfpEfConfirmed: storedTimestampV2.optional() }).optional(),
 })
 
-export type CarryForwardChoices = { inputs: boolean; decisions: boolean }
+/** `weight: false` leaves the saved weight to `carrySavedWeight`, which the carry on opening asks separately. */
+export type CarryForwardChoices = { inputs: boolean; decisions: boolean; weight?: boolean }
+
+/** A saved weight older than this is not brought in unasked: the DOAC dose rules would not use it. */
+export const SAVED_WEIGHT_MAX_AGE_DAYS = 90
+
+/** Whether today's record has no weight, or only one measured before the saved one (an undated one stands). */
+function savedWeightIsNewer(facts: CdssPatientProfile['facts'], measuredOn: string): boolean {
+  const onRecord = facts.bodyWeight
+  return !onRecord || (Boolean(onRecord.date) && onRecord.date!.slice(0, 10) < measuredOn)
+}
+
+/**
+ * Brings the weight a saved record holds into today's visit without being
+ * asked (owner decision 2026-11-25, #622) — the one measurement that is: it
+ * keeps its own measurement day, never replaces a weight entered today or a
+ * newer one on the record, and is left out once it is over 90 days old.
+ * Returns the weight brought in, if one was.
+ */
+export function carrySavedWeight(patientId: string, record: CdssHistoryRecord, currentRecordProfile: CdssPatientProfile,
+  now: Date = new Date()): { value: number; measuredOn: string } | undefined {
+  const vitals = useClinicVitalsStore.getState()
+  if (!patientId || !vitals.canCarryForward(patientId) || !useCarriedAnswersStore.getState().hydratedPatientIds[patientId]
+    || vitals.byPatientId[patientId]?.entries.bodyWeight) return undefined
+  const parsed = measurement.safeParse(object(object(object(record.save.physician_inputs).clinicVitals).entries).bodyWeight)
+  if (!parsed.success || parsed.data.value <= 0) return undefined
+  const { value, measuredOn } = parsed.data
+  const ageDays = Math.floor((Date.parse(todayIsoDate(now)) - Date.parse(measuredOn)) / 86_400_000)
+  if (ageDays < 0 || ageDays > SAVED_WEIGHT_MAX_AGE_DAYS || !savedWeightIsNewer(currentRecordProfile.facts, measuredOn)) return undefined
+  vitals.carryForward(patientId, { entries: { bodyWeight: parsed.data } }, { now })
+  useCarriedAnswersStore.getState().mark(patientId, { 'vital:bodyWeight': value },
+    todayIsoDate(new Date(storedTimestampForDisplay(record.save.saved_at))), now)
+  return { value, measuredOn }
+}
 
 /**
  * The every-visit questions a clinician answers afresh at each visit; never
@@ -123,7 +156,10 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
       // Lab numbers and old examinations require a new entry at this visit.
       const fact = clinicFacts[key]
       const parsed = measurement.safeParse(oldVitals[key])
-      return fact && !facts[fact] && parsed.success && parsed.data.measuredOn <= today
+      // The record's own weight stands unless the saved one was measured after it (#622).
+      const open = parsed.success && key === 'bodyWeight'
+        ? choices.weight !== false && savedWeightIsNewer(facts, parsed.data.measuredOn) : !facts[fact]
+      return fact && open && parsed.success && parsed.data.measuredOn <= today
         && (!['systolic', 'diastolic'].includes(key) || bpPair)
         ? [[key, parsed.data]] : []
     }))

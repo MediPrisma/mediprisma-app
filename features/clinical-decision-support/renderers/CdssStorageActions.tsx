@@ -159,6 +159,11 @@ type StorageProps = {
    * without asking (owner request 2026-11-25). The clinician is told each time it happens.
    */
   autoCarryReady?: boolean
+  /**
+   * Offered the newest saved record of any disease on opening: the host brings in the weight it holds
+   * and returns it, or nothing. The carry above then leaves the weight alone (#622).
+   */
+  onCarryWeight?: (record: CdssHistoryRecord) => { value: number; measuredOn: string } | undefined
   /** Clinician-facing disease name for a stored pack id. */
   packLabel?: (packId: string) => string | undefined
   /**
@@ -177,7 +182,7 @@ export function CdssStorageActions(props: StorageProps) {
   return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient)])} {...props} ownerUid={ownerUid} />
 }
 
-function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, packLabel, offered = true, autoCarryReady = false }: StorageProps & { ownerUid?: string }) {
+function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, onCarryWeight, packLabel, offered = true, autoCarryReady = false }: StorageProps & { ownerUid?: string }) {
   const enabled = useSyncExternalStore(subscribeSite, () => cdssGatewayStatus().enabled, () => false)
   const authorized = useSyncExternalStore(subscribeFhirAuth, () => fhirAuthStatus(ownerUid), () => false)
   const [authorizing, setAuthorizing] = useState(false)
@@ -200,8 +205,8 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const [deleting, setDeleting] = useState(false)
   const controller = useRef<AbortController | null>(null)
   const mounted = useRef(true)
-  const current = useRef({ input, onCarryForward })
-  useEffect(() => { current.current = { input, onCarryForward } }, [input, onCarryForward])
+  const current = useRef({ input, onCarryForward, onCarryWeight })
+  useEffect(() => { current.current = { input, onCarryForward, onCarryWeight } }, [input, onCarryForward, onCarryWeight])
   const context = JSON.stringify([input.patient.name, input.patient.birthDate, input.patient.identifier, input.packId, input.result.packVersion])
   useEffect(() => {
     // Invalidate patient/pack-scoped history without disconnecting the patient-scoped FHIR grant or cancelling saves.
@@ -219,22 +224,38 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
     void (async () => {
       try {
         const listed = await listCdssHistory(input.patient, request.signal, ownerUid)
-        const item = listed.records.filter(item => item.packId === input.packId)
-          .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0]
-        if (!item || request.signal.aborted || wasAutoCarried(item.saveId)) return
-        const record = await readCdssHistory(input.patient, item.saveId, request.signal, ownerUid)
-        const latest = current.current
-        // Another rules version is for viewing only, the same as when it is picked by hand.
-        if (request.signal.aborted || !mounted.current || !cdssGatewayStatus().enabled
-          || record.save.pack_id !== input.packId || record.save.result.packVersion !== input.result.packVersion
-          || latest.input.packId !== input.packId || latest.input.result.packVersion !== input.result.packVersion) return
-        const count = latest.onCarryForward?.(record, { inputs: true, decisions: true }) ?? 0
-        rememberAutoCarried(item.saveId)
-        if (!count) return
-        setAppliedFrom(record.savedAt); setAutoApplied(true)
-        const day = dayOf(storedTimestampForDisplay(record.savedAt), english)
-        toast.info(english ? `Brought in ${count} answer(s) from your ${day} record automatically.` : `已自動帶入您 ${day} 儲存的紀錄，共 ${count} 項。`,
-          { description: english ? 'Each is marked "Carried · date". Please check them; change any that no longer applies.' : '帶入的答案都標示「帶入 · 日期」，請核對；不適用的可直接改答。', duration: 12000 })
+        const newestFirst = [...listed.records].sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))
+        const item = newestFirst.find(item => item.packId === input.packId)
+        let read: CdssHistoryRecord | undefined
+        const stale = () => request.signal.aborted || !mounted.current || !cdssGatewayStatus().enabled
+        if (item && !request.signal.aborted && !wasAutoCarried(item.saveId)) {
+          const record = read = await readCdssHistory(input.patient, item.saveId, request.signal, ownerUid)
+          const latest = current.current
+          // Another rules version is for viewing only, the same as when it is picked by hand.
+          if (!stale() && record.save.pack_id === input.packId && record.save.result.packVersion === input.result.packVersion
+            && latest.input.packId === input.packId && latest.input.result.packVersion === input.result.packVersion) {
+            // With a host that takes the weight below, it comes from there alone: the newest record's, within its limit.
+            const count = latest.onCarryForward?.(record, { inputs: true, decisions: true, ...(latest.onCarryWeight ? { weight: false } : {}) }) ?? 0
+            rememberAutoCarried(item.saveId)
+            if (count) {
+              setAppliedFrom(record.savedAt); setAutoApplied(true)
+              const day = dayOf(storedTimestampForDisplay(record.savedAt), english)
+              toast.info(english ? `Brought in ${count} answer(s) from your ${day} record automatically.` : `已自動帶入您 ${day} 儲存的紀錄，共 ${count} 項。`,
+                { description: english ? 'Each is marked "Carried · date". Please check them; change any that no longer applies.' : '帶入的答案都標示「帶入 · 日期」，請核對；不適用的可直接改答。', duration: 12000 })
+            }
+          }
+        }
+        // The weight does not depend on the disease or the rules version: the newest record of any
+        // disease is asked for it, once per tab like the carry above (#622).
+        const newest = newestFirst[0]
+        if (!newest || stale() || !current.current.onCarryWeight || wasAutoCarried(`weight:${newest.saveId}`)) return
+        const holder = read?.saveId === newest.saveId ? read : await readCdssHistory(input.patient, newest.saveId, request.signal, ownerUid)
+        if (stale()) return
+        const weight = current.current.onCarryWeight?.(holder)
+        rememberAutoCarried(`weight:${newest.saveId}`)
+        if (weight) toast.info(english
+          ? `Brought in the saved weight: ${weight.value} kg, measured ${weight.measuredOn}.`
+          : `已帶入上次儲存的體重 ${weight.value} kg（${weight.measuredOn} 量測）。`)
       } catch { /* Nothing was brought in and nothing is shown; the records button still opens them by hand. */ }
     })()
     return () => request.abort()
