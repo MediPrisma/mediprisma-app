@@ -82,6 +82,14 @@ export function collectorGatewayFailure(error: unknown, modelId: string): Gatewa
   } catch { return undefined }
 }
 
+/** The AI SDK's finish reason in the usage record's closed set; a value it does not know is 'unreported'.
+ *  Nothing is reported when the service gave no reason at all. */
+export function collectorFinishReason(reason: string | undefined) {
+  if (reason === undefined) return undefined
+  const known = { stop: 'stop', length: 'length', 'content-filter': 'content_filter', 'tool-calls': 'tool_calls', error: 'error', other: 'other' } as const
+  return Object.hasOwn(known, reason) ? known[reason as keyof typeof known] : 'unreported' as const
+}
+
 export function collectorError(error: unknown) {
   try { return classifyAiOutcome(error) }
   catch { return 'error' as const }

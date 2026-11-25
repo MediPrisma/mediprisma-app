@@ -45,6 +45,8 @@ export interface StreamConfig {
   onModelExecution?: (execution: AiModelExecution) => void
   /** Token counts the service reported for this stream; called once after it completes, if any. */
   onUsage?: (usage: AiTokenUsage) => void
+  /** Why the model stopped, as the SDK names it ('stop', 'length', …); called once after the stream completes, if known. */
+  onFinishReason?: (reason: string) => void
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'low' | 'medium' | 'high'
@@ -196,6 +198,12 @@ export class AiSdkStreamAdapter {
         const usage = readTokenUsage(await result.usage)
         if (usage) config.onUsage(usage)
       } catch { /* usage is optional */ }
+    }
+    if (config.onFinishReason && !config.signal.aborted) {
+      try {
+        const reason = await result.finishReason
+        if (typeof reason === 'string') config.onFinishReason(reason)
+      } catch { /* the finish reason is optional */ }
     }
   }
 

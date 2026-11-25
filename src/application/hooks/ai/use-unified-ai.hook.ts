@@ -34,7 +34,7 @@ import {
   type AiExecutionStatus,
 } from '@/src/application/stores/ai-execution-diagnostics.store'
 
-import { beginCollectorObservation, collectorFeature, collectorError, collectorHttpStatus, collectorGatewayFailure, type CollectorContext } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, collectorFeature, collectorError, collectorHttpStatus, collectorGatewayFailure, collectorFinishReason, type CollectorContext } from '@/src/application/telemetry/collector'
 
 interface UseUnifiedAiOptions {
   defaultModel?: string
@@ -278,6 +278,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       let modelExecution = createModelExecution(streamOptions?.requestedModelId ?? modelId, modelId, openAiCompatible?.modelId)
       let fullText = ''
       let reportedUsage: { inputTokens?: number; outputTokens?: number } | undefined
+      let finishReason: string | undefined
       const collector = beginCollectorObservation({
         ...streamOptions?.collectorContext, feature: collectorFeature(streamOptions?.diagnosticFeature),
         modelId, sampleKind: 'request', mode: 'stream',
@@ -357,6 +358,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
             streamOptions?.onModelExecution?.(modelExecution)
           },
           onUsage: (usage) => { reportedUsage = usage },
+          onFinishReason: (reason) => { finishReason = reason },
           onChunk: (chunk: string) => {
             if (chunk.length > 0) collector.firstChunk()
             if (chunk.length > fullText.length) lastChunkMs = Math.max(0, Math.round(diagnosticNow() - diagnosticStart))
@@ -381,7 +383,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
         streamOptions?.onComplete?.(fullText)
         const parseFailed = ['invalid', 'incomplete', 'empty'].includes(technical()?.parse_state ?? '')
-        collector.finish({ summaryAttempt: technical(), outcome: parseFailed ? 'parse_failed' : 'ok', phase: parseFailed ? 'parse' : 'stream', responseComplete: true, usage: reportedUsage,
+        collector.finish({ summaryAttempt: technical(), outcome: parseFailed ? 'parse_failed' : 'ok', phase: parseFailed ? 'parse' : 'stream', responseComplete: true, usage: reportedUsage, finishReason: collectorFinishReason(finishReason),
           modelId: modelExecution.actualModelId ?? modelId,
           modelSource: modelExecution.actualModelId ? 'reported' : 'configured' })
         record(parseFailed ? 'error' : 'completed', null, parseFailed ? 'parse_failed' : null)
