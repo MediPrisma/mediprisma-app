@@ -380,8 +380,8 @@ export const CDSS_WEIGHT_SOURCE = 'CDSS 門診補登體重'
  * measured — wherever a calculator reads the actual body weight, so a dose is
  * not computed without the weight the page already holds. The entry takes the
  * chart's place exactly as `applyClinicVitals` lets it in the CDSS, so the
- * dose table and the calculator read one weight. One way only: nothing typed
- * into a calculator becomes a measurement.
+ * dose table and the calculator read one weight. The other way, a weight
+ * typed into a calculator is recorded by `CalculatorDetail` as today's.
  */
 export function withCdssWeight(data: Autofill, entry: MeasuredEntry | undefined): Autofill {
   if (!entry || !Number.isFinite(entry.value) || entry.value <= 0 || !entry.measuredOn) return data

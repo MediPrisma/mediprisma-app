@@ -26,6 +26,7 @@ import { formatNum, resolveInput } from "../autofill-compute"
 import { resultToClipboardText, resultToFullClipboardText, isImplausible, coherenceSpan, type ClipboardInputRow } from "../format"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
+import { todayIsoDate, useClinicVitals, useClinicVitalsStore } from "@/features/clinical-decision-support/stores/clinic-vitals.store"
 
 const SEVERITY_STYLES: Record<Severity, string> = {
   normal: "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300",
@@ -179,7 +180,29 @@ export function CalculatorDetail({
     setDisplayUnits((prev) => keep(initial.units, prev))
   }
 
+  // The patient's weight typed here is a measurement taken today (owner
+  // decision 2026-11-25, #622): leaving the field hands it to the CDSS's clinic
+  // record, so the dose table reads the same weight and a CDSS save keeps it.
+  // A blank field, or one typed for the patient before this one, is not one.
+  const weightInput = useMemo(() => calc.inputs.find((input) => input.type === 'number' && input.unit === 'kg'
+    && input.source?.kind === 'vital' && input.source.vital === 'weight'), [calc])
+  const typedWeight = useRef<{ patientId: string; value: number } | undefined>(undefined)
+  const keepWeight = useCallback(() => {
+    const typed = typedWeight.current
+    typedWeight.current = undefined
+    if (typed) void useClinicVitalsStore.getState().setVitals(typed.patientId, { entries: { bodyWeight: { value: typed.value } } })
+  }, [])
+  useEffect(() => { typedWeight.current = undefined }, [patientId, calc])
+  // Closing the panel with the field still focused leaves it too.
+  useEffect(() => keepWeight, [keepWeight])
+  const clinicWeight = useClinicVitals(patientId)?.entries.bodyWeight
+
   const setValue = useCallback((key: string, value: string) => {
+    if (weightInput?.key === key) {
+      const number = value.trim() ? Number(value) : NaN
+      typedWeight.current = patientId && Number.isFinite(number) && number > 0
+        ? { patientId, value: number } : undefined
+    }
     setEdited((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
     setValues((prev) => ({ ...prev, [key]: value }))
     setFilled((prev) => {
@@ -188,7 +211,7 @@ export function CalculatorDetail({
       delete next[key]
       return next
     })
-  }, [])
+  }, [patientId, weightInput])
 
   const refill = useCallback(() => {
     const s = seed(calc, autofill)
@@ -544,6 +567,7 @@ export function CalculatorDetail({
                     min={0}
                     value={values[input.key] ?? ""}
                     onChange={(e) => setValue(input.key, e.target.value)}
+                    onBlur={input === weightInput ? keepWeight : undefined}
                     placeholder={placeholder}
                     className={`${isHpa ? 'h-11 sm:h-9' : 'h-9'} ${implausible ? "border-amber-500 focus-visible:ring-amber-500/50" : ""}`}
                     aria-invalid={implausible || undefined}
@@ -555,6 +579,15 @@ export function CalculatorDetail({
                     </p>
                   )}
                 </>
+              )}
+
+              {input === weightInput && edited.has(input.key) && clinicWeight
+                && clinicWeight.value === Number(values[input.key]) && clinicWeight.measuredOn === todayIsoDate() && (
+                <p role="status" className="text-xs leading-relaxed text-muted-foreground" data-testid="calc-weight-kept">
+                  {zh
+                    ? '已記為今天的門診體重，CDSS 同步使用；儲存 CDSS 紀錄後才會留到下次。'
+                    : "Recorded as today's clinic weight and used by the CDSS; it is kept for next time only once the CDSS record is saved."}
+                </p>
               )}
 
               {initial.expired[input.key] && (values[input.key] ?? '') === '' && (() => {
