@@ -117,7 +117,7 @@ describe('DOAC calculator reads the weight added in the CDSS', () => {
   it('records a typed weight as today’s clinic weight when the field is left, and says so', () => {
     render(detail())
     fireEvent.change(weightField(), { target: { value: '70' } })
-    expect(useClinicVitalsStore.getState().byPatientId['weight-calc-a']).toBeUndefined()
+    expect(useClinicVitalsStore.getState().byPatientId['weight-calc-a']?.entries.bodyWeight).toBeUndefined()
     expect(screen.queryByTestId('calc-weight-kept')).toBeNull()
 
     fireEvent.blur(weightField())
