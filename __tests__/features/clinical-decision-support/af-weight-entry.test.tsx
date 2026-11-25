@@ -53,7 +53,19 @@ describe('AF missing-weight recovery', () => {
     Element.prototype.scrollIntoView = jest.fn()
   })
 
-  it.each(['2026-10-01', '2026-01-01'])('applies a measurement dated %s through the real profile/calculator', async measuredOn => {
+  it('takes no weight measured over 90 days ago: the dose rules would not use it', () => {
+    render(<Reading />)
+    fireEvent.click(screen.getByRole('button', { name: '補登體重' }))
+    fireEvent.change(screen.getByLabelText('體重（kg）'), { target: { value: '68' } })
+    fireEvent.change(screen.getByLabelText('量測日期'), { target: { value: '2026-01-01' } })
+    fireEvent.click(screen.getByRole('button', { name: '套用體重' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('超過 90 天的體重不用於劑量判斷')
+    expect(screen.getByLabelText('量測日期')).toHaveFocus()
+    expect(useClinicVitalsStore.getState().byPatientId['weight-a']?.entries.bodyWeight).toBeUndefined()
+    expect(screen.getByTestId('cdss-book-dose-table')).toHaveTextContent('缺 CrCl')
+  })
+
+  it.each(['2026-10-01'])('applies a measurement dated %s through the real profile/calculator', async measuredOn => {
     render(<Reading />)
     const table = screen.getByTestId('cdss-book-dose-table')
     expect(table).toHaveTextContent('缺 CrCl')

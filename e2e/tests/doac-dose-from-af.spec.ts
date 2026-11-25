@@ -92,7 +92,8 @@ test('a weight typed into the calculator becomes the clinic weight of the day, a
   test.setTimeout(150_000)
   await openAfPage(page, '2027-01-15T04:00:00Z')
   const point = page.locator('[data-book-dp="DP-09"]')
-  await expect(point).toContainText('58 kg')
+  // Her 58 kg is 110 days old: the dose rules do not use it.
+  await expect(point).toContainText('缺 體重')
   await page.getByTestId('cdss-book-calculators').click()
   await page.getByTestId('cdss-book-calculator-doac-dose').click()
   const panel = page.getByTestId('cdss-book-calculator-panel')

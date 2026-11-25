@@ -20,7 +20,8 @@ const p: CdssPatientProfile = {
     age: { numericValue: 78, zh: '78', en: '78' },
     atrialFibrillationDiagnosis: { zh: 'I48.0', en: 'I48.0' },
     hypertensionDiagnosis: { zh: 'I10', en: 'I10' },
-    bodyWeight: { numericValue: 60, unit: 'kg', zh: '60 kg', en: '60 kg' },
+    // Dated within 90 days: the dose rules take no older or undated weight (personalized-care 2.31.0).
+    bodyWeight: { numericValue: 60, unit: 'kg', zh: '60 kg', en: '60 kg', date: '2026-09-01' },
     serumCreatinine: { numericValue: 1, unit: 'mg/dL', zh: '1 mg/dL', en: '1 mg/dL' },
   },
 }

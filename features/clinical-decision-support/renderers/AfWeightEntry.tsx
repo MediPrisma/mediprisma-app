@@ -17,6 +17,9 @@ interface Props {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 
+/** The AF dose rules take no weight measured longer ago than this (personalized-care 2.31.0). */
+const MAX_WEIGHT_AGE_DAYS = 90
+
 /**
  * A missing dose input goes through the same per-patient measurement store as
  * clinic vitals. 「已存入」 waits for that store's write: a weight that could
@@ -90,10 +93,18 @@ function WeightForm({ isEnglish, now, saving, failed, onSave }: Required<Pick<Pr
             dateInput.current?.focus()
             return
           }
+          // A weight the dose rules would not use is not taken as if they did.
+          if (Math.floor((Date.parse(today) - Date.parse(measuredOn)) / 86_400_000) > MAX_WEIGHT_AGE_DAYS) {
+            setError({ field: 'date', message: isEnglish
+              ? `A weight measured over ${MAX_WEIGHT_AGE_DAYS} days ago is not used for dosing. Enter one measured within ${MAX_WEIGHT_AGE_DAYS} days.`
+              : `超過 ${MAX_WEIGHT_AGE_DAYS} 天的體重不用於劑量判斷，請填 ${MAX_WEIGHT_AGE_DAYS} 天內量測的體重。` })
+            dateInput.current?.focus()
+            return
+          }
           if (!saving) void onSave({ entries: { bodyWeight: { value: number, measuredOn } } })
         }}>
           <p id={`${id}-hint`} className="text-muted-foreground">
-            {isEnglish ? 'Use a measured weight and its original date. The dose assessment updates after applying it.' : '請填實際量測體重與原量測日期；套用後重新評估劑量。'}
+            {isEnglish ? `Use a weight measured within ${MAX_WEIGHT_AGE_DAYS} days and its original date. The dose assessment updates after applying it.` : `請填 ${MAX_WEIGHT_AGE_DAYS} 天內實際量測的體重與原量測日期；套用後重新評估劑量。`}
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1" htmlFor={`${id}-weight`}>
