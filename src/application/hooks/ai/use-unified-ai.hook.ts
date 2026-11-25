@@ -34,7 +34,7 @@ import {
   type AiExecutionStatus,
 } from '@/src/application/stores/ai-execution-diagnostics.store'
 
-import { beginCollectorObservation, collectorFeature, collectorError, collectorHttpStatus, type CollectorContext } from '@/src/application/telemetry/collector'
+import { beginCollectorObservation, collectorFeature, collectorError, collectorHttpStatus, collectorGatewayFailure, type CollectorContext } from '@/src/application/telemetry/collector'
 
 interface UseUnifiedAiOptions {
   defaultModel?: string
@@ -225,7 +225,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         options.onSuccess?.(outputData)
         return outputData
       } catch (err) {
-        collector.finish({ outcome: collectorError(err), phase: 'request', responseComplete: false, httpStatus: collectorHttpStatus(err) })
+        collector.finish({ outcome: collectorError(err), phase: 'request', responseComplete: false, httpStatus: collectorHttpStatus(err), gateway: collectorGatewayFailure(err, modelId) })
         if (err instanceof Error && err.name === 'AbortError') {
           record('aborted', err.message)
           throw err
@@ -391,7 +391,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         const classified = collectorError(err)
         const failure = classified === 'ok' ? 'error' : classified
         collector.finish({ summaryAttempt: technical(), outcome: abortController.signal.aborted ? abortOutcome() : failure, phase: 'stream', responseComplete: false,
-          httpStatus: collectorHttpStatus(err) })
+          httpStatus: collectorHttpStatus(err), gateway: collectorGatewayFailure(err, modelId) })
         if (abortController.signal.aborted) {
           const abortReason = abortController.signal.reason
           record(

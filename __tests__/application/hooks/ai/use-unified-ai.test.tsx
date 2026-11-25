@@ -110,7 +110,7 @@ describe('useUnifiedAi cancellation', () => {
       }
       const wires = jest.mocked(fetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)))
       expect(wires.map(w => w.diagnostics.summary_attempt.attempt)).toEqual([1, 2, 3])
-      expect(wires.every(w => w.schema_version === 11 && w.error_class === 'timeout')).toBe(true)
+      expect(wires.every(w => w.schema_version === 12 && w.error_class === 'timeout')).toBe(true)
       expect(JSON.stringify(wires)).not.toMatch(/SYNTHETIC-PROMPT|SYNTHETIC-OUTPUT|PRIVATE-PATIENT|openai-key/)
       expect(useAiExecutionDiagnosticsStore.getState().records).toHaveLength(3)
       expect(useAiExecutionDiagnosticsStore.getState().records[0].outputData).not.toContain('openai-key')
@@ -441,7 +441,7 @@ describe('useUnifiedAi collector template', () => {
       })
       await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
       const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
-      expect(wire).toMatchObject({ schema_version: 11, feature: 'insights', sample_kind: 'request',
+      expect(wire).toMatchObject({ schema_version: 12, feature: 'insights', sample_kind: 'request',
         diagnostics: { template: { id: 'changes', title: '重要變化' } } })
       expect(JSON.stringify(wire)).not.toMatch(/SYNTHETIC-PROMPT|SYNTHETIC-ANSWER|PRIVATE-PATIENT/)
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
@@ -460,7 +460,7 @@ describe('useUnifiedAi collector template', () => {
       })
       await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
       const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
-      expect(wire).toMatchObject({ schema_version: 11, feature: 'chat', sample_kind: 'request', status: 'completed' })
+      expect(wire).toMatchObject({ schema_version: 12, feature: 'chat', sample_kind: 'request', status: 'completed' })
       expect(wire.diagnostics.usage).toEqual({ input_tokens: 12345, output_tokens: 678 })
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })

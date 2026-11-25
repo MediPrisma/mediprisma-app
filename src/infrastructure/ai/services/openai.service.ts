@@ -140,7 +140,11 @@ export class OpenAiService {
         throw new AiError(
           this.sanitizeErrorMessage(errorMessage),
           errorCode,
-          { modelId: request.modelId, status: response.status }
+          { modelId: request.modelId, status: response.status,
+            // The hospital gateway's fixed error code and its two diagnostic headers, kept as received for the
+            // usage record, which validates them; never the message.
+            ...(intranet ? { gateway: { code: errorData.error?.code, upstreamAttempted: response.headers.get('x-upstream-attempted'),
+              requestId: response.headers.get('x-request-id') } } : {}) }
         )
       }
 

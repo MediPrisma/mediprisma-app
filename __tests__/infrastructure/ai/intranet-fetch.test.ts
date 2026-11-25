@@ -6,6 +6,7 @@ import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
 import { AiErrorCode, getUserErrorMessage } from '@/src/core/errors'
+import { collectorGatewayFailure, collectorHttpStatus } from '@/src/application/telemetry/collector'
 
 const origin = 'https://ai-vghtpe.mediprisma.tw'
 const href = 'https://mediprisma.tw/app-staging/?site=vghtpe'
@@ -184,4 +185,21 @@ test('only the HMC preview starts a hospital launch on the intranet Luna', () =>
   expect(intranetLunaIsLaunchDefault(hmc.replace('&site=vghtpe', ''))).toBe(false)
   delete process.env.NEXT_PUBLIC_INTRANET_AI_ORIGIN
   expect(intranetLunaIsLaunchDefault(hmc)).toBe(false)
+})
+
+test.each([[429, 'monthly_budget_exhausted'], [503, 'budget_unavailable']])('a gateway refusal (HTTP %i %s) reaches the usage record from both the query service and the stream adapter', async (status, code) => {
+  const REQUEST_ID = '0990d49f-d1ad-4496-9ef7-c687d37109cc'
+  globalThis.fetch = jest.fn().mockImplementation(async () => Response.json({ error: { code, message: 'SYNTHETIC-SECRET' } },
+    { status, headers: { 'X-Request-ID': REQUEST_ID, 'X-Upstream-Attempted': 'false' } }))
+  const expected = { gateway_error_code: code, upstream_attempted: false, gateway_request_id: REQUEST_ID }
+  const queried = await new OpenAiService('synthetic-personal-key').query({
+    modelId: 'gpt-6-luna', messages: [{ role: 'user', content: 'Synthetic question' }], maxTokens: 100 }).catch(error => error)
+  expect(collectorHttpStatus(queried)).toBe(status)
+  expect(collectorGatewayFailure(queried, 'gpt-6-luna')).toEqual(expected)
+  const streamed = await new AiSdkStreamAdapter(new AiProviderFactory()).stream({
+    model: 'gpt-6-luna', apiKey: null, signal: new AbortController().signal,
+    messages: [{ role: 'user', content: 'Synthetic question' }], onChunk: () => {} }).catch(error => error)
+  expect(collectorHttpStatus(streamed)).toBe(status)
+  expect(collectorGatewayFailure(streamed, 'gpt-6-luna')).toEqual(expected)
+  expect(JSON.stringify([collectorGatewayFailure(queried, 'gpt-6-luna'), collectorGatewayFailure(streamed, 'gpt-6-luna')])).not.toContain('SYNTHETIC-SECRET')
 })
