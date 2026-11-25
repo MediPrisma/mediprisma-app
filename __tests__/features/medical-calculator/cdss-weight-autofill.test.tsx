@@ -49,10 +49,11 @@ const addClinicWeight = (patientId: string, value: number, measuredOn: string) =
 
 describe('DOAC calculator reads the weight added in the CDSS', () => {
   const working = patientAnswerBacking()
-  beforeAll(() => setPatientAnswerBacking(createMemoryPatientAnswerBacking()))
   afterAll(() => setPatientAnswerBacking(working))
   afterEach(() => jest.useRealTimers())
   beforeEach(() => {
+    // A fresh store each time, so no test reads what another one kept.
+    setPatientAnswerBacking(createMemoryPatientAnswerBacking())
     // The weight must be from the last 90 days: the clock is the day these cases were written for.
     jest.useFakeTimers({ now: new Date('2026-10-22T08:00:00+08:00'), doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick', 'setImmediate', 'requestAnimationFrame', 'cancelAnimationFrame'] })
     useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
