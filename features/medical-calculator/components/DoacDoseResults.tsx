@@ -6,6 +6,7 @@ import {
   TAIWAN_LABEL_CHECKS,
   calculateDoacDoses,
   checkRegimen,
+  crclFieldToFill,
   crclLabel,
   regimenDay,
   type DoacAgentResult,
@@ -15,7 +16,6 @@ import {
 } from '../doac-dose-model'
 
 const FIELD: Record<string, L> = DOAC_FIELD_LABELS
-const FIELD_KEY: Record<string, string> = { CrCl: 'scr' }
 
 const VERDICT: Record<DoacAgentResult['verdict'], { zh: string; en: string; style: string }> = {
   dose: { zh: '仿單劑量', en: 'Label dose', style: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300' },
@@ -62,7 +62,7 @@ function doseText(result: DoacAgentResult, zh: boolean): string {
   return result.doses.map((dose) => `${dose.mg} mg ${freq(dose.perDay)}`).join(zh ? ' 或 ' : ' or ')
 }
 
-function MissingChips({ keys, zh, onReviewField }: { keys: string[]; zh: boolean; onReviewField?: (key: string) => void }) {
+function MissingChips({ keys, values, zh, onReviewField }: { keys: string[]; values: CalcValues; zh: boolean; onReviewField?: (key: string) => void }) {
   return (
     <>
       {keys.map((key) => (
@@ -70,7 +70,7 @@ function MissingChips({ keys, zh, onReviewField }: { keys: string[]; zh: boolean
           key={key}
           type="button"
           disabled={!onReviewField}
-          onClick={() => onReviewField?.(FIELD_KEY[key] ?? key)}
+          onClick={() => onReviewField?.(key === 'CrCl' ? crclFieldToFill(values) : key)}
           className="rounded border border-border px-1.5 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {FIELD[key] ? (zh ? FIELD[key].zh : FIELD[key].en) : key}
@@ -122,7 +122,7 @@ export function DoacDoseResults({ values, locale, onReviewField }: {
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 border-b bg-muted/40 px-3 py-2">
         <h3 className="text-sm font-semibold">
           {crcl
-            ? `CrCl ${crclLabel(crcl.value)} mL/min${crcl.source === 'manual' ? (zh ? '（手動）' : ' (manual)') : ' · Cockcroft–Gault'}`
+            ? `CrCl ${crclLabel(crcl.value)} mL/min · Cockcroft–Gault`
             : (zh ? 'CrCl 未算' : 'CrCl not computed')}
         </h3>
         <span className="text-xs text-muted-foreground" data-testid="doac-indication">{zh ? `${INDICATION[indication].zh} · 依 EU SmPC` : `${INDICATION[indication].en} · EU SmPC`}</span>
@@ -136,7 +136,7 @@ export function DoacDoseResults({ values, locale, onReviewField }: {
       {shared.length > 0 && (
         <div className="flex flex-wrap items-center gap-1 border-b px-3 py-2 text-xs text-muted-foreground" data-testid="doac-shared-missing">
           <span>{zh ? '待填（各藥共用，可能改為禁忌或不建議）：' : 'To fill (shared; may make one contraindicated or not recommended):'}</span>
-          <MissingChips keys={shared} zh={zh} onReviewField={onReviewField} />
+          <MissingChips keys={shared} values={values} zh={zh} onReviewField={onReviewField} />
         </div>
       )}
       <div className="divide-y divide-border">
@@ -181,7 +181,7 @@ export function DoacDoseResults({ values, locale, onReviewField }: {
             {own.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1 text-xs text-muted-foreground">
                 <span>{zh ? '待填：' : 'To fill:'}</span>
-                <MissingChips keys={own} zh={zh} onReviewField={onReviewField} />
+                <MissingChips keys={own} values={values} zh={zh} onReviewField={onReviewField} />
               </div>
             )}
           </div>
