@@ -35,7 +35,8 @@ const phenotype = z.object({ answeredOn: day,
   modifiedAt: z.object({ hfSuspicion: storedTimestampV2.optional(), phenotype: storedTimestampV2.optional(), hfpEfConfirmed: storedTimestampV2.optional() }).optional(),
 })
 
-export type CarryForwardChoices = { inputs: boolean; decisions: boolean }
+/** `weight: false` leaves the saved weight to `carrySavedWeight`, which the carry on opening asks separately. */
+export type CarryForwardChoices = { inputs: boolean; decisions: boolean; weight?: boolean }
 
 /** A saved weight older than this is not brought in unasked: the DOAC dose rules would not use it. */
 export const SAVED_WEIGHT_MAX_AGE_DAYS = 90
@@ -156,7 +157,8 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
       const fact = clinicFacts[key]
       const parsed = measurement.safeParse(oldVitals[key])
       // The record's own weight stands unless the saved one was measured after it (#622).
-      const open = parsed.success && key === 'bodyWeight' ? savedWeightIsNewer(facts, parsed.data.measuredOn) : !facts[fact]
+      const open = parsed.success && key === 'bodyWeight'
+        ? choices.weight !== false && savedWeightIsNewer(facts, parsed.data.measuredOn) : !facts[fact]
       return fact && open && parsed.success && parsed.data.measuredOn <= today
         && (!['systolic', 'diastolic'].includes(key) || bpPair)
         ? [[key, parsed.data]] : []

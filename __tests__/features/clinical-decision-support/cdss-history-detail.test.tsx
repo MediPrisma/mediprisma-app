@@ -386,7 +386,8 @@ describe('bringing in the last record on opening', () => {
     const onCarryWeight = jest.fn(() => ({ value: 61, measuredOn: '2026-09-28' }))
     const view = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryForward={onCarryForward} onCarryWeight={onCarryWeight} autoCarryReady />)
     await waitFor(() => expect(onCarryWeight).toHaveBeenCalledWith(other))
-    expect(onCarryForward).toHaveBeenCalledWith(mine, { inputs: true, decisions: true })
+    // The disease's own record leaves its weight alone: only the newest record's is taken.
+    expect(onCarryForward).toHaveBeenCalledWith(mine, { inputs: true, decisions: true, weight: false })
     expect(told).toHaveBeenCalledWith('已帶入上次儲存的體重 61 kg（2026-09-28 量測）。')
     expect(fetch).toHaveBeenCalledTimes(3)
     view.unmount()

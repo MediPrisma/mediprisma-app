@@ -160,8 +160,8 @@ type StorageProps = {
    */
   autoCarryReady?: boolean
   /**
-   * Offered the newest saved record of any disease on opening, where the carry above did not already
-   * bring its weight: the host brings in the weight it holds and returns it, or nothing (#622).
+   * Offered the newest saved record of any disease on opening: the host brings in the weight it holds
+   * and returns it, or nothing. The carry above then leaves the weight alone (#622).
    */
   onCarryWeight?: (record: CdssHistoryRecord) => { value: number; measuredOn: string } | undefined
   /** Clinician-facing disease name for a stored pack id. */
@@ -234,7 +234,8 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
           // Another rules version is for viewing only, the same as when it is picked by hand.
           if (!stale() && record.save.pack_id === input.packId && record.save.result.packVersion === input.result.packVersion
             && latest.input.packId === input.packId && latest.input.result.packVersion === input.result.packVersion) {
-            const count = latest.onCarryForward?.(record, { inputs: true, decisions: true }) ?? 0
+            // With a host that takes the weight below, it comes from there alone: the newest record's, within its limit.
+            const count = latest.onCarryForward?.(record, { inputs: true, decisions: true, ...(latest.onCarryWeight ? { weight: false } : {}) }) ?? 0
             rememberAutoCarried(item.saveId)
             if (count) {
               setAppliedFrom(record.savedAt); setAutoApplied(true)

@@ -291,6 +291,14 @@ describe('the saved weight (#622)', () => {
     expect(carrySavedWeight('p', withWeight('2026-09-01'), { id: 'p', facts: {} }, now)).toBeUndefined()
   })
 
+  test('the carry on opening leaves the weight to the newest record: an older or expired one in the disease record is not brought in', () => {
+    carryForwardCdss('p', record(), 'synthetic', '1', { id: 'p', facts: {} }, { inputs: true, decisions: false, weight: false })
+    expect(useClinicVitalsStore.getState().byPatientId.p.entries.bodyWeight).toBeUndefined()
+    expect(useClinicVitalsStore.getState().byPatientId.p.nyhaClass?.value).toBe('IV')
+    // 2026-09-01 in the disease record, 2026-10-15 in the newest one: the newest is the one taken.
+    expect(carrySavedWeight('p', withWeight('2026-10-15', 58), { id: 'p', facts: {} }, now)).toEqual({ value: 58, measuredOn: '2026-10-15' })
+  })
+
   test('the confirmed carry also brings it over an older record weight, never over a newer one', () => {
     const older = { id: 'p', facts: { bodyWeight: weightFact('2026-03-01') } }
     carryForwardCdss('p', record(), 'synthetic', '1', older, { inputs: true, decisions: false })
