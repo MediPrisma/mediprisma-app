@@ -19,13 +19,12 @@ test('opening the guidance brings in the last saved record by itself and says so
   writeFileSync(bundlePath, JSON.stringify(fixture))
   await page.addInitScript(() => localStorage.setItem('medical-note-locale', 'zh-TW'))
 
-  // The saved record, as the server would hand it back: last visit's snapshot with an NYHA grade.
-  let saved: (Record<string, unknown> & { save_id: string; saved_at: string; pack_id: string; physician_inputs: Record<string, unknown> }) | null = null
+  // The saved record, handed back as the server would: exactly what the screen saved.
+  let saved: (Record<string, unknown> & { save_id: string; saved_at: string; pack_id: string }) | null = null
   let reads = 0
   await page.route('**/cdss/v1/saves', async route => {
     const body = route.request().postDataJSON()
-    saved = { ...body, physician_inputs: { ...body.physician_inputs,
-      clinicVitals: { entries: {}, nyhaClass: { value: 'II', modifiedAt: body.saved_at, assessedOn: String(body.saved_at).slice(0, 10) } } } }
+    saved = body
     await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ status: 'stored', save_id: body.save_id }) })
   })
   const row = () => ({ saveId: saved!.save_id, documentId: '1', patientId: '2', receivedAt: new Date().toISOString(), packId: saved!.pack_id, versionId: '1' })
@@ -52,12 +51,21 @@ test('opening the guidance brings in the last saved record by itself and says so
   // No record yet: nothing is brought in and nothing is announced.
   await expect(page.getByTestId('cdss-save-record')).toBeEnabled()
   await expect(page.getByTestId('cdss-carried-notice')).toHaveCount(0)
+  // This visit's answers: the type, and the NYHA grade.
+  const grades = page.getByRole('group', { name: 'NYHA 分級' })
+  const nyha = grades.locator('xpath=../..')
+  const gradeTwo = grades.getByRole('button', { name: /^II /, exact: false })
+  await page.getByRole('button', { name: 'HFrEF', exact: true }).first().click()
+  await gradeTwo.click()
+  await expect(gradeTwo).toHaveAttribute('aria-pressed', 'true')
   await page.getByTestId('cdss-save-record').click()
   await expect(page.getByText('CDSS 紀錄已儲存。')).toBeVisible()
   expect(reads).toBe(0)
 
+  // The next visit: this browser no longer holds the answers, only the saved record does.
+  await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('cdss-')).forEach(key => localStorage.removeItem(key)))
   await open()
-  await expect(page.getByText(/已自動帶入您 .* 儲存的紀錄，共 1 項。/)).toBeVisible()
+  await expect(page.getByText(/已自動帶入您 .* 儲存的紀錄，共 \d+ 項。/)).toBeVisible()
   await expect(page.getByText('帶入的答案都標示「帶入 · 日期」，請核對；不適用的可直接改答。')).toBeVisible()
   await expect(page.getByTestId('cdss-carried-notice')).toContainText('已自動帶入')
   expect(reads).toBe(1)
@@ -67,6 +75,11 @@ test('opening the guidance brings in the last saved record by itself and says so
   await expect(page.getByText(/已自動帶入您 .* 儲存的紀錄/)).toBeHidden({ timeout: 20_000 })
   await expect(page.getByTestId('cdss-carried-notice')).toHaveText(/已自動帶入 .* 紀錄，請核對/)
   await page.screenshot({ path: info.outputPath('auto-carried-notice.png') })
+  // The answers are chosen again, each saying which record it came from.
+  await expect(gradeTwo).toHaveAttribute('aria-pressed', 'true')
+  await expect(nyha.locator('[data-carried-from]')).toHaveText(/^帶入 · \d{2}\/\d{2}$/)
+  await nyha.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: info.outputPath('auto-carried-answers.png') })
 
   // The same record is not brought in twice in this tab.
   await open()
