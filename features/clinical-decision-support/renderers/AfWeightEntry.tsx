@@ -29,8 +29,13 @@ const MAX_WEIGHT_AGE_DAYS = 90
 export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
   const [state, setState] = useState<SaveState>('idle')
   const confirmation = useRef<HTMLParagraphElement>(null)
-  const hasWeight = weight?.numericValue !== undefined && Number.isFinite(weight.numericValue)
+  const onFile = weight?.numericValue !== undefined && Number.isFinite(weight.numericValue)
     && weight.numericValue > 0 && weight.unit?.toLowerCase() === 'kg'
+  // A weight the dose rules do not take (over 90 days old, or undated) is asked for like a missing one.
+  const measuredOn = weight?.date?.slice(0, 10)
+  const age = measuredOn ? Math.floor((Date.parse(todayIsoDate(now)) - Date.parse(measuredOn)) / 86_400_000) : NaN
+  const hasWeight = onFile && Number.isFinite(age) && age <= MAX_WEIGHT_AGE_DAYS
+  const unused = onFile && !hasWeight ? { reading: `${weight!.numericValue} kg`, measuredOn } : undefined
   useEffect(() => { if (state === 'saved' && hasWeight) confirmation.current?.focus() }, [state, hasWeight])
 
   if (!onSave) return null
@@ -40,7 +45,7 @@ export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
     </p>
   )
   if (hasWeight && state === 'idle') return null
-  return <WeightForm isEnglish={isEnglish} now={now} saving={state === 'saving'} failed={state === 'failed'} onSave={async patch => {
+  return <WeightForm isEnglish={isEnglish} now={now} unused={unused} saving={state === 'saving'} failed={state === 'failed'} onSave={async patch => {
     setState('saving')
     const kept = await Promise.resolve(onSave(patch)).then(result => result ?? true, () => false)
     if (!kept) void onSave({ entries: { bodyWeight: null } })
@@ -48,7 +53,9 @@ export function AfWeightEntry({ weight, isEnglish, now, onSave }: Props) {
   }} />
 }
 
-function WeightForm({ isEnglish, now, saving, failed, onSave }: Required<Pick<Props, 'isEnglish' | 'now'>> & {
+function WeightForm({ isEnglish, now, unused, saving, failed, onSave }: Required<Pick<Props, 'isEnglish' | 'now'>> & {
+  /** The weight on file that the dose rules do not take, so the form can say why it asks. */
+  unused?: { reading: string; measuredOn?: string }
   saving: boolean
   failed: boolean
   onSave: (patch: ClinicVitalsPatch) => Promise<void>
@@ -71,7 +78,15 @@ function WeightForm({ isEnglish, now, saving, failed, onSave }: Required<Pick<Pr
   return (
     <div className="space-y-2 border-t border-border px-3 py-3 text-sm" data-testid="cdss-af-weight-entry">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p>{isEnglish ? 'Weight is missing; CrCl cannot be calculated.' : '缺少體重，無法計算 CrCl。'}</p>
+        <p>{unused
+          ? unused.measuredOn
+            ? (isEnglish
+              ? `The weight on file, ${unused.reading} (${unused.measuredOn}), is over ${MAX_WEIGHT_AGE_DAYS} days old and is not used; CrCl cannot be calculated.`
+              : `病歷體重 ${unused.reading}（${unused.measuredOn}）已超過 ${MAX_WEIGHT_AGE_DAYS} 天，不採用，無法計算 CrCl。`)
+            : (isEnglish
+              ? `The weight on file, ${unused.reading}, has no measurement date and is not used; CrCl cannot be calculated.`
+              : `病歷體重 ${unused.reading} 沒有量測日期，不採用，無法計算 CrCl。`)
+          : isEnglish ? 'Weight is missing; CrCl cannot be calculated.' : '缺少體重，無法計算 CrCl。'}</p>
         <Button ref={trigger} type="button" variant="outline" className="min-h-11"
           aria-expanded={open} aria-controls={`${id}-form`} onClick={() => { setOpen(!open); setError(undefined) }}>
           {isEnglish ? 'Enter weight' : '補登體重'}

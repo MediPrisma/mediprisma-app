@@ -162,6 +162,27 @@ describe('AF missing-weight recovery', () => {
     }
   })
 
+  describe('a weight on file that the dose rules do not take', () => {
+    const fact = (date?: string) => ({ zh: '58 kg', en: '58 kg', numericValue: 58, unit: 'kg', ...(date ? { date } : {}) })
+    const entry = (date?: string) => render(<AfWeightEntry weight={fact(date)} isEnglish={false} now={NOW} onSave={jest.fn()} />)
+
+    it('is asked for again when it is over 90 days old, saying which reading was left out', () => {
+      entry('2026-07-21T08:00:00+08:00')
+      expect(screen.getByTestId('cdss-af-weight-entry')).toHaveTextContent('病歷體重 58 kg（2026-07-21）已超過 90 天，不採用，無法計算 CrCl。')
+      expect(screen.getByRole('button', { name: '補登體重' })).toBeInTheDocument()
+    })
+
+    it('is asked for again when it has no measurement date', () => {
+      entry()
+      expect(screen.getByTestId('cdss-af-weight-entry')).toHaveTextContent('病歷體重 58 kg 沒有量測日期，不採用')
+    })
+
+    it('is not asked for on its 90th day', () => {
+      entry('2026-07-22')
+      expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
+    })
+  })
+
   it('does not ask again when the record already supplies weight', () => {
     render(<Reading weight={68} />)
     expect(screen.queryByTestId('cdss-af-weight-entry')).not.toBeInTheDocument()
