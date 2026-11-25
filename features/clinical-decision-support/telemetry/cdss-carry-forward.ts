@@ -76,7 +76,9 @@ export function carryableAnswers(patientId: string, now: Date = new Date(), scop
   if (vitals?.nyhaClass && (held || (vitals.nyhaClass.assessedOn ?? calendarDayOf(vitals.nyhaClass.modifiedAt)) >= today)) answers.nyha = vitals.nyhaClass.value
   if (vitals?.compensationStatus) answers.compensation = vitals.compensationStatus.value
   put('echo:', useHfpefInputsStore.getState().byPatientId[patientId]?.entries, entry => (entry as { value: string }).value)
-  if (usePhenotypeAnswerStore.getState().byPatientId[patientId]) answers.phenotype = true
+  // The answer itself, so a changed type or suspicion loses its 「帶入」 mark.
+  const phenotypeHeld = usePhenotypeAnswerStore.getState().byPatientId[patientId]
+  if (phenotypeHeld) answers.phenotype = [phenotypeHeld.hfSuspicion ?? null, phenotypeHeld.diagnosis ?? null, phenotypeHeld.choice ?? null]
   put('visit:', visitAnswersOf(useVisitAnswersStore.getState().byPatientId[patientId], today))
   const af = useAfAnswersStore.getState(), lipid = useNhiLipidReviewStore.getState(), prevent = usePreventStore.getState()
   put('af:', af.patientId === patientId ? af.answers : undefined)

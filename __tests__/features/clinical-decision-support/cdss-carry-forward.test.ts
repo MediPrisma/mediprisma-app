@@ -65,6 +65,9 @@ test('confirmed carry-forward retains dates, fills gaps, marks what it carried, 
   expect(carriedFrom(marks, 'visit:trigger-infection', 'yes')).toBe('2026-09-01')
   // A changed answer is no longer the carried one.
   expect(carriedFrom(marks, 'nyha', 'II')).toBeNull()
+  // The type keeps its mark only while it is the carried one.
+  expect(carriedFrom(marks, 'phenotype', carryableAnswers('p', new Date(), 'held').phenotype)).toBe('2026-09-01')
+  expect(carriedFrom(marks, 'phenotype', ['suspected', null, 'preserved'])).toBeNull()
   expect(carriedFrom(marks, 'visit:dyspnoea-trend', 'worse')).toBe('2026-09-01')
   expect(carriedFrom(marks, 'visit:dyspnoea-trend', 'stable')).toBeNull()
   expect(profile.facts).toEqual({ current: { zh: 'current', en: 'current' } })

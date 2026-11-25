@@ -6,6 +6,7 @@ import { checkIntervalSuffix, isUnranked } from './visit-decisions'
 import type { QueueStep } from './visit-decisions'
 import type { DecisionPointView, VisitAction } from '../../types'
 import styles from './VisitBookLayout.module.css'
+import { carriedLabel, useCarriedLookup } from './carried-answer-context'
 
 /**
  * After 「改」 the line that held it is gone; focus goes on to what the
@@ -67,6 +68,7 @@ export function BookDecisionControls({
   const decidedRef = useRef<HTMLParagraphElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hadDecision = useRef(Boolean(decision))
+  const carried = useCarriedLookup()(decision ? `decision:${decision.key}` : '')
   const [primary, ...others] = point.actions
   const readOnly = !onDecide
 
@@ -100,6 +102,7 @@ export function BookDecisionControls({
             </button>
           ) : null}
         </p>
+        {carried ? <span className={styles.carriedNote} data-carried-from={carried}>{carriedLabel(carried, isEnglish)}</span> : null}
         {check ? (
           <p className={styles.decidedCheck} data-visit-response-check="">
             {check.text}{checkIntervalSuffix(check, isEnglish)}
@@ -195,15 +198,18 @@ export function BookChainDone({ steps, isEnglish = false, onClear }: {
   isEnglish?: boolean
   onClear?: (step: QueueStep) => void
 }) {
+  const carriedLookup = useCarriedLookup()
   return (
     <>
       {steps.map((step) => {
         const label = step.decision?.record.actionLabel ?? step.decision?.action.label
+        const carried = step.decision ? carriedLookup(`decision:${step.decision.key}`) : null
         return (
           <p key={step.key} className={styles.chainDone} data-visit-chain-done={step.point.dp}>
             <Tick small />
             <span className={styles.dpTag}>{step.point.dp}</span>
             <span>{label}</span>
+            {carried ? <span className={styles.carriedNote} data-carried-from={carried}>{carriedLabel(carried, isEnglish)}</span> : null}
             {onClear ? (
               <button
                 type="button"

@@ -57,6 +57,9 @@ test('opening the guidance brings in the last saved record by itself and says so
   const gradeTwo = grades.getByRole('button', { name: /^II /, exact: false })
   await page.getByRole('button', { name: 'HFrEF', exact: true }).first().click()
   await gradeTwo.click()
+  // A decision: DP-29's CMR deferred.
+  await page.locator('[data-visit-action]').filter({ hasText: '暫緩' }).first().click()
+  await expect(page.locator('[data-visit-decided]').first()).toBeVisible()
   // Symptoms since the last visit.
   await page.getByRole('group', { name: /^喘比上次/ }).getByRole('button', { name: '變差', exact: true }).click()
   await page.getByRole('group', { name: /^體重比上次/ }).getByRole('button', { name: '增加', exact: true }).click()
@@ -92,6 +95,10 @@ test('opening the guidance brings in the last saved record by itself and says so
   await expect(page.locator('[data-book-ask="dyspnoea-trend"] [data-carried-from]')).toHaveText(/^帶入 · \d{2}\/\d{2}$/)
   await expect(page.locator('[data-book-ask="weight-trend"] [data-carried-from]')).toHaveText(/^帶入 · \d{2}\/\d{2}$/)
   await expect(page.getByRole('group', { name: /^體重比上次/ }).getByRole('button', { name: '增加', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('cdss-book-class-choices').locator('[data-carried-from]')).toHaveText(/^帶入 · \d{2}\/\d{2}$/)
+  await expect(page.locator('[data-visit-decided]').first().locator('xpath=..').locator('[data-carried-from]')).toHaveText(/^帶入 · \d{2}\/\d{2}$/)
+  await page.getByTestId('cdss-book-class-choices').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: info.outputPath('auto-carried-type.png') })
   await nyha.scrollIntoViewIfNeeded()
   await page.screenshot({ path: info.outputPath('auto-carried-answers.png') })
 
