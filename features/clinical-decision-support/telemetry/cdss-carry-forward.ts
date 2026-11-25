@@ -39,14 +39,15 @@ export type CarryForwardChoices = { inputs: boolean; decisions: boolean }
 
 /**
  * The every-visit questions a clinician answers afresh at each visit; never
- * carried. HF: breathlessness and weight since the last visit, breathlessness
- * today. HTN: DP-02's missed doses and dizziness/syncope/falls, and DP-03's
- * 「沒有量」 for the home reading — last visit's 「無」 is not today's answer.
+ * carried. HTN: DP-02's missed doses and DP-03's 「沒有量」 for the home
+ * reading — last visit's 「無」 is not today's answer.
+ *
+ * Owner decision 2026-11-25: symptoms are carried like the examination, marked
+ * with the record's day, so the clinician sees how the patient was last time —
+ * HF breathlessness and weight since the last visit and breathlessness today,
+ * HTN dizziness/syncope/falls.
  */
-export const EVERY_VISIT_ASK_IDS: readonly string[] = [
-  'dyspnoea-trend', 'weight-trend', 'dyspnoea-present',
-  'missed-antihypertensive', 'postural-symptoms', 'home-bp-measured',
-]
+export const EVERY_VISIT_ASK_IDS: readonly string[] = ['missed-antihypertensive', 'home-bp-measured']
 /**
  * The PREVENT answers only a clinician gives and today's record never fills.
  * Every other PREVENT input is a measurement or a record-derived answer, where
@@ -173,7 +174,7 @@ export function carryForwardCdss(patientId: string, record: CdssHistoryRecord, p
               ? { manualAction: provenance.manualAction } : {}) })
       }
     }
-    // Every-visit answers other than breathlessness and weight, given today as carried.
+    // Every-visit answers, symptoms included, given today as carried.
     const visit = useVisitAnswersStore.getState()
     const answeredToday = visitAnswersOf(visit.byPatientId[patientId], today) as Record<string, string | undefined>
     for (const [id, value] of Object.entries(object(inputs.visitAnswers))) {

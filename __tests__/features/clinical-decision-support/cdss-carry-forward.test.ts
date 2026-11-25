@@ -43,11 +43,11 @@ beforeEach(() => {
   usePreventStore.setState({ patientId: 'p', inputs: {} })
 })
 
-test('confirmed carry-forward retains dates, fills gaps, marks what it carried and never installs the old profile/result or the every-visit questions', () => {
+test('confirmed carry-forward retains dates, fills gaps, marks what it carried, symptoms included, and never installs the old profile/result', () => {
   const saved = record(), original = JSON.stringify(saved)
   const profile = { id: 'p', facts: { current: { zh: 'current', en: 'current' } } }
-  // weight, echo, phenotype, decision, lipid, NYHA, PREVENT smoking, evidence switch, one every-visit trigger
-  expect(carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: true })).toBe(9)
+  // weight, echo, phenotype, decision, lipid, NYHA, PREVENT smoking, evidence switch, one every-visit trigger, three symptoms
+  expect(carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: true })).toBe(12)
   expect(useClinicVitalsStore.getState().byPatientId.p.entries).toEqual({ bodyWeight: measurement })
   // Owner decision 2026-10-07: the NYHA grade is carried as today's, marked with the record's day.
   expect(useClinicVitalsStore.getState().byPatientId.p.nyhaClass).toMatchObject({ value: 'IV', assessedOn: todayIsoDate() })
@@ -55,8 +55,8 @@ test('confirmed carry-forward retains dates, fills gaps, marks what it carried a
   expect(usePhysicianDecisionsStore.getState().byPatientId.p.synthetic).toEqual(decision)
   expect(useNhiLipidReviewStore.getState().answers).toEqual({ smoking: 'yes' })
   expect(useNhiLipidReviewStore.getState().provenance.smoking.reviewedAt).toBe(at)
-  // Breathlessness and weight since last visit, and breathlessness today, are asked afresh.
-  expect(Object.keys(useVisitAnswersStore.getState().byPatientId.p)).toEqual(['trigger-infection'])
+  // Owner decision 2026-11-25: last visit's symptoms are carried as today's, marked with the record's day.
+  expect(Object.keys(useVisitAnswersStore.getState().byPatientId.p).sort()).toEqual(['dyspnoea-present', 'dyspnoea-trend', 'trigger-infection', 'weight-trend'])
   // A manual eGFR or statin answer would outrank today's record; only smoking and family history carry.
   expect(usePreventStore.getState().inputs).toEqual({ smoking: 'yes' })
   expect(useEvidenceOverridesStore.getState().byPatientId.p).toEqual({ synthetic: false })
@@ -65,19 +65,20 @@ test('confirmed carry-forward retains dates, fills gaps, marks what it carried a
   expect(carriedFrom(marks, 'visit:trigger-infection', 'yes')).toBe('2026-09-01')
   // A changed answer is no longer the carried one.
   expect(carriedFrom(marks, 'nyha', 'II')).toBeNull()
-  expect(carriedFrom(marks, 'visit:dyspnoea-trend', 'worse')).toBeNull()
+  expect(carriedFrom(marks, 'visit:dyspnoea-trend', 'worse')).toBe('2026-09-01')
+  expect(carriedFrom(marks, 'visit:dyspnoea-trend', 'stable')).toBeNull()
   expect(profile.facts).toEqual({ current: { zh: 'current', en: 'current' } })
   expect(JSON.stringify(saved)).toBe(original)
 })
 
-test('HTN: DP-02 and DP-03 every-visit answers are asked afresh; the family history carries', () => {
+test('HTN: missed doses and the home reading are asked afresh; dizziness/syncope/falls and the family history carry', () => {
   const saved = record()
   ;(saved.save.physician_inputs as Record<string, unknown>).visitAnswers = {
     'missed-antihypertensive': 'no', 'postural-symptoms': 'no', 'home-bp-measured': 'no',
     'family-primary-aldosteronism': 'no', 'family-early-onset-hypertension': 'yes',
   }
   carryForwardCdss('p', saved, 'synthetic', '1', { id: 'p', facts: {} }, { inputs: true, decisions: false })
-  expect(Object.keys(useVisitAnswersStore.getState().byPatientId.p).sort()).toEqual(['family-early-onset-hypertension', 'family-primary-aldosteronism'])
+  expect(Object.keys(useVisitAnswersStore.getState().byPatientId.p).sort()).toEqual(['family-early-onset-hypertension', 'family-primary-aldosteronism', 'postural-symptoms'])
 })
 
 test('current edits win even if entered after the history dialog opened; a second carry-forward is a no-op', () => {
