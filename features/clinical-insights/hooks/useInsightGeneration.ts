@@ -141,7 +141,7 @@ export function useInsightGeneration({
       // A new run replaces only an earlier run of the SAME module. Modules the
       // user started separately keep generating side by side.
       for (const panelId of activePanelIds) {
-        if (owners.has(panelId)) ai.stop(operationKey(panelId))
+        if (owners.has(panelId)) ai.stop(operationKey(panelId), 'superseded')
         owners.set(panelId, runId)
       }
 
@@ -164,7 +164,9 @@ export function useInsightGeneration({
         const mine = activePanelIds.filter(ownedByThisRun)
         if (mine.length === 0) return
         for (const panelId of mine) owners.delete(panelId)
-        if (inFlightPanelId && mine.includes(inFlightPanelId)) ai.stop(operationKey(inFlightPanelId))
+        // The progressive import no longer allows this automatic run (more of the record is arriving, the
+        // patient changed, or the import went stale); it is dropped here and may start again afterwards.
+        if (inFlightPanelId && mine.includes(inFlightPanelId)) ai.stop(operationKey(inFlightPanelId), 'superseded')
         setPanelStatus(prev => ({ ...prev, ...Object.fromEntries(mine.map(id => [id, { isLoading: false, error: null }])) }))
       }) : undefined
       try {
@@ -286,7 +288,7 @@ export function useInsightGeneration({
       // clear its loading indicator. Other modules keep generating.
       panelOwnersRef.current.delete(panelId)
       const owner = useInsightResponsesStore.getState().ownerPatientId
-      ai.stop(`clinical-insight:${owner}:${panelId}`)
+      ai.stop(`clinical-insight:${owner}:${panelId}`, 'user_cancel')
       setPanelStatus((prev) => (
         prev[panelId]?.isLoading
           ? { ...prev, [panelId]: { isLoading: false, error: null } }
@@ -300,7 +302,7 @@ export function useInsightGeneration({
   // the next patient's panels, and the tokens are wasted anyway).
   const stopAll = useCallback(() => {
     panelOwnersRef.current.clear()
-    ai.stop()
+    ai.stop(undefined, 'patient_switch')
   }, [ai])
 
   return { runPanel, runPanels, stopPanel, stopAll, responses, panelStatus, setResponses }
