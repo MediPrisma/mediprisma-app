@@ -40,18 +40,20 @@ export function collectorHttpStatus(error: unknown): number | undefined {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 /** What the hospital AI gateway said when it refused or failed a request to the intranet model: its fixed
  *  error code (anything unlisted becomes 'other'), whether it reached the upstream model, and its random
- *  request ID. Read from the SDK's APICallError only; other models and failures without an HTTP response
- *  report nothing. Never the message or the rest of the body. */
+ *  request ID. Read from the SDK's APICallError (streaming) or from the `context.gateway` our own query
+ *  service keeps on its AiError; other models and failures without an HTTP response report nothing.
+ *  Never the message or the rest of the body. */
 export function collectorGatewayFailure(error: unknown, modelId: string): GatewayFailure | undefined {
   try {
     if (modelId !== INTRANET_LUNA_ID) return undefined
     const seen = new Set<object>()
-    type Call = { statusCode?: unknown; responseHeaders?: unknown; responseBody?: unknown; lastError?: unknown; cause?: unknown; error?: unknown; errors?: unknown }
+    type Call = { statusCode?: unknown; responseHeaders?: unknown; responseBody?: unknown; context?: { gateway?: unknown } | null
+      lastError?: unknown; cause?: unknown; error?: unknown; errors?: unknown }
     const find = (value: unknown, depth: number): Call | undefined => {
       if (typeof value !== 'object' || value === null || depth > 4 || seen.has(value)) return undefined
       seen.add(value)
       const item = value as Call
-      if (typeof item.statusCode === 'number') return item
+      if (typeof item.statusCode === 'number' || (item.context?.gateway && typeof item.context.gateway === 'object')) return item
       for (const nested of [item.lastError, item.cause, item.error, ...(Array.isArray(item.errors) ? item.errors : [])]) {
         const found = find(nested, depth + 1)
         if (found) return found
@@ -60,12 +62,17 @@ export function collectorGatewayFailure(error: unknown, modelId: string): Gatewa
     }
     const call = find(error, 0)
     if (!call) return undefined
-    const headers = call.responseHeaders && typeof call.responseHeaders === 'object' ? call.responseHeaders as Record<string, unknown> : {}
-    const header = (name: string) => { const value = headers[name]; return typeof value === 'string' ? value : undefined }
-    let code: unknown
-    try { code = typeof call.responseBody === 'string' ? JSON.parse(call.responseBody)?.error?.code : undefined } catch { /* not the gateway's JSON */ }
+    const text = (value: unknown) => typeof value === 'string' ? value : undefined
+    let code: unknown, attempted: string | undefined, requestId: string | undefined
+    if (typeof call.statusCode === 'number') {
+      const headers = call.responseHeaders && typeof call.responseHeaders === 'object' ? call.responseHeaders as Record<string, unknown> : {}
+      try { code = typeof call.responseBody === 'string' ? JSON.parse(call.responseBody)?.error?.code : undefined } catch { /* not the gateway's JSON */ }
+      attempted = text(headers['x-upstream-attempted']); requestId = text(headers['x-request-id'])
+    } else {
+      const kept = call.context!.gateway as { code?: unknown; upstreamAttempted?: unknown; requestId?: unknown }
+      code = kept.code; attempted = text(kept.upstreamAttempted); requestId = text(kept.requestId)
+    }
     const listed = gatewayErrorCodeSchema.safeParse(code)
-    const attempted = header('x-upstream-attempted'), requestId = header('x-request-id')
     const failure: GatewayFailure = {
       ...(typeof code === 'string' ? { gateway_error_code: listed.success ? listed.data : 'other' } : {}),
       ...(attempted === 'true' || attempted === 'false' ? { upstream_attempted: attempted === 'true' } : {}),
