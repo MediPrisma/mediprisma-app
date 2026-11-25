@@ -402,9 +402,11 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       } catch (err) {
         const classified = collectorError(err)
         const failure = classified === 'ok' ? 'error' : classified
-        collector.finish({ summaryAttempt: technical(), outcome: abortController.signal.aborted ? abortOutcome() : failure, phase: 'stream', responseComplete: false,
+        // The final outcome decides the reason: the adapter's own idle watchdog times out without aborting this signal.
+        const outcome = abortController.signal.aborted ? abortOutcome() : failure
+        collector.finish({ summaryAttempt: technical(), outcome, phase: 'stream', responseComplete: false,
           httpStatus: collectorHttpStatus(err), gateway: collectorGatewayFailure(err, modelId),
-          abortReason: abortController.signal.aborted ? abortReasonOf(abortController, abortOutcome()) : undefined })
+          abortReason: abortReasonOf(abortController, outcome) })
         if (abortController.signal.aborted) {
           const abortReason = abortController.signal.reason
           record(

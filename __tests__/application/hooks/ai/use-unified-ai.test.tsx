@@ -498,6 +498,43 @@ describe('useUnifiedAi collector template', () => {
     } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
   })
 
+  it.each(['stream', 'query'] as const)('a %s that times out below the hook, without its signal being aborted, still reports the timeout reason', async (transport) => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
+    const idle = Object.assign(new Error('SYNTHETIC-SECRET stream timed out'), { name: 'StreamIdleTimeoutError' })
+    if (transport === 'stream') mockStream.mockRejectedValueOnce(idle)
+    else mockQuery.mockRejectedValueOnce(idle)
+    const { result } = renderHook(() => useUnifiedAi())
+    try {
+      await act(async () => {
+        await result.current[transport]([{ role: 'user', content: 'SYNTHETIC-PROMPT' }], { modelId: 'gpt-5.4-nano', diagnosticFeature: 'chat' }).catch(() => undefined)
+      })
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+      const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
+      expect(wire).toMatchObject({ schema_version: 12, status: 'error', error_class: 'timeout' })
+      expect(wire.diagnostics.abort_reason).toBe('timeout')
+      expect(JSON.stringify(wire)).not.toContain('SYNTHETIC-SECRET')
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
+
+  it('an ordinary failure carries no abort reason', async () => {
+    const permission = mockCollectorPermission()
+    window.history.replaceState({}, '', '/?site=vghtpe')
+    jest.mocked(fetch).mockReset().mockResolvedValue({ status: 201 } as Response)
+    mockStream.mockRejectedValueOnce(new Error('synthetic upstream failure'))
+    const { result } = renderHook(() => useUnifiedAi())
+    try {
+      await act(async () => {
+        await result.current.stream([{ role: 'user', content: 'SYNTHETIC-PROMPT' }], { modelId: 'gpt-5.4-nano', diagnosticFeature: 'chat' }).catch(() => undefined)
+      })
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+      const wire = JSON.parse(String(jest.mocked(fetch).mock.calls[0][1]?.body))
+      expect(wire).toMatchObject({ status: 'error', error_class: 'error' })
+      expect(wire.diagnostics.abort_reason).toBeUndefined()
+    } finally { cancelCollectorRequests(); permission.restore(); window.history.replaceState({}, '', '/') }
+  })
+
   it.each([['stop', 'stop'], ['length', 'length'], ['content-filter', 'content_filter'], ['tool-calls', 'tool_calls'], ['SYNTHETIC-SECRET', 'unreported'], [undefined, undefined]])(
     'a completed stream reports why the model stopped (%s → %s)', async (reported, sent) => {
     const permission = mockCollectorPermission()
