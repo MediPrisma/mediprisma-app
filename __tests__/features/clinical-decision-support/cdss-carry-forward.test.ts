@@ -1,4 +1,4 @@
-import { carryableAnswers, carryForwardCdss } from '@/features/clinical-decision-support/telemetry/cdss-carry-forward'
+import { carryableAnswers, carryForwardCdss, carrySavedWeight } from '@/features/clinical-decision-support/telemetry/cdss-carry-forward'
 import { createMemoryPatientAnswerBacking, setPatientAnswerBacking } from '@/features/clinical-decision-support/stores/patient-answer-backing'
 import { useClinicVitalsStore } from '@/features/clinical-decision-support/stores/clinic-vitals.store'
 import { useHfpefInputsStore } from '@/features/clinical-decision-support/stores/hfpef-inputs.store'
@@ -246,4 +246,55 @@ test('carries CAD DP-01\'s class with the day it was given, so the pack ages it;
   useCoronaryPhaseStore.setState({ answer: { phase: 'chronic-mi', answeredOn: todayIsoDate() } })
   carryForwardCdss('p', saved, 'synthetic', '1', profile, { inputs: true, decisions: false })
   expect(useCoronaryPhaseStore.getState().answer?.phase).toBe('chronic-mi')
+})
+
+describe('the saved weight (#622)', () => {
+  const now = new Date('2026-10-20T04:00:00Z')
+  const withWeight = (measuredOn: string, value = 61) => {
+    const saved = record()
+    saved.save.physician_inputs.clinicVitals = { entries: { bodyWeight: { value, measuredOn, modifiedAt: at }, potassium: measurement } }
+    return saved
+  }
+  const weightFact = (date?: string) => ({ zh: '65 kg', en: '65 kg', numericValue: 65, unit: 'kg', ...(date ? { date } : {}) })
+
+  test('comes in unasked with its own measurement day, is marked with the record’s day, and brings nothing else', () => {
+    expect(carrySavedWeight('p', withWeight('2026-09-01'), { id: 'p', facts: {} }, now)).toEqual({ value: 61, measuredOn: '2026-09-01' })
+    expect(useClinicVitalsStore.getState().byPatientId.p).toMatchObject({ entries: { bodyWeight: { value: 61, measuredOn: '2026-09-01' } }, signAnswers: {} })
+    expect(useClinicVitalsStore.getState().byPatientId.p.nyhaClass).toBeUndefined()
+    expect(Object.keys(useClinicVitalsStore.getState().byPatientId.p.entries)).toEqual(['bodyWeight'])
+    expect(carriedFrom(useCarriedAnswersStore.getState().byPatientId.p, 'vital:bodyWeight', 61)).toBe('2026-09-01')
+  })
+
+  test('replaces a record weight measured before it, expired or not, and yields to a newer one', () => {
+    expect(carrySavedWeight('p', withWeight('2026-09-01'), { id: 'p', facts: { bodyWeight: weightFact('2026-03-01T08:00:00Z') } }, now)).toBeDefined()
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
+    expect(carrySavedWeight('p', withWeight('2026-09-01'), { id: 'p', facts: { bodyWeight: weightFact('2026-09-15') } }, now)).toBeUndefined()
+    expect(useClinicVitalsStore.getState().byPatientId.p).toBeUndefined()
+  })
+
+  test('is left out at 91 days, when dated after today, and when a weight was already entered this visit', () => {
+    expect(carrySavedWeight('p', withWeight('2026-07-21'), { id: 'p', facts: {} }, now)).toBeUndefined()
+    expect(carrySavedWeight('p', withWeight('2026-10-21'), { id: 'p', facts: {} }, now)).toBeUndefined()
+    expect(carrySavedWeight('p', withWeight('2026-07-22'), { id: 'p', facts: {} }, now)).toMatchObject({ measuredOn: '2026-07-22' })
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
+    void useClinicVitalsStore.getState().setVitals('p', { entries: { bodyWeight: { value: 70, measuredOn: '2026-10-20' } } })
+    expect(carrySavedWeight('p', withWeight('2026-09-01'), { id: 'p', facts: {} }, now)).toBeUndefined()
+    expect(useClinicVitalsStore.getState().byPatientId.p.entries.bodyWeight?.value).toBe(70)
+  })
+
+  test('waits for the stores it writes to be read back', () => {
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: {} })
+    expect(carrySavedWeight('p', withWeight('2026-09-01'), { id: 'p', facts: {} }, now)).toBeUndefined()
+  })
+
+  test('the confirmed carry also brings it over an older record weight, never over a newer one', () => {
+    const older = { id: 'p', facts: { bodyWeight: weightFact('2026-03-01') } }
+    carryForwardCdss('p', record(), 'synthetic', '1', older, { inputs: true, decisions: false })
+    expect(useClinicVitalsStore.getState().byPatientId.p.entries.bodyWeight).toEqual(measurement)
+    useClinicVitalsStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
+    useCarriedAnswersStore.setState({ byPatientId: {}, hydratedPatientIds: { p: true } })
+    const newer = { id: 'p', facts: { bodyWeight: weightFact('2026-09-15') } }
+    carryForwardCdss('p', record(), 'synthetic', '1', newer, { inputs: true, decisions: false })
+    expect(useClinicVitalsStore.getState().byPatientId.p.entries.bodyWeight).toBeUndefined()
+  })
 })

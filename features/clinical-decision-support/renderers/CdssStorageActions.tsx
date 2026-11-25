@@ -138,6 +138,12 @@ type StorageProps = {
   /** Keep the save controller mounted when its button moves into the full-window header. */
   saveTarget?: HTMLElement | null
   onCarryForward?: (record: CdssHistoryRecord, choices: CarryForwardChoices) => number
+  /**
+   * Offered the newest saved record once per chart, unasked: the host brings in
+   * the weight it holds and returns it, or nothing when it has no use for it (#622).
+   * Absent until the host is ready to take one.
+   */
+  onCarryWeight?: (record: CdssHistoryRecord) => { value: number; measuredOn: string } | undefined
   /** Clinician-facing disease name for a stored pack id. */
   packLabel?: (packId: string) => string | undefined
   /**
@@ -156,7 +162,7 @@ export function CdssStorageActions(props: StorageProps) {
   return <OwnedStorageActions key={JSON.stringify([props.input.patient.id, ownerUid, isDeidentifiedPatient(props.input.patient)])} {...props} ownerUid={ownerUid} />
 }
 
-function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, packLabel, offered = true }: StorageProps & { ownerUid?: string }) {
+function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget, ownerUid, onCarryForward, onCarryWeight, packLabel, offered = true }: StorageProps & { ownerUid?: string }) {
   const enabled = useSyncExternalStore(subscribeSite, () => cdssGatewayStatus().enabled, () => false)
   const authorized = useSyncExternalStore(subscribeFhirAuth, () => fhirAuthStatus(ownerUid), () => false)
   const [authorizing, setAuthorizing] = useState(false)
@@ -178,8 +184,29 @@ function OwnedStorageActions({ input, sourceRecords, english = false, saveTarget
   const [deleting, setDeleting] = useState(false)
   const controller = useRef<AbortController | null>(null)
   const mounted = useRef(true)
-  const current = useRef({ input, onCarryForward })
-  useEffect(() => { current.current = { input, onCarryForward } }, [input, onCarryForward])
+  const current = useRef({ input, onCarryForward, onCarryWeight })
+  useEffect(() => { current.current = { input, onCarryForward, onCarryWeight } }, [input, onCarryForward, onCarryWeight])
+  // The newest saved record of any disease is read once per chart for its weight;
+  // a chart with no record, or a store that cannot be reached, changes nothing.
+  const weightReady = Boolean(ownerUid && enabled && onCarryWeight && (!fhirOAuthEnabled() || authorized))
+  const weightAsked = useRef(false)
+  useEffect(() => {
+    if (!weightReady || !ownerUid || weightAsked.current) return
+    const request = new AbortController()
+    void (async () => {
+      const { patient } = current.current.input
+      const newest = [...(await listCdssHistory(patient, request.signal, ownerUid)).records]
+        .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0]
+      const record = newest && await readCdssHistory(patient, newest.saveId, request.signal, ownerUid)
+      if (request.signal.aborted) return
+      weightAsked.current = true
+      const weight = record && current.current.onCarryWeight?.(record)
+      if (weight) toast.info(english
+        ? `Brought in the saved weight: ${weight.value} kg, measured ${weight.measuredOn}.`
+        : `已帶入上次儲存的體重 ${weight.value} kg（${weight.measuredOn} 量測）。`)
+    })().catch(() => { /* No record to read is not an error the clinician can act on. */ })
+    return () => request.abort()
+  }, [weightReady, ownerUid, english])
   const context = JSON.stringify([input.patient.name, input.patient.birthDate, input.patient.identifier, input.packId, input.result.packVersion])
   useEffect(() => {
     // Invalidate patient/pack-scoped history without disconnecting the patient-scoped FHIR grant or cancelling saves.

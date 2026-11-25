@@ -2,6 +2,7 @@ jest.mock('@/features/clinical-decision-support/telemetry/fhir-firebase-auth', (
 const mockAccount: { user: { uid: string } | null; loading: boolean } = { user: { uid: 'owner-a' }, loading: false }
 jest.mock('@/src/application/providers/auth.provider', () => ({ useAuth: () => mockAccount }))
 import React from 'react'
+import { toast } from 'sonner'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { webcrypto } from 'node:crypto'
 import { cdssPatientIdentity } from '@/features/clinical-decision-support/telemetry/patient-identity'
@@ -315,4 +316,39 @@ test('deleting the last record of a filtered disease falls back to all records',
   fireEvent.click(await screen.findByTestId('cdss-history-delete'))
   fireEvent.click(await screen.findByTestId('cdss-history-delete-confirm-button'))
   expect(await screen.findByTestId(`cdss-history-row-${other.saveId}`)).toBeVisible()
+})
+
+test('the newest saved record is offered for its weight once per chart, unasked, and only to a host ready to take it (#622)', async () => {
+  const older = { ...index, saveId: '22222222-2222-4222-8222-222222222222', receivedAt: '2026-09-01T00:00:00Z', packId: 'other' }
+  const stored = await detail()
+  jest.mocked(fetch).mockImplementation(async url => response(String(url).endsWith('/read') ? stored : { records: [older, index], hasMore: false }))
+  const { rerender } = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} />)
+  expect(fetch).not.toHaveBeenCalled()
+
+  const told = jest.spyOn(toast, 'info')
+  const onCarryWeight = jest.fn(() => ({ value: 61, measuredOn: '2026-09-28' }))
+  rerender(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
+  await waitFor(() => expect(onCarryWeight).toHaveBeenCalledWith(stored))
+  // The newest record, whatever its disease.
+  expect(JSON.parse(String(jest.mocked(fetch).mock.calls[1][1]?.body)).save_id).toBe(saveId)
+  expect(told).toHaveBeenCalledWith('已帶入上次儲存的體重 61 kg（2026-09-28 量測）。')
+
+  rerender(<CdssStorageActions input={{ ...currentInput }} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(onCarryWeight).toHaveBeenCalledTimes(1)
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+test('a chart with no saved record, or a store that cannot be read, brings in nothing and shows no error', async () => {
+  const onCarryWeight = jest.fn()
+  jest.mocked(fetch).mockImplementation(async () => response({ records: [], hasMore: false }))
+  const first = render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+  first.unmount()
+  jest.mocked(fetch).mockImplementation(async () => ({ status: 503 }) as Response)
+  render(<CdssStorageActions input={currentInput} sourceRecords={() => []} onCarryWeight={onCarryWeight} />)
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(onCarryWeight).not.toHaveBeenCalled()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
