@@ -316,6 +316,10 @@ test('a request the hospital AI gateway refused reports its fixed code, upstream
     name: 'AI_APICallError', statusCode: 429, responseHeaders: headers, responseBody: JSON.stringify({ error: { code, message: 'SYNTHETIC-SECRET' } }) })
   expect(collectorGatewayFailure(refused('rate_limited'), 'gpt-6-luna')).toEqual({ gateway_error_code: 'rate_limited', upstream_attempted: false, gateway_request_id: REQUEST_ID })
   expect(collectorGatewayFailure(Object.assign(new Error('retry'), { lastError: refused('monthly_budget_exhausted') }), 'gpt-6-luna')).toMatchObject({ gateway_error_code: 'monthly_budget_exhausted' })
+  // The gateway could not reach the model at all (seen in the hospital on 2026-11-26 as HTTP 502 in under a second).
+  expect(collectorGatewayFailure(refused('provider_unavailable', { 'x-request-id': REQUEST_ID, 'x-upstream-attempted': 'true' }), 'gpt-6-luna'))
+    .toEqual({ gateway_error_code: 'provider_unavailable', upstream_attempted: true, gateway_request_id: REQUEST_ID })
+  expect(collectorGatewayFailure(refused('unsupported_api_for_model'), 'gpt-6-luna')).toMatchObject({ gateway_error_code: 'unsupported_api_for_model' })
   // A code outside the contract's list is 'other'; malformed headers are left out rather than sent.
   expect(collectorGatewayFailure(refused('SYNTHETIC-SECRET', { 'x-request-id': 'SYNTHETIC-SECRET', 'x-upstream-attempted': 'maybe' }), 'gpt-6-luna')).toEqual({ gateway_error_code: 'other' })
   expect(collectorGatewayFailure(refused('provider_error', { 'x-upstream-attempted': 'true' }), 'gpt-6-luna')).toEqual({ gateway_error_code: 'provider_error', upstream_attempted: true })

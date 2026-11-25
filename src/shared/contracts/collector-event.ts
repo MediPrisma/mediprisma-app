@@ -321,7 +321,9 @@ export const gatewayErrorCodeSchema = z.enum([
   'origin_denied', 'authentication_required', 'invalid_token', 'authentication_unavailable', 'access_denied',
   'request_too_large', 'request_failed', 'route_not_found', 'invalid_request', 'invalid_output_limit',
   'provider_not_configured', 'unsupported_billable_input', 'rate_limited', 'monthly_budget_exhausted',
-  'budget_unavailable', 'provider_error', 'invalid_provider_response', 'other',
+  'budget_unavailable', 'provider_error', 'invalid_provider_response',
+  // D095: the two codes the first list missed. provider_unavailable is the gateway failing to reach the model at all.
+  'provider_unavailable', 'unsupported_api_for_model', 'other',
 ])
 export const finishReasonSchema = z.enum(['stop', 'length', 'content_filter', 'tool_calls', 'error', 'other', 'unreported'])
 export const abortReasonSchema = z.enum(['user_cancel', 'patient_switch', 'superseded', 'navigation', 'timeout', 'unknown'])
