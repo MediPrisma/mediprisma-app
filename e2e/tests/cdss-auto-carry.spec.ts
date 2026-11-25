@@ -57,6 +57,10 @@ test('opening the guidance brings in the last saved record by itself and says so
   const gradeTwo = grades.getByRole('button', { name: /^II /, exact: false })
   await page.getByRole('button', { name: 'HFrEF', exact: true }).first().click()
   await gradeTwo.click()
+  // Examination findings: leg oedema present, no rales.
+  const sign = (name: string) => page.getByRole('group', { name: new RegExp(`^${name}`) })
+  await sign('下肢水腫').getByRole('button', { name: '有', exact: true }).click()
+  await sign('肺部囉音').getByRole('button', { name: '無', exact: true }).click()
   await expect(gradeTwo).toHaveAttribute('aria-pressed', 'true')
   await page.getByTestId('cdss-save-record').click()
   await expect(page.getByText('CDSS 紀錄已儲存。')).toBeVisible()
@@ -78,6 +82,9 @@ test('opening the guidance brings in the last saved record by itself and says so
   // The answers are chosen again, each saying which record it came from.
   await expect(gradeTwo).toHaveAttribute('aria-pressed', 'true')
   await expect(nyha.locator('[data-carried-from]')).toHaveText(/^帶入 · \d{2}\/\d{2}$/)
+  await expect(sign('下肢水腫').getByRole('button', { name: '有', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(sign('肺部囉音').getByRole('button', { name: '無', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(sign('下肢水腫')).toHaveAccessibleName(/帶入 · \d{2}\/\d{2}$/)
   await nyha.scrollIntoViewIfNeeded()
   await page.screenshot({ path: info.outputPath('auto-carried-answers.png') })
 
